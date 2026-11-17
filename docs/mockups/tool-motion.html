@@ -150,7 +150,7 @@
         <li><strong>Approximated:</strong> when a fish comes to the float (the game's schools) is the page's: 0.8–2.4&nbsp;s after the splash time. The nibbles, bite window, fight, snap and landing are the game's rules.</li>
       </ul>
       <h3>The rod (Proposed)</h3>
-      <p><code>rod-motion</code> design 2: a damped spring toward each phase's target (<code>spring_hz</code>, <code>damping</code>), so a phase change never pops. Charging draws back to +<code>draw_rad</code>, the fist rising <code>draw_lift_m</code> along the shoulder arc; the cast flicks to −<code>flick_rad</code> in <code>flick_s</code> and the tip wobbles after it; a nibble twitches the tip; a bite dips it; while a fish is on the rod is held up at <code>fight_rad</code>, pulled down by <code>run_dip_rad</code> while the fish runs, rolled toward its pull up to <code>roll_rad</code>, and shakes by <code>fight_shake_rad</code> × the live tension; reeling turns the fist in a <code>crank_m</code> circle; a catch dips then lifts by <code>catch_rad</code>. <strong>Today</strong>: the rod stands still in every phase.</p>
+      <p><code>rod-motion</code> design 2: a damped spring toward each phase's target (<code>spring_hz</code>, <code>damping</code>), so a phase change never pops. The cast is an overhead cast in four stages (owner, 2026-11-17: "the casting fishing line the hand should be raised above shoulder"): the <strong>windup</strong> raises the fist on an arc about the shoulder, <code>cast_raise_m</code> up and <code>cast_back_m</code> back toward the head, so it ends above the right shoulder with the rod pointing up and back, <code>draw_rad</code> back from rest; the <strong>anticipation</strong> is a held coil at the top while the charge fills; the <strong>hit</strong>, on release, drives the arm forward and down along the arc to chest height (<code>cast_reach_m</code> past rest) as the rod flicks to −<code>flick_rad</code> in <code>flick_s</code>, pointing at the water; the <strong>recoil</strong> is the tip's wobble and the settle; a nibble twitches the tip; a bite dips it; while a fish is on the rod is held up at <code>fight_rad</code>, pulled down by <code>run_dip_rad</code> while the fish runs, rolled toward its pull up to <code>roll_rad</code>, and shakes by <code>fight_shake_rad</code> × the live tension; reeling turns the fist in a <code>crank_m</code> circle; a catch dips then lifts by <code>catch_rad</code>. <strong>Today</strong>: the rod stands still in every phase.</p>
 
       <h3>The hand (the Hand tab)</h3>
       <div id="hand-findings"></div>
@@ -222,7 +222,7 @@
       <div class="view" data-view="fish"><canvas aria-label="First-person view: hold to cast, click on a bite, hold to reel"></canvas><div class="crosshair"></div>
         <div class="hud"><span class="say"></span><span class="meter" hidden><i></i></span></div>
         <div class="prompt" hidden><b>RIGHT CLICK</b> REEL IN</div>
-        <span class="mode"></span></div>
+        <span class="mode"></span><span class="stage"></span></div>
       <div class="row">
         <span class="seg" data-ctl="mode"></span>
         <span class="label">Fish</span><span class="seg" data-ctl="species"></span>
@@ -873,13 +873,13 @@ const STROKE_SL = [
   ["pickaxe_weight", 0.5, 1.6, 0.05], ["axe_weight", 0.5, 1.6, 0.05], ["shovel_weight", 0.5, 1.6, 0.05], ["tier_slow", 0, 0.15, 0.01],
   ["sleeve_extra", 0, 20, 0.5],
 ];
-const ROD_DEF = { draw_rad: 0.9, draw_lift_m: 0.05, flick_rad: 0.35, flick_s: 0.14, flick_wobble_rad: 0.05, settle_rad: 0.12, bob_rad: 0.015, bob_hz: 0.4, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, run_dip_rad: 0.2, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_dip_rad: 0.08, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
-const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["draw_lift_m", 0, 0.2, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["flick_wobble_rad", 0, 0.2, 0.005], ["settle_rad", 0, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["bob_hz", 0.1, 2, 0.05], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["run_dip_rad", 0, 0.6, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_dip_rad", 0, 0.3, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
+const ROD_DEF = { draw_rad: 0.9, cast_raise_m: 0.28, cast_back_m: 0.18, cast_reach_m: 0.07, flick_rad: 0.35, flick_s: 0.14, flick_wobble_rad: 0.05, settle_rad: 0.12, bob_rad: 0.015, bob_hz: 0.4, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, run_dip_rad: 0.2, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_dip_rad: 0.08, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
+const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["cast_raise_m", 0, 0.45, 0.005], ["cast_back_m", 0, 0.4, 0.005], ["cast_reach_m", 0, 0.2, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["flick_wobble_rad", 0, 0.2, 0.005], ["settle_rad", 0, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["bob_hz", 0.1, 2, 0.05], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["run_dip_rad", 0, 0.6, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_dip_rad", 0, 0.3, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
 // The shovel's own stroke: a steep stab along the handle, then angle up
 // about the blade in the ground, and lift (shovelAt).
 const SHOVEL_DEF = { entry_deg: 65, thrust_m: 0.10, lever_rad: 0.4, lift_m: 0.07, scoop_s: 0.22, across_m: 0.12, arm_follow: 0.1, fist_drop_m: 0.06, fist_fwd_m: 0.10 };
 const SHOVEL_SL = [["entry_deg", 30, 85, 1], ["thrust_m", 0, 0.3, 0.005], ["lever_rad", 0, 0.9, 0.01], ["lift_m", 0, 0.2, 0.005], ["scoop_s", 0.08, 0.5, 0.01], ["across_m", 0, 0.35, 0.01], ["arm_follow", 0, 1, 0.05], ["fist_drop_m", -0.1, 0.25, 0.005], ["fist_fwd_m", -0.1, 0.3, 0.005]];
-const ROD_GAME = ["draw_rad", "draw_lift_m", "flick_rad", "flick_s", "settle_rad", "bob_rad", "bob_hz", "nibble_rad", "nibble_s", "bite_rad", "bite_shake_rad", "bite_shake_hz", "fight_rad", "fight_shake_rad", "fight_shake_hz", "crank_m", "crank_hz", "roll_rad", "catch_rad", "catch_s", "ease_s", "spring_hz", "damping"];
+const ROD_GAME = ["draw_rad", "cast_raise_m", "cast_back_m", "cast_reach_m", "flick_rad", "flick_s", "settle_rad", "bob_rad", "bob_hz", "nibble_rad", "nibble_s", "bite_rad", "bite_shake_rad", "bite_shake_hz", "fight_rad", "fight_shake_rad", "fight_shake_hz", "crank_m", "crank_hz", "roll_rad", "catch_rad", "catch_s", "ease_s", "spring_hz", "damping"];
 const ST = Object.assign({}, STROKE_DEF), ROD = Object.assign({}, ROD_DEF), SHOVEL = Object.assign({}, SHOVEL_DEF);
 const fmt = v => { const s = (+v.toFixed(4)).toString(); return s.includes(".") ? s : s + ".0"; };
 function ronText() {
@@ -994,6 +994,30 @@ function strokePose(s, sLag, h) {
   if (h && s.thrust) shift.addScaledVector(h.tip.clone().sub(h.fist).normalize().applyAxisAngle(QX, pitch).applyAxisAngle(QY, yawLag), s.thrust);
   if (s.lift) shift.y += s.lift;
   return { pitch, shift, yaw: yawLag };
+}
+// The cast (rod-motion decision 7; owner, 2026-11-17: "the casting fishing
+// line the hand should be raised above shoulder"). The fist moves on an arc
+// about the shoulder, in its upright plane: k = 0 is rest, 1 the overhead
+// draw (cast_raise_m up and cast_back_m back toward the head, from rest), -1
+// the flick's reach (the arm stretched by cast_reach_m and swung down as
+// far). The rod turns with the forearm (`turn`); while charging its own
+// pitch is set so that the rod as drawn is draw_rad back from rest.
+const CAST_RAISE_SHARE = 0.4;   // the share of the charge the raise takes; the rest is the held coil
+function castArc(k) {
+  const S = new THREE.Vector3(ST.shoulder_x, ST.shoulder_y, ST.shoulder_z);
+  const y0 = FIST0.y - S.y, z0 = FIST0.z - S.z, r0 = Math.hypot(y0, z0), a0 = Math.atan2(y0, -z0);
+  let r1, a1;
+  if (k >= 0) { const y1 = y0 + ROD.cast_raise_m, z1 = z0 + ROD.cast_back_m; r1 = Math.hypot(y1, z1); a1 = Math.atan2(y1, -z1); }
+  else { r1 = r0 + ROD.cast_reach_m; a1 = a0 - ROD.cast_reach_m / r0; k = -k; }
+  const r = lerp(r0, r1, k), a = lerp(a0, a1, k);
+  return { shift: new THREE.Vector3(0, S.y + r * Math.sin(a) - FIST0.y, S.z - r * Math.cos(a) - FIST0.z), turn: a - a0 };
+}
+// The charge, power 0..1: the windup raises the fist up and back over the
+// shoulder (eased out) in the first CAST_RAISE_SHARE of the charge; the
+// anticipation then coils a little further back and holds there.
+function castDraw(power) {
+  const kr = easeOut(power / CAST_RAISE_SHARE), kc = smooth((power - CAST_RAISE_SHARE) / (1 - CAST_RAISE_SHARE));
+  return { k: 0.88 * kr + 0.12 * kc, pitch: ROD.draw_rad * (0.8 * kr + 0.2 * kc), stage: power < CAST_RAISE_SHARE ? "WINDUP (RAISE)" : "ANTICIPATION (COIL)" };
 }
 const BETWEEN_S = 0.15;   // dig.ron between_s
 function Schedule(breakS, weight, tool) {
@@ -1420,7 +1444,7 @@ views.fish = View("fish", v => {
     tension: 0, stamina: 1, run: 0, run_s: 0, lineM: 0, heading: new THREE.Vector3(0, 0, -1), clock: 0, liftAt: -9, ease: null, say: "", sayT: 0, wakeT: 0, rand: rng(17), species: 2, result: "" };
   const UI = { mode: "proposed", held: false, pressed: false, released: false, reelIn: false };
   const BOT = { kind: null, held: false, prev: false, t: 0, power: 0.55 };
-  const modeTag = v.q(".mode"), sayEl = v.q(".say"), meter = v.q(".meter"), meterFill = meter.firstElementChild, readout = v.q('[data-ctl="readout"]'), slow = v.q('[data-ctl="slow"]'), prompt = v.q(".prompt");
+  const modeTag = v.q(".mode"), stageTag = v.q(".stage"), sayEl = v.q(".say"), meter = v.q(".meter"), meterFill = meter.firstElementChild, readout = v.q('[data-ctl="readout"]'), slow = v.q('[data-ctl="slow"]'), prompt = v.q(".prompt");
   seg(v.q('[data-ctl="mode"]'), [["Today", "today"], ["Proposed", "proposed"]], UI.mode, m => { UI.mode = m; });
   seg(v.q('[data-ctl="species"]'), SPECIES.map(([n], i) => [n, i]), F.species, i => { F.species = i; });
   RONS.push(v.q('[data-ctl="ron"]'));
@@ -1443,7 +1467,7 @@ views.fish = View("fish", v => {
     const tipW = tipEye.clone().applyMatrix4(eye());
     const speed = lerp(FS.speed_mps[0], FS.speed_mps[1], F.power), lift = lerp(FS.lift_mps[0], FS.lift_mps[1], F.power);
     F.pos.copy(tipW); F.vel.copy(look()).multiplyScalar(speed).add(new THREE.Vector3(0, lift, 0));
-    F.flickFrom = spring.p.x; F.flickT = 0; F.flight = 0; F.dip = 0;
+    F.flickFrom = spring.p.x; F.flickArm = spring.a.x; F.flickT = 0; F.flight = 0; F.dip = 0;
     setPhase("flying"); fl.visible = line.visible = true;
   }
   function interest(after) { F.check = after + rr(0.8, 2.4); }   // the page's stand-in for the schools
@@ -1590,13 +1614,11 @@ views.fish = View("fish", v => {
   });
 
   // The proposed pose from the phase (rod-motion design 2), on the shoulder arc.
-  const S0 = () => new THREE.Vector3(ST.shoulder_x, ST.shoulder_y, ST.shoulder_z);
-  function armShift(phi) { const A = ARM0(); return A.clone().applyAxisAngle(QX, phi).sub(A); }
   function rodPose(dt, t, c) {
     let T = 0, R = 0, ARM = 0, addP = 0;
-    const out = new THREE.Vector3(), armLen = ARM0().length();
+    const out = new THREE.Vector3();
     switch (F.phase) {
-      case "charging": { const e = smooth(F.power); T = ROD.draw_rad * e; ARM = ROD.draw_lift_m / armLen * e; break; }
+      case "charging": { const d = castDraw(F.power); T = d.pitch - castArc(d.k).turn; ARM = d.k; break; }
       case "flying": case "floating": case "nibble":
         T = -ROD.settle_rad; addP += ROD.bob_rad * Math.sin(t * 2 * Math.PI * ROD.bob_hz); break;
       case "bite": T = -ROD.bite_rad; addP += ROD.bite_shake_rad * Math.sin(F.te * 2 * Math.PI * ROD.bite_shake_hz) * smooth(F.te / 0.04); break;
@@ -1622,10 +1644,15 @@ views.fish = View("fish", v => {
       // The flick: from the drawn pitch to -flick_rad in flick_s, then the spring.
       const u = F.flickT / ROD.flick_s, k = u * u * (3 - 2 * u), dk = 6 * u * (1 - u) / ROD.flick_s;
       spring.p.x = F.flickFrom + (-ROD.flick_rad - F.flickFrom) * k; spring.p.v = (-ROD.flick_rad - F.flickFrom) * dk;
+      // The arm drives forward and down along the arc to the reach, fastest
+      // at the end (the hit), then springs back toward rest.
+      spring.a.x = lerp(F.flickArm, -1, u * u); spring.a.v = (-1 - F.flickArm) * 2 * u / ROD.flick_s;
     } else springTo(spring.p, T, dt);
     // The tip wobbles after the flick (follow-through).
     if (F.phase === "flying" || (F.phase === "floating" && F.te < 0.6)) { const w = (F.flickT || 0) - ROD.flick_s; if (w > 0) addP += ROD.flick_wobble_rad * Math.exp(-w / 0.25) * Math.sin(2 * Math.PI * 7 * w); }
-    return { pitch: spring.p.x + spring.a.x + addP, roll: spring.r.x, shift: armShift(spring.a.x).add(out) };
+    const arc = castArc(spring.a.x);
+    const stage = F.phase === "charging" ? castDraw(F.power).stage : F.phase === "flying" && F.flickT < ROD.flick_s ? "HIT (FLICK)" : (F.phase === "flying" || F.phase === "floating") && F.flickT < ROD.flick_s + 0.5 && F.te < 0.6 ? "RECOIL" : "";
+    return { pitch: spring.p.x + arc.turn + addP, roll: spring.r.x, shift: arc.shift.add(out), stage };
   }
 
   const pts = lineGeo.getAttribute("position");
@@ -1665,6 +1692,7 @@ views.fish = View("fish", v => {
       let pose = { pitch: 0, roll: 0, shift: new THREE.Vector3() };
       const p = rodPose(sdt, t, c);
       if (UI.mode === "proposed") pose = p;
+      stageTag.textContent = UI.mode === "proposed" ? p.stage : "";
       const P = applyPose(rod, pose.pitch, pose.roll, pose.shift.add(swayAt(t)));
       rod.look(UI.mode === "proposed");
       // The line leaves the tip where the rod is drawn (proposed), or the rest tip (today).
@@ -1769,18 +1797,19 @@ views.hand = View("hand", v => {
   function rodAt(t, dt) {
     const total = ROD_SEQ.reduce((a, [, d]) => a + d, 0);
     let e = t % total, i = 0; while (e >= ROD_SEQ[i][1]) { e -= ROD_SEQ[i][1]; i++; }
-    const name = ROD_SEQ[i][0], armLen = ARM0().length();
+    let name = ROD_SEQ[i][0];
     let T = 0, A = 0, R = 0, add = 0;
-    if (name === "CHARGE") { const k = smooth(e / 1.2); T = ROD.draw_rad * k; A = ROD.draw_lift_m / armLen * k; }
-    else if (name === "CAST") { if (e < ROD.flick_s) { const u = e / ROD.flick_s; rs.p.x = lerp(ROD.draw_rad, -ROD.flick_rad, u * u * (3 - 2 * u)); rs.p.v = 0; } T = -ROD.settle_rad; const w = e - ROD.flick_s; if (w > 0) add += ROD.flick_wobble_rad * Math.exp(-w / 0.25) * Math.sin(2 * Math.PI * 7 * w); }
+    if (name === "CHARGE") { const d = castDraw(e / 1.2); T = d.pitch - castArc(d.k).turn; A = d.k; name = "CHARGE · " + d.stage; }
+    else if (name === "CAST") { if (e < ROD.flick_s) { const u = e / ROD.flick_s, d = castDraw(1); rs.p.x = lerp(d.pitch - castArc(d.k).turn, -ROD.flick_rad, u * u * (3 - 2 * u)); rs.p.v = 0; rs.a.x = lerp(d.k, -1, u * u); rs.a.v = (-1 - d.k) * 2 * u / ROD.flick_s; } name = e < ROD.flick_s ? "CAST · HIT (FLICK)" : "CAST · RECOIL"; T = -ROD.settle_rad; const w = e - ROD.flick_s; if (w > 0) add += ROD.flick_wobble_rad * Math.exp(-w / 0.25) * Math.sin(2 * Math.PI * 7 * w); }
     else if (name === "FLOAT") { T = -ROD.settle_rad; add += ROD.bob_rad * Math.sin(t * 2 * Math.PI * ROD.bob_hz); }
     else if (name === "NIBBLE") { T = -ROD.settle_rad; if (e < ROD.nibble_s) add -= ROD.nibble_rad * Math.sin(Math.PI * e / ROD.nibble_s); }
     else if (name === "BITE") { T = -ROD.bite_rad; add += ROD.bite_shake_rad * Math.sin(e * 2 * Math.PI * ROD.bite_shake_hz); }
     else if (name === "FIGHT") { const run = e > 0.9 && e < 1.8 ? 1 : 0, ten = 0.3 + 0.5 * Math.sin(Math.PI * e / 2.4); T = ROD.fight_rad - ROD.run_dip_rad * run; R = -ROD.roll_rad * Math.sin(e * 1.7) * run; add += ROD.fight_shake_rad * ten * Math.sin(e * 2 * Math.PI * ROD.fight_shake_hz); }
     else if (name === "CATCH") { T = e < 0.1 ? -ROD.catch_dip_rad * Math.sin(Math.PI * e / 0.1) : ROD.catch_rad * (1 - smooth((e - 0.1) / ROD.catch_s)); }
-    springTo(rs.p, T, dt); springTo(rs.a, A, dt); springTo(rs.r, R, dt);
-    const Arm = ARM0();
-    return { pitch: rs.p.x + rs.a.x + add, roll: rs.r.x, shift: Arm.clone().applyAxisAngle(QX, rs.a.x).sub(Arm), stage: name };
+    if (!name.includes("FLICK")) { springTo(rs.p, T, dt); springTo(rs.a, A, dt); }
+    springTo(rs.r, R, dt);
+    const arc = castArc(rs.a.x);
+    return { pitch: rs.p.x + arc.turn + add, roll: rs.r.x, shift: arc.shift, stage: name };
   }
   const inv = new THREE.Quaternion(), lt = new THREE.Vector3();
   let painted = "", lastGeo = null;

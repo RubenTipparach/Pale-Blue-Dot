@@ -12,6 +12,7 @@ true face normals (`openspec/changes/rod-motion`, tasks 1.2 and 2.5).
 | The float on the water | `floating-before.jpg` | `floating-after.jpg` |
 | A bite: the tip dips | (the still rod of `floating-before.jpg`) | `bite-after.jpg` |
 | A fish on, reeling: rod up, rolled toward the pull, shaking | (the still rod of `floating-before.jpg`) | `hooked-after.jpg` |
+| Charging, the overhead cast (decision 7): the fist raised above the right shoulder, the rod up and back | `charging-after.jpg` | `charging-raised.jpg` |
 
 - Before is `db8f17e8`, the commit before this change: the rod stands still
   in every phase, so a bite and a fight look like the float shot. Its
@@ -50,3 +51,14 @@ draws the rod as if the line were in that phase (for `hooked`, at tension
 nothing but the drawn rod reads: the line, the float, the catch rules and
 the fish are untouched, so in `bite-after.jpg` and `hooked-after.jpg` the
 float still floats.
+
+`charging-raised.jpg` (2026-11-17, `rod-motion` decision 7, after the owner's
+"the casting fishing line the hand should be raised above shoulder"): the
+same bank, the same lavapipe and `fast` build, the cast meter at about 85 %,
+so the windup is done and the coil is under way. Its
+before is `charging-after.jpg`, the fist risen 5 cm. One frame of a burst:
+
+    PBD_CAPTURE_RUN=burst,70,56,8 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture charging.png --frames 118
+
+The run was stopped once the burst had the charge. Log: no `ERROR` lines,
+the same 37 `LATE_PIPELINE` lines as the runs above.

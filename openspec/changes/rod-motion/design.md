@@ -24,8 +24,8 @@ of the fist.
 
 | Phase / event | Pitch about the fist | Other |
 | --- | --- | --- |
-| Charging | rises to `+draw_rad` (0.9) with the charge, eased | fist up and back `draw_lift_m` (0.05) |
-| `Cast` | from the drawn pitch to `-flick_rad` (-0.35) in `flick_s` (0.14 s), then springs back to the fishing pose | |
+| Charging | rises to `+draw_rad` (0.9) with the charge: the windup, then a held coil (decision 7) | the fist raised over the shoulder on an arc, `cast_raise_m` (0.28) up and `cast_back_m` (0.18) back |
+| `Cast` | from the drawn pitch to `-flick_rad` (-0.35) in `flick_s` (0.14 s), then springs back to the fishing pose | the arm drives forward and down the arc to `cast_reach_m` (0.07) past rest |
 | Flying / Floating | fishing pose `-settle_rad` (-0.12), a slow bob | idle sway as today |
 | `Nibble` | a twitch of `nibble_rad` (0.05) for 0.15 s | |
 | `Bite` | a dip of `-bite_rad` (-0.22) at once, shaking at 14 Hz for the window | |
@@ -65,7 +65,9 @@ it) and written as a size: the fishing pose is at `-settle_rad`, so
 | Field | Default | Unit | What |
 | --- | ---: | --- | --- |
 | `draw_rad` | 0.9 | rad | pitch back at full charge |
-| `draw_lift_m` | 0.05 | m | fist up and back at full charge |
+| `cast_raise_m` | 0.28 | m | fist up from rest at full charge (decision 7) |
+| `cast_back_m` | 0.18 | m | fist back toward the head at full charge |
+| `cast_reach_m` | 0.07 | m | the arm's stretch and swing down past rest at the flick |
 | `flick_rad` | 0.35 | rad | pitch forward on the cast |
 | `flick_s` | 0.14 | s | how long the flick is held |
 | `settle_rad` | 0.12 | rad | pitch forward while the float is out |
@@ -133,4 +135,31 @@ mesh in `PostUpdate` reads this frame's.
   in Hand mockup's Fish tab: "are you deciding to do left click to real in
   fish insetad now?", "that seems better imo". This closes the open question
   of whether right click should hook or reel.
-
+- **7. The cast is overhead: the hand rises above the shoulder.** The
+  owner, 2026-11-17, on the Tools in Hand mockup: "make some videos of the
+  animations. they look freaking awesome, though I think the casting
+  fishing line the hand should be raised above shoulder". Before this, the
+  charge only pitched the rod back about a fist that rose 5 cm
+  (`draw_lift_m`), so the cast was a wrist flick at chest height. Now it is
+  the four stages of the `animation` skill, the fist on an arc about the
+  shoulder (the `held-swing` stroke's virtual shoulder, eye space
+  (0.2, -0.25, 0.05) m; the arc is in its upright plane, its radius and
+  angle eased together from the rest fist to the target):
+  - **windup** (the first 40 % of the charge, eased out): the fist rises
+    `cast_raise_m` (0.28 m) and comes back `cast_back_m` (0.18 m) toward the
+    head, to about eye height above the right shoulder, 88 % of the way;
+  - **anticipation** (the rest of the charge): a held coil, the last 12 % of
+    the arc and the last fifth of the draw, eased in and held at the top;
+  - **hit** (on release, over `flick_s`): the arm drives forward and down
+    along the arc to chest height, the arm stretched by `cast_reach_m`
+    (0.07 m) and swung down as far, fastest at the end, while the rod
+    flicks to `-flick_rad`, pointing at the water;
+  - **recoil**: the spring's overshoot and the tip's wobble, settling on the
+    fishing pose.
+  The rod turns with the forearm on the arc; while charging its own pitch is
+  set so the rod as drawn stays `draw_rad` (0.9) back from rest, pointing up
+  and back. `draw_lift_m` is replaced by `cast_raise_m`, `cast_back_m` and
+  `cast_reach_m` in `held.ron`. The sizes were set on the mockup so the fist
+  stays in view at the top of the draw (0.25 m back put it half off the
+  right edge). Recommendation taken (ask only with screenshots): the owner
+  sees it on the mockup and in `docs/screenshots/rod-motion/charging-raised.jpg`.

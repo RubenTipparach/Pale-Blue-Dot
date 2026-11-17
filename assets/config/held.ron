@@ -21,7 +21,9 @@
     swing_pitch_rad: 0.85,
     rod: (
         draw_rad: 0.9,
-        draw_lift_m: 0.05,
+        cast_raise_m: 0.28,
+        cast_back_m: 0.18,
+        cast_reach_m: 0.07,
         flick_rad: 0.35,
         flick_s: 0.14,
         settle_rad: 0.12,

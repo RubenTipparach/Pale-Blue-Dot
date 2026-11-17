@@ -10,10 +10,11 @@
 //! The fishing line leaves from the rod model's own tip
 //! (`openspec/changes/hex-held-tools`), where the rod is drawn this frame.
 //!
-//! The rod moves with the line (`openspec/changes/rod-motion`): it draws
-//! back on the charge, flicks on the cast, twitches on a nibble, dips on a
-//! bite and shakes with a fish on. The motion is drawn only: no rule reads
-//! it.
+//! The rod moves with the line (`openspec/changes/rod-motion`): the fist is
+//! raised over the shoulder and the rod drawn back on the charge, the arm
+//! drives down with the flick on the cast, and the rod twitches on a nibble,
+//! dips on a bite and shakes with a fish on. The motion is drawn only: no
+//! rule reads it.
 
 use crate::config::HeldConfig;
 use crate::fish::ToolSlot;
@@ -51,10 +52,15 @@ pub struct HeldSettings {
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RodSettings {
-    /// Charging: how far the rod draws back at full charge, rad, and how far
-    /// the fist rises and comes back with it, m.
+    /// Charging: how far the rod draws back at full charge, rad.
     pub draw_rad: f32,
-    pub draw_lift_m: f32,
+    /// The overhead cast (`rod-motion` decision 7): at full charge the fist
+    /// is raised on an arc about the shoulder this far up and this far back
+    /// toward the head from rest, m, above the right shoulder; at the flick
+    /// the arm stretches this far past rest and swings down as far, m.
+    pub cast_raise_m: f32,
+    pub cast_back_m: f32,
+    pub cast_reach_m: f32,
     /// The cast: how far forward of rest the rod flicks, rad, and for how
     /// long it is held there, s.
     pub flick_rad: f32,
@@ -99,7 +105,9 @@ impl Default for RodSettings {
     fn default() -> Self {
         Self {
             draw_rad: 0.9,
-            draw_lift_m: 0.05,
+            cast_raise_m: 0.28,
+            cast_back_m: 0.18,
+            cast_reach_m: 0.07,
             flick_rad: 0.35,
             flick_s: 0.14,
             settle_rad: 0.12,
@@ -129,7 +137,9 @@ impl RodSettings {
     pub fn validate(&self) -> Result<(), String> {
         let all = [
             self.draw_rad,
-            self.draw_lift_m,
+            self.cast_raise_m,
+            self.cast_back_m,
+            self.cast_reach_m,
             self.flick_rad,
             self.flick_s,
             self.settle_rad,
@@ -421,8 +431,9 @@ impl Default for RodCue {
 enum Moment {
     #[default]
     None,
-    /// The cast: the rod flicks forward.
-    Flick,
+    /// The cast: the rod flicks forward and the arm drives forward and
+    /// down the cast's arc from where the charge left it (`from_k`).
+    Flick { from_k: f32 },
     /// A nibble: the tip twitches.
     Nibble,
     /// From a pose to the phase's target: after a catch, a snap, a miss.
@@ -438,6 +449,9 @@ pub struct RodMotion {
     moment: Moment,
     since_s: f32,
     clock_s: f32,
+    /// How far along the cast's arc the charge has the fist, 0..1, kept
+    /// for the flick that starts from there.
+    drawn_k: f32,
 }
 
 /// Where the rod tip is drawn this frame, eye space: the rest tip through
@@ -455,6 +469,54 @@ impl Default for RodTipNow {
 fn smooth(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+/// 0..1 eased out: fast from the start, slowing into the end.
+fn ease_out(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    1.0 - (1.0 - t) * (1.0 - t)
+}
+
+/// The shoulder the cast's arc turns about, eye space, m: the `held-swing`
+/// stroke's virtual shoulder, as the Tools in Hand mockup places it.
+const SHOULDER: Vec3 = Vec3::new(0.2, -0.25, 0.05);
+
+/// The share of the charge the cast's windup (the raise) takes; the rest of
+/// the charge is the held coil at the top (`rod-motion` decision 7).
+const CAST_RAISE_SHARE: f32 = 0.4;
+
+/// The fist on the cast's arc about the shoulder, in its upright plane: the
+/// shift from the rod's rest fist, eye space, m, and how far the forearm has
+/// turned, rad (up and back positive). `k` 0 is rest, 1 the top of the draw
+/// (`cast_raise_m` up, `cast_back_m` back), -1 the flick's reach; the arc's
+/// radius and angle go between them together.
+pub fn cast_arc(s: &RodSettings, k: f32) -> (Vec3, f32) {
+    let fist: Vec3 = models().get(Tool::Rod).fist.into();
+    let (y0, z0) = (fist.y - SHOULDER.y, fist.z - SHOULDER.z);
+    let (r0, a0) = (y0.hypot(z0), y0.atan2(-z0));
+    let (r1, a1, k) = if k >= 0.0 {
+        let (y1, z1) = (y0 + s.cast_raise_m, z0 + s.cast_back_m);
+        (y1.hypot(z1), y1.atan2(-z1), k)
+    } else {
+        (r0 + s.cast_reach_m, a0 - s.cast_reach_m / r0, -k)
+    };
+    let r = r0 + (r1 - r0) * k;
+    let a = a0 + (a1 - a0) * k;
+    let at = Vec3::new(fist.x, SHOULDER.y + r * a.sin(), SHOULDER.z - r * a.cos());
+    (at - fist, a - a0)
+}
+
+/// The charge, `power` 0..1: how far along the cast's arc the fist is and
+/// the rod's pitch as drawn. The windup raises the fist, eased out, in the
+/// first share of the charge; the anticipation then coils the last of the
+/// arc and the draw and holds at the top.
+fn cast_draw(s: &RodSettings, power: f32) -> (f32, f32) {
+    let raise = ease_out(power / CAST_RAISE_SHARE);
+    let coil = smooth((power - CAST_RAISE_SHARE) / (1.0 - CAST_RAISE_SHARE));
+    (
+        0.88 * raise + 0.12 * coil,
+        s.draw_rad * (0.8 * raise + 0.2 * coil),
+    )
 }
 
 /// How far a timed motion is through, 0..1; one with no time is done.
@@ -477,11 +539,11 @@ impl RodMotion {
         match cue.phase {
             Phase::Ready => HeldPose::default(),
             Phase::Charging => {
-                let drawn = smooth(cue.power);
+                let (k, pitch) = cast_draw(s, cue.power);
                 HeldPose {
-                    pitch: s.draw_rad * drawn,
+                    pitch,
                     roll: 0.0,
-                    shift: Vec3::new(0.0, s.draw_lift_m, s.draw_lift_m) * drawn,
+                    shift: cast_arc(s, k).0,
                 }
             }
             Phase::Flying | Phase::Floating | Phase::Nibble => HeldPose {
@@ -515,10 +577,17 @@ impl RodMotion {
         let phase = self.phase_target(s, cue);
         match self.moment {
             Moment::None => phase,
-            Moment::Flick => HeldPose {
-                pitch: -s.flick_rad,
-                ..default()
-            },
+            Moment::Flick { from_k } => {
+                // The hit: the arm drives down the arc, fastest at the end,
+                // and the rod turns with it past the flick.
+                let u = through(self.since_s, s.flick_s);
+                let (shift, turn) = cast_arc(s, from_k + (-1.0 - from_k) * u * u);
+                HeldPose {
+                    pitch: -s.flick_rad + turn,
+                    roll: 0.0,
+                    shift,
+                }
+            }
             Moment::Nibble => HeldPose {
                 pitch: phase.pitch - s.nibble_rad,
                 ..phase
@@ -536,9 +605,14 @@ impl RodMotion {
         // its precision in a long sitting.
         self.clock_s = (self.clock_s + dt).rem_euclid(3600.0);
         self.since_s += dt;
+        if matches!(cue.phase, Phase::Charging) {
+            self.drawn_k = cast_draw(s, cue.power).0;
+        }
         for event in events {
             let moment = match event {
-                Event::Cast { .. } => Moment::Flick,
+                Event::Cast { .. } => Moment::Flick {
+                    from_k: self.drawn_k,
+                },
                 Event::Nibble { .. } => Moment::Nibble,
                 Event::Caught { .. } => Moment::Ease {
                     from: HeldPose {
@@ -563,7 +637,7 @@ impl RodMotion {
         }
         let lasts = match self.moment {
             Moment::None => f32::INFINITY,
-            Moment::Flick => s.flick_s,
+            Moment::Flick { .. } => s.flick_s,
             Moment::Nibble => s.nibble_s,
             Moment::Ease { over_s, .. } => over_s,
         };
@@ -1136,7 +1210,15 @@ mod tests {
         };
         let drawn = rod.phase_target(&s, &charged);
         assert!(near(drawn.pitch, s.draw_rad, 1e-6));
-        assert!(near(drawn.shift.y, s.draw_lift_m, 1e-6) && drawn.shift.z > 0.0);
+        assert!(near(drawn.shift.y, s.cast_raise_m, 1e-5), "{drawn:?}");
+        assert!(near(drawn.shift.z, s.cast_back_m, 1e-5), "{drawn:?}");
+        assert!(near(drawn.shift.x, 0.0, 1e-6));
+        // Overhead (decision 7): at the top of the draw the fist is above
+        // the shoulder.
+        let fist: Vec3 = models().get(Tool::Rod).fist.into();
+        assert!(fist.y + drawn.shift.y > SHOULDER.y + 0.15, "{drawn:?}");
+        // The windup is done before the charge is half full; the coil then
+        // takes the last of the draw.
         let half = rod.phase_target(
             &s,
             &RodCue {
@@ -1144,7 +1226,20 @@ mod tests {
                 ..cue(Phase::Charging)
             },
         );
-        assert!(near(half.pitch, s.draw_rad * 0.5, 1e-6), "eased");
+        assert!(half.shift.y > 0.85 * s.cast_raise_m, "{half:?}");
+        assert!(half.pitch > 0.8 * s.draw_rad && half.pitch < s.draw_rad);
+        // On an arc about the shoulder, not a straight line: half way, the
+        // fist has risen further than it has come back.
+        let (mid, turn) = cast_arc(&s, 0.5);
+        assert!(
+            mid.y / s.cast_raise_m > mid.z / s.cast_back_m + 0.1,
+            "{mid}"
+        );
+        assert!(turn > 0.0);
+        // The flick's reach: ahead of rest and below it.
+        let (reach, turn) = cast_arc(&s, -1.0);
+        assert!(reach.z < -0.5 * s.cast_reach_m && reach.y < 0.0, "{reach}");
+        assert!(turn < 0.0);
         for phase in [Phase::Flying, Phase::Floating, Phase::Nibble] {
             let t = rod.phase_target(&s, &cue(phase));
             assert!(near(t.pitch, -s.settle_rad, s.bob_rad), "{phase:?}");
@@ -1170,7 +1265,12 @@ mod tests {
             &[Event::Cast { speed_mps: 9.0 }],
             DT,
         );
-        assert_eq!(cast.target(&s, &cue(Phase::Flying)).pitch, -s.flick_rad);
+        let flick = cast.target(&s, &cue(Phase::Flying));
+        assert!(near(flick.pitch, -s.flick_rad, 0.01), "{flick:?}");
+        // By the end of the flick the arm has driven down to the reach.
+        run(&mut cast, &cue(Phase::Flying), &[], s.flick_s - 2.0 * DT);
+        let hit = cast.target(&s, &cue(Phase::Flying));
+        assert!(hit.pitch < -s.flick_rad && hit.shift.z < 0.0, "{hit:?}");
         let mut nibble = RodMotion::default();
         nibble.step(&s, &cue(Phase::Nibble), &[Event::Nibble { species: 0 }], DT);
         let twitched = nibble.target(&s, &cue(Phase::Nibble)).pitch;
