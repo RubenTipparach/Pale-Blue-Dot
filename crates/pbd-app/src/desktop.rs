@@ -1856,7 +1856,12 @@ pub fn run(args: &[String]) {
             guide::paint,
             hud::near_field,
             compass_bar::update,
-            (frame_graph::toggle, frame_graph::update).chain(),
+            (
+                frame_graph::toggle,
+                frame_graph::update,
+                frame_graph::breakdown,
+            )
+                .chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             (time_ui::press, time_ui::toggle, time_ui::show).chain(),
@@ -1986,17 +1991,17 @@ pub fn run(args: &[String]) {
             .in_set(pbd_app::settings::PacingSet),
     );
     if launch.frame_log.is_some() {
-        // GPU time per render pass for the frame log (`perf-rig`), and a
-        // route that ends the run when it lands, like `--walk-distance`.
-        // Not on macOS: its spans write timestamps inside a pass, which Apple
-        // GPUs cannot, so they read nought there, and the counter sample
-        // buffers it still makes for every frame in flight ran out under slow
-        // frames ("Cannot allocate sample buffer", a crash). The clouds'
-        // boundary timer measures them there instead (`cloud-puffs`).
-        if !cfg!(target_os = "macos") {
-            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
-        }
+        // A route that ends the run when it lands, like `--walk-distance`.
         app.add_systems(Last, (quit_after_route, log_window_attention));
+    }
+    // GPU time per render pass, for the frame log (`perf-rig`) and the F3
+    // breakdown. Not on macOS: its spans write timestamps inside a pass,
+    // which Apple GPUs cannot, so they read nought there, and the counter
+    // sample buffers it still makes for every frame in flight ran out under
+    // slow frames ("Cannot allocate sample buffer", a crash). The clouds'
+    // boundary timer measures them there instead (`cloud-puffs`).
+    if !cfg!(target_os = "macos") {
+        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
     }
     // Towns are lit by the field in every run, a still from above as much as
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
