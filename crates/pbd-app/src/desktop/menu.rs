@@ -658,10 +658,14 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
         .spawn(timber_layer(Screen::Title))
         .with_children(|layer| {
             layer
+                // The logo near the top of the screen, the way in centred in
+                // the space under it (owner, 2026-11-17: "this logo should be
+                // closer to top of the screen").
                 .spawn(Node {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Center,
-                    row_gap: px(6),
+                    height: percent(100),
+                    padding: UiRect::top(px(10)),
                     ..default()
                 })
                 .with_children(|column| {
@@ -674,6 +678,11 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
                             ..default()
                         },
                     ));
+                    let spacer = || Node {
+                        flex_grow: 1.0,
+                        ..default()
+                    };
+                    column.spawn(spacer());
                     column
                         .spawn(framed(kit, Set::Oak, 120.0))
                         .with_children(|panel| {
@@ -687,6 +696,7 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
                             button(panel, kit, "SETTINGS", MenuAction::Settings);
                             button(panel, kit, "QUIT", MenuAction::Quit);
                         });
+                    column.spawn(spacer());
                 });
         });
 }

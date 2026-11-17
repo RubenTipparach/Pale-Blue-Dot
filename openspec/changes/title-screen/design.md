@@ -14,7 +14,9 @@
 
 1. The title is the front door. `opening_screen` returns `Screen::Title`
    where it returned `Saves`; `--menu title` opens it for captures.
-2. The panel: the logo 300 UI units wide at its own aspect, then an oak frame
+2. The panel: the logo 300 UI units wide at its own aspect, 10 units from the top
+   of the screen (owner, 2026-11-17: "this logo should be closer to top of the
+   screen"), then, centred in the space under it, an oak frame
    120 units wide with CONTINUE (focused), NEW WORLD, LOAD WORLD, SETTINGS,
    QUIT. No lintel text: the logo is the title.
 3. Back steps: Esc on the title stays on the title. Saves and Settings step
