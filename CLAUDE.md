@@ -183,6 +183,21 @@ mockup with more than one 3D view puts each in its own tab:
 - 2D panels (a builder grid, a chart, stats) may sit beside the one 3D
   view in its tab.
 
+## Before and after is one video (owner, 2026-11-17)
+
+**Standing instruction from the user:** "I dont need before and after
+video by themselves, before after and comparison should all be one video,
+not 3 separate videos". A fix proved on video gets one file, not three:
+- the before, the after and their side-by-side comparison are cut into a
+  single video, each part labelled BEFORE, AFTER or BEFORE | AFTER in the
+  frame (a labelled side-by-side alone is enough when it shows it all);
+- separate before and after clips may exist locally for measuring, but only
+  the one combined video goes to Drive;
+- it is named `<what>-before-after-<height>p60.mp4`.
+
+This applies to every before-and-after video, including the Drive
+validation videos for complex water bugs.
+
 ## Every major step ends in a video (owner, 2026-09-27)
 
 **Standing instruction from the user:** "each major step needs a video
