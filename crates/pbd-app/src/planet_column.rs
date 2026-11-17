@@ -414,13 +414,21 @@ impl ColumnTier {
                 }
             }
         }
+        #[cfg(test)]
+        let queued = queue.len();
         let mut changed = Vec::new();
         let mut ticks = 0;
+        #[cfg(test)]
+        let mut sweeps = 0;
         // Settled, then swept: every water cell over the sea looked at again,
         // because the rule does not requeue the cell above one that changes
         // (Luanti's, kept), and a sweep that changes nothing is the field the
         // rule keeps. Two or three sweeps at most in practice.
         for sweep in 0..6 {
+            #[cfg(test)]
+            {
+                sweeps = sweep + 1;
+            }
             let before = changed.len();
             while !queue.is_empty() && ticks < RIVER_SETTLE_TICKS {
                 queue.tick(
@@ -451,6 +459,13 @@ impl ColumnTier {
         for slot in slots {
             self.repack_slot(slot);
         }
+        #[cfg(test)]
+        instrument(|p| {
+            p.settle_queued = queued;
+            p.settle_ticks = ticks;
+            p.settle_sweeps = sweeps;
+            p.settle_changed = changed.len();
+        });
         changed.len()
     }
 
@@ -482,6 +497,37 @@ impl ColumnTier {
         }
         out
     }
+}
+
+/// A measurement instrument (`river-cache`, design 1): what the last tier
+/// built on this thread spent in each phase, and what its river settle did.
+/// Test builds only; the game's build is untouched by it.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct BuildPhases {
+    pub columns_ms: f64,
+    pub flood_ms: f64,
+    pub settle_ms: f64,
+    pub relight_ms: f64,
+    pub settle_queued: usize,
+    pub settle_ticks: usize,
+    pub settle_sweeps: usize,
+    pub settle_changed: usize,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static LAST_BUILD: std::cell::Cell<BuildPhases> =
+        std::cell::Cell::new(BuildPhases::default());
+}
+
+#[cfg(test)]
+fn instrument(f: impl FnOnce(&mut BuildPhases)) {
+    LAST_BUILD.with(|c| {
+        let mut p = c.get();
+        f(&mut p);
+        c.set(p);
+    });
 }
 
 /// The most ticks a tier's rivers are settled for at its build: longer than
@@ -1308,6 +1354,8 @@ pub fn build(
             (cell.metadata[2] & SKYLIGHT_MASK) | (members.len() as u32 + 1) << SLOT_SHIFT;
         members.push(index);
     }
+    #[cfg(test)]
+    let phase = std::time::Instant::now();
     let mut columns = Vec::with_capacity(members.len());
     let mut records = Vec::with_capacity(members.len());
     let mut glow = Vec::with_capacity(members.len());
@@ -1416,14 +1464,32 @@ pub fn build(
     // The sea floods what a carve or an edit opened onto it (`volumetric-water`
     // phase 2): derived from the columns and the edits, so the same tier
     // floods the same way however often it is built, and never saved.
+    #[cfg(test)]
+    let phase = {
+        let ms = phase.elapsed().as_secs_f64() * 1000.;
+        instrument(|p| p.columns_ms = ms);
+        std::time::Instant::now()
+    };
     tier.sides = tier.neighbor_slots();
     let seeds = tier.sea_seeds(edits);
     let flooded = tier.flood_from(seeds);
     for slot in flooded {
         tier.repack_slot(slot);
     }
+    #[cfg(test)]
+    let phase = {
+        let ms = phase.elapsed().as_secs_f64() * 1000.;
+        instrument(|p| p.flood_ms = ms);
+        std::time::Instant::now()
+    };
     // A version 8 world's rivers, settled by the rule (design 13).
     let settled = tier.settle_rivers(edits);
+    #[cfg(test)]
+    let phase = {
+        let ms = phase.elapsed().as_secs_f64() * 1000.;
+        instrument(|p| p.settle_ms = ms);
+        std::time::Instant::now()
+    };
     if settled > 0 {
         bevy::log::debug!("rivers settled at build: {settled} cells");
     }
@@ -1437,6 +1503,11 @@ pub fn build(
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.
     tier.relight();
+    #[cfg(test)]
+    {
+        let ms = phase.elapsed().as_secs_f64() * 1000.;
+        instrument(|p| p.relight_ms = ms);
+    }
     tier
 }
 
@@ -3222,5 +3293,200 @@ mod river_tier_tests {
                 .map(|&(id, c)| (water_cell(id), c))
                 .collect::<Vec<_>>()
         );
+    }
+}
+
+/// A measurement instrument for `river-cache` (design 1): what a world's
+/// rivers cost the CPU when a tier is built, split into the drainage map
+/// (once a world), the river part of the columns, and the rule's settle at
+/// the build. CPU time on whatever machine runs it, never a frame time.
+/// Ignored because it takes seconds; run it with
+/// `cargo test -p pbd-app --profile fast --lib river_cost -- --ignored --nocapture --test-threads 1`.
+#[cfg(test)]
+mod river_cost {
+    use super::*;
+    use crate::planet::lod;
+    use std::time::Instant;
+
+    fn ms(t: Instant) -> f64 {
+        t.elapsed().as_secs_f64() * 1000.
+    }
+
+    #[test]
+    #[ignore]
+    fn what_a_world_s_rivers_cost_to_build() {
+        let cfg = terrain_config();
+        let settings = cfg.rivers.expect("the default generator has rivers");
+        // The drainage map, built fresh (the game builds it once a world).
+        for threads in [
+            1,
+            std::thread::available_parallelism().map_or(1, |n| n.get()),
+        ] {
+            let started = Instant::now();
+            let fresh = pbd_core::rivers::RiverMap::build_on(cfg, &settings, threads);
+            eprintln!(
+                "drainage map: {} river cells, built in {:.0} ms ({threads} threads)",
+                fresh.rivers().count(),
+                ms(started)
+            );
+        }
+        let map = pbd_core::rivers::map(cfg, &settings);
+        // River anchors with a fall, as `river_tier_tests` picks them, and a
+        // dry inland anchor for the floor.
+        let mut anchors: Vec<(String, Vec3)> = map
+            .rivers()
+            .map(|k| map.describe(k))
+            .filter(|&(c, level, drop, _)| drop >= 3 && level >= 3 && c.y.abs() < 0.7)
+            .map(|(c, ..)| c)
+            .step_by(97)
+            .take(4)
+            .enumerate()
+            .map(|(i, c)| (format!("river {i}"), c))
+            .collect();
+        anchors.push((
+            "dry".into(),
+            Vec3::new(0.8772014, 0.48012277, 0.0).normalize(),
+        ));
+        let dry = pbd_core::planet_gen::TerrainConfig {
+            rivers: None,
+            ..*cfg
+        };
+        // The drainage map's ground: one altitude per lattice cell, which is
+        // most of its build.
+        let lattice: Vec<Vec3> = (0..720 * 360)
+            .map(|k| {
+                let (i, j) = (k % 720, k / 720);
+                let lat = (-90.0 + (j as f32 + 0.5) * 0.5f32).to_radians();
+                let lon = (-180.0 + (i as f32 + 0.5) * 0.5f32).to_radians();
+                Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin())
+            })
+            .collect();
+        let started = Instant::now();
+        for &d in &lattice {
+            std::hint::black_box(pbd_core::planet_gen::surface_altitude(&dry, d));
+        }
+        eprintln!(
+            "drainage map's ground alone: {} altitudes in {:.0} ms (one thread)",
+            lattice.len(),
+            ms(started)
+        );
+        for (name, anchor) in anchors {
+            let started = Instant::now();
+            let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+            let whole = ms(started);
+            // Every fine record's altitude, with the river terms and without.
+            let records: Vec<Vec3> = set
+                .levels
+                .iter()
+                .flatten()
+                .map(|c| Vec3::from_slice(&c.direction_height[..3]))
+                .collect();
+            let started = Instant::now();
+            for &d in &records {
+                std::hint::black_box(pbd_core::planet_gen::surface_altitude(cfg, d));
+            }
+            let rec_with = ms(started);
+            let started = Instant::now();
+            for &d in &records {
+                std::hint::black_box(pbd_core::planet_gen::surface_altitude(&dry, d));
+            }
+            let rec_without = ms(started);
+            let started = Instant::now();
+            for &d in &records {
+                std::hint::black_box(pbd_core::rivers::far_surface(cfg, d, 10.0));
+            }
+            eprintln!(
+                "{name}: rivers::far_surface over the records {:.0} ms (one thread)",
+                ms(started)
+            );
+            // The tier's columns generated with the river terms and without.
+            let field = ColumnSettings::default().worms();
+            let region = worms::gather(&field, cfg, anchor, ColumnSettings::default().reach_m);
+            let started = Instant::now();
+            for &d in &set.columns.centres {
+                std::hint::black_box(column::generate_edited(&region, &field, cfg, d, &[]));
+            }
+            let col_with = ms(started);
+            let started = Instant::now();
+            for &d in &set.columns.centres {
+                std::hint::black_box(column::generate_edited(&region, &field, &dry, d, &[]));
+            }
+            let col_without = ms(started);
+            // The flowing water's mesh, made on the frame a set lands.
+            let started = Instant::now();
+            let mesh = crate::water_flow::liquid_mesh(
+                &set.columns,
+                set.finest_records(),
+                PLANET_RADIUS,
+                cfg.sea_level_m,
+            );
+            let meshed = ms(started);
+            eprintln!(
+                "{name}: generate_fine whole {whole:.0} ms ({} records); their altitudes \
+                 {rec_with:.0} ms with rivers, {rec_without:.0} without (one thread); tier \
+                 columns {col_with:.0} ms with rivers, {col_without:.0} without; water mesh \
+                 {meshed:.1} ms, {} cells",
+                records.len(),
+                mesh.cells,
+            );
+            // Best of three, each from the records as the set was laid.
+            let mut best: Option<(BuildPhases, f64, ColumnTier)> = None;
+            for _ in 0..3 {
+                let mut finest = set.levels[3].clone();
+                let started = Instant::now();
+                let tier = build(
+                    anchor,
+                    &mut finest,
+                    &set.finest_neighbors,
+                    &ColumnSettings::default(),
+                    &Edits::new(),
+                );
+                let total = ms(started);
+                let phases = LAST_BUILD.with(|c| c.get());
+                if best.as_ref().is_none_or(|b| total < b.1) {
+                    best = Some((phases, total, tier));
+                }
+            }
+            let (p, total, mut tier) = best.expect("three builds");
+            // The river part of the columns: the carve every altitude asks
+            // and the water each column stands, over the tier's directions.
+            let dirs = tier.centres.clone();
+            let started = Instant::now();
+            for &d in &dirs {
+                std::hint::black_box(pbd_core::planet_gen::surface_altitude(cfg, d));
+            }
+            let with = ms(started);
+            let started = Instant::now();
+            for &d in &dirs {
+                std::hint::black_box(pbd_core::planet_gen::surface_altitude(&dry, d));
+            }
+            let without = ms(started);
+            let started = Instant::now();
+            let mut sources = 0;
+            for &d in &dirs {
+                sources += pbd_core::rivers::water(cfg, d).len();
+            }
+            let water = ms(started);
+            // A second settle over the settled tier: what a check costs.
+            let started = Instant::now();
+            let again = tier.settle_rivers(&Edits::new());
+            let check = ms(started);
+            eprintln!(
+                "{name}: {} columns, build {total:.1} ms = columns {:.1} + flood {:.1} + \
+                 settle {:.1} + relight {:.1}; settle queued {} cells, {} ticks, {} sweeps, \
+                 changed {}; one altitude per column {with:.1} ms with rivers, {without:.1} \
+                 without; rivers::water {water:.1} ms ({sources} sources); settle again \
+                 {check:.1} ms, changed {again}",
+                tier.columns.len(),
+                p.columns_ms,
+                p.flood_ms,
+                p.settle_ms,
+                p.relight_ms,
+                p.settle_queued,
+                p.settle_ticks,
+                p.settle_sweeps,
+                p.settle_changed,
+            );
+        }
     }
 }
