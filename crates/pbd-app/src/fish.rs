@@ -186,12 +186,14 @@ impl Plugin for FishPlugin {
             .init_resource::<FishingStatus>()
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
+            .init_resource::<draw::DrawnFloat>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
                 Update,
                 (
                     life_script.run_if(resource_exists::<LifeScript>),
                     fish,
+                    draw::ease_float,
                     draw::schools,
                     draw::hud,
                 )
@@ -1218,6 +1220,87 @@ pub(crate) mod draw {
     #[derive(Component)]
     pub struct LineMesh;
 
+    /// How quickly a jump of the hooked float is eased out, 1/s: critically
+    /// damped, so 95% of it is gone in about 4.7 / this (a quarter second).
+    pub(crate) const FLOAT_EASE_PER_S: f32 = 19.0;
+
+    /// Where the float is drawn (`movement-smoothness` design 7.1): the
+    /// line's float plus an offset that takes up the one-frame jump the line
+    /// makes when a hooked fish starts or stops running (its swing switched
+    /// on or off) or is struck, and eases it out. Draw only: nothing in the
+    /// line's rules reads it.
+    #[derive(Resource, Clone, Copy, Debug, Default)]
+    pub struct DrawnFloat {
+        /// Drawn minus simulated, planet-local, m, and how fast it changes.
+        pub offset: Vec3,
+        velocity: Vec3,
+        /// The line as last frame left it: its float, phase and run.
+        last: Option<(Vec3, Phase, f32)>,
+    }
+
+    impl DrawnFloat {
+        /// One frame: `float`, `phase` and `run` are the line's after this
+        /// frame's step.
+        pub fn update(&mut self, dt: f32, float: Vec3, phase: Phase, run: f32) {
+            let hooked = phase == Phase::Hooked;
+            let jumped = match self.last {
+                Some((was, Phase::Hooked, was_run)) if hooked && was_run != run => Some(was),
+                Some((was, Phase::Bite, _)) if hooked => Some(was),
+                _ => None,
+            };
+            self.last = Some((float, phase, run));
+            if !hooked {
+                *self = Self {
+                    last: self.last,
+                    ..Self::default()
+                };
+                return;
+            }
+            if let Some(was) = jumped {
+                // Drawn where it was drawn last frame.
+                self.offset += was - float;
+            } else if dt > 0.0 && dt.is_finite() {
+                // Critically damped: x = (x0 + (v0 + w x0) t) e^-wt.
+                let w = FLOAT_EASE_PER_S;
+                let e = (-w * dt).exp();
+                let (x0, v0) = (self.offset, self.velocity);
+                let c = v0 + x0 * w;
+                self.offset = (x0 + c * dt) * e;
+                self.velocity = (v0 - c * (w * dt)) * e;
+            }
+            // Along the water: no part of it toward the planet's centre.
+            let up = float.normalize_or(Vec3::Y);
+            self.offset -= up * self.offset.dot(up);
+            self.velocity -= up * self.velocity.dot(up);
+            if !(self.offset.is_finite() && self.velocity.is_finite()) {
+                self.offset = Vec3::ZERO;
+                self.velocity = Vec3::ZERO;
+            }
+        }
+
+        /// The float as drawn: `float` moved by the offset and kept at its
+        /// height over the centre.
+        pub fn drawn(&self, float: Vec3) -> Vec3 {
+            if self.offset == Vec3::ZERO {
+                return float;
+            }
+            (float + self.offset).normalize_or(Vec3::Y) * float.length()
+        }
+
+        /// How far the drawn float is from the line's: what the fish on the
+        /// line, held at the lure, is drawn moved by.
+        pub fn shift(&self, float: Vec3) -> Vec3 {
+            self.drawn(float) - float
+        }
+    }
+
+    /// Ease the float's jumps (`movement-smoothness` design 7.1), after the
+    /// line has stepped and before anything is drawn from it.
+    pub fn ease_float(time: Res<Time>, fishery: Res<Fishery>, mut drawn: ResMut<DrawnFloat>) {
+        let line = &fishery.line;
+        drawn.update(time.delta_secs().min(0.1), line.float, line.phase, line.run);
+    }
+
     #[derive(Component)]
     pub struct StatusText;
 
@@ -1410,6 +1493,7 @@ pub(crate) mod draw {
         fauna: Res<FaunaConfig>,
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
+        float: Res<DrawnFloat>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
             Entity,
@@ -1449,6 +1533,9 @@ pub(crate) mod draw {
             })
         };
         let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
+        // The fish on the line is drawn at the lure under the drawn float
+        // (`movement-smoothness` 7.1).
+        let held = float.shift(fishery.line.float);
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.index) else {
@@ -1465,7 +1552,7 @@ pub(crate) mod draw {
                 faded.0 = fade;
             }
             if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
-                build(mesh, school, species, now, dim(school), alpha);
+                build(mesh, school, species, now, dim(school), alpha, held);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1480,7 +1567,7 @@ pub(crate) mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now, dim(school), alpha);
+            build(&mut mesh, school, species, now, dim(school), alpha, held);
             let handle = meshes.add(mesh);
             commands
                 .spawn((
@@ -1517,12 +1604,31 @@ pub(crate) mod draw {
     /// trace (`movement-smoothness`) follows.
     pub(crate) fn creature_drawn(
         fishery: &Fishery,
+        float: &DrawnFloat,
         s: usize,
         i: usize,
         step_hz: f32,
     ) -> Option<Vec3> {
         let school = fishery.schools.get(s)?;
-        (i < school.len()).then(|| school.drawn(i, fishery.step_alpha(step_hz)))
+        (i < school.len()).then(|| {
+            drawn_at(
+                school,
+                i,
+                fishery.step_alpha(step_hz),
+                float.shift(fishery.line.float),
+            )
+        })
+    }
+
+    /// Creature `i` between its school's steps; the fish on the line, held
+    /// at the lure, moved by `held` with the drawn float.
+    fn drawn_at(school: &School, i: usize, alpha: f32, held: Vec3) -> Vec3 {
+        let p = school.drawn(i, alpha);
+        if school.held.is_some_and(|(h, _)| h == i) {
+            p + held
+        } else {
+            p
+        }
     }
 
     /// How far under a diving duck is drawn when wholly dived, m.
@@ -1538,6 +1644,7 @@ pub(crate) mod draw {
     /// upended dabbler points its nose down, a sleeping duck tucks its head,
     /// a diver under the water is not drawn and a hidden octopus is small in
     /// its den.
+    #[allow(clippy::too_many_arguments)]
     fn build(
         mesh: &mut Mesh,
         school: &School,
@@ -1545,6 +1652,7 @@ pub(crate) mod draw {
         now: Option<(f64, Vec3)>,
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
+        held: Vec3,
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
@@ -1552,7 +1660,7 @@ pub(crate) mod draw {
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for i in 0..school.len() {
             // Between the school's last two steps (`movement-smoothness`).
-            let p = &school.drawn(i, alpha);
+            let p = &drawn_at(school, i, alpha, held);
             let up = p.normalize_or(Vec3::Y);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
@@ -1660,7 +1768,9 @@ pub(crate) mod draw {
         air: Option<Res<Air>>,
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
+        drawn: Res<DrawnFloat>,
         cameras: Query<&Transform, With<WalkingCamera>>,
+        rods: Query<(&crate::held::Held, &Transform), Without<WalkingCamera>>,
         mut floats: Query<
             (&mut Transform, &mut Visibility),
             (With<Float>, Without<LineMesh>, Without<WalkingCamera>),
@@ -1678,7 +1788,10 @@ pub(crate) mod draw {
         // what leaves it.
         let line = &fishery.line;
         let out = rod_out && line.is_out();
-        let float_at = (frame.center + line.float.as_dvec3()).as_vec3();
+        // The float as drawn: the line's, its hooked jumps eased out
+        // (`movement-smoothness` 7.1).
+        let float = drawn.drawn(line.float);
+        let float_at = (frame.center + float.as_dvec3()).as_vec3();
         for (mut transform, mut visibility) in &mut floats {
             *visibility = if out {
                 Visibility::Visible
@@ -1686,7 +1799,7 @@ pub(crate) mod draw {
                 Visibility::Hidden
             };
             transform.translation = float_at;
-            transform.rotation = Quat::from_rotation_arc(Vec3::Y, line.float.normalize_or(Vec3::Y));
+            transform.rotation = Quat::from_rotation_arc(Vec3::Y, float.normalize_or(Vec3::Y));
         }
         for (mesh, mut transform, mut visibility) in &mut lines {
             *visibility = if out {
@@ -1703,8 +1816,15 @@ pub(crate) mod draw {
             // The camera is a top-level entity: its `Transform`, which
             // `follow_walker` has just set, is where the rod is drawn this
             // frame. (Its `GlobalTransform` is still last frame's here.)
-            let tip_local =
-                (eye.transform_point(crate::held::rod_tip()).as_dvec3() - frame.center).as_vec3();
+            // The rod's tip as the rod is posed this frame (`held::hold`,
+            // in `Update`, has swayed it): `movement-smoothness` 7.3.
+            let tip = rods
+                .iter()
+                .find(|(held, _)| held.tool() == Tool::Rod)
+                .map_or(crate::held::rod_tip(), |(held, pose)| {
+                    held.posed(pose, crate::held::rod_tip())
+                });
+            let tip_local = (eye.transform_point(tip).as_dvec3() - frame.center).as_vec3();
             transform.translation = (frame.center + tip_local.as_dvec3()).as_vec3();
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
@@ -1715,7 +1835,7 @@ pub(crate) mod draw {
             // back up): the water the float rides, with its waves and tide,
             // not the mean sea, which stands a metre over it at low water.
             // It ends on the top of the float, where it is tied.
-            let end = line.float + line.float.normalize_or(Vec3::Y) * FLOAT_TOP_M;
+            let end = float + float.normalize_or(Vec3::Y) * FLOAT_TOP_M;
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -1724,7 +1844,7 @@ pub(crate) mod draw {
                         air.as_deref(),
                         contact.as_deref(),
                         &fishery.beds,
-                        line.float,
+                        float,
                         seconds,
                     );
                     line_points(tip_local, end, slack, |p| line_floor(&water, end, p))

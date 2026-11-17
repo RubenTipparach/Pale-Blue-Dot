@@ -43,7 +43,8 @@ impl Plugin for MotionTracePlugin {
              hand_vx,hand_vy,hand_vz,hand_lx,hand_ly,hand_lz,\
              float_vx,float_vy,float_vz,fish_vx,fish_vy,fish_vz,\
              hand_rx,hand_ry,hand_rz,\
-             origin_x,origin_y,origin_z"
+             origin_x,origin_y,origin_z,\
+             line_vx,line_vy,line_vz,tip_vx,tip_vy,tip_vz"
         )
         .expect("PBD_MOTION_TRACE: cannot write");
         info!("MOTION_TRACE writing {}", path.display());
@@ -81,11 +82,18 @@ fn trace(
     clock: Res<SimulationClock>,
     frame: Res<crate::planet::PlanetRenderFrame>,
     fishery: Option<Res<Fishery>>,
+    drawn_float: Option<Res<crate::fish::draw::DrawnFloat>>,
+    lines: Query<(&GlobalTransform, &InheritedVisibility), With<crate::fish::draw::LineMesh>>,
     fauna: Option<Res<crate::config::FaunaConfig>>,
     cameras: Query<&GlobalTransform, With<WalkingCamera>>,
     walkers: Query<&Position, With<Walker>>,
     floats: Query<(&GlobalTransform, &InheritedVisibility), With<Float>>,
-    in_hand: Query<(&GlobalTransform, &Transform, &InheritedVisibility), With<crate::held::Held>>,
+    in_hand: Query<(
+        &GlobalTransform,
+        &Transform,
+        &InheritedVisibility,
+        &crate::held::Held,
+    )>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let now = Instant::now();
@@ -148,8 +156,14 @@ fn trace(
             now_followed =
                 pick.and_then(|(s, i)| Some((f.schools.get(s)?.seed, *f.schools[s].ids.get(i)?)));
             let drawn = pick.and_then(|(s, i)| {
-                crate::fish::draw::creature_drawn(f, s, i, step_hz)
-                    .map(|p| (p, { f.schools[s].held.is_some_and(|(h, _)| h == i) }))
+                crate::fish::draw::creature_drawn(
+                    f,
+                    &drawn_float.as_deref().copied().unwrap_or_default(),
+                    s,
+                    i,
+                    step_hz,
+                )
+                .map(|p| (p, { f.schools[s].held.is_some_and(|(h, _)| h == i) }))
             });
             let (p, held) = drawn.unwrap_or((Vec3::NAN, false));
             (p, held, format!("{:?}", f.line.phase))
@@ -160,8 +174,8 @@ fn trace(
     let view = camera.to_matrix().inverse();
     let (hand_view, hand_local) = in_hand
         .iter()
-        .max_by_key(|(_, _, v)| v.get())
-        .map_or((Vec3::NAN, Vec3::NAN), |(g, t, _)| {
+        .max_by_key(|(_, _, v, _)| v.get())
+        .map_or((Vec3::NAN, Vec3::NAN), |(g, t, _, _)| {
             (view.transform_point3(g.translation()), t.translation)
         });
     // The A/B: the same tool drawn with the render origin rebased to the
@@ -179,6 +193,19 @@ fn trace(
         let view_rebased = Mat4::from_rotation_translation(rotation, eye_rebased).inverse();
         view_rebased.transform_point3((world - origin).as_vec3())
     };
+    // The line's start as drawn, and the tip of the rod as drawn (its pose
+    // under the camera, swayed), in camera space (`movement-smoothness`
+    // 7.3): the gap between them is the line leaving the rod off its tip.
+    let line_view = lines
+        .iter()
+        .find(|(_, v)| v.get())
+        .map_or(Vec3::NAN, |(g, _)| view.transform_point3(g.translation()));
+    let tip_view = in_hand
+        .iter()
+        .find(|(_, _, v, h)| v.get() && h.tool() == pbd_core::inventory::Tool::Rod)
+        .map_or(Vec3::NAN, |(g, _, _, h)| {
+            view.transform_point3(g.transform_point(h.in_tool(crate::held::rod_tip())))
+        });
     let float_view = if shown {
         view.transform_point3(float)
     } else {
@@ -190,7 +217,7 @@ fn trace(
     let float_local = local(float);
     let wall = now.duration_since(trace.start).as_secs_f64();
     let row = format!(
-        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1}",
+        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7}",
         trace.frame,
         wall,
         real.delta_secs_f64(),
@@ -233,6 +260,12 @@ fn trace(
         frame.origin.x,
         frame.origin.y,
         frame.origin.z,
+        line_view.x,
+        line_view.y,
+        line_view.z,
+        tip_view.x,
+        tip_view.y,
+        tip_view.z,
     );
     let _ = writeln!(trace.file, "{row}");
     if let Some(seconds) = trace.seconds
