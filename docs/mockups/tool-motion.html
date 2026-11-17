@@ -80,6 +80,14 @@
   dialog.modal ul { margin: 0; padding-left: 20px; display: grid; gap: 5px; }
   dialog.modal .mclose { position: sticky; top: 8px; float: right; margin: 8px 8px 0 0; z-index: 1; }
   @media (max-width: 560px) { .ptabs [role="tab"] { padding: 6px 9px; font-size: 14px; } h1 { font-size: 24px; } }
+  .stage { position: absolute; right: 8px; top: 8px; font: 700 13px "Pixelify Sans", monospace; letter-spacing: 0.08em; color: #f2d485; background: rgba(10, 14, 18, 0.55); padding: 3px 7px; border-radius: 3px; pointer-events: none; }
+  .stage:empty { display: none; }
+  .prompt { position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%); font: 12px "IBM Plex Mono", monospace; color: #e8eef0; background: rgba(5, 15, 20, 0.6); padding: 3px 8px; border-radius: 3px; pointer-events: none; white-space: nowrap; }
+  .prompt b { color: #f2d485; margin-right: 6px; }
+  .readout { font: 12px "IBM Plex Mono", monospace; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 18px; }
+  .readout b { color: var(--text); font-weight: 500; }
+  .readout b.run { color: #ff8a6b; }
+  .holdbtn { touch-action: none; }
 </style>
 </head>
 <body>
@@ -93,44 +101,75 @@
     <button class="mclose" id="info-close" aria-label="Close">✕</button>
     <div class="mbody">
       <h3 id="info-title">About this mockup</h3>
-      <p>Mockup M36, the tool in hand: digging, chopping and fishing in first person. The owner, 2026-11-17: <em>"The dudes hand kinda of has weird normals. Also the fishing rod isnt animated when casting or when a fish is bighting let's fix that up. Make a new fishing mockup"</em>, then <em>"make a new mockup for all the tools stuff for digging, choppin and fishing"</em>, after <em>"man that axe swing is weak, it should be more visceral, more faster"</em>. Plans: <code>openspec/changes/held-swing</code> (dig and chop) and <code>openspec/changes/rod-motion</code> (the rod and the hand).</p>
-      <p>Each tab has one 3D view and a <strong>Today / Proposed</strong> switch in it. <strong>Day / Night</strong> at the top applies to every tab. Nothing moves until you hold the mouse on the view or press a button; only the world moves on its own (water, the float on it, a lantern's flame).</p>
+      <p>Mockup M36, the tool in hand: digging, chopping and fishing in first person, and the hand on its own. The owner, 2026-11-17: <em>"The dudes hand kinda of has weird normals. Also the fishing rod isnt animated when casting or when a fish is bighting let's fix that up. Make a new fishing mockup"</em>, <em>"make a new mockup for all the tools stuff for digging, choppin and fishing"</em>, <em>"man that axe swing is weak, it should be more visceral, more faster"</em>, then <em>"this bar is just stuck in the middle, so it needs fixing, so I can actually understand the fishing ... game"</em>, <em>"hand normals still fucked, or maybe its coloring? add the hand model by itself with animations to another tab of tools in hand"</em>, <em>"I think hand should extend outward when doing actions"</em> and <em>"animation principles: windup, anticipation, hit, recoil"</em>. Plans: <code>openspec/changes/held-swing</code> (dig and chop) and <code>openspec/changes/rod-motion</code> (the rod and the hand).</p>
+      <p>Each tab has one 3D view. Dig, Chop and Fish have a <strong>Today / Proposed</strong> switch in it. <strong>Day / Night</strong> at the top applies to every tab. Nothing moves until you hold the mouse on the view or press a button; only the world moves on its own (water, a lantern's flame).</p>
 
-      <h3>Dig</h3>
+      <h3>The stroke: four stages on an arc (Dig, Chop, Proposed)</h3>
       <ul>
-        <li>The pickaxe on a stone cell, or the shovel on a grass cell (the picker). Hold the mouse on the view, or press <strong>Dig</strong>, to dig the cell ahead. Cracks grow with the dig's progress, the cell breaks and pops away, and a fresh one comes back after 0.15&nbsp;s (<code>between_s</code>, <code>dig.ron</code>).</li>
+        <li><strong>Windup</strong> (<code>windup_s</code>, eased out): the arm raises the tool up and back toward the right shoulder by <code>raise_rad</code>, the tool tipping back <code>windup_rad</code> on top, and the arm gathers in by <code>coil_m</code>.</li>
+        <li><strong>Anticipation</strong> (<code>anticipate_s</code>, <code>anticipate_rad</code>): at the top it settles a little further back and holds: a slow ease into a coiled pause, the beat before the release.</li>
+        <li><strong>Hit</strong> (<code>strike_s</code>, eased in with t³ so it is fastest at contact, then <code>impact_hold_s</code>): the sweep forward and down to full reach (<code>reach_rad</code>, the arm stretched by <code>extend_m</code>), the head landing at the crosshair, and a held frame on contact with the hit marker, chips and the optional camera kick.</li>
+        <li><strong>Recoil</strong> (<code>recoil_s</code>, <code>recoil_rad</code>, then <code>recover_s</code>): the tool kicks back up off the block with a slight overshoot while the arm follows through low (<code>follow_rad</code>), then eases to rest or into the next windup.</li>
+        <li>The fist moves on an arc about a virtual shoulder (<code>shoulder</code>, eye space, m), never a straight line; the arm, cuff and sleeve swing with it. The stage name shows live under the view; <strong>Slow ×0.25</strong> slows it to see each stage, and <strong>Show poses</strong> freezes on the four keyed poses (rest, top, hit, recoil) in turn.</li>
+        <li>The strokes keep one steady beat from block to block: a block of break time T and the 0.15&nbsp;s before the next one (<code>between_s</code>, <code>dig.ron</code>) get N&nbsp;=&nbsp;max(1,&nbsp;round((T&nbsp;+&nbsp;0.15)&nbsp;/&nbsp;<code>stroke_target_s</code>)) strokes of one period P&nbsp;=&nbsp;(T&nbsp;+&nbsp;0.15)&nbsp;/&nbsp;N, the last on the break. If a stroke is longer than P, its windup, anticipation and recover shrink in proportion; the hit never does.</li>
+        <li>Timing by weight: the windup, anticipation and impact hold are scaled by the tool's weight (<code>pickaxe_weight</code>, <code>axe_weight</code>, <code>shovel_weight</code>) and by the tier, <code>1 + tier_slow × (3 − tier)</code>, so stone is a little slower than steel. <code>exaggerate</code> scales the raise, the recoil and the camera kick together.</li>
         <li>The break times are the game's, <code>assets/config/dig.ron</code>: the stone tier's matrix (pickaxe on stone 1.2&nbsp;s, rock 1.6&nbsp;s, ore 2.0&nbsp;s; shovel on dirt 0.5&nbsp;s; axe on wood 0.6&nbsp;s) divided by the tier's speed (1, 1.6, 2.4, 3.6).</li>
-        <li><strong>Today</strong> is the game's chop (<code>held::hold</code>): a sine at 9&nbsp;rad/s, <code>chop = sin(phase).max(-0.2)</code>, pitching the tool 0.85&nbsp;rad forward about the fist and dropping it 6&nbsp;cm; it has no hits of its own, the block breaks when the time is up, and letting go snaps the tool to rest.</li>
-        <li><strong>Proposed</strong> is the STRIKE stroke of <code>held-swing</code>: a wind-up of 0.08&nbsp;s back to −0.35&nbsp;rad, the strike in 0.07&nbsp;s to +1.15&nbsp;rad eased in with t³ (fastest at impact), a 0.05&nbsp;s hold on impact (the tool only; the dig runs on), a 0.12&nbsp;rad kick back and 0.18&nbsp;s back to rest. The fist drops 9&nbsp;cm in step with the angle. The strokes keep one steady beat from block to block: a block of break time T and the 0.15&nbsp;s before the next one get N&nbsp;=&nbsp;max(1,&nbsp;round((T&nbsp;+&nbsp;0.15)&nbsp;/&nbsp;0.4)) strokes of one period (T&nbsp;+&nbsp;0.15)&nbsp;/&nbsp;N, the last on the break, so there is no pause between blocks. Letting go eases the tool back over <code>recover_s</code>. The camera kick is 0 unless its slider is raised.</li>
-      </ul>
-      <h3>Chop</h3>
-      <ul><li>The axe on a tree trunk, the same two strokes as Dig. Wood with the stone axe is 0.6&nbsp;s, which with the 0.15&nbsp;s pause is 2 strokes (round(1.875)); an iron axe's 0.25&nbsp;s is one, at one steady beat.</li></ul>
-      <h3>Fish</h3>
-      <ul>
-        <li>Hold the mouse on the view to charge, let go to cast, as in the game (power over 1.2&nbsp;s; the float flies at 5–18&nbsp;m/s with 3–6&nbsp;m/s of lift, <code>fauna.ron</code>). Click while the float is under to strike; hold to reel while a fish is on; right click winds the line in.</li>
-        <li>The buttons play one phase each: <strong>Charge</strong>, <strong>Cast</strong>, <strong>Nibble</strong>, <strong>Bite</strong>, <strong>Fight</strong> (the fish stays on until another button; <strong>Reel</strong> turns the crank, <strong>Tension</strong> sets the line's tension) and <strong>Catch</strong>. <strong>Play all</strong> runs the whole cast to a catch once.</li>
-        <li><strong>Today</strong>: the rod stands still in every phase; only the float and the line change, and the line leaves the rod's rest tip.</li>
-        <li><strong>Proposed</strong> (<code>rod-motion</code> design 2): a pitch about the fist (tip up and back positive), a roll and a shift of the fist, driven by a damped spring toward each phase's target (<code>spring_hz</code> 9, <code>damping</code> 0.7), so a phase change never pops the rod. Charging draws back to +<code>draw_rad</code> with the charge, eased, the fist up and back <code>draw_lift_m</code>; the cast flicks to −<code>flick_rad</code> in <code>flick_s</code> and springs to the fishing pose −<code>settle_rad</code> with a slow bob; a nibble twitches the tip <code>nibble_rad</code> for <code>nibble_s</code>; a bite dips it to −<code>bite_rad</code> at once and shakes at 14&nbsp;Hz for the window; a fish on lifts it to +<code>fight_rad</code>, shaking <code>fight_shake_rad</code>&nbsp;×&nbsp;tension at 9&nbsp;Hz, rolling toward the fish's pull up to <code>roll_rad</code>, and while reeling the fist turns a <code>crank_m</code> circle at 3&nbsp;Hz; a catch lifts +<code>catch_rad</code> and eases back over <code>catch_s</code>; a miss, a snap or a wind-in eases back over <code>ease_s</code>. The line leaves the tip where the rod is drawn this frame.</li>
+        <li><strong>Today</strong> is the game's chop (<code>held::hold</code>): a sine at 9&nbsp;rad/s, <code>chop = sin(phase).max(-0.2)</code>, pitching the tool 0.85&nbsp;rad forward about a fixed fist and dropping it 6&nbsp;cm: a wrist flick, slowest at the moment it should land. It has no hits of its own, and letting go snaps the tool to rest.</li>
+        <li>At the hit the arm also swings in toward the middle of the view (<code>sweep_rad</code>, about the shoulder's upright), so the head lands at the crosshair rather than off to the right where the fist rests.</li>
+        <li><strong>The shovel</strong> (the owner: <em>"the spade definitely need to take a steep angle approach to dirt, angle up and lift"</em>) has no overhead arc. The windup turns the spade onto a steep line, <code>entry_deg</code> below the horizontal with the tip leading, and the anticipation draws it back up that line. The hit stabs it in along its own handle by <code>thrust_m</code>, into the ground just ahead and <code>across_m</code> in toward the middle. The recoil angles it up about the point where the blade is in the ground (<code>lever_rad</code>, not about the fist), then lifts (<code>lift_m</code>) with a clump of dirt on the blade, which tips off as it returns. The arm follows only <code>arm_follow</code> of the spade's turn and the wrist takes the rest, so the sleeve stays below the hand.</li>
+        <li>In Proposed the hand is the proposed hand (below), and its sleeve is <code>sleeve_extra</code> tool units longer at its far end, so the arm still runs off the screen at full reach.</li>
       </ul>
 
-      <h3>The hand's faces</h3>
-      <p>The game shaded each side face of a hand prism by the direction from the prism's middle to the middle of that side. On a round finger the two are the same; on the flattened back of the hand (1.97 by 0.70 tool units) its four slanted faces were shaded as if they pointed up to about 50° away from where they do: the patchy back of the hand. <code>hexel::prism</code> now shades each side by its true normal, the side edge crossed with the axis turned outward (commit <code>8a769c43</code>), as the approved Hex Tool Bench did. Every hand here is built by a port of that function. The fingers are unchanged.</p>
+      <h3>The twelve principles, here</h3>
+      <ul>
+        <li><strong>Squash and stretch:</strong> the tools are rigid, so the arm gathers at the top (<code>coil_m</code>) and stretches at the hit (<code>extend_m</code>).</li>
+        <li><strong>Anticipation:</strong> the coiled pause before the hit; the rod draws back before the flick, and dips before it lifts on a catch (<code>catch_dip_rad</code>).</li>
+        <li><strong>Staging:</strong> the tool head lands at the crosshair and stays in frame against the block at the hit.</li>
+        <li><strong>Pose to pose:</strong> four keyed poses (rest, top, hit, recoil) blended by the stage curves; <strong>Show poses</strong> shows them.</li>
+        <li><strong>Follow-through and overlapping action:</strong> the head lags the fist on the windup by <code>lag_s</code> and carries <code>overlap_rad</code> past it at the hit, settling in the recoil; the arm follows through low; the rod tip wobbles after the flick (<code>flick_wobble_rad</code>) and the line follows the tip.</li>
+        <li><strong>Slow in and slow out:</strong> every held pose is eased into and out of; the hit alone arrives at full speed.</li>
+        <li><strong>Arcs:</strong> the fist swings about the shoulder, and the rod tip arcs over on the cast.</li>
+        <li><strong>Secondary action:</strong> chips, the hit marker, the camera kick (0 unless raised), the sleeve and cuff, the idle breathing sway between strokes.</li>
+        <li><strong>Timing:</strong> one steady beat from the dig's own clock; heavier tools wind up slower and hold the impact longer; lower tiers a little slower.</li>
+        <li><strong>Exaggeration:</strong> one <code>exaggerate</code> value (0–1.5) pushes or calms the raise, recoil and kick together.</li>
+        <li><strong>Solid drawing:</strong> the Hand tab shows each pose from any side; the fist must read as one solid fist and the arm must leave the screen edge.</li>
+        <li><strong>Appeal:</strong> the owner's call, on this page.</li>
+      </ul>
+
+      <h3>Fish: how the fight works</h3>
+      <p>The line is the game's own rules, <code>pbd_core::fishing</code>, with <code>fauna.ron</code>'s numbers and the species' pull and strength. Left button: hold to charge and let go to cast, click when the float goes under to strike, then <strong>hold to reel</strong>. Right click winds an empty line in.</p>
+      <ul>
+        <li><strong>Tension</strong> (the meter) starts at 0.2 on the strike. While you reel it rises 0.35 a second, plus 0.8 × the fish's pull × its stamina while it runs. With the button up it falls 0.7 a second.</li>
+        <li><strong>The fish runs and rests</strong> in turns: a run of 0.8–2&nbsp;s at its full pull, a rest of 1.2–3&nbsp;s. While it runs, reeling takes in less line (1.8&nbsp;m/s × (1 − 0.6 × min(pull / 1.5, 1))) and the tension climbs much faster; with the button up it takes line back out at 1.2 × pull × stamina m/s.</li>
+        <li><strong>Stamina</strong> falls 0.08 a second while the fish runs against a line over 0.25 tension, never under 0.15: a tired fish pulls less.</li>
+        <li><strong>The line snaps</strong> when the tension reaches 1. <strong>The fish is landed</strong> when the line is down to 1.3&nbsp;m, or the float is in water under 0.15&nbsp;m deep.</li>
+        <li>So the fight is: reel while it rests, ease off when it runs (the tension shoots up and the line goes out), and reel again. Holding the button the whole way snaps the line in about two seconds; never reeling never lands it.</li>
+        <li>The meter is green to 0.55, amber to 0.8 and red above, as the game's HUD. The prompts are the game's (<code>fish.rs</code>): "Hold to reel - ease off when it runs", "The line snapped - the … is gone", "&lt;name&gt; - N cm", and the others.</li>
+        <li><strong>What shows the run:</strong> in the game, only the line: the float stays pulled under at the bite's depth through the fight, and while the fish runs the place the line enters the water weaves 0.12 × pull rad either side. The page adds ripples there while it runs, and its readout under the view names the run and the stamina. The game has no run prompt; a cue could be added if this is still hard to read.</li>
+        <li><strong>Land</strong> and <strong>Snap</strong> hook a fish and let a bot play it: Land reels while the tension is low and eases off when it climbs or the fish runs; Snap holds the button down. <strong>Fight</strong> hooks one and hands it to you. <strong>Play all</strong> casts, waits for the bite, strikes and lands it.</li>
+        <li><strong>Approximated:</strong> when a fish comes to the float (the game's schools) is the page's: 0.8–2.4&nbsp;s after the splash time. The nibbles, bite window, fight, snap and landing are the game's rules.</li>
+      </ul>
+      <h3>The rod (Proposed)</h3>
+      <p><code>rod-motion</code> design 2: a damped spring toward each phase's target (<code>spring_hz</code>, <code>damping</code>), so a phase change never pops. Charging draws back to +<code>draw_rad</code>, the fist rising <code>draw_lift_m</code> along the shoulder arc; the cast flicks to −<code>flick_rad</code> in <code>flick_s</code> and the tip wobbles after it; a nibble twitches the tip; a bite dips it; while a fish is on the rod is held up at <code>fight_rad</code>, pulled down by <code>run_dip_rad</code> while the fish runs, rolled toward its pull up to <code>roll_rad</code>, and shakes by <code>fight_shake_rad</code> × the live tension; reeling turns the fist in a <code>crank_m</code> circle; a catch dips then lifts by <code>catch_rad</code>. <strong>Today</strong>: the rod stands still in every phase.</p>
+
+      <h3>The hand (the Hand tab)</h3>
+      <div id="hand-findings"></div>
 
       <h3>Tuning</h3>
-      <p>Each tab's <strong>Tune</strong> holds its values as sliders and prints the <code>assets/config/held.ron</code> they make. The stroke values replace the three <code>swing_*</code> values (<code>held-swing</code> decision 1); the rod's are its <code>rod</code> block. Names in the design tables: <code>windup_s</code>, <code>windup_rad</code>, <code>strike_s</code>, <code>strike_rad</code>, <code>impact_hold_s</code>, <code>recoil_rad</code>, <code>recover_s</code>, <code>stroke_target_s</code>, <code>drop_m</code>, <code>camera_kick_rad</code>; <code>draw_rad</code>, <code>draw_lift_m</code>, <code>flick_rad</code>, <code>flick_s</code>, <code>settle_rad</code>, <code>nibble_rad</code>, <code>bite_rad</code>, <code>fight_rad</code>, <code>fight_shake_rad</code>, <code>crank_m</code>, <code>spring_hz</code>, <code>damping</code>. The rod-motion table gives numbers but no names for the rest; this page names them <code>bob_rad</code>, <code>nibble_s</code>, <code>bite_shake_rad</code>, <code>bite_shake_hz</code>, <code>fight_shake_hz</code>, <code>crank_hz</code>, <code>roll_rad</code>, <code>catch_rad</code>, <code>catch_s</code> and <code>ease_s</code>. The table gives no value for <code>fight_shake_rad</code>, the bite's shake or the bob; 0.06, 0.04 and 0.015&nbsp;rad are this page's.</p>
+      <p>Each tab's <strong>Tune</strong> holds its values as sliders and prints the <code>assets/config/held.ron</code> they make: the stroke block (<code>held-swing</code>) and the rod block (<code>rod-motion</code>). The design tables name the first values; the page names the rest (<code>raise_rad</code>, <code>coil_m</code>, <code>anticipate_s</code>, <code>anticipate_rad</code>, <code>reach_rad</code>, <code>extend_m</code>, <code>sweep_rad</code>, <code>recoil_s</code>, <code>follow_rad</code>, <code>lag_s</code>, <code>overlap_rad</code>, <code>exaggerate</code>, <code>shoulder</code>, the weights, <code>tier_slow</code>, <code>sleeve_extra</code>; the shovel block; and three for the rod beyond the game's block, <code>run_dip_rad</code>, <code>flick_wobble_rad</code> and <code>catch_dip_rad</code>). The rod block prints exactly the game's fields (<code>held.rs</code>, merged), each a positive size, rate or time that the code gives its sign, so it pastes into <code>held.ron</code>; the page's three extra rod values and the hand's shade are printed as comments after it. The stroke and shovel blocks are proposed (<code>held-swing</code>) and replace the <code>swing_*</code> values once the game reads them.</p>
 
       <h3>Game-exact and approximated</h3>
       <ul>
-        <li><strong>Exact:</strong> the four tools' hexes, the hands' prisms, each tool's butt, rotation, scale, fist and rod tip, from <code>assets/models/held_tools.ron</code>; the hex mesh and its face shades (<code>hexel::mesh</code>, <code>shade</code>); the hand's shade 0.62&nbsp;+&nbsp;0.38·max(n·light,&nbsp;0) against (0.3,&nbsp;0.8,&nbsp;0.55) in eye space at the rest pose; the unlit held material tinted by the light at the eye; the 60° camera; today's chop and sway; the cast's physics, the float's two spheres and its dips (0.035&nbsp;m nibble, 0.14&nbsp;m bite); the line's sag (0.6&nbsp;m slack, 0.1&nbsp;+&nbsp;0.5·(1&nbsp;−&nbsp;tension) on a fish) held 5&nbsp;cm over the water; the break times.</li>
-        <li><strong>Approximated:</strong> the ground, water, trees and sky are simple stand-ins in the game's palette, lit by three.js lights, not the game's terrain, water and atmosphere shaders. The light on the tool in hand is the moon plus the lantern at the hand, worked out the way the page lights the ground, standing in for the game's light field. A tool head's tier tint is not shown. The fish is scripted: when it nibbles and bites, and how it runs, are set by the page, not by the game's schools. The rod's roll is about the view's forward axis.</li>
-        <li><strong>Not modelled:</strong> the rod does not bend (<code>rod-motion</code> decision 6): it is a rigid hex model, and the pitch and shake carry the fight. A bend can come later if wanted.</li>
+        <li><strong>Exact:</strong> the four tools' hexes, the hands' prisms, each tool's butt, rotation, scale, fist and rod tip, from <code>assets/models/held_tools.ron</code>; the hex mesh and its face shades (<code>hexel::mesh</code>, <code>shade</code>); the hand's shade (<code>hexel::prism</code>); the unlit held material tinted by the light at the eye; the 60° camera; today's chop and sway; the line's rules and numbers; the float's dips and the line's sag (0.6&nbsp;m slack, 0.1&nbsp;+&nbsp;0.5·(1&nbsp;−&nbsp;tension) on a fish) held 5&nbsp;cm over the water; the HUD's prompts and meter colours; the break times.</li>
+        <li><strong>Approximated:</strong> the ground, water, trees and sky are simple stand-ins in the game's palette, lit by three.js lights, not the game's shaders, and there is no exposure or tone curve except the Hand tab's <strong>Game tone</strong> switch. The light on the tool in hand is the moon plus the lantern near the hand, standing in for the game's light field at the eye. A tool head's tier tint is not shown. When a fish comes to the float is the page's. The bank is a step behind the water's edge, so a fish landed at 1.3&nbsp;m of line is drawn at the edge.</li>
+        <li><strong>Not modelled:</strong> the rod does not bend (<code>rod-motion</code> decision 6).</li>
         <li>The screenshots for this page were rendered in a cloud container without a GPU (SwiftShader); they show the look, not the frame rate.</li>
       </ul>
     </div>
   </dialog>
 
   <nav class="ptabs" role="tablist" aria-label="Tools">
-    <button role="tab" data-tab="dig">Dig</button><button role="tab" data-tab="chop">Chop</button><button role="tab" data-tab="fish">Fish</button>
+    <button role="tab" data-tab="dig">Dig</button><button role="tab" data-tab="chop">Chop</button><button role="tab" data-tab="fish">Fish</button><button role="tab" data-tab="hand">Hand</button>
     <span class="spacer"></span>
     <span class="seg" id="daynight" role="group" aria-label="Time of day"></span>
   </nav>
@@ -140,7 +179,7 @@
     <div class="panel">
       <div class="view" data-view="dig"><canvas aria-label="First-person view: hold to dig"></canvas><div class="crosshair"></div>
         <svg class="hitmark" viewBox="0 0 34 34" aria-hidden="true"><line x1="5" y1="5" x2="12" y2="12"/><line x1="29" y1="5" x2="22" y2="12"/><line x1="5" y1="29" x2="12" y2="22"/><line x1="29" y1="29" x2="22" y2="22"/></svg>
-        <span class="mode"></span></div>
+        <span class="mode"></span><span class="stage"></span></div>
       <div class="row">
         <span class="seg" data-ctl="mode"></span>
         <span class="seg" data-ctl="tool"></span>
@@ -151,8 +190,9 @@
         <span class="label">Block</span><span class="seg" data-ctl="material"></span>
         <span class="label">Tier</span><span class="seg" data-ctl="tier"></span>
         <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+        <label class="chk"><input type="checkbox" data-ctl="poses"> Show poses</label>
       </div>
-      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><span class="label">Shovel</span><div class="sliders" data-ctl="shovel-sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
     </div>
   </section>
 
@@ -161,7 +201,7 @@
     <div class="panel">
       <div class="view" data-view="chop"><canvas aria-label="First-person view: hold to chop"></canvas><div class="crosshair"></div>
         <svg class="hitmark" viewBox="0 0 34 34" aria-hidden="true"><line x1="5" y1="5" x2="12" y2="12"/><line x1="29" y1="5" x2="22" y2="12"/><line x1="5" y1="29" x2="12" y2="22"/><line x1="29" y1="29" x2="22" y2="22"/></svg>
-        <span class="mode"></span></div>
+        <span class="mode"></span><span class="stage"></span></div>
       <div class="row">
         <span class="seg" data-ctl="mode"></span>
         <button data-ctl="hold" aria-pressed="false">Chop</button>
@@ -170,6 +210,7 @@
       <div class="row">
         <span class="label">Tier</span><span class="seg" data-ctl="tier"></span>
         <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+        <label class="chk"><input type="checkbox" data-ctl="poses"> Show poses</label>
       </div>
       <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
     </div>
@@ -178,21 +219,59 @@
   <!-- Fish -->
   <section id="tab-fish" class="tabpanel" role="tabpanel" hidden>
     <div class="panel">
-      <div class="view" data-view="fish"><canvas aria-label="First-person view: hold to charge, let go to cast"></canvas><div class="crosshair"></div>
+      <div class="view" data-view="fish"><canvas aria-label="First-person view: hold to cast, click on a bite, hold to reel"></canvas><div class="crosshair"></div>
         <div class="hud"><span class="say"></span><span class="meter" hidden><i></i></span></div>
+        <div class="prompt" hidden><b>RIGHT CLICK</b> REEL IN</div>
         <span class="mode"></span></div>
       <div class="row">
         <span class="seg" data-ctl="mode"></span>
+        <span class="label">Fish</span><span class="seg" data-ctl="species"></span>
+      </div>
+      <div class="row">
         <span class="seg" data-ctl="phases"></span>
         <button data-ctl="play" aria-pressed="false">Play all</button>
       </div>
       <div class="row">
-        <button data-ctl="reel" aria-pressed="false">Reel</button>
-        <label class="sl" style="grid-template-columns:auto 160px 40px">Tension <input type="range" min="0" max="0.95" step="0.01" value="0.5" data-ctl="tension"><output data-ctl="tension-out">0.50</output></label>
+        <button data-ctl="reel" class="holdbtn">Hold: reel</button>
+        <button data-ctl="windin">Wind in</button>
         <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+        <span class="label">Left: cast, strike, hold to reel · right: wind in</span>
+      </div>
+      <div class="readout" data-ctl="readout"></div>
+      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+    </div>
+  </section>
+
+  <!-- Hand -->
+  <section id="tab-hand" class="tabpanel" role="tabpanel" hidden>
+    <div class="panel">
+      <div class="view" data-view="hand"><canvas aria-label="The right hand alone: drag to turn"></canvas><span class="mode"></span><span class="stage"></span></div>
+      <div class="row">
+        <span class="seg" data-ctl="which"></span>
+        <span class="label">Grip</span><span class="seg" data-ctl="grip"></span>
+        <button data-ctl="view">Player's view</button>
+      </div>
+      <div class="row"><span class="label">Shading</span><span class="seg" data-ctl="shade"></span></div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" data-ctl="textured" checked> Textures</label>
+        <label class="chk"><input type="checkbox" data-ctl="tool"> Tool</label>
+        <label class="chk"><input type="checkbox" data-ctl="edges"> Edges</label>
+        <span class="label">Skin</span><span class="seg" data-ctl="skin"></span>
+      </div>
+      <div class="row">
+        <button data-ctl="sway" aria-pressed="false">Play sway</button>
+        <button data-ctl="anim" aria-pressed="false">Play swing</button>
+        <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+        <label class="chk"><input type="checkbox" data-ctl="poses"> Show poses</label>
         <span class="stat" data-ctl="stat"></span>
       </div>
-      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+      <details class="tune"><summary>Tune</summary>
+        <div class="row"><label class="chk"><input type="checkbox" data-ctl="tone"> Game tone (exposure, PBR Neutral)</label>
+        <label class="sl" style="grid-template-columns:auto 160px 40px">Exposure <input type="range" min="0.5" max="3" step="0.05" value="1.4" data-ctl="exposure"><output data-ctl="exposure-out">1.40</output></label></div>
+        <div class="sliders" data-ctl="shade-sliders"></div>
+        <div class="row"><button data-ctl="copy">Copy hand data</button><span class="label">for tools/gen_held_tools.py → assets/models/held_tools.ron + assets/textures/hand/*.png</span></div>
+        <textarea class="ron" readonly data-ctl="export" aria-label="Hand data"></textarea>
+      </details>
     </div>
   </section>
 </div>
@@ -204,13 +283,15 @@
 // The game's own tools and hands: assets/models/held_tools.ron as JSON
 // (tools/gen_held_tools.py writes the RON). hexes are flat [q, r, colour, depth].
 const HELD = /*HELD-DATA*/{"spacing":0.25,"colours":[[238,243,244],[125,138,143],[201,211,214],[94,58,24],[122,77,34],[138,90,43],[114,71,31],[224,123,42],[185,162,122],[156,134,94],[227,93,74],[154,166,171]],"tools":[{"id":"pickaxe","butt":[0.299211,-0.484212,-0.533947],"rotation":[0.421189,0.567979,0.449027,0.546237],"scale":0.0380208,"fist":[0.29,-0.3,-0.58],"tip":[0.263842,0.223161,-0.71079],"hexes":[67,-21,0,0.33,68,-21,0,0.33,69,-21,0,0.33,70,-21,0,0.33,71,-21,0,0.33,72,-21,0,0.33,73,-21,0,0.33,70,-20,1,0.44,71,-20,1,0.44,72,-20,1,0.44,73,-20,0,0.35,74,-20,0,0.35,75,-20,0,0.35,72,-19,1,0.47,73,-19,1,0.47,74,-19,2,0.47,75,-19,0,0.37,76,-19,0,0.37,73,-18,1,0.49,74,-18,2,0.49,75,-18,2,0.49,76,-18,0,0.4,77,-18,0,0.4,74,-17,1,0.52,75,-17,2,0.52,76,-17,2,0.52,77,-17,0,0.42,78,-17,0,0.42,74,-16,1,0.55,75,-16,1,0.55,76,-16,2,0.55,77,-16,2,0.55,78,-16,0,0.44,75,-15,1,0.58,76,-15,2,0.58,77,-15,2,0.58,78,-15,0,0.47,79,-15,0,0.47,75,-14,1,0.61,76,-14,2,0.61,77,-14,2,0.61,78,-14,2,0.61,79,-14,0,0.49,75,-13,1,0.64,76,-13,2,0.64,77,-13,2,0.64,78,-13,2,0.64,79,-13,0,0.51,75,-12,1,0.67,76,-12,2,0.67,77,-12,2,0.67,78,-12,2,0.67,79,-12,0,0.54,75,-11,1,0.7,76,-11,2,0.7,77,-11,2,0.7,78,-11,2,0.7,79,-11,0,0.56,75,-10,1,0.73,76,-10,2,0.73,77,-10,2,0.73,78,-10,2,0.73,79,-10,0,0.58,75,-9,1,0.75,76,-9,2,0.75,77,-9,2,0.75,78,-9,2,0.75,79,-9,0,0.6,75,-8,1,0.75,76,-8,2,0.75,77,-8,2,0.75,78,-8,2,0.75,79,-8,0,0.6,75,-7,1,0.75,76,-7,2,0.75,77,-7,2,0.75,78,-7,2,0.75,79,-7,0,0.6,75,-6,1,0.75,76,-6,2,0.75,77,-6,2,0.75,78,-6,2,0.75,79,-6,0,0.6,74,-5,1,0.75,75,-5,2,0.75,76,-5,2,0.75,77,-5,2,0.75,78,-5,0,0.6,74,-4,1,0.75,75,-4,2,0.75,76,-4,2,0.75,77,-4,2,0.75,78,-4,0,0.6,71,-3,1,1.15,72,-3,1,1.15,73,-3,1,1.15,74,-3,1,1.15,75,-3,1,1.15,76,-3,1,1.15,77,-3,2,0.75,78,-3,0,0.6,0,-2,3,1.0,1,-2,4,0.67,2,-2,3,0.67,3,-2,3,0.67,4,-2,3,0.67,5,-2,4,0.67,6,-2,3,0.67,7,-2,3,0.67,8,-2,3,0.67,9,-2,4,0.67,10,-2,3,0.67,11,-2,3,0.67,12,-2,4,0.67,13,-2,5,0.59,14,-2,5,0.59,15,-2,5,0.59,16,-2,5,0.59,17,-2,5,0.59,18,-2,5,0.59,19,-2,5,0.59,20,-2,5,0.59,21,-2,5,0.59,22,-2,5,0.59,23,-2,5,0.59,24,-2,5,0.59,25,-2,5,0.59,26,-2,5,0.59,27,-2,5,0.59,28,-2,5,0.59,29,-2,5,0.59,30,-2,5,0.59,31,-2,5,0.59,32,-2,5,0.59,33,-2,5,0.59,34,-2,5,0.59,35,-2,5,0.59,36,-2,5,0.59,37,-2,5,0.59,38,-2,5,0.59,39,-2,5,0.59,40,-2,5,0.59,41,-2,5,0.59,42,-2,5,0.59,43,-2,5,0.59,44,-2,5,0.59,45,-2,5,0.59,46,-2,5,0.59,47,-2,5,0.59,48,-2,5,0.59,49,-2,5,0.59,50,-2,5,0.59,51,-2,5,0.59,52,-2,5,0.59,53,-2,5,0.59,54,-2,5,0.59,55,-2,5,0.59,56,-2,5,0.59,57,-2,5,0.59,58,-2,5,0.59,59,-2,5,0.59,60,-2,5,0.59,61,-2,5,0.59,62,-2,5,0.59,63,-2,5,0.59,64,-2,5,0.59,65,-2,5,0.59,66,-2,5,0.59,67,-2,5,0.59,68,-2,5,0.59,69,-2,5,0.59,70,-2,5,0.59,71,-2,1,1.15,72,-2,1,1.15,73,-2,1,1.15,74,-2,1,1.15,75,-2,1,1.15,76,-2,2,0.75,77,-2,0,0.6,0,-1,3,1.0,1,-1,4,0.97,2,-1,3,0.97,3,-1,3,0.97,4,-1,3,0.97,5,-1,3,0.97,6,-1,3,0.97,7,-1,3,0.97,8,-1,4,0.97,9,-1,3,0.97,10,-1,3,0.97,11,-1,3,0.97,12,-1,4,0.97,13,-1,6,0.89,14,-1,6,0.89,15,-1,5,0.89,16,-1,5,0.89,17,-1,6,0.89,18,-1,6,0.89,19,-1,6,0.89,20,-1,5,0.89,21,-1,5,0.89,22,-1,6,0.89,23,-1,6,0.89,24,-1,6,0.89,25,-1,6,0.89,26,-1,6,0.89,27,-1,5,0.89,28,-1,5,0.89,29,-1,6,0.89,30,-1,6,0.89,31,-1,6,0.89,32,-1,5,0.89,33,-1,5,0.89,34,-1,6,0.89,35,-1,6,0.89,36,-1,6,0.89,37,-1,6,0.89,38,-1,6,0.89,39,-1,5,0.89,40,-1,5,0.89,41,-1,6,0.89,42,-1,6,0.89,43,-1,5,0.89,44,-1,5,0.89,45,-1,5,0.89,46,-1,6,0.89,47,-1,6,0.89,48,-1,6,0.89,49,-1,6,0.89,50,-1,5,0.89,51,-1,5,0.89,52,-1,5,0.89,53,-1,6,0.89,54,-1,6,0.89,55,-1,5,0.89,56,-1,5,0.89,57,-1,6,0.89,58,-1,6,0.89,59,-1,6,0.89,60,-1,6,0.89,61,-1,6,0.89,62,-1,5,0.89,63,-1,5,0.89,64,-1,5,0.89,65,-1,6,0.89,66,-1,6,0.89,67,-1,5,0.89,68,-1,5,0.89,69,-1,6,0.89,70,-1,1,1.15,71,-1,1,1.15,72,-1,1,1.15,73,-1,1,1.15,74,-1,1,1.15,75,-1,1,1.15,76,-1,2,0.75,77,-1,0,0.6,-1,0,3,1.0,0,0,4,1.03,1,0,3,1.03,2,0,3,1.03,3,0,3,1.03,4,0,4,1.03,5,0,3,1.03,6,0,3,1.03,7,0,3,1.03,8,0,4,1.03,9,0,3,1.03,10,0,3,1.03,11,0,4,1.03,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,5,0.95,67,0,5,0.95,68,0,5,0.95,69,0,5,0.95,70,0,1,1.15,71,0,1,1.15,72,0,1,1.15,73,0,1,1.15,74,0,1,1.15,75,0,2,0.75,76,0,0,0.6,-1,1,3,1.0,0,1,4,0.97,1,1,3,0.97,2,1,3,0.97,3,1,3,0.97,4,1,3,0.97,5,1,3,0.97,6,1,3,0.97,7,1,4,0.97,8,1,3,0.97,9,1,3,0.97,10,1,3,0.97,11,1,4,0.97,12,1,5,0.89,13,1,5,0.89,14,1,6,0.89,15,1,6,0.89,16,1,6,0.89,17,1,6,0.89,18,1,6,0.89,19,1,5,0.89,20,1,5,0.89,21,1,6,0.89,22,1,6,0.89,23,1,6,0.89,24,1,5,0.89,25,1,5,0.89,26,1,6,0.89,27,1,6,0.89,28,1,6,0.89,29,1,6,0.89,30,1,6,0.89,31,1,5,0.89,32,1,5,0.89,33,1,6,0.89,34,1,6,0.89,35,1,5,0.89,36,1,5,0.89,37,1,5,0.89,38,1,6,0.89,39,1,6,0.89,40,1,6,0.89,41,1,6,0.89,42,1,5,0.89,43,1,5,0.89,44,1,5,0.89,45,1,6,0.89,46,1,6,0.89,47,1,5,0.89,48,1,5,0.89,49,1,6,0.89,50,1,6,0.89,51,1,6,0.89,52,1,6,0.89,53,1,6,0.89,54,1,5,0.89,55,1,5,0.89,56,1,6,0.89,57,1,6,0.89,58,1,6,0.89,59,1,5,0.89,60,1,5,0.89,61,1,6,0.89,62,1,6,0.89,63,1,6,0.89,64,1,6,0.89,65,1,6,0.89,66,1,5,0.89,67,1,5,0.89,68,1,6,0.89,69,1,1,1.15,70,1,1,1.15,71,1,1,1.15,72,1,1,1.15,73,1,1,1.15,74,1,1,1.15,75,1,2,0.75,76,1,0,0.6,-2,2,3,1.0,-1,2,4,0.67,0,2,3,0.67,1,2,3,0.67,2,2,3,0.67,3,2,4,0.67,4,2,3,0.67,5,2,3,0.67,6,2,3,0.67,7,2,4,0.67,8,2,3,0.67,9,2,3,0.67,10,2,4,0.67,11,2,5,0.59,12,2,5,0.59,13,2,5,0.59,14,2,5,0.59,15,2,5,0.59,16,2,5,0.59,17,2,5,0.59,18,2,5,0.59,19,2,5,0.59,20,2,5,0.59,21,2,5,0.59,22,2,5,0.59,23,2,5,0.59,24,2,5,0.59,25,2,5,0.59,26,2,5,0.59,27,2,5,0.59,28,2,5,0.59,29,2,5,0.59,30,2,5,0.59,31,2,5,0.59,32,2,5,0.59,33,2,5,0.59,34,2,5,0.59,35,2,5,0.59,36,2,5,0.59,37,2,5,0.59,38,2,5,0.59,39,2,5,0.59,40,2,5,0.59,41,2,5,0.59,42,2,5,0.59,43,2,5,0.59,44,2,5,0.59,45,2,5,0.59,46,2,5,0.59,47,2,5,0.59,48,2,5,0.59,49,2,5,0.59,50,2,5,0.59,51,2,5,0.59,52,2,5,0.59,53,2,5,0.59,54,2,5,0.59,55,2,5,0.59,56,2,5,0.59,57,2,5,0.59,58,2,5,0.59,59,2,5,0.59,60,2,5,0.59,61,2,5,0.59,62,2,5,0.59,63,2,5,0.59,64,2,5,0.59,65,2,5,0.59,66,2,5,0.59,67,2,5,0.59,68,2,5,0.59,69,2,1,1.15,70,2,1,1.15,71,2,1,1.15,72,2,1,1.15,73,2,1,1.15,74,2,2,0.75,75,2,0,0.6,68,3,1,1.15,69,3,1,1.15,70,3,1,1.15,71,3,1,1.15,72,3,1,1.15,73,3,1,1.15,74,3,2,0.75,75,3,0,0.6,70,4,1,0.75,71,4,2,0.75,72,4,2,0.75,73,4,2,0.75,74,4,0,0.6,69,5,1,0.75,70,5,2,0.75,71,5,2,0.75,72,5,2,0.75,73,5,0,0.6,69,6,1,0.75,70,6,2,0.75,71,6,2,0.75,72,6,2,0.75,73,6,0,0.6,68,7,1,0.75,69,7,2,0.75,70,7,2,0.75,71,7,2,0.75,72,7,0,0.6,67,8,1,0.75,68,8,2,0.75,69,8,2,0.75,70,8,2,0.75,71,8,0,0.6,66,9,1,0.75,67,9,2,0.75,68,9,2,0.75,69,9,2,0.75,70,9,0,0.6,65,10,1,0.73,66,10,2,0.73,67,10,2,0.73,68,10,2,0.73,69,10,0,0.58,64,11,1,0.7,65,11,2,0.7,66,11,2,0.7,67,11,2,0.7,68,11,0,0.56,63,12,1,0.67,64,12,2,0.67,65,12,2,0.67,66,12,2,0.67,67,12,0,0.54,62,13,1,0.64,63,13,2,0.64,64,13,2,0.64,65,13,2,0.64,66,13,0,0.51,61,14,1,0.61,62,14,2,0.61,63,14,2,0.61,64,14,2,0.61,65,14,0,0.49,60,15,1,0.58,61,15,2,0.58,62,15,2,0.58,63,15,0,0.47,64,15,0,0.47,58,16,1,0.55,59,16,1,0.55,60,16,2,0.55,61,16,2,0.55,62,16,0,0.44,57,17,1,0.52,58,17,2,0.52,59,17,2,0.52,60,17,0,0.42,61,17,0,0.42,55,18,1,0.49,56,18,2,0.49,57,18,2,0.49,58,18,0,0.4,59,18,0,0.4,53,19,1,0.47,54,19,1,0.47,55,19,2,0.47,56,19,0,0.37,57,19,0,0.37,50,20,1,0.44,51,20,1,0.44,52,20,1,0.44,53,20,0,0.35,54,20,0,0.35,55,20,0,0.35,46,21,0,0.33,47,21,0,0.33,48,21,0,0.33,49,21,0,0.33,50,21,0,0.33,51,21,0,0.33,52,21,0,0.33],"hand":[{"axis":[0.0853,-0.8729,-0.4804],"at":[4.6159,1.1732,1.7209],"radius":0.6955,"length":4.9745,"across":[0.9964,0.0747,0.0411],"width":1.9739,"colour":[227,176,137]},{"axis":[0.1287,0.0922,-0.9874],"at":[6.3541,-0.6165,-0.003],"radius":0.4827,"length":2.0066,"colour":[227,176,137]},{"axis":[-0.0904,0.9832,0.1584],"at":[6.4204,0.036,-0.8214],"radius":0.4827,"length":1.3181,"colour":[195,151,118]},{"axis":[-0.1786,0.5352,0.8257],"at":[6.285,0.8532,-0.3445],"radius":0.4345,"length":1.0972,"colour":[227,176,137]},{"axis":[0.1759,0.1779,-0.9682],"at":[5.4803,-0.6639,-0.1872],"radius":0.5073,"length":2.1907,"colour":[227,176,137]},{"axis":[-0.0192,0.9431,0.332],"at":[5.646,0.1375,-0.9496],"radius":0.5073,"length":1.4805,"colour":[195,151,118]},{"axis":[-0.1094,0.4909,0.8643],"at":[5.5825,0.9865,-0.3297],"radius":0.4565,"length":1.0923,"colour":[227,176,137]},{"axis":[0.2313,0.2889,-0.929],"at":[4.5263,-0.588,-0.2277],"radius":0.4786,"length":1.9972,"colour":[227,176,137]},{"axis":[0.0483,0.9263,0.3738],"at":[4.7697,0.2794,-0.8364],"radius":0.4786,"length":1.4645,"colour":[195,151,118]},{"axis":[-0.1192,0.2775,0.9533],"at":[4.7558,0.9871,-0.2314],"radius":0.4308,"length":0.9225,"colour":[227,176,137]},{"axis":[0.2927,0.4388,-0.8496],"at":[3.544,-0.486,-0.2342],"radius":0.4173,"length":1.3042,"colour":[227,176,137]},{"axis":[0.1508,0.8521,0.5012],"at":[3.7805,0.1579,-0.4872],"radius":0.4173,"length":1.0878,"colour":[195,151,118]},{"axis":[-0.08,0.2912,0.9533],"at":[3.8259,0.641,0.0374],"radius":0.3755,"length":0.7781,"colour":[227,176,137]},{"axis":[0.3218,-0.446,-0.8352],"at":[5.9769,2.1244,0.9781],"radius":0.6075,"length":1.8712,"colour":[227,176,137]},{"axis":[0.1516,-0.6103,-0.7775],"at":[6.3553,1.3261,-0.2667],"radius":0.5245,"length":1.532,"colour":[195,151,118]},{"axis":[-0.0239,-0.6924,-0.7211],"at":[6.4486,0.614,-1.1055],"radius":0.4692,"length":1.0141,"colour":[227,176,137]},{"axis":[-0.6428,0.6717,0.3683],"at":[3.9646,3.6108,3.0614],"radius":1.0227,"length":1.4318,"colour":[227,176,137]},{"axis":[-0.6428,0.6717,0.3683],"at":[3.2679,4.339,3.4606],"radius":1.35,"length":0.7364,"colour":[58,82,110]},{"axis":[-0.6428,0.6717,0.3683],"at":[-0.913,8.7082,5.8559],"radius":1.2682,"length":12.2727,"colour":[77,106,140]}]},{"id":"shovel","butt":[0.29809,-0.461792,-0.539552],"rotation":[-0.0842777,0.0884648,0.718609,0.684596],"scale":0.0333934,"fist":[0.29,-0.3,-0.58],"tip":[0.258612,0.327752,-0.736938],"hexes":[78,-11,1,0.5,79,-11,1,0.5,80,-11,0,0.26,81,-11,0,0.26,82,-11,0,0.26,83,-11,0,0.26,84,-11,0,0.26,85,-11,0,0.26,86,-11,0,0.26,87,-11,0,0.26,88,-11,0,0.26,89,-11,0,0.26,90,-11,0,0.26,91,-11,0,0.26,77,-10,1,0.5,78,-10,1,0.5,79,-10,0,0.26,80,-10,0,0.26,81,-10,0,0.26,82,-10,0,0.26,83,-10,0,0.26,84,-10,0,0.26,85,-10,0,0.26,86,-10,0,0.26,87,-10,0,0.26,88,-10,0,0.26,89,-10,0,0.26,90,-10,0,0.26,91,-10,0,0.26,92,-10,0,0.26,93,-10,0,0.26,94,-10,0,0.26,77,-9,1,0.5,78,-9,1,0.5,79,-9,2,0.36,80,-9,2,0.36,81,-9,2,0.36,82,-9,2,0.36,83,-9,2,0.36,84,-9,2,0.36,85,-9,2,0.36,86,-9,2,0.36,87,-9,2,0.36,88,-9,2,0.36,89,-9,2,0.36,90,-9,2,0.36,91,-9,2,0.36,92,-9,2,0.36,93,-9,2,0.36,94,-9,0,0.26,95,-9,0,0.26,96,-9,0,0.26,76,-8,1,0.5,77,-8,1,0.5,78,-8,2,0.36,79,-8,2,0.36,80,-8,2,0.36,81,-8,2,0.36,82,-8,2,0.36,83,-8,2,0.36,84,-8,2,0.36,85,-8,2,0.36,86,-8,2,0.36,87,-8,2,0.36,88,-8,2,0.36,89,-8,2,0.36,90,-8,2,0.36,91,-8,2,0.36,92,-8,2,0.36,93,-8,2,0.36,94,-8,2,0.36,95,-8,0,0.26,96,-8,0,0.26,76,-7,1,0.5,77,-7,1,0.5,78,-7,2,0.36,79,-7,2,0.36,80,-7,2,0.36,81,-7,2,0.36,82,-7,2,0.36,83,-7,2,0.36,84,-7,2,0.36,85,-7,2,0.36,86,-7,2,0.36,87,-7,2,0.36,88,-7,2,0.36,89,-7,2,0.36,90,-7,2,0.36,91,-7,2,0.36,92,-7,2,0.36,93,-7,2,0.36,94,-7,2,0.36,95,-7,2,0.36,96,-7,0,0.26,97,-7,0,0.26,75,-6,1,0.5,76,-6,1,0.5,77,-6,2,0.36,78,-6,2,0.36,79,-6,2,0.36,80,-6,2,0.36,81,-6,2,0.36,82,-6,2,0.36,83,-6,2,0.36,84,-6,2,0.36,85,-6,2,0.36,86,-6,2,0.36,87,-6,2,0.36,88,-6,2,0.36,89,-6,2,0.36,90,-6,2,0.36,91,-6,2,0.36,92,-6,2,0.36,93,-6,2,0.36,94,-6,2,0.36,95,-6,2,0.36,96,-6,2,0.36,97,-6,0,0.26,75,-5,1,0.5,76,-5,1,0.5,77,-5,2,0.36,78,-5,2,0.36,79,-5,2,0.36,80,-5,2,0.36,81,-5,2,0.36,82,-5,2,0.36,83,-5,2,0.36,84,-5,2,0.36,85,-5,2,0.36,86,-5,2,0.36,87,-5,2,0.36,88,-5,2,0.36,89,-5,2,0.36,90,-5,2,0.36,91,-5,2,0.36,92,-5,2,0.36,93,-5,2,0.36,94,-5,2,0.36,95,-5,2,0.36,96,-5,2,0.36,97,-5,0,0.26,98,-5,0,0.26,74,-4,1,0.5,75,-4,1,0.5,76,-4,2,0.36,77,-4,2,0.36,78,-4,2,0.36,79,-4,2,0.36,80,-4,2,0.36,81,-4,2,0.36,82,-4,2,0.36,83,-4,2,0.36,84,-4,2,0.36,85,-4,2,0.36,86,-4,2,0.36,87,-4,2,0.36,88,-4,2,0.36,89,-4,2,0.36,90,-4,2,0.36,91,-4,2,0.36,92,-4,2,0.36,93,-4,2,0.36,94,-4,2,0.36,95,-4,2,0.36,96,-4,2,0.36,97,-4,0,0.26,98,-4,0,0.26,74,-3,1,0.5,75,-3,1,0.5,76,-3,2,0.36,77,-3,2,0.36,78,-3,2,0.36,79,-3,2,0.36,80,-3,2,0.36,81,-3,2,0.36,82,-3,2,0.36,83,-3,2,0.36,84,-3,2,0.36,85,-3,2,0.36,86,-3,2,0.36,87,-3,2,0.36,88,-3,2,0.36,89,-3,2,0.36,90,-3,2,0.36,91,-3,2,0.36,92,-3,2,0.36,93,-3,2,0.36,94,-3,2,0.36,95,-3,2,0.36,96,-3,2,0.36,97,-3,0,0.26,98,-3,0,0.26,1,-2,3,0.76,2,-2,3,0.76,3,-2,7,0.76,4,-2,7,0.76,5,-2,7,0.76,6,-2,7,0.76,7,-2,7,0.76,8,-2,7,0.76,9,-2,7,0.76,10,-2,7,0.76,11,-2,7,0.76,12,-2,5,0.71,13,-2,5,0.71,14,-2,5,0.71,15,-2,5,0.71,16,-2,5,0.71,17,-2,5,0.71,18,-2,5,0.71,19,-2,5,0.71,20,-2,5,0.71,21,-2,5,0.71,22,-2,5,0.71,23,-2,5,0.71,24,-2,5,0.71,25,-2,5,0.71,26,-2,5,0.71,27,-2,5,0.71,28,-2,5,0.71,29,-2,5,0.71,30,-2,5,0.71,31,-2,5,0.71,32,-2,5,0.71,33,-2,5,0.71,34,-2,5,0.71,35,-2,5,0.71,36,-2,5,0.71,37,-2,5,0.71,38,-2,5,0.71,39,-2,5,0.71,40,-2,5,0.71,41,-2,5,0.71,42,-2,5,0.71,43,-2,5,0.71,44,-2,5,0.71,45,-2,5,0.71,46,-2,5,0.71,47,-2,5,0.71,48,-2,5,0.71,49,-2,5,0.71,50,-2,5,0.71,51,-2,5,0.71,52,-2,5,0.71,53,-2,5,0.71,54,-2,5,0.71,55,-2,5,0.71,56,-2,5,0.71,57,-2,5,0.71,58,-2,5,0.71,59,-2,5,0.71,60,-2,5,0.71,61,-2,5,0.71,62,-2,5,0.71,63,-2,5,0.71,64,-2,5,0.71,65,-2,5,0.71,66,-2,5,0.71,67,-2,5,0.71,68,-2,5,0.71,69,-2,1,0.9,70,-2,1,0.9,71,-2,1,0.9,72,-2,1,0.9,73,-2,1,0.5,74,-2,1,0.5,75,-2,2,0.36,76,-2,2,0.36,77,-2,2,0.36,78,-2,2,0.36,79,-2,2,0.36,80,-2,2,0.36,81,-2,2,0.36,82,-2,2,0.36,83,-2,2,0.36,84,-2,2,0.36,85,-2,2,0.36,86,-2,2,0.36,87,-2,2,0.36,88,-2,2,0.36,89,-2,2,0.36,90,-2,2,0.36,91,-2,2,0.36,92,-2,2,0.36,93,-2,2,0.36,94,-2,2,0.36,95,-2,2,0.36,96,-2,2,0.36,97,-2,0,0.26,98,-2,0,0.26,1,-1,3,0.95,2,-1,7,0.95,3,-1,7,0.95,4,-1,7,0.95,5,-1,7,0.95,6,-1,7,0.95,7,-1,7,0.95,8,-1,7,0.95,9,-1,7,0.95,10,-1,7,0.95,11,-1,6,0.9,12,-1,6,0.9,13,-1,6,0.9,14,-1,6,0.9,15,-1,5,0.9,16,-1,5,0.9,17,-1,6,0.9,18,-1,6,0.9,19,-1,6,0.9,20,-1,5,0.9,21,-1,5,0.9,22,-1,6,0.9,23,-1,6,0.9,24,-1,6,0.9,25,-1,6,0.9,26,-1,6,0.9,27,-1,5,0.9,28,-1,5,0.9,29,-1,6,0.9,30,-1,6,0.9,31,-1,6,0.9,32,-1,5,0.9,33,-1,5,0.9,34,-1,6,0.9,35,-1,6,0.9,36,-1,6,0.9,37,-1,6,0.9,38,-1,6,0.9,39,-1,5,0.9,40,-1,5,0.9,41,-1,6,0.9,42,-1,6,0.9,43,-1,5,0.9,44,-1,5,0.9,45,-1,5,0.9,46,-1,6,0.9,47,-1,6,0.9,48,-1,6,0.9,49,-1,6,0.9,50,-1,5,0.9,51,-1,5,0.9,52,-1,5,0.9,53,-1,6,0.9,54,-1,6,0.9,55,-1,5,0.9,56,-1,5,0.9,57,-1,6,0.9,58,-1,6,0.9,59,-1,6,0.9,60,-1,6,0.9,61,-1,6,0.9,62,-1,5,0.9,63,-1,5,0.9,64,-1,5,0.9,65,-1,6,0.9,66,-1,6,0.9,67,-1,5,0.9,68,-1,1,0.9,69,-1,1,0.9,70,-1,1,0.9,71,-1,1,0.9,72,-1,1,0.9,73,-1,1,0.8,74,-1,1,0.8,75,-1,1,0.8,76,-1,1,0.8,77,-1,1,0.8,78,-1,1,0.8,79,-1,1,0.8,80,-1,1,0.8,81,-1,1,0.8,82,-1,1,0.8,83,-1,1,0.8,84,-1,1,0.8,85,-1,1,0.8,86,-1,1,0.8,87,-1,2,0.36,88,-1,2,0.36,89,-1,2,0.36,90,-1,2,0.36,91,-1,2,0.36,92,-1,2,0.36,93,-1,2,0.36,94,-1,2,0.36,95,-1,2,0.36,96,-1,2,0.36,97,-1,0,0.26,0,0,3,1.0,1,0,3,1.0,2,0,7,1.0,3,0,7,1.0,4,0,7,1.0,5,0,7,1.0,6,0,7,1.0,7,0,7,1.0,8,0,7,1.0,9,0,7,1.0,10,0,7,1.0,11,0,5,0.95,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,5,0.95,67,0,5,0.95,68,0,1,0.9,69,0,1,0.9,70,0,1,0.9,71,0,1,0.9,72,0,1,0.8,73,0,1,0.8,74,0,1,0.8,75,0,1,0.8,76,0,1,0.8,77,0,1,0.8,78,0,1,0.8,79,0,1,0.8,80,0,1,0.8,81,0,1,0.8,82,0,1,0.8,83,0,1,0.8,84,0,1,0.8,85,0,1,0.8,86,0,1,0.8,87,0,2,0.36,88,0,2,0.36,89,0,2,0.36,90,0,2,0.36,91,0,2,0.36,92,0,2,0.36,93,0,2,0.36,94,0,2,0.36,95,0,2,0.36,96,0,2,0.36,97,0,0,0.26,0,1,3,0.95,1,1,7,0.95,2,1,7,0.95,3,1,7,0.95,4,1,7,0.95,5,1,7,0.95,6,1,7,0.95,7,1,7,0.95,8,1,7,0.95,9,1,7,0.95,10,1,6,0.9,11,1,6,0.9,12,1,5,0.9,13,1,5,0.9,14,1,6,0.9,15,1,6,0.9,16,1,6,0.9,17,1,6,0.9,18,1,6,0.9,19,1,5,0.9,20,1,5,0.9,21,1,6,0.9,22,1,6,0.9,23,1,6,0.9,24,1,5,0.9,25,1,5,0.9,26,1,6,0.9,27,1,6,0.9,28,1,6,0.9,29,1,6,0.9,30,1,6,0.9,31,1,5,0.9,32,1,5,0.9,33,1,6,0.9,34,1,6,0.9,35,1,5,0.9,36,1,5,0.9,37,1,5,0.9,38,1,6,0.9,39,1,6,0.9,40,1,6,0.9,41,1,6,0.9,42,1,5,0.9,43,1,5,0.9,44,1,5,0.9,45,1,6,0.9,46,1,6,0.9,47,1,5,0.9,48,1,5,0.9,49,1,6,0.9,50,1,6,0.9,51,1,6,0.9,52,1,6,0.9,53,1,6,0.9,54,1,5,0.9,55,1,5,0.9,56,1,6,0.9,57,1,6,0.9,58,1,6,0.9,59,1,5,0.9,60,1,5,0.9,61,1,6,0.9,62,1,6,0.9,63,1,6,0.9,64,1,6,0.9,65,1,6,0.9,66,1,5,0.9,67,1,1,0.9,68,1,1,0.9,69,1,1,0.9,70,1,1,0.9,71,1,1,0.9,72,1,1,0.8,73,1,1,0.8,74,1,1,0.8,75,1,1,0.8,76,1,1,0.8,77,1,1,0.8,78,1,1,0.8,79,1,1,0.8,80,1,1,0.8,81,1,1,0.8,82,1,1,0.8,83,1,1,0.8,84,1,1,0.8,85,1,1,0.8,86,1,2,0.36,87,1,2,0.36,88,1,2,0.36,89,1,2,0.36,90,1,2,0.36,91,1,2,0.36,92,1,2,0.36,93,1,2,0.36,94,1,2,0.36,95,1,2,0.36,96,1,0,0.26,-1,2,3,0.76,0,2,3,0.76,1,2,7,0.76,2,2,7,0.76,3,2,7,0.76,4,2,7,0.76,5,2,7,0.76,6,2,7,0.76,7,2,7,0.76,8,2,7,0.76,9,2,7,0.76,10,2,5,0.71,11,2,5,0.71,12,2,5,0.71,13,2,5,0.71,14,2,5,0.71,15,2,5,0.71,16,2,5,0.71,17,2,5,0.71,18,2,5,0.71,19,2,5,0.71,20,2,5,0.71,21,2,5,0.71,22,2,5,0.71,23,2,5,0.71,24,2,5,0.71,25,2,5,0.71,26,2,5,0.71,27,2,5,0.71,28,2,5,0.71,29,2,5,0.71,30,2,5,0.71,31,2,5,0.71,32,2,5,0.71,33,2,5,0.71,34,2,5,0.71,35,2,5,0.71,36,2,5,0.71,37,2,5,0.71,38,2,5,0.71,39,2,5,0.71,40,2,5,0.71,41,2,5,0.71,42,2,5,0.71,43,2,5,0.71,44,2,5,0.71,45,2,5,0.71,46,2,5,0.71,47,2,5,0.71,48,2,5,0.71,49,2,5,0.71,50,2,5,0.71,51,2,5,0.71,52,2,5,0.71,53,2,5,0.71,54,2,5,0.71,55,2,5,0.71,56,2,5,0.71,57,2,5,0.71,58,2,5,0.71,59,2,5,0.71,60,2,5,0.71,61,2,5,0.71,62,2,5,0.71,63,2,5,0.71,64,2,5,0.71,65,2,5,0.71,66,2,5,0.71,67,2,1,0.9,68,2,1,0.9,69,2,1,0.9,70,2,1,0.9,71,2,1,0.5,72,2,1,0.5,73,2,2,0.36,74,2,2,0.36,75,2,2,0.36,76,2,2,0.36,77,2,2,0.36,78,2,2,0.36,79,2,2,0.36,80,2,2,0.36,81,2,2,0.36,82,2,2,0.36,83,2,2,0.36,84,2,2,0.36,85,2,2,0.36,86,2,2,0.36,87,2,2,0.36,88,2,2,0.36,89,2,2,0.36,90,2,2,0.36,91,2,2,0.36,92,2,2,0.36,93,2,2,0.36,94,2,2,0.36,95,2,0,0.26,96,2,0,0.26,71,3,1,0.5,72,3,1,0.5,73,3,2,0.36,74,3,2,0.36,75,3,2,0.36,76,3,2,0.36,77,3,2,0.36,78,3,2,0.36,79,3,2,0.36,80,3,2,0.36,81,3,2,0.36,82,3,2,0.36,83,3,2,0.36,84,3,2,0.36,85,3,2,0.36,86,3,2,0.36,87,3,2,0.36,88,3,2,0.36,89,3,2,0.36,90,3,2,0.36,91,3,2,0.36,92,3,2,0.36,93,3,2,0.36,94,3,0,0.26,95,3,0,0.26,70,4,1,0.5,71,4,1,0.5,72,4,2,0.36,73,4,2,0.36,74,4,2,0.36,75,4,2,0.36,76,4,2,0.36,77,4,2,0.36,78,4,2,0.36,79,4,2,0.36,80,4,2,0.36,81,4,2,0.36,82,4,2,0.36,83,4,2,0.36,84,4,2,0.36,85,4,2,0.36,86,4,2,0.36,87,4,2,0.36,88,4,2,0.36,89,4,2,0.36,90,4,2,0.36,91,4,2,0.36,92,4,2,0.36,93,4,0,0.26,94,4,0,0.26,70,5,1,0.5,71,5,1,0.5,72,5,2,0.36,73,5,2,0.36,74,5,2,0.36,75,5,2,0.36,76,5,2,0.36,77,5,2,0.36,78,5,2,0.36,79,5,2,0.36,80,5,2,0.36,81,5,2,0.36,82,5,2,0.36,83,5,2,0.36,84,5,2,0.36,85,5,2,0.36,86,5,2,0.36,87,5,2,0.36,88,5,2,0.36,89,5,2,0.36,90,5,2,0.36,91,5,2,0.36,92,5,0,0.26,93,5,0,0.26,69,6,1,0.5,70,6,1,0.5,71,6,2,0.36,72,6,2,0.36,73,6,2,0.36,74,6,2,0.36,75,6,2,0.36,76,6,2,0.36,77,6,2,0.36,78,6,2,0.36,79,6,2,0.36,80,6,2,0.36,81,6,2,0.36,82,6,2,0.36,83,6,2,0.36,84,6,2,0.36,85,6,2,0.36,86,6,2,0.36,87,6,2,0.36,88,6,2,0.36,89,6,2,0.36,90,6,2,0.36,91,6,0,0.26,69,7,1,0.5,70,7,1,0.5,71,7,2,0.36,72,7,2,0.36,73,7,2,0.36,74,7,2,0.36,75,7,2,0.36,76,7,2,0.36,77,7,2,0.36,78,7,2,0.36,79,7,2,0.36,80,7,2,0.36,81,7,2,0.36,82,7,2,0.36,83,7,2,0.36,84,7,2,0.36,85,7,2,0.36,86,7,2,0.36,87,7,2,0.36,88,7,2,0.36,89,7,0,0.26,90,7,0,0.26,68,8,1,0.5,69,8,1,0.5,70,8,2,0.36,71,8,2,0.36,72,8,2,0.36,73,8,2,0.36,74,8,2,0.36,75,8,2,0.36,76,8,2,0.36,77,8,2,0.36,78,8,2,0.36,79,8,2,0.36,80,8,2,0.36,81,8,2,0.36,82,8,2,0.36,83,8,2,0.36,84,8,2,0.36,85,8,2,0.36,86,8,2,0.36,87,8,0,0.26,88,8,0,0.26,68,9,1,0.5,69,9,1,0.5,70,9,2,0.36,71,9,2,0.36,72,9,2,0.36,73,9,2,0.36,74,9,2,0.36,75,9,2,0.36,76,9,2,0.36,77,9,2,0.36,78,9,2,0.36,79,9,2,0.36,80,9,2,0.36,81,9,2,0.36,82,9,2,0.36,83,9,2,0.36,84,9,2,0.36,85,9,0,0.26,86,9,0,0.26,87,9,0,0.26,67,10,1,0.5,68,10,1,0.5,69,10,0,0.26,70,10,0,0.26,71,10,0,0.26,72,10,0,0.26,73,10,0,0.26,74,10,0,0.26,75,10,0,0.26,76,10,0,0.26,77,10,0,0.26,78,10,0,0.26,79,10,0,0.26,80,10,0,0.26,81,10,0,0.26,82,10,0,0.26,83,10,0,0.26,84,10,0,0.26,67,11,1,0.5,68,11,1,0.5,69,11,0,0.26,70,11,0,0.26,71,11,0,0.26,72,11,0,0.26,73,11,0,0.26,74,11,0,0.26,75,11,0,0.26,76,11,0,0.26,77,11,0,0.26,78,11,0,0.26,79,11,0,0.26,80,11,0,0.26],"hand":[{"axis":[0.0853,0.4698,-0.8786],"at":[4.5646,-1.9341,1.3532],"radius":0.7882,"length":5.6378,"across":[0.9964,-0.0402,0.0752],"width":2.237,"colour":[227,176,137]},{"axis":[0.1287,0.9884,0.0803],"at":[6.5346,-0.0051,-0.6987],"radius":0.5471,"length":2.2741,"colour":[227,176,137]},{"axis":[-0.0904,-0.1465,0.9851],"at":[6.6097,0.9314,0.0296],"radius":0.5471,"length":1.4938,"colour":[195,151,118]},{"axis":[-0.1786,-0.8191,0.5451],"at":[6.4563,0.4021,0.9622],"radius":0.4924,"length":1.2435,"colour":[227,176,137]},{"axis":[0.1759,0.9703,0.1661],"at":[5.5443,0.203,-0.7549],"radius":0.5749,"length":2.4828,"colour":[227,176,137]},{"axis":[-0.0192,-0.3205,0.9471],"at":[5.7321,1.078,0.1428],"radius":0.5749,"length":1.6779,"colour":[195,151,118]},{"axis":[-0.1094,-0.8583,0.5013],"at":[5.6602,0.3872,1.1134],"radius":0.5174,"length":1.2379,"colour":[227,176,137]},{"axis":[0.2313,0.9324,0.2776],"at":[4.4631,0.2499,-0.6695],"radius":0.5425,"length":2.2635,"colour":[227,176,137]},{"axis":[0.0483,-0.3625,0.9307],"at":[4.739,0.9516,0.3051],"radius":0.5425,"length":1.6598,"colour":[195,151,118]},{"axis":[-0.1192,-0.9499,0.289],"at":[4.7232,0.2758,1.1155],"radius":0.4882,"length":1.0455,"colour":[227,176,137]},{"axis":[0.2927,0.8548,0.4285],"at":[3.3499,0.2588,-0.554],"radius":0.4729,"length":1.4781,"colour":[227,176,137]},{"axis":[0.1508,-0.4909,0.8581],"at":[3.6179,0.5543,0.1723],"radius":0.4729,"length":1.2328,"colour":[195,151,118]},{"axis":[-0.08,-0.9497,0.3027],"at":[3.6694,-0.0336,0.7269],"radius":0.4256,"length":0.8818,"colour":[227,176,137]},{"axis":[0.3218,0.8297,-0.4561],"at":[6.1072,-1.0792,2.421],"radius":0.6885,"length":2.1207,"colour":[227,176,137]},{"axis":[0.1516,0.7701,-0.6197],"at":[6.536,0.3205,1.4991],"radius":0.5944,"length":1.7363,"colour":[195,151,118]},{"axis":[-0.0239,0.7127,-0.7011],"at":[6.6417,1.2612,0.6806],"radius":0.5318,"length":1.1494,"colour":[227,176,137]},{"axis":[-0.6428,-0.3601,0.6761],"at":[3.8265,-3.4198,4.1339],"radius":1.1591,"length":1.6227,"colour":[227,176,137]},{"axis":[-0.6428,-0.3601,0.6761],"at":[3.037,-3.8622,4.9646],"radius":1.53,"length":0.8345,"colour":[58,82,110]},{"axis":[-0.6428,-0.3601,0.6761],"at":[-1.7014,-6.5167,9.9489],"radius":1.4373,"length":13.9091,"colour":[77,106,140]}]},{"id":"axe","butt":[0.299066,-0.481313,-0.534672],"rotation":[-0.546237,-0.449027,0.567979,0.421189],"scale":0.0374227,"fist":[0.29,-0.3,-0.58],"tip":[0.263891,0.222183,-0.710546],"hexes":[77,-22,0,0.3,78,-22,0,0.3,79,-22,0,0.3,80,-22,0,0.3,81,-22,0,0.3,82,-22,0,0.3,83,-22,0,0.3,84,-22,0,0.3,85,-22,0,0.3,86,-22,0,0.3,73,-21,0,0.3,74,-21,0,0.3,75,-21,0,0.3,76,-21,0,0.3,77,-21,0,0.3,78,-21,0,0.3,79,-21,0,0.3,80,-21,0,0.3,81,-21,0,0.3,82,-21,0,0.3,83,-21,0,0.3,84,-21,0,0.3,85,-21,0,0.3,86,-21,0,0.3,87,-21,0,0.3,88,-21,0,0.3,89,-21,0,0.3,71,-20,0,0.3,72,-20,0,0.3,73,-20,0,0.3,74,-20,0,0.3,75,-20,2,0.39,76,-20,2,0.39,77,-20,2,0.39,78,-20,2,0.39,79,-20,2,0.39,80,-20,2,0.39,81,-20,2,0.39,82,-20,2,0.39,83,-20,2,0.39,84,-20,2,0.39,85,-20,2,0.39,86,-20,2,0.39,87,-20,0,0.3,88,-20,0,0.3,89,-20,0,0.3,90,-20,0,0.3,71,-19,1,0.42,72,-19,2,0.42,73,-19,2,0.42,74,-19,2,0.42,75,-19,2,0.42,76,-19,2,0.42,77,-19,2,0.42,78,-19,2,0.42,79,-19,2,0.42,80,-19,2,0.42,81,-19,2,0.42,82,-19,2,0.42,83,-19,2,0.42,84,-19,2,0.42,85,-19,2,0.42,86,-19,2,0.42,87,-19,2,0.42,88,-19,2,0.42,89,-19,0,0.3,71,-18,1,0.45,72,-18,2,0.45,73,-18,2,0.45,74,-18,2,0.45,75,-18,2,0.45,76,-18,2,0.45,77,-18,2,0.45,78,-18,2,0.45,79,-18,2,0.45,80,-18,2,0.45,81,-18,2,0.45,82,-18,2,0.45,83,-18,2,0.45,84,-18,2,0.45,85,-18,2,0.45,86,-18,2,0.45,87,-18,2,0.45,88,-18,1,0.45,71,-17,1,0.48,72,-17,2,0.48,73,-17,2,0.48,74,-17,2,0.48,75,-17,2,0.48,76,-17,2,0.48,77,-17,2,0.48,78,-17,2,0.48,79,-17,2,0.48,80,-17,2,0.48,81,-17,2,0.48,82,-17,2,0.48,83,-17,2,0.48,84,-17,2,0.48,85,-17,2,0.48,86,-17,2,0.48,87,-17,1,0.48,71,-16,1,0.51,72,-16,2,0.51,73,-16,2,0.51,74,-16,2,0.51,75,-16,2,0.51,76,-16,2,0.51,77,-16,2,0.51,78,-16,2,0.51,79,-16,2,0.51,80,-16,2,0.51,81,-16,2,0.51,82,-16,2,0.51,83,-16,2,0.51,84,-16,2,0.51,85,-16,2,0.51,86,-16,1,0.51,70,-15,1,0.54,71,-15,1,0.54,72,-15,2,0.54,73,-15,2,0.54,74,-15,2,0.54,75,-15,2,0.54,76,-15,2,0.54,77,-15,2,0.54,78,-15,2,0.54,79,-15,2,0.54,80,-15,2,0.54,81,-15,2,0.54,82,-15,2,0.54,83,-15,2,0.54,84,-15,2,0.54,85,-15,1,0.54,70,-14,1,0.57,71,-14,2,0.57,72,-14,2,0.57,73,-14,2,0.57,74,-14,2,0.57,75,-14,2,0.57,76,-14,2,0.57,77,-14,2,0.57,78,-14,2,0.57,79,-14,2,0.57,80,-14,2,0.57,81,-14,2,0.57,82,-14,2,0.57,83,-14,2,0.57,84,-14,2,0.57,85,-14,1,0.57,70,-13,1,0.6,71,-13,2,0.6,72,-13,2,0.6,73,-13,2,0.6,74,-13,2,0.6,75,-13,2,0.6,76,-13,2,0.6,77,-13,2,0.6,78,-13,2,0.6,79,-13,2,0.6,80,-13,2,0.6,81,-13,2,0.6,82,-13,2,0.6,83,-13,2,0.6,84,-13,1,0.6,70,-12,1,0.63,71,-12,2,0.63,72,-12,2,0.63,73,-12,2,0.63,74,-12,2,0.63,75,-12,2,0.63,76,-12,2,0.63,77,-12,2,0.63,78,-12,2,0.63,79,-12,2,0.63,80,-12,2,0.63,81,-12,2,0.63,82,-12,2,0.63,83,-12,1,0.63,70,-11,1,0.66,71,-11,2,0.66,72,-11,2,0.66,73,-11,2,0.66,74,-11,2,0.66,75,-11,2,0.66,76,-11,2,0.66,77,-11,2,0.66,78,-11,2,0.66,79,-11,2,0.66,80,-11,2,0.66,81,-11,2,0.66,82,-11,1,0.66,70,-10,1,0.69,71,-10,2,0.69,72,-10,2,0.69,73,-10,2,0.69,74,-10,2,0.69,75,-10,2,0.69,76,-10,2,0.69,77,-10,2,0.69,78,-10,2,0.69,79,-10,2,0.69,80,-10,2,0.69,81,-10,1,0.69,70,-9,1,0.72,71,-9,2,0.72,72,-9,2,0.72,73,-9,2,0.72,74,-9,2,0.72,75,-9,2,0.72,76,-9,2,0.72,77,-9,2,0.72,78,-9,2,0.72,79,-9,2,0.72,80,-9,1,0.72,70,-8,1,0.75,71,-8,2,0.75,72,-8,2,0.75,73,-8,2,0.75,74,-8,2,0.75,75,-8,2,0.75,76,-8,2,0.75,77,-8,2,0.75,78,-8,2,0.75,79,-8,1,0.75,70,-7,1,0.78,71,-7,2,0.78,72,-7,2,0.78,73,-7,2,0.78,74,-7,2,0.78,75,-7,2,0.78,76,-7,2,0.78,77,-7,2,0.78,78,-7,1,0.78,70,-6,1,0.81,71,-6,2,0.81,72,-6,2,0.81,73,-6,2,0.81,74,-6,2,0.81,75,-6,2,0.81,76,-6,2,0.81,77,-6,1,0.81,70,-5,1,0.84,71,-5,1,0.84,72,-5,1,0.84,73,-5,1,0.84,74,-5,1,0.84,75,-5,1,0.84,76,-5,1,0.84,68,-4,1,1.15,69,-4,1,1.15,70,-4,1,1.15,71,-4,1,1.15,72,-4,1,1.15,73,-4,1,1.15,74,-4,1,1.15,75,-4,1,1.15,76,-4,1,1.15,77,-4,1,1.15,68,-3,1,1.15,69,-3,1,1.15,70,-3,1,1.15,71,-3,1,1.15,72,-3,1,1.15,73,-3,1,1.15,74,-3,1,1.15,75,-3,1,1.15,76,-3,1,1.15,1,-2,4,0.67,2,-2,3,0.67,3,-2,3,0.67,4,-2,3,0.67,5,-2,4,0.67,6,-2,3,0.67,7,-2,3,0.67,8,-2,3,0.67,9,-2,4,0.67,10,-2,3,0.67,11,-2,3,0.67,12,-2,4,0.67,13,-2,5,0.59,14,-2,5,0.59,15,-2,5,0.59,16,-2,5,0.59,17,-2,5,0.59,18,-2,5,0.59,19,-2,5,0.59,20,-2,5,0.59,21,-2,5,0.59,22,-2,5,0.59,23,-2,5,0.59,24,-2,5,0.59,25,-2,5,0.59,26,-2,5,0.59,27,-2,5,0.59,28,-2,5,0.59,29,-2,5,0.59,30,-2,5,0.59,31,-2,5,0.59,32,-2,5,0.59,33,-2,5,0.59,34,-2,5,0.59,35,-2,5,0.59,36,-2,5,0.59,37,-2,5,0.59,38,-2,5,0.59,39,-2,5,0.59,40,-2,5,0.59,41,-2,5,0.59,42,-2,5,0.59,43,-2,5,0.59,44,-2,5,0.59,45,-2,5,0.59,46,-2,5,0.59,47,-2,5,0.59,48,-2,5,0.59,49,-2,5,0.59,50,-2,5,0.59,51,-2,5,0.59,52,-2,5,0.59,53,-2,5,0.59,54,-2,5,0.59,55,-2,5,0.59,56,-2,5,0.59,57,-2,5,0.59,58,-2,5,0.59,59,-2,5,0.59,60,-2,5,0.59,61,-2,5,0.59,62,-2,5,0.59,63,-2,5,0.59,64,-2,5,0.59,65,-2,5,0.59,66,-2,5,0.59,67,-2,1,1.15,68,-2,1,1.15,69,-2,1,1.15,70,-2,1,1.15,71,-2,1,1.15,72,-2,1,1.15,73,-2,1,1.15,74,-2,1,1.15,75,-2,1,1.15,76,-2,1,1.15,77,-2,5,0.59,78,-2,5,0.59,1,-1,4,0.97,2,-1,3,0.97,3,-1,3,0.97,4,-1,3,0.97,5,-1,3,0.97,6,-1,3,0.97,7,-1,3,0.97,8,-1,4,0.97,9,-1,3,0.97,10,-1,3,0.97,11,-1,3,0.97,12,-1,4,0.97,13,-1,6,0.89,14,-1,6,0.89,15,-1,5,0.89,16,-1,5,0.89,17,-1,6,0.89,18,-1,6,0.89,19,-1,6,0.89,20,-1,5,0.89,21,-1,5,0.89,22,-1,6,0.89,23,-1,6,0.89,24,-1,6,0.89,25,-1,6,0.89,26,-1,6,0.89,27,-1,5,0.89,28,-1,5,0.89,29,-1,6,0.89,30,-1,6,0.89,31,-1,6,0.89,32,-1,5,0.89,33,-1,5,0.89,34,-1,6,0.89,35,-1,6,0.89,36,-1,6,0.89,37,-1,6,0.89,38,-1,6,0.89,39,-1,5,0.89,40,-1,5,0.89,41,-1,6,0.89,42,-1,6,0.89,43,-1,5,0.89,44,-1,5,0.89,45,-1,5,0.89,46,-1,6,0.89,47,-1,6,0.89,48,-1,6,0.89,49,-1,6,0.89,50,-1,5,0.89,51,-1,5,0.89,52,-1,5,0.89,53,-1,6,0.89,54,-1,6,0.89,55,-1,5,0.89,56,-1,5,0.89,57,-1,6,0.89,58,-1,6,0.89,59,-1,6,0.89,60,-1,6,0.89,61,-1,6,0.89,62,-1,5,0.89,63,-1,5,0.89,64,-1,5,0.89,65,-1,6,0.89,66,-1,6,0.89,67,-1,1,1.15,68,-1,1,1.15,69,-1,1,1.15,70,-1,1,1.15,71,-1,1,1.15,72,-1,1,1.15,73,-1,1,1.15,74,-1,1,1.15,75,-1,1,1.15,76,-1,6,0.89,77,-1,6,0.89,78,-1,6,0.89,0,0,4,1.03,1,0,3,1.03,2,0,3,1.03,3,0,3,1.03,4,0,4,1.03,5,0,3,1.03,6,0,3,1.03,7,0,3,1.03,8,0,4,1.03,9,0,3,1.03,10,0,3,1.03,11,0,4,1.03,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,1,1.15,67,0,1,1.15,68,0,1,1.15,69,0,1,1.15,70,0,1,1.15,71,0,1,1.15,72,0,1,1.15,73,0,1,1.15,74,0,1,1.15,75,0,1,1.15,76,0,5,0.95,77,0,5,0.95,0,1,4,0.97,1,1,3,0.97,2,1,3,0.97,3,1,3,0.97,4,1,3,0.97,5,1,3,0.97,6,1,3,0.97,7,1,4,0.97,8,1,3,0.97,9,1,3,0.97,10,1,3,0.97,11,1,4,0.97,12,1,5,0.89,13,1,5,0.89,14,1,6,0.89,15,1,6,0.89,16,1,6,0.89,17,1,6,0.89,18,1,6,0.89,19,1,5,0.89,20,1,5,0.89,21,1,6,0.89,22,1,6,0.89,23,1,6,0.89,24,1,5,0.89,25,1,5,0.89,26,1,6,0.89,27,1,6,0.89,28,1,6,0.89,29,1,6,0.89,30,1,6,0.89,31,1,5,0.89,32,1,5,0.89,33,1,6,0.89,34,1,6,0.89,35,1,5,0.89,36,1,5,0.89,37,1,5,0.89,38,1,6,0.89,39,1,6,0.89,40,1,6,0.89,41,1,6,0.89,42,1,5,0.89,43,1,5,0.89,44,1,5,0.89,45,1,6,0.89,46,1,6,0.89,47,1,5,0.89,48,1,5,0.89,49,1,6,0.89,50,1,6,0.89,51,1,6,0.89,52,1,6,0.89,53,1,6,0.89,54,1,5,0.89,55,1,5,0.89,56,1,6,0.89,57,1,6,0.89,58,1,6,0.89,59,1,5,0.89,60,1,5,0.89,61,1,6,0.89,62,1,6,0.89,63,1,6,0.89,64,1,6,0.89,65,1,6,0.89,66,1,1,1.15,67,1,1,1.15,68,1,1,1.15,69,1,1,1.15,70,1,1,1.15,71,1,1,1.15,72,1,1,1.15,73,1,1,1.15,74,1,1,1.15,75,1,6,0.89,76,1,6,0.89,77,1,6,0.89,-1,2,4,0.67,0,2,3,0.67,1,2,3,0.67,2,2,3,0.67,3,2,4,0.67,4,2,3,0.67,5,2,3,0.67,6,2,3,0.67,7,2,4,0.67,8,2,3,0.67,9,2,3,0.67,10,2,4,0.67,11,2,5,0.59,12,2,5,0.59,13,2,5,0.59,14,2,5,0.59,15,2,5,0.59,16,2,5,0.59,17,2,5,0.59,18,2,5,0.59,19,2,5,0.59,20,2,5,0.59,21,2,5,0.59,22,2,5,0.59,23,2,5,0.59,24,2,5,0.59,25,2,5,0.59,26,2,5,0.59,27,2,5,0.59,28,2,5,0.59,29,2,5,0.59,30,2,5,0.59,31,2,5,0.59,32,2,5,0.59,33,2,5,0.59,34,2,5,0.59,35,2,5,0.59,36,2,5,0.59,37,2,5,0.59,38,2,5,0.59,39,2,5,0.59,40,2,5,0.59,41,2,5,0.59,42,2,5,0.59,43,2,5,0.59,44,2,5,0.59,45,2,5,0.59,46,2,5,0.59,47,2,5,0.59,48,2,5,0.59,49,2,5,0.59,50,2,5,0.59,51,2,5,0.59,52,2,5,0.59,53,2,5,0.59,54,2,5,0.59,55,2,5,0.59,56,2,5,0.59,57,2,5,0.59,58,2,5,0.59,59,2,5,0.59,60,2,5,0.59,61,2,5,0.59,62,2,5,0.59,63,2,5,0.59,64,2,5,0.59,65,2,1,1.15,66,2,1,1.15,67,2,1,1.15,68,2,1,1.15,69,2,1,1.15,70,2,1,1.15,71,2,1,1.15,72,2,1,1.15,73,2,1,1.15,74,2,1,1.15,75,2,5,0.59,76,2,5,0.59,65,3,1,1.15,66,3,1,1.15,67,3,1,1.15,68,3,1,1.15,69,3,1,1.15,70,3,1,1.15,71,3,1,1.15,72,3,1,1.15,73,3,1,1.15,64,4,1,1.15,65,4,1,1.15,66,4,1,1.15,67,4,1,1.15,68,4,1,1.15,69,4,1,1.15,70,4,1,1.15,71,4,1,1.15,72,4,1,1.15,73,4,1,1.15,65,5,1,0.9,66,5,1,0.9,67,5,1,0.9,68,5,1,0.9,69,5,1,0.9,70,5,1,0.9,71,5,1,0.9,64,6,1,0.9,65,6,1,0.9,66,6,1,0.9,67,6,1,0.9,68,6,1,0.9,69,6,1,0.9,70,6,1,0.9,71,6,1,0.9,64,7,1,0.9,65,7,1,0.9,66,7,1,0.9,67,7,1,0.9,68,7,1,0.9,69,7,1,0.9,70,7,1,0.9,63,8,1,0.9,64,8,1,0.9,65,8,1,0.9,66,8,1,0.9,67,8,1,0.9,68,8,1,0.9,69,8,1,0.9,70,8,1,0.9],"hand":[{"axis":[0.0853,0.8729,0.4804],"at":[4.6159,-1.1732,-1.7209],"radius":0.6955,"length":4.9745,"across":[0.9964,-0.0747,-0.0411],"width":1.9739,"colour":[227,176,137]},{"axis":[0.1287,-0.0922,0.9874],"at":[6.3541,0.6165,0.003],"radius":0.4827,"length":2.0066,"colour":[227,176,137]},{"axis":[-0.0904,-0.9832,-0.1584],"at":[6.4204,-0.036,0.8214],"radius":0.4827,"length":1.3181,"colour":[195,151,118]},{"axis":[-0.1786,-0.5352,-0.8257],"at":[6.285,-0.8532,0.3445],"radius":0.4345,"length":1.0972,"colour":[227,176,137]},{"axis":[0.1759,-0.1779,0.9682],"at":[5.4803,0.6639,0.1872],"radius":0.5073,"length":2.1907,"colour":[227,176,137]},{"axis":[-0.0192,-0.9431,-0.332],"at":[5.646,-0.1375,0.9496],"radius":0.5073,"length":1.4805,"colour":[195,151,118]},{"axis":[-0.1094,-0.4909,-0.8643],"at":[5.5825,-0.9865,0.3297],"radius":0.4565,"length":1.0923,"colour":[227,176,137]},{"axis":[0.2313,-0.2889,0.929],"at":[4.5263,0.588,0.2277],"radius":0.4786,"length":1.9972,"colour":[227,176,137]},{"axis":[0.0483,-0.9263,-0.3738],"at":[4.7697,-0.2794,0.8364],"radius":0.4786,"length":1.4645,"colour":[195,151,118]},{"axis":[-0.1192,-0.2775,-0.9533],"at":[4.7558,-0.9871,0.2314],"radius":0.4308,"length":0.9225,"colour":[227,176,137]},{"axis":[0.2927,-0.4388,0.8496],"at":[3.544,0.486,0.2342],"radius":0.4173,"length":1.3042,"colour":[227,176,137]},{"axis":[0.1508,-0.8521,-0.5012],"at":[3.7805,-0.1579,0.4872],"radius":0.4173,"length":1.0878,"colour":[195,151,118]},{"axis":[-0.08,-0.2912,-0.9533],"at":[3.8259,-0.641,-0.0374],"radius":0.3755,"length":0.7781,"colour":[227,176,137]},{"axis":[0.3218,0.446,0.8352],"at":[5.9769,-2.1244,-0.9781],"radius":0.6075,"length":1.8712,"colour":[227,176,137]},{"axis":[0.1516,0.6103,0.7775],"at":[6.3553,-1.3261,0.2667],"radius":0.5245,"length":1.532,"colour":[195,151,118]},{"axis":[-0.0239,0.6924,0.7211],"at":[6.4486,-0.614,1.1055],"radius":0.4692,"length":1.0141,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.9646,-3.6108,-3.0614],"radius":1.0227,"length":1.4318,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.2679,-4.339,-3.4606],"radius":1.35,"length":0.7364,"colour":[58,82,110]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[-0.913,-8.7082,-5.8559],"radius":1.2682,"length":12.2727,"colour":[77,106,140]}]},{"id":"rod","butt":[0.301468,-0.445429,-0.557064],"rotation":[0.546788,0.651636,0.337933,0.402733],"scale":0.0615301,"fist":[0.29,-0.3,-0.58],"tip":[0.214025,0.663465,-0.73195],"hexes":[1,-1,8,0.46,2,-1,8,0.46,3,-1,9,0.46,4,-1,8,0.46,5,-1,8,0.46,6,-1,1,0.62,7,-1,1,0.62,8,-1,1,0.62,9,-1,1,0.62,10,-1,1,0.62,11,-1,8,0.46,12,-1,8,0.46,13,-1,8,0.46,14,-1,8,0.46,15,-1,9,0.46,16,-1,1,0.5,72,-1,10,0.4,73,-1,10,0.4,0,0,9,0.56,1,0,8,0.56,2,0,8,0.56,3,0,8,0.56,4,0,8,0.56,5,0,1,0.62,6,0,1,0.62,7,0,1,0.62,8,0,1,0.62,9,0,1,0.62,10,0,1,0.62,11,0,8,0.56,12,0,9,0.56,13,0,8,0.56,14,0,8,0.56,15,0,8,0.56,16,0,1,0.5,17,0,3,0.44,18,0,3,0.44,19,0,3,0.44,20,0,3,0.44,21,0,3,0.44,22,0,3,0.44,23,0,3,0.44,24,0,3,0.44,25,0,3,0.44,26,0,3,0.44,27,0,3,0.44,28,0,3,0.44,29,0,3,0.44,30,0,3,0.44,31,0,3,0.44,32,0,3,0.44,33,0,3,0.44,34,0,3,0.44,35,0,3,0.44,36,0,3,0.44,37,0,3,0.44,38,0,3,0.44,39,0,3,0.44,40,0,3,0.44,41,0,3,0.44,42,0,3,0.44,43,0,3,0.44,44,0,3,0.44,45,0,3,0.44,46,0,3,0.44,47,0,3,0.44,48,0,3,0.44,49,0,3,0.44,50,0,3,0.44,51,0,3,0.44,52,0,3,0.44,53,0,3,0.44,54,0,3,0.44,55,0,3,0.44,56,0,3,0.44,57,0,3,0.44,58,0,3,0.44,59,0,3,0.44,60,0,3,0.44,61,0,3,0.44,62,0,3,0.44,63,0,3,0.44,64,0,3,0.44,65,0,3,0.44,66,0,3,0.44,67,0,3,0.44,68,0,3,0.44,69,0,3,0.44,70,0,3,0.44,71,0,10,0.4,72,0,10,0.4,73,0,10,0.4,0,1,8,0.46,1,1,8,0.46,2,1,9,0.46,3,1,8,0.46,4,1,8,0.46,5,1,1,0.62,6,1,1,0.62,7,1,1,0.62,8,1,1,0.62,9,1,1,0.62,10,1,8,0.46,11,1,8,0.46,12,1,8,0.46,13,1,8,0.46,14,1,9,0.46,15,1,1,0.5,27,1,1,0.3,28,1,1,0.3,43,1,1,0.3,44,1,1,0.3,57,1,1,0.3,58,1,1,0.3,67,1,1,0.3,71,1,10,0.4,72,1,10,0.4,6,2,1,0.6,7,2,1,0.6,27,2,1,0.3,43,2,1,0.3,57,2,1,0.3,66,2,1,0.3,4,3,1,0.9,5,3,1,0.9,6,3,1,0.9,7,3,1,0.9,8,3,1,0.9,26,3,1,0.3,27,3,1,0.3,42,3,1,0.3,43,3,1,0.3,56,3,1,0.3,57,3,1,0.3,65,3,1,0.3,66,3,1,0.3,3,4,1,0.9,4,4,11,0.9,5,4,11,0.9,6,4,11,0.9,7,4,11,0.9,8,4,1,0.9,25,4,1,0.3,27,4,1,0.3,41,4,1,0.3,43,4,1,0.3,55,4,1,0.3,57,4,1,0.3,64,4,1,0.3,66,4,1,0.3,2,5,1,0.9,3,5,11,0.9,4,5,11,0.9,5,5,11,0.9,6,5,11,0.9,7,5,11,0.9,8,5,1,0.9,25,5,1,0.3,26,5,1,0.3,41,5,1,0.3,42,5,1,0.3,55,5,1,0.3,56,5,1,0.3,65,5,1,0.3,1,6,1,0.9,2,6,11,0.9,3,6,11,0.9,4,6,1,1.1,5,6,1,1.1,6,6,11,0.9,7,6,11,0.9,8,6,1,0.9,1,7,11,0.9,2,7,11,0.9,3,7,1,1.1,4,7,1,1.1,5,7,1,1.1,6,7,11,0.9,7,7,11,0.9,8,7,1,0.9,0,8,1,0.9,1,8,11,0.9,2,8,11,0.9,3,8,1,1.1,4,8,1,1.1,5,8,11,0.9,6,8,11,0.9,7,8,1,0.9,0,9,1,0.9,1,9,11,0.9,2,9,11,0.9,3,9,11,0.9,4,9,11,0.9,5,9,11,0.9,6,9,1,0.9,0,10,1,0.9,1,10,1,0.9,2,10,11,0.9,3,10,11,0.9,4,10,11,0.9,5,10,1,0.9,1,11,1,0.9,2,11,1,0.9,3,11,1,0.9],"hand":[{"axis":[0.0853,-0.9958,-0.0333],"at":[2.161,1.1356,0.6243],"radius":0.4327,"length":3.0953,"across":[0.9964,0.0852,0.0028],"width":1.2282,"colour":[227,176,137]},{"axis":[0.1287,-0.3647,-0.9222],"at":[3.2425,-0.3429,0.172],"radius":0.3004,"length":1.2485,"colour":[227,176,137]},{"axis":[-0.0904,0.9484,-0.3038],"at":[3.2838,-0.2114,-0.4659],"radius":0.3004,"length":0.8201,"colour":[195,151,118]},{"axis":[-0.1786,0.8509,0.494],"at":[3.1995,0.3763,-0.4314],"radius":0.2703,"length":0.6827,"colour":[227,176,137]},{"axis":[0.1759,-0.2797,-0.9438],"at":[2.6988,-0.4211,0.0832],"radius":0.3156,"length":1.3631,"colour":[227,176,137]},{"axis":[-0.0192,0.9912,-0.1309],"at":[2.8019,-0.1911,-0.5656],"radius":0.3156,"length":0.9212,"colour":[195,151,118]},{"axis":[-0.1094,0.829,0.5485],"at":[2.7625,0.4544,-0.4608],"radius":0.2841,"length":0.6796,"colour":[227,176,137]},{"axis":[0.2313,-0.1629,-0.9591],"at":[2.1052,-0.3904,0.0393],"radius":0.2978,"length":1.2427,"colour":[227,176,137]},{"axis":[0.0483,0.9951,-0.086],"at":[2.2567,-0.0806,-0.5427],"radius":0.2978,"length":0.9113,"colour":[195,151,118]},{"axis":[-0.1192,0.679,0.7244],"at":[2.248,0.4825,-0.4064],"radius":0.268,"length":0.574,"colour":[227,176,137]},{"axis":[0.2927,0.0067,-0.9562],"at":[1.4941,-0.3356,0.0069],"radius":0.2596,"length":0.8115,"colour":[227,176,137]},{"axis":[0.1508,0.9867,0.0612],"at":[1.6412,-0.0496,-0.3148],"radius":0.2596,"length":0.6768,"colour":[195,151,118]},{"axis":[-0.08,0.6912,0.7182],"at":[1.6695,0.3662,-0.1598],"radius":0.2337,"length":0.4841,"colour":[227,176,137]},{"axis":[0.3218,-0.7758,-0.5428],"at":[3.0079,1.4542,-0.0557],"radius":0.378,"length":1.1643,"colour":[227,176,137]},{"axis":[0.1516,-0.8962,-0.417],"at":[3.2433,0.6606,-0.5215],"radius":0.3263,"length":0.9533,"colour":[195,151,118]},{"axis":[-0.0239,-0.9438,-0.3295],"at":[3.3013,0.0293,-0.7863],"radius":0.292,"length":0.631,"colour":[227,176,137]},{"axis":[-0.6428,0.7657,0.0243],"at":[1.7557,2.8656,0.6815],"radius":0.6364,"length":0.8909,"colour":[227,176,137]},{"axis":[-0.6428,0.7657,0.0243],"at":[1.3223,3.3821,0.6979],"radius":0.84,"length":0.4582,"colour":[58,82,110]},{"axis":[-0.6428,0.7657,0.0243],"at":[-1.2792,6.4809,0.7962],"radius":0.7891,"length":7.6364,"colour":[77,106,140]}]}]};
+const HAND_FINDINGS = "<p><strong>What is wrong: it is the colouring, not the normals.</strong> Every finger and the thumb have their middle segment painted a second, darker skin tone, (195,&nbsp;151,&nbsp;118), between segments of (227,&nbsp;176,&nbsp;137) (<code>held_tools.ron</code>). In linear light that band is about 28% darker, which is as big a step as the whole shading range (0.62 to 1.0), so each finger carries a dark stripe across its middle that reads as a face turned the wrong way. The side-normal fix (<code>8a769c43</code>) could not change that: it only moves the four slanted faces of the flattened back of the hand, and every finger is round, so the hand looked the same. <strong>Flat part colours</strong> shows the band with no shading at all.</p> <ul>   <li><strong>The normals are right.</strong> <strong>Normals as colour</strong> paints each face by its eye-space normal: every face is one even colour, outward, and the old radial normals differ only on the back of the hand (<strong>Old radial normals</strong>).</li>   <li><strong>The shade is weak and flat where it is not lit.</strong> 0.62&nbsp;+&nbsp;0.38·max(n·l,&nbsp;0) puts every face turned from the light on the same 0.62. Measured on the four grips from the eye: 9–11% of the hand's visible area sits on that floor, and most of the skin is between 0.62 and 0.77, so the real form is a soft step next to the painted band's hard one. The sleeve's faces jump between 0.64 and 0.95.</li>   <li><strong>The light is fixed in the tool's frame at the rest pose.</strong> It is right at rest, and wrong once the tool swings: in today's chop (0.85&nbsp;rad) and the proposed stroke the lit side turns with the hand.</li>   <li><strong>The prisms run into each other at the joints.</strong> With two tones, the darker middle segments' end caps show as dark slivers at the knuckles; with one tone the overlaps disappear.</li>   <li><strong>The game's tone curve</strong> (exposure, then PBR Neutral, from 0.76 up) flattens the lit faces further when the eye's exposure is over 1: the skin's red channel at full shade is 0.77, right on the knee. <strong>Game tone</strong> under Tune shows it; this page could not measure the game's exposure at the eye.</li> </ul> <p><strong>Recommendation (the Proposed hand):</strong></p> <ul>   <li><strong>One skin tone</strong> for the whole hand; the sleeve one cloth colour, the cuff one band.</li>   <li><strong>A wrapped light</strong>: 0.45&nbsp;+&nbsp;0.55·(0.5&nbsp;+&nbsp;0.5·n·l)², plus a soft fill from below and behind, 0.12·max(n·f,&nbsp;0). Every face gets its own tone and none clamps.</li>   <li><strong>The light in eye space every frame</strong>, taken into the model through the drawn pose, so the hand stays lit from above while it swings. It is still unlit and baked, multiplied by the field's light at the eye (the lantern at night). That ports to Bevy as it stands: re-bake the hand's vertex colours when its pose changes (under 5,000 vertices), or move the same sum into a small vertex shader on the hand's normals.</li>   <li><strong>A better model, still blocky</strong>: the same bones (so every grip closes on its handle at the fist), each a chamfered block (an octagonal section with bevelled ends), flat faces with the chamfer bands carrying the in-between normals. Flat rather than smooth, because the game is hard-edged and the shade is baked per face. Each finger is turned so a flat face is its back. There are nail plates on the five tips, a darker bevel at each knuckle (the crease), a wrist that runs into the cuff, and a hem ring on the sleeve.</li>   <li><strong>Textures</strong>, 16×16 and nearest-sampled at one texel per 0.24 tool units on every part: skin with a faint mottle, paler nails, cloth with a weave, and the cuff with two stitch rows. They are drawn in code, with no outlines. <strong>Copy hand data</strong> under Tune gives the parts per grip and the PNGs, for <code>tools/gen_held_tools.py</code> → <code>assets/models/held_tools.ron</code> and <code>assets/textures/hand/*.png</code>.</li>   <li>Dig, Chop and Fish show the Proposed hand in their Proposed mode.</li>   <li>The skin picker's tones besides the game's are the Fields folk swatches from the Townsfolk mockup. The game has no player skin list yet.</li> </ul> ";
 const TOOL = Object.fromEntries(HELD.tools.map(t => [t.id, t]));
 const S3 = Math.sqrt(3);
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const lin8 = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 const clamp01 = u => Math.max(0, Math.min(1, u));
 const smooth = u => { u = clamp01(u); return u * u * (3 - 2 * u); };
-const easeOut = u => 1 - (1 - u) * (1 - u);
+const easeOut = u => { u = clamp01(u); return 1 - (1 - u) * (1 - u); };
+const backOut = u => { u = clamp01(u); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); };
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---------------------------------------------------------------------------
@@ -218,14 +299,14 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const NEIGHBOURS = [[1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1], [1, 0]];
 function shade(n) { return n.z > 0.5 ? 1.0 : n.z < -0.5 ? 0.72 : 0.78 + 0.18 * n.y; }
 function Mesher() {
-  const P = [], C = [], a = new THREE.Vector3(), b = new THREE.Vector3();
+  const P = [], C = [], N = [], a = new THREE.Vector3(), b = new THREE.Vector3();
   const push = (tri, out, col, k) => {
     a.subVectors(tri[1], tri[0]); b.subVectors(tri[2], tri[0]);
     if (a.cross(b).dot(out) < 0) tri = [tri[0], tri[2], tri[1]];
-    for (const p of tri) { P.push(p.x, p.y, p.z); C.push(lin8(col[0]) * k, lin8(col[1]) * k, lin8(col[2]) * k); }
+    for (const p of tri) { P.push(p.x, p.y, p.z); N.push(out.x, out.y, out.z); C.push(lin8(col[0]) * k, lin8(col[1]) * k, lin8(col[2]) * k); }
   };
   return {
-    push,
+    push, P, N,
     quad(q, out, col, k) { push([q[0], q[1], q[2]], out, col, k); push([q[0], q[2], q[3]], out, col, k); },
     geometry() {
       const g = new THREE.BufferGeometry();
@@ -255,54 +336,370 @@ function hexMesh(tool) {
   }
   return m.geometry();
 }
-// The hand: each face shaded by its own normal against the light in the
-// model's frame (the fixed hexel::prism, commit 8a769c43).
-function handMesh(tool) {
-  const restQ = new THREE.Quaternion(...tool.rotation).normalize();
-  const light = new THREE.Vector3(0.3, 0.8, 0.55).normalize().applyQuaternion(restQ.clone().invert());
-  const m = Mesher();
-  for (const part of tool.hand) {
+
+// The hand: hexel::prism, the fixed version (commit 8a769c43) with a switch
+// for the old radial side normals, and repainted by one of five shadings.
+// Each vertex keeps its face normal (tool frame) and its part's colour, so a
+// shading or a light can be repainted without rebuilding.
+const SKIN = [227, 176, 137], SKIN_DARK = [195, 151, 118];
+const HAND_LIGHT = new THREE.Vector3(0.3, 0.8, 0.55).normalize();   // held.rs, eye space
+const SLEEVE_COLOUR = "77,106,140";
+function handGeometry(tool, opts) {
+  const radial = opts.radial, extra = opts.sleeveExtra || 0;
+  const parts = tool.hand.map(p => Object.assign({}, p));
+  if (extra > 0) {
+    // Lengthen the sleeve at its far end (away from the cuff).
+    const sl = parts.find(p => p.colour.join(",") === SLEEVE_COLOUR), cuff = parts[parts.indexOf(sl) - 1];
+    const ax = v3(sl.axis).normalize(), at = v3(sl.at);
+    const far = at.clone().addScaledVector(ax, sl.length / 2).distanceTo(v3(cuff.at)) > at.clone().addScaledVector(ax, -sl.length / 2).distanceTo(v3(cuff.at)) ? 1 : -1;
+    sl.at = at.addScaledVector(ax, far * extra / 2).toArray(); sl.length += extra;
+  }
+  const m = Mesher(), cols = [];
+  for (const part of parts) {
     const axis = v3(part.axis).normalize();
     const first = part.across ? v3(part.across) : Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
     const u = first.clone().addScaledVector(axis, -first.dot(axis)).normalize();
     const v = axis.clone().cross(u), at = v3(part.at), w = part.width || part.radius;
     const ring = z => [...Array(6)].map((_, k) => { const an = k * Math.PI / 3; return at.clone().addScaledVector(u, Math.cos(an) * w).addScaledVector(v, Math.sin(an) * part.radius).addScaledVector(axis, z); });
     const lo = ring(-part.length / 2), hi = ring(part.length / 2);
-    const lit = n => 0.62 + 0.38 * Math.max(0, n.dot(light));
     const bottom = at.clone().addScaledVector(axis, -part.length / 2), top = at.clone().addScaledVector(axis, part.length / 2);
     const na = axis.clone().negate();
+    const before = m.P.length;
     for (let k = 0; k < 6; k++) {
       const k1 = (k + 1) % 6;
-      m.push([bottom, lo[k], lo[k1]], na, part.colour, lit(na));
-      m.push([top, hi[k], hi[k1]], axis, part.colour, lit(axis));
+      m.push([bottom, lo[k], lo[k1]], na, part.colour, 1);
+      m.push([top, hi[k], hi[k1]], axis, part.colour, 1);
       const mid = lo[k].clone().add(lo[k1]).multiplyScalar(0.5).sub(bottom);
-      let edge = lo[k1].clone().sub(lo[k]).cross(axis);
-      edge = edge.lengthSq() > 1e-12 ? edge.normalize() : u.clone();
-      const side = edge.dot(mid) < 0 ? edge.negate() : edge;
-      m.quad([lo[k], lo[k1], hi[k1], hi[k]], side, part.colour, lit(side));
+      let side;
+      if (radial) {
+        // Before 8a769c43: the direction from the axis to the side's middle.
+        side = mid.clone().addScaledVector(axis, -mid.dot(axis));
+        side = side.lengthSq() > 1e-12 ? side.normalize() : u.clone();
+      } else {
+        let edge = lo[k1].clone().sub(lo[k]).cross(axis);
+        edge = edge.lengthSq() > 1e-12 ? edge.normalize() : u.clone();
+        side = edge.dot(mid) < 0 ? edge.negate() : edge;
+      }
+      // The winding follows the true outward face (as push does with the
+      // normal it is given); a radial normal only changes the shade.
+      let edge = lo[k1].clone().sub(lo[k]).cross(axis); if (edge.dot(mid) < 0) edge.negate();
+      const n0 = m.N.length;
+      m.quad([lo[k], lo[k1], hi[k1], hi[k]], edge.normalize(), part.colour, 1);
+      for (let i = n0; i < m.N.length; i += 3) { m.N[i] = side.x; m.N[i + 1] = side.y; m.N[i + 2] = side.z; }
+    }
+    for (let i = before; i < m.P.length; i += 3) cols.push(part.colour);
+  }
+  const g = m.geometry();
+  g.userData = { N: m.N, cols };
+  return g;
+}
+// Paint a hand geometry. mode: game | normals | flat | proposed.
+// lightTool: the light in the model's frame; eyeQ: the model's rotation into
+// eye space (for "normals as colour").
+function paintHand(g, mode, lightTool, eyeQ) {
+  const { N, cols } = g.userData, C = g.getAttribute("color"), n = new THREE.Vector3();
+  for (let i = 0; i < cols.length; i++) {
+    n.set(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]);
+    let col = cols[i], k = 1, r, gg, b;
+    if (mode === "normals") {
+      n.applyQuaternion(eyeQ);
+      r = lin8(Math.round((n.x * 0.5 + 0.5) * 255)); gg = lin8(Math.round((n.y * 0.5 + 0.5) * 255)); b = lin8(Math.round((n.z * 0.5 + 0.5) * 255));
+      C.setXYZ(i, r, gg, b); continue;
+    }
+    const nl = n.dot(lightTool);
+    if (mode === "game") k = 0.62 + 0.38 * Math.max(nl, 0);
+    else if (mode === "proposed") {
+      // One skin tone, and a wrapped light: every face gets its own tone.
+      if (col[0] === SKIN_DARK[0] && col[1] === SKIN_DARK[1]) col = SKIN;
+      const h = 0.5 + 0.5 * nl; k = HS.ambient + HS.wrap * h * h;
+    }
+    C.setXYZ(i, lin8(col[0]) * k, lin8(col[1]) * k, lin8(col[2]) * k);
+  }
+  C.needsUpdate = true;
+}
+// The proposed hand shade: ambient + wrap * (0.5 + 0.5 n.l)^2.
+const HS = { ambient: 0.45, wrap: 0.55, fill: 0.12 };
+
+// ---------------------------------------------------------------------------
+// The proposed hand (rod-motion, the owner's "improved hand model, better
+// normals, better shading, more uniform colors, hell throw in some
+// textures"). Built from the same bones as the game's hand (the 19 prisms of
+// held_tools.ron, so every grip still closes on its handle at the fist), but
+// each bone is a chamfered block: an octagonal section with bevelled ends, so
+// the silhouette reads rounder while every face stays flat (one normal per
+// face, the chamfer bands carrying the in-between normals). One skin tone
+// for the whole hand, nail plates on the five tips, a hem ring on the sleeve,
+// and small nearest-sampled pixel textures drawn in code.
+// Parts in held_tools.ron: 0 back of the hand, 1-12 four fingers of three
+// segments (proximal, middle, distal), 13-15 the thumb, 16 the wrist, 17 the
+// cuff, 18 the sleeve.
+const SKINS = [["Game", [227, 176, 137]], ["Fair", [240, 196, 158]], ["Tan", [201, 154, 116]], ["Brown", [156, 107, 74]], ["Dark", [122, 80, 56]]];
+const HAND_LOOK = { skin: SKINS[0][1], cloth: [77, 106, 140], cuff: [58, 82, 110], textured: true };
+const TEX_UNIT = 0.24;   // tool units per texel (~9 mm on the pickaxe's hand)
+const HAND_PARTS = { skin: 0, nail: 1, cloth: 2, cuff: 3 };
+function texCanvas(draw) { const c = document.createElement("canvas"); c.width = c.height = 16; draw(c.getContext("2d")); return c; }
+const hexOf = c => "#" + c.map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("");
+const tone = (c, k) => c.map(x => x * k);
+function handTextures() {
+  const r = rng(91), skin = HAND_LOOK.skin, cloth = HAND_LOOK.cloth, cuff = HAND_LOOK.cuff;
+  const px = (x, X, Y, col) => { x.fillStyle = hexOf(col); x.fillRect(X, Y, 1, 1); };
+  return {
+    // Skin: the tone with a light mottle, a few warmer and a few paler pixels.
+    skin: texCanvas(x => { for (let Y = 0; Y < 16; Y++) for (let X = 0; X < 16; X++) { const u = r(); px(x, X, Y, u < 0.07 ? [skin[0] * 1.0, skin[1] * 0.95, skin[2] * 0.93] : u < 0.13 ? tone(skin, 1.03) : u < 0.19 ? tone(skin, 0.975) : skin); } }),
+    // Nails: paler than the skin, a lighter row at the tip.
+    nail: texCanvas(x => { const n = [skin[0] * 0.55 + 240 * 0.45, skin[1] * 0.55 + 214 * 0.45, skin[2] * 0.55 + 200 * 0.45]; for (let Y = 0; Y < 16; Y++) for (let X = 0; X < 16; X++) px(x, X, Y, Y < 3 ? tone(n, 1.07) : r() < 0.15 ? tone(n, 0.97) : n); }),
+    // Cloth: a two-tone weave and an odd darker thread.
+    cloth: texCanvas(x => { for (let Y = 0; Y < 16; Y++) for (let X = 0; X < 16; X++) { const w = ((X >> 1) + (Y >> 1)) & 1; px(x, X, Y, r() < 0.05 ? tone(cloth, 0.88) : tone(cloth, w ? 1.03 : 0.96)); } }),
+    // Cuff: the band's colour with a row of stitches near each edge.
+    cuff: texCanvas(x => { for (let Y = 0; Y < 16; Y++) for (let X = 0; X < 16; X++) { const st = (Y === 3 || Y === 12) && (X % 3) !== 2; px(x, X, Y, st ? tone(cuff, 1.32) : r() < 0.1 ? tone(cuff, 0.95) : cuff); } }),
+  };
+}
+function canvasTex(c) {
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+// The hand's shared materials: one per texture, plus a plain one (no map)
+// for the diagnostics. All unlit; the shade is baked into vertex colours.
+const HAND_MATS = (() => {
+  const mk = () => new THREE.MeshBasicMaterial({ vertexColors: true });
+  const m = { tex: [mk(), mk(), mk(), mk()], plain: mk(), canvases: null };
+  m.refresh = () => {
+    m.canvases = handTextures();
+    ["skin", "nail", "cloth", "cuff"].forEach((k, i) => { if (m.tex[i].map) m.tex[i].map.dispose(); m.tex[i].map = canvasTex(m.canvases[k]); m.tex[i].needsUpdate = true; });
+  };
+  m.refresh();
+  return m;
+})();
+// A chamfered block along `axis`: half sizes w (along u) and h (along v),
+// length len, chamfer c. Adds its faces to the builder `B`.
+function chamferBlock(B, o) {
+  const { at, axis, u, w, h, len, c, group, colour, crease, uvAlong } = o;
+  const v = axis.clone().cross(u);
+  const sec = (s) => {   // the octagon, scaled inward by s at the bevels
+    const W = w - s, Hh = h - s, C = Math.max(0.0001, c - s * 0.4);
+    return [[W - C, -Hh], [W, -Hh + C], [W, Hh - C], [W - C, Hh], [-W + C, Hh], [-W, Hh - C], [-W, -Hh + C], [-W + C, -Hh]];
+  };
+  const bev = Math.min(c, len * 0.3);
+  const ringAt = (z, s) => sec(s).map(([a, b]) => at.clone().addScaledVector(u, a).addScaledVector(v, b).addScaledVector(axis, z));
+  const z0 = -len / 2, z1 = len / 2;
+  const r0 = ringAt(z0, bev), r1 = ringAt(z0 + bev, 0), r2 = ringAt(z1 - bev, 0), r3 = ringAt(z1, bev);
+  const cBot = at.clone().addScaledVector(axis, z0), cTop = at.clone().addScaledVector(axis, z1);
+  const quad = (a, b, cc, d, k, along) => B.face([a, b, cc, d], at, group, colour, k, along ? { axis, z0, len } : null);
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8;
+    quad(r1[i], r1[j], r2[j], r2[i], 1, uvAlong);
+    quad(r0[i], r0[j], r1[j], r1[i], crease ? crease[0] : 1, false);
+    quad(r2[i], r2[j], r3[j], r3[i], crease ? crease[1] : 1, false);
+    B.face([cBot, r0[j], r0[i]], at, group, colour, crease ? crease[0] : 1);
+    B.face([cTop, r3[i], r3[j]], at, group, colour, crease ? crease[1] : 1);
+  }
+}
+// The builder: flat faces, each wound outward from its part's centre, a
+// planar UV per face at TEX_UNIT tool units a texel (or along the axis for
+// the cuff, so its stitch rows sit at its edges).
+function HandBuilder() {
+  const P = [], N = [], UV = [], COL = [], K = [], groups = [[], [], [], []];
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3(), mid = new THREE.Vector3();
+  function tri(a, b, c, centre, group, colour, k, along) {
+    e1.subVectors(b, a); e2.subVectors(c, a); n.crossVectors(e1, e2);
+    if (n.lengthSq() < 1e-14) return;
+    n.normalize();
+    mid.copy(a).add(b).add(c).multiplyScalar(1 / 3).sub(centre);
+    if (n.dot(mid) < 0) { [b, c] = [c, b]; n.negate(); }
+    const T = e1.subVectors(b, a).normalize(), Bt = new THREE.Vector3().crossVectors(n, T);
+    for (const p of [a, b, c]) {
+      groups[group].push(P.length / 3);
+      P.push(p.x, p.y, p.z); N.push(n.x, n.y, n.z); COL.push(colour); K.push(k);
+      if (along) { const z = p.clone().sub(along.at).dot(along.axis), Ta = new THREE.Vector3().crossVectors(n, along.axis).normalize(); UV.push(p.dot(Ta) / TEX_UNIT / 16, (z - along.z0) / along.len); }
+      else UV.push(p.dot(T) / TEX_UNIT / 16, p.dot(Bt) / TEX_UNIT / 16);
     }
   }
-  return m.geometry();
+  return {
+    face(pts, centre, group, colour, k, along) {
+      if (along) along.at = centre;
+      tri(pts[0], pts[1], pts[2], centre, group, colour, k, along);
+      if (pts.length === 4) tri(pts[0], pts[2], pts[3], centre, group, colour, k, along);
+    },
+    geometry() {
+      // Order the vertices by group so the four textured materials draw as
+      // geometry groups.
+      const g = new THREE.BufferGeometry(), order = groups.flat();
+      const pick = (src, w) => { const out = new Float32Array(order.length * w); order.forEach((i, j) => { for (let q = 0; q < w; q++) out[j * w + q] = src[i * w + q]; }); return out; };
+      g.setAttribute("position", new THREE.BufferAttribute(pick(P, 3), 3));
+      g.setAttribute("uv", new THREE.BufferAttribute(pick(UV, 2), 2));
+      g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(order.length * 3), 3));
+      let start = 0; groups.forEach((gr, i) => { g.addGroup(start, gr.length, i); start += gr.length; });
+      g.userData = { N: Array.from(pick(N, 3)), cols: order.map(i => COL[i]), k: order.map(i => K[i]), proposedHand: true };
+      return g;
+    },
+  };
 }
+function proposedHandGeometry(tool, sleeveExtra, only) {
+  const B = HandBuilder(), parts = tool.hand;
+  const q = new THREE.Quaternion(...tool.rotation).normalize();
+  const fistT = v3(tool.fist).sub(v3(tool.butt)).applyQuaternion(q.clone().invert()).multiplyScalar(1 / tool.scale);
+  const pc = i => v3(parts[i].at);
+  const handleDir = pc(10).sub(pc(1)).normalize();   // index to little finger: along the handle
+  parts.forEach((p, i) => {
+    if (only === "hand" && i >= 16 || only === "arm" && i < 16) return;
+    let axis = v3(p.axis).normalize(), at = v3(p.at), len = p.length;
+    const first = p.across ? v3(p.across) : Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    let u = first.clone().addScaledVector(axis, -first.dot(axis)).normalize();
+    const finger = i >= 1 && i <= 15, distal = finger && (i % 3 === 0), seg = finger ? (i - 1) % 3 : -1;
+    // Turn a finger block so a flat face looks away from the handle (the
+    // back of the finger), so the nail and the knuckles sit on a face.
+    let out = null;
+    if (finger) {
+      const rel = at.clone().sub(fistT); rel.addScaledVector(handleDir, -rel.dot(handleDir)).addScaledVector(axis, -rel.dot(axis));
+      if (rel.lengthSq() > 1e-8) { out = rel.normalize(); u = axis.clone().cross(out).normalize(); }
+    }
+    let w = (p.width || p.radius), h = p.radius, group = HAND_PARTS.skin, colour = HAND_LOOK.skin, uvAlong = false, crease = null;
+    if (i === 17) { group = HAND_PARTS.cuff; colour = HAND_LOOK.cuff; uvAlong = true; }
+    if (i === 18) {
+      group = HAND_PARTS.cloth; colour = HAND_LOOK.cloth;
+      // Lengthen the sleeve at its far end (away from the cuff).
+      const far = at.clone().addScaledVector(axis, len / 2).distanceTo(pc(17)) > at.clone().addScaledVector(axis, -len / 2).distanceTo(pc(17)) ? 1 : -1;
+      at.addScaledVector(axis, far * sleeveExtra / 2); len += sleeveExtra;
+    }
+    if (finger) { w *= 0.94; h *= 0.94; crease = seg < 2 ? [1, 0.9] : [1, 1]; }   // a darker bevel at each knuckle
+    if (i === 0) { w *= 1.0; h *= 1.08; }   // the back of the hand: a solid block
+    if (i === 16) { w *= 1.05; h *= 0.92; len *= 1.15; }   // the wrist runs into the cuff
+    const c = Math.min(w, h) * (finger ? 0.36 : 0.3);
+    chamferBlock(B, { at, axis, u, w, h, len, c, group, colour, crease, uvAlong });
+    // The hem: a ring of the sleeve's cloth where it meets the cuff.
+    if (i === 18) {
+      const near = v3(p.at).addScaledVector(axis, (v3(p.at).addScaledVector(axis, p.length / 2).distanceTo(pc(17)) < v3(p.at).addScaledVector(axis, -p.length / 2).distanceTo(pc(17)) ? 1 : -1) * (p.length / 2 - 0.3));
+      chamferBlock(B, { at: near, axis, u, w: w * 1.06, h: h * 1.06, len: 0.5, c: c * 1.06, group, colour: tone(HAND_LOOK.cloth, 0.86), crease: null });
+    }
+    // A nail plate on each tip, on the back face near the end.
+    if (distal && out) {
+      const nat = at.clone().addScaledVector(axis, len * 0.14).addScaledVector(out, h * 0.93);
+      chamferBlock(B, { at: nat, axis, u, w: w * 0.62, h: h * 0.14, len: len * 0.56, c: h * 0.08, group: HAND_PARTS.nail, colour: tone(HAND_LOOK.skin, 1.06), crease: null });
+    }
+  });
+  return B.geometry();
+}
+// Paint the proposed hand: textured (the texture carries the colour, the
+// vertex the shade) or plain (the part colour times the shade).
+function paintProposedHand(g, mode, lightTool, eyeQ, textured) {
+  const { N, cols, k: K } = g.userData, C = g.getAttribute("color"), n = new THREE.Vector3();
+  const fill = FILL_EYE.clone().applyQuaternion(eyeQ.clone().invert());
+  for (let i = 0; i < cols.length; i++) {
+    n.set(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]);
+    if (mode === "normals") { n.applyQuaternion(eyeQ); C.setXYZ(i, lin8(Math.round((n.x * 0.5 + 0.5) * 255)), lin8(Math.round((n.y * 0.5 + 0.5) * 255)), lin8(Math.round((n.z * 0.5 + 0.5) * 255))); continue; }
+    let k = 1;
+    const nl = n.dot(lightTool);
+    if (mode === "game") k = 0.62 + 0.38 * Math.max(nl, 0);
+    else if (mode === "proposed") { const hh = 0.5 + 0.5 * nl; k = HS.ambient + HS.wrap * hh * hh + HS.fill * Math.max(0, n.dot(fill)); }
+    k *= K[i];
+    if (textured && mode !== "flat") C.setXYZ(i, k, k, k);
+    else if (textured) C.setXYZ(i, 1, 1, 1);
+    else { const col = cols[i]; C.setXYZ(i, lin8(col[0]) * k, lin8(col[1]) * k, lin8(col[2]) * k); }
+  }
+  C.needsUpdate = true;
+}
+// The proposed hand as two meshes: the hand (bones 0-15) and the arm (the
+// wrist, cuff and sleeve), so the arm can follow only part of a pitch and
+// the wrist takes the rest (the shovel's steep entry). In tool units.
+function HandPair(tool, mats) {
+  const q = new THREE.Quaternion(...tool.rotation).normalize();
+  // The arm turns about the wrist joint: the wrist block's end at the hand.
+  const wr = tool.hand[16], wax = v3(wr.axis).normalize(), back = v3(tool.hand[0].at);
+  const e1 = v3(wr.at).addScaledVector(wax, wr.length / 2), e2 = v3(wr.at).addScaledVector(wax, -wr.length / 2);
+  const fistT = e1.distanceTo(back) < e2.distanceTo(back) ? e1 : e2;
+  const axisT = QX.clone().applyQuaternion(q.clone().invert());
+  const group = new THREE.Group(), armG = new THREE.Group(); armG.matrixAutoUpdate = false;
+  const hand = new THREE.Mesh(proposedHandGeometry(tool, ST.sleeve_extra, "hand"), mats);
+  const arm = new THREE.Mesh(proposedHandGeometry(tool, ST.sleeve_extra, "arm"), mats);
+  armG.add(arm); group.add(hand, armG);
+  const pair = { group, hand, arm, armG, bendRad: 0, sleeve: ST.sleeve_extra, skin: HAND_LOOK.skin };
+  const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), m3 = new THREE.Matrix4();
+  // Turn the arm back by `rad` about the eye's x through the wrist joint.
+  pair.bend = rad => { pair.bendRad = rad; armG.matrix.copy(m1.makeTranslation(fistT.x, fistT.y, fistT.z)).multiply(m2.makeRotationAxis(axisT, rad)).multiply(m3.makeTranslation(-fistT.x, -fistT.y, -fistT.z)); armG.matrixWorldNeedsUpdate = true; };
+  pair.bend(0);
+  pair.rebuild = () => {
+    if (pair.sleeve === ST.sleeve_extra && pair.skin === HAND_LOOK.skin) return false;
+    hand.geometry.dispose(); arm.geometry.dispose();
+    hand.geometry = proposedHandGeometry(tool, ST.sleeve_extra, "hand"); arm.geometry = proposedHandGeometry(tool, ST.sleeve_extra, "arm");
+    pair.sleeve = ST.sleeve_extra; pair.skin = HAND_LOOK.skin; return true;
+  };
+  // Paint both with the light in eye space through `worldQ`, the model's
+  // drawn rotation (the arm's turned back by its bend).
+  const inv = new THREE.Quaternion(), lt = new THREE.Vector3(), aq = new THREE.Quaternion();
+  pair.paint = (mode, worldQ, textured, restLight) => {
+    const one = (geo, Q) => {
+      if (mode === "proposed") { inv.copy(Q).invert(); lt.copy(HAND_LIGHT).applyQuaternion(inv); } else lt.copy(restLight);
+      paintProposedHand(geo, mode, lt, Q, textured);
+    };
+    one(hand.geometry, worldQ);
+    aq.setFromAxisAngle(QX, pair.bendRad).multiply(worldQ);
+    one(arm.geometry, aq);
+  };
+  group.traverse(o => { o.frustumCulled = false; });
+  return pair;
+}
+// A soft fill from below and behind the hand, eye space.
+const FILL_EYE = new THREE.Vector3(-0.2, -0.75, -0.6).normalize();
+// The hand data a generator could write (tools/gen_held_tools.py ->
+// assets/models/held_tools.ron + assets/textures/hand/*.png).
+function handExport() {
+  const grips = {};
+  for (const t of HELD.tools) grips[t.id] = { fist: t.fist, butt: t.butt, rotation: t.rotation, scale: t.scale, bones: t.hand.map((p, i) => ({ part: i === 0 ? "back" : i <= 12 ? `finger${Math.floor((i - 1) / 3) + 1}.${(i - 1) % 3}` : i <= 15 ? `thumb.${i - 13}` : ["wrist", "cuff", "sleeve"][i - 16], at: p.at, axis: p.axis, across: p.across || null, width: p.width || p.radius, radius: p.radius, length: p.length })) };
+  const pngs = {}; for (const k of ["skin", "nail", "cloth", "cuff"]) pngs[`assets/textures/hand/${k}.png`] = HAND_MATS.canvases[k].toDataURL("image/png");
+  return JSON.stringify({ builder: "chamfered blocks: octagon section, chamfer 0.36 of the smaller half size on fingers (0.3 elsewhere), bevelled ends; fingers 0.94 of the bone's size, turned so a flat face is the back of the finger; nails 0.62 w x 0.56 len on each tip; a hem ring on the sleeve; sleeve_extra on the sleeve's far end", tex_unit: TEX_UNIT, skin: HAND_LOOK.skin, cloth: HAND_LOOK.cloth, cuff: HAND_LOOK.cuff, shade: { ambient: HS.ambient, wrap: HS.wrap, fill: HS.fill, light_eye: [0.3, 0.8, 0.55], fill_eye: FILL_EYE.toArray().map(x => +x.toFixed(3)) }, grips, textures: pngs }, null, 1);
+}
+
+
 // One holder per tool: the tool's and the hand's meshes in tool units under a
 // transform in eye space (held::rest), sharing one unlit material whose
-// colour is the light at the eye (held::light_held).
+// colour is the light at the eye (held::light_held). Proposed swaps in the
+// proposed hand: its own textured materials, its shade baked each frame
+// with the light in eye space taken through the drawn pose.
 function makeHeld(id) {
   const t = TOOL[id], mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const q = new THREE.Quaternion(...t.rotation).normalize();
+  const restLight = HAND_LIGHT.clone().applyQuaternion(q.clone().invert());
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(hexMesh(t), mat), new THREE.Mesh(handMesh(t), mat));
+  const handToday = handGeometry(t, {}); paintHand(handToday, "game", restLight, q);
+  const toolMesh = new THREE.Mesh(hexMesh(t), mat), handMesh = new THREE.Mesh(handToday, mat);
+  const pair = HandPair(t, HAND_MATS.tex), newMesh = pair.group; newMesh.visible = false;
+  g.add(toolMesh, handMesh, newMesh);
+  const h = { id, pair, group: g, mat, mats: [mat, ...HAND_MATS.tex], butt: v3(t.butt), q, scale: t.scale, fist: v3(t.fist), tip: v3(t.tip), handToday, handMesh, newMesh, restLight, sleeve: ST.sleeve_extra, skin: HAND_LOOK.skin };
+  if (id === "shovel") {
+    // A clump of dirt for the scoop: a few dirt-coloured hex chips on both
+    // faces of the blade, near its middle (tool units).
+    const tipT = h.tip.clone().sub(h.butt).applyQuaternion(q.clone().invert()).multiplyScalar(1 / t.scale);
+    const fistT = h.fist.clone().sub(h.butt).applyQuaternion(q.clone().invert()).multiplyScalar(1 / t.scale);
+    const blade = fistT.clone().lerp(tipT, 0.86);
+    const dirt = new THREE.Group(), dm = phong({ map: pixTex(8, 8, noisy(...PAL.dirt, 77)) }), r = rng(5);
+    for (let i = 0; i < 7; i++) {
+      const s = 0.5 + r() * 0.5, m = new THREE.Mesh(new THREE.CylinderGeometry(s, s, 0.45 + r() * 0.3, 6), dm);
+      m.rotation.x = Math.PI / 2; m.position.set((r() - 0.5) * 1.8, (r() - 0.5) * 1.8, (i & 1 ? 1 : -1) * (0.45 + r() * 0.2));
+      dirt.add(m);
+    }
+    dirt.position.copy(blade); dirt.visible = false; g.add(dirt); h.dirt = dirt;
+  }
   g.traverse(o => { o.frustumCulled = false; });
-  return { group: g, mat, butt: v3(t.butt), q: new THREE.Quaternion(...t.rotation).normalize(), scale: t.scale, fist: v3(t.fist), tip: v3(t.tip) };
+  const inv = new THREE.Quaternion(), lt = new THREE.Vector3();
+  h.look = (proposed) => {
+    handMesh.visible = !proposed; newMesh.visible = proposed;
+    if (!proposed) return;
+    pair.rebuild();
+    pair.paint("proposed", g.quaternion, true, restLight);
+  };
+  return h;
 }
 // Pose a holder: pitch (about eye x, tip up and back positive) and roll
 // (about eye z) about the fist, plus a shift (eye space, m).
-const QX = new THREE.Vector3(1, 0, 0), QZ = new THREE.Vector3(0, 0, 1);
-function posed(h, pitch, roll, shift) {
-  const r = new THREE.Quaternion().setFromAxisAngle(QX, pitch).multiply(new THREE.Quaternion().setFromAxisAngle(QZ, roll));
+const QX = new THREE.Vector3(1, 0, 0), QY = new THREE.Vector3(0, 1, 0), QZ = new THREE.Vector3(0, 0, 1);
+function posed(h, pitch, roll, shift, yaw) {
+  const r = new THREE.Quaternion().setFromAxisAngle(QY, yaw || 0).multiply(new THREE.Quaternion().setFromAxisAngle(QX, pitch)).multiply(new THREE.Quaternion().setFromAxisAngle(QZ, roll));
   return { r, at: (p) => p.clone().sub(h.fist).applyQuaternion(r).add(h.fist).add(shift) };
 }
-function applyPose(h, pitch, roll, shift) {
-  const P = posed(h, pitch, roll, shift);
+function applyPose(h, pitch, roll, shift, yaw) {
+  const P = posed(h, pitch, roll, shift, yaw);
   h.group.position.copy(P.at(h.butt));
   h.group.quaternion.copy(P.r).multiply(h.q);
   h.group.scale.setScalar(h.scale);
@@ -438,19 +835,57 @@ function glowTex() {
 }
 
 // ---------------------------------------------------------------------------
-// Values. The stroke (held-swing decision 1) and the rod (rod-motion design 2).
-const STROKE_DEF = { windup_s: 0.08, windup_rad: 0.35, strike_s: 0.07, strike_rad: 1.15, impact_hold_s: 0.05, recoil_rad: 0.12, recover_s: 0.18, stroke_target_s: 0.4, drop_m: 0.09, camera_kick_rad: 0.0 };
-const STROKE_SL = [["windup_s", 0.02, 0.3, 0.01], ["windup_rad", 0, 1, 0.01], ["strike_s", 0.03, 0.25, 0.005], ["strike_rad", 0.3, 1.8, 0.01], ["impact_hold_s", 0, 0.2, 0.005], ["recoil_rad", 0, 0.4, 0.01], ["recover_s", 0.05, 0.5, 0.01], ["stroke_target_s", 0.2, 1.0, 0.01], ["drop_m", 0, 0.2, 0.005], ["camera_kick_rad", 0, 0.15, 0.005]];
-const ROD_DEF = { draw_rad: 0.9, draw_lift_m: 0.05, flick_rad: 0.35, flick_s: 0.14, settle_rad: 0.12, bob_rad: 0.015, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
-const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["draw_lift_m", 0, 0.15, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["settle_rad", -0.3, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
-const ST = Object.assign({}, STROKE_DEF), ROD = Object.assign({}, ROD_DEF);
+// Values. The stroke (held-swing) and the rod (rod-motion design 2).
+const STROKE_DEF = {
+  windup_s: 0.10, windup_rad: 0.35, raise_rad: 0.42, coil_m: 0.03,
+  anticipate_s: 0.07, anticipate_rad: 0.08,
+  strike_s: 0.06, strike_rad: 0.55, reach_rad: 0.05, extend_m: 0.12, sweep_rad: 0.25,
+  impact_hold_s: 0.05,
+  recoil_s: 0.06, recoil_rad: 0.15, follow_rad: 0.08, recover_s: 0.16,
+  lag_s: 0.03, overlap_rad: 0.06,
+  stroke_target_s: 0.45, camera_kick_rad: 0.0, exaggerate: 1.0,
+  shoulder_x: 0.2, shoulder_y: -0.25, shoulder_z: 0.05,
+  pickaxe_weight: 1.15, axe_weight: 1.1, shovel_weight: 0.85, tier_slow: 0.04,
+  sleeve_extra: 6.0,
+};
+const STROKE_SL = [
+  ["windup_s", 0.02, 0.3, 0.005], ["windup_rad", 0, 1, 0.01], ["raise_rad", 0, 1.2, 0.01], ["coil_m", 0, 0.08, 0.005],
+  ["anticipate_s", 0, 0.2, 0.005], ["anticipate_rad", 0, 0.3, 0.005],
+  ["strike_s", 0.03, 0.2, 0.005], ["strike_rad", 0.3, 1.8, 0.01], ["reach_rad", -0.3, 0.6, 0.01], ["extend_m", 0, 0.25, 0.005], ["sweep_rad", -0.2, 0.6, 0.01],
+  ["impact_hold_s", 0, 0.2, 0.005],
+  ["recoil_s", 0.02, 0.2, 0.005], ["recoil_rad", 0, 0.5, 0.01], ["follow_rad", 0, 0.4, 0.01], ["recover_s", 0.05, 0.5, 0.01],
+  ["lag_s", 0, 0.1, 0.005], ["overlap_rad", 0, 0.2, 0.005],
+  ["stroke_target_s", 0.2, 1.0, 0.01], ["camera_kick_rad", 0, 0.15, 0.005], ["exaggerate", 0, 1.5, 0.05],
+  ["shoulder_x", -0.1, 0.4, 0.01], ["shoulder_y", -0.5, 0, 0.01], ["shoulder_z", -0.2, 0.3, 0.01],
+  ["pickaxe_weight", 0.5, 1.6, 0.05], ["axe_weight", 0.5, 1.6, 0.05], ["shovel_weight", 0.5, 1.6, 0.05], ["tier_slow", 0, 0.15, 0.01],
+  ["sleeve_extra", 0, 20, 0.5],
+];
+const ROD_DEF = { draw_rad: 0.9, draw_lift_m: 0.05, flick_rad: 0.35, flick_s: 0.14, flick_wobble_rad: 0.05, settle_rad: 0.12, bob_rad: 0.015, bob_hz: 0.4, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, run_dip_rad: 0.2, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_dip_rad: 0.08, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
+const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["draw_lift_m", 0, 0.2, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["flick_wobble_rad", 0, 0.2, 0.005], ["settle_rad", 0, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["bob_hz", 0.1, 2, 0.05], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["run_dip_rad", 0, 0.6, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_dip_rad", 0, 0.3, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
+// The shovel's own stroke: a steep stab along the handle, then angle up
+// about the blade in the ground, and lift (shovelAt).
+const SHOVEL_DEF = { entry_deg: 65, thrust_m: 0.14, lever_rad: 0.4, lift_m: 0.07, scoop_s: 0.22, across_m: 0.24, arm_follow: 0.1 };
+const SHOVEL_SL = [["entry_deg", 30, 85, 1], ["thrust_m", 0, 0.3, 0.005], ["lever_rad", 0, 0.9, 0.01], ["lift_m", 0, 0.2, 0.005], ["scoop_s", 0.08, 0.5, 0.01], ["across_m", 0, 0.35, 0.01], ["arm_follow", 0, 1, 0.05]];
+const ROD_GAME = ["draw_rad", "draw_lift_m", "flick_rad", "flick_s", "settle_rad", "bob_rad", "bob_hz", "nibble_rad", "nibble_s", "bite_rad", "bite_shake_rad", "bite_shake_hz", "fight_rad", "fight_shake_rad", "fight_shake_hz", "crank_m", "crank_hz", "roll_rad", "catch_rad", "catch_s", "ease_s", "spring_hz", "damping"];
+const ST = Object.assign({}, STROKE_DEF), ROD = Object.assign({}, ROD_DEF), SHOVEL = Object.assign({}, SHOVEL_DEF);
 const fmt = v => { const s = (+v.toFixed(4)).toString(); return s.includes(".") ? s : s + ".0"; };
 function ronText() {
-  const lines = ["// assets/config/held.ron, as set on this page", "(", "    sway_m: (0.006, 0.005),", "    sway_rate: (1.3, 1.7),", "    // The stroke (held-swing), replacing swing_rate, swing_drop_m and swing_pitch_rad."];
-  for (const [k] of STROKE_SL) lines.push(`    ${k}: ${fmt(ST[k])},`);
-  lines.push("    // The rod in hand (rod-motion design 2).", "    rod: (");
-  for (const [k] of ROD_SL) lines.push(`        ${k}: ${fmt(ROD[k])},`);
-  lines.push("    ),", ")");
+  const lines = ["// assets/config/held.ron, as set on this page", "(", "    sway_m: (0.006, 0.005),", "    sway_rate: (1.3, 1.7),", "    // Proposed (held-swing): the stroke, windup, anticipation, hit and", "    // recoil on the shoulder arc, and the shovel's, replacing swing_rate,", "    // swing_drop_m and swing_pitch_rad once the game reads them.", "    stroke: ("];
+  for (const [k] of STROKE_SL) {
+    if (k === "shoulder_y" || k === "shoulder_z") continue;
+    if (k === "shoulder_x") { lines.push(`        shoulder: (${fmt(ST.shoulder_x)}, ${fmt(ST.shoulder_y)}, ${fmt(ST.shoulder_z)}),`); continue; }
+    lines.push(`        ${k}: ${fmt(ST[k])},`);
+  }
+  lines.push("    ),", "    // The shovel's stroke: a steep stab along the handle, angle up about", "    // the blade in the ground, lift (its times are the stroke's, scoop_s in", "    // place of recoil_s).", "    shovel: (");
+  for (const [k] of SHOVEL_SL) lines.push(`        ${k}: ${fmt(SHOVEL[k])},`);
+  lines.push("    ),", "    // The rod in hand (rod-motion design 2).", "    rod: (");
+  // The game's rod block (held.rs RodSettings): sizes, rates and times, all
+  // positive (the code gives each its sign). The page's extra values are
+  // printed after it as a comment, not yet fields the game reads.
+  const extra = ROD_SL.filter(([k]) => !ROD_GAME.includes(k));
+  for (const k of ROD_GAME) lines.push(`        ${k}: ${fmt(ROD[k])},`);
+  lines.push("    ),", `    // Proposed for the rod block, not yet in the game: ${extra.map(([k]) => `${k}: ${fmt(ROD[k])}`).join(", ")}.`);
+  lines.push("    // Proposed for the hand (rod-motion), not yet in the game: its shade is", `    // ${fmt(HS.ambient)} + ${fmt(HS.wrap)} * (0.5 + 0.5 n.l)^2 + ${fmt(HS.fill)} * max(n.f, 0), the light in eye space each frame.`, ")");
   return lines.join("\n");
 }
 const RONS = [];
@@ -479,112 +914,232 @@ function seg(el, options, value, onPick) {
 }
 
 // ---------------------------------------------------------------------------
-// The STRIKE stroke (held-swing), the same curve as the Hex Tool Bench's.
-const strokeLen = () => ST.windup_s + ST.strike_s + ST.impact_hold_s + ST.recover_s;
-const toImpact = () => ST.windup_s + ST.strike_s;
-function strokeAngle(e, from) {   // forward positive
-  const wr = -ST.windup_rad, sr = ST.strike_rad;
-  if (e < 0) return from;
-  if (e < ST.windup_s) return from + (wr - from) * easeOut(e / ST.windup_s);
-  e -= ST.windup_s;
-  if (e < ST.strike_s) { const u = e / ST.strike_s; return wr + (sr - wr) * u * u * u; }
-  e -= ST.strike_s;
-  if (e < ST.impact_hold_s) return sr;
-  e -= ST.impact_hold_s;
-  if (e >= ST.recover_s) return 0;
-  const u = e / ST.recover_s, KICK = 0.15, low = sr - ST.recoil_rad;
-  if (u < KICK) return sr - ST.recoil_rad * easeOut(u / KICK);
-  return low * (1 - smooth((u - KICK) / (1 - KICK)));
+// The stroke (held-swing, proposed): four stages, keyed poses blended by
+// curves, the fist on an arc about a virtual shoulder.
+//   a    the tool's forward pitch about the fist, rad (forward positive)
+//   phi  the arm's angle about the shoulder, rad (raised positive)
+//   ext  the arm's stretch, m (negative gathers it)
+//   ov   the head's overlap past the fist, rad (forward positive)
+const TIERS = [["Stone", 1.0], ["Bronze", 1.6], ["Iron", 2.4], ["Steel", 3.6]];
+const toolWeight = id => ST[id + "_weight"] || 1;
+const weightOf = (id, tier) => toolWeight(id) * (1 + ST.tier_slow * (3 - tier));
+// Stage times for a stroke of a tool of weight w that must fit period P.
+function timings(w, P, tool) {
+  let wu = ST.windup_s * w, an = ST.anticipate_s * w, rv = ST.recover_s;
+  const st = ST.strike_s, ho = ST.impact_hold_s * w, rc = tool === "shovel" ? SHOVEL.scoop_s : ST.recoil_s;
+  const fixed = st + ho + rc, soft = wu + an + rv;
+  if (P && fixed + soft > P) { const k = Math.max(0.1, (P - fixed) / soft); wu *= k; an *= k; rv *= k; }
+  return { wu, an, st, ho, rc, rv, impact: wu + an + st, len: wu + an + st + ho + rc + rv };
+}
+const REST = { a: 0, phi: 0, ext: 0, ov: 0, thrust: 0, lift: 0, yaw: 0 };
+// The keyed poses of the pick's and the axe's chop.
+function keys() {
+  const ex = ST.exaggerate;
+  return {
+    top: { a: -ST.windup_rad * ex, phi: ST.raise_rad * ex, ext: -ST.coil_m, ov: 0, thrust: 0, lift: 0, yaw: -0.08 * ex },
+    coil: { a: -(ST.windup_rad + ST.anticipate_rad) * ex, phi: (ST.raise_rad + ST.anticipate_rad * 0.5) * ex, ext: -ST.coil_m * 1.25, ov: 0, thrust: 0, lift: 0, yaw: -0.1 * ex },
+    hit: { a: ST.strike_rad, phi: -ST.reach_rad, ext: ST.extend_m, ov: ST.overlap_rad, thrust: 0, lift: 0, yaw: ST.sweep_rad },
+    recoil: { a: ST.strike_rad - ST.recoil_rad * ex, phi: -(ST.reach_rad + ST.follow_rad), ext: ST.extend_m * 0.7, ov: 0, thrust: 0, lift: 0, yaw: ST.sweep_rad * 0.9 },
+  };
+}
+const mixPose = (p, q, t) => p.shovel ? mixS(p, SREST, t) : ({ a: lerp(p.a, q.a, t), phi: lerp(p.phi, q.phi, t), ext: lerp(p.ext, q.ext, t), ov: lerp(p.ov, q.ov, t), thrust: lerp(p.thrust || 0, q.thrust || 0, t), lift: lerp(p.lift || 0, q.lift || 0, t), yaw: lerp(p.yaw || 0, q.yaw || 0, t) });
+// The pose e seconds into a stroke that began from pose `from`.
+function strokeAt(e, from, T, tool) {
+  if (tool === "shovel") return shovelAt(e, T);
+  const K = keys(), shovel = false;
+  if (e < 0) return Object.assign({ stage: "" }, from);
+  if (e < T.wu) return Object.assign(mixPose(from, K.top, easeOut(e / T.wu)), { stage: "WINDUP" });
+  e -= T.wu;
+  if (e < T.an) return Object.assign(mixPose(K.top, K.coil, smooth(e / (T.an * 0.7))), { stage: "ANTICIPATION" });
+  e -= T.an;
+  if (e < T.st) { const u = e / T.st, p = mixPose(K.coil, K.hit, u * u * u); p.ov = K.hit.ov * u * u * u; return Object.assign(p, { stage: "HIT" }); }
+  e -= T.st;
+  if (e < T.ho) return Object.assign(Object.assign({}, K.hit), { stage: "HIT" });
+  e -= T.ho;
+  if (e < T.rc) {
+    // The pick and axe kick back with an overshoot; the shovel scoops: the
+    // blade tilts back and the arm lifts the dirt.
+    const u = e / T.rc, p = mixPose(K.hit, K.recoil, shovel ? smooth(u) : backOut(u)); p.ov = K.hit.ov * (1 - easeOut(u));
+    return Object.assign(p, { stage: shovel ? "RECOIL (SCOOP)" : "RECOIL" });
+  }
+  e -= T.rc;
+  if (e < T.rv) return Object.assign(mixPose(K.recoil, REST, smooth(e / T.rv)), { stage: shovel ? "RECOIL (SCOOP)" : "RECOIL", rv: e / T.rv });
+  return Object.assign({}, REST, { stage: "" });
+}
+// The pose as drawn: the arm's angle for the fist, a lagged one for the
+// tool (the head trails the fist on the windup), the tool's own pitch on
+// top; the shovel's thrust along its handle and its lift.
+const FIST0 = new THREE.Vector3(0.29, -0.3, -0.58);
+const ARM0 = () => FIST0.clone().sub(new THREE.Vector3(ST.shoulder_x, ST.shoulder_y, ST.shoulder_z));
+function strokePose(s, sLag, h) {
+  if (s.shovel) return { pitch: s.pitch, shift: s.shift.clone(), yaw: 0 };
+  const S = new THREE.Vector3(ST.shoulder_x, ST.shoulder_y, ST.shoulder_z), A = ARM0(), L = A.length();
+  const yaw = s.yaw || 0, yawLag = sLag ? (sLag.yaw || 0) : yaw;
+  const fist = A.clone().multiplyScalar((L + s.ext) / L).applyAxisAngle(QX, s.phi).applyAxisAngle(QY, yaw).add(S);
+  const pitch = (sLag ? sLag.phi : s.phi) - s.a - s.ov;
+  const shift = fist.sub(FIST0);
+  if (h && s.thrust) shift.addScaledVector(h.tip.clone().sub(h.fist).normalize().applyAxisAngle(QX, pitch).applyAxisAngle(QY, yawLag), s.thrust);
+  if (s.lift) shift.y += s.lift;
+  return { pitch, shift, yaw: yawLag };
 }
 const BETWEEN_S = 0.15;   // dig.ron between_s
-function Schedule(breakS) {
-  // One steady rhythm across blocks (owner, 2026-11-17: "why is it in sets of
-  // 3?", "it should be like continous"): a block and the pause after it, L,
-  // take n strokes of one period P = L / n, the last landing on the break, so
-  // the strokes run on at one beat from block to block.
+function Schedule(breakS, weight, tool) {
+  // One steady rhythm across blocks: a block and the pause after it, L,
+  // take n strokes of one period P = L / n, the last landing on the break.
   const L = () => breakS() + BETWEEN_S;
   const n = () => Math.max(1, Math.round(L() / ST.stroke_target_s + 1e-9));
   const P = () => L() / n();
+  const T = () => timings(weight(), P(), tool());
   const at = (c, k) => c * L() + breakS() - (n() - k) * P();   // the k-th impact (1..n) of cycle c
-  function starts(c) { const out = []; for (let cc = Math.max(0, c - 1); cc <= c + 1; cc++) for (let k = 1; k <= n(); k++) out.push(at(cc, k) - toImpact()); return out; }
+  function starts(c, imp) { const out = []; for (let cc = Math.max(0, c - 1); cc <= c + 1; cc++) for (let k = 1; k <= n(); k++) out.push(at(cc, k) - imp); return out; }
+  function poseAt(tc, Tm) {
+    const s = starts(Math.floor(tc / L()), Tm.impact).filter(x => x <= tc);
+    if (!s.length) return Object.assign({}, REST, { stage: "" });
+    let from = REST;
+    for (let i = Math.max(0, s.length - 4); i < s.length - 1; i++) from = strokeAt(s[i + 1] - s[i], from, Tm, tool());
+    return strokeAt(tc - s[s.length - 1], from, Tm, tool());
+  }
   return {
-    n, L,
-    angle(tc) {
-      const s = starts(Math.floor(tc / L())).filter(x => x <= tc);
-      if (!s.length) return { a: 0, e: -1 };
-      let from = 0;
-      for (let i = Math.max(0, s.length - 4); i < s.length - 1; i++) from = strokeAngle(s[i + 1] - s[i], from);
-      return { a: strokeAngle(tc - s[s.length - 1], from), e: tc - s[s.length - 1] };
-    },
+    n, L, P, T,
+    state(tc) { const Tm = T(); return { s: poseAt(tc, Tm), lag: poseAt(Math.max(0, tc - ST.lag_s), Tm) }; },
     impacts(t0, t1) { const out = []; for (let c = Math.max(0, Math.floor(t0 / L())); c <= Math.floor(t1 / L()) + 1; c++) for (let k = 1; k <= n(); k++) { const t = at(c, k); if (t > t0 && t <= t1) out.push([t, k === n()]); } return out; },
   };
 }
+// The four keyed poses, for "Show poses".
+const POSES = ["REST", "TOP", "HIT", "RECOIL"];
+function keyedPose(name, tool) {
+  if (tool === "shovel") { const K = shovelKeys(); return name === "TOP" ? mixS(K.coil, K.coil, 0) : name === "HIT" ? mixS(K.hit, K.hit, 0) : name === "RECOIL" ? Object.assign(mixS(K.lift, K.lift, 0), { scoop: true }) : mixS(SREST, SREST, 0); }
+  const K = keys(); return name === "TOP" ? K.coil : name === "HIT" ? K.hit : name === "RECOIL" ? K.recoil : REST;
+}
+// The shovel's stroke: no overhead arc. The spade turns to a steep entry
+// (entry_deg below the horizontal, tip leading), stabs in along its own
+// handle (thrust_m), levers back about the point where the blade is in the
+// ground (lever_rad: the tip rises, the heel pivots), lifts the dirt
+// (lift_m), and returns. Eye space; the view looks down DIG_PITCH as the Dig
+// tab's does.
+const DIG_PITCH = -0.56;
+function shovelKeys() {
+  const V = SHOVEL, ex = ST.exaggerate, tipR = v3(TOOL.shovel.tip).sub(FIST0);
+  const a0 = Math.atan2(tipR.y, -tipR.z);                           // the handle's elevation at rest
+  const aD = -(V.entry_deg * Math.PI / 180 + DIG_PITCH);            // the entry's, eye space
+  const entry = aD - a0;                                            // pitch that lays the spade on the entry line
+  const tipAt = (pitch, shift) => tipR.clone().applyAxisAngle(QX, pitch).add(FIST0).add(shift);
+  const D = new THREE.Vector3(0, Math.sin(aD), -Math.cos(aD));      // along the handle, toward the blade
+  // Where the blade goes in: the ground just ahead, low in the view
+  // (eye space; across_m toward the middle from the rest fist's side).
+  const tanH = Math.tan(FOV * Math.PI / 360), Cg = new THREE.Vector3(0.29 - V.across_m, -0.55 * tanH * 1.15, -1.15);
+  const fistHit = Cg.clone().sub(tipR.clone().applyAxisAngle(QX, entry));
+  const hit = { pitch: entry, shift: fistHit.clone().sub(FIST0) };
+  const coil = { pitch: entry, shift: hit.shift.clone().addScaledVector(D, -V.thrust_m) };
+  const top = { pitch: entry * 0.8, shift: coil.shift.clone().add(new THREE.Vector3(0, 0.03 * ex, 0.02)) };
+  // The lever: turn about the blade's point in the ground.
+  const C = tipAt(hit.pitch, hit.shift);
+  const leverAt = k => { const r = V.lever_rad * ex * k, f = FIST0.clone().add(hit.shift).sub(C).applyAxisAngle(QX, r).add(C); return { pitch: hit.pitch + r, shift: f.sub(FIST0) }; };
+  const lever = leverAt(1);
+  const lift = { pitch: lever.pitch, shift: lever.shift.clone().add(new THREE.Vector3(0, V.lift_m * ex, 0.02)) };
+  return { top, coil, hit, lever, lift, leverAt };
+}
+const mixS = (p, q, t) => ({ shovel: true, pitch: lerp(p.pitch, q.pitch, t), shift: p.shift.clone().lerp(q.shift, t) });
+const SREST = { pitch: 0, shift: new THREE.Vector3() };
+function shovelAt(e, T) {
+  const K = shovelKeys();
+  if (e < 0) return Object.assign(mixS(SREST, SREST, 0), { stage: "" });
+  if (e < T.wu) return Object.assign(mixS(SREST, K.top, easeOut(e / T.wu)), { stage: "WINDUP" });
+  e -= T.wu;
+  if (e < T.an) return Object.assign(mixS(K.top, K.coil, smooth(e / (T.an * 0.7))), { stage: "ANTICIPATION" });
+  e -= T.an;
+  if (e < T.st) { const u = e / T.st; return Object.assign(mixS(K.coil, K.hit, u * u * u), { stage: "HIT" }); }
+  e -= T.st;
+  if (e < T.ho) return Object.assign(mixS(K.hit, K.hit, 0), { stage: "HIT" });
+  e -= T.ho;
+  if (e < T.rc) {
+    // Angle up about the blade in the ground, then lift.
+    const u = e / T.rc;
+    if (u < 0.55) return Object.assign(Object.assign({ shovel: true }, K.leverAt(smooth(u / 0.55))), { stage: "RECOIL (ANGLE UP)", scoop: true });
+    return Object.assign(mixS(K.lever, K.lift, easeOut((u - 0.55) / 0.45)), { stage: "RECOIL (LIFT)", scoop: true });
+  }
+  e -= T.rc;
+  if (e < T.rv) return Object.assign(mixS(K.lift, SREST, smooth(e / T.rv)), { stage: "RECOIL (LIFT)", rv: e / T.rv, scoop: e / T.rv < 0.45 });
+  return Object.assign(mixS(SREST, SREST, 0), { stage: "" });
+}
+
 
 // ---------------------------------------------------------------------------
 // A view: one canvas, made when its tab first opens, drawing only while open.
 const FOV = 60;   // the walking camera's vertical field of view
 function View(id, build) {
   const box = document.querySelector(`[data-view="${id}"]`), canvas = box.querySelector("canvas");
-  const v = { id, box, canvas, renderer: null, running: false, raf: 0, then: 0, time: 0, frozen: false };
-  v.scene = new THREE.Scene();
-  v.cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.05, 600);
-  v.cam.position.set(0, 1.62, 0);
-  v.cam.rotation.order = "YXZ";
-  v.scene.add(v.cam);
-  v.world = makeWorld(v.scene);
+  const v = { id, box, canvas, renderer: null, running: false, raf: 0, then: 0, time: 0, frozen: false, built: false };
   v.panel = document.getElementById("tab-" + id);
   v.q = sel => v.panel.querySelector(sel);
-  const logic = build(v);
-  v.world.setNight(NIGHT.on);
+  let logic = null;
+  function make() {
+    if (v.built) return;
+    v.built = true;
+    v.scene = new THREE.Scene();
+    v.cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.05, 600);
+    v.cam.position.set(0, 1.62, 0);
+    v.cam.rotation.order = "YXZ";
+    v.scene.add(v.cam);
+    v.world = makeWorld(v.scene);
+    logic = v.logic = build(v);
+    v.world.setNight(NIGHT.on);
+  }
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { v.renderer.setPixelRatio(dpr); v.renderer.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); }
   }
   const lightCol = new THREE.Color(), eye = new THREE.Vector3();
-  function frame(now) {
-    if (!v.running) return;
-    const dt = v.frozen ? 0 : Math.min(0.05, (now - v.then) / 1000 || 0); v.then = now;
-    fit();
+  function draw(dt) {
     v.time += dt;
     const t = v.time;
     v.world.tick(t);
     logic.update(dt, t);
     v.cam.updateMatrixWorld(true);
-    v.cam.getWorldPosition(eye);
-    v.world.heldLight(eye.add(new THREE.Vector3(0.25, -0.35, -0.5)), lightCol);
-    for (const h of logic.helds()) h.mat.color.copy(lightCol);
+    if (logic.lightAt) logic.lightAt(eye); else { v.cam.getWorldPosition(eye); eye.add(new THREE.Vector3(0.25, -0.35, -0.5)); }
+    v.world.heldLight(eye, lightCol);
+    for (const h of logic.helds()) for (const m of (h.mats || [h.mat])) m.color.copy(lightCol);
+    fit();
     v.renderer.render(v.scene, v.cam);
+  }
+  function frame(now) {
+    if (!v.running) return;
+    const dt = v.frozen ? 0 : Math.min(0.05, (now - v.then) / 1000 || 0); v.then = now;
+    draw(dt);
     v.raf = requestAnimationFrame(frame);
   }
   v.show = () => {
+    make();
     if (!v.renderer) { v.renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); v.renderer.outputEncoding = THREE.sRGBEncoding; }
     if (v.running) return;
     v.running = true; v.then = performance.now(); v.raf = requestAnimationFrame(frame);
   };
-  v.hide = () => { v.running = false; cancelAnimationFrame(v.raf); logic.hide && logic.hide(); };
-  v.setNight = n => v.world.setNight(n);
+  v.hide = () => { v.running = false; cancelAnimationFrame(v.raf); logic && logic.hide && logic.hide(); };
+  v.setNight = n => { if (v.built) v.world.setNight(n); };
   // For the screenshot script: stop the clock, or step it by a set time.
   v.advance = secs => { const n = Math.round(secs * 240); for (let i = 0; i < n; i++) { v.time += 1 / 240; v.world.tick(v.time); logic.update(1 / 240, v.time); } };
-  v.logic = logic;
   return v;
 }
 
 // Shared bits of the Dig and Chop tabs: Today / Proposed, hold to work, the
 // strokes, the block's cracks, its break and return.
 function WorkTab(v, opts) {
-  const state = { mode: "proposed", holding: false, button: false, tc: 0, phase: 0, rel: null, hitAt: -9, kickAt: -9, brokeAt: -9, lastA: 0, lastDrop: 0, back: 1 };
-  const modeTag = v.q(".mode"), hitmark = v.q(".hitmark"), stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]');
+  const state = { mode: "proposed", holding: false, button: false, tc: 0, phase: 0, rel: null, hitAt: -9, kickAt: -9, brokeAt: -9, last: null, poseT: 0 };
+  const modeTag = v.q(".mode"), stageTag = v.q(".stage"), hitmark = v.q(".hitmark"), stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]'), poses = v.q('[data-ctl="poses"]');
   seg(v.q('[data-ctl="mode"]'), [["Today", "today"], ["Proposed", "proposed"]], state.mode, m => { state.mode = m; reset(); });
   const holdBtn = v.q('[data-ctl="hold"]');
   holdBtn.addEventListener("click", () => { state.button = !state.button; holdBtn.setAttribute("aria-pressed", String(state.button)); });
   v.box.addEventListener("pointerdown", e => { if (e.button !== 0) return; state.holding = true; try { v.box.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
   const up = () => { state.holding = false; };
   v.box.addEventListener("pointerup", up); v.box.addEventListener("pointercancel", up);
-  const sched = Schedule(opts.breakS);
-  function reset() { state.tc = 0; state.phase = 0; state.hitAt = state.kickAt = state.brokeAt = -9; opts.block.restore(); }
+  const tool = () => opts.held().id;
+  const sched = Schedule(opts.breakS, opts.weight, tool);
+  function reset() { state.tc = 0; state.phase = 0; state.rel = null; state.hitAt = state.kickAt = state.brokeAt = -9; opts.block.restore(); }
+  poses.addEventListener("change", () => { state.poseT = 0; });
   RONS.push(v.q('[data-ctl="ron"]'));
   syncStroke.push(sliders(v.q('[data-ctl="sliders"]'), STROKE_SL, ST, STROKE_DEF, () => { syncStroke.forEach(f => f()); reset(); }));
+  if (opts.shovelSliders) { const box = v.q('[data-ctl="shovel-sliders"]'); syncStroke.push(sliders(box, SHOVEL_SL, SHOVEL, SHOVEL_DEF, () => { syncStroke.forEach(f => f()); reset(); })); }
   const chips = [...Array(14)].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), opts.chipMat()); m.visible = false; v.scene.add(m); return { m, vel: new THREE.Vector3(), life: 0 }; });
   function burst(at, count, speed) {
     let n = 0;
@@ -595,42 +1150,55 @@ function WorkTab(v, opts) {
     }
   }
   return {
-    state, reset,
+    state, reset, sched,
     update(dt, t) {
       const working = state.holding || state.button;
       const cdt = dt * (slow.checked ? 0.25 : 1);
-      modeTag.textContent = state.mode === "today" ? "TODAY" : "PROPOSED";
-      let a = 0, drop = 0;
-      if (working) {
+      const proposed = state.mode === "proposed";
+      modeTag.textContent = proposed ? "PROPOSED" : "TODAY";
+      let pitch = 0, shift = new THREE.Vector3(), stage = "", yaw = 0;
+      if (proposed && poses.checked) {
+        // Freeze on each keyed pose in turn.
+        state.poseT += dt;
+        const name = POSES[Math.floor(state.poseT / 1.2) % POSES.length], p = keyedPose(name, tool());
+        const P = strokePose(p, p, opts.held()); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = name + " (pose)"; state.pose = name;
+        stat.textContent = "";
+      } else if (working) {
         state.rel = null;
         const t0 = state.tc; state.tc += cdt;
         const L = sched.L(), B = opts.breakS();
         for (const [at, last] of sched.impacts(t0, state.tc)) {
-          if (state.mode === "proposed") { state.hitAt = at; state.kickAt = at; burst(opts.block.hitPoint(), last ? 0 : 3, 1); opts.block.shake(); }
+          if (proposed) { state.hitAt = at; state.kickAt = at; burst(opts.block.hitPoint(), last ? 0 : 3, 1); opts.block.shake(); }
           if (last) { state.brokeAt = at; opts.block.breakNow(); burst(opts.block.hitPoint(), 12, 1.4); }
         }
         const local = state.tc % L;
         if (state.brokeAt > 0 && state.tc - state.brokeAt >= BETWEEN_S) { state.brokeAt = -9; opts.block.restore(); }
         if (local < B) opts.block.progress(local / B);
-        if (state.mode === "proposed") {
-          a = sched.angle(state.tc).a;
-          drop = ST.drop_m * Math.max(0, a) / Math.max(1e-3, ST.strike_rad);
-          const n = sched.n(), P = L / n, hits = Math.max(0, Math.min(n, Math.floor((local - (B - n * P)) / P + 1e-9)));
-          stat.textContent = local >= B ? `broken · ${n} stroke${n > 1 ? "s" : ""}` : `hit ${hits}/${n} · ${B.toFixed(2)} s`;
+        if (proposed) {
+          const { s, lag } = sched.state(state.tc);
+          const P = strokePose(s, lag, opts.held()); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = s.stage;
+          state.last = { s, lag }; state.cur = s;
+          const n = sched.n(), Pp = L / n, hits = Math.max(0, Math.min(n, Math.floor((local - (B - n * Pp)) / Pp + 1e-9)));
+          const Tm = sched.T();
+          stat.textContent = `${local >= B ? "broken" : `hit ${hits}/${n}`} · ${B.toFixed(2)} s · beat ${Pp.toFixed(2)} s · stroke ${Tm.len.toFixed(2)} s`;
         } else {
           // held::hold today: the phase runs at swing_rate while swinging.
           state.phase += cdt * 9.0;
           const chop = state.phase > 0 ? Math.max(Math.sin(state.phase), -0.2) : 0;
-          a = chop * 0.85; drop = chop * 0.06;
+          pitch = -chop * 0.85; shift.y = -chop * 0.06;
           stat.textContent = local >= B ? "broken" : `dig ${(local / B * 100).toFixed(0)}% · ${B.toFixed(2)} s`;
         }
-        state.lastA = a; state.lastDrop = drop;
       } else {
         // Letting go: today snaps to rest; proposed eases back over recover_s.
-        if (state.tc > 0) { if (state.mode === "proposed") state.rel = { a: state.lastA, d: state.lastDrop, t: 0 }; state.tc = 0; state.phase = 0; opts.block.restore(); }
-        if (state.rel) { state.rel.t += cdt; const k = 1 - smooth(state.rel.t / ST.recover_s); a = state.rel.a * k; drop = state.rel.d * k; if (k <= 0) state.rel = null; }
+        if (state.tc > 0) { if (proposed && state.last) state.rel = { s: state.last.s, lag: state.last.lag, t: 0 }; state.tc = 0; state.phase = 0; opts.block.restore(); }
+        if (state.rel) {
+          state.rel.t += cdt; const k = smooth(state.rel.t / ST.recover_s);
+          const P = strokePose(mixPose(state.rel.s, REST, k), mixPose(state.rel.lag, REST, k), opts.held()); pitch = P.pitch; shift = P.shift; yaw = P.yaw;
+          if (k >= 1) state.rel = null;
+        }
         stat.textContent = "";
       }
+      stageTag.textContent = stage;
       const since = state.tc - state.hitAt;
       hitmark.style.opacity = working && since >= 0 && since < 0.09 ? String(1 - since / 0.09 * 0.6) : "0";
       for (const c of chips) if (c.m.visible) {
@@ -638,11 +1206,24 @@ function WorkTab(v, opts) {
         if (c.life <= 0) c.m.visible = false;
       }
       let kick = 0; const sk = state.tc - state.kickAt;
-      if (working && state.mode === "proposed" && sk >= 0 && sk < 0.14) { const u = sk / 0.14; kick = ST.camera_kick_rad * (u < 0.15 ? u / 0.15 : (1 - (u - 0.15) / 0.85) ** 2); }
+      if (working && proposed && sk >= 0 && sk < 0.14) { const u = sk / 0.14; kick = ST.camera_kick_rad * ST.exaggerate * (u < 0.15 ? u / 0.15 : (1 - (u - 0.15) / 0.85) ** 2); }
       v.cam.rotation.x = opts.pitch - kick;
       opts.block.tick(cdt);
       const h = opts.held();
-      applyPose(h, -a, 0, swayAt(t).add(new THREE.Vector3(0, -drop, 0)));
+      const AP = applyPose(h, pitch, 0, shift.add(swayAt(t)), yaw);
+      h.pair.bend(proposed && h.id === "shovel" ? -(1 - SHOVEL.arm_follow) * pitch : 0);
+      h.look(proposed);
+      // Where the tool's tip is on screen (for checking the staging).
+      const tipE = AP.at(h.tip); state.tipNdc = [tipE.x / -tipE.z / Math.tan(FOV * Math.PI / 360) / v.cam.aspect, tipE.y / -tipE.z / Math.tan(FOV * Math.PI / 360)];
+      // The shovel's scoop carries a clump of dirt on the blade, which tips
+      // off as it returns.
+      if (h.dirt) {
+        const s = state.cur, scoop = proposed && ((working && !poses.checked && s && !!s.scoop) || (poses.checked && state.pose === "RECOIL"));
+        const pose = proposed && poses.checked && state.pose === "RECOIL";
+        if (h.dirt.visible && !(scoop || pose) && proposed && working) { h.group.updateMatrixWorld(true); const w = new THREE.Vector3(); h.dirt.getWorldPosition(w); burst(w, 4, 0.5); }
+        h.dirt.visible = scoop || pose;
+      }
+      if (!working) state.cur = null;
     },
   };
 }
@@ -682,7 +1263,6 @@ function stageMats(name, sideName, seed) {
 
 // ---------------------------------------------------------------------------
 // Dig: the pickaxe on stone, the shovel on grass.
-const TIERS = [["Stone", 1.0], ["Bronze", 1.6], ["Iron", 2.4], ["Steel", 3.6]];
 const DIG = { pickaxe: [["Stone", 1.2, "stone"], ["Rock", 1.6, "stone"], ["Ore", 2.0, "stone"]], shovel: [["Grass", 0.5, "grass"], ["Sand", 0.5, "sand"]] };
 function groundCells(scene, skip, mat) {
   const g = cellGeo(1);
@@ -732,7 +1312,7 @@ views.dig = View("dig", v => {
   const cur = () => DIG[S.tool][S.mat];
   const breakS = () => cur()[1] / TIERS[S.tier][1];
   const chipMat = () => block.mesh.material[1];
-  const work = WorkTab(v, { breakS, held: () => helds[S.tool], block, pitch: -0.56, chipMat });
+  const work = WorkTab(v, { breakS, weight: () => weightOf(S.tool, S.tier), held: () => helds[S.tool], block, pitch: -0.56, chipMat, shovelSliders: true });
   const matSeg = v.q('[data-ctl="material"]');
   function pickMat() {
     seg(matSeg, DIG[S.tool].map(([n, s], i) => [`${n} ${s}s`, i]), S.mat, i => { S.mat = i; apply(); });
@@ -764,21 +1344,26 @@ views.chop = View("chop", v => {
   const block = Breakable(v.scene, woodStages, segGeo, new THREE.Vector3(0, 1.5, TZ), new THREE.Vector3(0.1, 1.35, TZ + TR));
   scenery(v.scene, 33, 10);
   v.world.lantern(new THREE.Vector3(-1.3, 0, -2.2), 1.5);
-  const work = WorkTab(v, { breakS: () => 0.6 / TIERS[S.tier][1], held: () => axe, block, pitch: -0.1, chipMat: () => ringM });
+  const work = WorkTab(v, { breakS: () => 0.6 / TIERS[S.tier][1], weight: () => weightOf("axe", S.tier), held: () => axe, block, pitch: -0.1, chipMat: () => ringM });
   seg(v.q('[data-ctl="tier"]'), TIERS.map(([n], i) => [n, i]), S.tier, i => { S.tier = i; work.reset(); });
   return { update: work.update, helds: () => [axe], work };
 });
 
 // ---------------------------------------------------------------------------
-// Fish: the bank, the water, the float and the line, and the rod in hand.
-const FISH = { charge_s: 1.2, speed: [5, 18], lift: [3, 6], gravity: 9.81, hook_window_s: 0.9, bite_dip_m: 0.14, nibble_dip_m: 0.035, reel_mps: 1.8, land_line_m: 1.3 };
+// Fish: the game's line (pbd_core::fishing), its numbers from fauna.ron.
+const FS = { charge_s: 1.2, speed_mps: [5, 18], lift_mps: [3, 6], flight_max_s: 5, line_max_m: 45, splash_s: 1.2, nibbles: [1, 3], nibble_s: [0.6, 1.4], hook_window_s: 0.9, hook_step: 0.13, hook_floor_s: 0.25, bite_dip_m: 0.14, nibble_dip_m: 0.035, reel_mps: 1.8, tension_base: 0.35, tension_pull: 0.8, tension_fall: 0.7, stamina_drain: 0.08, stamina_floor: 0.15, land_line_m: 1.3, land_depth_m: 0.15 };
+const hookWindow = strength => Math.max(FS.hook_floor_s, FS.hook_window_s * (1 - (Math.max(1, strength) - 1) * FS.hook_step));
+// fauna.ron's home roster, the fish (name, length_m, pull, strength).
+const SPECIES = [["Minnow", 0.14, 0.4, 1], ["Silverfin", 0.22, 0.55, 1], ["Banded perch", 0.38, 0.85, 2], ["Eel", 0.9, 1.1, 3], ["Deepback", 0.7, 1.35, 4], ["Sea serpent", 1.3, 1.45, 4]];
 const WATER_Y = -0.42, BANK_Z = -1.416, FLOAT_TOP_M = 0.09, LINE_CLEARANCE_M = 0.05, LINE_POINTS = 24;
 const waveAt = (x, z, t) => 0.025 * Math.sin(x * 0.9 + t * 1.3) + 0.018 * Math.sin(z * 1.3 - t * 1.7 + x * 0.4) + 0.01 * Math.sin((x + z) * 2.1 + t * 2.3);
+const tensionColour = x => x > 0.8 ? "rgb(255,107,87)" : x > 0.55 ? "rgb(240,181,61)" : "rgb(120,224,161)";   // fish.rs hud(), sRGB
 views.fish = View("fish", v => {
   const rod = makeHeld("rod"); v.cam.add(rod.group);
   const PITCH = -0.13;
   v.cam.rotation.x = PITCH;
   v.cam.position.z = 1.1;   // a step back from the bank's edge
+  const FEET = new THREE.Vector3(0, 0, 1.1);
   // The bank: the player's row of cells, dropping to sand under the water.
   const grassTop = pm("grass", 16, 3, 3), dirtSide = pm("dirt", 17, 6, 1.6);
   const sandM = pm("sand", 18, 3, 3);
@@ -798,7 +1383,7 @@ views.fish = View("fish", v => {
   scenery(v.scene, 45, 50);
   // The water: a faceted sheet that moves with the waves (world motion).
   const wg = new THREE.PlaneGeometry(120, 90, 90, 60); wg.rotateX(-Math.PI / 2); wg.translate(0, WATER_Y, -44);
-  const water = new THREE.Mesh(wg, phong({ color: new THREE.Color("#2b5d74").convertSRGBToLinear(), shininess: 40, specular: 0x2a3a40, transparent: true, opacity: 0.92 }));
+  const water = new THREE.Mesh(wg, phong({ color: new THREE.Color("#2b5d74").convertSRGBToLinear(), shininess: 40, specular: 0x2a3a40, transparent: true, opacity: 0.86 }));
   v.scene.add(water);
   const wpos = wg.getAttribute("position"), wx = Float32Array.from({ length: wpos.count }, (_, i) => wpos.getX(i)), wz = Float32Array.from({ length: wpos.count }, (_, i) => wpos.getZ(i));
   v.world.lantern(new THREE.Vector3(-1.15, 0, -1.0), 1.05);
@@ -811,169 +1396,226 @@ views.fish = View("fish", v => {
   fl.add(red, white, fglow, flight); fl.visible = false; v.scene.add(fl);
   const lineGeo = new THREE.BufferGeometry(); lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(LINE_POINTS * 3), 3));
   const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(0.92, 0.95, 0.95).convertSRGBToLinear() })); line.frustumCulled = false; line.visible = false; v.scene.add(line);
-  const rings = [...Array(5)].map(() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 24), new THREE.MeshLambertMaterial({ color: 0xd8e6ea, transparent: true, opacity: 0, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; v.scene.add(m); return { m, t: 9 }; });
+  const rings = [...Array(8)].map(() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 24), new THREE.MeshLambertMaterial({ color: 0xd8e6ea, transparent: true, opacity: 0, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; v.scene.add(m); return { m, t: 9 }; });
   let ringNext = 0;
   const ripple = (p, big) => { const r = rings[ringNext++ % rings.length]; r.t = 0; r.big = big; r.m.position.set(p.x, WATER_Y + 0.02, p.z); r.m.visible = true; };
 
-  // The line's phases (pbd_core::fishing), scripted fish.
-  const F = { phase: "ready", te: 0, power: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), dip: 0, lineM: 10, heading: new THREE.Vector3(0, 0, -1), clock: 0, timer: 0, nibbles: 0, twitchAt: -9, ease: null, catchAt: -9, say: "", sayT: 0, script: null, auto: null };
-  const UI = { mode: "proposed", reel: false, tension: 0.5, holding: false };
-  const modeTag = v.q(".mode"), sayEl = v.q(".say"), meter = v.q(".meter"), meterFill = meter.firstElementChild, stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]');
+  // The line's state (pbd_core::fishing::Line).
+  const F = { phase: "ready", te: 0, power: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), dip: 0, flight: 0, check: 0, timer: 0, nibbles: 0, twitched: false, twitchAt: -9,
+    tension: 0, stamina: 1, run: 0, run_s: 0, lineM: 0, heading: new THREE.Vector3(0, 0, -1), clock: 0, liftAt: -9, ease: null, say: "", sayT: 0, wakeT: 0, rand: rng(17), species: 2, result: "" };
+  const UI = { mode: "proposed", held: false, pressed: false, released: false, reelIn: false };
+  const BOT = { kind: null, held: false, prev: false, t: 0, power: 0.55 };
+  const modeTag = v.q(".mode"), sayEl = v.q(".say"), meter = v.q(".meter"), meterFill = meter.firstElementChild, readout = v.q('[data-ctl="readout"]'), slow = v.q('[data-ctl="slow"]'), prompt = v.q(".prompt");
   seg(v.q('[data-ctl="mode"]'), [["Today", "today"], ["Proposed", "proposed"]], UI.mode, m => { UI.mode = m; });
-  const reelBtn = v.q('[data-ctl="reel"]');
-  const setReel = on => { UI.reel = on; reelBtn.setAttribute("aria-pressed", String(on)); };
-  reelBtn.addEventListener("click", () => setReel(!UI.reel));
-  const tens = v.q('[data-ctl="tension"]'), tensOut = v.q('[data-ctl="tension-out"]');
-  const setTension = x => { UI.tension = x; tens.value = x; tensOut.textContent = (+x).toFixed(2); };
-  tens.addEventListener("input", () => setTension(+tens.value));
+  seg(v.q('[data-ctl="species"]'), SPECIES.map(([n], i) => [n, i]), F.species, i => { F.species = i; });
   RONS.push(v.q('[data-ctl="ron"]'));
   sliders(v.q('[data-ctl="sliders"]'), ROD_SL, ROD, ROD_DEF);
+  const rr = (a, b) => a + (b - a) * F.rand();
+  const sp = () => SPECIES[F.species], spName = () => sp()[0].toLowerCase();
 
   // The rod's pose: a damped spring toward each phase's target.
-  const spring = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, y: { x: 0, v: 0 }, z: { x: 0, v: 0 } };
+  const spring = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, a: { x: 0, v: 0 } };
   const springTo = (s, target, dt) => { const w = 2 * Math.PI * ROD.spring_hz; const n = Math.max(1, Math.ceil(dt * 480)), h = dt / n; for (let i = 0; i < n; i++) { s.v += (w * w * (target - s.x) - 2 * ROD.damping * w * s.v) * h; s.x += s.v * h; } };
   const eye = () => { v.cam.updateMatrixWorld(true); return v.cam.matrixWorld; };
   const look = () => new THREE.Vector3(0, 0, -1).applyQuaternion(v.cam.quaternion);
   let tipEye = rod.tip.clone();
 
-  function event(name) { F.evt = name; }
   function setPhase(p) { F.phase = p; F.te = 0; }
-  const say = (s, t) => { F.say = s; F.sayT = t || 0; };
-  function windIn() { setPhase("ready"); fl.visible = line.visible = false; F.ease = { from: spring.p.x, t: 0 }; }
+  const say = (s, t) => { F.say = s; F.sayT = t; };
+  const isOut = () => ["flying", "floating", "nibble", "bite", "hooked"].includes(F.phase);
+  function windIn() { setPhase("ready"); F.power = 0; F.dip = 0; F.tension = 0; fl.visible = line.visible = false; F.ease = { from: spring.p.x, t: 0 }; }
   function cast() {
     const tipW = tipEye.clone().applyMatrix4(eye());
-    const speed = lerp(FISH.speed[0], FISH.speed[1], F.power), lift = lerp(FISH.lift[0], FISH.lift[1], F.power);
+    const speed = lerp(FS.speed_mps[0], FS.speed_mps[1], F.power), lift = lerp(FS.lift_mps[0], FS.lift_mps[1], F.power);
     F.pos.copy(tipW); F.vel.copy(look()).multiplyScalar(speed).add(new THREE.Vector3(0, lift, 0));
-    F.flickFrom = spring.p.x; F.flickT = 0; F.dip = 0;
+    F.flickFrom = spring.p.x; F.flickT = 0; F.flight = 0; F.dip = 0;
     setPhase("flying"); fl.visible = line.visible = true;
   }
-  function putOut() {   // a scripted phase with no float out yet: the float is already on the water
-    if (["floating", "nibble", "bite", "hooked"].includes(F.phase)) return;
-    F.pos.set(0.5, WATER_Y, -8.5); F.dip = 0; fl.visible = line.visible = true; setPhase("floating");
-    if (spring.p.x > -0.05) { spring.p.x = -ROD.settle_rad; spring.p.v = 0; }
+  function interest(after) { F.check = after + rr(0.8, 2.4); }   // the page's stand-in for the schools
+  function hook() {
+    setPhase("hooked"); F.tension = 0.2; F.stamina = 1; F.run = sp()[2]; F.run_s = rr(0.8, 1.6);
+    const out = new THREE.Vector3(F.pos.x - FEET.x, 0, F.pos.z - FEET.z);
+    F.lineM = out.length(); F.heading.copy(out).normalize();
   }
-  function startNibble(n) { setPhase("nibble"); F.nibbles = n; F.timer = 0.15; F.twitchAt = -9; }
-  function startBite() { setPhase("bite"); F.timer = FISH.hook_window_s; }
-  function hook() { setPhase("hooked"); F.lineM = Math.hypot(F.pos.x, F.pos.z); F.heading.set(F.pos.x, 0, F.pos.z).normalize(); F.dip = 0.05; }
-  function caught() { setPhase("caught"); fl.visible = line.visible = false; say("Caught a fish", 1.5); setReel(false); }
-  function missed() { F.ease = { from: spring.p.x, t: 0 }; setPhase("floating"); F.timer = 9; say("It got away", 1.2); }
-
-  v.box.addEventListener("contextmenu", e => { e.preventDefault(); stopScript(); if (["flying", "floating", "nibble"].includes(F.phase)) windIn(); });
-  v.box.addEventListener("pointerdown", e => {
-    if (e.button !== 0) return; e.preventDefault(); stopScript();
-    try { v.box.setPointerCapture(e.pointerId); } catch (_) {}
-    UI.holding = true;
-    F.auto = null;
-    if (F.phase === "ready" || F.phase === "caught") { setPhase("charging"); F.power = 0; F.ease = null; }
-    else if (F.phase === "bite") hook();
-    else if (F.phase === "nibble") { missed(); say("Too early", 1.2); }
-  });
-  const release = () => { if (!UI.holding) return; UI.holding = false; if (F.phase === "charging") cast(); };
-  v.box.addEventListener("pointerup", release); v.box.addEventListener("pointercancel", release);
-
-  // Phase buttons and Play all: a short script of timed steps.
-  const playBtn = v.q('[data-ctl="play"]');
-  function stopScript() { F.script = null; playBtn.setAttribute("aria-pressed", "false"); playBtn.textContent = "Play all"; }
-  function run(steps) { F.script = { steps: steps.slice(), t: 0 }; }
-  const PH = {
-    Charge: () => { windIn(); F.ease = null; setPhase("charging"); F.power = 0; F.auto = "hold"; },
-    Cast: () => { if (F.phase !== "charging") { windIn(); F.ease = null; setPhase("charging"); F.power = 0.3; } run([[0.3, cast]]); },
-    Nibble: () => { putOut(); startNibble(2); F.auto = "nibbleOnly"; },
-    Bite: () => { putOut(); startBite(); },
-    Fight: () => { putOut(); hook(); F.auto = "hold"; },
-    Catch: () => { if (F.phase !== "hooked") { putOut(); hook(); } run([[0.25, caught]]); },
-  };
-  const phaseSeg = v.q('[data-ctl="phases"]');
-  for (const name of Object.keys(PH)) { const b = document.createElement("button"); b.textContent = name; b.addEventListener("click", () => { stopScript(); F.auto = null; PH[name](); }); phaseSeg.appendChild(b); }
-  playBtn.addEventListener("click", () => {
-    if (F.script) { stopScript(); return; }
-    F.auto = null; windIn(); F.ease = null;
-    run([[0.2, () => { setPhase("charging"); F.power = 0; }], [1.0, cast], [2.6, () => startNibble(2)], [1.4, () => { if (F.phase !== "bite") startBite(); }], [0.45, hook], [0.6, () => setReel(true)], [1.4, () => { setReel(false); setTension(0.8); }], [1.2, () => { setReel(true); setTension(0.4); }], [1.6, caught], [1.2, () => { setReel(false); setTension(0.5); }]]);
-    playBtn.setAttribute("aria-pressed", "true"); playBtn.textContent = "Stop";
-  });
-
-  function step(dt) {
-    F.te += dt; F.clock += dt; F.sayT -= dt;
-    if (F.script) { F.script.t += dt; while (F.script && F.script.steps.length && F.script.t >= F.script.steps[0][0]) { F.script.t -= F.script.steps[0][0]; const fn = F.script.steps.shift()[1]; fn(); if (F.script && !F.script.steps.length) stopScript(); } }
-    if (F.ease) { F.ease.t += dt; if (F.ease.t > ROD.ease_s) F.ease = null; }
+  // One step of pbd_core::fishing::Line::step, with the page's interest.
+  function step(dt, c) {
+    F.clock += dt; F.te += dt; F.sayT -= dt;
+    if (c.reelIn && ["flying", "floating", "nibble"].includes(F.phase)) {
+      if (F.phase === "nibble") say(`Wound in - the ${spName()} got away`, 2.0);
+      windIn(); return;
+    }
     const surf = (x, z) => WATER_Y + waveAt(x, z, F.clock);
     switch (F.phase) {
-      case "charging": F.power = Math.min(1, F.power + dt / FISH.charge_s); break;
+      case "ready": if (c.pressed) { setPhase("charging"); F.power = 0; F.ease = null; } break;
+      case "charging":
+        F.power = Math.min(1, F.power + dt / FS.charge_s);
+        if (c.released || !c.held) cast();
+        break;
       case "flying":
-        F.flickT += dt;
-        F.vel.y -= FISH.gravity * dt; F.pos.addScaledVector(F.vel, dt);
-        if (F.pos.y <= surf(F.pos.x, F.pos.z) && F.pos.z < BANK_Z) { setPhase("floating"); ripple(F.pos, true); F.timer = 2.2 + Math.random() * 1.5; }
-        else if (F.pos.y < -2) windIn();
+        F.flickT += dt; F.flight += dt;
+        F.vel.y -= 9.81 * dt; F.pos.addScaledVector(F.vel, dt);
+        if (F.pos.z >= BANK_Z && F.pos.y <= 0) { windIn(); say("The float came down on dry ground", 1.5); }
+        else if (F.pos.y <= surf(F.pos.x, F.pos.z)) { setPhase("floating"); F.pos.y = surf(F.pos.x, F.pos.z); ripple(F.pos, true); interest(FS.splash_s); }
+        else if (F.flight > FS.flight_max_s) { windIn(); say("The float came down on dry ground", 1.5); }
         break;
       case "floating":
-        F.timer -= dt;
-        if (F.timer <= 0 && !F.script && F.auto !== "nibbleOnly") startNibble(1 + Math.floor(Math.random() * 2));
+        F.check -= dt;
+        if (F.check <= 0) { setPhase("nibble"); F.nibbles = Math.max(FS.nibbles[0], Math.min(FS.nibbles[1], Math.floor(rr(FS.nibbles[0], FS.nibbles[1] + 1)))); F.timer = rr(FS.nibble_s[0], FS.nibble_s[1]); F.twitched = false; }
         break;
       case "nibble":
+        if (c.pressed) { setPhase("floating"); interest(2.0); say(`Too early - the ${spName()} bolted`, 2.0); F.ease = { from: spring.p.x, t: 0 }; break; }
         F.timer -= dt;
+        if (F.timer < 0.12 && !F.twitched) { F.twitched = true; F.twitchAt = F.clock; ripple(F.pos, false); }
         if (F.timer <= 0) {
-          F.twitchAt = F.clock; ripple(F.pos, false); F.nibbles--;
-          if (F.nibbles > 0) F.timer = 0.7;
-          else if (F.auto === "nibbleOnly") { F.auto = null; setPhase("floating"); F.timer = 99; }
-          else if (!F.script) startBite();
-          else { F.timer = 99; }
+          F.nibbles--;
+          if (F.nibbles <= 0) { setPhase("bite"); F.timer = hookWindow(sp()[3]); say("Bite! Click now", 0.3); ripple(F.pos, true); }
+          else { F.timer = rr(FS.nibble_s[0], FS.nibble_s[1]); F.twitched = false; }
         }
         break;
-      case "bite": F.timer -= dt; if (F.timer <= 0) { missed(); } break;
+      case "bite":
+        if (c.pressed || c.reelIn) { hook(); break; }
+        F.timer -= dt;
+        if (F.timer <= 0) { setPhase("floating"); interest(1.5); say(`Missed - the ${spName()} spat the hook`, 2.0); }
+        break;
       case "hooked": {
-        const reeling = UI.holding || UI.reel;
-        if (reeling) F.lineM -= FISH.reel_mps * dt * 0.8;
-        if (F.auto === "hold" || F.script) F.lineM = Math.max(F.lineM, 4.5);
-        if (F.lineM <= FISH.land_line_m + 0.8) { caught(); break; }
-        const sw = Math.sin(F.clock * 1.7) * 0.12;
-        const hd = F.heading.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), sw);
-        F.pos.set(hd.x * F.lineM, 0, hd.z * F.lineM);
-        if (Math.random() < dt * 3) ripple(F.pos, false);
+        const pull = sp()[2];
+        F.run_s -= dt;
+        if (F.run_s <= 0) { F.run = F.run > 0 ? 0 : pull; F.run_s = F.run > 0 ? rr(0.8, 2.0) : rr(1.2, 3.0); }
+        if (c.held) {
+          F.lineM -= FS.reel_mps * dt * (1 - 0.6 * Math.min(F.run / 1.5, 1));
+          F.tension += (FS.tension_base + FS.tension_pull * F.run * F.stamina) * dt;
+        } else {
+          F.tension -= FS.tension_fall * dt;
+          F.lineM += F.run * 1.2 * F.stamina * dt;
+        }
+        if (F.run > 0 && F.tension > 0.25) F.stamina = Math.max(FS.stamina_floor, F.stamina - FS.stamina_drain * dt);
+        F.tension = Math.max(0, F.tension);
+        F.lineM = Math.min(FS.line_max_m, Math.max(0, F.lineM));
+        // The fish runs away and across the line, so the float weaves.
+        const swing = Math.sin(F.clock * 1.7) * 0.12 * F.run;
+        const away = F.heading.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), swing);
+        F.pos.set(FEET.x + away.x * F.lineM, 0, FEET.z + away.z * F.lineM);
+        F.pos.y = surf(F.pos.x, F.pos.z) - F.dip;
+        if (F.tension >= 1) {
+          setPhase("ready"); F.tension = 0; fl.visible = line.visible = false; F.ease = { from: spring.p.x, t: 0 };
+          say(`The line snapped - the ${spName()} is gone`, 2.5); F.result = "snapped";
+        } else if (F.lineM <= FS.land_line_m) {
+          const cm = Math.max(1, Math.round(sp()[1] * (0.85 + 0.4 * F.rand()) * 100));
+          setPhase("ready"); F.tension = 0; fl.visible = line.visible = false; F.liftAt = F.clock;
+          say(`${sp()[0]} - ${cm} cm`, 3.0); F.result = "caught";
+        }
         break;
       }
-      case "caught": if (F.te > ROD.catch_s + 0.4) setPhase("ready"); break;
     }
-    if (["floating", "nibble", "bite", "hooked"].includes(F.phase)) {
-      const want = F.phase === "bite" ? FISH.bite_dip_m : F.phase === "nibble" && F.clock - F.twitchAt < 0.12 ? FISH.nibble_dip_m : F.phase === "hooked" ? 0.05 + 0.03 * Math.sin(F.clock * 9) : 0;
+    if (["floating", "nibble", "bite"].includes(F.phase)) {
+      const want = F.phase === "bite" ? FS.bite_dip_m : F.phase === "nibble" && F.timer < 0.12 ? FS.nibble_dip_m : 0;
       F.dip += (want - F.dip) * Math.min(1, dt * 14);
       F.pos.y = surf(F.pos.x, F.pos.z) - F.dip;
     }
-    // The fish pulls it under at the moment of a nibble too.
-    if (F.phase === "nibble" && F.clock - F.twitchAt < 0.12) { /* the dip above */ }
   }
 
-  // The proposed pose from the phase (rod-motion design 2).
-  function rodPose(dt, t) {
-    let T = 0, R = 0, Y = 0, Z = 0, addP = 0;
-    const out = new THREE.Vector3();
+  // Input: the left button as the game reads it, the right as reel_in.
+  v.box.addEventListener("contextmenu", e => { e.preventDefault(); stopBot(); UI.reelIn = true; });
+  v.box.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return; e.preventDefault(); stopBot();
+    try { v.box.setPointerCapture(e.pointerId); } catch (_) {}
+    UI.held = true; UI.pressed = true;
+  });
+  const release = () => { if (!UI.held) return; UI.held = false; UI.released = true; };
+  v.box.addEventListener("pointerup", release); v.box.addEventListener("pointercancel", release);
+  const reelBtn = v.q('[data-ctl="reel"]');
+  reelBtn.addEventListener("pointerdown", e => { e.preventDefault(); stopBot(); UI.held = true; UI.pressed = true; reelBtn.setAttribute("aria-pressed", "true"); try { reelBtn.setPointerCapture(e.pointerId); } catch (_) {} });
+  const reelUp = () => { reelBtn.setAttribute("aria-pressed", "false"); release(); };
+  reelBtn.addEventListener("pointerup", reelUp); reelBtn.addEventListener("pointercancel", reelUp);
+  v.q('[data-ctl="windin"]').addEventListener("click", () => { stopBot(); UI.reelIn = true; });
+
+  // The bot: plays the line through the same controls.
+  const playBtn = v.q('[data-ctl="play"]');
+  function stopBot() { BOT.kind = null; BOT.held = false; playBtn.setAttribute("aria-pressed", "false"); playBtn.textContent = "Play all"; }
+  function bot(kind, power) { BOT.kind = kind; BOT.held = false; BOT.prev = false; BOT.t = 0; BOT.power = power || 0.55; F.result = ""; F.rand = rng(17); }
+  function botControls(dt) {
+    BOT.t += dt;
+    const k = BOT.kind;
     switch (F.phase) {
-      case "charging": { const e = smooth(F.power); T = ROD.draw_rad * e; Y = Z = ROD.draw_lift_m * e * Math.SQRT1_2; break; }
+      case "ready": BOT.held = (k === "all" || k === "cast" || k === "charge") && F.result === "" && BOT.t > 0.2; break;
+      case "charging": BOT.held = k === "charge" || F.power < BOT.power; break;
+      case "flying": case "floating": case "nibble": BOT.held = false; break;
+      case "bite": BOT.held = (k === "all" || k === "land" || k === "snap" || k === "fight") && F.te > 0.25; break;
+      case "hooked":
+        if (k === "snap") BOT.held = true;
+        else if (k === "land" || k === "all") {
+          // Reel while the fish rests and the tension is low; ease off when it climbs or the fish runs.
+          if (BOT.held && (F.tension > 0.78 || (F.run > 0 && F.tension > 0.45))) BOT.held = false;
+          else if (!BOT.held && F.tension < (F.run > 0 ? 0.2 : 0.35)) BOT.held = true;
+        } else if (k === "fight") { BOT.kind = null; BOT.held = false; }
+        break;
+    }
+    const c = { held: BOT.held, pressed: BOT.held && !BOT.prev, released: !BOT.held && BOT.prev, reelIn: false };
+    BOT.prev = BOT.held;
+    if ((F.result === "caught" || F.result === "snapped") && F.phase === "ready" && k && k !== "charge") { stopBot(); }
+    return c;
+  }
+  function putOut() { setPhase("floating"); F.pos.set(0.5, WATER_Y, -8.5); F.dip = 0; fl.visible = line.visible = true; F.check = 99; if (spring.p.x > -0.05) { spring.p.x = -ROD.settle_rad; spring.p.v = 0; } }
+  function toBite() { putOut(); setPhase("bite"); F.timer = hookWindow(sp()[3]); F.dip = FS.bite_dip_m * 0.6; say("Bite! Click now", 0.3); }
+  const PH = {
+    Charge: () => { windIn(); F.ease = null; bot("charge"); },
+    Cast: () => { windIn(); F.ease = null; bot("cast", 0.55); },
+    Nibble: () => { putOut(); bot(null); F.rand = rng(5); setPhase("nibble"); F.nibbles = 2; F.timer = 0.5; F.twitched = false; },
+    Bite: () => { bot(null); toBite(); },
+    Fight: () => { bot("fight"); toBite(); },
+    Land: () => { bot("land"); toBite(); },
+    Snap: () => { bot("snap"); toBite(); },
+  };
+  const phaseSeg = v.q('[data-ctl="phases"]');
+  for (const name of Object.keys(PH)) { const b = document.createElement("button"); b.textContent = name; b.addEventListener("click", () => { stopBot(); PH[name](); }); phaseSeg.appendChild(b); }
+  playBtn.addEventListener("click", () => {
+    if (BOT.kind === "all") { stopBot(); return; }
+    windIn(); F.ease = null; bot("all", 0.5);
+    playBtn.setAttribute("aria-pressed", "true"); playBtn.textContent = "Stop";
+  });
+
+  // The proposed pose from the phase (rod-motion design 2), on the shoulder arc.
+  const S0 = () => new THREE.Vector3(ST.shoulder_x, ST.shoulder_y, ST.shoulder_z);
+  function armShift(phi) { const A = ARM0(); return A.clone().applyAxisAngle(QX, phi).sub(A); }
+  function rodPose(dt, t, c) {
+    let T = 0, R = 0, ARM = 0, addP = 0;
+    const out = new THREE.Vector3(), armLen = ARM0().length();
+    switch (F.phase) {
+      case "charging": { const e = smooth(F.power); T = ROD.draw_rad * e; ARM = ROD.draw_lift_m / armLen * e; break; }
       case "flying": case "floating": case "nibble":
-        T = -ROD.settle_rad; addP += ROD.bob_rad * Math.sin(t * 2 * Math.PI * 0.35); break;
+        T = -ROD.settle_rad; addP += ROD.bob_rad * Math.sin(t * 2 * Math.PI * ROD.bob_hz); break;
       case "bite": T = -ROD.bite_rad; addP += ROD.bite_shake_rad * Math.sin(F.te * 2 * Math.PI * ROD.bite_shake_hz) * smooth(F.te / 0.04); break;
       case "hooked": {
-        T = ROD.fight_rad; R = ROD.roll_rad * Math.sin(F.clock * 1.7) * clamp01(0.4 + UI.tension);
-        addP += ROD.fight_shake_rad * UI.tension * Math.sin(F.clock * 2 * Math.PI * ROD.fight_shake_hz) * smooth(F.te / 0.1);
-        if (UI.holding || UI.reel) { const a = F.clock * 2 * Math.PI * ROD.crank_hz; out.set(0, Math.sin(a) * ROD.crank_m, Math.cos(a) * ROD.crank_m); }
+        // Held up, pulled down while the fish runs, rolled toward its pull,
+        // shaking with the live tension.
+        const runK = Math.min(1, F.run / 1.5) * F.stamina;
+        T = ROD.fight_rad - ROD.run_dip_rad * runK;
+        R = -ROD.roll_rad * Math.sin(F.clock * 1.7) * Math.min(1, F.run);
+        addP += ROD.fight_shake_rad * F.tension * Math.sin(F.clock * 2 * Math.PI * ROD.fight_shake_hz) * smooth(F.te / 0.1);
+        if (c.held) { const a = F.clock * 2 * Math.PI * ROD.crank_hz; out.set(0, Math.sin(a) * ROD.crank_m, Math.cos(a) * ROD.crank_m); }
         break;
       }
-      case "caught": T = ROD.catch_rad * (1 - smooth(F.te / ROD.catch_s)); break;
     }
-    if (F.ease) { T = F.ease.from * (1 - smooth(F.ease.t / ROD.ease_s)); R = 0; Y = Z = 0; }
+    // A catch: a small dip first (anticipation), then the lift, easing back.
+    const lt = F.clock - F.liftAt;
+    if (F.phase === "ready" && lt >= 0 && lt < ROD.catch_s + 0.1) { T = lt < 0.1 ? -ROD.catch_dip_rad * Math.sin(Math.PI * lt / 0.1) : ROD.catch_rad * (1 - smooth((lt - 0.1) / ROD.catch_s)); }
+    if (F.ease) { T = F.ease.from * (1 - smooth(F.ease.t / ROD.ease_s)); R = 0; ARM = 0; }
     // A nibble twitches the tip down for nibble_s.
     const tw = F.clock - F.twitchAt; if (tw >= 0 && tw < ROD.nibble_s) addP -= ROD.nibble_rad * Math.sin(Math.PI * tw / ROD.nibble_s);
-    springTo(spring.r, R, dt); springTo(spring.y, Y, dt); springTo(spring.z, Z, dt);
+    springTo(spring.r, R, dt); springTo(spring.a, ARM, dt);
     if (F.phase === "flying" && F.flickT < ROD.flick_s) {
       // The flick: from the drawn pitch to -flick_rad in flick_s, then the spring.
       const u = F.flickT / ROD.flick_s, k = u * u * (3 - 2 * u), dk = 6 * u * (1 - u) / ROD.flick_s;
       spring.p.x = F.flickFrom + (-ROD.flick_rad - F.flickFrom) * k; spring.p.v = (-ROD.flick_rad - F.flickFrom) * dk;
     } else springTo(spring.p, T, dt);
-    return { pitch: spring.p.x + addP, roll: spring.r.x, shift: new THREE.Vector3(0, spring.y.x, spring.z.x).add(out) };
+    // The tip wobbles after the flick (follow-through).
+    if (F.phase === "flying" || (F.phase === "floating" && F.te < 0.6)) { const w = (F.flickT || 0) - ROD.flick_s; if (w > 0) addP += ROD.flick_wobble_rad * Math.exp(-w / 0.25) * Math.sin(2 * Math.PI * 7 * w); }
+    return { pitch: spring.p.x + spring.a.x + addP, roll: spring.r.x, shift: armShift(spring.a.x).add(out) };
   }
 
   const pts = lineGeo.getAttribute("position");
-  function drawLine(tipW, slack) {
-    const end = F.pos.clone().add(new THREE.Vector3(0, FLOAT_TOP_M, 0)), last = LINE_POINTS - 1;
+  function drawLine(tipW, slack, endP) {
+    const end = endP.clone().add(new THREE.Vector3(0, FLOAT_TOP_M, 0)), last = LINE_POINTS - 1;
     for (let k = 0; k <= last; k++) {
       let p;
       if (k === 0) p = tipW; else if (k === last) p = end;
@@ -987,39 +1629,202 @@ views.fish = View("fish", v => {
     pts.needsUpdate = true;
   }
 
-  return {
+  const api = {
     helds: () => [rod],
-    hide() { UI.holding = false; },
+    hide() { UI.held = false; },
+    F, BOT, PH, bot,
     update(dt, t) {
       const sdt = dt * (slow.checked ? 0.25 : 1);
       // The water moves on its own: the world, not the mockup.
       for (let i = 0; i < wpos.count; i++) wpos.setY(i, WATER_Y + waveAt(wx[i], wz[i], t));
       wpos.needsUpdate = true; wg.computeVertexNormals();
       for (const r of rings) if (r.m.visible) { r.t += dt; const s = (r.big ? 0.15 : 0.08) + r.t * (r.big ? 0.9 : 0.5); r.m.scale.setScalar(s); r.m.material.opacity = Math.max(0, 0.5 - r.t * 0.45); if (r.t > 1.1) r.m.visible = false; }
-      step(sdt);
+      if (F.ease) { F.ease.t += sdt; if (F.ease.t > ROD.ease_s) F.ease = null; }
+      const c = BOT.kind ? botControls(sdt) : { held: UI.held, pressed: UI.pressed, released: UI.released, reelIn: UI.reelIn };
+      if (BOT.kind) c.reelIn = c.reelIn || UI.reelIn;
+      UI.pressed = UI.released = UI.reelIn = false;
+      step(sdt, c);
+      // While the fish runs, the water stirs where the line goes in (the page's).
+      if (F.phase === "hooked" && F.run > 0) { F.wakeT -= sdt; if (F.wakeT <= 0) { F.wakeT = 0.22; ripple(drawnFloat(), false); } }
       modeTag.textContent = UI.mode === "today" ? "TODAY" : "PROPOSED";
       let pose = { pitch: 0, roll: 0, shift: new THREE.Vector3() };
-      const p = rodPose(sdt, t);
+      const p = rodPose(sdt, t, c);
       if (UI.mode === "proposed") pose = p;
       const P = applyPose(rod, pose.pitch, pose.roll, pose.shift.add(swayAt(t)));
+      rod.look(UI.mode === "proposed");
       // The line leaves the tip where the rod is drawn (proposed), or the rest tip (today).
       tipEye = UI.mode === "proposed" ? P.at(rod.tip) : rod.tip.clone();
-      fl.position.copy(F.pos);
+      const fp = drawnFloat();
+      fl.position.copy(fp);
       fglow.visible = NIGHT.on; flight.intensity = NIGHT.on ? 0.5 : 0;
-      if (line.visible) drawLine(tipEye.clone().applyMatrix4(eye()), F.phase === "hooked" ? 0.1 + 0.5 * (1 - Math.min(1, UI.tension)) : 0.6);
-      // The game's HUD line and meter.
+      if (line.visible) drawLine(tipEye.clone().applyMatrix4(eye()), F.phase === "hooked" ? 0.1 + 0.5 * (1 - Math.min(1, F.tension)) : 0.6, fp);
+      // The game's HUD: the line under the crosshair, the meter, the reel prompt.
       const texts = { ready: "Hold the left button to cast", charging: "Let go to cast", nibble: "Something is nibbling - wait for the float to go under", bite: "Bite! Click now", hooked: "Hold to reel - ease off when it runs" };
       sayEl.textContent = F.sayT > 0 ? F.say : (texts[F.phase] || "");
-      meter.hidden = !(F.phase === "charging" || F.phase === "hooked");
-      meterFill.style.width = ((F.phase === "charging" ? F.power : UI.tension) * 100).toFixed(0) + "%";
-      stat.textContent = `${F.phase}${F.phase === "hooked" ? ` · line ${F.lineM.toFixed(1)} m` : ""} · pitch ${pose.pitch.toFixed(2)} rad`;
+      prompt.hidden = F.phase !== "floating";
+      const m = F.phase === "charging" ? ["CAST", F.power] : F.phase === "hooked" ? ["TENSION", F.tension] : null;
+      meter.hidden = !m;
+      if (m) { meterFill.style.width = (clamp01(m[1]) * 100).toFixed(1) + "%"; meterFill.style.background = m[0] === "TENSION" ? tensionColour(m[1]) : "rgb(240,181,61)"; }
+      readout.innerHTML = F.phase === "hooked"
+        ? `<b>${sp()[0]}</b> on · tension <b>${F.tension.toFixed(2)}</b> · line <b>${F.lineM.toFixed(1)} m</b> · ${F.run > 0 ? '<b class="run">RUNNING</b>' : "resting"} · stamina ${F.stamina.toFixed(2)} · ${c.held ? "reeling" : "button up"}${BOT.kind ? " · bot" : ""}`
+        : `${F.phase}${F.result ? " · last: " + F.result : ""}${BOT.kind ? " · bot playing" : ""}`;
     },
   };
+  // A float hauled in to the bank is drawn at the water's edge.
+  function drawnFloat() { const p = F.pos.clone(); if (p.z > BANK_Z - 0.2) { p.z = BANK_Z - 0.2; p.y = WATER_Y + waveAt(p.x, p.z, F.clock) - F.dip; } return p; }
+  return api;
 });
 
 // ---------------------------------------------------------------------------
+// Hand: the right hand, cuff and sleeve alone. The game's hand (its prisms,
+// its shading) or the proposed one, with the diagnostics, and the sway, the
+// swing and the rod motion played on the hand alone.
+views.hand = View("hand", v => {
+  const S = { which: "game", grip: "pickaxe", shade: "game", sway: false, anim: false, at: 0, poseT: 0 };
+  const stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]'), poses = v.q('[data-ctl="poses"]'), stageTag = v.q(".stage"), modeTag = v.q(".mode");
+  const toolChk = v.q('[data-ctl="tool"]'), edgeChk = v.q('[data-ctl="edges"]'), texChk = v.q('[data-ctl="textured"]'), toneChk = v.q('[data-ctl="tone"]'), expo = v.q('[data-ctl="exposure"]'), expoOut = v.q('[data-ctl="exposure-out"]');
+  // The game's display transform (tone_grade.wgsl): exposure, then Khronos
+  // PBR Neutral, on the hand's materials only (a diagnostic).
+  const tone = { on: { value: 0 }, exposure: { value: 1.4 } };
+  const toned = m => {
+    m.onBeforeCompile = sh => {
+      sh.uniforms.toneOn = tone.on; sh.uniforms.exposure = tone.exposure;
+      sh.fragmentShader = "uniform float toneOn; uniform float exposure;\nvec3 pbrNeutral(vec3 color){ float x = min(color.r, min(color.g, color.b)); float offset = x < 0.08 ? x - 6.25*x*x : 0.04; vec3 c = color - offset; float peak = max(c.r, max(c.g, c.b)); if (peak < 0.76) return c; float d = 1.0 - 0.76; float np = 1.0 - d*d/(peak + d - 0.76); c *= np/peak; float g = 1.0 - 1.0/(0.15*(peak - np) + 1.0); return mix(c, vec3(np), g); }\n" + sh.fragmentShader.replace("#include <encodings_fragment>", "if (toneOn > 0.5) gl_FragColor.rgb = clamp(pbrNeutral(gl_FragColor.rgb * exposure), 0.0, 1.0);\n#include <encodings_fragment>");
+    };
+    return m;
+  };
+  const mat = toned(new THREE.MeshBasicMaterial({ vertexColors: true }));
+  const texMats = HAND_MATS.tex.map(m => toned(m.clone()));
+  const plainMat = toned(new THREE.MeshBasicMaterial({ vertexColors: true }));
+  const syncMaps = () => texMats.forEach((m, i) => { m.map = HAND_MATS.tex[i].map; m.needsUpdate = true; });
+  // An eye frame: the hand posed as in first person, the camera orbiting it.
+  const eyeF = new THREE.Group(); eyeF.position.set(0, 1.62, 0); v.scene.add(eyeF);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 6), phong({ color: new THREE.Color("#2c3338").convertSRGBToLinear() })); ground.rotation.x = -Math.PI / 2; v.scene.add(ground);
+  v.world.lantern(new THREE.Vector3(-0.75, 0, -1.25), 1.55);
+  const H = {};
+  for (const id of ["pickaxe", "shovel", "axe", "rod"]) {
+    const t = TOOL[id], q = new THREE.Quaternion(...t.rotation).normalize();
+    const g = new THREE.Group();
+    const geos = { fixed: handGeometry(t, {}), radial: handGeometry(t, { radial: true }), next: null };
+    const hand = new THREE.Mesh(geos.fixed, mat), tool = new THREE.Mesh(hexMesh(t), mat);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geos.fixed, 1), new THREE.LineBasicMaterial({ color: 0x35e0ff }));
+    const pair = HandPair(t, texMats); pair.group.visible = false;
+    g.add(hand, tool, edges, pair.group); g.visible = false; eyeF.add(g);
+    g.traverse(o => { o.frustumCulled = false; });
+    H[id] = { id, t, q, group: g, hand, tool, edges, geos, pair, mats: [mat, plainMat, ...texMats], butt: v3(t.butt), scale: t.scale, fist: v3(t.fist), tip: v3(t.tip), restLight: HAND_LIGHT.clone().applyQuaternion(q.clone().invert()) };
+  }
+  // Where the camera looks: the middle of the hand at rest, eye space.
+  function centre(h) { h.geos.fixed.computeBoundingBox(); const c = new THREE.Vector3(); h.geos.fixed.boundingBox.getCenter(c); return c.multiplyScalar(h.scale).applyQuaternion(h.q).add(h.butt); }
+  const orbit = { yaw: 0, pitch: 0, dist: 0.5, target: new THREE.Vector3() };
+  function playerView() { const h = H[S.grip]; orbit.target.copy(centre(h)); const d = orbit.target.clone().negate().normalize(); orbit.yaw = Math.atan2(d.x, d.z); orbit.pitch = Math.asin(d.y); orbit.dist = 0.5; }
+  let drag = null;
+  v.box.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, yaw: orbit.yaw, pitch: orbit.pitch }; try { v.box.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
+  v.box.addEventListener("pointermove", e => { if (!drag) return; orbit.yaw = drag.yaw - (e.clientX - drag.x) * 0.008; orbit.pitch = Math.max(-1.45, Math.min(1.45, drag.pitch + (e.clientY - drag.y) * 0.008)); });
+  const end = () => { drag = null; };
+  v.box.addEventListener("pointerup", end); v.box.addEventListener("pointercancel", end);
+  v.box.addEventListener("wheel", e => { e.preventDefault(); orbit.dist = Math.max(0.2, Math.min(2, orbit.dist * (e.deltaY > 0 ? 1.08 : 0.92))); }, { passive: false });
+  v.q('[data-ctl="view"]').addEventListener("click", playerView);
+  const SHADES = [["Game shading", "game"], ["Proposed shading", "proposed"], ["Normals as colour", "normals"], ["Flat part colours", "flat"], ["Old radial normals", "radial"]];
+  const setShade = seg(v.q('[data-ctl="shade"]'), SHADES, S.shade, m => { S.shade = m; });
+  seg(v.q('[data-ctl="which"]'), [["Game hand", "game"], ["Proposed hand", "proposed"]], S.which, w => { S.which = w; S.shade = w; setShade(w); });
+  seg(v.q('[data-ctl="skin"]'), SKINS.map(([n, c]) => [n, c]), HAND_LOOK.skin, c => { HAND_LOOK.skin = c; HAND_MATS.refresh(); syncMaps(); });
+  const animBtn = v.q('[data-ctl="anim"]'), swayBtn = v.q('[data-ctl="sway"]');
+  // Playing or posing, the camera stands back so the whole motion stays in view.
+  const wide = () => { orbit.dist = (S.anim || poses.checked) ? 1.1 : 0.5; };
+  const setAnim = on => { S.anim = on; S.at = 0; animBtn.setAttribute("aria-pressed", String(on)); wide(); };
+  poses.addEventListener("change", () => { S.poseT = 0; wide(); });
+  const setSway = on => { S.sway = on; swayBtn.setAttribute("aria-pressed", String(on)); };
+  const label = () => { animBtn.textContent = S.grip === "rod" ? "Play rod" : "Play swing"; };
+  seg(v.q('[data-ctl="grip"]'), [["Pickaxe", "pickaxe"], ["Shovel", "shovel"], ["Axe", "axe"], ["Rod", "rod"]], S.grip, g => { S.grip = g; setAnim(false); label(); playerView(); });
+  animBtn.addEventListener("click", () => setAnim(!S.anim));
+  swayBtn.addEventListener("click", () => setSway(!S.sway));
+  toneChk.addEventListener("change", () => { tone.on.value = toneChk.checked ? 1 : 0; });
+  expo.addEventListener("input", () => { tone.exposure.value = +expo.value; expoOut.textContent = (+expo.value).toFixed(2); });
+  sliders(v.q('[data-ctl="shade-sliders"]'), [["ambient", 0.2, 0.8, 0.01], ["wrap", 0, 1, 0.01], ["fill", 0, 0.4, 0.01]], HS, { ambient: 0.45, wrap: 0.55, fill: 0.12 });
+  const exportBox = v.q('[data-ctl="export"]');
+  v.q('[data-ctl="copy"]').addEventListener("click", () => { exportBox.value = handExport(); exportBox.select(); try { navigator.clipboard.writeText(exportBox.value); } catch (_) {} });
+  // Each tool's beat on its stone-tier block (dig.ron): pickaxe on stone,
+  // shovel on dirt, axe on wood.
+  const BREAK = { pickaxe: 1.2, shovel: 0.5, axe: 0.6 };
+  const scheds = Object.fromEntries(Object.keys(BREAK).map(id => [id, Schedule(() => BREAK[id], () => weightOf(id, 0), () => id)]));
+  // The rod's motion on the hand alone: the phases in turn, a spring between.
+  const ROD_SEQ = [["CHARGE", 1.2], ["CAST", 0.6], ["FLOAT", 1.0], ["NIBBLE", 0.5], ["BITE", 0.6], ["FIGHT", 2.4], ["CATCH", 0.9], ["REST", 0.6]];
+  const rs = { p: { x: 0, v: 0 }, a: { x: 0, v: 0 }, r: { x: 0, v: 0 } };
+  const springTo = (s, target, dt) => { const w = 2 * Math.PI * ROD.spring_hz; const n = Math.max(1, Math.ceil(dt * 480)), hh = dt / n; for (let i = 0; i < n; i++) { s.v += (w * w * (target - s.x) - 2 * ROD.damping * w * s.v) * hh; s.x += s.v * hh; } };
+  function rodAt(t, dt) {
+    const total = ROD_SEQ.reduce((a, [, d]) => a + d, 0);
+    let e = t % total, i = 0; while (e >= ROD_SEQ[i][1]) { e -= ROD_SEQ[i][1]; i++; }
+    const name = ROD_SEQ[i][0], armLen = ARM0().length();
+    let T = 0, A = 0, R = 0, add = 0;
+    if (name === "CHARGE") { const k = smooth(e / 1.2); T = ROD.draw_rad * k; A = ROD.draw_lift_m / armLen * k; }
+    else if (name === "CAST") { if (e < ROD.flick_s) { const u = e / ROD.flick_s; rs.p.x = lerp(ROD.draw_rad, -ROD.flick_rad, u * u * (3 - 2 * u)); rs.p.v = 0; } T = -ROD.settle_rad; const w = e - ROD.flick_s; if (w > 0) add += ROD.flick_wobble_rad * Math.exp(-w / 0.25) * Math.sin(2 * Math.PI * 7 * w); }
+    else if (name === "FLOAT") { T = -ROD.settle_rad; add += ROD.bob_rad * Math.sin(t * 2 * Math.PI * ROD.bob_hz); }
+    else if (name === "NIBBLE") { T = -ROD.settle_rad; if (e < ROD.nibble_s) add -= ROD.nibble_rad * Math.sin(Math.PI * e / ROD.nibble_s); }
+    else if (name === "BITE") { T = -ROD.bite_rad; add += ROD.bite_shake_rad * Math.sin(e * 2 * Math.PI * ROD.bite_shake_hz); }
+    else if (name === "FIGHT") { const run = e > 0.9 && e < 1.8 ? 1 : 0, ten = 0.3 + 0.5 * Math.sin(Math.PI * e / 2.4); T = ROD.fight_rad - ROD.run_dip_rad * run; R = -ROD.roll_rad * Math.sin(e * 1.7) * run; add += ROD.fight_shake_rad * ten * Math.sin(e * 2 * Math.PI * ROD.fight_shake_hz); }
+    else if (name === "CATCH") { T = e < 0.1 ? -ROD.catch_dip_rad * Math.sin(Math.PI * e / 0.1) : ROD.catch_rad * (1 - smooth((e - 0.1) / ROD.catch_s)); }
+    springTo(rs.p, T, dt); springTo(rs.a, A, dt); springTo(rs.r, R, dt);
+    const Arm = ARM0();
+    return { pitch: rs.p.x + rs.a.x + add, roll: rs.r.x, shift: Arm.clone().applyAxisAngle(QX, rs.a.x).sub(Arm), stage: name };
+  }
+  const inv = new THREE.Quaternion(), lt = new THREE.Vector3();
+  let painted = "", lastGeo = null;
+  playerView(); label();
+  return {
+    helds: () => [H[S.grip]],
+    lightAt(out) { H[S.grip].group.getWorldPosition(out); return out; },
+    H, S, orbit, playerView,
+    update(dt, t) {
+      const sdt = dt * (slow.checked ? 0.25 : 1);
+      for (const id in H) H[id].group.visible = id === S.grip;
+      const h = H[S.grip];
+      let pitch = 0, roll = 0, shift = new THREE.Vector3(), stage = "", yaw = 0;
+      if (poses.checked && S.grip !== "rod") {
+        S.poseT += dt; const name = POSES[Math.floor(S.poseT / 1.2) % POSES.length], p = keyedPose(name, S.grip);
+        const P = strokePose(p, p, h); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = name + " (pose)";
+      } else if (S.anim) {
+        S.at += sdt;
+        if (S.grip === "rod") { const r = rodAt(S.at, sdt); pitch = r.pitch; roll = r.roll; shift = r.shift; stage = r.stage; }
+        else { const sc = scheds[S.grip], { s, lag } = sc.state(S.at); const P = strokePose(s, lag, h); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = s.stage || "REST"; }
+      }
+      if (S.sway) { S.swayT = (S.swayT || 0) + sdt; shift.add(swayAt(S.swayT)); }
+      applyPose(h, pitch, roll, shift, yaw);
+      // The geometry and paint for the hand and shading picked.
+      const isNew = S.which === "proposed";
+      const textured = isNew && texChk.checked && S.shade !== "normals" && S.shade !== "flat";
+      if (h.pair.rebuild()) { painted = ""; lastGeo = null; }
+      h.pair.bend(isNew && S.grip === "shovel" ? -(1 - SHOVEL.arm_follow) * pitch : 0);
+      h.hand.visible = !isNew; h.pair.group.visible = isNew;
+      h.pair.hand.material = h.pair.arm.material = textured ? texMats : plainMat;
+      const geo = isNew ? h.pair.hand.geometry : S.shade === "radial" ? h.geos.radial : h.geos.fixed;
+      if (geo !== lastGeo) { if (!isNew) h.hand.geometry = geo; h.edges.geometry.dispose(); h.edges.geometry = new THREE.EdgesGeometry(geo, 1); painted = ""; lastGeo = geo; }
+      const mode = S.shade === "radial" ? "game" : S.shade;
+      const key = [S.which, S.grip, S.shade, textured, HS.ambient, HS.wrap, HS.fill, h.pair.bendRad.toFixed(4), mode === "proposed" ? h.group.quaternion.toArray().map(x => x.toFixed(4)).join() : ""].join("|");
+      if (key !== painted) {
+        painted = key;
+        if (isNew) h.pair.paint(mode, h.group.quaternion, textured, h.restLight);
+        else {
+          if (mode === "proposed") { inv.copy(h.group.quaternion).invert(); lt.copy(HAND_LIGHT).applyQuaternion(inv); } else lt.copy(h.restLight);
+          paintHand(geo, mode, lt, h.q);
+        }
+      }
+      h.tool.visible = toolChk.checked; h.edges.visible = edgeChk.checked;
+      modeTag.textContent = (isNew ? "PROPOSED HAND · " : "GAME HAND · ") + SHADES.find(s => s[1] === S.shade)[0].toUpperCase();
+      stageTag.textContent = stage;
+      // The camera orbits the hand's middle (drag), looking at it.
+      const tw = orbit.target.clone().add(eyeF.position);
+      v.cam.position.set(tw.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist, tw.y + Math.sin(orbit.pitch) * orbit.dist, tw.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist);
+      v.cam.lookAt(tw);
+      if (v.cam.near !== 0.01) { v.cam.near = 0.01; v.cam.updateProjectionMatrix(); }
+      stat.textContent = S.anim ? (S.grip === "rod" ? "rod-motion, the phases in turn" : `beat ${scheds[S.grip].P().toFixed(2)} s · stroke ${scheds[S.grip].T().len.toFixed(2)} s`) : "";
+    },
+  };
+});
+document.getElementById("hand-findings").innerHTML = HAND_FINDINGS;
+
+// ---------------------------------------------------------------------------
 // Tabs: one 3D view at a time; the open tab is the URL's bare hash.
-const TABS = ["dig", "chop", "fish"];
+const TABS = ["dig", "chop", "fish", "hand"];
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
 let TAB = null;
 function fitTab() {
@@ -1027,7 +1832,7 @@ function fitTab() {
   for (const id of TABS) { const box = views[id].box; box.style.height = ""; box.style.aspectRatio = ""; }
   if (!wide || !TAB) return;
   const box = views[TAB].box, top = box.getBoundingClientRect().top + window.scrollY;
-  const room = window.innerHeight - top - 110;
+  const room = window.innerHeight - top - 150;
   const h = Math.max(300, Math.min(room, box.clientWidth * 9 / 16));
   box.style.aspectRatio = "auto"; box.style.height = Math.round(h) + "px";
 }
@@ -1052,7 +1857,7 @@ infoDlg.addEventListener("click", e => { if (e.target === infoDlg) infoDlg.close
 refreshRon();
 setTab(tabOf(location.hash) || "dig", false);
 // For checking: the page's state, read by the screenshot script.
-window.__toolMotion = { views, NIGHT, ST, ROD };
+window.__toolMotion = { views, NIGHT, ST, ROD, HS, SHOVEL, advance: s => views[TAB].advance(s) };
 })();
 </script>
 </body>
