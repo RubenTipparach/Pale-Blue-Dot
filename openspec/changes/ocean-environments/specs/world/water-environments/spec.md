@@ -61,6 +61,32 @@ phase SHALL follow the world clock. It SHALL NOT be saved.
   same point and time with a 3 m tide
 - **THEN** they agree within 1 mm
 
+### Requirement: The sea's surface reaches every cell its water reaches
+
+The sea's drawn surface, the eye's water test and the swimmer SHALL agree on
+where the sea is: on the column tier, every cell joined to the open sea
+through cells that are not solid, up to the high water's layer, SHALL be
+under the sea's tided surface, roofed or open, and a cell no water reaches
+SHALL be dry. The sea's own water SHALL be drawn by one surface at one
+height, in a cave as in the open.
+
+#### Scenario: A cavern behind a beach is under the sea
+
+- **WHEN** a dry pit and a roofed cavern under sea level are joined to the
+  sea across a beach under the high water
+- **THEN** both are marked reached, the sheet is listed over them, and an
+  eye in either under the tided surface is in the sea's water
+
+#### Scenario: A hollow inland stays dry
+
+- **WHEN** a pit under the high water is joined to no water
+- **THEN** it is not reached and no sheet is listed over it
+
+#### Scenario: One surface in a sea cave
+
+- **WHEN** the sea's water stands under a roof joined to the open sea
+- **THEN** the sheet draws its top and the mesher draws no top there
+
 ### Requirement: Floes float
 
 A floe SHALL be laid only where the water under it is deep enough for its

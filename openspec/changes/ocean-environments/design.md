@@ -1736,3 +1736,90 @@ On the beach the before video's beach band steps 2.5 to 3.1 (of 255) in
 colour at every flip into air and back; the after video's steps none over
 1.0. **Open:** the murk ceiling is darker than a bright shallow floor; a
 lighter ceiling would be a look change, for the owner with the sheets.
+
+### B22. Holes in the sea at caverns beside it (owner, 2026-11-16)
+
+The owner, on a beach at `41.636 11.664` (1.6 m up, on the column tier):
+"theres some holes here in caverns next to the ocean". A narrow channel
+cut into a grass and dirt bank, a small cavern under the bank's overhang
+open to the sea, and the sea's surface broken in both: patches of it
+missing, the stone and cobble walls and floor showing through as stepped,
+hard-edged blocks, worst under the overhang and at the cavern's back.
+
+**Reproduced.** A measurement (`sea_cave_report`, an ignored test that
+builds the fine set at a place and maps, metre by metre, what is drawn over
+each cell's water at the sea's top layer) at the owner's spot, and a scan of
+39 coastal places round it and further south, then captures with the eye
+path at the default and the high tide (`--tide high`). The owner's place is
+a cave system of dry pits and roofed air pockets (`D`, `C` on the map) two to
+twelve metres west of the beach, whose floors are 2 to 5 m under sea level;
+the sea's own caves (`W`: the sea's water under a roof) are as common along
+other shores (`35.952 18.251`, `40 10`, `44 6`). Two causes, one family: the
+sea's surface is decided in three places that do not agree.
+
+1. **The tide overtops pockets the column holds dry.** The tide is drawn,
+   not simulated: the sheet stands at `sea - 0.5 + tide`, up to 1.5 m over
+   the mean, over every cell whose ground is under the high water
+   (`planet_visibility.wgsl`, the sheet's listing), but not over a cell
+   marked dry (`DRY_SHEET_BIT`, `planet_column.rs` `mark_sheet`): one whose
+   ground is under sea level and whose column holds no water at the sea's
+   top. The build's flood (`flood_from`) fills only what is joined to the
+   sea UNDER sea level, so a pit or cavern behind a beach whose sand stands
+   at sea level stays air, which is right at the mean. At any tide over the
+   beach the sheet runs up to the pit and stops: a hole in the sea with the
+   pit's walls and floor in it (`D`). Under a bank whose top stands over the
+   high water (`C`, `h >= 1.5`) the sheet is not listed at all, so under the
+   overhang the eye looks below the sea's surface into dry stone. The eye's
+   own test (`eye_water_at`, the "open air over ground the high tide
+   reaches" branch) meanwhile calls an open pit under the tide's sheet the
+   sea's water, and the swimmer (`swim_surface`) reads the height field's
+   ground: three answers for one place.
+2. **The sea's water under a roof is drawn at the wrong height.** A cell of
+   the sea's own water under a roof (`W`) has the roof's top as its record
+   height. Over the sea level, the mesher draws it (`water_flow.rs`
+   `cell_pieces`: the sea's top is the sheet's only where the record is
+   under sea level) at its layer's top, 0 m, while the sheet beside it
+   stands at the tide's height, anywhere from -1.5 to +1.5 m. Neither draws
+   a face between them (the mesher skips a side toward water; the sheet has
+   no sides), so at the cave's mouth the eye sees past a step of up to 1.5 m
+   into the cave under its surface. Where the roof's top is under the high
+   water the cell is drawn twice: the sheet at the tide's height and the
+   mesher's top at 0 m.
+
+**The fix: one answer, the sea's reach.** At the tier's build, and after
+every edit, a walk from the open sea (cells whose column holds the sea's
+water at its top layer with open air over it, under sea level) through every
+cell that is not solid, at every layer up to the high water's, sideways and
+up and down. A cell the walk reaches is one the sea's surface reaches at
+some tide: its finest record is marked (`SEA_REACH_BIT`).
+- **The sheet** is listed over a reached cell whatever its ground's or
+  roof's height, and over an unreached cell under the high water only if
+  its column holds water at the sea's top (a sealed pool someone poured).
+  A dry pit or cavern behind a beach is under the sea's sheet; a hollow
+  inland that no water reaches is no longer flooded at high tide.
+- **The sea's own top under a roof is the sheet's**: the mesher leaves the
+  sea's top layer to the sheet wherever the sheet is listed (one Rust
+  function, `sheet_listed`, read by the mesher and the tests, beside the
+  listing it mirrors). One surface, at one height, inside the cave and out.
+- **Under a roof the sheet is lit by the cave**: the record carries the sky
+  light over the water's top in its column (four bits), so the sea in a
+  cave is as dark as the mesher's water in it was, not the open sky's.
+- **The eye and the swimmer** read the same mark: on the tier, air under the
+  high water in a reached cell is the sea's water at the tided sheet
+  (`eye_water_at`, `swim_surface`); in an unreached cell it is dry.
+
+Derived, like the flood: never saved, and the same tier marks the same way
+however often it is built. The columns, the edits and the generator are
+untouched, so saves are too. The tide is still drawn, not simulated: at low
+tide a pit behind the beach holds the sea's surface at the tide's height,
+like a tide pool.
+
+**Not changed.** The flood, the water rule and the generator. Rivers: a cell
+with inland water over the sea's level keeps its own surface (B18). The
+sheet's look.
+
+**Validation.** Before and after MP4s at 1080p60 at the owner's spot and two
+other places, slowly across the cavern's mouth, under the overhang and
+through the waterline, the eye's height burnt in; on Drive as
+`sea-cavern-<place>-<before|after>-1080p60.mp4`, contact sheets and the
+frame-by-frame list in `docs/screenshots/sea-cavern-holes/`.

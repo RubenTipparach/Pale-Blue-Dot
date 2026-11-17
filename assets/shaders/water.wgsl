@@ -394,8 +394,12 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.clip = view.clip_from_local*vec4<f32>(out.local_position,1.0);
     out.normal = axis;
     // The sheet is open sky by construction in a heightfield; the cell's
-    // baked occlusion is the seabed's and would tile the sea by column.
-    out.sky_light = 1.0;
+    // baked occlusion is the seabed's and would tile the sea by column. Under
+    // a roof the sea reaches, the record carries how much darker than the
+    // open sky its water's top is lit (`SHEET_SHADE_SHIFT`, bits 8-11 of
+    // `spare.z`, `ocean-environments` B22), so the sea in a cave is as dark
+    // as the cave.
+    out.sky_light = 1.0 - f32((cell.spare.z >> 8u) & 15u)/15.0;
     out.flow_uv = vec3<f32>(0.0);
     out.kind = select(0u, 4u, river);
     out.level = level;
