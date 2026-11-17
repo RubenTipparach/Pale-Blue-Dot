@@ -18,3 +18,13 @@ renders.
 
 The screenshots were rendered in a cloud session without a GPU (software rendering): they show
 the look, not how smoothly the game runs.
+
+| Screenshot | Shows |
+| --- | --- |
+| `pale-blue-dot-valley-village.jpg` | a village in a green valley |
+| `pale-blue-dot-jungle-river.jpg` | a river through the jungle |
+| `pale-blue-dot-jungle.jpg` | under the jungle canopy |
+| `pale-blue-dot-snowy-river.jpg` | a river between snowy pine banks |
+| `pale-blue-dot-rainy-farmstead.jpg` | rain over farmland and a farmstead |
+| `pale-blue-dot-desert-edge.jpg` | cacti where the desert meets the forest |
+| `pale-blue-dot-home-world.jpg` | the home world from orbit |
