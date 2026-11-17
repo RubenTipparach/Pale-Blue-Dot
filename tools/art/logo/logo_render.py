@@ -73,7 +73,12 @@ li = lichen[::STEP, ::STEP][keep][:, None]
 col = col * (1 - 0.4 * li) + lich * 0.4 * li
 gl = glyphs[::STEP, ::STEP][keep][:, None].astype(np.float32)
 speck = rng.random((len(gl), 1)) * 0.35 + 0.65
-col = col * (1 - 0.92 * gl) + pecked * speck * 0.92 * gl
+if os.environ.get("OCHRE", "1") == "1":
+    col = col * (1 - 0.92 * gl) + pecked * speck * 0.92 * gl
+else:
+    # all blue (owner: "try another version without any orange etching", "all blue"): the cuts are
+    # the stone's own blue, a shade deeper where the chisel went in
+    col = col * (1 - 0.38 * gl * speck)
 le = letters[::STEP, ::STEP][keep][:, None].astype(np.float32)
 # the raised letters: the stone's fresher face, a little lighter than the patina round them
 col = col * (1 - le) + (np.array([0.32, 0.37, 0.42]) * (0.85 + 0.3 * var)) * le

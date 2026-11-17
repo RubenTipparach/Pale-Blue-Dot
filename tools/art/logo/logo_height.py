@@ -373,27 +373,27 @@ def glyphs(draw, x, y, s, which, w):
             L((a - 0.05, b), (a + 0.05, b)); L((a, b - 0.05), (a, b + 0.05))
         return 1.45
     if which == "starship":
-        # the story's end: the interstellar ship (the owner's reference): a block of panels at the
-        # back, a cluster of round tanks, a long thin truss, a habitat ring and a dish shield ahead
-        draw.rectangle([x + 0.0 * s, y - 0.34 * s, x + 0.42 * s, y - 0.08 * s], fill=255)          # the panels
+        # the story's end: the interstellar ship (the owner's reference), drawn tall so it is never
+        # a line: a wide panel wing at the back, two rows of tanks, the truss, a big upright habitat
+        # ring with its spokes, and a tall dish shield ahead
+        draw.rectangle([x + 0.0 * s, y - 0.55 * s, x + 0.32 * s, y + 0.15 * s], fill=255)          # the panel wing
         for k in range(1, 4):
-            L((k * 0.105, -0.34), (k * 0.105, -0.08))
-        L((-0.08, -0.21), (0.0, -0.21))
-        for k in range(4):
-            cxk = 0.55 + k * 0.17
-            D(cxk, -0.29, 0.085); D(cxk, -0.13, 0.085)                                              # the tanks
-        L((1.15, -0.21), (1.85, -0.21))                                                              # the truss
-        draw.ellipse([x + 1.52 * s, y - 0.42 * s, x + 1.64 * s, y + 0.0 * s], outline=255, width=w)   # the ring
-        L((1.58, -0.21), (1.58, -0.21))
-        draw.ellipse([x + 1.86 * s, y - 0.4 * s, x + 1.98 * s, y - 0.02 * s], fill=255)             # the shield
-        return 2.05
+            draw.line([(x + 0.0 * s, y + (-0.55 + k * 0.175) * s), (x + 0.32 * s, y + (-0.55 + k * 0.175) * s)], fill=0, width=max(2, w // 2))
+        for k in range(3):
+            cxk = 0.48 + k * 0.2
+            D(cxk, -0.31, 0.095); D(cxk, -0.09, 0.095)                                              # the tanks
+        L((0.32, -0.2), (1.8, -0.2))                                                                 # the truss
+        C(1.28, -0.2, 0.36)                                                                          # the ring
+        L((1.28, -0.56), (1.28, 0.16)); L((0.92, -0.2), (1.64, -0.2))                                # its spokes
+        draw.ellipse([x + 1.78 * s, y - 0.62 * s, x + 1.92 * s, y + 0.22 * s], fill=255)             # the shield
+        return 2.0
     raise ValueError(which)
 
 
 SPAN = {"hunting": 2.1, "fishing": 2.0, "farming": 2.1, "sailing": 2.0, "rocketry": 2.1,
         "comet": 1.4, "rafting": 1.3, "flying": 1.3, "shipbuilding": 1.65, "mining": 1.45, "windmill": 1.2,
         "watermill": 1.45, "nuclear": 1.25, "fusion": 1.3, "antimatter": 1.4, "dyson": 1.3, "computer": 1.45,
-        "solar": 1.4, "station": 1.35, "colony": 1.45, "starship": 2.05,
+        "solar": 1.4, "station": 1.35, "colony": 1.45, "starship": 2.0,
         "spiral": 1.0, "sun": 0.9, "fish": 0.9, "bird": 0.8, "star": 0.6, "hand": 0.75, "stag": 0.95}
 
 
@@ -460,7 +460,7 @@ def carved_border(points, inset, d0, d1, seed, scroll_edges=None, frieze_edges=N
             probe = int(ay + mid), int((ax + bx) / 2)
             yb = ay + (mid if inset[min(probe[0], H - 1), probe[1]] > 0 else -mid)
             for (r0, r1, seq) in frieze_items[ei]:
-                sizes = [fs * (0.95 if SPAN[n] < 1.7 else 0.78) for n in seq]
+                sizes = [fs * (0.95 if SPAN[n] < 1.7 or n == "starship" else 0.78) for n in seq]
                 widths = [SPAN[n] * z for n, z in zip(seq, sizes)]
                 gap = (r1 - r0 - sum(widths)) / (len(seq) + 1)
                 x = r0 + gap
@@ -552,8 +552,8 @@ def main(out):
         1: [(L0, ecx0 - er0 - 30, ["comet", "hunting", "fishing", "farming"]),
             (ecx0 + er0 + 30, R0, ["rafting", "sailing", "mining", "shipbuilding"])],
         4: [(dx1 + 60 + 60, tx1 - 110 - 70, ["windmill", "watermill", "flying"])],
-        7: [(dx0 + 70, dx1 - 70, ["nuclear", "rocketry", "computer", "solar", "fusion", "station", "colony"])],
-        10: [(tx0 + 110 + 70, dx0 - 60 - 60, ["dyson", "antimatter", "starship"])],
+        7: [(dx0 + 70, dx1 - 70, ["nuclear", "rocketry", "computer", "solar", "fusion", "station", "colony", "dyson"])],
+        10: [(tx0 + 110 + 60, dx0 - 60 - 50, ["antimatter", "starship"])],
     }
     t_border, t_band, t_etch = carved_border(t_pts, t_in, 30, 150, 22,
                                               scroll_edges={0, 2, 3, 5, 6, 8, 9, 11},
@@ -643,11 +643,10 @@ def main(out):
         sd.ellipse([xp - rp, sy - rp, xp + rp, sy + rp], outline=255, width=5)
         if k == 5:
             sd.line([(xp - rp - 12, sy + 3), (xp + rp + 12, sy - 3)], fill=255, width=5)   # a ringed world
-    # the home world, third, marked only by a thin line under the row from it onward (owner: "no
-    # arrow, maybe just a line underneath, more subtle")
+    # the home world, third, marked by a small vertical line under it (owner: "just a small vertical
+    # line on our home planet")
     hx = xs[2]
-    sd.line([(hx, sy + 34), (xs[-1] + 30, sy + 34)], fill=255, width=3)
-    sd.line([(hx, sy + 24), (hx, sy + 34)], fill=255, width=3)
+    sd.line([(hx, sy + 20), (hx, sy + 48)], fill=255, width=4)
     sol_mask = (np.array(sol) > 127) & t_mask & ~e_mask & ~ndimage.binary_dilation(letters, iterations=14)
     h += groove(sol_mask, 0.05, 4.0)
 
@@ -661,7 +660,7 @@ def main(out):
     mask = t_mask | d_mask | e_mask
     # ---- the cave scenes, etched into the frame on purpose (owner: "purposefully etched into the
     # decor/border would be awesome"), red ochre rubbed into the cuts
-    glyph_mask = (t_etch & t_mask & ~e_mask) | (d_etch & d_mask) | tether_mask | sol_mask
+    glyph_mask = (t_etch & t_mask & ~e_mask) | (d_etch & d_mask) | tether_mask   # the planets are plain cuts (owner)
     paint = glyph_mask.astype(np.uint8)
     # cracks: a few thin random walks, cut shallow
     crack = Image.new("L", (W, H), 0)
