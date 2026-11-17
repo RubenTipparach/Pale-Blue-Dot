@@ -11,6 +11,7 @@
 //! proposal).
 
 use crate::fauna::{FishingSettings, FlockSettings, Rng, School, Species, Water};
+use crate::world_frame::SimOrigin;
 use glam::Vec3;
 
 /// Where the line is.
@@ -45,7 +46,7 @@ pub struct Controls {
     pub reel_in: bool,
 }
 
-/// Where the angler is, planet-local.
+/// Where the angler is, local (`world-frames`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Angler {
     /// The rod tip: where a cast leaves from.
@@ -117,7 +118,9 @@ pub struct Line {
     pub phase: Phase,
     /// How charged the cast is, 0..1.
     pub power: f32,
-    /// Where the float is, planet-local.
+    /// Where the float is, local (`world-frames`): relative to the
+    /// [`SimOrigin`] the step is given, so its bob of millimetres is not
+    /// rounded to the half millimetre an f32 holds at a planet's radius.
     pub float: Vec3,
     velocity: Vec3,
     /// How far under the surface the float is pulled, m (positive is down).
@@ -180,8 +183,13 @@ impl Line {
     }
 
     /// The lure: a hand's width under the float, where a fish comes to it.
-    pub fn lure(&self) -> Vec3 {
-        self.float - self.float.normalize_or(Vec3::Y) * 0.35
+    pub fn lure(&self, o: &SimOrigin) -> Vec3 {
+        self.float - o.up_at(self.float) * 0.35
+    }
+
+    /// Move the float by `-shift`: the origin was rebased.
+    pub fn rebase(&mut self, shift: Vec3) {
+        self.float -= shift;
     }
 
     /// Take the line in, empty, freeing any fish it was working.
@@ -221,6 +229,7 @@ impl Line {
     #[allow(clippy::too_many_arguments)]
     pub fn step(
         &mut self,
+        o: &SimOrigin,
         dt: f32,
         controls: Controls,
         angler: &Angler,
@@ -237,6 +246,9 @@ impl Line {
             return events;
         }
         self.clock += dt;
+        if self.is_out() {
+            crate::world_frame::check_local("float", self.float);
+        }
         self.splash_s = (self.splash_s - dt).max(0.0);
         // A target whose school has gone (despawned out of range) is no
         // target: the line goes back to waiting rather than steering nothing.
@@ -289,7 +301,7 @@ impl Line {
                 self.power = (self.power + dt / s.charge_s).min(1.0);
                 if controls.released || !controls.held {
                     let speed = lerp(s.speed_mps, self.power);
-                    let up = angler.tip.normalize_or(Vec3::Y);
+                    let up = o.up_at(angler.tip);
                     self.float = angler.tip;
                     self.velocity =
                         angler.look.normalize_or(up) * speed + up * lerp(s.lift_mps, self.power);
@@ -301,16 +313,17 @@ impl Line {
             }
             Phase::Flying => {
                 self.flight_s += dt;
-                let up = self.float.normalize_or(Vec3::Y);
+                let up = o.up_at(self.float);
                 self.velocity -= up * gravity * dt;
                 self.float += self.velocity * dt;
-                let r = self.float.length();
-                let (surface, bed) = (water.surface(self.float), water.bed(self.float));
-                if bed >= surface - 0.05 && r <= bed {
+                let r = o.radius_at(self.float);
+                let q = o.query_point(self.float);
+                let (surface, bed) = (water.surface(q), water.bed(q));
+                if bed >= surface - 0.05 && r <= f64::from(bed) {
                     self.phase = Phase::Ready;
                     events.push(Event::Dry);
-                } else if r <= surface {
-                    self.float = self.float.normalize_or(up) * surface;
+                } else if r <= f64::from(surface) {
+                    self.float = o.with_radius(self.float, f64::from(surface));
                     self.phase = Phase::Floating;
                     self.splash_s = s.splash_s;
                     self.check_s = s.scent_every_s;
@@ -325,11 +338,19 @@ impl Line {
                 if self.check_s <= 0.0 && self.splash_s <= 0.0 {
                     self.check_s = s.scent_every_s;
                     if self.target.is_none() {
-                        self.look_for_interest(schools, roster, s, water, bite_factor, &mut events);
+                        self.look_for_interest(
+                            o,
+                            schools,
+                            roster,
+                            s,
+                            water,
+                            bite_factor,
+                            &mut events,
+                        );
                     }
                 }
                 if let Some(t) = self.target {
-                    let lure = self.lure();
+                    let lure = self.lure(o);
                     let school = &mut schools[t.school];
                     school.lure = Some((t.fish, lure));
                     if school.positions[t.fish].distance(lure) < s.nibble_m {
@@ -350,7 +371,7 @@ impl Line {
                     return events;
                 };
                 let species = schools[t.school].species;
-                schools[t.school].held = Some((t.fish, self.lure()));
+                schools[t.school].held = Some((t.fish, self.lure(o)));
                 if controls.pressed {
                     self.release(schools, flock);
                     self.phase = Phase::Floating;
@@ -380,7 +401,7 @@ impl Line {
                     return events;
                 };
                 let species = schools[t.school].species;
-                schools[t.school].held = Some((t.fish, self.lure()));
+                schools[t.school].held = Some((t.fish, self.lure(o)));
                 if strike {
                     let pull = roster.get(species as usize).map_or(0.5, |sp| sp.pull);
                     self.phase = Phase::Hooked;
@@ -388,10 +409,10 @@ impl Line {
                     self.stamina = 1.0;
                     self.run = pull;
                     self.run_s = self.rng.range(0.8, 1.6);
-                    let out = tangent(self.float - angler.feet, angler.feet);
+                    let out = tangent(o, self.float - angler.feet, angler.feet);
                     self.line_m = out.length();
-                    self.heading =
-                        out.normalize_or(tangent(angler.look, angler.feet).normalize_or(Vec3::X));
+                    self.heading = out
+                        .normalize_or(tangent(o, angler.look, angler.feet).normalize_or(Vec3::X));
                     events.push(Event::Hooked { species });
                 } else {
                     self.timer -= dt;
@@ -434,23 +455,25 @@ impl Line {
                 self.line_m = self.line_m.clamp(0.0, s.line_max_m);
                 // The fish runs away from the angler and across the line, so
                 // the float weaves while it runs.
-                let up = angler.feet.normalize_or(Vec3::Y);
+                let up = o.up_at(angler.feet);
                 let swing = (self.clock * 1.7).sin() * 0.12 * self.run;
                 let away = rotate_about(
-                    tangent(self.heading, angler.feet).normalize_or(self.heading),
+                    tangent(o, self.heading, angler.feet).normalize_or(self.heading),
                     up,
                     swing,
                 );
                 let point = angler.feet + away * self.line_m;
-                let dir = point.normalize_or(up);
-                self.float = dir * (water.surface(dir * point.length()) - self.dip);
-                schools[t.school].held = Some((t.fish, self.lure()));
+                let surface = water.surface(o.query_point(point));
+                self.float = o.with_radius(point, f64::from(surface) - f64::from(self.dip));
+                schools[t.school].held = Some((t.fish, self.lure(o)));
                 if self.tension >= 1.0 {
                     self.release(schools, flock);
                     self.phase = Phase::Ready;
                     self.tension = 0.0;
                     events.push(Event::Snapped { species });
-                } else if self.line_m <= s.land_line_m || water.depth(self.float) < s.land_depth_m {
+                } else if self.line_m <= s.land_line_m
+                    || water.depth(o.query_point(self.float)) < s.land_depth_m
+                {
                     let length_cm = roster
                         .get(species as usize)
                         .map_or(1, |sp| schools[t.school].length_cm(t.fish, sp));
@@ -470,8 +493,8 @@ impl Line {
                 _ => 0.0,
             };
             self.dip += (want - self.dip) * (dt * 14.0).min(1.0);
-            let up = self.float.normalize_or(Vec3::Y);
-            self.float = up * (water.surface(self.float) - self.dip);
+            let surface = water.surface(o.query_point(self.float));
+            self.float = o.with_radius(self.float, f64::from(surface) - f64::from(self.dip));
         }
         events
     }
@@ -479,8 +502,10 @@ impl Line {
     /// Every school near the float gets a chance to send one fish: the ones
     /// within its reach turn toward the lure, and one within its sense range
     /// may commit a fish to it.
+    #[allow(clippy::too_many_arguments)]
     fn look_for_interest(
         &mut self,
+        o: &SimOrigin,
         schools: &mut [School],
         roster: &[Species],
         s: &FishingSettings,
@@ -488,7 +513,7 @@ impl Line {
         bite_factor: f32,
         events: &mut Vec<Event>,
     ) {
-        let lure = self.lure();
+        let lure = self.lure(o);
         for (index, school) in schools.iter_mut().enumerate() {
             let Some(species) = roster.get(school.species as usize) else {
                 continue;
@@ -499,12 +524,12 @@ impl Line {
             if !species.can_bite() {
                 continue;
             }
-            let d = tangent(school.centre() - lure, lure).length();
+            let d = tangent(o, school.centre() - lure, lure).length();
             if d > s.scent_reach * species.sense_m {
                 continue;
             }
             if d > 2.5 {
-                school.scent(species, lure, water, 3.0);
+                school.scent(o, species, lure, water, 3.0);
             }
             if d <= species.sense_m
                 && self.rng.unit() < species.bite * bite_factor * s.bite_chance
@@ -527,9 +552,9 @@ fn lerp(range: (f32, f32), t: f32) -> f32 {
     range.0 + (range.1 - range.0) * t.clamp(0.0, 1.0)
 }
 
-/// The part of `v` along the surface at `at`.
-fn tangent(v: Vec3, at: Vec3) -> Vec3 {
-    let up = at.normalize_or(Vec3::Y);
+/// The part of `v` along the surface at `at` (local).
+fn tangent(o: &SimOrigin, v: Vec3, at: Vec3) -> Vec3 {
+    let up = o.up_at(at);
     v - up * v.dot(up)
 }
 

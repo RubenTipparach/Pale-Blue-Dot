@@ -594,3 +594,134 @@ strike, in real time and at a quarter speed). Read frame by frame:
   the float for 6 to 8 frames at the strike, then snaps level. That is its
   pose (built from its velocity), not this change; it is left for a
   follow-up.
+
+## 8. The fish's pose: a heading from a bob, and turns in 30 Hz steps (owner, 2026-11-17)
+
+The owner, on the under-water bite video of 7.6: "the problem isnt even
+jitter right now...... the fish is glitching like hell", and then "why is
+rotation all snappy?". Read at 20 fps, the video shows the fish at the lure
+drawn level, then for one frame standing on its tail under the float, then
+level again, over and over through the nibble and the strike, in the build
+before 7 (`d0f101b3`) and after it alike. Some frames show the fish nose-on,
+filling the view, or turned so the line runs into its side.
+
+### 8.1 Cause (read in the code, measured in 8.4)
+
+`draw::build` turns each creature along its velocity: for a schooling fish
+`forward = (v - up * v·up * 0.5).normalize_or(up.any_orthonormal_vector())`,
+from `School::velocities[i]`, the velocity of its latest 30 Hz step.
+
+- **A fish at the lure has no velocity of its own.** `School::step` gives a
+  held fish (nibbling, biting, hooked) `velocities[i] = (lure - positions[i])
+  / dt`: how far the lure moved in that step. While the fish nibbles or bites
+  the lure moves only with the float, and the float's dips are straight down
+  and up, so `v` is vertical: `forward` is half of `up` and the fish is drawn
+  standing on its nose or its tail. On a step the lure did not move, `v` is
+  zero and `forward` falls back to `any_orthonormal_vector()`, a fixed but
+  arbitrary bearing that has nothing to do with the last one; the fish snaps
+  round to it. Hooked, the lure is dragged by the line's own rule, so the
+  heading is whichever way the float went that step, and at the strike the
+  float's dip makes it vertical again (the "standing on its tail for 6 to 8
+  frames" of 7.6). The position pops in the video are this too: a body turned
+  nose-on or on end round the same point covers a different part of the view
+  from 0.85 m away.
+- **Every fish turns in 30 Hz steps.** Since section 5 a fish's position is
+  drawn between its steps, but its heading is still the latest step's, never
+  interpolated. At 60 to 120 fps it holds for frames and then turns all at
+  once, as far as one step's velocity changed: a sharp turn is drawn in one
+  frame.
+
+Nothing in the simulation flickers: the line's phase and the held fish do not
+change between frames. Both are the drawing's.
+
+### 8.2 The fix (draw-side only)
+
+A draw-only `DrawnHeadings` resource keeps, for each creature by its school's
+seed and its id, the forward it was drawn with last frame.
+
+- **The step's heading is the target, the drawn heading eases to it.** Each
+  frame the drawn forward turns toward the heading of the latest step by
+  `1 - exp(-dt / HEADING_EASE_S)`, `HEADING_EASE_S` 0.08 s (a little over
+  two school steps), and never faster than 540 degrees a second
+  (`HEADING_TURN_MAX`; right round in a third of a second, 9 degrees a frame
+  at 60 fps). A step's turn is spread over the frames between steps instead
+  of landing in one. A reversal (target opposite) turns about the local up,
+  never through an arbitrary axis.
+- **No velocity, no new heading.** When a step's velocity is under 1 mm/s the
+  target is the heading already drawn.
+- **A fish at the lure keeps the heading it took the lure with, level.** The
+  first frame a fish is held, its drawn forward, with the up part taken out,
+  is kept as its held heading, and it is drawn along that while it nibbles,
+  bites and is on the line; it is never turned by the lure's bob. When it is
+  let go it eases back to its own swimming heading.
+- A creature seen for the first time is drawn along its target at once; one
+  no longer drawn is forgotten.
+- Pose-specific turns (a crab's sideways walk, a diving duck's nose-down tip)
+  are applied after the eased heading as before.
+
+The simulation, the catch and bite rules and saves are untouched: nothing
+reads `DrawnHeadings` but the drawing and the motion trace. The cost is that
+a fish's drawn heading lags its swimming by about 0.08 s, and a hooked fish
+dragged by the line faces the way it took the bait rather than turning with
+each run (left for later; it is level and steady, which is what was asked).
+
+### 8.3 The instrument
+
+The motion trace gets the followed creature's drawn forward and up (from
+`DrawnHeadings`, what the mesh is built with) and the angle its forward turned
+since the last frame; `tools/motion_graph.py` reports the per-frame turn
+(p50, p99, max, and frames over 30 degrees), split into the fish at the lure
+and swimming fish. Measured before (the heading as built today, written into
+the same resource with no easing) and after.
+
+### 8.4 Results (M4 Max MacBook Pro, 2026-11-17)
+
+The fishing trace with the eye under water (`--fish-play --hold-pointer
+--watch-hook --time 10 --no-vsync`, 50 s, real time, windowed), each on a
+fresh world, one fish hooked in each. "Before" is the instrument alone (the
+heading built as on `3c25cf15`), "after" the fix. Turn per frame is the larger
+of the angle the drawn forward and the drawn up moved since the last frame,
+the same fish both frames.
+
+| | before (2 runs) | after (2 runs) |
+| --- | --- | --- |
+| fish at the lure: frames turning over 30 degrees | **78, 116** | **0, 0** |
+| fish at the lure: turn per frame p99 / max | 127 / 176, 150 / 178 deg | 0.3 / 3.3, 0.6 / 1.4 deg |
+| fish at the lure: nose more than 30 degrees out of level | 32 of 956, 80 of 1 020 frames | 0, 0 (max 13 and 7 degrees, the first frames it eases level from its approach) |
+| swimming fish: frames turning over 30 degrees | 3, 2 | 0, 0 |
+| swimming fish: turn per frame p99 / max | 7.3 / 130, 13.4 / 98 deg | 4.5 / 6.4, 8.2 / 21.9 deg |
+
+Before, at the lure, the trace shows the cause directly: the held fish is
+drawn level along one fixed bearing (the `any_orthonormal_vector` fallback,
+`(0.113, 0.906, -0.407)` every time) on the frames the lure did not move, and
+pitched 31 to 79 degrees on the frames the float dipped; it flips between them
+up to 133 degrees in a frame. The largest swimming turn left after (21.9
+degrees) is on a long frame.
+
+Video, one file: `fish-nibble-underwater-pose-before-after-1080p60.mp4` in the
+validation folder on Drive (before, after, then side by side aligned on the
+strike at real time and a quarter speed). Read at the full 60 fps around the
+nibble and the strike: before, the fish at the lure stands on end for single
+frames and runs of frames, nose-on and side-on, and hangs vertical under the
+float for about 15 frames at the strike; after, the fish (an eel in that run)
+lies level at the lure through the nibble and the strike with no frame
+turning, and swims off level. What is still seen after: an eel climbing
+straight up from the bed to the lure is drawn pitched up while it climbs
+(its real heading, pitched by half as before), easing level as it arrives.
+
+## 9. Correction: the simulation was rounded too (owner, 2026-11-17)
+
+Section 4 kept "physics and simulation planet-centred ... collision needs
+0.5 mm, not 0.005". That was wrong. The owner: "its not the camera thats the
+problem, the math still shows: 4436.446780"; "think about it, your
+translations still have limited precision". The render origin subtracts
+after the store has rounded: every position the simulation integrates (the
+walker's `Position += v dt`, the skiff, the fish's step, the float's bob)
+was stored as an f32 4 800 m from the centre, on a 0.488 mm grid, so a 1 m/s
+walk's steps were off by 0.11 mm at p50 and 0.92 mm at worst. Collision does
+not need 0.005 mm; motion does. The fix is a local origin for the simulation
+too, as CLAUDE.md prescribes, and it is its own change:
+`openspec/changes/world-frames` (the frame tree, `SimOrigin`, rebase and
+handoff, and the guards). Section 6's render origin stays, as an offset
+inside that local space; a sim rebase moves it with physics, so nothing
+drawn moves.

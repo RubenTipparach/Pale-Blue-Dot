@@ -245,8 +245,16 @@ impl FlightInputState {
     }
 }
 
+/// The ship's position at the last protection pass, local (`world-frames`):
+/// moved by a rebase with the ship.
 #[derive(Component)]
 struct ProtectedPosition(Vec3);
+
+fn rebase_protected(world: &mut World, shift: Vec3) {
+    for mut p in world.query::<&mut ProtectedPosition>().iter_mut(world) {
+        p.0 -= shift;
+    }
+}
 
 pub struct FlightViewPlugin;
 
@@ -264,6 +272,7 @@ pub struct FlightViewPostPhysics;
 
 impl Plugin for FlightViewPlugin {
     fn build(&self, app: &mut App) {
+        crate::sim_origin::add_rebase_hook(app, rebase_protected);
         app.init_resource::<FlightViewConfig>()
             .init_resource::<FlightReadout>()
             .init_resource::<TourProgress>()
@@ -344,13 +353,18 @@ fn setup_flight(world: &mut World) {
     assert!(config.route_camera_ease_s > 0.0 && config.route_camera_max_rate > 0.0);
     assert!(config.route_climb_speed > 0.0 && config.route_climb_speed <= config.route_speed);
     assert!(config.route_corner_m >= 0.0);
-    let (position, orientation, normal) = spawn_pose(config);
+    let (spawn, orientation, normal) = spawn_pose(config);
     if config.mode == FlyMode::Route {
         *world.resource_mut::<RouteState>() = match config.route_kind {
-            RouteKind::FarSide => RouteState::new(position.normalize(), normal),
-            RouteKind::Scenic => RouteState::scenic_pending(position.normalize()),
+            RouteKind::FarSide => RouteState::new(spawn.normalize(), normal),
+            RouteKind::Scenic => RouteState::scenic_pending(spawn.normalize()),
         };
     }
+    // The spawn is a planet point; the ship's `Position` is local
+    // (`world-frames`), wherever the origin is by now.
+    let position = crate::sim_origin::origin_of(world).to_local(
+        pbd_core::world_frame::WorldPos::new(crate::sim_origin::HOME, spawn.as_dvec3()),
+    );
     let controller = ShipController {
         limits: FlightLimits {
             acceleration: config.acceleration as f64,
@@ -369,7 +383,7 @@ fn setup_flight(world: &mut World) {
     world.resource_mut::<FlightInputState>().target_rotation = orientation;
     *world.resource_mut::<TourProgress>() = TourProgress {
         normal,
-        previous_direction: position.normalize(),
+        previous_direction: spawn.normalize(),
         ..Default::default()
     };
     if config.startup_camera {
@@ -398,9 +412,12 @@ fn setup_flight(world: &mut World) {
 /// Relocate the existing pilot ship for an explicit mode switch or reset.
 /// Velocity, swept terrain state, view target, and readout change together;
 /// ordinary flight still moves only through Avian. Invalid poses are rejected.
+///
+/// `position` is local (physics space, `world-frames`).
 pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> bool {
+    let o = crate::sim_origin::origin_of(world);
     if !position.is_finite()
-        || position.length_squared() < 1.0
+        || o.radius_at(position) < 1.0
         || !orientation.is_finite()
         || orientation.length_squared() <= f32::EPSILON
     {
@@ -454,7 +471,8 @@ pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> b
     intent.brake = !intent.enabled;
     intent.reset = false;
     let dampeners = intent.dampeners || !intent.captured;
-    let direction = position.normalize();
+    let direction = o.up_at(position);
+    let radius = o.radius_at(position) as f32;
     let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
     *world.resource_mut::<TourProgress>() = TourProgress {
         normal: direction.cross(east).normalize(),
@@ -472,21 +490,25 @@ pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> b
         .is_in_space();
     let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(direction).degrees();
     *world.resource_mut::<FlightReadout>() = FlightReadout {
-        position,
-        altitude: position.length() - planet::PLANET_RADIUS,
-        clearance: position.length() - surface_radius,
+        position: o.query_point(position),
+        altitude: radius - planet::PLANET_RADIUS,
+        clearance: radius - surface_radius,
         latitude_deg,
         longitude_deg,
         dampeners,
         is_in_space,
         ..Default::default()
     };
+    crate::sim_origin::recenter_on(world, position);
     true
 }
 
 fn reset_flight(world: &mut World) {
     if world.resource::<FlightInputState>().reset {
         let (position, orientation, _) = spawn_pose(*world.resource::<FlightViewConfig>());
+        let position = crate::sim_origin::origin_of(world).to_local(
+            pbd_core::world_frame::WorldPos::new(crate::sim_origin::HOME, position.as_dvec3()),
+        );
         teleport_pilot(world, position, orientation);
     }
 }
@@ -506,6 +528,7 @@ fn flight_surface_radius(
     planet::terrain_radius(direction)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_flight_command(
     config: Res<FlightViewConfig>,
     scene: Res<CelestialScene>,
@@ -523,8 +546,13 @@ fn update_flight_command(
         ),
         With<PilotShip>,
     >,
+    space: crate::SimSpace,
 ) {
+    let o = space.origin();
     for (position, rotation, velocity, angular, mut controller) in &mut ships {
+        // The route and the tour steer by planet points, which hold half a
+        // millimetre (`world-frames`): they only aim, never integrate.
+        let at = o.query_point(position.0);
         let gravity = scene
             .gravity_at(frame.0.origin + position.0.as_dvec3())
             .acceleration()
@@ -539,14 +567,14 @@ fn update_flight_command(
         };
         if config.mode == FlyMode::Route {
             let (acceleration, target_rotation) =
-                route::route_command(position.0, velocity.0, &route, &config);
+                route::route_command(at, velocity.0, &route, &config);
             intent.target_rotation = target_rotation;
             controller.input.thrust =
                 (rotation.0.inverse() * (acceleration - gravity) / config.acceleration).as_dvec3();
             controller.input.inertial_dampeners = false;
         } else if config.mode == FlyMode::Tour {
             let (acceleration, target_rotation) =
-                tour::tour_command(position.0, velocity.0, progress.normal, *config);
+                tour::tour_command(at, velocity.0, progress.normal, *config);
             intent.target_rotation = target_rotation;
             controller.input.thrust =
                 (rotation.0.inverse() * (acceleration - gravity) / config.acceleration).as_dvec3();
@@ -590,7 +618,9 @@ fn protect_terrain_clearance(
     terrain: Option<Res<planet::PlanetContact>>,
     mut progress: ResMut<TourProgress>,
     mut ships: Query<(&mut Position, &mut LinearVelocity, &mut ProtectedPosition), With<PilotShip>>,
+    space: crate::SimSpace,
 ) {
+    let o = space.origin();
     for (mut position, mut velocity, mut previous) in &mut ships {
         // Short conservative samples also catch a narrow ridge crossed in one tick.
         // This height-shell guard cannot represent caves or overhangs.
@@ -599,11 +629,11 @@ fn protect_terrain_clearance(
         let samples = ((end - start).length() / 3.0).ceil().clamp(1.0, 64.0) as u32;
         for sample in 1..=samples {
             let point = start.lerp(end, sample as f32 / samples as f32);
-            let up = point.normalize_or(config.spawn_direction.normalize_or(Vec3::Y));
+            let up = o.up_at(point);
             let safe_radius = flight_surface_radius(up, config.mode, terrain.as_deref())
                 + config.minimum_clearance;
-            if point.length() < safe_radius {
-                position.0 = up * safe_radius;
+            if o.radius_at(point) < safe_radius as f64 {
+                position.0 = o.with_radius(point, safe_radius as f64);
                 let inward_speed = velocity.0.dot(up).min(0.0);
                 velocity.0 -= up * inward_speed;
                 progress.protection_events += 1;
@@ -634,16 +664,18 @@ fn publish_flight_readout(
         ),
         With<PilotShip>,
     >,
+    space: crate::SimSpace,
 ) {
+    let o = space.origin();
     for (position, velocity, angular, command) in &ships {
-        let direction = position.0.normalize_or(Vec3::Y);
-        let clearance =
-            position.0.length() - flight_surface_radius(direction, config.mode, terrain.as_deref());
+        let direction = o.up_at(position.0);
+        let radius = o.radius_at(position.0) as f32;
+        let clearance = radius - flight_surface_radius(direction, config.mode, terrain.as_deref());
         let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(direction).degrees();
         *readout = FlightReadout {
-            position: position.0,
+            position: o.query_point(position.0),
             speed: velocity.0.length(),
-            altitude: position.0.length() - planet::PLANET_RADIUS,
+            altitude: radius - planet::PLANET_RADIUS,
             clearance,
             latitude_deg,
             longitude_deg,
@@ -757,6 +789,7 @@ fn update_route_camera(
     time: Res<Time>,
     mut route: ResMut<RouteState>,
     ships: Query<&Position, With<PilotShip>>,
+    space: crate::SimSpace,
 ) {
     if config.mode != FlyMode::Route {
         return;
@@ -764,7 +797,8 @@ fn update_route_camera(
     let Ok(position) = ships.single() else {
         return;
     };
-    let target = route::camera_target(position.0, &route, &config, route.elapsed_s);
+    let at = space.origin().query_point(position.0);
+    let target = route::camera_target(at, &route, &config, route.elapsed_s);
     route::ease_camera(
         &mut route,
         target,

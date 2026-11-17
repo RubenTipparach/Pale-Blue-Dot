@@ -11,7 +11,7 @@
 
 use super::chart::{Chart, Patch};
 use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
-use glam::{Vec2, Vec3};
+use glam::{DVec3, Vec2, Vec3};
 use std::collections::BTreeMap;
 
 pub mod cog;
@@ -65,6 +65,26 @@ impl Frame {
     pub fn local(&self, p: Vec3) -> Vec3 {
         let d = p - self.origin;
         Vec3::new(d.dot(self.x), d.dot(self.y), d.dot(self.z))
+    }
+
+    /// An f64 point (in the space the frame's origin is in) in the frame:
+    /// subtracted in f64, so a point a few metres from the origin is exact
+    /// however far both are from the space's zero (`world-frames` 10.3).
+    pub fn local_f64(&self, p: DVec3) -> Vec3 {
+        let d = p - self.origin.as_dvec3();
+        Vec3::new(
+            d.dot(self.x.as_dvec3()) as f32,
+            d.dot(self.y.as_dvec3()) as f32,
+            d.dot(self.z.as_dvec3()) as f32,
+        )
+    }
+
+    /// A point in the frame, in its space, in f64.
+    pub fn world_f64(&self, p: Vec3) -> DVec3 {
+        self.origin.as_dvec3()
+            + self.x.as_dvec3() * f64::from(p.x)
+            + self.y.as_dvec3() * f64::from(p.y)
+            + self.z.as_dvec3() * f64::from(p.z)
     }
 
     fn world_dir(&self, n: Vec3) -> Vec3 {
@@ -415,7 +435,11 @@ impl BuildingSolids {
     /// Whether a body centred at `centre` (planet-local), `half_height`
     /// tall each way and `radius` round, is in any solid.
     pub fn holds(&self, centre: Vec3, half_height: f32, radius: f32) -> bool {
-        let p = self.frame.local(centre);
+        self.holds_in(self.frame.local(centre), half_height, radius)
+    }
+
+    /// [`BuildingSolids::holds`] for a point already in the frame.
+    pub fn holds_in(&self, p: Vec3, half_height: f32, radius: f32) -> bool {
         if Vec2::new(p.x, p.z).length() > self.reach_m + radius {
             return false;
         }
@@ -428,6 +452,16 @@ impl BuildingSolids {
     /// above that, the ceiling; both as planet-local radii.
     pub fn stand(&self, point: Vec3, reach: f32) -> (Option<f32>, Option<f32>) {
         let p = self.frame.local(point);
+        let (floor, ceiling) = self.stand_in(p, reach);
+        let radius = |y: f32| self.frame.world(Vec3::new(p.x, y, p.z)).length();
+        (floor.map(radius), ceiling.map(radius))
+    }
+
+    /// [`BuildingSolids::stand`] for a point already in the frame, the floor
+    /// and the ceiling as heights in the frame (its `y`): the caller makes
+    /// them radii in whatever precision its space needs (`world-frames`
+    /// 10.3).
+    pub fn stand_in(&self, p: Vec3, reach: f32) -> (Option<f32>, Option<f32>) {
         let plan = Vec2::new(p.x, p.z);
         if self.surfaces.is_empty() || plan.length() > self.reach_m {
             return (None, None);
@@ -446,8 +480,7 @@ impl BuildingSolids {
             .filter(|s| s.1 > p.y + reach && s.0 > p.y)
             .map(|s| s.0)
             .min_by(f32::total_cmp);
-        let radius = |y: f32| self.frame.world(Vec3::new(p.x, y, p.z)).length();
-        (floor.map(radius), ceiling.map(radius))
+        (floor, ceiling)
     }
 
     /// The way out of whatever solid holds a body centred at `centre`: from
@@ -455,7 +488,12 @@ impl BuildingSolids {
     /// along the ground. A refused move slides along the face this is the
     /// normal of (`tenebris-towns` section 4).
     pub fn push_normal(&self, centre: Vec3, half_height: f32, radius: f32) -> Option<Vec3> {
-        let p = self.frame.local(centre);
+        self.push_normal_in(self.frame.local(centre), half_height, radius)
+    }
+
+    /// [`BuildingSolids::push_normal`] for a point already in the frame; the
+    /// normal is along the frame's axes.
+    pub fn push_normal_in(&self, p: Vec3, half_height: f32, radius: f32) -> Option<Vec3> {
         let plan = Vec2::new(p.x, p.z);
         let shut: Vec<Solid> = self
             .doors
@@ -498,13 +536,20 @@ impl BuildingSolids {
     /// door's lintel (the design's slice 2a).
     pub fn ceiling(&self, centre: Vec3, radius: f32) -> Option<f32> {
         let p = self.frame.local(centre);
+        self.ceiling_in(p, radius)
+            .map(|y| self.frame.world(Vec3::new(p.x, y, p.z)).length())
+    }
+
+    /// [`BuildingSolids::ceiling`] for a point already in the frame, as a
+    /// height in the frame.
+    pub fn ceiling_in(&self, p: Vec3, radius: f32) -> Option<f32> {
         if Vec2::new(p.x, p.z).length() > self.reach_m + radius {
             return None;
         }
         self.solids
             .iter()
             .filter(|s| s.y0 >= p.y && s.covers(p.x, p.z, radius))
-            .map(|s| self.frame.world(Vec3::new(p.x, s.y0, p.z)).length())
+            .map(|s| s.y0)
             .min_by(f32::total_cmp)
     }
 }

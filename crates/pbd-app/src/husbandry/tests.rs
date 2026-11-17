@@ -393,3 +393,131 @@ fn find_a_coastal_start_with_hens() {
     }
     assert!(!found.is_empty());
 }
+
+/// `world-frames` 10.6: an animal striding across the ground, `steps` steps
+/// at `speed`, on a sphere of `radius`, the origin following it (`follow`)
+/// or held at the planet's centre (the yard before). The worst per-step
+/// planet-frame move against its intended `facing * speed * dt`, m, and the
+/// rebases crossed.
+fn stride_error(radius: f64, speed: f32, steps: usize, follow: bool) -> (f64, u32) {
+    let (errors, rebases) = stride_errors(radius, speed, steps, follow);
+    (errors.iter().copied().fold(0.0, f64::max), rebases)
+}
+
+/// Every step's error of [`stride_error`], in order.
+fn stride_errors(radius: f64, speed: f32, steps: usize, follow: bool) -> (Vec<f64>, u32) {
+    use bevy::math::DVec3;
+    use pbd_core::world_frame::{ORIGIN_CELL_M, WorldPos};
+    let home = crate::sim_origin::HOME;
+    let dt = 1.0 / 60.0;
+    let ground = move |_: Vec3| radius;
+    let start = DVec3::new(0.62, 0.41, -0.67).normalize() * radius;
+    let mut o = if follow {
+        SimOrigin::new(home, (start / ORIGIN_CELL_M).round() * ORIGIN_CELL_M)
+    } else {
+        SimOrigin::new(home, DVec3::ZERO)
+    };
+    let mut pos = o.to_local(WorldPos::new(home, start));
+    let mut facing = o.up_at(pos).any_orthonormal_vector();
+    let (mut errors, mut rebases) = (Vec::with_capacity(steps), 0);
+    for _ in 0..steps {
+        let before = o.to_world(pos).pos;
+        let intended = (facing * speed * dt).as_dvec3();
+        pos = stride(&o, pos, facing, speed, dt, ground);
+        let moved = o.to_world(pos).pos - before;
+        errors.push((moved - intended).length());
+        // As `step` keeps the facing along the ground.
+        let up = o.up_at(pos);
+        facing = (facing - up * facing.dot(up)).normalize();
+        if follow && let Some(r) = o.rebase_for(pos, ORIGIN_CELL_M) {
+            // What the yard's hook does at a rebase.
+            pos -= r.shift;
+            o = o.rebased(r);
+            rebases += 1;
+        }
+    }
+    (errors, rebases)
+}
+
+/// The median and the worst of a run's errors.
+fn p50_max(mut e: Vec<f64>) -> (f64, f64) {
+    e.sort_by(f64::total_cmp);
+    (e[e.len() / 2], e[e.len() - 1])
+}
+
+/// The numbers for `world-frames` 10.7 (`--ignored --nocapture`).
+#[test]
+#[ignore]
+fn stride_error_report() {
+    for (radius, speed, follow) in [
+        (4_800.0, 1.0, false),
+        (4_800.0, 1.0, true),
+        (4_800.0, 8.0, false),
+        (4_800.0, 8.0, true),
+        (4_800_000.0, 1.0, true),
+        (4_800_000.0, 8.0, true),
+    ] {
+        let (e, rebases) = stride_errors(radius, speed, 60 * 300, follow);
+        let (p50, max) = p50_max(e);
+        eprintln!(
+            "STRIDE r {radius} m, {speed} m/s, {}: p50 {:.3} um, max {:.3} um, {rebases} rebases",
+            if follow { "local" } else { "planet-centred" },
+            p50 * 1e6,
+            max * 1e6
+        );
+    }
+}
+
+/// An animal walking and running across rebases moves continuously: every
+/// step's planet-frame move is its intended step to 1e-5 m, at the home
+/// planet's radius and a thousand times it. Planet-centred, as the yard
+/// was, a step is off by more (the before).
+#[test]
+fn an_animal_strides_continuously_across_a_rebase() {
+    for radius in [4_800.0, 4_800_000.0] {
+        for (speed, steps) in [(1.0, 60 * 300), (8.0, 60 * 60)] {
+            let (error, rebases) = stride_error(radius, speed, steps, true);
+            eprintln!("stride {speed} m/s at {radius} m, local: {error:e} m, {rebases} rebases");
+            assert!(rebases > 0, "the walk crossed no rebase");
+            assert!(error < 1e-5, "local {error} at {speed} m/s, r {radius}");
+        }
+    }
+    let (planet, _) = stride_error(4_800.0, 1.0, 600, false);
+    eprintln!("stride 1 m/s at 4800 m, planet-centred: {planet:e} m");
+    assert!(planet > 1e-5, "planet-centred {planet}");
+}
+
+/// A rebase moves every animal's feet and goal by the shift, so each is
+/// where it was in the planet's frame.
+#[test]
+fn a_rebase_leaves_the_yard_where_it_was() {
+    use bevy::math::DVec3;
+    use pbd_core::world_frame::Rebase;
+    let home = crate::sim_origin::HOME;
+    let o = SimOrigin::new(home, DVec3::new(4352.0, 1920.0, -256.0));
+    let pos = Vec3::new(12.25, -3.5, 40.125);
+    let mut beast = Beast::new(
+        Who::Wild { seed: 7 },
+        0,
+        Sex::F,
+        Genome::default(),
+        pos,
+        o.up_at(pos),
+        Range::Around(o.up_at(pos), 6.0),
+        7,
+    );
+    beast.goal = Some(pos + Vec3::X * 2.0);
+    let (feet, goal) = (o.to_world(pos).pos, o.to_world(pos + Vec3::X * 2.0).pos);
+    let mut yard = Farmyard::default();
+    yard.beasts.push(beast);
+    let delta = DVec3::new(128.0, 0.0, -128.0);
+    let r = Rebase {
+        shift: delta.as_vec3(),
+        delta,
+    };
+    yard.rebase(r.shift);
+    let n = o.rebased(r);
+    let b = &yard.beasts[0];
+    assert!((n.to_world(b.pos).pos - feet).length() < 1e-6);
+    assert!((n.to_world(b.goal.unwrap()).pos - goal).length() < 1e-6);
+}

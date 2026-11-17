@@ -28,6 +28,7 @@ use pbd_core::fishing::{Angler, Controls, Event, Line, Phase};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Equipment, Item, Tool};
 use pbd_core::sea::LocalSea;
+use pbd_core::world_frame::SimOrigin;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -178,8 +179,30 @@ pub struct FishSet;
 
 pub struct FishPlugin;
 
+/// The fishery's local positions move with a rebase (`world-frames`): the
+/// line's float, every school, the drawn float's last place and the
+/// under-water watch's eye.
+fn rebase_fishery(world: &mut World, shift: Vec3) {
+    if let Some(mut fishery) = world.get_resource_mut::<Fishery>() {
+        fishery.line.rebase(shift);
+        for school in &mut fishery.schools {
+            school.rebase(shift);
+        }
+    }
+    if let Some(mut drawn) = world.get_resource_mut::<draw::DrawnFloat>() {
+        drawn.rebase(shift);
+    }
+    if let Some(mut watch) = world.get_resource_mut::<WatchHook>()
+        && let Some((eye, target)) = watch.view.as_mut()
+    {
+        *eye -= shift;
+        *target -= shift;
+    }
+}
+
 impl Plugin for FishPlugin {
     fn build(&self, app: &mut App) {
+        crate::sim_origin::add_rebase_hook(app, rebase_fishery);
         app.add_plugins(places::SeaPlacesPlugin)
             .init_resource::<Fishery>()
             .add_message::<crate::missions::Did>()
@@ -187,6 +210,7 @@ impl Plugin for FishPlugin {
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
+            .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
                 Update,
@@ -365,17 +389,29 @@ fn fish(
         .and_then(|e| world.vehicles.get(e).ok())
         .filter(|v| v.craft.kind.paddled())
         .map(|v| &v.craft);
+    // The fishery lives in local space (`world-frames`): the feet, the eye,
+    // the line and the schools; the water and the air are asked at planet
+    // points.
+    let o = crate::sim_origin::from_render_frame(&world.frame);
+    let home = |p: bevy::math::DVec3| {
+        o.to_local(pbd_core::world_frame::WorldPos::new(
+            crate::sim_origin::HOME,
+            p,
+        ))
+    };
     let feet = match afloat {
-        Some(craft) => Some(craft.exit().as_vec3()),
-        None => world.walkers.iter().next().map(|p| {
-            let at = (p.0.as_dvec3() - world.frame.physics_center()).as_vec3();
-            at - at.normalize_or(Vec3::Y) * HALF_HEIGHT
-        }),
+        Some(craft) => Some(home(craft.exit())),
+        None => world
+            .walkers
+            .iter()
+            .next()
+            .map(|p| p.0 - o.up_at(p.0) * HALF_HEIGHT),
     };
     let Some(feet) = feet else {
         return;
     };
-    let up = feet.normalize_or(Vec3::Y);
+    pbd_core::world_frame::check_local("angler", feet);
+    let up = o.up_at(feet);
     let roster = world.fauna.0.roster(&world.body.0);
     let settings = &world.fauna.0;
     let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -409,7 +445,7 @@ fn fish(
                 roster,
                 None,
                 None,
-                fishery.line.float,
+                o.query_point(fishery.line.float),
                 false,
             );
         }
@@ -430,14 +466,14 @@ fn fish(
         // leaves the paddler, not the camera behind them.
         Some(craft) => world.vehicle_cameras.iter().next().map(|t| {
             (
-                craft.eye().as_vec3(),
+                home(craft.eye()),
                 t.forward().as_vec3(),
                 t.right().as_vec3(),
                 t.up().as_vec3(),
             )
         }),
         None => world.cameras.iter().next().map(|t| {
-            let eye = (t.translation().as_dvec3() - world.frame.center).as_vec3();
+            let eye = crate::sim_origin::local_from_render(&world.frame, t.translation());
             (
                 eye,
                 t.forward().as_vec3(),
@@ -469,9 +505,16 @@ fn fish(
         } else {
             feet
         };
-        let water = PlanetWater::at(sea, air, contact, &fishery.beds, around, seconds);
+        let water = PlanetWater::at(
+            sea,
+            air,
+            contact,
+            &fishery.beds,
+            o.query_point(around),
+            seconds,
+        );
         let factor = air.map_or(1.0, |air| {
-            let sample = air.now.sample(around.normalize_or(Vec3::Y));
+            let sample = air.now.sample(o.up_at(around));
             settings
                 .fishing
                 .bite_factor(sample.cover, sample.rain_rate * 3600.0)
@@ -486,6 +529,7 @@ fn fish(
             world.meals.as_deref().map_or(1.0, |m| m.steady),
         );
         let events = fishery.line.step(
+            &o,
             dt,
             controls,
             &angler,
@@ -501,9 +545,9 @@ fn fish(
             // The rod's sounds (`audio-and-ambience` build decision 5).
             heard.write(crate::audio::hooks::FishHeard {
                 event,
-                at: fishery.line.float,
+                at: o.query_point(fishery.line.float),
             });
-            let float = fishery.line.float;
+            let float = o.query_point(fishery.line.float);
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -568,9 +612,16 @@ fn fish(
             let Some(species) = roster.get(school.species as usize) else {
                 continue;
             };
-            let water = PlanetWater::at(sea, air, contact, beds, school.anchor, seconds);
+            let water = PlanetWater::at(
+                sea,
+                air,
+                contact,
+                beds,
+                o.query_point(school.anchor),
+                seconds,
+            );
             school.notice(eye, species, SHY_HOLD_S);
-            school.step(step, species, &settings.flock, &water, splash);
+            school.step(&o, step, species, &settings.flock, &water, splash);
         }
     }
     // `PBD_LIFE_TRACE=1`, a measurement instrument (`ocean-environments`
@@ -613,7 +664,9 @@ fn fish(
         fishery.spawn_s = 0.0;
         drop_far(fishery, feet, settings.spawn.despawn_m);
         if let Some(air) = air {
-            try_spawn(fishery, feet, sea, air, contact, roster, settings, seconds);
+            try_spawn(
+                &o, fishery, feet, sea, air, contact, roster, settings, seconds,
+            );
         }
     }
 }
@@ -630,7 +683,8 @@ fn fish(
 /// player meets.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct WatchHook {
-    /// The eye and the point it looks at, planet-local, for this cast.
+    /// The eye and the point it looks at, local (`world-frames`), for this
+    /// cast.
     view: Option<(Vec3, Vec3)>,
     /// The angler's own camera, put back at the start of the next frame.
     angler: Option<(Transform, GlobalTransform)>,
@@ -670,22 +724,23 @@ fn watch_hook_view(
     let Ok((mut transform, global)) = cameras.single_mut() else {
         return;
     };
+    let o = crate::sim_origin::from_render_frame(&frame);
     let view = *watch.view.get_or_insert_with(|| {
         let float = line.float;
-        let up = float.normalize_or(Vec3::Y);
-        let eye = (transform.translation.as_dvec3() - frame.center).as_vec3();
+        let up = o.up_at(float);
+        let eye = crate::sim_origin::local_from_render(&frame, transform.translation);
         let toward = eye - float;
         let toward = (toward - up * toward.dot(up)).normalize_or(up.any_orthonormal_vector());
         let side = up.cross(toward).normalize_or(up.any_orthonormal_vector());
-        let lure = line.lure();
+        let lure = line.lure(&o);
         let target = lure + up * 0.1;
         (target + side * 0.85 + toward * 0.2 - up * 0.15, target)
     });
     watch.angler = Some((*transform, *global));
     let (eye, target) = view;
-    let up = eye.normalize_or(Vec3::Y);
-    let at = (frame.center + eye.as_dvec3()).as_vec3();
-    let look = (frame.center + target.as_dvec3()).as_vec3();
+    let up = o.up_at(eye);
+    let at = crate::render_origin::render_from_physics(&frame, eye);
+    let look = crate::render_origin::render_from_physics(&frame, target);
     *transform = Transform::from_translation(at).looking_at(look, up);
     for mut v in &mut held {
         *v = Visibility::Hidden;
@@ -786,7 +841,9 @@ fn life_script(
             anchor,
             seconds,
         );
-        let school = School::spawn(index as u16, species, anchor, 0x11fe, &water);
+        let o = crate::sim_origin::from_render_frame(&world.frame);
+        let local = o.at(direction.as_dvec3(), f64::from(sea.radius));
+        let school = School::spawn(&o, index as u16, species, local, 0x11fe, &water);
         info!(
             "life script: {} x{} put {metres} m ahead",
             species.id,
@@ -932,6 +989,7 @@ fn drop_far(fishery: &mut Fishery, feet: Vec3, despawn_m: f32) {
 /// there and is under its cap.
 #[allow(clippy::too_many_arguments)]
 fn try_spawn(
+    o: &pbd_core::world_frame::SimOrigin,
     fishery: &mut Fishery,
     feet: Vec3,
     sea: &Sea,
@@ -955,9 +1013,12 @@ fn try_spawn(
     if roster.is_empty() || (!fish_room && !life_room) {
         return;
     }
-    let up = feet.normalize_or(Vec3::Y);
+    // The place is found by planet directions; the school is put in local
+    // space (`world-frames`).
+    let up = o.up_at(feet);
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
+    let feet = o.query_point(feet);
     let bearing = fishery.rng.range(0.0, std::f32::consts::TAU);
     let distance = fishery
         .rng
@@ -1026,7 +1087,8 @@ fn try_spawn(
     );
     let anchor = direction * fresh.unwrap_or(sea.radius);
     let water = PlanetWater::at(sea, Some(air), contact, &fishery.beds, anchor, seconds);
-    let mut school = School::spawn(pick as u16, &roster[pick], anchor, seed, &water);
+    let local = o.at(direction.as_dvec3(), f64::from(fresh.unwrap_or(sea.radius)));
+    let mut school = School::spawn(o, pick as u16, &roster[pick], local, seed, &water);
     // Smaller water, smaller fish (`fishing-anywhere` design 3).
     if let (Some(top), Some(contact)) = (fresh, contact) {
         school.scale = body_scale(direction, top - floor, |p| {
@@ -1083,7 +1145,7 @@ fn report(
     roster: &[Species],
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
-    float: Vec3,
+    float_at: Vec3,
     baited: bool,
 ) -> Vec<crate::missions::Did> {
     use pbd_core::missions::Kind;
@@ -1138,7 +1200,7 @@ fn report(
                 did.push(Did::new(Kind::Species, kind, 1));
                 // The sea or fresh water: water standing above the sea's
                 // level is a river or a lake ("Off the shore").
-                let fresh = float.length() - crate::planet::PLANET_RADIUS > 0.6;
+                let fresh = float_at.length() - crate::planet::PLANET_RADIUS > 0.6;
                 did.push(Did::new(
                     Kind::Waters,
                     if fresh { "fresh" } else { "sea" },
@@ -1330,7 +1392,7 @@ pub(crate) mod draw {
     impl DrawnFloat {
         /// One frame: `float`, `phase` and `run` are the line's after this
         /// frame's step.
-        pub fn update(&mut self, dt: f32, float: Vec3, phase: Phase, run: f32) {
+        pub fn update(&mut self, o: &SimOrigin, dt: f32, float: Vec3, phase: Phase, run: f32) {
             let hooked = phase == Phase::Hooked;
             let jumped = match self.last {
                 Some((was, Phase::Hooked, was_run))
@@ -1366,7 +1428,7 @@ pub(crate) mod draw {
                 self.velocity = (v0 - c * (w * dt)) * e;
             }
             // Along the water: no part of it toward the planet's centre.
-            let up = float.normalize_or(Vec3::Y);
+            let up = o.up_at(float);
             self.offset -= up * self.offset.dot(up);
             self.velocity -= up * self.velocity.dot(up);
             if !(self.offset.is_finite() && self.velocity.is_finite()) {
@@ -1377,25 +1439,44 @@ pub(crate) mod draw {
 
         /// The float as drawn: `float` moved by the offset and kept at its
         /// height over the centre.
-        pub fn drawn(&self, float: Vec3) -> Vec3 {
+        pub fn drawn(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
             if self.offset == Vec3::ZERO {
                 return float;
             }
-            (float + self.offset).normalize_or(Vec3::Y) * float.length()
+            o.with_radius(float + self.offset, o.radius_at(float))
         }
 
         /// How far the drawn float is from the line's: what the fish on the
         /// line, held at the lure, is drawn moved by.
-        pub fn shift(&self, float: Vec3) -> Vec3 {
-            self.drawn(float) - float
+        pub fn shift(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
+            self.drawn(o, float) - float
+        }
+
+        /// The origin was rebased: the float it last saw moves with it.
+        pub fn rebase(&mut self, shift: Vec3) {
+            if let Some((float, _, _)) = self.last.as_mut() {
+                *float -= shift;
+            }
         }
     }
 
     /// Ease the float's jumps (`movement-smoothness` design 7.1), after the
     /// line has stepped and before anything is drawn from it.
-    pub fn ease_float(time: Res<Time>, fishery: Res<Fishery>, mut drawn: ResMut<DrawnFloat>) {
+    pub fn ease_float(
+        time: Res<Time>,
+        fishery: Res<Fishery>,
+        mut drawn: ResMut<DrawnFloat>,
+        space: crate::SimSpace,
+    ) {
         let line = &fishery.line;
-        drawn.update(time.delta_secs().min(0.1), line.float, line.phase, line.run);
+        let o = space.origin();
+        drawn.update(
+            &o,
+            time.delta_secs().min(0.1),
+            line.float,
+            line.phase,
+            line.run,
+        );
     }
 
     #[derive(Component)]
@@ -1406,6 +1487,129 @@ pub(crate) mod draw {
 
     #[derive(Component)]
     pub struct MeterFill;
+
+    /// How quickly a creature's drawn heading follows its step's, s: the
+    /// time constant of its easing (`movement-smoothness` design 8.2), a
+    /// little over two of the school's 30 Hz steps.
+    pub(crate) const HEADING_EASE_S: f32 = 0.08;
+
+    /// The fastest a creature's drawn heading turns, rad/s (540 degrees a
+    /// second: right round in a third of a second), so even a step that
+    /// reverses it is drawn as a turn.
+    pub(crate) const HEADING_TURN_MAX: f32 = 3.0 * std::f32::consts::PI;
+
+    /// A step slower than this, m/s, says nothing about which way a creature
+    /// faces: it keeps the heading it was drawn with.
+    const HEADING_MIN_MPS: f32 = 0.01;
+
+    /// How each creature is drawn (`movement-smoothness` design 8): the
+    /// heading it was drawn along last frame, eased toward its latest step's
+    /// so a turn is spread over the frames between steps; the heading a fish
+    /// at the lure took the lure with, which it keeps, level, while it is
+    /// held; and this frame's forward and up as the mesh was built, which the
+    /// motion trace reads. Draw only: nothing in the rules reads it.
+    #[derive(Resource, Default, Debug)]
+    pub struct DrawnHeadings {
+        /// This frame's drawn forward and up, by school seed and id.
+        pub map: HashMap<(u64, u32), Heading>,
+        eased: HashMap<(u64, u32), Eased>,
+        frame: u64,
+    }
+
+    /// One creature's drawn heading.
+    #[derive(Clone, Copy, Debug)]
+    pub struct Heading {
+        pub forward: Vec3,
+        pub up: Vec3,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct Eased {
+        forward: Vec3,
+        /// Held at the lure: the level heading it took the lure with.
+        held: Option<Vec3>,
+        seen: u64,
+    }
+
+    impl DrawnHeadings {
+        /// A new frame: what was drawn last frame is cleared from `map`.
+        pub(crate) fn begin(&mut self) {
+            self.frame += 1;
+            self.map.clear();
+        }
+
+        /// Forget the creatures not drawn this frame.
+        pub(crate) fn end(&mut self) {
+            let frame = self.frame;
+            self.eased.retain(|_, e| e.seen == frame);
+        }
+
+        /// The heading creature `key` is drawn along this frame, unit:
+        /// `step` is the heading its latest step gives (any length), `up`
+        /// the local up at it, `held` whether it is held at the lure.
+        pub(crate) fn ease(
+            &mut self,
+            key: (u64, u32),
+            step: Vec3,
+            up: Vec3,
+            held: bool,
+            dt: f32,
+        ) -> Vec3 {
+            let level = |f: Vec3| (f - up * f.dot(up)).normalize_or(up.any_orthonormal_vector());
+            let moving = step.length() >= HEADING_MIN_MPS && step.is_finite();
+            let frame = self.frame;
+            let Some(e) = self.eased.get_mut(&key) else {
+                let f = if moving {
+                    step.normalize()
+                } else {
+                    up.any_orthonormal_vector()
+                };
+                let f = if held { level(f) } else { f };
+                self.eased.insert(
+                    key,
+                    Eased {
+                        forward: f,
+                        held: held.then_some(f),
+                        seen: frame,
+                    },
+                );
+                return f;
+            };
+            let last = e.forward;
+            let target = if held {
+                level(*e.held.get_or_insert_with(|| level(last)))
+            } else {
+                e.held = None;
+                if moving { step.normalize() } else { last }
+            };
+            let (t, max) = if dt.is_finite() && dt > 0.0 {
+                (1.0 - (-dt / HEADING_EASE_S).exp(), HEADING_TURN_MAX * dt)
+            } else {
+                (0.0, 0.0)
+            };
+            let f = turn_toward(last, target, up, t, max);
+            e.forward = f;
+            e.seen = frame;
+            f
+        }
+    }
+
+    /// `from` turned `t` (0 to 1) of the way to `to`, both unit, and never
+    /// more than `max` radians; a reversal turns about `up`, never about an
+    /// arbitrary axis.
+    pub(crate) fn turn_toward(from: Vec3, to: Vec3, up: Vec3, t: f32, max: f32) -> Vec3 {
+        let angle = from.angle_between(to);
+        if !angle.is_finite() || angle < 1e-6 {
+            return to;
+        }
+        let by = (angle * t.clamp(0.0, 1.0)).min(max.max(0.0));
+        let axis = if from.dot(to) < -0.9999 {
+            up
+        } else {
+            from.cross(to).normalize_or(up)
+        };
+        (Quat::from_axis_angle(axis, by) * from).normalize_or(to)
+    }
 
     /// The float, the line and the HUD line; the rod is hung on the walking
     /// camera once there is one.
@@ -1591,6 +1795,8 @@ pub(crate) mod draw {
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         float: Res<DrawnFloat>,
+        mut headings: ResMut<DrawnHeadings>,
+        time: Res<Time>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
             Entity,
@@ -1616,23 +1822,27 @@ pub(crate) mod draw {
         // sea's tided one otherwise, never the mean sea sphere.
         let under = super::places::UnderWater::of(water.as_deref());
         let seconds = now.map_or(0.0, |(seconds, _)| seconds);
+        let o = crate::sim_origin::from_render_frame(&frame);
         let dim = |school: &School| {
             sea.as_deref().map(|sea| {
+                let anchor = o.query_point(school.anchor);
                 let water = PlanetWater::at(
                     sea,
                     air.as_deref(),
                     contact.as_deref(),
                     &fishery.beds,
-                    school.anchor,
+                    anchor,
                     seconds,
                 );
-                (water.surface(school.anchor), under)
+                (water.surface(anchor), under)
             })
         };
         let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
         // The fish on the line is drawn at the lure under the drawn float
         // (`movement-smoothness` 7.1).
-        let held = float.shift(fishery.line.float);
+        let held = float.shift(&o, fishery.line.float);
+        let dt = time.delta_secs().min(0.1);
+        headings.begin();
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.index) else {
@@ -1643,13 +1853,24 @@ pub(crate) mod draw {
                 continue;
             };
             seen[school_mesh.index] = true;
-            transform.translation = (frame.center + school.anchor.as_dvec3()).as_vec3();
+            transform.translation =
+                crate::render_origin::render_from_physics(&frame, school.anchor);
             let fade = fishery.fade_of(school);
             if faded.0 != fade {
                 faded.0 = fade;
             }
             if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
-                build(mesh, school, species, now, dim(school), alpha, held);
+                build(
+                    &o,
+                    mesh,
+                    school,
+                    species,
+                    now,
+                    dim(school),
+                    alpha,
+                    held,
+                    (&mut headings, dt),
+                );
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1664,7 +1885,17 @@ pub(crate) mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now, dim(school), alpha, held);
+            build(
+                &o,
+                &mut mesh,
+                school,
+                species,
+                now,
+                dim(school),
+                alpha,
+                held,
+                (&mut headings, dt),
+            );
             let handle = meshes.add(mesh);
             commands
                 .spawn((
@@ -1679,9 +1910,10 @@ pub(crate) mod draw {
                     // B23), not by Bevy's picture.
                     crate::field_light::LitLikeTerrain,
                     crate::field_light::Faded(fishery.fade_of(school)),
-                    Transform::from_translation(
-                        (frame.center + school.anchor.as_dvec3()).as_vec3(),
-                    ),
+                    Transform::from_translation(crate::render_origin::render_from_physics(
+                        &frame,
+                        school.anchor,
+                    )),
                     Visibility::default(),
                 ))
                 .with_children(|root| {
@@ -1693,6 +1925,7 @@ pub(crate) mod draw {
                     ));
                 });
         }
+        headings.end();
     }
 
     /// Where creature `i` of school `s` is drawn this frame, planet-local
@@ -1700,6 +1933,7 @@ pub(crate) mod draw {
     /// two steps: the point the mesh is built round, and the one the motion
     /// trace (`movement-smoothness`) follows.
     pub(crate) fn creature_drawn(
+        o: &SimOrigin,
         fishery: &Fishery,
         float: &DrawnFloat,
         s: usize,
@@ -1712,7 +1946,7 @@ pub(crate) mod draw {
                 school,
                 i,
                 fishery.step_alpha(step_hz),
-                float.shift(fishery.line.float),
+                float.shift(o, fishery.line.float),
             )
         })
     }
@@ -1743,6 +1977,7 @@ pub(crate) mod draw {
     /// its den.
     #[allow(clippy::too_many_arguments)]
     fn build(
+        o: &SimOrigin,
         mesh: &mut Mesh,
         school: &School,
         species: &Species,
@@ -1750,6 +1985,7 @@ pub(crate) mod draw {
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
         held: Vec3,
+        (headings, dt): (&mut DrawnHeadings, f32),
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
@@ -1758,7 +1994,7 @@ pub(crate) mod draw {
         for i in 0..school.len() {
             // Between the school's last two steps (`movement-smoothness`).
             let p = &drawn_at(school, i, alpha, held);
-            let up = p.normalize_or(Vec3::Y);
+            let up = o.up_at(*p);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
             });
@@ -1774,11 +2010,19 @@ pub(crate) mod draw {
                 * std::f32::consts::TAU;
             let v = school.velocities[i];
             let along = v - up * v.dot(up);
-            let flat = along.normalize_or(up.any_orthonormal_vector());
+            // The heading its step gives (a swimmer pitches with it), eased
+            // to over the frames between steps; a fish at the lure keeps the
+            // level heading it took the lure with, never turned by the
+            // lure's bob (`movement-smoothness` design 8.2).
+            let step = match species.mover {
+                fauna::Mover::School => v - up * v.dot(up) * 0.5,
+                _ => along,
+            };
+            let held_here = school.held.is_some_and(|(h, _)| h == i);
+            let eased = headings.ease((school.seed, id), step, up, held_here, dt);
+            let flat = (eased - up * eased.dot(up)).normalize_or(up.any_orthonormal_vector());
             let mut forward = match species.mover {
-                fauna::Mover::School => {
-                    (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector())
-                }
+                fauna::Mover::School => eased,
                 _ => flat,
             };
             // A crab walks sideways.
@@ -1818,9 +2062,12 @@ pub(crate) mod draw {
                 [1.0; 3]
             };
             if let Some((surface, water)) = dim {
-                tint = water.albedo(tint, surface - p.length());
+                tint = water.albedo(tint, (f64::from(surface) - o.radius_at(*p)) as f32);
             }
             let look = bodies::Look { t, phase, pose };
+            headings
+                .map
+                .insert((school.seed, id), Heading { forward, up: top });
             let place = bodies::Place {
                 origin,
                 forward,
@@ -1890,8 +2137,9 @@ pub(crate) mod draw {
         let out = rod_out && line.is_out();
         // The float as drawn: the line's, its hooked jumps eased out
         // (`movement-smoothness` 7.1).
-        let float = drawn.drawn(line.float);
-        let float_at = (frame.center + float.as_dvec3()).as_vec3();
+        let o = crate::sim_origin::from_render_frame(&frame);
+        let float = drawn.drawn(&o, line.float);
+        let float_at = crate::render_origin::render_from_physics(&frame, float);
         for (mut transform, mut visibility) in &mut floats {
             *visibility = if out {
                 Visibility::Visible
@@ -1899,7 +2147,7 @@ pub(crate) mod draw {
                 Visibility::Hidden
             };
             transform.translation = float_at;
-            transform.rotation = Quat::from_rotation_arc(Vec3::Y, float.normalize_or(Vec3::Y));
+            transform.rotation = Quat::from_rotation_arc(Vec3::Y, o.up_at(float));
         }
         for (mesh, mut transform, mut visibility) in &mut lines {
             *visibility = if out {
@@ -1924,8 +2172,12 @@ pub(crate) mod draw {
                 .map_or(crate::held::rod_tip(), |(held, pose)| {
                     held.posed(pose, crate::held::rod_tip())
                 });
-            let tip_local = (eye.transform_point(tip).as_dvec3() - frame.center).as_vec3();
-            transform.translation = (frame.center + tip_local.as_dvec3()).as_vec3();
+            // The line's shape is laid in local points (`world-frames`
+            // 10.1), from the drawn rod tip to the drawn float; the water is
+            // asked at planet query points.
+            let tip_render = eye.transform_point(tip);
+            let tip_local = crate::sim_origin::local_from_render(&frame, tip_render);
+            transform.translation = tip_render;
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
                 _ => 0.6,
@@ -1935,7 +2187,8 @@ pub(crate) mod draw {
             // back up): the water the float rides, with its waves and tide,
             // not the mean sea, which stands a metre over it at low water.
             // It ends on the top of the float, where it is tied.
-            let end = float + float.normalize_or(Vec3::Y) * FLOAT_TOP_M;
+            let end = float + o.up_at(float) * FLOAT_TOP_M;
+            let end_point = o.query_point(end);
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -1944,12 +2197,14 @@ pub(crate) mod draw {
                         air.as_deref(),
                         contact.as_deref(),
                         &fishery.beds,
-                        float,
+                        end_point,
                         seconds,
                     );
-                    line_points(tip_local, end, slack, |p| line_floor(&water, end, p))
+                    line_points(&o, tip_local, end, slack, |p| {
+                        line_floor(&water, end_point, o.query_point(p))
+                    })
                 }
-                None => line_points(tip_local, end, slack, |_| 0.0),
+                None => line_points(&o, tip_local, end, slack, |_| 0.0),
             };
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
@@ -2022,20 +2277,22 @@ pub(crate) mod draw {
     }
 
     /// The line's points, as offsets from the rod tip, from `tip` to
-    /// `float` (both planet-local; `float` is where the line is tied, the
-    /// top of the float): a curve that sags by `slack` toward the planet,
-    /// every point between the ends held `LINE_CLEARANCE_M` over `surface`
-    /// (the radius of the water under a point). The first point is the tip
+    /// `float` (both local, relative to `origin`; `float` is where the line
+    /// is tied, the top of the float): a curve that sags by `slack` toward
+    /// the planet, every point between the ends held `LINE_CLEARANCE_M` over
+    /// `surface` (the radius of the water under a local point), lifted
+    /// through the origin in f64. The first point is the tip
     /// and the last is the float, exactly: a float pulled under on a bite
     /// is still where the line ends (`fishing-and-equipment` design 4, the
     /// line's far end).
     pub(crate) fn line_points(
+        origin: &SimOrigin,
         tip: Vec3,
         float: Vec3,
         slack: f32,
         surface: impl Fn(Vec3) -> f32,
     ) -> Vec<Vec3> {
-        let down = -tip.normalize_or(Vec3::Y);
+        let down = -origin.up_at(tip);
         let last = LINE_POINTS - 1;
         (0..LINE_POINTS)
             .map(|k| {
@@ -2048,10 +2305,10 @@ pub(crate) mod draw {
                 let u = k as f32 / last as f32;
                 let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
                 let at = tip + offset;
-                let r = at.length();
-                let floor = surface(at) + LINE_CLEARANCE_M;
+                let r = origin.radius_at(at);
+                let floor = f64::from(surface(at) + LINE_CLEARANCE_M);
                 if r > 0.0 && r < floor {
-                    at * (floor / r) - tip
+                    origin.with_radius(at, floor) - tip
                 } else {
                     offset
                 }

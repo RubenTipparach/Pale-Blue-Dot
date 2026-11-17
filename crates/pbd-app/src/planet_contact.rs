@@ -37,6 +37,11 @@ pub struct SurfaceContact {
     /// one, which is what lets them wade in and swim rather than walk on the
     /// sheet as if it were a floor.
     pub floor_radius: f32,
+    /// `floor_radius` before its cast to f32 (`world-frames`): at a planet's
+    /// radius an f32 holds half a millimetre, so a walker stood on a tilted
+    /// facet by the f32 steps up and down a stair of half-millimetres. The
+    /// walker stands on this one.
+    pub floor_precise: f64,
 }
 
 /// What a body at one point stands between: the answer a walker reads. Inside
@@ -47,6 +52,8 @@ pub struct SurfaceContact {
 pub struct Stand {
     /// Top of the solid run at or below the feet: what you stand on.
     pub floor_radius: f32,
+    /// The floor in f64 (`SurfaceContact::floor_precise`).
+    pub floor_precise: f64,
     /// Bottom of the solid run above that, if any: what you hit your head on.
     pub ceiling_radius: Option<f32>,
     /// Positive where the feet are under the sea.
@@ -132,6 +139,7 @@ impl Tier {
             biome: cell.metadata[1],
             water_depth: (-height).max(0.),
             floor_radius: (normal.dot(center) / normal.dot(ray)) as f32 - (-height).max(0.),
+            floor_precise: normal.dot(center) / normal.dot(ray) - f64::from((-height).max(0.)),
         }
     }
 }
@@ -396,6 +404,7 @@ impl PlanetContact {
         let surface = self.sample(direction);
         let mut stand = Stand {
             floor_radius: surface.floor_radius,
+            floor_precise: surface.floor_precise,
             ceiling_radius: None,
             water_depth: surface.water_depth,
         };
@@ -415,6 +424,7 @@ impl PlanetContact {
             // the cave floor below - because the column and the record read
             // one `surface_m`. A walker stands on exactly what it can see.
             stand.floor_radius = PLANET_RADIUS + floor;
+            stand.floor_precise = f64::from(PLANET_RADIUS) + f64::from(floor);
         }
         stand.ceiling_radius = contact.ceiling.map(|c| PLANET_RADIUS + c);
         // And the water, which the column knows and the height field only
