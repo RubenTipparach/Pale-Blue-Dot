@@ -3,7 +3,9 @@
 //! drawn: the camera, the walker's physics body, the fishing float and one
 //! creature (the fish on the line, else the nearest one to the eye), beside
 //! the frame's wall time, how many fixed physics steps ran in it and how far
-//! the fixed clock had run past its last step. It runs in `Last`, after
+//! the fixed clock had run past its last step. The creature's drawn forward
+//! and up are written too (`movement-smoothness` design 8.3), with a key
+//! naming which creature it is. It runs in `Last`, after
 //! transforms propagate, so it reads what the frame draws. Changes nothing
 //! drawn.
 //!
@@ -44,7 +46,8 @@ impl Plugin for MotionTracePlugin {
              float_vx,float_vy,float_vz,fish_vx,fish_vy,fish_vz,\
              hand_rx,hand_ry,hand_rz,\
              origin_x,origin_y,origin_z,\
-             line_vx,line_vy,line_vz,tip_vx,tip_vy,tip_vz"
+             line_vx,line_vy,line_vz,tip_vx,tip_vy,tip_vz,\
+             fish_key,fish_fx,fish_fy,fish_fz,fish_ux,fish_uy,fish_uz"
         )
         .expect("PBD_MOTION_TRACE: cannot write");
         info!("MOTION_TRACE writing {}", path.display());
@@ -83,6 +86,7 @@ fn trace(
     frame: Res<crate::planet::PlanetRenderFrame>,
     fishery: Option<Res<Fishery>>,
     drawn_float: Option<Res<crate::fish::draw::DrawnFloat>>,
+    headings: Option<Res<crate::fish::draw::DrawnHeadings>>,
     lines: Query<(&GlobalTransform, &InheritedVisibility), With<crate::fish::draw::LineMesh>>,
     fauna: Option<Res<crate::config::FaunaConfig>>,
     cameras: Query<&GlobalTransform, With<WalkingCamera>>,
@@ -212,12 +216,16 @@ fn trace(
         Vec3::NAN
     };
     trace.followed = now_followed;
+    // The followed creature's drawn forward and up, as its mesh was built.
+    let pose = now_followed.and_then(|key| headings.as_deref()?.map.get(&key).copied());
+    let (fwd, top) = pose.map_or((Vec3::NAN, Vec3::NAN), |h| (h.forward, h.up));
+    let key = now_followed.map_or(String::new(), |(seed, id)| format!("{seed:x}-{id}"));
     let fish_view = view.transform_point3((frame.center + fish.as_dvec3()).as_vec3());
     let eye_local = local(eye);
     let float_local = local(float);
     let wall = now.duration_since(trace.start).as_secs_f64();
     let row = format!(
-        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7}",
+        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
         trace.frame,
         wall,
         real.delta_secs_f64(),
@@ -266,6 +274,13 @@ fn trace(
         tip_view.x,
         tip_view.y,
         tip_view.z,
+        key,
+        fwd.x,
+        fwd.y,
+        fwd.z,
+        top.x,
+        top.y,
+        top.z,
     );
     let _ = writeln!(trace.file, "{row}");
     if let Some(seconds) = trace.seconds

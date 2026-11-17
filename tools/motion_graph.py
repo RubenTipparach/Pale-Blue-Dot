@@ -34,7 +34,7 @@ def load(path: Path) -> list[dict]:
         for r in csv.DictReader(f):
             row = {}
             for k, v in r.items():
-                if k == "phase":
+                if k in ("phase", "fish_key"):
                     row[k] = v
                     continue
                 try:
@@ -210,6 +210,47 @@ def main() -> None:
         report.append(f"hooked float on screen, jitter: n {n}, rms {rms:.3f}, p50 {p50:.3f}, "
                       f"p99 {p99:.3f} px; frames over 20 px {jumps}; "
                       f"largest move in a frame {100 * max(moves, default=0):.1f} cm")
+    # The fish's drawn pose (`movement-smoothness` 8): how far its forward
+    # and its up turn from one frame to the next, the same fish both frames,
+    # split into the fish at the lure and fish swimming free.
+    if "fish_fx" in rows[0]:
+        def angle(a: tuple, b: tuple) -> float:
+            na, nb = math.hypot(*a), math.hypot(*b)
+            if not (na > 0 and nb > 0) or math.isnan(na) or math.isnan(nb):
+                return math.nan
+            d = sum(x * y for x, y in zip(a, b)) / (na * nb)
+            return math.degrees(math.acos(max(-1.0, min(1.0, d))))
+        turns = {"at the lure": [], "swimming": []}
+        for i in range(1, len(rows)):
+            r, p = rows[i], rows[i - 1]
+            if not r["fish_key"] or r["fish_key"] != p["fish_key"]:
+                continue
+            f = angle((r["fish_fx"], r["fish_fy"], r["fish_fz"]),
+                      (p["fish_fx"], p["fish_fy"], p["fish_fz"]))
+            u = angle((r["fish_ux"], r["fish_uy"], r["fish_uz"]),
+                      (p["fish_ux"], p["fish_uy"], p["fish_uz"]))
+            if math.isnan(f):
+                continue
+            group = "at the lure" if r["fish_held"] > 0.5 and p["fish_held"] > 0.5 else "swimming"
+            turns[group].append(max(f, 0.0 if math.isnan(u) else u))
+        for group, t in turns.items():
+            if not t:
+                continue
+            t = sorted(t)
+            q = lambda f: t[min(len(t) - 1, int(f * len(t)))]
+            # Pitch: how far the forward stands out of level, at the lure.
+            report.append(f"fish turn per frame, {group}: n {len(t)}, p50 {q(0.5):.2f}, "
+                          f"p99 {q(0.99):.2f}, max {t[-1]:.1f} deg; "
+                          f"frames over 30 deg {sum(1 for x in t if x > 30)}, "
+                          f"over 10 deg {sum(1 for x in t if x > 10)}")
+        held = [r for r in rows if r["fish_held"] > 0.5 and not math.isnan(r["fish_fx"])]
+        if held:
+            def pitch(r: dict) -> float:
+                up = (r["fish_x"], r["fish_y"], r["fish_z"])
+                return 90.0 - angle((r["fish_fx"], r["fish_fy"], r["fish_fz"]), up)
+            ps = [abs(pitch(r)) for r in held]
+            report.append(f"fish at the lure, nose out of level: max {max(ps):.1f} deg; "
+                          f"frames over 30 deg {sum(1 for x in ps if x > 30)} of {len(ps)}")
     if "line_vx" in rows[0]:
         gaps = []
         for r in rows:
