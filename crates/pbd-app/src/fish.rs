@@ -615,6 +615,7 @@ fn life_script(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     life: Option<Res<draw::LifeMaterial>>,
+    settings: Option<Res<crate::config::WaterSettings>>,
 ) {
     if script.placed || !world.walking.as_ref().is_some_and(|w| w.active) {
         return;
@@ -642,7 +643,8 @@ fn life_script(
         );
         let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
         let above = eye.length() > water.surface(eye);
-        let mesh = lineup(eye, look, &water, seconds, above);
+        let under = places::UnderWater::of(settings.as_deref());
+        let mesh = lineup(eye, look, &water, seconds, above, under);
         if let Some(life) = life {
             commands.spawn((
                 Name::new("Water life lineup"),
@@ -710,6 +712,7 @@ fn lineup(
     water: &impl fauna::Water,
     seconds: f64,
     floaters_up: bool,
+    under: places::UnderWater,
 ) -> Mesh {
     use bodies::{Look, Place, emit, model_for};
     use fauna::Pose;
@@ -767,11 +770,14 @@ fn lineup(
             phase: k as f32,
             pose,
         };
+        // Tinted by the water over it as the bed it lies on is (B23), so a
+        // body beside the sand can be read against it.
+        let tint = under.albedo([1.0; 3], water.surface(at) - radius);
         emit(
             body,
             &look,
             &place,
-            [1.0; 3],
+            tint,
             &mut positions,
             &mut colours,
             &mut uvs,

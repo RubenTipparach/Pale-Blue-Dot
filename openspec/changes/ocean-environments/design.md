@@ -1904,3 +1904,16 @@ as bright as before: most of the daylight is left there, so they are lit
 more than a bed 3.4 m down, by the water's own rule. Not filmed: a school in
 a lake or river over sea level (cause 4), and a lamp beside a school under
 water (the instrument's torch landed 7 m off).
+
+**The owner's view, measured (second pass).** The owner's fish are perch,
+a school. At their spot (`24.000 122.66`, `docs/screenshots/underwater-
+fish-light/owner-*`) the school is darker than the sand behind it (luma 34
+against 45) and keeps its yellow and red. A white body lying on the sand
+takes the sand's own transfer (linear 0.008, 0.13, 0.14 against 0.004,
+0.15, 0.19), so the fish are treated as the seabed is: the same light, depth
+tint and murk by distance. The difference is depth and distance: perch swim
+0.3 to 1 m under the surface, 3 to 4 m off, and keep about three times the
+red of a bed 2.4 m down and 5 m off. Tinting them further than the water
+over them would be a look of its own, for the owner to decide with the
+frames, and is not built here. The `--life lineup` instrument is tinted by
+its depth too, so a body can be read on the bed beside the sand.
