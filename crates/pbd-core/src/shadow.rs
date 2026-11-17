@@ -225,7 +225,11 @@ pub fn due_for(frame: u64, count: usize) -> [bool; CASCADES] {
             return false;
         }
         // The period of the cascade with as many coarser than it at full count.
-        let period = if i == 0 { 1 } else { PERIOD[CASCADES - count + i] };
+        let period = if i == 0 {
+            1
+        } else {
+            PERIOD[CASCADES - count + i]
+        };
         (frame + i as u64).is_multiple_of(period)
     })
 }
