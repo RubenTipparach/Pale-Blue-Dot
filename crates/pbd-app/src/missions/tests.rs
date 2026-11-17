@@ -79,6 +79,7 @@ fn every_kind_counts_from_its_message() {
                 unlocks: vec![],
                 after: vec![],
                 branch: String::new(),
+                icon: String::new(),
             })
             .collect(),
     };

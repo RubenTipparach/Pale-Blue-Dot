@@ -580,6 +580,9 @@ fn fishing(
             Event::Dry => sfx.play("float_dry", at),
             Event::Nibble { .. } => sfx.play("nibble_tick", at),
             Event::Bite { .. } => sfx.play("bite_splash", at),
+            // A fish on the hook (owner, 2026-11-17: "some sort of jingle
+            // when a fish is on the hook"); the catch has its chime.
+            Event::Hooked { .. } => sfx.play("hook_jingle", Where::Menu),
             Event::Snapped { .. } => sfx.play("line_snap", in_hand(&listener)),
             Event::Caught { .. } => {
                 sfx.play("catch_splash", at);

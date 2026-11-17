@@ -1009,3 +1009,31 @@ fn nothing_grows_where_water_stands() {
             .contains("if ((cell.metadata.y >> 25u) & 1u) == 1u { return false; }")
     );
 }
+
+/// `underwater-shafts`: the shafts seen from under the water are sampled at
+/// the same distances along every ray, laid over the shafts' own reach, and
+/// the scene's distance only clips the march. A march spread over the scene's
+/// distance put neighbouring pixels on unrelated parts of the shaft pattern
+/// wherever the depth stepped, and drew the scene's outline into the light.
+#[test]
+fn the_underwater_shafts_are_sampled_by_their_reach_not_the_scene() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let shafts = wgsl_fn_body(&src, "shafts");
+    for line in [
+        "let reach = view.under.y;",
+        "let steps = 16;",
+        "let d = min(reach*u*u, lo + 0.5*weight);",
+        "let lo = reach*u0*u0;",
+        "let stretch = reach*(u1*u1 - u0*u0);",
+        "if (lo >= dist) { break; }",
+        "let weight = clamp(dist - lo, 0.0, stretch);",
+        "SHAFT_MEAN, smoothstep(0.8, 2.5, weight));",
+        "gathered += bright*light_left(depth)*exp(-extinction*d)*weight;",
+    ] {
+        assert!(shafts.contains(line), "missing `{line}`");
+    }
+    assert!(
+        !shafts.contains("min(dist"),
+        "the shafts' march is spread over the scene's distance again"
+    );
+}

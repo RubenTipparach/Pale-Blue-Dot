@@ -78,7 +78,7 @@ const SEAL_M: f32 = LEVEE_M + LEVEE_FOOT_M;
 const NONE: u32 = u32::MAX;
 
 /// One lattice cell of the drainage map.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Node {
     /// The cell it drains into, or `NONE` for the sea.
     down: u32,
@@ -93,6 +93,7 @@ struct Node {
 }
 
 /// The body's drainage, built once per world.
+#[derive(Debug, PartialEq)]
 pub struct RiverMap {
     width: usize,
     height: usize,
@@ -143,8 +144,18 @@ impl RiverMap {
         Some(j as usize * self.width + i as usize)
     }
 
-    /// Build the drainage of `cfg`'s ground (with no rivers in it).
+    /// Build the drainage of `cfg`'s ground (with no rivers in it), its
+    /// ground sampled on every core.
     pub fn build(cfg: &TerrainConfig, settings: &RiverSettings) -> Self {
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+        Self::build_on(cfg, settings, threads)
+    }
+
+    /// [`Self::build`] on `threads` threads (`river-cache` design 2). The
+    /// lattice's altitudes are pure and independent, so they are sampled in
+    /// chunks on scoped threads and joined in order; the flood after them is
+    /// one thread. The map does not depend on the count.
+    pub fn build_on(cfg: &TerrainConfig, settings: &RiverSettings, threads: usize) -> Self {
         let width = (360.0 / settings.cell_deg).round() as usize;
         let height = (180.0 / settings.cell_deg).round() as usize;
         let mut map = Self {
@@ -167,9 +178,18 @@ impl RiverMap {
             ..*cfg
         };
         let sea = cfg.sea_level_m;
-        let alt: Vec<f32> = (0..width * height)
-            .map(|k| planet_gen::surface_altitude(&ground, map.centre(k)))
-            .collect();
+        let mut alt = vec![0.0f32; width * height];
+        let chunk = (width * height).div_ceil(threads.max(1)).max(1);
+        std::thread::scope(|scope| {
+            for (n, out) in alt.chunks_mut(chunk).enumerate() {
+                let (map, ground) = (&map, &ground);
+                scope.spawn(move || {
+                    for (i, a) in out.iter_mut().enumerate() {
+                        *a = planet_gen::surface_altitude(ground, map.centre(n * chunk + i));
+                    }
+                });
+            }
+        });
         // The priority flood, in a fixed order: the spill in millimetres,
         // then the index.
         let key = |m: f32| (m * 1000.0).round() as i64;
@@ -416,6 +436,18 @@ pub fn at(cfg: &TerrainConfig, d: Vec3) -> Option<RiverHere> {
     map(cfg, settings).at(cfg, settings, d)
 }
 
+/// Whether a river's banks reach within `extra_m` of `d`: the cheap read a
+/// caller that tests an area with [`floods`] (the map's pixel, `map-rivers`)
+/// makes first, since no water stands anywhere this says no.
+pub fn near(cfg: &TerrainConfig, d: Vec3, extra_m: f32) -> bool {
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return false;
+    };
+    map(cfg, settings)
+        .at_widened(cfg, settings, d, extra_m.max(0.0))
+        .is_some()
+}
+
 /// Where a river's valley and a margin past its banks are sealed from
 /// caves (`water-flow` E16): the altitude, metres over the radius, above
 /// which no cave opens in a column here. Four metres under the sea's level,
@@ -616,6 +648,22 @@ mod tests {
 
     fn v8() -> TerrainConfig {
         TerrainConfig::for_version(8).expect("version 8")
+    }
+
+    /// The drainage map built on many threads is the one-thread map, node for
+    /// node (`river-cache` design 2): a core count never changes a river.
+    #[test]
+    fn the_map_built_on_every_core_is_the_one_thread_map() {
+        let cfg = v8();
+        let settings = cfg.rivers.expect("version 8 has rivers");
+        let one = RiverMap::build_on(&cfg, &settings, 1);
+        for threads in [3, 7] {
+            assert!(
+                RiverMap::build_on(&cfg, &settings, threads) == one,
+                "the map on {threads} threads differs from one thread's"
+            );
+        }
+        assert!(one.rivers().count() > 0);
     }
 
     /// Every river cell drains to the sea, down a path whose water never

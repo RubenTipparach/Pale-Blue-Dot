@@ -349,6 +349,10 @@ pub enum MapMarker {
     /// list, oldest first (`starter-missions` G3).
     Mark(usize),
 }
+/// The label beside a waypoint's pin, "W1" ..., by the pin's place in the
+/// list (`waypoints` decision 5).
+#[derive(Component)]
+pub struct MapPinLabel(usize);
 /// The legend's buttons.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MapButton {
@@ -482,9 +486,10 @@ pub fn store_marks(save: &mut WorldSave, marks: &[pbd_core::map::Mark]) -> bool 
     true
 }
 
-/// The `--map-mark-east` capture instrument: once, with the map up and the
-/// player placed, add a waypoint at each distance given, the first due east
-/// of the player and each next one turned 72 degrees toward the north.
+/// The `--map-mark-east` capture instrument: once, with the map up, or in
+/// play once the walker is out (`waypoints` decision 8), add a waypoint at
+/// each distance given, the first due east of the player and each next one
+/// turned 72 degrees toward the north.
 pub fn launch_mark(
     launch: Res<MapLaunch>,
     screen: Res<Screen>,
@@ -495,7 +500,12 @@ pub fn launch_mark(
     let Some(mut save) = save else {
         return;
     };
-    if launch.mark_east_m.is_empty() || *done || *screen != Screen::Map {
+    let placed = match *screen {
+        Screen::Map => true,
+        Screen::Playing => player.walking(),
+        _ => false,
+    };
+    if launch.mark_east_m.is_empty() || *done || !placed {
         return;
     }
     let Some(at) = player.get() else {
@@ -855,16 +865,31 @@ pub fn spawn(
                     .spawn((MarkerLayer, full(), FocusPolicy::Pass))
                     .with_children(|markers| {
                         for k in 0..pbd_core::map::MARKS_MAX {
-                            markers.spawn((
-                                MapMarker::Mark(k),
-                                ImageNode::new(icons.pin.clone()),
-                                hidden(Node {
-                                    position_type: PositionType::Absolute,
-                                    width: px(16),
-                                    height: px(16),
-                                    ..default()
-                                }),
-                            ));
+                            markers
+                                .spawn((
+                                    MapMarker::Mark(k),
+                                    ImageNode::new(icons.pin.clone()),
+                                    hidden(Node {
+                                        position_type: PositionType::Absolute,
+                                        width: px(16),
+                                        height: px(16),
+                                        ..default()
+                                    }),
+                                ))
+                                .with_children(|pin| {
+                                    // "W1" beside the pin's head (`waypoints`
+                                    // decision 5).
+                                    pin.spawn((
+                                        MapPinLabel(k),
+                                        KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            left: px(15),
+                                            top: px(2),
+                                            ..default()
+                                        },
+                                    ));
+                                });
                         }
                         markers.spawn((
                             MapMarker::Ship,
@@ -1782,6 +1807,7 @@ pub fn markers(
     layer: Query<Entity, With<MarkerLayer>>,
     mut marks: Query<(Entity, &MapMarker, &mut Node, &mut UiTransform)>,
     mut readout: Query<&mut Text, With<MapReadout>>,
+    mut labels: Query<(&MapPinLabel, &mut KitText)>,
     ui_scale: Option<Res<UiScale>>,
     save: Option<Res<WorldSave>>,
 ) {
@@ -1801,6 +1827,15 @@ pub fn markers(
         .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
     let ship_at = ship.iter().next().map(|p| p.0);
     let waypoints = save.as_deref().map(marks_of).unwrap_or_default();
+    for (label, mut text) in &mut labels {
+        let want = waypoints
+            .get(label.0)
+            .map(|m| m.label())
+            .unwrap_or_default();
+        if text.text != want {
+            text.text = want;
+        }
+    }
     let mut seen_crafts = Vec::new();
     for (entity, mark, mut node, mut turn) in &mut marks {
         let (at, heading) = match *mark {
@@ -2063,9 +2098,45 @@ mod tests {
         assert!(marks_of(&save).is_empty());
         let mark = pbd_core::map::Mark::set(Vec3::X, Vec3::Y, PLANET_RADIUS).unwrap();
         assert!(store_marks(&mut save, &[mark, mark]));
-        assert_eq!(marks_of(&save), [mark, mark]);
+        let read = marks_of(&save);
+        assert_eq!(read.iter().map(|m| m.number).collect::<Vec<_>>(), [1, 2]);
         assert!(store_marks(&mut save, &[]));
         assert!(marks_of(&save).is_empty());
+    }
+
+    /// Place W1 and W2, remove W1, reopen the world: W2 is there, at the
+    /// same place, still W2, and a new one is W1 (`waypoints`, "Survives a
+    /// reload").
+    #[test]
+    fn a_waypoint_keeps_its_number_through_a_reload() {
+        use pbd_app::saves::{create, list};
+        let dir = std::env::temp_dir().join(format!(
+            "pbd-waypoints-{}-{}",
+            std::process::id(),
+            pbd_app::saves::now_unix_s()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let slot = create(&dir, "Marks", 5).unwrap();
+        let at = |x: f32| pbd_core::map::Mark::set(Vec3::new(x, 1.0, 0.0), Vec3::Y, PLANET_RADIUS);
+        {
+            let mut save = WorldSave::open(dir.clone(), slot);
+            let mut marks = Vec::new();
+            pbd_core::map::add_mark(&mut marks, at(0.1).unwrap());
+            pbd_core::map::add_mark(&mut marks, at(0.2).unwrap());
+            assert!(store_marks(&mut save, &marks));
+            marks.remove(0);
+            assert!(store_marks(&mut save, &marks));
+            save.drain();
+        }
+        let save = WorldSave::open(dir.clone(), list(&dir)[0].clone());
+        let back = marks_of(&save);
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].label(), "W2");
+        assert_eq!(back[0].at, at(0.2).unwrap().at);
+        let mut next = back.clone();
+        pbd_core::map::add_mark(&mut next, at(0.3).unwrap());
+        assert_eq!(next[1].label(), "W1");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Zoomed all the way out the whole planet is on screen; zoomed all the

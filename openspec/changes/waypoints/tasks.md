@@ -1,42 +1,33 @@
 ## 1. Model and save
 
-- [ ] 1.1 A `Waypoints` resource:
-  - waypoints as body directions with numbers 1 to 8;
-  - place takes the lowest free number and refuses past eight;
-  - remove by number.
-
-  Verify: unit tests for the lowest free number and the cap.
-- [ ] 1.2 The `waypoint` record kind (schema 1) in the save:
-  - written on place and removed on remove, through the durable path,
-    authored by the player;
-  - loaded into `Waypoints` on open.
-
-  Verify:
-  - a round-trip test: place two, remove one, reload;
-  - an old-save test: it opens with none;
-  - check how an older build treats the removal of an unknown kind (design
-    risk 3).
-- [ ] 1.3 `--waypoint LAT LON` (repeatable) places waypoints at launch.
+- [x] 1.1 Up to four waypoints, the fifth dropping the oldest; a click on a
+  pin removes it (built in `starter-missions` G3, revised 2026-11-16).
+- [x] 1.2 Each waypoint carries its number, the lowest free one from 1, saved
+  in the `map-mark` record at schema 3; schema 1 and 2 bodies read and are
+  numbered in order. Verify: unit tests in `pbd_core::map` and the record
+  round trip in `map_screen`.
+- [x] 1.3 `--map-mark-east` also places waypoints in play, once the walker
+  is out.
 
 ## 2. Map
 
-- [ ] 2.1 Right-click (and Ctrl+click) places a waypoint, or removes one
-  within 12 px; a left-click or drag never places one; the cap message.
-  Verify: a test on the steer logic and a real-time check.
-- [ ] 2.2 Numbered pins in their colours. The readout names the pin under the
-  pointer with its distance. Verify: a capture with three pins.
+- [x] 2.1 Right-click adds, a click on a pin removes (built in
+  `starter-missions` G3).
+- [x] 2.2 A "W1" ... label beside each pin, in the kit font with an ink
+  outline. Verify: a capture with labelled pins.
 
 ## 3. Compass
 
-- [ ] 3.1 `MarkKind::Waypoint(i)` from `Place::seen`, every waypoint at every
-  distance. Verify: a unit test of the mark's bearing and distance.
-- [ ] 3.2 Pins on the bar's foot row over the town diamonds, and the label
-  rule (nearest the middle, ahead of a town). Verify:
-  - a capture facing a pin;
-  - a capture with a pin and a town on one bearing.
+- [x] 3.1 `MarkKind::Waypoint(i)` from `Place::seen`, every waypoint at every
+  distance. Verify: a unit test of the mark's bearing at a distance past a
+  town's reach.
+- [x] 3.2 The red pins on the bar's foot row over the town studs, and the
+  label line "W2 1.2 km" for the waypoint faced, ahead of a town. Verify: a
+  unit test of the label rule and a capture facing a pin.
 
 ## 4. Close
 
-- [ ] 4.1 Before and after shots in `docs/screenshots/waypoints/`, the spec
-  moved into `openspec/specs/player/navigation/`, and `openspec validate
+- [x] 4.1 Shots in `docs/screenshots/compass-waypoints/`, `openspec validate
   --all`.
+- [ ] 4.2 The owner plays it; then the spec moves into
+  `openspec/specs/player/navigation/` and the change is archived.

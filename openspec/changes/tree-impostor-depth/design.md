@@ -158,3 +158,31 @@ python3 tools/perf_suite.py --scenarios clouds,walk,far-side --repeats 3 \
 
 Expected cost: one storage-buffer read, a cross product and a normalise per
 impostor fragment, and nothing anywhere else.
+
+## 5. With the crossed cards (merge, 2026-11-17)
+
+`crossed-tree-cards` landed beside this change: the far billboard became
+two fixed cards (0 and 2) and a crown cap showing a ninth, top-down view.
+The two fit together, and nothing of either is given up:
+
+- **The strip is nine views.** `IMPOSTOR_RELIEF` is one strip's pixels,
+  `STRIP_W * VIEW_H`, so it follows the strip from 27648 to **31104**
+  words; the shader's constant moved with it and `planet_trees`' test holds
+  the two equal. The kit grows by the relief of the top view as well.
+- **The top view is relieved too.** `tree_bake::draw` keeps its normals in
+  the tree's own frame (across x, up, z), which is bearing 0's level frame,
+  so the shader's `level = t.x*sin(th) + t.z*cos(th)` at view 8
+  (th = 2 pi) rebuilds them with no special case. The bake test checks the
+  top view's crown normals lean up.
+- **Every shown card and the cap carry their view's level direction** as
+  the vertex normal, as the mid cards and billboard did here.
+- **The standing normal is the crossed cards'**: at
+  `tree_impostor_relief` below one the fragment mixes toward
+  `crossed-tree-cards` 5's normal (toward the eye across the ground, lifted
+  by `IMPOSTOR_LIFT`), rebuilt per pixel from the eye rather than per tree
+  from its base. At the distances a card is drawn the two differ by well
+  under a degree. At one (the default) every plane of a tree is lit by the
+  same baked model normals, so the X still never shows one light arm and
+  one dark.
+
+The section 4 numbers were taken before the merge, on the billboard.

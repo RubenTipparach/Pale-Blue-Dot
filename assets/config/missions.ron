@@ -43,6 +43,7 @@
         (
             id: "gather",
             branch: "trunk",
+            icon: "tools/hand",
             title: "Gather by hand",
             help: "Pick up loose stones and pull fiber from shrubs and ferns with F, and dig soft ground with bare hands for soil.",
             objectives: [
@@ -55,6 +56,7 @@
         (
             id: "axe",
             branch: "trunk",
+            icon: "tools/stone-axe",
             title: "Craft an axe",
             help: "Pull a branch from a tree by hand, then make a stone axe in the pack's Craft row (I).",
             needs: ["gather"],
@@ -65,8 +67,9 @@
         (
             id: "wood",
             branch: "trunk",
+            icon: "goods/log",
             title: "Gather wood",
-            help: "Hold the axe and strike a trunk until the tree falls.",
+            help: "Hold G and pick the axe with the wheel, then strike a trunk until the tree falls.",
             needs: ["axe"],
             objectives: [
                 (kind: fell, what: "tree", count: 2, label: "trees"),
@@ -77,6 +80,7 @@
         (
             id: "planks-rope",
             branch: "trunk",
+            icon: "goods/rope",
             title: "Planks and rope",
             help: "In the pack (I), the Craft row makes planks from a log and rope from three fiber.",
             needs: ["wood"],
@@ -89,6 +93,7 @@
         (
             id: "crafting-table",
             branch: "trunk",
+            icon: "stations/workbench",
             title: "Build a crafting bench",
             help: "Make a workbench from six planks in the Craft row, then place it on the ground.",
             needs: ["planks-rope"],
@@ -101,6 +106,7 @@
         (
             id: "stone-tools",
             branch: "trunk",
+            icon: "tools/stone-pickaxe",
             title: "Stone tools",
             help: "At the workbench (F), make a stone pickaxe and a stone shovel.",
             needs: ["crafting-table"],
@@ -112,6 +118,7 @@
         (
             id: "fire",
             branch: "trunk",
+            icon: "lights/campfire",
             title: "Make a fire",
             help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.",
             needs: ["stone-tools"],
@@ -125,6 +132,7 @@
         (
             id: "rod",
             branch: "fishing",
+            icon: "tools/rod",
             title: "Make a fishing rod",
             help: "Make a rod at the workbench from planks, rope and fiber.",
             needs: ["fire"],
@@ -135,6 +143,7 @@
         (
             id: "go-fishing",
             branch: "fishing",
+            icon: "fish/perch",
             title: "Go fishing",
             help: "Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel.",
             needs: ["rod"],
@@ -147,6 +156,7 @@
         (
             id: "bait",
             branch: "fishing",
+            icon: "tools/stone-shovel",
             title: "Dig for bait",
             help: "Dig wet ground at the water's edge for bait worms; cast with them in your pack and they go on the hook.",
             needs: ["go-fishing"],
@@ -158,6 +168,7 @@
         (
             id: "three-kinds",
             branch: "fishing",
+            icon: "fish/silverfin",
             title: "Three kinds of fish",
             help: "Fish in other water and at other hours; the field guide (J) fills in each new kind.",
             needs: ["bait"],
@@ -168,6 +179,7 @@
         (
             id: "sea-fishing",
             branch: "fishing",
+            icon: "fish/eel",
             title: "Off the shore",
             help: "Cast from the shore into the sea, then from a river bank or a lake.",
             needs: ["three-kinds"],
@@ -179,6 +191,7 @@
         (
             id: "cook-fish",
             branch: "cooking",
+            icon: "goods/grilled-fish",
             title: "Cook fish",
             help: "Open the campfire with F and grill the fish you caught.",
             needs: ["go-fishing"],
@@ -189,6 +202,7 @@
         (
             id: "eat",
             branch: "cooking",
+            icon: "goods/kale-skewer",
             title: "Eat well",
             help: "Put a dish on the hotbar and use it; its effect shows by the hotbar.",
             needs: ["cook-fish"],
@@ -200,6 +214,7 @@
         (
             id: "find-seeds",
             branch: "farming",
+            icon: "goods/chili-seed",
             title: "Find seeds",
             help: "Seeds turn up when you dig grass, and wild plants give them when picked (F).",
             needs: ["fire"],
@@ -210,8 +225,9 @@
         (
             id: "till",
             branch: "farming",
+            icon: "tools/stone-shovel",
             title: "Break ground",
-            help: "With the shovel in hand, F tills soil.",
+            help: "Hold G and pick the shovel with the wheel, then F tills soil.",
             needs: ["find-seeds"],
             objectives: [
                 (kind: till, what: "any", count: 6, label: "till"),
@@ -220,6 +236,7 @@
         (
             id: "plant",
             branch: "farming",
+            icon: "goods/wheat-seed",
             title: "Plant a field",
             help: "Plant wheat seed on tilled soil with the right button.",
             needs: ["till"],
@@ -230,6 +247,7 @@
         (
             id: "water-field",
             branch: "farming",
+            icon: "goods/water-bucket",
             title: "Water the field",
             help: "Fill the bucket at water (right click), then pour it beside the field.",
             needs: ["plant"],
@@ -241,6 +259,7 @@
         (
             id: "harvest",
             branch: "farming",
+            icon: "goods/wheat",
             title: "Harvest",
             help: "A crop is ripe when it is full grown: F on it harvests produce and seed.",
             needs: ["water-field"],
@@ -251,6 +270,7 @@
         (
             id: "three-crops",
             branch: "farming",
+            icon: "goods/turnip",
             title: "A mixed field",
             help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold.",
             needs: ["harvest"],
@@ -263,6 +283,7 @@
         (
             id: "bread",
             branch: "farming",
+            icon: "goods/flatbread",
             title: "Bake bread",
             help: "At the campfire, bake flatbread from wheat you grew.",
             needs: ["harvest"],
@@ -273,6 +294,7 @@
         (
             id: "farm-meal",
             branch: "farming",
+            icon: "goods/roast-turnip",
             title: "A farm meal",
             help: "At the campfire, cook a dish from your field.",
             needs: ["three-crops"],
@@ -283,6 +305,7 @@
         (
             id: "feast",
             branch: "farming",
+            icon: "goods/chili-fish",
             title: "A feast",
             help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
             needs: ["farm-meal"],
@@ -296,6 +319,7 @@
         (
             id: "fence",
             branch: "herding",
+            icon: "goods/fence",
             title: "Make fences",
             help: "At the workbench, make fences and a gate from planks and rope.",
             needs: ["fire"],
@@ -307,6 +331,7 @@
         (
             id: "tame",
             branch: "herding",
+            icon: "missions/yard-hen",
             title: "Tame an animal",
             help: "Stand still with its food in hand and let a wild animal come to you, then feed it.",
             needs: ["fence"],
@@ -317,6 +342,7 @@
         (
             id: "pen",
             branch: "herding",
+            icon: "goods/gate",
             title: "Build a pen",
             help: "Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.",
             needs: ["tame"],
@@ -328,6 +354,7 @@
         (
             id: "collect",
             branch: "herding",
+            icon: "goods/egg",
             title: "Collect from the herd",
             help: "A kept animal in a pen gives an egg, wool or milk once a day: F on it collects.",
             needs: ["pen"],
@@ -338,6 +365,7 @@
         (
             id: "flock",
             branch: "herding",
+            icon: "goods/wool",
             title: "A mixed herd",
             help: "Woolbacks and plodders graze in open country; tame one as you did the hen.",
             needs: ["collect"],
@@ -349,6 +377,7 @@
         (
             id: "fried-egg",
             branch: "herding",
+            icon: "goods/fried-egg",
             title: "Breakfast",
             help: "At the campfire, fry an egg from your own hens.",
             needs: ["collect"],
@@ -360,6 +389,7 @@
         (
             id: "dig-deep",
             branch: "mining",
+            icon: "goods/stone",
             title: "Dig into the hill",
             help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time.",
             needs: ["fire"],
@@ -371,6 +401,7 @@
         (
             id: "ore",
             branch: "mining",
+            icon: "goods/tin-ore",
             title: "Find ore",
             help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams.",
             needs: ["dig-deep"],
@@ -382,6 +413,7 @@
         (
             id: "forge",
             branch: "mining",
+            icon: "stations/forge",
             title: "Build a forge",
             help: "Make a forge at the workbench and place it on the ground.",
             needs: ["ore"],
@@ -394,6 +426,7 @@
         (
             id: "smelt",
             branch: "mining",
+            icon: "goods/bronze-ingot",
             title: "Smelt bronze",
             help: "Put ore and coal in the forge (F) and smelt bronze.",
             needs: ["forge"],
@@ -405,6 +438,7 @@
         (
             id: "bronze-tool",
             branch: "mining",
+            icon: "tools/bronze-pickaxe",
             title: "Bronze tools",
             help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone.",
             needs: ["smelt"],
@@ -417,6 +451,7 @@
         (
             id: "iron",
             branch: "mining",
+            icon: "tools/iron-pickaxe",
             title: "The iron age",
             help: "Iron ore smelts hotter: feed the forge more coal.",
             needs: ["bronze-tool"],
@@ -430,6 +465,7 @@
         (
             id: "build",
             branch: "light",
+            icon: "goods/stone",
             title: "Build a shelter",
             help: "Hold planks, stone or soil and place blocks with the right button: walls and a roof.",
             needs: ["fire"],
@@ -441,6 +477,7 @@
         (
             id: "torch",
             branch: "light",
+            icon: "lights/torch",
             title: "Light the night",
             help: "Set torches round your shelter and stay by them as night falls.",
             needs: ["build"],
@@ -454,6 +491,7 @@
         (
             id: "map",
             branch: "about",
+            icon: "missions/map",
             title: "Read the map",
             help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there.",
             needs: ["go-fishing"],
@@ -465,6 +503,7 @@
         (
             id: "swim",
             branch: "about",
+            icon: "water_life/sea_otter",
             title: "Into the water",
             help: "Walk into deep water and swim.",
             needs: ["map"],
@@ -475,6 +514,7 @@
         (
             id: "reef",
             branch: "about",
+            icon: "fish/reef",
             title: "See a reef",
             help: "Swim down where the sea is warm and shallow.",
             needs: ["swim"],
@@ -485,6 +525,7 @@
         (
             id: "town",
             branch: "about",
+            icon: "lights/lantern_post",
             title: "Find a town",
             help: "Towns show on the map; follow the compass to one.",
             needs: ["reef"],
@@ -495,6 +536,7 @@
         (
             id: "boat",
             branch: "about",
+            icon: "goods/planks",
             title: "Take a boat",
             help: "Board a rowboat or a cog at a town's quay (F) and head out.",
             needs: ["town"],

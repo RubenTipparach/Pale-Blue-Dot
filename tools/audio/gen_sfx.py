@@ -404,6 +404,15 @@ def catch_chime(r):
     return mix(*[at(mallet(f, 0.6, bright=0.3, decay_s=0.45), t, n) * (0.8 if i < 3 else 1.0) for i, (f, t) in enumerate(notes)])
 
 
+@sound("hook_jingle", "Menu", "A fish on the hook: a quick bright lift of two mallet notes with a shimmer over them, an alert that says it is on.", peak_db=-8.0)
+def hook_jingle(r):
+    n = int(0.55 * SR)
+    lift = mix(at(mallet(784.0, 0.18, bright=0.45, decay_s=0.1), 0.0, n), at(mallet(1175.0, 0.45, bright=0.45, decay_s=0.3), 0.07, n))
+    t = np.arange(n) / SR
+    shimmer = at(mallet(1568.0, 0.4, bright=0.2, decay_s=0.25), 0.07, n) * (0.6 + 0.4 * np.sin(2 * np.pi * 18.0 * t))
+    return mix(lift, 0.35 * shimmer)
+
+
 # --- craft
 
 @sound("stall_warn", "Craft", "The Kestrel's stall warning in the cockpit: a soft two-tone chime pulsing about three times a second (loops).", peak_db=-10.0)

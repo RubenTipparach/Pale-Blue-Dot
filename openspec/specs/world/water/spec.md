@@ -61,3 +61,18 @@ SHALL be drawn over it. Proven by `water_tier_tests`.
 
 - **WHEN** a tunnel under land reaches the sea below sea level
 - **THEN** it is water to sea level, and a sealed pocket beside it is air
+
+### Requirement: A world's drainage map does not depend on the core count
+
+The drainage map a version 8 world's rivers are read from SHALL be built
+with its ground sampled on every core, and SHALL be the map a one-thread
+build makes, node for node, so a core count never moves a river. Proven by
+`rivers::tests::the_map_built_on_every_core_is_the_one_thread_map`
+(`river-cache` design 2).
+
+#### Scenario: Opening a world on a machine with more cores
+
+- **WHEN** the same world's drainage map is built on one thread and on
+  several
+- **THEN** every lattice cell drains to the same cell, with the same river
+  flag, level, drop and width

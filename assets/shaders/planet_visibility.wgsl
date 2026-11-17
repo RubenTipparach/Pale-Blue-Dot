@@ -144,7 +144,7 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    // A tree's mid cards and far billboard (`flora-v2` design 10.5); the
+    // A tree's four crossed cards and crown cap (`crossed-tree-cards`); the
     // near model is the near draws'.
     args[1].vertex_count = 30u;
     atomicStore(&args[1].instance_count, 0u);

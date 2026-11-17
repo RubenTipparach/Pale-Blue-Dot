@@ -51,6 +51,8 @@ pub enum MarkKind {
     Tick,
     /// One of the places passed in, by index.
     Place(usize),
+    /// One of the player's waypoints passed in, by index (`waypoints`).
+    Waypoint(usize),
 }
 
 /// A mark on the bar.
@@ -166,17 +168,63 @@ pub fn marks(heading: f32, places: &[Place]) -> Vec<Mark> {
     marks
 }
 
-/// The place whose name is shown: the one nearest the middle of the bar,
-/// within [`NAMED_WITHIN`] of the heading and in reach.
-pub fn named(heading: f32, places: &[Place]) -> Option<usize> {
+/// The player's waypoints on the bar for a heading (`waypoints` decision 6):
+/// every one on the bar's half of the horizon, whatever its distance, faded
+/// only toward the bar's ends.
+pub fn waypoint_marks(heading: f32, waypoints: &[Place]) -> Vec<Mark> {
+    waypoints
+        .iter()
+        .enumerate()
+        .filter_map(|(i, w)| {
+            let offset = offset_of(w.bearing, heading)?;
+            Some(Mark {
+                kind: MarkKind::Waypoint(i),
+                index: i,
+                label: "",
+                offset,
+                fade: edge_fade(offset),
+            })
+        })
+        .collect()
+}
+
+/// The one of `places` nearest the middle of the bar, within
+/// [`NAMED_WITHIN`] of the heading and no further than `reach_m`.
+fn nearest_middle(heading: f32, places: &[Place], reach_m: f32) -> Option<usize> {
     places
         .iter()
         .enumerate()
-        .filter(|(_, p)| p.distance_m <= PLACE_REACH_M)
+        .filter(|(_, p)| p.distance_m <= reach_m)
         .map(|(i, p)| (i, wrapped(p.bearing - heading).abs()))
         .filter(|(_, off)| *off <= NAMED_WITHIN)
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(i, _)| i)
+}
+
+/// The place whose name is shown: the one nearest the middle of the bar,
+/// within [`NAMED_WITHIN`] of the heading and in reach.
+pub fn named(heading: f32, places: &[Place]) -> Option<usize> {
+    nearest_middle(heading, places, PLACE_REACH_M)
+}
+
+/// What the line under the bar names: the waypoint nearest the middle at
+/// any distance, ahead of a town (`waypoints` decision 7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Named {
+    Waypoint(usize),
+    Place(usize),
+}
+
+/// The waypoint faced, else the town faced, else nothing.
+pub fn named_ahead(heading: f32, waypoints: &[Place], places: &[Place]) -> Option<Named> {
+    nearest_middle(heading, waypoints, f32::INFINITY)
+        .map(Named::Waypoint)
+        .or_else(|| named(heading, places).map(Named::Place))
+}
+
+/// The line naming something on the bar: its name and how far it is.
+pub fn name_line(name: &str, distance_m: f32) -> String {
+    format!("{name} {}", distance_text(distance_m))
 }
 
 /// What the bar reads off the view each frame: where the active camera is
@@ -343,6 +391,55 @@ mod tests {
                 .iter()
                 .all(|m| m.kind != MarkKind::Place(0))
         );
+    }
+
+    /// A waypoint lands on the bar at its bearing however far it is, past a
+    /// town's reach too, and facing it names it ahead of a town on the same
+    /// bearing: "W1 1.2 km" (`waypoints` decisions 6 and 7).
+    #[test]
+    fn a_waypoint_is_on_the_bar_at_any_distance_and_named_ahead_of_a_town() {
+        let radius = 4800.0f32;
+        let here = place(-20.0, 60.0);
+        let (north, east) = compass_north_east(here);
+        let toward = |metres: f32, along: Vec3| {
+            let a = metres / radius;
+            (here * a.cos() + along * a.sin()).normalize()
+        };
+        let east_far = Place::seen(here, toward(9_000.0, east), radius);
+        let north_near = Place::seen(here, toward(1_200.0, north), radius);
+        assert!(east_far.distance_m > PLACE_REACH_M, "past a town's reach");
+        let waypoints = [east_far, north_near];
+        let east_on = waypoint_marks(FRAC_PI_2 + 0.3, &waypoints);
+        assert!(east_on.iter().all(|m| m.kind != MarkKind::Waypoint(1)));
+        let east_on = waypoint_marks(FRAC_PI_2, &waypoints);
+        let w = *east_on
+            .iter()
+            .find(|m| m.kind == MarkKind::Waypoint(0))
+            .expect("on the bar");
+        assert!(w.offset.abs() < 1e-3 && (w.fade - 1.0).abs() < 1e-6);
+        let left = waypoint_marks(FRAC_PI_2 - 45f32.to_radians(), &waypoints);
+        let w = left
+            .iter()
+            .find(|m| m.kind == MarkKind::Waypoint(0))
+            .unwrap();
+        assert!((w.offset - 0.5).abs() < 1e-3, "{}", w.offset);
+        assert!(waypoint_marks(FRAC_PI_2 + PI, &waypoints[..1]).is_empty());
+
+        // A town on the north bearing too: facing north names the waypoint.
+        let town = Place::seen(here, toward(800.0, north), radius);
+        assert_eq!(
+            named_ahead(0.02, &waypoints, &[town]),
+            Some(Named::Waypoint(1))
+        );
+        assert_eq!(named_ahead(0.02, &[], &[town]), Some(Named::Place(0)));
+        assert_eq!(
+            named_ahead(FRAC_PI_2 + 0.05, &waypoints, &[town]),
+            Some(Named::Waypoint(0)),
+            "named at 9 km"
+        );
+        assert_eq!(named_ahead(PI, &waypoints, &[town]), None);
+        assert_eq!(name_line("W1", north_near.distance_m), "W1 1.2 km");
+        assert_eq!(name_line("W2", 230.0), "W2 230 m");
     }
 
     /// Marks fade toward the ends of the bar, and the bar fades out between

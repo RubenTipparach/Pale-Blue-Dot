@@ -33,27 +33,73 @@ pub struct Texel {
     /// The sea's place here (`ocean-environments` 6.1), as the chart shows
     /// it: `None` on land and on a world made before the sea's places.
     pub place: Option<crate::fauna::Environment>,
+    /// How much of the pixel a river's water covers (`map-rivers`), in
+    /// thirds: 0 dry, [`RIVER_FULL`] all water. A river stands over the
+    /// sea's level on its carved bed, so `sea` never says it.
+    pub river: u8,
+}
+
+/// A texel's [`Texel::river`] when the river's water covers all of it.
+pub const RIVER_FULL: u8 = 3;
+
+/// Whether the column at `d` holds a river's water: the river test the
+/// column itself makes (`column::generate_solid`, through
+/// [`crate::rivers::water`]), which puts no river in a town's footprint.
+pub fn river_water(cfg: &TerrainConfig, d: Vec3) -> bool {
+    crate::settlement::ground::top(cfg, d).is_none() && crate::rivers::floods(cfg, d)
 }
 
 /// What the map shows at `direction`, a direction from the planet's centre.
-/// Any length but zero; it is normalised here.
+/// Any length but zero; it is normalised here. Its river is the point's:
+/// all or none ([`river_cover`] gives a pixel's share).
 pub fn base_texel(cfg: &TerrainConfig, direction: Vec3) -> Texel {
     let d = direction.normalize_or(Vec3::Y);
     let altitude_m = column::surface_m(cfg, d);
+    let sea = altitude_m < cfg.sea_level_m;
     Texel {
         altitude_m,
         biome: biome_at(cfg, d, altitude_m),
         top: top_material(cfg, d, altitude_m),
-        sea: altitude_m < cfg.sea_level_m,
+        sea,
         place: crate::ocean::places::chart_at(cfg, d, altitude_m),
+        river: if !sea && river_water(cfg, d) {
+            RIVER_FULL
+        } else {
+            0
+        },
     }
 }
 
+/// How much of a map pixel centred on `direction` a river's water covers,
+/// in thirds ([`Texel::river`]): [`river_water`] at a 3 x 3 grid across the
+/// pixel, `east_m` wide and `north_m` tall. Only read where a river's banks
+/// reach the pixel ([`crate::rivers::near`]), so dry land pays one lattice
+/// read.
+pub fn river_cover(cfg: &TerrainConfig, direction: Vec3, east_m: f32, north_m: f32) -> u8 {
+    let d = direction.normalize_or(Vec3::Y);
+    if !crate::rivers::near(cfg, d, 0.5 * east_m.hypot(north_m)) {
+        return 0;
+    }
+    let east = Vec3::Y.cross(d).try_normalize().unwrap_or(Vec3::X);
+    let north = d.cross(east);
+    let wet = (-1..=1)
+        .flat_map(|j| (-1..=1).map(move |i| (i, j)))
+        .filter(|&(i, j)| {
+            let offset = east * (i as f32 * east_m / 3.0) + north * (j as f32 * north_m / 3.0);
+            river_water(cfg, (d + offset / cfg.radius_m).normalize())
+        })
+        .count();
+    // Nine points to the nearest third: one point alone is a grazed corner,
+    // two to four a third.
+    ((wet as u32 * u32::from(RIVER_FULL) + 4) / 9).min(u32::from(RIVER_FULL)) as u8
+}
+
 /// The record kind of the player's waypoints, its schema and its one id
-/// (`starter-missions` G3). Schema 2 is the list; schema 1 was one optional
-/// mark, and still reads ([`read_marks`]).
+/// (`starter-missions` G3). Schema 3 is the list with each waypoint's number
+/// (`waypoints` decision 4); schema 2 was the list without numbers and
+/// schema 1 one optional mark, and both still read ([`read_marks`]).
 pub const MARK_KIND: &str = "map-mark";
-pub const MARK_SCHEMA: u32 = 2;
+pub const MARK_SCHEMA: u32 = 3;
 pub const MARK_ID: u64 = 0;
 
 /// The most waypoints a player keeps; a new one past this removes the
@@ -75,6 +121,12 @@ pub struct Mark {
     pub at: [f32; 3],
     /// How far, along the ground, the player stood from it when it was set.
     pub set_from_m: f32,
+    /// Its number, shown as "W1", "W2" ... (`waypoints` decision 3): the
+    /// lowest free one when it was added, kept until it is removed. Zero
+    /// before [`add_mark`] numbers it, and in a schema 1 or 2 body, which
+    /// [`read_marks`] numbers in order.
+    #[serde(default)]
+    pub number: u8,
 }
 
 impl Mark {
@@ -89,7 +141,13 @@ impl Mark {
         Some(Self {
             at: at.to_array(),
             set_from_m,
+            number: 0,
         })
+    }
+
+    /// What the map and the compass call it: "W1", "W2" ...
+    pub fn label(&self) -> String {
+        format!("W{}", self.number)
     }
 
     pub fn direction(&self) -> Vec3 {
@@ -106,21 +164,45 @@ impl Mark {
     }
 }
 
-/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`].
-pub fn add_mark(marks: &mut Vec<Mark>, mark: Mark) {
+/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`],
+/// and give it the lowest number the others leave free.
+pub fn add_mark(marks: &mut Vec<Mark>, mut mark: Mark) {
+    let over = (marks.len() + 1).saturating_sub(MARKS_MAX);
+    marks.drain(..over.min(marks.len()));
+    mark.number = lowest_free(marks);
     marks.push(mark);
-    let over = marks.len().saturating_sub(MARKS_MAX);
-    marks.drain(..over);
 }
 
-/// The waypoints a `map-mark` record's body holds: a schema 2 list, or a
-/// schema 1 body of one optional mark. `None` for a body that is neither.
+/// The lowest number from 1 that no waypoint in `marks` holds.
+fn lowest_free(marks: &[Mark]) -> u8 {
+    (1..=u8::MAX)
+        .find(|n| marks.iter().all(|m| m.number != *n))
+        .unwrap_or(u8::MAX)
+}
+
+/// The waypoints a `map-mark` record's body holds: a schema 3 or 2 list, or
+/// a schema 1 body of one optional mark, each numbered. A waypoint with no
+/// number (schema 1 and 2), or with one a waypoint before it holds, takes
+/// the lowest free number in list order, so an old save's come out W1, W2
+/// ... oldest first. `None` for a body that is none of these.
 pub fn read_marks(body: &str) -> Option<Vec<Mark>> {
-    ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
+    let mut marks = ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
         ron::from_str::<Option<Mark>>(body)
             .ok()
             .map(|m| m.into_iter().collect())
-    })
+    })?;
+    for k in 0..marks.len() {
+        let n = marks[k].number;
+        if marks[..k].iter().any(|m| m.number == n) {
+            marks[k].number = 0;
+        }
+    }
+    for k in 0..marks.len() {
+        if marks[k].number == 0 {
+            marks[k].number = lowest_free(&marks);
+        }
+    }
+    Some(marks)
 }
 
 /// The distance along the ground between two unit directions, m.
@@ -212,16 +294,124 @@ mod tests {
             add_mark(&mut marks, mark(k as f32 * 0.01));
         }
         assert_eq!(marks.len(), MARKS_MAX);
-        assert_eq!(marks[0], mark(0.01), "the first is gone");
-        assert_eq!(marks[3], mark(0.04));
+        assert_eq!(marks[0].at, mark(0.01).at, "the first is gone");
+        assert_eq!(marks[3].at, mark(0.04).at);
         let body = ron::to_string(&marks).unwrap();
         assert_eq!(read_marks(&body), Some(marks));
         let one = ron::to_string(&Some(mark(0.0))).unwrap();
-        assert_eq!(read_marks(&one), Some(vec![mark(0.0)]));
+        let first = Mark {
+            number: 1,
+            ..mark(0.0)
+        };
+        assert_eq!(read_marks(&one), Some(vec![first]));
         assert_eq!(
             read_marks(&ron::to_string(&None::<Mark>).unwrap()),
             Some(vec![])
         );
+    }
+
+    /// `map-rivers`: a texel's river is the column's river water, the
+    /// generator's own test, on seeded directions near rivers and off them;
+    /// never on the sea; and a pixel's cover is all of it where the point
+    /// and its neighbours are all river, none where the banks are far.
+    #[test]
+    fn the_map_river_is_the_column_river() {
+        let cfg = TerrainConfig::for_version(10).expect("version 10");
+        let settings = cfg.rivers.expect("rivers");
+        let rivers = crate::rivers::map(&cfg, &settings);
+        // Points along the rivers' lines as well as anywhere, so the sample
+        // holds water.
+        let along = rivers
+            .rivers()
+            .step_by(7)
+            .take(600)
+            .map(|k| rivers.describe(k).0);
+        let mut wet = 0;
+        for d in directions(2_000).chain(along) {
+            let texel = base_texel(&cfg, d);
+            let water = crate::rivers::water(&cfg, d);
+            assert_eq!(
+                texel.river == RIVER_FULL,
+                !texel.sea && river_water(&cfg, d),
+                "{d}"
+            );
+            if crate::settlement::ground::top(&cfg, d).is_none() && !texel.sea {
+                assert_eq!(texel.river == RIVER_FULL, !water.is_empty(), "{d}");
+            }
+            assert!(!(texel.sea && texel.river > 0), "{d}");
+            wet += usize::from(texel.river > 0);
+            let cover = river_cover(&cfg, d, 2.833, 2.833);
+            if texel.river == 0 && !crate::rivers::near(&cfg, d, 3.0) {
+                assert_eq!(cover, 0, "{d}");
+            }
+        }
+        assert!(wet > 100, "{wet} wet points: the sample holds rivers");
+    }
+
+    /// Waypoints are numbered W1, W2 ... in the order placed by the lowest
+    /// free number: a removal leaves the others' numbers, the next one takes
+    /// the gap, and a fifth takes the number of the oldest it drops
+    /// (`waypoints` decision 3).
+    #[test]
+    fn waypoints_take_the_lowest_free_number() {
+        let mark = |x: f32| Mark::set(Vec3::new(x, 1.0, 0.0), Vec3::Y, 4_800.0).unwrap();
+        let numbers = |marks: &[Mark]| marks.iter().map(|m| m.number).collect::<Vec<_>>();
+        let mut marks = Vec::new();
+        for k in 0..3 {
+            add_mark(&mut marks, mark(k as f32 * 0.01));
+        }
+        assert_eq!(numbers(&marks), [1, 2, 3]);
+        assert_eq!(marks[0].label(), "W1");
+        marks.remove(1);
+        assert_eq!(numbers(&marks), [1, 3], "W3 keeps its number");
+        add_mark(&mut marks, mark(0.1));
+        assert_eq!(numbers(&marks), [1, 3, 2], "the next is W2");
+        add_mark(&mut marks, mark(0.2));
+        assert_eq!(numbers(&marks), [1, 3, 2, 4]);
+        add_mark(&mut marks, mark(0.3));
+        assert_eq!(numbers(&marks), [3, 2, 4, 1], "the fifth takes W1's");
+        assert_eq!(marks[3].label(), "W1");
+    }
+
+    /// A schema 2 body has no numbers: it reads numbered in order, oldest
+    /// W1. A schema 3 body reads back as written, and an older build that
+    /// knows no number still reads its waypoints (`waypoints` decision 4).
+    #[test]
+    fn old_waypoint_records_read_numbered_in_order() {
+        /// The schema 2 shape, as the build before numbers wrote it.
+        #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+        struct OldMark {
+            at: [f32; 3],
+            set_from_m: f32,
+        }
+        let old = vec![
+            OldMark {
+                at: [1.0, 0.0, 0.0],
+                set_from_m: 250.0,
+            },
+            OldMark {
+                at: [0.0, 1.0, 0.0],
+                set_from_m: 30.0,
+            },
+        ];
+        let body = ron::to_string(&old).unwrap();
+        let read = read_marks(&body).expect("a schema 2 body reads");
+        assert_eq!(read.iter().map(|m| m.number).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!(read[0].at, old[0].at);
+        assert_eq!(read[1].set_from_m, 30.0);
+        // Two with one number are numbered again in order.
+        let mut clash = read.clone();
+        clash[1].number = 1;
+        let clash = read_marks(&ron::to_string(&clash).unwrap()).unwrap();
+        assert_eq!(clash.iter().map(|m| m.number).collect::<Vec<_>>(), [1, 2]);
+        // A schema 3 body keeps a gap in the numbers.
+        let mut gap = read.clone();
+        gap[0].number = 3;
+        let three = ron::to_string(&gap).unwrap();
+        assert_eq!(read_marks(&three), Some(gap));
+        // An older build reading schema 3 passes over the number.
+        let older: Vec<OldMark> = ron::from_str(&three).expect("an older build reads it");
+        assert_eq!(older, old);
     }
 
     /// A direction's length does not matter.

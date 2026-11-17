@@ -44,6 +44,9 @@ pub struct School {
     /// A stable number per fish, which is what its length is hashed from, so
     /// a fish measures the same whichever of its schoolmates are caught first.
     pub ids: Vec<u32>,
+    /// The size of the water it lives in, 0 to 1 (`fishing-anywhere`
+    /// design 3): smaller water holds smaller fish. 1 in the sea.
+    pub scale: f32,
     /// Where each creature was put: an octopus's den (`Behaviour::Hides`).
     pub homes: Vec<Vec3>,
     pub goal: Vec3,
@@ -103,6 +106,7 @@ impl School {
             spook: vec![0.0; count as usize],
             ids: (0..count as u32).collect(),
             homes: Vec::with_capacity(count as usize),
+            scale: 1.0,
             goal: anchor,
             goal_t: 0.0,
             lured: false,
@@ -221,11 +225,17 @@ impl School {
     }
 
     /// How long this fish is, cm: its species' length, 85 to 125% of it,
-    /// hashed from the school and the fish so it never changes.
+    /// hashed from the school and the fish so it never changes, times the
+    /// school's [`School::scale`].
     pub fn length_cm(&self, fish: usize, species: &Species) -> u32 {
         let id = self.ids.get(fish).copied().unwrap_or(0);
         let u = (hash2(self.seed, u64::from(id)) >> 40) as f32 / (1u64 << 24) as f32;
-        (species.length_m * (0.85 + 0.40 * u) * 100.0)
+        let scale = if self.scale.is_finite() {
+            self.scale.clamp(0.05, 1.0)
+        } else {
+            1.0
+        };
+        (species.length_m * scale * (0.85 + 0.40 * u) * 100.0)
             .round()
             .max(1.0) as u32
     }

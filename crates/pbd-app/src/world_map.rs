@@ -22,7 +22,7 @@ use crate::planet::{PLANET_RADIUS, terrain_config};
 use crate::saves::format::{material_code, material_of};
 use pbd_core::fauna::Environment;
 use pbd_core::geo;
-use pbd_core::map::{Texel, base_texel};
+use pbd_core::map::{RIVER_FULL, Texel, base_texel, river_cover};
 use pbd_core::planet_gen::{Biome, TerrainConfig};
 use pbd_core::terrain::Material;
 use std::path::{Path, PathBuf};
@@ -68,11 +68,30 @@ pub fn texel_block(
         let y = (y0 + row).saturating_sub(1).min(height - 1);
         for col in 0..w + 2 {
             let x = (x0 + width + col - 1) % width;
-            texels.push(base_texel(cfg, geo::pixel_direction(x, y, width, height)));
+            texels.push(pixel_texel(cfg, level, x, y));
         }
     }
     texels
 }
+
+/// What pixel `(x, y)` of `level` shows: the ground at its centre, and the
+/// share of it a river's water covers (`map-rivers`), so a river is as wide
+/// on the map as its water is in the world.
+pub fn pixel_texel(cfg: &TerrainConfig, level: usize, x: usize, y: usize) -> Texel {
+    let (width, height) = level_size(level);
+    let d = geo::pixel_direction(x, y, width, height);
+    let mut texel = base_texel(cfg, d);
+    if !texel.sea {
+        let north_m = std::f32::consts::TAU * cfg.radius_m / width as f32;
+        let lat = std::f32::consts::PI * (0.5 - (y as f32 + 0.5) / height as f32);
+        texel.river = river_cover(cfg, d, north_m * lat.cos(), north_m);
+    }
+    texel
+}
+
+/// How deep the map paints a river's water, metres: the two layers
+/// `rivers::carve` cuts its bed under the water.
+pub const RIVER_DEPTH_M: f32 = 2.0;
 
 /// The tileset colours the map is painted with: each tile's mean, from the
 /// same pictures the ground is drawn with.
@@ -242,13 +261,22 @@ pub fn colour_block(
                     north,
                     south,
                 );
-                palette.ground_colour(t).map(|c| c * shade)
+                let ground = palette.ground_colour(t).map(|c| c * shade);
+                river_over(ground, t.river)
             };
             out.extend(colour.map(|c| c.round().clamp(0.0, 255.0) as u8));
             out.push(255);
         }
     }
     out
+}
+
+/// The shaded ground under a river's share of the pixel, `river` thirds of
+/// it painted in the sea's own colour at the river's depth.
+pub fn river_over(ground: [f32; 3], river: u8) -> [f32; 3] {
+    let share = f32::from(river.min(RIVER_FULL)) / f32::from(RIVER_FULL);
+    let water = sea_colour(RIVER_DEPTH_M);
+    std::array::from_fn(|c| ground[c] + (water[c] - ground[c]) * share)
 }
 
 /// The base level's cache file for a seed and the generator that made it:
@@ -262,19 +290,22 @@ pub fn colour_block(
 pub fn cache_name(seed: u64, generator: u32) -> String {
     match pbd_core::settlement::ground::installed() {
         // `p1`: the texel carries the sea's place (`ocean-environments` 6.1),
-        // so a cache from before it is not read.
+        // so a cache from before it is not read. `p2`: and its river
+        // (`map-rivers`), which a `p1` cache would read as dry.
         Some(ground) => format!(
-            "map-base-g{generator}-p1-{seed:016x}-t{:016x}.png",
+            "map-base-g{generator}-p2-{seed:016x}-t{:016x}.png",
             ground.digest()
         ),
-        None => format!("map-base-g{generator}-p1-{seed:016x}.png"),
+        None => format!("map-base-g{generator}-p2-{seed:016x}.png"),
     }
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the
 /// layer the column is floored to, offset by 32,768), its top block's saved
 /// code, and its biome in the low four bits of the last byte with the sea's
-/// place ([`PLACES`], one more than its row, nought for none) in the high.
+/// place ([`PLACES`], one more than its row, nought for none) in the next
+/// three. Its river's thirds take the two top bits left over: the high one
+/// on the block's code (codes stop under 128), the low one on the last byte.
 fn pack(t: &Texel) -> [u8; 4] {
     let altitude = (t.altitude_m.floor() + 32768.0).clamp(0.0, 65535.0) as u16;
     let [high, low] = altitude.to_be_bytes();
@@ -282,11 +313,12 @@ fn pack(t: &Texel) -> [u8; 4] {
         .place
         .and_then(|p| PLACES.iter().position(|q| *q == p))
         .map_or(0, |i| i as u8 + 1);
+    let river = t.river.min(RIVER_FULL);
     [
         high,
         low,
-        material_code(t.top),
-        (t.biome as u8 & 15) | (place << 4),
+        material_code(t.top) | ((river >> 1) << 7),
+        (t.biome as u8 & 15) | ((place & 7) << 4) | ((river & 1) << 7),
     ]
 }
 
@@ -306,12 +338,13 @@ fn unpack(p: [u8; 4], cfg: &TerrainConfig) -> Option<Texel> {
     Some(Texel {
         altitude_m,
         biome: *BIOMES.get(usize::from(p[3] & 15))?,
-        top: material_of(p[2])?,
+        top: material_of(p[2] & 0x7f)?,
         sea: altitude_m < cfg.sea_level_m,
-        place: match p[3] >> 4 {
+        place: match (p[3] >> 4) & 7 {
             0 => None,
             i => Some(*PLACES.get(usize::from(i) - 1)?),
         },
+        river: ((p[2] >> 7) << 1) | (p[3] >> 7),
     })
 }
 
@@ -371,7 +404,7 @@ pub fn build_base(cfg: &TerrainConfig) -> Vec<Texel> {
                     let last = (first + rows_each).min(height);
                     (first..last)
                         .flat_map(|y| (0..width).map(move |x| (x, y)))
-                        .map(|(x, y)| base_texel(cfg, geo::pixel_direction(x, y, width, height)))
+                        .map(|(x, y)| pixel_texel(cfg, BASE, x, y))
                         .collect::<Vec<_>>()
                 })
             })
@@ -732,15 +765,22 @@ mod tests {
         let cfg = *terrain_config();
         let (width, height) = level_size(BASE);
         // A cheap stand-in for the base: every row the same line of places.
+        // Every share of a river among them, so its bits round-trip too.
         let line: Vec<Texel> = (0..width)
-            .map(|x| base_texel(&cfg, geo::pixel_direction(x, height / 3, width, height)))
+            .map(|x| Texel {
+                river: (x % 4) as u8,
+                ..base_texel(&cfg, geo::pixel_direction(x, height / 3, width, height))
+            })
             .collect();
         let texels: Vec<Texel> = (0..height).flat_map(|_| line.iter().copied()).collect();
         let generator = crate::planet::generator_version();
         save_base(&dir, 7, generator, &texels).expect("written");
         let back = load_base(&dir, 7, generator, &cfg).expect("read back");
         for (a, b) in texels.iter().zip(&back) {
-            assert_eq!((a.top, a.biome, a.sea), (b.top, b.biome, b.sea));
+            assert_eq!(
+                (a.top, a.biome, a.sea, a.place, a.river),
+                (b.top, b.biome, b.sea, b.place, b.river)
+            );
             assert_eq!(a.altitude_m.floor(), b.altitude_m);
         }
         assert!(
@@ -783,6 +823,7 @@ mod tests {
             top: Material::Grass,
             sea: false,
             place: None,
+            river: 0,
         };
         let [r, g, b] = palette.ground_colour(&meadow);
         assert!(g > r && g > b, "meadow is green: {r} {g} {b}");
@@ -800,5 +841,118 @@ mod tests {
             relief(1, 0.0, 0.0, 10.0, 10.0, 0.0) < flat,
             "one facing south-east is not"
         );
+    }
+
+    /// `map-rivers`: a river's water is painted as the map's water, in the
+    /// sea's own shallows colour, by its share of the pixel; dry ground is
+    /// left as it was; and the sea's colour never reads the river field.
+    #[test]
+    fn a_river_is_painted_as_water() {
+        let palette = Palette::load(&tileset_dir()).expect("the tilesets");
+        let ground = |river| Texel {
+            altitude_m: 20.0,
+            biome: Biome::Fields,
+            top: Material::Grass,
+            sea: false,
+            place: None,
+            river,
+        };
+        let paint = |t: Texel| {
+            // A flat block of one texel, so the relief leaves it unshaded.
+            let block = vec![t; 9];
+            let rgba = colour_block(&block, 1, 100, 1, 1, &palette);
+            [rgba[0], rgba[1], rgba[2]]
+        };
+        let dry = paint(ground(0));
+        let shade = palette.ground_colour(&ground(0));
+        assert_eq!(dry, shade.map(|c| c.round() as u8), "dry ground as before");
+        let wet = paint(ground(RIVER_FULL));
+        assert_eq!(
+            wet,
+            sea_colour(RIVER_DEPTH_M).map(|c| c.round() as u8),
+            "a full river is the sea's water"
+        );
+        let third = paint(ground(1));
+        assert!(
+            third[2] > dry[2] && third[2] < wet[2],
+            "a third of a pixel is a third of the way: {dry:?} {third:?} {wet:?}"
+        );
+        let sea = |river| Texel {
+            altitude_m: -10.0,
+            sea: true,
+            biome: Biome::Ocean,
+            top: Material::Sand,
+            ..ground(river)
+        };
+        assert_eq!(paint(sea(0)), paint(sea(RIVER_FULL)), "the sea unchanged");
+    }
+
+    /// `map-rivers`: the owner's river at the spawn (`flora-v2` 12.10, the
+    /// one `planet_terrain`'s bed test stands in) is water on the map at every
+    /// level, wholly on the finest; dry meadow away from it is not.
+    #[test]
+    fn the_spawn_river_is_water_on_the_map() {
+        let cfg = *terrain_config();
+        let at = |lat: f32, lon: f32, level: usize| {
+            let (width, height) = level_size(level);
+            let x = ((lon + 180.0) / 360.0 * width as f32) as usize;
+            let y = ((90.0 - lat) / 180.0 * height as f32) as usize;
+            pixel_texel(&cfg, level, x, y)
+        };
+        let d = geo::direction(geo::LatLon {
+            lat: 28.25_f32.to_radians(),
+            lon: 0.75_f32.to_radians(),
+        });
+        assert!(
+            pbd_core::rivers::floods(&cfg, d),
+            "the river is still there"
+        );
+        for level in 0..LEVELS.len() {
+            let t = at(28.25, 0.75, level);
+            assert!(!t.sea && t.river > 0, "level {level}: {t:?}");
+        }
+        assert_eq!(at(28.25, 0.75, 2).river, RIVER_FULL);
+    }
+}
+
+#[cfg(test)]
+mod river_bank_probe {
+    /// Instrument (`fishing-anywhere` 1.4): where the spawn river's banks
+    /// are along its latitude, for a capture of a cast into it.
+    #[test]
+    #[ignore = "instrument: the spawn river's banks"]
+    fn print_the_spawn_river_banks() {
+        use pbd_core::geo;
+        let cfg = *crate::planet::terrain_config();
+        let mut row = String::new();
+        let mut lon = 0.25_f32;
+        while lon <= 1.25 {
+            let d = geo::direction(geo::LatLon {
+                lat: 28.25_f32.to_radians(),
+                lon: lon.to_radians(),
+            });
+            row.push(if pbd_core::rivers::floods(&cfg, d) {
+                '~'
+            } else {
+                '.'
+            });
+            lon += 0.01;
+        }
+        println!("lat 28.25, lon 0.25..1.25 by 0.01: {row}");
+        let mut col = String::new();
+        let mut lat = 27.75_f32;
+        while lat <= 28.75 {
+            let d = geo::direction(geo::LatLon {
+                lat: lat.to_radians(),
+                lon: 0.75_f32.to_radians(),
+            });
+            col.push(if pbd_core::rivers::floods(&cfg, d) {
+                '~'
+            } else {
+                '.'
+            });
+            lat += 0.01;
+        }
+        println!("lon 0.75, lat 27.75..28.75 by 0.01: {col}");
     }
 }
