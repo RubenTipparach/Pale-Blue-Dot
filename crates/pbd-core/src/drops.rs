@@ -73,6 +73,11 @@ impl ItemDrop {
         ((self.id % 1024) as f32 * 1.7) % TAU
     }
 
+    /// Up at the drop: away from its body's centre, in f64.
+    pub fn up(&self) -> DVec3 {
+        self.position.normalize_or(DVec3::Y)
+    }
+
     /// Whether it has outlived its time at world time `now_s`.
     pub fn expired(&self, now_s: f64) -> bool {
         now_s - self.made_s > LIFE_S

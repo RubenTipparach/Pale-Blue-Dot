@@ -251,7 +251,7 @@ pub fn prism(faces: PrismFaces) -> Mesh {
 /// centre in render space) in f64 before the cast. A prism turns about the
 /// up; a card turns to face `eye`, upright.
 fn pose(drop: &ItemDrop, centre: DVec3, t: f32, card: bool, eye: Option<Vec3>) -> Transform {
-    let up64 = drop.position.normalize_or(DVec3::Y);
+    let up64 = drop.up();
     let up = up64.as_vec3();
     let at = (centre + drop.position + up64 * f64::from(drop.bob(t))).as_vec3();
     let standing = Quat::from_rotation_arc(Vec3::Y, up);

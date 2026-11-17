@@ -8,17 +8,22 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 6] = [
+const FILES: [&str; 10] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
     "crates/pbd-app/src/sim_origin.rs",
     "crates/pbd-core/src/fauna/school.rs",
     "crates/pbd-core/src/fishing.rs",
+    // `world-frames` 10: the herd, drops and decks.
+    "crates/pbd-app/src/husbandry.rs",
+    "crates/pbd-app/src/husbandry/breed.rs",
+    "crates/pbd-app/src/drops.rs",
+    "crates/pbd-app/src/decks.rs",
 ];
 
 /// What taking up or a radius from a local position looks like.
-const PATTERNS: [&str; 12] = [
+const PATTERNS: [&str; 20] = [
     "position.0.normalize",
     "position.0.length()",
     "position.normalize",
@@ -31,6 +36,16 @@ const PATTERNS: [&str; 12] = [
     "float.length()",
     "feet.normalize",
     "anchor.normalize",
+    // An animal's feet and goal (`husbandry.rs`), a drop's walker, a deck's
+    // carried point.
+    "pos.normalize",
+    "pos.length()",
+    "goal.normalize",
+    "goal.length()",
+    "feet.length()",
+    "walker.normalize",
+    "on_deck_at.normalize",
+    "next.normalize",
 ];
 
 /// The source with every `#[cfg(test)]` item cut out.
