@@ -327,6 +327,10 @@ fn fish(
     mut save: Option<ResMut<WorldSave>>,
     mut did: MessageWriter<crate::missions::Did>,
     mut heard: MessageWriter<crate::audio::hooks::FishHeard>,
+    (tip_now, mut cue): (
+        Option<Res<crate::held::RodTipNow>>,
+        Option<ResMut<crate::held::RodCue>>,
+    ),
     mut was_aboard: Local<Option<Entity>>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
@@ -432,9 +436,13 @@ fn fish(
             reel_in: pressed(MouseButton::Right),
         };
         let angler = Angler {
-            // The rod model's own tip (`held.rs`): eye space, -z ahead.
+            // The rod tip as last drawn (`held.rs`, `RodTipNow`): eye
+            // space, -z ahead. A cast leaves from where the drawn-back tip is
+            // when the button comes up.
             tip: {
-                let t = crate::held::rod_tip();
+                let t = tip_now
+                    .as_deref()
+                    .map_or_else(crate::held::rod_tip, |t| t.0);
                 eye + right * t.x + cam_up * t.y - look * t.z
             },
             look,
@@ -473,6 +481,11 @@ fn fish(
             crate::sea::surface_gravity(),
             factor,
         );
+        if let Some(cue) = cue.as_deref_mut() {
+            cue.reeling = controls.held && fishery.line.phase == Phase::Hooked;
+            let to_float = (fishery.line.float - angler.tip).normalize_or_zero();
+            cue.pull = to_float.dot(right).clamp(-1.0, 1.0);
+        }
         for event in events {
             // The rod's sounds (`audio-and-ambience` build decision 5).
             heard.write(crate::audio::hooks::FishHeard {
@@ -480,6 +493,9 @@ fn fish(
                 at: fishery.line.float,
             });
             let float = fishery.line.float;
+            if let Some(cue) = cue.as_deref_mut() {
+                cue.events.push(event);
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -504,6 +520,15 @@ fn fish(
     }
     status.reel_prompt =
         rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
+    // The rod in hand moves with the line (`held.rs`, `rod-motion`).
+    if let Some(cue) = cue.as_deref_mut() {
+        cue.phase = fishery.line.phase;
+        cue.power = fishery.line.power;
+        cue.tension = fishery.line.tension;
+        if fishery.line.phase != Phase::Hooked {
+            cue.reeling = false;
+        }
+    }
     status.meter = match fishery.line.phase {
         Phase::Charging => Some(("CAST", fishery.line.power)),
         Phase::Hooked => Some(("TENSION", fishery.line.tension)),
@@ -1606,6 +1631,7 @@ pub(crate) mod draw {
         air: Option<Res<Air>>,
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
+        tip_now: Option<Res<crate::held::RodTipNow>>,
         cameras: Query<&Transform, With<WalkingCamera>>,
         mut floats: Query<
             (&mut Transform, &mut Visibility),
@@ -1649,8 +1675,12 @@ pub(crate) mod draw {
             // The camera is a top-level entity: its `Transform`, which
             // `follow_walker` has just set, is where the rod is drawn this
             // frame. (Its `GlobalTransform` is still last frame's here.)
-            let tip_local =
-                (eye.transform_point(crate::held::rod_tip()).as_dvec3() - frame.center).as_vec3();
+            // The tip is where the rod is drawn this frame (`held.rs`
+            // poses it in `Update`), not its rest.
+            let tip = tip_now
+                .as_deref()
+                .map_or_else(crate::held::rod_tip, |t| t.0);
+            let tip_local = (eye.transform_point(tip).as_dvec3() - frame.center).as_vec3();
             transform.translation = (frame.center + tip_local.as_dvec3()).as_vec3();
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
