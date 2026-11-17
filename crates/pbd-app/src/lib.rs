@@ -39,6 +39,8 @@ pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod missions;
 #[cfg(feature = "desktop")]
+pub mod motion_trace;
+#[cfg(feature = "desktop")]
 pub mod night_lights;
 #[cfg(feature = "desktop")]
 pub mod overlay;

@@ -1610,6 +1610,8 @@ pub fn run(args: &[String]) {
     .insert_resource(tools)
     // And the dug blocks still floating where they were cut.
     .add_plugins(pbd_app::drops::DropsPlugin)
+    // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
+    .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
     // Each world's city sites, made once and kept in its save (`city-sites`).
@@ -2138,11 +2140,24 @@ pub fn run(args: &[String]) {
             if launch.fish_play {
                 app.insert_resource(FishPlay);
             }
+            // In a real-time run (no `--capture`) the script's frames count
+            // from `READY`, so its cast is not spent under the loading
+            // screen (`movement-smoothness`'s fishing trace).
+            let live = launch.capture.is_none();
+            if live {
+                app.insert_resource(FishLive);
+            }
             app.add_systems(
                 PreUpdate,
                 (swim_script, fish_script)
                     .chain()
-                    .after(bevy::input::InputSystems),
+                    .after(bevy::input::InputSystems)
+                    .run_if(
+                        move |ready: Option<Res<pbd_app::loading::Warming>>,
+                              loading: Option<Res<pbd_app::WorldLoading>>| {
+                            !live || (ready.is_none() && loading.is_none())
+                        },
+                    ),
             );
         }
         if let Some(seconds) = launch.sail_for {
@@ -4233,6 +4248,12 @@ fn load_hold_script(
 #[derive(Resource)]
 struct FishPlay;
 
+/// A real-time `--fish` run (no `--capture`): the first click only takes the
+/// pointer, so while the line is in, the script casts again every three
+/// seconds (`movement-smoothness`'s fishing trace).
+#[derive(Resource)]
+struct FishLive;
+
 /// One scripted cast for `--fish`: the left button held for most of a second
 /// from frame 90, and the fishery's state logged every second, so a run says
 /// what the water held as well as showing it.
@@ -4243,6 +4264,7 @@ fn fish_script(
     status: Option<Res<pbd_app::fish::FishingStatus>>,
     fauna: Res<pbd_app::config::FaunaConfig>,
     play: Option<Res<FishPlay>>,
+    live: Option<Res<FishLive>>,
     hotbar: Option<Res<pbd_app::hotbar::Hotbar>>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut was: Local<Option<pbd_core::fishing::Phase>>,
@@ -4264,6 +4286,17 @@ fn fish_script(
         91..=149 => {}
         150 => buttons.release(MouseButton::Left),
         _ => {}
+    }
+    if live.is_some()
+        && *frame > 150
+        && let Some(fishery) = fishery.as_deref()
+        && matches!(fishery.line.phase, Phase::Ready | Phase::Charging)
+    {
+        if *frame % 180 < 60 {
+            buttons.press(MouseButton::Left);
+        } else {
+            buttons.release(MouseButton::Left);
+        }
     }
     // `--fish-play`: the bite played out as a player plays it.
     if play.is_some()
@@ -4299,6 +4332,8 @@ fn fish_script(
                     buttons.press(MouseButton::Left);
                 }
             }
+            // A live run's recast (above) holds the button itself.
+            Phase::Ready | Phase::Charging if live.is_some() => {}
             _ => {
                 if buttons.pressed(MouseButton::Left) {
                     buttons.release(MouseButton::Left);

@@ -836,11 +836,37 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
     out
 }
 
-/// What is left of a colour at `depth_m` under the sea: the daylight's
-/// downwelling, as the seabed is lit (`ocean-environments` B2), never quite
-/// black so a shape still reads against the murk.
-pub fn dimmed(downwell_per_m: [f32; 3], depth_m: f32) -> [f32; 3] {
-    pbd_core::ocean::light_left(downwell_per_m, depth_m).map(|l| l.max(0.04))
+/// The water sea life is seen in: the daylight it lets down per metre and
+/// its deep colour, both from the water settings (`ocean-environments` B23).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UnderWater {
+    pub downwell_per_m: [f32; 3],
+    pub deep: [f32; 3],
+}
+
+impl UnderWater {
+    pub fn of(water: Option<&crate::config::WaterSettings>) -> Self {
+        let defaults;
+        let water = match water {
+            Some(water) => water,
+            None => {
+                defaults = crate::config::WaterSettings::default();
+                &defaults
+            }
+        };
+        Self {
+            downwell_per_m: water.downwell_per_m,
+            deep: water.deep_color,
+        }
+    }
+
+    /// A creature's or a sea piece's colour `depth_m` under the surface of
+    /// the water it is in, as the seabed at that depth is tinted
+    /// ([`pbd_core::ocean::under_water_albedo`]): dimmed by the daylight
+    /// left and greyed toward the deep, never quite black.
+    pub fn albedo(&self, colour: [f32; 3], depth_m: f32) -> [f32; 3] {
+        pbd_core::ocean::under_water_albedo(colour, self.downwell_per_m, self.deep, depth_m)
+    }
 }
 
 // ---- the tile's mesh (main thread) -------------------------------------------
@@ -1218,7 +1244,7 @@ fn build_tile(
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
     low_water_m: f32,
-    downwell: [f32; 3],
+    water: UnderWater,
     seed: u32,
 ) -> Built {
     let lib = library();
@@ -1256,14 +1282,15 @@ fn build_tile(
                 let height = (sea_radius - ground - 0.3).max(1.0);
                 let mut kelp = Verts::default();
                 kelp_stand(origin, axes, height, i as f32 * 0.37, &mut kelp);
-                let light = dimmed(downwell, height * 0.5);
                 out.kelp.uvs.extend_from_slice(&kelp.uvs);
                 for (q, c) in kelp.positions.into_iter().zip(kelp.colours) {
                     let q = Vec3::from_array(q);
                     out.kelp.rest.push(q);
-                    out.kelp
-                        .colours
-                        .push([c[0] * light[0], c[1] * light[1], c[2] * light[2], 1.0]);
+                    // Each vertex by its own depth: the frond's foot darker
+                    // than its top, as the bed beside it.
+                    let [r, g, b] =
+                        water.albedo([c[0], c[1], c[2]], sea_radius - (q + anchor).length());
+                    out.kelp.colours.push([r, g, b, 1.0]);
                     out.kelp.height.push((q - origin).dot(p.dir).max(0.0));
                     out.kelp.axis.push(axes.0);
                     out.kelp.phase.push(i as f32 * 0.37);
@@ -1274,12 +1301,7 @@ fn build_tile(
                     continue;
                 };
                 let scale = Vec3::new(p.scale, p.scale * p.tall, p.scale);
-                let light = dimmed(downwell, sea_radius - ground);
-                let tint = [
-                    p.colour[0] * light[0],
-                    p.colour[1] * light[1],
-                    p.colour[2] * light[2],
-                ];
+                let tint = water.albedo(p.colour, sea_radius - ground);
                 if sways(kind) {
                     lay_swaying(
                         shape,
@@ -1333,7 +1355,9 @@ fn build_tile(
 }
 
 /// A tile's ambient life and plumes at a moment, round the eye (`eye` in
-/// the tile's frame): lit fish and seals, and the unlit smoke.
+/// the tile's frame): lit fish and seals, and the unlit smoke. `seen` is the
+/// tint the water gives a creature at a point of the tile's frame
+/// ([`UnderWater::albedo`] by its depth, `ocean-environments` B23).
 #[allow(clippy::too_many_arguments)]
 fn ambient(
     list: &mut [Ambient],
@@ -1341,6 +1365,7 @@ fn ambient(
     clock: f32,
     tide: f32,
     eye: Vec3,
+    seen: &dyn Fn(Vec3) -> [f32; 3],
     lit: &mut Verts,
     smoke: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
 ) {
@@ -1375,7 +1400,7 @@ fn ambient(
                 pose: Pose::Moving,
             },
             &place,
-            [1.0; 3],
+            seen(at),
             lp,
             lc,
             lu,
@@ -1459,7 +1484,7 @@ fn ambient(
                         pose: Pose::HauledOut,
                     },
                     &place,
-                    [1.0; 3],
+                    seen(origin),
                     lp,
                     lc,
                     lu,
@@ -1652,6 +1677,7 @@ fn warm_glow(
     commands.spawn((
         Name::new("Kelp (warm)"),
         crate::field_light::LitByField,
+        crate::field_light::LitLikeTerrain,
         Mesh3d(meshes.add(mesh_of(card, true))),
         MeshMaterial3d(kelp.clone()),
         Transform::default(),
@@ -1749,6 +1775,7 @@ fn tiles(
         return;
     }
     let now = time.elapsed_secs();
+    let under = UnderWater::of(water.as_deref());
     let radius = cfg.radius_m;
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
     let eye_dir = eye.normalize_or(Vec3::Y);
@@ -1844,12 +1871,17 @@ fn tiles(
         if !drawn.ambient.is_empty() {
             let (mut lit, mut smoke) = (Verts::default(), Verts::default());
             if fade < 1.0 {
+                // Depth under the sea's tided surface over the tile.
+                let surface = sea.radius + tide;
+                let anchor = drawn.anchor;
+                let seen = |at: Vec3| under.albedo([1.0; 3], surface - (at + anchor).length());
                 ambient(
                     &mut drawn.ambient,
                     seconds,
                     now,
                     tide,
                     local_eye,
+                    &seen,
                     &mut lit,
                     (&mut smoke.positions, &mut smoke.colours),
                 );
@@ -1928,23 +1960,12 @@ fn tiles(
     let anchor = tile_centre(key, radius) * sea.radius;
     let contact = contact.as_deref();
     let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32;
-    let downwell = water
-        .as_deref()
-        .map_or(pbd_core::ocean::OCEAN_DOWNWELL_PER_M, |w| w.downwell_per_m);
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
     // The tide's lowest under the mean: a third of its range.
     let low_water_m = sea.tide_range_m / 3.0;
-    let built = build_tile(
-        &pieces,
-        anchor,
-        bed,
-        sea.radius,
-        low_water_m,
-        downwell,
-        seed,
-    );
+    let built = build_tile(&pieces, anchor, bed, sea.radius, low_water_m, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -1973,6 +1994,8 @@ fn tiles(
         .spawn((
             Name::new("Sea places tile"),
             crate::field_light::LitByField,
+            // Lit as the seabed beside it is (`ocean-environments` B23).
+            crate::field_light::LitLikeTerrain,
             crate::field_light::Faded(1.0),
             Transform::from_translation(at),
             Visibility::default(),
@@ -2131,6 +2154,34 @@ fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
 mod tests {
     use super::*;
 
+    /// Design B23: sea life is tinted by the terrain's own rule for the
+    /// seabed. The rule lives once in the core
+    /// (`pbd_core::ocean::under_water_albedo`); this holds the terrain
+    /// shader's copy of it to the same expression, so the two cannot drift.
+    #[test]
+    fn sea_life_takes_the_seabeds_under_water_tint() {
+        let shader = include_str!("../../../../assets/shaders/planet_surface.wgsl");
+        let flat: String = shader.split_whitespace().collect();
+        assert!(
+            flat.contains(
+                "color=mix(color*attenuation,params.water_deep.rgb*face_light*attenuation,\
+                 (1.-dot(attenuation,vec3(1./3.)))*0.5);"
+            ),
+            "the seabed's under-water tint changed: change under_water_albedo with it"
+        );
+        assert!(flat.contains("letattenuation=exp(-params.water_absorption.rgb*water_depth);"));
+        // And the app reads it from the settings the terrain is given.
+        let settings = crate::config::WaterSettings::default();
+        let water = UnderWater::of(Some(&settings));
+        assert_eq!(water.downwell_per_m, settings.downwell_per_m);
+        assert_eq!(water.deep, settings.deep_color);
+        assert_eq!(water, UnderWater::of(None));
+        let shallow = water.albedo([0.85, 0.63, 0.23], 1.0);
+        let deeper = water.albedo([0.85, 0.63, 0.23], 8.0);
+        assert!((0..3).all(|i| deeper[i] < shallow[i]));
+        assert_eq!(water.albedo([0.85, 0.63, 0.23], -2.0), [0.85, 0.63, 0.23]);
+    }
+
     /// Design B18: a floe is laid only where its ice clears the ground at
     /// low water, so none stands on a beach or a terrace; and the floe seal
     /// is drawn on every frame of its slide off, its swim and its climb back,
@@ -2166,9 +2217,25 @@ mod tests {
             reach: 1.3,
             floe: true,
         }];
-        let built = build_tile(&pieces, dir * radius, flat(-0.6), radius, 1.0, [0.1; 3], 1);
+        let built = build_tile(
+            &pieces,
+            dir * radius,
+            flat(-0.6),
+            radius,
+            1.0,
+            UnderWater::of(None),
+            1,
+        );
         assert!(built.floes.positions.is_empty(), "no floe on the beach");
-        let built = build_tile(&pieces, dir * radius, flat(4.0), radius, 1.0, [0.1; 3], 1);
+        let built = build_tile(
+            &pieces,
+            dir * radius,
+            flat(4.0),
+            radius,
+            1.0,
+            UnderWater::of(None),
+            1,
+        );
         assert!(!built.floes.positions.is_empty(), "a floe on the sea");
 
         // The seal: the eye walks in from 30 m to 2 m, waits, then leaves.

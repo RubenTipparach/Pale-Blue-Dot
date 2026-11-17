@@ -1823,3 +1823,123 @@ other places, slowly across the cavern's mouth, under the overhang and
 through the waterline, the eye's height burnt in; on Drive as
 `sea-cavern-<place>-<before|after>-1080p60.mp4`, contact sheets and the
 frame-by-frame list in `docs/screenshots/sea-cavern-holes/`.
+
+**Follow-up: a dug pit on a beach (owner, 2026-11-17), not reproduced.**
+The owner sent a screenshot at `39.725 15.339`, 1.6 m up: a square pit one
+cell wide and one or two layers deep under a one-layer sand cliff, with dry,
+lit sand walls and floor and shallow sea round it. Their hotbar held dirt,
+so they may have dug there. Their build is not known.
+
+The checks, on `main` at `db8f17e` (the reach, through #98):
+- **Captures** at the owner's place and height, at low tide, the day's tide
+  and high tide:
+  - the spot's own pit, a shaft beside a one-layer sand slab;
+  - pits dug through the edit path, one and two layers deep, beside the
+    water and away from it;
+  - the same pits after reloading the save.
+- **A measurement**, `sea_hole_dig_report`, an ignored test. It ran five edit
+  sequences on every beach cell within 12 m: dig 1, dig 2, place and take
+  back, dig-fill-dig, and dirt in the water then dig. Each ran through
+  `write_layer` and `mark_sea`, then was rebuilt from the save. 380
+  sequences on 76 cells left no cell under the high water with neither a
+  sheet over it nor water at the sea's top.
+
+Every pit fills to the tide's surface. The build before the reach
+(`8fa25d6`) gives the same pictures there. So no rule is changed. The stills
+and the method are in `docs/screenshots/sea-hole-beach/`. What would settle
+it is a save from the owner's world or the screenshot's HUD line, giving the
+build and the tide.
+
+### B23. Fish under the water at full brightness (owner, 2026-11-17)
+
+The owner, under a shallow sea by day, looking level at a school of
+yellow and orange striped fish 2 to 6 m off: "fish under water have full
+light brightness, the water should lower light brightness". The seabed,
+the far wall and the surface from below are dimmed and tinted teal by the
+water; the fish stand out of it like stickers.
+
+**Reproduced** (`docs/screenshots/underwater-fish-light/`, the "before"
+frames): the reef at `13.096 94.896` with `--life reef:3` and its anthias,
+a sea shore with `--life perch:3`, about 8 m down at `-4.125 -11.125`, and the
+reef at 23:00 with a torch. The composite's murk does reach the fish (they
+write depth like the reef, and the compose runs after the main pass); what
+differs is how they are lit and tinted before it. Four causes:
+
+1. **Lit by another light.** Every creature and every sea piece is drawn
+   with the water life's material under `LitByField` but not
+   `LitLikeTerrain` (`fish.rs` the school root, `fish/places.rs` the tile
+   root), so `field_lit.wgsl` gives them Bevy's PBR picture
+   (`apply_pbr_lighting`, `field_lit.wgsl:339`): Bevy's 15,000 lx sun,
+   its own ambient and the mirrored sky, gated by the field. The seabed
+   beside them is lit by the terrain's fill and its sun after the air
+   (`sun_air`). Two lights in one view, by day and at night.
+2. **Half the water's tint.** The terrain under water takes the daylight
+   left at its depth AND a share of the water's deep colour
+   (`planet_surface.wgsl:3846`: `mix(c*att, deep*light*att,
+   (1 - mean(att))*0.5)`). Sea life takes only the first (`places::dimmed`
+   in `fish.rs:1561`, `fish/places.rs:1259` and `:1277`), so it keeps its
+   saturated colours where the bed beside it greys toward the water.
+3. **Ambient fish are not dimmed at all.** The reef tile's anthias cloud,
+   its clownfish and a seal swimming off its floe are emitted with a white
+   tint (`fish/places.rs` `ambient`, `:1378`, `:1462`): the full colour of
+   the atlas at any depth.
+4. **Depth from the wrong surface.** A school's depth is measured from the
+   mean sea sphere (`sea.radius - |p|`, `fish.rs:1561`). In a lake or a
+   river over sea level that is negative, so fresh-water fish (perch,
+   minnows) are never dimmed, and in the sea the tide is ignored.
+
+**The fix: one rule for what water does to a colour, and the terrain's
+light.**
+
+- **`pbd_core::ocean::under_water_albedo(colour, downwell, deep, depth)`**:
+  the terrain's own rule, `att * mix(colour, deep, (1 - mean(att)) * 0.5)`
+  with `att = light_left(downwell, depth)`, floored at 0.04 as `dimmed`
+  was so a shape still reads in the dark. A test holds its expression to
+  `planet_surface.wgsl`'s. `places::dimmed` becomes a call to it, and every
+  sea-life colour goes through it: the schools, the reef's pieces, its
+  swaying pieces, the kelp, and the ambient anthias, clownfish and seals.
+- **Depth from the water the creature is in**: a school reads its depth
+  from `PlanetWater::surface` at its anchor, the same surface it swims
+  under (a lake's or river's own top, else the sea's tided one). A tile's
+  ambient life reads the sea's tided surface over the tile.
+- **Lit as the terrain is**: the school root, the sea-places tile root and
+  the `--life lineup` instrument carry `LitLikeTerrain`, so
+  `field_lit.wgsl` lights them with the terrain's fill, the sun after the
+  air, the sun's cascades and the lamps, the seabed's numbers. The look is
+  a per-mesh row in the one shared material: no new pipeline.
+- **Unchanged**: the murk by distance and Snell's window (the composite,
+  already applied to them), the water's transmission seen from above (the
+  sheet), the atlas, the palette and the bodies. No outlines. The vents'
+  glow and smoke stay unlit (they are light). Saves are untouched: this is
+  drawing only.
+
+**Validation**: before and after stills of the same frames in
+`docs/screenshots/underwater-fish-light/`: near the surface (the owner's
+shot), about 9 m down, from above looking into the water, and at night
+with a torch; looked at for the fish sitting in the water like the reef
+and kelp. A test of the rule; READY with no new `LATE_PIPELINE`.
+
+**What the frames showed (2026-11-17, built).** The largest part of the
+"full brightness" was cause 1's mirrored sky: Bevy's picture gave every
+creature and sea piece the open sky's light off its back (`sky_specular`),
+and nothing in the water dims that, so a ray 8 m down was a glowing cyan
+sliver over a dim bed and the reef fish's fins a bright blue rim. Lit as the
+terrain, the ray is as dark as the bed beside it and the reef's own pieces
+sit at the seabed's brightness. Fish 1 to 2 m under the surface stay about
+as bright as before: most of the daylight is left there, so they are lit
+more than a bed 3.4 m down, by the water's own rule. Not filmed: a school in
+a lake or river over sea level (cause 4), and a lamp beside a school under
+water (the instrument's torch landed 7 m off).
+
+**The owner's view, measured (second pass).** The owner's fish are perch,
+a school. At their spot (`24.000 122.66`, `docs/screenshots/underwater-
+fish-light/owner-*`) the school is darker than the sand behind it (luma 34
+against 45) and keeps its yellow and red. A white body lying on the sand
+takes the sand's own transfer (linear 0.008, 0.13, 0.14 against 0.004,
+0.15, 0.19), so the fish are treated as the seabed is: the same light, depth
+tint and murk by distance. The difference is depth and distance: perch swim
+0.3 to 1 m under the surface, 3 to 4 m off, and keep about three times the
+red of a bed 2.4 m down and 5 m off. Tinting them further than the water
+over them would be a look of its own, for the owner to decide with the
+frames, and is not built here. The `--life lineup` instrument is tinted by
+its depth too, so a body can be read on the bed beside the sand.

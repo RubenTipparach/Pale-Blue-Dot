@@ -38,6 +38,10 @@ pub struct School {
     /// fish that strays over water too shallow for it is pushed back toward.
     pub anchor: Vec3,
     pub positions: Vec<Vec3>,
+    /// Where each fish was before the last [`School::step`]: the school
+    /// steps on its own clock, slower than the frame, and is drawn between
+    /// the two (`movement-smoothness`), never at the raw step.
+    pub before: Vec<Vec3>,
     pub velocities: Vec<Vec3>,
     /// Seconds of fright left per fish.
     pub spook: Vec<f32>,
@@ -102,6 +106,7 @@ impl School {
             seed,
             anchor,
             positions: Vec::with_capacity(count as usize),
+            before: Vec::new(),
             velocities: Vec::with_capacity(count as usize),
             spook: vec![0.0; count as usize],
             ids: (0..count as u32).collect(),
@@ -198,6 +203,28 @@ impl School {
         }
     }
 
+    /// Where fish `i` is drawn, `alpha` (0 to 1) of the way from the step
+    /// before to the last one (`movement-smoothness`): the school's clock
+    /// runs at `step_hz`, slower than the frame, and a fish drawn at the raw
+    /// step stands still for frames and then jumps while the camera glides.
+    /// A fish held at the line's lure is drawn at the lure, which the line
+    /// moves every frame. A fish with no step behind it yet is drawn where
+    /// it is.
+    pub fn drawn(&self, i: usize, alpha: f32) -> Vec3 {
+        if let Some((held, point)) = self.held
+            && held == i
+        {
+            return point;
+        }
+        let now = self.positions[i];
+        match self.before.get(i) {
+            Some(was) if self.before.len() == self.positions.len() => {
+                was.lerp(now, alpha.clamp(0.0, 1.0))
+            }
+            _ => now,
+        }
+    }
+
     /// Frighten one fish.
     pub fn frighten(&mut self, fish: usize, seconds: f32) {
         if let Some(s) = self.spook.get_mut(fish) {
@@ -211,6 +238,9 @@ impl School {
             return;
         }
         self.positions.swap_remove(fish);
+        if fish < self.before.len() {
+            self.before.swap_remove(fish);
+        }
         self.velocities.swap_remove(fish);
         self.spook.swap_remove(fish);
         self.ids.swap_remove(fish);
@@ -261,6 +291,7 @@ impl School {
         if dt.is_nan() || dt <= 0.0 || self.is_empty() {
             return;
         }
+        self.before.clone_from(&self.positions);
         self.goal_t -= dt;
         if self.goal_t <= 0.0 {
             self.goal = self.pick_goal(species, flock.goal_reach_m, water);
