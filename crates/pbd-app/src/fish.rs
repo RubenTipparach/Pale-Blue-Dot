@@ -187,6 +187,7 @@ impl Plugin for FishPlugin {
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
+            .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
                 Update,
@@ -1407,6 +1408,21 @@ pub(crate) mod draw {
     #[derive(Component)]
     pub struct MeterFill;
 
+    /// How each creature was drawn this frame (`movement-smoothness` design
+    /// 8): its forward and its up, by its school's seed and its own id. The
+    /// motion trace reads what the mesh was built with from here.
+    #[derive(Resource, Default, Debug)]
+    pub struct DrawnHeadings {
+        pub map: HashMap<(u64, u32), Heading>,
+    }
+
+    /// One creature's drawn heading.
+    #[derive(Clone, Copy, Debug)]
+    pub struct Heading {
+        pub forward: Vec3,
+        pub up: Vec3,
+    }
+
     /// The float, the line and the HUD line; the rod is hung on the walking
     /// camera once there is one.
     pub fn spawn(
@@ -1591,6 +1607,7 @@ pub(crate) mod draw {
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         float: Res<DrawnFloat>,
+        mut headings: ResMut<DrawnHeadings>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
             Entity,
@@ -1649,7 +1666,16 @@ pub(crate) mod draw {
                 faded.0 = fade;
             }
             if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
-                build(mesh, school, species, now, dim(school), alpha, held);
+                build(
+                    mesh,
+                    school,
+                    species,
+                    now,
+                    dim(school),
+                    alpha,
+                    held,
+                    &mut headings,
+                );
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1664,7 +1690,16 @@ pub(crate) mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now, dim(school), alpha, held);
+            build(
+                &mut mesh,
+                school,
+                species,
+                now,
+                dim(school),
+                alpha,
+                held,
+                &mut headings,
+            );
             let handle = meshes.add(mesh);
             commands
                 .spawn((
@@ -1750,6 +1785,7 @@ pub(crate) mod draw {
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
         held: Vec3,
+        headings: &mut DrawnHeadings,
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
@@ -1821,6 +1857,9 @@ pub(crate) mod draw {
                 tint = water.albedo(tint, surface - p.length());
             }
             let look = bodies::Look { t, phase, pose };
+            headings
+                .map
+                .insert((school.seed, id), Heading { forward, up: top });
             let place = bodies::Place {
                 origin,
                 forward,

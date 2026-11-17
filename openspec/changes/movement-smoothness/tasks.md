@@ -61,6 +61,19 @@
 - [x] 5.7 Video: a bite seen from under water, before and after, one file
   (`--watch-hook`, design 7.6).
 
+## 6. The fish's pose (design 8)
+
+- [ ] 6.1 Trace columns: the followed creature's drawn forward and up, and its
+  turn per frame; `motion_graph.py` counts turns over 30 degrees.
+- [ ] 6.2 Measure before: a nibble and a strike under water, and fish swimming.
+- [ ] 6.3 `DrawnHeadings`: headings eased between steps, kept with no
+  velocity, a held fish level along the heading it took the lure with.
+- [ ] 6.4 Tests: a held fish's bob does not turn it; a step's turn is spread
+  over frames; a reversal turns about up.
+- [ ] 6.5 Measure after; fill in design 8.4.
+- [ ] 6.6 Video: the nibble and strike from under water, before and after,
+  one file.
+
 ## 4. Gate
 
 - [ ] 4.1 The owner plays the fishing again.

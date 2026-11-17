@@ -594,3 +594,84 @@ strike, in real time and at a quarter speed). Read frame by frame:
   the float for 6 to 8 frames at the strike, then snaps level. That is its
   pose (built from its velocity), not this change; it is left for a
   follow-up.
+
+## 8. The fish's pose: a heading from a bob, and turns in 30 Hz steps (owner, 2026-11-17)
+
+The owner, on the under-water bite video of 7.6: "the problem isnt even
+jitter right now...... the fish is glitching like hell", and then "why is
+rotation all snappy?". Read at 20 fps, the video shows the fish at the lure
+drawn level, then for one frame standing on its tail under the float, then
+level again, over and over through the nibble and the strike, in the build
+before 7 (`d0f101b3`) and after it alike. Some frames show the fish nose-on,
+filling the view, or turned so the line runs into its side.
+
+### 8.1 Cause (read in the code, measured in 8.4)
+
+`draw::build` turns each creature along its velocity: for a schooling fish
+`forward = (v - up * v·up * 0.5).normalize_or(up.any_orthonormal_vector())`,
+from `School::velocities[i]`, the velocity of its latest 30 Hz step.
+
+- **A fish at the lure has no velocity of its own.** `School::step` gives a
+  held fish (nibbling, biting, hooked) `velocities[i] = (lure - positions[i])
+  / dt`: how far the lure moved in that step. While the fish nibbles or bites
+  the lure moves only with the float, and the float's dips are straight down
+  and up, so `v` is vertical: `forward` is half of `up` and the fish is drawn
+  standing on its nose or its tail. On a step the lure did not move, `v` is
+  zero and `forward` falls back to `any_orthonormal_vector()`, a fixed but
+  arbitrary bearing that has nothing to do with the last one; the fish snaps
+  round to it. Hooked, the lure is dragged by the line's own rule, so the
+  heading is whichever way the float went that step, and at the strike the
+  float's dip makes it vertical again (the "standing on its tail for 6 to 8
+  frames" of 7.6). The position pops in the video are this too: a body turned
+  nose-on or on end round the same point covers a different part of the view
+  from 0.85 m away.
+- **Every fish turns in 30 Hz steps.** Since section 5 a fish's position is
+  drawn between its steps, but its heading is still the latest step's, never
+  interpolated. At 60 to 120 fps it holds for frames and then turns all at
+  once, as far as one step's velocity changed: a sharp turn is drawn in one
+  frame.
+
+Nothing in the simulation flickers: the line's phase and the held fish do not
+change between frames. Both are the drawing's.
+
+### 8.2 The fix (draw-side only)
+
+A draw-only `DrawnHeadings` resource keeps, for each creature by its school's
+seed and its id, the forward it was drawn with last frame.
+
+- **The step's heading is the target, the drawn heading eases to it.** Each
+  frame the drawn forward turns toward the heading of the latest step by
+  `1 - exp(-dt / HEADING_EASE_S)`, `HEADING_EASE_S` 0.08 s (a little over
+  two school steps). A step's turn is spread over the frames between steps
+  instead of landing in one. A reversal (target opposite) turns about the
+  local up, never through an arbitrary axis.
+- **No velocity, no new heading.** When a step's velocity is under 1 mm/s the
+  target is the heading already drawn.
+- **A fish at the lure keeps the heading it took the lure with, level.** The
+  first frame a fish is held, its drawn forward, with the up part taken out,
+  is kept as its held heading, and it is drawn along that while it nibbles,
+  bites and is on the line; it is never turned by the lure's bob. When it is
+  let go it eases back to its own swimming heading.
+- A creature seen for the first time is drawn along its target at once; one
+  no longer drawn is forgotten.
+- Pose-specific turns (a crab's sideways walk, a diving duck's nose-down tip)
+  are applied after the eased heading as before.
+
+The simulation, the catch and bite rules and saves are untouched: nothing
+reads `DrawnHeadings` but the drawing and the motion trace. The cost is that
+a fish's drawn heading lags its swimming by about 0.08 s, and a hooked fish
+dragged by the line faces the way it took the bait rather than turning with
+each run (left for later; it is level and steady, which is what was asked).
+
+### 8.3 The instrument
+
+The motion trace gets the followed creature's drawn forward and up (from
+`DrawnHeadings`, what the mesh is built with) and the angle its forward turned
+since the last frame; `tools/motion_graph.py` reports the per-frame turn
+(p50, p99, max, and frames over 30 degrees), split into the fish at the lure
+and swimming fish. Measured before (the heading as built today, written into
+the same resource with no easing) and after.
+
+### 8.4 Results
+
+(Filled in when measured.)
