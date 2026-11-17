@@ -1647,3 +1647,14 @@ going from 0.6 m over the surface to 0.4 m under it at 0.1 m/s, on down,
 and back up through it, its height burnt in. On Drive as
 `underwater-waterline-<place>-<before|after>-1080p60.mp4`; contact sheets
 and the frame-by-frame list in `docs/screenshots/underwater-waterline/`.
+
+**Validated** (2026-11-16, `docs/screenshots/underwater-waterline/README.md`):
+at the owner's shallow-sea spot the before video shows the split frame for
+every frame under the surface (the mirrored floor over the waterline, the
+streak band); the after video shows the floor under water and the murk
+ceiling over the waterline, no mirror and no streaks. Under the sea in rain
+the dark mirror and its speckled band are gone; the rings shade the murk.
+On the beach the before video's beach band steps 2.5 to 3.1 (of 255) in
+colour at every flip into air and back; the after video's steps none over
+1.0. **Open:** the murk ceiling is darker than a bright shallow floor; a
+lighter ceiling would be a look change, for the owner with the sheets.
