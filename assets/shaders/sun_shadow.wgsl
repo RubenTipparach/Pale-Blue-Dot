@@ -22,11 +22,26 @@ struct SunCascades {
     // normal offset and z the depth bias, both in texels of the cascade in
     // use; w the share of a box across which it blends into the next.
     settings: vec4<f32>,
+    // The player's SHADOW QUALITY (`shadow-quality`): x how many cascades
+    // are drawn, finest first; y the soft filter's least radius and z the
+    // 3 x 3 filter's spacing, both in texels (the blur); w the share of each
+    // map's side the cascades are drawn into (0.5: 1024 of 2048).
+    quality: vec4<f32>,
+}
+
+// The texels of a cascade's map in use.
+fn sun_map_size(map: texture_depth_2d_array, quality: vec4<f32>) -> vec2<f32> {
+    return vec2<f32>(textureDimensions(map)) * quality.w;
+}
+
+// A cascade's clip position to where it is in the map, in the corner in use.
+fn sun_map_uv(clip: vec2<f32>, quality: vec4<f32>) -> vec2<f32> {
+    return vec2<f32>(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5) * quality.w;
 }
 
 // A 3 x 3 kernel of comparison taps round `uv`, each a bilinear 2 x 2: an edge
 // a texel and a half soft. `spacing` is in texels (one: today's).
-fn sun_shadow_taps(map: texture_depth_2d_array, cmp: sampler_comparison,
+fn sun_shadow_taps(map: texture_depth_2d_array, cmp: sampler_comparison, quality: vec4<f32>,
                    uv: vec2<f32>, layer: u32, depth: f32, spacing: f32) -> f32 {
     let texel = spacing / vec2<f32>(textureDimensions(map));
     var lit = 0.0;
@@ -43,7 +58,7 @@ fn sun_shadow_taps(map: texture_depth_2d_array, cmp: sampler_comparison,
 // point stands in its box, the larger of |x| and |y| (over one: outside it).
 // `clip_from_body`, `texel_m` and `depth_m` are the cascade's.
 fn sun_shadow_in(map: texture_depth_2d_array, cmp: sampler_comparison, settings: vec4<f32>,
-                 i: u32, clip_from_body: mat4x4<f32>, texel_m: f32, depth_m: f32,
+                 quality: vec4<f32>, i: u32, clip_from_body: mat4x4<f32>, texel_m: f32, depth_m: f32,
                  position: vec3<f32>, normal: vec3<f32>) -> vec2<f32> {
     let lifted = position + normal * (settings.y * texel_m);
     let clip = clip_from_body * vec4<f32>(lifted, 1.0);
@@ -51,9 +66,9 @@ fn sun_shadow_in(map: texture_depth_2d_array, cmp: sampler_comparison, settings:
     if edge >= 1.0 || clip.z < 0.0 || clip.z > 1.0 {
         return vec2<f32>(1.0, 2.0);
     }
-    let uv = vec2<f32>(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5);
+    let uv = sun_map_uv(clip.xy, quality);
     let depth = clip.z - settings.z * texel_m / depth_m;
-    return vec2<f32>(sun_shadow_taps(map, cmp, uv, i, depth, 1.0), edge);
+    return vec2<f32>(sun_shadow_taps(map, cmp, quality, uv, i, depth, quality.z), edge);
 }
 
 // `lighting-model` L3: the disc's taps, a Poisson set in the unit circle. The
@@ -76,7 +91,7 @@ const SUN_SEARCH = array<vec2<f32>, 8>(
 // distance and with the light's slope on the face (`tan_l`), so a wide disc
 // on a face turned from the sun does not shadow the face itself (acne).
 fn sun_shadow_soft_in(map: texture_depth_2d_array, cmp: sampler_comparison, settings: vec4<f32>,
-                      i: u32, clip_from_body: mat4x4<f32>, texel_m: f32, depth_m: f32,
+                      quality: vec4<f32>, i: u32, clip_from_body: mat4x4<f32>, texel_m: f32, depth_m: f32,
                       position: vec3<f32>, normal: vec3<f32>, spread: f32, tan_l: f32) -> vec2<f32> {
     let lifted = position + normal * (settings.y * texel_m);
     let clip = clip_from_body * vec4<f32>(lifted, 1.0);
@@ -84,8 +99,8 @@ fn sun_shadow_soft_in(map: texture_depth_2d_array, cmp: sampler_comparison, sett
     if edge >= 1.0 || clip.z < 0.0 || clip.z > 1.0 {
         return vec2<f32>(1.0, 2.0);
     }
-    let size = vec2<f32>(textureDimensions(map));
-    let uv = vec2<f32>(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5);
+    let size = sun_map_size(map, quality);
+    let uv = sun_map_uv(clip.xy, quality);
     let depth = clip.z - settings.z * texel_m / depth_m;
     // Blockers up to 16 m over the receiver are searched for, the disc they
     // would make, in texels: between two and twenty-four.
@@ -93,7 +108,8 @@ fn sun_shadow_soft_in(map: texture_depth_2d_array, cmp: sampler_comparison, sett
     var blocker = 0.0;
     var found = 0.0;
     for (var k = 0u; k < 8u; k++) {
-        let at = vec2<i32>(clamp(uv * size + SUN_SEARCH[k] * search, vec2(0.0), size - 1.0));
+        let at = vec2<i32>(clamp(uv * vec2<f32>(textureDimensions(map)) + SUN_SEARCH[k] * search,
+            vec2(0.0), size - 1.0));
         let d = textureLoad(map, at, i32(i), 0);
         if d < depth {
             blocker += d;
@@ -104,12 +120,13 @@ fn sun_shadow_soft_in(map: texture_depth_2d_array, cmp: sampler_comparison, sett
         return vec2<f32>(1.0, edge);
     }
     let height_m = max(depth - blocker / found, 0.0) * depth_m;
-    let radius = clamp(height_m * spread / texel_m, 0.5, search);
+    let radius = clamp(height_m * spread / texel_m, quality.y, max(search, quality.y));
     var lit = 0.0;
     for (var k = 0u; k < 12u; k++) {
         let o = SUN_POISSON[k] * radius;
         let bias = length(o) * texel_m * min(tan_l, 8.0) * 1.2 / depth_m;
-        lit += textureSampleCompareLevel(map, cmp, uv + o / size, i, depth - bias);
+        lit += textureSampleCompareLevel(map, cmp, uv + o / vec2<f32>(textureDimensions(map)), i,
+            depth - bias);
     }
     return vec2<f32>(lit / 12.0, edge);
 }
@@ -119,7 +136,7 @@ fn sun_shadow_soft_in(map: texture_depth_2d_array, cmp: sampler_comparison, sett
 fn sun_shadow_pick(map: texture_depth_2d_array, cmp: sampler_comparison, c: SunCascades,
                    i: u32, position: vec3<f32>, normal: vec3<f32>, spread: f32, tan_l: f32) -> vec2<f32> {
     if spread > 0.0 && i < 2u {
-        return sun_shadow_soft_in(map, cmp, c.settings, i, c.clip_from_body[i], c.texel_m[i],
+        return sun_shadow_soft_in(map, cmp, c.settings, c.quality, i, c.clip_from_body[i], c.texel_m[i],
             c.depth_m[i], position, normal, spread, tan_l);
     }
     if spread > 0.0 {
@@ -129,11 +146,11 @@ fn sun_shadow_pick(map: texture_depth_2d_array, cmp: sampler_comparison, c: SunC
         if edge >= 1.0 || clip.z < 0.0 || clip.z > 1.0 {
             return vec2<f32>(1.0, 2.0);
         }
-        let uv = vec2<f32>(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5);
+        let uv = sun_map_uv(clip.xy, c.quality);
         let depth = clip.z - c.settings.z * c.texel_m[i] / c.depth_m[i];
-        return vec2<f32>(sun_shadow_taps(map, cmp, uv, i, depth, 0.75), edge);
+        return vec2<f32>(sun_shadow_taps(map, cmp, c.quality, uv, i, depth, 0.75 * c.quality.z), edge);
     }
-    return sun_shadow_in(map, cmp, c.settings, i, c.clip_from_body[i], c.texel_m[i],
+    return sun_shadow_in(map, cmp, c.settings, c.quality, i, c.clip_from_body[i], c.texel_m[i],
         c.depth_m[i], position, normal);
 }
 
@@ -148,7 +165,8 @@ fn sun_shadow_soft(map: texture_depth_2d_array, cmp: sampler_comparison, cascade
     let cl = clamp(n_dot_l, 0.05, 1.0);
     let tan_l = sqrt(1.0 - cl * cl) / cl;
     let band = max(c.settings.w, 1e-3);
-    for (var i = 0u; i < 4u; i++) {
+    let count = u32(c.quality.x + 0.5);
+    for (var i = 0u; i < count; i++) {
         let here = sun_shadow_pick(map, cmp, c, i, position, normal, spread, tan_l);
         if here.y >= 1.0 {
             continue;
@@ -158,7 +176,7 @@ fn sun_shadow_soft(map: texture_depth_2d_array, cmp: sampler_comparison, cascade
             return here.x;
         }
         var next = 1.0;
-        if i < 3u {
+        if i + 1u < count {
             let there = sun_shadow_pick(map, cmp, c, i + 1u, position, normal, spread, tan_l);
             if there.y >= 1.0 {
                 return here.x;
@@ -182,8 +200,9 @@ fn sun_shadow(map: texture_depth_2d_array, cmp: sampler_comparison, cascades: Su
         return 1.0;
     }
     let band = max(c.settings.w, 1e-3);
-    for (var i = 0u; i < 4u; i++) {
-        let here = sun_shadow_in(map, cmp, c.settings, i, c.clip_from_body[i], c.texel_m[i],
+    let count = u32(c.quality.x + 0.5);
+    for (var i = 0u; i < count; i++) {
+        let here = sun_shadow_in(map, cmp, c.settings, c.quality, i, c.clip_from_body[i], c.texel_m[i],
             c.depth_m[i], position, normal);
         if here.y >= 1.0 {
             continue;
@@ -193,9 +212,9 @@ fn sun_shadow(map: texture_depth_2d_array, cmp: sampler_comparison, cascades: Su
             return here.x;
         }
         var next = 1.0;
-        if i < 3u {
+        if i + 1u < count {
             let j = i + 1u;
-            let there = sun_shadow_in(map, cmp, c.settings, j, c.clip_from_body[j], c.texel_m[j],
+            let there = sun_shadow_in(map, cmp, c.settings, c.quality, j, c.clip_from_body[j], c.texel_m[j],
                 c.depth_m[j], position, normal);
             if there.y >= 1.0 {
                 return here.x;

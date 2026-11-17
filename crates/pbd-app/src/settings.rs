@@ -41,8 +41,9 @@ use std::time::{Duration, Instant};
 /// 2026-11-16), and an older file's rebind of either moves onto it
 /// (`controls::KeyBinds::from_names`); version 9 added `reflections`
 /// (`reflection-quality`), which an older file reads as HIGH, the look it
-/// had.
-pub const VERSION: u32 = 9;
+/// had; version 10 added `shadows` (`shadow-quality`), which an older file
+/// reads as the new default, LOW (owner, 2026-11-17: "reduce to 2? 1024").
+pub const VERSION: u32 = 10;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -189,6 +190,9 @@ pub struct PlayerSettings {
     /// REFLECTIONS (`reflection-quality`): HIGH is the reflections as they
     /// were before the setting.
     pub reflections: Reflections,
+    /// SHADOW QUALITY (`shadow-quality`): ULTRA is the sun's shadows as
+    /// they were before the setting.
+    pub shadows: crate::config::ShadowQuality,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -206,6 +210,7 @@ impl Default for PlayerSettings {
             pixel_grass: true,
             flow_arrows: false,
             reflections: Reflections::High,
+            shadows: crate::config::ShadowQuality::Low,
         }
     }
 }
@@ -232,6 +237,7 @@ impl PlayerSettings {
         pixel_grass: true,
         flow_arrows: false,
         reflections: Reflections::High,
+        shadows: crate::config::ShadowQuality::Ultra,
     };
 }
 
@@ -251,6 +257,7 @@ struct File {
     pixel_grass: bool,
     flow_arrows: bool,
     reflections: Reflections,
+    shadows: crate::config::ShadowQuality,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -269,6 +276,7 @@ impl Default for File {
             pixel_grass: base.pixel_grass,
             flow_arrows: base.flow_arrows,
             reflections: base.reflections,
+            shadows: base.shadows,
             keys: BTreeMap::new(),
         }
     }
@@ -312,6 +320,7 @@ impl PlayerSettings {
             pixel_grass: file.pixel_grass,
             flow_arrows: file.flow_arrows,
             reflections: file.reflections,
+            shadows: file.shadows,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -334,6 +343,7 @@ impl PlayerSettings {
                 pixel_grass: self.pixel_grass,
                 flow_arrows: self.flow_arrows,
                 reflections: self.reflections,
+                shadows: self.shadows,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -380,6 +390,7 @@ impl PlayerSettings {
             pixel_grass: overrides.pixel_grass.unwrap_or(self.pixel_grass),
             flow_arrows: self.flow_arrows,
             reflections: overrides.reflections.unwrap_or(self.reflections),
+            shadows: overrides.shadows.unwrap_or(self.shadows),
         }
     }
 }
@@ -395,6 +406,7 @@ pub struct Overrides {
     pub rain_shadows: Option<bool>,
     pub pixel_grass: Option<bool>,
     pub reflections: Option<Reflections>,
+    pub shadows: Option<crate::config::ShadowQuality>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -733,6 +745,17 @@ pub fn follow_reflections(
     }
 }
 
+/// The sun's shadows follow SHADOW QUALITY (`config::SunShadowQuality`,
+/// `shadow-quality`).
+pub fn follow_shadows(
+    settings: Res<PlayerSettings>,
+    mut quality: ResMut<crate::config::SunShadowQuality>,
+) {
+    if quality.0 != settings.shadows {
+        quality.0 = settings.shadows;
+    }
+}
+
 /// The flow arrows follow the setting (`water-flow` task 3.4); F5 lays its
 /// own switch over it for the session.
 pub fn follow_flow_arrows(
@@ -760,6 +783,7 @@ impl Plugin for PlayerSettingsPlugin {
             .init_resource::<ScaledView>()
             .init_resource::<FramePacer>()
             .init_resource::<crate::config::ReflectQuality>()
+            .init_resource::<crate::config::SunShadowQuality>()
             .add_systems(
                 PostUpdate,
                 (
@@ -769,6 +793,7 @@ impl Plugin for PlayerSettingsPlugin {
                     follow_auto_step,
                     follow_rain_shadows,
                     follow_reflections,
+                    follow_shadows,
                     follow_flow_arrows,
                 ),
             );
@@ -864,11 +889,43 @@ mod tests {
                 flow_arrows: false,
                 // Version 9's: HIGH, the look it had.
                 reflections: Reflections::High,
+                shadows: crate::config::ShadowQuality::Low,
             }
         );
         assert!(
             Loaded::Read(1).writable(),
             "an older file takes the new field"
+        );
+    }
+
+    /// `shadow-quality`: a version-9 file (the last before SHADOW QUALITY)
+    /// reads LOW, the new default, and each level round-trips; a benchmark
+    /// draws them as they were, ULTRA.
+    #[test]
+    fn a_file_from_before_shadow_quality_reads_low() {
+        use crate::config::ShadowQuality;
+        let old = "(version: 9, frame_limit: Fps120, render_scale: 67, reflections: Medium)";
+        let (read, _, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 9);
+        assert_eq!(read.shadows, ShadowQuality::Low);
+        assert_eq!(read.reflections, Reflections::Medium);
+        for level in ShadowQuality::ALL {
+            let chosen = PlayerSettings {
+                shadows: level,
+                ..read
+            };
+            let (back, _, _) =
+                PlayerSettings::parse(&chosen.to_text(&KeyBinds::default())).unwrap();
+            assert_eq!(back.shadows, level);
+            assert_eq!(
+                ShadowQuality::parse(&level.label().to_lowercase()),
+                Some(level)
+            );
+        }
+        assert_eq!(PlayerSettings::ISOLATED.shadows, ShadowQuality::Ultra);
+        assert_eq!(
+            (ShadowQuality::Low.cascades(), ShadowQuality::Low.texels()),
+            (2, 1024)
         );
     }
 
@@ -891,7 +948,7 @@ mod tests {
         assert!(!read.pixel_grass && read.flow_arrows);
         assert!(Loaded::Read(8).writable());
         let text = read.to_text(&KeyBinds::default());
-        assert!(text.contains("version: 9"), "{text}");
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         assert!(text.contains("reflections: High"), "{text}");
         // Each level round-trips, and a launch flag lays over the file.
         for level in Reflections::ALL {
@@ -928,6 +985,7 @@ mod tests {
             pixel_grass: true,
             flow_arrows: true,
             reflections: Reflections::Medium,
+            shadows: crate::config::ShadowQuality::Low,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -1191,6 +1249,7 @@ mod tests {
             pixel_grass: true,
             flow_arrows: false,
             reflections: Reflections::High,
+            shadows: crate::config::ShadowQuality::Low,
         };
         let flags = Overrides {
             render_scale: Some(100),

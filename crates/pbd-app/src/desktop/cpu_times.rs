@@ -95,3 +95,30 @@ fn render_end(clock: Res<RenderClock>) {
         ACQUIRE_MS.store(clock.acquire_ms.to_bits(), Ordering::Relaxed);
     }
 }
+
+/// With `--frame-log`, every two seconds: each nested span of the shadow pass
+/// (`planet_shadow/cascade_N` and its draw's invocations), the newest
+/// reading, as `SHADOW_SPANS` (`play-frame-budget`).
+pub fn log_shadow_spans(
+    store: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
+    mut frames: Local<u32>,
+) {
+    *frames += 1;
+    if !(*frames).is_multiple_of(120) {
+        return;
+    }
+    let Some(store) = store else {
+        return;
+    };
+    let mut parts: Vec<String> = store
+        .iter()
+        .filter_map(|d| {
+            let path = d.path().as_str();
+            let rest = path.strip_prefix("render/planet_shadow/")?;
+            let value = d.smoothed()?;
+            Some(format!("{rest}={value:.3}"))
+        })
+        .collect();
+    parts.sort();
+    info!("SHADOW_SPANS {}", parts.join(" "));
+}

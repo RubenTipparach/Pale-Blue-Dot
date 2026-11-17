@@ -1087,6 +1087,16 @@ impl Launch {
                             .expect("--reflections takes off, low, medium or high"),
                     );
                 }
+                "--shadows" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--shadows requires low, medium, high or ultra");
+                    result.settings.shadows = Some(
+                        pbd_app::config::ShadowQuality::parse(level)
+                            .expect("--shadows takes low, medium, high or ultra"),
+                    );
+                }
                 "--grass" => {
                     i += 1;
                     // Tufts are the only grass (owner, 2026-11-16); the flag
@@ -1994,7 +2004,14 @@ pub fn run(args: &[String]) {
     cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
         // A route that ends the run when it lands, like `--walk-distance`.
-        app.add_systems(Last, (quit_after_route, log_window_attention));
+        app.add_systems(
+            Last,
+            (
+                quit_after_route,
+                log_window_attention,
+                cpu_times::log_shadow_spans,
+            ),
+        );
     }
     // GPU time per render pass, for the frame log (`perf-rig`) and the F3
     // breakdown. Not on macOS: its spans write timestamps inside a pass,

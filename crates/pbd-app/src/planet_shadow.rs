@@ -67,6 +67,9 @@ pub struct GpuCascades {
     pub texel_m: [f32; 4],
     pub depth_m: [f32; 4],
     pub settings: [f32; 4],
+    /// `sun_shadow.wgsl`'s `quality`: the cascades drawn, the blur's two
+    /// radii in texels, and the share of the map's side in use.
+    pub quality: [f32; 4],
 }
 
 const CASCADES_BYTES: u64 = size_of::<GpuCascades>() as u64;
@@ -87,6 +90,8 @@ pub struct SunCascades {
     /// The sun they were fitted to, for telling a jump in time from its drift.
     pub sun: Vec3,
     pub settings: Option<ShadowSettings>,
+    /// The player's shadow quality they were fitted for.
+    pub quality: crate::config::ShadowQuality,
 }
 
 /// Each town's pieces, as the triangles that cast, by site. A town adds
@@ -209,8 +214,10 @@ fn fit_cascades(
     frame: Option<Res<PlanetRenderFrame>>,
     sun: Option<Res<crate::sky::Sun>>,
     settings: Res<ShadowSettings>,
+    quality: Option<Res<crate::config::SunShadowQuality>>,
     mut cascades: ResMut<SunCascades>,
 ) {
+    let quality = quality.map(|q| q.0).unwrap_or_default();
     let (Some(frame), Some(sun)) = (frame, sun) else {
         return;
     };
@@ -232,9 +239,19 @@ fn fit_cascades(
         fov_y: f64::from(lens.fov),
         aspect: f64::from(lens.aspect_ratio),
     };
-    let jumped = cascades.sun.dot(toward) < JUMP_COS;
-    let fitted = fit::fit(&view, toward.as_dvec3(), f64::from(PLANET_RADIUS));
-    cascades.drawn.update(fitted, jumped);
+    // A new quality redraws every cascade at once, as a jump in time does.
+    let jumped = cascades.sun.dot(toward) < JUMP_COS || cascades.quality != quality;
+    let fitted = fit::fit_for(
+        &view,
+        toward.as_dvec3(),
+        f64::from(PLANET_RADIUS),
+        quality.cascades(),
+        quality.texels(),
+    );
+    cascades.quality = quality;
+    cascades
+        .drawn
+        .update_for(fitted, jumped, quality.cascades());
     cascades.sun = toward;
     cascades.settings = Some(*settings);
 }
@@ -246,6 +263,7 @@ pub struct SunShadowPlugin;
 impl Plugin for SunShadowPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ShadowSettings>()
+            .init_resource::<crate::config::SunShadowQuality>()
             .init_resource::<SunCascades>()
             .init_resource::<TownCasters>()
             .add_plugins((
@@ -407,6 +425,8 @@ pub(super) struct ShadowState {
     drawn: [Option<Cascade>; CASCADES],
     layers: Vec<TextureView>,
     texture: Option<TextureId>,
+    /// The quality the maps were last drawn at.
+    quality: Option<crate::config::ShadowQuality>,
     towns: Vec<TownBuffer>,
     pub(super) receiver: Option<BindGroup>,
 }
@@ -513,9 +533,15 @@ fn prepare_shadows(
         .drawn
         .cascades
         .filter(|_| settings.enabled && ready);
+    let quality = cascades.quality;
+    let count = quality.cascades();
+    if state.quality != Some(quality) {
+        state.drawn = [None; CASCADES];
+        state.quality = Some(quality);
+    }
     let mut draw = [false; CASCADES];
     if let Some(fitted) = fitted {
-        for i in 0..CASCADES {
+        for i in 0..count {
             // A map never drawn is drawn now, whatever the schedule.
             draw[i] = cascades.drawn.redraw[i] || state.drawn[i].is_none();
             if draw[i] {
@@ -526,7 +552,7 @@ fn prepare_shadows(
     // What the receivers read: the matrices each map was drawn with, and no
     // shadow at all until every map has been drawn once.
     let mut gpu = GpuCascades::default();
-    let whole = settings.enabled && state.drawn.iter().all(Option::is_some);
+    let whole = settings.enabled && state.drawn[..count].iter().all(Option::is_some);
     for (i, drawn) in state.drawn.iter().enumerate() {
         if let Some(c) = drawn {
             gpu.clip_from_body[i] = c.clip_from_body.as_mat4().to_cols_array();
@@ -534,6 +560,13 @@ fn prepare_shadows(
             gpu.depth_m[i] = c.depth_m as f32;
         }
     }
+    let (soft_least, spacing) = quality.blur_texels();
+    gpu.quality = [
+        count as f32,
+        soft_least,
+        spacing,
+        quality.texels() as f32 / TEXELS as f32,
+    ];
     gpu.settings = [
         if whole { 1.0 } else { 0.0 },
         settings.normal_offset_texels,
@@ -704,10 +737,14 @@ pub(super) fn draw_cascades(
     };
     let diagnostics = ctx.diagnostic_recorder();
     let span = diagnostics.time_span(ctx.command_encoder(), "planet_shadow");
+    // Each cascade timed on its own (`play-frame-budget`), and its draw's
+    // vertex and fragment invocations with it.
+    const NAMES: [&str; CASCADES] = ["cascade_0", "cascade_1", "cascade_2", "cascade_3"];
     for i in 0..CASCADES {
         if !gpu.draw[i] {
             continue;
         }
+        let cascade_span = diagnostics.time_span(ctx.command_encoder(), NAMES[i]);
         {
             let mut pass = ctx
                 .command_encoder()
@@ -737,6 +774,10 @@ pub(super) fn draw_cascades(
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+        // A lower quality draws into the corner of the map it uses.
+        let side = state.quality.unwrap_or_default().texels() as f32;
+        pass.set_viewport(0.0, 0.0, side, side, 0.0, 1.0);
+        let draw_span = diagnostics.pass_span(&mut pass, "draw");
         let skip = shadow_skip();
         pass.set_pipeline(planet);
         if !skip.contains("terrain") {
@@ -756,24 +797,27 @@ pub(super) fn draw_cascades(
             pass.set_bind_group(0, &*gpu.column[i], &[]);
             pass.draw_indirect(&gpu.indirect, 64);
         }
-        if skip.contains("towns") {
-            continue;
-        }
-        pass.set_pipeline(town);
-        pass.set_bind_group(0, &*gpu.casters[i].1, &[]);
-        // Only the chunks this cascade's box holds, and a town's dressing
-        // only into the finer cascades (`crab-breeze-lessons` rank 5).
-        let clip = state.drawn[i].map(|c| c.clip_from_body.as_mat4());
-        for t in &state.towns {
-            pass.set_vertex_buffer(0, (*t.buffer).slice(..));
-            for chunk in &t.source.chunks {
-                if usize::from(chunk.cascades) <= i || clip.is_some_and(|clip| !chunk.in_box(&clip))
-                {
-                    continue;
+        if !skip.contains("towns") {
+            pass.set_pipeline(town);
+            pass.set_bind_group(0, &*gpu.casters[i].1, &[]);
+            // Only the chunks this cascade's box holds, and a town's dressing
+            // only into the finer cascades (`crab-breeze-lessons` rank 5).
+            let clip = state.drawn[i].map(|c| c.clip_from_body.as_mat4());
+            for t in &state.towns {
+                pass.set_vertex_buffer(0, (*t.buffer).slice(..));
+                for chunk in &t.source.chunks {
+                    if usize::from(chunk.cascades) <= i
+                        || clip.is_some_and(|clip| !chunk.in_box(&clip))
+                    {
+                        continue;
+                    }
+                    pass.draw(chunk.first..chunk.first + chunk.count, 0..1);
                 }
-                pass.draw(chunk.first..chunk.first + chunk.count, 0..1);
             }
         }
+        draw_span.end(&mut pass);
+        drop(pass);
+        cascade_span.end(ctx.command_encoder());
     }
     span.end(ctx.command_encoder());
 }
