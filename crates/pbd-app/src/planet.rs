@@ -114,9 +114,10 @@ pub(crate) fn clutter_vertices() -> u32 {
     // fronds).
     GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36 + 2 * 54 + 4 * 6
 }
-/// Vertices per tree in the impostor draw (`flora-v2` design 10.5): the mid
-/// ring's four crossed cards, then the far billboard. The near model is
-/// drawn by the near draws (`trees::near_vertices`).
+/// Vertices per tree in the impostor draw (`flora-v2` design 10.5,
+/// `crossed-tree-cards`): four fixed crossed cards, of which the far ring
+/// draws two, then the crown cap. The near model is drawn by the near draws
+/// (`trees::near_vertices`).
 #[cfg(test)]
 pub(crate) fn foliage_vertices() -> u32 {
     4 * 6 + 6
@@ -861,7 +862,7 @@ const LIGHT_HALF_WORDS: usize = column::COLUMN_CAPACITY as usize * column::LIGHT
 ///
 /// Two points the camera stood at, `from` and `to`, body-local, and the fade
 /// between them: the surface shader decides each tree's representation (near
-/// model, mid cards, far billboard, none) at both by hard thresholds, draws it
+/// model, mid cards, far cards, none) at both by hard thresholds, draws it
 /// whole where they agree and dithers from the one to the other by the fade's
 /// progress where they do not. A new fade starts only when the last has run
 /// out and the camera has moved, so a still camera has `from == to` one fade
