@@ -363,7 +363,10 @@ The owner's ask (2026-11-17) brings section 3's option in with the origin:
   so a teleport is never drawn as a glide.
 
 The cost is up to one physics step (16.7 ms) of position latency, the price
-of drawing between steps.
+of drawing between steps. A `--capture` runs one physics step a frame and
+has no beat to smooth, so it draws the step itself (`DrawBetweenSteps`):
+drawn between steps, a capture showed the body a step behind, 105 000
+pixels of a still moved (found by the held-origin check of 6.7).
 
 ### 6.6 `--render-offset` in play, tests and checks (stage 6)
 
@@ -382,3 +385,83 @@ Same-frame `--capture` stills before and after (`tools/capture_repeat.py
 --against`) at a town by day and at night with lamps, the sea, under water, a
 waterfall and flying at 1 km. A pixel difference beyond the repeat noise is a
 bug.
+
+### 6.8 Results (M4 Max MacBook Pro, 2026-11-17)
+
+Real-time windowed traces, walking (`--walk-distance 1000 --turn 15`) and
+fishing (`--fish --fish-play --hold-pointer`), the build before against this
+one, each on a fresh world; plots and reports in
+`docs/screenshots/floating-origin/`. The machine was not quiet (other agents
+building, another game running), so frame time is not the measure.
+
+| held-tool shimmer (rms / p50 / p99 px, 1 800 px tall) | before | after |
+| --- | --- | --- |
+| walking (1 342 / 1 247 frames) | 2.60 / 2.02 / 6.23 | **0.0046 / 0.0036 / 0.0118** |
+| fishing (1 549 / 1 490 frames) | 1.33 / 0.94 / 3.23 | **0.0022 / 0.0016 / 0.0055** |
+
+The target was 0.05 px; the trace's own A/B (the same frames re-rebased in
+f64) agrees with what is drawn to a thousandth of a pixel. The camera sits
+at most 12 m from the origin, where an f32 holds 1 µm.
+
+Camera speed while walking, by physics steps in the frame:
+
+| | 1 step | 2 steps |
+| --- | --- | --- |
+| before (raw step) | 10.3 m/s | 16.4 m/s |
+| after (between steps) | 8.2 m/s | 7.9 m/s |
+
+The beat is gone. On the 11 frames with a rebase in the walking trace the
+camera moved by its walk (6 to 74 cm, in proportion to the frame's time), so
+nothing jumps across a rebase.
+
+**Stills** (`tools/capture_repeat.py --against`, 300 frames, GPU, 2880 x 1800;
+pixels differing by more than 1/255):
+
+| scene | before vs before (noise) | after vs before | after with the origin held (`PBD_HOLD_ORIGIN=1`) vs before |
+| --- | --- | --- | --- |
+| Ashenstead by day (walk) | 0 | 58 261 (1.1%), max 77 | 0 |
+| Ashenstead at night, lamps | 0 | 63 254 (1.2%), max 160 | 0 |
+| Holbrook lane at night | 0 | 5 905, max 221 | 16 (the noise) |
+| harbour from 30 m | 0 | 109, max 14 | 0 |
+| under water | 0 | 0 | 0 |
+| waterfall (walk) | 16 | 53 | 16 |
+| flying at 1 km | 0 | 7 | 0 |
+
+Every difference is an edge or a texel boundary moved by under a pixel, and
+the held-origin column shows they are the origin alone: with the origin held
+at the planet's centre and every conversion still running, the stills match
+the old build pixel for pixel. The old view matrix carried the camera's
+4 800 m translation in f32 and so drew the eye up to half a millimetre off;
+that error is the jitter, and a still taken at one instant shows it as a
+sub-pixel shift of near geometry (the town walls are a metre from the eye).
+
+`--render-offset 8192 -4096 2048` in play: a walk to `READY` with no
+`LATE_PIPELINE`, the camera drawn round the walker as without; the held
+tool's shimmer comes back (4.2 px rms at 9.4 km from the origin), which is
+the offset being applied. Stills with the offset: under water 0 pixels
+against no offset, flying at 1 km 2 115 (near terrain edges at the coarser
+precision). It found one bug: the flight and walking cameras were spawned
+in physics space, and a static flying capture never moves its camera.
+
+Launches to `READY`: the four real-time traces and the offset walk, no
+`LATE_PIPELINE`.
+
+**Frame cost: owed.** The machine was not quiet; `perf_suite.py` before and
+after is to be run on a quiet machine. A rebase walks every root transform
+once per 16 m cell (every few seconds on foot) and marks them changed, so
+that frame re-propagates and re-uploads them; the field-lit rows' world
+bounds move too and are rewritten (`field_light.rs`).
+
+### 6.9 Not converted, or left as they are
+
+- The hooked float hangs off the walker's raw physics `Position`
+  (`Line::step`), so while a fish is on and the angler walks, the float moves
+  in physics steps against an eye drawn between them. The line's simulation
+  is not touched here.
+- The vehicle cameras and the flight camera are not drawn between steps (a
+  craft is stepped on its own clock; the skiff is an Avian body).
+- `desktop/scene.rs` stars are spawned once at the frame's centre and move
+  with the rebase like any root.
+- Bodies under Avian (the walker, the skiff) keep physics-space transforms;
+  neither has a drawn child. A drawn rigid body would need its own render
+  transform.

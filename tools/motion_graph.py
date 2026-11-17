@@ -111,6 +111,20 @@ def main() -> None:
         still = sum(1 for s in cam_speed if not math.isnan(s) and s <= 0.05)
         report.append(f"camera world speed while moving: mean {mean:.3f} m/s, sd {sd:.3f} "
                       f"({100 * sd / mean:.1f}%), frames with no camera move {still}")
+    # The beat of physics steps (`movement-smoothness` design 6.5): while the
+    # body walks (over 1 m/s), the camera's speed on frames that ran one
+    # physics step against those that ran two. Drawn at the raw step, a
+    # two-step frame moves the camera twice as far in the same time.
+    body_speed = speed("body")
+    by_steps: dict[int, list[float]] = {}
+    for r, c, b_ in zip(rows, cam_speed, body_speed):
+        if not (math.isnan(c) or math.isnan(b_)) and b_ > 1.0 and c < 100.0:
+            by_steps.setdefault(int(r["steps"]), []).append(c)
+    for k in sorted(by_steps):
+        v = by_steps[k]
+        if len(v) > 3:
+            report.append(f"camera speed while walking, frames with {k} physics step(s): n {len(v)}, "
+                          f"mean {sum(v) / len(v):.2f} m/s")
 
     series = {}
     for name in ("float", "fish"):

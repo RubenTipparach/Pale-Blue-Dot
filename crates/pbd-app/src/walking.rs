@@ -562,6 +562,11 @@ fn setup_walking(world: &mut World) {
         previous: position,
         current: position,
     });
+    // Render space, at the origin the frame starts with.
+    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
+    let eye = world
+        .get_resource::<crate::planet::PlanetRenderFrame>()
+        .map_or(eye, |f| crate::render_origin::render_from_physics(f, eye));
     world.spawn((
         Name::new("First-person walking camera"),
         Camera3d::default(),
@@ -569,8 +574,7 @@ fn setup_walking(world: &mut World) {
             is_active: config.start_walking,
             ..default()
         },
-        Transform::from_translation(position + up * (EYE_HEIGHT - HALF_HEIGHT))
-            .with_rotation(state.rotation()),
+        Transform::from_translation(eye).with_rotation(state.rotation()),
         WalkingCamera,
     ));
     world.insert_resource(state);

@@ -25,22 +25,25 @@
 
 ## 3. Camera-relative render origin (go-ahead 2026-11-17; design 6)
 
-- [ ] 3.1 `RenderOrigin` (camera snapped to 16 m) and `PlanetRenderFrame.center = -origin`.
-- [ ] 3.2 Walking, flight and vehicle cameras write `position - origin`.
-- [ ] 3.3 Drawn rigid bodies' `Transform` from `Position - origin`; Avian's
-  position-to-transform sync off for them.
-- [ ] 3.4 Audit every camera and `GlobalTransform` reader (design 4.4) and the
+- [x] 3.1 `RenderOrigin` (camera snapped to 16 m) and `PlanetRenderFrame.center = -origin`.
+- [x] 3.2 Walking, flight and vehicle cameras write `position - origin`.
+- [x] 3.3 Drawn rigid bodies: none is drawn (the walker and the skiff have
+  no drawn child), so Avian's sync stays on and their transforms stay in
+  physics space; the rebase leaves `RigidBody` entities alone (design 6.9).
+- [x] 3.4 Audit every camera and `GlobalTransform` reader (design 4.4) and the
   eleven shaders with a planet centre (design 4.5).
-- [ ] 3.5 Run the offset-planet test (`--render-offset`) in play as well as in
+- [x] 3.5 Run the offset-planet test (`--render-offset`) in play as well as in
   a static capture.
-- [ ] 3.6 Verify: held-tool shimmer under 0.05 px rms, `--render-offset`
-  captures unchanged, `READY` with no `LATE_PIPELINE`, and `perf_suite.py`
-  before and after.
-- [ ] 3.7 The walking camera between physics steps (design 6.5): position
+- [x] 3.6 Verify: held-tool shimmer under 0.05 px rms (0.0046 walking,
+  0.0022 fishing), `--render-offset` in play, `READY` with no
+  `LATE_PIPELINE` (design 6.8).
+- [ ] 3.10 `perf_suite.py` before and after on a quiet machine (owed: the
+  machine was busy when this was built).
+- [x] 3.7 The walking camera between physics steps (design 6.5): position
   only, the look stays raw, teleports snap.
-- [ ] 3.8 Tests: origins at 0, 4 800 m and a random offset agree; no jump
+- [x] 3.8 Tests: origins at 0, 4 800 m and a random offset agree; no jump
   across a rebase.
-- [ ] 3.9 Same-frame stills before and after (design 6.7): town by day and
+- [x] 3.9 Same-frame stills before and after (design 6.7): town by day and
   night, sea, under water, waterfall, flying at 1 km.
 
 ## 4. Gate

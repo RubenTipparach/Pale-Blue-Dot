@@ -373,6 +373,13 @@ fn setup_flight(world: &mut World) {
         ..Default::default()
     };
     if config.startup_camera {
+        // Render space, at the origin the frame starts with
+        // (`movement-smoothness` design 6.3).
+        let drawn = world
+            .get_resource::<crate::planet::PlanetRenderFrame>()
+            .map_or(position, |f| {
+                crate::render_origin::render_from_physics(f, position)
+            });
         world.spawn((
             Name::new("Skiff cockpit camera"),
             Camera3d::default(),
@@ -382,7 +389,7 @@ fn setup_flight(world: &mut World) {
                 far: 100_000.0,
                 ..Default::default()
             }),
-            Transform::from_translation(position).with_rotation(orientation),
+            Transform::from_translation(drawn).with_rotation(orientation),
             FlightCamera,
         ));
     }

@@ -23,3 +23,24 @@ in the planet's frame.
 - **WHEN** the camera crosses into another 16 m cell and the origin moves
 - **THEN** every drawn transform is written in the new frame in that same
   frame, and nothing is seen to jump
+
+### Requirement: The walking camera is drawn between physics steps
+
+The walking camera's position SHALL be drawn between the walker's last two
+physics steps, at the fraction the fixed clock has run past the last one. Its
+look SHALL stay this frame's raw mouse. A position moved outside the physics
+step (a respawn, a restore, boarding, a climb-out) or a step longer than 2 m
+SHALL be drawn where it is, never glided to. A `--capture`, which runs one
+physics step a frame, SHALL draw the step itself.
+
+#### Scenario: A steady walk at an uneven frame rate
+
+- **WHEN** the walker walks at a steady speed while frames run 0, 1 or 2
+  physics steps
+- **THEN** the camera moves by the walk's speed every frame, not by one step
+  on one frame and two on the next
+
+#### Scenario: A teleport
+
+- **WHEN** the walker is put somewhere else between steps
+- **THEN** the camera is drawn there in the same frame
