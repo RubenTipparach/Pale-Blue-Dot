@@ -4326,9 +4326,15 @@ fn fish_script(
             Phase::Bite if !buttons.pressed(MouseButton::Left) => {
                 buttons.press(MouseButton::Left);
             }
-            Phase::Hooked if line.tension < 0.6 => {
-                if !buttons.pressed(MouseButton::Left) {
+            // Reel as a hand does: hold the button down until the tension
+            // is high, let it up until it has fallen, never one frame on and
+            // one off (`movement-smoothness` 7.2).
+            Phase::Hooked => {
+                let held = buttons.pressed(MouseButton::Left);
+                if !held && line.tension < 0.45 {
                     buttons.press(MouseButton::Left);
+                } else if held && line.tension > 0.75 {
+                    buttons.release(MouseButton::Left);
                 }
             }
             // A live run's recast (above) holds the button itself.
