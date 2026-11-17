@@ -1552,7 +1552,8 @@ needs; no behaviour changes with them unset):
   stay), so a held view can be priced with kelp and without on the same
   exe, in the same sitting.
 - A `SEA_PLACES` log line, once a second: the tiles drawn, the triangles in
-  them, the kelp's share, and the swaying vertices rewritten that frame.
+  them, the kelp's share, the swaying vertices rewritten that frame, and
+  the main thread's mean time in the sea places' system.
 
 **Finding** (the `SEA_PLACES` line at the B16 spot, `--walk --at 71.308
 -8.196`, the Mac; the bed 9 m down):
@@ -1602,3 +1603,16 @@ saved, so no generator version):
   fewer vertices.
 - No distance LOD: at 14 triangles a stand there is nothing left to cut
   with distance, and none to cross-fade.
+
+**Measured** (`docs/benchmarks/2026-11-16-kelp/`, the Mac, release, a held
+view on the bed in the forest, before, after and before without kelp
+interleaved, two sittings): kelp triangles round the eye 625,011 to 8,974;
+vertices rewritten a frame 1,875,033 to 26,922 (about 90 MB to 1.3 MB of
+upload); the sea places' system on the main thread 7 ms to 0.16 ms a frame.
+Frame time was not measured cleanly: other sessions' games and builds ran on
+the Mac through both sittings, and the repeats spread 19 to 104 ms at p50.
+The sitting is to be repeated on a quiet machine. Stills before and after,
+from 1.6 m over the water and on the bed, are in
+`docs/screenshots/kelp-perf/`. Known, and not changed here: the stands are
+cut to the mean sea, so at low tide the canopy card lies above the water, as
+B16's canopy did.
