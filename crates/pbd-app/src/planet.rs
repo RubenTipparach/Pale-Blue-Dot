@@ -1370,8 +1370,10 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     let materials = device.create_buffer(&BufferDescriptor {
-        label: Some("Persistent planet voxel materials for the column tier"),
-        size: column::COLUMN_CAPACITY as u64 * column::MATERIAL_WORDS as u64 * 4,
+        label: Some("Persistent planet voxel materials for the column tier, then placed sheets"),
+        // Two halves: every slot's render codes, then every slot's placed
+        // sheets from `PLACED_SHEETS_BASE` (`placed-blocks-keep-material`).
+        size: 2 * column::PLACED_SHEETS_BASE as u64 * 4,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1571,6 +1573,14 @@ fn upload_fine(
         // layer is a placed stone wearing the earth that was there before.
         let materials = fine.set.columns.gpu_materials();
         queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
+        // And which of those layers somebody placed, so a placed block is
+        // drawn as itself (`placed-blocks-keep-material`).
+        let sheets = fine.set.columns.gpu_placed_sheets();
+        queue.write_buffer(
+            &planet.materials,
+            (column::PLACED_SHEETS_BASE * 4) as u64,
+            bytemuck::cast_slice(&sheets),
+        );
         let centres = fine.set.columns.gpu_centres();
         queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
