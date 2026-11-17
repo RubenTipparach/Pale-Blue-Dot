@@ -129,6 +129,13 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
 /// `planet_visibility.wgsl`'s foliage pass reads it.
 pub const CLEARED_BIT: u32 = 24;
 
+/// Where a record's material word carries the sheet its PLACED top is drawn
+/// from, plus one, in four bits; nought for a generated top, which takes its
+/// biome's (`placed-blocks-keep-material`, `planet::column::placed_sheet`).
+/// `planet_surface.wgsl` reads it for the cap.
+pub const PLACED_SHEET_SHIFT: u32 = 26;
+const _: () = assert!(PLACED_SHEET_SHIFT > FLOODED_BIT && PLACED_SHEET_SHIFT + 4 <= 30);
+
 /// The bit of a record's material word that says water stands on the cell
 /// at some tide, so nothing grows there (`flora-v2` 12.11).
 pub const FLOODED_BIT: u32 = pbd_core::flora::FLOODED_BIT;
@@ -498,6 +505,15 @@ mod tests {
             format!(
                 "const MATERIAL_PER_WORD: u32 = {}u;",
                 crate::planet::column::MATERIAL_PER_WORD
+            ),
+            format!(
+                "const PLACED_SHEETS_BASE: u32 = {}u;",
+                crate::planet::column::PLACED_SHEETS_BASE
+            ),
+            format!("const PLACED_SHEET_SHIFT: u32 = {PLACED_SHEET_SHIFT}u;"),
+            format!(
+                "const PLACED_SHEET_MASK: u32 = {:#010x}u;",
+                0xf << PLACED_SHEET_SHIFT
             ),
             format!(
                 "const COLUMN_WATER_SHIFT: u32 = {}u;",

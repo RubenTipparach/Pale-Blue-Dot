@@ -1038,6 +1038,10 @@ fn f(x: f32) -> u32 {
     x.to_bits()
 }
 
+/// How many words past an impostor strip's first its relief strip starts
+/// (`tree-impostor-depth`): one strip's pixels.
+pub const IMPOSTOR_RELIEF: u32 = (crate::tree_bake::STRIP_W * crate::tree_bake::VIEW_H) as u32;
+
 /// Build every species' variants, bake their impostors and pack the kit.
 pub fn build_kit(tex: &Textures) -> Kit {
     let mut models = Vec::new();
@@ -1110,16 +1114,22 @@ pub fn build_kit(tex: &Textures) -> Kit {
         let lk = look(m.species);
         let h = (VARIANT_BASE + mi as u32 * VARIANT_WORDS) as usize;
         words[h + 8] = words.len() as u32;
-        let leafy = crate::tree_bake::bake(m, &lk, tex, false);
+        // Each strip is followed by its relief strip (`tree-impostor-depth`),
+        // [`IMPOSTOR_RELIEF`] words on: the shader reads a pixel's normal and
+        // AO at the colour's index plus that.
+        let (leafy, leafy_relief) = crate::tree_bake::bake_with_relief(m, &lk, tex, false);
         // The baked crown's mean, which the shader meets to the near
         // crown's (words 10..12).
         for (c, v) in crate::tree_bake::crown_mean(&leafy).iter().enumerate() {
             words[h + 10 + c] = f(*v);
         }
         words.extend(leafy);
+        words.extend(leafy_relief);
         if lk.deciduous {
             words[h + 9] = words.len() as u32;
-            words.extend(crate::tree_bake::bake(m, &lk, tex, true));
+            let (bare, bare_relief) = crate::tree_bake::bake_with_relief(m, &lk, tex, true);
+            words.extend(bare);
+            words.extend(bare_relief);
         } else {
             words[h + 9] = words[h + 8];
         }

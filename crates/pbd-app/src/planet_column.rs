@@ -19,7 +19,7 @@
 //! already assumes.
 
 use super::GpuCell;
-use super::terrain::{PLANET_RADIUS, render_code, terrain_config};
+use super::terrain::{PLANET_RADIUS, render_code, terrain_config, tileset_slot};
 use crate::config::ColumnSettings;
 use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
@@ -131,6 +131,22 @@ pub const MATERIAL_PER_WORD: usize = 8;
 pub const MATERIAL_WORDS: usize = LAYERS / MATERIAL_PER_WORD;
 // Every render code has to fit its nibble.
 const _: () = assert!(super::terrain::DIRT < 16);
+/// Where the placed sheets start in the material buffer, in words: after
+/// every slot's materials ([`ColumnTier::gpu_placed_sheets`]).
+pub const PLACED_SHEETS_BASE: usize = COLUMN_CAPACITY as usize * MATERIAL_WORDS;
+
+/// The sheet a layer is drawn from if somebody PLACED it, plus one, or
+/// nought for generated ground (`placed-blocks-keep-material`): the tileset
+/// of the block's own home ([`column::home_biome`]), never the biome it
+/// stands in. A nibble, as the materials are.
+pub fn placed_sheet(column: &Column, layer: usize) -> u32 {
+    if !column.placed(layer) {
+        return 0;
+    }
+    column::home_biome(column.material(layer)).map_or(0, |home| tileset_slot(home) + 1)
+}
+// Every sheet, plus one, fits its nibble, and so the record's four bits.
+const _: () = assert!(super::terrain::TILESETS.len() < 16);
 
 /// The columns around one anchor, and the map from a finest record to its slot.
 #[derive(Clone)]
@@ -597,11 +613,13 @@ impl ColumnTier {
         self.columns.get_mut(slot)
     }
 
-    /// Write one layer of one record's column. `false` where there is no
+    /// Write one layer of one record's column as an EDIT writes it: placed
+    /// ([`Column::place`]), so it is drawn as the block it is wherever it
+    /// stands (`placed-blocks-keep-material`). `false` where there is no
     /// column, or where the column refused it - bedrock does.
     pub fn set_layer(&mut self, record: usize, layer: usize, material: Material) -> bool {
         self.column_mut(record)
-            .is_some_and(|column| column.set(layer, material))
+            .is_some_and(|column| column.place(layer, material))
     }
 
     /// Repack a record's runs from its column.
@@ -755,6 +773,30 @@ impl ColumnTier {
                 let shift = (layer % MATERIAL_PER_WORD) * 4;
                 // As drawn: a drowned top is a bed (`flora-v2` 12.10).
                 words[word] |= (render_code(column.drawn_material(layer)) & 0xf) << shift;
+            }
+        }
+        words
+    }
+
+    /// Every layer's PLACED sheet, eight to a word, `MATERIAL_WORDS` words per
+    /// slot, laid after the materials of every slot the buffer can hold
+    /// ([`PLACED_SHEETS_BASE`]): nought for generated ground, which takes its
+    /// biome's sheet, and for a block somebody placed its own sheet plus one
+    /// ([`placed_sheet`]), so it is drawn as the block it is whatever biome
+    /// it stands in (`placed-blocks-keep-material`). Only a column with a
+    /// placed layer costs more than its zeroes.
+    pub fn gpu_placed_sheets(&self) -> Vec<u32> {
+        let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
+        for (slot, column) in self.columns.iter().enumerate() {
+            if !column.any_placed() {
+                continue;
+            }
+            for layer in 0..LAYERS {
+                let sheet = placed_sheet(column, layer);
+                if sheet != 0 {
+                    let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+                    words[word] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
+                }
             }
         }
         words
@@ -1017,7 +1059,10 @@ pub fn reconcile_surface(
     // A top with water standing on it is drawn as a bed, and grows nothing
     // (`flora-v2` 12.10); under the sea's own level the tier keeps drawing
     // its seabed as it did.
-    let code = if column.water_over(top) && top_m > terrain_config().sea_level_m {
+    // A PLACED top is the block placed (`placed-blocks-keep-material`): no
+    // bed, and drawn from its own sheet, which the record carries.
+    let placed = placed_sheet(column, top);
+    let code = if placed == 0 && column.water_over(top) && top_m > terrain_config().sea_level_m {
         super::terrain::bed_code(column.drawn_material(top))
     } else {
         render_code(column.drawn_material(top))
@@ -1029,8 +1074,12 @@ pub fn reconcile_surface(
     // stood a beach tree in the sea before this bit.
     let flooded = column.water_over(top) || top_m < super::terrain::high_water_m();
     let flood_bit = 1 << super::terrain::FLOODED_BIT;
-    let word = finest[index].metadata[1] & !0xff & !flood_bit;
-    finest[index].metadata[1] = word | code | if flooded { flood_bit } else { 0 };
+    let sheet_bits = 0xf << super::terrain::PLACED_SHEET_SHIFT;
+    let word = finest[index].metadata[1] & !0xff & !flood_bit & !sheet_bits;
+    finest[index].metadata[1] = word
+        | code
+        | if flooded { flood_bit } else { 0 }
+        | placed << super::terrain::PLACED_SHEET_SHIFT;
     let Some(table) = neighbors.get(index).copied() else {
         return;
     };
@@ -3222,5 +3271,201 @@ mod river_tier_tests {
                 .map(|&(id, c)| (water_cell(id), c))
                 .collect::<Vec<_>>()
         );
+    }
+}
+
+/// `placed-blocks-keep-material`: what the tier DRAWS for a block the player
+/// placed, after the save has been written and read back (the owner,
+/// 2026-11-16: "I placed dirt on sand and it became sand ... not just for
+/// dirt block but any block in inventory").
+#[cfg(test)]
+mod placed_block_tests {
+    use super::*;
+    use crate::saves::{WorldSave, create};
+    use pbd_core::edits::Edit;
+    use pbd_core::inventory::Slots;
+    use pbd_core::planet_gen::{self, Biome};
+
+    /// Every block a pack holds and puts down: everything with a picture of
+    /// its own but the sea, which is poured from a bucket.
+    fn placeable() -> impl Iterator<Item = Material> {
+        Material::ALL
+            .into_iter()
+            .filter(|&m| column::home_biome(m).is_some() && !m.is_water())
+    }
+
+    fn find(want: impl Fn(Vec3, &Column) -> bool) -> Vec3 {
+        (0..60_000)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / 60_000.0;
+                let r = (1.0 - y * y).sqrt();
+                let phi = i as f32 * 2.399_963;
+                Vec3::new(r * phi.cos(), y, r * phi.sin())
+            })
+            .find(|&d| want(d, &column::generate_solid(terrain_config(), d)))
+            .expect("the shipped world has this ground")
+    }
+
+    /// The grounds the owner's rule names, on the shipped world. A town's
+    /// lane is stood in for by the desert's ground with its top a placed
+    /// lane's stone: the town is installed by the running game, and its
+    /// ground reaches the record only through the column, as these do.
+    fn grounds() -> Vec<(&'static str, Vec3)> {
+        let cfg = terrain_config();
+        let top = |c: &Column| c.surface().map(|t| c.material(t));
+        let biome = |d: Vec3| planet_gen::biome_at(cfg, d, column::surface_m(cfg, d));
+        vec![
+            (
+                "desert sand",
+                find(|d, c| {
+                    top(c) == Some(Material::Sand)
+                        && biome(d) == Biome::Desert
+                        && !c.water_over(c.surface().unwrap())
+                }),
+            ),
+            ("snow", find(|_, c| top(c) == Some(Material::Snow))),
+            (
+                "a river bed",
+                find(|d, c| {
+                    pbd_core::rivers::floods(cfg, d)
+                        && c.water_over(c.surface().unwrap())
+                        && column::surface_m(cfg, d) > cfg.sea_level_m
+                }),
+            ),
+            (
+                "a beach under the sea",
+                find(|d, c| {
+                    top(c) == Some(Material::Sand)
+                        && column::surface_m(cfg, d) < cfg.sea_level_m - 1.0
+                }),
+            ),
+        ]
+    }
+
+    /// One nibble of a packed per-layer buffer.
+    fn nibble(words: &[u32], layer: usize) -> u32 {
+        words[layer / MATERIAL_PER_WORD] >> ((layer % MATERIAL_PER_WORD) * 4) & 0xf
+    }
+
+    /// Place every block on every ground, write the save and read it back,
+    /// build the column the tier builds from it, and hold what is drawn: the
+    /// cap's code and sheet in the record, and the layer's code and sheet in
+    /// the column pass's buffers. The ground under it is drawn as it was.
+    #[test]
+    fn a_placed_block_is_drawn_as_itself_after_a_reload() {
+        let root = std::env::temp_dir().join(format!("pbd-placed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = create(&root, "Placed", 4242).unwrap();
+        let grounds = grounds();
+        let mut cases = Vec::new();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            for (g, &(_, d)) in grounds.iter().enumerate() {
+                let generated = column::generate_solid(terrain_config(), d);
+                let under = generated.surface().unwrap();
+                for (i, material) in placeable().enumerate() {
+                    // A cell of its own each, and two blocks: the one on the
+                    // ground and one placed on top of it (a dirt block, or
+                    // stone on dirt).
+                    let cell = (g * 100 + i) as u32 + 1;
+                    let second = if material == Material::Dirt {
+                        Material::Stone
+                    } else {
+                        Material::Dirt
+                    };
+                    for (layer, m) in [(under + 1, material), (under + 2, second)] {
+                        assert!(save.accept(
+                            Edit {
+                                cell,
+                                layer: layer as u16,
+                                material: m,
+                            },
+                            None,
+                            &Slots::new()
+                        ));
+                    }
+                    cases.push((g, d, cell, under, material, second));
+                }
+            }
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), slot);
+        for (g, d, cell, under, material, second) in cases {
+            let what = format!("{material:?} on {}", grounds[g].0);
+            let edits = reopened.edits.for_cell(cell);
+            assert_eq!(
+                edits,
+                &[(under as u16 + 1, material), (under as u16 + 2, second)],
+                "{what}: the save keeps what was placed"
+            );
+            let built = column::generate_edited_solid(terrain_config(), d, edits);
+            let height = super::super::terrain::surface_height(d);
+            let word = super::super::terrain::surface_code(d, height);
+            for (layer, m, on_top) in [(under + 1, material, false), (under + 2, second, true)] {
+                let what = format!("{what}, layer {layer} {m:?}");
+                // The column the tier builds holds it, placed.
+                assert_eq!(built.material(layer), m, "{what}: stored");
+                assert!(built.placed(layer), "{what}: placed");
+                let sheet = tileset_slot(column::home_biome(m).unwrap()) + 1;
+                // The column pass draws it in its own code, from its own sheet.
+                let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
+                let codes = tier.gpu_materials();
+                let sheets = tier.gpu_placed_sheets();
+                assert_eq!(
+                    nibble(&codes, layer),
+                    render_code(m) & 0xf,
+                    "{what}: its code"
+                );
+                assert_eq!(nibble(&sheets, layer), sheet, "{what}: its own sheet");
+                assert_eq!(
+                    nibble(&sheets, under),
+                    0,
+                    "{what}: the ground under it is the biome's"
+                );
+                // And the cap, which the record draws: the top block's.
+                let mut column_top = built.clone();
+                if !on_top {
+                    column_top.set(under + 2, Material::Air);
+                }
+                assert_eq!(column_top.surface(), Some(layer));
+                let mut finest = vec![<GpuCell as Zeroable>::zeroed()];
+                finest[0].metadata[1] = word;
+                reconcile_surface(&mut finest, &[], 0, &column_top);
+                let record = finest[0].metadata[1];
+                assert_eq!(record & 0xff, render_code(m), "{what}: the cap's code");
+                assert_eq!(
+                    record >> super::super::terrain::PLACED_SHEET_SHIFT & 0xf,
+                    sheet,
+                    "{what}: the cap's own sheet"
+                );
+                assert_eq!(
+                    record & 0xff00,
+                    word & 0xff00,
+                    "{what}: the cell's biome stays its own"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Ground nobody touched is drawn as it was: its record carries no
+    /// placed sheet, and its column's layers none.
+    #[test]
+    fn untouched_ground_takes_its_biomes_sheet() {
+        for (name, d) in grounds() {
+            let column = column::generate_solid(terrain_config(), d);
+            let tier = ColumnTier::for_tests(vec![column.clone()], &[[NO_NEIGHBOR; 6]]);
+            assert!(tier.gpu_placed_sheets().iter().all(|&w| w == 0), "{name}");
+            let height = super::super::terrain::surface_height(d);
+            let word = super::super::terrain::surface_code(d, height);
+            let mut finest = vec![<GpuCell as Zeroable>::zeroed()];
+            finest[0].metadata[1] = word;
+            reconcile_surface(&mut finest, &[], 0, &column);
+            assert_eq!(
+                finest[0].metadata[1] >> super::super::terrain::PLACED_SHEET_SHIFT & 0xf,
+                0,
+                "{name}"
+            );
+        }
     }
 }
