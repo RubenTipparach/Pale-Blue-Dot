@@ -120,7 +120,7 @@ pub fn plant(
     let ground = digging::material_of(world.fine, world.save, (cell, layer));
     let over = digging::material_of(world.fine, world.save, (cell, layer + 1));
     if ground != Some(Material::Tilled) || over != Some(Material::Air) {
-        note.say(wall_s, "Plant on tilled soil: F with the shovel tills");
+        note.say(wall_s, "Seeds need tilled soil");
         return false;
     }
     if live_crop(world.fine, world.save, cell).is_some() {
@@ -523,6 +523,7 @@ pub fn farm_act(
     clutter: Option<pbd_app::clutter::ClutterHit>,
     shovel: bool,
     now_s: f64,
+    axe_logs: u16,
 ) -> Option<FarmAct> {
     let crop_on = |cell: u32, layer: usize| {
         live_crop(fine, save, cell)
@@ -587,7 +588,8 @@ pub fn farm_act(
     }
     (shovel
         && farming::tillable(material)
-        && digging::material_of(fine, save, (cell, layer + 1)) == Some(Material::Air))
+        && digging::material_of(fine, save, (cell, layer + 1)) == Some(Material::Air)
+        && !digging::under_standing_tree(fine, save, axe_logs, (cell, layer)))
     .then_some(FarmAct::Till {
         cell,
         layer,
@@ -603,6 +605,15 @@ fn eye_ray(cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>) -> Opti
         .map(|(t, _)| (t.translation(), t.forward().as_vec3()))
 }
 
+/// The logs a tree gives the axe before it falls, from the gathering's
+/// settings (absent in a still capture).
+fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
+    gather.map_or_else(
+        || pbd_core::gather::GatherSettings::default().axe_logs,
+        |g| g.0.axe_logs,
+    )
+}
+
 /// Offer the farm's act to the interact key.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn offer(
@@ -611,12 +622,13 @@ pub fn offer(
     aim: Res<Aim>,
     tools: Res<pbd_app::fish::ToolSlot>,
     farm: Res<FarmConfig>,
-    (fine, save, sun, time, scatter): (
+    (fine, save, sun, time, scatter, gathering): (
         Res<PlanetFine>,
         Res<WorldSave>,
         Res<pbd_app::sky::Sun>,
         Res<Time>,
         Option<Res<pbd_app::config::ScatterSettings>>,
+        Option<Res<pbd_app::config::GatherConfig>>,
     ),
     mut interact: ResMut<Interact>,
     mut last: Local<(
@@ -659,6 +671,7 @@ pub fn offer(
         *clutter,
         shovel,
         sun.clock.seconds,
+        axe_logs(gathering.as_deref()),
     ) {
         interact.offer(act.offer());
     }
@@ -676,10 +689,11 @@ pub fn use_key(
     mut station_at: ResMut<StationAt>,
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
-    (cameras, interact, scatter): (
+    (cameras, interact, scatter, gathering): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<Interact>>,
         Option<Res<pbd_app::config::ScatterSettings>>,
+        Option<Res<pbd_app::config::GatherConfig>>,
     ),
     (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
@@ -735,15 +749,21 @@ pub fn use_key(
         clutter,
         shovel,
         now_s,
+        axe_logs(gathering.as_deref()),
     );
     let Some(act) = act else {
-        // Tillable ground under a block: say why F does nothing.
+        // Tillable ground under a block or a tree: say why F does nothing.
         if shovel
             && let Some(target) = aim.target
             && digging::material_of(&fine, &save, (target.dig.cell, target.dig.layer))
                 .is_some_and(farming::tillable)
         {
-            note.say(wall_s, "Nothing tills under a block");
+            let block = (target.dig.cell, target.dig.layer);
+            if digging::under_standing_tree(&fine, &save, axe_logs(gathering.as_deref()), block) {
+                note.say(wall_s, "Cut down the tree first");
+            } else {
+                note.say(wall_s, "Can't till under a block");
+            }
         }
         return;
     };
@@ -836,7 +856,7 @@ pub fn use_key(
             });
         }
         match seed {
-            Some(seed) => note.say(wall_s, format!("Tilled, and turned up a {}", seed.name())),
+            Some(seed) => note.say(wall_s, format!("Tilled. Found {}", seed.name())),
             None => note.say(wall_s, "Tilled"),
         }
     }
@@ -2033,6 +2053,7 @@ mod tests {
                 None,
                 false,
                 0.0,
+                4,
             )
         };
         let Some(FarmAct::Wild { crop, .. }) = crop else {

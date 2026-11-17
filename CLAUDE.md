@@ -146,6 +146,17 @@ no bracketed explanations, design notes, costs measured on one machine or
 "off by default" remarks. Those go in the OpenSpec change, the mockup's info
 modal and the reply.
 
+## Game text is plain (owner, 2026-11-17)
+
+**Standing instruction from the user:** on a pick-up note, "'Its branch is
+taken, an axe takes more' sounds like AI writing please remove this", "its
+very AI sounding", and "never ... add AI sounding text to the game to over
+describe things". Never add AI-sounding or over-descriptive text to the game.
+Text the player reads in the game is short and plain, the way a game says it:
+- "No more wood", "Needs a stone pickaxe", "No ripe fruit";
+- not riddles, inverted or literary phrasing, or colons that explain;
+- when a note adds nothing, show none.
+
 ## Waterfalls are designed in a mockup first (owner, 2026-11-15)
 
 **Standing instruction from the user:** "make mockups from now on for how
