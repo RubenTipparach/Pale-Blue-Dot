@@ -159,6 +159,11 @@ pub struct Launch {
     /// fish in the slots (`fishing-and-equipment` tasks 11). A measurement
     /// instrument.
     pub fish_play: bool,
+    /// `--watch-hook`: with `--fish`, the frame is drawn from under the water
+    /// beside the hook while the line is in, and the HUD and readout are
+    /// hidden, so a bite can be filmed from below (`movement-smoothness` 7).
+    /// A recording instrument.
+    pub watch_hook: bool,
     /// `--cast`: take up the rod and cast once, from a boat's seat
     /// (`--aboard tube|raft|loon|rowboat`) or on foot where the walker
     /// stands (`--at`), scripted as `--fish` casts on its shore
@@ -474,6 +479,7 @@ impl Launch {
             climb_out: false,
             fish: false,
             fish_play: false,
+            watch_hook: false,
             cast: false,
             load_hold: false,
             husbandry: None,
@@ -1207,6 +1213,7 @@ impl Launch {
                     result.fish = true;
                     result.fish_play = true;
                 }
+                "--watch-hook" => result.watch_hook = true,
                 "--cast" => result.cast = true,
                 "--load-hold" => result.load_hold = true,
                 "--life" => {
@@ -2138,6 +2145,17 @@ pub fn run(args: &[String]) {
         if launch.fish {
             if launch.fish_play {
                 app.insert_resource(FishPlay);
+            }
+            if launch.watch_hook {
+                app.insert_resource(pbd_app::fish::WatchHook::default())
+                    .add_systems(
+                        PostUpdate,
+                        hide_in_play_hud
+                            .before(
+                                bevy::camera::visibility::VisibilitySystems::VisibilityPropagate,
+                            )
+                            .run_if(pbd_app::loading::ready),
+                    );
             }
             // In a real-time run (no `--capture`) the script's frames count
             // from `READY`, so its cast is not spent under the loading
@@ -4240,6 +4258,17 @@ fn load_hold_script(
     if pbd_app::vehicles::hold::store(&mut save, craft.id, &hold, &slots) {
         hotbar.0 = slots;
         info!("load-hold: twelve logs in the raft's hold");
+    }
+}
+
+/// `--watch-hook`: no HUD or readout over the view from under the water
+/// (the slots, the crosshair, the compass, the prompts and the readout),
+/// after everything that shows them.
+fn hide_in_play_hud(mut nodes: Query<&mut Visibility, With<Node>>) {
+    for mut v in &mut nodes {
+        if *v != Visibility::Hidden {
+            *v = Visibility::Hidden;
+        }
     }
 }
 

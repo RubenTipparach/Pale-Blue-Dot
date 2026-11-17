@@ -210,6 +210,17 @@ impl Plugin for FishPlugin {
                     .after(crate::walking::follow_walker)
                     .after(crate::planet::update_planet_frame)
                     .before(bevy::transform::TransformSystems::Propagate),
+            )
+            .add_systems(
+                First,
+                watch_hook_restore.run_if(resource_exists::<WatchHook>),
+            )
+            .add_systems(
+                PostUpdate,
+                watch_hook_view
+                    .run_if(resource_exists::<WatchHook>)
+                    .after(draw::tackle)
+                    .before(bevy::transform::TransformSystems::Propagate),
             );
     }
 }
@@ -604,6 +615,80 @@ fn fish(
         if let Some(air) = air {
             try_spawn(fishery, feet, sea, air, contact, roster, settings, seconds);
         }
+    }
+}
+
+/// `--watch-hook`, a recording instrument (`movement-smoothness` 7): the
+/// frame is drawn from an eye under the water beside the hook, so a bite can
+/// be watched from below. When the float lands an eye is placed to the
+/// side of the lure (0.35 m under the float), 0.85 m off, a little under it, and looks
+/// at the lure; it stays there for the cast. Only the drawn frame moves: the
+/// walking camera is put back at the start of every frame, so the line, the
+/// cast, the fish's shyness and everything else in `Update` see the angler's
+/// own eye, and the line is placed from the rod before the view moves. The
+/// rod in hand is hidden while the view is under water. Changes nothing a
+/// player meets.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct WatchHook {
+    /// The eye and the point it looks at, planet-local, for this cast.
+    view: Option<(Vec3, Vec3)>,
+    /// The angler's own camera, put back at the start of the next frame.
+    angler: Option<(Transform, GlobalTransform)>,
+}
+
+/// Put the angler's camera back before anything reads it.
+fn watch_hook_restore(
+    mut watch: ResMut<WatchHook>,
+    mut cameras: Query<(&mut Transform, &mut GlobalTransform), With<WalkingCamera>>,
+) {
+    if let Some((transform, global)) = watch.angler.take() {
+        for (mut t, mut g) in &mut cameras {
+            *t = transform;
+            *g = global;
+        }
+    }
+}
+
+/// Draw this frame from under the water beside the hook.
+#[allow(clippy::type_complexity)]
+fn watch_hook_view(
+    mut watch: ResMut<WatchHook>,
+    fishery: Res<Fishery>,
+    frame: Res<crate::planet::PlanetRenderFrame>,
+    mut cameras: Query<(&mut Transform, &GlobalTransform), With<WalkingCamera>>,
+    mut held: Query<&mut Visibility, With<crate::held::Held>>,
+) {
+    let line = &fishery.line;
+    let wet = matches!(
+        line.phase,
+        Phase::Floating | Phase::Nibble | Phase::Bite | Phase::Hooked
+    );
+    if !wet {
+        watch.view = None;
+        return;
+    }
+    let Ok((mut transform, global)) = cameras.single_mut() else {
+        return;
+    };
+    let view = *watch.view.get_or_insert_with(|| {
+        let float = line.float;
+        let up = float.normalize_or(Vec3::Y);
+        let eye = (transform.translation.as_dvec3() - frame.center).as_vec3();
+        let toward = eye - float;
+        let toward = (toward - up * toward.dot(up)).normalize_or(up.any_orthonormal_vector());
+        let side = up.cross(toward).normalize_or(up.any_orthonormal_vector());
+        let lure = line.lure();
+        let target = lure + up * 0.1;
+        (target + side * 0.85 + toward * 0.2 - up * 0.15, target)
+    });
+    watch.angler = Some((*transform, *global));
+    let (eye, target) = view;
+    let up = eye.normalize_or(Vec3::Y);
+    let at = (frame.center + eye.as_dvec3()).as_vec3();
+    let look = (frame.center + target.as_dvec3()).as_vec3();
+    *transform = Transform::from_translation(at).looking_at(look, up);
+    for mut v in &mut held {
+        *v = Visibility::Hidden;
     }
 }
 
