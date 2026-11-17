@@ -3395,6 +3395,9 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
           skylight: f32) -> vec4<f32> {
     // The far lights go under the haze like the ground they stand on.
     var color = lit + far_glow;
+#ifdef TERRAIN_OFF_FOG
+    return vec4(color, 1.0);
+#endif
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
     let air = exp(-altitude/1050.);
@@ -3667,7 +3670,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
         far = GROUND_MEAN;
     }
+#ifdef TERRAIN_OFF_TEXTURE
+    var art = base;
+#else
     var art = pixel_tile(input.uv,tile,slot);
+#endif
     // `flora-v2` design 10: a detailed tree's own texel, or its impostor's,
     // which needs no far fade (it is already the far picture).
     if input.kind == 2u && cap >= TREE_BARK_CODE && cap <= IMPOSTOR_CODE {
@@ -3689,16 +3696,22 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let grain = dot(art, vec3(0.299, 0.587, 0.114));
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
+#ifndef TERRAIN_OFF_SEASON
     albedo = flora_albedo(input, albedo, grain, cell_variation);
+#endif
     // Design 12.6: the ground's grass (a top, the sod lip down a column's
     // side, a terrace) dries and frosts with the season.
     if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
         && (code == 2u || code == 3u || code == 7u || code == GRASS_SIDE_CODE) {
+#ifndef TERRAIN_OFF_SEASON
         albedo = ground_tint(albedo, normalized(input.position));
+#endif
     }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {
+#ifndef TERRAIN_OFF_SEASON
         albedo = fallen_leaves(input, albedo);
+#endif
     }
     if input.kind == KIND_LAMP {
         var part = vec3(0.16, 0.15, 0.14);
@@ -3884,7 +3897,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // a cell at a time and rain does not - and by being above the waterline
     // (no rings on the seabed).
     let above_water = 1.-step(0.001,water_depth);
+#ifdef TERRAIN_OFF_WET
+    let wet_amt = 0.0;
+#else
     let wet_amt = clamp(params.weather.x,0.,1.)*input.rain_open*above_water;
+#endif
     // A plant is not wet ground (`flora-v2` 13.2; owner, 2026-11-16: "grass
     // blades shouldnt have rain shader on them", "no rain drops on tree
     // leaves either"): a detailed tree and every piece of clutter only

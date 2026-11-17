@@ -2381,21 +2381,40 @@ fn draw_terrain<'w>(
 ) {
     pass.set_bind_group(1, &maps.bind_group, &[]);
     pass.set_bind_group(2, receiver, &[]);
-    pass.set_bind_group(0, &view.draw_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 0);
-    pass.set_bind_group(0, &view.foliage_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 16);
-    // The near trees, one draw per species (`flora-v2` design 10.5).
-    pass.set_bind_group(0, &view.near_bind_group, &[]);
-    for s in 0..8 {
-        pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+    let skip = terrain_skip();
+    if !skip.contains("ground") {
+        pass.set_bind_group(0, &view.draw_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 0);
     }
-    pass.set_bind_group(0, &view.clutter_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 48);
+    if !skip.contains("trees") {
+        pass.set_bind_group(0, &view.foliage_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 16);
+    }
+    // The near trees, one draw per species (`flora-v2` design 10.5).
+    if !skip.contains("near") {
+        pass.set_bind_group(0, &view.near_bind_group, &[]);
+        for s in 0..8 {
+            pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+        }
+    }
+    if !skip.contains("clutter") {
+        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 48);
+    }
     // The inside of the world, last: everything before it is the surface,
     // and a cave face is only ever seen through a hole in that surface.
-    pass.set_bind_group(0, &view.column_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 64);
+    if !skip.contains("column") {
+        pass.set_bind_group(0, &view.column_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 64);
+    }
+}
+
+/// A pricing instrument (`play-frame-budget`): `PBD_TERRAIN_SKIP=ground,trees,
+/// near,clutter,column` leaves those draws out of the terrain pass, so a
+/// sitting can price each draw's share on the same replay.
+fn terrain_skip() -> &'static str {
+    static SKIP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SKIP.get_or_init(|| std::env::var("PBD_TERRAIN_SKIP").unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -2833,7 +2852,7 @@ pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
 }
 
 /// A pricing instrument (`play-frame-budget`), not a setting:
-/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night` compiles those parts
+/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night,texture,season,fog,wet` compiles those parts
 /// out of the terrain's fragment shader, so a sitting can price each by what
 /// it saves on the same view. `flat` returns a grey after the cut-out test:
 /// what is left is the vertex shader, the raster and the depth test.

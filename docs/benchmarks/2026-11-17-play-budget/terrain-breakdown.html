@@ -147,6 +147,46 @@ ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
   </section>
 
   <section>
+    <h2>The terrain pass at the bench, after the cuts</h2>
+    <p>LOW, 200 m, vsync off, one bench replay per row. Terrain pass <b class="num">9.37 ms</b> of a 12.83 ms GPU frame.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>ms</th><th>Measured as</th></tr></thead>
+        <tbody>
+          <tr><td>3. Vertex, triangles, depth test</td><td class="num">1.67</td><td>lighting replaced by grey</td></tr>
+          <tr><td>4. Lighting</td><td class="num hot">7.70</td><td>the rest</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="label">Step 3 by draw (each draw skipped, lighting grey)</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Draw</th><th>ms</th><th>Vertices a frame</th></tr></thead>
+        <tbody>
+          <tr><td>Trees (cards and impostors)</td><td class="num">0.67</td><td class="num">0.24 M</td></tr>
+          <tr><td>Clutter (tufts, stones, flowers)</td><td class="num">0.52</td><td class="num">0.93 M</td></tr>
+          <tr><td>Near trees (full models)</td><td class="num">0.45</td><td class="num">0.34 M</td></tr>
+          <tr><td>Column tier</td><td class="num">0.15</td><td class="num">1.00 M</td></tr>
+          <tr><td>Ground hexes</td><td class="num">0.06</td><td class="num">1.70 M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The vertex side is not the problem: trees and clutter cost most because they cover many pixels with cut-out leaves and blades, not because of their vertex count.</p>
+    <p class="label">Step 4: the lighting runs 15 times per pixel</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>a frame</th></tr></thead>
+        <tbody>
+          <tr><td>Pixels on screen (1440 × 900)</td><td class="num">1.30 M</td></tr>
+          <tr><td>Times the lighting shader ran</td><td class="num hot">19.1 M</td></tr>
+          <tr><td>Per pixel</td><td class="num hot">≈ 15</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note callout">The terrain shader can discard a pixel (grass tufts, leaf cut-outs, dither fades), and a shader that can discard stops the GPU from testing depth before it runs. So every hillside, tree and wall behind what you finally see is fully lit, shadows and lamps and fog included, then overwritten. That is why each lighting part seemed to cost so much on its own (shadow lookups 4.6, night lights 3.1, lamps 2.6, bounce 2.2, cloud 1.7, fog 1.5 ms; textures and season tint about nothing): every part is paid about 15 times. The fix is a depth pre-pass: draw depth first with the cheap cut-out test, then light each pixel once.</p>
+  </section>
+
+  <section>
     <h2>Building the bench: where the GPU goes</h2>
     <p>Before the GPU cuts, with vsync on. The bot replayed the trunk missions; these are the 9.5 s of its bench step, looking across open land, morning. Same moment at both shadow levels.</p>
     <div class="table-wrap">
