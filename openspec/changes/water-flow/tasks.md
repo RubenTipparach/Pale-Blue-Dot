@@ -73,6 +73,23 @@
       pass, the bubbles on the GPU in the water's pass, the aerated colour
       in the water's fragment. Verify: captures above, beside and under a
       fall; a launch to READY with no LATE_PIPELINE.
+  - [x] 6.6.1 The write-up (design "Porting M35"). Verify: `openspec validate --all`.
+  - [x] 6.6.2 The mesher's feet carry the drop `D`, the way over, the pool's depth and the column; a foot
+        cell's falling face carries metres under the lip. Verify: unit tests on a ring tier.
+  - [x] 6.6.3 `falls` in `water.ron`, validated, the mockup's defaults. Verify: the shipped-file test.
+  - [x] 6.6.4 `animate_splash` on the proposed rule: puffs on the open side, fade in at birth, centre at
+        0.2 x size, continuous frames; spray floors; fall droplets as single drops; the 140 m reach faded
+        in time. Verify: unit tests of the rule against the mockup's table.
+  - [x] 6.6.5 The splash pass: three lanes a quad, the puff sheet smooth with the frame cross-fade, soft
+        against the main and water depth in its own pass, lamps on the mist. Verify: naga validation, the
+        layout test, captures.
+  - [x] 6.6.6 Bubbles on the GPU from the feet uniform. Verify: captures above and under a pool.
+  - [x] 6.6.7 (Stills and the differences: `docs/screenshots/waterfall-look/`; a normal launch at the
+        cascade reaches READY with 113 pipelines and no LATE_PIPELINE.) The water's fragment: teal churn, foot ripples, pool flow, fall speed-up, Glassy lip.
+        Verify: captures above, beside and under a tall and a short fall beside the mockup's
+        (`docs/screenshots/waterfall-look/`); a launch to READY with no LATE_PIPELINE.
+  - [ ] 6.6.8 (Owed: not run in this sitting; the suite has no fall scenario, a held-view command is in
+        `docs/screenshots/waterfall-look/README.md`.) The frame cost: `perf_suite.py`, before and after, on the release build (owner's condition).
 
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
