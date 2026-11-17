@@ -103,3 +103,15 @@
    - **Pose to pose, solid drawing and appeal:** four keyed poses (rest,
      top, hit, recoil) blended by the curves, and the fist reads as solid in
      each.
+9. The shovel scoops (owner, 2026-11-17: "the shovel should go down fast,
+   lift slightly like its lifting dirt"). It has its own stroke and does not
+   chop:
+   - a short raise and anticipation;
+   - a fast thrust down and forward along the handle into the ground
+     (`thrust_m`): the hit;
+   - instead of a bounce, the blade tilts back (`scoop_tilt_rad`, 0.35) and
+     the arm lifts a little (`scoop_lift_m`, 0.06) with a clump of dirt on
+     the spade;
+   - the clump tips off as the shovel returns.
+
+   It keeps the same four stages and the same steady beat as the other tools.
