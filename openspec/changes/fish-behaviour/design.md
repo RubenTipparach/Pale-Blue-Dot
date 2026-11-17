@@ -120,3 +120,169 @@ code.
 Asked only with the mockup beside them (CLAUDE.md, "Ask the owner with a
 survey"): the owner's review of M37 on the tracker answers whether the
 proposed behaviour is right and which slider values to take.
+
+## 8. The body wave (M37, tab "Body wave")
+
+The owner, after PR #109 fixed the heading: "the fish now turns correctly, but
+for some reason doesnt move convincingly? perhaps its how the model just turns
+without matching proper fish movement, make a mockup for using shaders to
+twist a fish around when its swimming so it moves convincingly".
+
+### 8.1 Today
+
+`bodies::sway` adds a sideways shear to the model on the CPU in `emit`, and
+`draw::build` makes flat normals from the result. Per kind:
+
+| Sway | Offset (model units, body length 1) | Beat |
+| --- | --- | --- |
+| `Fish` | `Z * sin(t*7 + phase - x*6) * 0.075 * w^2`, `w = clamp((0.3 - x)/0.8, 0, 1)` | 1.11 Hz, always |
+| `Eel` | `Z * sin(t*3.5 + phase - x*13) * 0.06 * w`, `w = clamp((0.55 - x)/1.0, 0.15, 1)` | 0.56 Hz, always |
+| `Ray` | wing `Y * 0.07 sin(ph - 2.5 s) (|z|/0.44)^2`, whip behind `s > 1` | 0.25 Hz, always |
+
+Two things make it read as a turning plank with a wagging tail:
+
+- **The fish and eel waves run backwards.** A crest of `sin(7t - 6x)` sits at
+  `x = (7t - c)/6`, which grows with `t`: it moves toward +X, the head. A
+  swimming fish sends its wave from head to tail. (The ray's `sin(ph - 2.5 s)`
+  already runs nose to tail.)
+- **Nothing follows the swim.** The beat and amplitude never change with speed,
+  the body never straightens in a glide, never curves into a turn, the head
+  never recoils, and the shear moves vertices straight sideways, so a swung
+  tail is thinner than the body it came from.
+
+### 8.2 Proposed: the vertex shader
+
+`u` is the place along the body, 0 at the nose to 1 at the tail (beyond 1 a
+ray's whip); `d` the vertex's distance off the spine across the body; `phi`,
+`A`, `B` the fish's wave phase (rad), amplitude and turn bend (body lengths).
+Per species: `lambda` waves along the body, envelope `h`, `p`, recoil `r`
+reaching `ur` from the nose.
+
+```text
+E(u)  = h + (1 - h) u^p                          amplitude envelope
+R(u)  = -r (max(1 - u/ur, 0))^2 sin(2 pi lambda - phi)   head recoil, against the tail
+q     = (u - 0.35) / 0.65                        C-shape about the pivot
+f(u)  = A (E sin(2 pi lambda u - phi) + R) + B q^2      spine offset
+f'(u) = A (E' sin(.) + E 2 pi lambda cos(.) + R') + 2 B q / 0.65
+s = -f'/L   c = 1/sqrt(1 + s^2)                   slope dz/dx (x runs nose + to tail -)
+x' = x - d s c     z' = f + d c                    the cross-section turns with the spine
+n' = (n.x c - n.z s c, n.y, n.x s c + n.z c)       the normal turns by the same angle
+```
+
+Crests sit at `u = (phi + pi/2 + 2 pi k) / (2 pi lambda)`, which grows with
+`phi`: the wave runs head to tail. A ray instead lifts its wings,
+`y += A (|d|/span)^pw sin(2 pi lambda_w (1 - flap) u - phi)`, the wing inside
+a turn beating less, the whip swinging sideways, and the normal taking the
+height field's slope, `n' = normalize(n.x - g_x n.y, n.y, n.z - g_z n.y)`.
+The mockup checks `f'` against a numerical derivative (error < 1e-9).
+
+WGSL, as the life material's vertex stage would carry it:
+
+```wgsl
+struct Swim { u: f32, d: f32, phase: f32, amp: f32, bend: f32 }
+struct Profile { waves: f32, expo: f32, head: f32, recoil: f32, recoil_u: f32, spine: f32 }
+
+fn swim_lateral(s: Swim, k: Profile) -> vec2<f32> {
+    let u = clamp(s.u, 0.0, 1.0);
+    let um = max(u, 1e-3);
+    let e = k.head + (1.0 - k.head) * pow(um, k.expo);
+    let de = (1.0 - k.head) * k.expo * pow(um, k.expo - 1.0);
+    let a = TAU * k.waves * u - s.phase;
+    let tail = sin(TAU * k.waves - s.phase);
+    let r = max(1.0 - u / k.recoil_u, 0.0);
+    let q = (u - 0.35) / 0.65;
+    let f = s.amp * (e * sin(a) - k.recoil * r * r * tail) + s.bend * q * q;
+    let df = s.amp * (de * sin(a) + e * TAU * k.waves * cos(a) + 2.0 * k.recoil * r / k.recoil_u * tail)
+        + s.bend * 2.0 * q / 0.65;
+    return vec2(f, df);
+}
+
+// fwd, side: the fish's axes in mesh space, scaled by its length; the vertex
+// was laid rigid by `emit`.
+fn swim_body(p: vec3<f32>, n: vec3<f32>, fwd: vec3<f32>, side: vec3<f32>, s: Swim, k: Profile)
+    -> array<vec3<f32>, 2> {
+    let fl = swim_lateral(s, k);
+    let slope = -fl.y / k.spine;
+    let c = inverseSqrt(1.0 + slope * slope);
+    let sn = slope * c;
+    let p2 = p + side * (fl.x + s.d * (c - 1.0)) - fwd * (s.d * sn);
+    let nf = dot(n, normalize(fwd));
+    let ns = dot(n, normalize(side));
+    let n2 = n + normalize(fwd) * (nf * (c - 1.0) - ns * sn) + normalize(side) * (nf * sn + ns * (c - 1.0));
+    return array(p2, normalize(n2));
+}
+```
+
+### 8.3 Speed, glide, hover and turn (draw side, CPU)
+
+Per drawn fish, kept in the `FishPose` of 5 beside its heading and roll:
+
+- **Phase** integrated, `phi += 2 pi f dt`, never `omega t`, so a change of
+  speed never jumps the tail. `f = f0 + fk * (speed / length)`, capped at
+  `fmax`; hovering, `f = f_hover`.
+- **Amplitude** eased (0.18 s) toward: hovering below `hover_below` lengths a
+  second; gliding when slowing faster than `glide_acc` lengths a second
+  squared (`A_glide`, near zero, so the body straightens); otherwise between
+  cruising and bursting by speed across the species' range.
+- **Bend** eased (0.15 s) toward `-bend_gain * yaw_rate / 90 deg/s`, capped at
+  `bend_max`; a left turn bows the body left.
+
+All of it reads the speed, its change and the yaw rate, which `draw::build`
+already has per fish (`School::velocities`, `DrawnHeadings`).
+
+| Default | Perch (carangiform) | Eel (anguilliform) | Ray (rajiform) |
+| --- | --- | --- | --- |
+| `f0`, `fk`, `fmax` | 0.5 Hz, 1.0 Hz per len/s, 8 Hz | 0.4, 1.0, 4 | 0.4, 0.6, 3 |
+| `A` cruise, burst, hover, glide | 0.075, 0.11, 0.025, 0.004 len | 0.07, 0.09, 0.03, 0.01 | wing tip 0.08, 0.12, 0.03, 0.006 |
+| `h`, `p`, `lambda` | 0.04, 2.0, 0.95 | 0.3, 0.8, 1.25 | wing `pw` 1.6, 0.7 waves a chord |
+| recoil, reach | 0.35, 0.4 | 0, - | - |
+| bend at 90 deg/s, most | 0.06, 0.14 len | 0.10, 0.22 | 0.04, 0.10 |
+| glide threshold, hover below | 0.35 len/s2, 0.4 len/s | 0.3, 0.3 | 0.3, 0.3 |
+
+At a perch's cruise (0.8 m/s, 2.1 len/s) the beat is 2.6 Hz and the wave runs
+back at `f L / lambda` = 1.05 m/s, a slip of 0.76; at its burst (2.4 m/s) 6.8 Hz
+and 2.7 m/s, 0.88. Real carangiform slip is about 0.7 to 0.9.
+
+### 8.4 Where it goes in the game
+
+- **The mesh** stays one mesh a school, rebuilt each frame by `draw::build`,
+  but `emit` lays each creature rigid (no `sway`) and writes, per vertex, two
+  more attributes: `swim_axes: vec4` (the fish's `side * scale` and `u`) and
+  `swim_wave: vec4` (`phi`, `A`, `B`, `d`), with the forward axis recovered as
+  `cross(side, up)` from a third, `swim_up: vec4` (`up * scale` and the
+  profile index). That is 48 bytes a vertex on top of the 48 the mesh carries
+  today (position, colour, uv, normal): a 10-fish perch school, about 7,200
+  vertices, uploads about 350 KB a frame more. `compute_flat_normals` runs on
+  the rigid mesh, which is the input the shader turns.
+- **The profile** (`lambda`, `h`, `p`, recoil, span, wing values) is a small
+  uniform array in the material, indexed by the profile index, one row per
+  sway kind and species, filled from `fauna.ron` at startup.
+- **The material**: the life material is `ExtendedMaterial<StandardMaterial,
+  FieldLit>` (`field_light.rs`, fragment `field_lit.wgsl`). A swimmer's
+  meshes get their own extension, `SwimLit`, with the same fragment shader and
+  a `vertex_shader()` (and `prepass_vertex_shader()`, so the shadow and depth
+  prepass bend the same way) that calls `swim_body` before Bevy's
+  `mesh_position_local_to_world`. Its `specialize` adds the three attributes
+  to the vertex layout; the reef, kelp and places keep `FieldLit`. The
+  loading screen prewarms the new pipeline (CLAUDE.md, "A loading screen on
+  boot").
+- **Crabs, birds, turtles, otters, octopus** keep their CPU part rig
+  (`animate`); their `swim` attributes are zero and the shader leaves them as
+  they are (`A = 0`, `B = 0`).
+- **A later step**, not needed for this: one instanced base mesh per species
+  with a per-fish instance buffer (transform, `phi`, `A`, `B`) would drop the
+  per-frame rebuild altogether.
+
+**Cost**: vertex stage only, two `sin`, one `cos`, two `pow` and about 40
+ALU a vertex. At 7,200 vertices a school and a few schools in view that is
+tens of thousands of vertices: a few microseconds on the RTX 3070, under the
+noise of `perf_suite.py`. It is measured with the suite when built, not
+claimed (CLAUDE.md, "Implementation and verification").
+
+**Not changed**: where a fish is, its heading, its school's rules, the
+fishing rules. The bend never moves the fish's position or facing, only its
+body round its spine.
+
+**Waits** for the owner's approval of M37's Body wave tab; no game code until
+then and a request.
+

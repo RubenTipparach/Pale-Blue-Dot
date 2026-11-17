@@ -778,9 +778,11 @@ const VIEWS = {
   swim:   makeView("swim",   { yaw: 0.6, pitch: -0.06, dist: 4.2, target: V(0, -1.3, 0) }),
   hooked: makeView("hooked", { yaw: 1.4, pitch: -0.05, dist: 2.6, target: V(0, -0.5, 0) }),
 };
+// The Body wave tab (body-wave.js): the game's rigid fish and tail sway beside a vertex-shader body wave.
+if (window.__fishWave) VIEWS.wave = window.__fishWave({ environment, loadTextures, getAtlas: () => atlas, state, MODELS });
 
 // ------------------------------------------------------------------ the page: tabs (one 3D view at a time, #anchor), shared controls, sliders, modals
-const TABS = ["lure", "swim", "hooked"];
+const TABS = ["lure", "swim", "hooked"].concat(VIEWS.wave ? ["wave"] : []);
 let current = null;
 function setTab(t, push){
   if (!TABS.includes(t)) t = "lure";
@@ -789,7 +791,9 @@ function setTab(t, push){
   current = t;
   TABS.forEach(x => { $("tab-" + x).hidden = x !== t; $("tb-" + x).setAttribute("aria-pressed", x === t); });
   document.querySelectorAll(".lureonly").forEach(e => e.hidden = t !== "lure");
-  document.querySelectorAll(".hookonly").forEach(e => e.hidden = t === "lure");
+  document.querySelectorAll(".hookonly").forEach(e => e.hidden = t === "lure" || t === "wave");
+  document.querySelectorAll(".notwave").forEach(e => e.hidden = t === "wave");
+  document.querySelectorAll(".waveonly").forEach(e => e.hidden = t !== "wave");
   // Each tab's canvas sits in the one shared stage.
   VIEWS[t].show();
   if (push !== false && location.hash !== "#" + t) history.replaceState(null, "", "#" + t);

@@ -89,6 +89,7 @@ template{display:none}
     <button id="tb-lure" aria-pressed="true">At the lure</button>
     <button id="tb-swim" aria-pressed="false">Swimming</button>
     <button id="tb-hooked" aria-pressed="false">Hooked</button>
+    <button id="tb-wave" aria-pressed="false">Body wave</button>
   </div>
 
   <section class="tab" id="tab-lure">
@@ -104,20 +105,35 @@ template{display:none}
     <div class="stage"><canvas id="cv-hooked" aria-label="A hooked perch fighting the line"></canvas><div class="hud" id="hud-hooked"><span class="l"></span><span class="r"></span></div></div>
   </section>
 
+  <section class="tab" id="tab-wave" hidden>
+    <div class="tabhead"><h2>Body wave</h2><button class="info" data-info="about-wave" aria-label="About Body wave">i</button></div>
+    <div class="stage"><canvas id="cv-wave" aria-label="Fish swimming: today's rigid body beside a body wave"></canvas><div class="hud" id="hud-wave"><span class="l"></span><span class="r"></span></div></div>
+  </section>
+
   <div class="bar">
     <div class="seg" id="sg-mode" aria-label="Which behaviour"><button aria-pressed="false">Today</button><button aria-pressed="false">Proposed</button><button aria-pressed="true">Split</button></div>
     <div class="seg" id="sg-speed" aria-label="Speed"><button aria-pressed="true">1x</button><button aria-pressed="false">1/2x</button><button aria-pressed="false">1/4x</button></div>
     <div class="seg" id="sg-time" aria-label="Time of day"><button aria-pressed="true">Day</button><button aria-pressed="false">Night</button></div>
-    <div class="seg" id="sg-species" aria-label="Species"><button aria-pressed="true">Perch</button><button aria-pressed="false">Minnow</button></div>
-    <button class="act" id="bt-replay">Replay</button>
+    <div class="seg notwave" id="sg-species" aria-label="Species"><button aria-pressed="true">Perch</button><button aria-pressed="false">Minnow</button></div>
+    <button class="act notwave" id="bt-replay">Replay</button>
     <button class="act strike lureonly" id="bt-strike">Strike now</button>
     <label class="chk hookonly" hidden><input type="checkbox" id="ck-follow" checked> Follow</label>
-    <label class="chk"><input type="checkbox" id="ck-loop" checked> Loop</label>
+    <label class="chk notwave"><input type="checkbox" id="ck-loop" checked> Loop</label>
+  </div>
+  <div class="bar waveonly" hidden>
+    <div class="seg" id="sg-wave-species" aria-label="Species"><button aria-pressed="true">Perch</button><button aria-pressed="false">Eel</button><button aria-pressed="false">Ray</button></div>
+    <div class="seg" id="sg-wave-view" aria-label="View"><button aria-pressed="true">School</button><button aria-pressed="false">Close-up</button></div>
+    <div class="seg" id="sg-wave-force" aria-label="Swim"><button aria-pressed="true">Auto</button><button aria-pressed="false">Burst</button><button aria-pressed="false">Cruise</button><button aria-pressed="false">Glide</button><button aria-pressed="false">Hover</button><button aria-pressed="false">Turn</button></div>
+    <label class="chk"><input type="checkbox" id="ck-wave-debug"> Wire and spine</label>
   </div>
 
-  <section class="tuning">
+  <section class="tuning notwave">
     <div class="tunehead"><h3>Proposed tuning</h3><button class="info" data-info="about-tuning" aria-label="About the tuning">i</button><button class="act" id="bt-reset">Reset</button></div>
     <div id="tuning"></div>
+  </section>
+  <section class="tuning waveonly" hidden>
+    <div class="tunehead"><h3>Body wave tuning</h3><button class="info" data-info="about-wave-tuning" aria-label="About the body wave tuning">i</button><button class="act" id="bt-wave-reset">Reset species</button></div>
+    <div id="wave-tuning"></div>
   </section>
 </main>
 
@@ -141,7 +157,7 @@ template{display:none}
     <li><b>The fight.</b> On the line the fish is held at the lure again, so its facing follows the float's path: it swims backwards while reeled, flips when the float stalls, and never shakes its head.</li>
   </ol>
   <h3>Which art is whose</h3>
-  <p>The perch and minnow meshes and their skins are the game's (<code>fish-behaviour/game/fish_models.js</code> from the game's own export, <code>water_life_atlas.png</code>), as are the sand and timber textures (<code>assets/textures/settlement/</code>) and the float's two spheres and colours (<code>fish.rs</code>). The water surface, the bed plane, the dock with its lantern, the leader and the hook with its bait are the page's stand-ins; the leader and hook are part of the proposal (today nothing is drawn under the float). Night is lit by the lantern on the dock.</p>
+  <p>The perch, minnow, eel and ray meshes and their skins are the game's (<code>fish-behaviour/game/fish_models.js</code> from the game's own export, <code>water_life_atlas.png</code>), as are the sand and timber textures (<code>assets/textures/settlement/</code>) and the float's two spheres and colours (<code>fish.rs</code>). The water surface, the bed plane, the dock with its lantern, the leader and the hook with its bait are the page's stand-ins; the leader and hook are part of the proposal (today nothing is drawn under the float). Night is lit by the lantern on the dock.</p>
   <h3>Controls</h3>
   <p>Drag to look round the lure, scroll or pinch to come closer. The camera stays where you leave it. Replay starts the run again, Strike now hooks early (in a nibble, the fish bolts: the game's <code>TooEarly</code>). The angler in the replay strikes 0.3 s into the bite, reels while the fish rests and gives line while it runs.</p>
   <p>Mockup for Pale Blue Dot, 2026-11-17. three.js r128. OpenSpec change: <code>openspec/changes/fish-behaviour</code>.</p>
@@ -188,6 +204,49 @@ template{display:none}
   <p>All draw side: <code>Line</code>'s run, tension and stamina are read, never changed.</p>
 </template>
 
+<template id="about-wave" data-title="Body wave">
+  <p>The owner, after the heading fix (PR #109): <q>the fish now turns correctly, but for some reason doesnt move convincingly? perhaps its how the model just turns without matching proper fish movement, make a mockup for using shaders to twist a fish around when its swimming so it moves convincingly</q>. Both sides swim the same path at the same speeds and turn the same way; only the body differs.</p>
+  <h3>Today</h3>
+  <p><code>fish/bodies.rs</code> <code>sway</code>, applied on the CPU to each vertex before <code>emit</code> places it, then flat normals (<code>compute_flat_normals</code>). The body is rigid and only a sideways shear is added near the tail:</p>
+  <ul>
+    <li>Fish: <code>sin(t*7 + phase - x*6) * 0.075 * w*w</code>, w rising from x 0.3 to the tail. 1.11 Hz and 0.075 of a length at every speed, gliding or hovering included.</li>
+    <li>Eel: <code>sin(t*3.5 + phase - x*13) * 0.06 * w</code>, 0.56 Hz.</li>
+    <li>Ray: wing flap and whip at 1.6 rad/s (0.25 Hz).</li>
+  </ul>
+  <p><b>The fish and eel waves run the wrong way.</b> With <code>+ t</code> and <code>- x</code> a crest sits where <code>7t = 6x + c</code>, so it moves toward +X, the head. A real fish pushes water back by sending the wave from head to tail. A wave running forward reads as wobbling, not swimming. The ray's wave already runs nose to tail.</p>
+  <h3>Proposed: a body wave in the vertex shader</h3>
+  <p>With <code>u</code> the place along the body (0 nose, 1 tail) and <code>&phi;</code> the fish's own wave phase:</p>
+  <ul>
+    <li><b>Travelling wave</b>: <code>z = A&middot;(E(u)&middot;sin(2&pi;&lambda;u &minus; &phi;) + R(u)) + B&middot;q(u)&sup2;</code>. Its crests move toward the tail as <code>&phi;</code> grows.</li>
+    <li><b>Envelope</b> <code>E(u) = h + (1 &minus; h)&middot;u<sup>p</sup></code>. A perch (carangiform) has <code>h</code> 0.04 and <code>p</code> 2, so mostly its tail moves. An eel (anguilliform) has <code>h</code> 0.3 and <code>p</code> 0.8, so the wave runs down the whole body, about 1.25 waves long.</li>
+    <li><b>Head recoil</b> <code>R(u)</code>: near the nose the head yaws against the tail's swing.</li>
+    <li><b>Turn bend</b> <code>B&middot;q&sup2;</code> with <code>q = (u &minus; 0.35)/0.65</code>: a C-shape about the body's pivot, toward the inside of the turn. It grows with the yaw rate and eases in.</li>
+    <li><b>Cross-sections turn with the spine.</b> From the slope <code>s = dz/dx</code> (worked out in closed form, no extra sin), <code>c = 1/&radic;(1+s&sup2;)</code>, a vertex <code>d</code> off the spine goes to <code>(x &minus; d&middot;s&middot;c, y, z + d&middot;c)</code>. The normal turns by the same angle, so the light follows the bend and the body keeps its thickness.</li>
+    <li><b>Ray</b>: the wings rise and fall in a wave from nose to tail along the chord, growing toward the tips (<code>span<sup>p</sup></code>). The flap slider blends this into a whole-wing flap. The wing on the inside of a turn beats less. The whip swings sideways. Normals follow the height field's slope.</li>
+  </ul>
+  <h3>Speed sets the wave</h3>
+  <p>Beat frequency is <code>f0 + fk &middot; body lengths a second</code>, capped. The phase <code>&phi;</code> is integrated per fish on the CPU (<code>&phi; += 2&pi;f&middot;dt</code>), never <code>&omega;t</code>, so a change of speed never makes the tail jump. Amplitude eases between cruising and bursting by speed. Gliding is a fish slowing faster than the threshold: the wave dies and the body straightens. Below the hover speed it sculls slowly. The draw side reads only the fish's speed, how fast that changes, and its yaw rate, all of which the game already has per fish.</p>
+  <h3>In the game</h3>
+  <p>The school mesh stays one mesh a school, built each frame by <code>emit</code>, but rigid. Each vertex also carries <code>u</code>, its offset off the spine, the fish's side and forward axes, and per fish <code>(&phi;, A, B)</code> plus the species profile. The life material's vertex stage applies the wave, in a <code>MaterialExtension</code> beside <code>field_lit.wgsl</code>. The cost is vertex-only, about 40 ALU and two sines per vertex: a 10-fish perch school is about 7k vertices, a few microseconds of GPU. The design and the WGSL are in <code>openspec/changes/fish-behaviour/design.md</code>, section 8.</p>
+  <h3>Controls</h3>
+  <p>School: three fish on a figure of eight that burst, glide, cruise and hover in turn. Close-up: the first fish's swim on a treadmill, so it stays put. Drag to turn round it, scroll or pinch to come closer; the camera stays where you leave it. Swim: Auto runs the cycle; the others hold one state; Turn holds a 120 deg/s left turn in the close-up. Wire and spine draws the mesh as wire and the spine as dots (blue today, amber proposed). Day and Night: at night the dock's lantern lights the fish.</p>
+  <h3>Which art is whose</h3>
+  <p>The perch, eel and ray meshes, their skins and the sand are the game's (<code>fish-behaviour/game/</code>). The water, the dock and its lantern are the page's stand-ins, as in the other tabs. The proposed shader is GLSL in <code>fish-behaviour/body-wave.js</code>, written so it ports line for line to WGSL.</p>
+</template>
+
+<template id="about-wave-tuning" data-title="Body wave tuning">
+  <p>These sliders change Proposed only, for the species shown; each species keeps its own values. Today runs on the game's constants.</p>
+  <ul>
+    <li><b>Wave frequency</b>: the beat in Hz, from speed in body lengths a second; the scull while hovering; a top limit.</li>
+    <li><b>Amplitude envelope</b>: the tail's swing (or a ray's wing tip) in body lengths, for cruising, bursting, hovering and gliding. <i>Amplitude at the nose</i> is <code>h</code> and the exponent is <code>p</code> in <code>E(u)</code>; easing smooths the change between them.</li>
+    <li><b>Wavelength</b>: waves along the body at once. Perch about 1, eel about 1.25.</li>
+    <li><b>Head recoil</b>: how far the head yaws against the tail, as a share of the tail's swing, and how far back from the nose that reaches.</li>
+    <li><b>Turn bend</b>: the C-shape at a 90 deg/s turn, its most, and its easing.</li>
+    <li><b>Glide and hover</b>: how fast the fish must slow, in lengths a second squared, before it glides; and the speed below which it hovers.</li>
+    <li><b>Ray wings</b> (ray only): the span exponent, waves along the wing, undulate to flap, and the whip.</li>
+  </ul>
+</template>
+
 <template id="about-tuning" data-title="Proposed tuning">
   <p>These sliders change Proposed only; Today runs on the game's constants. Every value has its unit. A slider's range runs well past its default both ways. The groups match the port: turning, banking and the tail are draw side; the swim turn limit, the glide and burst and the depth wander are sim side; approach, pecks, the take and the fight are the choreography of the one fish the line is working.</p>
   <p>Tail amplitudes are in body lengths, as the game's sway is (today's beat is 0.075 at 7 rad/s, about 1.1 Hz, always).</p>
@@ -195,4 +254,5 @@ template{display:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="fish-behaviour/game/fish_models.js"></script>
+<script src="fish-behaviour/body-wave.js"></script>
 <script src="fish-behaviour/fish-behaviour.js"></script>

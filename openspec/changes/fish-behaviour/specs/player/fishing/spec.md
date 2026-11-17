@@ -48,3 +48,30 @@ gliding.
 
 - **WHEN** a fish is slowing in a glide
 - **THEN** its tail beats with a small amplitude, not the cruising one
+
+### Requirement: A swimmer's body bends in a wave from head to tail
+
+A drawn fish or eel SHALL bend along its body in a wave whose crests travel
+from the head toward the tail, with an amplitude that grows toward the tail
+(along the whole body for an eel), a head that yaws against the tail, and a
+frequency and amplitude set by its speed; a gliding fish's body SHALL
+straighten, and a turning fish's body SHALL curve toward the inside of the
+turn. A ray's wings SHALL undulate in a wave running from nose to tail. The
+bend SHALL be applied in the vertex stage with the normals turned to match,
+and SHALL NOT change where the fish is or which way it faces.
+
+#### Scenario: A cruising perch
+
+- **WHEN** a perch cruises in a straight line
+- **THEN** the crests of its body wave move from behind its head to its tail,
+  and its nose swings a little to the opposite side of its tail
+
+#### Scenario: A perch glides
+
+- **WHEN** a perch stops beating and slows in a glide
+- **THEN** its body straightens over a fraction of a second
+
+#### Scenario: A perch turns
+
+- **WHEN** a perch turns left at 90 deg/s
+- **THEN** its head and tail bow to the left of its middle

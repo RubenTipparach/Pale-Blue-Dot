@@ -31,7 +31,7 @@ What reads as unnatural today, from the video and the code (design 1):
   game's behaviour, ported constant for constant, beside a proposed one, in
   three tabs (At the lure, Swimming, Hooked), Today / Proposed / Split, 1x to
   1/4x, day and night, with every proposed value on a slider with its unit.
-  https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz (version 1).
+  https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz (version 2, with the Body wave tab).
 - **Proposed** (design 2 to 4), for the game once approved:
   - the fish at the lure comes in on a curve, slows, hovers a body length off
     and pecks: darts in so its mouth meets the lure as the float dips, shakes
@@ -45,6 +45,12 @@ What reads as unnatural today, from the video and the code (design 1):
     into turns, and its tail beat follows its speed;
   - schools swim in bursts and glides, turn at a limited rate and wander a
     little in depth.
+- **Body wave** (design 8, M37 tab "Body wave", version 2): the fish's
+  body bends in a vertex-shader wave running head to tail (today's fish and
+  eel waves run tail to head), with its beat and amplitude set by speed, a
+  straight body in a glide, a slow scull when hovering, head recoil, a C-bend
+  into turns and normals that turn with the bend; an eel waves along its whole
+  body and a ray undulates its wings.
 - **Unchanged:** every fishing rule. The interest chance, the nibble count and
   timers, the dips, the hook window, what a strike does in each phase, the
   fight's runs, tension and stamina. Saves: schools are not saved; nothing
@@ -73,4 +79,7 @@ None.
 - Sim side: `crates/pbd-core/src/fauna/school.rs` (turn limit, glide and
   burst, depth wander, the lured fish's stand-off and arrival), with new
   values in `assets/config/fauna.ron` (`flock`, and a new `behaviour` block).
+- Body wave: `fish/bodies.rs` (`emit` lays swimmers rigid, `sway` goes),
+  `fish.rs` (`draw::build` writes the swim attributes), `field_light.rs` (a
+  `SwimLit` extension with a vertex stage), a new `assets/shaders/swim.wgsl`.
 - `crates/pbd-core/src/fishing.rs` is read, not changed.

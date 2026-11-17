@@ -25,6 +25,25 @@
   and the events are unchanged (the existing `fishing` tests pass as they
   are); a fish's heading never turns faster than the limit.
 
+## 5. Body wave (after approval, on request)
+
+- [x] 5.1 M37 tab "Body wave": today's `sway` (perch, eel, ray, the game's
+  meshes) beside the proposed vertex-shader wave, school and close-up, wire and
+  spine view, sliders per species, day and night.
+- [ ] 5.2 The owner's approval of the Body wave tab.
+- [ ] 5.3 `emit` lays swimmers rigid and writes `swim_axes`, `swim_wave`,
+  `swim_up` per vertex; `bodies::sway` goes.
+- [ ] 5.4 `SwimLit` material extension: `swim_body` in the vertex and prepass
+  vertex stages, the profile table from `fauna.ron`, the attributes in
+  `specialize`; prewarmed on the loading screen.
+- [ ] 5.5 Draw side: per-fish wave phase, amplitude and bend in `FishPose`
+  from speed, its change and the yaw rate (design 8.3).
+- [ ] 5.6 Tests: `swim_lateral`'s slope against a numerical derivative; a
+  crest moves toward the tail as the phase grows; zero amplitude and bend
+  leave the mesh as laid; a WGSL check of the pipeline with the new layout.
+- [ ] 5.7 `perf_suite.py` before and after (a school in view), and the
+  under-water video beside the mockup.
+
 ## 4. Check
 
 - [ ] 4.1 Before-and-after under-water video at 1x and 1/4x, the shots of the
