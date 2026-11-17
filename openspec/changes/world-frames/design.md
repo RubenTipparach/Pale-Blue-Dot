@@ -404,3 +404,92 @@ used as the game grows, so the types do not need redoing.
 - **Saves.** When a second frame can be saved in, each saved point records
   its frame (`WorldPos` serialises as `(frame, [f64; 3])`); old saves, whose
   points are the home body's frame, migrate on open by naming `HOME`.
+
+## 10. The second pass: the herd, drops, decks, towns' floors, the line
+
+Written before the code, as CLAUDE.md asks. After design 3-7 the owner's
+jittery animals were still there: the herd was one of design 8's "not
+converted" list. This pass takes that list down to what is left on purpose.
+
+### 10.1 What was still planet-centred, and how each goes
+
+| what | where | before | after |
+| --- | --- | --- | --- |
+| an animal's feet, goal | `husbandry.rs` `Beast` | planet f32: `pos += facing v dt`, then `pos = d * ground(d)` | **local f32**, stood on the ground in f64 (`with_radius`, `floor_precise`); a rebase hook moves `pos` and `goal` |
+| a herd's range | `Range::Around`, `Range::Pen` | unit directions | unchanged: directions, not points; a goal is laid from them through the origin (`at`) |
+| the player's feet and eye, to the yard | `World::feet`, `eye` | planet f32 | `feet_local`, `eye` local for the step and the aim; `feet` stays a query point for cells and herds |
+| a drop | `pbd_core::drops::ItemDrop.position` | planet f32, pulled in planet f32 | **body-frame f64** (stored data, design 4: "a long-lived position is a `WorldPos`"); pulled in f64; drawn as `centre + position` in f64. Its save text (`{:.3}` mm) is the same bytes, read as f64 |
+| a moored deck | `decks.rs` `Deck.then/now` | planet f32 frame; the heave is rounded to 0.488 mm | **local f32 frame** (`now_local`), swung about the rest frame moved into local space in f64; a hook moves `then`/`now`; the town piece's planet frame is set from it in f64 for its other readers |
+| a deck under sail | `CraftDecks` | `craft_frame` from `physics_center()`, which since design 5 is **local**, but its solids were asked with planet points: a walker could not stand on a sailing cog away from the planet's centre origin (a bug design 5 brought in) | its motion is local (as it was); its solids are asked in local space (10.3) |
+| a town floor, stair or ceiling | `BuildingSolids::stand`, `ceiling` | an f32 planet radius: a walker on a town floor stood on a half-millimetre stair, as on a facet before `floor_precise` | the point in the building's frame and the floor's radius in f64 (`Frame::local_f64`, `world_f64`; `stand_in`, `ceiling_in`) |
+| a town wall | `holds`, `push_normal` | a planet f32 point | the point in the building's frame in f64; the wall itself is generated data in its building's f32 frame (static; it does not move or integrate) |
+| the line's sag | `fish.rs` `line_points` | laid in planet points (tip and float rounded to 0.488 mm, so its end missed the drawn float by up to that) | laid in local points, lifted over the water through `with_radius`; the water is asked at query points |
+
+### 10.2 The herd
+
+The step is split so it can be tested on its own: `stride(beast, origin,
+ground, dt)` moves the feet by `facing * speed * dt` in local space and stands
+them on `ground(up)` (an f64 radius, the column's floor or the facet's
+`floor_precise`) through `SimOrigin::with_radius`. Everything the step
+compares (the player's feet, a goal, the flee and follow distances) is local.
+A cell lookup (`World::cell`) and the ground are queries at
+`query_point(pos)`. The drawing is `render_from_physics(frame, pos)`; the
+up and right it builds the rig on come from `up_at`. The yard is stepped
+in `Update` after the rebase (`PreUpdate`), and holds no interpolation
+history (the rig is rebuilt every frame), so the hook moves only `pos` and
+`goal`.
+
+`Seen` (the showcase bot's view of an animal) keeps a planet point, from
+`query_point`, because the bot reasons in planet points (`Sight`); it is a
+query.
+
+### 10.3 The pieces the walker stands on
+
+A piece's solids are kept in one of two spaces: the towns' (planet, the
+generated frames every other reader uses: rain shelter, doors, lights) and
+the decks' (local, the frames the decks move). `Meets` asks each in its own
+space through the origin, in f64: the walker's point is `to_world(local)` or
+the local point itself, the building-frame point is `Frame::local_f64`, and
+the floor's radius is the length of `world_f64` (plus the origin for a local
+piece). A moored deck's piece in `Structures` stays planet for the other
+readers; `Meets` takes that deck's local frame from `Decks` instead.
+
+A walker on a deck keeps its place in the deck's own small coordinates
+(`on_deck`, as before); the carry is now `now_local.world(on_deck)` in local
+space, so the deck's motion reaches the walker without a planet-scale cast.
+
+### 10.4 Drops
+
+A drop is a few seconds to five minutes of stored state and the save names
+its place, so it is a body-frame f64 point (design 4), not a local one: no
+hook, and nothing moves at a rebase. The magnet pulls it in f64 toward the
+chest's planet point (`to_world(chest)`). The save writes `{:.3}` of each
+coordinate exactly as before (the decimal expansion of the same value), and
+reads it as f64: an old save's line reads to the same text it was written
+from.
+
+### 10.5 What stays, and why
+
+- **Terrain queries** (columns, facets, the sea, the towns' generated
+  frames) answer at query points: they are asked, never integrated, and the
+  answers a body stands on are f64 (`floor_precise`, the towns' f64 radii).
+  Terrain at a planet thousands of times larger needs altitudes, not radii
+  (design 9); not needed at the home planet's 4.8 km.
+- **Pure-draw consumers that go through the render frame**: fences and
+  incubators (`draw_fences`, laid relative to their first corner, then
+  placed by the render frame), the towns' meshes, the vehicles (f64). They do
+  not move, so they cannot jitter, and they are placed in f64.
+- **The aimed ground** (`AimedGround`, from the dig's march) is a query point
+  for a fence's edge or an incubator's cell.
+
+### 10.6 Tests (the guards, extended)
+
+- An animal stepped at 1 m/s and 8 m/s across a rebase, at 4 800 m and
+  4 800 km: each step's planet-frame move is its `facing * speed * dt` to
+  1e-5 m; planet-centred, it is off by > 1e-5 m (the before).
+- A drop and a moored deck survive a rebase unchanged in the planet frame
+  (to 1e-6 m), and the deck's next carry is continuous across it.
+- A walker stands on a sailing cog's deck with the origin far from the
+  planet's centre (the bug of 10.1).
+- `tests/origin_guard.rs` reads `husbandry.rs`, `husbandry/breed.rs`,
+  `drops.rs`, `decks.rs` too.
