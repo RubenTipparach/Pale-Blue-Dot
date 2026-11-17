@@ -817,6 +817,109 @@ and by night. Game code waits for the owner's approval.
   moves toward a lighter teal (the churn scattering light back up), fading
   out over 2.2 m + 0.15 m per metre fallen from the foot.
 
+### Mist on every fall, the heights compared, and a faster scroll lower down (6.5, owner, 2026-11-16)
+
+The owner asked three more things of the same mockup: "whats rules behind
+waterfall? I feel like anything that exposes this even a tiny bit of the
+water falling animation should have some mist", "show me a comparison of
+different water fall heights", and "can you make the side scrolling texture
+increase with the height of the fall?". All three are in
+`docs/mockups/waterfall-mist.html`, on the New tab. Game code waits for the
+owner's approval of the mockup. Screenshots:
+`docs/screenshots/waterfall-mist-heights/`.
+
+**Where the game shows the fall animation today.** The falling froth (the
+streaks scrolled down the face, `water.wgsl`'s `in.kind == 2u` branch, and
+the waves' radial scroll at `flow_uv_speed_falling`) is drawn on a face of
+kind `KIND_FALLING`. `cell_pieces` (`water_flow.rs`) gives a side that kind
+when `falling || above_water && flow.is_some()`:
+
+| Where | Shown? | Splash |
+| --- | --- | --- |
+| A falling cell's side over air: the fall's sheet, every layer from the lip down | yes | at the foot only, none up the face |
+| A foot cell's side over air: the flowing cell a fall lands on, until its water spreads to the cell beside it | yes, for a tick or two | its own foot, at the cell's centre |
+| A falling cell's side over lower water ("a fall's side over lower water, down to it") | never: over water a cell with water above has all its corner levels at 1, so the face runs from its top to its top and has no height | none |
+| A flowing top over a lower flowing top in the same layer (part of a riffle) | no: one sloped top, no face between, kind `KIND_TOP` | none |
+| A far river's sheet (`kind == 4u`) | no: flat caps only | none |
+
+A water cell is falling when the cell under it is air or flowing water
+(`liquid::transform`). So a river stepping down a layer is a fall like any
+other: one falling cell, then its foot, `h = 1`. Every fall that has landed
+has a foot, so no place shows the animation with no splash at all. The gaps
+are in the amount: a 1 or 2-layer fall gets one puff (alpha 0.16 or 0.20)
+and 9 or 15 drops, and nothing marks the faces high up a tall fall. One more
+case, by the code rather than seen: water over a source is not falling, so a
+fall into a pool of sources counts one layer fewer, and a single-layer spill
+onto one has no falling cell at all (a still face, no scroll, no splash).
+
+**The proposed rule.** Every fall is measured by `D`, the metres from the
+lip's water to the water it lands in (a part layer counts), and every part
+of the splash gets a floor, so a riffle's metre reads as misty. The tall end
+stays the owner's tuned 9-layer look.
+
+| | Game today (`h` falling layers) | Proposed (`D` metres) |
+| --- | --- | --- |
+| Mist puffs | `clamp((h - 1) * 1.5, 1, 24)` | `clamp(round(7 + 0.75 D), 8, 24)` |
+| Puff alpha | `0.12 + 0.33 min(h / 8, 1)` | `0.45`, every fall |
+| Puff size | `min(0.5 + 0.18 h, 5)` | `max(0.35, min(0.25 + 0.19 D, 5))` |
+| Puff rise | `0.25 + 0.04 h` m/s | `0.15 + 0.05 D` m/s, so a short fall's mist stays at its foot |
+| Where the puffs rise | a ring all round the foot | the fall's open side, within 110 degrees of the way the water goes over |
+| Spray drops | `min(3 + 6 h, 160)` | `max(12, min(3 + 6 D, 160))` |
+| Fall droplets (6.5) | none | `max(6, min(160, 9 D))` |
+
+The puffs' size is the mockup's Mist size (1.65) times this, and their alpha
+the Mist opacity (1.50) times this, as tuned. In the game every run of
+`KIND_FALLING` faces would carry a foot record at the bottom of its lowest
+face, not only a foot cell, so a foot cell's face over air mists too; the
+mesher already walks those faces. `D` is the falling run's height plus the
+lip cell's level less the landing cell's, both of which the mesher has.
+
+**The height comparison.** The mockup's one pit became five falls side by
+side off one plateau, the same on all three tabs: a riffle (a river stepping
+down one layer into a shallow channel, `D` 1.05 m), and falls of 1, 2, 4 and
+9 layers into pools 3.35 m deep (`D` 1.4, 2.4, 4.4 and 9.4 m), each dug into
+a shore one layer under the lip less than the fall, open to the front so the
+side view sees every face. The 9 keeps the two-ring pit the owner tuned on.
+**Fall** picks one to come close to; **All** frames them together.
+
+| Fall | `h` | `D` | Puffs, alpha today | Proposed |
+| --- | --- | --- | --- | --- |
+| Riffle | 1 | 1.05 m | 1, 0.16 | 8, 0.45 |
+| 1 layer | 1 | 1.4 m | 1, 0.16 | 8, 0.45 |
+| 2 layers | 2 | 2.4 m | 1, 0.20 | 9, 0.45 |
+| 4 layers | 4 | 4.4 m | 4, 0.29 | 10, 0.45 |
+| 9 layers | 9 | 9.4 m | 12, 0.45 | 14, 0.45 |
+
+**The scroll, faster down a taller fall.** Today a falling face scrolls at
+one speed from lip to foot: its waves at 1 m/s (`flow_uv_speed_falling`) and
+its froth streaks at 2.7 m/s (the same scroll, plus the 0.6 drift on noise
+stretched 0.35 down the face: (0.35 + 0.6) / 0.35). On the New tab the water
+speeds up as it falls: `s` metres under the lip it moves at
+`v(s) = min(sqrt(v0^2 + 2 g s), 8 m/s)`, `g` 3 m/s^2 at Fall speed-up 1.00
+(0 is the game's one speed). The froth leaves the lip at 2.7 m/s and reaches
+about 4 m/s at the foot of the 1-layer fall, 5.8 at the 4 and 8 at the 9.
+
+The pattern stays continuous. Reading it at `s - t v(s)` would move each
+height at its own speed but shear the pattern: two heights a metre apart
+slide `t (v(s+1) - v(s))` apart, more every second. Instead the pattern is
+scrolled at `v0` as today and read at `c(s) = v0 tau(s)`, where `tau(s)` is
+the time the water takes to fall `s` metres:
+
+```text
+tau(s) = (sqrt(v0^2 + 2 g s) - v0) / g                   s <= s_cap
+       = (vmax - v0) / g + (s - s_cap) / vmax            s >  s_cap,  s_cap = (vmax^2 - v0^2) / (2 g)
+```
+
+A feature held at constant `c(s) - v0 t` has `d tau / dt = 1`, so it moves
+at `v(s)`; `c` is smooth in `s` (including at the cap) and fixed in time, so
+the texture never tears, and it stretches by `v(s) / v0` as the water speeds
+up, as a falling blob of water does. With `g = 0`, `c(s) = s`: today's
+scroll exactly. In the shader it is one function of the face's
+metres-under-the-lip (`flow_uv.z` on a falling face, which the mesher
+already writes and the shader does not yet read), applied to the waves'
+advected position and to the froth's, each with its own `v0`. The game keeps
+the one speed until the owner approves.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With
@@ -832,3 +935,36 @@ and by night. Game code waits for the owner's approval.
 
 - Mockup first (tasks section 1). The game waits for the owner's approval of
   the mockup, then a request (CLAUDE.md, the mockup tracker).
+
+**Owner's tuning, 2026-11-16 (mockup M35):**
+- "fall mist shouldnt be mist, should be like water droplets fx": the mist shed down the fall became droplets, flung off the sheet at the fall's speed and falling under gravity into the pool.
+- "mist size = 1.65", "mist opac = 1.50": the mist puffs are drawn at 1.65x the game's puff size and 1.50 opacity on the new sheet. Mist size also scales the fall droplets.
+- 2026-11-16: "opacity = 2", "fall speed up = 2", "also please do smooth": the mockup now opens at Mist opacity 2.00, Fall speed-up 2.00 and FX Smooth (the puffs, fall droplets and bubbles drawn smooth rather than pixelated). The owner, the same day: "smooth mist is better", so a port draws the mist smooth.
+- 2026-11-16: "disable droplets streak by default, make a note that I dont want them in game yet right now": **droplet streaks are not to go into the game for now.** The mockup opens with Droplet streak at 0 (each fall droplet a single drop); the slider stays in the mockup to try them. A port of the fall droplets leaves the streak trail out until the owner asks for it.
+- 2026-11-16: "mist seems to not be connecting with the bottom": a puff's centre now sits 0.2 of its size above the foot (it was its full size plus 5 cm, so its lower edge floated clear of the pool), and the wall blend fades it against the water's surface as well as the ground and walls, so the mist meets the pool softly. In the game the soft fade would read the depth after the water pass.
+
+These are now the mockup's defaults. The other sliders (mist amount, fall droplets, wall blend, bubbles, teal churn) stay at 1.00 / 1.20 until the owner says otherwise.
+
+The owner's tuning applies under the proposed mist rule too ("Mist on every fall" above): the New tab opens on the proposed rule, with a Mist rule switch back to the game's, and on Fall speed-up 1.00 (g = 3 m/s^2, at most 8 m/s); both are recommendations, not the owner's choices, until the owner reviews the mockup.
+
+#### Mockup additions, 2026-11-16 (waterfall-mist, New tab; not in the game)
+
+- **Foot ripples** (owner: "is there some rippling you can do here too? to show water being pushed outward"): rings run
+  out from the falling column across the pool, 0.9 m apart at 1.3 m/s, dying over 2 + 0.35 h metres; they tilt the
+  water's normal and whiten faintly on their crests near the column. Slider 0-3.
+- **Pool flow away from the fall** (owner: "set some flow direction away from the source too (add toggle for flow
+  arrows)"): the pool's waves and foam drift outward, 0.5 + 0.07 h m/s at the column, slowing over 2.5 + 0.3 h
+  metres, by the two-phase flow-map method (two copies of the waves, each dragged 2 s and reset, cross-faded). A Flow
+  arrows checkbox draws the field.
+- **Glassy lip** (owner, with a photo of travertine falls: "check out the transition between smooth water and water
+  fall, can we do something like that?"): the top's small waves die away over the last 2 m before the lip and the
+  first ~0.5 m of the drop stays smooth and green, then thin strands appear and fill in to the full froth by 2.5 m
+  down. The game's lip-whitening is off under it. A Lip switch (Froth / Glassy) compares it with the game's look.
+- **Rounded lip** (owner: "still looks kinda sharp there"): under Glassy the falling cell's top edge, on every side
+  but the one it is fed from, is a 0.45 m quarter-round: the top's vertices within 0.45 m of the rim move onto the
+  arc and take its normal, and the sides start 0.45 m below the top where the arc ends. In the game this is a mesher
+  change (the falling cell's cap and the top of its side quads), so it is the larger part of a port.
+  **Taken back** (owner, on seeing it: "nope go back"): the lip stays square; Glassy keeps only its shading.
+- **The owner's edge tuning** (2026-11-16, "here are the edge settings for now"): under Glassy, smooth for 0.70 m
+  before the edge, glassy for 0.50 m over it, froth filled in by 2.25 m down, glassy green 0.25, no edge highlight.
+  These are the mockup's defaults.
