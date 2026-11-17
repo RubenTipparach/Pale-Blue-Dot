@@ -343,3 +343,61 @@ pub fn pour_cycle(
     }
     info!("POUR_FLIP {due} {material:?}: {changed} sources");
 }
+
+/// MEASUREMENT (`water-flow` 5.4, the owner's "the despawn is still step
+/// based"): `PBD_POUR_STOP_S=<seconds>` in a capture stops the sources
+/// `--pour` poured that many seconds of game time after the pour, through
+/// the ordinary edit path (a source taken, as a bucket takes one), so a
+/// `PBD_CAPTURE_RUN` sequence can film a pour draining frame by frame. In a
+/// capture the clock is the fixed step, so the stop lands on the same frame
+/// in every run. Nothing of it exists without the variable.
+#[allow(clippy::too_many_arguments)]
+pub fn pour_stop(
+    time: Res<Time>,
+    mut fine: ResMut<PlanetFine>,
+    mut contact: ResMut<PlanetContact>,
+    mut save: ResMut<WorldSave>,
+    mut slots: ResMut<super::slots::Hotbar>,
+    (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
+    sources: Res<PourSources>,
+    mut since: Local<Option<f32>>,
+    mut stop_s: Local<Option<Option<f32>>>,
+) {
+    let Some(stop_s) = *stop_s.get_or_insert_with(|| {
+        std::env::var("PBD_POUR_STOP_S")
+            .ok()
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .filter(|s| s.is_finite() && *s >= 0.0)
+    }) else {
+        return;
+    };
+    if sources.0.is_empty() {
+        return;
+    }
+    let Some(elapsed) = since.as_mut() else {
+        *since = Some(0.0);
+        return;
+    };
+    if *elapsed > stop_s {
+        return;
+    }
+    *elapsed += time.delta_secs();
+    if *elapsed <= stop_s {
+        return;
+    }
+    let mut world = Edited {
+        fine: &mut fine,
+        contact: &mut contact,
+        save: &mut save,
+        slots: &mut slots,
+        drops: &mut drops,
+        now_s: sun.clock.seconds,
+    };
+    let mut changed = 0;
+    for &(cell, layer) in &sources.0 {
+        if apply_edit(&mut world, Hands::Empty, cell, layer, Material::Air).is_some() {
+            changed += 1;
+        }
+    }
+    info!("POUR_STOP after {elapsed:.2} s: {changed} sources taken");
+}

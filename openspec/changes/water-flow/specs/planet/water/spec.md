@@ -78,3 +78,25 @@ speckle.
 #### Scenario: A river in rain from the bank
 - **WHEN** a river 10 to 60 m away is seen in full rain
 - **THEN** the near water shows rings and the far water shows its waves, without white speckle
+
+### Requirement: Water eases in and out between ticks
+The game's water SHALL be drawn easing from what it was to what it is over
+one tick (`liquid::TICK_S`) whenever it changes: by the rule's tick, by an
+edit (water taken, placed or dug away) or by a fine set landing. A cell that
+turns dry SHALL be drawn for one more tick, sinking toward the water under it
+or toward its wettest side, and SHALL be gone at that tick's end. Every lane
+a face is shaded by (its position, flow, normal and sky) SHALL ease, so no
+part of the water steps at a tick. The ease is drawing only: the rule, its
+tick and the save are unchanged. The owner, 2026-11-17: "The despawn is
+still step based."
+
+#### Scenario: A source stopped over a fall
+- **WHEN** the source feeding a fall into a pit is taken away
+- **THEN** the taken cell shrinks away over a tick, the fall drains from the
+  top a cell a tick with its top sinking smoothly, and no frame shows a
+  cell or a band of froth jump
+
+#### Scenario: A dried cell mid-tick and at the tick's end
+- **WHEN** a cell wet last tick is dry this tick
+- **THEN** halfway through the tick it is drawn with its top between its
+  last level and its floor, and at the tick's end it is not drawn
