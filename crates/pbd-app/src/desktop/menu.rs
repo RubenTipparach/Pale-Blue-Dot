@@ -678,27 +678,49 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
                             ..default()
                         },
                     ));
-                    let spacer = || Node {
-                        flex_grow: 1.0,
-                        ..default()
-                    };
-                    column.spawn(spacer());
+                    // The way in right under the logo (owner: "move the menu
+                    // text up too").
                     column
-                        .spawn(framed(kit, Set::Oak, 120.0))
-                        .with_children(|panel| {
-                            let go = button(panel, kit, "CONTINUE", MenuAction::Resume);
-                            panel.commands().entity(go).insert(Plaque {
-                                focus: true,
-                                ..Plaque::new(Set::Oak)
-                            });
-                            button(panel, kit, "NEW WORLD", MenuAction::NewWorld);
-                            button(panel, kit, "LOAD WORLD", MenuAction::Saves);
-                            button(panel, kit, "SETTINGS", MenuAction::Settings);
-                            button(panel, kit, "QUIT", MenuAction::Quit);
+                        .spawn(Node {
+                            margin: UiRect::top(px(8)),
+                            ..default()
+                        })
+                        .with_children(|gap| {
+                            gap.spawn(framed(kit, Set::Oak, 120.0))
+                                .with_children(|panel| {
+                                    let go = button(panel, kit, "CONTINUE", MenuAction::Resume);
+                                    panel.commands().entity(go).insert(Plaque {
+                                        focus: true,
+                                        ..Plaque::new(Set::Oak)
+                                    });
+                                    button(panel, kit, "NEW WORLD", MenuAction::NewWorld);
+                                    button(panel, kit, "LOAD WORLD", MenuAction::Saves);
+                                    button(panel, kit, "SETTINGS", MenuAction::Settings);
+                                    button(panel, kit, "QUIT", MenuAction::Quit);
+                                });
                         });
-                    column.spawn(spacer());
                 });
         });
+}
+
+/// The in-play HUD the title screen hides: the hotbar, the hand and the
+/// crosshair (owner, 2026-11-17: "why would you have hot bar in title
+/// screen?").
+#[derive(Component)]
+pub struct InPlayHud;
+
+/// Hide the in-play HUD while the title screen is up.
+pub fn hide_hud_on_title(screen: Res<Screen>, mut hud: Query<&mut Visibility, With<InPlayHud>>) {
+    let want = if *screen == Screen::Title {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
+    for mut visibility in &mut hud {
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
 }
 
 /// An out-of-play menu's layer: the world dimmed behind the timber.

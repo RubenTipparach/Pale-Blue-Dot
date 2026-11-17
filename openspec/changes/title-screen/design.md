@@ -16,7 +16,7 @@
    where it returned `Saves`; `--menu title` opens it for captures.
 2. The panel: the logo 300 UI units wide at its own aspect, 10 units from the top
    of the screen (owner, 2026-11-17: "this logo should be closer to top of the
-   screen"), then, centred in the space under it, an oak frame
+   screen"), then right under it ("move the menu text up too") an oak frame
    120 units wide with CONTINUE (focused), NEW WORLD, LOAD WORLD, SETTINGS,
    QUIT. No lintel text: the logo is the title.
 3. Back steps: Esc on the title stays on the title. Saves and Settings step
@@ -26,3 +26,7 @@
    linear-sampled `Image`); it is a UI image, so it adds no pipeline.
 5. The pause menu's QUIT still quits (a "quit to title" is a behaviour change
    for the owner to ask for).
+6. The title hides the in-play HUD: the hotbar, the hand cell and the
+   crosshair (owner, 2026-11-17: "why would you have hot bar in title
+   screen?"). They carry `InPlayHud`; `hide_hud_on_title` hides them while the
+   title is up.
