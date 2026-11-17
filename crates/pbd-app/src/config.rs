@@ -1179,6 +1179,12 @@ pub struct ScatterSettings {
     /// it when the camera moves fast. Within 1..=6 m, inside the margins the
     /// visibility pass lists the near model and the cards with.
     pub tree_fade_lag_m: f32,
+    /// How much of the near model's relief a far tree takes
+    /// (`tree-impostor-depth`), 0..=1, unitless: its mid cards and billboard
+    /// lit by the normals and root-to-tip AO baked beside their colour, so a
+    /// crown has a sunlit side and a shaded one. Zero is the flat card of
+    /// `flora-v2` 13.4 (one standing normal and the crown's mean shade).
+    pub tree_impostor_relief: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1215,6 +1221,7 @@ impl Default for ScatterSettings {
             tree_mid_m: 90.,
             tree_fade_s: 0.5,
             tree_fade_lag_m: 5.0,
+            tree_impostor_relief: 1.0,
         }
     }
 }
@@ -1254,6 +1261,7 @@ impl Validated for ScatterSettings {
         unit("leaf_fall", self.leaf_fall)?;
         unit("leaf_under", self.leaf_under)?;
         unit("fruit_chance", self.fruit_chance)?;
+        unit("tree_impostor_relief", self.tree_impostor_relief)?;
         (self.tree_near_m.is_finite() && (10.0..=60.0).contains(&self.tree_near_m))
             .then_some(())
             .ok_or("tree_near_m must lie within 10 and 60 m, the near list's reach")?;
