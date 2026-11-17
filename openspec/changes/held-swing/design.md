@@ -103,15 +103,18 @@
    - **Pose to pose, solid drawing and appeal:** four keyed poses (rest,
      top, hit, recoil) blended by the curves, and the fist reads as solid in
      each.
-9. The shovel scoops (owner, 2026-11-17: "the shovel should go down fast,
-   lift slightly like its lifting dirt"). It has its own stroke and does not
-   chop:
-   - a short raise and anticipation;
-   - a fast thrust down and forward along the handle into the ground
-     (`thrust_m`): the hit;
-   - instead of a bounce, the blade tilts back (`scoop_tilt_rad`, 0.35) and
-     the arm lifts a little (`scoop_lift_m`, 0.06) with a clump of dirt on
-     the spade;
-   - the clump tips off as the shovel returns.
+9. The shovel digs at a steep angle and scoops (owner, 2026-11-17: "the
+   shovel should go down fast, lift slightly like its lifting dirt", then on
+   the mockup: "shovel in the mockup looked like it was smashing dirt, the
+   spade definiely need to take a stteep angle approach to dirt, angle up and
+   lift"). It has no overhead chop arc:
+   - **Entry:** the spade comes in steeply, tip first, about 65° below level
+     (`entry_deg`). It is driven along the handle's own axis into the ground
+     just ahead (`thrust_m`). The fist pushes forward and down, and the tool
+     barely pitches.
+   - **Angle up:** the handle levers back about the blade's contact point in
+     the ground (`lever_rad`, 0.4). The tip rises.
+   - **Lift:** the spade rises with a clump of dirt on it (`lift_m`, 0.06).
+   - **Return:** the clump tips off as the spade returns.
 
-   It keeps the same four stages and the same steady beat as the other tools.
+   It keeps the four stages (decision 7) and the steady beat (decision 5).
