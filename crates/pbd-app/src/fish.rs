@@ -1770,7 +1770,10 @@ pub(crate) mod draw {
         sun: Option<Res<crate::sky::Sun>>,
         drawn: Res<DrawnFloat>,
         cameras: Query<&Transform, With<WalkingCamera>>,
-        rods: Query<(&crate::held::Held, &Transform), Without<WalkingCamera>>,
+        rods: Query<
+            (&crate::held::Held, &Transform),
+            (Without<WalkingCamera>, Without<Float>, Without<LineMesh>),
+        >,
         mut floats: Query<
             (&mut Transform, &mut Visibility),
             (With<Float>, Without<LineMesh>, Without<WalkingCamera>),
