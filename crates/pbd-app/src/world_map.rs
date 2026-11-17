@@ -925,8 +925,8 @@ mod river_bank_probe {
         use pbd_core::geo;
         let cfg = *crate::planet::terrain_config();
         let mut row = String::new();
-        let mut lon = 0.70_f32;
-        while lon <= 0.80 {
+        let mut lon = 0.25_f32;
+        while lon <= 1.25 {
             let d = geo::direction(geo::LatLon {
                 lat: 28.25_f32.to_radians(),
                 lon: lon.to_radians(),
@@ -936,12 +936,12 @@ mod river_bank_probe {
             } else {
                 '.'
             });
-            lon += 0.001;
+            lon += 0.01;
         }
-        println!("lat 28.25, lon 0.700..0.800 by 0.001: {row}");
+        println!("lat 28.25, lon 0.25..1.25 by 0.01: {row}");
         let mut col = String::new();
-        let mut lat = 28.20_f32;
-        while lat <= 28.30 {
+        let mut lat = 27.75_f32;
+        while lat <= 28.75 {
             let d = geo::direction(geo::LatLon {
                 lat: lat.to_radians(),
                 lon: 0.75_f32.to_radians(),
@@ -951,8 +951,8 @@ mod river_bank_probe {
             } else {
                 '.'
             });
-            lat += 0.001;
+            lat += 0.01;
         }
-        println!("lon 0.75, lat 28.200..28.300 by 0.001: {col}");
+        println!("lon 0.75, lat 27.75..28.75 by 0.01: {col}");
     }
 }
