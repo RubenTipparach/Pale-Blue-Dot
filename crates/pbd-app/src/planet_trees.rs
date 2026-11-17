@@ -150,6 +150,10 @@ mod tests {
             constant(SURFACE, "IMPOSTOR_W"),
             pbd_core::tree_bake::STRIP_W as u32
         );
+        assert_eq!(
+            constant(SURFACE, "IMPOSTOR_RELIEF"),
+            tree_kit::IMPOSTOR_RELIEF
+        );
         for (name, salt) in [
             ("SALT_SPECIES", tree_kit::SALT_SPECIES),
             ("SALT_VARIANT", tree_kit::SALT_VARIANT),

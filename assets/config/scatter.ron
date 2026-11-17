@@ -81,4 +81,8 @@
     // are decided at never trails the camera by more than the lag, metres.
     tree_fade_s: 0.5,
     tree_fade_lag_m: 5.0,
+    // tree-impostor-depth: how much of the near model's relief (its baked
+    // normals and root-to-tip AO) the far trees take, 0..1. Zero is the flat
+    // card: one normal and the crown's mean shade.
+    tree_impostor_relief: 1.0,
 )

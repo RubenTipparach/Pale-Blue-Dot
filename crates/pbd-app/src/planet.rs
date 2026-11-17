@@ -811,8 +811,8 @@ struct PlanetParams {
     rain_near: Vec4,
     // `baked-light-ease` 7.3: the light field across a dusk or dawn relight:
     // x how far the newest half has blended in, 0..1; y which half is the
-    // newest; z one while the other half holds the field it blends from; w
-    // spare.
+    // newest; z one while the other half holds the field it blends from;
+    // w the far trees' baked relief, 0..1 (`tree-impostor-depth`).
     light_ease: Vec4,
     // `flora-v2` design 6: x tufts per cell (zero: the blades), y and z the
     // tuft's width and height, m; w how far round the year, 0..1.
@@ -2117,7 +2117,8 @@ fn prepare_views(
                 planet.light_blending,
                 planet.light_from_s,
                 clock.0,
-            ),
+            )
+            .with_w(scatter.tree_impostor_relief),
             flora: Vec4::new(
                 scatter.tuft_count,
                 scatter.tuft_width_m,
