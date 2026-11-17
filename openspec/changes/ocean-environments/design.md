@@ -1824,6 +1824,32 @@ through the waterline, the eye's height burnt in; on Drive as
 `sea-cavern-<place>-<before|after>-1080p60.mp4`, contact sheets and the
 frame-by-frame list in `docs/screenshots/sea-cavern-holes/`.
 
+**Follow-up: a dug pit on a beach (owner, 2026-11-17), not reproduced.**
+The owner sent a screenshot at `39.725 15.339`, 1.6 m up: a square pit one
+cell wide and one or two layers deep under a one-layer sand cliff, with dry,
+lit sand walls and floor and shallow sea round it. Their hotbar held dirt,
+so they may have dug there. Their build is not known.
+
+The checks, on `main` at `db8f17e` (the reach, through #98):
+- **Captures** at the owner's place and height, at low tide, the day's tide
+  and high tide:
+  - the spot's own pit, a shaft beside a one-layer sand slab;
+  - pits dug through the edit path, one and two layers deep, beside the
+    water and away from it;
+  - the same pits after reloading the save.
+- **A measurement**, `sea_hole_dig_report`, an ignored test. It ran five edit
+  sequences on every beach cell within 12 m: dig 1, dig 2, place and take
+  back, dig-fill-dig, and dirt in the water then dig. Each ran through
+  `write_layer` and `mark_sea`, then was rebuilt from the save. 380
+  sequences on 76 cells left no cell under the high water with neither a
+  sheet over it nor water at the sea's top.
+
+Every pit fills to the tide's surface. The build before the reach
+(`8fa25d6`) gives the same pictures there. So no rule is changed. The stills
+and the method are in `docs/screenshots/sea-hole-beach/`. What would settle
+it is a save from the owner's world or the screenshot's HUD line, giving the
+build and the tide.
+
 ### B23. Fish under the water at full brightness (owner, 2026-11-17)
 
 The owner, under a shallow sea by day, looking level at a school of

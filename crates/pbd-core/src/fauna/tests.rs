@@ -857,3 +857,28 @@ fn a_smaller_school_has_smaller_fish() {
         );
     }
 }
+
+/// A school is drawn between its last two steps (`movement-smoothness`):
+/// at the step before for alpha 0, at the last step for 1, halfway for a
+/// half, never at the raw step while its clock runs between them. A fish
+/// held at the lure is drawn at the lure, and a caught fish leaves the two
+/// steps in step with each other.
+#[test]
+fn a_school_is_drawn_between_its_steps_and_a_held_fish_at_the_lure() {
+    let water = Shore { max_depth: 8.0 };
+    let flock = FlockSettings::default();
+    let (mut school, species) = school_of("silverfin", at(-10.0, 1.0, 14.0), 9, &water);
+    // No step behind it yet: drawn where it is.
+    assert_eq!(school.drawn(0, 0.0), school.positions[0]);
+    school.step(1.0 / 30.0, &species, &flock, &water, None);
+    let (was, now) = (school.before[0], school.positions[0]);
+    assert!(was.distance(now) > 1e-4, "the fish moved in the step");
+    assert!(school.drawn(0, 0.0).distance(was) < 1e-6);
+    assert!(school.drawn(0, 1.0).distance(now) < 1e-6);
+    assert!(school.drawn(0, 0.5).distance(was.lerp(now, 0.5)) < 1e-6);
+    let lure = at(8.0, 0.35, 11.0);
+    school.held = Some((0, lure));
+    assert_eq!(school.drawn(0, 0.3), lure);
+    school.remove(0);
+    assert_eq!(school.before.len(), school.positions.len());
+}
