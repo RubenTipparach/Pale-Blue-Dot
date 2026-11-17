@@ -247,6 +247,7 @@ fn fit_cascades(
         f64::from(PLANET_RADIUS),
         quality.cascades(),
         quality.texels(),
+        reach_override().unwrap_or(quality.reach_m()),
     );
     cascades.quality = quality;
     cascades
@@ -364,16 +365,18 @@ fn initialize_shadow_pipelines(
     let planet_id = cache.queue_render_pipeline(RenderPipelineDescriptor {
         label: Some(Cow::Borrowed("sun cascade: planet")),
         layout: vec![planet.draw_layout.clone()],
+        // `gpu-cuts` 2: the terrain's vertex shader without its light reads.
         vertex: VertexState {
             shader: planet.shader.clone(),
             entry_point: Some(Cow::Borrowed("vertex")),
+            shader_defs: vec!["SHADOW_CASTER".into()],
             ..default()
         },
         fragment: Some(FragmentState {
             shader: planet.shader.clone(),
             entry_point: Some(Cow::Borrowed("shadow_fragment")),
+            shader_defs: vec!["SHADOW_CASTER".into()],
             targets: vec![],
-            ..default()
         }),
         primitive,
         depth_stencil: Some(depth_state()),
@@ -699,6 +702,17 @@ fn prepare_shadows(
     }
 }
 
+/// A pricing instrument (`gpu-cuts`): `PBD_SHADOW_REACH=<metres>` replaces
+/// the quality's shadow reach, so one build prices one reach against another.
+fn reach_override() -> Option<f64> {
+    static REACH: std::sync::OnceLock<Option<f64>> = std::sync::OnceLock::new();
+    *REACH.get_or_init(|| {
+        std::env::var("PBD_SHADOW_REACH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+    })
+}
+
 /// A measurement instrument (`main-perf-2026-11`): `PBD_SHADOW_SKIP=terrain,
 /// foliage,column,towns` leaves those casters out of every cascade, so a
 /// sitting can price each part of the shadow pass on the same walk.
@@ -740,6 +754,7 @@ pub(super) fn draw_cascades(
     // Each cascade timed on its own (`play-frame-budget`), and its draw's
     // vertex and fragment invocations with it.
     const NAMES: [&str; CASCADES] = ["cascade_0", "cascade_1", "cascade_2", "cascade_3"];
+    #[allow(clippy::needless_range_loop, reason = "i indexes five arrays")]
     for i in 0..CASCADES {
         if !gpu.draw[i] {
             continue;

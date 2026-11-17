@@ -107,6 +107,11 @@ pub struct Launch {
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
     /// time is its work and not the display's refresh.
     pub no_vsync: bool,
+    /// `--vsync`: present with vsync in a `--frame-log` run, which otherwise
+    /// runs without it (owner, 2026-11-17: "to avoid confusion vsync just
+    /// shouldnt run when we benchmark"), so a log's frame time is the work and
+    /// never the wait for the display.
+    pub vsync: bool,
     /// `--frame-latency 1|2`: how many frames the swapchain may queue
     /// (`crab-breeze-lessons` 1.1). The default is 2 (1.3): measured on the
     /// owner's desktop it took 3.6 ms off p50 in flight and on foot in the
@@ -458,6 +463,7 @@ impl Launch {
             sail_for: None,
             frame_graph: false,
             no_vsync: false,
+            vsync: false,
             frame_latency: 2,
             settings: pbd_app::settings::Overrides::default(),
             upscale_nearest: false,
@@ -1044,6 +1050,7 @@ impl Launch {
                     ));
                 }
                 "--no-vsync" => result.no_vsync = true,
+                "--vsync" => result.vsync = true,
                 "--frame-latency" => {
                     i += 1;
                     let frames: u32 = args
@@ -1529,11 +1536,18 @@ pub fn run(args: &[String]) {
                 ..default()
             })
             .set(ImagePlugin::default_nearest())
+            .set(bevy::log::LogPlugin {
+                custom_layer: cpu_times::span_layer,
+                ..default()
+            })
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
                     resolution: window_size().into(),
-                    present_mode: if launch.capture.is_some() || launch.no_vsync {
+                    present_mode: if launch.capture.is_some()
+                        || launch.no_vsync
+                        || (launch.frame_log.is_some() && !launch.vsync)
+                    {
                         PresentMode::AutoNoVsync
                     } else {
                         PresentMode::AutoVsync
@@ -4759,7 +4773,7 @@ impl FrameLog {
                 .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot,main_between_ms,submit_ms,present_ms"
             )
             .expect("frame log header");
             out
@@ -4810,7 +4824,7 @@ fn write_frame_log(
     let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
@@ -4824,6 +4838,9 @@ fn write_frame_log(
         cpu.render_ms(),
         cpu.acquire_ms(),
         showcase.map_or(0, |player| player.shot()),
+        cpu.between_ms,
+        cpu.submit_ms(),
+        cpu.present_ms(),
     );
 }
 

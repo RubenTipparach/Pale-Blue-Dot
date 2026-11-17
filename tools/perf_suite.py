@@ -321,7 +321,7 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
     saves = Path("saves") / world
     shutil.rmtree(saves, ignore_errors=True)
     cmd = [variant["exe"], *SCENARIOS[scenario], "--world", world, "--time", str(a.time),
-           *([] if a.vsync else ["--no-vsync"]), "--frame-log", str(csv_path), *variant.get("args", [])]
+           *(["--vsync"] if a.vsync else ["--no-vsync"]), "--frame-log", str(csv_path), *variant.get("args", [])]
     env = {**os.environ, **variant["env"]}
     print(f"[{dt.datetime.now():%H:%M:%S}] {tag}: {' '.join(cmd)} {variant['env'] or ''}"
           f"{' assets@' + variant['assets'] if variant.get('assets') else ''}", flush=True)

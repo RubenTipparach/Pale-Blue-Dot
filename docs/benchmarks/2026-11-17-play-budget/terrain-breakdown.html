@@ -1,0 +1,300 @@
+<title>Terrain Frame Breakdown</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; each section is a measured budget drawn to one ms scale. */
+:root {
+  --bg: #f3f5f4;
+  --panel: #ffffff;
+  --ink: #1b2422;
+  --muted: #5d6b67;
+  --line: #d5dddb;
+  --gpu: #2f7f6d;
+  --cpu: #c9822b;
+  --wait: #a9b5b2;
+  --frag: #3f9b85;
+  --vert: #7fc2b1;
+  --cull: #1e5a4c;
+  --warn: #b5482f;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1514; --panel: #161f1d; --ink: #e3ebe9; --muted: #93a39f; --line: #2a3734;
+    --gpu: #4fb39a; --cpu: #e2a052; --wait: #4a5855; --frag: #5cc2a8; --vert: #2f6f60; --cull: #9fdcca; --warn: #e07a5f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1514; --panel: #161f1d; --ink: #e3ebe9; --muted: #93a39f; --line: #2a3734;
+  --gpu: #4fb39a; --cpu: #e2a052; --wait: #4a5855; --frag: #5cc2a8; --vert: #2f6f60; --cull: #9fdcca; --warn: #e07a5f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; }
+.tracker { font: 500 12px/1.4 var(--mono); }
+.tracker a { color: var(--muted); }
+h1 { font: 700 clamp(30px, 6vw, 46px)/1.02 var(--display); letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h2 { font: 700 24px/1.1 var(--display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.label { font: 600 11px/1.3 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Bars: every bar uses the same scale, width = ms / scale. */
+.lanes { display: grid; gap: 10px; }
+.lane { display: grid; grid-template-columns: 9.5rem 1fr 4.2rem; gap: 10px; align-items: center; }
+.lane .name { font-weight: 500; }
+.lane .ms { text-align: right; }
+.track { position: relative; height: 22px; background: color-mix(in srgb, var(--line) 45%, transparent); border-radius: 4px; overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px 0 0 4px; }
+.budget { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--warn); }
+.stack { display: flex; height: 100%; }
+.stack span { height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+.steps { display: grid; gap: 14px; }
+.step { display: grid; grid-template-columns: 2.2rem 1fr; gap: 12px; align-items: start; }
+.step .n { font: 700 26px/1 var(--display); color: var(--gpu); }
+.step h3 { margin: 0 0 4px; font: 600 15px/1.3 var(--body); }
+.step p { color: var(--muted); font-size: 14px; }
+.step .bar { margin-top: 8px; display: grid; grid-template-columns: 1fr 4.2rem; gap: 10px; align-items: center; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+th { font: 600 11px/1.3 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td.hot { color: var(--warn); font-weight: 600; }
+.note { font-size: 13.5px; color: var(--muted); }
+.callout { border-left: 3px solid var(--cpu); padding: 4px 0 4px 12px; }
+ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+.pending { color: var(--muted); font-style: italic; }
+@media (max-width: 560px) {
+  .lane { grid-template-columns: 6.5rem 1fr 3.6rem; }
+}
+</style>
+
+<main>
+  <p class="tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+
+  <header style="display:grid;gap:10px">
+    <h1>Terrain Frame Breakdown</h1>
+    <p class="lede">Where a frame of Pale Blue Dot goes, measured on the owner's desktop (RTX 3070) on 2026-11-17. GPU times are the game's own per-pass timers; CPU times are the clocks added for this sitting.</p>
+  </header>
+
+  <section>
+    <h2>Where the frame goes, exclusive times</h2>
+    <p>After the GPU cuts, vsync off, measured on every frame. Each thread's rows are measured clocks that add up to the frame; nothing is derived. The GPU is a third processor: its rows add up to its busy time, and the rest of the frame it is idle. Two replays of the trunk missions per setting, ms.</p>
+    <p class="label">Building the bench, looking across open land</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>LOW, 200 m (default)</th><th>LOW, 900 m</th><th>ULTRA</th></tr></thead>
+        <tbody>
+          <tr><td><b>Frame</b></td><td class="num"><b>12.98 (77 fps)</b></td><td class="num"><b>13.50 (74 fps)</b></td><td class="num"><b>22.89 (44 fps)</b></td></tr>
+          <tr><td colspan="4" class="label">Main thread</td></tr>
+          <tr><td>Game logic</td><td class="num hot">11.11</td><td class="num hot">11.51</td><td class="num">13.29</td></tr>
+          <tr><td>Between frames: extraction, waiting on the render thread</td><td class="num">1.87</td><td class="num">1.99</td><td class="num hot">9.60</td></tr>
+          <tr><td colspan="4" class="label">Render thread</td></tr>
+          <tr><td>Building GPU commands</td><td class="num">6.13</td><td class="num">6.27</td><td class="num">6.42</td></tr>
+          <tr><td>Waiting for the GPU (image acquire)</td><td class="num">2.94</td><td class="num">3.22</td><td class="num hot">14.20</td></tr>
+          <tr><td>Present and submit</td><td class="num">0.16</td><td class="num">0.16</td><td class="num">0.17</td></tr>
+          <tr><td>Idle, waiting for the main thread</td><td class="num">3.75</td><td class="num">3.85</td><td class="num">2.10</td></tr>
+          <tr><td colspan="4" class="label">GPU</td></tr>
+          <tr><td>Terrain</td><td class="num hot">8.81</td><td class="num hot">9.21</td><td class="num hot">9.85</td></tr>
+          <tr><td>Shadow pass</td><td class="num">1.66</td><td class="num">1.58</td><td class="num hot">10.85</td></tr>
+          <tr><td>Water</td><td class="num">0.29</td><td class="num">0.36</td><td class="num">0.29</td></tr>
+          <tr><td>Cull</td><td class="num">0.19</td><td class="num">0.19</td><td class="num">0.19</td></tr>
+          <tr><td>Everything else</td><td class="num">0.53</td><td class="num">0.52</td><td class="num">0.53</td></tr>
+          <tr><td>Idle</td><td class="num">1.50</td><td class="num">1.63</td><td class="num">1.17</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="label">The whole trunk replay, about 4 minutes of play</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>LOW, 200 m (default)</th><th>LOW, 900 m</th><th>ULTRA</th></tr></thead>
+        <tbody>
+          <tr><td><b>Frame</b></td><td class="num"><b>14.62 (68 fps)</b></td><td class="num"><b>14.80 (68 fps)</b></td><td class="num"><b>18.86 (53 fps)</b></td></tr>
+          <tr><td colspan="4" class="label">Main thread</td></tr>
+          <tr><td>Game logic</td><td class="num hot">13.10</td><td class="num hot">13.25</td><td class="num hot">14.35</td></tr>
+          <tr><td>Between frames</td><td class="num">1.52</td><td class="num">1.54</td><td class="num">4.51</td></tr>
+          <tr><td colspan="4" class="label">Render thread</td></tr>
+          <tr><td>Building GPU commands</td><td class="num">5.94</td><td class="num">6.11</td><td class="num">6.60</td></tr>
+          <tr><td>Waiting for the GPU</td><td class="num">0.61</td><td class="num">0.65</td><td class="num">6.63</td></tr>
+          <tr><td>Present and submit</td><td class="num">0.16</td><td class="num">0.16</td><td class="num">0.17</td></tr>
+          <tr><td>Idle</td><td class="num">7.92</td><td class="num">7.87</td><td class="num">5.45</td></tr>
+          <tr><td colspan="4" class="label">GPU</td></tr>
+          <tr><td>Terrain</td><td class="num">6.40</td><td class="num">6.73</td><td class="num">7.17</td></tr>
+          <tr><td>Shadow pass</td><td class="num">1.49</td><td class="num">1.65</td><td class="num hot">7.72</td></tr>
+          <tr><td>Water, cull, everything else</td><td class="num">0.95</td><td class="num">0.97</td><td class="num">0.92</td></tr>
+          <tr><td>Idle</td><td class="num">5.77</td><td class="num">5.45</td><td class="num">3.05</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note callout">At LOW the game logic is now the frame: 13.1 of 14.6 ms over the replay, while the GPU sits idle 5.8 ms a frame. At ULTRA the GPU is the frame, and both CPU threads wait on it. The 200 m reach saves 0.2–0.5 ms against 900 m: the far cascade is only redrawn every fourth frame, so it was already cheap after the cuts.</p>
+  </section>
+
+  <section>
+    <h2>Building the bench: where the GPU goes</h2>
+    <p>Before the GPU cuts, with vsync on. The bot replayed the trunk missions; these are the 9.5 s of its bench step, looking across open land, morning. Same moment at both shadow levels.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pass</th><th>LOW shadows</th><th>ULTRA shadows</th></tr></thead>
+        <tbody>
+          <tr><td>Terrain</td><td class="num hot">11.40</td><td class="num hot">11.13</td></tr>
+          <tr><td>Shadow pass</td><td class="num">1.80</td><td class="num hot">11.95</td></tr>
+          <tr><td>Water</td><td class="num">0.38</td><td class="num">0.24</td></tr>
+          <tr><td>Cull</td><td class="num">0.19</td><td class="num">0.22</td></tr>
+          <tr><td>Everything else</td><td class="num">0.52</td><td class="num">0.55</td></tr>
+          <tr><td><b>GPU total</b></td><td class="num"><b>14.29</b></td><td class="num"><b>24.09</b></td></tr>
+
+        </tbody>
+      </table>
+    </div>
+    <p class="label">The terrain pass at the bench, LOW (11.4 ms)</p>
+    <div class="lanes" id="bench"></div>
+    <p class="note">Each lighting part's cost is what turning it off alone saved. The parts are not additive: the shader is long, and taking any part out also lets the GPU run more pixels at once, so their sum is more than step 4. The distant night lights run by day because towns on the planet's night side count as lit, even past the horizon where no pixel can see them.</p>
+  </section>
+
+  <section>
+    <h2>How the terrain is drawn, by GPU time</h2>
+    <p>The light view. The terrain pass is 2.35 ms of a 5.3 ms GPU frame; steps 2 to 4 are drawn to one scale.</p>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section>
+    <h2>Step 4, the lighting, by part</h2>
+    <p>Each part was compiled out of the shader in turn (<span class="num">PBD_TERRAIN_OFF</span>); its cost is the time that saved. Mean of the two runs.</p>
+    <div class="lanes" id="parts"></div>
+    <p class="note">Lamp lookups and the distant town lights run in daylight too. Skipping them by day keeps the picture and saves about 0.3 ms here: the next cut.</p>
+  </section>
+
+  <section>
+    <h2>By activity, 17½ minutes of play</h2>
+    <p>The showcase bot playing the starter missions through the player's own keys. Shadows were the old 4 × 2048 then.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Activity</th><th>fps</th><th>GPU</th><th>Shadow pass</th><th>Terrain pass</th><th>Game logic</th></tr></thead>
+        <tbody>
+          <tr><td>Building the bench, looking across open land</td><td class="num">37</td><td class="num hot">25.6</td><td class="num hot">13.4</td><td class="num">11.1</td><td class="num">13.9</td></tr>
+          <tr><td>Fishing at the sea (6½ min)</td><td class="num">49</td><td class="num hot">19.2</td><td class="num">9.4</td><td class="num">7.8</td><td class="num">12.8</td></tr>
+          <tr><td>Taming a hen</td><td class="num">59</td><td class="num">11.3</td><td class="num">3.5</td><td class="num">6.8</td><td class="num">13.9</td></tr>
+          <tr><td>Grilling fish at the fire</td><td class="num">59</td><td class="num">7.7</td><td class="num">4.4</td><td class="num">2.3</td><td class="num">12.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">All times in ms, mean over each activity. The terrain pass grows with how much ground fills the screen: a view to the horizon is about five times a view of the ground at your feet.</p>
+  </section>
+
+  <section>
+    <h2>Shadow quality, LOW against ULTRA</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Level</th><th>Cascades</th><th>Map</th><th>Shadow pass</th><th>Terrain pass</th><th>GPU total</th></tr></thead>
+        <tbody>
+          <tr><td>LOW (new default)</td><td class="num">2</td><td class="num">1024</td><td class="num">1.76</td><td class="num">2.45</td><td class="num">5.16</td></tr>
+          <tr><td>MEDIUM</td><td class="num">3</td><td class="num">1024</td><td class="num">2.06</td><td class="num">2.19</td><td class="num">5.13</td></tr>
+          <tr><td>ULTRA (as before)</td><td class="num">4</td><td class="num">2048</td><td class="num">3.78</td><td class="num">1.84</td><td class="num">6.41</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The light view. The shadow pass is limited by vertices, not pixels: the nearest cascade, a few metres across, still draws about 4 million vertices because its cull keeps nearly everything. Culling it properly is the next cut there.</p>
+  </section>
+
+  <section>
+    <h2>Rain against clear</h2>
+    <p>The light view with the storm forced on (rain shadow on), against the same view clear. Rain adds <b class="num">1.2 ms</b> of GPU: 5.3 to 6.5 ms.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pass</th><th>Clear</th><th>Rain</th><th>Rain adds</th></tr></thead>
+        <tbody>
+          <tr><td>Rain volume, half size (the rain shadow)</td><td class="num">0</td><td class="num">0.38</td><td class="num hot">+0.38</td></tr>
+          <tr><td>Drops on the lens</td><td class="num">0</td><td class="num">0.29</td><td class="num hot">+0.29</td></tr>
+          <tr><td>Wet-ground reflections (half size and compose)</td><td class="num">0.03</td><td class="num">0.27</td><td class="num hot">+0.24</td></tr>
+          <tr><td>Terrain (the wet film)</td><td class="num">2.34</td><td class="num">2.56</td><td class="num">+0.22</td></tr>
+          <tr><td>Water</td><td class="num">0.40</td><td class="num">0.54</td><td class="num">+0.14</td></tr>
+          <tr><td>Rain streaks, full size</td><td class="num">0</td><td class="num">0.08</td><td class="num">+0.08</td></tr>
+          <tr><td>Splashes</td><td class="num">0</td><td class="num">0.05</td><td class="num">+0.05</td></tr>
+          <tr><td>Shadow pass</td><td class="num">2.11</td><td class="num">1.93</td><td class="num">−0.18</td></tr>
+          <tr><td>Clouds</td><td class="num">0.08</td><td class="num">0.08</td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">In rain, step 3 (vertex and raster) is 0.61 ms and step 4 (lighting) 1.94 ms. Its parts: shadow lookups 0.42, lamps 0.29, bounce 0.14, night lights 0.12, cloud shadow 0.12. Under this view's storm the clouds cost almost nothing, and the rain's own passes are about a millisecond together. Rain is not where the budget goes.</p>
+  </section>
+
+  <section>
+    <h2>Read these numbers with care</h2>
+    <ul>
+      <li>The step 1–4 split is from the light view. The heavy views are next, at LOW and ULTRA.</li>
+      <li>On the light view the GPU is busy a third of the frame, so the card lowers its clocks: differences under about 0.1 ms are noise.</li>
+      <li>Builds are the <span class="num">fast</span> profile, windowed, the player settings' defaults except where a level is named.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+const BUDGET = 16.7;
+function lanes(id, rows, scale) {
+  const host = document.getElementById(id);
+  for (const r of rows) {
+    const lane = document.createElement('div');
+    lane.className = 'lane';
+    const pct = Math.min(100, r.ms / scale * 100);
+    const budget = r.budget === false ? '' : `<div class="budget" style="left:${BUDGET / scale * 100}%"></div>`;
+    lane.innerHTML = `<span class="name">${r.name}</span>
+      <div class="track"><div class="fill" style="width:${pct}%;background:var(${r.color})"></div>${budget}</div>
+      <span class="ms num">${r.ms.toFixed(r.dp ?? 1)} ms</span>`;
+    host.appendChild(lane);
+  }
+}
+
+const STEP_SCALE = 1.8;
+const steps = [
+  { n: 1, title: 'World data lives on the GPU', text: 'The hex grid, column heights, materials and baked light sit in long-lived GPU buffers, uploaded only when the world changes. No terrain mesh is built on the CPU.', ms: 0, color: '--cull', label: 'per frame' },
+  { n: 2, title: 'The cull: a compute pass (planet_cull)', text: 'Tests every cell for being on screen and in its detail band, and writes the visible list and the draw counts straight into an indirect draw.', ms: 0.19, color: '--cull' },
+  { n: 3, title: 'The vertex shader, triangles and depth test', text: 'Each instance reads a cell from the list and builds its hex top, walls or tree from the grid buffer. Priced with the lighting replaced by plain grey.', ms: 0.73, color: '--vert' },
+  { n: 4, title: 'The lighting: the fragment shader', text: 'Textures and materials, sun and sky, shadows, bounce, lamps, cloud shadow, wet ground, fog. Two thirds of the terrain pass.', ms: 1.62, color: '--frag' },
+];
+const sh = document.getElementById('steps');
+for (const s of steps) {
+  const el = document.createElement('div');
+  el.className = 'step';
+  el.innerHTML = `<span class="n">${s.n}</span><div><h3>${s.title}</h3><p>${s.text}</p>
+    <div class="bar"><div class="track"><div class="fill" style="width:${s.ms / STEP_SCALE * 100}%;background:var(${s.color})"></div></div>
+    <span class="num" style="text-align:right">${s.ms ? s.ms.toFixed(2) + ' ms' : '0 ms'}</span></div></div>`;
+  sh.appendChild(el);
+}
+
+lanes('bench', [
+  { name: '3. Vertex, triangles, depth', ms: 2.05, color: '--vert', budget: false, dp: 2 },
+  { name: '4. Lighting, all of it', ms: 9.35, color: '--frag', budget: false, dp: 2 },
+  { name: '  sun shadow lookups', ms: 4.17, color: '--frag', budget: false, dp: 2 },
+  { name: '  distant night lights', ms: 2.12, color: '--frag', budget: false, dp: 2 },
+  { name: '  lamp lookups', ms: 1.90, color: '--frag', budget: false, dp: 2 },
+  { name: '  bounce light', ms: 1.16, color: '--frag', budget: false, dp: 2 },
+  { name: '  cloud shadow', ms: 0.91, color: '--frag', budget: false, dp: 2 },
+  { name: '  wet reflections', ms: 0.00, color: '--frag', budget: false, dp: 2 },
+], 12);
+lanes('parts', [
+  { name: 'Textures, materials, fog', ms: 0.89, color: '--frag', budget: false, dp: 2 },
+  { name: 'Sun shadow lookups', ms: 0.28, color: '--frag', budget: false, dp: 2 },
+  { name: 'Lamp lookups', ms: 0.20, color: '--frag', budget: false, dp: 2 },
+  { name: 'Town night lights', ms: 0.12, color: '--frag', budget: false, dp: 2 },
+  { name: 'Bounce light', ms: 0.11, color: '--frag', budget: false, dp: 2 },
+  { name: 'Cloud shadow', ms: 0.03, color: '--frag', budget: false, dp: 2 },
+  { name: 'Wet reflections', ms: 0.00, color: '--frag', budget: false, dp: 2 },
+], 1.0);
+</script>

@@ -141,21 +141,26 @@ fn exit_shell(from: DVec3, z: DVec3, shell: f64) -> f64 {
 /// Fit the four cascades to a view, with the sun toward `sun`, on a planet of
 /// `radius` metres centred at the origin.
 pub fn fit(view: &View, sun: DVec3, radius: f64) -> [Cascade; CASCADES] {
-    fit_for(view, sun, radius, CASCADES, TEXELS)
+    fit_for(view, sun, radius, CASCADES, TEXELS, f64::INFINITY)
 }
 
 /// [`fit`] for the player's shadow quality (`shadow-quality`): `count`
 /// cascades across the same reach, each drawn `texels` a side. The cascades
 /// past `count` are fitted to an empty slice at the far edge and never drawn.
+/// The reach is never more than `max_reach_m` (owner, 2026-11-17: "max
+/// distance should be 200m? we dont really care that much all the way out
+/// there"); infinity keeps [`reach`] as it was.
 pub fn fit_for(
     view: &View,
     sun: DVec3,
     radius: f64,
     count: usize,
     texels: u32,
+    max_reach_m: f64,
 ) -> [Cascade; CASCADES] {
     let altitude = view.eye.length() - radius;
-    let edges = splits_for(NEAR_M, reach(radius, altitude), count);
+    let far = reach(radius, altitude).min(max_reach_m).max(NEAR_M * 4.0);
+    let edges = splits_for(NEAR_M, far, count);
     let tan = (0.5 * view.fov_y).tan();
     let k2 = tan * tan * (1.0 + view.aspect * view.aspect);
     let (x, y, z) = light_axes(sun);
@@ -471,5 +476,33 @@ mod tests {
             (0..16).map(due).collect::<Vec<_>>(),
             (0..16).map(|f| due_for(f, 4)).collect::<Vec<_>>()
         );
+    }
+
+    /// `shadow-quality`: a capped reach ends the last drawn cascade there, on
+    /// foot and in flight, and the uncapped fit is the one it always was.
+    #[test]
+    fn a_capped_reach_ends_the_cascades_there() {
+        let eye = DVec3::new(0.0, R + 2.0, 0.0);
+        let view = View {
+            eye,
+            forward: DVec3::X,
+            up: DVec3::Y,
+            fov_y: 1.2,
+            aspect: 16.0 / 9.0,
+        };
+        let sun = DVec3::new(0.3, 1.0, 0.2).normalize();
+        let capped = fit_for(&view, sun, R, 2, 1024, 200.0);
+        assert_eq!(capped[1].to_m, 200.0);
+        assert!(capped[0].to_m < 200.0);
+        let high = View {
+            eye: DVec3::new(0.0, R + 2000.0, 0.0),
+            ..view
+        };
+        assert_eq!(fit_for(&high, sun, R, 2, 1024, 200.0)[1].to_m, 200.0);
+        assert_eq!(
+            fit_for(&view, sun, R, CASCADES, TEXELS, f64::INFINITY),
+            fit(&view, sun, R)
+        );
+        assert_eq!(fit(&view, sun, R)[3].to_m, FOOT_REACH_M);
     }
 }

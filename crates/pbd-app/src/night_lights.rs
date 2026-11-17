@@ -85,6 +85,7 @@ impl FarLights {
                 )
             })
             .filter(|(s, _)| *s > 1e-4)
+            .filter(|(_, l)| over_the_horizon(l, camera, radius_m))
             .collect();
         // Stable: equal strengths keep the list's order.
         lit.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -106,6 +107,29 @@ impl FarLights {
         }
         (Vec4::new(lit.len() as f32, 0.0, 0.0, 0.0), packed)
     }
+}
+
+/// Whether any of a far light's reach can be seen from `camera` over the
+/// planet's curve (`gpu-cuts` 4): a town on the night side past the horizon
+/// still counts as lit, and every ground pixel ran its loop for nothing. The
+/// ground it lights stands at most `CASTER_SHELL_M` over the radius, and the
+/// limit is the camera's horizon plus that ground's own, with a degree to
+/// spare, so nothing that could show is ever left out.
+fn over_the_horizon(light: &FarLight, camera: Vec3, radius_m: f32) -> bool {
+    let occluder = radius_m - 8.0;
+    let top = radius_m + pbd_core::shadow::CASTER_SHELL_M as f32;
+    let horizon = (occluder / camera.length().max(occluder))
+        .clamp(-1.0, 1.0)
+        .acos()
+        + (occluder / top).clamp(-1.0, 1.0).acos()
+        + 1f32.to_radians();
+    let reach = (light.radius_m + 2.0 * light.spacing_m) / radius_m;
+    let apart = camera
+        .normalize_or_zero()
+        .dot(light.direction)
+        .clamp(-1.0, 1.0)
+        .acos();
+    apart - reach <= horizon
 }
 
 /// The player's light blocks: every edit that emits on a cell the player has

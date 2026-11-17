@@ -2040,6 +2040,16 @@ impl ShadowQuality {
         }
     }
 
+    /// How far the sun's shadows reach, metres, on foot and in flight
+    /// (owner, 2026-11-17: "max distance should be 200m?"). ULTRA's is the
+    /// reach as it was: 900 m on foot, growing with the horizon in flight.
+    pub fn reach_m(self) -> f64 {
+        match self {
+            Self::Ultra => f64::INFINITY,
+            _ => 200.0,
+        }
+    }
+
     /// The blur: the soft filter's least radius and the 3 x 3 filter's
     /// spacing, in texels. ULTRA's are the filters as they were.
     pub fn blur_texels(self) -> (f32, f32) {

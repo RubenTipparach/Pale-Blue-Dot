@@ -1766,8 +1766,8 @@ impl SpecializedRenderPipeline for PlanetPipeline {
                 } else {
                     "fragment"
                 })),
+                shader_defs: terrain_off_defs(),
                 targets,
-                ..default()
             }),
             primitive: PrimitiveState {
                 cull_mode: Some(Face::Back),
@@ -2830,4 +2830,18 @@ pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
     let mut contact = PlanetContact::new(Arc::new(lod::base_records(&cells)), &cells);
     contact.set_fine(&set);
     (PlanetFine { set, version: 1 }, contact)
+}
+
+/// A pricing instrument (`play-frame-budget`), not a setting:
+/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night` compiles those parts
+/// out of the terrain's fragment shader, so a sitting can price each by what
+/// it saves on the same view. `flat` returns a grey after the cut-out test:
+/// what is left is the vertex shader, the raster and the depth test.
+fn terrain_off_defs() -> Vec<bevy::shader::ShaderDefVal> {
+    let off = std::env::var("PBD_TERRAIN_OFF").unwrap_or_default();
+    off.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("TERRAIN_OFF_{}", p.to_uppercase()).into())
+        .collect()
 }
