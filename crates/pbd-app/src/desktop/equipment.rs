@@ -269,7 +269,7 @@ pub fn spawn(
                 margin: UiRect::left(px(left)),
                 ..default()
             },
-            (),
+            super::menu::InPlayHud,
         ))
         .with_children(|cell| {
             cell.spawn(tool_icon(&icons));

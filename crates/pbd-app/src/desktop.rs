@@ -1827,6 +1827,7 @@ pub fn run(args: &[String]) {
                 slots::input,
                 equipment::pack_hand,
                 equipment::paint,
+                menu::hide_hud_on_title,
             )
                 .chain(),
             (
