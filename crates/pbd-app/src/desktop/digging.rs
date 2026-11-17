@@ -1031,21 +1031,64 @@ fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample
 /// lantern gets a two-block pillar in the cell beyond it to hang on, and the
 /// hanging lantern a block over it to hang from. Returns how many lights were
 /// placed.
-fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+/// The cell `metres` ahead of the eye along the ground and `across` to its
+/// right, as its key and the first layer over its ground: where a capture's
+/// row of lamps or blocks stands each one.
+fn row_spot(
+    world: &Edited,
+    eye: Vec3,
+    forward: Vec3,
+    metres: f32,
+    across: f32,
+) -> Option<(u32, usize)> {
     let up = eye.normalize_or(Vec3::Y);
     let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
     let right = ahead.cross(up).normalize_or(Vec3::Z);
-    // The cell `metres` ahead and `across` to the right, its key and the first
-    // layer over its ground.
-    let spot = |world: &Edited, metres: f32, across: f32| -> Option<(u32, usize)> {
-        let offset = ahead * metres + right * across;
-        let angle = offset.length() / PLANET_RADIUS;
-        let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
-        let record = world.contact.finest_cell(direction)?;
-        let key = world.fine.set.finest_records().get(record)?.key();
-        let top = world.fine.set.columns.column(record)?.surface()?;
-        Some((key, top + 1))
-    };
+    let offset = ahead * metres + right * across;
+    let angle = offset.length() / PLANET_RADIUS;
+    let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
+    let record = world.contact.finest_cell(direction)?;
+    let key = world.fine.set.finest_records().get(record)?.key();
+    let top = world.fine.set.columns.column(record)?.surface()?;
+    Some((key, top + 1))
+}
+
+/// `--place-row` (`placed-blocks-keep-material`): each block on the ground
+/// in a row across the view, `row` metres ahead, one cell apart, each in a
+/// cell of its own. Nought before the fine set is under the camera.
+fn block_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, blocks: &[Material]) -> usize {
+    if row_spot(world, eye, forward, row, 0.0).is_none() {
+        return 0;
+    }
+    let mut used = Vec::new();
+    let mut across = -0.5 * LAMP_SPACING_M * (blocks.len() as f32 - 1.0);
+    let mut placed = 0;
+    for &block in blocks {
+        let mut found = None;
+        for _ in 0..16 {
+            match row_spot(world, eye, forward, row, across) {
+                Some((cell, layer)) if !used.contains(&cell) => {
+                    found = Some((cell, layer));
+                    break;
+                }
+                _ => across += 0.5,
+            }
+        }
+        if let Some((cell, layer)) = found {
+            used.push(cell);
+            if apply_edit(world, Hands::Empty, cell, layer, block).is_some() {
+                info!("scripted {block:?} placed in cell {cell} layer {layer}");
+                placed += 1;
+            }
+        }
+        across += LAMP_SPACING_M;
+    }
+    placed
+}
+
+fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+    let spot =
+        |world: &Edited, metres: f32, across: f32| row_spot(world, eye, forward, metres, across);
     // Before the fine set is under the camera there is no cell to put a lamp
     // in, and the caller tries again next frame.
     if spot(world, row, 0.0).is_none() {
@@ -1121,7 +1164,10 @@ pub fn scripted_dig(
     (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
     mut done: Local<bool>,
 ) {
-    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
+    if *done
+        || launch.capture.is_none()
+        || (launch.dig == 0 && !launch.torch && !launch.lamps && launch.place_row.is_empty())
+    {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
@@ -1255,6 +1301,29 @@ pub fn scripted_dig(
             *done = true;
         }
     }
+    if !launch.place_row.is_empty() {
+        let forward = transform.forward().as_vec3();
+        let placed = block_row(
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
+            },
+            eye,
+            forward,
+            launch.lamps_at,
+            &launch.place_row,
+        );
+        // Before the fine set is under the camera, the next frame tries again.
+        if placed > 0 {
+            info!("scripted blocks: {placed} placed");
+            *done = true;
+        }
+        return;
+    }
     if dug == 0 && !launch.torch && !launch.lamps {
         // Say why nothing happened rather than failing silently: a scripted
         // dig that finds no ground is either out of the tier or aimed wrong,
@@ -1282,6 +1351,73 @@ pub fn scripted_dig(
                 "scripted dig: {dug} layers taken under the camera;                  the hole's floor cell is lit to {sky} of {}",
                 pbd_core::light::MAX
             );
+        }
+    }
+}
+
+/// `placed-blocks-keep-material`: what a placed block gives back when it is
+/// dug, wherever it was put down.
+#[cfg(test)]
+mod placed_tests {
+    use super::*;
+    use pbd_app::planet::terrain_config;
+    use pbd_core::edits::Edit;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::planet_gen::{self, Biome};
+
+    /// A block placed on desert sand is dug as that block, never as the
+    /// sand under it: the column the tier builds from the save is what the
+    /// dig reads (`material_of`), and that is what it yields.
+    #[test]
+    fn a_placed_block_on_desert_sand_digs_as_itself() {
+        let cfg = terrain_config();
+        let desert = (0..60_000)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / 60_000.0;
+                let r = (1.0 - y * y).sqrt();
+                let phi = i as f32 * 2.399_963;
+                Vec3::new(r * phi.cos(), y, r * phi.sin())
+            })
+            .find(|&d| {
+                let surface = column::surface_m(cfg, d);
+                planet_gen::biome_at(cfg, d, surface) == Biome::Desert
+                    && planet_gen::top_material(cfg, d, surface) == Material::Sand
+                    && surface > cfg.sea_level_m
+            })
+            .expect("the shipped world has a desert");
+        let under = column::generate_solid(cfg, desert).surface().unwrap();
+        for (cell, material) in Material::ALL
+            .into_iter()
+            .filter(|&m| column::home_biome(m).is_some() && !m.is_water())
+            .enumerate()
+        {
+            let cell = cell as u32 + 1;
+            let mut save = WorldSave::memory_only();
+            assert!(save.accept(
+                Edit {
+                    cell,
+                    layer: under as u16 + 1,
+                    material,
+                },
+                None,
+                &Slots::new()
+            ));
+            let built = column::generate_edited_solid(cfg, desert, save.edits.for_cell(cell));
+            let was = built.material(under + 1);
+            assert_eq!(was, material, "{material:?}: stored");
+            let expected = match material {
+                // Turned soil is dirt again (`farming-and-smelting` decision 2).
+                Material::Tilled => Item::Block(Material::Dirt),
+                Material::Ore => pbd_core::station::ore_yield(cell, under as u16 + 1, true),
+                other => Item::Block(other),
+            };
+            assert_eq!(
+                yield_of(&save, was, cell, under + 1),
+                expected,
+                "{material:?}"
+            );
+            // And the sand under it is still the desert's sand.
+            assert_eq!(built.material(under), Material::Sand);
         }
     }
 }

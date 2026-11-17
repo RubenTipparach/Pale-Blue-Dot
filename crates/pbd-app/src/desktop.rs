@@ -311,6 +311,13 @@ pub struct Launch {
     pub lamps: bool,
     pub lamps_at: f32,
     pub lamps_across: f32,
+    /// `--place-row <block,block,...> [metres]` (`placed-blocks-keep-material`,
+    /// a capture instrument): one of each named block (`stone`, `dirt`, ...)
+    /// placed on the ground in a row across the view, that far ahead of the
+    /// camera (5 m when no distance follows), through the edit path a
+    /// player's place takes, so a capture shows what a placed block is drawn
+    /// as on the ground it stands on.
+    pub place_row: Vec<pbd_core::terrain::Material>,
     /// `--farm [metres]` (`farming-and-smelting` task 5.1, a capture
     /// instrument): tills two rows of four cells that far ahead, sows wheat
     /// and turnip in them at staggered world times so the rows show all four
@@ -496,6 +503,7 @@ impl Launch {
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
+            place_row: Vec::new(),
             farm: None,
             farm_harvest: false,
             hold_pointer: false,
@@ -681,6 +689,28 @@ impl Launch {
                             result.lamps_across = across;
                             i += 1;
                         }
+                    }
+                }
+                "--place-row" => {
+                    i += 1;
+                    let names = args.get(i).expect("--place-row requires blocks");
+                    result.place_row = names
+                        .split(',')
+                        .map(|name| {
+                            pbd_core::terrain::Material::ALL
+                                .into_iter()
+                                .find(|&m| pbd_core::inventory::material_name(m) == name)
+                                .unwrap_or_else(|| panic!("--place-row: no block named {name}"))
+                        })
+                        .collect();
+                    if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                    {
+                        assert!(
+                            metres.is_finite() && metres > 0.0,
+                            "--place-row takes metres ahead"
+                        );
+                        result.lamps_at = metres;
+                        i += 1;
                     }
                 }
                 "--farm" | "--forge" => {

@@ -223,6 +223,23 @@ fn material_at(slot: u32, layer: u32) -> u32 {
     if word >= arrayLength(&materials) { return 0u; }
     return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
 }
+// `placed-blocks-keep-material`: after every slot's render codes, every
+// slot's PLACED sheets, laid out as the codes are: nought for generated
+// ground, which takes its biome's sheet, and for a block somebody placed its
+// own sheet plus one, so it is drawn as the block it is whatever biome it
+// stands in. `ColumnTier::gpu_placed_sheets` packs it.
+const PLACED_SHEETS_BASE: u32 = 1032192u;
+fn placed_sheet_at(slot: u32, layer: u32) -> u32 {
+    if slot == 0u || layer >= LIGHT_LAYERS { return 0u; }
+    let word = PLACED_SHEETS_BASE + (slot - 1u) * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+    if word >= arrayLength(&materials) { return 0u; }
+    return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
+}
+// And the record's own: the sheet its PLACED top is drawn from, plus one,
+// in four bits of its material word (`planet_terrain::PLACED_SHEET_SHIFT`),
+// which the cap and its heightfield wall carry to the fragment.
+const PLACED_SHEET_SHIFT: u32 = 26u;
+const PLACED_SHEET_MASK: u32 = 0x3c000000u;
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -1933,7 +1950,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // The material in the low byte and the cell's BIOME above it, exactly as
     // the record packs them: the fragment needs the biome to pick its sheet,
     // and carrying it in a word it already has costs no interpolator.
-    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags;
+    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags
+        | (cell.metadata.y & PLACED_SHEET_MASK);
     out.height = out_height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
@@ -3458,11 +3476,20 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
     let face_altitude = length(input.position)-params.settings.x;
+    // A block somebody PLACED is drawn from its own sheet, never the biome's
+    // (`placed-blocks-keep-material`): dirt on desert sand is the meadow's
+    // earth, not the desert's. The cap carries its record's.
+    let placed_cap = (input.material & PLACED_SHEET_MASK) >> PLACED_SHEET_SHIFT;
+    if input.kind==0u && placed_cap != 0u { slot = placed_cap - 1u; }
     if input.kind==1u {
         // The heightfield's own wall, which stands only where a cell has no
         // column: no layer to ask, so the depth rule, which is the
         // generator's own stack.
-        code = face_code(cap,max(input.height-face_altitude,0.));
+        let depth = max(input.height-face_altitude,0.);
+        code = face_code(cap,depth);
+        // Its top metre is the placed block's own side; under it, the
+        // generated ground.
+        if placed_cap != 0u && depth <= 1.0 { slot = placed_cap - 1u; }
     }
     if input.kind==4u {
         // A column-pass face wears the LAYER it bounds: the block under an
@@ -3479,6 +3506,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
         let own = material_at(input.slot, layer);
         code = own;
+        let placed = placed_sheet_at(input.slot, layer);
+        if placed != 0u { slot = placed - 1u; }
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }
