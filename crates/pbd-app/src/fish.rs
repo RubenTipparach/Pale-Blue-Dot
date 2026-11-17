@@ -1408,12 +1408,32 @@ pub(crate) mod draw {
     #[derive(Component)]
     pub struct MeterFill;
 
-    /// How each creature was drawn this frame (`movement-smoothness` design
-    /// 8): its forward and its up, by its school's seed and its own id. The
-    /// motion trace reads what the mesh was built with from here.
+    /// How quickly a creature's drawn heading follows its step's, s: the
+    /// time constant of its easing (`movement-smoothness` design 8.2), a
+    /// little over two of the school's 30 Hz steps.
+    pub(crate) const HEADING_EASE_S: f32 = 0.08;
+
+    /// The fastest a creature's drawn heading turns, rad/s (540 degrees a
+    /// second: right round in a third of a second), so even a step that
+    /// reverses it is drawn as a turn.
+    pub(crate) const HEADING_TURN_MAX: f32 = 3.0 * std::f32::consts::PI;
+
+    /// A step slower than this, m/s, says nothing about which way a creature
+    /// faces: it keeps the heading it was drawn with.
+    const HEADING_MIN_MPS: f32 = 0.01;
+
+    /// How each creature is drawn (`movement-smoothness` design 8): the
+    /// heading it was drawn along last frame, eased toward its latest step's
+    /// so a turn is spread over the frames between steps; the heading a fish
+    /// at the lure took the lure with, which it keeps, level, while it is
+    /// held; and this frame's forward and up as the mesh was built, which the
+    /// motion trace reads. Draw only: nothing in the rules reads it.
     #[derive(Resource, Default, Debug)]
     pub struct DrawnHeadings {
+        /// This frame's drawn forward and up, by school seed and id.
         pub map: HashMap<(u64, u32), Heading>,
+        eased: HashMap<(u64, u32), Eased>,
+        frame: u64,
     }
 
     /// One creature's drawn heading.
@@ -1421,6 +1441,94 @@ pub(crate) mod draw {
     pub struct Heading {
         pub forward: Vec3,
         pub up: Vec3,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct Eased {
+        forward: Vec3,
+        /// Held at the lure: the level heading it took the lure with.
+        held: Option<Vec3>,
+        seen: u64,
+    }
+
+    impl DrawnHeadings {
+        /// A new frame: what was drawn last frame is cleared from `map`.
+        pub(crate) fn begin(&mut self) {
+            self.frame += 1;
+            self.map.clear();
+        }
+
+        /// Forget the creatures not drawn this frame.
+        pub(crate) fn end(&mut self) {
+            let frame = self.frame;
+            self.eased.retain(|_, e| e.seen == frame);
+        }
+
+        /// The heading creature `key` is drawn along this frame, unit:
+        /// `step` is the heading its latest step gives (any length), `up`
+        /// the local up at it, `held` whether it is held at the lure.
+        pub(crate) fn ease(
+            &mut self,
+            key: (u64, u32),
+            step: Vec3,
+            up: Vec3,
+            held: bool,
+            dt: f32,
+        ) -> Vec3 {
+            let level = |f: Vec3| (f - up * f.dot(up)).normalize_or(up.any_orthonormal_vector());
+            let moving = step.length() >= HEADING_MIN_MPS && step.is_finite();
+            let frame = self.frame;
+            let Some(e) = self.eased.get_mut(&key) else {
+                let f = if moving {
+                    step.normalize()
+                } else {
+                    up.any_orthonormal_vector()
+                };
+                let f = if held { level(f) } else { f };
+                self.eased.insert(
+                    key,
+                    Eased {
+                        forward: f,
+                        held: held.then_some(f),
+                        seen: frame,
+                    },
+                );
+                return f;
+            };
+            let last = e.forward;
+            let target = if held {
+                level(*e.held.get_or_insert_with(|| level(last)))
+            } else {
+                e.held = None;
+                if moving { step.normalize() } else { last }
+            };
+            let (t, max) = if dt.is_finite() && dt > 0.0 {
+                (1.0 - (-dt / HEADING_EASE_S).exp(), HEADING_TURN_MAX * dt)
+            } else {
+                (0.0, 0.0)
+            };
+            let f = turn_toward(last, target, up, t, max);
+            e.forward = f;
+            e.seen = frame;
+            f
+        }
+    }
+
+    /// `from` turned `t` (0 to 1) of the way to `to`, both unit, and never
+    /// more than `max` radians; a reversal turns about `up`, never about an
+    /// arbitrary axis.
+    pub(crate) fn turn_toward(from: Vec3, to: Vec3, up: Vec3, t: f32, max: f32) -> Vec3 {
+        let angle = from.angle_between(to);
+        if !angle.is_finite() || angle < 1e-6 {
+            return to;
+        }
+        let by = (angle * t.clamp(0.0, 1.0)).min(max.max(0.0));
+        let axis = if from.dot(to) < -0.9999 {
+            up
+        } else {
+            from.cross(to).normalize_or(up)
+        };
+        (Quat::from_axis_angle(axis, by) * from).normalize_or(to)
     }
 
     /// The float, the line and the HUD line; the rod is hung on the walking
@@ -1608,6 +1716,7 @@ pub(crate) mod draw {
         frame: Res<crate::planet::PlanetRenderFrame>,
         float: Res<DrawnFloat>,
         mut headings: ResMut<DrawnHeadings>,
+        time: Res<Time>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
             Entity,
@@ -1650,6 +1759,8 @@ pub(crate) mod draw {
         // The fish on the line is drawn at the lure under the drawn float
         // (`movement-smoothness` 7.1).
         let held = float.shift(fishery.line.float);
+        let dt = time.delta_secs().min(0.1);
+        headings.begin();
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.index) else {
@@ -1674,7 +1785,7 @@ pub(crate) mod draw {
                     dim(school),
                     alpha,
                     held,
-                    &mut headings,
+                    (&mut headings, dt),
                 );
             }
         }
@@ -1698,7 +1809,7 @@ pub(crate) mod draw {
                 dim(school),
                 alpha,
                 held,
-                &mut headings,
+                (&mut headings, dt),
             );
             let handle = meshes.add(mesh);
             commands
@@ -1728,6 +1839,7 @@ pub(crate) mod draw {
                     ));
                 });
         }
+        headings.end();
     }
 
     /// Where creature `i` of school `s` is drawn this frame, planet-local
@@ -1785,7 +1897,7 @@ pub(crate) mod draw {
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
         held: Vec3,
-        headings: &mut DrawnHeadings,
+        (headings, dt): (&mut DrawnHeadings, f32),
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
@@ -1810,11 +1922,19 @@ pub(crate) mod draw {
                 * std::f32::consts::TAU;
             let v = school.velocities[i];
             let along = v - up * v.dot(up);
-            let flat = along.normalize_or(up.any_orthonormal_vector());
+            // The heading its step gives (a swimmer pitches with it), eased
+            // to over the frames between steps; a fish at the lure keeps the
+            // level heading it took the lure with, never turned by the
+            // lure's bob (`movement-smoothness` design 8.2).
+            let step = match species.mover {
+                fauna::Mover::School => v - up * v.dot(up) * 0.5,
+                _ => along,
+            };
+            let held_here = school.held.is_some_and(|(h, _)| h == i);
+            let eased = headings.ease((school.seed, id), step, up, held_here, dt);
+            let flat = (eased - up * eased.dot(up)).normalize_or(up.any_orthonormal_vector());
             let mut forward = match species.mover {
-                fauna::Mover::School => {
-                    (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector())
-                }
+                fauna::Mover::School => eased,
                 _ => flat,
             };
             // A crab walks sideways.

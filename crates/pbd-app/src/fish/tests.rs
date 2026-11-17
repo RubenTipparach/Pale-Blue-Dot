@@ -566,3 +566,83 @@ fn a_hooked_float_jump_is_eased_and_nothing_else_moves() {
     drawn.update(dt, at(10.4), Phase::Ready, 0.0);
     assert_eq!(drawn.drawn(at(10.4)), at(10.4));
 }
+
+/// A fish at the lure keeps the level heading it took the lure with: the
+/// lure's bob (straight down and up, or not moving at all) never turns it
+/// (`movement-smoothness` design 8).
+#[test]
+fn a_fish_at_the_lure_is_not_turned_by_the_bob() {
+    let mut headings = draw::DrawnHeadings::default();
+    let up = Vec3::Y;
+    let key = (7, 3);
+    // Swimming in, nose a little up.
+    let mut forward = Vec3::ZERO;
+    for _ in 0..30 {
+        headings.begin();
+        forward = headings.ease(key, Vec3::new(1.0, 0.2, 0.0), up, false, 1.0 / 60.0);
+        headings.end();
+    }
+    let took = (forward - up * forward.dot(up)).normalize();
+    // Held: the lure bobs down, up and stands still, frame by frame.
+    for (i, bob) in [-0.6, 0.6, 0.0, -0.3, 0.0, 0.5]
+        .iter()
+        .cycle()
+        .take(240)
+        .enumerate()
+    {
+        headings.begin();
+        let f = headings.ease(key, Vec3::new(0.0, *bob, 0.0), up, true, 1.0 / 60.0);
+        headings.end();
+        if i > 30 {
+            assert!(f.dot(up).abs() < 1e-3, "level at the lure, frame {i}: {f}");
+            assert!(
+                f.dot(took) > 0.9999,
+                "the bearing it took the lure with: {f}"
+            );
+        }
+        if i > 0 {
+            assert!(f.angle_between(forward).to_degrees() < 3.0, "no snap: {f}");
+        }
+        forward = f;
+    }
+}
+
+/// A step's turn is spread over the frames between steps; a step with no
+/// velocity keeps the heading; a reversal turns about the local up.
+#[test]
+fn a_fish_turns_over_frames_not_in_one() {
+    let mut headings = draw::DrawnHeadings::default();
+    let up = Vec3::Y;
+    let key = (1, 1);
+    headings.begin();
+    let mut last = headings.ease(key, Vec3::X, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(last.dot(Vec3::X) > 0.9999);
+    // Its step turns it right round in one step.
+    let mut frames = 0;
+    while last.dot(Vec3::NEG_X) < 0.99 {
+        headings.begin();
+        let f = headings.ease(key, Vec3::NEG_X, up, false, 1.0 / 60.0);
+        headings.end();
+        assert!(
+            f.angle_between(last).to_degrees() < 30.0,
+            "one frame turned too far"
+        );
+        assert!(f.dot(up).abs() < 1e-3, "the reversal turns about up: {f}");
+        last = f;
+        frames += 1;
+    }
+    assert!(frames >= 5, "spread over {frames} frames");
+    // No velocity: it keeps its heading.
+    headings.begin();
+    let f = headings.ease(key, Vec3::ZERO, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(f.dot(last) > 0.9999);
+    // Not drawn for a frame: forgotten.
+    headings.begin();
+    headings.end();
+    headings.begin();
+    let f = headings.ease(key, Vec3::Z, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(f.dot(Vec3::Z) > 0.9999);
+}

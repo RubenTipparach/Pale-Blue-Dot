@@ -642,9 +642,11 @@ seed and its id, the forward it was drawn with last frame.
 - **The step's heading is the target, the drawn heading eases to it.** Each
   frame the drawn forward turns toward the heading of the latest step by
   `1 - exp(-dt / HEADING_EASE_S)`, `HEADING_EASE_S` 0.08 s (a little over
-  two school steps). A step's turn is spread over the frames between steps
-  instead of landing in one. A reversal (target opposite) turns about the
-  local up, never through an arbitrary axis.
+  two school steps), and never faster than 540 degrees a second
+  (`HEADING_TURN_MAX`; right round in a third of a second, 9 degrees a frame
+  at 60 fps). A step's turn is spread over the frames between steps instead
+  of landing in one. A reversal (target opposite) turns about the local up,
+  never through an arbitrary axis.
 - **No velocity, no new heading.** When a step's velocity is under 1 mm/s the
   target is the heading already drawn.
 - **A fish at the lure keeps the heading it took the lure with, level.** The
@@ -672,6 +674,37 @@ since the last frame; `tools/motion_graph.py` reports the per-frame turn
 and swimming fish. Measured before (the heading as built today, written into
 the same resource with no easing) and after.
 
-### 8.4 Results
+### 8.4 Results (M4 Max MacBook Pro, 2026-11-17)
 
-(Filled in when measured.)
+The fishing trace with the eye under water (`--fish-play --hold-pointer
+--watch-hook --time 10 --no-vsync`, 50 s, real time, windowed), each on a
+fresh world, one fish hooked in each. "Before" is the instrument alone (the
+heading built as on `3c25cf15`), "after" the fix. Turn per frame is the larger
+of the angle the drawn forward and the drawn up moved since the last frame,
+the same fish both frames.
+
+| | before (2 runs) | after (2 runs) |
+| --- | --- | --- |
+| fish at the lure: frames turning over 30 degrees | **78, 116** | **0, 0** |
+| fish at the lure: turn per frame p99 / max | 127 / 176, 150 / 178 deg | 0.3 / 3.3, 0.6 / 1.4 deg |
+| fish at the lure: nose more than 30 degrees out of level | 32 of 956, 80 of 1 020 frames | 0, 0 (max 13 and 7 degrees, the first frames it eases level from its approach) |
+| swimming fish: frames turning over 30 degrees | 3, 2 | 0, 0 |
+| swimming fish: turn per frame p99 / max | 7.3 / 130, 13.4 / 98 deg | 4.5 / 6.4, 8.2 / 21.9 deg |
+
+Before, at the lure, the trace shows the cause directly: the held fish is
+drawn level along one fixed bearing (the `any_orthonormal_vector` fallback,
+`(0.113, 0.906, -0.407)` every time) on the frames the lure did not move, and
+pitched 31 to 79 degrees on the frames the float dipped; it flips between them
+up to 133 degrees in a frame. The largest swimming turn left after (21.9
+degrees) is on a long frame.
+
+Video, one file: `fish-nibble-underwater-pose-before-after-1080p60.mp4` in the
+validation folder on Drive (before, after, then side by side aligned on the
+strike at real time and a quarter speed). Read at the full 60 fps around the
+nibble and the strike: before, the fish at the lure stands on end for single
+frames and runs of frames, nose-on and side-on, and hangs vertical under the
+float for about 15 frames at the strike; after, the fish (an eel in that run)
+lies level at the lure through the nibble and the strike with no frame
+turning, and swims off level. What is still seen after: an eel climbing
+straight up from the bed to the lure is drawn pitched up while it climbs
+(its real heading, pitched by half as before), easing level as it arrives.
