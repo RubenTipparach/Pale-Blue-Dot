@@ -1,5 +1,10 @@
 use super::*;
 
+/// The planet-centred origin: these tests are written in the planet's frame
+/// (`world-frames`).
+const PLANET: pbd_core::world_frame::SimOrigin =
+    pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
+
 /// A landed fish is in the hotbar and in the save on the same frame, and the
 /// field guide's record counts it.
 #[test]
@@ -79,6 +84,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
     for (strike, seed) in [("left", 70), ("right", 71)] {
         let mut line = Line::new(seed);
         let mut schools = vec![School::spawn(
+            &PLANET,
             minnow as u16,
             &roster[minnow],
             at(0.0, 1.0, 8.0),
@@ -124,6 +130,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                 _ => Controls::default(),
             };
             let events = line.step(
+                &PLANET,
                 dt,
                 controls,
                 &angler,
@@ -137,7 +144,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
             );
             let splash = line.splash();
             for school in &mut schools {
-                school.step(dt, &roster[minnow], &fauna.flock, &Shore, splash);
+                school.step(&PLANET, dt, &roster[minnow], &fauna.flock, &Shore, splash);
             }
             for event in events {
                 seen.push(event);
@@ -473,7 +480,7 @@ fn a_school_fades_in_and_fades_out_before_it_is_dropped() {
     let anchor = Vec3::Y * 1000.0;
     fishery
         .schools
-        .push(School::spawn(0, &roster[0], anchor, 7, &Deep));
+        .push(School::spawn(&PLANET, 0, &roster[0], anchor, 7, &Deep));
     let dt = 1.0 / 60.0;
     let school = fishery.schools[0].clone();
     assert_eq!(
@@ -537,20 +544,23 @@ fn a_hooked_float_jump_is_eased_and_nothing_else_moves() {
     let dt = 1.0 / 60.0;
     let mut drawn = DrawnFloat::default();
     // Floating and reeling: drawn as the line has it.
-    drawn.update(dt, at(10.0), Phase::Floating, 0.0);
-    assert_eq!(drawn.drawn(at(10.0)), at(10.0));
-    drawn.update(dt, at(10.0), Phase::Bite, 0.0);
+    drawn.update(&PLANET, dt, at(10.0), Phase::Floating, 0.0);
+    assert_eq!(drawn.drawn(&PLANET, at(10.0)), at(10.0));
+    drawn.update(&PLANET, dt, at(10.0), Phase::Bite, 0.0);
     // The strike, and on the next step the swing goes on with a jump of a
     // metre: drawn where it was.
-    drawn.update(dt, at(10.0), Phase::Hooked, 0.8);
-    drawn.update(dt, at(11.0), Phase::Hooked, 0.8);
-    assert!(drawn.drawn(at(11.0)).distance(at(10.0)) < 1e-3);
-    assert!(drawn.drawn(at(11.0)).length() - r < 1e-3, "on the water");
+    drawn.update(&PLANET, dt, at(10.0), Phase::Hooked, 0.8);
+    drawn.update(&PLANET, dt, at(11.0), Phase::Hooked, 0.8);
+    assert!(drawn.drawn(&PLANET, at(11.0)).distance(at(10.0)) < 1e-3);
+    assert!(
+        drawn.drawn(&PLANET, at(11.0)).length() - r < 1e-3,
+        "on the water"
+    );
     // Eased: each frame closer, no step larger than a sixth of the jump.
-    let mut was = drawn.drawn(at(11.0));
+    let mut was = drawn.drawn(&PLANET, at(11.0));
     for frame in 0..25 {
-        drawn.update(dt, at(11.0), Phase::Hooked, 0.8);
-        let now = drawn.drawn(at(11.0));
+        drawn.update(&PLANET, dt, at(11.0), Phase::Hooked, 0.8);
+        let now = drawn.drawn(&PLANET, at(11.0));
         assert!(
             now.distance(was) < 0.17,
             "frame {frame}: {}",
@@ -558,13 +568,13 @@ fn a_hooked_float_jump_is_eased_and_nothing_else_moves() {
         );
         was = now;
     }
-    assert!(drawn.drawn(at(11.0)).distance(at(11.0)) < 0.05);
+    assert!(drawn.drawn(&PLANET, at(11.0)).distance(at(11.0)) < 0.05);
     // The run stops: the swing's jump is taken up again.
-    drawn.update(dt, at(10.4), Phase::Hooked, 0.0);
-    assert!(drawn.drawn(at(10.4)).distance(was) < 0.05);
+    drawn.update(&PLANET, dt, at(10.4), Phase::Hooked, 0.0);
+    assert!(drawn.drawn(&PLANET, at(10.4)).distance(was) < 0.05);
     // Caught: the line's float again.
-    drawn.update(dt, at(10.4), Phase::Ready, 0.0);
-    assert_eq!(drawn.drawn(at(10.4)), at(10.4));
+    drawn.update(&PLANET, dt, at(10.4), Phase::Ready, 0.0);
+    assert_eq!(drawn.drawn(&PLANET, at(10.4)), at(10.4));
 }
 
 /// A fish at the lure keeps the level heading it took the lure with: the

@@ -876,9 +876,10 @@ fn viewer(world: &mut World) -> Option<Vec3> {
     {
         return Some((at.translation().as_dvec3() - centre).as_vec3());
     }
+    let o = crate::sim_origin::origin_of(world);
     let mut walkers =
         world.query_filtered::<&avian3d::prelude::Position, With<crate::walking::Walker>>();
-    walkers.iter(world).next().map(|p| p.0)
+    walkers.iter(world).next().map(|p| o.query_point(p.0))
 }
 
 /// Every held town's ground, installed at once, and the planet rebuilt round
@@ -1445,6 +1446,7 @@ pub fn offer_doors(
     towns: Res<Towns>,
     doors: Query<&TownDoor>,
     mut interact: ResMut<crate::interact::Interact>,
+    space: crate::SimSpace,
 ) {
     let (Some(walking), Some(structures), Ok(position)) = (walking, structures, walker.single())
     else {
@@ -1453,7 +1455,8 @@ pub fn offer_doors(
     if !walking.active {
         return;
     }
-    let Some(door) = door_in_reach(&walking, position.0, &structures, &towns, doors.iter()) else {
+    let at = space.origin().query_point(position.0);
+    let Some(door) = door_in_reach(&walking, at, &structures, &towns, doors.iter()) else {
         return;
     };
     let open = towns
@@ -1481,6 +1484,7 @@ pub fn use_doors(
     save: Option<ResMut<WorldSave>>,
     doors: Query<&TownDoor>,
     interact: Option<Res<crate::interact::Interact>>,
+    space: crate::SimSpace,
 ) {
     // A camera that does not walk (a capture's view from above) opens no
     // door.
@@ -1499,7 +1503,8 @@ pub fn use_doors(
     let (Some(mut structures), Ok(position)) = (structures, walker.single()) else {
         return;
     };
-    let Some(door) = door_in_reach(&walking, position.0, &structures, &towns, doors.iter()) else {
+    let at = space.origin().query_point(position.0);
+    let Some(door) = door_in_reach(&walking, at, &structures, &towns, doors.iter()) else {
         return;
     };
     let Some(index) = towns.index(door.site, door.building) else {

@@ -1624,6 +1624,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::drops::DropsPlugin)
     // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
     .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
+    .add_plugins(pbd_app::step_trace::StepTracePlugin)
+    .add_plugins(pbd_app::sim_origin::SimOriginPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
     // Each world's city sites, made once and kept in its save (`city-sites`).
@@ -1974,6 +1976,12 @@ pub fn run(args: &[String]) {
             })
             .run_if(pbd_app::loading::ready)
             .after(capture),
+    )
+    .add_systems(
+        Last,
+        rebase_shots
+            .run_if(|| std::env::var_os("PBD_REBASE_SHOTS").is_some())
+            .run_if(pbd_app::loading::ready),
     )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
@@ -2475,9 +2483,11 @@ fn load_world(world: &mut World) {
     let pose = {
         let state = world.get_resource::<pbd_app::walking::WalkingState>();
         let view = state.map(pbd_app::walking::WalkingState::view);
+        // Saved in the planet's frame, never local (`world-frames`).
+        let o = pbd_app::sim_origin::origin_of(world);
         let mut walkers =
             world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
-        let position = walkers.iter(world).next().map(|p| p.0);
+        let position = walkers.iter(world).next().map(|p| o.query_point(p.0));
         view.zip(position).map(|((heading, pitch), position)| Pose {
             position,
             heading,
@@ -2630,16 +2640,18 @@ fn switch_line(world: &mut World) -> String {
         save.identity.generator,
         save.edits.len()
     );
+    let o = pbd_app::sim_origin::origin_of(world);
     let mut walkers =
         world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
     let walker = walkers.iter(world).next().map_or_else(
         || "none".to_string(),
         |p| {
             // As `--at` takes it, through the one place the screen reads.
-            let place = pbd_app::place::Place::of(p.0);
+            let p = o.query_point(p.0);
+            let place = pbd_app::place::Place::of(p);
             format!(
                 "{:.1},{:.1},{:.1} (lat {:.4} lon {:.4})",
-                p.0.x, p.0.y, p.0.z, place.lat, place.lon
+                p.x, p.y, p.z, place.lat, place.lon
             )
         },
     );
@@ -2669,6 +2681,7 @@ fn autosave(
     sun: Res<pbd_app::sky::Sun>,
     mut save: ResMut<WorldSave>,
     mut due: Local<f32>,
+    space: pbd_app::SimSpace,
 ) {
     let opening = screen.is_changed() && *screen != menu::Screen::Playing;
     *due -= time.delta_secs();
@@ -2682,7 +2695,8 @@ fn autosave(
     let (heading, pitch) = state.view();
     save.snapshot(
         Pose {
-            position: position.0,
+            // The planet's frame, never local (`world-frames`).
+            position: space.origin().query_point(position.0),
             heading,
             pitch,
             selected: slots.selected(),
@@ -3444,6 +3458,7 @@ fn walk_script(
     mut mouse: ResMut<ButtonInput<MouseButton>>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut exit: MessageWriter<AppExit>,
+    space: pbd_app::SimSpace,
 ) {
     let Some(goal) = launch.walk_distance else {
         return;
@@ -3454,6 +3469,8 @@ fn walk_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     let here = position.0;
     let now = Instant::now();
     state.captured = true;
@@ -3478,7 +3495,10 @@ fn walk_script(
     }
     progress.last = Some(here);
     keys.press(KeyCode::KeyW);
-    keys.press(KeyCode::ShiftLeft);
+    // MEASUREMENT: a slow walk (`PBD_WALK_AXIS_SCALE`) walks, not sprints.
+    if std::env::var_os("PBD_WALK_AXIS_SCALE").is_none() {
+        keys.press(KeyCode::ShiftLeft);
+    }
     let (anchor, since) = *progress.anchor.get_or_insert((here, now));
     if here.distance(anchor) > 4.0 {
         progress.anchor = Some((here, now));
@@ -3549,6 +3569,7 @@ fn stroll_script(
     towns: Option<Res<pbd_app::towns::Towns>>,
     mut stood: Local<Option<Instant>>,
     mut stood_log: Local<Option<Instant>>,
+    space: pbd_app::SimSpace,
 ) {
     let stood_log = stood_log.get_or_insert_with(Instant::now);
     let Some(seconds) = launch.stroll else {
@@ -3560,6 +3581,8 @@ fn stroll_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     // Not before the walker stands in a town that stands (within 150 m of
     // its anchor), and a second after: towns stand from kilometres off, and
     // the walker is put at `--at` only once its town is up.
@@ -3698,6 +3721,7 @@ fn coast_script(
     walkers: Query<&Position, With<pbd_app::walking::Walker>>,
     mut exit: MessageWriter<AppExit>,
     mut walk: Local<CoastWalk>,
+    space: pbd_app::SimSpace,
 ) {
     use pbd_app::coast_walk;
     let Some(goal) = launch.coast_walk else {
@@ -3709,6 +3733,8 @@ fn coast_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     let here = position.0;
     let up = here.normalize_or(Vec3::Y);
     let now = Instant::now();
@@ -3932,6 +3958,7 @@ fn swim_script(
         ),
         With<pbd_app::walking::Walker>,
     >,
+    space: pbd_app::SimSpace,
 ) {
     if !state.active {
         return;
@@ -3968,7 +3995,12 @@ fn swim_script(
         let Ok((mut position, mut ground, mut transform)) = walkers.single_mut() else {
             return;
         };
-        let stand = land * (terrain.sample(land).floor_radius + 1.0);
+        // A planet point, put into local space (`world-frames`); the origin
+        // follows the walker there on the next frame.
+        let stand = space.origin().at(
+            land.as_dvec3(),
+            (terrain.sample(land).floor_radius + 1.0) as f64,
+        );
         position.0 = stand;
         transform.translation = stand;
         ground.previous = stand;
@@ -4050,11 +4082,13 @@ fn climb_out_script(
         ),
         With<pbd_app::walking::Walker>,
     >,
+    space: pbd_app::SimSpace,
 ) {
     if !state.active {
         return;
     }
     *frame += 1;
+    let o = space.origin();
     let Some((coarse, _)) = *coarse_site.get_or_insert_with(|| {
         let found = climb_out_site();
         if found.is_none() {
@@ -4091,7 +4125,10 @@ fn climb_out_script(
         } else {
             out
         };
-        let start = from * (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT);
+        let start = o.at(
+            from.as_dvec3(),
+            (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT) as f64,
+        );
         position.0 = start;
         transform.translation = start;
         velocity.0 = Vec3::ZERO;
@@ -4125,8 +4162,8 @@ fn climb_out_script(
     info!(
         "CLIMB {} {:.2} {:.2}",
         *frame,
-        position.0.length() - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
-        (position.0.normalize() - bank).length() * PLANET_RADIUS
+        o.radius_at(position.0) as f32 - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
+        (o.up_at(position.0) - bank).length() * PLANET_RADIUS
     );
 }
 
@@ -4175,6 +4212,7 @@ fn break_script(
 /// `--cast`: once aboard, the rod granted and taken up, the pointer held,
 /// and the left button held for a second from 60 frames after boarding, as
 /// `fish_script` does on shore; the line's phase logged every second.
+#[allow(clippy::too_many_arguments)]
 fn cast_afloat_script(
     aboard: Res<pbd_app::vehicles::Aboard>,
     mut walking: ResMut<pbd_app::walking::WalkingState>,
@@ -4183,6 +4221,7 @@ fn cast_afloat_script(
     mut view: ResMut<pbd_app::vehicles::VehicleView>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
     mut frame: Local<u32>,
+    space: pbd_app::SimSpace,
 ) {
     // Aboard, or on foot (a cast from a bank, `fishing-anywhere`).
     if aboard.0.is_none() {
@@ -4213,7 +4252,7 @@ fn cast_afloat_script(
             "cast script frame {}: line {:?}, float at {:.1} m",
             *frame,
             fishery.line.phase,
-            fishery.line.float.length() - pbd_app::planet::PLANET_RADIUS
+            space.origin().radius_at(fishery.line.float) as f32 - pbd_app::planet::PLANET_RADIUS
         );
     }
 }
@@ -4481,6 +4520,50 @@ fn landing_shots(
         commands
             .spawn(Screenshot::primary_window())
             .observe(bevy::render::view::screenshot::save_to_disk(shot));
+    }
+}
+
+/// MEASUREMENT (`world-frames` design 7): `PBD_REBASE_SHOTS=<dir>` saves
+/// every frame of a real-time run as `f<frame>.png` and keeps only the four
+/// frames each side of the first three rebases of the local origin, so the
+/// frames across a rebase can be compared with their neighbours for a pop.
+/// The frame a rebase is drawn in is logged as `REBASE_SHOT <frame>`.
+/// Changes nothing drawn.
+fn rebase_shots(
+    mut commands: Commands,
+    rebases: Option<Res<pbd_app::sim_origin::RebaseCount>>,
+    frames: Option<Res<pbd_app::loading::FrameCount>>,
+    mut state: Local<(Option<u64>, Vec<u64>)>,
+) {
+    let (Some(rebases), Some(frames)) = (rebases, frames) else {
+        return;
+    };
+    let Some(dir) = std::env::var_os("PBD_REBASE_SHOTS").map(PathBuf::from) else {
+        return;
+    };
+    let frame = frames.0;
+    let (seen, at) = &mut *state;
+    if seen.is_some_and(|n| n != rebases.0) && at.len() < 3 {
+        at.push(frame);
+        info!("REBASE_SHOT {frame} rebase {}", rebases.0);
+    }
+    *seen = Some(rebases.0);
+    if at.len() >= 3 && frame > at[2] + 5 {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join(format!("f{frame:06}.png"));
+    commands
+        .spawn(Screenshot::primary_window())
+        .observe(move |event: On<ScreenshotCaptured>| {
+            if let Ok(image) = event.image.clone().try_into_dynamic() {
+                let _ = image.to_rgb8().save(&path);
+            }
+        });
+    // Drop what is not near a rebase.
+    let old = frame.saturating_sub(6);
+    if !at.iter().any(|r| old + 4 >= *r && old <= r + 4) {
+        let _ = std::fs::remove_file(dir.join(format!("f{old:06}.png")));
     }
 }
 

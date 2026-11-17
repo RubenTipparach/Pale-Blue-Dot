@@ -125,53 +125,61 @@ fn trace(
     let step_hz = fauna.as_deref().map_or(30.0, |c| c.0.spawn.step_hz);
     let followed = trace.followed;
     let mut now_followed = followed;
-    let (fish, held, phase) = fishery
-        .as_deref()
-        .map_or((Vec3::NAN, false, String::new()), |f| {
-            let local_eye = (eye.as_dvec3() - frame.center).as_vec3();
-            let find = |key: (u64, u32)| {
-                f.schools.iter().enumerate().find_map(|(s, school)| {
-                    (school.seed == key.0)
-                        .then(|| {
-                            school
-                                .ids
-                                .iter()
-                                .position(|id| *id == key.1)
-                                .map(|i| (s, i))
-                        })
-                        .flatten()
-                })
-            };
-            let pick = f.line.target.map(|t| (t.school, t.fish));
-            let pick = pick.or_else(|| followed.and_then(find)).or_else(|| {
-                f.schools
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(s, school)| {
-                        school
-                            .positions
-                            .iter()
-                            .enumerate()
-                            .map(move |(i, p)| (s, i, p.distance(local_eye)))
+    let o = crate::sim_origin::from_render_frame(&frame);
+    let (fish, held, phase, fish_local) =
+        fishery
+            .as_deref()
+            .map_or((Vec3::NAN, false, String::new(), Vec3::NAN), |f| {
+                // The fishery is local (`world-frames`).
+                let local_eye = crate::sim_origin::local_from_render(&frame, eye);
+                let find = |key: (u64, u32)| {
+                    f.schools.iter().enumerate().find_map(|(s, school)| {
+                        (school.seed == key.0)
+                            .then(|| {
+                                school
+                                    .ids
+                                    .iter()
+                                    .position(|id| *id == key.1)
+                                    .map(|i| (s, i))
+                            })
+                            .flatten()
                     })
-                    .min_by(|a, b| a.2.total_cmp(&b.2))
-                    .map(|(s, i, _)| (s, i))
+                };
+                let pick = f.line.target.map(|t| (t.school, t.fish));
+                let pick = pick.or_else(|| followed.and_then(find)).or_else(|| {
+                    f.schools
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(s, school)| {
+                            school
+                                .positions
+                                .iter()
+                                .enumerate()
+                                .map(move |(i, p)| (s, i, p.distance(local_eye)))
+                        })
+                        .min_by(|a, b| a.2.total_cmp(&b.2))
+                        .map(|(s, i, _)| (s, i))
+                });
+                now_followed = pick
+                    .and_then(|(s, i)| Some((f.schools.get(s)?.seed, *f.schools[s].ids.get(i)?)));
+                let drawn = pick.and_then(|(s, i)| {
+                    crate::fish::draw::creature_drawn(
+                        &o,
+                        f,
+                        &drawn_float.as_deref().copied().unwrap_or_default(),
+                        s,
+                        i,
+                        step_hz,
+                    )
+                    .map(|p| {
+                        // Planet-local for the columns, from f64.
+                        let held = f.schools[s].held.is_some_and(|(h, _)| h == i);
+                        ((o.to_world(p).pos).as_vec3(), held, p)
+                    })
+                });
+                let (p, held, local) = drawn.unwrap_or((Vec3::NAN, false, Vec3::NAN));
+                (p, held, format!("{:?}", f.line.phase), local)
             });
-            now_followed =
-                pick.and_then(|(s, i)| Some((f.schools.get(s)?.seed, *f.schools[s].ids.get(i)?)));
-            let drawn = pick.and_then(|(s, i)| {
-                crate::fish::draw::creature_drawn(
-                    f,
-                    &drawn_float.as_deref().copied().unwrap_or_default(),
-                    s,
-                    i,
-                    step_hz,
-                )
-                .map(|p| (p, { f.schools[s].held.is_some_and(|(h, _)| h == i) }))
-            });
-            let (p, held) = drawn.unwrap_or((Vec3::NAN, false));
-            (p, held, format!("{:?}", f.line.phase))
-        });
     // Camera space as the GPU gets it: an f32 view matrix (the inverse of
     // the camera's world matrix) times an f32 world position, so the
     // rounding of planet-scale coordinates shows in what is drawn.
@@ -220,7 +228,9 @@ fn trace(
     let pose = now_followed.and_then(|key| headings.as_deref()?.map.get(&key).copied());
     let (fwd, top) = pose.map_or((Vec3::NAN, Vec3::NAN), |h| (h.forward, h.up));
     let key = now_followed.map_or(String::new(), |(seed, id)| format!("{seed:x}-{id}"));
-    let fish_view = view.transform_point3((frame.center + fish.as_dvec3()).as_vec3());
+    let fish_view = view.transform_point3(crate::render_origin::render_from_physics(
+        &frame, fish_local,
+    ));
     let eye_local = local(eye);
     let float_local = local(float);
     let wall = now.duration_since(trace.start).as_secs_f64();

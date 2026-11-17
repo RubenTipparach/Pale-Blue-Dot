@@ -805,6 +805,8 @@ pub struct World<'w, 's> {
     /// Absent in a test's app, which has a camera and no walker plugin.
     state: Option<ResMut<'w, pbd_app::walking::WalkingState>>,
     walkers: Query<'w, 's, &'static Position, With<pbd_app::walking::Walker>>,
+    /// The walker's `Position` is local; the bot steers by planet points.
+    space: pbd_app::SimSpace<'w>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<pbd_app::walking::WalkingCamera>>,
     /// Render space to planet-local (`movement-smoothness` design 6.1).
     frame: Option<Res<'w, pbd_app::planet::PlanetRenderFrame>>,
@@ -892,7 +894,7 @@ pub fn drive(
     if bot.home.is_none()
         && let Ok(p) = w.walkers.single()
     {
-        bot.home = Some(p.0);
+        bot.home = Some(w.space.origin().query_point(p.0));
     }
     let started = *bot.started.get_or_insert_with(|| {
         info!("SHOWCASE_START {}", player.name);
@@ -913,7 +915,7 @@ pub fn drive(
         return;
     }
     // Where the player looks, off the camera the walker's mouse-look turns.
-    let feet = position.0;
+    let feet = w.space.origin().query_point(position.0);
     let up = feet.normalize_or(Vec3::Y);
     let look = camera.forward().as_vec3();
     let heading = tangent(look, up).normalize_or(up.any_orthonormal_vector());

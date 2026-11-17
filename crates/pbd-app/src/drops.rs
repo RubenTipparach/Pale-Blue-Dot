@@ -80,6 +80,7 @@ pub fn chest(walker: Vec3) -> Vec3 {
 /// load would not restore them either. On foot, the rest are pulled toward
 /// the walker and picked up by the give order. A pickup is written before the
 /// slots change; one the save refuses leaves the drop where it is.
+#[allow(clippy::too_many_arguments)]
 pub fn gather(
     time: Res<Time>,
     sun: Res<Sun>,
@@ -88,6 +89,7 @@ pub fn gather(
     mut drops: ResMut<Drops>,
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
+    space: crate::SimSpace,
 ) {
     let now = sun.clock.seconds;
     drops.live.retain(|drop| !drop.expired(now));
@@ -95,7 +97,8 @@ pub fn gather(
     let Some(walker) = walkers.iter().next().filter(|_| on_foot) else {
         return;
     };
-    let chest = chest(walker.translation);
+    // The walker's body is local; drops are planet points (`world-frames`).
+    let chest = chest(space.origin().query_point(walker.translation));
     let dt = time.delta_secs();
     if let Some(nearest) = drops
         .live

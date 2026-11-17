@@ -40,6 +40,9 @@ pub mod loading;
 pub mod missions;
 #[cfg(feature = "desktop")]
 pub mod motion_trace;
+pub mod sim_origin;
+pub mod step_trace;
+pub use sim_origin::SimSpace;
 #[cfg(feature = "desktop")]
 pub mod night_lights;
 #[cfg(feature = "desktop")]

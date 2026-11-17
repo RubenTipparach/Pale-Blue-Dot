@@ -45,8 +45,9 @@ pub fn spawn_fleet(world: &mut World) {
     if world.get_resource::<Fleet>().is_none_or(|f| f.spawned) {
         return;
     }
-    // The craft are placed round the walker.
-    let Some(walker) = world
+    // The craft are placed round the walker, by its planet point.
+    let o = crate::sim_origin::origin_of(world);
+    let Some(local) = world
         .query_filtered::<&Position, With<Walker>>()
         .iter(world)
         .next()
@@ -54,6 +55,7 @@ pub fn spawn_fleet(world: &mut World) {
     else {
         return;
     };
+    let walker = o.query_point(local);
     let Some(Gathered {
         crafts,
         retired,
@@ -72,7 +74,7 @@ pub fn spawn_fleet(world: &mut World) {
             "{} {} at {:.1} m from the player",
             craft.kind.name(),
             if fresh { "placed" } else { "restored" },
-            at.distance(walker)
+            at.distance(local)
         );
         spawn_craft(world, craft);
     }
