@@ -717,7 +717,8 @@ same over-wide sheet.
   ticks eases its pieces; a new cell sweeps in from its wettest last-tick
   side (S2) or grows down from the water over it (S3); a dried cell is kept
   in the mesh for one tick, squashed toward the water under it (a fall
-  drains down, its top sinking to its floor) or toward its wettest side
+  drains down, its top sinking onto that water's surface) or toward its
+  wettest side
   (S4), and dropped at the tick's end. Fronts ease linearly, levels by the
   smoothstep. A falling column whose source stopped drains a cell a tick
   from the top (the rule's own order), each cell's top sinking to its floor
@@ -744,6 +745,27 @@ same over-wide sheet.
   to the side's own span, between its two corners, so the thin sheet
   (`THIN`, a quarter of the cell's height, as M31) covers the side the water
   came from and nothing beside it.
+
+- **A foot that leaves fades out.** Found in the "after" frames: with the
+  mesh continuous in every lane (counted in the game at every remesh), the
+  steps left were at fall feet. A foot fades in over `splash_fade_s` when it
+  appears (6.6), but one that leaves the mesher's list (its fall drained, or
+  its landing moved a layer) was dropped at once, so its teal churn, ripples
+  and mist went in a frame. It now fades out over the same time from its
+  last place, as it faded in: "a fade is a moment in time" (CLAUDE.md). No
+  term of the fall's look changes; only when it goes.
+- **A foot's drop eases.** The splash is sized by the drop `D` (6.6), which
+  moves a whole metre when a drain lowers the lip a layer, so the mist's
+  size, count and placement stepped at the tick. Each foot's drawn `D`
+  follows its own with a time constant of 0.35 s (most of the way in a
+  tick).
+- **A drained cell ends on the water it drained into.** The first S4 port
+  pressed a cell with water under it down to its own floor, the layer
+  boundary. Where the water under it stands lower (a flowing level), the
+  surface stepped down at the tick's end when the cell was hidden: a band
+  of the water's colour changed at once. It now ends on the top of the
+  water under it, at that top's own corner levels, so hiding it changes
+  nothing drawn.
 
 **Bounded.**
 - Six lanes a vertex instead of four (96 bytes against 64).
