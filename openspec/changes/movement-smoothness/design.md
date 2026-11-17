@@ -566,3 +566,31 @@ the float 4 m out; the steady hand takes them. What is left at p99 is the
 reel starting and stopping, which a player's hand does too. The 0.3 px left
 between the line's start and the rod tip is the rod model's tip against
 the line's first vertex, constant, not a motion.
+
+### 7.6 The bite from under the water (`--watch-hook`)
+
+A recording instrument: with `--fish`, when the float lands an eye is put
+under the water 0.85 m beside the lure, a little under it, and looks at it
+for the rest of the cast; the HUD, the readout and the rod in hand are
+hidden. Only the drawn frame moves: the walking camera is put back in
+`First`, so the line, the cast and the creatures see the angler's eye, and
+the line is placed from the rod before the view moves. The before build
+(`d0f101b3`) got the same instrument as a local commit only.
+
+Recorded with OBS (real time, windowed, `--no-vsync`, 60 fps), one file:
+`fish-bite-underwater-before-after-2026-11-17-1080p60.mp4` in the
+validation folder on Drive (before, after, then side by side aligned on the
+strike, in real time and at a quarter speed). Read frame by frame:
+
+- Both builds show the fish come to the lure, nibble and take it under the
+  float. The game draws no hook: the fish noses an empty point 0.35 m under
+  the float (`Line::lure`). The two runs hooked different fish (a pike-like
+  fish before, a ray after): the line's draws differ.
+- Before: about 0.15 s after the strike the float and the fish jump about a
+  metre in one frame (the swing of 7.1), then race off.
+- After: the float holds at the strike and glides off over the next frames;
+  no frame jumps.
+- In both builds the fish on the line is drawn standing on its tail under
+  the float for 6 to 8 frames at the strike, then snaps level. That is its
+  pose (built from its velocity), not this change; it is left for a
+  follow-up.

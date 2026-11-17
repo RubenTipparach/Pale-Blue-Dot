@@ -58,7 +58,8 @@
   pose.
 - [x] 5.6 The trace again: hooked float rms/p99 and frames over 20 px; the
   tip gap.
-- [ ] 5.7 Video: a bite seen from under water, before and after, one file.
+- [x] 5.7 Video: a bite seen from under water, before and after, one file
+  (`--watch-hook`, design 7.6).
 
 ## 4. Gate
 
