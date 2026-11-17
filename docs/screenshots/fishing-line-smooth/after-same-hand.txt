@@ -1,0 +1,13 @@
+after-same-hand.csv: 2237 frames after-same-hand
+frame dt: mean 19.91 ms, min 3.55, max 29.64
+fixed steps per frame: {0: 2, 1: 1798, 2: 437}
+camera world speed while moving: mean 8.334 m/s, sd 4.888 (58.7%), frames with no camera move 2193
+camera speed while walking, frames with 1 physics step(s): n 37, mean 9.45 m/s
+float on screen, jitter (px from its neighbours' mean): n 1877, rms 6.005, p50 0.063, p99 18.144
+fish on screen, jitter (px from its neighbours' mean): n 2223, rms 47.948, p50 0.674, p99 28.388
+held tool shimmer, floating render origin (as drawn): n 2236, rms 0.0020 px, p50 0.0015, p99 0.0052 px
+held tool shimmer, origin rebased to the camera (16 m grid): n 2236, rms 0.0026 px, p50 0.0021, p99 0.0056 px
+fish drawn: frames it did not move 112 of 2219; speed per frame p10 0.680, p50 1.270, p90 1.912 m/s (p90/p10 2.8)
+hooked float on screen, jitter: n 790, rms 4.538, p50 1.685, p99 18.149 px; frames over 20 px 6; largest move in a frame 20.1 cm
+line start from the drawn rod tip: n 1885, rms 0.31, p50 0.28, p99 0.55, max 0.65 px
+camera distance from the render origin: up to 9.3 m, f32 step there 0.001 mm

@@ -1,0 +1,13 @@
+before.csv: 2245 frames before
+frame dt: mean 19.84 ms, min 4.59, max 28.68
+fixed steps per frame: {0: 5, 1: 1808, 2: 432}
+camera world speed while moving: mean 8.333 m/s, sd 4.893 (58.7%), frames with no camera move 2201
+camera speed while walking, frames with 1 physics step(s): n 37, mean 9.33 m/s
+float on screen, jitter (px from its neighbours' mean): n 1987, rms 12.918, p50 0.049, p99 70.471
+fish on screen, jitter (px from its neighbours' mean): n 2230, rms 1177.779, p50 1.598, p99 131.276
+held tool shimmer, floating render origin (as drawn): n 2244, rms 0.0021 px, p50 0.0016, p99 0.0053 px
+held tool shimmer, origin rebased to the camera (16 m grid): n 2244, rms 0.0025 px, p50 0.0022, p99 0.0054 px
+fish drawn: frames it did not move 180 of 2227; speed per frame p10 0.575, p50 1.197, p90 1.900 m/s (p90/p10 3.3)
+hooked float on screen, jitter: n 793, rms 19.048, p50 1.488, p99 131.262 px; frames over 20 px 38; largest move in a frame 151.7 cm
+line start from the drawn rod tip: n 1995, rms 16.28, p50 16.43, p99 23.19, max 23.57 px
+camera distance from the render origin: up to 9.3 m, f32 step there 0.001 mm

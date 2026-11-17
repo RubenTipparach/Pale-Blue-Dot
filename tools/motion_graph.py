@@ -195,6 +195,31 @@ def main() -> None:
         report.append(f"fish drawn: frames it did not move {still} of {still + len(v)}; "
                       f"speed per frame p10 {q(0.1):.3f}, p50 {q(0.5):.3f}, p90 {q(0.9):.3f} m/s "
                       f"(p90/p10 {q(0.9) / max(q(0.1), 1e-6):.1f})")
+    # The hooked float and the line's start (`movement-smoothness` 7): the
+    # float's jitter while a fish is on, the frames it jumps (over 20 px from
+    # its neighbours) and its largest move in one frame; and how far the
+    # line's start is drawn from the rod's drawn tip.
+    float_res = series["float"][1] if "float" in series else []
+    hooked = [i for i, r in enumerate(rows) if r["phase"] == "Hooked"]
+    if hooked and float_res:
+        n, rms, p50, p99 = stats([float_res[i] for i in hooked])
+        jumps = sum(1 for i in hooked if not math.isnan(float_res[i]) and float_res[i] > 20)
+        moves = [math.dist((rows[i]["float_x"], rows[i]["float_y"], rows[i]["float_z"]),
+                           (rows[i - 1]["float_x"], rows[i - 1]["float_y"], rows[i - 1]["float_z"]))
+                 for i in hooked if i > 0 and rows[i - 1]["phase"] == "Hooked"]
+        report.append(f"hooked float on screen, jitter: n {n}, rms {rms:.3f}, p50 {p50:.3f}, "
+                      f"p99 {p99:.3f} px; frames over 20 px {jumps}; "
+                      f"largest move in a frame {100 * max(moves, default=0):.1f} cm")
+    if "line_vx" in rows[0]:
+        gaps = []
+        for r in rows:
+            line = screen(r["line_vx"], r["line_vy"], r["line_vz"], focal)
+            tip = screen(r["tip_vx"], r["tip_vy"], r["tip_vz"], focal)
+            if not (math.isnan(line[0]) or math.isnan(tip[0])):
+                gaps.append(math.hypot(line[0] - tip[0], line[1] - tip[1]))
+        n, rms, p50, p99 = stats(gaps)
+        report.append(f"line start from the drawn rod tip: n {n}, rms {rms:.2f}, "
+                      f"p50 {p50:.2f}, p99 {p99:.2f}, max {max(gaps, default=math.nan):.2f} px")
     # With a floating origin the trace writes it (physics space, whose
     # centre is the planet's in play); before, the origin was the centre.
     o = ("origin_x", "origin_y", "origin_z") if "origin_x" in rows[0] else None

@@ -465,3 +465,132 @@ bounds move too and are rewritten (`field_light.rs`).
 - Bodies under Avian (the walker, the skiff) keep physics-space transforms;
   neither has a drawn child. A drawn rigid body would need its own render
   transform.
+
+## 7. The hooked float and the line (owner, 2026-11-17)
+
+The owner, on the fish before/after videos: "I'm noticing that the fish line
+is not all smooth, it jumps around a bit". Measured on `claude/floating-origin`
+(`787964cb`) with the fishing trace of section 1 (`--fish-play
+--hold-pointer --time 10`, 45 s, one hook played out), the float on screen by
+phase (px from the mean of its two neighbours each side, 1 800 px tall):
+
+| phase | frames | rms | p50 | p99 |
+| --- | --- | --- | --- | --- |
+| floating | 1 183 | 0.64 | 0.018 | 0.086 |
+| hooked | 733 | **14.4** | 1.49 | **86.7** |
+
+The float is smooth while it waits. While a fish is on it is not, for two
+reasons, both found frame by frame in the trace's planet-local float:
+
+### 7.1 The swing switches on and off in one frame (the jumps)
+
+`Line::step` (`pbd-core/src/fishing.rs`, `Phase::Hooked`) puts the float at
+`feet + away * line_m`, with `away` the fish's heading turned by a swing of
+`sin(clock * 1.7) * 0.12 * run`. `run` is the fish's pull while it runs and
+0 while it rests, and it changes in one step when `run_s` runs out (and at
+the strike, from nothing). So the swing angle drops to 0 or jumps to its
+value in one frame, and the float with it, sideways across the water: **1.47,
+1.19, 1.06 m ... 0.26 m in one frame** in the trace, at 14 m to 4 m of line,
+with the float's distance from the angler unchanged. The line's far end and
+the fish drawn at the lure jump with it. These are the 50 to 120 px spikes.
+
+The rule is the simulation's (the float's point decides the landing and the
+line's length), and is not changed here. The drawing takes the jump out:
+
+- a draw-only `DrawnFloat` keeps an offset from the simulated float;
+- on a frame where the line was hooked last frame and is hooked now and its
+  `run` changed, or the frame the line goes from a bite to hooked, the
+  offset takes up the whole of that frame's move (the float is drawn where it
+  was), and from there it eases to nothing, critically damped (no kick in
+  speed at either end), over about a third of a second
+  (`FLOAT_EASE_PER_S` 14/s). The swing goes on at the line's first hooked
+  step, the frame after the strike, so that frame is taken up too;
+- the offset is kept along the water: the drawn float stays at the simulated
+  float's height over the planet's centre;
+- in every other frame and phase the offset only decays, and the line's
+  leaving the water (caught, snapped, wound in) or any other phase clears it;
+- the float, the line's far end and the hooked fish (drawn at the lure) all
+  use the drawn float, so they stay together.
+
+The cost is that for a third of a second after a run starts or stops the
+float is drawn up to a metre from where the line's rules have it. Nothing
+reads the drawn float.
+
+### 7.2 The scripted hand flickers the button (the stutter)
+
+Between the jumps, the float moved 3.5 cm, 3.5 cm, 0, 3.5, 3.5, 0 ... a 20 Hz
+stutter (`hooked` p50 1.5 px, against 0.018 floating). That is the
+`--fish-play` bot of section 5: it presses below a tension of 0.6 and lets go
+above it, deciding every frame, so it holds two frames and lets go one. A
+player holds the button down and lets it up. The bot now does the same, with
+a band (hold from under 0.45 until over 0.75), so a video shows the reel a
+player's hand would give. That is the instrument; the game's controls are not
+touched.
+
+### 7.3 The line leaves the rod's tip at rest, not the swayed rod
+
+`draw::tackle` starts the line at `held::rod_tip()`, the tip of the rod in its
+rest pose, but `held::hold` sways the rod by up to 6 mm right and 5 mm up
+(`held.ron`). The rod's tip is 0.73 m in front of the eye, so the line's
+start and the drawn tip drift up to 20 px apart and back over about four
+seconds. The trace gets a column for it (the line mesh's start and the
+swayed rod's tip, in camera space, as drawn). The line now starts at the
+held rod's tip as posed this frame: its `Transform` (written in `Update`,
+before `tackle` in `PostUpdate`) times its rest pose's inverse, applied to the
+rest tip. The cast still leaves from the rest tip (`Angler.tip`, simulation).
+
+### 7.4 Left as it is
+
+- The hooked float hangs off the walker's physics `Position` (6.9); the bot
+  stands still, so the trace does not show it.
+- The cast's first frames are the float thrown at 15 m/s from the tip; their
+  residual is the throw's own acceleration, not a step.
+
+### 7.5 Results (M4 Max MacBook Pro, 2026-11-17)
+
+The same 45 s fishing trace, real time, windowed, vsync on, each on a fresh
+world; one fish hooked and landed in each. "Before" is this branch with the
+drawing changes switched off in a local build (the trace's new columns need
+the instrument); its hooked numbers match the run on `787964cb` itself
+(rms 14.4, p99 86.7 px). Reports and plots: `docs/screenshots/fishing-line-smooth/`.
+
+| | before | after, same scripted hand | after, steady hand (7.2) |
+| --- | --- | --- | --- |
+| hooked float jitter, rms / p50 / p99 px | 19.0 / 1.49 / 131 | 4.5 / 1.69 / 18.1 | **2.9 / 1.06 / 11.3** |
+| hooked frames over 20 px | 38 of 793 | 6 of 790 | **0 of 788** |
+| largest float move in one frame | 152 cm | 20 cm (an eased slide) | 19 cm (an eased slide) |
+| line start from the drawn rod tip, rms / max px | 16.3 / 23.6 | **0.31 / 0.65** | 0.31 / 0.63 |
+
+The 6 frames left over 20 px with the old hand are its 20 Hz stutter with
+the float 4 m out; the steady hand takes them. What is left at p99 is the
+reel starting and stopping, which a player's hand does too. The 0.3 px left
+between the line's start and the rod tip is the rod model's tip against
+the line's first vertex, constant, not a motion.
+
+### 7.6 The bite from under the water (`--watch-hook`)
+
+A recording instrument: with `--fish`, when the float lands an eye is put
+under the water 0.85 m beside the lure, a little under it, and looks at it
+for the rest of the cast; the HUD, the readout and the rod in hand are
+hidden. Only the drawn frame moves: the walking camera is put back in
+`First`, so the line, the cast and the creatures see the angler's eye, and
+the line is placed from the rod before the view moves. The before build
+(`d0f101b3`) got the same instrument as a local commit only.
+
+Recorded with OBS (real time, windowed, `--no-vsync`, 60 fps), one file:
+`fish-bite-underwater-before-after-2026-11-17-1080p60.mp4` in the
+validation folder on Drive (before, after, then side by side aligned on the
+strike, in real time and at a quarter speed). Read frame by frame:
+
+- Both builds show the fish come to the lure, nibble and take it under the
+  float. The game draws no hook: the fish noses an empty point 0.35 m under
+  the float (`Line::lure`). The two runs hooked different fish (a pike-like
+  fish before, a ray after): the line's draws differ.
+- Before: about 0.15 s after the strike the float and the fish jump about a
+  metre in one frame (the swing of 7.1), then race off.
+- After: the float holds at the strike and glides off over the next frames;
+  no frame jumps.
+- In both builds the fish on the line is drawn standing on its tail under
+  the float for 6 to 8 frames at the strike, then snaps level. That is its
+  pose (built from its velocity), not this change; it is left for a
+  follow-up.
