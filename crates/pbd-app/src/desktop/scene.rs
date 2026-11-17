@@ -76,10 +76,11 @@ pub fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut star_materials: ResMut<Assets<StarMaterial>>,
-    frame: Res<pbd_app::PhysicsFrame>,
+    frame: Res<pbd_app::planet::PlanetRenderFrame>,
     sun: Res<pbd_app::sky::Sun>,
 ) {
-    let offset = (-frame.0.origin).as_vec3();
+    // The planet's centre in render space (`movement-smoothness` design 6).
+    let offset = frame.center.as_vec3();
     let sun = sun.direction();
     commands.spawn((
         Name::new("Sun"),
@@ -167,6 +168,7 @@ pub fn setup(
 pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
     frame: Res<pbd_app::PhysicsFrame>,
+    render: Res<pbd_app::planet::PlanetRenderFrame>,
     sun: Res<pbd_app::sky::Sun>,
     scene: Res<pbd_app::CelestialScene>,
     sea: Option<ResMut<pbd_app::sea::Sea>>,
@@ -178,7 +180,8 @@ pub fn move_moon(
     let mut toward = None;
     for (orbit, mut transform) in &mut moons {
         let position = turn * orbit.0.sample(time.seconds).position;
-        transform.translation = (position - frame.0.origin).as_vec3();
+        // Render space: physics less the render origin, in f64.
+        transform.translation = (position - frame.0.origin - render.origin).as_vec3();
         let planet = scene
             .states
             .first()
@@ -191,11 +194,7 @@ pub fn move_moon(
     if let Some(which) = launch.tide.as_deref()
         && let Some((at, _)) = cameras.iter().find(|(_, c)| c.is_active)
     {
-        let planet = scene
-            .states
-            .first()
-            .map_or(bevy::math::DVec3::ZERO, |s| s.position);
-        let up = (at.translation().as_dvec3() + frame.0.origin - planet)
+        let up = (at.translation().as_dvec3() - render.center)
             .as_vec3()
             .normalize_or(Vec3::Y);
         toward = Some(if which == "high" {

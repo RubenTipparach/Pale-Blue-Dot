@@ -168,6 +168,7 @@ pub fn find_hold(
     walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
     save: Res<WorldSave>,
     mut view: ResMut<HoldView>,
+    frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
     mut panels: Query<&mut Node, With<HoldPanel>>,
 ) {
     let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
@@ -182,12 +183,21 @@ pub fn find_hold(
     } else {
         // Both in the render frame: the walker's position and the craft's
         // drawn place.
-        let feet = walkers.iter().next().map(|p| p.0.as_dvec3());
+        // Planet-local, both: the walker's physics position less the
+        // physics centre, the craft's drawn place less the render centre.
+        let frame = frame.as_deref().copied().unwrap_or_default();
+        let feet = walkers
+            .iter()
+            .next()
+            .map(|p| p.0.as_dvec3() - frame.physics_center());
         feet.and_then(|feet| {
             vehicles
                 .iter()
                 .filter(|(_, v, _)| raft(v.craft.kind))
-                .map(|(e, v, at)| (e, v.craft.id, at.translation().as_dvec3().distance(feet)))
+                .map(|(e, v, at)| {
+                    let at = at.translation().as_dvec3() - frame.center;
+                    (e, v.craft.id, at.distance(feet))
+                })
                 .filter(|(_, _, d)| *d <= HOLD_REACH_M)
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(e, id, _)| (e, id))

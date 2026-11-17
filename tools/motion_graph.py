@@ -145,9 +145,12 @@ def main() -> None:
         n, rms, p50, p99 = stats(res)
         report.append(f"{name} on screen, jitter (px from its neighbours' mean): "
                       f"n {n}, rms {rms:.3f}, p50 {p50:.3f}, p99 {p99:.3f}")
+    floating = "origin_x" in rows[0]
+    drawn_label = ("floating render origin (as drawn)" if floating
+                   else "origin at the planet's centre (as drawn)")
     n, rms, p50, p99 = stats(hand_now)
-    report.append(f"held tool shimmer, origin at the planet's centre (as drawn): n {n}, "
-                  f"rms {rms:.3f} px, p50 {p50:.3f}, p99 {p99:.3f} px")
+    report.append(f"held tool shimmer, {drawn_label}: n {n}, "
+                  f"rms {rms:.4f} px, p50 {p50:.4f}, p99 {p99:.4f} px")
     if has_rebased:
         n, rms, p50, p99 = stats(hand_rebased)
         report.append(f"held tool shimmer, origin rebased to the camera (16 m grid): n {n}, "
@@ -178,7 +181,11 @@ def main() -> None:
         report.append(f"fish drawn: frames it did not move {still} of {still + len(v)}; "
                       f"speed per frame p10 {q(0.1):.3f}, p50 {q(0.5):.3f}, p90 {q(0.9):.3f} m/s "
                       f"(p90/p10 {q(0.9) / max(q(0.1), 1e-6):.1f})")
-    radius = [math.dist((0, 0, 0), (r["cam_x"], r["cam_y"], r["cam_z"])) for r in rows]
+    # With a floating origin the trace writes it (physics space, whose
+    # centre is the planet's in play); before, the origin was the centre.
+    o = ("origin_x", "origin_y", "origin_z") if "origin_x" in rows[0] else None
+    radius = [math.dist((r[o[0]], r[o[1]], r[o[2]]) if o else (0, 0, 0),
+                        (r["cam_x"], r["cam_y"], r["cam_z"])) for r in rows]
     rmax = max(radius)
     ulp = 2.0 ** (math.floor(math.log2(rmax)) - 23)
     report.append(f"camera distance from the render origin: up to {rmax:.1f} m, "
@@ -213,7 +220,8 @@ def main() -> None:
     # not jitter: keep the scale on the jitter.
     ax[2].set_ylim(0, 40)
     ax[2].legend(loc="upper right")
-    ax[3].plot(t, hand_now, lw=0.7, color="#839", label="origin at planet centre")
+    ax[3].plot(t, hand_now, lw=0.7, color="#839",
+               label="floating origin, as drawn" if "origin_x" in rows[0] else "origin at planet centre")
     if has_rebased:
         ax[3].plot(t, hand_rebased, lw=0.9, color="#2a6", label="origin rebased to camera")
     ax[3].legend(loc="upper right")

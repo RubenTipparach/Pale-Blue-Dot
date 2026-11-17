@@ -483,7 +483,10 @@ pub fn apply_edit(
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
@@ -541,7 +544,7 @@ pub fn dig_and_place(
         mining.breaking.step(dt, false, None, between);
         return;
     }
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let look = transform.forward().as_vec3();
     // The march reads "nothing" as air. Remember the first point it read that
     // way INSIDE the ground, because a click that lands there is a click the
@@ -1199,7 +1202,10 @@ const LAMP_SPACING_M: f32 = 2.9;
 #[allow(clippy::too_many_arguments)]
 pub fn scripted_dig(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
     mut edits: ResMut<WorldSave>,
@@ -1216,7 +1222,7 @@ pub fn scripted_dig(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     // Down, or along the look where the capture asked for it.
     let down = if launch.dig_ahead {
         transform.forward().as_vec3()

@@ -156,7 +156,10 @@ pub fn many(name: &str) -> String {
 #[allow(clippy::too_many_arguments)]
 pub fn offer(
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     fine: Option<Res<PlanetFine>>,
     save: Option<Res<WorldSave>>,
     sun: Option<Res<pbd_app::sky::Sun>>,
@@ -176,7 +179,10 @@ pub fn offer(
     let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let (eye, look) = (transform.translation(), transform.forward().as_vec3());
+    let (eye, look) = (
+        pbd_app::render_origin::local_of(frame.as_deref(), transform.translation()),
+        transform.forward().as_vec3(),
+    );
     let (recheck, offered) = &mut *last;
     if recheck.due(eye, look, fine.version, time.delta_secs()) {
         *offered = on_tree(&fine, &save, &scatter, &gather, sun.as_deref(), eye, look)
@@ -196,7 +202,10 @@ pub fn pick(
     mut keys: ResMut<ButtonInput<KeyCode>>,
     screen: Res<Screen>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     fine: Option<Res<PlanetFine>>,
     sun: Option<Res<pbd_app::sky::Sun>>,
     scatter: Option<Res<pbd_app::config::ScatterSettings>>,
@@ -231,7 +240,10 @@ pub fn pick(
     let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let (eye, look) = (transform.translation(), transform.forward().as_vec3());
+    let (eye, look) = (
+        pbd_app::render_origin::local_of(frame.as_deref(), transform.translation()),
+        transform.forward().as_vec3(),
+    );
     let Some(tree) = on_tree(&fine, save, &scatter, &gather, sun.as_deref(), eye, look) else {
         // A tree that bears nothing: the F is someone else's.
         return;
@@ -289,7 +301,10 @@ pub fn pick(
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     fine: Option<Res<PlanetFine>>,
     mut save: Option<ResMut<WorldSave>>,
     sun: Option<Res<pbd_app::sky::Sun>>,
@@ -314,7 +329,10 @@ pub fn scripted(
     let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let (eye, look) = (transform.translation(), transform.forward().as_vec3());
+    let (eye, look) = (
+        pbd_app::render_origin::local_of(frame.as_deref(), transform.translation()),
+        transform.forward().as_vec3(),
+    );
     let table = pbd_app::planet::terrain_config().trees;
     let day = sun
         .as_ref()

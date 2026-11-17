@@ -771,6 +771,7 @@ pub fn follow_flight_camera(
     config: Res<FlightViewConfig>,
     intent: Res<FlightInputState>,
     route: Option<Res<RouteState>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     ships: Query<(&Position, &Rotation), With<PilotShip>>,
     mut cameras: Query<&mut Transform, (With<FlightCamera>, Without<PilotShip>)>,
 ) {
@@ -781,7 +782,10 @@ pub fn follow_flight_camera(
         return;
     };
     for mut transform in &mut cameras {
-        transform.translation = position.0;
+        // Render space (`movement-smoothness` design 6.3).
+        transform.translation = frame.as_deref().map_or(position.0, |frame| {
+            crate::render_origin::render_from_physics(frame, position.0)
+        });
         transform.rotation = match config.mode {
             FlyMode::Manual => intent.target_rotation,
             FlyMode::Route => route.as_ref().map_or(rotation.0, |route| route.camera),

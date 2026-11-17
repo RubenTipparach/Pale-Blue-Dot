@@ -63,7 +63,9 @@ pub fn spawn_fleet(world: &mut World) {
     else {
         return;
     };
-    let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+    let center = world
+        .resource::<crate::planet::PlanetRenderFrame>()
+        .physics_center();
     for craft in crafts {
         let at = (center + craft.reference_position()).as_vec3();
         info!(
@@ -156,7 +158,10 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
             }
         }
         None => {
-            let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+            // The walker is a physics `Position`.
+            let center = world
+                .resource::<crate::planet::PlanetRenderFrame>()
+                .physics_center();
             let local = walker.as_dvec3() - center;
             let berths = Berths::find(sea, local.normalize_or(DVec3::Y).as_vec3());
             for (kind, berth) in berths.0 {

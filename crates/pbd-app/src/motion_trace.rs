@@ -42,7 +42,8 @@ impl Plugin for MotionTracePlugin {
              fish_x,fish_y,fish_z,fish_held,phase,\
              hand_vx,hand_vy,hand_vz,hand_lx,hand_ly,hand_lz,\
              float_vx,float_vy,float_vz,fish_vx,fish_vy,fish_vz,\
-             hand_rx,hand_ry,hand_rz"
+             hand_rx,hand_ry,hand_rz,\
+             origin_x,origin_y,origin_z"
         )
         .expect("PBD_MOTION_TRACE: cannot write");
         info!("MOTION_TRACE writing {}", path.display());
@@ -98,7 +99,13 @@ fn trace(
         return;
     };
     let (_, rotation, eye) = camera.to_scale_rotation_translation();
-    let body = walkers.single().map_or(Vec3::NAN, |p| p.0);
+    // Positions are written planet-local (f64 from render space, so a
+    // rebase of the render origin is not a jump in the trace); the camera
+    // space columns are what the GPU gets (`movement-smoothness` design 6).
+    let local = |p: Vec3| (p.as_dvec3() - frame.center).as_vec3();
+    let body = walkers.single().map_or(Vec3::NAN, |p| {
+        (p.0.as_dvec3() - frame.physics_center()).as_vec3()
+    });
     let (float, shown) = floats
         .iter()
         .next()
@@ -141,11 +148,8 @@ fn trace(
             now_followed =
                 pick.and_then(|(s, i)| Some((f.schools.get(s)?.seed, *f.schools[s].ids.get(i)?)));
             let drawn = pick.and_then(|(s, i)| {
-                crate::fish::draw::creature_drawn(f, s, i, step_hz).map(|p| {
-                    ((frame.center + p.as_dvec3()).as_vec3(), {
-                        f.schools[s].held.is_some_and(|(h, _)| h == i)
-                    })
-                })
+                crate::fish::draw::creature_drawn(f, s, i, step_hz)
+                    .map(|p| (p, { f.schools[s].held.is_some_and(|(h, _)| h == i) }))
             });
             let (p, held) = drawn.unwrap_or((Vec3::NAN, false));
             (p, held, format!("{:?}", f.line.phase))
@@ -181,18 +185,20 @@ fn trace(
         Vec3::NAN
     };
     trace.followed = now_followed;
-    let fish_view = view.transform_point3(fish);
+    let fish_view = view.transform_point3((frame.center + fish.as_dvec3()).as_vec3());
+    let eye_local = local(eye);
+    let float_local = local(float);
     let wall = now.duration_since(trace.start).as_secs_f64();
     let row = format!(
-        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7}",
+        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1}",
         trace.frame,
         wall,
         real.delta_secs_f64(),
         steps,
         fixed.overstep_fraction(),
-        eye.x,
-        eye.y,
-        eye.z,
+        eye_local.x,
+        eye_local.y,
+        eye_local.z,
         rotation.x,
         rotation.y,
         rotation.z,
@@ -200,9 +206,9 @@ fn trace(
         body.x,
         body.y,
         body.z,
-        float.x,
-        float.y,
-        float.z,
+        float_local.x,
+        float_local.y,
+        float_local.z,
         u8::from(shown),
         fish.x,
         fish.y,
@@ -224,6 +230,9 @@ fn trace(
         hand_rebased.x,
         hand_rebased.y,
         hand_rebased.z,
+        frame.origin.x,
+        frame.origin.y,
+        frame.origin.z,
     );
     let _ = writeln!(trace.file, "{row}");
     if let Some(seconds) = trace.seconds

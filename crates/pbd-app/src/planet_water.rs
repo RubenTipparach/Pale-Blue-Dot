@@ -3016,9 +3016,12 @@ mod tests {
         app.add_plugins((MinimalPlugins, TransformPlugin));
         install_eye_water(&mut app);
         let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
-        app.insert_resource(PlanetRenderFrame { center: offset })
-            .insert_resource(contact)
-            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        app.insert_resource(PlanetRenderFrame {
+            center: offset,
+            origin: bevy::math::DVec3::ZERO,
+        })
+        .insert_resource(contact)
+        .insert_resource(crate::planet::PlanetFine { set, version: 1 });
         let above = (offset + (ocean * (terrain::PLANET_RADIUS + 3.0)).as_dvec3()).as_vec3();
         let below = (offset + (ocean * (terrain::PLANET_RADIUS - 2.0)).as_dvec3()).as_vec3();
         let parked = app
@@ -3120,9 +3123,12 @@ mod tests {
         app.add_plugins((MinimalPlugins, TransformPlugin));
         install_eye_water(&mut app);
         let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
-        app.insert_resource(PlanetRenderFrame { center: offset })
-            .insert_resource(contact)
-            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        app.insert_resource(PlanetRenderFrame {
+            center: offset,
+            origin: bevy::math::DVec3::ZERO,
+        })
+        .insert_resource(contact)
+        .insert_resource(crate::planet::PlanetFine { set, version: 1 });
         let at = |m: f32| (offset + (river * (terrain::PLANET_RADIUS + m)).as_dvec3()).as_vec3();
         let camera = app
             .world_mut()

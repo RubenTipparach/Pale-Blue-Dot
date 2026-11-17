@@ -19,7 +19,10 @@ use pbd_core::terrain::Material;
 pub fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut arrows: ResMut<FlowArrows>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
@@ -39,7 +42,7 @@ pub fn keys(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let look = transform.forward().as_vec3();
     pour(
         &mut Edited {
@@ -104,7 +107,10 @@ fn pour(world: &mut Edited, eye: Vec3, look: Vec3) -> Option<(u32, usize)> {
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
     mut save: ResMut<WorldSave>,
@@ -141,7 +147,7 @@ pub fn scripted(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let up = eye.normalize_or(Vec3::Y);
     let mut look = transform.forward().as_vec3();
     let right = transform.right().as_vec3();

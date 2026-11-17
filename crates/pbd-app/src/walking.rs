@@ -476,9 +476,12 @@ impl Plugin for WalkingPlugin {
                     .in_set(PhysicsStepSystems::Last)
                     .before(FlightViewPostPhysics),
             )
+            // After the fixed loop's physics, once a step.
+            .add_systems(FixedLast, record_step)
             .add_systems(
                 PostUpdate,
                 follow_walker
+                    .before(crate::render_origin::rebase)
                     .before(TransformSystems::Propagate)
                     .run_if(crate::world_open),
             );
@@ -555,6 +558,10 @@ fn setup_walking(world: &mut World) {
         body,
         climb: None,
     };
+    world.entity_mut(body).insert(StepHistory {
+        previous: position,
+        current: position,
+    });
     world.spawn((
         Name::new("First-person walking camera"),
         Camera3d::default(),
@@ -1845,25 +1852,82 @@ fn water_climb(
     Some(to)
 }
 
+/// The walker's physics `Position` at the last two fixed steps
+/// (`movement-smoothness` design 6.5), in physics space, which never
+/// rebases. The camera is drawn between them.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct StepHistory {
+    pub previous: Vec3,
+    pub current: Vec3,
+}
+
+/// A step longer than this is a teleport, drawn where it lands, never as a
+/// glide: a walker's fastest step at 60 Hz is a fraction of a metre.
+pub const STEP_SNAP_M: f32 = 2.0;
+
+impl StepHistory {
+    /// Where to draw the body this frame, `alpha` of a step past `previous`.
+    /// A `position` other than the last step's was moved outside the fixed
+    /// loop (respawn, restore, climb-out, boarding): the history snaps to it.
+    pub fn drawn(&mut self, position: Vec3, alpha: f32) -> Vec3 {
+        if position != self.current || self.previous.distance(self.current) > STEP_SNAP_M {
+            self.previous = position;
+            self.current = position;
+            return position;
+        }
+        self.previous.lerp(self.current, alpha.clamp(0.0, 1.0))
+    }
+}
+
+/// Keep the last two steps' positions, after each fixed step.
+fn record_step(mut walkers: Query<(&Position, &mut StepHistory), With<Walker>>) {
+    for (position, mut history) in &mut walkers {
+        history.previous = history.current;
+        history.current = position.0;
+    }
+}
+
 pub(crate) fn follow_walker(
     mut state: ResMut<WalkingState>,
     mut readout: ResMut<WalkingReadout>,
-    walkers: Query<(&Position, &LinearVelocity, &GroundState), With<Walker>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    fixed: Option<Res<Time<Fixed>>>,
+    mut walkers: Query<
+        (
+            &Position,
+            &LinearVelocity,
+            &GroundState,
+            Option<&mut StepHistory>,
+        ),
+        With<Walker>,
+    >,
     mut cameras: Query<&mut Transform, With<WalkingCamera>>,
 ) {
     readout.active = state.active;
     if !state.active {
         return;
     }
-    let Ok((position, velocity, ground)) = walkers.single() else {
+    let Ok((position, velocity, ground, history)) = walkers.single_mut() else {
         return;
     };
     let up = position.0.normalize();
     state.transport_up(up);
+    // The body between its last two physics steps, by how far the fixed
+    // clock has run past the last one: the position only. The look below
+    // is this frame's raw mouse.
+    let alpha = fixed.map_or(1.0, |f| f.overstep_fraction());
+    let body = history.map_or(position.0, |mut h| h.drawn(position.0, alpha));
+    let drawn_up = body.normalize_or(up);
     for mut camera in &mut cameras {
-        // Direct current pose and mouse orientation: no interpolation, easing,
-        // head bob, follow spring, or dependence on the body's angular velocity.
-        camera.translation = position.0 + up * (EYE_HEIGHT - HALF_HEIGHT);
+        // The body drawn between physics steps and the current mouse
+        // orientation: no easing of the look, head bob, follow spring, or
+        // dependence on the body's angular velocity.
+        // Render space: the physics-space eye less the render origin, in
+        // f64 before the cast (`movement-smoothness` design 6.3).
+        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT);
+        camera.translation = frame.as_deref().map_or(eye, |frame| {
+            crate::render_origin::render_from_physics(frame, eye)
+        });
         camera.rotation = state.rotation();
     }
     let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(up).degrees();
@@ -1881,6 +1945,72 @@ pub(crate) fn follow_walker(
 
 /// E10 pinned: a pool, a flowing cell and a beach under high water are
 /// swum to their own surfaces; a dry cave under the sea is not.
+/// `movement-smoothness` design 6.5: the camera is drawn between the last
+/// two physics steps, and a teleport snaps.
+#[cfg(test)]
+mod step_history_tests {
+    use super::*;
+
+    #[test]
+    fn the_body_is_drawn_between_steps_and_a_teleport_snaps() {
+        let a = Vec3::new(0.0, 4801.0, 0.0);
+        let b = a + Vec3::X * 0.1;
+        let mut h = StepHistory {
+            previous: a,
+            current: b,
+        };
+        assert_eq!(h.drawn(b, 0.0), a);
+        assert!((h.drawn(b, 0.5) - (a + Vec3::X * 0.05)).length() < 1e-4);
+        assert_eq!(h.drawn(b, 1.0), b);
+        // Moved outside the fixed loop: drawn where it is, history reset.
+        let far = a + Vec3::Z * 30.0;
+        assert_eq!(h.drawn(far, 0.25), far);
+        assert_eq!((h.previous, h.current), (far, far));
+        // A step longer than a teleport's limit is not glided either.
+        let mut h = StepHistory {
+            previous: a,
+            current: a + Vec3::X * (STEP_SNAP_M + 1.0),
+        };
+        assert_eq!(h.drawn(h.current, 0.5), h.current);
+    }
+
+    /// A walk at a steady speed with 0, 1 or 2 physics steps a frame: drawn
+    /// between steps, the camera's speed frame by frame is the walk's, not a
+    /// beat of one step and two.
+    #[test]
+    fn a_steady_walk_draws_at_a_steady_speed() {
+        let step = 1.0 / 60.0;
+        let speed = 5.0;
+        let mut h = StepHistory {
+            previous: Vec3::ZERO,
+            current: Vec3::ZERO,
+        };
+        let (mut physics_t, mut accumulated) = (0.0f32, 0.0f32);
+        let mut position = Vec3::ZERO;
+        let mut last: Option<Vec3> = None;
+        // Frames of 13 to 21 ms, as the trace saw.
+        for i in 0..240 {
+            let dt = [0.013, 0.021, 0.0167, 0.009, 0.019][i % 5];
+            accumulated += dt;
+            while accumulated >= step {
+                accumulated -= step;
+                physics_t += step;
+                position = Vec3::X * speed * physics_t;
+                h.previous = h.current;
+                h.current = position;
+            }
+            let drawn = h.drawn(position, accumulated / step);
+            if let Some(last) = last
+                && i > 2
+            {
+                let v = (drawn.x - last.x) / dt;
+                assert!((v - speed).abs() < 0.05, "frame {i}: {v} m/s");
+            }
+            last = Some(drawn);
+        }
+    }
+}
+
 #[cfg(test)]
 mod swim_tests {
     use super::swim_surface;

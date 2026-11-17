@@ -355,7 +355,7 @@ fn fish(
     let feet = match afloat {
         Some(craft) => Some(craft.exit().as_vec3()),
         None => world.walkers.iter().next().map(|p| {
-            let at = (p.0.as_dvec3() - world.frame.center).as_vec3();
+            let at = (p.0.as_dvec3() - world.frame.physics_center()).as_vec3();
             at - at.normalize_or(Vec3::Y) * HALF_HEIGHT
         }),
     };

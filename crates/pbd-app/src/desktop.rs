@@ -185,7 +185,9 @@ pub struct Launch {
     /// Capture instrument: a cog boarded with `--aboard cog` is cast off
     /// with its yard braced this many degrees and 2 m/s of way.
     pub sail: Option<f32>,
-    /// Static capture instrument: translate the scene within the local frame.
+    /// Test instrument: hold the render origin this far from the camera's
+    /// cell, so the planet's centre and the eye are both away from 0 in
+    /// render space (`movement-smoothness` design 6.6). Works in play.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
@@ -1417,11 +1419,6 @@ impl Launch {
                 || result.fly,
             "--height requires --fly, or --view shore or dive with a static --capture"
         );
-        assert!(
-            result.render_offset == Vec3::ZERO
-                || (result.capture.is_some() && !result.walk && !result.fly && !result.tour),
-            "--render-offset requires a static --capture"
-        );
         result
     }
 }
@@ -1551,10 +1548,17 @@ pub fn run(args: &[String]) {
         pbd_app::bloom::LiteBloomPlugin,
     ))
     .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
-    .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
+    .insert_resource(PhysicsFrame::default())
+    // The render origin starts at -offset, so a camera placed at a
+    // planet-local eye plus the offset is in render space from its first
+    // frame (`movement-smoothness` design 6.6).
+    .insert_resource(pbd_app::render_origin::RenderOffset(
+        launch.render_offset.as_dvec3(),
+    ))
+    .insert_resource(pbd_app::planet::PlanetRenderFrame {
+        center: launch.render_offset.as_dvec3(),
         origin: -launch.render_offset.as_dvec3(),
-        ..default()
-    }))
+    })
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {

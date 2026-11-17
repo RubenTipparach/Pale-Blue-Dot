@@ -1030,7 +1030,10 @@ pub fn paint(
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     refresh: Res<pbd_app::planet::LodRefresh>,
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
         ResMut<pbd_app::planet::PlanetFine>,
@@ -1098,7 +1101,7 @@ pub fn scripted(
         info!("scripted craft: the pack, planks part made by hand");
         return;
     }
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let up = eye.normalize_or(Vec3::Y);
     let forward = transform.forward().as_vec3();
     let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
