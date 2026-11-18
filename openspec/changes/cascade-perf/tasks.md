@@ -16,5 +16,5 @@
 ## 3. Owed
 
 - [ ] 3.1 The A/B on an unlocked, quiet machine: `python tools/perf_suite.py --scenarios cascade,cascade-walk,walk --repeats 2 --variant "before|<main exe>||2de3c03a" --variant after`. Not run in this sitting: the screen was locked throughout (the suite refuses) and other sessions' game windows and builds shared the GPU.
-- [ ] 3.2 The fine-set upload's light and materials worked out off the render thread (proposal, "Next"). Write-up first.
+- [x] 3.2 The fine-set upload's light and materials worked out off the render thread (proposal, "Next"). Verify: `openspec/changes/fine-set-upload`.
 - [ ] 3.3 The same A/B with `claude/fall-size-rules` (its mist rule) once both are on `main`.

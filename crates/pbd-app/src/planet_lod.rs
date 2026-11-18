@@ -1305,13 +1305,7 @@ impl NearField {
 #[derive(Resource, Default)]
 pub struct LodRefresh {
     /// The set and its contact tier, both built on the pool.
-    task: Option<
-        Task<(
-            Arc<FineSet>,
-            super::contact::PreparedFine,
-            super::bounce::SetLight,
-        )>,
-    >,
+    task: Option<Task<super::tier_gpu::Landed>>,
     /// When the in-flight task was spawned.
     started: Option<std::time::Instant>,
     /// Rebuild the tier whatever the player has or has not walked.
@@ -1348,6 +1342,8 @@ struct Held {
     prepared: super::contact::PreparedFine,
     /// Its bounce and lamp bake, which land with it (`baked-light-ease` 7.2).
     light: super::bounce::SetLight,
+    /// Its GPU image, made on its task (`fine-set-upload` D3).
+    gpu: Arc<super::tier_gpu::TierImage>,
     /// How long its build took, seconds of wall clock.
     took: f32,
     /// When it finished, on the game clock.
@@ -1430,11 +1426,12 @@ pub fn refresh_lod(
     count: Option<Res<crate::loading::FrameCount>>,
     // `baked-light-ease` 7.2: what the set's task bakes beside it, and where
     // the landing draws it.
-    (sun, lighting, mut bounce, mut lamp_bake): (
+    (sun, lighting, mut bounce, mut lamp_bake, prepared_gpu): (
         Option<Res<crate::sky::Sun>>,
         Option<Res<crate::config::LightingSettings>>,
         ResMut<super::bounce::BounceField>,
         ResMut<super::bounce::LampBakeField>,
+        Option<ResMut<super::tier_gpu::PreparedGpu>>,
     ),
 ) {
     let player = player_position(&cameras, frame.center);
@@ -1455,7 +1452,7 @@ pub fn refresh_lod(
         }
     }
     if let Some(task) = refresh.task.as_mut() {
-        let Some((set, prepared, light)) = block_on(poll_once(task)) else {
+        let Some((set, prepared, light, gpu)) = block_on(poll_once(task)) else {
             return;
         };
         let took = refresh.in_flight_s().unwrap_or(0.0);
@@ -1470,6 +1467,7 @@ pub fn refresh_lod(
             set,
             prepared,
             light,
+            gpu,
             took,
             built_s: time.elapsed_secs(),
         });
@@ -1488,6 +1486,7 @@ pub fn refresh_lod(
             set,
             prepared,
             light,
+            gpu,
             took,
             built_s,
         } = held;
@@ -1552,6 +1551,12 @@ pub fn refresh_lod(
             &mut bounce,
             &mut lamp_bake,
         );
+        // Its GPU image, for `tier_gpu::pack_fine_gpu` at the end of this
+        // frame: as it is, or, where edits were replayed into the set, as
+        // the base the replayed set is diffed against.
+        if let Some(mut prepared_gpu) = prepared_gpu {
+            prepared_gpu.0 = Some(gpu);
+        }
         commands.insert_resource(PlanetFine {
             set,
             version: fine.version + 1,
@@ -1610,6 +1615,7 @@ pub fn refresh_lod(
             .then(|| sun.as_ref().map(|s| s.direction()))
             .flatten();
         let bake_lamps = lighting.as_ref().is_some_and(|l| l.lamp_bake_on());
+        let reach_m = super::tier_gpu::reach_m(lighting.as_deref());
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
             let mut set = generate_fine_live(
                 direction,
@@ -1626,7 +1632,10 @@ pub fn refresh_lod(
                 super::bounce::bake_with_set(&set.columns, set.anchor, bake_sun, bake_lamps);
             let set = Arc::new(set);
             let prepared = super::PlanetContact::prepare_fine(&set);
-            (set, prepared, light)
+            // What the GPU reads of it, packed here rather than on the
+            // render thread when it lands (`fine-set-upload` D3).
+            let gpu = Arc::new(super::tier_gpu::TierImage::build(set.clone(), reach_m));
+            (set, prepared, light, gpu)
         }));
     }
 }
