@@ -523,6 +523,8 @@ const ROADMAP = [
     { title: 'Regions near each player', status: 'planned', change: 'multiplayer', refs: [], text: 'Each player streams the regions around them in the server\'s order and builds their own detail.' },
     { title: 'Checksums and resync', status: 'planned', change: 'multiplayer', refs: [], text: 'The server sends each region\'s digest; a player whose copy differs fetches the region again.' },
     { title: 'Playing together', status: 'planned', change: 'multiplayer', refs: [], text: 'Host and join, other players in the world, trades and chat near or far.' },
+    { title: 'Launcher', status: 'planned', change: 'game-launcher', refs: [], text: 'One small download per OS that keeps the game on the latest build from itch, and keeps itself current.',
+      missing: ['The game is Private on itch, so nothing can check it for updates yet', 'How a free game downloads from itch is not documented: a spike comes first'] },
   ] },
   { title: 'Town building and civil engineering', when: 'later', note: 'After multiplayer. Not started.', steps: [
     { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },

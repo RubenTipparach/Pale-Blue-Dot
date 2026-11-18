@@ -494,7 +494,11 @@ which wait for a request.
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
   and per-region checksums that make a client re-fetch a region that does not
-  match (`multiplayer`). No mockup yet.
+  match (`multiplayer`). With it, a self-contained launcher per OS that keeps
+  the game up to date from itch.io (owner: "as part of 3b is a self contained
+  launcher that pulls the latest from itch io based on your OS", "this
+  launcher should be responsible for keeping the game up to date always";
+  `game-launcher`). No mockup yet.
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for

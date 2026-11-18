@@ -443,8 +443,45 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     <p>Luanti has no checksum. It trusts reliable delivery plus resend-on-refuse, and cannot notice a copy that drifted silently. The region digest is the safety net it lacks, and it can run slowly because resend-on-refuse catches the common case first.</p>
   </section>
 
+  <section aria-labelledby="h-launch">
+    <h2 id="h-launch"><span class="tag">10</span>The launcher keeps everyone current</h2>
+    <p>Multiplayer refuses a join when two games' versions differ. The launcher is the other half of that check: it is the one thing a player downloads, and it puts them on the latest build every time it starts. The plan is the OpenSpec change <code>game-launcher</code>.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Launcher start: update itself, ask itch for the latest version of this OS's channel, then either start the installed build or download, check and switch to the new one. Offline, it starts the last build. Saves live outside every build.">
+        <defs>
+          <marker id="ar7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          <marker id="ar7w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk w"/></marker>
+        </defs>
+        <rect class="box" x="20" y="30" width="150" height="56"/><text class="t h" x="95" y="54" text-anchor="middle">start</text><text class="t m" x="95" y="72" text-anchor="middle">update itself first</text>
+        <rect class="box srv" x="210" y="30" width="180" height="56"/><text class="t h g" x="300" y="54" text-anchor="middle">ask itch</text><text class="t m" x="300" y="72" text-anchor="middle">latest on this OS's channel</text>
+        <rect class="box" x="430" y="30" width="200" height="56"/><text class="t h" x="530" y="54" text-anchor="middle">download + check</text><text class="t m" x="530" y="72" text-anchor="middle">size, hash, files, --version</text>
+        <rect class="box acc" x="670" y="30" width="210" height="56"/><text class="t h" x="775" y="54" text-anchor="middle">switch in one step</text><text class="t m" x="775" y="72" text-anchor="middle">keep the previous build</text>
+        <line class="ln" x1="170" y1="58" x2="206" y2="58" marker-end="url(#ar7)"/>
+        <line class="ln" x1="390" y1="58" x2="426" y2="58" marker-end="url(#ar7)"/>
+        <text class="t m" x="408" y="50" text-anchor="middle">newer</text>
+        <line class="ln" x1="630" y1="58" x2="666" y2="58" marker-end="url(#ar7)"/>
+        <rect class="box" x="670" y="140" width="210" height="56"/><text class="t h" x="775" y="164" text-anchor="middle">start the game</text><text class="t m" x="775" y="182" text-anchor="middle">--data-dir, --build</text>
+        <line class="ln" x1="775" y1="86" x2="775" y2="136" marker-end="url(#ar7)"/>
+        <path class="ln" d="M300 86 L300 168 L666 168" marker-end="url(#ar7)"/>
+        <text class="t m" x="310" y="130">same version, or offline</text>
+        <path class="ln w d" d="M775 196 L775 236 L540 236" marker-end="url(#ar7w)"/>
+        <text class="t m w" x="560" y="228">never reached READY</text>
+        <rect class="box" x="330" y="212" width="210" height="48"/><text class="t h" x="435" y="234" text-anchor="middle">fall back to previous</text><text class="t m" x="435" y="250" text-anchor="middle">skip that version</text>
+        <rect class="box acc" x="20" y="200" width="250" height="70"/><text class="t h" x="145" y="224" text-anchor="middle">player's data folder</text><text class="t m" x="145" y="242" text-anchor="middle">saves/ outside every build</text><text class="t m" x="145" y="258" text-anchor="middle">builds/current, builds/previous</text>
+      </svg>
+      </div>
+      <figcaption>Nothing before the switch can leave the player without a game that starts, and no step touches a save. A new build that dies before its loading screen finishes is rolled back on the next start.</figcaption>
+    </figure>
+    <ul class="plain">
+      <li><b>Found now:</b> itch's free version check (<code>wharf/latest</code>) answers "invalid game" for Pale Blue Dot, because the game is Private on itch. It has to be at least Restricted or Public before any launcher can see a new build.</li>
+      <li><b>Not documented:</b> how a non-developer downloads a free game's build from itch. The first task is to try it with the player's own itch login. If that cannot work, the same zips also go to a GitHub Release, and itch still decides which version is latest.</li>
+      <li><b>Saves move once</b> from beside the old exe to the player's data folder: copied, checked, and never deleted.</li>
+    </ul>
+  </section>
+
   <section aria-labelledby="h-not">
-    <h2 id="h-not"><span class="tag">10</span>Not in this phase</h2>
+    <h2 id="h-not"><span class="tag">11</span>Not in this phase</h2>
     <ul class="plain">
       <li>PvP and damage between players; claims and permissions beyond kick, ban and rate limits (they come with building).</li>
       <li>More than one person aboard a moving craft (once vehicles and ships exist).</li>
