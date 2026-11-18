@@ -757,6 +757,11 @@ beside `catch_chime`. It is a UI sound, played on the menu bus, unplaced.
 - Written at -8 dBFS peak, as the chime is.
 - Named in `assets/audio/sfx/SOURCES.md`.
 
+**Revised (owner, 2026-11-18: "jingle should be just the ding", "keep it
+short").** The phrase and the chord are gone. `mission_done` is one ding:
+- a single bright struck note (G5) with a bell's partials over it;
+- under a second, with a short ring and no room.
+
 It is a sound effect, not a music cue: Pale Blue Dot has no music pipeline
 yet (the `music-authoring` skill's note).
 

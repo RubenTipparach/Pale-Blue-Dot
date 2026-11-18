@@ -413,27 +413,13 @@ def hook_jingle(r):
     return mix(lift, 0.35 * shimmer)
 
 
-@sound("mission_done", "Menu", "A mission done: a warm rising mallet phrase in C major, G C E then D E G, settling on a held chord with a soft bell over it, in a small room. Longer and rounder than the catch chime.", peak_db=-8.0)
+@sound("mission_done", "Menu", "A mission done: one short bright ding, a struck G5 with a bell's ring over it.", peak_db=-8.0)
 def mission_done(r):
-    n = int(2.4 * SR)
-    hit = lambda f, t, length, decay, bright=0.3, gain=1.0: at(mallet(f, length, bright=bright, decay_s=decay), t, n) * gain
-    # The phrase: two rising figures, the second answering the first one step higher.
-    phrase = mix(
-        hit(392.00, 0.00, 0.5, 0.30, gain=0.75),
-        hit(523.25, 0.11, 0.5, 0.30, gain=0.8),
-        hit(659.25, 0.22, 0.6, 0.35, gain=0.85),
-        hit(587.33, 0.42, 0.5, 0.30, gain=0.8),
-        hit(659.25, 0.53, 0.5, 0.30, gain=0.85),
-        hit(783.99, 0.64, 1.7, 0.95, bright=0.35, gain=1.0),
-    )
-    # The chord it settles on: C E G C under the last note, swelling in softly and dying slowly.
-    k = int(1.7 * SR)
-    swell = np.minimum(1.0, np.arange(k) / (0.06 * SR)) * exp_decay(k, 1.5)
-    chord = sum(sine(np.full(k, f)) * g for f, g in ((261.63, 0.5), (329.63, 0.4), (392.00, 0.35), (523.25, 0.3)))
-    chord = at(chord * swell, 0.64, n) * 0.35
-    # A soft bell an octave over the end: a sine and its inharmonic partials, fading out.
-    bell = at(ring([1567.98, 1567.98 * 2.76, 1567.98 * 5.4], [1.1, 0.5, 0.25], int(1.4 * SR), amps=[1.0, 0.3, 0.12]), 0.66, n) * 0.18
-    return reverb(mix(phrase, chord, bell), room=0.45, wet=0.22, tail_s=0.4)
+    n = int(0.8 * SR)
+    strike = mallet(783.99, 0.8, bright=0.35, decay_s=0.5)
+    bell = ring([1567.98, 1567.98 * 2.76, 1567.98 * 5.4], [0.6, 0.3, 0.15], n, amps=[1.0, 0.3, 0.12])
+    bell *= np.minimum(1.0, np.arange(n) / (0.002 * SR))
+    return mix(strike, 0.35 * bell)
 
 
 # --- craft
