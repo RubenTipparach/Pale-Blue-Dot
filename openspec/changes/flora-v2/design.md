@@ -934,7 +934,8 @@ show the veins. Drawing ore needs a fifth bit in the material word (six
 codes a word, both the Rust packing and `material_at` in
 `planet_surface.wgsl`, and the runs' code field) and an ore tile on the
 atlas's stone sheet. That is a rendering change of its own, proposed as the
-next step (task 9.9) and not taken here.
+next step (task 9.9) and not taken here. Superseded by 12.12: no fifth bit;
+the placed-sheet field's spare value marks ore.
 
 ### 12.10 Captures draw the grass the player sees (owner, 2026-11-16)
 
@@ -1089,6 +1090,96 @@ rule, as 12.10 is:
 - A test that bit 25 stops `grows_tree`.
 - A shader test holding the visibility and surface passes to the bit.
 - Before and after `--capture` of the shore in `docs/screenshots/water-gameplay/`.
+
+### 12.12 Ore drawn as ore: the placed-sheet field's spare value (task 9.9; owner, 2026-11-18)
+
+Roadmap phase 2.1, "Ore drawn as ore in a dug wall (it shows as stone)".
+
+**Finding.** 12.8 proposed a fifth bit in the column's material word. Before
+taking that, the other per-layer field was measured:
+- `placed-blocks-keep-material` added a second four-bit field per layer, the
+  PLACED sheets (`ColumnTier::gpu_placed_sheets`, `PLACED_SHEETS_BASE`,
+  `placed_sheet_at` in `planet_surface.wgsl`), and the same four bits in the
+  record's material word at bit 26 (`PLACED_SHEET_SHIFT`) for the cap. It
+  holds nought for generated ground and a placed block's sheet plus one.
+- There are 14 tilesets, so it holds 0 to 14. **Fifteen is never written**:
+  the only guard was `TILESETS.len() < 16`.
+- The four-bit render codes are a different story. A per-layer nibble never
+  holds 4, 7, 9, 11 or 12 (`render_code` returns none of them), but the
+  shader's code space is shared with the record's eight-bit cap code and the
+  face codes it derives (4 is the desert's ground, 9 the leaves, 11 and 12
+  the sod and snow sides). Taking one for ore means teaching every reader of
+  a code what it now means in which buffer. Not a cheaper route.
+
+**Decision.** The spare value 15 is `ORE_SHEET` (`planet_terrain::ORE_SHEET`,
+the WGSL `ORE_SHEET`): "this stone is ore".
+- **Rust.** `planet_column::drawn_sheet_mark(column, layer)` is
+  `ORE_SHEET` for an ore layer, generated or placed, and the placed sheet
+  (`placed_sheet`, unchanged) otherwise. `pack_placed_sheets` and the
+  record's bits in `reconcile_surface` write it. `placed_sheet` keeps its
+  meaning ("somebody placed this"), so the drowned-bed rule is unchanged.
+- **The layer keeps the stone's code (5).** Every rule that reads a code
+  sees stone as before: the side rule, the plant tint, the reflections'
+  `vox_albedo`, the visibility and rain passes. Only the albedo changes.
+- **Shader.** Where the mark is 15, the face keeps its biome's sheet, and
+  stone faces (code 5) get ore flecks. The cap (kind 0), the heightfield's
+  top metre (kind 1) and a column-pass face (kind 4) read it, as they read
+  a placed sheet.
+- **Guard.** `TILESETS.len() < ORE_SHEET` at compile time, so a fifteenth
+  tileset fails the build instead of turning into ore. That is the price:
+  the field is now full, and the next tileset widens it.
+
+**Why not the fifth bit.** Six codes a word turns 63 words a column into 84:
+the material buffer, its upload and `PLACED_SHEETS_BASE` grow by a third for
+every column, for one material, and the packing changes in Rust and in every
+WGSL reader. The spare value costs no byte and no new layout.
+
+**The look.** Procedural in the shader, on the stone tile's own 32-texel
+grid, rather than an ore tile on the atlas. The atlas has no free tile: every
+sheet's 16 slots are named materials (`assets/tilesets/biomes.json`). An ore
+tile would need new art on all 14 sheets, or a fifteenth sheet that draws
+one stone everywhere. The flecks keep each biome's own stone and overwrite
+only some of its texels:
+- the tile is cut into 4 by 4 texel blocks, and a block holds a nugget on its
+  own hash: about a third of blocks;
+- a nugget is two to five texels, never smaller than the stone's own grain;
+- the ore is a third coal (near black), a third copper (rust orange) and a
+  third tin (pale grey), as the mixed ore yields;
+- each colour is shaded by the stone texel under it, with its upper left
+  lit and its lower right in shade (the light the sheets are drawn under),
+  so the ore stays in the stone's palette and value range;
+- no outline (owner, 2026-11-15);
+- the hash takes the cell and the layer, so neighbouring blocks differ, and
+  the pattern is fixed per block face (nearest sampling, nothing moves).
+The far fade to the flat mean is the stone's, unchanged.
+
+**What this leaves.**
+- **A placed ore block takes the stone of where it stands**, not its home
+  sheet (the fields'). Fifteen carries no sheet, and ore is a vein in the
+  local rock. This is the one exception to `placed-blocks-keep-material`.
+  Mining is unchanged: the CPU column says `Ore`, and `station::ore_yield`
+  decides the drop.
+- The far records (`surface_code`) never show ore. A generated top is never
+  ore; only a dug face shows a vein, and that is a tier column.
+- Reflections (`vox_albedo`) draw ore as plain stone.
+- Saves: nothing stored changes. The mark is derived from the column's
+  material on every pack, so an old world shows its veins on open, and a
+  version 9 world has none to show.
+- Frame cost not measured (cloud session, no GPU). The pack now walks every
+  layer of every column for ore, as `pack_materials` already does. The
+  shader adds a hash and a branch on stone faces only.
+
+**Verify.**
+- Rust tests on the packing:
+  - an ore layer packs 15 and its neighbours 0;
+  - a placed ore block packs 15;
+  - an exposed ore top's record carries 15;
+  - a placed stone still packs its sheet;
+  - generated ground with no ore packs nothing.
+- An `include_str` test holding the WGSL's `ORE_SHEET` to the Rust constant.
+- Shader validation.
+- Before (`claude/river-cache-full`) and after captures of a dug wall with a
+  vein, in `docs/screenshots/ore-veins/`.
 
 ## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
 

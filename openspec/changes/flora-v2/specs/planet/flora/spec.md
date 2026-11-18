@@ -177,3 +177,18 @@ toward the eye, as the near crown's leaves are, and not as a floor.
 #### Scenario: Near and far trees at night
 - **WHEN** near and far trees are in one frame at night
 - **THEN** the far band is no brighter than the near crowns beside it
+
+### Requirement: Ore is drawn as ore
+A layer of ore, generated in a vein or placed by a player, SHALL be drawn as
+its biome's stone tile with ore flecks on the tile's own texel grid, and not
+as plain stone. The mark SHALL be derived from the column's material, never
+stored, and the layer's render code SHALL stay the stone's.
+
+#### Scenario: A dug wall through a vein
+- **WHEN** a player digs into a hillside of a version 10 world through a vein
+- **THEN** the ore cells in the wall show dark, copper and tin flecks in the
+  stone, and the stone around them is drawn as before
+
+#### Scenario: A placed ore block
+- **WHEN** a player places a block of mixed ore
+- **THEN** it is drawn with the same flecks
