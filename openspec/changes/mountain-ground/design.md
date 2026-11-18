@@ -28,8 +28,8 @@
 
 ## Decisions
 
-1. **Flat tops in version 12.** (Planned as 11; `swamps` took version 11
-   on 2026-11-18, so this is version 12, on version 11's ground.)
+1. **Flat tops in version 13.** (Planned as 11; `swamps` took version 12
+   and `river-downhill` version 11 on 2026-11-18, so this is version 13.)
    In Mountains, a cell whose six neighbours
    stand within 1 m of it takes: Snow above a snow line lowered to about
    170 m and ragged by a coarse noise (±15 m); alpine Grass below it down to

@@ -147,7 +147,12 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let share = ((depth + 0.05) / 0.25).clamp(0.0, 1.0);
         let (_, water) = cx.water(at, depth.max(0.0));
         let blade_velocity = body.velocity_at(at) + body.axis(DVec3::Z * stroke_speed);
-        let rel = blade_velocity - water;
+        // A pole pushes on the bed, a paddle on the water.
+        let rel = if p.pole {
+            blade_velocity
+        } else {
+            blade_velocity - water
+        };
         let force = rel * (-0.5 * SEA_DENSITY * p.blade_cd as f64 * area * share * rel.length());
         body.push(force, at);
         FoilForce {

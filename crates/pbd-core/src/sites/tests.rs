@@ -443,32 +443,32 @@ fn the_list_round_trips_through_its_records() {
     assert_eq!(from_records(&missing), None, "a named site missing");
 }
 
-/// The measurement behind `swamps` decision 6: version 11's sites are
-/// surveyed on ground without its swamps, so the list is version 10's; this
-/// counts the sites whose anchor stands in a version 11 swamp all the same,
+/// The measurement behind `swamps` decision 6: version 12's sites are
+/// surveyed on ground without its swamps, so the list is version 11's; this
+/// counts the sites whose anchor stands in a version 12 swamp all the same,
 /// by kind. Run with `--ignored --nocapture`.
 #[test]
 #[ignore]
-fn sites_in_version_11_swamps() {
+fn sites_in_version_12_swamps() {
+    let v12 = TerrainConfig::for_version(12).expect("version 12");
     let v11 = TerrainConfig::for_version(11).expect("version 11");
-    let v10 = TerrainConfig::for_version(10).expect("version 10");
-    let list = generate(&shipped(), &v11, spawn(), threads());
-    let old = generate(&shipped(), &v10, spawn(), threads());
+    let list = generate(&shipped(), &v12, spawn(), threads());
+    let old = generate(&shipped(), &v11, spawn(), threads());
     println!(
-        "version 11 list is version 10's: {} ({} sites)",
+        "version 12 list is version 11's: {} ({} sites)",
         old == list,
         list.sites.len()
     );
     let mut by_kind = std::collections::BTreeMap::<SiteKind, (usize, usize)>::new();
     for site in &list.sites {
         let d = site.direction;
-        let h = crate::planet_gen::surface_altitude(&v11, d);
-        let swamp = crate::planet_gen::biome_at(&v11, d, h) == Biome::Swamp;
+        let h = crate::planet_gen::surface_altitude(&v12, d);
+        let swamp = crate::planet_gen::biome_at(&v12, d, h) == Biome::Swamp;
         let e = by_kind.entry(site.kind).or_default();
         e.0 += 1;
         e.1 += usize::from(swamp);
     }
     for (kind, (all, swamp)) in by_kind {
-        println!("  {kind:?}: {swamp} of {all} anchors in a version 11 swamp");
+        println!("  {kind:?}: {swamp} of {all} anchors in a version 12 swamp");
     }
 }

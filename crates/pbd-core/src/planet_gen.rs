@@ -158,8 +158,8 @@ pub struct Swamps {
 }
 
 impl Swamps {
-    /// Version 11's (`swamps` design, "Measured" and decision 2).
-    pub const V11: Self = Self {
+    /// Version 12's (`swamps` design, "Measured" and decision 2).
+    pub const V12: Self = Self {
         wet_from: 0.47,
         wet_full: 0.56,
         coast_m: 12.0,
@@ -192,16 +192,25 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V11;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V12;
 
-    /// Generator version 11 (`swamps`): version 10 with swamps on the low
-    /// wet land by the sea and the rivers, several percent of the land where
-    /// version 10 had about one, with pools and mud in patches. Every height
-    /// is version 10's, so its rivers, sea and sites are too; only which
-    /// biome the low wet land is, and so its top block and its trees, moves.
+    /// Generator version 11 (`river-downhill`): version 10 with rivers that
+    /// never run uphill. A river's water is the lowest bank clamp met along
+    /// its line from its spring, so it falls or stays level downstream, and
+    /// its bed is carved under that. Off the rivers' valleys it is version 10.
     pub const TENEBRIS_V11: Self = Self {
-        swamps: Some(Swamps::V11),
+        rivers: Some(crate::rivers::RiverSettings::V11),
         ..Self::TENEBRIS_V10
+    };
+
+    /// Generator version 12 (`swamps`): version 11 with swamps on the low
+    /// wet land by the sea and the rivers, several percent of the land where
+    /// version 11 had about one, with pools and mud in patches. Every height
+    /// is version 11's, so its rivers, sea and sites are too; only which
+    /// biome the low wet land is, and so its top block and its trees, moves.
+    pub const TENEBRIS_V12: Self = Self {
+        swamps: Some(Swamps::V12),
+        ..Self::TENEBRIS_V11
     };
 
     /// Generator version 10 (`flora-v2` design 12): version 9 with M13's
@@ -356,6 +365,7 @@ impl TerrainConfig {
             9 => Some(Self::TENEBRIS_V9),
             10 => Some(Self::TENEBRIS_V10),
             11 => Some(Self::TENEBRIS_V11),
+            12 => Some(Self::TENEBRIS_V12),
             _ => None,
         }
     }
@@ -1062,6 +1072,27 @@ mod tests {
 
     /// The digests of version 6's ground and top blocks on 10,000 directions,
     /// taken on the M4 Max Mac (2026-11-15).
+    /// Version 11 is version 10 with rivers that never run uphill
+    /// (`river-downhill`), and a new world is made on it.
+    #[test]
+    fn version_11_is_version_10_with_downhill_rivers() {
+        let v11 = TerrainConfig::for_version(11).expect("version 11 is carried");
+        assert_eq!(v11, TerrainConfig::TENEBRIS_V11);
+        assert_eq!(
+            TerrainConfig {
+                rivers: Some(crate::rivers::RiverSettings::V8),
+                ..v11
+            },
+            TerrainConfig::TENEBRIS_V10
+        );
+        assert!(v11.rivers.is_some_and(|r| r.downhill));
+        assert!(
+            !TerrainConfig::TENEBRIS_V10
+                .rivers
+                .is_some_and(|r| r.downhill)
+        );
+    }
+
     /// The ground digest differs by platform: the Mac's and the Linux
     /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
     /// is the operating system's maths library, not the processor: an
@@ -1163,40 +1194,40 @@ mod tests {
         assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
     }
 
-    /// Version 11 (`swamps`) is version 10's ground with its swamps: every
-    /// altitude is version 10's bit for bit, every version 10 swamp is still
-    /// one, and a cell that is not a swamp in version 11 has version 10's
+    /// Version 12 (`swamps`) is version 11's ground with its swamps: every
+    /// altitude is version 11's bit for bit, every version 11 swamp is still
+    /// one, and a cell that is not a swamp in version 12 has version 11's
     /// biome and top block. Only `swamps` differs in the config.
     #[test]
-    fn version_11_is_version_10_s_ground_with_its_swamps() {
-        let v11 = TerrainConfig::for_version(11).expect("version 11 is carried");
-        assert_eq!(v11, TerrainConfig::TENEBRIS_V11);
-        assert_eq!(TerrainConfig::TENEBRIS, v11, "a new world is made on 11");
-        let v10 = TerrainConfig::TENEBRIS_V10;
-        assert_eq!(v11.climate_ground(), v10);
-        assert_eq!(v10.swamps, None, "version 10 has no swamps rule");
+    fn version_12_is_version_11_s_ground_with_its_swamps() {
+        let v12 = TerrainConfig::for_version(12).expect("version 12 is carried");
+        assert_eq!(v12, TerrainConfig::TENEBRIS_V12);
+        assert_eq!(TerrainConfig::TENEBRIS, v12, "a new world is made on 12");
+        let v11 = TerrainConfig::TENEBRIS_V11;
+        assert_eq!(v12.climate_ground(), v11);
+        assert_eq!(v11.swamps, None, "version 11 has no swamps rule");
         let (mut swamps, mut kept) = (0usize, 0usize);
         for d in sphere(60_000) {
-            let h = surface_altitude(&v11, d);
-            assert_eq!(h.to_bits(), surface_altitude(&v10, d).to_bits(), "{d}");
-            let (b10, b11) = (biome_at(&v10, d, h), biome_at(&v11, d, h));
-            if b10 == Biome::Swamp {
-                assert_eq!(b11, Biome::Swamp, "a version 10 swamp at {d}");
+            let h = surface_altitude(&v12, d);
+            assert_eq!(h.to_bits(), surface_altitude(&v11, d).to_bits(), "{d}");
+            let (b11, b12) = (biome_at(&v11, d, h), biome_at(&v12, d, h));
+            if b11 == Biome::Swamp {
+                assert_eq!(b12, Biome::Swamp, "a version 11 swamp at {d}");
                 kept += 1;
             }
-            if b11 == Biome::Swamp {
+            if b12 == Biome::Swamp {
                 swamps += 1;
             } else {
-                assert_eq!(b11, b10, "{d}");
+                assert_eq!(b12, b11, "{d}");
                 // The top block reads the biome at the floored surface,
                 // which can be a swamp where the surface itself is not.
                 let f = h.floor();
-                if biome_at(&v11, d, f) != Biome::Swamp {
-                    assert_eq!(top_material(&v11, d, f), top_material(&v10, d, f), "{d}");
+                if biome_at(&v12, d, f) != Biome::Swamp {
+                    assert_eq!(top_material(&v12, d, f), top_material(&v11, d, f), "{d}");
                 }
             }
         }
-        assert!(kept > 50, "only {kept} version 10 swamp samples");
+        assert!(kept > 50, "only {kept} version 11 swamp samples");
         assert!(swamps > kept * 3, "{swamps} swamp samples against {kept}");
     }
 
@@ -1208,7 +1239,7 @@ mod tests {
     fn swamps_hold_several_percent_of_the_land() {
         let mut failures = Vec::new();
         for seed in [TerrainConfig::TENEBRIS.seed, 1, 0xB10E_5EED] {
-            for version in [10, 11] {
+            for version in [11, 12] {
                 let cfg = TerrainConfig {
                     seed,
                     ..TerrainConfig::for_version(version).unwrap()
@@ -1227,7 +1258,7 @@ mod tests {
                     }
                 }
                 let share = swamp as f32 / land as f32;
-                let band = if version == 11 {
+                let band = if version == 12 {
                     0.04..=0.09
                 } else {
                     0.0..=0.02
@@ -1247,12 +1278,12 @@ mod tests {
         assert!(failures.is_empty(), "{}", failures.join("; "));
     }
 
-    /// A version 11 swamp is moss, pools and mud (`swamps` decision 3): every
+    /// A version 12 swamp is moss, pools and mud (`swamps` decision 3): every
     /// pool is held (no ground 2.9 m round it is lower), moss is the most of
     /// it and stands the willows, and there is open water and mud in it.
     #[test]
     fn a_swamp_is_moss_pools_and_mud() {
-        let cfg = TerrainConfig::TENEBRIS_V11;
+        let cfg = TerrainConfig::TENEBRIS_V12;
         let mut tops = std::collections::BTreeMap::<u16, usize>::new();
         for d in sphere(200_000) {
             let h = surface_altitude(&cfg, d);
@@ -1291,17 +1322,50 @@ mod tests {
         assert!((0.1..=0.35).contains(&mud), "{measured}");
     }
 
-    /// The city survey and the climate read version 11 without its swamps
+    /// The city survey and the climate read version 12 without its swamps
     /// (`swamps` decisions 6 and 7), so its sites and its settled climate
-    /// are version 10's.
+    /// are version 11's.
     #[test]
-    fn sites_and_climate_read_version_11_without_its_swamps() {
+    fn sites_and_climate_read_version_12_without_its_swamps() {
+        let v12 = TerrainConfig::TENEBRIS_V12;
         let v11 = TerrainConfig::TENEBRIS_V11;
-        let v10 = TerrainConfig::TENEBRIS_V10;
-        assert_eq!(v11.site_ground(), v10.site_ground());
-        assert_eq!(v11.climate_ground(), v10.climate_ground());
-        assert_eq!(v11.climate_ground(), v10);
+        assert_eq!(v12.site_ground(), v11.site_ground());
+        assert_eq!(v12.climate_ground(), v11.climate_ground());
+        assert_eq!(v12.climate_ground(), v11);
     }
+
+    /// Version 11's ground, biomes and top blocks (`river-downhill`), pinned
+    /// before version 12 (`swamps`) landed (CLAUDE.md, "Saved games survive
+    /// every change"). Taken in the Linux container; the Mac's values are
+    /// the owner's to take.
+    #[test]
+    fn version_11_keeps_its_ground() {
+        let v11 = TerrainConfig::for_version(11).expect("version 11 is carried");
+        assert_eq!(v11, TerrainConfig::TENEBRIS_V11);
+        if cfg!(not(target_os = "macos")) {
+            assert_eq!(digest(&v11, 10_000), VERSION_11_DIGEST);
+            assert_eq!(top_digest(&v11, 10_000), VERSION_11_TOP_DIGEST);
+            assert_eq!(land_digest(&v11, 200_000), VERSION_11_LAND_DIGEST);
+        }
+    }
+
+    /// Prints version 11's digests, for pinning them. Run with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_version_11_digests() {
+        let v11 = TerrainConfig::TENEBRIS_V11;
+        println!(
+            "V11 digest {} top {} land {}",
+            digest(&v11, 10_000),
+            top_digest(&v11, 10_000),
+            land_digest(&v11, 200_000)
+        );
+    }
+
+    const VERSION_11_DIGEST: u64 = 17_529_809_071_530_290_517;
+    const VERSION_11_TOP_DIGEST: u64 = 3_220_481_899_684_298_056;
+    const VERSION_11_LAND_DIGEST: u64 = 5_254_754_296_649_985_577;
 
     /// Version 10's ground, biomes and top blocks, pinned on constants of
     /// its own before version 11 (`swamps`) landed, so that nothing version
@@ -2075,14 +2139,14 @@ mod tests {
         }
     }
 
-    /// A capture locator for `swamps` (task 4.1): the version 11 swamps
+    /// A capture locator for `swamps` (task 4.1): the version 12 swamps
     /// nearest the default spawn with pools in them, as `--at` latitude and
     /// longitude, the coast's and the rivers' apart. Run with `--ignored
     /// --nocapture`.
     #[test]
     #[ignore]
     fn swamp_places_near_the_spawn() {
-        let cfg = TerrainConfig::TENEBRIS_V11;
+        let cfg = TerrainConfig::TENEBRIS_V12;
         let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
         let mut found = Vec::new();
         for d in sphere(400_000) {

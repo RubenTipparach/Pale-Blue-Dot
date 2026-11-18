@@ -257,10 +257,13 @@ impl Builder<'_> {
 
 /// Hang a craft's meshes under its entity.
 pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
-    // Lit by the field wherever it stands (`lamps-and-lanterns` decision 10).
-    world
-        .entity_mut(entity)
-        .insert(crate::field_light::LitByField);
+    // Lit by the field wherever it stands (`lamps-and-lanterns` decision 10),
+    // and as the terrain is: its own sun and shadows, not Bevy's
+    // (`craft-lighting`; the owner: "can you properly light the raft?").
+    world.entity_mut(entity).insert((
+        crate::field_light::LitByField,
+        crate::field_light::LitLikeTerrain,
+    ));
     if super::model::AUTHORED.contains(&craft.kind) {
         super::model::build(world, entity, craft)
             .expect("vehicle model: regenerate and export from Blender");
@@ -465,6 +468,7 @@ pub fn place(
     frame: Res<crate::planet::PlanetRenderFrame>,
     view: Res<VehicleView>,
     aboard: Res<super::Aboard>,
+    controls: Res<super::VehicleControls>,
     dusk: Option<Res<crate::planet::lod::DuskLamps>>,
     mut crafts: Query<(Entity, &Vehicle, &mut Transform), Without<Part>>,
     mut parts: Query<(&mut Part, &mut Transform, &mut Visibility)>,
@@ -486,6 +490,16 @@ pub fn place(
             }
             (Moving::Laid, _) => {
                 *visibility = visible(!craft.occupied);
+            }
+            (Moving::Paddle, CraftState::Loon(_)) if craft.kind == Kind::Raft => {
+                // The poler's own controls when this is the craft aboard.
+                let input = if aboard.0 == Some(entity) {
+                    controls.0
+                } else {
+                    pbd_core::vehicle::Input::default()
+                };
+                *transform = pole(&input);
+                *visibility = visible(craft.occupied);
             }
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);
@@ -561,6 +575,34 @@ fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
     let x = stroke.side as f32 * p.reach_m;
     Transform::from_xyz(x, p.depth_m + lift, z)
         .with_rotation(Quat::from_rotation_z(-x.signum() * 0.35))
+}
+
+/// The raft's pole as M34 River Craft moves it (`river-craft.html`, its
+/// raft's `sync`; the owner, 2026-11-18, on the game's pole drawn at a
+/// paddle's blade out to either side: "why his stick flyaway?", "why is the
+/// game implmenetation different on how the pole moves", "the mockup worked
+/// well"). It always hangs from the poler's hand, held on the controls:
+/// - standing a little forward at rest (0.12);
+/// - leaning 0.5 with W (foot behind, pushing off the bed) or S;
+/// - tilted 0.35 to the side with a turn (A or D, or the pole's own Q or E).
+///
+/// The mockup's raft points along its +x and leans about its z; the game's
+/// points along -z, so its lean is about x and its tilt about -z.
+fn pole(input: &pbd_core::vehicle::Input) -> Transform {
+    // The hand at 1.45 m, a third of the way down the 4.6 m pole (the pole is
+    // drawn 0.35 m over its pivot, so the pivot stands 1.75 m under the hand).
+    let hand = Vec3::new(0.62, 1.45, 0.55);
+    let forward = input.forward.clamp(-1.0, 1.0);
+    // The mockup's turn is right less left; the game's steer and rudder are
+    // left positive.
+    let turn = -(input.steer + input.rudder).clamp(-1.0, 1.0);
+    let lean = if forward != 0.0 { -0.5 * forward } else { 0.12 };
+    let mut pose = Transform::from_translation(hand - Vec3::Y * 1.75);
+    pose.rotate_around(
+        hand,
+        Quat::from_rotation_z(-turn * 0.35) * Quat::from_rotation_x(lean),
+    );
+    pose
 }
 
 #[cfg(test)]

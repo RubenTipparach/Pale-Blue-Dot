@@ -1,5 +1,13 @@
 # Proposal
 
+> **Renumbered 2026-11-18:** `river-downhill` shipped as generator version 11
+> first (PR #131), so the swamps are **version 12**, on version 11's ground
+> (version 10's off the rivers' valleys). Version 11 was pinned by digest
+> (`version_11_keeps_its_ground`) before version 12 landed. The measurements
+> below were taken on version 10; where they name "version 11" for the swamps,
+> read version 12.
+
+
 ## Why
 
 The owner, 2026-11-18: "the swamps do need to be on this planet", and "right

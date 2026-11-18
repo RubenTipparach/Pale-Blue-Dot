@@ -6,12 +6,12 @@
 - [x] 1.2 Pin version 10's ground on its own digests, in a commit before any
       swamp code (`version_10_keeps_its_ground`).
 
-## 2. Version 11
+## 2. Version 12
 
 - [x] 2.1 `Swamps`, `swamp_holds`, `swamp_patch`, `TENEBRIS_V11`,
       `GENERATOR_VERSION = 11`; `rivers::beside`.
 - [x] 2.2 Tests: the share on three seeds, version 10's swamps inside
-      version 11's, no height moved, the ground rule (pools held, mud and
+      version 12's, no height moved, the ground rule (pools held, mud and
       moss), sites and climate read the ground without swamps.
 - [x] 2.3 `settled-g11-l{3,5}` (version 10's bytes, decision 7).
 - [x] 2.4 `mountain-ground` amended to version 12.
@@ -24,7 +24,7 @@
 
 ## 4. Proof
 
-- [x] 4.1 Map biome layer, version 10 and version 11, and an eye-level
+- [x] 4.1 Map biome layer, version 10 and version 12, and an eye-level
       swamp, in `docs/screenshots/swamps/` with a README.
 - [ ] 4.2 The owner's look at the captures.
 - [ ] 4.3 Generation time and frame cost on the owner's machine (not
