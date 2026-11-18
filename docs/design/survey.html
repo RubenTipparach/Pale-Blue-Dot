@@ -175,6 +175,17 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 // The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
 // pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
 const SECTIONS = [
+  { tag: 'F', name: 'Flora',
+    lead: 'From flora-v2 (2026-11-18). The beach acacia of generator 10 grows only on beach sand, but since every cell under the high water grows nothing (12.11), and the highest beach cell is 1.00 m against a 1.50 m high water, no beach cell is dry: no acacia stands on any beach of a version 10 world. The one captured on 2026-11-15 stood in the tide.',
+    qs: [
+      { id: 'F1', q: 'Where should the beach acacias grow? Today none can: every beach cell is under the high water. The swamps are about to make generator version 11 (new worlds only), so a change here can ride with them.',
+        options: ['On the dry ground just behind the beach (grass and sand above the high water), in version 11', 'Leave beaches bare of trees', 'Raise some beach cells above the high water so acacias stand on the sand itself, in version 11'], rec: 0,
+        why: 'It keeps the look you approved (acacias framing the shore) without trees standing in the tide; version 10 worlds keep their ground as the save rule asks.',
+        change: 'flora-v2 (12.11, task 7.8)', asked: '2026-11-18',
+        images: [
+          { src: 'img/f1-acacia-then-now.jpg', alt: 'Top: an acacia on the beach sand at the shore in an earlier build. Bottom: the same spot today, bare sand.', caption: 'The same beach: the acacia of 2026-11-15 (top, standing in the tide), and today (bottom, none).' },
+        ] },
+    ] },
   { tag: 'G', name: 'Ships and flight',
     lead: 'From ship-tiers (2026-11-12), the mockup "Rockets and Landers" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
     qs: [
