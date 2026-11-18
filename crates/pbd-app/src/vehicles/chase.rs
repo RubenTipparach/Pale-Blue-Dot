@@ -3,7 +3,7 @@
 use super::view::VehicleView;
 use bevy::prelude::*;
 use pbd_core::DVec3;
-use pbd_core::vehicle::{Craft, Kind};
+use pbd_core::vehicle::Craft;
 
 const EYE_CLEARANCE_M: f64 = 0.25;
 const BOOM_SAMPLE_M: f64 = 0.5;
@@ -20,13 +20,9 @@ pub(super) fn pose(
     let look = Quat::from_axis_angle(up, view.yaw) * heading;
     let right = look.cross(up).normalize_or(Vec3::X);
     let forward = Quat::from_axis_angle(right, view.pitch) * look;
-    let aim_height = if craft.kind == Kind::Tern {
-        let sail = &craft.specs().tern.sail;
-        (sail.mast[1] + sail.head_height_m) * 0.5
-    } else {
-        1.0
-    };
-    let target = craft.reference_position() + (up * aim_height).as_dvec3();
+    // A metre over the craft's reference point: every boat's chase view
+    // aims there now the Tern's masthead is gone (`retire-tern`).
+    let target = craft.reference_position() + (up * 1.0).as_dvec3();
     let desired = target + (-forward * view.distance + up * (view.distance * 0.12)).as_dvec3();
     (clear_boom(target, desired, ground), target, up)
 }
@@ -50,8 +46,6 @@ fn clear_boom(target: DVec3, desired: DVec3, ground: impl Fn(DVec3) -> f64) -> D
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pbd_core::vehicle::{Hulls, spec::VehicleSpecs};
-    use std::sync::Arc;
 
     #[test]
     fn a_shore_shortens_the_boom_and_clear_ground_restores_it() {
@@ -64,42 +58,5 @@ mod tests {
         assert_eq!(clear_boom(target, desired, |_| 100.0), desired);
         let buried_target = DVec3::Y * 99.0;
         assert!(clear_boom(buried_target, desired, |_| 100.0).length() >= 100.25);
-    }
-
-    #[test]
-    fn the_default_tern_view_contains_the_masthead_and_hull() {
-        let specs = Arc::new(VehicleSpecs::default());
-        let craft = Craft::new(
-            Kind::Tern,
-            1,
-            specs.clone(),
-            Hulls::new(&specs),
-            DVec3::Y * 4800.0,
-            pbd_core::DQuat::IDENTITY,
-        );
-        let view = VehicleView {
-            distance: super::super::view::default_distance(Kind::Tern),
-            ..default()
-        };
-        let (eye, target, up) = pose(&craft, &view, |_| 4750.0);
-        let camera = Transform::from_translation((eye - craft.reference_position()).as_vec3())
-            .looking_at((target - craft.reference_position()).as_vec3(), up);
-        let projection = PerspectiveProjection::default();
-        let sail = &specs.tern.sail;
-        let mut points = craft.hull().unwrap().loft(28, 10).0;
-        points.push(Vec3::from(sail.mast) + Vec3::Y * sail.head_height_m);
-        for point in points {
-            let in_view = camera.rotation.inverse() * (point - camera.translation);
-            assert!(in_view.z < -projection.near);
-            let vertical = in_view.y.abs() / -in_view.z;
-            assert!(
-                vertical < (projection.fov * 0.5).tan(),
-                "point {point:?} is cropped"
-            );
-        }
-        assert_eq!(
-            view.distance,
-            super::super::view::default_distance(Kind::Tern)
-        );
     }
 }

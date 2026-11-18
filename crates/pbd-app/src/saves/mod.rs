@@ -920,7 +920,7 @@ mod tests {
         let specs = std::sync::Arc::new(VehicleSpecs::default());
         let hulls = Hulls::new(&specs);
         let mut craft = Craft::new(
-            Kind::Tern,
+            Kind::Loon,
             7,
             specs,
             hulls,

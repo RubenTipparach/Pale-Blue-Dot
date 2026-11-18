@@ -1,7 +1,7 @@
 //! What a craft looks like: procedural meshes built from the same numbers its
 //! physics is (the hull's own loft, the sail's own mast and boom, the blade's
-//! own area), and the parts that move with its state - the Tern's boom and
-//! tiller, the Loon's paddle, the cog's yard and sail - placed from that
+//! own area), and the parts that move with its state - the Loon's paddle,
+//! the cog's tiller, yard and sail - placed from that
 //! state every frame.
 //! The cog is the harbour's ship as its piece is cut. Nothing here decides
 //! anything.
@@ -30,14 +30,11 @@ pub struct Part {
 
 #[derive(Clone, Copy, PartialEq)]
 enum Moving {
-    Boom,
     Tiller,
     Paddle,
     /// What lies in a boat until someone aboard takes it up: the canoe's
     /// paddle.
     Laid,
-    /// The Tern's keel, lifted in shallow water.
-    Keel,
     /// The cog's yard, turned about its mast by the braces.
     Yard,
     /// Its sail, set (true) or furled on the yard: set at sea, furled at a
@@ -56,7 +53,6 @@ impl Part {
     pub(super) fn named(owner: Entity, name: &str) -> Option<Self> {
         let kind = match name {
             "rudder" | "tiller" => Moving::Tiller,
-            "boom" => Moving::Boom,
             "paddle" => Moving::Paddle,
             "crew" => Moving::Crew,
             _ => return None,
@@ -279,7 +275,6 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             .expect("vehicle model: regenerate and export from Blender");
         return;
     }
-    let hull = paint(world, Color::srgb(0.86, 0.84, 0.78), true);
     let dark = paint(world, Color::srgb(0.18, 0.2, 0.22), false);
     let trim = paint(world, Color::srgb(0.75, 0.32, 0.18), false);
     let crew = paint(world, Color::srgb(0.9, 0.55, 0.15), false);
@@ -289,76 +284,6 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
     };
     let specs = craft.specs().clone();
     match craft.kind {
-        Kind::Tern => {
-            let s = &specs.tern;
-            let shape = craft.hull().expect("a boat has a hull").clone();
-            let (p, i) = shape.loft(28, 10);
-            b.piece(entity, mesh(p, i), &hull, Transform::IDENTITY);
-            let (p, i) = shape.deck(28);
-            b.piece(entity, mesh(p, i), &trim, Transform::IDENTITY);
-            let mast = Vec3::from(s.sail.mast);
-            let head = s.sail.head_height_m;
-            b.cuboid(
-                entity,
-                Vec3::new(0.1, head, 0.1),
-                mast + Vec3::Y * head / 2.0,
-                &dark,
-            );
-            // The keel, lifted in shallow water (`TernSpec::lift`).
-            let keel_h = (s.keel.area_m2 * s.keel.aspect).sqrt();
-            let keel = b.pivot(
-                entity,
-                Moving::Keel,
-                Transform::from_translation(Vec3::from(s.keel.at)),
-            );
-            b.cuboid(
-                keel,
-                Vec3::new(0.08, keel_h, s.keel.area_m2 / keel_h),
-                Vec3::ZERO,
-                &dark,
-            );
-            // The boom and the sail swing together about the mast.
-            let boom = b.pivot(
-                entity,
-                Moving::Boom,
-                Transform::from_translation(mast + Vec3::Y * s.sail.boom_height_m),
-            );
-            let length = s.sail.boom_length_m;
-            b.cuboid(
-                boom,
-                Vec3::new(0.08, 0.08, length),
-                Vec3::Z * length / 2.0,
-                &dark,
-            );
-            let sail = paint(b.world, Color::srgb(0.95, 0.94, 0.9), true);
-            let rise = head - s.sail.boom_height_m;
-            b.piece(
-                boom,
-                mesh(
-                    vec![
-                        Vec3::ZERO,
-                        Vec3::new(0.0, 0.0, length),
-                        Vec3::new(0.0, rise, 0.0),
-                    ],
-                    vec![0, 1, 2],
-                ),
-                &sail,
-                Transform::IDENTITY,
-            );
-            let rudder_h = (s.rudder.area_m2 * s.rudder.aspect).sqrt();
-            let tiller = b.pivot(
-                entity,
-                Moving::Tiller,
-                Transform::from_translation(Vec3::from(s.rudder.at)),
-            );
-            b.cuboid(
-                tiller,
-                Vec3::new(0.05, rudder_h, s.rudder.area_m2 / rudder_h),
-                Vec3::ZERO,
-                &dark,
-            );
-            b.crew(entity, s.seat.eye, &crew);
-        }
         Kind::Loon | Kind::Rowboat => {
             // The towns mockup's small boats (`cities-in-the-world` task
             // 4.2b): the canoe in driftwood, the rowboat in boards with its
@@ -664,17 +589,6 @@ pub fn place(
         };
         let craft = &vehicle.craft;
         match (part.kind, &craft.state) {
-            (Moving::Boom, CraftState::Tern(s)) => {
-                transform.rotation = Quat::from_rotation_y(s.boom as f32);
-            }
-            (Moving::Tiller, CraftState::Tern(s)) => {
-                transform.rotation = Quat::from_rotation_y(s.tiller as f32);
-            }
-            (Moving::Keel, CraftState::Tern(s)) => {
-                let spec = &craft.specs().tern;
-                transform.translation =
-                    Vec3::from(spec.keel.at) + Vec3::Y * spec.lift.raised_m(s.keel) as f32;
-            }
             (Moving::Tiller, CraftState::Cog(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.tiller as f32);
             }
@@ -712,14 +626,10 @@ pub fn place(
                 });
                 transform.rotation = Quat::from_rotation_x(swing);
             }
-            (Moving::Crew, state) => {
+            (Moving::Crew, _) => {
                 let chase = !(view.seat && aboard.0 == Some(entity));
                 *visibility = visible(craft.occupied && chase);
-                let hike = match state {
-                    CraftState::Tern(s) => s.crew as f32,
-                    _ => 0.0,
-                };
-                transform.translation = Vec3::from(craft.seat().eye) + Vec3::X * hike;
+                transform.translation = Vec3::from(craft.seat().eye);
             }
             _ => {}
         }

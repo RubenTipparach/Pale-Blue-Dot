@@ -1,4 +1,4 @@
-//! Vehicles in the app: the Tern, the Loon and the harbours' boats as entities, the
+//! Vehicles in the app: the Loon, the made boats and the harbours' boats as entities, the
 //! world sampled round each one every tick and handed to `pbd_core::vehicle`,
 //! boarding and leaving, and the durable record of every craft.
 //!
@@ -522,11 +522,6 @@ fn read_controls(
         ..default()
     };
     match vehicle.craft.kind {
-        Kind::Tern => {
-            input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
-            input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
-            input.crew = axis(KeyCode::KeyE, KeyCode::KeyQ);
-        }
         Kind::Loon | Kind::Rowboat | Kind::Raft => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);

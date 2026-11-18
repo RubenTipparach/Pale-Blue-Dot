@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "schema": 1,
         "axes": "+X right, +Y up, +Z aft; metres",
         "specs": specs,
-        "hulls": {"tern": shape(specs.tern.hull), "loon": shape(specs.loon.hull)},
+        "hulls": {"loon": shape(specs.loon.hull)},
     });
     std::fs::create_dir_all(output.parent().ok_or("output needs a parent directory")?)?;
     std::fs::write(&output, serde_json::to_string_pretty(&data)? + "\n")?;

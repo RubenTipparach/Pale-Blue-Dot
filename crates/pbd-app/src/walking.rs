@@ -1003,6 +1003,18 @@ pub fn arrive_new(world: &mut World, direction: Vec3) {
     place_walker(world, up, None);
 }
 
+/// Put the walker on the nearest dry land to `direction` (body-local),
+/// keeping its heading: where a player loaded at a retired craft over the sea
+/// is put (`retire-tern` decision 2), by the start search's own rule
+/// (`PlanetContact::find_land_near`).
+pub fn put_ashore(world: &mut World, direction: Vec3) {
+    let land = world
+        .resource::<PlanetContact>()
+        .find_land_near(direction)
+        .normalize();
+    place_walker(world, land, None);
+}
+
 /// Put the walker back at this world's spawn, which is what a NEW world and
 /// the reset key both want.
 pub fn respawn(world: &mut World) {
