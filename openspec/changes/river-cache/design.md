@@ -324,11 +324,16 @@ a mouse turns it), in the shape of `--coast-walk`:
   the start (`--at`): up to its source (each step up the widest feeder) and
   down to the sea. Its length is logged at the start.
 - **The path:** the course's cell centres, offset a bank's width to one side
-  (`half width + bank + 4 m`), so the walker keeps to the bank, a few metres
-  off the water, and the river is in view ahead and to one side. It steers
-  toward the point 24 m further along the path; stalls are hopped, and
-  after 1.5 s stuck it turns 40 degrees away from the river and walks on, as
-  the coast walk does. In water it swims at the surface.
+  (`half width + 9 m`, either bank: `--walk-river left|right`), so the
+  walker keeps to the bank, a few metres off the water. It moves toward the
+  point 24 m further along that path, sprinting, with the keys a player
+  strafes with (W, A, S, D relative to the view), while the view turns (no
+  faster than 70 degrees a second, as a mouse does) to look 50 m down the
+  river's own line, so the river and its distance are what is filmed. A
+  rise the auto step will not take is hopped; after 1.5 s stuck the walker
+  turns its way 40 degrees away from the river; stuck twice in one place it
+  takes the river's channel for 10 s, swimming. A plain launch's title
+  screen is not opened in front of it, as for a capture.
 - **The log:** `RIVER_WALK_START <length> m`, a `RIVER_WALK` line every
   second (seconds, metres walked, the share of the river's length passed,
   place), and `RIVER_WALK_DONE` at the mouth or when the river's last cell
@@ -347,3 +352,58 @@ The recording: the same build, run once with `origin/main`'s
 `assets` folder by the executable) and once with this change's, so the two
 walks differ in that one file and nothing else. Real time, `obs-record`,
 one OBS.
+
+## 9. Measured after (2026-11-17, M4 Max, `--profile fast`)
+
+**At the owner's spot** (`--at 20.885 -6.393`, captures in
+`docs/screenshots/river-cache/`, `origin/main`'s visibility shader against
+this change's, the same executable otherwise):
+
+- From 80 m up, pitched down 25 degrees (`owner-spot-air-*`): before, the
+  water stops at the fall at the tier's edge and the channel is dry for the
+  next ~100-150 m, then the far sheet resumes; after, the river is unbroken
+  from the tier to the sea.
+- From 12 m up looking downstream (`owner-spot-h12-*`,
+  `owner-spot-past-the-fall-*`): before, past the fall a dry red bed; after,
+  the river's sheet runs on past it.
+- From the bank at eye height looking the owner's way (`owner-spot-bank-*`):
+  the two are the same. From there the downstream reach turns behind the
+  bank and drops under the eye; nothing of it is in view to draw. The owner's
+  frame was taken facing along a reach that was in view.
+- On arrival: the far sheet's record (`spare.w`) is uploaded with the
+  ground's own record in the set that lands, and the listing that draws the
+  ground is the one that now draws the sheet, so a river past the tier comes
+  with its ground in the same frame; the tier's own water was already in the
+  set (section 1). That is by construction and by the walk below (each
+  second, every set): no arrival was filmed frame by frame.
+
+**Along the whole river** (`--walk-river right --at 19.25 -6.75`, the
+owner's river, 1,593 m from its source at level 88 to the sea, 35 lattice
+cells, 12 falls; walked source to mouth in 261-269 s in each recording):
+`RIVER_AHEAD`, the drawn water ahead each second, is a CPU model of the
+listing test with the camera's own view, so each run logs both rules:
+
+| | old rule (sea's sphere) | new rule (own surface) |
+| --- | ---: | ---: |
+| Median metres of river drawn ahead (of up to 600 measured) | 56 | 600 |
+| Tenth percentile | 28-36 | 179-201 (the river's end in reach) |
+| Seconds the whole measured stretch was drawn | 3-5% | 100% |
+
+The old rule's median is the distance to the column tier's edge: past it,
+nothing. The new rule's shortfalls from 600 m are all the river ending
+(the mouth within 600 m), never a culled sheet.
+
+**Frame time.** One branch and a bitcast per cell in the visibility pass,
+and more water instances listed: the river cells actually in view (at most
+a few hundred 18-vertex fans). The perf suite's verdict is in section 10.
+
+**The recording.** `river-walk-before-after-2026-11-17-900p60.mp4`: the
+before walk, the after walk, then the two side by side matched by progress
+along the river, captioned with the share of the river, the metres walked
+and `RIVER_AHEAD` under that recording's rule. Real time, OBS, one instance;
+the game rendered at the window's 2880 x 1800 and the video is half that.
+OBS's cadence check: median 46 (before) and 56 (after) new frames a second
+of 60, on a machine other sessions were also using (load average 6-30), so
+the video shows what is drawn, not how smoothly. The two walks are the same
+script from the same start but not the same frames: the walker's path
+differs a little run to run.

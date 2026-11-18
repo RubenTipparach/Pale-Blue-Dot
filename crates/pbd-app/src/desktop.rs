@@ -1529,7 +1529,9 @@ pub fn run(args: &[String]) {
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
         launch.world.is_some() || launch.showcase.is_some(),
-        launch.capture.is_some(),
+        // A recording instrument plays the world it was launched on, as a
+        // capture does: the title screen would stand in front of the film.
+        launch.capture.is_some() || launch.walk_river,
     );
     let restored = world.pose;
     // Where and when a world with no pose starts, from the launch alone, for
@@ -4029,6 +4031,8 @@ fn river_walk_script(
     space: pbd_app::SimSpace,
 ) {
     use pbd_app::river_walk::{RiverPath, STEER_AHEAD_M};
+    /// How far down the river's line the view looks, m.
+    const LOOK_AHEAD_M: f32 = 50.0;
     if !state.active || walk.done {
         return;
     }
@@ -4077,6 +4081,8 @@ fn river_walk_script(
     if let Some(until) = walk.backing {
         if now < until {
             keys.release(KeyCode::KeyW);
+            keys.release(KeyCode::KeyA);
+            keys.release(KeyCode::KeyD);
             keys.press(KeyCode::KeyS);
             keys.press(KeyCode::Space);
             return;
@@ -4086,19 +4092,39 @@ fn river_walk_script(
         keys.release(KeyCode::Space);
         walk.anchor = Some((here, now));
     }
-    keys.press(KeyCode::KeyW);
+    // The view looks down the river, 50 m along its line, so the river and
+    // its distance are in the picture; the walker moves toward its own
+    // target on the bank with the keys a player strafes with (W, A, S, D
+    // relative to the view), so the two can differ.
+    let look = path.line_at(walk.best_m.max(progress) + LOOK_AHEAD_M);
+    let look = (look - up * look.dot(up)).normalize_or(state.view().0);
+    let heading = state.view().0;
+    let moving = walk
+        .target
+        .map(|t| (t - up * t.dot(up)).normalize_or(heading))
+        .unwrap_or(heading);
+    let left = up.cross(heading).normalize_or_zero();
+    let (ahead, aside) = (moving.dot(heading), moving.dot(left));
+    for (key, on) in [
+        (KeyCode::KeyW, ahead > 0.38),
+        (KeyCode::KeyS, ahead < -0.38),
+        (KeyCode::KeyA, aside > 0.38),
+        (KeyCode::KeyD, aside < -0.38),
+    ] {
+        if on {
+            keys.press(key);
+        } else {
+            keys.release(key);
+        }
+    }
     if let Some((last, at)) = walk.last {
         walk.walked_m += ground_m(here, last).min(5.0);
-        if let Some(target) = walk.target {
-            let dt = now.duration_since(at).as_secs_f32();
-            let heading = state.view().0;
-            let target = (target - up * target.dot(up)).normalize_or(heading);
-            let angle = heading.angle_between(target);
-            let sign = up.dot(heading.cross(target)).signum();
-            let turn = angle.min(70f32.to_radians() * dt) * sign;
-            if turn.abs() > 1e-5 {
-                state.face(up, Quat::from_axis_angle(up, turn) * heading);
-            }
+        let dt = now.duration_since(at).as_secs_f32();
+        let angle = heading.angle_between(look);
+        let sign = up.dot(heading.cross(look)).signum();
+        let turn = angle.min(70f32.to_radians() * dt) * sign;
+        if turn.abs() > 1e-5 {
+            state.face(up, Quat::from_axis_angle(up, turn) * heading);
         }
     }
     walk.last = Some((here, now));
@@ -4130,8 +4156,7 @@ fn river_walk_script(
     // A rise the auto step will not take, just ahead along the heading: hop
     // it, as a player does, rather than walk into it and stall.
     let rise = {
-        let heading = state.view().0;
-        let ahead = (up + heading * (2.5 / pbd_app::planet::PLANET_RADIUS)).normalize();
+        let ahead = (up + moving * (2.5 / pbd_app::planet::PLANET_RADIUS)).normalize();
         pbd_app::planet::surface_height(ahead) - pbd_app::planet::surface_height(up) > 0.8
     };
     if ground_m(here, anchor) > 1.5 {
@@ -4166,7 +4191,7 @@ fn river_walk_script(
         if stalled > 1.5 {
             // Away from the river: a left bank turns right, a right bank left.
             let side = if launch.walk_river_right { -1.0 } else { 1.0 };
-            let away = Quat::from_axis_angle(up, -side * 40f32.to_radians()) * state.view().0;
+            let away = Quat::from_axis_angle(up, -side * 40f32.to_radians()) * moving;
             walk.target = Some(away);
             walk.steered = Some(now);
             walk.turns += 1;

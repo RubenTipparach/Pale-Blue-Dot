@@ -76,10 +76,11 @@
 - [x] `river_walk::RiverPath`: the bank path, progress and the drawn-water
       measure, with tests.
 - [x] `--walk-river`: the walk through the player's inputs, its log lines.
-- [ ] The recording: before and after, one OBS, real time, cut into one
-      video with progress captions; uploaded to Drive.
+- [x] The recording: before and after, one OBS, real time, cut into one
+      video with progress captions (`river-walk-before-after-2026-11-17-900p60.mp4`,
+      design 9); uploaded to Drive.
 
 ## 9. Measure again
-- [ ] `RIVER_AHEAD` along the whole walk, old rule against new, summarised
+- [x] `RIVER_AHEAD` along the whole walk, old rule against new, summarised
       in design 9.
 - [ ] The perf suite on the release build (the fix lists more sheets).
