@@ -4830,6 +4830,9 @@ fn hide_in_play_hud(mut nodes: Query<&mut Visibility, With<Node>>) {
     }
 }
 
+/// How long into a bite `--fish-play` strikes, s.
+const FISH_PLAY_STRIKE_S: f32 = 0.3;
+
 /// `--fish-play` is on: `fish_script` plays the bite out.
 #[derive(Resource)]
 struct FishPlay;
@@ -4855,6 +4858,8 @@ fn fish_script(
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut was: Local<Option<pbd_core::fishing::Phase>>,
     mut frame: Local<u32>,
+    time: Res<Time>,
+    mut bite_at: Local<Option<f32>>,
 ) {
     use pbd_core::fishing::Phase;
     *frame += 1;
@@ -4908,11 +4913,24 @@ fn fish_script(
             );
             *was = Some(line.phase);
         }
+        // Strike 0.3 s into the bite, as a player who sees the float go
+        // under does (and as M37's angler does, `fish-behaviour`), so the
+        // take is seen before the strike.
+        let now = time.elapsed_secs();
+        if line.phase == Phase::Bite {
+            bite_at.get_or_insert(now);
+        } else {
+            *bite_at = None;
+        }
         match line.phase {
             // The float has gone under: click.
-            Phase::Bite if !buttons.pressed(MouseButton::Left) => {
+            Phase::Bite
+                if !buttons.pressed(MouseButton::Left)
+                    && bite_at.is_some_and(|at| now - at >= FISH_PLAY_STRIKE_S) =>
+            {
                 buttons.press(MouseButton::Left);
             }
+            Phase::Bite => {}
             // Reel as a hand does: hold the button down until the tension
             // is high, let it up until it has fallen, never one frame on and
             // one off (`movement-smoothness` 7.2).

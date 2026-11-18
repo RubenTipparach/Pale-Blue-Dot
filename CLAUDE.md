@@ -334,6 +334,22 @@ in it, outlives every change to how worlds are made:
   stay valid: a saved edit is indexed from `column::BASE_M`, which does not
   move.
 
+## One pull request, not many (owner, 2026-11-18)
+
+**Standing instruction from the user:** "add to claude md to maintain a
+single pr and not worry about breaking up features, that is a human habbit,
+not suitable for you" (after seven parallel PRs conflicted at merge: "you
+wouldnt have had to do this if youhad stuck to one pr").
+- Work in hand goes on one branch and one open PR at a time. New asks,
+  fixes and features are added to it as further commits; do not split them
+  into separate PRs by feature.
+- Agents working in parallel still use their own worktrees, but each lands
+  its commits on that one branch as it finishes, and conflicts are resolved
+  there, not at merge time.
+- Commits stay readable (one topic each, with its write-up); the PR is the
+  unit of merging, not of review.
+- A second PR is opened only when the owner asks for one.
+
 ## No scheduled PR check-ins (owner, 2026-09-29)
 
 **Standing instruction from the user:** "you should never rearm pr

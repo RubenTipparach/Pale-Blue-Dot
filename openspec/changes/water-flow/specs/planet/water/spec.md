@@ -108,3 +108,19 @@ still step based."
 - **WHEN** a cell wet last tick is dry this tick
 - **THEN** halfway through the tick it is drawn with its top between its
   last level and its floor, and at the tick's end it is not drawn
+
+### Requirement: A fall's ripples and splash follow its size
+A fall's foot ripples SHALL fade in with the depth of the pool under the
+foot, from none at one layer to full at two. A fall that drops less than one
+layer SHALL emit no mist, and a fall whose drop crosses one layer SHALL ease
+its mist in or out over time. A small fall SHALL show its mist at half the
+approved opacity and fewer particles, rising smoothly to the approved look
+for a fall of four metres or more.
+
+#### Scenario: A shallow stream stepping down
+- **WHEN** a stream drops less than a metre into one layer of water
+- **THEN** its foot shows no ripple rings and no mist puffs
+
+#### Scenario: A tall fall into a deep pool
+- **WHEN** a fall drops four metres or more into a pool two layers deep or more
+- **THEN** its mist, particles and ripples are as approved in M35

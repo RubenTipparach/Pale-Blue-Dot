@@ -110,6 +110,9 @@ button{font:inherit;color:inherit}
       <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="4" step="0.05" value="2"><output id="gainOut">2.00</output></div>
       <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="6" step="0.05" value="1"><output id="mistOut">1.00</output></div>
       <div class="sl one"><label for="mistSize">Mist size</label><input id="mistSize" type="range" min="0.4" max="5" step="0.05" value="1.65"><output id="mistSizeOut">1.65</output></div>
+      <div class="sl one"><label for="noMist">No mist under, m</label><input id="noMist" type="range" min="0" max="4" step="0.05" value="1"><output id="noMistOut">1.00</output></div>
+      <div class="sl one"><label for="smallMist">Small-fall mist</label><input id="smallMist" type="range" min="0" max="1" step="0.05" value="0.5"><output id="smallMistOut">0.50</output></div>
+      <div class="sl one"><label for="smallCount">Small-fall particles</label><input id="smallCount" type="range" min="0" max="1" step="0.05" value="0.35"><output id="smallCountOut">0.35</output></div>
       <div class="sl one"><label for="soft">Wall blend</label><input id="soft" type="range" min="0" max="6" step="0.05" value="1.2"><output id="softOut">1.20</output></div>
     </div></details>
     <details class="grp" data-grp="Falling water"><summary>Falling water</summary><div class="grpb">
@@ -131,6 +134,8 @@ button{font:inherit;color:inherit}
       <div class="sl one"><label for="rip">Ripple height</label><input id="rip" type="range" min="0" max="6" step="0.05" value="0.5"><output id="ripOut">0.50</output></div>
       <div class="sl one"><label for="ripLen">Ripple size, m</label><input id="ripLen" type="range" min="0.3" max="6" step="0.05" value="0.9"><output id="ripLenOut">0.90</output></div>
       <div class="sl one"><label for="ripReach">Ripple reach, m</label><input id="ripReach" type="range" min="1" max="30" step="0.25" value="6"><output id="ripReachOut">6.00</output></div>
+      <div class="sl one"><label for="ripDepth0">Ripples from depth, m</label><input id="ripDepth0" type="range" min="0" max="4" step="0.05" value="1"><output id="ripDepth0Out">1.00</output></div>
+      <div class="sl one"><label for="ripDepth1">Ripples full at, m</label><input id="ripDepth1" type="range" min="0.1" max="6" step="0.05" value="2"><output id="ripDepth1Out">2.00</output></div>
       <div class="sl one"><label for="out">Pool flow</label><input id="out" type="range" min="0" max="6" step="0.05" value="0.1"><output id="outOut">0.10</output></div>
       <div class="sl one"><label for="outReach">Flow reach, m</label><input id="outReach" type="range" min="1" max="30" step="0.25" value="6"><output id="outReachOut">6.00</output></div>
     </div></details>
@@ -197,6 +202,14 @@ button{font:inherit;color:inherit}
     <tr><td>9 layers</td><td>9</td><td>9.4 m</td><td>12, 0.45</td><td>14, 0.45</td></tr>
   </table></div>
   <p>In the game every run of falling faces would carry its own foot record, the bottom of its lowest face, so a foot cell's face over air mists too.</p>
+  <h3>A fall's size (owner, 2026-11-17)</h3>
+  <ul>
+    <li><q>this water is too shallow for ripples</q>: the foot's rings fade in with the pool's depth under the foot, none at 1 m (one layer), full at 2 m (<b>Ripples from depth</b>, <b>Ripples full at</b>). The riffle's 0.7 m channel has none; the 3.35 m pools keep theirs.</li>
+    <li><q>no steam/mist at all for drops that are less than 1 block height</q>: no mist puffs under a 1 m drop (<b>No mist under</b>), eased in or out over 0.6 s as a drop crosses it. Spray and fall droplets stay, fewer.</li>
+    <li><q>the mist should be 50% at this size</q>: the puffs' opacity is 0.5 (<b>Small-fall mist</b>) up to a 1.5 m drop, rising smoothly to the approved look by 4 m.</li>
+    <li><q>less particles for these shallow drops too</q>: puffs, spray, fall droplets and bubbles at 0.35 of the count (<b>Small-fall particles</b>) on the same ramp. The 4 and 9 layer falls are as approved.</li>
+    <li>On the Proposed rule only; the game has the same numbers in <code>water.ron</code>.</li>
+  </ul>
   <h3>The scroll, faster down a taller fall</h3>
   <ul>
     <li>Today a falling face scrolls at one speed top to bottom: the waves at 1 m/s (<code>flow_uv_speed_falling</code>), the froth streaks at 2.7 m/s (the same scroll plus a 0.6 drift on the stretched noise).</li>
@@ -239,7 +252,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=28"></script>
+<script src="waterfall-mist/mist.js?v=29"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -292,7 +305,7 @@ document.getElementById("focus").addEventListener("click", e => {
   for (const x of document.querySelectorAll("#focus button")) x.setAttribute("aria-pressed", String(x === b));
 });
 document.getElementById("rule").addEventListener("click", e => {
-  const b = e.target.closest("button[data-rule]"); if (!b) return; P.S.rule = b.dataset.rule;
+  const b = e.target.closest("button[data-rule]"); if (!b) return; P.S.rule = b.dataset.rule; P.apply();
   for (const x of document.querySelectorAll("#rule button")) x.setAttribute("aria-pressed", String(x === b));
 });
 document.getElementById("pix").addEventListener("click", e => {
@@ -308,7 +321,7 @@ document.getElementById("pause").addEventListener("change", e => { P.S.running =
 document.getElementById("showRef").addEventListener("change", refresh);
 const gain = document.getElementById("gain");
 gain.addEventListener("input", () => { P.S.gain = +gain.value; document.getElementById("gainOut").textContent = (+gain.value).toFixed(2); P.apply(); });
-for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"], ["rip", "rip"], ["out", "out"], ["ripLen", "ripLen"], ["ripReach", "ripReach"], ["outReach", "outReach"], ["glassTop", "glassTop"], ["glassFace", "glassFace"], ["fill", "fill"], ["glassTint", "glassTint"], ["edgeHi", "edgeHi"]]) {
+for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"], ["rip", "rip"], ["out", "out"], ["ripLen", "ripLen"], ["ripReach", "ripReach"], ["outReach", "outReach"], ["noMist", "noMist"], ["smallMist", "smallMist"], ["smallCount", "smallCount"], ["ripDepth0", "ripDepth0"], ["ripDepth1", "ripDepth1"], ["glassTop", "glassTop"], ["glassFace", "glassFace"], ["fill", "fill"], ["glassTint", "glassTint"], ["edgeHi", "edgeHi"]]) {
   const el = document.getElementById(id);
   el.addEventListener("input", () => { P.S[key] = +el.value; document.getElementById(id + "Out").textContent = (+el.value).toFixed(2); P.apply(); });
 }

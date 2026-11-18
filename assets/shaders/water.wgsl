@@ -161,8 +161,13 @@ struct WaterView {
     fall_more: vec4<f32>,
     fall_splash: vec4<f32>,
     aer_color: vec4<f32>,
+    // A fall's size: x the mist's opacity share and y the particles' count
+    // share on a small fall, z the drop m up to which a fall is small, w the
+    // drop m from which it is full (`fall_size_scale` in `water_flow.rs`).
+    fall_size: vec4<f32>,
     // The nearest feet: xyz where each lands (body-local), w its drop m;
-    // then x the pool's depth under it m, y a seed, z its fade.
+    // then x the pool's depth under it m, y a seed, z its fade, w its
+    // ripples' share by that depth (none over shallow water, faded in).
     feet: array<vec4<f32>, 8>,
     feet_more: array<vec4<f32>, 8>,
 }
@@ -971,7 +976,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Foot ripples (M35, `uRip`): rings run out from the falling column
     // across the pool, `fall_look.w` apart at 1.3 m/s, strongest at the
     // column and gone by the reach; they tilt the normal and whiten a little
-    // on their crests near the column.
+    // on their crests near the column. Only on water deep enough for them
+    // (`feet_more.w`, the depth gate; owner, 2026-11-17: "this water is too
+    // shallow for ripples").
     var rip_foam = 0.0;
     if (pool_top && view.fall_look.z > 0.0) {
         let len = max(view.fall_look.w, 0.05);
@@ -987,7 +994,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
             let ph = k*x - seconds*1.3*k;
             let reach = min(2.0 + 0.35*h, reach_max);
             let env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*reach_max, reach_max, x))
-                *(0.6 + 0.06*min(h, 10.0))*view.fall_look.z*o.w;
+                *(0.6 + 0.06*min(h, 10.0))*view.fall_look.z*o.w*view.feet_more[i].w;
             let slope = cos(ph)*env*0.55*(0.9/len);
             gradient += o.xyz/max(d, 1e-3)*slope*12.5*0.25;
             rip_foam = max(rip_foam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
@@ -3149,7 +3156,11 @@ fn bubble_vertex(@builtin(vertex_index) vertex: u32) -> BubbleOut {
     let foot = view.feet[i];
     let more = view.feet_more[i];
     let h = max(foot.w, 0.0);
-    let count = min(u32(round((60.0 + 14.0*h)*view.fall_more.w)), BUBBLES_MAX);
+    // Fewer on a small fall (owner, 2026-11-17: "less particles for these
+    // shallow drops too"), as the CPU's splash by the same ramp.
+    let small = mix(view.fall_size.y, 1.0, smoothstep(view.fall_size.z,
+        max(view.fall_size.w, view.fall_size.z + 1e-3), h));
+    let count = min(u32(round((60.0 + 14.0*h)*view.fall_more.w*small)), BUBBLES_MAX);
     if (b >= count || more.z <= 0.0) { return out; }
     let salt = u32(more.y*65535.0)*7919u + b*4u;
     let seed = vec4<f32>(bubble_hash(salt), bubble_hash(salt + 1u), bubble_hash(salt + 2u), bubble_hash(salt + 3u));
