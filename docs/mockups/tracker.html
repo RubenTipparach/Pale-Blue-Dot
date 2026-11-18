@@ -285,6 +285,8 @@ const MOCKUPS = [
 
 // Every other published artifact, by section, newest first.
 const GUIDES = [
+  { title: 'Multiplayer Architecture', page: 'docs/design/multiplayer-architecture.html', url: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw',
+    published: '2026-11-18', summary: 'Phase 3b drawn out: one server, region streams near and far, a dig from click to everyone, checksums and resync, and what we take from Luanti.' },
   { title: 'Fish Range Atlas', page: 'docs/wiki/fish-ranges/index.html', url: 'https://claude.ai/artifact/Sr32H5K9cCmkteSDytP3hj',
     published: '2026-09-24', summary: 'One range map per fish species, field-guide style, measured off the climate.' },
 ];
@@ -517,7 +519,7 @@ const ROADMAP = [
     { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
   ] },
   { title: 'Multiplayer', num: '3b', when: 'later', note: 'After the townsfolk, before town building. Written up, not started.', steps: [
-    { title: 'One authority', status: 'planned', change: 'multiplayer', refs: [], text: 'The server holds every edit, item, crop and animal; single player runs the same server in the game.' },
+    { title: 'One authority', status: 'planned', change: 'multiplayer', refs: [], doc: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw', text: 'The server holds every edit, item, crop and animal; single player runs the same server in the game.' },
     { title: 'Regions near each player', status: 'planned', change: 'multiplayer', refs: [], text: 'Each player streams the regions around them in the server\'s order and builds their own detail.' },
     { title: 'Checksums and resync', status: 'planned', change: 'multiplayer', refs: [], text: 'The server sends each region\'s digest; a player whose copy differs fetches the region again.' },
     { title: 'Playing together', status: 'planned', change: 'multiplayer', refs: [], text: 'Host and join, other players in the world, trades and chat near or far.' },

@@ -1,0 +1,455 @@
+<title>Multiplayer Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column of argued sections, each built round one diagram drawn as an engineer's figure.
+   Dark first, like the tracker; a daylight variant for light viewers. */
+:root {
+  --bg: #0b1119; --panel: #131c28; --slot: #0f1722; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2f4058;
+  --accent: #e8b44c; --accent-soft: #3a2c12; --go: #7fb2f0; --go-soft: #15263c; --warn: #f07a6a; --ok: #7fcf86;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef2f6; --panel: #ffffff; --slot: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #b9c6d4;
+    --accent: #9a6a10; --accent-soft: #f6e6c4; --go: #2a5ea8; --go-soft: #dde8f7; --warn: #b8392b; --ok: #2f7a3a;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eef2f6; --panel: #ffffff; --slot: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #b9c6d4;
+  --accent: #9a6a10; --accent-soft: #f6e6c4; --go: #2a5ea8; --go-soft: #dde8f7; --warn: #b8392b; --ok: #2f7a3a;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 920px; margin: 0 auto; display: grid; gap: 40px; }
+header.top { padding-top: 28px; display: grid; gap: 12px; }
+.hudline { font: 500 12px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.04em; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.hudline b { color: var(--accent); font-weight: 600; }
+.hudline a { color: var(--accent); }
+h1 { font: 700 clamp(32px, 6vw, 50px)/1.05 var(--display); margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 66ch; }
+section { display: grid; gap: 14px; min-width: 0; }
+section > h2 { font: 700 26px/1.15 var(--display); margin: 0; padding-top: 18px; border-top: 2px solid var(--line); text-wrap: balance; }
+section > h2 .tag { font: 600 12px/1 var(--mono); color: var(--accent); letter-spacing: 0.06em; margin-right: 10px; vertical-align: 4px; }
+p { margin: 0; max-width: 68ch; }
+code { font: 500 0.88em var(--mono); background: var(--slot); border: 1px solid var(--line); padding: 1px 5px; }
+.quote { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 14px; font-size: 15px; display: grid; gap: 6px; }
+.quote p { max-width: none; }
+.quote .who { font: 500 12px/1 var(--mono); color: var(--muted); }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.scroll { overflow-x: auto; }
+figure svg { display: block; width: 100%; height: auto; min-width: 640px; color: var(--ink); font-family: var(--mono); }
+figcaption { font-size: 14px; color: var(--muted); max-width: 72ch; }
+/* SVG parts, styled from the page so the figures follow the theme. */
+.box { fill: var(--slot); stroke: var(--line); stroke-width: 1.5; }
+.box.srv { fill: var(--go-soft); stroke: var(--go); }
+.box.acc { fill: var(--accent-soft); stroke: var(--accent); }
+.row { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.t { fill: var(--ink); font-size: 13px; }
+.t.h { font-weight: 600; font-size: 14px; }
+.t.m { fill: var(--muted); font-size: 12px; }
+.t.a { fill: var(--accent); }
+.t.g { fill: var(--go); }
+.t.w { fill: var(--warn); }
+.t.ok { fill: var(--ok); }
+.ln { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+.ln.a { stroke: var(--accent); }
+.ln.g { stroke: var(--go); }
+.ln.w { stroke: var(--warn); }
+.ln.d { stroke-dasharray: 5 4; }
+.life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.planet { fill: var(--go-soft); stroke: var(--go); stroke-width: 1.5; }
+.ring1 { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; fill-opacity: 0.8; }
+.ring2 { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 4; }
+.dot { fill: var(--ink); }
+.mk { fill: var(--ink); }
+.mk.a { fill: var(--accent); }
+.mk.g { fill: var(--go); }
+.mk.w { fill: var(--warn); }
+/* Tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.3 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); background: var(--slot); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+.pill { font: 600 11px/1 var(--mono); padding: 3px 6px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.s { color: var(--go); background: var(--go-soft); }
+.pill.c { color: var(--accent); background: var(--accent-soft); }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: baseline; background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; min-width: 0; }
+ol.steps li::before { content: counter(s); font: 600 13px/1 var(--mono); color: var(--accent); border: 1px solid currentColor; padding: 4px 0; text-align: center; }
+ol.steps li.dep::before { color: var(--muted); }
+ol.steps b { font-family: var(--display); }
+ol.steps span { color: var(--muted); font-size: 14px; }
+ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 68ch; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="hudline"><span><b>PALE BLUE DOT</b> &middot; phase 3b &middot; OpenSpec <code>multiplayer</code></span><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></div>
+    <h1>Multiplayer Architecture</h1>
+    <p class="lede">How one planet is shared by up to 8 players: one server owns everything that is saved, each player's game builds its own view of the world, and per-region checksums keep every copy honest. This is the plan in <code>openspec/changes/multiplayer</code>, drawn out. Nothing here is built yet.</p>
+    <div class="quote">
+      <p>"server authority - server contains all data on item locations, map changes etc. ... a player interacting on one side of the planet with another player on other side of the planet, server must mediate that. each player handles their own LOD local data. sever periodically sends out checksum for the "chunk" client compares, and request new data if the "chunk data doest match"</p>
+      <span class="who">the owner, 2026-11-18</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-shape">
+    <h2 id="h-shape"><span class="tag">01</span>The shape: one server, many views</h2>
+    <p>The server holds the one save. A game never writes the world. It sends what its player tried to do, and changes its own copy only from what the server sends back. What the server sends is <em>facts</em> (edits, records, items), never geometry: each game builds its own detail tiers, contact and light from the seed plus those facts, the way it already does today.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 440" role="img" aria-label="Two clients connect to one server over QUIC. Clients send requests and presence; the server sends ordered region changes, digests and other players' positions. Only the server writes the save.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk a"/></marker>
+          <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk g"/></marker>
+        </defs>
+        <!-- Client A -->
+        <rect class="box" x="20" y="30" width="230" height="300"/>
+        <text class="t h" x="135" y="56" text-anchor="middle">Player A's game</text>
+        <text class="t m" x="135" y="74" text-anchor="middle">pbd-app</text>
+        <rect class="row" x="36" y="90" width="198" height="42"/><text class="t" x="135" y="109" text-anchor="middle">input → predict</text><text class="t m" x="135" y="124" text-anchor="middle">same ACCEPT rule, drawn at once</text>
+        <rect class="row" x="36" y="142" width="198" height="42"/><text class="t" x="135" y="161" text-anchor="middle">region copies</text><text class="t m" x="135" y="176" text-anchor="middle">only the regions near A</text>
+        <rect class="row" x="36" y="194" width="198" height="42"/><text class="t" x="135" y="213" text-anchor="middle">own LOD · fine tier · light</text><text class="t m" x="135" y="228" text-anchor="middle">built locally, never sent</text>
+        <rect class="row" x="36" y="246" width="198" height="42"/><text class="t" x="135" y="265" text-anchor="middle">other players</text><text class="t m" x="135" y="280" text-anchor="middle">smoothed between snapshots</text>
+        <text class="t m" x="135" y="314" text-anchor="middle">own floating origin</text>
+        <!-- Server -->
+        <rect class="box srv" x="335" y="30" width="230" height="300"/>
+        <text class="t h g" x="450" y="56" text-anchor="middle">Server (the authority)</text>
+        <text class="t m" x="450" y="74" text-anchor="middle">pbd-server · 20 Hz tick</text>
+        <rect class="row" x="351" y="90" width="198" height="42"/><text class="t" x="450" y="109" text-anchor="middle">ACCEPT or refuse</text><text class="t m" x="450" y="124" text-anchor="middle">rules from pbd-core</text>
+        <rect class="row" x="351" y="142" width="198" height="42"/><text class="t" x="450" y="161" text-anchor="middle">sequence per region</text><text class="t m" x="450" y="176" text-anchor="middle">the one order of changes</text>
+        <rect class="row" x="351" y="194" width="198" height="42"/><text class="t" x="450" y="213" text-anchor="middle">digest per region</text><text class="t m" x="450" y="228" text-anchor="middle">updated on every change</text>
+        <rect class="row" x="351" y="246" width="198" height="42"/><text class="t" x="450" y="265" text-anchor="middle">animals · water · clock</text><text class="t m" x="450" y="280" text-anchor="middle">where players stand</text>
+        <text class="t m" x="450" y="314" text-anchor="middle">no render origin</text>
+        <!-- Client B -->
+        <rect class="box" x="650" y="30" width="230" height="300"/>
+        <text class="t h" x="765" y="56" text-anchor="middle">Player B's game</text>
+        <text class="t m" x="765" y="74" text-anchor="middle">pbd-app</text>
+        <rect class="row" x="666" y="90" width="198" height="42"/><text class="t" x="765" y="109" text-anchor="middle">input → predict</text>
+        <rect class="row" x="666" y="142" width="198" height="42"/><text class="t" x="765" y="161" text-anchor="middle">region copies</text><text class="t m" x="765" y="176" text-anchor="middle">only the regions near B</text>
+        <rect class="row" x="666" y="194" width="198" height="42"/><text class="t" x="765" y="213" text-anchor="middle">own LOD · fine tier · light</text>
+        <rect class="row" x="666" y="246" width="198" height="42"/><text class="t" x="765" y="265" text-anchor="middle">other players</text>
+        <!-- A <-> Server -->
+        <line class="ln a" x1="236" y1="104" x2="349" y2="104" marker-end="url(#arA)"/>
+        <text class="t m a" x="292" y="97" text-anchor="middle">request</text>
+        <line class="ln g" x1="349" y1="156" x2="236" y2="156" marker-end="url(#arG)"/>
+        <text class="t m" x="292" y="149" text-anchor="middle">changes</text>
+        <line class="ln g" x1="349" y1="208" x2="236" y2="208" marker-end="url(#arG)"/>
+        <text class="t m" x="292" y="201" text-anchor="middle">digests</text>
+        <line class="ln d" x1="236" y1="262" x2="349" y2="262" marker-start="url(#ar)" marker-end="url(#ar)"/>
+        <text class="t m" x="292" y="255" text-anchor="middle">20 Hz pos</text>
+        <!-- B <-> Server -->
+        <line class="ln a" x1="664" y1="104" x2="551" y2="104" marker-end="url(#arA)"/>
+        <text class="t m a" x="608" y="97" text-anchor="middle">request</text>
+        <line class="ln g" x1="551" y1="156" x2="664" y2="156" marker-end="url(#arG)"/>
+        <text class="t m" x="608" y="149" text-anchor="middle">changes</text>
+        <line class="ln g" x1="551" y1="208" x2="664" y2="208" marker-end="url(#arG)"/>
+        <text class="t m" x="608" y="201" text-anchor="middle">digests</text>
+        <line class="ln d" x1="551" y1="262" x2="664" y2="262" marker-start="url(#ar)" marker-end="url(#ar)"/>
+        <text class="t m" x="608" y="255" text-anchor="middle">20 Hz pos</text>
+        <!-- Save -->
+        <rect class="box acc" x="365" y="372" width="170" height="48"/>
+        <text class="t h" x="450" y="394" text-anchor="middle">World save</text>
+        <text class="t m" x="450" y="410" text-anchor="middle">journal · regions · records</text>
+        <line class="ln a" x1="450" y1="330" x2="450" y2="370" marker-end="url(#arA)"/>
+        <text class="t m a" x="460" y="355">only writer</text>
+        <text class="t m" x="135" y="400" text-anchor="middle">no save of its own</text>
+        <text class="t m" x="765" y="400" text-anchor="middle">no save of its own</text>
+      </svg>
+      </div>
+      <figcaption>Requests and positions go up; ordered changes, digests and other players' positions come down. Everything travels over one QUIC connection: reliable ordered streams for changes, snapshots and trades, and unreliable datagrams for positions. Only the server touches the save.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="h-same">
+    <h2 id="h-same"><span class="tag">02</span>Single player is the same server</h2>
+    <p>There is no single-player path and a separate network path that drift apart. Single player starts the server inside the game process and talks to it through an in-memory channel carrying the same messages as the socket. Hosting opens that running server to other players without a reload. A dedicated server is the same crate with no window.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Crate layering: pbd-core at the bottom holds rules, protocol and digest. pbd-net and pbd-server build on it. pbd-app uses all three and runs pbd-server in-process for single player and hosting; a dedicated server is pbd-server plus pbd-net.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+        </defs>
+        <rect class="box acc" x="40" y="220" width="820" height="60"/>
+        <text class="t h" x="450" y="244" text-anchor="middle">pbd-core</text>
+        <text class="t m" x="450" y="264" text-anchor="middle">every rule (dig, craft, farm, herd, cook, fish) · message types and their bytes · region encoding and digest</text>
+        <rect class="box" x="40" y="120" width="250" height="60"/>
+        <text class="t h" x="165" y="144" text-anchor="middle">pbd-net</text>
+        <text class="t m" x="165" y="164" text-anchor="middle">QUIC streams + datagrams</text>
+        <rect class="box srv" x="325" y="120" width="250" height="60"/>
+        <text class="t h g" x="450" y="144" text-anchor="middle">pbd-server</text>
+        <text class="t m" x="450" y="164" text-anchor="middle">authority, no Bevy, no window</text>
+        <rect class="box" x="610" y="20" width="250" height="60"/>
+        <text class="t h" x="735" y="44" text-anchor="middle">pbd-app (the game)</text>
+        <text class="t m" x="735" y="64" text-anchor="middle">Bevy, Avian, rendering</text>
+        <rect class="box" x="40" y="20" width="250" height="60"/>
+        <text class="t h" x="165" y="44" text-anchor="middle">--server (dedicated)</text>
+        <text class="t m" x="165" y="64" text-anchor="middle">pbd-server + pbd-net</text>
+        <line class="ln" x1="165" y1="180" x2="165" y2="218" marker-end="url(#ar2)"/>
+        <line class="ln" x1="450" y1="180" x2="450" y2="218" marker-end="url(#ar2)"/>
+        <line class="ln" x1="735" y1="80" x2="735" y2="218" marker-end="url(#ar2)"/>
+        <line class="ln" x1="165" y1="80" x2="165" y2="118" marker-end="url(#ar2)"/>
+        <line class="ln" x1="230" y1="80" x2="400" y2="118" marker-end="url(#ar2)"/>
+        <line class="ln" x1="640" y1="80" x2="520" y2="118" marker-end="url(#ar2)"/>
+        <text class="t m" x="610" y="106" text-anchor="end">runs in process</text>
+        <line class="ln" x1="610" y1="66" x2="292" y2="140" marker-end="url(#ar2)"/>
+        <text class="t m" x="455" y="88" text-anchor="middle">joins / hosts</text>
+      </svg>
+      </div>
+      <figcaption>Arrows mean "depends on". The server can only run rules that live in <code>pbd-core</code>, so this phase finishes moving each saved-state rule out of the Bevy systems that call it today. That is most of the work.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="h-edit">
+    <h2 id="h-edit"><span class="tag">03</span>A dig, from click to everyone</h2>
+    <p>The player's own click stays instant: the game runs the same accept rule locally and draws the result at once, marked provisional. The server decides for real, writes it to the save, numbers it, and sends it to every player near that region in that order.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 420" role="img" aria-label="Sequence: A predicts a dig, sends a request; the server accepts, journals, waits for commit, then sends Accepted to A and the numbered change to B. A refused request makes A rebuild the cell from the server's edits.">
+        <defs>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          <marker id="ar3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk g"/></marker>
+          <marker id="ar3w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk w"/></marker>
+        </defs>
+        <rect class="box" x="50" y="14" width="120" height="34"/><text class="t h" x="110" y="36" text-anchor="middle">Player A</text>
+        <rect class="box srv" x="330" y="14" width="120" height="34"/><text class="t h g" x="390" y="36" text-anchor="middle">Server</text>
+        <rect class="box acc" x="560" y="14" width="120" height="34"/><text class="t h" x="620" y="36" text-anchor="middle">Save</text>
+        <rect class="box" x="740" y="14" width="120" height="34"/><text class="t h" x="800" y="36" text-anchor="middle">Player B</text>
+        <line class="life" x1="110" y1="48" x2="110" y2="410"/>
+        <line class="life" x1="390" y1="48" x2="390" y2="410"/>
+        <line class="life" x1="620" y1="48" x2="620" y2="410"/>
+        <line class="life" x1="800" y1="48" x2="800" y2="410"/>
+        <text class="t" x="122" y="82">1 dig: predict, draw at once</text>
+        <line class="ln" x1="110" y1="108" x2="386" y2="108" marker-end="url(#ar3)"/>
+        <text class="t m" x="248" y="100" text-anchor="middle">2 request: dig cell, held tool</text>
+        <text class="t" x="402" y="142">3 ACCEPT: validate, spend item</text>
+        <line class="ln" x1="390" y1="170" x2="616" y2="170" marker-end="url(#ar3)"/>
+        <text class="t m" x="503" y="162" text-anchor="middle">4 journal entry</text>
+        <line class="ln" x1="620" y1="204" x2="394" y2="204" marker-end="url(#ar3)"/>
+        <text class="t m" x="507" y="196" text-anchor="middle">5 committed</text>
+        <line class="ln g" x1="390" y1="242" x2="114" y2="242" marker-end="url(#ar3g)"/>
+        <text class="t m" x="252" y="234" text-anchor="middle">6 accepted, seq 412</text>
+        <line class="ln g" x1="390" y1="242" x2="796" y2="242" marker-end="url(#ar3g)"/>
+        <text class="t m" x="700" y="234" text-anchor="middle">6 change seq 412</text>
+        <text class="t ok" x="122" y="276">7 provisional → confirmed</text>
+        <text class="t ok" x="788" y="276" text-anchor="end">7 apply in order</text>
+        <line x1="20" y1="306" x2="880" y2="306" class="life"/>
+        <text class="t m" x="24" y="326">if refused (cell was bedrock, item already spent, B placed there first):</text>
+        <line class="ln w d" x1="390" y1="356" x2="114" y2="356" marker-end="url(#ar3w)"/>
+        <text class="t m w" x="252" y="348" text-anchor="middle">refused: reason</text>
+        <text class="t w" x="122" y="390">rebuild the cell from the server's edits</text>
+      </svg>
+      </div>
+      <figcaption>The save is committed before anyone is told the dig happened, so a crash after step 6 never loses it. Two players digging one cell get the server's order, and both games end with the same cell.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="h-near">
+    <h2 id="h-near"><span class="tag">04</span>Near and far</h2>
+    <p>The "chunk" is the region already planned for saving and loading: a level-5 triangle of the icosahedron, 20,480 on the planet, each about 180 m across and about 2,000 hex cells. Each game subscribes to the regions its detail tier can reach, plus a margin ring. Players whose rings overlap share the same ordered stream. Players on opposite sides share nothing but the server.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 460" role="img" aria-label="A planet with players A and C close together, sharing subscribed regions, and player B on the far side with its own. The server streams each ring to its players; a gift from A to B is a single server transaction.">
+        <defs>
+          <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          <marker id="ar4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk a"/></marker>
+        </defs>
+        <circle class="planet" cx="280" cy="235" r="195"/>
+        <text class="t m" x="280" y="452" text-anchor="middle">the planet (20,480 regions)</text>
+        <!-- A and C -->
+        <circle class="ring2" cx="185" cy="125" r="74"/>
+        <circle class="ring1" cx="185" cy="125" r="52"/>
+        <circle class="ring1" cx="232" cy="160" r="52"/>
+        <circle class="dot" cx="185" cy="125" r="6"/><text class="t h" x="172" y="120" text-anchor="end">A</text>
+        <circle class="dot" cx="232" cy="160" r="6"/><text class="t h" x="246" y="166">C</text>
+        <!-- B -->
+        <circle class="ring2" cx="370" cy="355" r="74"/>
+        <circle class="ring1" cx="370" cy="355" r="52"/>
+        <circle class="dot" cx="370" cy="355" r="6"/><text class="t h" x="384" y="360">B</text>
+        <!-- Server -->
+        <rect class="box srv" x="620" y="170" width="250" height="120"/>
+        <text class="t h g" x="745" y="196" text-anchor="middle">Server</text>
+        <text class="t m" x="745" y="218" text-anchor="middle">holds every region</text>
+        <text class="t m" x="745" y="238" text-anchor="middle">streams each to its subscribers</text>
+        <text class="t m" x="745" y="258" text-anchor="middle">runs trades as one transaction</text>
+        <line class="ln" x1="290" y1="120" x2="616" y2="200" marker-end="url(#ar4)"/>
+        <text class="t m" x="450" y="138" text-anchor="middle">shared stream: A's and C's regions</text>
+        <line class="ln" x1="430" y1="350" x2="616" y2="270" marker-end="url(#ar4)"/>
+        <text class="t m" x="560" y="340" text-anchor="middle">B's regions only</text>
+        <path class="ln a d" d="M185 125 C 300 30, 560 40, 690 166" marker-end="url(#ar4a)"/>
+        <path class="ln a d" d="M700 292 C 640 420, 470 420, 376 362" marker-end="url(#ar4a)"/>
+        <text class="t a" x="430" y="40" text-anchor="middle">A gives B an item</text>
+        <text class="t a" x="560" y="432" text-anchor="middle">B receives it</text>
+        <!-- legend -->
+        <circle class="ring1" cx="640" cy="60" r="9"/><text class="t m" x="656" y="64">subscribed regions</text>
+        <circle class="ring2" cx="640" cy="88" r="9"/><text class="t m" x="656" y="92">drop-off ring (hysteresis)</text>
+      </svg>
+      </div>
+      <figcaption>A and C overlap, so a block C places lands in A's game in the same order it lands in C's. B never receives A's region changes. A gift from A to B takes the item out of A's pack and puts it in B's in one journal entry: it happens wholly or not at all, and neither game needs the other's regions.</figcaption>
+    </figure>
+    <p>One cost of this, accepted for the phase: a large build on the far side does not show in another player's far terrain until they come near, because the far terrain comes from the seed alone. A small per-region summary for the far view (height change, lamp count) is a named follow-up.</p>
+  </section>
+
+  <section aria-labelledby="h-sum">
+    <h2 id="h-sum"><span class="tag">05</span>Checksums and resync</h2>
+    <p>The server sends each subscribed region's sequence and digest every few seconds, round-robin, and on every new subscription. The game digests its own copy at that sequence. If they differ, it asks for the region and replaces its copy with the server's snapshot, which is the same bytes the save writes for that region.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 360" role="img" aria-label="Sequence: the server sends a region digest; the client's own digest differs; the client asks for the region, receives the snapshot, rebuilds, and the next digest matches.">
+        <defs>
+          <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          <marker id="ar5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk g"/></marker>
+        </defs>
+        <rect class="box srv" x="130" y="14" width="140" height="34"/><text class="t h g" x="200" y="36" text-anchor="middle">Server</text>
+        <rect class="box" x="630" y="14" width="140" height="34"/><text class="t h" x="700" y="36" text-anchor="middle">Player's game</text>
+        <line class="life" x1="200" y1="48" x2="200" y2="350"/>
+        <line class="life" x1="700" y1="48" x2="700" y2="350"/>
+        <line class="ln g" x1="200" y1="88" x2="696" y2="88" marker-end="url(#ar5g)"/>
+        <text class="t m" x="450" y="80" text-anchor="middle">digest: region 9813 · seq 412 · 7f3a…c1</text>
+        <text class="t w" x="688" y="122" text-anchor="end">own copy at seq 412 → 51c0…9e  ≠</text>
+        <line class="ln" x1="700" y1="160" x2="204" y2="160" marker-end="url(#ar5)"/>
+        <text class="t m" x="450" y="152" text-anchor="middle">send region 9813</text>
+        <line class="ln g" x1="200" y1="204" x2="696" y2="204" marker-end="url(#ar5g)"/>
+        <text class="t m" x="450" y="196" text-anchor="middle">snapshot: region 9813 at seq 412</text>
+        <text class="t" x="688" y="240" text-anchor="end">replace copy · rebuild columns · relight</text>
+        <line class="ln g" x1="200" y1="286" x2="696" y2="286" marker-end="url(#ar5g)"/>
+        <text class="t m" x="450" y="278" text-anchor="middle">next check: region 9813 · seq 412 · 7f3a…c1</text>
+        <text class="t ok" x="688" y="320" text-anchor="end">own copy → 7f3a…c1  = match</text>
+      </svg>
+      </div>
+      <figcaption>A mismatch means a lost message or a bug. Either way the server's copy wins, and the player sees at most a brief flicker of one region rebuilding.</figcaption>
+    </figure>
+    <p>What a region's digest covers, in this order, so every machine hashes the same bytes:</p>
+    <ul class="plain">
+      <li>its terrain edits, by cell key ascending, each cell's layers in the order they were made;</li>
+      <li>its water cells (level and flags), by cell key and layer;</li>
+      <li>the records in it (dropped items, chests, crops, animals, lamps, stations), by record id.</li>
+    </ul>
+    <p>The hash is a fixed 64-bit FNV-1a, written once in <code>pbd-core</code> with a pinned test value, so it is equal on every operating system and processor. It is kept up to date as changes apply, so a check is a lookup, not a pass over 2,000 cells. Drawn things (columns, light, GPU data) are never hashed: they follow from the facts, and the join check makes sure every game builds them with the same generator.</p>
+  </section>
+
+  <section aria-labelledby="h-who">
+    <h2 id="h-who"><span class="tag">06</span>Who runs what</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Thing</th><th>Runs on</th><th>The player's game</th></tr></thead>
+        <tbody>
+          <tr><td>Terrain edits, items, chests, drops</td><td><span class="pill s">server</span></td><td>predicts its own, applies everyone else's</td></tr>
+          <tr><td>Crops</td><td><span class="pill s">server</span></td><td>draws growth from the record and the clock</td></tr>
+          <tr><td>Herd and wild animals</td><td><span class="pill s">server</span> where players stand, 10 Hz</td><td>smooths between updates</td></tr>
+          <tr><td>Fish</td><td><span class="pill c">each game</span> draws its own schools</td><td>the catch itself is a server request</td></tr>
+          <tr><td>Water flow</td><td><span class="pill s">server</span> where players stand</td><td>applies changed water cells; the existing tick smoothing draws them</td></tr>
+          <tr><td>Weather</td><td><span class="pill c">each game</span></td><td>computes it from the seed and the clock</td></tr>
+          <tr><td>World clock</td><td><span class="pill s">server</span>, sent every 5 s</td><td>runs it forward between updates; it runs only while someone is connected</td></tr>
+          <tr><td>Walking and flying</td><td><span class="pill c">each game</span></td><td>sends its position 20 times a second; the server checks it is plausible</td></tr>
+          <tr><td>Missions</td><td><span class="pill s">server</span></td><td>shows progress</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Positions sent between machines are body-relative <code>f64</code>, the same form a save stores. Each game converts them into its own floating origin when they arrive, so one player's origin shift never moves anyone else.</p>
+  </section>
+
+  <section aria-labelledby="h-join">
+    <h2 id="h-join"><span class="tag">07</span>Joining, and saves</h2>
+    <ul class="plain">
+      <li><b>Join check.</b> Protocol, topology, generator and content versions and the world's identity must all match. If one differs, the join is refused with a short message such as "Game version differs" and nothing else is sent.</li>
+      <li><b>Loading.</b> The player's record, the clock and the regions around them arrive first; the loading screen stays up until those and every render pipeline are ready, as the boot does now.</li>
+      <li><b>Old saves.</b> They open and host unchanged. The host is player 0, which is what the save's player token already means. Each guest is a new <code>player</code> record (pack, position, missions), added without touching anything already there, and the world still opens alone afterwards.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-order">
+    <h2 id="h-order"><span class="tag">08</span>Build order</h2>
+    <p>Phase 3b starts after the townsfolk, when you ask. Steps 1 and 2 are other changes this one waits on.</p>
+    <ol class="steps">
+      <li class="dep"><div><b>Accept and apply split</b> <span>edit-pipeline section 5: one half refuses, one half applies; a sequence on the log</span></div></li>
+      <li class="dep"><div><b>Regions and the world clock</b> <span>world-persistence 4.1, 5.1, 5.2: region snapshots with their last sequence, the segmented journal</span></div></li>
+      <li><div><b>Rules without a frame</b> <span>every saved-state rule runs from a request in pbd-core, one rule per commit</span></div></li>
+      <li><div><b>Protocol and digest</b> <span>message types, their bytes, the region digest, with pinned tests</span></div></li>
+      <li><div><b>The server, in process</b> <span>single player plays through it; the same inputs give the same save as before</span></div></li>
+      <li><div><b>Mockups for you</b> <span>host and join screens; how another player looks, by day and lit at night</span></div></li>
+      <li><div><b>The network</b> <span>QUIC, the join check, Host from the pause menu, region subscription</span></div></li>
+      <li><div><b>Checksums and resync</b> <span>a corrupted cell in one game is repaired within one check cycle</span></div></li>
+      <li><div><b>Sharing the world</b> <span>other players, drops, animals, water, gifts and chat, the clock</span></div></li>
+      <li><div><b>Your gate</b> <span>two-game screenshots, then a two-bot demo with a goal, and a perf run on your desktop</span></div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-lua">
+    <h2 id="h-lua"><span class="tag">09</span>What we take from Luanti</h2>
+    <p>Luanti (formerly Minetest) is a shipped voxel game with an authoritative server, and its source answers questions this plan had left open. Read at <code>luanti-org/luanti</code> <code>8bb14e8</code> (2026-11-16). We take the ideas, not the code.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 900 330" role="img" aria-label="A dig in a region. Subscribers within the near radius receive the single change. Subscribers beyond it have the region marked stale and receive a full snapshot later, nearest first.">
+        <defs>
+          <marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk g"/></marker>
+          <marker id="ar6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk a"/></marker>
+        </defs>
+        <circle class="ring2" cx="230" cy="170" r="140"/>
+        <circle class="ring1" cx="230" cy="170" r="70"/>
+        <rect x="222" y="162" width="16" height="16" class="box acc"/>
+        <text class="t h" x="230" y="200" text-anchor="middle">dig</text>
+        <text class="t m" x="230" y="122" text-anchor="middle">near radius</text>
+        <text class="t m" x="230" y="44" text-anchor="middle">subscribed, but far</text>
+        <circle class="dot" cx="185" cy="150" r="6"/><text class="t h" x="172" y="146" text-anchor="end">A</text>
+        <circle class="dot" cx="335" cy="250" r="6"/><text class="t h" x="349" y="262">D</text>
+        <rect class="box srv" x="540" y="40" width="330" height="92"/>
+        <text class="t h g" x="705" y="66" text-anchor="middle">to A: the change itself</text>
+        <text class="t m" x="705" y="88" text-anchor="middle">one cell, in order, at once</text>
+        <text class="t m" x="705" y="108" text-anchor="middle">(Luanti: within 30 nodes)</text>
+        <rect class="box acc" x="540" y="200" width="330" height="92"/>
+        <text class="t h a" x="705" y="226" text-anchor="middle">to D: region marked stale</text>
+        <text class="t m" x="705" y="248" text-anchor="middle">whole snapshot later, nearest first</text>
+        <text class="t m" x="705" y="268" text-anchor="middle">(Luanti: SetBlockNotSent)</text>
+        <line class="ln g" x1="194" y1="146" x2="536" y2="86" marker-end="url(#ar6)"/>
+        <line class="ln a d" x1="344" y1="250" x2="536" y2="246" marker-end="url(#ar6a)"/>
+      </svg>
+      </div>
+      <figcaption>The near/far split from <code>Server::sendNodeChangePkt</code>. A player at the edge of a busy region gets one snapshot after the activity, instead of every single change during it.</figcaption>
+    </figure>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Luanti does</th><th>Where</th><th>We take</th></tr></thead>
+        <tbody>
+          <tr><td>Single player starts a server in the game process</td><td><code>client/game.cpp</code></td><td>Confirms the plan's one-path design</td></tr>
+          <tr><td>A refused dig or place re-sends the block; a refused item move re-sends the whole inventory</td><td><code>RemoteClient::fixupNodePrediction</code>, <code>SendInventory</code></td><td>A refusal re-sends the cells and the pack, never an undo message; also when a snapshot was still on its way</td></tr>
+          <tr><td>Blocks go out nearest first, a few in flight per client, each acknowledged</td><td><code>RemoteClient::GetNextBlocks</code>, <code>TOSERVER_GOTBLOCKS</code></td><td>Snapshots nearest region first, capped and acknowledged</td></tr>
+          <tr><td>The client reports blocks it dropped, and its view range</td><td><code>TOSERVER_DELETEDBLOCKS</code>, <code>wanted_range</code></td><td>The client sends its reach; the server sizes the subscription from it</td></tr>
+          <tr><td>Separate radii for simulating, sending objects and sending terrain</td><td><code>active_block_range</code> and two others</td><td>Three named radii in config: simulate, subscribe, presence</td></tr>
+          <tr><td>Speed, reach and dig-time checks, each a flag, off in single player</td><td><code>checkMovementCheat</code>, <code>checkInteractDistance</code></td><td>The same three checks, logged with the reason</td></tr>
+          <tr><td>Time of day sent every 5 s; the client runs it forward</td><td><code>time_send_interval</code></td><td>Every 5 s, not every second</td></tr>
+          <tr><td>Accepts a range of protocol versions</td><td><code>SERVER_PROTOCOL_VERSION_MIN</code></td><td>Protocol as a range; world versions stay exact</td></tr>
+          <tr><td>Records who changed what, for rollback</td><td><code>server/rollback.cpp</code></td><td>Later: our journal already names every author</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Luanti has no checksum. It trusts reliable delivery plus resend-on-refuse, and cannot notice a copy that drifted silently. The region digest is the safety net it lacks, and it can run slowly because resend-on-refuse catches the common case first.</p>
+  </section>
+
+  <section aria-labelledby="h-not">
+    <h2 id="h-not"><span class="tag">10</span>Not in this phase</h2>
+    <ul class="plain">
+      <li>PvP and damage between players; claims and permissions beyond kick, ban and rate limits (they come with building).</li>
+      <li>More than one person aboard a moving craft (once vehicles and ships exist).</li>
+      <li>Server lists, matchmaking, relays for players behind routers, and voice. LAN and direct address first.</li>
+      <li>More than 8 players.</li>
+    </ul>
+  </section>
+</div>

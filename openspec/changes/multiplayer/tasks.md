@@ -22,7 +22,7 @@ townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
 
 - [ ] 4.1 `pbd-server` crate: the world, the 20 Hz tick, per-region sequences, the journal through `SaveWriter`. Verify: a core-only test that applies requests and journals them with ascending sequences.
 - [ ] 4.2 Single player starts the server in process and talks to it over an in-memory channel. Verify: the same inputs produce byte-identical saves before and after the switch; the starter missions finish under `--capture`; an old save opens with its player as 0.
-- [ ] 4.3 Prediction and reconcile on the client (design 4). Verify: an app test where the server refuses a predicted dig and the column returns to the server's state.
+- [ ] 4.3 Prediction and reconcile on the client (design 4), with Luanti's fix-up (design 15.3): a refusal re-sends the touched cells and the whole inventory, and the region if a snapshot was in flight. Verify: an app test where the server refuses a predicted dig and the column and inventory return to the server's; a second where the region's snapshot was in flight when the dig was predicted.
 
 ## 5. Mockups for the owner
 
@@ -31,9 +31,10 @@ townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 6. The network
 
-- [ ] 6.1 `pbd-net` on QUIC: connect, the join check (design 9), streams and datagrams. Verify: a test connecting two processes on loopback; a mismatched generator version is refused with the plain message.
+- [ ] 6.1 `pbd-net` on QUIC: connect, the join check (design 9, with a protocol range per design 15.9), streams and datagrams. Verify: a test connecting two processes on loopback; a mismatched generator version is refused with the plain message.
 - [ ] 6.2 `--server` headless launch and Host from the pause menu without a reload. Verify: a second game process joins a hosted world on loopback in a cloud run, with `--capture` shots from both.
-- [ ] 6.3 Region subscription and hysteresis (design 3), measured off the real tier's radius. Verify: a test that no fine cell is built in a region before its snapshot arrives; a walk into a region another client edited shows the edit.
+- [ ] 6.3 Region subscription and hysteresis (design 3): the client sends its tier reach and the regions it dropped; snapshots go nearest first with a per-client in-flight cap and acks; separate simulate, subscribe and presence radii in validated config (design 15.4-15.6). Verify: a test that no fine cell is built in a region before its snapshot arrives; a walk into a region another client edited shows the edit; a test that snapshots arrive in distance order.
+- [ ] 6.4 Near changes sent, far changes mark the region stale (design 15.2). Verify: a test that a subscriber beyond the near radius receives no single change, and holds the region's new state after its re-send.
 
 ## 7. Checksums and resync
 
@@ -46,7 +47,8 @@ townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
 - [ ] 8.3 Animals run on the server for subscribed regions; fishing's catch is a server request. Verify: a test that taming an animal on one client shows it tamed on the other.
 - [ ] 8.4 Water flow runs on the server; liquid changes ride the region stream. Verify: a dug channel floods the same on both clients, and their digests match after it settles.
 - [ ] 8.5 Far transactions: give, trade, shared container, chat, map marker (design 12). Verify: a test that a gift whose receiver's pack is full leaves both inventories unchanged.
-- [ ] 8.6 The world clock runs only while a player is connected (design 11). Verify: a test that a server with nobody on it does not advance its clock.
+- [ ] 8.6 The world clock runs only while a player is connected (design 11), sent every 5 s and run forward by the client (design 15.8). Verify: a test that a server with nobody on it does not advance its clock.
+- [ ] 8.7 Cheat checks (design 15.7): movement speed with a tolerance, interaction distance, dig time against the tool; each a config flag, logged with player and reason, never run in process. Verify: a test per check that an out-of-bounds request is refused and logged, and that single player never runs them.
 
 ## 9. The owner's gate
 
@@ -57,4 +59,4 @@ townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
 ## Workflow follow-up
 
 - Sync `world/multiplayer` into `openspec/specs/` requirement by requirement, each in the commit that makes it true with its test.
-- Follow-ups named in the design: the coarse-LOD region summary, a relay for NAT, seats on moving craft.
+- Follow-ups named in the design: the coarse-LOD region summary, a relay for NAT, seats on moving craft, rollback by author (design 15.11), content by hash for mods (design 15.10).

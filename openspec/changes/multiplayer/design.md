@@ -200,7 +200,7 @@ player's simulation (`docs/GAME_DESIGN.md` 15).
 | fish | each client draws its own schools; the catch is a server request | draws |
 | water flow | server, for subscribed regions | applies changed liquid cells as region changes; the existing smoothing between ticks draws them |
 | weather | each client, from the seed and the clock | computes |
-| world clock | server; sent once a second | follows it |
+| world clock | server; sent every 5 s (design 15.8) | runs it forward between |
 | walking and flying the player | the client | sends position at 20 Hz |
 | missions | server (they read the stored state) | shows them |
 
@@ -265,6 +265,80 @@ the mockups.
    outline, lit like the ground, with their name over it only when near. A
    mockup first.
 6. Text chat on a key; no voice.
+
+### 15. What we take from Luanti
+
+Luanti (formerly Minetest) is a shipped server-authoritative voxel game, and
+its server answers several questions this design had left open. Read at
+`luanti-org/luanti` `8bb14e8` (2026-11-16). Only the ideas are taken, not the
+code: Luanti is LGPL-2.1-or-later, the same terms as the liquid rule
+`water-flow` already ports with its provenance.
+
+1. **Single player is a local server.** `client/game.cpp` builds a `Server` in
+   process when `simple_singleplayer_mode` is set. A shipped game confirms
+   decision 5.
+2. **Near changes are sent; far changes mark the block stale.**
+   `Server::sendNodeChangePkt` sends a single-node change only to players
+   within 30 nodes who already hold the block. Anyone farther away, or still
+   waiting for the block, gets `SetBlockNotSent`, and the whole block goes out
+   again later at low priority. *Taken:* within a near radius (to be measured,
+   about the dig reach plus a margin) a subscriber gets the change itself.
+   Beyond it, the region is marked stale for that client and re-sent as a
+   snapshot when it reaches the head of the send queue. This bounds traffic
+   when many players stand at the edge of a busy region.
+3. **A wrong prediction is fixed by resending the state, not by an undo
+   message.** `RemoteClient::fixupNodePrediction` re-sends the block when a
+   dig or place was refused, and also when the block was still on the wire
+   when the client predicted, which is the race this design had not named.
+   A refused inventory action re-sends the whole inventory (`SendInventory`).
+   *Taken:* `Refused` carries no undo. The server re-sends the touched cells
+   and the player's whole inventory. If a snapshot of that region was in
+   flight at the time, it re-sends the region.
+4. **Nearest first, a few at a time.** `RemoteClient::GetNextBlocks` walks
+   outward from the player, remembers the nearest unsent distance, and keeps
+   at most `max_simultaneous_block_sends_per_client` blocks in flight, each
+   acknowledged by `TOSERVER_GOTBLOCKS`. *Taken:* snapshots go out nearest
+   region first, with a per-client in-flight cap, acknowledged by the client.
+5. **The client says what it dropped and how far it sees.**
+   `TOSERVER_DELETEDBLOCKS` tells the server which blocks the client threw
+   away, so they are re-sent if needed. `TOSERVER_PLAYERPOS` carries
+   `wanted_range`, the client's view range, which sizes what the server sends.
+   *Taken:* the client's unsubscribe message is that list. The client also
+   sends its tier reach, from which the server sizes the subscription, rather
+   than the server guessing it.
+6. **Three separate radii.** `active_block_range` (what the server
+   simulates: ABMs, liquids, entities), `active_object_send_range_blocks`
+   (which entities are sent) and `max_block_send_distance` (which terrain is
+   sent) are separate settings. *Taken:* the simulate radius (animals, water)
+   is set apart from the subscribe radius (terrain and records) and the
+   presence radius (other players drawn). Each is a validated config value.
+7. **Cheat checks that switch off in single player.** `checkMovementCheat`
+   (speed against `anticheat_movement_tolerance`), interaction distance
+   (`checkInteractDistance`), and dig time against the tool (`m_dig_pool`)
+   are each a flag in `anticheat_flags`. A failed check calls `on_cheat` and
+   is logged. None of them runs in single player. *Taken:* decision 8's
+   plausibility check becomes these three named checks, logged with the
+   player and the reason, never run on the in-process server.
+8. **The clock is sent every 5 s** (`time_send_interval`), and the client
+   runs it forward in between. *Taken:* every 5 s rather than every second.
+9. **A protocol range, not one version.** The server accepts any client
+   protocol from `SERVER_PROTOCOL_VERSION_MIN` up to its own. *Taken:* the
+   protocol version is a range, so an older client can join a newer server
+   while the wire allows it. The generator, topology and content versions
+   stay exact matches, because they decide the world itself.
+10. **Content by hash.** Media is announced and cached by SHA-1
+    (`TOCLIENT_ANNOUNCE_MEDIA`). Not needed while every player runs the same
+    build. Kept as the model for mods and custom textures later.
+11. **Rollback by author.** `server/rollback.cpp` records who changed which
+    node, so an admin can undo one player's griefing. Our journal already
+    names the author of every entry, so rollback is cheap. A named follow-up,
+    since `docs/GAME_DESIGN.md` 16 asks for it on persistent servers.
+
+**What Luanti does not have** is the owner's checksum. It relies on reliable
+delivery plus resend on mispredict, and has no way to notice a copy that
+drifted silently. The region digest (decision 2) is the safety net Luanti
+lacks, so it stays. It can run at a slow rate, because resend-on-refuse
+(item 3) catches the common case first.
 
 ## Risks / Trade-offs
 
