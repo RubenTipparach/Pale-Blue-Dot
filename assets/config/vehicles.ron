@@ -224,11 +224,11 @@
     ),
     raft: (
         parts: ((
-            mass_kg: 2000.0,
+            mass_kg: 1200.0,
             at: (0.0, -0.04, 0.0),
         )),
         inertia_box: (
-            mass_kg: 2000.0,
+            mass_kg: 1200.0,
             size_m: (2.4, 0.5, 4.4),
         ),
         paddler: (
@@ -271,10 +271,11 @@
             stroke_m: 1.4,
             power_s: 0.8,
             recovery_s: 0.7,
-            blade_m2: 0.28,
+            blade_m2: 0.7,
             blade_cd: 1.25,
             rudder_at: (1.2, 2.0),
             rudder_m2: 0.14,
+            pole: true,
         ),
         resistance: (
             at: (0.0, -0.06, 0.0),

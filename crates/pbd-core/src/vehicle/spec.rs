@@ -130,6 +130,13 @@ pub struct PaddleSpec {
     /// The blade held at the stern as a rudder: where, and how much of it.
     pub rudder_at: [f32; 2],
     pub rudder_m2: f32,
+    /// A pole, not a paddle: the stroke pushes on the river bed, so its
+    /// push is against the ground whatever the water does, and a raft poles
+    /// up a river against its current (the owner, 2026-11-18: "the raft guy
+    /// pushing the raft up and down the river"). A paddle only moves a craft
+    /// through the water.
+    #[serde(default)]
+    pub pole: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -211,6 +218,7 @@ impl Default for LoonSpec {
                 blade_cd: 1.25,
                 rudder_at: [0.55, 1.9],
                 rudder_m2: 0.08,
+                pole: false,
             },
             resistance: ResistanceSpec {
                 at: [0.0, -0.02, 0.2],
@@ -317,6 +325,7 @@ impl LoonSpec {
                 blade_cd: 1.2,
                 rudder_at: [0.3, -0.9],
                 rudder_m2: 0.02,
+                pole: false,
             },
             resistance: ResistanceSpec {
                 at: [0.0, -0.06, 0.0],
@@ -354,13 +363,17 @@ impl LoonSpec {
     /// round in section, as a row of logs is, and decked, so it does not
     /// swamp. It floats with its logs half under, as M34's draws it.
     pub fn raft() -> Self {
+        // Nine 4.4 m logs about 0.3 m thick, green, and the deck boards:
+        // about 1,200 kg, so it rides with its deck about 20 cm clear with its
+        // poler aboard (the owner, 2026-11-18: "please ensure the raft is
+        // boyant"; at 2,000 kg it sat awash, its deck 7 cm over the river).
         Self {
             parts: [Part {
-                mass_kg: 2000.0,
+                mass_kg: 1200.0,
                 at: [0.0, -0.04, 0.0],
             }],
             inertia_box: InertiaBox {
-                mass_kg: 2000.0,
+                mass_kg: 1200.0,
                 size_m: [2.4, 0.5, 4.4],
             },
             paddler: Part {
@@ -403,10 +416,13 @@ impl LoonSpec {
                 stroke_m: 1.4,
                 power_s: 0.8,
                 recovery_s: 0.7,
-                blade_m2: 0.28,
+                // A pole's push on the bed: enough for a poler to work the
+                // raft up a river against its current.
+                blade_m2: 0.7,
                 blade_cd: 1.25,
                 rudder_at: [1.2, 2.0],
                 rudder_m2: 0.14,
+                pole: true,
             },
             resistance: ResistanceSpec {
                 at: [0.0, -0.06, 0.0],

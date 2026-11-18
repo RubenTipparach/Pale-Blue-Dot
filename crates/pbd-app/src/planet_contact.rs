@@ -399,6 +399,25 @@ impl PlanetContact {
         Some(column.water_surface(point.length() - PLANET_RADIUS))
     }
 
+    /// [`Self::column_water`], at the surface the water is DRAWN at: a
+    /// flowing top is drawn through its corners, up to a layer's share over
+    /// the cell's own level (`water_flow::drawn_top_m`), and a craft floats on
+    /// what is seen (`craft-lighting`: a raft rode with its deck under the
+    /// drawn river, 20 cm over the column's level).
+    pub fn drawn_water(&self, point: Vec3) -> Option<Option<f32>> {
+        let direction = point.try_normalize()?;
+        let fine = self.fine.as_ref()?;
+        let id = fine.locate(direction)?;
+        let column = fine.set.columns.column(id)?;
+        let Some(surface) = column.water_surface(point.length() - PLANET_RADIUS) else {
+            return Some(None);
+        };
+        let drawn = pbd_core::column::layer_at(surface - 1e-3)
+            .zip(fine.set.columns.slot(id))
+            .and_then(|(top, slot)| crate::water_flow::drawn_top_m(&fine.set.columns, slot, top));
+        Some(Some(drawn.unwrap_or(surface).max(surface)))
+    }
+
     /// Whether `point` (body-local) is over a column of the tier: what the
     /// river walk logs as on or off the tier.
     pub fn on_tier(&self, point: Vec3) -> bool {
