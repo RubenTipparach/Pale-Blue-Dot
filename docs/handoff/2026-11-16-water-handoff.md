@@ -15,7 +15,7 @@ things stand and what to do next, in priority order.
     OS: PR #56);
   - `openspec validate --all` passes 163.
 - **Bug list page** (the owner's bugs with screenshots):
-  https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou
+  https://claude.ai/artifact/7WA7dq9PM5bC2CtxpwGBtB
   (`docs/design/bug-list.html`). Keep it current, and add the bugs below to it.
 - **Tracker:** https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA
 - **Cloud session "PDB environment improvements"** works on

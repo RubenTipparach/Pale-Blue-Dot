@@ -10,7 +10,7 @@ step's velocity, with the vertical part halved. The tail is `bodies::sway`,
 `Sway::Fish`: `sin(t * 7 + phase - x * 6) * 0.075 * w^2`, always.
 
 Mockup: M37, `docs/mockups/fish-behaviour.html`,
-https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz. Its Today side is a port of
+https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2. Its Today side is a port of
 the code above with the numbers of `assets/config/fauna.ron`; its Proposed
 side is this design.
 

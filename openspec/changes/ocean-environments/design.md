@@ -966,7 +966,7 @@ not.
 The owner, looking at the reef in the game: "reef needs some textures". Then,
 of the fish: "also please use proper fish models", refined to "use the fish
 species mockup to create proper fish": M9, *Fish Lab and Aquariums*
-(`docs/mockups/fish.html`, https://claude.ai/artifact/Ay54k8LEf4sdteFpZkeSsG),
+(`docs/mockups/fish.html`, https://claude.ai/artifact/L1HnKS2h13jTJTooFYqzmW),
 whose rule is that every fish is drawn from a species and a seed.
 
 **Finding.** The reef's pieces (B10, B13) and the creatures (B8) are flat,

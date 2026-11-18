@@ -316,7 +316,7 @@ survey's Already decided.
 
 The mockups' links:
 - M22 Cranes and Printers: https://claude.ai/artifact/42o1sitc2KvFvVCpfQyHSv
-- M23 Drydock and Hex Ship Builder: https://claude.ai/artifact/K2uLF3kCJGu57tg4bk6ect
+- M23 Drydock and Hex Ship Builder: https://claude.ai/artifact/YC3SViwisspS7kfu4BhMkE
 - M24 Hangar and Chibi Aircraft: https://claude.ai/artifact/WUugWkXMLPRKMGVMd4w9mG
 
 ## Risks
