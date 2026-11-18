@@ -16,9 +16,10 @@ contact relight (`planet_contact.rs`) and the loads (`planet.rs`).
 `Light` is a `u8` newtype and `light::Baked` is `Vec<[Light; LAYERS]>`;
 `gpu_light` builds `words[slot * LIGHT_WORDS + layer / 4] |= level << 8 *
 (layer % 4)`. On a little-endian target that is the bytes of the arrays as
-they lie. `Light` gets `#[repr(transparent)]` and the image copies the bytes
-(`bytemuck`). A big-endian target keeps the loop. Pinned by a test that the
-cast and the loop agree on a baked tier.
+they lie: each word is `u32::from_le_bytes` of four levels, the same on any
+target, with no shifting layer by layer (`ColumnTier::pack_light`).
+`pbd-core` takes no `bytemuck` for it. Pinned by a test that the image's
+light and `gpu_light`'s loop agree on a baked tier.
 
 ### D2. `TierImage`, and `FineGpu` beside `PlanetFine`
 
@@ -82,7 +83,55 @@ what the buffer can hold.
 
 ## Measured
 
-Filled in by the implementation (task 3).
+M4 Max, release, windowed, `--no-vsync`, `--frame-log`, `--time 10`, fresh
+throwaway worlds; before `71b7868c` (`claude/cascade-perf`), after this
+branch; interleaved, two repeats, nothing else running. The screen was locked
+for the sitting, so the perf suite's frame-time A/B was not run (it refuses);
+these are CPU times of the upload itself (`UPLOAD_PARTS`, `TIER_IMAGE`, debug
+level), which a locked screen does not pace.
+
+Scenarios: `cascade-walk` (`--walk --at 23.2255 -3.012 --yaw 0 --pitch -10
+--walk-distance 250`: 3 digs, 11-12 water ticks, 9-10 landings), `walk`
+(`--walk-distance 600`, landings only), `stand` (`--walk --at 23.2255 -3.012
+--stand 20`, the first set).
+
+The render thread per version (`render: fine-set upload`), p50 (max):
+
+| | before | after |
+| --- | ---: | ---: |
+| a landing, `walk` | 8.9 (9.9) ms | **3.3 (4.1) ms** |
+| a landing, `cascade-walk` | 8.5 (10.4) ms, every version alike | **3.2 (4.0) ms** |
+| an edit or a water tick, `cascade-walk` | the same 8.5 ms | **0.02 (0.02) ms**, 1-4 writes, a few KiB |
+| the first set, `stand` | 7.7-8.1 ms | 2.6 ms |
+
+Before, by part (`cascade-walk` p50): the levels' cell records written
+2.8-3.0 ms, records with reach 0.27 ms, light packed 2.3 ms and written
+0.15 ms, materials and sheets packed and written 2.8-2.9 ms. (The
+`cascade-perf` proposal reads the first lap as "records"; it is the levels.)
+
+After, a landing still writes its 34-35 MiB in 9 writes; what is left
+(3.2-3.4 ms) is wgpu copying the levels' cell records into its staging, the
+size of the set. An edit writes 12 KiB of level records and under 1 KiB of
+records, light and materials.
+
+The main thread (`pack_fine_gpu`): 0.00 ms for a landing (its image came
+from its task), 1.34 ms p50 (1.57 max) to diff an edit's or a tick's
+version (the levels compared on a thread each), 2.1-2.3 ms for the first set
+after a load. An edit's own cost (clone, relight, contact) is unchanged,
+11.8-12.9 ms before and after.
+
+The same picture, `--capture` before against after, 2880x1800: the cascade
+(`--walk --at 23.2255 -3.012 --yaw 0 --pitch -10`) 0 of 5,184,000 pixels
+differ; Ashenstead (`--walk --at 19.644 59.178`) 0; a dig at the spawn
+(`--walk --pitch -60 --break 4 --frames 500`, edit deltas) 0. A pour
+(`--walk --pitch -30 --yaw 90 --pour 3 --pour-ahead 12 --pit 9 --frames
+700`, water-tick deltas) comes out one of two ways run to run on either exe
+(68 pixels apart, by 1 level): before gave A, A, B, after B, A, A, and every
+after capture is byte-identical to a before capture.
+
+Next: a landing's level records could be written into a mapped staging
+buffer on its task and copied on the GPU, leaving the render thread nothing
+of the 3.2 ms. Not done here.
 
 ## Risks
 

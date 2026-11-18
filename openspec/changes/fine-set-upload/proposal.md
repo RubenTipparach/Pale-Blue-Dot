@@ -52,4 +52,6 @@ No buffer layout, binding or shader changes.
 
 ## Measured
 
-See `design.md`, "Measured", and `docs/benchmarks/2026-11-17-fine-set-upload/`.
+See `design.md`, "Measured": on the M4 Max a landing's upload costs the
+render thread 3.3 ms instead of 8.9, and an edit's or a water tick's
+0.02 ms instead of 8.5, with the same picture.
