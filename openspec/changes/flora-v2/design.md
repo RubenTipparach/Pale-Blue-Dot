@@ -382,9 +382,9 @@ flora_fall: vec4<f32>            x leaf fall, y gather under trees, z leaf size,
 - **Far trees with no baked season.** A fix to the mockup's baked impostors;
   the game has no baked impostor (Q2 deferred), and its prism crowns take the
   season live. Nothing to port.
-- **Fungal forest** (violet caps, warm stalks, dark violet moss). No game
-  biome is a fungal forest; a new biome is a new generator version, its own
-  change (Q7). Not built.
+- **Fungal forest** (violet caps, warm stalks, dark violet moss). Dropped
+  for the home world (owner, 2026-11-18: "fungal forest should not be on
+  this planet"); it stays an alien biome for another body, if any.
 - **Crops and gardens layer.** The game's crops are the phase-1 farming
   (`farming-and-smelting`), grown by the player on tilled soil; the mockup's
   layer is M8's crops shown in place. Nothing to add here.
