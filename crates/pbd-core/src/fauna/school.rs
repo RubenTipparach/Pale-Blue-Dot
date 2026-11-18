@@ -75,6 +75,16 @@ pub struct School {
     flee: Option<Vec3>,
     /// Making for the water away from the eye, with the pull of a lure.
     fleeing: bool,
+    /// A fish the drawing is moving, by id: one bolting from the lure
+    /// (`fish-behaviour` design 2), which the step leaves where it is until
+    /// it is handed back ([`School::place`]). Never saved.
+    pub owned: Option<u32>,
+    /// The fish steered to a lure, by id, and the side of the lure it came
+    /// up on, along the water: where it stands off.
+    lure_side: Option<(u32, Vec3)>,
+    /// Seconds stepped: each fish's burst-glide cycle and depth wander run
+    /// on it.
+    clock: f64,
     rng: Rng,
 }
 
@@ -126,6 +136,9 @@ impl School {
             under: vec![0.0; count as usize],
             flee: None,
             fleeing: false,
+            owned: None,
+            lure_side: None,
+            clock: 0.0,
             rng,
         };
         for _ in 0..count {
@@ -257,6 +270,34 @@ impl School {
         }
     }
 
+    /// Hand fish `id` back to the step where the drawing left it
+    /// (`fish-behaviour` design 2: the end of a bolt): at `pos`, swimming at
+    /// `velocity`, both local. Its step before is put there too, so it is
+    /// drawn from there.
+    pub fn place(&mut self, id: u32, pos: Vec3, velocity: Vec3) {
+        if self.owned == Some(id) {
+            self.owned = None;
+        }
+        let Some(i) = self.ids.iter().position(|x| *x == id) else {
+            return;
+        };
+        if !(pos.is_finite() && velocity.is_finite()) {
+            return;
+        }
+        self.positions[i] = pos;
+        if let Some(b) = self.before.get_mut(i) {
+            *b = pos;
+        }
+        self.velocities[i] = velocity;
+    }
+
+    /// Fish `i`'s own phase, 0..1, hashed from the school and its id, as its
+    /// length is: where it is in its burst-glide cycle and its depth wander.
+    fn phase_of(&self, i: usize) -> f64 {
+        let id = self.ids.get(i).copied().unwrap_or(0);
+        (super::hash2(self.seed ^ 0xb0a7, u64::from(id)) >> 40) as f64 / (1u64 << 24) as f64
+    }
+
     /// Frighten one fish.
     pub fn frighten(&mut self, fish: usize, seconds: f32) {
         if let Some(s) = self.spook.get_mut(fish) {
@@ -336,6 +377,7 @@ impl School {
             crate::world_frame::check_local("school", *p);
         }
         self.before.clone_from(&self.positions);
+        self.clock += f64::from(dt);
         self.goal_t -= dt;
         if self.goal_t <= 0.0 {
             self.goal = self.pick_goal(o, species, flock.goal_reach_m, water);
@@ -387,7 +429,27 @@ impl School {
         let accelerations: Vec<Vec3> = (0..n)
             .map(|i| self.acceleration(o, i, species, flock, water, splash))
             .collect();
+        // The side of the lure the lured fish comes up on, kept while it is
+        // lured.
+        self.lure_side = match self.lure {
+            Some((fish, lure)) if fish < n => {
+                let id = self.ids[fish];
+                match self.lure_side {
+                    Some((was, side)) if was == id => Some((id, side)),
+                    _ => {
+                        let up = o.up_at(lure);
+                        let away = self.positions[fish] - lure;
+                        Some((id, (away - up * away.dot(up)).normalize_or(tangents(up).0)))
+                    }
+                }
+            }
+            _ if self.held.is_some() => self.lure_side,
+            _ => None,
+        };
         for (i, acceleration) in accelerations.into_iter().enumerate() {
+            if self.owned.is_some() && self.owned == self.ids.get(i).copied() {
+                continue;
+            }
             if let Some((held, point)) = self.held
                 && held == i
             {
@@ -421,19 +483,31 @@ impl School {
                 };
                 continue;
             }
-            let mut v = self.velocities[i] + acceleration * dt;
             let fright = if self.spook[i] > 0.0 { 2.0 } else { 1.0 };
             let (slow, fast) = (species.speed_mps.0 * 0.5, species.speed_mps.1 * fright);
-            let speed = v.length();
-            if speed > fast {
-                v *= fast / speed;
-            } else if speed < slow {
-                v = v.normalize_or(tangents(o.up_at(self.positions[i])).0) * slow;
-            }
+            let lured = self
+                .lure
+                .filter(|(fish, _)| *fish == i && species.mover == Mover::School)
+                .map(|(_, point)| point);
+            let (mut v, settle) = if let Some(lure) = lured {
+                self.approach(o, i, lure, species, flock, dt)
+            } else {
+                let mut v = self.velocities[i] + acceleration * dt;
+                if species.mover == Mover::School {
+                    v = self.swim(i, v, fast, flock, dt, o);
+                }
+                let speed = v.length();
+                if speed > fast {
+                    v *= fast / speed;
+                } else if speed < slow {
+                    v = v.normalize_or(tangents(o.up_at(self.positions[i])).0) * slow;
+                }
+                (v, Vec3::ZERO)
+            };
             if !v.is_finite() {
                 v = Vec3::ZERO;
             }
-            let mut p = self.positions[i] + v * dt;
+            let mut p = self.positions[i] + v * dt + settle;
             // Never out of the water: between the bed and the surface, with a
             // skin off each, and in the middle of a column too thin for both.
             let q = o.query_point(p);
@@ -472,6 +546,93 @@ impl School {
         }
     }
 
+    /// A free fish's swim this step (`fish-behaviour` design 4): its
+    /// velocity turned toward `v` by no more than `flock.turn_deg_s`, then
+    /// its speed set by its own burst-glide cycle (bursting toward most of
+    /// `fast`, gliding under drag).
+    fn swim(
+        &self,
+        i: usize,
+        mut v: Vec3,
+        fast: f32,
+        flock: &FlockSettings,
+        dt: f32,
+        o: &SimOrigin,
+    ) -> Vec3 {
+        let was = self.velocities[i];
+        let limit = flock.turn_deg_s.to_radians() * dt;
+        let angle = was.angle_between(v);
+        if angle.is_finite() && angle > limit && was.length_squared() > 1e-8 {
+            let axis = was
+                .cross(v)
+                .try_normalize()
+                .unwrap_or_else(|| o.up_at(self.positions[i]));
+            v = glam::Quat::from_axis_angle(axis, limit) * was.normalize() * v.length();
+        }
+        let phase = (self.clock / f64::from(flock.burst_s.max(1e-3)) + self.phase_of(i)).fract();
+        let mut speed = v.length();
+        if phase < f64::from(flock.burst_share) {
+            speed += (fast * 0.8 - speed) * (2.5 * dt).min(1.0);
+        } else {
+            speed *= (-flock.glide_drag_per_s * dt).exp();
+        }
+        v.normalize_or(was.normalize_or(tangents(o.up_at(self.positions[i])).0)) * speed.max(1e-4)
+    }
+
+    /// The lured fish's step (`fish-behaviour` design 2): it steers, its
+    /// turn limited, to its stand-off point on the side of the lure it came
+    /// from, slowing as it nears it with no speed floor, and turns to face
+    /// the lure as it settles. Its velocity, and a pull onto the point once
+    /// it is close.
+    fn approach(
+        &self,
+        o: &SimOrigin,
+        i: usize,
+        lure: Vec3,
+        species: &Species,
+        flock: &FlockSettings,
+        dt: f32,
+    ) -> (Vec3, Vec3) {
+        let p = self.positions[i];
+        let up = o.up_at(lure);
+        let side = self
+            .lure_side
+            .map_or_else(|| tangents(up).0, |(_, side)| side);
+        let half = 0.005 * self.length_cm(i, species) as f32;
+        let reach = (flock.standoff_m + half).min(flock.standoff_max_m);
+        let station = lure + side * reach - up * 0.03;
+        let to = station - p;
+        let d = to.length();
+        let cruise = 0.5 * (species.speed_mps.0 + species.speed_mps.1);
+        let want = cruise * flock.approach * (d / flock.slow_m.max(1e-3)).clamp(0.04, 1.0);
+        let was = self.velocities[i];
+        let speed = was.length();
+        let speed = speed + (want - speed).clamp(-3.0 * dt, 2.0 * dt);
+        let face = if d > 0.3 {
+            to
+        } else {
+            let k = 1.0 - d / 0.3;
+            to.normalize_or_zero()
+                .lerp((lure - p).normalize_or_zero(), k)
+        };
+        let heading = was.normalize_or(face.normalize_or(side));
+        let face = face.normalize_or(heading);
+        let angle = heading.angle_between(face);
+        let limit = flock.turn_deg_s.to_radians() * dt;
+        let dir = if angle.is_finite() && angle > limit {
+            let axis = heading.cross(face).try_normalize().unwrap_or(up);
+            glam::Quat::from_axis_angle(axis, limit) * heading
+        } else {
+            face
+        };
+        let settle = if d < 0.35 {
+            to * (1.0 - (-dt * 2.0).exp())
+        } else {
+            Vec3::ZERO
+        };
+        (dir * speed.max(1e-3), settle)
+    }
+
     fn acceleration(
         &self,
         o: &SimOrigin,
@@ -508,11 +669,17 @@ impl School {
             .lure
             .filter(|(fish, _)| *fish == i)
             .map(|(_, point)| point);
-        let (target, weight) = match lure {
+        let (mut target, weight) = match lure {
             Some(point) => (point, flock.lure),
             None if self.lured || self.fleeing => (self.goal, flock.lured),
             None => (self.goal, flock.goal),
         };
+        // Each fish wanders its own little way in depth round the goal, so a
+        // school is not a flat sheet (`fish-behaviour` design 4).
+        if lure.is_none() && species.mover == Mover::School && !species.bed {
+            let wander = (self.clock * 0.7 + self.phase_of(i) * std::f64::consts::TAU).sin();
+            target += up * (wander as f32 * flock.depth_wander_m);
+        }
         let want = target - p;
         acc += want.normalize_or_zero() * weight * want.length().min(1.0);
         // The surface and the bed are walls.

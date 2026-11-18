@@ -17,6 +17,7 @@
 //! and no species appears on two bodies (`CLAUDE.md`'s life-roster rule).
 
 pub mod school;
+pub mod swim;
 
 use crate::planet_gen::{TerrainConfig, surface_altitude};
 use glam::Vec3;
@@ -24,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub use school::{School, Water, crawl_lift, pose, under_share};
+pub use swim::BehaviourSettings;
 
 /// The home planet's key in the roster. The world has one body with water
 /// today; a second gets its own key and its own species.
@@ -464,6 +466,25 @@ pub struct FlockSettings {
     /// A spooked fish stays spooked this long, s, and swims up to twice as
     /// fast meanwhile.
     pub spook_s: f32,
+    /// The fastest a fish's swim turns in a step, deg/s (`fish-behaviour`
+    /// design 4): a boid that reverses turns round, never back in one step.
+    pub turn_deg_s: f32,
+    /// Each fish swims a burst-glide cycle of its own: this long, s, the
+    /// share of it bursting, and the drag of its glide, 1/s.
+    pub burst_s: f32,
+    pub burst_share: f32,
+    pub glide_drag_per_s: f32,
+    /// How far each fish wanders up and down round the school's goal, m.
+    pub depth_wander_m: f32,
+    /// The fish that has left its school for a lure (design 2): it comes in
+    /// at this share of its cruising speed, slowing inside `slow_m`, to a
+    /// stand-off point on the side it came from, its mouth `standoff_m` off
+    /// the lure, its middle never further than `standoff_max_m` (inside
+    /// the line's `nibble_m`, so a long fish still nibbles).
+    pub approach: f32,
+    pub slow_m: f32,
+    pub standoff_m: f32,
+    pub standoff_max_m: f32,
 }
 
 impl Default for FlockSettings {
@@ -484,6 +505,15 @@ impl Default for FlockSettings {
             splash_m: 4.0,
             splash_push: 12.0,
             spook_s: 2.0,
+            turn_deg_s: 220.0,
+            burst_s: 1.8,
+            burst_share: 0.35,
+            glide_drag_per_s: 0.9,
+            depth_wander_m: 0.18,
+            approach: 0.75,
+            slow_m: 1.3,
+            standoff_m: 0.15,
+            standoff_max_m: 0.36,
         }
     }
 }
@@ -663,6 +693,9 @@ pub struct FaunaSettings {
     pub flock: FlockSettings,
     pub spawn: SpawnSettings,
     pub fishing: FishingSettings,
+    /// How a fish is drawn moving (`fish-behaviour`): its heading and bank,
+    /// the fish at the lure and on the line, and the body wave.
+    pub behaviour: BehaviourSettings,
     /// Each body's species, in roster order. Append only: a caught fish is
     /// saved as its index here.
     pub bodies: BTreeMap<String, Vec<Species>>,
@@ -677,6 +710,7 @@ impl Default for FaunaSettings {
             flock: FlockSettings::default(),
             spawn: SpawnSettings::default(),
             fishing: FishingSettings::default(),
+            behaviour: BehaviourSettings::default(),
             bodies,
         }
     }
@@ -705,8 +739,25 @@ impl FaunaSettings {
                 f.goal_reach_m,
                 f.splash_m,
                 f.spook_s,
+                f.turn_deg_s,
+                f.burst_s,
+                f.approach,
+                f.slow_m,
+                f.standoff_max_m,
             ],
         )?;
+        if !(0.0..=1.0).contains(&f.burst_share)
+            || !(f.glide_drag_per_s.is_finite() && f.glide_drag_per_s >= 0.0)
+            || !(f.depth_wander_m.is_finite() && f.depth_wander_m >= 0.0)
+            || !(f.standoff_m.is_finite() && f.standoff_m >= 0.0)
+        {
+            return Err(
+                "flock: the burst share is 0..1, and the glide drag, the depth \
+                        wander and the stand-off are not negative"
+                    .into(),
+            );
+        }
+        self.behaviour.validate()?;
         let s = &self.spawn;
         finite_positive(
             "spawn",
@@ -741,6 +792,13 @@ impl FaunaSettings {
                 r.rain_full_mm_h,
             ],
         )?;
+        if f.standoff_max_m >= r.nibble_m {
+            return Err(format!(
+                "flock.standoff_max_m ({}) must be inside fishing.nibble_m ({}), or a fish \
+                 at its stand-off never nibbles",
+                f.standoff_max_m, r.nibble_m
+            ));
+        }
         if !(r.bait_bite.is_finite() && r.bait_bite >= 0.0) {
             return Err(format!(
                 "fishing.bait_bite must be finite and not negative, got {}",

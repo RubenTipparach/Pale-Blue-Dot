@@ -78,6 +78,9 @@ pub struct Fishery {
     /// more readily, and a fish landed on it uses one (`starter-missions`
     /// G1).
     pub baited: bool,
+    /// Where the angler stood this frame, local: which way the fish on the
+    /// line is drawn running (`fish-behaviour`).
+    pub feet: Option<Vec3>,
 }
 
 /// How long a school takes to fade in when spawned, or out before it is
@@ -137,6 +140,7 @@ impl Default for Fishery {
             told_refusal: false,
             fades: HashMap::new(),
             baited: false,
+            feet: None,
         }
     }
 }
@@ -192,6 +196,9 @@ pub struct FishPlugin;
 fn rebase_fishery(world: &mut World, shift: Vec3) {
     if let Some(mut fishery) = world.get_resource_mut::<Fishery>() {
         fishery.line.rebase(shift);
+        if let Some(feet) = fishery.feet.as_mut() {
+            *feet -= shift;
+        }
         for school in &mut fishery.schools {
             school.rebase(shift);
         }
@@ -201,6 +208,9 @@ fn rebase_fishery(world: &mut World, shift: Vec3) {
     }
     if let Some(mut trail) = world.get_resource_mut::<draw::CastTrail>() {
         trail.rebase(shift);
+    }
+    if let Some(mut swim) = world.get_resource_mut::<draw::DrawnSwim>() {
+        swim.rebase(shift);
     }
     if let Some(mut watch) = world.get_resource_mut::<WatchHook>()
         && let Some((eye, target)) = watch.view.as_mut()
@@ -221,6 +231,7 @@ impl Plugin for FishPlugin {
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
             .init_resource::<draw::CastTrail>()
+            .init_resource::<draw::DrawnSwim>()
             .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
@@ -426,6 +437,7 @@ fn fish(
         return;
     };
     pbd_core::world_frame::check_local("angler", feet);
+    fishery.feet = Some(feet);
     let up = o.up_at(feet);
     let roster = world.fauna.0.roster(&world.body.0);
     let settings = &world.fauna.0;
@@ -1421,98 +1433,21 @@ pub(crate) mod draw {
     #[derive(Component)]
     pub struct LineMesh;
 
-    /// How quickly a jump of the hooked float is eased out, 1/s: critically
-    /// damped, so 95% of it is gone in about 4.7 / this (a third of a
-    /// second).
-    pub(crate) const FLOAT_EASE_PER_S: f32 = 14.0;
+    /// The bait on the hook, at the lure under the float (`fish-behaviour`):
+    /// what the fish pecks at and takes.
+    #[derive(Component)]
+    pub struct Hook;
 
     /// Where the float is drawn (`movement-smoothness` design 7.1): the
-    /// line's float plus an offset that takes up the one-frame jump the line
-    /// makes when a hooked fish starts or stops running (its swing switched
-    /// on or off) or is struck, and eases it out. Draw only: nothing in the
-    /// line's rules reads it.
-    #[derive(Resource, Clone, Copy, Debug, Default)]
-    pub struct DrawnFloat {
-        /// Drawn minus simulated, planet-local, m, and how fast it changes.
-        pub offset: Vec3,
-        velocity: Vec3,
-        /// The line as last frame left it: its float, phase and run.
-        last: Option<(Vec3, Phase, f32)>,
-        /// Struck, and not yet swung: the line's first hooked step, a frame
-        /// after the strike, puts the swing on.
-        struck: bool,
-    }
+    /// core's [`fauna::swim::DrawnFloat`], as a resource. Draw only.
+    #[derive(Resource, Clone, Copy, Debug, Default, Deref, DerefMut)]
+    pub struct DrawnFloat(pub fauna::swim::DrawnFloat);
 
-    impl DrawnFloat {
-        /// One frame: `float`, `phase` and `run` are the line's after this
-        /// frame's step.
-        pub fn update(&mut self, o: &SimOrigin, dt: f32, float: Vec3, phase: Phase, run: f32) {
-            let hooked = phase == Phase::Hooked;
-            let jumped = match self.last {
-                Some((was, Phase::Hooked, was_run))
-                    if hooked && (was_run != run || self.struck) =>
-                {
-                    self.struck = false;
-                    Some(was)
-                }
-                Some((was, Phase::Bite, _)) if hooked => {
-                    self.struck = true;
-                    Some(was)
-                }
-                _ => None,
-            };
-            self.last = Some((float, phase, run));
-            if !hooked {
-                *self = Self {
-                    last: self.last,
-                    ..Self::default()
-                };
-                return;
-            }
-            if let Some(was) = jumped {
-                // Drawn where it was drawn last frame.
-                self.offset += was - float;
-            } else if dt > 0.0 && dt.is_finite() {
-                // Critically damped: x = (x0 + (v0 + w x0) t) e^-wt.
-                let w = FLOAT_EASE_PER_S;
-                let e = (-w * dt).exp();
-                let (x0, v0) = (self.offset, self.velocity);
-                let c = v0 + x0 * w;
-                self.offset = (x0 + c * dt) * e;
-                self.velocity = (v0 - c * (w * dt)) * e;
-            }
-            // Along the water: no part of it toward the planet's centre.
-            let up = o.up_at(float);
-            self.offset -= up * self.offset.dot(up);
-            self.velocity -= up * self.velocity.dot(up);
-            if !(self.offset.is_finite() && self.velocity.is_finite()) {
-                self.offset = Vec3::ZERO;
-                self.velocity = Vec3::ZERO;
-            }
-        }
-
-        /// The float as drawn: `float` moved by the offset and kept at its
-        /// height over the centre.
-        pub fn drawn(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
-            if self.offset == Vec3::ZERO {
-                return float;
-            }
-            o.with_radius(float + self.offset, o.radius_at(float))
-        }
-
-        /// How far the drawn float is from the line's: what the fish on the
-        /// line, held at the lure, is drawn moved by.
-        pub fn shift(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
-            self.drawn(o, float) - float
-        }
-
-        /// The origin was rebased: the float it last saw moves with it.
-        pub fn rebase(&mut self, shift: Vec3) {
-            if let Some((float, _, _)) = self.last.as_mut() {
-                *float -= shift;
-            }
-        }
-    }
+    /// Every swimmer's drawn pose and the line's fish (`fish-behaviour`
+    /// design 5): the core's [`fauna::swim::Drawing`], as a resource. Draw
+    /// only, but for a bolting fish handed back to its school.
+    #[derive(Resource, Clone, Debug, Default, Deref, DerefMut)]
+    pub struct DrawnSwim(pub fauna::swim::Drawing);
 
     /// Ease the float's jumps (`movement-smoothness` design 7.1), after the
     /// line has stepped and before anything is drawn from it.
@@ -1685,6 +1620,9 @@ pub(crate) mod draw {
     pub struct Heading {
         pub forward: Vec3,
         pub up: Vec3,
+        /// Where its mouth is drawn, local (`fish-behaviour`'s trace): the
+        /// model's nose, laid rigid.
+        pub mouth: Vec3,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -1777,12 +1715,20 @@ pub(crate) mod draw {
 
     /// The float, the line and the HUD line; the rod is hung on the walking
     /// camera once there is one.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         mut commands: Commands,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
         mut images: ResMut<Assets<Image>>,
+        fauna: Option<Res<FaunaConfig>>,
+        rows: Option<ResMut<crate::field_light::FieldRows>>,
     ) {
+        // The body-wave table the schools' vertex stage reads
+        // (`fish-behaviour` design 8.4), from `fauna.ron`.
+        if let (Some(fauna), Some(mut rows)) = (fauna, rows) {
+            rows.set_swim_rows(&bodies::wave_table(&fauna.0.behaviour));
+        }
         // The creatures' material, with one tiny creature-shaped mesh held
         // hidden from the start so the loading screen warms its pipeline
         // before play (no schools exist until the walker is in the water).
@@ -1807,6 +1753,13 @@ pub(crate) mod draw {
         warm.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; 3]);
         warm.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![bodies::white_uv(); 3]);
         warm.compute_flat_normals();
+        // A school's mesh carries the body-wave attributes and is drawn
+        // through the swim vertex stage: warmed too, so no school's first
+        // frame compiles a pipeline after `READY`.
+        let mut warm_school = warm.clone();
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, vec![[0.0f32; 4]; 3]);
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, vec![[0.0f32; 4]; 3]);
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, vec![[0.0f32; 4]; 3]);
         commands.spawn((
             Name::new("Water life (warm)"),
             crate::field_light::LitByField,
@@ -1814,6 +1767,19 @@ pub(crate) mod draw {
             MeshMaterial3d(life.clone()),
             Transform::default(),
             Visibility::Hidden,
+        ));
+        commands.spawn((
+            Name::new("Water life school (warm)"),
+            crate::field_light::LitByField,
+            crate::field_light::LitLikeTerrain,
+            Transform::default(),
+            Visibility::Hidden,
+            children![(
+                Mesh3d(meshes.add(warm_school)),
+                MeshMaterial3d(life.clone()),
+                Transform::default(),
+                Visibility::Inherited,
+            )],
         ));
         commands.insert_resource(LifeMaterial(life));
         let red = materials.add(StandardMaterial {
@@ -1846,8 +1812,41 @@ pub(crate) mod draw {
                     Transform::from_xyz(0.0, -0.02, 0.0),
                 ));
             });
+        // The bait on the hook: a worm's end and the shank over it, the
+        // mockup's (M37).
+        let bait = materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(0xb0, 0x60, 0x5a),
+            perceptual_roughness: 0.9,
+            ..default()
+        });
+        let shank = materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(0x5a, 0x5f, 0x63),
+            metallic: 0.6,
+            perceptual_roughness: 0.4,
+            ..default()
+        });
+        commands
+            .spawn((
+                Name::new("Fishing hook"),
+                Hook,
+                crate::field_light::LitByField,
+                Transform::default(),
+                Visibility::Hidden,
+            ))
+            .with_children(|hook| {
+                hook.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.018, 0.035, 0.018))),
+                    MeshMaterial3d(bait),
+                    Transform::default(),
+                ));
+                hook.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.004, 0.03, 0.004))),
+                    MeshMaterial3d(shank),
+                    Transform::from_xyz(0.0, 0.02, 0.0),
+                ));
+            });
         let mut line = Mesh::new(PrimitiveTopology::LineStrip, RenderAssetUsages::default());
-        line.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![Vec3::ZERO; LINE_POINTS]);
+        line.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![Vec3::ZERO; LINE_POINTS + 1]);
         commands.spawn((
             Name::new("Fishing line"),
             LineMesh,
@@ -1954,12 +1953,12 @@ pub(crate) mod draw {
     #[allow(clippy::too_many_arguments)]
     pub fn schools(
         mut commands: Commands,
-        fishery: Res<Fishery>,
+        mut fishery: ResMut<Fishery>,
         fauna: Res<FaunaConfig>,
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         float: Res<DrawnFloat>,
-        mut headings: ResMut<DrawnHeadings>,
+        (mut headings, mut swim): (ResMut<DrawnHeadings>, ResMut<DrawnSwim>),
         time: Res<Time>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
@@ -1987,6 +1986,76 @@ pub(crate) mod draw {
         let under = super::places::UnderWater::of(water.as_deref());
         let seconds = now.map_or(0.0, |(seconds, _)| seconds);
         let o = crate::sim_origin::from_render_frame(&frame);
+        let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
+        // The fish on the line is drawn at the lure under the drawn float
+        // (`movement-smoothness` 7.1).
+        let held = float.shift(&o, fishery.line.float);
+        let dt = time.delta_secs().min(0.1);
+        // Every swimmer turned and its wave stepped, and the line's fish
+        // moved by its choreography (`fish-behaviour`): before the meshes
+        // are built from them.
+        {
+            let lure = drawn_lure(&o, &fishery, &float);
+            let fishery = &mut *fishery;
+            let water = sea.as_deref().map(|sea| {
+                PlanetWater::at(
+                    sea,
+                    air.as_deref(),
+                    contact.as_deref(),
+                    &fishery.beds,
+                    o.query_point(fishery.line.float),
+                    seconds,
+                )
+            });
+            let view = match (fishery.line.is_out(), fishery.feet) {
+                (true, Some(feet)) => Some(fauna::swim::LineView {
+                    line: &fishery.line,
+                    lure,
+                    feet,
+                }),
+                _ => None,
+            };
+            swim.frame(
+                &o,
+                &mut fishery.schools,
+                roster,
+                &fauna.0.behaviour,
+                view,
+                alpha,
+                dt,
+                |school, i, species| {
+                    let id = school.ids.get(i).copied().unwrap_or(0);
+                    let body = bodies::model_for(&species.id, id);
+                    let kind = body.wave_kind()?;
+                    let length_m = school.length_cm(i, species) as f32 / 100.0;
+                    let scale = length_m / body.length;
+                    Some((
+                        fauna::swim::Build {
+                            length_m,
+                            mouth_m: body.nose * scale,
+                            speeds: species.speed_mps,
+                        },
+                        kind,
+                    ))
+                },
+                |p| {
+                    let Some(water) = water.as_ref() else {
+                        return p;
+                    };
+                    let q = o.query_point(p);
+                    let (top, bottom) = (
+                        f64::from(water.surface(q) - 0.25),
+                        f64::from(water.bed(q) + 0.25),
+                    );
+                    if top > bottom {
+                        o.with_radius(p, o.radius_at(p).clamp(bottom, top))
+                    } else {
+                        p
+                    }
+                },
+            );
+        }
+        let fishery = &*fishery;
         let dim = |school: &School| {
             sea.as_deref().map(|sea| {
                 let anchor = o.query_point(school.anchor);
@@ -2001,11 +2070,6 @@ pub(crate) mod draw {
                 (water.surface(anchor), under)
             })
         };
-        let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
-        // The fish on the line is drawn at the lure under the drawn float
-        // (`movement-smoothness` 7.1).
-        let held = float.shift(&o, fishery.line.float);
-        let dt = time.delta_secs().min(0.1);
         headings.begin();
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
@@ -2033,7 +2097,7 @@ pub(crate) mod draw {
                     dim(school),
                     alpha,
                     held,
-                    (&mut headings, dt),
+                    (&mut headings, &swim, dt),
                 );
             }
         }
@@ -2058,7 +2122,7 @@ pub(crate) mod draw {
                 dim(school),
                 alpha,
                 held,
-                (&mut headings, dt),
+                (&mut headings, &swim, dt),
             );
             let handle = meshes.add(mesh);
             commands
@@ -2100,11 +2164,16 @@ pub(crate) mod draw {
         o: &SimOrigin,
         fishery: &Fishery,
         float: &DrawnFloat,
+        swim: Option<&DrawnSwim>,
         s: usize,
         i: usize,
         step_hz: f32,
     ) -> Option<Vec3> {
         let school = fishery.schools.get(s)?;
+        // A swimmer is drawn at its pose (`fish-behaviour`).
+        if let Some(pose) = swim.and_then(|w| w.poses.get(&(school.seed, *school.ids.get(i)?))) {
+            return Some(pose.pos);
+        }
         (i < school.len()).then(|| {
             drawn_at(
                 school,
@@ -2124,6 +2193,14 @@ pub(crate) mod draw {
         } else {
             p
         }
+    }
+
+    /// The lure as drawn this frame, local: a hand's width under the drawn
+    /// float (`fish-behaviour`'s trace reads it).
+    /// Before what the fish does to it: add [`fauna::swim::Drawing::lure_offset`].
+    pub(crate) fn drawn_lure(o: &SimOrigin, fishery: &Fishery, float: &DrawnFloat) -> Vec3 {
+        let drawn = float.drawn(o, fishery.line.float);
+        drawn - o.up_at(drawn) * 0.35
     }
 
     /// How far under a diving duck is drawn when wholly dived, m.
@@ -2149,15 +2226,20 @@ pub(crate) mod draw {
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
         held: Vec3,
-        (headings, dt): (&mut DrawnHeadings, f32),
+        (headings, swim, dt): (&mut DrawnHeadings, &DrawnSwim, f32),
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
         let mut uvs: Vec<[f32; 2]> = Vec::new();
+        let mut waves = bodies::SwimAttributes::default();
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for i in 0..school.len() {
-            // Between the school's last two steps (`movement-smoothness`).
-            let p = &drawn_at(school, i, alpha, held);
+            let id = school.ids.get(i).copied().unwrap_or(0);
+            // A swimmer's pose (`fish-behaviour`): turned, banked, its body
+            // wave; else between the school's last two steps
+            // (`movement-smoothness`).
+            let posed = swim.poses.get(&(school.seed, id));
+            let p = &posed.map_or_else(|| drawn_at(school, i, alpha, held), |pose| pose.pos);
             let up = o.up_at(*p);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
@@ -2167,7 +2249,6 @@ pub(crate) mod draw {
             let under = now.map_or(0.0, |(seconds, sun)| {
                 fauna::under_share(species, school, i, seconds, sun.dot(up) < -0.05)
             });
-            let id = school.ids.get(i).copied().unwrap_or(0);
             let body = bodies::model_for(&species.id, id);
             let phase = (fauna::hash2(school.seed, u64::from(id)) >> 40) as f32
                 / (1u64 << 24) as f32
@@ -2183,7 +2264,14 @@ pub(crate) mod draw {
                 _ => along,
             };
             let held_here = school.held.is_some_and(|(h, _)| h == i);
-            let eased = headings.ease((school.seed, id), step, up, held_here, dt);
+            let length = school.length_cm(i, species) as f32 / 100.0;
+            let mut scale = length / body.length;
+            let mouth = body.nose * scale;
+            let framed = posed.map(|pose| pose.frame(up, mouth));
+            let eased = match framed {
+                Some((forward, _, _)) => forward,
+                None => headings.ease((school.seed, id), step, up, held_here, dt),
+            };
             let flat = (eased - up * eased.dot(up)).normalize_or(up.any_orthonormal_vector());
             let mut forward = match species.mover {
                 fauna::Mover::School => eased,
@@ -2195,13 +2283,16 @@ pub(crate) mod draw {
             }
             let side = forward.cross(up).normalize_or(up.any_orthonormal_vector());
             let mut top = side.cross(forward);
-            let length = school.length_cm(i, species) as f32 / 100.0;
-            let mut scale = length / body.length;
             let at = *p - school.anchor;
             let mut origin = match species.mover {
                 fauna::Mover::Crawler => at - up * fauna::crawl_lift(species),
                 _ => at,
             };
+            // Posed: banked, flashing, its head shaken about its mouth.
+            if let Some((_, posed_top, posed_origin)) = framed {
+                top = posed_top;
+                origin = posed_origin - school.anchor;
+            }
             match (body.kind, pose) {
                 (bodies::Kind::Seal, _) => {
                     origin -= up * (0.1 * scale + (1.2 + 0.03 * scale) * under);
@@ -2229,23 +2320,36 @@ pub(crate) mod draw {
                 tint = water.albedo(tint, (f64::from(surface) - o.radius_at(*p)) as f32);
             }
             let look = bodies::Look { t, phase, pose };
-            headings
-                .map
-                .insert((school.seed, id), Heading { forward, up: top });
+            headings.map.insert(
+                (school.seed, id),
+                Heading {
+                    forward,
+                    up: top,
+                    mouth: school.anchor + origin + forward * body.nose * scale,
+                },
+            );
+            // Its body wave: the pose's; a swimmer drawn without one (a seal)
+            // cruises on the world clock.
+            let wave = match posed {
+                Some(pose) => Some(pose.wave),
+                None => body.wave_kind().map(|_| bodies::cruising(body, &look)),
+            };
             let place = bodies::Place {
                 origin,
                 forward,
                 up: top,
                 scale,
             };
-            bodies::emit(
+            bodies::emit_swimmer(
                 body,
                 &look,
                 &place,
                 tint,
+                wave,
                 &mut positions,
                 &mut colours,
                 &mut uvs,
+                &mut waves,
             );
         }
         // A school with nobody drawn (all under, all gone) keeps one hidden
@@ -2255,11 +2359,21 @@ pub(crate) mod draw {
             positions = vec![[0.0; 3]; 3];
             colours = vec![[0.0; 4]; 3];
             uvs = vec![bodies::white_uv(); 3];
+            waves = bodies::SwimAttributes {
+                axes: vec![[0.0; 4]; 3],
+                wave: vec![[0.0; 4]; 3],
+                up: vec![[0.0; 4]; 3],
+            };
         }
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, waves.axes);
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, waves.wave);
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, waves.up);
         mesh.remove_indices();
+        // Flat normals of the rigid body: the vertex stage turns them with
+        // the bend.
         mesh.compute_flat_normals();
     }
 
@@ -2277,20 +2391,43 @@ pub(crate) mod draw {
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
         tip_now: Option<Res<crate::held::RodTipNow>>,
-        drawn: Res<DrawnFloat>,
-        trail: Res<CastTrail>,
+        (drawn, swim, trail): (Res<DrawnFloat>, Res<DrawnSwim>, Res<CastTrail>),
         cameras: Query<&Transform, With<WalkingCamera>>,
         rods: Query<
             (&crate::held::Held, &Transform),
-            (Without<WalkingCamera>, Without<Float>, Without<LineMesh>),
+            (
+                Without<WalkingCamera>,
+                Without<Float>,
+                Without<LineMesh>,
+                Without<Hook>,
+            ),
         >,
         mut floats: Query<
             (&mut Transform, &mut Visibility),
-            (With<Float>, Without<LineMesh>, Without<WalkingCamera>),
+            (
+                With<Float>,
+                Without<LineMesh>,
+                Without<WalkingCamera>,
+                Without<Hook>,
+            ),
         >,
         mut lines: Query<
             (&Mesh3d, &mut Transform, &mut Visibility),
-            (With<LineMesh>, Without<Float>, Without<WalkingCamera>),
+            (
+                With<LineMesh>,
+                Without<Float>,
+                Without<WalkingCamera>,
+                Without<Hook>,
+            ),
+        >,
+        mut hooks: Query<
+            (&mut Transform, &mut Visibility),
+            (
+                With<Hook>,
+                Without<Float>,
+                Without<LineMesh>,
+                Without<WalkingCamera>,
+            ),
         >,
         mut meshes: ResMut<Assets<Mesh>>,
     ) {
@@ -2305,7 +2442,24 @@ pub(crate) mod draw {
         // (`movement-smoothness` 7.1).
         let o = crate::sim_origin::from_render_frame(&frame);
         let float = drawn.drawn(&o, line.float);
+        // The lure, where the fish has it (`fish-behaviour`: a peck's tug,
+        // the take's drag), and the float leaning toward a lure pulled
+        // aside and down after it. Drawn only.
+        let up_here = o.up_at(float);
+        let lure_off = swim.lure_offset();
+        let lure = float - up_here * 0.35 + lure_off;
+        let aside = lure_off - up_here * lure_off.dot(up_here);
+        let float = float + aside * 0.45 - up_here * (-lure_off.dot(up_here)).max(0.0) * 0.3;
         let float_at = crate::render_origin::render_from_physics(&frame, float);
+        for (mut transform, mut visibility) in &mut hooks {
+            *visibility = if out {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+            transform.translation = crate::render_origin::render_from_physics(&frame, lure);
+            transform.rotation = Quat::from_rotation_arc(Vec3::Y, up_here);
+        }
         for (mut transform, mut visibility) in &mut floats {
             *visibility = if out {
                 Visibility::Visible
@@ -2386,6 +2540,9 @@ pub(crate) mod draw {
                 }
                 None => line_points(&o, tip_local, end, slack, cast, |_| 0.0),
             };
+            // On down through the float to the hook: the leader.
+            let mut points = points;
+            points.push(lure + up_here * 0.03 - tip_local);
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
             }

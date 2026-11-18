@@ -196,13 +196,69 @@ pub struct FieldLit {
     pub rows: Handle<ShaderStorageBuffer>,
     #[storage(105, read_only)]
     pub room_lights: Handle<ShaderStorageBuffer>,
+    /// The body-wave table a swimmer's vertex stage reads (`swim.wgsl`,
+    /// `fish-behaviour` design 8.4): one row per body, written once.
+    #[storage(106, read_only)]
+    pub swim: Handle<ShaderStorageBuffer>,
 }
+
+/// The vertex stage of a mesh carrying the body-wave attributes, loaded at
+/// startup (`swim_vertex.wgsl`, and the `pbd::swim` module it imports).
+static SWIM_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
+
+/// Keeps the `pbd::swim` module loaded for the composer.
+#[derive(Resource)]
+struct SwimModule(#[allow(dead_code)] Handle<Shader>);
 
 impl MaterialExtension for FieldLit {
     fn fragment_shader() -> ShaderRef {
         "shaders/field_lit.wgsl".into()
     }
+
+    /// A mesh with the body-wave attributes (a school's) is drawn through
+    /// `swim_vertex.wgsl`, with its layout widened to them; every other
+    /// mesh keeps Bevy's vertex stage, untouched. The game has no depth or
+    /// normal prepass and fish are not casters of the sun's cascades, so
+    /// only the main pass bends.
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialExtensionPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        layout: &bevy::mesh::MeshVertexBufferLayoutRef,
+        _key: bevy::pbr::MaterialExtensionKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        use crate::fish::bodies::{ATTRIBUTE_SWIM_AXES, ATTRIBUTE_SWIM_UP, ATTRIBUTE_SWIM_WAVE};
+        if !layout.0.contains(ATTRIBUTE_SWIM_AXES) {
+            return Ok(());
+        }
+        let prepass = descriptor
+            .vertex
+            .shader_defs
+            .contains(&"PREPASS_PIPELINE".into());
+        let Some(shader) = SWIM_VERTEX.get() else {
+            return Ok(());
+        };
+        if prepass {
+            return Ok(());
+        }
+        descriptor.vertex.buffers = vec![layout.0.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            Mesh::ATTRIBUTE_COLOR.at_shader_location(5),
+            ATTRIBUTE_SWIM_AXES.at_shader_location(10),
+            ATTRIBUTE_SWIM_WAVE.at_shader_location(11),
+            ATTRIBUTE_SWIM_UP.at_shader_location(12),
+        ])?];
+        descriptor.vertex.shader = shader.clone();
+        descriptor.vertex.entry_point = None;
+        Ok(())
+    }
 }
+
+/// How many bodies the body-wave table has room for.
+const SWIM_ROWS: usize = 128;
+/// One row of it, bytes: three vec4s.
+const SWIM_ROW_BYTES: u64 = 48;
 
 /// A PBR material lit by the field.
 pub type FieldLitMaterial = ExtendedMaterial<StandardMaterial, FieldLit>;
@@ -232,6 +288,9 @@ pub struct FieldUploads {
     view_buffer: Handle<ShaderStorageBuffer>,
     rows_buffer: Handle<ShaderStorageBuffer>,
     lights_buffer: Handle<ShaderStorageBuffer>,
+    swim_buffer: Handle<ShaderStorageBuffer>,
+    /// The body-wave table, kept: written whole to each new GPU buffer.
+    swim: std::sync::Arc<Vec<Vec4>>,
 }
 
 /// Every field-lit mesh's row and room lights, as the CPU holds them, and the
@@ -268,10 +327,22 @@ impl FieldRows {
                 view_buffer: buffers.add(storage_buffer(FieldView::BYTES)),
                 rows_buffer: buffers.add(storage_buffer(FieldRow::BYTES * ROWS_START as u64)),
                 lights_buffer: buffers.add(storage_buffer(LightRow::BYTES * LIGHTS_START as u64)),
+                swim_buffer: buffers.add(storage_buffer(SWIM_ROW_BYTES * SWIM_ROWS as u64)),
                 ..default()
             },
             ..default()
         }
+    }
+
+    /// Set the body-wave table (`fish-behaviour` design 8.4): a row of three
+    /// vec4s per body, written to the GPU once, and again into a new buffer.
+    pub fn set_swim_rows(&mut self, rows: &[[[f32; 4]; 3]]) {
+        let rows = &rows[..rows.len().min(SWIM_ROWS)];
+        self.uploads.swim = std::sync::Arc::new(
+            rows.iter()
+                .flat_map(|r| r.iter().map(|v| Vec4::from_array(*v)))
+                .collect(),
+        );
     }
 
     /// How many meshes hold a row now.
@@ -399,6 +470,7 @@ impl FieldRows {
                         sun_cascades: shadows.cascades.clone(),
                         rows: uploads.rows_buffer.clone(),
                         room_lights: uploads.lights_buffer.clone(),
+                        swim: uploads.swim_buffer.clone(),
                     },
                 })
             })
@@ -426,6 +498,12 @@ impl Plugin for FieldLightPlugin {
             .get_resource_mut::<Assets<ShaderStorageBuffer>>()
             .map(|mut buffers| FieldRows::new(&mut buffers))
             .unwrap_or_default();
+        if let Some(assets) = app.world().get_resource::<AssetServer>() {
+            let vertex = assets.load("shaders/swim_vertex.wgsl");
+            let module = assets.load("shaders/swim.wgsl");
+            let _ = SWIM_VERTEX.set(vertex);
+            app.insert_resource(SwimModule(module));
+        }
         app.add_plugins(MaterialPlugin::<FieldLitMaterial>::default())
             .insert_resource(rows)
             .add_systems(
@@ -864,7 +942,7 @@ struct FieldMirror {
     dirty_lights: Option<(u32, u32)>,
     buffers: FieldUploads,
     /// The GPU buffers last written, so a new one is written whole.
-    written: [Option<bevy::render::render_resource::BufferId>; 3],
+    written: [Option<bevy::render::render_resource::BufferId>; 4],
 }
 
 fn widen(range: &mut Option<(u32, u32)>, at: u32) {
@@ -887,6 +965,11 @@ fn extract_the_field(
     mirror.buffers.view_buffer = up.view_buffer.clone();
     mirror.buffers.rows_buffer = up.rows_buffer.clone();
     mirror.buffers.lights_buffer = up.lights_buffer.clone();
+    mirror.buffers.swim_buffer = up.swim_buffer.clone();
+    if !std::sync::Arc::ptr_eq(&mirror.buffers.swim, &up.swim) {
+        mirror.buffers.swim = up.swim.clone();
+        mirror.written[3] = None;
+    }
     for (at, row) in &up.rows {
         let i = *at as usize;
         if mirror.rows.len() <= i {
@@ -959,6 +1042,16 @@ fn write_the_field(
         }
         mirror.written[2] = Some(gpu.buffer.id());
         mirror.dirty_lights = None;
+    }
+    // The body-wave table: whole, once to each buffer, once it is set.
+    if let Some(gpu) = storage.get(&mirror.buffers.swim_buffer)
+        && mirror.written[3] != Some(gpu.buffer.id())
+        && !mirror.buffers.swim.is_empty()
+    {
+        let bytes = vec4_bytes(mirror.buffers.swim.iter());
+        let bytes = &bytes[..bytes.len().min(gpu.buffer.size() as usize)];
+        queue.write_buffer(&gpu.buffer, 0, bytes);
+        mirror.written[3] = Some(gpu.buffer.id());
     }
 }
 

@@ -1077,3 +1077,33 @@ fn the_underwater_shafts_are_sampled_by_their_reach_not_the_scene() {
         "the shafts' march is spread over the scene's distance again"
     );
 }
+
+/// `swim.wgsl` (`fish-behaviour` design 8): the body wave module validates
+/// as naga reads it, and `swim_vertex.wgsl` imports what it defines.
+#[test]
+fn the_body_wave_module_compiles_and_the_school_vertex_stage_imports_it() {
+    let module: String = include_str!("../../../assets/shaders/swim.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    validated_entry_points("swim.wgsl", &module);
+    let vertex = include_str!("../../../assets/shaders/swim_vertex.wgsl");
+    assert!(vertex.contains("#import pbd::swim::{SwimRow, swim_body}"));
+    assert!(module.contains("fn swim_body(") && module.contains("struct SwimRow"));
+    // The attributes it reads are the ones `FieldLit::specialize` lays out.
+    for location in [
+        "@location(10) swim_axes",
+        "@location(11) swim_wave",
+        "@location(12) swim_up",
+    ] {
+        assert!(
+            vertex.contains(location),
+            "swim_vertex.wgsl lost `{location}`"
+        );
+    }
+    assert!(
+        vertex.contains("@binding(106)"),
+        "the table's binding moved"
+    );
+}

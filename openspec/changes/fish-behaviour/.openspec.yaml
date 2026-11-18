@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-11-17
+# The requirements moved into openspec/specs/player/fishing with the game
+# code that made them true (fish-behaviour task 4.2).
+skip_specs: true

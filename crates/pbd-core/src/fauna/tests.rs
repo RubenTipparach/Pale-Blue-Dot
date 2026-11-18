@@ -437,6 +437,39 @@ fn a_school_is_a_function_of_its_seed_and_its_steps() {
     assert_eq!(run(), run());
 }
 
+/// `fish-behaviour` design 4: a free fish's swim turns no faster than
+/// `flock.turn_deg_s` from one step to the next, and its speed rises and
+/// falls with its burst-glide cycle rather than holding one value.
+#[test]
+fn a_fish_turns_no_faster_than_its_limit_and_bursts_and_glides() {
+    let water = Shore { max_depth: 8.0 };
+    let flock = FlockSettings::default();
+    let (mut school, species) = school_of("perch", at(0.0, 2.0, 14.0), 3, &water);
+    let dt = 1.0 / 30.0;
+    let limit = flock.turn_deg_s.to_radians() * dt;
+    let mut speeds = Vec::new();
+    for tick in 0..30 * 40 {
+        let was = school.velocities.clone();
+        school.step(&PLANET, dt, &species, &flock, &water, None);
+        for (a, b) in was.iter().zip(&school.velocities) {
+            let turn = a.angle_between(*b);
+            assert!(
+                turn <= limit + 1e-4,
+                "tick {tick}: turned {:.1} deg in a step",
+                turn.to_degrees()
+            );
+        }
+        speeds.push(school.velocities[0].length());
+    }
+    let (lo, hi) = speeds.iter().fold((f32::INFINITY, 0.0f32), |(lo, hi), s| {
+        (lo.min(*s), hi.max(*s))
+    });
+    assert!(
+        hi - lo > 0.3,
+        "one speed all the way: {lo:.2} to {hi:.2} m/s"
+    );
+}
+
 /// A school told of a lure turns toward it and gets there.
 #[test]
 fn a_scented_school_reaches_the_lure() {
