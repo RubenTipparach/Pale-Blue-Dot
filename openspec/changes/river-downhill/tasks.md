@@ -17,5 +17,10 @@
 - [x] Versions 8 to 10's ground unchanged (their digests as `origin/main`'s; the pinned values fail on main too).
 
 ## 4. Show it
-- [ ] The instrument down the owner's river reads no rises; screenshots of
-      one of the old rises, version 10 against 11.
+- [x] The instrument down the owner's river reads no rises; screenshots of
+      one of the old rises, version 10 against 11
+      (`docs/screenshots/river-downhill/`, 610 m down the owner's river from a
+      tube looking downstream: version 10's water climbs in steps toward the
+      camera, its falls' faces turned uphill; version 11's runs level, 2 m
+      lower. Memory-only worlds: `--generator N --walk --at ... --aboard tube
+      --capture`).
