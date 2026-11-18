@@ -92,6 +92,14 @@
   - [ ] 6.6.8 (Owed: not run in this sitting; the suite has no fall scenario, a held-view command is in
         `docs/screenshots/waterfall-look/README.md`.) The frame cost: `perf_suite.py`, before and after, on the release build (owner's condition).
 
+- [x] 6.7 (Built 2026-11-17 on `claude/fall-size-rules`.) A fall's size (design "A fall's size"; owner,
+      2026-11-17: "this water is too shallow for ripples, and the mist should be 50% at this size", "less
+      particles for these shallow drops too", "no steam/mist at all for drops that are less than 1 block
+      height"): the foot's ripples gated on the pool's depth (none at 1 m, full at 2 m); no mist under a
+      1 m drop, eased in time across it; mist opacity 50% and particle counts 35% on a small fall, the
+      approved look from 4 m; the same rules in M35. Verify: unit tests for the depth gate, the mist and
+      count scales and the timed mist fade; before and after in `docs/screenshots/fall-size-rules/`.
+
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
 - [x] 7.1 (Built: the rings fade by footprint and end at `rain_detail_reach_m`; river 30.2 to 20.8 (dry 19.0), the beach's far water 42.3 to 24.8 with the near rings kept; the falls' froth not touched.) The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.

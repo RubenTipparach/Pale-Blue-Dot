@@ -381,7 +381,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0}, uRipLen: {value: 0.9}, uGlassTop: {value: 2}, uGlassFace: {value: 0.9}, uFill: {value: 2.5}, uGlassTint: {value: 0.7}, uEdgeHi: {value: 0}, uRipReach: {value: 6}, uOutReach: {value: 6},
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0}, uRipLen: {value: 0.9}, uGlassTop: {value: 2}, uGlassFace: {value: 0.9}, uFill: {value: 2.5}, uGlassTint: {value: 0.7}, uEdgeHi: {value: 0}, uRipReach: {value: 6}, uOutReach: {value: 6}, uRipGain: {value: FALLS.map(() => 1)},
       uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
@@ -396,7 +396,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass; uniform float uRipLen; uniform float uGlassTop; uniform float uGlassFace; uniform float uFill; uniform float uGlassTint; uniform float uEdgeHi; uniform float uRipReach; uniform float uOutReach;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass; uniform float uRipLen; uniform float uGlassTop; uniform float uGlassFace; uniform float uFill; uniform float uGlassTint; uniform float uEdgeHi; uniform float uRipReach; uniform float uOutReach; uniform float uRipGain[${NF}];
       uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
@@ -506,6 +506,8 @@ function waterMaterial(U, vertexShader) {
         // water being pushed outward"): rings run out from the falling column across the pool, 0.9 m apart at
         // 1.3 m/s, strongest at the column and dying over a few metres, larger under a taller fall. They tilt the
         // normal (so the reflection and the fresnel ring) and whiten a little on their crests near the column.
+        // Ripples need depth (owner, 2026-11-17: "this water is too shallow for ripples"): uRipGain, the game's
+        // smoothstep(1 m, 2 m) of the pool's depth under the foot (none on the riffle's 0.7 m channel).
         float ripFoam = 0.0;
         if (uRip > 0.0 && vKind < 0.5) {
           for (int i = 0; i < ${NF}; i++) {
@@ -516,7 +518,7 @@ function waterMaterial(U, vertexShader) {
             // have died to nothing (a hard limit, faded over its last 40%); uRip: their height.
             float k = 6.2831853/uRipLen, ph = k*x - uTime/0.75*1.3*k;
             float reach = min(2.0 + 0.35*uFeetH[i], uRipReach);
-            float env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*uRipReach, uRipReach, x))*(0.6 + 0.06*min(uFeetH[i], 10.0))*uRip;
+            float env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*uRipReach, uRipReach, x))*(0.6 + 0.06*min(uFeetH[i], 10.0))*uRip*uRipGain[i];
             vec2 dir = off/max(d, 1e-3);
             float slope = cos(ph)*env*0.55*(0.9/uRipLen);
             gradient += uM*vec3(dir.x*slope, 0.0, dir.y*slope)*12.5*0.25;
@@ -664,6 +666,14 @@ const RULES = {
     alpha: () => 0.45, size: m => Math.max(0.35, Math.min(0.25 + 0.19 * m, 5)), rise: m => 0.15 + 0.05 * m,
     drops: m => Math.max(12, Math.min(3 + 6 * m, 160)) | 0, veil: m => Math.max(6, Math.min(160, 9 * m))}),
 };
+// A fall's size (owner, 2026-11-17; `water-flow` design "A fall's size", the game's `water.ron` `falls`): on the
+// proposed rule, no mist at all under a drop of `noMist` m (1, "no steam/mist at all for drops that are less than 1
+// block height"), eased in or out over 0.6 s as a drop crosses it; from there the puffs' opacity is `smallMist`
+// (0.5, "the mist should be 50% at this size") and every count (puffs, spray, fall droplets, bubbles) `smallCount`
+// (0.35, "less particles for these shallow drops too") up to D 1.5 m, rising smoothly to the approved look by 4 m.
+const SMALL_DROP_M = 1.5, FULL_DROP_M = 4.0;
+const smooth01 = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+const sizeScale = (small, D) => small + (1 - small) * smooth01(SMALL_DROP_M, FULL_DROP_M, D);
 function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
   const mistN = newPuffs && tune ? tune.mist : 1, mistS = newPuffs && tune ? tune.mistSize : 1;
   const veilN = newPuffs && tune ? tune.veil : 0;
@@ -688,8 +698,16 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       fade = f._vis; if (fade <= 0) continue;
     } else fade = 1 - Math.min(1, Math.max(0, (foot.distanceTo(eye) - 55) / 15));
     const light = (0.12 + 0.88 * day) * Math.max(f.sky, 0.15);
+    const sized = newPuffs && tune && tune.rule === "new" && tune.smallMist !== undefined;
+    const mistScale = sized ? sizeScale(tune.smallMist, f.D) : 1, countScale = sized ? sizeScale(tune.smallCount, f.D) : 1;
+    let mistOn = 1;
+    if (sized) {
+      const want = f.D >= tune.noMist ? 1 : 0, dt = Math.max(0, Math.min(0.1, t - (f._mt ?? t)));
+      f._mt = t; f._mist = f._mist === undefined ? want : f._mist + Math.sign(want - f._mist) * Math.min(Math.abs(want - f._mist), dt / 0.6);
+      mistOn = f._mist;
+    }
     const seed = ((Math.trunc(foot.x * 7) >>> 0) ^ (((Math.trunc(foot.z * 13) >>> 0) << 11) | ((Math.trunc(foot.z * 13) >>> 0) >>> 21))) >>> 0;
-    const drops = R.drops(h);
+    const drops = Math.round(R.drops(h) * countScale);
     for (let i = 0; i < drops; i++) {
       const r = k => hash01(seed, i * 8 + k);
       const period = 0.7 + 0.5 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
@@ -700,7 +718,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       quad({x: foot.x + Math.cos(a) * d, y: foot.y + lift, z: foot.z + Math.sin(a) * d}, size,
         [light, light, light * 1.02, 0.75 * (1 - phase) * (newPuffs ? Math.min(1, phase / 0.15) : 1) * fade], -1, 0);
     }
-    const puffs = Math.round(R.puffs * mistN);
+    const puffs = mistOn > 0 ? Math.round(R.puffs * mistN * countScale) : 0;
     for (let i = 0; i < puffs; i++) {
       const r = k => hash01((seed ^ 0xA5A5) >>> 0, i * 8 + k);
       const period = 2 + 1.5 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
@@ -715,7 +733,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       // New tab: each puff fades in over the first fifth of its life instead of being born at full alpha, which
       // read as puffs flickering in and out on the tall fall's big puffs (owner, 2026-11-16).
       const born = newPuffs ? Math.min(1, phase / 0.2) : 1;
-      const alpha = R.alpha(h) * (1 - phase) * born * fade;
+      const alpha = R.alpha(h) * mistScale * mistOn * (1 - phase) * born * fade;
       // The new puffs: a variant by the puff's own hash, its frame by its age.
       // A continuous frame (variant*4 + 0..3); the shader cross-fades the two frames either side, so a big puff
       // never changes shape in one frame (owner, 2026-11-16: "see the popping?").
@@ -727,7 +745,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
     // down at the fall's speed there, flung a little outward, and falls under gravity until it reaches the pool.
     // More of them low down, where the water has fallen furthest and broken up most. Drawn as hard 8-texel
     // droplets (cell -2), not soft puffs.
-    const veil = Math.round(R.veil(h) * veilN);
+    const veil = Math.round(R.veil(h) * veilN * countScale);
     const G = 15;  // the splash's own gravity, m/s^2
     const STREAK_S = 0.035 * (tune && tune.streak !== undefined ? tune.streak : 1);  // a streak's length in seconds of travel
     for (let i = 0; i < veil; i++) {
@@ -963,7 +981,8 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6, glassTop: 0.7, glassFace: 0.5, fill: 2.25, glassTint: 0.25, edgeHi: 0};
+    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6, glassTop: 0.7, glassFace: 0.5, fill: 2.25, glassTint: 0.25, edgeHi: 0,
+    ripDepth0: 1.0, ripDepth1: 2.0, noMist: 1.0, smallMist: 0.5, smallCount: 0.35};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -991,7 +1010,9 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   function apply() {
     const v = S.variant;
     leak.visible = v === "today"; front.visible = v !== "today";
-    for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
+    const sized = v === "new" && S.rule === "new";
+    bubbles.forEach((b, i) => { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles * (sized ? sizeScale(S.smallCount, FALLS[i].H) : 1); });
+    FALLS.forEach((F, i) => { wmat.uniforms.uRipGain.value[i] = smooth01(S.ripDepth0, Math.max(S.ripDepth1, S.ripDepth0 + 1e-3), F.poolY - F.floor); });
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
     wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0;
     wmat.uniforms.uRipLen.value = S.ripLen; for (const k of ["GlassTop", "GlassFace", "Fill", "GlassTint", "EdgeHi"]) wmat.uniforms["u" + k].value = S[k[0].toLowerCase() + k.slice(1)]; wmat.uniforms.uRipReach.value = S.ripReach; wmat.uniforms.uOutReach.value = S.outReach;
@@ -1120,7 +1141,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     const day = S.night ? 0 : 1;
     for (const m of [leak, front]) {
       if (!m.visible) continue;
-      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil, streak: S.streak, rule: S.rule});
+      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil, streak: S.streak, rule: S.rule, noMist: S.noMist, smallMist: S.smallMist, smallCount: S.smallCount});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
     }

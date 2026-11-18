@@ -1408,3 +1408,74 @@ spots. The fix is two extra lines a fragment on the game's water and one
 `north_east` a top vertex in the mesher; frame time was not measured
 (`perf_suite.py` has no river scenario, and the read replaces one frame with
 another of the same cost).
+
+## A fall's size: ripples need depth, small falls mist less (6.7; owner, 2026-11-17)
+
+The owner, on a screenshot of a shallow desert stream stepping down a layer
+with mist puffs all along it and big faint rings at the feet: "this water is
+too shallow for ripples, and the mist should be 50% at this size"; then, on a
+long cascade of one-layer steps (near 23.2255S 3.012W) speckled white at
+every lip: "less particles for these shallow drops too"; then "actually no
+steam/mist at all for drops that are less than 1 block height". The owner's
+own words are the approval for exactly this change (CLAUDE.md, "Waterfalls
+are designed in a mockup first"); M35 carries the same rules so the mockup
+and the game agree.
+
+**Measured** (a temporary `animate_splash` log of the feet near the eye,
+removed before commit; `--capture`, the Mac):
+
+| Scene | Feet | `h` | `D`, m | Pool under the foot, m |
+| --- | --- | --- | --- | --- |
+| One-layer pit (`--pit 1 --pour 1`, the spawn) | stream steps | 1 | 0.10 to 0.89 | 1.00 |
+| the same | two-layer steps | 2 | 1.22 to 1.79 | 1.00 to 2.00 |
+| Jungle cascade (`--at 11.33992 4.76730`) | tall falls | 4 to 9 | 3.77 to 8.81 | 1.00 to 5.00 |
+| the same | one-layer steps | 1 | 0.88 to 0.91 | 1.00 |
+
+The landing cell under a fall is drawn full (water stands on it), so a foot
+over one layer of water reads exactly 1.00 m: one layer is the most water a
+one-layer step can stand in. A stream's one-layer step drops under a metre
+(`D` is lip water to landing water, and the stream's own surface sits below
+each cell's top). The ripples' only driver was `fall_look.z` (height 0.5)
+times the foot's fade, on every top within 6 m of any of the nearest eight
+feet at its level: depth never entered.
+
+**The rules.** All in `water.ron` `falls`, validated, in metres:
+- **Ripples need depth.** The rings' envelope is multiplied by
+  `smoothstep(ripple_depth_none_m 1.0, ripple_depth_full_m 2.0, pool)`: none
+  over one layer (the stream, a pit's one-layer pool), half at 1.5 m, full
+  from two layers (the cascade's 3 to 5 m pools, M35's 3.35 m). The CPU puts
+  the share in `feet_more.w`; the fragment multiplies the rings by it (their
+  crest foam with them). Never a hard cut: a smoothstep, and a pool filling
+  changes `pool_m` a layer at a time but the foot's fade carries it.
+- **No mist under a metre.** A drop `D` under `mist_none_below_m` 1.0 emits no
+  mist puffs at all (not faded: none). The foot keeps a mist presence faded in
+  time over `splash_fade_s` (0.6 s) toward "mists" or not, reading the foot's
+  eased `D`: a fall whose drop crosses a metre (a level changing) eases its
+  puffs in or out, then emits none once the fade is out. The spray drops and
+  fall droplets are not steam and stay, at the reduced count below.
+- **Small falls mist at half.** From a metre up the puffs' opacity is
+  `0.5 + 0.5 smoothstep(mist_small_drop_m 1.5, mist_full_drop_m 4.0, D)`
+  times the approved opacity: 50% for a fall up to 1.5 m, 65% at M35's
+  2-layer 2.4 m, the approved look from 4 m (M35's 4 and 9-layer falls, the
+  cascade's tall falls). Opacity, not count, carries the "50%": at a small
+  fall the count is already the rule's floor (8), and the count is cut
+  separately below.
+- **Fewer particles on small falls.** Every count (mist puffs, spray drops,
+  fall droplets, and the bubbles on the GPU) is multiplied by
+  `0.35 + 0.65 smoothstep(1.5, 4.0, D)` (`particles_small_scale` 0.35): 35%
+  of today's on a small fall, all of it from 4 m. A one-layer step goes from
+  8 puffs, 12 spray drops, 6 to 8 droplets and 73 bubbles to (no puffs under
+  a metre, 3 from a metre) 4 spray drops, 2 to 3 droplets and 25 bubbles.
+- The rule before M35 (`rule: Layers`) is left as it was. The bubbles' ramp
+  reads a new `fall_size` lane of `WaterView` (x the mist share, y the count
+  share, z and w the two drops).
+
+**Seen** (`docs/screenshots/fall-size-rules/`, before and after, the HUD
+cropped): the river cascade at 23.2255S 3.012W, white at every lip before,
+clear after with one faint puff at its one step of a metre or more; the
+one-layer pit, puffs and rings gone; the tall pit fall (`D` 9.8 m), its mist
+unchanged; the jungle cascade's deep pool, its rings unchanged.
+
+**Not changed:** the approved look of any fall of 4 m or more, the reach and
+its fade, the wall blend, saves (nothing here is stored). The frame cost can
+only fall (fewer quads and bubbles, one multiply in the rings); not measured.

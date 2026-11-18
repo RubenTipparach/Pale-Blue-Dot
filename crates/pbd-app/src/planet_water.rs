@@ -218,6 +218,12 @@ pub(super) struct WaterView {
     fall_splash: Vec4,
     /// rgb the aerated water's colour, linear; w the water's time scale.
     aer_color: Vec4,
+    /// A fall's size (owner, 2026-11-17: "the mist should be 50% at this
+    /// size", "less particles for these shallow drops too"): x the mist's
+    /// opacity share and y the particles' count share on a small fall, z the
+    /// drop m up to which a fall is small, w the drop m from which it is full
+    /// (`water_flow::fall_size_scale`). The bubbles read it.
+    fall_size: Vec4,
     /// The nearest feet (`water_flow::FallFeetGpu`): xyz where each lands,
     /// body-local, w its drop m; then x the pool's depth m, y a seed, z its
     /// fade.
@@ -2024,6 +2030,12 @@ fn prepare_water_views(
                 view.viewport.w.max(1) as f32,
             ),
             aer_color: Vec3::from_array(s.falls.aer_color).extend(s.time_scale.max(1e-3)),
+            fall_size: Vec4::new(
+                s.falls.mist_small_scale,
+                s.falls.particles_small_scale,
+                s.falls.mist_small_drop_m,
+                s.falls.mist_full_drop_m,
+            ),
             feet: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.feet),
             feet_more: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.more),
             height_fog: height_fog_lane(
@@ -3275,7 +3287,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * eights + 8 * sh;
-        assert_eq!((mat4, vec4, eights, sh), (4, 100, 3, 1));
+        assert_eq!((mat4, vec4, eights, sh), (4, 101, 3, 1));
         assert_eq!(crate::water_flow::FALL_FEET_MAX, 8);
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();

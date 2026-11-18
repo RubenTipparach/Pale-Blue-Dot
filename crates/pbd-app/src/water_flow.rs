@@ -2582,7 +2582,8 @@ pub const FALL_FEET_MAX: usize = 8;
 /// The feet the water pass is told of (`water-flow` 6.6): per foot, xyz where
 /// it lands (body-local) and w its drop `D`, m; then x the pool's depth under
 /// it, m, y its seed 0..1, z its fade 0..1 (in time, as it joins or leaves the
-/// nearest eight); and how many there are.
+/// nearest eight), w its ripples' share by that depth (`ripple_depth_gain`);
+/// and how many there are.
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct FallFeetGpu {
     pub feet: [Vec4; FALL_FEET_MAX],
@@ -2659,6 +2660,46 @@ impl SplashRule {
     }
 }
 
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0).max(1e-6)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// How much of the foot's ripples a pool shows, 0..1, by its depth under the
+/// foot, m (owner, 2026-11-17: "this water is too shallow for ripples"):
+/// none at `ripple_depth_none_m` or less, faded in to full at
+/// `ripple_depth_full_m`, never a hard cut.
+pub fn ripple_depth_gain(look: &crate::config::FallLook, pool_m: f32) -> f32 {
+    smoothstep(look.ripple_depth_none_m, look.ripple_depth_full_m, pool_m)
+}
+
+/// The ramp a fall's size runs on, by its drop `D` m: `small` at
+/// `mist_small_drop_m` or less, rising smoothly to 1 at `mist_full_drop_m`.
+fn fall_size_scale(look: &crate::config::FallLook, small: f32, drop_m: f32) -> f32 {
+    small + (1.0 - small) * smoothstep(look.mist_small_drop_m, look.mist_full_drop_m, drop_m)
+}
+
+/// The share of the approved mist opacity a fall of drop `D` m shows (owner,
+/// 2026-11-17: "the mist should be 50% at this size"): `mist_small_scale` on
+/// a small fall, the approved look on a big one.
+pub fn mist_drop_scale(look: &crate::config::FallLook, drop_m: f32) -> f32 {
+    fall_size_scale(look, look.mist_small_scale, drop_m)
+}
+
+/// Whether a fall of drop `D` m mists at all (owner, 2026-11-17: "no
+/// steam/mist at all for drops that are less than 1 block height"). Under
+/// the rule before M35 every fall keeps its mist.
+pub fn mists(look: &crate::config::FallLook, drop_m: f32) -> bool {
+    look.rule != crate::config::MistRule::Proposed || drop_m >= look.mist_none_below_m
+}
+
+/// The share of the approved particle count (mist puffs, spray drops, fall
+/// droplets; the bubbles on the GPU by the same ramp) a fall of drop `D` m
+/// makes (owner, 2026-11-17: "less particles for these shallow drops too").
+pub fn particle_drop_scale(look: &crate::config::FallLook, drop_m: f32) -> f32 {
+    fall_size_scale(look, look.particles_small_scale, drop_m)
+}
+
 /// A foot's fades across frames, in time (CLAUDE.md, "a fade is a moment in
 /// time"): the splash's, as it crosses the reach, and the water's, as it
 /// joins or leaves the nearest `FALL_FEET_MAX`.
@@ -2676,6 +2717,9 @@ struct FootFade {
     /// over about a tick, so a lip lowered a layer by a drain does not
     /// resize and reseed the mist in a frame.
     drop: f32,
+    /// Whether the fall mists at all (`mist_none_below_m`), faded in time:
+    /// a fall whose drop crosses a metre eases its mist in or out.
+    mist: f32,
 }
 
 /// The time constant, s, of the splash's drop following the foot's: most
@@ -2801,8 +2845,15 @@ fn animate_splash(
                 fade.splash = 0.0;
                 fade.near = 0.0;
                 fade.drop = f.drop_m;
+                fade.mist = f32::from(u8::from(mists(look, f.drop_m)));
             }
             fade.drop += (f.drop_m - fade.drop) * (dt / SPLASH_DROP_EASE_S).min(1.0);
+            fade.mist = fade_toward(
+                fade.mist,
+                f32::from(u8::from(mists(look, fade.drop))),
+                dt,
+                look.splash_fade_s,
+            );
             fade.splash = fade_toward(
                 fade.splash,
                 f32::from(u8::from(inside)),
@@ -2824,7 +2875,12 @@ fn animate_splash(
                 as f32
                 / 65535.0;
             gpu_feet.feet[k] = f.at.extend(fade.drop);
-            gpu_feet.more[k] = Vec4::new(f.pool_m, seed, fade.near * gain, 0.0);
+            gpu_feet.more[k] = Vec4::new(
+                f.pool_m,
+                seed,
+                fade.near * gain,
+                ripple_depth_gain(look, f.pool_m),
+            );
             gpu_feet.count += 1;
         }
     }
@@ -2868,10 +2924,26 @@ fn animate_splash(
         let light = (0.12 + 0.88 * day) * f.sky.max(0.15);
         let rule = SplashRule::of(look.rule, f.height, fades.drop);
         let h = rule.m;
+        // The mist by the fall's size: a small fall's puffs at a share of the
+        // approved opacity, their count and size as approved.
+        let proposed = look.rule == crate::config::MistRule::Proposed;
+        let mist_scale = if proposed {
+            mist_drop_scale(look, fades.drop)
+        } else {
+            1.0
+        };
+        // And fewer of everything on a small fall, so a river of one-layer
+        // steps is not one white speckle (owner, 2026-11-17).
+        let count_scale = if proposed {
+            particle_drop_scale(look, fades.drop)
+        } else {
+            1.0
+        };
         let seed = (foot.x * 7.0) as i32 as u32 ^ ((foot.z * 13.0) as i32 as u32).rotate_left(11);
         // Spray: drops thrown up and out, falling back under gravity, each
         // fading in over the first 15% of its flight.
-        for i in 0..rule.drops {
+        let drops = (rule.drops as f32 * count_scale).round() as u32;
+        for i in 0..drops {
             let r = |k: u32| hash01(seed, i * 8 + k);
             let period = 0.7 + 0.5 * r(0);
             let phase = (t / period + r(1)).fract();
@@ -2901,7 +2973,12 @@ fn animate_splash(
         // proposed rule, each fading in over the first fifth of its life,
         // its centre low so its body meets the pool and the wall blend
         // fades it at the waterline.
-        let puffs = (rule.puffs as f32 * look.mist_amount).round() as u32;
+        // None under a one-layer drop: not emitted once its fade is out.
+        let puffs = if fades.mist > 0.0 {
+            (rule.puffs as f32 * look.mist_amount * count_scale).round() as u32
+        } else {
+            0
+        };
         let over = Vec2::new(f.over.dot(east), f.over.dot(north));
         let open = rule.open && over.length_squared() > 0.25;
         for i in 0..puffs {
@@ -2921,7 +2998,7 @@ fn animate_splash(
                 + up * (rule.rise * s + 0.2 * size)
                 + dir * (SPLASH_EDGE_M + spread * (0.3 + phase) * r(3));
             let born = (phase / 0.2).min(1.0);
-            let alpha = rule.alpha * (1.0 - phase) * born * fade;
+            let alpha = rule.alpha * mist_scale * fades.mist * (1.0 - phase) * born * fade;
             // A continuous frame (row * 4 + 0..3): the fragment cross-fades
             // the two frames either side, so a puff never changes shape in
             // one frame.
@@ -2935,7 +3012,7 @@ fn animate_splash(
         // out, falling under gravity into the pool. More low down. One drop
         // each: no streak trails in the game (owner, 2026-11-16: "I dont want
         // them in game yet").
-        let droplets = (rule.droplets * look.droplets).round() as u32;
+        let droplets = (rule.droplets * look.droplets * count_scale).round() as u32;
         for i in 0..droplets {
             let r = |k: u32| hash01(seed ^ 0x5C3E, i * 8 + k);
             let along = r(2).powf(0.7);
@@ -3012,6 +3089,61 @@ mod splash_tests {
         assert_eq!(SplashRule::of(MistRule::Layers, 9.0, 9.4).puffs, 12);
     }
 
+    /// Ripples need depth (owner, 2026-11-17: "this water is too shallow
+    /// for ripples"): none over one layer (the stream's feet measured 1.00
+    /// m), full from two (the cascade's 3 to 5 m pools), smooth between.
+    #[test]
+    fn ripples_need_depth_and_fade_in_over_it() {
+        let look = crate::config::FallLook::default();
+        assert_eq!(ripple_depth_gain(&look, 0.4), 0.0);
+        assert_eq!(ripple_depth_gain(&look, 1.0), 0.0);
+        assert!((ripple_depth_gain(&look, 1.5) - 0.5).abs() < 1e-6);
+        assert_eq!(ripple_depth_gain(&look, 2.0), 1.0);
+        assert_eq!(ripple_depth_gain(&look, 5.0), 1.0);
+        let mut last = 0.0;
+        for i in 0..=100 {
+            let g = ripple_depth_gain(&look, 1.0 + i as f32 * 0.01);
+            assert!(g >= last && g - last < 0.02, "no hard cut at {i}");
+            last = g;
+        }
+    }
+
+    /// The mist scales with the fall (owner, 2026-11-17: "the mist should
+    /// be 50% at this size"): half the approved opacity at a one-layer step,
+    /// the approved look on a big fall, smooth between.
+    #[test]
+    fn a_small_fall_mists_at_half_and_a_big_one_as_approved() {
+        let look = crate::config::FallLook::default();
+        // The stream's one-layer steps measured D 0.1 to 0.9 m.
+        for d in [0.1, 0.9, 1.05, 1.4, 1.5] {
+            assert_eq!(mist_drop_scale(&look, d), 0.5, "D {d}");
+        }
+        // The mockup's 4 and 9-layer falls, and the cascade's 6 to 9 m.
+        for d in [4.0, 4.4, 6.6, 9.4] {
+            assert_eq!(mist_drop_scale(&look, d), 1.0, "D {d}");
+        }
+        // No mist at all under a one-layer drop.
+        assert!(!mists(&look, 0.9) && !mists(&look, 0.1));
+        assert!(mists(&look, 1.0) && mists(&look, 9.4));
+        // And fewer particles: 35% of the count on the small fall, all of
+        // it on the big one.
+        assert_eq!(particle_drop_scale(&look, 0.9), 0.35);
+        assert_eq!(particle_drop_scale(&look, 9.4), 1.0);
+        let r = SplashRule::of(crate::config::MistRule::Proposed, 1.0, 0.9);
+        let puffs = (r.puffs as f32 * particle_drop_scale(&look, 0.9)).round() as u32;
+        let drops = (r.drops as f32 * particle_drop_scale(&look, 0.9)).round() as u32;
+        assert_eq!((r.puffs, puffs), (8, 3));
+        assert_eq!((r.drops, drops), (12, 4));
+        let two = mist_drop_scale(&look, 2.4);
+        assert!(two > 0.6 && two < 0.7, "{two}");
+        let mut last = 0.5;
+        for i in 0..=250 {
+            let s = mist_drop_scale(&look, 1.5 + i as f32 * 0.01);
+            assert!(s >= last && s - last < 0.01, "no hard cut at {i}");
+            last = s;
+        }
+    }
+
     /// A fall that drains away, or moves, takes its foot out of the
     /// mesher's list at a tick: its churn and mist fade out from there over
     /// the fade time, as a new one fades in, rather than going in a frame
@@ -3074,6 +3206,79 @@ mod splash_tests {
             app.update();
         }
         assert_eq!(near(&app), None, "and gone once its fade has played");
+    }
+
+    /// A step under a metre emits no mist at all; when its drop grows past
+    /// a metre its mist eases in over the fade time, never in one frame
+    /// (owner, 2026-11-17: "no steam/mist at all for drops that are less
+    /// than 1 block height").
+    #[test]
+    fn a_sub_metre_step_has_no_mist_and_eases_it_in_past_a_metre() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(bevy::time::TimePlugin)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(1.0 / 60.0),
+            ))
+            .insert_resource(PlanetRenderFrame {
+                center: bevy::math::DVec3::ZERO,
+                origin: bevy::math::DVec3::ZERO,
+            })
+            .init_resource::<FallFeet>()
+            .init_resource::<WaterEase>()
+            .init_resource::<SplashQuads>()
+            .init_resource::<FallFeetGpu>()
+            .add_systems(Update, animate_splash);
+        app.world_mut().spawn((
+            Camera::default(),
+            Camera3d::default(),
+            GlobalTransform::from(
+                Transform::from_xyz(0.0, 1010.0, 8.0)
+                    .looking_at(Vec3::new(0.0, 1000.0, 0.0), Vec3::Y),
+            ),
+        ));
+        let foot = |drop_m: f32| Foot {
+            at: Vec3::new(0.0, 1000.0, 0.0),
+            height: 1.0,
+            sky: 1.0,
+            born: false,
+            drop_m,
+            over: Vec3::X,
+            pool_m: 1.0,
+            column: 1,
+            layer: 1,
+        };
+        // The puffs' summed alpha: a puff's cell is a frame 0..16.
+        let mist = |app: &App| {
+            let lanes = &app.world().resource::<SplashQuads>().lanes;
+            let quads = lanes.get(2..).unwrap_or(&[]);
+            let mut n = 0;
+            let mut alpha = 0.0;
+            for q in quads.chunks(SPLASH_LANES) {
+                if q[2][0] >= 0.0 {
+                    n += 1;
+                    alpha += q[1][3];
+                }
+            }
+            (n, alpha)
+        };
+        app.world_mut().resource_mut::<FallFeet>().0.push(foot(0.9));
+        for _ in 0..60 {
+            app.update();
+            assert_eq!(mist(&app).0, 0, "no puff under a metre");
+        }
+        app.world_mut().resource_mut::<FallFeet>().0[0] = foot(1.4);
+        let mut last = 0.0f32;
+        let mut seen = Vec::new();
+        for _ in 0..90 {
+            app.update();
+            seen.push(mist(&app).1);
+        }
+        for (i, &a) in seen.iter().enumerate().take(20) {
+            assert!(a < last + 0.35, "no pop at frame {i}: {last} to {a}");
+            last = a;
+        }
+        assert!(*seen.last().unwrap() > 0.0, "mists once past a metre");
     }
 
     /// A fade runs in time to its end and stops: never held part way.
