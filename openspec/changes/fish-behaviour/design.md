@@ -397,3 +397,24 @@ The core test runs the same at 60 frames a second and finds no frame over
 (19 of 26 frames over 5 m/s are the float's own; before, 11 of 11): the
 float itself steps up to 30 cm a frame while reeled, which is the line's
 place (`feet + away * line_m`), left alone here and worth its own look.
+
+### 9.2 The video
+
+`fish-behaviour-before-after-2026-11-17-1236p60.mp4` (Drive,
+`pale-blue-dot-validation`; `output/videos/`): `main` with the instrument
+(BEFORE) and this branch (AFTER), each `--fish-play --hold-pointer
+--watch-hook --time 10 --no-vsync` on a fresh world, recorded with OBS; each
+from the approach to the start of the fight at 1x, then side by side aligned
+on the strike at 1x and at 1/4 speed. Limits, as seen frame by frame:
+
+- The fish differ: on `main` an eel came, on the branch a smaller fish (the
+  sim's turn limit and bursts change which fish of which school arrives
+  first). Each nibbled once before its bite, so one peck each, not three.
+- The machine was busy with other agents' builds and games: the recordings
+  have a median of 39 (before) and 47 (after) new frames a second.
+- The watch camera stays where the float landed; on the branch the run took
+  the fish and float out of frame within a second of the strike, so the
+  fight is short on screen. The core test covers the fight frame by frame.
+- On `main` the strike throws the eel and the float at the camera in one
+  frame (the pop of 9.1); on the branch the take drags the lure down and
+  aside and the fish turns away with it.

@@ -54,7 +54,7 @@
 
 ## 4. Check
 
-- [ ] 4.1 Before-and-after under-water video at 1x and 1/4x, the shots of the
+- [x] 4.1 Before-and-after under-water video at 1x and 1/4x, the shots of the
   owner's video, beside the mockup (complex-bug rule: video, not stills).
 - [x] 4.2 Move the requirements into `openspec/specs/player/fishing` in the
   commit that makes them true.
