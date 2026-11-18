@@ -336,6 +336,9 @@ fn draw(
             Name::new(format!("drop {}", drop.id)),
             DropView(drop.id),
             crate::field_light::LitByField,
+            // Lit as the terrain is: its own sun and shadows, not Bevy's
+            // (`drop-lighting`).
+            crate::field_light::LitLikeTerrain,
             Mesh3d(mesh),
             MeshMaterial3d(material),
             pose(drop, centre, t, card, eye),
