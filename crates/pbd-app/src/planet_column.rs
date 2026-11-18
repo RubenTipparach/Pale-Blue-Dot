@@ -3832,7 +3832,11 @@ mod river_cost {
             eprintln!(
                 "{name}: the next set 40 m on {:.0} ms (the first {whole:.0} ms), cache {}",
                 ms(started),
-                if pbd_core::river_cache::enabled() { "on" } else { "off" }
+                if pbd_core::river_cache::enabled() {
+                    "on"
+                } else {
+                    "off"
+                }
             );
             // Every fine record's altitude, with the river terms and without.
             let records: Vec<Vec3> = set
