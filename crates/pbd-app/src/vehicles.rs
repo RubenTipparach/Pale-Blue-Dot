@@ -1,4 +1,4 @@
-//! Vehicles in the app: the Loon, the made boats and the harbours' boats as entities, the
+//! Vehicles in the app: the Loon, the made boats and the harbours' canoes as entities, the
 //! world sampled round each one every tick and handed to `pbd_core::vehicle`,
 //! boarding and leaving, and the durable record of every craft.
 //!
@@ -16,6 +16,7 @@ mod hud;
 pub mod launch;
 mod model;
 pub(crate) mod place;
+pub mod refund;
 pub(crate) mod view;
 
 pub use view::{VehicleCamera, VehicleView};
@@ -183,10 +184,7 @@ impl Plugin for VehiclePlugin {
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
-            .add_systems(
-                FixedUpdate,
-                (step_vehicles, harbour::swing_moored_cogs).chain(),
-            )
+            .add_systems(FixedUpdate, step_vehicles)
             .add_systems(
                 PostUpdate,
                 (draw::place, view::follow)
@@ -204,6 +202,12 @@ impl Plugin for VehiclePlugin {
                     .before(save_vehicles),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look))
+            .add_systems(
+                Update,
+                refund::refund_retired
+                    .after(place::spawn_fleet)
+                    .run_if(crate::world_open),
+            )
             .add_systems(
                 PostUpdate,
                 offer_board
@@ -291,16 +295,12 @@ fn step_vehicles(
         } else {
             Input::default()
         };
-        // A cog on its swing is moved by it, not stepped
-        // (`harbour::swing_moored_cogs`).
-        if !harbour::on_swing(&vehicle.craft) {
-            // MEASUREMENT (`town-frame-time` decision 6): each kind's step.
-            let started = std::time::Instant::now();
-            step_one(&mut vehicle, dt, &input, &env, &mut fleet);
-            let entry = timing.1.entry(vehicle.craft.kind.name()).or_default();
-            entry.0 += 1;
-            entry.1 += started.elapsed().as_secs_f64();
-        }
+        // MEASUREMENT (`town-frame-time` decision 6): each kind's step.
+        let started = std::time::Instant::now();
+        step_one(&mut vehicle, dt, &input, &env, &mut fleet);
+        let entry = timing.1.entry(vehicle.craft.kind.name()).or_default();
+        entry.0 += 1;
+        entry.1 += started.elapsed().as_secs_f64();
         // MEASUREMENT (`small-boats` 2b): the water the craft aboard floats
         // on, about once a second, with `PBD_BOAT_TRACE` set.
         if aboard.0 == Some(entity)
@@ -522,7 +522,7 @@ fn read_controls(
         ..default()
     };
     match vehicle.craft.kind {
-        Kind::Loon | Kind::Rowboat | Kind::Raft => {
+        Kind::Loon | Kind::Raft => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
@@ -532,10 +532,6 @@ fn read_controls(
         Kind::Tube => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
-        }
-        Kind::Cog => {
-            input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
-            input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
         }
     }
     controls.0 = input;
@@ -683,10 +679,6 @@ pub struct VehicleScript {
     pub board: Option<Kind>,
     /// In the seat rather than the chase view.
     pub seat: bool,
-    /// A cog boarded is cast off with its yard braced this many degrees
-    /// off square and 2 m/s of way along its bow (`--sail`): a capture's,
-    /// so a few seconds show it under way.
-    pub sail: Option<f32>,
 }
 
 fn scripted_board(world: &mut World) {
@@ -704,11 +696,6 @@ fn scripted_board(world: &mut World) {
         .iter(world)
         .find(|(_, v)| v.craft.kind == kind)
         .map(|(e, _)| e);
-    // A harbour makes its cog and its rowboats when the fleet first meets
-    // it, after the fleet is in: wait for them.
-    if found.is_none() && matches!(kind, Kind::Cog | Kind::Rowboat) {
-        return;
-    }
     // A made boat a fresh world has none of: launched where its Loon lies,
     // as a player would launch it (`small-boats`).
     let found = found.or_else(|| {
@@ -739,16 +726,6 @@ fn scripted_board(world: &mut World) {
     };
     world.resource_mut::<view::VehicleView>().seat = script.seat;
     take_seat(world, entity, true);
-    if let Some(deg) = script.sail
-        && let Some(mut vehicle) = world.get_mut::<Vehicle>(entity)
-        && let pbd_core::vehicle::CraftState::Cog(s) = &mut vehicle.craft.state
-    {
-        s.yard = f64::from(deg).to_radians();
-        let craft = &mut vehicle.craft;
-        craft.mooring = None;
-        craft.body.velocity = craft.body.axis(pbd_core::vehicle::FORWARD) * 2.0;
-        info!("--sail: cast off with the yard braced {deg} deg");
-    }
 }
 
 /// Step off: the craft stays, unattended; the walker is put at its exit.
@@ -779,21 +756,6 @@ pub fn leave(world: &mut World, entity: Entity) {
         .map_or(Quat::IDENTITY, |t| t.rotation);
     let captured = world.resource::<view::VehicleView>().captured;
     crate::walking::drop_walker(world, eye, velocity.as_vec3(), look);
-    // Off a ship's helm onto its deck (`sail-the-cog` step 3): the walker
-    // keeps the ship's way until its feet are down, and the deck carries it
-    // from there.
-    if world
-        .get_resource::<crate::decks::CraftDecks>()
-        .is_some_and(|d| d.at(entity).is_some())
-    {
-        let v = velocity.as_vec3();
-        for mut ground in world
-            .query_filtered::<&mut crate::walking::GroundState, With<Walker>>()
-            .iter_mut(world)
-        {
-            ground.drift = v - up * v.dot(up);
-        }
-    }
     world.resource_mut::<WalkingState>().captured = captured;
     crate::walking::set_view(world, View::Walking);
     world.resource_mut::<Fleet>().dirty = true;
@@ -813,9 +775,6 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
             .mooring = None;
         world.resource_mut::<Fleet>().dirty = true;
         info!("cast off");
-        return;
-    }
-    if make_fast_at_berth(world, entity) {
         return;
     }
     let Some(vehicle) = world.get::<Vehicle>(entity) else {
@@ -849,67 +808,6 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     });
     world.resource_mut::<Fleet>().dirty = true;
     info!("anchored in {depth:.1} m");
-}
-
-/// How near its berth a harbour's cog makes fast there, m; how slow it must
-/// be, m/s; and how near its berth's heading, rad.
-const MAKE_FAST_M: f64 = 4.0;
-const MAKE_FAST_SPEED: f64 = 0.8;
-const MAKE_FAST_RAD: f64 = 30.0 * std::f64::consts::PI / 180.0;
-
-/// A harbour's cog near its own berth, slow and heading as it lies there,
-/// makes fast to its bollard and eases back onto its swing
-/// (`sail-the-cog` step 3, part 3). Whether it did.
-fn make_fast_at_berth(world: &mut World, entity: Entity) -> bool {
-    let Some(vehicle) = world.get::<Vehicle>(entity) else {
-        return false;
-    };
-    let craft = &vehicle.craft;
-    let Some((site, harbour::COG)) = craft.berth else {
-        return false;
-    };
-    let berthed = match world.get::<harbour::Berthed>(entity) {
-        Some(b) => *b,
-        None => {
-            let (Some(towns), Some(assets)) = (
-                world.get_resource::<crate::towns::Towns>(),
-                world.get_resource::<crate::towns::TownAssets>(),
-            ) else {
-                return false;
-            };
-            let sea = world.resource::<Sea>().radius;
-            let Some(b) = harbour::berth_of(towns, assets, sea, site) else {
-                return false;
-            };
-            b
-        }
-    };
-    let off = craft
-        .reference_position()
-        .distance(berthed.rest.origin.as_dvec3());
-    let speed = craft.body.velocity.length();
-    let heading = craft
-        .body
-        .axis(pbd_core::vehicle::FORWARD)
-        .angle_between(berthed.bow.as_dvec3());
-    if off > MAKE_FAST_M || speed > MAKE_FAST_SPEED || heading > MAKE_FAST_RAD {
-        return false;
-    }
-    let from = (craft.reference_position(), craft.body.orientation);
-    let at = craft.bow();
-    let mut vehicle = world.get_mut::<Vehicle>(entity).expect("checked");
-    vehicle.craft.mooring = Some(Mooring {
-        at,
-        length: 2.0,
-        anchored: false,
-    });
-    world.entity_mut(entity).insert(harbour::Berthed {
-        easing: Some((from.0, from.1, 0.0)),
-        ..berthed
-    });
-    world.resource_mut::<Fleet>().dirty = true;
-    info!("made fast at its berth, {off:.1} m off");
-    true
 }
 
 /// Write the fleet whenever something a save must keep happened (a craft

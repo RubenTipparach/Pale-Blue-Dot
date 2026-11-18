@@ -5,7 +5,7 @@
 //! precision, and the frame they are in is named, because a craft's pose is
 //! meaningless without it.
 
-use super::{Craft, CraftState, Hulls, Kind, Mooring};
+use super::{Craft, Hulls, Kind, Mooring};
 use crate::vehicle::spec::VehicleSpecs;
 use glam::{DQuat, DVec3};
 use serde::{Deserialize, Serialize};
@@ -47,8 +47,9 @@ pub struct VehicleRecord {
     /// every other craft's record is as it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub berth: Option<(u32, u32)>,
-    /// The cog's yard off square, rad (`sail-the-cog`). Written only for a
-    /// cog, so every other craft's record is as it was.
+    /// The cog's yard off square, rad (`sail-the-cog`), kept in layout 1 for
+    /// the retired cog records that carry it (`retire-rowboat-and-cog`
+    /// decision 1). No craft this build sails writes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yard: Option<f64>,
     /// A boat the player made and launched (`small-boats` design 4). Written
@@ -71,10 +72,6 @@ impl Craft {
     /// quits aboard comes back on foot beside the craft, which is where the
     /// load puts them, and the craft is unattended until they board again.
     pub fn record(&self) -> VehicleRecord {
-        let yard = match &self.state {
-            CraftState::Cog(s) => Some(s.yard),
-            _ => None,
-        };
         VehicleRecord {
             id: self.id,
             kind: self.kind.key().into(),
@@ -92,7 +89,7 @@ impl Craft {
             brake: None,
             sheet: None,
             berth: self.berth,
-            yard,
+            yard: None,
             made: self.made,
         }
     }
@@ -151,15 +148,6 @@ impl Craft {
             length,
             anchored,
         });
-        match &mut craft.state {
-            CraftState::Cog(s) => {
-                let reach = (craft.specs.cog.sail.brace_deg as f64).to_radians();
-                if let Some(yard) = record.yard.filter(|y| y.is_finite()) {
-                    s.yard = yard.clamp(-reach, reach);
-                }
-            }
-            CraftState::Loon(_) => {}
-        }
         Ok(craft)
     }
 }
@@ -174,7 +162,7 @@ mod tests {
         let hulls = Hulls::new(&specs);
         let q = DQuat::from_rotation_y(0.7);
         let mut craft = Craft::new(
-            Kind::Rowboat,
+            Kind::Raft,
             42,
             specs.clone(),
             hulls.clone(),
@@ -198,7 +186,7 @@ mod tests {
         let file: VehicleFile = ron::from_str(&text).unwrap();
         let back = Craft::from_record(&file.vehicles[0], specs, hulls).unwrap();
         assert_eq!(back.id, 42);
-        assert_eq!(back.kind, Kind::Rowboat);
+        assert_eq!(back.kind, Kind::Raft);
         assert!((back.reference_position() - craft.reference_position()).length() < 1e-9);
         assert!(back.body.orientation.angle_between(q) < 1e-9);
         assert_eq!(back.bilge_kg, 12.5);

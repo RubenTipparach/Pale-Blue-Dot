@@ -9,7 +9,7 @@
 
 use super::{Aboard, Vehicle, view::VehicleView};
 use bevy::prelude::*;
-use pbd_core::vehicle::{CraftState, Kind, Telemetry};
+use pbd_core::vehicle::{Kind, Telemetry};
 use std::fmt::Write;
 
 /// The instruments behind F3: plain text, a developer's.
@@ -268,97 +268,38 @@ fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
 fn instruments(vehicle: &Vehicle, seat: bool) -> String {
     let craft = &vehicle.craft;
     let mut s = String::new();
-    match (&craft.telemetry, &craft.state) {
-        (Telemetry::Loon(t), CraftState::Loon(_)) => {
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s",
-                t.water_speed, t.speed, t.water_drift, t.drift
-            );
-            let _ = writeln!(
-                s,
-                "strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg",
-                t.strokes_per_minute,
-                t.freeboard,
-                t.heel.to_degrees(),
-                craft.bilge_kg
-            );
-            let phase = if t.rudder_at.is_some() {
-                "stern rudder"
-            } else if t.stroke.is_some_and(|stroke| stroke.phase < 1.0) {
-                "power stroke"
-            } else if t.stroke.is_some() {
-                "recovering"
-            } else if craft.kind == Kind::Rowboat {
-                "oars resting"
-            } else if craft.kind == Kind::Tube {
-                "hands resting"
-            } else {
-                "paddle resting"
-            };
-            let _ = writeln!(
-                s,
-                "{phase} - alternate strokes to make way; rudder steers while moving."
-            );
-        }
-        (Telemetry::Cog(t), CraftState::Cog(_)) => {
-            let sail = if t.fill < 0.5 {
-                "luffing"
-            } else if t.sail.stall > 0.5 {
-                "stalled"
-            } else {
-                "drawing"
-            };
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  heel {:>+4.0} deg  leeway {:>+4.1} deg",
-                t.water_speed,
-                t.speed,
-                t.heel.to_degrees(),
-                t.leeway.to_degrees()
-            );
-            let _ = writeln!(
-                s,
-                "apparent wind {:>4.1} m/s  {} {:>3.0} deg  windward VMG (ground) {:>+4.1} m/s",
-                t.apparent.length(),
-                side(t.apparent_angle),
-                t.apparent_angle.to_degrees().abs(),
-                t.upwind
-            );
-            let _ = writeln!(
-                s,
-                "yard {:>3.0} deg {}  sail {sail}  water aboard {:>4.0} kg",
-                t.yard.to_degrees().abs(),
-                if t.yard > 0.0 {
-                    "starboard arm forward"
-                } else if t.yard < 0.0 {
-                    "port arm forward"
-                } else {
-                    "square"
-                },
-                craft.bilge_kg
-            );
-            let hint = if t.fill < 0.5 {
-                "Too close: bear away, or brace the yard square to the wind."
-            } else {
-                "A square sail will not point: make way on a reach or a run."
-            };
-            let _ = writeln!(s, "{hint}");
-        }
-        _ => {}
+    if let Telemetry::Loon(t) = &craft.telemetry {
+        let _ = writeln!(
+            s,
+            "water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s",
+            t.water_speed, t.speed, t.water_drift, t.drift
+        );
+        let _ = writeln!(
+            s,
+            "strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg",
+            t.strokes_per_minute,
+            t.freeboard,
+            t.heel.to_degrees(),
+            craft.bilge_kg
+        );
+        let phase = if t.rudder_at.is_some() {
+            "stern rudder"
+        } else if t.stroke.is_some_and(|stroke| stroke.phase < 1.0) {
+            "power stroke"
+        } else if t.stroke.is_some() {
+            "recovering"
+        } else if craft.kind == Kind::Tube {
+            "hands resting"
+        } else {
+            "paddle resting"
+        };
+        let _ = writeln!(
+            s,
+            "{phase} - alternate strokes to make way; rudder steers while moving."
+        );
     }
     let _ = write!(s, "({} view)", if seat { "seat" } else { "chase" });
     s
-}
-
-fn side(angle: f64) -> &'static str {
-    if angle.abs() < 0.5_f64.to_radians() {
-        "AHEAD"
-    } else if angle > 0.0 {
-        "STBD"
-    } else {
-        "PORT"
-    }
 }
 
 #[cfg(test)]

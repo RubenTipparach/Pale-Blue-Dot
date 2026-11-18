@@ -248,9 +248,7 @@ fn loon_reports_a_working_rudder_at_rest_and_during_recovery() {
         for rudder in [-1.0, 1.0] {
             let mut craft = at_pole(Kind::Loon, 0.1, 0.0);
             craft.board();
-            let CraftState::Loon(st) = &mut craft.state else {
-                unreachable!()
-            };
+            let CraftState::Loon(st) = &mut craft.state;
             st.stroke = phase.map(|phase| Stroke {
                 side: 1.0,
                 direction: 1.0,
@@ -357,7 +355,7 @@ fn the_shipped_specs_are_valid() {
 
 #[test]
 fn a_boat_settles_to_displace_its_own_weight() {
-    for kind in [Kind::Loon, Kind::Rowboat, Kind::Cog] {
+    for kind in [Kind::Loon, Kind::Tube, Kind::Raft] {
         let mut world = World::new(RADIUS - 40.0);
         world.sea = SeaTable::new(
             SeaSettings {
@@ -371,7 +369,6 @@ fn a_boat_settles_to_displace_its_own_weight() {
         world.run(&mut craft, 20.0, |_| Input::default());
         let displaced = match &craft.telemetry {
             Telemetry::Loon(t) => t.displaced_m3,
-            Telemetry::Cog(t) => t.displaced_m3,
             _ => unreachable!(),
         };
         let want = craft.body.mass / SEA_DENSITY;
@@ -388,7 +385,7 @@ fn a_hull_rides_a_long_wave() {
     let mut world = World::new(RADIUS - 40.0);
     world.sea_wind = 12.0;
     world.wind = Vec3::X * 12.0;
-    let mut craft = at_pole(Kind::Rowboat, 0.2, 0.0);
+    let mut craft = at_pole(Kind::Loon, 0.2, 0.0);
     craft.board();
     world.run(&mut craft, 10.0, |_| Input::default());
     let (mut lo, mut hi) = (f64::MAX, f64::MIN);
@@ -404,18 +401,6 @@ fn a_hull_rides_a_long_wave() {
         hi - lo,
         world.sea.state(12.0, Vec3::X).significant_height()
     );
-}
-
-/// Hold a heading off the true wind with the tiller, as a helmsman does.
-fn helm(target: f64) -> impl FnMut(&Craft) -> Input {
-    move |c: &Craft| {
-        let error = (target - heading(c) + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
-            - std::f64::consts::PI;
-        Input {
-            steer: (error * 3.0).clamp(-1.0, 1.0) as f32,
-            ..Default::default()
-        }
-    }
 }
 
 #[test]
@@ -495,287 +480,10 @@ fn an_untied_boat_drifts_downwind_and_a_moored_one_does_not() {
     }
 }
 
-/// Instrument (`sail-the-cog` step 3): where the cog floats at rest, and
-/// what it makes at each point of sail over the yard's angles.
-#[test]
-#[ignore = "instrument: prints the cog's waterline and its speed and heel by yard"]
-fn print_the_cogs_sailing() {
-    let mut world = World::new(RADIUS - 40.0);
-    world.sea = SeaTable::new(
-        SeaSettings {
-            swell_height_m: 0.0,
-            ..Default::default()
-        },
-        G as f32,
-    );
-    let mut craft = at_pole(Kind::Cog, 0.0, 0.0);
-    world.run(&mut craft, 30.0, |_| Input::default());
-    let Telemetry::Cog(t) = &craft.telemetry else {
-        panic!("a cog");
-    };
-    println!(
-        "mass {:.0} kg, displaced {:.1} m^3 (weighs {:.1}), waterline origin {:+.2} m, hull {} cells",
-        craft.body.mass,
-        t.displaced_m3,
-        craft.body.mass / SEA_DENSITY,
-        craft.reference_position().length() - RADIUS,
-        craft.hull().unwrap().cells.len()
-    );
-    // The wind blows toward +x, from -x. A heading `off` the wind's source.
-    let from = std::f64::consts::FRAC_PI_2;
-    for off in [70.0f64, 90.0, 120.0, 180.0] {
-        let mut row = format!("{off:>4} off:");
-        for yard in [-60.0f64, -40.0, -20.0, 0.0, 20.0, 40.0, 60.0] {
-            let mut world = World::new(RADIUS - 40.0);
-            world.wind = Vec3::X * 8.0;
-            world.sea_wind = 8.0;
-            let course = from - off.to_radians();
-            let mut craft = at_pole(Kind::Cog, 0.0, course);
-            craft.board();
-            if let CraftState::Cog(s) = &mut craft.state {
-                s.yard = yard.to_radians();
-            }
-            world.run(&mut craft, 90.0, helm(course));
-            let Telemetry::Cog(t) = &craft.telemetry else {
-                panic!("a cog");
-            };
-            row += &format!(
-                "  {yard:+3}: {:.2} m/s {:+.1} up {:.1} deg",
-                t.speed,
-                t.upwind,
-                t.heel.to_degrees()
-            );
-        }
-        println!("{row}");
-    }
-}
-
-fn cog_telemetry(craft: &Craft) -> CogTelemetry {
-    match &craft.telemetry {
-        Telemetry::Cog(t) => t.clone(),
-        _ => panic!("not a cog"),
-    }
-}
-
-/// `sail-the-cog` task 2.1: the cog floats on the waterline its reference
-/// frame is drawn about, the harbour's moored piece's, to a hand.
-#[test]
-fn the_cog_floats_on_its_waterline() {
-    let mut world = World::new(RADIUS - 40.0);
-    world.sea = SeaTable::new(
-        SeaSettings {
-            swell_height_m: 0.0,
-            ..Default::default()
-        },
-        G as f32,
-    );
-    let mut craft = at_pole(Kind::Cog, 0.0, 0.0);
-    world.run(&mut craft, 30.0, |_| Input::default());
-    let waterline = craft.reference_position().length() - RADIUS;
-    assert!(
-        waterline.abs() < 0.15,
-        "its waterline {waterline:+.2} m off"
-    );
-}
-
-/// `sail-the-cog` task 2.2: the braces turn the yard at their rate and no
-/// further than they reach, and only with someone at the helm; nobody at
-/// it, the yard and the tiller stay as they were left.
-#[test]
-fn the_cogs_yard_follows_its_braces() {
-    let mut world = World::new(RADIUS - 40.0);
-    let mut craft = at_pole(Kind::Cog, 0.0, 0.0);
-    if let CraftState::Cog(s) = &mut craft.state {
-        s.tiller = 0.3;
-    }
-    let brace = Input {
-        sheet: 1.0,
-        ..Default::default()
-    };
-    world.run(&mut craft, 2.0, |_| brace);
-    assert_eq!(cog_telemetry(&craft).yard, 0.0, "nobody at the helm");
-    assert!(
-        matches!(&craft.state, CraftState::Cog(s) if s.tiller == 0.3),
-        "the tiller left over stays over"
-    );
-    craft.board();
-    world.run(&mut craft, 2.0, |_| brace);
-    let yard = cog_telemetry(&craft).yard.to_degrees();
-    assert!((yard - 24.0).abs() < 1.0, "braced {yard} deg in 2 s");
-    world.run(&mut craft, 6.0, |_| brace);
-    let yard = cog_telemetry(&craft).yard.to_degrees();
-    assert!(
-        (yard - 60.0).abs() < 0.01,
-        "braced to {yard} deg, past its reach"
-    );
-}
-
-/// How a cog sails a course `off` degrees from where an 8 m/s wind comes
-/// from, the yard braced at `yard` degrees and a helmsman holding the course:
-/// the mean over 60-120 s, once it has settled.
-#[derive(Debug)]
-struct CogRun {
-    /// Speed made good to windward and along its own bow, m/s.
-    upwind: f64,
-    ahead: f64,
-    /// Leeway and the most the bow wandered off the course, and the most it
-    /// heeled, deg.
-    leeway: f64,
-    wander: f64,
-    heel: f64,
-}
-
-fn sail_cog(off: f64, yard: f64) -> CogRun {
-    let mut world = World::new(RADIUS - 40.0);
-    // The wind blows toward +x, from -x, where a heading of 90 deg points.
-    world.wind = Vec3::X * 8.0;
-    world.sea_wind = 8.0;
-    let course = std::f64::consts::FRAC_PI_2 - off.to_radians();
-    let mut craft = at_pole(Kind::Cog, 0.0, course);
-    craft.board();
-    if let CraftState::Cog(s) = &mut craft.state {
-        s.yard = yard.to_radians();
-    }
-    world.run(&mut craft, 60.0, helm(course));
-    let mut run = CogRun {
-        upwind: 0.0,
-        ahead: 0.0,
-        leeway: 0.0,
-        wander: 0.0,
-        heel: 0.0,
-    };
-    let n = 60;
-    for _ in 0..n {
-        world.run(&mut craft, 1.0, helm(course));
-        let t = cog_telemetry(&craft);
-        run.upwind += t.upwind / n as f64;
-        run.ahead += craft.body.velocity.dot(craft.body.axis(FORWARD)) / n as f64;
-        run.leeway += t.leeway.to_degrees() / n as f64;
-        let wander = (heading(&craft) - course + std::f64::consts::PI)
-            .rem_euclid(std::f64::consts::TAU)
-            - std::f64::consts::PI;
-        run.wander = run.wander.max(wander.abs().to_degrees());
-        run.heel = run.heel.max(t.heel.abs().to_degrees());
-    }
-    run
-}
-
-/// `sail-the-cog` task 2.2: a square sail luffs with the wind along its
-/// yard, from either end, and draws with the wind across it.
-#[test]
-fn a_square_sail_luffs_with_the_wind_along_its_yard() {
-    let sail = VehicleSpecs::default().cog.sail;
-    for deg in [0.0f64, 10.0, 175.0, -178.0] {
-        assert_eq!(cog::fill(&sail, deg.to_radians()), 0.0, "at {deg} deg");
-    }
-    for deg in [35.0f64, -60.0, 90.0, 140.0] {
-        assert_eq!(cog::fill(&sail, deg.to_radians()), 1.0, "at {deg} deg");
-    }
-}
-
-/// `sail-the-cog` task 2.2: in an 8 m/s wind the cog runs and reaches at
-/// better than 2 m/s and heels under 15 degrees on the reach. To windward it
-/// does best braced hard 60 degrees off the wind, where it makes about 9
-/// degrees of leeway, so it makes good a track little closer than 70
-/// degrees; pinched to 45 it makes less, and it cannot hold 40.
-#[test]
-fn the_cog_reaches_runs_and_cannot_point_high() {
-    let reach = sail_cog(90.0, -40.0);
-    assert!(reach.ahead > 2.0, "reaching at {} m/s", reach.ahead);
-    assert!(reach.heel < 15.0, "heeled {} deg on the reach", reach.heel);
-    let run = sail_cog(180.0, 0.0);
-    assert!(run.ahead > 2.0, "running at {} m/s", run.ahead);
-    let close = sail_cog(60.0, -60.0);
-    assert!(
-        close.wander < 10.0,
-        "wandered {} deg close-hauled",
-        close.wander
-    );
-    assert!(
-        close.upwind > 0.3,
-        "made good {} m/s to windward",
-        close.upwind
-    );
-    assert!(
-        close.leeway > 4.0 && 60.0 + close.leeway > 65.0,
-        "a track {} deg off the wind",
-        60.0 + close.leeway
-    );
-    let pinched = sail_cog(45.0, -60.0);
-    assert!(
-        pinched.upwind < close.upwind,
-        "made good {} m/s to windward at 45 deg against {} at 60",
-        pinched.upwind,
-        close.upwind
-    );
-    let lost = sail_cog(40.0, -60.0);
-    assert!(lost.wander > 20.0, "held 40 deg within {} deg", lost.wander);
-}
-
-/// `sail-the-cog` task 5.1: a cog's yard comes back from its record, and
-/// every other craft's record carries none.
-#[test]
-fn a_cogs_yard_is_saved_with_it() {
-    let (specs, hulls) = specs();
-    let mut craft = at_pole(Kind::Cog, 0.0, 0.3);
-    if let CraftState::Cog(s) = &mut craft.state {
-        s.yard = 0.4;
-    }
-    let record = craft.record();
-    assert_eq!(record.kind, "cog");
-    assert_eq!(record.yard, Some(0.4));
-    let back = Craft::from_record(&record, specs, hulls).unwrap();
-    assert!(matches!(&back.state, CraftState::Cog(s) if (s.yard - 0.4).abs() < 1e-12));
-    assert_eq!(at_pole(Kind::Loon, 0.2, 0.0).record().yard, None);
-}
-
-#[test]
-#[ignore = "instrument: the cog's settled polar, by course and brace"]
-fn print_the_cogs_polar() {
-    for off in [40.0f64, 50.0, 60.0, 70.0, 80.0, 90.0] {
-        let mut row = format!("{off:>4} off:");
-        for yard in [-20.0f64, -30.0, -40.0, -50.0, -60.0] {
-            let r = sail_cog(off, yard);
-            row += &format!(
-                " | {yard:+3}: {:+.2} up {:+.2} ahead lee {:+4.1} wander {:4.1}",
-                r.upwind, r.ahead, r.leeway, r.wander
-            );
-        }
-        println!("{row}");
-    }
-}
-
-/// `sail-the-cog` step 3: the craft sails the ship the harbour moors, its
-/// sail's force where the ship's cut draws its mast, yard and sail.
-#[test]
-fn vehicle_specs_match_the_ship_they_sail() {
-    use crate::settlement::pieces::cog as ship;
-    let sail = VehicleSpecs::default().cog.sail;
-    assert!(Vec3::from(sail.mast).distance(ship::MAST_STEP) < 1e-5);
-    assert_eq!(sail.yard_height_m, ship::YARD_M);
-    assert_eq!(sail.width_m, ship::SAIL_W);
-    assert_eq!(sail.foot_height_m, ship::SAIL_FOOT_M);
-}
-
-/// `sail-the-cog` task 2.1: the cog's settings refuse a hull too coarse for
-/// its beam, a sail with no yard over its foot, and a luff that does not
-/// rise to where the sail fills.
-#[test]
-fn a_cogs_settings_refuse_a_coarse_hull_a_yardless_sail_and_a_backward_luff() {
-    let refused = |change: &dyn Fn(&mut spec::CogSpec)| {
-        let mut specs = VehicleSpecs::default();
-        change(&mut specs.cog);
-        specs.validate().unwrap_err()
-    };
-    assert!(refused(&|c| c.hull.cell_m = c.hull.beam_m / 2.0).contains("third of the beam"));
-    assert!(refused(&|c| c.sail.yard_height_m = c.sail.foot_height_m).contains("yard"));
-    assert!(refused(&|c| c.sail.fill_deg = c.sail.luff_deg).contains("luff"));
-}
-
 #[test]
 #[ignore = "instrument: an empty moored boat left alone, by depth: does it stay upright?"]
 fn print_an_empty_moored_boat_by_depth() {
-    for kind in [Kind::Loon, Kind::Rowboat] {
+    for kind in [Kind::Loon] {
         for depth in [0.3f64, 0.5, 0.8, 1.2, 2.0, 3.0, 5.0, 40.0] {
             let mut world = World::new(RADIUS - depth);
             let mut craft = at_pole(kind, 0.0, 0.0);
@@ -817,10 +525,7 @@ fn over_the_sea(world: &World, at: DVec3) -> f64 {
 /// of its planks, in its reference frame.
 fn floorboards_of(craft: &Craft) -> (Vec<Vec3>, Vec<Vec3>) {
     let h = craft.loon_spec().hull;
-    let (kind, wood) = match craft.kind {
-        Kind::Rowboat => ("rowboat", "boards"),
-        _ => ("canoe", "driftwood"),
-    };
+    let (kind, wood) = ("canoe", "driftwood");
     let (middle, rise) = craft.floor().expect("an open boat");
     let cut = crate::settlement::pieces::dressing::small_boat(
         &|_| 1.5,
@@ -838,7 +543,7 @@ fn floorboards_of(craft: &Craft) -> (Vec<Vec3>, Vec<Vec3>) {
 
 #[test]
 fn an_open_boats_floorboards_stand_over_the_sea_inside_its_hull() {
-    for kind in [Kind::Loon, Kind::Rowboat] {
+    for kind in [Kind::Loon] {
         let mut craft = at_pole(kind, 0.0, 0.0);
         craft.occupied = true;
         let mut world = World::new(RADIUS - 40.0);
@@ -879,53 +584,9 @@ fn an_open_boats_floorboards_stand_over_the_sea_inside_its_hull() {
 }
 
 #[test]
-fn a_rowboat_floats_upright_empty_and_with_its_rower_and_rows_ahead() {
-    // Across the sea's face: its swell lifts and drops a boat riding it.
-    let drift = |craft: &Craft| {
-        let up = craft.body.position.normalize();
-        let v = craft.body.velocity;
-        (v - up * v.dot(up)).length()
-    };
-    for occupied in [false, true] {
-        let mut craft = at_pole(Kind::Rowboat, 0.0, 0.0);
-        craft.occupied = occupied;
-        let mut world = World::new(RADIUS - 40.0);
-        world.run(&mut craft, 30.0, |_| Input::default());
-        let up = craft.body.position.normalize();
-        let upright = craft.body.axis(DVec3::Y).dot(up);
-        let keel = over_the_sea(&world, craft.reference_point([0.0, -0.25, 0.0]));
-        let gunwale = over_the_sea(&world, craft.reference_point([0.0, 0.35, 0.0]));
-        println!(
-            "rowboat, occupied {occupied}: upright {upright:.4}, keel {keel:+.3} m, gunwale {gunwale:+.3} m, drift {:.3}",
-            drift(&craft)
-        );
-        assert!(upright > 3f64.to_radians().cos(), "heeled: {upright}");
-        assert!(
-            keel < 0.0 && gunwale > 0.2,
-            "keel {keel}, gunwale {gunwale}"
-        );
-        assert!(drift(&craft) < 0.05);
-    }
-    let mut craft = at_pole(Kind::Rowboat, 0.0, 0.0);
-    craft.occupied = true;
-    let mut world = World::new(RADIUS - 40.0);
-    world.run(&mut craft, 5.0, |_| Input::default());
-    let start = craft.body.position;
-    let ahead = craft.body.axis(FORWARD);
-    world.run(&mut craft, 30.0, |_| Input {
-        forward: 1.0,
-        ..Default::default()
-    });
-    let made = (craft.body.position - start).dot(ahead);
-    let speed = craft.body.velocity.dot(craft.body.axis(FORWARD));
-    println!("rowboat rowed 30 s: {made:.1} m ahead, {speed:.2} m/s");
-    assert!(made > 20.0 && speed > 0.8, "{made} m, {speed} m/s");
-}
-
-#[test]
 #[ignore = "instrument: an empty boat settling on a still sea"]
 fn print_an_empty_boat_settling() {
-    for kind in [Kind::Loon, Kind::Rowboat] {
+    for kind in [Kind::Loon] {
         let mut craft = at_pole(kind, 0.0, 0.0);
         let mut world = World::new(RADIUS - 40.0);
         for _ in 0..12 {
@@ -949,7 +610,7 @@ fn print_an_empty_boat_settling() {
 #[test]
 #[ignore = "instrument: an open boat with its paddler aboard, heel and trim"]
 fn print_an_open_boat_with_its_paddler() {
-    for kind in [Kind::Loon, Kind::Rowboat] {
+    for kind in [Kind::Loon] {
         let mut craft = at_pole(kind, 0.0, 0.0);
         craft.occupied = true;
         let mut world = World::new(RADIUS - 40.0);
@@ -1027,7 +688,7 @@ fn a_tube_and_a_raft_float_upright_and_paddle_ahead() {
 /// A made boat's good names its kind, both ways, and only made kinds have one.
 #[test]
 fn a_boat_good_names_its_kind() {
-    for kind in [Kind::Tube, Kind::Raft, Kind::Rowboat] {
+    for kind in [Kind::Tube, Kind::Raft] {
         let code = kind.good_code().expect("a made kind");
         assert_eq!(Kind::of_good_code(code), Some(kind));
         assert!(
@@ -1035,10 +696,13 @@ fn a_boat_good_names_its_kind() {
             "{code} is a good"
         );
     }
-    for kind in [Kind::Loon, Kind::Cog] {
-        assert_eq!(kind.good_code(), None);
-    }
-    assert!(Kind::Tube.paddled() && Kind::Raft.paddled() && !Kind::Cog.paddled());
+    assert_eq!(Kind::Loon.good_code(), None);
+    assert_eq!(
+        Kind::of_good_code("rowboat"),
+        None,
+        "the rowboat is retired"
+    );
+    assert!(Kind::Tube.paddled() && Kind::Raft.paddled() && Kind::Loon.paddled());
 }
 
 /// At high water every boat floats on the tide (`small-boats`): with the moon
@@ -1049,7 +713,7 @@ fn a_boat_good_names_its_kind() {
 /// swamped under the tide.)
 #[test]
 fn every_boat_floats_on_the_tide() {
-    for kind in [Kind::Loon, Kind::Rowboat, Kind::Tube, Kind::Raft] {
+    for kind in [Kind::Loon, Kind::Tube, Kind::Raft] {
         // Put on the water where it stands, as a launch or a new world's
         // placement puts it.
         let high = f64::from(crate::sea::tide_m(

@@ -306,7 +306,8 @@ impl Default for RecipeFile {
             metal_tool("iron", "pickaxe", "IRON PICK"),
             metal_tool("iron", "shovel", "IRON SHOVEL"),
             metal_tool("iron", "axe", "IRON AXE"),
-            // small-boats design 3: the boats, up to a small rowboat.
+            // small-boats design 3: the boats. (The rowboat was here until
+            // `retire-rowboat-and-cog`: `RETIRED_RECIPES`.)
             recipe(
                 "inner-tube",
                 "INNER TUBE",
@@ -323,16 +324,36 @@ impl Default for RecipeFile {
                 &[("log", 6), ("rope", 4)],
                 &[("raft", 1)],
             ),
-            recipe(
-                "rowboat",
-                "ROWBOAT",
-                "workbench",
-                10.0,
-                &[("planks", 16), ("rope", 2)],
-                &[("rowboat", 1)],
-            ),
         ]);
         file
+    }
+}
+
+/// Recipes this build has retired, by code, and the inputs each took as it
+/// shipped (`retire-rowboat-and-cog` decisions 2 and 3): what a saved job
+/// for one, a good it made, or a craft launched from that good gives back.
+/// Never edited: a refund is what the player paid.
+pub const RETIRED_RECIPES: [(&str, &[(&str, u16)]); 1] =
+    [("rowboat", &[("planks", 16), ("rope", 2)])];
+
+/// The inputs a retired recipe took, resolved; `None` for a code that was
+/// never retired.
+pub fn retired_inputs(code: &str) -> Option<Vec<(Item, u16)>> {
+    let (_, inputs) = RETIRED_RECIPES.iter().find(|(c, _)| *c == code)?;
+    inputs
+        .iter()
+        .map(|&(item, n)| item_named(item).map(|i| (i, n)))
+        .collect()
+}
+
+/// Give all of `items` into `slots`, or none of them: whether they went.
+pub fn give_all(slots: &mut Slots, items: &[(Item, u16)]) -> bool {
+    let mut after = slots.clone();
+    if items.iter().all(|&(item, n)| after.give(item, n) == 0) {
+        *slots = after;
+        true
+    } else {
+        false
     }
 }
 
@@ -604,13 +625,17 @@ impl StationState {
                 break;
             }
             let mut after = slots.clone();
-            let fits = match book.get(&self.jobs[0].recipe) {
-                Some(recipe) => recipe
+            let code = &self.jobs[0].recipe;
+            let fits = match (book.get(code), retired_inputs(code)) {
+                (Some(recipe), _) => recipe
                     .outputs
                     .iter()
                     .all(|&(item, n)| after.give(item, n) == 0),
+                // A retired recipe gives back what it took
+                // (`retire-rowboat-and-cog` decision 3).
+                (None, Some(inputs)) => give_all(&mut after, &inputs),
                 // A recipe this build lacks: kept, never thrown away.
-                None => false,
+                (None, None) => false,
             };
             if !fits {
                 break;
@@ -686,9 +711,10 @@ mod tests {
         assert_eq!(book.at("hand").count(), 5);
         assert_eq!(
             book.at("workbench").count(),
-            17,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the three boats (small-boats)"
+            16,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the tube and raft (small-boats; the rowboat retired)"
         );
+        assert!(book.get("rowboat").is_none(), "the rowboat is retired");
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));
         assert_eq!(item_named("unobtainium"), None);
@@ -880,5 +906,46 @@ mod tests {
         let jobs = other.collect_into(&mut slots, Some(&mut kit), &book, 40.0);
         assert_eq!(jobs.len(), 1, "never stuck");
         assert!(!other.busy());
+    }
+
+    /// `retire-rowboat-and-cog` decision 3: a rowboat queued at a workbench
+    /// before the recipe was retired takes no time and collects as the
+    /// planks and rope it took, and only when they all fit.
+    #[test]
+    fn a_retired_recipes_job_collects_as_its_inputs() {
+        let book = book();
+        let bench = STATIONS
+            .iter()
+            .find(|s| s.code == "workbench")
+            .expect("the workbench");
+        let mut state = StationState::new(bench);
+        state.jobs.push(Job {
+            recipe: "rowboat".into(),
+            queued_s: 100.0,
+        });
+        let mut slots = Slots::new();
+        assert_eq!(state.collect(&mut slots, &book, 100.0), 1);
+        assert_eq!(slots.count(Item::Good(Good::PLANKS)), 16);
+        assert_eq!(slots.count(Item::Good(Good::ROPE)), 2);
+        assert!(state.jobs.is_empty());
+        // A full pack takes nothing and the job waits.
+        state.jobs.push(Job {
+            recipe: "rowboat".into(),
+            queued_s: 200.0,
+        });
+        let mut full = Slots::new();
+        while full.give(Item::Good(Good::COAL), 99) == 0 {}
+        let before = full.clone();
+        assert_eq!(state.collect(&mut full, &book, 200.0), 0);
+        assert_eq!(full, before);
+        assert_eq!(state.jobs.len(), 1);
+        assert_eq!(
+            retired_inputs("rowboat"),
+            Some(vec![
+                (Item::Good(Good::PLANKS), 16),
+                (Item::Good(Good::ROPE), 2)
+            ])
+        );
+        assert_eq!(retired_inputs("raft"), None);
     }
 }

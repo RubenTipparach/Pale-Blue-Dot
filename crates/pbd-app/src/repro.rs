@@ -22,7 +22,7 @@ pub enum Mode {
     Walking,
     Swimming,
     Flying,
-    /// Aboard a craft, by its key (`loon`, `cog`, ...).
+    /// Aboard a craft, by its key (`loon`, `raft`, ...).
     Aboard(&'static str),
 }
 

@@ -193,8 +193,9 @@
             inputs: [("iron-ingot", 3), ("planks", 2)],
             outputs: [("tool:iron-axe", 1)],
         ),
-        // ---- small-boats design 3: the boats, up to a small rowboat. Each
-        // gives its boat as a good, launched on water from the hotbar.
+        // ---- small-boats design 3: the boats. Each gives its boat as a
+        // good, launched on water from the hotbar. (The rowboat is retired,
+        // `retire-rowboat-and-cog`.)
         (
             code: "inner-tube",
             name: "INNER TUBE",
@@ -210,14 +211,6 @@
             secs: 6.0,
             inputs: [("log", 6), ("rope", 4)],
             outputs: [("raft", 1)],
-        ),
-        (
-            code: "rowboat",
-            name: "ROWBOAT",
-            station: "workbench",
-            secs: 10.0,
-            inputs: [("planks", 16), ("rope", 2)],
-            outputs: [("rowboat", 1)],
         ),
     ],
 )

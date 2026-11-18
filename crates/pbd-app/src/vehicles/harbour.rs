@@ -1,10 +1,11 @@
 //! A harbour's boats (`cities-in-the-world` task 4.2b, survey T7: "you can
 //! use any boat you find"), and the stowing that keeps a world of them cheap.
 //!
-//! Each boat the harbour's template moors on the water is a craft record,
-//! made once when the fleet first meets the harbour: a rowboat is a
-//! Rowboat, a canoe a Loon. (A sailing boat was a Tern, retired in
-//! `retire-tern`; its berth stays empty.) It lies at its berth on the planet's
+//! Each canoe the harbour's template moors on the water is a craft record,
+//! made once when the fleet first meets the harbour: a Loon. (A sailing boat
+//! was a Tern, a rowboat a Rowboat and the harbour's ship its cog, all
+//! retired, `retire-tern` and `retire-rowboat-and-cog`; their berths stay
+//! empty.) It lies at its berth on the planet's
 //! water, anchored to the seabed under it, and is tagged with its berth so it
 //! is never made twice, wherever the player sails it. A craft further than
 //! [`STOW_M`] from the viewer is kept as its record only, and comes back
@@ -13,10 +14,8 @@
 use super::{Aboard, Fleet, Vehicle, place};
 use crate::sea::Sea;
 use crate::towns::{TownAssets, Towns, patch_m, patch_round};
-use bevy::math::{DMat3, DQuat};
 use bevy::prelude::*;
 use pbd_core::DVec3;
-use pbd_core::settlement::pieces::Frame;
 use pbd_core::settlement::record::{self, Town};
 use pbd_core::settlement::{Template, chart::Patch, sea};
 use pbd_core::sites::SiteKind;
@@ -25,24 +24,20 @@ use pbd_core::vehicle::{Craft, Hulls, Kind, Mooring};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-/// The cog's number among its harbour's berths (`sail-the-cog` step 3,
-/// part 3): past any boat's.
-pub const COG: u32 = u32::MAX;
-
 /// A craft further than this from the viewer is stowed, m.
 pub const STOW_M: f64 = 1500.0;
 /// A stowed craft nearer than this comes back, m.
 pub const WAKE_M: f64 = 1200.0;
 
 /// The game's craft for a mockup boat (`cities-in-the-world` task 4.2b): a
-/// rowboat is a Rowboat and a canoe a Loon, each drawn as the mockup draws
-/// it. A sailing boat was a Tern, which is retired (`retire-tern`, owner
-/// 2026-11-17): its berth is left empty.
+/// canoe is a Loon, drawn as the mockup draws it. A sailing boat was a Tern
+/// and a rowboat a Rowboat, both retired (`retire-tern`, owner 2026-11-17;
+/// `retire-rowboat-and-cog`, owner 2026-11-18): their berths are left
+/// empty.
 pub fn kind_of(boat: &str) -> Option<Kind> {
     match boat {
-        "sail" => None,
-        "rowboat" => Some(Kind::Rowboat),
-        _ => Some(Kind::Loon),
+        "canoe" => Some(Kind::Loon),
+        _ => None,
     }
 }
 
@@ -59,8 +54,8 @@ const DRAWS_M: f32 = 0.5;
 /// and tagged with its berth, numbered from `next_id`. `floor` is the solid
 /// ground's radius under a direction and `sea_radius` the water's. Returns
 /// the craft, and how many berths were skipped: over land, over water
-/// shallower than a harbour boat draws ([`DRAWS_M`]), or a sailing boat's,
-/// whose Tern is retired.
+/// shallower than a harbour boat draws ([`DRAWS_M`]), or a retired kind's
+/// (a sailing boat's or a rowboat's).
 #[allow(clippy::too_many_arguments)]
 pub fn boats_for(
     site: u32,
@@ -120,194 +115,6 @@ pub fn boats_for(
     (crafts, skipped)
 }
 
-/// Where a harbour's cog lies at rest at its berth: its waterline's middle
-/// on the drawn sea (`sea_radius`) and its bow, planet-local, from the
-/// town's chart (`pieces::cog::berth`). `None` where the town has no cog or
-/// its chart cannot be made.
-pub fn cog_berth(
-    town: &Town,
-    template: &Template,
-    patch: &Patch,
-    radius_m: f32,
-    sea_radius: f32,
-) -> Option<(Vec3, Vec3)> {
-    let cog = template.cog.as_ref()?;
-    let chart = record::chart_of(town, patch).ok()?;
-    pbd_core::settlement::pieces::cog::berth(
-        patch,
-        &chart,
-        template,
-        cog,
-        radius_m,
-        sea_radius - radius_m,
-    )
-}
-
-/// A harbour's cog, if the fleet does not hold it yet (`made` names the
-/// berths it does): at rest at its berth on a bollard, tagged `(site,
-/// COG)`, numbered `next_id`.
-#[allow(clippy::too_many_arguments)]
-pub fn cog_for(
-    site: u32,
-    town: &Town,
-    template: &Template,
-    patch: &Patch,
-    radius_m: f32,
-    sea_radius: f32,
-    made: &BTreeSet<(u32, u32)>,
-    specs: &Arc<VehicleSpecs>,
-    hulls: &Hulls,
-    next_id: &mut u64,
-) -> Option<Craft> {
-    let berth = (site, COG);
-    if made.contains(&berth) {
-        return None;
-    }
-    let (origin, bow) = cog_berth(town, template, patch, radius_m, sea_radius)?;
-    let up = origin.normalize().as_dvec3();
-    let mut craft = Craft::new(
-        Kind::Cog,
-        *next_id,
-        specs.clone(),
-        hulls.clone(),
-        origin.as_dvec3(),
-        place::facing(up, bow.as_dvec3()),
-    );
-    *next_id += 1;
-    craft.mooring = Some(Mooring {
-        at: craft.bow(),
-        length: 2.0,
-        anchored: false,
-    });
-    craft.berth = Some(berth);
-    Some(craft)
-}
-
-/// Whether a craft is a harbour's cog made fast at its own berth, where it
-/// rides the mooring swing and is not stepped.
-pub fn on_swing(craft: &Craft) -> bool {
-    craft.kind == Kind::Cog
-        && craft.berth.is_some_and(|(_, n)| n == COG)
-        && craft.mooring.is_some_and(|m| !m.anchored)
-}
-
-/// How long a cog just made fast takes to ease onto its swing, s.
-pub const EASE_S: f32 = 3.0;
-
-/// A harbour's cog's berth, worked out once from its town: the frame it
-/// rests in (its waterline's middle, +y up, +z aft) and its bow; and, just
-/// made fast, the pose it is easing from and how long it has eased.
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Berthed {
-    pub rest: Frame,
-    pub bow: Vec3,
-    pub easing: Option<(DVec3, DQuat, f32)>,
-}
-
-impl Berthed {
-    pub fn new(origin: Vec3, bow: Vec3) -> Self {
-        let y = origin.normalize();
-        let z = -bow;
-        Self {
-            rest: Frame {
-                origin,
-                x: y.cross(z),
-                y,
-                z,
-            },
-            bow,
-            easing: None,
-        }
-    }
-}
-
-/// A held harbour's cog's berth, by its site.
-pub fn berth_of(towns: &Towns, assets: &TownAssets, sea_radius: f32, site: u32) -> Option<Berthed> {
-    let held = towns.held.iter().find(|h| h.site.id == site)?;
-    let template = assets.template_named(&held.town.template)?;
-    let radius_m = crate::planet::terrain_config().radius_m;
-    let patch = patch_round(held.site.direction, radius_m, patch_m(held.site.kind));
-    let (origin, bow) = cog_berth(&held.town, template, &patch, radius_m, sea_radius)?;
-    Some(Berthed::new(origin, bow))
-}
-
-/// Ride each harbour's cog made fast at its berth on the mooring swing
-/// (`sail-the-cog` step 3, part 3): not stepped, its pose the swing's about
-/// its berth and its velocity the swing's, eased onto it over [`EASE_S`]
-/// when it has just been made fast. Its rest is the swing's, so it is never
-/// a moving craft the save must keep writing.
-#[allow(clippy::type_complexity)]
-pub fn swing_moored_cogs(
-    mut commands: Commands,
-    time: Res<Time>,
-    swing: Option<Res<crate::decks::CogSwing>>,
-    towns: Option<Res<Towns>>,
-    assets: Option<Res<TownAssets>>,
-    sea: Option<Res<Sea>>,
-    mut cogs: Query<(Entity, &mut Vehicle, Option<&mut Berthed>)>,
-) {
-    let dt = time.delta_secs();
-    if dt <= 0.0 {
-        return;
-    }
-    let t = time.elapsed_secs();
-    let motion = crate::decks::Swing::MOORED.scaled(swing.map_or(1.0, |s| s.0));
-    for (entity, mut vehicle, berthed) in &mut cogs {
-        if !on_swing(&vehicle.craft) {
-            continue;
-        }
-        vehicle.rested = true;
-        let mut found = None;
-        let berthed = match berthed {
-            Some(b) => b.into_inner(),
-            None => {
-                let (Some(towns), Some(assets), Some(sea), Some((site, _))) = (
-                    towns.as_deref(),
-                    assets.as_deref(),
-                    sea.as_deref(),
-                    vehicle.craft.berth,
-                ) else {
-                    continue;
-                };
-                let Some(b) = berth_of(towns, assets, sea.radius, site) else {
-                    continue;
-                };
-                found.insert(b)
-            }
-        };
-        let now = motion.at(&berthed.rest, berthed.bow, t);
-        let mut position = now.origin.as_dvec3();
-        let mut orientation = DQuat::from_mat3(&DMat3::from_cols(
-            now.x.as_dvec3(),
-            now.y.as_dvec3(),
-            now.z.as_dvec3(),
-        ))
-        .normalize();
-        if let Some((p0, q0, age)) = berthed.easing.as_mut() {
-            *age += dt;
-            let w = f64::from(crate::decks::ease(*age / EASE_S));
-            position = p0.lerp(position, w);
-            orientation = q0.slerp(orientation, w);
-            if *age >= EASE_S {
-                berthed.easing = None;
-            }
-        }
-        let body = &mut vehicle.craft.body;
-        let (p, q) = (body.position, body.orientation);
-        vehicle.craft.set_reference_pose(position, orientation);
-        let body = &mut vehicle.craft.body;
-        let h = f64::from(dt);
-        body.velocity = (body.position - p) / h;
-        let (axis, angle) = (body.orientation * q.inverse()).to_axis_angle();
-        let angle =
-            (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
-        body.angular_velocity = axis * (angle / h);
-        if let Some(b) = found {
-            commands.entity(entity).insert(b);
-        }
-    }
-}
-
 /// Whether a craft at `at` stays in the world, comes into it, or is stowed,
 /// with the viewer at `viewer`, both planet-local: stowed past [`STOW_M`],
 /// back within [`WAKE_M`], as it was between.
@@ -333,8 +140,9 @@ fn viewer(world: &mut World) -> Option<DVec3> {
 }
 
 /// Every berth the fleet holds a craft of: in the world, stowed, or held
-/// as a retired kind's record (`retire-tern` decision 3), so a retired
-/// boat's berth is never filled again.
+/// as a retired kind's record (`retire-tern` decision 3,
+/// `retire-rowboat-and-cog` decision 1), so a retired boat's berth is never
+/// filled again.
 pub(super) fn made(world: &mut World) -> BTreeSet<(u32, u32)> {
     let mut query = world.query::<&Vehicle>();
     let mut out: BTreeSet<(u32, u32)> = query.iter(world).filter_map(|v| v.craft.berth).collect();
@@ -382,7 +190,7 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
             continue;
         };
         let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
-        let (crafts, skipped, cog) = {
+        let (crafts, skipped) = {
             let mut fleet = world.resource_mut::<Fleet>();
             let (specs, hulls) = (fleet.specs.clone(), fleet.hulls.clone());
             let mut next = fleet.next_id;
@@ -398,37 +206,20 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
                 &mut next,
                 place::floor,
             );
-            // Its cog, the craft its ship is (`sail-the-cog` step 3).
-            let cog = cog_for(
-                h.site.id,
-                &h.town,
-                &template,
-                &patch,
-                config.radius_m,
-                sea_radius,
-                &berths,
-                &specs,
-                &hulls,
-                &mut next,
-            );
-            let has_cog = cog.is_some();
-            // The boats on the tide (`small-boats`); the cog lies on its
-            // swing, which keeps it at its berth.
+            // The boats on the tide (`small-boats`).
             for craft in &mut crafts {
                 place::on_the_tide(craft, tide);
             }
-            crafts.extend(cog);
             fleet.next_id = next;
-            (crafts, skipped, has_cog)
+            (crafts, skipped)
         };
         if crafts.is_empty() && skipped == 0 {
             continue;
         }
         info!(
-            "{}: {} boats moored{}, {skipped} berths skipped (over land, too shallow, or a retired sailing boat's)",
+            "{}: {} boats moored, {skipped} berths skipped (over land, too shallow, or a retired boat's)",
             h.site.name,
-            crafts.len() - usize::from(cog),
-            if cog { " and its cog" } else { "" }
+            crafts.len(),
         );
         for craft in crafts {
             berths.extend(craft.berth);

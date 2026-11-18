@@ -150,10 +150,6 @@ pub struct Laid {
     /// Its dressing things standing, and those left off its chart (task
     /// 4.2c).
     pub dressing: (usize, usize),
-    /// Its cog's ship among its solids, where the template moors it
-    /// (`sail-the-cog` design 6). The town stands it empty: the cog is a
-    /// craft (step 3, part 3).
-    pub cog: Option<usize>,
     /// Its dressing's faces in `meshes`, a run of vertices a texture
     /// (`crab-breeze-lessons` rank 5).
     pub props: BTreeMap<String, (usize, usize)>,
@@ -168,14 +164,6 @@ pub struct Laid {
 /// `depth_offset_m`), which is what boats float on.
 pub fn sheet_m(config: &TerrainConfig, water: &crate::config::WaterSettings) -> f32 {
     config.sea_level_m - water.depth_offset_m
-}
-
-/// [`sheet_m`] in a world, from its water settings or the shipped ones.
-fn sheet_in(world: &World, config: &TerrainConfig) -> f32 {
-    match world.get_resource::<crate::config::WaterSettings>() {
-        Some(water) => sheet_m(config, water),
-        None => sheet_m(config, &crate::config::WaterSettings::default()),
-    }
 }
 
 /// The patch of finest cells round a direction.
@@ -235,8 +223,7 @@ fn lay_on(
 
 /// Build a town from its definition: its ground and its pieces, cut on the
 /// cells it was laid on, and the masonry of `template`, the template it was
-/// laid from (slice 4c). `repeat_m` is how far a texture repeats, and
-/// `sheet_m` the drawn sea's surface over the radius ([`sheet_m`]).
+/// laid from (slice 4c). `repeat_m` is how far a texture repeats.
 pub fn build(
     site: &Site,
     town: &Town,
@@ -244,7 +231,6 @@ pub fn build(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
-    sheet_m: f32,
 ) -> Result<Laid, String> {
     build_yielding(
         site,
@@ -253,7 +239,6 @@ pub fn build(
         kits,
         repeat_m,
         config,
-        sheet_m,
         &BTreeSet::new(),
     )
 }
@@ -269,7 +254,6 @@ pub fn build_yielding(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
-    sheet_m: f32,
     yielded: &BTreeSet<u32>,
 ) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
@@ -280,7 +264,6 @@ pub fn build_yielding(
         kits,
         repeat_m,
         config.radius_m,
-        sheet_m,
         natural(config),
         &|k| yielded.contains(&k),
     )?;
@@ -296,7 +279,6 @@ pub fn build_yielding(
         rooms: built.rooms,
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
-        cog: built.cog,
         props: built.props,
         casting: None,
     })
@@ -909,7 +891,6 @@ fn settle(world: &mut World) {
         let assets = world.resource::<TownAssets>();
         (assets.kits.clone(), assets.repeat())
     };
-    let sheet = sheet_in(world, &config);
     for h in kept {
         if (h.point(config.radius_m) - at).length() > STAND_M {
             continue;
@@ -926,7 +907,6 @@ fn settle(world: &mut World) {
             &kits,
             &repeat,
             &config,
-            sheet,
             &yielded,
         ) {
             Ok(laid) => stand(world, &h, laid, 1.0),
@@ -1003,7 +983,6 @@ pub fn stand_in_range(world: &mut World) {
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
-    let sheet = sheet_in(world, &config);
     let dt = world
         .get_resource::<Time>()
         .map_or(1.0 / 60.0, |t| t.delta_secs());
@@ -1062,7 +1041,6 @@ pub fn stand_in_range(world: &mut World) {
                         &kits,
                         &repeat,
                         &config,
-                        sheet,
                         &yielded,
                     )
                     .map(|mut laid| {
@@ -1160,22 +1138,6 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     // Each door as its save holds it: open where the player left it open,
     // shut where there is no record (slice 2b).
     let mut solids = laid.solids.clone();
-    // Its cog is a craft (`sail-the-cog` step 3, part 3), made with its
-    // boats: the ship's place among its pieces is kept, empty, so the
-    // town's numbering holds, and its gangplank stays the town's.
-    if let Some(n) = laid.cog {
-        solids[n] = BuildingSolids {
-            frame: solids[n].frame,
-            reach_m: 0.0,
-            solids: Vec::new(),
-            roof_plan: Vec::new(),
-            surfaces: Vec::new(),
-            doors: Vec::new(),
-            top_m: 0.0,
-            rooms: Meshes::new(),
-            lights: Vec::new(),
-        };
-    }
     door_states(
         &mut solids,
         site.id,
@@ -1192,14 +1154,11 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
-    let mut dressing = match (things, off) {
+    let dressing = match (things, off) {
         (0, 0) => String::new(),
         (n, 0) => format!(", {n} dressing things"),
         (n, off) => format!(", {n} dressing things ({off} off its chart)"),
     };
-    if laid.cog.is_some() {
-        dressing.push_str(", a berth for its cog");
-    }
     info!(
         "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,
@@ -1282,8 +1241,8 @@ pub(crate) fn town_material(
 }
 
 /// A cut's faces drawn under `parent` in the towns' textures, in the
-/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: the cog a
-/// craft carries. Each mesh drawn, by its texture's name.
+/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: a craft's
+/// own cut. Each mesh drawn, by its texture's name.
 pub(crate) fn spawn_meshes(
     world: &mut World,
     parent: Entity,

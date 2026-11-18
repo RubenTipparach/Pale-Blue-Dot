@@ -13,7 +13,6 @@ Scenarios (each ends itself):
     far-side  --route far-side    ground to 3 km and down on the far side
     walk      --walk-distance 1000
     town      a walk from Ashenstead's middle out through the walled town, rain forced
-    sail      Holinghaven's cog cast off from its helm, --sail-for 60
     pour      a live pour by the spawn (--pour-for 60), sampled POUR_START to POUR_DONE
 
 Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional); an
@@ -70,10 +69,6 @@ SCENARIOS = {
     # ground near and far of the eye, on a script that never digs.
     "rain-stroll": ["--walk", "--at", "29.69673", "1.19287", "--yaw", "179.4", "--rain", "1",
                     "--stroll", "45", "--stroll-leg", "7"],
-    # Holinghaven's cog cast off with its yard braced, from its helm
-    # (`sail-the-cog` task 6.1).
-    "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
-             "--seat", "--sail-for", "60"],
     # A live pour by the spawn (`water-flow` 5.3, smooth water between
     # ticks): three sources 12 m ahead beside a 9-deep pit, stopped and
     # started again every 12 s, so water spreads, falls into the pit and
@@ -89,7 +84,7 @@ SCENARIOS = {
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "town": "WALK_DONE",
-        "sail": "SAIL_DONE", "pour": "POUR_DONE", "cascade": "STAND_DONE", "cascade-walk": "WALK_DONE"}
+        "pour": "POUR_DONE", "cascade": "STAND_DONE", "cascade-walk": "WALK_DONE"}
 # A scenario whose hard part starts on a line of its own: sampled from that
 # line (no further warm-up) to its DONE line, not from the ready line.
 START = {"pour": "POUR_START"}

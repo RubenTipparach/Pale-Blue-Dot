@@ -1133,7 +1133,8 @@ mod tests {
         assert_eq!(again, keys, "and reads back the same");
     }
 
-    /// `retire-kestrel` decision 3 (and `retire-tern` decision 5): a rebind
+    /// `retire-kestrel` decision 3 (and `retire-tern` decision 5,
+    /// `retire-rowboat-and-cog` decision 7): a rebind
     /// of a key a retired craft read (its group went with it) is ignored on
     /// load, moves no key, and is still in the file after the next change is
     /// written.
@@ -1143,13 +1144,19 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
-            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "tern:KeyW": "KeyJ", "on_foot:ShiftLeft": "KeyK"})"#,
+            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "tern:KeyW": "KeyJ", "rowboat:KeyW": "KeyL", "cog:KeyA": "KeyN", "on_foot:ShiftLeft": "KeyK"})"#,
         )
         .unwrap();
         let (read, keys, loaded) = PlayerSettings::load_from(&path);
         assert_eq!(loaded, Loaded::Read(3));
         assert!(
-            crate::controls::slots().all(|s| s.name() != "kestrel:KeyW" && s.name() != "tern:KeyW"),
+            crate::controls::slots().all(|s| ![
+                "kestrel:KeyW",
+                "tern:KeyW",
+                "rowboat:KeyW",
+                "cog:KeyA"
+            ]
+            .contains(&s.name().as_str())),
             "no slot reads them"
         );
         // Every key reads as it would with only the known rebind.
@@ -1189,6 +1196,13 @@ mod tests {
             Some("KeyJ"),
             "the Tern's too: {text}"
         );
+        for (slot, key) in [("rowboat:KeyW", "KeyL"), ("cog:KeyA", "KeyN")] {
+            assert_eq!(
+                keys_again.to_names().get(slot).map(String::as_str),
+                Some(key),
+                "the {slot} rebind too: {text}"
+            );
+        }
         assert_eq!(
             keys_again
                 .to_names()

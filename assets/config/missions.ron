@@ -538,7 +538,7 @@
             branch: "about",
             icon: "goods/planks",
             title: "Take a boat",
-            help: "Board a rowboat or a cog at a town's quay (F) and head out.",
+            help: "Board a boat at a town's quay (F) and head out.",
             needs: ["town"],
             objectives: [
                 (kind: board, what: "boat", count: 1, label: "board"),
