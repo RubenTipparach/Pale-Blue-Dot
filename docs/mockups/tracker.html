@@ -285,6 +285,8 @@ const MOCKUPS = [
 
 // Every other published artifact, by section, newest first.
 const GUIDES = [
+  { title: 'Multiplayer Architecture', page: 'docs/design/multiplayer-architecture.html', url: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw',
+    published: '2026-11-18', summary: 'Phase 3b drawn out: one server, region streams near and far, a dig from click to everyone, checksums and resync, and what we take from Luanti.' },
   { title: 'Fish Range Atlas', page: 'docs/wiki/fish-ranges/index.html', url: 'https://claude.ai/artifact/Sr32H5K9cCmkteSDytP3hj',
     published: '2026-09-24', summary: 'One range map per fish species, field-guide style, measured off the climate.' },
 ];
@@ -489,7 +491,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, finance and space stations, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, multiplayer as phase 3b (owner, 2026-11-18), town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, finance and space stations, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next. Merged to main (PR #37); its last fixes and the audio in PR #41.', steps: [
@@ -517,7 +519,21 @@ const ROADMAP = [
     { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
     { title: 'Logging', status: 'planned', change: 'log-drives', refs: ['M34'], text: 'Logs loaded on a raft, or dropped in a river to float downstream; they stop where the water stops flowing.' },
   ] },
-  { title: 'Town building and civil engineering', when: 'later', note: 'After the townsfolk. Not started.', steps: [
+  { title: 'Multiplayer', num: '3b', when: 'later', note: 'After the townsfolk, before town building. Written up, not started.', steps: [
+    { title: 'One authority', status: 'planned', change: 'multiplayer', refs: [], doc: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw', text: 'The server holds every edit, item, crop and animal; single player runs the same server in the game.' },
+    { title: 'Regions near each player', status: 'planned', change: 'multiplayer', refs: [], text: 'Each player streams the regions around them in the server\'s order and builds their own detail.' },
+    { title: 'Checksums and resync', status: 'planned', change: 'multiplayer', refs: [], text: 'The server sends each region\'s digest; a player whose copy differs fetches the region again.' },
+    { title: 'Playing together', status: 'planned', change: 'multiplayer', refs: [], text: 'Host and join, other players in the world, trades and chat near or far.' },
+    { title: 'Launcher', status: 'planned', change: 'game-launcher', refs: [], text: 'One small download per OS that keeps the game on the latest build from itch, and keeps itself current.',
+      missing: ['The game is Private on itch, so nothing can check it for updates yet', 'How a free game downloads from itch is not documented: a spike comes first'] },
+  ] },
+  { title: 'Survival', num: '3c', when: 'later', note: 'After multiplayer, before town building. Written up, not started.', steps: [
+    { title: 'Survival mode', status: 'planned', change: 'survival-mode', refs: [], text: 'A mode per world beside today\'s calm Explorer; old saves open as Explorer. Health, death and a pack that waits where you fell.' },
+    { title: 'Falls, hunger and air', status: 'planned', change: 'survival-mode', refs: [], text: 'Falls hurt by impact speed in each world\'s gravity; hunger that meals refill; breath under water and suit air in thin air or space.' },
+    { title: 'Predators', status: 'planned', change: 'survival-mode', refs: ['M7', 'M26'], text: 'Foxes, dust hounds and their kin stalk, warn, attack and flee in Survival; your tool is the weapon.' },
+    { title: 'Fighting townsfolk', status: 'planned', change: 'survival-mode', refs: ['M5'], text: 'Strike a villager and the guards come; the town remembers.' },
+  ] },
+  { title: 'Town building and civil engineering', when: 'later', note: 'After survival. Not started.', steps: [
     { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },
     { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: roads, bridges and the like. No mockup yet.' },
   ] },
@@ -562,9 +578,9 @@ const ROADMAP = [
 const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };
 function roadmap() {
   const root = document.getElementById('roadmap');
-  let n = 0;
-  ROADMAP.forEach((ph, k) => {
-    const p = k + 1;
+  let n = 0, pn = 0;
+  ROADMAP.forEach((ph) => {
+    const p = ph.num || String(++pn);
     const list = el('ol', { class: 'steps' });
     ph.steps.forEach((st, j) => {
       const i = j + 1;
