@@ -399,6 +399,12 @@ impl PlanetContact {
         Some(column.water_surface(point.length() - PLANET_RADIUS))
     }
 
+    /// Whether `point` (body-local) is over a column of the tier: what the
+    /// river walk logs as on or off the tier.
+    pub fn on_tier(&self, point: Vec3) -> bool {
+        self.column_water(point).is_some()
+    }
+
     pub fn stand(&self, feet: Vec3) -> Stand {
         let direction = feet.try_normalize().unwrap_or(Vec3::Y);
         let surface = self.sample(direction);
@@ -414,10 +420,20 @@ impl PlanetContact {
         let Some(id) = fine.locate(direction) else {
             return stand;
         };
+        let altitude = feet.length() - PLANET_RADIUS;
         let Some(column) = fine.set.columns.column(id) else {
+            // Off the tier, the river band's water (`river-cache` design 14):
+            // a walker in a river past the tier swims it, as it would on the
+            // tier, rather than walking its bed under the water.
+            let key = fine.set.levels[3].get(id).map(|c| c.key());
+            if let Some(&top) = key.and_then(|k| fine.set.river.tops.get(&k)) {
+                let floor = stand.floor_radius - PLANET_RADIUS;
+                if top > floor && altitude < top {
+                    stand.water_depth = top - floor;
+                }
+            }
             return stand;
         };
-        let altitude = feet.length() - PLANET_RADIUS;
         let contact = column.contact(altitude);
         if let Some(floor) = contact.floor {
             // A run's top is the drawn face over it - the cap at the surface,

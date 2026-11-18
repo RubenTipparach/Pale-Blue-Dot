@@ -35,7 +35,7 @@ Ordered by value. Captures go in
 
 - [x] 5.1 `cargo fmt --all -- --check`, clippy, the relevant tests, `openspec validate --all`.
 - [x] 5.2 A fresh world launched (not a capture) to READY with no ERROR and no `LATE_PIPELINE`.
-- [ ] 5.3 The fungal forest (Q7). Not in this change: a new biome is a new generator version, its own change.
+- [x] 5.3 ~~The fungal forest (Q7).~~ Dropped (owner, 2026-11-18: "fungal forest should not be on this planet").
 - [ ] 5.4 The owner's video waits for the batch (CLAUDE.md, 2026-09-27); frame cost is the owner's perf sitting.
 
 ## 6. The approved mockup into the engine (M13 approved 2026-11-15; design 9)

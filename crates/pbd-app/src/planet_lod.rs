@@ -263,8 +263,50 @@ pub const RIVER_WORD_NONE: u32 = 0;
 
 fn river_word(direction: Vec3, level: u8) -> u32 {
     let cell_m = 2.833 * (1u32 << (super::FINEST_LEVEL.saturating_sub(level) as u32)) as f32;
-    pbd_core::rivers::far_surface(super::terrain::terrain_config(), direction, cell_m)
+    let cfg = super::terrain::terrain_config();
+    pbd_core::rivers::far_surface(cfg, direction, cell_m)
+        .or_else(|| pbd_core::rivers::flood_top(cfg, direction))
         .map_or(RIVER_WORD_NONE, |m| m.max(0.001).to_bits())
+}
+
+/// Fill the river cache round `points` (`river-cache` design 11): every
+/// fine level's cells within `corridor_m` (and a cell) of each point, asked
+/// what a fine set asks of them (their heights and their neighbours', the
+/// far sheet's word, and at the finest level a column's water), so a later
+/// rebuild finds the river terms worked out. The cells are the lattice's own,
+/// whose directions are the same floats whatever the anchor. Returns the
+/// cells asked about.
+pub fn fill_river_cache(points: &[Vec3], corridor_m: f32) -> usize {
+    let cfg = super::terrain::terrain_config();
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return 0;
+    };
+    let map = pbd_core::rivers::map(cfg, settings);
+    let mut lattice = Lattice::default();
+    let mut seen: std::collections::HashSet<[u32; 3]> = Default::default();
+    for &p in points {
+        for &level in &FINE_LEVELS {
+            let cell_m = crate::river_fill::cell_m(level);
+            let reach = (corridor_m + cell_m) / PLANET_RADIUS;
+            for local in lattice.cells_in_band(level, p, 0.0, reach) {
+                let d = local.cell.direction;
+                if !seen.insert([level as u32, d.x.to_bits(), d.y.to_bits() ^ d.z.to_bits()])
+                    || !map.may_reach(d)
+                {
+                    continue;
+                }
+                std::hint::black_box(surface_height(d));
+                for &n in &local.neighbor_directions {
+                    std::hint::black_box(surface_height(n));
+                }
+                std::hint::black_box(river_word(d, level));
+                if level == super::FINEST_LEVEL {
+                    std::hint::black_box(pbd_core::rivers::water(cfg, d));
+                }
+            }
+        }
+    }
+    seen.len()
 }
 
 /// The base level's records from the whole-sphere dual. Owners are the cell
@@ -349,6 +391,10 @@ pub struct FineSet {
     /// a cave, an overhang and a block to remove expressible at all. Built on
     /// this same task, because the records carry their own slots.
     pub columns: ColumnTier,
+    /// The river's final water out to the finest band (`river-cache` design
+    /// 14): read from its cache or built, on this same task, so the water
+    /// lands with its ground.
+    pub river: std::sync::Arc<crate::river_band::RiverBand>,
 }
 
 impl FineSet {
@@ -516,6 +562,25 @@ impl FineSet {
         // ground is: the terrain pass draws its cap from the cell record and
         // every neighbour draws its wall down to it.
         self.reconcile(record);
+        // A change to a river's flow: the river band's water within the
+        // rule's reach (and a fall's run below it) is built again by the next
+        // job with this edit in it, and cached again (`river-cache` design 14;
+        // the owner: "water rebuild is only when a player influences the flow
+        // of the river").
+        let at = Vec3::from_slice(&self.levels[3][record].direction_height[..3]);
+        if pbd_core::rivers::near(
+            super::terrain::terrain_config(),
+            at,
+            crate::river_band::EDIT_REACH_M,
+        ) {
+            crate::river_band::drop_round(
+                at,
+                crate::river_band::EDIT_REACH_M,
+                self.levels[3]
+                    .iter()
+                    .map(|c| (c.key(), Vec3::from_slice(&c.direction_height[..3]))),
+            );
+        }
         // Where the sea's sheet lies is not marked here: the sea's reach can
         // change anywhere the dig joins to it, and its shade is the light's,
         // so the caller marks the whole tier once, after the light is
@@ -1172,7 +1237,16 @@ pub(crate) fn generate_fine_live_on(
     // The column tier, last, because it stamps each finest record with its own
     // slot: the tier and the records it is read through are one artifact and
     // are built on one task.
-    let columns = column::build(anchor, &mut levels[3], &finest_neighbors, columns, edits);
+    let tier = column::build(anchor, &mut levels[3], &finest_neighbors, columns, edits);
+    let river = std::sync::Arc::new(crate::river_band::build(
+        anchor,
+        &levels[3],
+        &finest_neighbors,
+        &tier,
+        columns,
+        edits,
+    ));
+    let columns = tier;
     FineSet {
         anchor,
         levels,
@@ -1185,6 +1259,7 @@ pub(crate) fn generate_fine_live_on(
         width,
         fit_m,
         columns,
+        river,
     }
 }
 
@@ -1334,6 +1409,30 @@ pub struct LodRefresh {
     /// compares the save's against, to replay what was accepted while it
     /// built (`edit-pipeline` 1b). The task's own copy, shared.
     built_from: Option<Arc<Edits>>,
+    /// Where the player was last frame and when: what the walker's ground
+    /// velocity is measured from (`river-cache` design 14, the tier leads a
+    /// moving walker).
+    last_seen: Option<(Vec3, std::time::Instant)>,
+    /// The player's velocity along the ground, m/s, smoothed over about a
+    /// second.
+    velocity: Vec3,
+    /// How long the last set took to build, s.
+    last_build_s: f32,
+}
+
+/// Where to anchor a set requested at `direction` for a player moving at
+/// `velocity` (m/s, along the ground) when a set takes `build_s` to build:
+/// where the player will be when it lands, at most `regen` metres ahead, so
+/// the tier is centred on the player rather than behind them (`river-cache`
+/// design 14).
+pub fn led_anchor(direction: Vec3, velocity: Vec3, build_s: f32, regen: f32) -> Vec3 {
+    let lead = velocity * build_s.max(0.0);
+    let lead = if lead.length() > regen {
+        lead.normalize_or_zero() * regen
+    } else {
+        lead
+    };
+    (direction + lead / PLANET_RADIUS).normalize_or(direction)
 }
 
 /// A built set waiting to land (`LodRefresh::held`).
@@ -1437,6 +1536,23 @@ pub fn refresh_lod(
     let player = player_position(&cameras, frame.center);
     let direction = player.and_then(|p| p.try_normalize());
     if let Some(direction) = direction {
+        let now = std::time::Instant::now();
+        if let Some((last, at)) = refresh.last_seen {
+            let dt = now.duration_since(at).as_secs_f32();
+            if dt > 1e-4 {
+                let moved = (direction - last) * PLANET_RADIUS;
+                // Along the ground only, and a jump across a rebase or a
+                // teleport is not a velocity.
+                let along = (moved - direction * moved.dot(direction)) / dt;
+                if along.length() < 400.0 {
+                    let k = (dt / 1.0).min(1.0);
+                    refresh.velocity = refresh.velocity.lerp(along, k);
+                }
+            }
+        }
+        refresh.last_seen = Some((direction, now));
+    }
+    if let Some(direction) = direction {
         let column = contact
             .finest_cell(direction)
             .is_some_and(|record| fine.set.columns.column(record).is_some());
@@ -1456,6 +1572,7 @@ pub fn refresh_lod(
             return;
         };
         let took = refresh.in_flight_s().unwrap_or(0.0);
+        refresh.last_build_s = took;
         refresh.task = None;
         if !LodRefresh::current(refresh.epoch, super::terrain::terrain_epoch()) {
             refresh.started = None;
@@ -1501,9 +1618,14 @@ pub fn refresh_lod(
         }
         let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
         info!(
-            "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
+            "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor; river band {} cells ({} read, {} built) {} vertices in {:.0} ms",
             fine.version + 1,
-            set.columns.columns.len()
+            set.columns.columns.len(),
+            set.river.cells,
+            set.river.read,
+            set.river.built,
+            set.river.mesh.vertices.len(),
+            set.river.ms
         );
         // MEASUREMENT (`baked-light-ease`): the frame a set's light goes up.
         info!(
@@ -1580,7 +1702,24 @@ pub fn refresh_lod(
     // A rebuild the player is not waiting on waits for the atmosphere's step
     // to finish; see `advance_air`.
     let air_busy = air.is_some_and(|air| air.stepping());
-    if refresh.force || (!air_busy && fine.set.outrun(&live, moved, clear_of_all)) {
+    // INSTRUMENT (`river-cache` design 14): `PBD_HOLD_SET=<n>` builds no set
+    // after version n, so a walker can be watched outside the tier.
+    let held_set = std::env::var("PBD_HOLD_SET")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .is_some_and(|n| fine.version >= n);
+    // And early enough that it lands before the walker reaches the tier's
+    // edge: at its speed, the last set's build time on, it would be within
+    // 15 m of it (`river-cache` design 14). Past the tier there is no water
+    // physics and no live rule, so a walker who outruns it walks a river's
+    // bed under its water.
+    let reach = settings.reach_m.max(0.0);
+    let outrunning_tier = reach > 0.0
+        && moved + refresh.velocity.length() * refresh.last_build_s.max(1.0) > reach - 15.0;
+    if !held_set
+        && (refresh.force
+            || (!air_busy && (fine.set.outrun(&live, moved, clear_of_all) || outrunning_tier)))
+    {
         let threads = if refresh.force {
             build_threads()
         } else {
@@ -1616,9 +1755,13 @@ pub fn refresh_lod(
             .flatten();
         let bake_lamps = lighting.as_ref().is_some_and(|l| l.lamp_bake_on());
         let reach_m = super::tier_gpu::reach_m(lighting.as_deref());
+        // Up to half the tier's reach ahead, so a set built at a walker's
+        // pace lands with the walker still well inside it.
+        let lead_m = regen.max(settings.reach_m * 0.5);
+        let anchor = led_anchor(direction, refresh.velocity, refresh.last_build_s, lead_m);
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
             let mut set = generate_fine_live(
-                direction,
+                anchor,
                 live,
                 regen,
                 &settings,
@@ -1918,6 +2061,7 @@ mod near_field_tests {
             width: 0.0,
             fit_m: 0.0,
             columns: ColumnTier::empty(),
+            river: Default::default(),
         }
     }
 

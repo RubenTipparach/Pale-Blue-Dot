@@ -285,7 +285,6 @@ pub fn pick(
         count: took,
         how: How::Picked,
     });
-    note.say(wall_s, format!("+{took} {}", good.row().name));
     info!(
         "picked {took} {} from the tree at cell {cell} on day {day:.2}",
         FRUIT_GOODS[kind]

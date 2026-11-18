@@ -97,6 +97,14 @@ pub enum How {
     Gathered,
 }
 
+/// A dug block the magnet brought into the pack (`item-toasts` decision 1):
+/// the one gain `Gained` does not cover. Raised after the save took it.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PickedUp {
+    pub item: Item,
+    pub count: u16,
+}
+
 /// A seed was planted (`starter-missions`: "plant").
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Planted {

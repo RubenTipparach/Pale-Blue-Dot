@@ -41,6 +41,7 @@ pub mod ore;
 pub mod overlay;
 pub mod planet_gen;
 pub mod records;
+pub mod river_cache;
 pub mod rivers;
 pub mod scatter;
 pub mod sea;
