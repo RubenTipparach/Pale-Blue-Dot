@@ -3818,6 +3818,22 @@ mod river_cost {
             let started = Instant::now();
             let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
             let whole = ms(started);
+            // The same set again, 40 m on: a rebuild over ground the first
+            // set's job already asked about (`river-cache` design 11: what
+            // the cache saves a walker's next rebuild).
+            let east = Vec3::Y.cross(anchor).normalize_or(Vec3::X);
+            let on = (anchor + east * (40.0 / PLANET_RADIUS)).normalize();
+            let started = Instant::now();
+            std::hint::black_box(lod::generate_fine(
+                on,
+                &ColumnSettings::default(),
+                &Edits::new(),
+            ));
+            eprintln!(
+                "{name}: the next set 40 m on {:.0} ms (the first {whole:.0} ms), cache {}",
+                ms(started),
+                if pbd_core::river_cache::enabled() { "on" } else { "off" }
+            );
             // Every fine record's altitude, with the river terms and without.
             let records: Vec<Vec3> = set
                 .levels

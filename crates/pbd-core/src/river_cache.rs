@@ -23,7 +23,7 @@ use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 /// A small multiplicative hasher: the keys are float bits, already well mixed.
 #[derive(Default)]
@@ -52,33 +52,46 @@ type FxMap<Key, V> = HashMap<Key, V, BuildHasherDefault<Fx>>;
 
 const SHARDS: usize = 64;
 
+thread_local! {
+    static LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Memo lookups made on the calling thread so far: an instrument, to find
+/// which thread asks the cache how often.
+pub fn thread_lookups() -> u64 {
+    LOOKUPS.with(|n| n.get())
+}
+
 /// A memo shared by the threads that build a fine set: sharded by key, so
 /// two threads rarely wait on one lock.
+/// Read-write locks: once warm nearly every access is a read, and reads on
+/// one shard from the job's threads and the main thread go side by side.
 pub struct Memo<Key, V> {
-    shards: Vec<Mutex<FxMap<Key, V>>>,
+    shards: Vec<RwLock<FxMap<Key, V>>>,
     len: AtomicUsize,
 }
 
 impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
     fn new() -> Self {
         Self {
-            shards: (0..SHARDS).map(|_| Mutex::new(FxMap::default())).collect(),
+            shards: (0..SHARDS).map(|_| RwLock::new(FxMap::default())).collect(),
             len: AtomicUsize::new(0),
         }
     }
 
-    fn shard(&self, key: &Key) -> &Mutex<FxMap<Key, V>> {
+    fn shard(&self, key: &Key) -> &RwLock<FxMap<Key, V>> {
         let mut h = Fx::default();
         key.hash(&mut h);
         &self.shards[(h.finish() >> 58) as usize % SHARDS]
     }
 
     pub fn get(&self, key: &Key) -> Option<V> {
-        self.shard(key).lock().ok()?.get(key).cloned()
+        LOOKUPS.with(|n| n.set(n.get() + 1));
+        self.shard(key).read().ok()?.get(key).cloned()
     }
 
     pub fn put(&self, key: Key, value: V) {
-        if let Ok(mut shard) = self.shard(&key).lock()
+        if let Ok(mut shard) = self.shard(&key).write()
             && shard.insert(key, value).is_none()
         {
             self.len.fetch_add(1, Ordering::Relaxed);
@@ -86,7 +99,7 @@ impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
     }
 
     pub fn remove(&self, key: &Key) {
-        if let Ok(mut shard) = self.shard(key).lock()
+        if let Ok(mut shard) = self.shard(key).write()
             && shard.remove(key).is_some()
         {
             self.len.fetch_sub(1, Ordering::Relaxed);
@@ -105,7 +118,7 @@ impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
     fn entries(&self) -> Vec<(Key, V)> {
         let mut out = Vec::with_capacity(self.len());
         for shard in &self.shards {
-            if let Ok(shard) = shard.lock() {
+            if let Ok(shard) = shard.read() {
                 out.extend(shard.iter().map(|(k, v)| (*k, v.clone())));
             }
         }

@@ -69,7 +69,10 @@ fn fill_rivers(
     space: crate::SimSpace,
 ) {
     let now = Instant::now();
-    if !pbd_core::river_cache::enabled() || fill.next_look.is_some_and(|t| now < t) {
+    if !pbd_core::river_cache::enabled()
+        || off("PBD_RIVER_FILL")
+        || fill.next_look.is_some_and(|t| now < t)
+    {
         return;
     }
     fill.next_look = Some(now + std::time::Duration::from_secs(2));
@@ -132,6 +135,9 @@ fn save(saving: Arc<AtomicBool>) {
 }
 
 fn save_now_and_then(mut fill: ResMut<RiverFill>) {
+    if off("PBD_RIVER_SAVE") {
+        return;
+    }
     let now = Instant::now();
     let next = *fill
         .next_save
@@ -157,6 +163,12 @@ fn save_on_exit(mut exits: MessageReader<AppExit>) {
     if exits.read().next().is_some() {
         save(Arc::new(AtomicBool::new(false)));
     }
+}
+
+/// A pricing switch: `PBD_RIVER_FILL=off` and `PBD_RIVER_SAVE=off` turn the
+/// fill and the half-minute save off, to price each.
+fn off(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|v| v.eq_ignore_ascii_case("off"))
 }
 
 /// The finest level's cell width, m, at `level`.

@@ -4078,6 +4078,8 @@ struct RiverWalk {
     hop_until: Option<Instant>,
     /// The jump key went down last frame: on land it is let up between taps.
     jump_down: bool,
+    /// The main thread's cache lookups at the last `RIVER_CACHE` line.
+    main_lookups: u64,
     backing: Option<Instant>,
     done: bool,
 }
@@ -4399,11 +4401,13 @@ fn river_walk_script(
                 field.misses.load(Ordering::Relaxed),
             );
             info!(
-                "RIVER_CACHE {seconds:.0} s: {:.1}% of {} lookups from the cache; holds {carve} ground, {top} water tops, {far} far sheets, {settled} settled cells; stuck {} times so far",
+                "RIVER_CACHE {seconds:.0} s: {:.1}% of {} lookups from the cache; holds {carve} ground, {top} water tops, {far} far sheets, {settled} settled cells; stuck {} times so far; main thread {} lookups since the last line",
                 100.0 * hits as f64 / (hits + misses).max(1) as f64,
                 hits + misses,
-                walk.stuck_total
+                walk.stuck_total,
+                pbd_core::river_cache::thread_lookups() - walk.main_lookups
             );
+            walk.main_lookups = pbd_core::river_cache::thread_lookups();
         }
         if let (Ok((camera, projection)), Some(fine)) = (cameras.single(), fine.as_deref()) {
             let fov = match projection {

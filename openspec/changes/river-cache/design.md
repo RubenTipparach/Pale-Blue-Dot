@@ -637,3 +637,202 @@ player wanders is owed: a cap, or keeping only values a river changes, is
 the next cut if it grows past what a save folder should hold.
 
 **Not measured:** `tools/perf_suite.py` on the release build.
+
+## 14. Far rivers drawn the way terrain is (owner, 2026-11-18; proposed)
+
+**The report.** The owner, on the v1 recording's frames: "some examples of
+partial river, not full water sim", and "I also dont like how stuff keeps
+fading in, the terrain isnt fading in because its lod is much bigger, why
+cant we do the same for rivers?"
+
+**Why terrain doesn't fade and rivers do.**
+- **Terrain is one thing near and far.** The column tier's ground and every
+  fine record read the same `surface_m`, so when the tier lands nothing
+  changes in the picture.
+- **River water is two things:**
+  - **Inside the column tier** (`reach_m` 90 m from its anchor): the water
+    the columns hold, with the rule's settled flow, drawn as flowing faces.
+  - **Past it:** a stand-in, a still sheet per far cell at the reach's level
+    (`rivers::far_surface`, `water.wgsl` `kind == 4`).
+- **They hand over by a distance dither** across the tier's last 25 m. That's
+  the fading.
+- **The stand-in differs from the real water in three ways:**
+  1. It is drawn only within half a cell or the river's half width of the
+     line, while the valley's ground stands under water further out
+     (`rivers::floods`). Those cells draw their bed as a bed with no sheet
+     over it: the dry patches in the owner's frames.
+  2. It is still: a fall is a step in it, with no face.
+  3. It never has the rule's flowing sheets.
+- **The tier lags a fast walker.** A rebuild takes about 4 s while walking
+  (section 13), and the anchor is where the walker was when it was asked for.
+  At swimming or sprinting pace the anchor is 50-80 m behind (the owner's HUD:
+  "73 m from anchor"). The dither band is then 15-20 m ahead of the eye,
+  always in view.
+
+**The plan.** The owner: "there should be no stand in sheets, I think thats
+for orbital view, or when terrain is in LOD". So the real water reaches as
+far as the ground is drawn at full detail, and a stand-in sheet only where
+the ground itself is a level of detail.
+
+1. **The water is loaded exactly as the terrain is** (owner: "the full
+   final water geometry should be loading out to a reasonable distance that
+   once the player crosses a threshold another job starts loading water
+   again. exactly the same process as terrain").
+   - **The job:** the fine-set job (`generate_fine_live_on`, on the async
+     pool) builds the river's final water geometry with the ground. That
+     means the water cells, their settled flow and the flowing-water mesh
+     itself (today `water_flow::rebuild_water`, 6-14 ms on the frame the set
+     lands).
+   - **Its reach:** the finest band, 300 m, where the ground is drawn at full
+     detail.
+   - **When it runs:** the same anchor and the same threshold: the walker
+     crosses `regen_m` (40 m) from the anchor and the next job starts.
+   - **How it lands:** whole, in the same frame as its ground, with the same
+     set's cross-fade. Nothing about the water is built on the frame.
+   - **What stays the tier's:** solid columns, collision, lighting and the
+     live rule's edits, within its 90 m. Inside it the tier's water is the
+     band's water, cell for cell.
+   - **Cached, so a job retrieves it rather than builds it** (owner: "this
+     data should be cached somewhere so it is easily retreivable"):
+     - **By fixed pieces, not by anchor.** Each piece is the water of one
+       drainage-lattice cell (0.5 degrees, about 42 m): its water cells,
+       their settled flow and their mesh. Pieces are fixed on the planet, so
+       a job at any anchor assembles its 300 m from the pieces it needs and
+       builds only the ones nobody has built yet.
+     - **Where it lives:** in memory for the session, and in the river cache
+       file beside the worlds (design 11), so a second visit or a second
+       launch loads the river's water as fast as it reads.
+     - **Built once, kept for good** (owner: "since we know water WILL NOT
+       change on its own"): a river's generated water is settled once and
+       stays settled. Nothing in the world moves it but an edit, so a built
+       piece never expires and is never rebuilt for time or distance.
+       **The one rebuild is the player's** (owner: "water rebuild is only when
+       a player influences the flow of the river, which they totally can"):
+       digging a bank, damming the channel, pouring or taking water. The live
+       rule moves the water from the edit as it does today
+       (`water_after_edit`, saved as the world's edits). The pieces the change
+       reaches are dropped and rebuilt from the generated water plus the
+       save's edits, then cached again, so the player's river is the one
+       every later job and launch reads.
+     - **So loading is a read, never the sim** (owner: "then that becomes
+       cached and so loading becomes instant without having to do the water
+       sim calcs"). Every piece a job needs is read: the generated river as
+       first built, or the player's river as last rebuilt. The rule's settle
+       runs only to build a piece nobody has built yet, and once per player
+       change. The save still holds the edits, so if the cache file is
+       deleted, each piece is built once from them and cached again. Once a
+       river's pieces are built, every later job and every later launch only
+       reads them.
+     - **Kept honest:** a piece is keyed by the generator version, seed and
+       settings like the rest of the cache. An edit drops every piece within
+       the rule's reach of it (the edit's water is the save's, and the rule
+       rebuilds the piece with it). A missing or stale piece is built and
+       stored, never trusted.
+     - **Filled ahead:** the background fill builds the pieces along the
+       whole river nearest the walker, so a job's pieces are usually there
+       before it asks for them.
+2. **The settled flow comes from the cache.** The background fill (design 11)
+   settles each river it fills along its whole course, in tier-sized regions
+   down the river, keeping each region's interior (`SETTLE_KEEP_CELLS`), as a
+   tier does. So the water out to 300 m is what a tier there would hold:
+   flowing sheets, riffles and falls, never a still stand-in. A region not yet
+   settled draws its sources until the fill reaches it, which is within a
+   second or two of the river being found (`RIVER_FILL`, 0.1-1.8 s a river).
+3. **Stand-in sheets only where the ground is LOD.** The still sheet
+   (`far_surface`, `kind == 4`) stays on the coarser levels (L10 to L8) and
+   from orbit, where the ground is also an approximation. It's drawn over
+   every cell the river floods (`floods`), so a far valley has no dry bed.
+4. **One handover, the ground's own.** The river's full water and the
+   stand-in hand over at the finest band's edge, through the same L11-to-L10
+   cross-fade the ground uses, in the same pixels. The ground and its river
+   change together, far out where the ground's own change is already accepted.
+   The tier's 25 m water dither goes: inside the band, tier water and band
+   water are the same water, and the tier's cells simply draw the tier's.
+5. **The tier leads a moving walker.** A rebuild is anchored where the walker
+   will be when it lands (its velocity times the last rebuild's time, at most
+   the rebuild distance ahead), so collision and the live rule are centred on
+   the walker rather than 70 m behind.
+
+**What a player would see differently.** Out to 300 m the river is the
+real water (full width, falls, flowing sheets). No band of fading water is in
+front of the player; past 300 m the river changes with the ground, at the
+ground's own fade. That's the owner's own request.
+
+**Cost, to measure before and after** (`river-cache` perf study, section 15):
+- the band's water records: one cache lookup per flooded finest cell, out to
+  300 m (a river's corridor is a few thousand cells);
+- the flowing-water mesh over those cells: more faces in the water pass,
+  measured per pass with the F3 breakdown's spans;
+- the background settle along each river, on its own thread.
+
+## 15. Performance study (2026-11-18, the owner's desktop, RTX 3070, `--profile fast`)
+
+The owner: "could you also do a performance study as well?". Frame logs
+without vsync, day, new worlds, nothing else running. Raw logs stayed local.
+
+**The walk down the owner's river, cache on and off, interleaved** (five
+whole-river walks):
+
+| Run | Frame median / p99 | Main thread median | GPU median | Rebuild mean | Landings a minute | Walk |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| on, cold | 15.8 / 31.9 ms | 13.9 ms | 9.6 ms | 5.0 s | 11.7 | 166 s |
+| off | 12.3 / 23.7 | 11.1 | 8.3 | 6.7 s | 8.3 | 133 s |
+| on, warm | 15.9 / 28.7 | 14.0 | 9.9 | 4.5 s | 11.6 | 168 s |
+| off | 13.3 / 51.0 | 11.9 | 8.2 | 9.0 s | 6.5 | 127 s |
+| on, warm | 16.4 / 33.3 | 14.4 | 10.3 | 4.5 s | 11.9 | 171 s |
+
+**The walks can't price the cache.** The bot's path depends on the live
+tier. With the cache on, rebuilds land sooner, the live tier is under the
+walker more often, and it swims the channel. With it off it runs more of the
+bed outside the tier: 127-133 s against 166-171 s. Swimming, underwater and
+more landings each have their own cost. So:
+
+**Standing still at the owner's spot, on and off interleaved** (60 s, last
+50 s):
+
+| | on | off | on | off |
+| --- | ---: | ---: | ---: | ---: |
+| Main thread median | 10.8 | 12.7 | 13.2 | 13.1 ms |
+| Frame median | 13.9 | 14.7 | 15.1 | 15.1 ms |
+
+No per-frame cost: the difference is inside the spread between runs. Read-write
+locks in place of mutexes on the memo's shards changed nothing measurable
+(a walk: 14.3 ms on, 11.7 ms off, the same as before), and are kept since
+every warm access is a read.
+
+**The rebuild job** (`river_cost`, a set and then the next set 40 m on,
+eight threads, two sittings):
+
+| Next set 40 m on | river 0 | river 1 | river 2 | river 3 | dry |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| cache on | 926-1,036 | 768-769 | 812-852 | 926-936 | 878-925 ms |
+| cache off | 960-969 | 989-1,007 | 1,171-1,235 | 1,034-1,141 | 1,412-1,420 ms |
+
+The cache makes the next rebuild 3-38% faster, most where a river is near
+but not under the set. In play a rebuild gets two of the eight cores
+(`background_threads`, a measured choice that keeps the frame smooth), so it
+takes 4.5-5.0 s with the cache against 6.7-9.0 s without.
+
+**What the cache costs.**
+- **Its size is the problem.** After a day of runs on one river and its
+  feeders, the file is **342 MB, 16.3 million values** (8.1 M ground, 7.6 M
+  water tops, 0.5 M far sheets). The near-river mask lets every point within
+  a 5 x 5 lattice window (about 210 m) of a river be memoised. Most of them
+  are points where the river changes nothing.
+- **Saving it** copies every value under the shards' locks and writes the
+  file: 1.5-2.0 s on its own thread every 30 s, and about 2 s on the frame
+  the game quits.
+- **The fill**: 0.1-1.8 s of one core per river found.
+
+**What this means for design 14.** A point memo is the wrong unit for a
+whole planet's rivers. Design 14's pieces (the final water of one lattice
+cell, its cells, flow and mesh) replace it. They hold only cells the river
+floods, at most a few thousand per piece. They are built once and kept, read
+whole, and saved as they are made rather than by copying everything. The
+point memo shrinks to what pieces don't cover, or goes.
+
+**Other costs on the frame, measured in passing.**
+- The flowing-water mesh is built on the frame a set lands: 6-14 ms
+  (design 1). Design 14 moves it into the job.
+- The terrain's GPU cost is as the play-budget study left it (median 8-10
+  ms here); the water passes weren't priced separately in this sitting.

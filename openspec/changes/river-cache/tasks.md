@@ -114,3 +114,18 @@
       step rule (`the_step_rule_is_the_walker_s`), swimming read at the
       feet, jumps tapped on land; re-recorded with no stall
       (`river-cache-runs-v2-2026-11-18-450p60.mp4`).
+
+## 12. Far rivers drawn the way terrain is (design 14), proposed
+- [ ] Real water across the finest band (300 m), built in the fine-set job
+      with the ground, landing with it; the flowing-water mesh off the frame.
+- [ ] Water pieces cached by drainage-lattice cell, in memory and in the
+      file; a job assembles from pieces and builds only the missing ones;
+      edits drop the pieces they reach.
+- [ ] The background fill settles and builds pieces along the whole river.
+- [ ] Stand-in sheets only past the finest band and from orbit, over every
+      flooded cell.
+- [ ] The handover at the band's edge rides the ground's cross-fade; the
+      tier's 25 m water dither removed.
+- [ ] The tier anchored ahead of a moving walker.
+- [ ] Measured against the perf study (section 15), and recorded down the
+      owner's river.

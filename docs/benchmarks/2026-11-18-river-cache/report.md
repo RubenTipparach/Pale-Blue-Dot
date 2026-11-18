@@ -33,3 +33,14 @@ The first recording (`river-cache-runs-2026-11-18-450p60.mp4`) had the bot
 before its fixes: 8 and 11 stalls, each freed. Design 12 says why.
 
 Not measured: `tools/perf_suite.py` on the release build.
+
+## Performance study (design 15)
+
+- Standing still at the river: no per-frame cost from the cache (main thread
+  10.8 / 13.2 ms on, 12.7 / 13.1 ms off, interleaved).
+- The next rebuild 40 m on (eight threads): 768-1,036 ms with the cache,
+  960-1,420 ms without. In play (two threads): 4.5-5.0 s against 6.7-9.0 s.
+- Walking runs differ by path (the bot swims more with the cache on), so their
+  frame times don't price the cache.
+- The cache file reached 342 MB (16.3 M values) after a day on one river: the
+  point memo is the wrong unit, and design 14's pieces replace it.
