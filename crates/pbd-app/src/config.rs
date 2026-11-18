@@ -238,6 +238,30 @@ pub struct FallLook {
     pub ripple_height: f32,
     pub ripple_length_m: f32,
     pub ripple_reach_m: f32,
+    /// The foot's ripples need depth (owner, 2026-11-17: "this water is too
+    /// shallow for ripples"): none where the pool under the foot is this
+    /// deep or less, m, fading in (smoothstep) to full at
+    /// `ripple_depth_full_m`. The landing cell under a fall is drawn full, so
+    /// one layer of water reads 1 m.
+    pub ripple_depth_none_m: f32,
+    pub ripple_depth_full_m: f32,
+    /// The mist scales with the fall's size (owner, 2026-11-17: "the mist
+    /// should be 50% at this size"): the puffs' opacity is this share at a
+    /// drop `D` of `mist_small_drop_m` or less, rising (smoothstep) to the
+    /// approved look at `mist_full_drop_m` and over. Proposed rule only.
+    pub mist_small_scale: f32,
+    /// No mist at all on a drop `D` under this, m (owner, 2026-11-17:
+    /// "actually no steam/mist at all for drops that are less than 1 block
+    /// height"): none emitted. A fall crossing it fades its mist in or out
+    /// over `splash_fade_s`, in time.
+    pub mist_none_below_m: f32,
+    /// And fewer particles on a small fall (owner, 2026-11-17: "less
+    /// particles for these shallow drops too"): the count of mist puffs,
+    /// spray drops, fall droplets and bubbles is this share at the small
+    /// drop, by the same ramp. Proposed rule only.
+    pub particles_small_scale: f32,
+    pub mist_small_drop_m: f32,
+    pub mist_full_drop_m: f32,
     /// The pool's flow away from the foot, a multiplier on its speed (zero:
     /// none), and how far out it reaches, m.
     pub pool_flow: f32,
@@ -278,6 +302,13 @@ impl Default for FallLook {
             ripple_height: 0.5,
             ripple_length_m: 0.9,
             ripple_reach_m: 6.0,
+            ripple_depth_none_m: 1.0,
+            ripple_depth_full_m: 2.0,
+            mist_small_scale: 0.5,
+            particles_small_scale: 0.35,
+            mist_none_below_m: 1.0,
+            mist_small_drop_m: 1.5,
+            mist_full_drop_m: 4.0,
             pool_flow: 0.1,
             pool_flow_reach_m: 6.0,
             glassy: true,
@@ -306,6 +337,9 @@ impl Validated for FallLook {
                 s.teal_churn,
                 s.fall_speed_up,
                 s.ripple_height,
+                s.ripple_depth_none_m,
+                s.mist_small_drop_m,
+                s.mist_none_below_m,
                 s.pool_flow,
                 s.edge_highlight,
             ],
@@ -326,6 +360,24 @@ impl Validated for FallLook {
             ],
         )?;
         unit("falls.glass_tint", s.glass_tint)?;
+        unit("falls.mist_small_scale", s.mist_small_scale)?;
+        unit("falls.particles_small_scale", s.particles_small_scale)?;
+        (s.ripple_depth_full_m > s.ripple_depth_none_m)
+            .then_some(())
+            .ok_or_else(|| {
+                format!(
+                    "falls.ripple_depth_full_m ({}) must exceed ripple_depth_none_m ({})",
+                    s.ripple_depth_full_m, s.ripple_depth_none_m
+                )
+            })?;
+        (s.mist_full_drop_m > s.mist_small_drop_m)
+            .then_some(())
+            .ok_or_else(|| {
+                format!(
+                    "falls.mist_full_drop_m ({}) must exceed mist_small_drop_m ({})",
+                    s.mist_full_drop_m, s.mist_small_drop_m
+                )
+            })?;
         (s.bubbles.is_finite() && (0.0..=2.0).contains(&s.bubbles))
             .then_some(())
             .ok_or_else(|| format!("falls.bubbles must be within 0..=2, got {}", s.bubbles))?;

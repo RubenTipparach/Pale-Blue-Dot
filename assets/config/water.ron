@@ -102,6 +102,25 @@
         ripple_height: 0.5,
         ripple_length_m: 0.9,
         ripple_reach_m: 6.0,
+        // Ripples need depth (owner, 2026-11-17: "this water is too shallow
+        // for ripples"): none over a pool 1 m deep or less (one layer; the
+        // landing cell under a fall is drawn full), full from 2 m, m.
+        ripple_depth_none_m: 1.0,
+        ripple_depth_full_m: 2.0,
+        // The mist scales with the fall (owner, 2026-11-17: "the mist should
+        // be 50% at this size"): puff opacity 0.5 at a drop D of 1.5 m or
+        // less, the approved look from 4 m, m.
+        mist_small_scale: 0.5,
+        // And fewer particles there (owner, 2026-11-17: "less particles for
+        // these shallow drops too"): puffs, spray, fall droplets and bubbles
+        // at 35% of the approved count on a small fall, by the same ramp.
+        particles_small_scale: 0.35,
+        // No mist at all under a one-layer drop (owner, 2026-11-17: "no
+        // steam/mist at all for drops that are less than 1 block height"),
+        // m; a fall crossing it fades its mist over splash_fade_s.
+        mist_none_below_m: 1.0,
+        mist_small_drop_m: 1.5,
+        mist_full_drop_m: 4.0,
         pool_flow: 0.1,
         pool_flow_reach_m: 6.0,
         glassy: true,
