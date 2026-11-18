@@ -1005,6 +1005,58 @@ mod tests {
         assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
     }
 
+    /// Version 10's ground, biomes and top blocks, pinned on constants of
+    /// its own before version 11 (`swamps`) landed, so that nothing version
+    /// 11 brings moves a version 10 world (CLAUDE.md, "Saved games survive
+    /// every change"). Its trees are pinned by
+    /// `flora::tests::every_version_keeps_where_its_trees_stand`.
+    #[test]
+    fn version_10_keeps_its_ground() {
+        let v10 = TerrainConfig::for_version(10).expect("version 10 is carried");
+        assert_eq!(v10, TerrainConfig::TENEBRIS_V10);
+        assert_eq!(digest(&v10, 10_000), VERSION_10_DIGEST);
+        assert_eq!(top_digest(&v10, 10_000), VERSION_10_TOP_DIGEST);
+        // And on a denser sampling, which crosses version 10's swamp strip
+        // about 2,000 times: every biome and top block (the floored
+        // surface, which agrees across platforms, with what stands on it).
+        // Taken in the Linux container; the Mac's maths library can move an
+        // altitude's last bit, and a biome edge with it, so the Mac's value
+        // is the owner's to take.
+        if cfg!(not(target_os = "macos")) {
+            assert_eq!(land_digest(&v10, 200_000), VERSION_10_LAND_DIGEST);
+        }
+    }
+
+    /// The digest of the biome and the top block over the floored surface,
+    /// on `n` directions: what a column shows, which the swamps change.
+    fn land_digest(cfg: &TerrainConfig, n: usize) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for d in sphere(n) {
+            let h = surface_altitude(cfg, d);
+            let surface = h.floor();
+            let word = (biome_at(cfg, d, h) as u64) << 40
+                | (top_material(cfg, d, surface) as u64) << 32
+                | u64::from((surface as i32) as u32);
+            for byte in word.to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        hash
+    }
+
+    /// Version 10's digests on 10,000 directions: its ground is version 9's,
+    /// so they are version 9's values on each platform (the live comparison
+    /// in `version_10_is_version_9_s_ground_with_m13_s_trees` holds that on
+    /// every target), taken again here before version 11 landed.
+    #[cfg(target_os = "macos")]
+    const VERSION_10_DIGEST: u64 = 15_558_980_979_595_432_169;
+    #[cfg(not(target_os = "macos"))]
+    const VERSION_10_DIGEST: u64 = 4_200_192_246_974_754_388;
+    const VERSION_10_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
+    /// Version 10's biomes and top blocks on 200,000 directions, taken in
+    /// the Linux container (x86_64) on 2026-11-18 before version 11 landed.
+    const VERSION_10_LAND_DIGEST: u64 = 4_798_154_120_607_629_680;
+
     /// The ground digest differs by platform: the Mac's and the Linux
     /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
     /// is the operating system's maths library, not the processor: an
