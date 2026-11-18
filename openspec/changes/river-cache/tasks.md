@@ -83,4 +83,5 @@
 ## 9. Measure again
 - [x] `RIVER_AHEAD` along the whole walk, old rule against new, summarised
       in design 9.
-- [ ] The perf suite on the release build (the fix lists more sheets).
+- [ ] The perf suite on the release build (the fix lists more sheets):
+      refused, the screen locked (design 10). Owed.

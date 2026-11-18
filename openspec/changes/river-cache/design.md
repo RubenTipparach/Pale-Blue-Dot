@@ -407,3 +407,15 @@ of 60, on a machine other sessions were also using (load average 6-30), so
 the video shows what is drawn, not how smoothly. The two walks are the same
 script from the same start but not the same frames: the walker's path
 differs a little run to run.
+
+## 10. Frame time: not measured
+
+`tools/perf_suite.py --scenarios walk,far-side --repeats 2` (before:
+`origin/main`'s assets on the same release exe; after: this change) refused
+to start at 22:05: the screen had locked, and macOS throttles a locked
+screen's window, so every run would be paced, not measured. No number is
+claimed. What the change adds per frame: one branch and a bitcast for each
+listed cell in `compact_visible`, and an 18-vertex instance for each far
+river cell now in view that was culled before (the river's cells past the
+tier, at most a few hundred). The owner's sitting on an unlocked screen
+decides it.
