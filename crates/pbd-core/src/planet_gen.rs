@@ -149,9 +149,9 @@ pub struct Swamps {
     pub river_wet_from: f32,
     /// Open water and mud: a patch field of this size, m. A swamp cell is a
     /// pool where the field is over `pool_above` and the ground round it
-    /// holds water (`rivers::rimmed`); a cell that holds none is mud where
-    /// the field is over `mud_above`, the wettest of the patches, and moss
-    /// where it is not.
+    /// holds water ([`swamp_pool_held`]); a cell that holds none is mud
+    /// where the field is over `mud_above`, the wettest of the patches, and
+    /// moss where it is not.
     pub patch_m: f32,
     pub pool_above: f32,
     pub mud_above: f32,
@@ -167,8 +167,8 @@ impl Swamps {
         river_rise_m: 3.0,
         river_wet_from: 0.47,
         patch_m: 36.0,
-        pool_above: 0.47,
-        mud_above: 0.58,
+        pool_above: 0.3,
+        mud_above: 0.6,
     };
 }
 
@@ -785,6 +785,33 @@ pub fn swamp_holds(
     })
 }
 
+/// Whether a version 11 swamp pool is held at `d` (`swamps` decision 3): the
+/// ground round it stands a margin over the pool's floor all the way round,
+/// read on three rings of 16 that span the cells' spread of widths (2.6 to
+/// 3.1 m), so no neighbour, whichever way it lies, is lower. Version 8's
+/// `rivers::rimmed` reads six points at one width, which a hex neighbour can
+/// fall between; a pool it passes can spill.
+pub fn swamp_pool_held(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> bool {
+    const RINGS_M: [f32; 3] = [2.5, 2.9, 3.3];
+    const MARGIN_M: f32 = 0.25;
+    let d = direction.normalize_or(Vec3::Y);
+    let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+    let north = d.cross(east);
+    let floor = surface_m.floor() + MARGIN_M;
+    RINGS_M.iter().all(|&r| {
+        (0..16).all(|k| {
+            let a = k as f32 * std::f32::consts::TAU / 16.0;
+            let n = (d + (east * a.cos() + north * a.sin()) * (r / cfg.radius_m)).normalize();
+            surface_altitude(cfg, n) >= floor
+        })
+    })
+}
+
+/// How far under a version 11 swamp's ground no cave opens, m (`swamps`
+/// decision 3): a cave under a pool would drain it, as one under a river
+/// would (`rivers::sealed_from`).
+pub const SWAMP_SEAL_M: f32 = 6.0;
+
 /// The swamp's patch field at a direction, in [0, 1]: where its open water
 /// and its mud lie (`swamps` decision 3).
 pub fn swamp_patch(cfg: &TerrainConfig, swamps: &Swamps, direction: Vec3) -> f32 {
@@ -849,15 +876,15 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
                 Material::Sand
             }
         }
-        // Version 11: pools in the patch field's high ground where the
-        // ground round them holds water, mud about them, moss between; and
-        // the coast's lowest layer as version 10 has it.
+        // Version 11: pools wherever the ground round them holds water, mud
+        // in the patch field's wettest ground, moss between; and the coast's
+        // lowest layer as version 10 has it.
         (Biome::Swamp, Some(_)) if cfg.swamps.is_some() => {
             let swamps = cfg.swamps.as_ref().expect("checked");
             let above_beach = surface_m - (sea + cfg.beach_band_m);
             let patch = swamp_patch(cfg, swamps, direction);
             let pool = above_beach < 1.0 || patch > swamps.pool_above;
-            if pool && crate::rivers::rimmed(cfg, direction, surface_m) {
+            if pool && swamp_pool_held(cfg, direction, surface_m) {
                 Material::Water
             } else if above_beach < 2.0 || patch > swamps.mud_above {
                 Material::Dirt
@@ -1235,7 +1262,8 @@ mod tests {
             let top = top_material(&cfg, d, h.floor());
             if top == Material::Water {
                 assert!(
-                    crate::rivers::rimmed(&cfg, d, h.floor()),
+                    swamp_pool_held(&cfg, d, h.floor())
+                        && crate::rivers::rimmed(&cfg, d, h.floor()),
                     "a pool spills at {d}"
                 );
             }
@@ -2044,6 +2072,55 @@ mod tests {
                     f(low_flat_water[i])
                 );
             }
+        }
+    }
+
+    /// A capture locator for `swamps` (task 4.1): the version 11 swamps
+    /// nearest the default spawn with pools in them, as `--at` latitude and
+    /// longitude, the coast's and the rivers' apart. Run with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore]
+    fn swamp_places_near_the_spawn() {
+        let cfg = TerrainConfig::TENEBRIS_V11;
+        let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let mut found = Vec::new();
+        for d in sphere(400_000) {
+            let h = surface_altitude(&cfg, d);
+            if biome_at(&cfg, d, h) != Biome::Swamp {
+                continue;
+            }
+            let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+            let north = d.cross(east);
+            let (mut swamp, mut pools) = (0, 0);
+            for ring in [8.0f32, 16.0, 24.0] {
+                for k in 0..12 {
+                    let a = k as f32 * std::f32::consts::TAU / 12.0;
+                    let n = (d + (east * a.cos() + north * a.sin()) * (ring / cfg.radius_m))
+                        .normalize();
+                    let nh = surface_altitude(&cfg, n);
+                    if biome_at(&cfg, n, nh) == Biome::Swamp {
+                        swamp += 1;
+                        pools += usize::from(top_material(&cfg, n, nh.floor()) == Material::Water);
+                    }
+                }
+            }
+            if swamp >= 34 && pools >= 4 {
+                let ll = crate::geo::lat_lon(d);
+                found.push((
+                    d.angle_between(spawn) * cfg.radius_m,
+                    ll.lat.to_degrees(),
+                    ll.lon.to_degrees(),
+                    h,
+                    pools,
+                ));
+            }
+        }
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (m, lat, lon, h, pools) in found.iter().take(12) {
+            println!(
+                "{m:.0} m from the spawn: --at {lat:.4} {lon:.4}, {h:.1} m, {pools} pools of 36 round it"
+            );
         }
     }
 

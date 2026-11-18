@@ -27,9 +27,17 @@ keep their ground.
 #### Scenario: Swamp ground holds its water
 
 - **WHEN** a version 11 swamp cell's top is water
-- **THEN** no ground 2.9 m round it stands lower, so the pool is held; and
-  the swamp's tops are moss, water and mud, moss the most of them
+- **THEN** no ground round it, at any of the cells' widths, stands lower,
+  so the pool is held; and the swamp's tops are moss, water and mud, moss
+  the most of them
   (`planet_gen::tests::a_swamp_is_moss_pools_and_mud`)
+
+#### Scenario: A fresh tier by a river holds its swamp's water
+
+- **WHEN** a column tier is built by a river in a version 11 world
+- **THEN** no water flows outside the river's banks: the swamp's pools are
+  held and no cave opens under a swamp's top 6 m
+  (`planet::column::river_tier_tests::a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`)
 
 #### Scenario: An old world
 

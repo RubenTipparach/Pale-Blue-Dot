@@ -22,10 +22,10 @@ muddy beach. It is there; a player does not see it as a place.
   land, where it was 1.2%: from the jungle (24.96 to 20.77%) and the fields
   (26.10 to 24.90%). No height moves, so the rivers, the sea, the caves and
   the sites are version 10's.
-- **Swamp ground in patches** (decision 3): standing water where the ground
-  holds a pool, mud about the wettest patches, swamp moss between; the
-  coast's lowest layer as version 10 has it. Measured: moss 58%, water 17%,
-  mud 26%.
+- **Swamp ground** (decision 3): standing water wherever the ground round
+  a cell holds a pool, mud in the wettest patches, swamp moss between; the
+  coast's lowest layer as version 10 has it; no cave under a swamp's top
+  6 m, so no pool drains. Measured: moss 66%, water 9%, mud 25%.
 - **Willows** on the moss at the table's swamp rate (version 10's, unchanged).
 - **Reeds** (decision 5): the swamp's ferns drawn as M13's reeds, as the
   approved foliage mockup draws them. Draw-time, so every version's swamps
@@ -38,7 +38,8 @@ muddy beach. It is there; a player does not see it as a place.
 ## Impact
 
 - `pbd-core`: `planet_gen.rs` (`Swamps`, `swamp_holds`, `swamp_patch`,
-  V11, `climate_ground`, `site_ground`), `rivers.rs` (`beside`),
+  `swamp_pool_held`, V11, `climate_ground`, `site_ground`), `column.rs`
+  (the swamp's cave seal), `rivers.rs` (`beside`),
   `terrain.rs` (`GENERATOR_VERSION = 11`), `atmosphere/mod.rs` (reads
   `climate_ground`).
 - `pbd-app`: `planet_surface.wgsl` (reeds); the map needs no change.

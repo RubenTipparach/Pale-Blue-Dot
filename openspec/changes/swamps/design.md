@@ -82,16 +82,29 @@ needs either a taller coastal band or the rivers, and the design takes both.
    | Fields | 26.10 | 24.90 |
    | Desert, Beach, Mountains, Tundra | unchanged | unchanged |
 
-3. **The ground** (`top_material`, version 11's swamp branch). A patch field
-   (`swamp_patch`, 36 m) lays the swamp out: a cell is **water** where the
-   field is over `pool_above` (0.47) and the ground round it holds a pool
-   (`rivers::rimmed`, the rule version 8 made for the marsh: no neighbour
-   2.9 m out is lower), and in the coast's lowest layer as version 10 has
-   it; **mud** (`Dirt`) where it holds no pool and the field is over
-   `mud_above` (0.58), and in the coast's second layer; **swamp moss**
-   (`Grass`, drawn with the swamp sheet's moss) elsewhere. Measured: moss
-   58%, water 17%, mud 26% (version 10: 29, 7, 64). A pool stands only where
-   it is held, so no swamp water spills.
+3. **The ground** (`top_material`, version 11's swamp branch). A cell is
+   **water** where the ground round it holds a pool
+   (`swamp_pool_held`): every point of three rings of sixteen, at 2.5, 2.9
+   and 3.3 m (the spread of the cells' widths), stands at least 0.25 m over
+   the pool's floor, so no neighbour, whichever way it lies, is lower; and
+   in the coast's lowest layer as version 10 has it. A patch field
+   (`swamp_patch`, 36 m) gates where pools may stand (over `pool_above`,
+   0.3: nearly everywhere) and lays the **mud** (`Dirt`): a cell that holds
+   no pool is mud where the field is over `mud_above` (0.6), and in the
+   coast's second layer; **swamp moss** (`Grass`, drawn with the swamp
+   sheet's moss) elsewhere. Measured: moss 66%, water 9%, mud 25% (version
+   10: 29, 7, 64).
+
+   Version 8's `rivers::rimmed` (six points at 2.9 m) was tried first and
+   measured to spill: a fresh tier by a river
+   (`river_tier_tests::a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`)
+   held 1,761 flowing cells outside a river's banks, pools running over
+   their rims between the six points and draining into caves. Two changes
+   make the test pass with none: the three rings with their margin, and
+   **no cave opens within `SWAMP_SEAL_M` (6 m) of a version 11 swamp's
+   surface** (`column::generate_edited`, as a river's valley is sealed).
+   The rings cost up to 48 altitudes for a swamp cell, at generation only;
+   most cells fail on the first few.
 
 4. **Willows.** The tree table is version 10's (`TreeTable::V10`, the swamp
    67 in 256 of its moss cells, M13's `treeP` 0.26), the willow 0.75 and
@@ -149,3 +162,7 @@ needs either a taller coastal band or the rivers, and the design takes both.
   a later settle on the owner's machine can fold them in as its own change.
 - **A pool at a tier seam** is decided by the same pure function on both
   sides, so the tiers agree, as the version 8 marsh does.
+- **Generation cost of the pool rings** (decision 3): the river tier test
+  took 3 s with six points and about 14 s with the rings (this container,
+  under load from other jobs, so a rough figure). The owner's machine
+  should measure tier build time before and after (task 4.3).
