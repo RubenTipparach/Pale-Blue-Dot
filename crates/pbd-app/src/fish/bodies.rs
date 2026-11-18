@@ -8,12 +8,19 @@
 //! for the vertex colour). It is one unit long, head along +X and back along
 //! +Y. Parts that move (a duck's head, wings and feet, a ray's wings, a
 //! turtle's flippers, an octopus's arms, a clam's upper shell, a worm's
-//! plume) hang from pivots and are turned each frame by [`emit`], which also
-//! sways a swimmer from its tail and lays the posed creature into a school's
-//! mesh. All of it on the CPU, as the herd's rig is (`husbandry/rig.rs`).
+//! plume) hang from pivots and are turned each frame by [`emit`], which lays
+//! the posed creature into a mesh, as the herd's rig is (`husbandry/rig.rs`).
+//!
+//! A swimmer's body wave (`fish-behaviour` design 8) is the vertex shader's
+//! (`swim.wgsl`): [`emit_swimmer`] lays it rigid and writes, per vertex, the
+//! attributes the shader bends it by. [`emit`], for meshes drawn without
+//! them (the sea's places), bends it on the CPU by the same wave.
 
+use bevy::mesh::MeshVertexAttribute;
 use bevy::prelude::*;
+use bevy::render::render_resource::VertexFormat;
 use pbd_core::fauna::Pose;
+use pbd_core::fauna::swim::{Wave, WaveKind, WaveProfile};
 use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::OnceLock;
@@ -52,7 +59,7 @@ pub enum Kind {
     TubeWorm,
 }
 
-/// How a swimmer sways (the mockup's vertex shader).
+/// How a swimmer's body waves (`fish-behaviour` design 8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sway {
     None,
@@ -75,6 +82,13 @@ pub struct Body {
     /// Where its nose is along +X, model units: the front of the model,
     /// where a fish's mouth is.
     pub nose: f32,
+    /// A swimmer's spine, nose to tail, model units: its body wave's `u`
+    /// runs 0 to 1 along it (a ray's whip beyond 1). And how far its widest
+    /// point stands off the spine, model units (a ray's wing span).
+    pub spine: f32,
+    pub span: f32,
+    /// Its row of the body-wave table the shader reads ([`wave_rows`]).
+    pub wave_row: u32,
 }
 
 impl Body {
@@ -898,6 +912,10 @@ fn m9_body(p: &FishPlan) -> Body {
     let mut body = Body::new(kind, sway, m9_fish(p), Vec::new());
     // M9 builds a fish of length one and scales it by the species' length.
     body.length = 1.0;
+    // A ray's disc is the length; its whip runs on past it (`u` over 1).
+    if p.flat {
+        body.spine = 1.0;
+    }
     body
 }
 
@@ -914,6 +932,9 @@ impl Body {
             parts,
             length: 1.0,
             nose: 0.0,
+            spine: 1.0,
+            span: 0.0,
+            wave_row: 0,
         };
         let axis = |p: Vec3| if kind == Kind::TubeWorm { p.y } else { p.x };
         let mut lo = f32::INFINITY;
@@ -935,7 +956,31 @@ impl Body {
             .map(|p| p.x)
             .fold(f32::NEG_INFINITY, f32::max)
             .max(0.0);
+        let tail = body
+            .base
+            .positions
+            .iter()
+            .map(|p| p.x)
+            .fold(f32::INFINITY, f32::min);
+        body.spine = (body.nose - tail).max(1e-3);
+        body.span = body
+            .base
+            .positions
+            .iter()
+            .map(|p| p.z.abs())
+            .fold(0.0, f32::max)
+            .max(1e-3);
         body
+    }
+
+    /// Its body wave, if it is a swimmer.
+    pub fn wave_kind(&self) -> Option<WaveKind> {
+        match self.sway {
+            Sway::None => None,
+            Sway::Fish => Some(WaveKind::Fish),
+            Sway::Eel => Some(WaveKind::Eel),
+            Sway::Ray => Some(WaveKind::Ray),
+        }
     }
 }
 
@@ -1038,26 +1083,12 @@ pub const MODELS: &[&str] = &[
 /// `id % VARIANTS` (`ocean-environments` B14), the hen for every second
 /// reed dabbler, and the minnow's for a species with none.
 pub fn model_for(species: &str, id: u32) -> &'static Body {
-    static FISH: OnceLock<HashMap<(String, u32), Body>> = OnceLock::new();
-    static OTHERS: OnceLock<HashMap<&'static str, Body>> = OnceLock::new();
-    let fish = FISH.get_or_init(|| {
-        atlas()
-            .fish
-            .iter()
-            .map(|plan| ((plan.id.clone(), plan.variant), m9_body(plan)))
-            .collect()
-    });
+    let fish = fish_bodies();
     let variant = id % VARIANTS;
     if let Some(body) = fish.get(&(species.to_string(), variant)) {
         return body;
     }
-    let others = OTHERS.get_or_init(|| {
-        MODELS
-            .iter()
-            .filter(|m| !fish.contains_key(&(m.to_string(), 0)))
-            .map(|m| (*m, build(m)))
-            .collect()
-    });
+    let others = other_bodies();
     let name = match species {
         "reed_dabbler" if id % 2 == 1 => "dabbler_hen",
         "reed_dabbler" => "dabbler_drake",
@@ -1066,6 +1097,84 @@ pub fn model_for(species: &str, id: u32) -> &'static Body {
     others
         .get(name)
         .unwrap_or_else(|| &fish[&("minnow".to_string(), variant)])
+}
+
+/// Every M9 fish's body by species and variant, each given its row of the
+/// body-wave table in the plans' order.
+fn fish_bodies() -> &'static HashMap<(String, u32), Body> {
+    static FISH: OnceLock<HashMap<(String, u32), Body>> = OnceLock::new();
+    FISH.get_or_init(|| {
+        atlas()
+            .fish
+            .iter()
+            .enumerate()
+            .map(|(row, plan)| {
+                let mut body = m9_body(plan);
+                body.wave_row = row as u32;
+                ((plan.id.clone(), plan.variant), body)
+            })
+            .collect()
+    })
+}
+
+/// Every other model's body, its rows after the fish's in `MODELS` order.
+fn other_bodies() -> &'static HashMap<&'static str, Body> {
+    static OTHERS: OnceLock<HashMap<&'static str, Body>> = OnceLock::new();
+    OTHERS.get_or_init(|| {
+        let fish = fish_bodies();
+        let first = atlas().fish.len();
+        MODELS
+            .iter()
+            .filter(|m| !fish.contains_key(&(m.to_string(), 0)))
+            .enumerate()
+            .map(|(k, m)| {
+                let mut body = build(m);
+                body.wave_row = (first + k) as u32;
+                (*m, body)
+            })
+            .collect()
+    })
+}
+
+/// One row of the body-wave table per body, in row order: its wave and its
+/// span over its spine (a ray's wing in body lengths). `swim.wgsl` reads a
+/// row by the index each vertex carries; the numbers of each wave come from
+/// `fauna.ron` ([`wave_table`]).
+pub fn wave_rows() -> Vec<(Option<WaveKind>, f32)> {
+    let mut rows: Vec<(u32, Option<WaveKind>, f32)> = fish_bodies()
+        .values()
+        .chain(other_bodies().values())
+        .map(|b| (b.wave_row, b.wave_kind(), b.span / b.spine))
+        .collect();
+    rows.sort_by_key(|r| r.0);
+    rows.into_iter().map(|(_, k, s)| (k, s)).collect()
+}
+
+/// A body-wave table row as `swim.wgsl`'s `SwimRow` reads it: waves,
+/// exponent, head, recoil; recoil reach, kind (0 a swimmer, 1 a ray), span,
+/// wing exponent; wing waves, flap, whip, nothing.
+pub fn wave_row(kind: Option<WaveKind>, span: f32, w: &WaveProfile) -> [[f32; 4]; 3] {
+    let ray = if kind == Some(WaveKind::Ray) {
+        1.0
+    } else {
+        0.0
+    };
+    [
+        [w.waves, w.expo, w.head, w.recoil],
+        [w.recoil_reach, ray, span, w.wing_expo],
+        [w.wing_waves, w.flap, w.whip, 0.0],
+    ]
+}
+
+/// The whole table, from the waves in `fauna.ron`.
+pub fn wave_table(s: &pbd_core::fauna::BehaviourSettings) -> Vec<[[f32; 4]; 3]> {
+    wave_rows()
+        .into_iter()
+        .map(|(kind, span)| {
+            let w = kind.map_or(&s.fish_wave, |k| s.wave(k));
+            wave_row(kind, span, w)
+        })
+        .collect()
 }
 
 /// Whether a species has a model of its own.
@@ -1148,32 +1257,72 @@ fn animate(kind: Kind, name: &str, index: usize, yaw: f32, look: &Look) -> (Quat
     }
 }
 
-/// The sway of a swimmer's vertex at `p`, model units.
-fn sway(kind: Sway, p: Vec3, look: &Look) -> Vec3 {
-    let x = p.x;
-    match kind {
-        Sway::None => Vec3::ZERO,
-        Sway::Fish => {
-            let w = ((0.3 - x) / 0.8).clamp(0.0, 1.0);
-            Vec3::Z * (look.t * 7.0 + look.phase - x * 6.0).sin() * 0.075 * w * w
-        }
-        Sway::Eel => {
-            let w = ((0.55 - x) / 1.0).clamp(0.15, 1.0);
-            Vec3::Z * (look.t * 3.5 + look.phase - x * 13.0).sin() * 0.06 * w
-        }
-        Sway::Ray => {
-            // M9's `swim` for the flat plan.
-            let ph = look.phase + look.t * 1.6;
-            let s = 0.5 - x;
-            let zz = p.z.abs() / 0.44;
-            let flap = 0.07 * (ph - s * 2.5).sin() * zz * zz;
-            let whip = if s > 1.0 {
-                0.05 * (ph * 0.7 - s * 3.0).sin() * (s - 1.0)
-            } else {
-                0.0
-            };
-            Vec3::new(0.0, flap, whip)
-        }
+/// The body wave's per-vertex attributes (`swim.wgsl`): the creature's side
+/// and up, scaled to metres a body length (its spine), with `u` (0 nose to 1
+/// tail) and its row of the table; its wave's phase, amplitude and bend, and
+/// the vertex's distance off the spine, body lengths.
+pub const ATTRIBUTE_SWIM_AXES: MeshVertexAttribute =
+    MeshVertexAttribute::new("Swim_Axes", 0x5eed_f15b_0001, VertexFormat::Float32x4);
+pub const ATTRIBUTE_SWIM_WAVE: MeshVertexAttribute =
+    MeshVertexAttribute::new("Swim_Wave", 0x5eed_f15b_0002, VertexFormat::Float32x4);
+pub const ATTRIBUTE_SWIM_UP: MeshVertexAttribute =
+    MeshVertexAttribute::new("Swim_Up", 0x5eed_f15b_0003, VertexFormat::Float32x4);
+
+/// `swim.wgsl`'s bend of a model point `p` by `wave` (`fish-behaviour`
+/// design 8.2), in model units: for meshes drawn without the shader's
+/// attributes. The shader is the one the schools are drawn with; this is
+/// the same maths, on the CPU.
+fn bend(body: &Body, p: Vec3, wave: Wave, w: &WaveProfile) -> Vec3 {
+    let Some(kind) = body.wave_kind() else {
+        return p;
+    };
+    if wave.amp == 0.0 && wave.bend == 0.0 {
+        return p;
+    }
+    let spine = body.spine;
+    let u = (body.nose - p.x) / spine;
+    let d = p.z / spine;
+    if kind == WaveKind::Ray {
+        let span = body.span / spine;
+        let sp = (d.abs() / span).clamp(0.0, 1.0);
+        let sg = if d < 0.0 { -1.0 } else { 1.0 };
+        let k = TAU * w.wing_waves * (1.0 - w.flap);
+        let a = k * u.clamp(0.0, 1.0) - wave.phase;
+        let inner = 1.0 - (wave.bend * sg * 6.0).clamp(-0.6, 0.6);
+        let g = wave.amp * inner * sp.max(1e-3).powf(w.wing_expo) * a.sin();
+        let tail = (u - 1.0).max(0.0);
+        let whip =
+            w.whip * tail * (TAU * 1.2 * u - 0.7 * wave.phase).sin() + wave.bend * u * u * 0.5;
+        return p + Vec3::new(0.0, g, whip) * spine;
+    }
+    let (f, df) = pbd_core::fauna::swim::lateral(u, wave, w);
+    let slope = -df;
+    let c = 1.0 / (1.0 + slope * slope).sqrt();
+    let sn = slope * c;
+    p + Vec3::new(-d * sn, 0.0, f + d * (c - 1.0)) * spine
+}
+
+/// The wave a creature drawn without the shader's attributes swims with:
+/// cruising, its beat at two body lengths a second, from the world clock.
+pub fn cruising(body: &Body, look: &Look) -> Wave {
+    let w = match body.wave_kind() {
+        Some(WaveKind::Eel) => WaveProfile::EEL,
+        Some(WaveKind::Ray) => WaveProfile::RAY,
+        _ => WaveProfile::FISH,
+    };
+    let hz = (w.beat_rest_hz + w.beat_per_len_hz * 2.0).min(w.beat_max_hz);
+    Wave {
+        phase: (look.phase + TAU * hz * look.t).rem_euclid(TAU),
+        amp: w.amp_cruise,
+        bend: 0.0,
+    }
+}
+
+fn profile_of(body: &Body) -> WaveProfile {
+    match body.wave_kind() {
+        Some(WaveKind::Eel) => WaveProfile::EEL,
+        Some(WaveKind::Ray) => WaveProfile::RAY,
+        _ => WaveProfile::FISH,
     }
 }
 
@@ -1199,6 +1348,22 @@ pub fn emit(
     colours: &mut Vec<[f32; 4]>,
     uvs: &mut Vec<[f32; 2]>,
 ) {
+    let wave = cruising(body, look);
+    emit_with(body, look, place, tint, Some(wave), positions, colours, uvs);
+}
+
+/// Lay a creature, its base bent on the CPU by `wave` (none: as modelled).
+#[allow(clippy::too_many_arguments)]
+fn emit_with(
+    body: &Body,
+    look: &Look,
+    place: &Place,
+    tint: [f32; 3],
+    wave: Option<Wave>,
+    positions: &mut Vec<[f32; 3]>,
+    colours: &mut Vec<[f32; 4]>,
+    uvs: &mut Vec<[f32; 2]>,
+) {
     let side = place.forward.cross(place.up);
     // A model turned for the pose before it is placed: a dabbler upended,
     // nose down about its own across axis (the mockup's -1.7 rad).
@@ -1218,8 +1383,10 @@ pub fn emit(
             .to_array()
     };
     let tinted = |c: [f32; 4]| [c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0];
+    let profile = profile_of(body);
     for (p, c) in body.base.positions.iter().zip(&body.base.colours) {
-        positions.push(to_world(*p + sway(body.sway, *p, look)));
+        let p = wave.map_or(*p, |w| bend(body, *p, w, &profile));
+        positions.push(to_world(p));
         colours.push(tinted(*c));
     }
     uvs.extend_from_slice(&body.base.uvs);
@@ -1231,5 +1398,62 @@ pub fn emit(
             colours.push(tinted(*c));
         }
         uvs.extend_from_slice(&part.shape.uvs);
+    }
+}
+
+/// The body-wave attributes of a mesh being built, one of each per vertex.
+#[derive(Default)]
+pub struct SwimAttributes {
+    pub axes: Vec<[f32; 4]>,
+    pub wave: Vec<[f32; 4]>,
+    pub up: Vec<[f32; 4]>,
+}
+
+/// Lay one creature into a school's mesh as [`emit`] does, but rigid, with
+/// the attributes `swim.wgsl` bends it by: its `wave` (a swimmer's; `None`
+/// for one with no body wave, whose attributes are zero and which the
+/// shader leaves as laid).
+#[allow(clippy::too_many_arguments)]
+pub fn emit_swimmer(
+    body: &Body,
+    look: &Look,
+    place: &Place,
+    tint: [f32; 3],
+    wave: Option<Wave>,
+    positions: &mut Vec<[f32; 3]>,
+    colours: &mut Vec<[f32; 4]>,
+    uvs: &mut Vec<[f32; 2]>,
+    swim: &mut SwimAttributes,
+) {
+    let first = positions.len();
+    // The base laid rigid; its moving parts posed on the CPU.
+    emit_with(body, look, place, tint, None, positions, colours, uvs);
+    let laid = positions.len() - first;
+    let base = body.base.positions.len();
+    let side = place.forward.cross(place.up);
+    let metres = place.scale * body.spine;
+    match wave.filter(|_| body.wave_kind().is_some()) {
+        Some(w) => {
+            let axes = (side * metres).extend(0.0);
+            let up = (place.up * metres).extend(body.wave_row as f32);
+            for p in &body.base.positions {
+                let u = (body.nose - p.x) / body.spine;
+                swim.axes.push([axes.x, axes.y, axes.z, u]);
+                swim.wave.push([w.phase, w.amp, w.bend, p.z / body.spine]);
+                swim.up.push(up.to_array());
+            }
+            for _ in base..laid {
+                swim.axes.push([0.0; 4]);
+                swim.wave.push([0.0; 4]);
+                swim.up.push([0.0; 4]);
+            }
+        }
+        None => {
+            for _ in 0..laid {
+                swim.axes.push([0.0; 4]);
+                swim.wave.push([0.0; 4]);
+                swim.up.push([0.0; 4]);
+            }
+        }
     }
 }
