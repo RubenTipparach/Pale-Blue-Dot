@@ -476,6 +476,20 @@ fn in_frustum(center: vec3<f32>, radius: f32) -> bool {
     return true;
 }
 
+// A segment from `a` to `b` thickened by `radius` (a capsule): out only when
+// both ends are past one plane by more than the radius.
+fn in_frustum_segment(a: vec3<f32>, b: vec3<f32>, radius: f32) -> bool {
+    let rows = transpose(params.clip_from_body);
+    let planes = array<vec4<f32>,6>(rows[3]+rows[0], rows[3]-rows[0],
+        rows[3]+rows[1], rows[3]-rows[1], rows[2], rows[3]-rows[2]);
+    for (var i=0u; i<6u; i++) {
+        let plane = planes[i];
+        let margin = -(radius+0.01)*length(plane.xyz);
+        if dot(plane,vec4(a,1.)) < margin && dot(plane,vec4(b,1.)) < margin { return false; }
+    }
+    return true;
+}
+
 fn terrain_bound(cell: Cell, center: vec3<f32>, top: f32) -> f32 {
     var radius_squared = 0.0;
     // Bound every cap and exposed wall endpoint, including the bottom of a
@@ -635,9 +649,15 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // purpose: the tier is a few thousand cells inside ninety metres, so the
     // tight bound - which would mean binding the runs to this pass as well -
     // buys nothing a profile could see.
+    // `gpu-cuts` 1: tested as what it is, a segment from the span's floor to
+    // its cap thickened by the cap's own bound, not a sphere round the cap as
+    // wide as the whole span: that sphere was 145 m or more for every column,
+    // so every column of the tier was drawn into every cascade and the
+    // camera's view whatever it looked at. The segment's test is exact for
+    // that shape and never rejects a face the sphere kept in view.
     if now && has_column(cell,center) {
-        let span = cell.direction_height.w - COLUMN_BASE_M;
-        if in_frustum(center,terrain_bound(cell,center,surface_radius)+span) {
+        let floor_at = cell.direction_height.xyz*(radius + COLUMN_BASE_M);
+        if in_frustum_segment(floor_at,center,terrain_bound(cell,center,surface_radius)) {
             let slot = atomicAdd(&args[4].instance_count,1u);
             column[slot] = id.x;
         }

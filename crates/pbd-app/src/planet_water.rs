@@ -140,8 +140,9 @@ pub(super) struct WaterView {
     sea: SeaView,
     /// x how far the sheet sits below sea level, m; y the surface of the
     /// water the eye is in or over, a body radius: an inland water's drawn
-    /// top (`inland_surface`), else the sea's tided surface at the eye; zw
-    /// the water's easing between ticks.
+    /// top (`inland_surface`), else the sea's tided surface at the eye; z
+    /// seconds since the water was meshed, w the tick's length: the clock
+    /// the flowing water's vertices ease on.
     sea_frame: Vec4,
     /// The lens mist (`lens-weather`): seconds to mist over and to clear
     /// standing still, how much faster per m/s of airspeed, its strength.
@@ -1881,8 +1882,8 @@ fn prepare_water_views(
                 .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
             // y the surface of the water the eye is in or over (B17, B18);
-            // z and w the water's easing
-            // between ticks, smoothstepped and linear (`water_flow::WaterEase`).
+            // z the seconds since the water was meshed and w the tick, the
+            // clock every vertex's ease runs on (`water_flow::WaterEase`).
             sea_frame: Vec4::new(
                 s.depth_offset_m,
                 // The sea's own surface over the eye is its tided, swelling
@@ -1891,8 +1892,8 @@ fn prepare_water_views(
                 // An eye in the air is over the same tided sea (`fishing-and-equipment`
                 // design 4, `ocean-environments` B21): one helper says it.
                 composite_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here),
-                ease.smooth,
-                ease.linear,
+                ease.since_mesh_s,
+                pbd_core::liquid::TICK_S,
             ),
             mist: Vec4::new(
                 weather_settings.lens_mist_fog_s,
@@ -3016,9 +3017,12 @@ mod tests {
         app.add_plugins((MinimalPlugins, TransformPlugin));
         install_eye_water(&mut app);
         let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
-        app.insert_resource(PlanetRenderFrame { center: offset })
-            .insert_resource(contact)
-            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        app.insert_resource(PlanetRenderFrame {
+            center: offset,
+            origin: bevy::math::DVec3::ZERO,
+        })
+        .insert_resource(contact)
+        .insert_resource(crate::planet::PlanetFine { set, version: 1 });
         let above = (offset + (ocean * (terrain::PLANET_RADIUS + 3.0)).as_dvec3()).as_vec3();
         let below = (offset + (ocean * (terrain::PLANET_RADIUS - 2.0)).as_dvec3()).as_vec3();
         let parked = app
@@ -3120,9 +3124,12 @@ mod tests {
         app.add_plugins((MinimalPlugins, TransformPlugin));
         install_eye_water(&mut app);
         let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
-        app.insert_resource(PlanetRenderFrame { center: offset })
-            .insert_resource(contact)
-            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        app.insert_resource(PlanetRenderFrame {
+            center: offset,
+            origin: bevy::math::DVec3::ZERO,
+        })
+        .insert_resource(contact)
+        .insert_resource(crate::planet::PlanetFine { set, version: 1 });
         let at = |m: f32| (offset + (river * (terrain::PLANET_RADIUS + m)).as_dvec3()).as_vec3();
         let camera = app
             .world_mut()
@@ -3859,5 +3866,140 @@ mod sea_cave_report {
             "pockets under no sheet {}, under the sheet {}",
             pockets[0], pockets[1]
         );
+    }
+}
+
+/// MEASUREMENT (`ocean-environments` B22 follow-up, the owner's dug beach):
+/// every cell of a beach round a place dug one and two layers down through
+/// the edit's own path (`FineSet::write_layer`, the relight, `mark_sea`), as
+/// a player's dig is, and again rebuilt from the save (a reload). A dug cell
+/// is a hole in the sea where its ground is under the high water and yet no
+/// sheet lies over it and no water stands at the sea's top in its column.
+/// `PBD_AT='lat lon'`, `PBD_SPAN` metres each way, `PBD_ALL` every cell.
+#[cfg(test)]
+mod sea_hole_dig_report {
+    use crate::planet::column::{DRY_SHEET_BIT, SEA_REACH_BIT, sea_layer, sheet_listed};
+    use crate::planet::lod::FineSet;
+    use crate::planet::terrain;
+    use bevy::math::Vec3;
+    use pbd_core::edits::{Edit, Edits};
+    use pbd_core::terrain::Material;
+
+    #[test]
+    #[ignore = "a report: PBD_AT='39.725 15.339' cargo test -p pbd-app sea_hole_dig_report -- --ignored --nocapture"]
+    fn sea_hole_dig_report() {
+        let at = std::env::var("PBD_AT").unwrap_or_else(|_| "39.725 15.339".into());
+        let v: Vec<f32> = at
+            .split_whitespace()
+            .filter_map(|x| x.parse().ok())
+            .collect();
+        let span: f32 = std::env::var("PBD_SPAN")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10.0);
+        let up = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: v[0].to_radians(),
+            lon: v[1].to_radians(),
+        });
+        let settings = crate::config::ColumnSettings::default();
+        let set = crate::planet::lod::generate_fine(up, &settings, &Edits::new());
+        let sea = sea_layer();
+        let high = terrain::high_water_m();
+        let r = terrain::PLANET_RADIUS;
+        let (n, e) = pbd_core::geo::compass_north_east(up);
+        let hole = |set: &FineSet, record: usize| {
+            let cell = &set.levels[3][record];
+            let column = set.columns.column(record).unwrap();
+            cell.direction_height[3] < high
+                && !sheet_listed(cell)
+                && !column.material(sea - 1).is_water()
+        };
+        let stack = |set: &FineSet, record: usize| -> String {
+            let column = set.columns.column(record).unwrap();
+            (sea - 4..sea + 3)
+                .map(|l| match column.material(l) {
+                    Material::Air => '.',
+                    m if m.is_water() => 'w',
+                    _ => '#',
+                })
+                .collect()
+        };
+        let (mut tried, mut holes) = (0, 0);
+        for (record, cell) in set.levels[3].iter().enumerate() {
+            let p = Vec3::from_slice(&cell.direction_height[..3]);
+            let off = (p - up) * r;
+            let (j, i) = (off.dot(n), off.dot(e));
+            if j.abs() > span || i.abs() > span {
+                continue;
+            }
+            let Some(column) = set.columns.column(record) else {
+                continue;
+            };
+            let Some(top) = column.surface() else {
+                continue;
+            };
+            let h = cell.direction_height[3];
+            // A beach: ground a little under the sea's top layer or over it.
+            if top + 3 < sea || top > sea + 1 {
+                continue;
+            }
+            // What a player does there, layer by layer from the ground's top:
+            // dig one, dig two, put a block of dirt on it and take it back,
+            // dig one and fill it with dirt and dig it again, and put dirt in
+            // the water over it and take it back with the ground under it.
+            let (a, d) = (Material::Air, Material::Dirt);
+            let scenarios: [(&str, &[(isize, Material)]); 5] = [
+                ("dig 1", &[(0, a)]),
+                ("dig 2", &[(0, a), (-1, a)]),
+                ("place+take", &[(1, d), (1, a)]),
+                ("dig,fill,dig", &[(0, a), (0, d), (0, a), (-1, a)]),
+                ("water dirt+dig", &[(1, d), (1, a), (0, a)]),
+            ];
+            for (depth, (name, steps)) in scenarios.iter().enumerate() {
+                let depth = format!("{depth} {name}");
+                let mut dug = set.clone();
+                let mut edits = Edits::new();
+                for &(k, material) in steps.iter() {
+                    let layer = (top as isize + k) as usize;
+                    edits.set(Edit {
+                        cell: cell.key(),
+                        layer: layer as u16,
+                        material,
+                    });
+                    dug.write_layer(record, layer, material, &edits);
+                    dug.columns.relight();
+                    dug.mark_sea();
+                }
+                dug.columns.relight();
+                dug.mark_sea();
+                tried += 1;
+                let live = hole(&dug, record);
+                // And as a reload builds it, from the save.
+                let reload = crate::planet::lod::generate_fine(up, &settings, &edits);
+                let reloaded = reload.levels[3]
+                    .iter()
+                    .position(|c| c.key() == cell.key())
+                    .is_some_and(|rec| reload.columns.column(rec).is_some() && hole(&reload, rec));
+                let after = &dug.levels[3][record];
+                let line = format!(
+                    "cell {} at n {j:+.1} e {i:+.1}: top {:+} h {h:.2} -> {:.2}, dug {depth}: [{}] -> [{}] reach {} dry {} listed {} | hole live {live} reload {reloaded}",
+                    cell.key(),
+                    top as i32 - sea as i32,
+                    after.direction_height[3],
+                    stack(&set, record),
+                    stack(&dug, record),
+                    after.spare[2] & SEA_REACH_BIT != 0,
+                    after.spare[2] & DRY_SHEET_BIT != 0,
+                    sheet_listed(after),
+                );
+                if live || reloaded {
+                    holes += 1;
+                    println!("HOLE {line}");
+                } else if std::env::var("PBD_ALL").is_ok() {
+                    println!("ok   {line}");
+                }
+            }
+        }
+        println!("dug {tried}, holes {holes} (high water {high:.2} m, sea layer {sea})");
     }
 }

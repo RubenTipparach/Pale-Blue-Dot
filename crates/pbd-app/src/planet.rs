@@ -175,8 +175,12 @@ pub(crate) fn column_first_vertex() -> u32 {
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
 #[derive(Resource, Clone, Copy, Default, ExtractResource)]
-pub(crate) struct PlanetRenderFrame {
-    pub(crate) center: DVec3,
+pub struct PlanetRenderFrame {
+    /// The planet's centre in render space (`movement-smoothness` design 6):
+    /// `-origin` in play.
+    pub center: DVec3,
+    /// The render origin, in physics space: render = physics - origin.
+    pub origin: DVec3,
 }
 
 pub(crate) fn update_planet_frame(
@@ -185,11 +189,18 @@ pub(crate) fn update_planet_frame(
     mut render_frame: ResMut<PlanetRenderFrame>,
 ) {
     if let Some(body) = scene.states.first() {
-        render_frame.center = body.position - frame.0.origin;
+        render_frame.center = body.position - frame.0.origin - render_frame.origin;
     }
 }
 
 impl PlanetRenderFrame {
+    /// The planet's centre in physics space (Avian's `Position`): 0 in play.
+    /// A `Position` is planet-local as `position - physics_center()`, never
+    /// `- center`, which is render space.
+    pub fn physics_center(self) -> DVec3 {
+        self.center + self.origin
+    }
+
     fn camera_and_clip(
         self,
         world_from_view: &GlobalTransform,
@@ -364,7 +375,9 @@ impl Plugin for PlanetPlugin {
         .add_systems(Update, (lod::switch_dusk_lamps, lod::refresh_lod).chain())
         .add_systems(
             PostUpdate,
-            update_planet_frame.before(TransformSystems::Propagate),
+            (crate::render_origin::rebase, update_planet_frame)
+                .chain()
+                .before(TransformSystems::Propagate),
         )
         .add_systems(Update, |time: Res<Time>, mut clock: ResMut<PlanetClock>| {
             clock.0 = time.elapsed_secs();
@@ -1753,8 +1766,8 @@ impl SpecializedRenderPipeline for PlanetPipeline {
                 } else {
                     "fragment"
                 })),
+                shader_defs: terrain_off_defs(),
                 targets,
-                ..default()
             }),
             primitive: PrimitiveState {
                 cull_mode: Some(Face::Back),
@@ -2368,21 +2381,40 @@ fn draw_terrain<'w>(
 ) {
     pass.set_bind_group(1, &maps.bind_group, &[]);
     pass.set_bind_group(2, receiver, &[]);
-    pass.set_bind_group(0, &view.draw_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 0);
-    pass.set_bind_group(0, &view.foliage_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 16);
-    // The near trees, one draw per species (`flora-v2` design 10.5).
-    pass.set_bind_group(0, &view.near_bind_group, &[]);
-    for s in 0..8 {
-        pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+    let skip = terrain_skip();
+    if !skip.contains("ground") {
+        pass.set_bind_group(0, &view.draw_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 0);
     }
-    pass.set_bind_group(0, &view.clutter_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 48);
+    if !skip.contains("trees") {
+        pass.set_bind_group(0, &view.foliage_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 16);
+    }
+    // The near trees, one draw per species (`flora-v2` design 10.5).
+    if !skip.contains("near") {
+        pass.set_bind_group(0, &view.near_bind_group, &[]);
+        for s in 0..8 {
+            pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+        }
+    }
+    if !skip.contains("clutter") {
+        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 48);
+    }
     // The inside of the world, last: everything before it is the surface,
     // and a cave face is only ever seen through a hole in that surface.
-    pass.set_bind_group(0, &view.column_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 64);
+    if !skip.contains("column") {
+        pass.set_bind_group(0, &view.column_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 64);
+    }
+}
+
+/// A pricing instrument (`play-frame-budget`): `PBD_TERRAIN_SKIP=ground,trees,
+/// near,clutter,column` leaves those draws out of the terrain pass, so a
+/// sitting can price each draw's share on the same replay.
+fn terrain_skip() -> &'static str {
+    static SKIP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SKIP.get_or_init(|| std::env::var("PBD_TERRAIN_SKIP").unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -2817,4 +2849,18 @@ pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
     let mut contact = PlanetContact::new(Arc::new(lod::base_records(&cells)), &cells);
     contact.set_fine(&set);
     (PlanetFine { set, version: 1 }, contact)
+}
+
+/// A pricing instrument (`play-frame-budget`), not a setting:
+/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night,texture,season,fog,wet` compiles those parts
+/// out of the terrain's fragment shader, so a sitting can price each by what
+/// it saves on the same view. `flat` returns a grey after the cut-out test:
+/// what is left is the vertex shader, the raster and the depth test.
+fn terrain_off_defs() -> Vec<bevy::shader::ShaderDefVal> {
+    let off = std::env::var("PBD_TERRAIN_OFF").unwrap_or_default();
+    off.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("TERRAIN_OFF_{}", p.to_uppercase()).into())
+        .collect()
 }

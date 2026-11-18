@@ -17,6 +17,9 @@
 //! its water came from (S2) or grows down from the water over it (S3); a
 //! dried cell shrinks back toward where its water went and is drawn for that
 //! one tick only (S4). Fronts ease linearly, so a pour creeps at one speed.
+//! Every lane eases (position, flow, normal, sky), any change eases (a tick,
+//! an edit, a landing), and each vertex runs on its own clock so a remesh
+//! carries what is in flight (`carry`; "Water that dries eases out too").
 //! The rule, its tick and the save are untouched. `PBD_WATER_SMOOTH=0` draws
 //! each tick as it lands, as before.
 
@@ -55,8 +58,10 @@ pub const EASE_FRONT: u32 = 1;
 /// A dried cell's piece, or one a cell lost this tick: hidden once the
 /// tick has played.
 pub const EASE_GONE: u32 = 2;
-/// Lanes (vec4s) a vertex in the water pass's buffer.
-pub const LANES_PER_VERTEX: usize = 4;
+/// Lanes (vec4s) a vertex in the water pass's buffer: where it is and was,
+/// its normal, flow and sky now and the tick before, its flags and when its
+/// ease started (`vertex_flowing`).
+pub const LANES_PER_VERTEX: usize = 6;
 
 /// The game's own water as the water pass draws it (`water-flow` E6): four
 /// lanes a vertex, triangles end to end (`vertex_flowing` in `water.wgsl`),
@@ -70,12 +75,15 @@ pub struct FlowingWater {
 /// How far the drawing is through the tick that last landed: `linear`
 /// 0..1 for the fronts, `smooth` its smoothstep for the levels. Both 1 when
 /// the water is drawn as it is (`PBD_WATER_SMOOTH=0`, or the tick played).
+/// The water pass reads `since_mesh_s`: seconds since the mesh's epoch, the
+/// clock every vertex's own ease start is counted on.
 #[derive(
     Resource, Clone, Copy, Debug, PartialEq, bevy::render::extract_resource::ExtractResource,
 )]
 pub struct WaterEase {
     pub linear: f32,
     pub smooth: f32,
+    pub since_mesh_s: f32,
 }
 
 impl Default for WaterEase {
@@ -83,6 +91,7 @@ impl Default for WaterEase {
         Self {
             linear: 1.0,
             smooth: 1.0,
+            since_mesh_s: 2.0 * liquid::TICK_S,
         }
     }
 }
@@ -105,6 +114,9 @@ pub struct WaterStep {
     after: Option<(u64, usize)>,
     /// Seconds since the last tick landed.
     pub since_s: f32,
+    /// Seconds since the water was last meshed: the epoch every vertex's
+    /// ease start is counted from (design "Water that dries eases out too").
+    pub mesh_s: f32,
     /// A capture's frozen fraction of the tick (`--water-tick-frac`): the
     /// rule does not tick on its own while it is set.
     pub hold: Option<f32>,
@@ -118,6 +130,7 @@ impl Default for WaterStep {
             prev: None,
             after: None,
             since_s: liquid::TICK_S,
+            mesh_s: 2.0 * liquid::TICK_S,
             hold: None,
             smooth: std::env::var("PBD_WATER_SMOOTH").map_or(true, |v| v.trim() != "0"),
         }
@@ -141,11 +154,15 @@ impl FlowArrows {
 #[derive(Component)]
 struct ArrowMesh;
 
-/// Which fine set the mesher last made the water for.
+/// Which fine set the mesher last made the water for, that set (what the
+/// next change eases from when it is not a tick) and the mesh it made (what
+/// the next mesh carries an ease in flight on from).
 #[derive(Resource, Default)]
 struct Meshed {
     version: u64,
     set: usize,
+    last_set: Option<Arc<FineSet>>,
+    last: LiquidMesh,
 }
 
 /// Run `ticks` of the rule over the tier now, as a tick does: every change
@@ -163,7 +180,6 @@ pub fn run_ticks(
     if fine.set.columns.water.queue.is_empty() || ticks == 0 {
         return 0;
     }
-    let before = fine.set.clone();
     let mut set = (*fine.set).clone();
     let mut last_before: Option<Arc<FineSet>> = None;
     let mut ran = 0;
@@ -172,8 +188,8 @@ pub fn run_ticks(
         if set.columns.water.queue.is_empty() {
             break;
         }
-        // Only the last tick is eased across: keep the set before it (the
-        // one already published when it is the only tick).
+        // Only the last tick is eased across: keep the set before it (when
+        // it is the only tick, the set last meshed is).
         if step.smooth && i > 0 && i + 1 == ticks {
             last_before = Some(Arc::new(set.clone()));
         }
@@ -217,10 +233,11 @@ pub fn run_ticks(
     let made = Arc::as_ptr(&set) as usize;
     fine.set = set;
     fine.version += 1;
-    step.prev = if !step.smooth {
+    // One tick eases from the set last meshed (`rebuild_water`), which an
+    // edit landing in the same frame is already in; several at once ease
+    // across the last of them only.
+    step.prev = if !step.smooth || ticks == 1 {
         None
-    } else if ran == 1 && ticks == 1 {
-        Some(before)
     } else if ran == ticks {
         last_before
     } else {
@@ -243,6 +260,7 @@ fn tick_water(
     refresh: Option<Res<crate::planet::LodRefresh>>,
 ) {
     step.since_s += time.delta_secs();
+    step.mesh_s += time.delta_secs();
     if step.hold.is_some() {
         return;
     }
@@ -278,9 +296,15 @@ fn ease_water(step: Res<WaterStep>, mut ease: ResMut<WaterEase>) {
     } else {
         1.0
     };
+    let since_mesh_s = if !step.smooth {
+        2.0 * liquid::TICK_S
+    } else {
+        step.hold.map_or(step.mesh_s, |h| h * liquid::TICK_S)
+    };
     let want = WaterEase {
         linear,
         smooth: linear * linear * (3.0 - 2.0 * linear),
+        since_mesh_s,
     };
     if *ease != want {
         *ease = want;
@@ -341,6 +365,86 @@ pub struct FlowVertex {
     pub sky: f32,
     /// `EASE_FRONT` and `EASE_GONE`.
     pub flags: u32,
+    /// The normal, flow and sky the tick before: every lane eases, not only
+    /// the position, so a fall's froth slides with its lip rather than
+    /// jumping (design "Water that dries eases out too").
+    pub prev_normal: Vec3,
+    pub prev_flow: Vec3,
+    pub prev_sky: f32,
+    /// When its ease started, seconds against the mesh's epoch (0 the
+    /// change this mesh was made for; under 0 an ease carried on from an
+    /// earlier mesh).
+    pub start: f32,
+}
+
+impl FlowVertex {
+    /// How far through its ease it is at `now` seconds since its mesh's
+    /// epoch, eased as `vertex_flowing` eases it.
+    fn eased(&self, now: f32) -> (f32, f32) {
+        let f = ((now - self.start) / liquid::TICK_S).clamp(0.0, 1.0);
+        let t = if self.flags & EASE_FRONT != 0 {
+            f
+        } else {
+            f * f * (3.0 - 2.0 * f)
+        };
+        (f, t)
+    }
+
+    /// Where and how it is drawn at `now`: the from-lanes of an ease that
+    /// starts there.
+    fn drawn(&self, now: f32) -> (Vec3, Vec3, Vec3, f32) {
+        let (_, t) = self.eased(now);
+        (
+            self.prev.lerp(self.position, t),
+            self.prev_normal
+                .lerp(self.normal, t)
+                .normalize_or(self.normal),
+            self.prev_flow.lerp(self.flow, t),
+            self.prev_sky + (self.sky - self.prev_sky) * t,
+        )
+    }
+}
+
+/// One piece of one cell in the mesh's vertices: which piece (`ident`), its
+/// first vertex and how many it has. A later mesh finds the same piece by it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PieceSpan {
+    pub ident: u64,
+    pub first: u32,
+    pub n: u32,
+}
+
+/// A side piece pressed down: each vertex to the lowest of the piece's
+/// vertices on its own corner (its top sunk to its bottom).
+fn lowered(piece: &Piece) -> [Vec3; PIECE_MAX] {
+    let mut out = piece.positions();
+    let own = &piece.v[..piece.n];
+    for (o, v) in out.iter_mut().zip(own) {
+        let dir = v.p.normalize_or(Vec3::Y);
+        *o = own
+            .iter()
+            .map(|w| w.p)
+            .filter(|p| (p.normalize_or(Vec3::Y) - dir).length() < 1e-5)
+            .fold(
+                v.p,
+                |low, p| if p.length() < low.length() { p } else { low },
+            );
+    }
+    out
+}
+
+/// Set in a piece's name for the old face of a face that changed kind this
+/// tick, drawn beside the new one.
+const REKINDED: u64 = 0x40;
+
+/// A piece's name across meshes: the cell's key, its layer and which piece.
+fn ident(key: u32, layer: usize, id: PieceId) -> u64 {
+    let code = match id {
+        PieceId::Top => 0,
+        PieceId::Side(s) => 1 + s as u64,
+        PieceId::Bottom => 7,
+    };
+    u64::from(key) << 32 | (layer as u64) << 8 | code
 }
 
 /// A fall's foot: where it lands (body-local), how many layers it fell, the
@@ -418,6 +522,8 @@ pub struct LiquidMesh {
     pub dried: usize,
     /// The foot of every fall: what the splash draws from.
     pub feet: Vec<Foot>,
+    /// Every piece drawn, in the order its vertices are.
+    pub pieces: Vec<PieceSpan>,
 }
 
 /// The tangent frame the sea's fragment builds off a face (`fragment` in
@@ -437,6 +543,8 @@ impl LiquidMesh {
             out.push(v.normal.extend(v.kind).to_array());
             out.push(v.flow.extend(0.0).to_array());
             out.push(v.prev.extend(v.flags as f32).to_array());
+            out.push(v.prev_flow.extend(v.prev_sky).to_array());
+            out.push(v.prev_normal.extend(v.start).to_array());
         }
         out
     }
@@ -464,34 +572,50 @@ impl LiquidMesh {
             .extend([0, 1, 2, 0, 2, 3, 4, 5, 6].map(|i| base + i));
     }
 
-    /// One piece's vertices: where each is (`now`), where it was (`was`).
-    fn emit(&mut self, piece: &Piece, now: &[Vec3], was: &[Vec3], sky: f32, flags: u32) {
-        for ((v, &position), &prev) in piece.v[..piece.n].iter().zip(now).zip(was) {
+    /// One piece's vertices: where each is (`now`), where it was (`was`),
+    /// its other lanes now (`piece`) and the tick before (`from`, the same
+    /// piece last tick; the piece's own where it has none), its sky now and
+    /// before.
+    #[allow(clippy::too_many_arguments)]
+    fn emit(
+        &mut self,
+        key: u64,
+        piece: &Piece,
+        now: &[Vec3],
+        was: &[Vec3],
+        from: Option<&Piece>,
+        sky: (f32, f32),
+        flags: u32,
+    ) {
+        self.pieces.push(PieceSpan {
+            ident: key,
+            first: self.vertices.len() as u32,
+            n: piece.n as u32,
+        });
+        for (k, ((v, &position), &prev)) in piece.v[..piece.n].iter().zip(now).zip(was).enumerate()
+        {
+            let before = from.map_or(v, |f| &f.v[k]);
             self.vertices.push(FlowVertex {
                 position,
                 prev,
                 normal: v.n,
                 flow: v.flow,
                 kind: v.kind,
-                sky,
+                sky: sky.0,
                 flags,
+                prev_normal: before.n,
+                prev_flow: before.flow,
+                prev_sky: sky.1,
+                start: 0.0,
             });
         }
     }
 
     /// A piece drawn where it is, not moving.
-    fn emit_still(&mut self, piece: &Piece, sky: f32) {
-        for v in &piece.v[..piece.n] {
-            self.vertices.push(FlowVertex {
-                position: v.p,
-                prev: v.p,
-                normal: v.n,
-                flow: v.flow,
-                kind: v.kind,
-                sky,
-                flags: 0,
-            });
-        }
+    fn emit_still(&mut self, key: u64, piece: &Piece, sky: f32) {
+        let positions = piece.positions();
+        let now = &positions[..piece.n];
+        self.emit(key, piece, now, now, None, (sky, sky), 0);
     }
 }
 
@@ -671,6 +795,34 @@ pub fn drawn_top_m(tier: &ColumnTier, slot: usize, layer: usize) -> Option<f32> 
     Some(column::layer_altitude(layer) + mean)
 }
 
+/// The level of each corner of the water cell's top, a fraction of its
+/// layer: full where water stands on it, else Luanti's corner level.
+fn top_levels(tier: &ColumnTier, f: &CellFrame, slot: usize, layer: usize) -> [f32; 6] {
+    let column = &tier.columns[slot];
+    let above_water = column.material(layer + 1).is_water();
+    let side_of = |s: usize| -> Option<Side> {
+        let n = f.sides[s]?;
+        Some(Side {
+            material: material_in(tier, n, layer),
+            above_water: material_in(tier, n, layer + 1).is_water(),
+        })
+    };
+    let me = Some(Side {
+        material: column.material(layer),
+        above_water,
+    });
+    let degree = f.degree;
+    let mut levels = [0.0f32; 6];
+    for (i, level) in levels.iter_mut().enumerate().take(degree) {
+        *level = if above_water {
+            1.0
+        } else {
+            corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)])
+        };
+    }
+    levels
+}
+
 /// A layer's material in a tier, stone off it.
 fn material_in(tier: &ColumnTier, slot: usize, layer: usize) -> Material {
     tier.columns
@@ -710,25 +862,7 @@ fn cell_pieces(
     // The sea's own top: the sheet draws it wherever it is listed, under a
     // roof too, so a sea cave has one surface at the sheet's tided height.
     let sheet = here == Material::Water && layer + 1 == sea && f.sheet_listed;
-    let side_of = |s: usize| -> Option<Side> {
-        let n = sides[s]?;
-        Some(Side {
-            material: material(n, layer),
-            above_water: material(n, layer + 1).is_water(),
-        })
-    };
-    let me = Some(Side {
-        material: here,
-        above_water,
-    });
-    let mut levels = [0.0f32; 6];
-    for (i, level) in levels.iter_mut().enumerate().take(degree) {
-        *level = if above_water {
-            1.0
-        } else {
-            corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)])
-        };
-    }
+    let levels = top_levels(tier, f, slot, layer);
     let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);
     let top_of = |p: Vec3| p.normalize_or(centre) * (radius + floor + 1.0);
     if let Some(out) = out.as_deref_mut() {
@@ -993,13 +1127,18 @@ fn cell_pieces(
 }
 
 /// Where a cell that appears (S2, S3) starts, or one that dries (S4) ends.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Squash {
     /// Pressed up to its top: a fall arriving from the water over it.
     Top,
     /// Pressed down to its floor: a fall's tail draining into the water
     /// under it.
     Floor,
+    /// Pressed down onto the top of the water under it, at that top's own
+    /// corner levels (fractions of the layer under): a drained cell ends
+    /// exactly on the surface it drained into, so hiding it at the tick's
+    /// end changes nothing drawn.
+    Onto([f32; 6]),
     /// A thin sheet (`THIN` of its height) on side `s`: the side its water
     /// came from or went to.
     Side(usize),
@@ -1013,12 +1152,32 @@ impl Squash {
         match self {
             Squash::Top => dir * (base + 1.0),
             Squash::Floor => dir * base,
+            Squash::Onto(levels) => {
+                // Which corner the point stands on, if any, by its distance
+                // against the cell's own size (a dot of unit vectors cannot
+                // tell a corner from the middle at a planet's radius in f32).
+                let span = (f.corners[0] - f.centre).length();
+                let at = (0..f.degree).find(|&i| (dir - f.corners[i]).length() < 0.01 * span);
+                let level = at.map_or_else(
+                    || levels[..f.degree].iter().sum::<f32>() / f.degree.max(1) as f32,
+                    |i| levels[i],
+                );
+                dir * (base - 1.0 + level)
+            }
             Squash::Side(s) => {
                 let n = f.side_normal(s);
-                let edge = f.corners[s];
+                let (a, b) = (f.corners[s], f.corners[(s + 1) % f.degree.max(1)]);
                 // At or under zero inside the cell: how far in from the side.
-                let d = (dir - edge).dot(n);
-                let onto = (dir - n * d).normalize_or(dir);
+                let d = (dir - a).dot(n);
+                let onto = dir - n * d;
+                // Kept to the side's own span, between its two corners: a
+                // far corner projected onto the side's plane lands past it,
+                // which drew the sheet twice the side's width, half a cell
+                // into the neighbours either side (the spawn's "geometry
+                // weirdness", 2026-11-17).
+                let along = b - a;
+                let u = ((onto - a).dot(along) / along.length_squared().max(1e-12)).clamp(0.0, 1.0);
+                let onto = (a + along * u).normalize_or(dir);
                 let height = p.length() - base;
                 onto * (base + height * THIN)
             }
@@ -1119,6 +1278,12 @@ pub fn liquid_mesh_eased(
             continue;
         };
         let column = &tier.columns[slot];
+        let key = tier
+            .water
+            .keys
+            .get(slot)
+            .copied()
+            .unwrap_or(u32::MAX - slot as u32);
         // An unchanged column was wet where it is wet now.
         let before = prev.filter(|_| changed[slot]).map(|p| &p.columns[slot]);
         // The cell's shape, and the tick to ease across when the cell or a
@@ -1137,44 +1302,83 @@ pub fn liquid_mesh_eased(
                 (f, prev.filter(|_| near))
             });
             let prev = *prev;
-            let lit = {
-                let own = tier.light_at(slot, layer);
-                let up = tier.light_at(slot, layer + 1);
+            let lit_in = |t: &ColumnTier| {
+                let own = t.light_at(slot, layer);
+                let up = t.light_at(slot, layer + 1);
                 f32::from(own.sky().max(up.sky())) / 15.0
             };
+            let lit = lit_in(tier);
+            let id = |piece: &Piece| ident(key, layer, piece.id);
             let floor = column::layer_altitude(layer);
             match prev {
                 Some(p) if wet_was && wet_now && !same_shape(p, tier, f, slot, layer) => {
                     // S1: the same cell in both ticks; its pieces ease.
                     cell_pieces(p, f, slot, layer, radius, &mut was, None);
                     let foot = cell_pieces(tier, f, slot, layer, radius, &mut now, Some(&mut out));
+                    let lit_was = lit_in(p);
                     let mut used = [false; 8];
                     for c in &now {
                         let matched = was
                             .iter()
-                            .position(|w| w.id == c.id && w.n == c.n)
+                            .position(|w| w.id == c.id && w.n == c.n && w.v[0].kind == c.v[0].kind)
                             .filter(|&i| !used[i]);
                         let positions = c.positions();
                         match matched {
                             Some(i) => {
                                 used[i] = true;
                                 let from = was[i].positions();
-                                out.emit(c, &positions, &from, lit, 0);
+                                out.emit(
+                                    id(c),
+                                    c,
+                                    &positions,
+                                    &from,
+                                    Some(&was[i]),
+                                    (lit, lit_was),
+                                    0,
+                                );
                             }
                             // A piece new this tick grows from its collapsed self.
-                            None => out.emit(c, &positions, &c.alt[..c.n], lit, EASE_FRONT),
+                            None => out.emit(
+                                id(c),
+                                c,
+                                &positions,
+                                &c.alt[..c.n],
+                                None,
+                                (lit, lit_was),
+                                EASE_FRONT,
+                            ),
                         }
                     }
-                    // And one gone this tick collapses away.
+                    // And one gone this tick collapses away. A face whose
+                    // kind changed (a fall's face turning still as its fall
+                    // ends) is wiped: the old face drains down, its top
+                    // sunk to its bottom, as the new one grows down from
+                    // its top, so the two meet at one line.
                     for (i, w) in was.iter().enumerate() {
                         if !used[i] {
                             let from = w.positions();
-                            out.emit(w, &w.alt[..w.n], &from, lit, EASE_FRONT | EASE_GONE);
+                            let rekinded = now.iter().any(|c| c.id == w.id && c.n == w.n);
+                            let to = if rekinded { lowered(w) } else { w.alt };
+                            let key = if rekinded { id(w) | REKINDED } else { id(w) };
+                            out.emit(
+                                key,
+                                w,
+                                &to[..w.n],
+                                &from,
+                                None,
+                                (lit_was, lit_was),
+                                EASE_FRONT | EASE_GONE,
+                            );
                         }
                     }
                     if let Some(found) = foot {
-                        out.feet
-                            .push(found.foot(lit, !is_foot(p, slot, layer), slot, layer));
+                        // Born, and its splash held until its column lands
+                        // (S3), only where the fall arrived this tick: a
+                        // foot that moved down a pool draining is the same
+                        // fall, and cross-fades (`water-flow` 5.4).
+                        let arrived =
+                            !is_foot(p, slot, layer) && !material_in(p, slot, layer + 1).is_water();
+                        out.feet.push(found.foot(lit, arrived, slot, layer));
                     }
                 }
                 Some(p) if wet_now && !wet_was => {
@@ -1191,7 +1395,15 @@ pub fn liquid_mesh_eased(
                         for (t, &p) in to.iter_mut().zip(&positions) {
                             *t = how.apply(f, radius, floor, p);
                         }
-                        out.emit(c, &positions, &to[..c.n], lit, EASE_FRONT);
+                        out.emit(
+                            id(c),
+                            c,
+                            &positions,
+                            &to[..c.n],
+                            None,
+                            (lit, lit),
+                            EASE_FRONT,
+                        );
                     }
                     if let Some(found) = foot {
                         out.feet.push(found.foot(lit, true, slot, layer));
@@ -1201,17 +1413,26 @@ pub fn liquid_mesh_eased(
                     // S4: dried; drawn this one tick more, shrinking back.
                     out.dried += 1;
                     let how = if material_in(tier, slot, layer - 1).is_water() {
-                        Squash::Floor
+                        Squash::Onto(top_levels(tier, f, slot, layer - 1))
                     } else {
                         wettest_side(tier, f, layer).map_or(Squash::Floor, Squash::Side)
                     };
                     cell_pieces(p, f, slot, layer, radius, &mut was, None);
+                    let lit_was = lit_in(p);
                     for w in &was {
                         let from = w.positions();
                         for (t, &p) in to.iter_mut().zip(&from) {
                             *t = how.apply(f, radius, floor, p);
                         }
-                        out.emit(w, &to[..w.n], &from, lit, EASE_FRONT | EASE_GONE);
+                        out.emit(
+                            id(w),
+                            w,
+                            &to[..w.n],
+                            &from,
+                            None,
+                            (lit_was, lit_was),
+                            EASE_FRONT | EASE_GONE,
+                        );
                     }
                 }
                 _ => {
@@ -1219,7 +1440,7 @@ pub fn liquid_mesh_eased(
                     // cell changed in it.
                     let foot = cell_pieces(tier, f, slot, layer, radius, &mut now, Some(&mut out));
                     for c in &now {
-                        out.emit_still(c, lit);
+                        out.emit_still(id(c), c, lit);
                     }
                     if let Some(found) = foot {
                         out.feet.push(found.foot(lit, false, slot, layer));
@@ -1252,16 +1473,41 @@ fn rebuild_water(
     meshed.version = fine.version;
     meshed.set = set;
     let started = std::time::Instant::now();
-    let prev = step
+    // What the change eases from: the set before the last of several ticks
+    // run at once, else the set last meshed, so an edit (water taken,
+    // placed, dug away) or a landing eases as a tick does (design "Water
+    // that dries eases out too").
+    let ticked = step
         .prev
         .take()
         .filter(|_| step.after == Some((fine.version, set)));
-    let made = liquid_mesh_eased(
+    let prev = if step.smooth {
+        ticked.or_else(|| meshed.last_set.clone())
+    } else {
+        None
+    };
+    let mut made = liquid_mesh_eased(
         &fine.set.columns,
         prev.as_deref().map(|p| &p.columns),
         fine.set.finest_records(),
         PLANET_RADIUS,
     );
+    if step.smooth {
+        // What the last mesh is drawing now, and how far its epoch is from
+        // this one's: a capture's held fraction holds the clock, so nothing
+        // is moved along it then.
+        let old_now = step.hold.map_or(step.mesh_s, |h| h * liquid::TICK_S);
+        let shift = if step.hold.is_some() {
+            0.0
+        } else {
+            step.mesh_s
+        };
+        carry(&mut made, &meshed.last, old_now, shift);
+        meshed.last_set = Some(fine.set.clone());
+    }
+    if step.hold.is_none() {
+        step.mesh_s = 0.0;
+    }
     if made.cells > 0 {
         debug!(
             "water mesh: {} cells ({} new, {} dried), {} tops ({} flowing), {} triangles in {:.2} ms",
@@ -1283,11 +1529,96 @@ fn rebuild_water(
         if made.arrow_indices.is_empty() {
             *mesh = placeholder();
         } else {
-            let normals = vec![[0.0f32, 1.0, 0.0]; made.arrow_positions.len()];
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, made.arrow_positions);
+            let positions = std::mem::take(&mut made.arrow_positions);
+            let normals = vec![[0.0f32, 1.0, 0.0]; positions.len()];
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
             mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-            mesh.insert_indices(Indices::U32(made.arrow_indices));
+            mesh.insert_indices(Indices::U32(std::mem::take(&mut made.arrow_indices)));
         }
+    }
+    meshed.last = made;
+}
+
+/// Carry the last mesh's eases in flight onto a new one (design "Water that
+/// dries eases out too"). `old_now` is how far the last mesh's clock has run,
+/// `shift` how far its epoch is behind the new one's. A piece of the new mesh
+/// that the last one was still easing:
+/// - toward the same end, keeps that ease (its from and its start);
+/// - toward another, starts again from where it is drawn now.
+///
+/// A dried piece of the last mesh still shrinking, which the new mesh does
+/// not have, is kept until its own tick has played. So a remesh mid-tick (an
+/// edit, a landing) never snaps, and a dried cell always has its whole tick.
+fn carry(made: &mut LiquidMesh, old: &LiquidMesh, old_now: f32, shift: f32) {
+    if old.pieces.is_empty() {
+        return;
+    }
+    let mut index: Vec<(u64, usize)> = old
+        .pieces
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.ident, i))
+        .collect();
+    index.sort_unstable();
+    let find = |ident: u64| -> Option<usize> {
+        let at = index.partition_point(|&(k, _)| k < ident);
+        index.get(at).filter(|&&(k, _)| k == ident).map(|&(_, i)| i)
+    };
+    let span = |p: &PieceSpan| p.first as usize..(p.first + p.n) as usize;
+    let near = |a: Vec3, b: Vec3| a.distance_squared(b) < 1e-8;
+    let mut kept = vec![false; old.pieces.len()];
+    for piece in &made.pieces {
+        let Some(j) = find(piece.ident) else {
+            continue;
+        };
+        let was = old.pieces[j];
+        if was.n != piece.n {
+            continue;
+        }
+        kept[j] = true;
+        let before = &old.vertices[span(&was)];
+        if before.iter().all(|v| v.eased(old_now).0 >= 1.0) {
+            // Played to its end: this mesh's own from is where it stands.
+            continue;
+        }
+        let now = &mut made.vertices[span(piece)];
+        let same_end = now.iter().zip(before).all(|(n, b)| {
+            near(n.position, b.position)
+                && near(n.flow, b.flow)
+                && near(n.normal, b.normal)
+                && (n.sky - b.sky).abs() < 1e-4
+                && n.flags & EASE_GONE == b.flags & EASE_GONE
+        });
+        for (n, b) in now.iter_mut().zip(before) {
+            if same_end {
+                n.prev = b.prev;
+                n.prev_normal = b.prev_normal;
+                n.prev_flow = b.prev_flow;
+                n.prev_sky = b.prev_sky;
+                n.start = b.start - shift;
+                n.flags = b.flags;
+            } else {
+                (n.prev, n.prev_normal, n.prev_flow, n.prev_sky) = b.drawn(old_now);
+                n.start = 0.0;
+            }
+        }
+    }
+    for (j, was) in old.pieces.iter().enumerate() {
+        let before = &old.vertices[span(was)];
+        if kept[j]
+            || before.first().is_none_or(|v| v.flags & EASE_GONE == 0)
+            || before.iter().all(|v| v.eased(old_now).0 >= 1.0)
+        {
+            continue;
+        }
+        made.pieces.push(PieceSpan {
+            first: made.vertices.len() as u32,
+            ..*was
+        });
+        made.vertices.extend(before.iter().map(|v| FlowVertex {
+            start: v.start - shift,
+            ..*v
+        }));
     }
 }
 
@@ -1572,6 +1903,11 @@ mod tests {
             let dir = v.prev.normalize();
             let off = (dir - edge).dot(n) * RADIUS;
             assert!(off.abs() < 1e-2, "{off} m off the source edge");
+            // And within the side's own span, between its two corners: the
+            // sheet never pokes past them into the cells either side.
+            let (a, b) = (f.corners[3], f.corners[4]);
+            let u = (dir - a).dot(b - a) / (b - a).length_squared();
+            assert!((-1e-3..=1.0 + 1e-3).contains(&u), "{u} along the side");
             let height = v.prev.length() - base;
             assert!(
                 (-1e-3..=THIN + 1e-3).contains(&height),
@@ -1647,6 +1983,282 @@ mod tests {
         assert_eq!(next.dried, 0);
         assert!(next.vertices.iter().all(|v| v.flags & EASE_GONE == 0));
         assert_eq!(next.vertices.len(), mesh(&dry, None).vertices.len());
+    }
+
+    /// Every triangle a mesh draws at `now` seconds on its clock, its
+    /// position, flow, normal and sky rounded, sorted; a zero-area one and a
+    /// dried one whose tick has played are not drawn.
+    fn drawn_at(made: &LiquidMesh, now: f32) -> Vec<[[i64; 10]; 3]> {
+        let r = |x: f32| (x * 1e3).round() as i64;
+        let mut out = Vec::new();
+        for tri in made.vertices.chunks(3) {
+            if tri[0].flags & EASE_GONE != 0 && tri[0].eased(now).0 > 0.999 {
+                continue;
+            }
+            let lanes: Vec<(Vec3, Vec3, Vec3, f32)> = tri.iter().map(|v| v.drawn(now)).collect();
+            let (p0, p1, p2) = (lanes[0].0, lanes[1].0, lanes[2].0);
+            if (p1 - p0).cross(p2 - p0).length() < 1e-5 {
+                continue;
+            }
+            let mut t = [[0i64; 10]; 3];
+            for (o, (p, n, f, sky)) in t.iter_mut().zip(&lanes) {
+                *o = [
+                    r(p.x),
+                    r(p.y),
+                    r(p.z),
+                    r(f.x),
+                    r(f.y),
+                    r(f.z),
+                    r(n.x),
+                    r(n.y),
+                    r(n.z),
+                    r(*sky),
+                ];
+            }
+            t.sort();
+            out.push(t);
+        }
+        out.sort();
+        out
+    }
+
+    /// The triangles of `a` that `b` does not draw.
+    fn missing(a: &[[[i64; 10]; 3]], b: &[[[i64; 10]; 3]]) -> usize {
+        a.iter().filter(|t| b.binary_search(t).is_err()).count()
+    }
+
+    /// The design's continuity (`water-flow` 5.4), on the rule's own drain: a
+    /// source over a three-layer ledge pours into the ring until it settles,
+    /// then is taken away (an edit, remeshed mid-tick, as `apply_edit` does)
+    /// and the water drains a tick at a time. At every remesh, everything
+    /// drawn the frame before is drawn the frame after, in every lane: no
+    /// cell, froth band or normal steps. And it all drains away.
+    #[test]
+    fn a_drain_never_steps_at_a_tick_or_an_edit() {
+        use crate::planet::column::{TierGrid, water_id};
+        let mut tier = ring(&[
+            (0, AT, Material::Stone),
+            (0, AT + 1, Material::Stone),
+            (0, AT + 2, Material::Stone),
+            (0, AT + 3, Material::Water),
+        ]);
+        tier.water.queue.push(water_id(0, AT + 3));
+        let mut shown = mesh(&tier, None);
+        let mut last = tier.clone();
+        // Each remesh lands this far into the last one's tick; the edit
+        // halfway through one.
+        let remesh = |next: &ColumnTier, last: &ColumnTier, shown: &mut LiquidMesh, at: f32| {
+            let mut made = mesh(next, Some(last));
+            let before = drawn_at(shown, at);
+            carry(&mut made, shown, at, at);
+            let after = drawn_at(&made, 0.0);
+            assert_eq!(missing(&before, &after), 0, "nothing drawn goes in a frame");
+            *shown = made;
+        };
+        let mut dried = 0;
+        for tick in 0..60 {
+            if tick == 12 {
+                // The source taken, half a tick in.
+                tier.columns[0].set(AT + 3, Material::Air);
+                let mut q = std::mem::take(&mut tier.water.queue);
+                q.touch(&TierGrid(&mut tier), water_id(0, AT + 3));
+                tier.water.queue = q;
+                remesh(&tier, &last, &mut shown, 0.5);
+                dried += shown.dried;
+                last = tier.clone();
+            }
+            if tier.water.queue.is_empty() {
+                if tick > 12 {
+                    break;
+                }
+                continue;
+            }
+            tier.tick_water(liquid::LOOP_MAX);
+            let at = if tick == 12 { 0.5 } else { liquid::TICK_S };
+            remesh(&tier, &last, &mut shown, at);
+            dried += shown.dried;
+            last = tier.clone();
+        }
+        assert!(dried > 3, "the fall and its pool dried a cell at a time");
+        assert!(
+            (0..7).all(|s| (1..LAYERS - 1).all(|l| !tier.columns[s].material(l).is_water())),
+            "it all drained"
+        );
+        // A tick after the last: nothing of it is drawn.
+        let mut end = mesh(&tier, Some(&last));
+        carry(&mut end, &shown, liquid::TICK_S, liquid::TICK_S);
+        assert!(drawn_at(&end, liquid::TICK_S).is_empty());
+    }
+
+    /// S4, the owner's case: a cell present last tick and dry this tick is
+    /// still drawn halfway through the tick, its top between its last level
+    /// and its floor (a fall's tail sinking into the water under it), and is
+    /// gone at the tick's end.
+    #[test]
+    fn a_dried_cell_is_drawn_mid_tick_between_its_levels_and_gone_at_its_end() {
+        let falling = Material::flowing(7, true);
+        let wet = ring(&[(1, AT + 1, falling), (1, AT, Material::Water)]);
+        let dry = ring(&[(1, AT, Material::Water)]);
+        let made = mesh(&dry, Some(&wet));
+        assert_eq!(made.dried, 1);
+        let floor = RADIUS + column::layer_altitude(AT + 1);
+        let gone: Vec<&FlowVertex> = made
+            .vertices
+            .iter()
+            .filter(|v| v.flags & EASE_GONE != 0)
+            .collect();
+        assert!(!gone.is_empty());
+        let top = |now: f32| {
+            gone.iter()
+                .map(|v| v.drawn(now).0.length() - floor)
+                .fold(f32::MIN, f32::max)
+        };
+        let (start, mid) = (top(0.0), top(0.5 * liquid::TICK_S));
+        assert!(start > 0.9, "drawn whole as the tick lands: {start}");
+        assert!(mid > 0.05 && mid < start - 0.05, "sinking mid-tick: {mid}");
+        assert!(top(liquid::TICK_S) < 1e-3, "down to its floor");
+        assert!(
+            gone.iter().all(|v| v.eased(liquid::TICK_S).0 > 0.999),
+            "and its tick played, so the pass hides it"
+        );
+        assert!(
+            drawn_at(&made, liquid::TICK_S)
+                .iter()
+                .all(|t| t.iter().all(|v| (v[0] as f32 / 1e3)
+                    .hypot(v[1] as f32 / 1e3)
+                    .hypot(v[2] as f32 / 1e3)
+                    < floor + 1e-3))
+        );
+        // The tick after: not in the mesh.
+        let next = mesh(&dry, Some(&dry));
+        assert!(next.vertices.iter().all(|v| v.flags & EASE_GONE == 0));
+        // Over a flowing pool lower than its layer's top, it ends on that
+        // pool's own drawn top, vertex for vertex, so hiding it changes
+        // nothing drawn.
+        let pool = Material::flowing(3, false);
+        let wet = ring(&[(1, AT + 1, falling), (1, AT, pool), (2, AT, pool)]);
+        let dry = ring(&[(1, AT, pool), (2, AT, pool)]);
+        let made = mesh(&dry, Some(&wet));
+        let tops: Vec<Vec3> = made
+            .vertices
+            .iter()
+            .filter(|v| v.flags & EASE_GONE == 0 && v.kind == KIND_TOP)
+            .map(|v| v.position)
+            .collect();
+        // What is left of it to see at the end: its triangles that still
+        // have an area (a piece collapsing to a sliver hides nothing).
+        let ends: Vec<Vec3> = made
+            .vertices
+            .chunks(3)
+            .filter(|t| t[0].flags & EASE_GONE != 0)
+            .filter(|t| {
+                (t[1].position - t[0].position)
+                    .cross(t[2].position - t[0].position)
+                    .length()
+                    > 1e-5
+            })
+            .flat_map(|t| t.iter().map(|v| v.position))
+            .collect();
+        assert!(!ends.is_empty());
+        let same = |a: Vec3, b: Vec3| (a.normalize() - b.normalize()).length() * RADIUS < 1e-2;
+        let mut on = 0;
+        for p in &ends {
+            if let Some(t) = tops.iter().find(|t| same(**t, *p)) {
+                assert!(
+                    (t.length() - p.length()).abs() < 1e-3,
+                    "ends on the pool top: {} vs {} (floor {floor})",
+                    t.length(),
+                    p.length()
+                );
+                on += 1;
+            }
+        }
+        assert!(on > 0, "some of it lies over the pool");
+        assert!(
+            ends.iter().all(|p| p.length() < floor - 0.05),
+            "under its own floor"
+        );
+    }
+
+    /// An edit mid-tick carries the ease in flight: a cell growing in keeps
+    /// growing from where it is drawn, rather than jumping to its end.
+    #[test]
+    fn an_edit_mid_tick_does_not_snap_an_ease_in_flight() {
+        let before = ring(&[(0, AT, Material::Water)]);
+        let now = ring(&[
+            (0, AT, Material::Water),
+            (1, AT, Material::flowing(7, false)),
+        ]);
+        let growing = mesh(&now, Some(&before));
+        // A stone placed far off: the water is the same, the set is new.
+        let mut edited = now.clone();
+        edited.columns[4].set(AT + 5, Material::Stone);
+        let mut made = mesh(&edited, Some(&now));
+        let at = 0.3 * liquid::TICK_S;
+        let was = drawn_at(&growing, at);
+        carry(&mut made, &growing, at, at);
+        assert_eq!(
+            was,
+            drawn_at(&made, 0.0),
+            "drawn the same across the remesh"
+        );
+        assert_eq!(
+            drawn_at(&growing, liquid::TICK_S),
+            drawn_at(&made, liquid::TICK_S - at),
+            "and reaches its end when it would have"
+        );
+    }
+
+    /// `lanes` and `vertex_flowing` agree on the layout: the stride, and
+    /// which lane each eased value comes from (`water-flow` 5.4; a sky read
+    /// from the wrong lane drew every tick's first frame unlit).
+    #[test]
+    fn the_lanes_and_the_flowing_vertex_agree() {
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        let at = shader
+            .find("fn vertex_flowing")
+            .expect("the flowing vertex");
+        let body = &shader[at..at + shader[at..].find("\n}").expect("its end")];
+        let stride = format!("flowing[vertex*{LANES_PER_VERTEX}u");
+        assert!(body.contains(&stride), "stride {LANES_PER_VERTEX}");
+        let last = format!("vertex*{LANES_PER_VERTEX}u + {}u]", LANES_PER_VERTEX - 1);
+        assert!(body.contains(&last), "reads every lane");
+        let v = FlowVertex {
+            position: Vec3::splat(1.0),
+            prev: Vec3::splat(2.0),
+            normal: Vec3::splat(3.0),
+            flow: Vec3::splat(4.0),
+            kind: 5.0,
+            sky: 6.0,
+            flags: 1,
+            prev_normal: Vec3::splat(7.0),
+            prev_flow: Vec3::splat(8.0),
+            prev_sky: 9.0,
+            start: 10.0,
+        };
+        let made = LiquidMesh {
+            vertices: vec![v],
+            ..Default::default()
+        };
+        let lanes = made.lanes();
+        // a b c d e f, as `vertex_flowing` names them.
+        let lane = |name: char| lanes[(name as u8 - b'a') as usize];
+        assert_eq!(lane('a'), [1.0, 1.0, 1.0, 6.0]);
+        assert_eq!(lane('b'), [3.0, 3.0, 3.0, 5.0]);
+        assert_eq!(lane('d'), [2.0, 2.0, 2.0, 1.0]);
+        assert_eq!(lane('e'), [8.0, 8.0, 8.0, 9.0]);
+        assert_eq!(lane('f'), [7.0, 7.0, 7.0, 10.0]);
+        assert_eq!(&lane('c')[..3], &[4.0, 4.0, 4.0]);
+        for read in [
+            "mix(d.xyz, a.xyz, t)",
+            "mix(f.xyz, b.xyz, t)",
+            "mix(e.w, a.w, t)",
+            "mix(e.xyz, c.xyz, t)",
+            "view.sea_frame.z - f.w",
+            "d.w + 0.5",
+        ] {
+            assert!(body.contains(read), "{read}");
+        }
     }
 
     /// Water that did not change, or no tick to ease across: every vertex
@@ -1798,7 +2410,20 @@ struct FootFade {
     splash: f32,
     near: f32,
     seen: u32,
+    /// The frame it was last among the mesher's feet, and what it was then:
+    /// a foot whose fall has drained or moved fades out from there rather
+    /// than vanishing at the tick (`water-flow` 5.4).
+    present: u32,
+    last: Option<Foot>,
+    /// The drop `D` the splash is drawn by, m: eased toward the foot's own
+    /// over about a tick, so a lip lowered a layer by a drain does not
+    /// resize and reseed the mist in a frame.
+    drop: f32,
 }
+
+/// The time constant, s, of the splash's drop following the foot's: most
+/// of the way in a tick.
+const SPLASH_DROP_EASE_S: f32 = 0.35;
 
 /// What the splash keeps between frames: each foot's fades, keyed by its
 /// column and layer (a lookup only; nothing is ordered by it), and a scratch list kept
@@ -1808,6 +2433,8 @@ struct SplashState {
     fades: std::collections::HashMap<u64, FootFade>,
     frame: u32,
     order: Vec<(f32, usize)>,
+    /// This frame's feet: the mesher's, and those leaving it still fading.
+    feet: Vec<Foot>,
 }
 
 /// Step `v` toward `want` (0 or 1) by `dt` over `fade_s`.
@@ -1864,9 +2491,30 @@ fn animate_splash(
     let state = &mut *state;
     state.frame = state.frame.wrapping_add(1);
     let stamp = state.frame;
+    // This frame's feet: the mesher's, then any it no longer has whose
+    // fades are still running out.
+    state.feet.clear();
+    for f in &feet.0 {
+        let fade = state.fades.entry(f.key()).or_default();
+        fade.present = stamp;
+        fade.last = Some(*f);
+        state.feet.push(*f);
+    }
+    for fade in state.fades.values() {
+        if fade.present != stamp
+            && fade.seen == stamp.wrapping_sub(1)
+            && (fade.splash > 0.0 || fade.near > 0.0)
+            && let Some(last) = fade.last
+        {
+            state.feet.push(Foot {
+                born: false,
+                ..last
+            });
+        }
+    }
     // Every foot, nearest first.
     state.order.clear();
-    for (i, f) in feet.0.iter().enumerate() {
+    for (i, f) in state.feet.iter().enumerate() {
         let distance = f.at.distance(eye);
         if distance.is_finite() {
             state.order.push((distance, i));
@@ -1876,9 +2524,9 @@ fn animate_splash(
     let mut near_rank = 0usize;
     gpu_feet.count = 0;
     for &(distance, i) in &state.order {
-        let f = &feet.0[i];
+        let f = &state.feet[i];
         let fade = state.fades.entry(f.key()).or_default();
-        let inside = distance < look.splash_reach_m;
+        let inside = distance < look.splash_reach_m && fade.present == stamp;
         let want_near = inside && near_rank < FALL_FEET_MAX;
         if inside {
             near_rank += 1;
@@ -1890,7 +2538,9 @@ fn animate_splash(
             if fade.seen != stamp.wrapping_sub(1) {
                 fade.splash = 0.0;
                 fade.near = 0.0;
+                fade.drop = f.drop_m;
             }
+            fade.drop += (f.drop_m - fade.drop) * (dt / SPLASH_DROP_EASE_S).min(1.0);
             fade.splash = fade_toward(
                 fade.splash,
                 f32::from(u8::from(inside)),
@@ -1911,12 +2561,14 @@ fn animate_splash(
             let seed = ((f.column ^ f.layer.rotate_left(16)).wrapping_mul(0x9E37_79B9) >> 16)
                 as f32
                 / 65535.0;
-            gpu_feet.feet[k] = f.at.extend(f.drop_m);
+            gpu_feet.feet[k] = f.at.extend(fade.drop);
             gpu_feet.more[k] = Vec4::new(f.pool_m, seed, fade.near * gain, 0.0);
             gpu_feet.count += 1;
         }
     }
-    state.fades.retain(|_, f| f.seen == stamp);
+    state
+        .fades
+        .retain(|_, f| f.seen == stamp && (f.present == stamp || f.splash > 0.0 || f.near > 0.0));
     // The same quads, nearest foot first, as the mesh they were drawn as:
     // the water pass expands each to its corners along the camera's right
     // and up (`splash_vertex`).
@@ -1935,7 +2587,7 @@ fn animate_splash(
         lanes.push([cell, flip, surface, 0.0]);
     };
     for &(_, i) in &state.order {
-        let f = &feet.0[i];
+        let f = &state.feet[i];
         let Some(fades) = state.fades.get(&f.key()) else {
             continue;
         };
@@ -1952,7 +2604,7 @@ fn animate_splash(
         let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
         let north = up.cross(east);
         let light = (0.12 + 0.88 * day) * f.sky.max(0.15);
-        let rule = SplashRule::of(look.rule, f.height, f.drop_m);
+        let rule = SplashRule::of(look.rule, f.height, fades.drop);
         let h = rule.m;
         let seed = (foot.x * 7.0) as i32 as u32 ^ ((foot.z * 13.0) as i32 as u32).rotate_left(11);
         // Spray: drops thrown up and out, falling back under gravity, each
@@ -2080,6 +2732,70 @@ mod splash_tests {
         // two-layer fall, twelve for nine.
         assert_eq!(SplashRule::of(MistRule::Layers, 2.0, 2.4).puffs, 1);
         assert_eq!(SplashRule::of(MistRule::Layers, 9.0, 9.4).puffs, 12);
+    }
+
+    /// A fall that drains away, or moves, takes its foot out of the
+    /// mesher's list at a tick: its churn and mist fade out from there over
+    /// the fade time, as a new one fades in, rather than going in a frame
+    /// (`water-flow` 5.4).
+    #[test]
+    fn a_foot_that_leaves_fades_out_rather_than_vanishing() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(bevy::time::TimePlugin)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(1.0 / 60.0),
+            ))
+            .insert_resource(PlanetRenderFrame {
+                center: bevy::math::DVec3::ZERO,
+                origin: bevy::math::DVec3::ZERO,
+            })
+            .init_resource::<FallFeet>()
+            .init_resource::<WaterEase>()
+            .init_resource::<SplashQuads>()
+            .init_resource::<FallFeetGpu>()
+            .add_systems(Update, animate_splash);
+        app.world_mut().spawn((
+            Camera::default(),
+            Camera3d::default(),
+            GlobalTransform::from(
+                Transform::from_xyz(0.0, 1010.0, 8.0)
+                    .looking_at(Vec3::new(0.0, 1000.0, 0.0), Vec3::Y),
+            ),
+        ));
+        app.world_mut().resource_mut::<FallFeet>().0.push(Foot {
+            at: Vec3::new(0.0, 1000.0, 0.0),
+            height: 3.0,
+            sky: 1.0,
+            born: false,
+            drop_m: 3.0,
+            over: Vec3::X,
+            pool_m: 1.0,
+            column: 1,
+            layer: 1,
+        });
+        let fade_s = crate::config::FallLook::default().splash_fade_s;
+        let frames = (fade_s * 60.0).ceil() as usize + 2;
+        for _ in 0..frames {
+            app.update();
+        }
+        let near = |app: &App| {
+            let g = app.world().resource::<FallFeetGpu>();
+            (g.count > 0).then(|| g.more[0].z)
+        };
+        assert_eq!(near(&app), Some(1.0), "faded in");
+        app.world_mut().resource_mut::<FallFeet>().0.clear();
+        app.update();
+        let leaving = near(&app).expect("still drawn the frame after it left");
+        assert!(leaving > 0.5 && leaving < 1.0, "fading out: {leaving}");
+        assert!(
+            app.world().resource::<SplashQuads>().lanes.len() > 2,
+            "its mist with it"
+        );
+        for _ in 0..frames {
+            app.update();
+        }
+        assert_eq!(near(&app), None, "and gone once its fade has played");
     }
 
     /// A fade runs in time to its end and stops: never held part way.

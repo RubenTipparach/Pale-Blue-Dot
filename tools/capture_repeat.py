@@ -52,6 +52,13 @@ SCENES = {
     "ash-night": ASHENSTEAD + ["--time", "22"] + DRY,
     "quay-day": QUAY + ["--time", "10"] + DRY,
     "quay-night": QUAY + ["--time", "22"] + DRY,
+    # The floating origin's no-look-change set (`movement-smoothness` design
+    # 6.7): under water, a waterfall, flying at 1 km, a tool in hand.
+    "dive": ["--view", "dive", "--time", "11"] + DRY,
+    "fall": ["--walk", "--at", "-34.6830", "101.4869", "--yaw", "14", "--pitch", "-6",
+             "--time", "5"] + DRY,
+    "fly-1km": ["--fly", "--height", "1000", "--time", "11"] + DRY,
+    "rod": ["--walk", "--fish", "--time", "11"] + DRY,
 }
 
 

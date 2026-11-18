@@ -595,7 +595,7 @@ const SCREEN: [Binding; 9] = [
     row(
         &[Key::Board(KeyCode::F3)],
         " ",
-        "frame graph and boat instruments",
+        "frame graph, again for its GPU breakdown",
     ),
     row(&[Key::Board(KeyCode::F5)], " ", "flow arrows"),
     row(&[Key::Board(KeyCode::F6)], " ", "pour water"),

@@ -598,11 +598,18 @@ pub fn farm_act(
 }
 
 /// The eye and its look, from the active 3D camera.
-fn eye_ray(cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>) -> Option<(Vec3, Vec3)> {
-    cameras
-        .iter()
-        .find(|(_, c)| c.is_active)
-        .map(|(t, _)| (t.translation(), t.forward().as_vec3()))
+/// Planet-local: render space less the planet's centre
+/// (`movement-smoothness` design 6.1).
+fn eye_ray(
+    cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<&pbd_app::planet::PlanetRenderFrame>,
+) -> Option<(Vec3, Vec3)> {
+    cameras.iter().find(|(_, c)| c.is_active).map(|(t, _)| {
+        (
+            pbd_app::render_origin::local_of(frame, t.translation()),
+            t.forward().as_vec3(),
+        )
+    })
 }
 
 /// The logs a tree gives the axe before it falls, from the gathering's
@@ -618,7 +625,10 @@ fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn offer(
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     aim: Res<Aim>,
     tools: Res<pbd_app::fish::ToolSlot>,
     farm: Res<FarmConfig>,
@@ -641,7 +651,7 @@ pub fn offer(
     if !walking.is_some_and(|w| w.active) {
         return;
     }
-    let Some((eye, look)) = eye_ray(&cameras) else {
+    let Some((eye, look)) = eye_ray(&cameras, frame.as_deref()) else {
         return;
     };
     let (recheck, plant, clutter, records) = &mut *last;
@@ -689,11 +699,12 @@ pub fn use_key(
     mut station_at: ResMut<StationAt>,
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
-    (cameras, interact, scatter, gathering): (
+    (cameras, interact, scatter, gathering, frame): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<Interact>>,
         Option<Res<pbd_app::config::ScatterSettings>>,
         Option<Res<pbd_app::config::GatherConfig>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
     ),
     (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
@@ -724,10 +735,10 @@ pub fn use_key(
     }
     let wall_s = time.elapsed_secs();
     let now_s = sun.clock.seconds;
-    let plant =
-        eye_ray(&cameras).and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look));
+    let plant = eye_ray(&cameras, frame.as_deref())
+        .and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look));
     let day = pbd_app::clutter::day_of(now_s);
-    let clutter = eye_ray(&cameras)
+    let clutter = eye_ray(&cameras, frame.as_deref())
         .zip(scatter.as_deref())
         .and_then(|((eye, look), s)| {
             pbd_app::clutter::clutter_on_ray(
@@ -1176,7 +1187,10 @@ pub fn show(
     recipes: Res<Recipes>,
     sun: Res<pbd_app::sky::Sun>,
     time: Res<Time>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     mut crops: Query<(Entity, &mut CropView, &mut Faded), Without<ForgeView>>,
     mut forges: Query<(Entity, &mut ForgeView, &mut Faded, &Children), Without<CropView>>,
     mut flames: Query<&mut Visibility, With<Flame>>,
@@ -1209,9 +1223,14 @@ pub fn show(
     let Some(eye) = cameras
         .iter()
         .find(|(_, c)| c.is_active)
-        .map(|(t, _)| t.translation())
+        .map(|(t, _)| pbd_app::render_origin::local_of(frame.as_deref(), t.translation()))
     else {
         return;
+    };
+    // Spawned in render space from the planet-local stand.
+    let drawn = |mut t: Transform| {
+        t.translation = pbd_app::render_origin::drawn_of(frame.as_deref(), t.translation);
+        t
     };
     keys.refresh(&fine);
     let now_s = sun.clock.seconds;
@@ -1296,7 +1315,7 @@ pub fn show(
     }
     for (cell, (crop, stage, layer, index, wild)) in wanted {
         let turn = (cell % 360) as f32 * std::f32::consts::PI / 180.0;
-        let Some(transform) = standing(&fine, index, usize::from(layer), turn) else {
+        let Some(transform) = standing(&fine, index, usize::from(layer), turn).map(drawn) else {
             continue;
         };
         commands
@@ -1369,7 +1388,7 @@ pub fn show(
         }
     }
     for ((cell, layer), (index, working, material)) in wanted {
-        let Some(transform) = standing(&fine, index, usize::from(layer), 0.0) else {
+        let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
         if material == Material::Workbench {
@@ -1453,7 +1472,10 @@ pub fn show(
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted_gather(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     refresh: Res<pbd_app::planet::LodRefresh>,
     (fine, mut save, mut slots, sun, scatter): (
         Res<PlanetFine>,
@@ -1480,7 +1502,8 @@ pub fn scripted_gather(
         return;
     };
     *frames = u32::MAX;
-    let up = transform.translation().normalize_or(Vec3::Y);
+    let up = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation())
+        .normalize_or(Vec3::Y);
     let odds = pbd_app::clutter::odds(&scatter);
     // A hundredth of a day ago: long past the sink, far short of regrowth.
     let day = pbd_app::clutter::day_of(sun.clock.seconds) - 0.01;
@@ -1516,7 +1539,10 @@ pub fn scripted_gather(
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     refresh: Res<pbd_app::planet::LodRefresh>,
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
         ResMut<PlanetFine>,
@@ -1546,7 +1572,7 @@ pub fn scripted(
     let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let up = eye.normalize_or(Vec3::Y);
     let forward = transform.forward().as_vec3();
     let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);

@@ -15,11 +15,14 @@ use pbd_core::aim;
 use pbd_core::terrain::Material;
 
 /// F5 and F6, on foot with the pointer captured.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut arrows: ResMut<FlowArrows>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
@@ -39,7 +42,7 @@ pub fn keys(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let look = transform.forward().as_vec3();
     pour(
         &mut Edited {
@@ -101,10 +104,13 @@ fn pour(world: &mut Edited, eye: Vec3, look: Vec3) -> Option<(u32, usize)> {
 /// `--pour` pours one source where the capture camera looks, then runs
 /// `--water-ticks` of the rule at once, so a capture shows water that has
 /// had that long to move. `--arrows` turns the overlay on.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
     mut save: ResMut<WorldSave>,
@@ -141,7 +147,7 @@ pub fn scripted(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let up = eye.normalize_or(Vec3::Y);
     let mut look = transform.forward().as_vec3();
     let right = transform.right().as_vec3();
@@ -342,4 +348,62 @@ pub fn pour_cycle(
         }
     }
     info!("POUR_FLIP {due} {material:?}: {changed} sources");
+}
+
+/// MEASUREMENT (`water-flow` 5.4, the owner's "the despawn is still step
+/// based"): `PBD_POUR_STOP_S=<seconds>` in a capture stops the sources
+/// `--pour` poured that many seconds of game time after the pour, through
+/// the ordinary edit path (a source taken, as a bucket takes one), so a
+/// `PBD_CAPTURE_RUN` sequence can film a pour draining frame by frame. In a
+/// capture the clock is the fixed step, so the stop lands on the same frame
+/// in every run. Nothing of it exists without the variable.
+#[allow(clippy::too_many_arguments)]
+pub fn pour_stop(
+    time: Res<Time>,
+    mut fine: ResMut<PlanetFine>,
+    mut contact: ResMut<PlanetContact>,
+    mut save: ResMut<WorldSave>,
+    mut slots: ResMut<super::slots::Hotbar>,
+    (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
+    sources: Res<PourSources>,
+    mut since: Local<Option<f32>>,
+    mut stop_s: Local<Option<Option<f32>>>,
+) {
+    let Some(stop_s) = *stop_s.get_or_insert_with(|| {
+        std::env::var("PBD_POUR_STOP_S")
+            .ok()
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .filter(|s| s.is_finite() && *s >= 0.0)
+    }) else {
+        return;
+    };
+    if sources.0.is_empty() {
+        return;
+    }
+    let Some(elapsed) = since.as_mut() else {
+        *since = Some(0.0);
+        return;
+    };
+    if *elapsed > stop_s {
+        return;
+    }
+    *elapsed += time.delta_secs();
+    if *elapsed <= stop_s {
+        return;
+    }
+    let mut world = Edited {
+        fine: &mut fine,
+        contact: &mut contact,
+        save: &mut save,
+        slots: &mut slots,
+        drops: &mut drops,
+        now_s: sun.clock.seconds,
+    };
+    let mut changed = 0;
+    for &(cell, layer) in &sources.0 {
+        if apply_edit(&mut world, Hands::Empty, cell, layer, Material::Air).is_some() {
+            changed += 1;
+        }
+    }
+    info!("POUR_STOP after {elapsed:.2} s: {changed} sources taken");
 }

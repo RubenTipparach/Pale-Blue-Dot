@@ -1,6 +1,11 @@
 use super::*;
 use crate::fauna::{FaunaSettings, HOME_BODY};
 
+/// The planet-centred origin: the tests below are written in the planet's
+/// frame, which is the local space of this origin (`world-frames`).
+const PLANET: crate::world_frame::SimOrigin =
+    crate::world_frame::SimOrigin::new(crate::world_frame::FrameId(1), glam::DVec3::ZERO);
+
 const R: f32 = 4800.0;
 const G: f32 = 25.0;
 
@@ -53,6 +58,7 @@ impl World {
     fn add(&mut self, id: &str, anchor: Vec3, seed: u64) {
         let i = self.roster.iter().position(|s| s.id == id).unwrap();
         self.schools.push(School::spawn(
+            &PLANET,
             i as u16,
             &self.roster[i],
             anchor,
@@ -64,6 +70,7 @@ impl World {
     fn tick(&mut self, controls: Controls) -> Vec<Event> {
         let dt = 1.0 / 30.0;
         let events = self.line.step(
+            &PLANET,
             dt,
             controls,
             &angler(),
@@ -78,7 +85,7 @@ impl World {
         let splash = self.line.splash();
         for school in &mut self.schools {
             let species = &self.roster[school.species as usize];
-            school.step(dt, species, &self.fauna.flock, &Shore, splash);
+            school.step(&PLANET, dt, species, &self.fauna.flock, &Shore, splash);
         }
         events
     }
@@ -136,6 +143,7 @@ fn a_cast_over_water_floats_and_a_cast_onto_the_beach_comes_back() {
     a.look = -a.feet.normalize();
     world.line.phase = Phase::Charging;
     let events = world.line.step(
+        &PLANET,
         1.0 / 30.0,
         Controls {
             released: true,

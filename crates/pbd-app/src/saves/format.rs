@@ -25,7 +25,6 @@
 //! so the line that records the hole records where the block went, and a
 //! pickup is a line of its own.
 
-use bevy::math::Vec3;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
@@ -251,7 +250,9 @@ pub fn line_of(edit: Edit, drop: Option<&ItemDrop>, slots: &Slots) -> String {
 
 /// A drop as one field: `d<id>:<stack>:<made_s>:<x>,<y>,<z>`. It begins with
 /// `d`, which no slot field does, so an edit line says whether it has one. A
-/// millimetre and a millisecond are finer than anything a drop does.
+/// millimetre and a millisecond are finer than anything a drop does. The
+/// point is the body's frame in f64 (`world-frames` 10.4); `{:.3}` writes
+/// the same text for it as it did for the f32 it was before.
 fn drop_text(drop: &ItemDrop) -> String {
     let p = drop.position;
     format!(
@@ -270,8 +271,8 @@ fn drop_of(text: &str) -> Option<ItemDrop> {
     let id = fields.next()?.parse().ok()?;
     let stack = stack_of(fields.next()?)??;
     let made_s: f64 = fields.next()?.parse().ok()?;
-    let mut xyz = fields.next()?.split(',').map(|v| v.parse::<f32>().ok());
-    let position = Vec3::new(xyz.next()??, xyz.next()??, xyz.next()??);
+    let mut xyz = fields.next()?.split(',').map(|v| v.parse::<f64>().ok());
+    let position = bevy::math::DVec3::new(xyz.next()??, xyz.next()??, xyz.next()??);
     if fields.next().is_some()
         || xyz.next().is_some()
         || stack.count == 0
@@ -838,6 +839,26 @@ mod tests {
         assert!((SLOTS..CARRIED).all(|k| slots.get(k).is_none()));
     }
 
+    /// A drop's field written by the f32 build before (`world-frames`
+    /// 10.4: drops are f64 now) reads and writes back to the same bytes.
+    #[test]
+    fn an_f32_drop_field_reads_and_writes_back_the_same() {
+        for text in [
+            "d41:b1,1:86400.500:-1.500,299.875,12.250",
+            "d3:b2,1:120.017:4436.447,1987.819,-230.918",
+            "d9:b3,1:5.000:-2354.408,1953.115,3701.418",
+        ] {
+            let drop = drop_of(text).expect(text);
+            assert_eq!(drop_text(&drop), text);
+        }
+        // And what the f32 build wrote for an f32 point, this one writes for
+        // the same point widened.
+        let p = bevy::math::DVec3::new(4436.4468, 1987.8191, -230.91805).as_vec3();
+        let old = format!("{:.3},{:.3},{:.3}", p.x, p.y, p.z);
+        let wide = p.as_dvec3();
+        assert_eq!(format!("{:.3},{:.3},{:.3}", wide.x, wide.y, wide.z), old);
+    }
+
     /// A dig's line carries its drop, and a pickup and a pack move are lines
     /// of their own; each comes back exactly.
     #[test]
@@ -851,7 +872,7 @@ mod tests {
             id: 41,
             item: Item::Block(Material::LanternPost),
             count: 1,
-            position: Vec3::new(-1.5, 299.875, 12.25),
+            position: bevy::math::DVec3::new(-1.5, 299.875, 12.25),
             made_s: 86_400.5,
         };
         assert_eq!(

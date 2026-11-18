@@ -20,7 +20,7 @@ use bevy::{
     input::keyboard::{Key, KeyboardInput},
     prelude::*,
 };
-use pbd_app::config::Reflections;
+use pbd_app::config::{Reflections, ShadowQuality};
 use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
@@ -124,6 +124,8 @@ pub enum MenuAction {
     RainShadows,
     /// Set REFLECTIONS: off, low, medium, high (`reflection-quality`).
     Reflections,
+    /// Set SHADOW QUALITY: low, medium, high, ultra (`shadow-quality`).
+    Shadows,
     /// The starter mission's HUD line, on or off.
     MissionLine,
     /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
@@ -214,6 +216,13 @@ fn slider_step(action: MenuAction, player: &PlayerSettings) -> Option<(usize, us
                 .position(|r| *r == player.reflections)
                 .unwrap_or(Reflections::ALL.len() - 1),
         ),
+        MenuAction::Shadows => (
+            ShadowQuality::ALL.len(),
+            ShadowQuality::ALL
+                .iter()
+                .position(|r| *r == player.shadows)
+                .unwrap_or(0),
+        ),
         MenuAction::RenderScale => {
             let steps = scale_steps();
             (
@@ -245,6 +254,9 @@ fn with_step(action: MenuAction, player: PlayerSettings, step: usize) -> PlayerS
         MenuAction::Reflections => {
             changed.reflections = Reflections::ALL[step.min(Reflections::ALL.len() - 1)];
         }
+        MenuAction::Shadows => {
+            changed.shadows = ShadowQuality::ALL[step.min(ShadowQuality::ALL.len() - 1)];
+        }
         _ => {}
     }
     changed
@@ -256,6 +268,7 @@ fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String>
         MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
         MenuAction::RenderScale => format!("{}%", player.render_scale),
         MenuAction::Reflections => player.reflections.label().to_string(),
+        MenuAction::Shadows => player.shadows.label().to_string(),
         MenuAction::Volume(which) => {
             let mut volumes = player.volumes;
             format!("{}%", volume_of(&mut volumes, which))
@@ -930,6 +943,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
                         slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
                         slider_row(rows, kit, "Reflections", "", MenuAction::Reflections);
+                        slider_row(rows, kit, "Shadow quality", "", MenuAction::Shadows);
                         // On PICTURE beside Reflections (owner, 2026-11-16:
                         // "rain shadow should be under picture").
                         check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
@@ -1878,6 +1892,7 @@ pub fn press(
             | MenuAction::AutoStep
             | MenuAction::RainShadows
             | MenuAction::Reflections
+            | MenuAction::Shadows
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
             | MenuAction::FlowArrows

@@ -422,26 +422,35 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
 // the sea's own fragment so a poured pool and the sea are one water.
 @vertex
 fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
-    let a = flowing[vertex*4u];
-    let b = flowing[vertex*4u + 1u];
-    let c = flowing[vertex*4u + 2u];
-    let d = flowing[vertex*4u + 3u];
-    // Smooth water between ticks (M31's Pour tab): eased from where the
-    // vertex was the tick before. Fronts at one speed, levels smoothstepped.
+    // Six lanes a vertex (`water_flow::LANES_PER_VERTEX`): a where it is
+    // and its sky, b its normal and kind, c its flow, d where it was and its
+    // flags, e its flow and sky the tick before, f its normal the tick
+    // before and when its ease started.
+    let a = flowing[vertex*6u];
+    let b = flowing[vertex*6u + 1u];
+    let c = flowing[vertex*6u + 2u];
+    let d = flowing[vertex*6u + 3u];
+    let e = flowing[vertex*6u + 4u];
+    let f = flowing[vertex*6u + 5u];
+    // Smooth water between ticks (M31's Pour tab; `water-flow` 5.4): every
+    // lane eased from what it was, on the vertex's own clock (seconds since
+    // the mesh's epoch, z, against its start, over the tick, w). Fronts at
+    // one speed, levels smoothstepped.
     let flags = u32(d.w + 0.5);
-    let t = select(view.sea_frame.z, view.sea_frame.w, (flags & 1u) != 0u);
+    let frac = clamp((view.sea_frame.z - f.w) / max(view.sea_frame.w, 1e-3), 0.0, 1.0);
+    let t = select(frac * frac * (3.0 - 2.0 * frac), frac, (flags & 1u) != 0u);
     let p = mix(d.xyz, a.xyz, t);
     var out: VertexOut;
     out.body_position = p;
     out.local_position = view.planet_center.xyz + p;
     out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
     // A dried cell, its tick played: gone (outside the clip volume).
-    if ((flags & 2u) != 0u && view.sea_frame.w > 0.999) {
+    if ((flags & 2u) != 0u && frac > 0.999) {
         out.clip = vec4<f32>(0.0, 0.0, 2.0, 1.0);
     }
-    out.normal = b.xyz;
-    out.sky_light = a.w;
-    out.flow_uv = c.xyz;
+    out.normal = safe_normal(mix(f.xyz, b.xyz, t));
+    out.sky_light = mix(e.w, a.w, t);
+    out.flow_uv = mix(e.xyz, c.xyz, t);
     out.level = 0u;
     out.owner_a = safe_normal(p);
     out.owner_b = out.owner_a;

@@ -1,0 +1,10 @@
+before-walk.csv: 1256 frames (before-walk)
+frame dt: mean 19.52 ms, min 4.46, max 105.38
+fixed steps per frame: {0: 16, 1: 1041, 2: 182, 3: 10, 4: 2, 5: 3, 6: 1, 7: 1}
+camera world speed while moving: mean 2.529 m/s, sd 3.100 (122.6%), frames with no camera move 543
+float on screen, jitter (px from its neighbours' mean): n 0, rms nan, p50 nan, p99 nan
+fish on screen, jitter (px from its neighbours' mean): n 739, rms 8644.090, p50 2.152, p99 12093.901
+held tool shimmer, origin at the planet's centre (as drawn): n 1255, rms 2.561 px, p50 1.950, p99 6.154 px
+held tool shimmer, origin rebased to the camera (16 m grid): n 1255, rms 0.0044 px, p50 0.0035, p99 0.0099 px
+fish drawn: frames it did not move 463 of 1087; speed per frame p10 0.967, p50 1.803, p90 3.245 m/s (p90/p10 3.4)
+camera distance from the render origin: up to 4860.9 m, f32 step there 0.488 mm

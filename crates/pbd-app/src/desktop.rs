@@ -1,6 +1,7 @@
 mod arrival;
 mod breeding;
 mod compass_bar;
+mod cpu_times;
 mod cracks;
 mod craft;
 mod digging;
@@ -106,6 +107,11 @@ pub struct Launch {
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
     /// time is its work and not the display's refresh.
     pub no_vsync: bool,
+    /// `--vsync`: present with vsync in a `--frame-log` run, which otherwise
+    /// runs without it (owner, 2026-11-17: "to avoid confusion vsync just
+    /// shouldnt run when we benchmark"), so a log's frame time is the work and
+    /// never the wait for the display.
+    pub vsync: bool,
     /// `--frame-latency 1|2`: how many frames the swapchain may queue
     /// (`crab-breeze-lessons` 1.1). The default is 2 (1.3): measured on the
     /// owner's desktop it took 3.6 ms off p50 in flight and on foot in the
@@ -159,6 +165,11 @@ pub struct Launch {
     /// fish in the slots (`fishing-and-equipment` tasks 11). A measurement
     /// instrument.
     pub fish_play: bool,
+    /// `--watch-hook`: with `--fish`, the frame is drawn from under the water
+    /// beside the hook while the line is in, and the HUD and readout are
+    /// hidden, so a bite can be filmed from below (`movement-smoothness` 7).
+    /// A recording instrument.
+    pub watch_hook: bool,
     /// `--cast`: take up the rod and cast once, from a boat's seat
     /// (`--aboard tube|raft|loon|rowboat`) or on foot where the walker
     /// stands (`--at`), scripted as `--fish` casts on its shore
@@ -191,7 +202,9 @@ pub struct Launch {
     /// Capture instrument: a cog boarded with `--aboard cog` is cast off
     /// with its yard braced this many degrees and 2 m/s of way.
     pub sail: Option<f32>,
-    /// Static capture instrument: translate the scene within the local frame.
+    /// Test instrument: hold the render origin this far from the camera's
+    /// cell, so the planet's centre and the eye are both away from 0 in
+    /// render space (`movement-smoothness` design 6.6). Works in play.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
@@ -456,6 +469,7 @@ impl Launch {
             sail_for: None,
             frame_graph: false,
             no_vsync: false,
+            vsync: false,
             frame_latency: 2,
             settings: pbd_app::settings::Overrides::default(),
             upscale_nearest: false,
@@ -478,6 +492,7 @@ impl Launch {
             climb_out: false,
             fish: false,
             fish_play: false,
+            watch_hook: false,
             cast: false,
             rod_cue: None,
             load_hold: false,
@@ -1042,6 +1057,7 @@ impl Launch {
                     ));
                 }
                 "--no-vsync" => result.no_vsync = true,
+                "--vsync" => result.vsync = true,
                 "--frame-latency" => {
                     i += 1;
                     let frames: u32 = args
@@ -1091,6 +1107,16 @@ impl Launch {
                     result.settings.reflections = Some(
                         pbd_app::config::Reflections::parse(level)
                             .expect("--reflections takes off, low, medium or high"),
+                    );
+                }
+                "--shadows" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--shadows requires low, medium, high or ultra");
+                    result.settings.shadows = Some(
+                        pbd_app::config::ShadowQuality::parse(level)
+                            .expect("--shadows takes low, medium, high or ultra"),
                     );
                 }
                 "--grass" => {
@@ -1212,6 +1238,7 @@ impl Launch {
                     result.fish = true;
                     result.fish_play = true;
                 }
+                "--watch-hook" => result.watch_hook = true,
                 "--cast" => result.cast = true,
                 "--rod-cue" => {
                     i += 1;
@@ -1435,11 +1462,6 @@ impl Launch {
                 || result.fly,
             "--height requires --fly, or --view shore or dive with a static --capture"
         );
-        assert!(
-            result.render_offset == Vec3::ZERO
-                || (result.capture.is_some() && !result.walk && !result.fly && !result.tour),
-            "--render-offset requires a static --capture"
-        );
         result
     }
 }
@@ -1532,11 +1554,18 @@ pub fn run(args: &[String]) {
                 ..default()
             })
             .set(ImagePlugin::default_nearest())
+            .set(bevy::log::LogPlugin {
+                custom_layer: cpu_times::span_layer,
+                ..default()
+            })
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
                     resolution: window_size().into(),
-                    present_mode: if launch.capture.is_some() || launch.no_vsync {
+                    present_mode: if launch.capture.is_some()
+                        || launch.no_vsync
+                        || (launch.frame_log.is_some() && !launch.vsync)
+                    {
                         PresentMode::AutoNoVsync
                     } else {
                         PresentMode::AutoVsync
@@ -1569,10 +1598,18 @@ pub fn run(args: &[String]) {
         pbd_app::bloom::LiteBloomPlugin,
     ))
     .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
-    .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
+    .insert_resource(PhysicsFrame::default())
+    // The render origin starts at -offset, so a camera placed at a
+    // planet-local eye plus the offset is in render space from its first
+    // frame (`movement-smoothness` design 6.6).
+    .insert_resource(pbd_app::walking::DrawBetweenSteps(launch.capture.is_none()))
+    .insert_resource(pbd_app::render_origin::RenderOffset(
+        launch.render_offset.as_dvec3(),
+    ))
+    .insert_resource(pbd_app::planet::PlanetRenderFrame {
+        center: launch.render_offset.as_dvec3(),
         origin: -launch.render_offset.as_dvec3(),
-        ..default()
-    }))
+    })
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
@@ -1628,6 +1665,10 @@ pub fn run(args: &[String]) {
     .insert_resource(tools)
     // And the dug blocks still floating where they were cut.
     .add_plugins(pbd_app::drops::DropsPlugin)
+    // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
+    .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
+    .add_plugins(pbd_app::step_trace::StepTracePlugin)
+    .add_plugins(pbd_app::sim_origin::SimOriginPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
     // Each world's city sites, made once and kept in its save (`city-sites`).
@@ -1876,7 +1917,12 @@ pub fn run(args: &[String]) {
             guide::paint,
             hud::near_field,
             compass_bar::update,
-            (frame_graph::toggle, frame_graph::update).chain(),
+            (
+                frame_graph::toggle,
+                frame_graph::update,
+                frame_graph::breakdown,
+            )
+                .chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             (time_ui::press, time_ui::toggle, time_ui::show).chain(),
@@ -1943,6 +1989,12 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_stop
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.capture.is_some())
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
             water::pour_cycle
                 .after(water::scripted)
                 .run_if(|launch: Res<Launch>| launch.pour_for.is_some())
@@ -1981,6 +2033,12 @@ pub fn run(args: &[String]) {
             .run_if(pbd_app::loading::ready)
             .after(capture),
     )
+    .add_systems(
+        Last,
+        rebase_shots
+            .run_if(|| std::env::var_os("PBD_REBASE_SHOTS").is_some())
+            .run_if(pbd_app::loading::ready),
+    )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
     .insert_resource(new_world_start)
@@ -1998,25 +2056,33 @@ pub fn run(args: &[String]) {
     .add_systems(
         Last,
         (
-            (measure_frames, write_frame_log).chain(),
+            (cpu_times::main_end, measure_frames, write_frame_log).chain(),
             // The save is the loading thread's until the world opens.
             drain_saves.run_if(pbd_app::world_open),
         )
             // The frame limiter holds the loop after these.
             .in_set(pbd_app::settings::PacingSet),
     );
+    cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
-        // GPU time per render pass for the frame log (`perf-rig`), and a
-        // route that ends the run when it lands, like `--walk-distance`.
-        // Not on macOS: its spans write timestamps inside a pass, which Apple
-        // GPUs cannot, so they read nought there, and the counter sample
-        // buffers it still makes for every frame in flight ran out under slow
-        // frames ("Cannot allocate sample buffer", a crash). The clouds'
-        // boundary timer measures them there instead (`cloud-puffs`).
-        if !cfg!(target_os = "macos") {
-            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
-        }
-        app.add_systems(Last, (quit_after_route, log_window_attention));
+        // A route that ends the run when it lands, like `--walk-distance`.
+        app.add_systems(
+            Last,
+            (
+                quit_after_route,
+                log_window_attention,
+                cpu_times::log_shadow_spans,
+            ),
+        );
+    }
+    // GPU time per render pass, for the frame log (`perf-rig`) and the F3
+    // breakdown. Not on macOS: its spans write timestamps inside a pass,
+    // which Apple GPUs cannot, so they read nought there, and the counter
+    // sample buffers it still makes for every frame in flight ran out under
+    // slow frames ("Cannot allocate sample buffer", a crash). The clouds'
+    // boundary timer measures them there instead (`cloud-puffs`).
+    if !cfg!(target_os = "macos") {
+        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
     }
     // Towns are lit by the field in every run, a still from above as much as
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
@@ -2160,11 +2226,35 @@ pub fn run(args: &[String]) {
             if launch.fish_play {
                 app.insert_resource(FishPlay);
             }
+            if launch.watch_hook {
+                app.insert_resource(pbd_app::fish::WatchHook::default())
+                    .add_systems(
+                        PostUpdate,
+                        hide_in_play_hud
+                            .before(
+                                bevy::camera::visibility::VisibilitySystems::VisibilityPropagate,
+                            )
+                            .run_if(pbd_app::loading::ready),
+                    );
+            }
+            // In a real-time run (no `--capture`) the script's frames count
+            // from `READY`, so its cast is not spent under the loading
+            // screen (`movement-smoothness`'s fishing trace).
+            let live = launch.capture.is_none();
+            if live {
+                app.insert_resource(FishLive);
+            }
             app.add_systems(
                 PreUpdate,
                 (swim_script, fish_script)
                     .chain()
-                    .after(bevy::input::InputSystems),
+                    .after(bevy::input::InputSystems)
+                    .run_if(
+                        move |ready: Option<Res<pbd_app::loading::Warming>>,
+                              loading: Option<Res<pbd_app::WorldLoading>>| {
+                            !live || (ready.is_none() && loading.is_none())
+                        },
+                    ),
             );
         }
         if let Some(seconds) = launch.sail_for {
@@ -2465,9 +2555,11 @@ fn load_world(world: &mut World) {
     let pose = {
         let state = world.get_resource::<pbd_app::walking::WalkingState>();
         let view = state.map(pbd_app::walking::WalkingState::view);
+        // Saved in the planet's frame, never local (`world-frames`).
+        let o = pbd_app::sim_origin::origin_of(world);
         let mut walkers =
             world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
-        let position = walkers.iter(world).next().map(|p| p.0);
+        let position = walkers.iter(world).next().map(|p| o.query_point(p.0));
         view.zip(position).map(|((heading, pitch), position)| Pose {
             position,
             heading,
@@ -2620,16 +2712,18 @@ fn switch_line(world: &mut World) -> String {
         save.identity.generator,
         save.edits.len()
     );
+    let o = pbd_app::sim_origin::origin_of(world);
     let mut walkers =
         world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
     let walker = walkers.iter(world).next().map_or_else(
         || "none".to_string(),
         |p| {
             // As `--at` takes it, through the one place the screen reads.
-            let place = pbd_app::place::Place::of(p.0);
+            let p = o.query_point(p.0);
+            let place = pbd_app::place::Place::of(p);
             format!(
                 "{:.1},{:.1},{:.1} (lat {:.4} lon {:.4})",
-                p.0.x, p.0.y, p.0.z, place.lat, place.lon
+                p.x, p.y, p.z, place.lat, place.lon
             )
         },
     );
@@ -2659,6 +2753,7 @@ fn autosave(
     sun: Res<pbd_app::sky::Sun>,
     mut save: ResMut<WorldSave>,
     mut due: Local<f32>,
+    space: pbd_app::SimSpace,
 ) {
     let opening = screen.is_changed() && *screen != menu::Screen::Playing;
     *due -= time.delta_secs();
@@ -2672,7 +2767,8 @@ fn autosave(
     let (heading, pitch) = state.view();
     save.snapshot(
         Pose {
-            position: position.0,
+            // The planet's frame, never local (`world-frames`).
+            position: space.origin().query_point(position.0),
             heading,
             pitch,
             selected: slots.selected(),
@@ -3434,6 +3530,7 @@ fn walk_script(
     mut mouse: ResMut<ButtonInput<MouseButton>>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut exit: MessageWriter<AppExit>,
+    space: pbd_app::SimSpace,
 ) {
     let Some(goal) = launch.walk_distance else {
         return;
@@ -3444,6 +3541,8 @@ fn walk_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     let here = position.0;
     let now = Instant::now();
     state.captured = true;
@@ -3468,7 +3567,10 @@ fn walk_script(
     }
     progress.last = Some(here);
     keys.press(KeyCode::KeyW);
-    keys.press(KeyCode::ShiftLeft);
+    // MEASUREMENT: a slow walk (`PBD_WALK_AXIS_SCALE`) walks, not sprints.
+    if std::env::var_os("PBD_WALK_AXIS_SCALE").is_none() {
+        keys.press(KeyCode::ShiftLeft);
+    }
     let (anchor, since) = *progress.anchor.get_or_insert((here, now));
     if here.distance(anchor) > 4.0 {
         progress.anchor = Some((here, now));
@@ -3539,6 +3641,7 @@ fn stroll_script(
     towns: Option<Res<pbd_app::towns::Towns>>,
     mut stood: Local<Option<Instant>>,
     mut stood_log: Local<Option<Instant>>,
+    space: pbd_app::SimSpace,
 ) {
     let stood_log = stood_log.get_or_insert_with(Instant::now);
     let Some(seconds) = launch.stroll else {
@@ -3550,6 +3653,8 @@ fn stroll_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     // Not before the walker stands in a town that stands (within 150 m of
     // its anchor), and a second after: towns stand from kilometres off, and
     // the walker is put at `--at` only once its town is up.
@@ -3688,6 +3793,7 @@ fn coast_script(
     walkers: Query<&Position, With<pbd_app::walking::Walker>>,
     mut exit: MessageWriter<AppExit>,
     mut walk: Local<CoastWalk>,
+    space: pbd_app::SimSpace,
 ) {
     use pbd_app::coast_walk;
     let Some(goal) = launch.coast_walk else {
@@ -3699,6 +3805,8 @@ fn coast_script(
     let Ok(position) = walkers.single() else {
         return;
     };
+    // The instrument steers by planet points (`world-frames`).
+    let position = &Position(space.origin().query_point(position.0));
     let here = position.0;
     let up = here.normalize_or(Vec3::Y);
     let now = Instant::now();
@@ -3922,6 +4030,7 @@ fn swim_script(
         ),
         With<pbd_app::walking::Walker>,
     >,
+    space: pbd_app::SimSpace,
 ) {
     if !state.active {
         return;
@@ -3958,7 +4067,12 @@ fn swim_script(
         let Ok((mut position, mut ground, mut transform)) = walkers.single_mut() else {
             return;
         };
-        let stand = land * (terrain.sample(land).floor_radius + 1.0);
+        // A planet point, put into local space (`world-frames`); the origin
+        // follows the walker there on the next frame.
+        let stand = space.origin().at(
+            land.as_dvec3(),
+            (terrain.sample(land).floor_radius + 1.0) as f64,
+        );
         position.0 = stand;
         transform.translation = stand;
         ground.previous = stand;
@@ -4040,11 +4154,13 @@ fn climb_out_script(
         ),
         With<pbd_app::walking::Walker>,
     >,
+    space: pbd_app::SimSpace,
 ) {
     if !state.active {
         return;
     }
     *frame += 1;
+    let o = space.origin();
     let Some((coarse, _)) = *coarse_site.get_or_insert_with(|| {
         let found = climb_out_site();
         if found.is_none() {
@@ -4081,7 +4197,10 @@ fn climb_out_script(
         } else {
             out
         };
-        let start = from * (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT);
+        let start = o.at(
+            from.as_dvec3(),
+            (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT) as f64,
+        );
         position.0 = start;
         transform.translation = start;
         velocity.0 = Vec3::ZERO;
@@ -4115,8 +4234,8 @@ fn climb_out_script(
     info!(
         "CLIMB {} {:.2} {:.2}",
         *frame,
-        position.0.length() - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
-        (position.0.normalize() - bank).length() * PLANET_RADIUS
+        o.radius_at(position.0) as f32 - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
+        (o.up_at(position.0) - bank).length() * PLANET_RADIUS
     );
 }
 
@@ -4165,6 +4284,7 @@ fn break_script(
 /// `--cast`: once aboard, the rod granted and taken up, the pointer held,
 /// and the left button held for a second from 60 frames after boarding, as
 /// `fish_script` does on shore; the line's phase logged every second.
+#[allow(clippy::too_many_arguments)]
 fn cast_afloat_script(
     aboard: Res<pbd_app::vehicles::Aboard>,
     mut walking: ResMut<pbd_app::walking::WalkingState>,
@@ -4173,6 +4293,7 @@ fn cast_afloat_script(
     mut view: ResMut<pbd_app::vehicles::VehicleView>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
     mut frame: Local<u32>,
+    space: pbd_app::SimSpace,
 ) {
     // Aboard, or on foot (a cast from a bank, `fishing-anywhere`).
     if aboard.0.is_none() {
@@ -4203,7 +4324,7 @@ fn cast_afloat_script(
             "cast script frame {}: line {:?}, float at {:.1} m",
             *frame,
             fishery.line.phase,
-            fishery.line.float.length() - pbd_app::planet::PLANET_RADIUS
+            space.origin().radius_at(fishery.line.float) as f32 - pbd_app::planet::PLANET_RADIUS
         );
     }
 }
@@ -4295,9 +4416,26 @@ fn load_hold_script(
     }
 }
 
+/// `--watch-hook`: no HUD or readout over the view from under the water
+/// (the slots, the crosshair, the compass, the prompts and the readout),
+/// after everything that shows them.
+fn hide_in_play_hud(mut nodes: Query<&mut Visibility, With<Node>>) {
+    for mut v in &mut nodes {
+        if *v != Visibility::Hidden {
+            *v = Visibility::Hidden;
+        }
+    }
+}
+
 /// `--fish-play` is on: `fish_script` plays the bite out.
 #[derive(Resource)]
 struct FishPlay;
+
+/// A real-time `--fish` run (no `--capture`): the first click only takes the
+/// pointer, so while the line is in, the script casts again every three
+/// seconds (`movement-smoothness`'s fishing trace).
+#[derive(Resource)]
+struct FishLive;
 
 /// One scripted cast for `--fish`: the left button held for most of a second
 /// from frame 90, and the fishery's state logged every second, so a run says
@@ -4309,6 +4447,7 @@ fn fish_script(
     status: Option<Res<pbd_app::fish::FishingStatus>>,
     fauna: Res<pbd_app::config::FaunaConfig>,
     play: Option<Res<FishPlay>>,
+    live: Option<Res<FishLive>>,
     hotbar: Option<Res<pbd_app::hotbar::Hotbar>>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut was: Local<Option<pbd_core::fishing::Phase>>,
@@ -4330,6 +4469,17 @@ fn fish_script(
         91..=149 => {}
         150 => buttons.release(MouseButton::Left),
         _ => {}
+    }
+    if live.is_some()
+        && *frame > 150
+        && let Some(fishery) = fishery.as_deref()
+        && matches!(fishery.line.phase, Phase::Ready | Phase::Charging)
+    {
+        if *frame % 180 < 60 {
+            buttons.press(MouseButton::Left);
+        } else {
+            buttons.release(MouseButton::Left);
+        }
     }
     // `--fish-play`: the bite played out as a player plays it.
     if play.is_some()
@@ -4360,11 +4510,19 @@ fn fish_script(
             Phase::Bite if !buttons.pressed(MouseButton::Left) => {
                 buttons.press(MouseButton::Left);
             }
-            Phase::Hooked if line.tension < 0.6 => {
-                if !buttons.pressed(MouseButton::Left) {
+            // Reel as a hand does: hold the button down until the tension
+            // is high, let it up until it has fallen, never one frame on and
+            // one off (`movement-smoothness` 7.2).
+            Phase::Hooked => {
+                let held = buttons.pressed(MouseButton::Left);
+                if !held && line.tension < 0.45 {
                     buttons.press(MouseButton::Left);
+                } else if held && line.tension > 0.75 {
+                    buttons.release(MouseButton::Left);
                 }
             }
+            // A live run's recast (above) holds the button itself.
+            Phase::Ready | Phase::Charging if live.is_some() => {}
             _ => {
                 if buttons.pressed(MouseButton::Left) {
                     buttons.release(MouseButton::Left);
@@ -4478,6 +4636,50 @@ fn landing_shots(
         commands
             .spawn(Screenshot::primary_window())
             .observe(bevy::render::view::screenshot::save_to_disk(shot));
+    }
+}
+
+/// MEASUREMENT (`world-frames` design 7): `PBD_REBASE_SHOTS=<dir>` saves
+/// every frame of a real-time run as `f<frame>.png` and keeps only the four
+/// frames each side of the first three rebases of the local origin, so the
+/// frames across a rebase can be compared with their neighbours for a pop.
+/// The frame a rebase is drawn in is logged as `REBASE_SHOT <frame>`.
+/// Changes nothing drawn.
+fn rebase_shots(
+    mut commands: Commands,
+    rebases: Option<Res<pbd_app::sim_origin::RebaseCount>>,
+    frames: Option<Res<pbd_app::loading::FrameCount>>,
+    mut state: Local<(Option<u64>, Vec<u64>)>,
+) {
+    let (Some(rebases), Some(frames)) = (rebases, frames) else {
+        return;
+    };
+    let Some(dir) = std::env::var_os("PBD_REBASE_SHOTS").map(PathBuf::from) else {
+        return;
+    };
+    let frame = frames.0;
+    let (seen, at) = &mut *state;
+    if seen.is_some_and(|n| n != rebases.0) && at.len() < 3 {
+        at.push(frame);
+        info!("REBASE_SHOT {frame} rebase {}", rebases.0);
+    }
+    *seen = Some(rebases.0);
+    if at.len() >= 3 && frame > at[2] + 5 {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join(format!("f{frame:06}.png"));
+    commands
+        .spawn(Screenshot::primary_window())
+        .observe(move |event: On<ScreenshotCaptured>| {
+            if let Ok(image) = event.image.clone().try_into_dynamic() {
+                let _ = image.to_rgb8().save(&path);
+            }
+        });
+    // Drop what is not near a rebase.
+    let old = frame.saturating_sub(6);
+    if !at.iter().any(|r| old + 4 >= *r && old <= r + 4) {
+        let _ = std::fs::remove_file(dir.join(format!("f{old:06}.png")));
     }
 }
 
@@ -4643,7 +4845,7 @@ impl FrameLog {
                 .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot,main_between_ms,submit_ms,present_ms"
             )
             .expect("frame log header");
             out
@@ -4669,6 +4871,8 @@ fn write_frame_log(
     walk: Option<Res<WalkProgress>>,
     diagnostics: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
     route: Option<Res<pbd_app::flight_view::RouteState>>,
+    cpu: Res<cpu_times::CpuTimes>,
+    showcase: Option<Res<showcase::Player>>,
 ) {
     use std::io::Write;
     let latency = log.1;
@@ -4692,7 +4896,7 @@ fn write_frame_log(
     let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
@@ -4702,6 +4906,13 @@ fn write_frame_log(
         route.map_or(f64::NAN, |route| route.flown_rad
             * f64::from(pbd_app::planet::PLANET_RADIUS)),
         gpu.other,
+        cpu.main_ms,
+        cpu.render_ms(),
+        cpu.acquire_ms(),
+        showcase.map_or(0, |player| player.shot()),
+        cpu.between_ms,
+        cpu.submit_ms(),
+        cpu.present_ms(),
     );
 }
 

@@ -2,8 +2,12 @@
 //!
 //! The fish are packed arrays rather than entities, because there are dozens
 //! of them to a school and a fish is a point with a heading, not an actor.
-//! Positions are planet-local metres (the planet's centre at the origin), so
-//! "up" at a fish is its own direction and the surface and the bed are radii.
+//! Positions are local metres (`world-frames`): relative to a
+//! [`SimOrigin`] near the player, so a fish moving millimetres a step moves
+//! by them, not by the half millimetre an f32 holds at a planet's radius.
+//! "Up" at a fish and the surface and the bed (radii from the planet's
+//! centre) are taken through the origin, in f64. The [`Water`] is asked at
+//! planet points, which hold half a millimetre and are never stored.
 //!
 //! Each step is the three boid rules within the school (separation,
 //! alignment, cohesion), a goal the school wanders between, the surface and
@@ -12,6 +16,7 @@
 //! bites is a fish that was swimming there.
 
 use super::{Behaviour, FlockSettings, Mover, Pose, Rng, Species, hash2};
+use crate::world_frame::SimOrigin;
 use glam::Vec3;
 
 /// The water a school swims in: the sea surface and the ground under a
@@ -38,6 +43,10 @@ pub struct School {
     /// fish that strays over water too shallow for it is pushed back toward.
     pub anchor: Vec3,
     pub positions: Vec<Vec3>,
+    /// Where each fish was before the last [`School::step`]: the school
+    /// steps on its own clock, slower than the frame, and is drawn between
+    /// the two (`movement-smoothness`), never at the raw step.
+    pub before: Vec<Vec3>,
     pub velocities: Vec<Vec3>,
     /// Seconds of fright left per fish.
     pub spook: Vec<f32>,
@@ -79,9 +88,10 @@ pub const FLEE_M: f32 = 12.0;
 pub const DUCK_DIVE_S: f32 = 0.6;
 
 impl School {
-    /// A school of `species` spawned about `anchor`, which the spawner has
-    /// already found to be water the species lives in.
+    /// A school of `species` spawned about `anchor` (local), which the
+    /// spawner has already found to be water the species lives in.
     pub fn spawn(
+        o: &SimOrigin,
         index: u16,
         species: &Species,
         anchor: Vec3,
@@ -95,13 +105,14 @@ impl School {
         } else {
             species.school.0
         };
-        let up = anchor.normalize_or(Vec3::Y);
+        let up = o.up_at(anchor);
         let (east, north) = tangents(up);
         let mut school = Self {
             species: index,
             seed,
             anchor,
             positions: Vec::with_capacity(count as usize),
+            before: Vec::new(),
             velocities: Vec::with_capacity(count as usize),
             spook: vec![0.0; count as usize],
             ids: (0..count as u32).collect(),
@@ -121,18 +132,44 @@ impl School {
             let spread = 1.5;
             let offset = east * school.rng.range(-spread, spread)
                 + north * school.rng.range(-spread, spread);
-            let at = (anchor + offset).normalize_or(up);
-            let point = at * water.surface(at * anchor.length());
+            let at = o.with_radius(anchor + offset, o.radius_at(anchor));
+            let point =
+                o.query_point(o.with_radius(at, f64::from(water.surface(o.query_point(at)))));
             let radius = school.depth_for(species, point, water);
-            school.positions.push(at * radius);
-            school.homes.push(at * radius);
+            let p = o.with_radius(at, f64::from(radius));
+            school.positions.push(p);
+            school.homes.push(p);
             let heading = east * school.rng.range(-1.0, 1.0) + north * school.rng.range(-1.0, 1.0);
             school
                 .velocities
                 .push(heading.normalize_or(east) * species.speed_mps.0);
         }
-        school.goal = school.pick_goal(species, 25.0, water);
+        school.goal = school.pick_goal(o, species, 25.0, water);
         school
+    }
+
+    /// Move every local position by `-shift`: the origin was rebased
+    /// (`world-frames`). Nothing else changes.
+    pub fn rebase(&mut self, shift: Vec3) {
+        self.anchor -= shift;
+        self.goal -= shift;
+        for p in self
+            .positions
+            .iter_mut()
+            .chain(self.before.iter_mut())
+            .chain(self.homes.iter_mut())
+        {
+            *p -= shift;
+        }
+        if let Some((_, p)) = self.lure.as_mut() {
+            *p -= shift;
+        }
+        if let Some((_, p)) = self.held.as_mut() {
+            *p -= shift;
+        }
+        if let Some(p) = self.flee.as_mut() {
+            *p -= shift;
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -198,6 +235,28 @@ impl School {
         }
     }
 
+    /// Where fish `i` is drawn, `alpha` (0 to 1) of the way from the step
+    /// before to the last one (`movement-smoothness`): the school's clock
+    /// runs at `step_hz`, slower than the frame, and a fish drawn at the raw
+    /// step stands still for frames and then jumps while the camera glides.
+    /// A fish held at the line's lure is drawn at the lure, which the line
+    /// moves every frame. A fish with no step behind it yet is drawn where
+    /// it is.
+    pub fn drawn(&self, i: usize, alpha: f32) -> Vec3 {
+        if let Some((held, point)) = self.held
+            && held == i
+        {
+            return point;
+        }
+        let now = self.positions[i];
+        match self.before.get(i) {
+            Some(was) if self.before.len() == self.positions.len() => {
+                was.lerp(now, alpha.clamp(0.0, 1.0))
+            }
+            _ => now,
+        }
+    }
+
     /// Frighten one fish.
     pub fn frighten(&mut self, fish: usize, seconds: f32) {
         if let Some(s) = self.spook.get_mut(fish) {
@@ -211,6 +270,9 @@ impl School {
             return;
         }
         self.positions.swap_remove(fish);
+        if fish < self.before.len() {
+            self.before.swap_remove(fish);
+        }
         self.velocities.swap_remove(fish);
         self.spook.swap_remove(fish);
         self.ids.swap_remove(fish);
@@ -241,10 +303,17 @@ impl School {
     }
 
     /// Point the school at a lure: its goal becomes the water under it.
-    pub fn scent(&mut self, species: &Species, lure: Vec3, water: &impl Water, hold_s: f32) {
-        let up = lure.normalize_or(Vec3::Y);
-        let point = up * water.surface(lure);
-        self.goal = up * self.depth_for(species, point, water);
+    pub fn scent(
+        &mut self,
+        o: &SimOrigin,
+        species: &Species,
+        lure: Vec3,
+        water: &impl Water,
+        hold_s: f32,
+    ) {
+        let surface = water.surface(o.query_point(lure));
+        let point = o.query_point(o.with_radius(lure, f64::from(surface)));
+        self.goal = o.with_radius(lure, f64::from(self.depth_for(species, point, water)));
         self.goal_t = hold_s;
         self.lured = true;
     }
@@ -252,6 +321,7 @@ impl School {
     /// One step of the flock.
     pub fn step(
         &mut self,
+        o: &SimOrigin,
         dt: f32,
         species: &Species,
         flock: &FlockSettings,
@@ -261,9 +331,14 @@ impl School {
         if dt.is_nan() || dt <= 0.0 || self.is_empty() {
             return;
         }
+        #[cfg(debug_assertions)]
+        if let Some(p) = self.positions.first() {
+            crate::world_frame::check_local("school", *p);
+        }
+        self.before.clone_from(&self.positions);
         self.goal_t -= dt;
         if self.goal_t <= 0.0 {
-            self.goal = self.pick_goal(species, flock.goal_reach_m, water);
+            self.goal = self.pick_goal(o, species, flock.goal_reach_m, water);
             self.goal_t = self.rng.range(flock.goal_every_s.0, flock.goal_every_s.1);
             self.lured = false;
             self.fleeing = false;
@@ -275,17 +350,19 @@ impl School {
             && !self.lured
         {
             let centre = self.centre();
-            let up = centre.normalize_or(Vec3::Y);
+            let up = o.up_at(centre);
             let away = centre - eye;
             let away = (away - up * away.dot(up)).normalize_or(tangents(up).0);
             let side = up.cross(away);
             'search: for reach in [FLEE_M, FLEE_M * 0.6] {
                 for turn in [0.0f32, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5] {
                     let dir = away * turn.cos() + side * turn.sin();
-                    let at = (centre + dir * reach).normalize_or(up) * self.anchor.length();
-                    if species.fits(water.depth(at)) {
-                        let point = at.normalize_or(up) * water.surface(at);
-                        self.goal = at.normalize_or(up) * self.depth_for(species, point, water);
+                    let at = o.with_radius(centre + dir * reach, o.radius_at(self.anchor));
+                    let q = o.query_point(at);
+                    if species.fits(water.depth(q)) {
+                        let point = o.query_point(o.with_radius(at, f64::from(water.surface(q))));
+                        self.goal =
+                            o.with_radius(at, f64::from(self.depth_for(species, point, water)));
                         self.goal_t = self.goal_t.max(4.0);
                         self.fleeing = true;
                         break 'search;
@@ -308,7 +385,7 @@ impl School {
         }
         let n = self.len();
         let accelerations: Vec<Vec3> = (0..n)
-            .map(|i| self.acceleration(i, species, flock, water, splash))
+            .map(|i| self.acceleration(o, i, species, flock, water, splash))
             .collect();
         for (i, acceleration) in accelerations.into_iter().enumerate() {
             if let Some((held, point)) = self.held
@@ -351,7 +428,7 @@ impl School {
             if speed > fast {
                 v *= fast / speed;
             } else if speed < slow {
-                v = v.normalize_or(tangents(self.positions[i].normalize_or(Vec3::Y)).0) * slow;
+                v = v.normalize_or(tangents(o.up_at(self.positions[i])).0) * slow;
             }
             if !v.is_finite() {
                 v = Vec3::ZERO;
@@ -359,28 +436,33 @@ impl School {
             let mut p = self.positions[i] + v * dt;
             // Never out of the water: between the bed and the surface, with a
             // skin off each, and in the middle of a column too thin for both.
-            let (top, bottom) = (water.surface(p) - SKIN_M, water.bed(p) + SKIN_M);
-            let r = p.length();
+            let q = o.query_point(p);
+            let (top, bottom) = (
+                f64::from(water.surface(q) - SKIN_M),
+                f64::from(water.bed(q) + SKIN_M),
+            );
+            let r = o.radius_at(p);
             let clamped = if top > bottom {
                 r.clamp(bottom, top)
             } else {
                 0.5 * (top + bottom)
             };
-            if r > 0.0 && clamped.is_finite() {
-                p *= clamped / r;
+            if r > 0.0 && clamped.is_finite() && clamped != r {
+                p = o.with_radius(p, clamped);
             }
             // A crawler stands on the bed and a floater rides the surface
             // (`ocean-environments` 7.1): along it, never off it.
+            let q = o.query_point(p);
             let ride = match species.mover {
                 Mover::School => None,
-                Mover::Crawler => Some(water.bed(p) + crawl_lift(species)),
-                Mover::Floater => Some(water.surface(p)),
+                Mover::Crawler => Some(water.bed(q) + crawl_lift(species)),
+                Mover::Floater => Some(water.surface(q)),
             };
             if let Some(radius) = ride
                 && radius.is_finite()
             {
-                let up = p.normalize_or(Vec3::Y);
-                p = up * radius;
+                let up = o.up_at(p);
+                p = o.with_radius(p, f64::from(radius));
                 v -= up * v.dot(up);
             }
             if p.is_finite() {
@@ -392,6 +474,7 @@ impl School {
 
     fn acceleration(
         &self,
+        o: &SimOrigin,
         i: usize,
         species: &Species,
         flock: &FlockSettings,
@@ -399,7 +482,7 @@ impl School {
         splash: Option<Vec3>,
     ) -> Vec3 {
         let p = self.positions[i];
-        let up = p.normalize_or(Vec3::Y);
+        let up = o.up_at(p);
         let (mut separation, mut heading, mut middle, mut neighbours) =
             (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, 0.0f32);
         for (j, q) in self.positions.iter().enumerate() {
@@ -433,21 +516,27 @@ impl School {
         let want = target - p;
         acc += want.normalize_or_zero() * weight * want.length().min(1.0);
         // The surface and the bed are walls.
-        let r = p.length();
-        let (top, bottom) = (water.surface(p) - SKIN_M, water.bed(p) + SKIN_M);
+        // Heights against the surface and the bed as small differences, in
+        // f64 before the cast.
+        let r = o.radius_at(p);
+        let q = o.query_point(p);
+        let (top, bottom) = (
+            f64::from(water.surface(q) - SKIN_M),
+            f64::from(water.bed(q) + SKIN_M),
+        );
         if r > top - 0.3 {
-            acc -= up * flock.wall * (r - (top - 0.3) + 0.1);
+            acc -= up * flock.wall * ((r - (top - 0.3)) as f32 + 0.1);
         }
         if r < bottom + 0.3 {
-            acc += up * flock.wall * ((bottom + 0.3) - r + 0.1);
+            acc += up * flock.wall * (((bottom + 0.3) - r) as f32 + 0.1);
         }
         // Water too shallow for the species: back toward where it spawned.
-        if water.depth(p) < species.depth_m.0 + 0.4 {
+        if water.depth(q) < species.depth_m.0 + 0.4 {
             let home = self.anchor - p;
             acc += (home - up * home.dot(up)).normalize_or_zero() * flock.wall;
         }
         if species.bed && lure.is_none() {
-            acc += up * 3.0 * ((water.bed(p) + 0.35) - r);
+            acc += up * 3.0 * ((f64::from(water.bed(q) + 0.35) - r) as f32);
         }
         if let Some(centre) = splash {
             let d = p.distance(centre);
@@ -480,16 +569,23 @@ impl School {
 
     /// A new place to swim to near where the school spawned, in water deep
     /// enough for it; the old goal when none is found.
-    fn pick_goal(&mut self, species: &Species, reach_m: f32, water: &impl Water) -> Vec3 {
-        let up = self.anchor.normalize_or(Vec3::Y);
+    fn pick_goal(
+        &mut self,
+        o: &SimOrigin,
+        species: &Species,
+        reach_m: f32,
+        water: &impl Water,
+    ) -> Vec3 {
+        let up = o.up_at(self.anchor);
         let (east, north) = tangents(up);
         for _ in 0..12 {
             let offset = east * self.rng.range(-reach_m, reach_m)
                 + north * self.rng.range(-reach_m, reach_m);
-            let at = (self.anchor + offset).normalize_or(up) * self.anchor.length();
-            if species.fits(water.depth(at)) {
-                let point = at.normalize_or(up) * water.surface(at);
-                return at.normalize_or(up) * self.depth_for(species, point, water);
+            let at = o.with_radius(self.anchor + offset, o.radius_at(self.anchor));
+            let q = o.query_point(at);
+            if species.fits(water.depth(q)) {
+                let point = o.query_point(o.with_radius(at, f64::from(water.surface(q))));
+                return o.with_radius(at, f64::from(self.depth_for(species, point, water)));
             }
         }
         if self.goal == Vec3::ZERO {

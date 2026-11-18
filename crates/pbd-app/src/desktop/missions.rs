@@ -340,6 +340,7 @@ pub fn night_watch(
     walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
     mut did: MessageWriter<pbd_app::missions::Did>,
     mut was: Local<Option<f32>>,
+    space: pbd_app::SimSpace,
 ) {
     let hour = sun.clock.hour();
     let crossed = was.is_some_and(|h| h < NIGHT_HOUR && hour >= NIGHT_HOUR);
@@ -359,7 +360,7 @@ pub fn night_watch(
     if lights.is_empty() {
         return;
     }
-    let toward = feet.0.normalize_or(Vec3::Y);
+    let toward = space.origin().up_at(feet.0);
     let near = fine.set.finest_records().iter().any(|r| {
         lights.iter().any(|e| e.cell == r.key())
             && Vec3::from_slice(&r.direction_height[..3])
@@ -472,11 +473,15 @@ pub fn about_watch(
     save: Option<Res<pbd_app::saves::WorldSave>>,
     mut did: MessageWriter<pbd_app::missions::Did>,
     mut state: Local<AboutState>,
+    space: pbd_app::SimSpace,
 ) {
     use pbd_app::missions::Did;
     use pbd_app::planet::{PLANET_RADIUS, surface_height};
     use pbd_core::missions::Kind;
-    let at = walkers.single().ok().map(|p| p.0);
+    let at = walkers
+        .single()
+        .ok()
+        .map(|p| space.origin().query_point(p.0));
     if state.screen != Some(*screen) {
         if *screen == Screen::Map {
             did.write(Did::new(Kind::Open, "map", 1));

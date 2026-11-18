@@ -56,6 +56,9 @@ pub mod tree_kit;
 pub mod vehicle;
 pub mod weather;
 pub mod wind;
+pub mod world_frame;
+#[cfg(test)]
+mod world_frame_guards;
 pub mod worms;
 
 pub use glam::{DQuat, DVec3};

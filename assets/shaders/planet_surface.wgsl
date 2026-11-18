@@ -500,6 +500,10 @@ fn light_cell(half: u32, slot: u32, layer: u32) -> vec2<f32> {
     return vec2(f32(byte >> 4u), f32(byte & 0xfu)) / LIGHT_MAX;
 }
 fn light_at(slot: u32, layer: u32) -> vec2<f32> {
+#ifdef SHADOW_CASTER
+    // `gpu-cuts` 2: a depth map takes no light; the cascades skip its reads.
+    return vec2(1.0, 0.0);
+#endif
     if slot == 0u { return vec2(1.0, 0.0); }
     if layer >= LIGHT_LAYERS { return vec2(1.0, 0.0); }
     let newest = min(u32(params.light_ease.y), 1u);
@@ -574,6 +578,9 @@ fn occluders_at(a: u32, b: u32, layer: u32) -> u32 {
 }
 
 fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
+#ifdef SHADOW_CASTER
+    return vec2(1.0, 0.0);
+#endif
     let here = corner_at(own, a, b, layer);
     if here.x >= 0.0 { return here.xy * contact(u32(here.z)); }
     // Every cell there is rock, so this is not a dark corner, it is the wrong
@@ -618,6 +625,9 @@ fn wall_corner_light(own: u32, a: u32, b: u32, layer: u32, beyond: u32) -> vec2<
 // derive light from, never a hard 0".
 fn wall_light(cell: Cell, own: u32, degree: u32, side: u32,
               index: u32, bottom: f32, top: f32) -> vec2<f32> {
+#ifdef SHADOW_CASTER
+    return vec2(1.0, 0.0);
+#endif
     if own == 0u { return vec2(1.0, 0.0); }
     let rec = columns[own - 1u];
     // Corners 0 and 3 stand on the edge's first ray, 1 and 2 on its second.
@@ -3385,6 +3395,9 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
           skylight: f32) -> vec4<f32> {
     // The far lights go under the haze like the ground they stand on.
     var color = lit + far_glow;
+#ifdef TERRAIN_OFF_FOG
+    return vec4(color, 1.0);
+#endif
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
     let air = exp(-altitude/1050.);
@@ -3494,6 +3507,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // film fades rings under it and widens its lobe by it (specular AA).
     let foot = length(fwidth(input.position));
     if dropped(input) { discard; }
+#ifdef TERRAIN_OFF_FLAT
+    return vec4(0.5, 0.5, 0.5, 1.0);
+#endif
     let radial = normalized(input.position);
     var n = normalized(input.normal);
     if input.kind == 2u && (input.material & 0xffu) == IMPOSTOR_CODE {
@@ -3502,7 +3518,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
     let distance_to_camera = distance(input.position,params.camera.xyz);
+#ifndef TERRAIN_OFF_NIGHT
     far_glow = far_night_lights(input.position, foot);
+#endif
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(-0.13,0.20,sun_elevation);
     // Overcast: the cover over the player takes the sun down by
@@ -3515,8 +3533,13 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // sky's fill by the cover over this face: both off the weather maps, so a
     // storm on the far hills darkens the far hills and not the meadow under
     // a clear sky. `overcast_amb_dim` stays the fill's knob.
+#ifdef TERRAIN_OFF_CLOUD
+    let here_cover = 0.0;
+    let sun_dim = 1.0;
+#else
     let here_cover = clamp(textureSampleLevel(weather_cloud,weather_sampler,radial,0.0).x,0.,1.);
     let sun_dim = cloud_sun(input.position,sun);
+#endif
     let fill_dim = 1.-here_cover*params.rain[4].y;
     // The sun ends at the horizon (`sun-shadows` decision 5), and reaches a
     // face only where its cascades see it (decision 4). A face turned from it
@@ -3529,7 +3552,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         // tangent (zero: today's filter), wider under the cover over this
         // face, so an overcast day softens its shadows (`light.w`).
         let spread = params.light.z*(1.0 + params.light.w*here_cover);
+#ifndef TERRAIN_OFF_SHADOW
         shade = sun_shadow_soft(sun_map, sun_cmp, sun_cascades, input.position, n, spread, dot(n,sun));
+#endif
     }
     let direct = facing*sun_dim*shade;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
@@ -3645,7 +3670,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
         far = GROUND_MEAN;
     }
+#ifdef TERRAIN_OFF_TEXTURE
+    var art = base;
+#else
     var art = pixel_tile(input.uv,tile,slot);
+#endif
     // `flora-v2` design 10: a detailed tree's own texel, or its impostor's,
     // which needs no far fade (it is already the far picture).
     if input.kind == 2u && cap >= TREE_BARK_CODE && cap <= IMPOSTOR_CODE {
@@ -3667,16 +3696,22 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let grain = dot(art, vec3(0.299, 0.587, 0.114));
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
+#ifndef TERRAIN_OFF_SEASON
     albedo = flora_albedo(input, albedo, grain, cell_variation);
+#endif
     // Design 12.6: the ground's grass (a top, the sod lip down a column's
     // side, a terrace) dries and frosts with the season.
     if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
         && (code == 2u || code == 3u || code == 7u || code == GRASS_SIDE_CODE) {
+#ifndef TERRAIN_OFF_SEASON
         albedo = ground_tint(albedo, normalized(input.position));
+#endif
     }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {
+#ifndef TERRAIN_OFF_SEASON
         albedo = fallen_leaves(input, albedo);
+#endif
     }
     if input.kind == KIND_LAMP {
         var part = vec3(0.16, 0.15, 0.14);
@@ -3734,7 +3769,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         // say where it came from, and most of the air over a floor was lit by
         // that floor: a face turned up takes a fifth, so a floor is not lit by
         // itself, while walls and undersides take it all.
+#ifndef TERRAIN_OFF_BOUNCE
         if params.reflect.z > 0.0 && input.slot != 0u {
+#else
+        if false {
+#endif
             let toward_floor = 1.0 - 0.8*max(dot(n, radial), 0.0);
             color += albedo*bounce_near(input.position, n, input.slot)
                 *(params.reflect.z*sun_dim*toward_floor);
@@ -3746,7 +3785,14 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // carrying a light through.
     let flood = albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN)*lamp_share(skylight, daylight);
     var torch = flood;
-    if params.light.x > 0.5 && input.slot != 0u && params.lamp_bake.y + params.lamp_bake.z > 0.5 {
+#ifndef TERRAIN_OFF_LAMP
+    // `gpu-cuts` 4: none where a lamp's light cannot show (`lamp_share` is
+    // nought in the open by day), so its lookups are skipped there.
+    if params.light.x > 0.5 && input.slot != 0u && params.lamp_bake.y + params.lamp_bake.z > 0.5
+        && lamp_share(skylight, daylight) > 0.0 {
+#else
+    if false {
+#endif
         // `lighting-model` L7: the baked lamps where the bake holds this face
         // and a lamp is in reach, the flood elsewhere; the newest bake fades
         // in over the one before it (or over the flood), never a cell at a
@@ -3851,7 +3897,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // a cell at a time and rain does not - and by being above the waterline
     // (no rings on the seabed).
     let above_water = 1.-step(0.001,water_depth);
+#ifdef TERRAIN_OFF_WET
+    let wet_amt = 0.0;
+#else
     let wet_amt = clamp(params.weather.x,0.,1.)*input.rain_open*above_water;
+#endif
     // A plant is not wet ground (`flora-v2` 13.2; owner, 2026-11-16: "grass
     // blades shouldnt have rain shader on them", "no rain drops on tree
     // leaves either"): a detailed tree and every piece of clutter only

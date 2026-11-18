@@ -565,7 +565,10 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
         (offset + DVec3::new(0., 0., f64::from(RADIUS + 100.))).as_vec3(),
     ));
     let projection = Mat4::orthographic_rh(-10., 10., -10., 10., 10., 3000.);
-    let frame = PlanetRenderFrame { center: offset };
+    let frame = PlanetRenderFrame {
+        center: offset,
+        origin: DVec3::ZERO,
+    };
     for override_clip in [None, Some(projection * camera.to_matrix().inverse())] {
         let (position, clip) = frame.camera_and_clip(&camera, projection, override_clip);
         assert_eq!(position, Vec3::new(0., 0., RADIUS + 100.));

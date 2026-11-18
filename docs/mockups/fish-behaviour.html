@@ -1,0 +1,263 @@
+<meta charset="utf-8">
+<title>Fish Behaviour</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* Under the water at the lure: one stage, tabs above it, controls below, tuning folded away. Dark, as the sea mockups are. */
+:root{
+  color-scheme: dark;
+  --ground:#081014; --panel:#0f1a20; --panel-2:#15232b; --line:rgba(130,175,180,.22); --line-2:rgba(130,175,180,.42);
+  --ink:#e2ebed; --muted:#93a8ad; --amber:#e8b040; --sea:#8fc3d8; --red:#d9473a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ground);overflow-x:hidden}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--body);padding-block:12px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:10px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+h1{font:700 clamp(24px,5vw,34px)/1.05 var(--display);letter-spacing:.02em;margin:0;text-wrap:balance}
+.tracker{flex-basis:100%;margin:0;font:500 12px/1.4 var(--mono)}
+.tracker a{color:var(--sea)}
+button{font:inherit;color:inherit}
+.info{all:unset;cursor:pointer;display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 10px;border:1px solid var(--line-2);border-radius:15px;font:600 14px var(--display);letter-spacing:.06em;color:var(--sea)}
+.info:hover,.info:focus-visible{border-color:var(--amber);color:var(--amber);outline:none}
+.bar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:7px 11px;font:600 15px var(--display);letter-spacing:.04em;color:var(--muted);background:var(--panel)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:rgba(232,176,64,.16);color:var(--amber)}
+.seg button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.tabs button{font-size:17px;padding:8px 16px}
+.lbl{font:600 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.act{all:unset;cursor:pointer;padding:6px 12px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em}
+.act:hover{border-color:var(--amber);color:var(--amber)} .act:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.act.strike{border-color:rgba(217,71,58,.6)}
+.chk{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em;cursor:pointer}
+.chk input{accent-color:var(--amber);margin:0}
+.tab{display:grid;gap:8px;min-width:0}
+.tabhead{display:flex;align-items:center;gap:10px}
+.tabhead h2{margin:0;font:700 21px var(--display);letter-spacing:.03em}
+.stage{position:relative;width:100%;aspect-ratio:16/9;max-height:70vh;min-height:280px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#000}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.hud{position:absolute;inset:8px 10px auto;display:flex;justify-content:space-between;pointer-events:none;font:700 15px var(--display);letter-spacing:.06em;text-shadow:0 1px 3px #000}
+.hud .r{color:var(--amber)}
+.hud.one{justify-content:flex-start}
+.hud.one span:empty{display:none}
+.split-rule{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--line-2);pointer-events:none}
+.tuning{display:grid;gap:6px}
+.tunehead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tunehead h3{margin:0;font:700 18px var(--display);letter-spacing:.03em}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.grp summary{cursor:pointer;padding:7px 12px;font:600 16px var(--display);letter-spacing:.04em}
+.grp summary:focus-visible{outline:2px solid var(--amber)}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px 14px;padding:4px 10px 10px}
+.sl{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,1.1fr) auto;gap:8px;align-items:center;min-width:0}
+.sl label{font:500 14px var(--body);overflow-wrap:anywhere}
+.sl output{font:500 12.5px var(--mono);color:var(--amber);min-width:74px;text-align:right}
+.sl input{width:100%;min-width:0;accent-color:var(--amber)}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(3,6,9,.74);display:grid;place-items:center;padding:12px}
+.modal .mbox{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;width:min(820px,100%);max-height:min(88vh,960px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.modal .mhead h2{margin:0;font:700 20px var(--display);letter-spacing:.03em}
+.modal .mclose{all:unset;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:4px}
+.modal .mclose:hover{color:var(--amber)} .modal .mclose:focus-visible{outline:2px solid var(--amber)}
+.mbody{overflow:auto;padding:12px 16px;display:grid;gap:10px;min-width:0;max-width:72ch}
+.mbody h3{margin:6px 0 0;font:700 17px var(--display);letter-spacing:.03em;color:var(--sea)}
+.mbody p,.mbody ul,.mbody ol{margin:0} .mbody ul,.mbody ol{padding-left:20px}
+.mbody li+li{margin-top:3px}
+.mbody q{color:var(--amber);quotes:"\201C" "\201D"}
+.mbody code{font:13px var(--mono);color:#cfe3e6;overflow-wrap:anywhere}
+.mbody table{border-collapse:collapse;width:100%;font-size:13.5px}
+.mbody td,.mbody th{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.mbody th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tw{overflow-x:auto}
+template{display:none}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto} }
+</style>
+<main>
+  <header>
+    <h1>Fish Behaviour</h1>
+    <button class="info" data-info="about-page" aria-label="About this mockup">i</button>
+    <p class="tracker"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a> · M37</p>
+  </header>
+
+  <div class="bar tabs seg" role="tablist" aria-label="Views">
+    <button id="tb-lure" aria-pressed="true">At the lure</button>
+    <button id="tb-swim" aria-pressed="false">Swimming</button>
+    <button id="tb-hooked" aria-pressed="false">Hooked</button>
+    <button id="tb-wave" aria-pressed="false">Body wave</button>
+  </div>
+
+  <section class="tab" id="tab-lure">
+    <div class="tabhead"><h2>At the lure</h2><button class="info" data-info="about-lure" aria-label="About At the lure">i</button></div>
+    <div class="stage"><canvas id="cv-lure" aria-label="Under the water at the float: a perch comes to the lure"></canvas><div class="hud" id="hud-lure"><span class="l"></span><span class="r"></span></div></div>
+  </section>
+  <section class="tab" id="tab-swim" hidden>
+    <div class="tabhead"><h2>Swimming</h2><button class="info" data-info="about-swim" aria-label="About Swimming">i</button></div>
+    <div class="stage"><canvas id="cv-swim" aria-label="A school swimming"></canvas><div class="hud" id="hud-swim"><span class="l"></span><span class="r"></span></div></div>
+  </section>
+  <section class="tab" id="tab-hooked" hidden>
+    <div class="tabhead"><h2>Hooked</h2><button class="info" data-info="about-hooked" aria-label="About Hooked">i</button></div>
+    <div class="stage"><canvas id="cv-hooked" aria-label="A hooked perch fighting the line"></canvas><div class="hud" id="hud-hooked"><span class="l"></span><span class="r"></span></div></div>
+  </section>
+
+  <section class="tab" id="tab-wave" hidden>
+    <div class="tabhead"><h2>Body wave</h2><button class="info" data-info="about-wave" aria-label="About Body wave">i</button></div>
+    <div class="stage"><canvas id="cv-wave" aria-label="Fish swimming: today's rigid body beside a body wave"></canvas><div class="hud" id="hud-wave"><span class="l"></span><span class="r"></span></div></div>
+  </section>
+
+  <div class="bar">
+    <div class="seg" id="sg-mode" aria-label="Which behaviour"><button aria-pressed="false">Today</button><button aria-pressed="false">Proposed</button><button aria-pressed="true">Split</button></div>
+    <div class="seg" id="sg-speed" aria-label="Speed"><button aria-pressed="true">1x</button><button aria-pressed="false">1/2x</button><button aria-pressed="false">1/4x</button></div>
+    <div class="seg" id="sg-time" aria-label="Time of day"><button aria-pressed="true">Day</button><button aria-pressed="false">Night</button></div>
+    <div class="seg notwave" id="sg-species" aria-label="Species"><button aria-pressed="true">Perch</button><button aria-pressed="false">Minnow</button></div>
+    <button class="act notwave" id="bt-replay">Replay</button>
+    <button class="act strike lureonly" id="bt-strike">Strike now</button>
+    <label class="chk hookonly" hidden><input type="checkbox" id="ck-follow" checked> Follow</label>
+    <label class="chk notwave"><input type="checkbox" id="ck-loop" checked> Loop</label>
+  </div>
+  <div class="bar waveonly" hidden>
+    <div class="seg" id="sg-wave-species" aria-label="Species"><button aria-pressed="true">Perch</button><button aria-pressed="false">Eel</button><button aria-pressed="false">Ray</button></div>
+    <div class="seg" id="sg-wave-view" aria-label="View"><button aria-pressed="true">School</button><button aria-pressed="false">Close-up</button></div>
+    <div class="seg" id="sg-wave-force" aria-label="Swim"><button aria-pressed="true">Auto</button><button aria-pressed="false">Burst</button><button aria-pressed="false">Cruise</button><button aria-pressed="false">Glide</button><button aria-pressed="false">Hover</button><button aria-pressed="false">Turn</button></div>
+    <label class="chk"><input type="checkbox" id="ck-wave-debug"> Wire and spine</label>
+  </div>
+
+  <section class="tuning notwave">
+    <div class="tunehead"><h3>Proposed tuning</h3><button class="info" data-info="about-tuning" aria-label="About the tuning">i</button><button class="act" id="bt-reset">Reset</button></div>
+    <div id="tuning"></div>
+  </section>
+  <section class="tuning waveonly" hidden>
+    <div class="tunehead"><h3>Body wave tuning</h3><button class="info" data-info="about-wave-tuning" aria-label="About the body wave tuning">i</button><button class="act" id="bt-wave-reset">Reset species</button></div>
+    <div id="wave-tuning"></div>
+  </section>
+</main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <div class="mbox"><div class="mhead"><h2 id="mtitle"></h2><button class="mclose" id="mclose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="mbody"></div></div>
+</div>
+
+<template id="about-page" data-title="About this mockup">
+  <p>The owner, watching the under-water video of a fish coming to the lure (2026-11-17): <q>the fish behavior is super unnatural</q>, <q>why is rotation all snappy?</q>, <q>the fish is glitching like hell</q>. This page shows the game's behaviour beside a proposed one, so the behaviour is agreed before any game code changes.</p>
+  <h3>Today and Proposed</h3>
+  <p><b>Today</b> is the game's own rules, ported constant for constant: the flock (<code>fauna/school.rs</code>), the line from Floating to Hooked (<code>fishing.rs</code>), the heading taken from the last 30 Hz step's velocity and the fixed tail beat (<code>fish.rs</code> <code>draw::build</code>, <code>fish/bodies.rs</code> <code>sway</code>), with the numbers from <code>assets/config/fauna.ron</code>. <b>Proposed</b> keeps every fishing rule: the phases, the nibble and bite timers, the float's dips, the hook window and the fight's tension and runs. It changes how the fish moves and how it is drawn. <b>Split</b> runs both side by side from the same seed, under one camera.</p>
+  <h3>What reads as unnatural today</h3>
+  <ol>
+    <li><b>Glued to the lure.</b> From the first nibble to the end of the fight the fish is <code>held</code> at the lure point, 0.35 m under the float. It covers the last 0.45 m (<code>nibble_m</code>) in one 30 Hz step, about 13 m/s, and then never moves on its own again.</li>
+    <li><b>Flips upright.</b> A held fish's velocity is the lure's movement. While the float dips and comes back, that is a tiny vertical number; <code>normalize_or</code> scales it to a whole unit vector, so the fish points straight up or straight down. When the lure is still the velocity is zero and the fish swings to a fixed fallback heading, the same one for every fish (glam's <code>any_orthonormal_vector</code>, world -Z here).</li>
+    <li><b>Snappy rotation.</b> Position is drawn between steps but heading is not: it is the last step's velocity, so a fish's facing changes 30 times a second in jumps, and a sharp boid turn is one jump.</li>
+    <li><b>No approach.</b> The fish is steered at the lure point itself with a strong pull (<code>lure</code> 3.0) and a speed floor of half its slowest speed, so it arrives at full tilt in a straight line and stops dead.</li>
+    <li><b>No pecks.</b> A nibble is the float dipping 3.5 cm in the last 0.12 s of a timer. The fish does nothing; it is already at the lure.</li>
+    <li><b>No take.</b> At the bite the float sinks 14 cm and the fish sinks with it, still pointing wherever its velocity says.</li>
+    <li><b>Constant swimming.</b> Every fish swims at one speed with one tail beat (7 rad/s, a fixed amplitude) whatever it is doing; it never glides, never bursts, never banks into a turn, and turns as fast as the boids ask.</li>
+    <li><b>The fight.</b> On the line the fish is held at the lure again, so its facing follows the float's path: it swims backwards while reeled, flips when the float stalls, and never shakes its head.</li>
+  </ol>
+  <h3>Which art is whose</h3>
+  <p>The perch, minnow, eel and ray meshes and their skins are the game's (<code>fish-behaviour/game/fish_models.js</code> from the game's own export, <code>water_life_atlas.png</code>), as are the sand and timber textures (<code>assets/textures/settlement/</code>) and the float's two spheres and colours (<code>fish.rs</code>). The water surface, the bed plane, the dock with its lantern, the leader and the hook with its bait are the page's stand-ins; the leader and hook are part of the proposal (today nothing is drawn under the float). Night is lit by the lantern on the dock.</p>
+  <h3>Controls</h3>
+  <p>Drag to look round the lure, scroll or pinch to come closer. The camera stays where you leave it. Replay starts the run again, Strike now hooks early (in a nibble, the fish bolts: the game's <code>TooEarly</code>). The angler in the replay strikes 0.3 s into the bite, reels while the fish rests and gives line while it runs.</p>
+  <p>Mockup for Pale Blue Dot, 2026-11-17. three.js r128. OpenSpec change: <code>openspec/changes/fish-behaviour</code>.</p>
+</template>
+
+<template id="about-lure" data-title="At the lure">
+  <p>A perch school swims up after the cast's splash has settled; one fish leaves it for the lure. The replay forces the interest on the second scent check in range (the game rolls a chance each check) and gives the perch three nibbles (its guide's tip: <q>Nibbles come in threes</q>). Timers are seeded, so Today and Proposed see the same nibble and bite times.</p>
+  <h3>Proposed, and where each part comes from in the game</h3>
+  <div class="tw"><table>
+    <tr><th>Game phase or event</th><th>Proposed behaviour</th><th>Side</th></tr>
+    <tr><td><code>Event::Interest</code>, Floating with a target</td><td>Leaves the school and curves in under a turn-rate limit; slows inside the slow-down radius; settles at a stand-off point a body length off the lure, on the side it came from, turning to face it.</td><td>sim (steer to a stand-off point, no speed floor for this fish) + draw</td></tr>
+    <tr><td>Floating to Nibble (<code>distance &lt; nibble_m</code>)</td><td>Unchanged rule: the stand-off point is inside 0.45 m, so the phase starts as today.</td><td>none</td></tr>
+    <tr><td>Nibble, each timer (<code>nibble_s</code> 0.6 to 1.4 s)</td><td>Hovers with a slow drift and a sculling tail; darts in so the mouth meets the lure when the timer is under 0.12 s, which is exactly when the game dips the float; shakes its head and tugs the lure a couple of centimetres (the float leans with it); backs off. With a long enough gap it may turn away and swim a small loop, coming back to face the lure before the next peck.</td><td>draw: a choreography read off <code>phase</code> and <code>timer</code></td></tr>
+    <tr><td><code>Event::Bite</code>, the hook window</td><td>Darts onto the lure, turns hard and runs down and away with it. The lure goes with the mouth (up to 0.3 m) and drags the float, on top of the game's 14 cm dip.</td><td>draw (the lure offset is drawn; the rule's lure point is unchanged)</td></tr>
+    <tr><td><code>Event::TooEarly</code>, <code>Event::Missed</code></td><td>Bolts: a burst away from the lure, then rejoins the school still spooked.</td><td>draw, then sim (hand back position and velocity)</td></tr>
+    <tr><td><code>Event::Hooked</code></td><td>See the Hooked tab.</td><td></td></tr>
+  </table></div>
+  <p>Fishing rules are unchanged: the chance of interest, the nibble count and times, the dips, the hook window (0.78 s for a perch), and what a strike in each phase does.</p>
+</template>
+
+<template id="about-swim" data-title="Swimming">
+  <p>A school of perch wandering between goals. The game draws goals up to 25 m off; here the reach is 5 m so the school stays near, for both sides. Follow keeps each side's camera on its own school's middle; untick it to hold the camera still.</p>
+  <h3>Proposed</h3>
+  <ul>
+    <li><b>Heading is smoothed every frame</b> toward the velocity, with a time constant and a maximum turn rate, so a fish never turns in 30 Hz jumps (draw side).</li>
+    <li><b>It banks into turns</b>: roll from the yaw rate, capped, eased (draw side).</li>
+    <li><b>It turns at a limited rate</b> in the flock step too, so a boid cannot reverse in one step (sim side).</li>
+    <li><b>Glide and burst</b>: each fish has its own cycle, a few tail beats of thrust then a glide with the tail still; speed varies inside the species' range (sim side, inside the same min and max).</li>
+    <li><b>Tail beat follows speed</b>: frequency from body lengths a second, amplitude from bursting, cruising, gliding or hovering (draw side).</li>
+    <li><b>Depth wander</b>: each fish drifts a little up and down round the school's depth (sim side).</li>
+  </ul>
+  <p>The flock's own rules (separation, alignment, cohesion, walls, the splash) are unchanged. The school's positions are not saved, so nothing here touches a save.</p>
+</template>
+
+<template id="about-hooked" data-title="Hooked">
+  <p>The fight from the strike to the landing, with the game's own line rules: runs of 0.8 to 2.0 s at the species' pull, rests of 1.2 to 3.0 s, tension, stamina, reeling at 1.8 m/s, the float weaving across the line while the fish runs. The angler reels while the fish rests and gives line while it runs. Follow keeps the camera on the float; untick it to hold the camera still.</p>
+  <h3>Proposed</h3>
+  <ul>
+    <li><b>The mouth stays on the lure and the body swings round it</b>, instead of the body's centre being glued to the lure.</li>
+    <li><b>Running</b>: head away from the rod along the line, diving a little, crossing with the line's swing; tail at full beat.</li>
+    <li><b>Being reeled</b>: the hook turns the head toward the rod; the fish shakes its head and rolls from side to side, flashing its flank.</li>
+    <li>Turning between the two is eased and rate-limited, so a change from run to rest is a turn, not a flip. The turn rate itself builds up and dies away (at most 1200 deg/s a second, up to 300 deg/s), so a turn never starts or stops in one frame.</li>
+    <li>The head shake and the flash fade in when reeling starts and out when a run starts (0.35 s), and run on the frame&rsquo;s own clock, not the line&rsquo;s 30 Hz step. A shake turns the body about the mouth, so the mouth stays on the lure.</li>
+    <li>The float is drawn as the game now draws it (<code>DrawnFloat</code>): the line puts the float&rsquo;s swing on or off in one step when a run starts or stops, a jump of up to a metre at 9 m of line, and that jump is eased out over about a third of a second instead of carrying the fish with it.</li>
+  </ul>
+  <h3>Today&rsquo;s snaps are the game&rsquo;s</h3>
+  <p>Today is the game as this mockup was first made, before <code>movement-smoothness</code>: the fish is turned along the float&rsquo;s last 30 Hz step, so it flips end for end as the float stops and starts, and the float and fish jump sideways when a run starts or stops. Those are the faults being shown, not bugs in the page. The game has since eased the float&rsquo;s jump and the fish&rsquo;s heading; Proposed includes the float easing.</p>
+  <p>The angler in the replay gives line through a run and, in a rest, reels to a tension of 0.85, then waits for 0.6 before reeling again.</p>
+  <p>All draw side: <code>Line</code>'s run, tension and stamina are read, never changed.</p>
+</template>
+
+<template id="about-wave" data-title="Body wave">
+  <p>The owner, after the heading fix (PR #109): <q>the fish now turns correctly, but for some reason doesnt move convincingly? perhaps its how the model just turns without matching proper fish movement, make a mockup for using shaders to twist a fish around when its swimming so it moves convincingly</q>. Both sides swim the same path at the same speeds and turn the same way; only the body differs.</p>
+  <h3>Today</h3>
+  <p><code>fish/bodies.rs</code> <code>sway</code>, applied on the CPU to each vertex before <code>emit</code> places it, then flat normals (<code>compute_flat_normals</code>). The body is rigid and only a sideways shear is added near the tail:</p>
+  <ul>
+    <li>Fish: <code>sin(t*7 + phase - x*6) * 0.075 * w*w</code>, w rising from x 0.3 to the tail. 1.11 Hz and 0.075 of a length at every speed, gliding or hovering included.</li>
+    <li>Eel: <code>sin(t*3.5 + phase - x*13) * 0.06 * w</code>, 0.56 Hz.</li>
+    <li>Ray: wing flap and whip at 1.6 rad/s (0.25 Hz).</li>
+  </ul>
+  <p><b>The fish and eel waves run the wrong way.</b> With <code>+ t</code> and <code>- x</code> a crest sits where <code>7t = 6x + c</code>, so it moves toward +X, the head. A real fish pushes water back by sending the wave from head to tail. A wave running forward reads as wobbling, not swimming. The ray's wave already runs nose to tail.</p>
+  <h3>Proposed: a body wave in the vertex shader</h3>
+  <p>With <code>u</code> the place along the body (0 nose, 1 tail) and <code>&phi;</code> the fish's own wave phase:</p>
+  <ul>
+    <li><b>Travelling wave</b>: <code>z = A&middot;(E(u)&middot;sin(2&pi;&lambda;u &minus; &phi;) + R(u)) + B&middot;q(u)&sup2;</code>. Its crests move toward the tail as <code>&phi;</code> grows.</li>
+    <li><b>Envelope</b> <code>E(u) = h + (1 &minus; h)&middot;u<sup>p</sup></code>. A perch (carangiform) has <code>h</code> 0.04 and <code>p</code> 2, so mostly its tail moves. An eel (anguilliform) has <code>h</code> 0.3 and <code>p</code> 0.8, so the wave runs down the whole body, about 1.25 waves long.</li>
+    <li><b>Head recoil</b> <code>R(u)</code>: near the nose the head yaws against the tail's swing.</li>
+    <li><b>Turn bend</b> <code>B&middot;q&sup2;</code> with <code>q = (u &minus; 0.35)/0.65</code>: a C-shape about the body's pivot, toward the inside of the turn. It grows with the yaw rate and eases in.</li>
+    <li><b>Cross-sections turn with the spine.</b> From the slope <code>s = dz/dx</code> (worked out in closed form, no extra sin), <code>c = 1/&radic;(1+s&sup2;)</code>, a vertex <code>d</code> off the spine goes to <code>(x &minus; d&middot;s&middot;c, y, z + d&middot;c)</code>. The normal turns by the same angle, so the light follows the bend and the body keeps its thickness.</li>
+    <li><b>Ray</b>: the wings rise and fall in a wave from nose to tail along the chord, growing toward the tips (<code>span<sup>p</sup></code>). The flap slider blends this into a whole-wing flap. The wing on the inside of a turn beats less. The whip swings sideways. Normals follow the height field's slope.</li>
+  </ul>
+  <h3>Speed sets the wave</h3>
+  <p>Beat frequency is <code>f0 + fk &middot; body lengths a second</code>, capped. The phase <code>&phi;</code> is integrated per fish on the CPU (<code>&phi; += 2&pi;f&middot;dt</code>), never <code>&omega;t</code>, so a change of speed never makes the tail jump. Amplitude eases between cruising and bursting by speed. Gliding is a fish slowing faster than the threshold: the wave dies and the body straightens. Below the hover speed it sculls slowly. The draw side reads only the fish's speed, how fast that changes, and its yaw rate, all of which the game already has per fish.</p>
+  <h3>In the game</h3>
+  <p>The school mesh stays one mesh a school, built each frame by <code>emit</code>, but rigid. Each vertex also carries <code>u</code>, its offset off the spine, the fish's side and forward axes, and per fish <code>(&phi;, A, B)</code> plus the species profile. The life material's vertex stage applies the wave, in a <code>MaterialExtension</code> beside <code>field_lit.wgsl</code>. The cost is vertex-only, about 40 ALU and two sines per vertex: a 10-fish perch school is about 7k vertices, a few microseconds of GPU. The design and the WGSL are in <code>openspec/changes/fish-behaviour/design.md</code>, section 8.</p>
+  <h3>Controls</h3>
+  <p>School: three fish on a figure of eight that burst, glide, cruise and hover in turn. Close-up: the first fish's swim on a treadmill, so it stays put. Drag to turn round it, scroll or pinch to come closer; the camera stays where you leave it. Swim: Auto runs the cycle; the others hold one state; Turn holds a 120 deg/s left turn in the close-up. Wire and spine draws the mesh as wire and the spine as dots (blue today, amber proposed). Day and Night: at night the dock's lantern lights the fish.</p>
+  <h3>Which art is whose</h3>
+  <p>The perch, eel and ray meshes, their skins and the sand are the game's (<code>fish-behaviour/game/</code>). The water, the dock and its lantern are the page's stand-ins, as in the other tabs. The proposed shader is GLSL in <code>fish-behaviour/body-wave.js</code>, written so it ports line for line to WGSL.</p>
+</template>
+
+<template id="about-wave-tuning" data-title="Body wave tuning">
+  <p>These sliders change Proposed only, for the species shown; each species keeps its own values. Today runs on the game's constants.</p>
+  <ul>
+    <li><b>Wave frequency</b>: the beat in Hz, from speed in body lengths a second; the scull while hovering; a top limit.</li>
+    <li><b>Amplitude envelope</b>: the tail's swing (or a ray's wing tip) in body lengths, for cruising, bursting, hovering and gliding. <i>Amplitude at the nose</i> is <code>h</code> and the exponent is <code>p</code> in <code>E(u)</code>; easing smooths the change between them.</li>
+    <li><b>Wavelength</b>: waves along the body at once. Perch about 1, eel about 1.25.</li>
+    <li><b>Head recoil</b>: how far the head yaws against the tail, as a share of the tail's swing, and how far back from the nose that reaches.</li>
+    <li><b>Turn bend</b>: the C-shape at a 90 deg/s turn, its most, and its easing.</li>
+    <li><b>Glide and hover</b>: how fast the fish must slow, in lengths a second squared, before it glides; and the speed below which it hovers.</li>
+    <li><b>Ray wings</b> (ray only): the span exponent, waves along the wing, undulate to flap, and the whip.</li>
+  </ul>
+</template>
+
+<template id="about-tuning" data-title="Proposed tuning">
+  <p>These sliders change Proposed only; Today runs on the game's constants. Every value has its unit. A slider's range runs well past its default both ways. The groups match the port: turning, banking and the tail are draw side; the swim turn limit, the glide and burst and the depth wander are sim side; approach, pecks, the take and the fight are the choreography of the one fish the line is working.</p>
+  <p>Tail amplitudes are in body lengths, as the game's sway is (today's beat is 0.075 at 7 rad/s, about 1.1 Hz, always).</p>
+</template>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="fish-behaviour/game/fish_models.js"></script>
+<script src="fish-behaviour/body-wave.js"></script>
+<script src="fish-behaviour/fish-behaviour.js"></script>

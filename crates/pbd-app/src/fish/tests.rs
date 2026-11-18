@@ -1,5 +1,10 @@
 use super::*;
 
+/// The planet-centred origin: these tests are written in the planet's frame
+/// (`world-frames`).
+const PLANET: pbd_core::world_frame::SimOrigin =
+    pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
+
 /// A landed fish is in the hotbar and in the save on the same frame, and the
 /// field guide's record counts it.
 #[test]
@@ -81,6 +86,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
     for (strike, seed) in [("left", 70), ("left", 71)] {
         let mut line = Line::new(seed);
         let mut schools = vec![School::spawn(
+            &PLANET,
             minnow as u16,
             &roster[minnow],
             at(0.0, 1.0, 8.0),
@@ -122,6 +128,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                 _ => Controls::default(),
             };
             let events = line.step(
+                &PLANET,
                 dt,
                 controls,
                 &angler,
@@ -135,7 +142,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
             );
             let splash = line.splash();
             for school in &mut schools {
-                school.step(dt, &roster[minnow], &fauna.flock, &Shore, splash);
+                school.step(&PLANET, dt, &roster[minnow], &fauna.flock, &Shore, splash);
             }
             for event in events {
                 seen.push(event);
@@ -422,7 +429,9 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         );
         let tied = float + float.normalize() * draw::FLOAT_TOP_M;
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
-        let points = draw::line_points(tip, tied, slack, floor);
+        let centre =
+            pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
+        let points = draw::line_points(&centre, tip, tied, slack, floor);
         assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
         let end = tip + *points.last().unwrap();
         assert!(
@@ -430,6 +439,19 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
             "the line ends at the float: {} m off",
             end.distance(tied)
         );
+        // The same line laid in local space (`world-frames` 10.1), the origin
+        // a cell from the angler: the same points, and its end exactly the
+        // float's.
+        let near = pbd_core::world_frame::SimOrigin::new(
+            crate::sim_origin::HOME,
+            (feet.as_dvec3() / 128.0).round() * 128.0,
+        );
+        let (tip_l, tied_l) = (near.from_query_point(tip), near.from_query_point(tied));
+        let local = draw::line_points(&near, tip_l, tied_l, slack, |p| floor(near.query_point(p)));
+        assert!((tip_l + *local.last().unwrap()).distance(tied_l) < 1e-5);
+        for (a, b) in points.iter().zip(&local) {
+            assert!(a.distance(*b) < 2e-3, "{a} {b}");
+        }
         for p in &points[1..points.len() - 1] {
             let at = tip + *p;
             assert!(
@@ -471,7 +493,7 @@ fn a_school_fades_in_and_fades_out_before_it_is_dropped() {
     let anchor = Vec3::Y * 1000.0;
     fishery
         .schools
-        .push(School::spawn(0, &roster[0], anchor, 7, &Deep));
+        .push(School::spawn(&PLANET, 0, &roster[0], anchor, 7, &Deep));
     let dt = 1.0 / 60.0;
     let school = fishery.schools[0].clone();
     assert_eq!(
@@ -548,4 +570,129 @@ fn both_buttons_say_what_they_do_in_every_phase() {
         };
         assert_eq!(r, (cancel, false), "{phase:?}");
     }
+}
+
+/// The hooked float's one-frame jump when a run starts or stops is drawn
+/// eased out, along the water, and gone in a quarter second; a plain reel and
+/// every other phase are drawn where the line has them
+/// (`movement-smoothness` 7.1).
+#[test]
+fn a_hooked_float_jump_is_eased_and_nothing_else_moves() {
+    use draw::DrawnFloat;
+    let r = 1000.0;
+    let at = |x: f32| Vec3::new(x, r, 0.0).normalize() * r;
+    let dt = 1.0 / 60.0;
+    let mut drawn = DrawnFloat::default();
+    // Floating and reeling: drawn as the line has it.
+    drawn.update(&PLANET, dt, at(10.0), Phase::Floating, 0.0);
+    assert_eq!(drawn.drawn(&PLANET, at(10.0)), at(10.0));
+    drawn.update(&PLANET, dt, at(10.0), Phase::Bite, 0.0);
+    // The strike, and on the next step the swing goes on with a jump of a
+    // metre: drawn where it was.
+    drawn.update(&PLANET, dt, at(10.0), Phase::Hooked, 0.8);
+    drawn.update(&PLANET, dt, at(11.0), Phase::Hooked, 0.8);
+    assert!(drawn.drawn(&PLANET, at(11.0)).distance(at(10.0)) < 1e-3);
+    assert!(
+        drawn.drawn(&PLANET, at(11.0)).length() - r < 1e-3,
+        "on the water"
+    );
+    // Eased: each frame closer, no step larger than a sixth of the jump.
+    let mut was = drawn.drawn(&PLANET, at(11.0));
+    for frame in 0..25 {
+        drawn.update(&PLANET, dt, at(11.0), Phase::Hooked, 0.8);
+        let now = drawn.drawn(&PLANET, at(11.0));
+        assert!(
+            now.distance(was) < 0.17,
+            "frame {frame}: {}",
+            now.distance(was)
+        );
+        was = now;
+    }
+    assert!(drawn.drawn(&PLANET, at(11.0)).distance(at(11.0)) < 0.05);
+    // The run stops: the swing's jump is taken up again.
+    drawn.update(&PLANET, dt, at(10.4), Phase::Hooked, 0.0);
+    assert!(drawn.drawn(&PLANET, at(10.4)).distance(was) < 0.05);
+    // Caught: the line's float again.
+    drawn.update(&PLANET, dt, at(10.4), Phase::Ready, 0.0);
+    assert_eq!(drawn.drawn(&PLANET, at(10.4)), at(10.4));
+}
+
+/// A fish at the lure keeps the level heading it took the lure with: the
+/// lure's bob (straight down and up, or not moving at all) never turns it
+/// (`movement-smoothness` design 8).
+#[test]
+fn a_fish_at_the_lure_is_not_turned_by_the_bob() {
+    let mut headings = draw::DrawnHeadings::default();
+    let up = Vec3::Y;
+    let key = (7, 3);
+    // Swimming in, nose a little up.
+    let mut forward = Vec3::ZERO;
+    for _ in 0..30 {
+        headings.begin();
+        forward = headings.ease(key, Vec3::new(1.0, 0.2, 0.0), up, false, 1.0 / 60.0);
+        headings.end();
+    }
+    let took = (forward - up * forward.dot(up)).normalize();
+    // Held: the lure bobs down, up and stands still, frame by frame.
+    for (i, bob) in [-0.6, 0.6, 0.0, -0.3, 0.0, 0.5]
+        .iter()
+        .cycle()
+        .take(240)
+        .enumerate()
+    {
+        headings.begin();
+        let f = headings.ease(key, Vec3::new(0.0, *bob, 0.0), up, true, 1.0 / 60.0);
+        headings.end();
+        if i > 30 {
+            assert!(f.dot(up).abs() < 1e-3, "level at the lure, frame {i}: {f}");
+            assert!(
+                f.dot(took) > 0.9999,
+                "the bearing it took the lure with: {f}"
+            );
+        }
+        if i > 0 {
+            assert!(f.angle_between(forward).to_degrees() < 3.0, "no snap: {f}");
+        }
+        forward = f;
+    }
+}
+
+/// A step's turn is spread over the frames between steps; a step with no
+/// velocity keeps the heading; a reversal turns about the local up.
+#[test]
+fn a_fish_turns_over_frames_not_in_one() {
+    let mut headings = draw::DrawnHeadings::default();
+    let up = Vec3::Y;
+    let key = (1, 1);
+    headings.begin();
+    let mut last = headings.ease(key, Vec3::X, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(last.dot(Vec3::X) > 0.9999);
+    // Its step turns it right round in one step.
+    let mut frames = 0;
+    while last.dot(Vec3::NEG_X) < 0.99 {
+        headings.begin();
+        let f = headings.ease(key, Vec3::NEG_X, up, false, 1.0 / 60.0);
+        headings.end();
+        assert!(
+            f.angle_between(last).to_degrees() < 30.0,
+            "one frame turned too far"
+        );
+        assert!(f.dot(up).abs() < 1e-3, "the reversal turns about up: {f}");
+        last = f;
+        frames += 1;
+    }
+    assert!(frames >= 5, "spread over {frames} frames");
+    // No velocity: it keeps its heading.
+    headings.begin();
+    let f = headings.ease(key, Vec3::ZERO, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(f.dot(last) > 0.9999);
+    // Not drawn for a frame: forgotten.
+    headings.begin();
+    headings.end();
+    headings.begin();
+    let f = headings.ease(key, Vec3::Z, up, false, 1.0 / 60.0);
+    headings.end();
+    assert!(f.dot(Vec3::Z) > 0.9999);
 }

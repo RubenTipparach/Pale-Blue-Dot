@@ -1,0 +1,11 @@
+after-fish.csv: 1490 frames after-fish
+frame dt: mean 19.81 ms, min 4.88, max 129.91
+fixed steps per frame: {0: 87, 1: 1088, 2: 280, 3: 23, 4: 8, 5: 3, 7: 1}
+camera world speed while moving: mean 8.275 m/s, sd 5.072 (61.3%), frames with no camera move 1445
+camera speed while walking, frames with 1 physics step(s): n 39, mean 9.18 m/s
+float on screen, jitter (px from its neighbours' mean): n 1288, rms 17.302, p50 0.508, p99 115.316
+fish on screen, jitter (px from its neighbours' mean): n 1486, rms 59.397, p50 0.758, p99 133.617
+held tool shimmer, floating render origin (as drawn): n 1489, rms 0.0022 px, p50 0.0016, p99 0.0055 px
+held tool shimmer, origin rebased to the camera (16 m grid): n 1489, rms 0.0025 px, p50 0.0021, p99 0.0061 px
+fish drawn: frames it did not move 144 of 1483; speed per frame p10 0.376, p50 1.166, p90 2.070 m/s (p90/p10 5.5)
+camera distance from the render origin: up to 9.3 m, f32 step there 0.001 mm

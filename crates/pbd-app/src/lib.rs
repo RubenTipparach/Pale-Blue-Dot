@@ -39,6 +39,11 @@ pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod missions;
 #[cfg(feature = "desktop")]
+pub mod motion_trace;
+pub mod sim_origin;
+pub mod step_trace;
+pub use sim_origin::SimSpace;
+#[cfg(feature = "desktop")]
 pub mod night_lights;
 #[cfg(feature = "desktop")]
 pub mod overlay;
@@ -48,6 +53,7 @@ pub mod place;
 #[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
+pub mod render_origin;
 pub mod repro;
 #[cfg(feature = "desktop")]
 pub mod saves;
