@@ -320,3 +320,80 @@ body round its spine.
 **Waits** for the owner's approval of M37's Body wave tab; no game code until
 then and a request.
 
+
+## 9. Built (2026-11-17, branch `claude/fish-behaviour`)
+
+The owner, on M37 version 3: "good implement". Built as sections 2 to 4 and
+8 say, with these changes found in the porting (each is the design now):
+
+- **The line steps every frame**, not at the school's 30 Hz: `fish()` calls
+  `Line::step` with the frame's `dt`. So the peck is timed against the
+  line's own timer, read through the new read-only `Line::timer()`, and risk
+  1 of section 6 does not arise. The dip's 0.12 s is now the named
+  `fishing::NIBBLE_DIP_S` (the same value; no rule changed).
+- **Where it lives.** The pose, the line's fish's choreography, the body
+  wave's CPU twin and the drawn float are `pbd_core::fauna::swim` (engine
+  free, testable without Bevy: `Pose`, `LineFish`, `Drawing`, `DrawnFloat`
+  moved from the app). The app drives `Drawing::frame` once a frame before
+  the school meshes are built (`fish::draw::schools`) and keeps it in
+  `DrawnSwim`, rebased with the fishery (`world-frames`).
+- **The sim-side values are in `flock`**, not the new `behaviour` block:
+  `turn_deg_s`, `burst_s`, `burst_share`, `glide_drag_per_s`,
+  `depth_wander_m`, and the approach's `approach`, `slow_m`, `standoff_m`,
+  `standoff_max_m`. That keeps `School::step`'s signature, so the fishing
+  tests run as they are. The draw-side sliders are `behaviour` (`pose`,
+  `lure`, `fight`, and a wave per kind). Both validated, with units.
+- **A long fish still nibbles.** The rule starts a nibble when the fish's
+  middle is inside `nibble_m` (0.45 m). The sim's stand-off is the mouth
+  15 cm off, but the middle never more than `standoff_max_m` (0.36 m) off,
+  validated inside `nibble_m`; an eel or a serpent stops there. The drawn
+  choreography uses the true stand-off (mouth 15 cm off), so a long fish
+  backs off a little as its first nibble starts.
+- **The choreography keeps state** (where a peck started, the loop, the
+  take's drag): draw state, stepped from the line's phase, timer and run
+  each frame. A peer sees the pecks land on the same dips; the hover drift
+  between them may differ (section 6, risk 3).
+- **The bolt** owns its fish (`School::owned`) for 1.2 s and hands it back
+  with `School::place` where it was drawn. Schools are not saved.
+- **Tail numbers**: design 8.3's wave (a profile per kind: perch, eel, ray)
+  replaces design 4's tail line, since `sway` is gone.
+- **The shader.** One body-wave table row per model (`bodies::wave_rows`),
+  its spine and span; the per-vertex attributes are in body lengths (the
+  axes scaled to metres a spine), so the shader needs no spine. The table is
+  a storage binding (106) of `FieldLit`, written once. `FieldLit::specialize`
+  gives `swim_vertex.wgsl` only to a mesh with the swim attributes; every
+  other field-lit mesh keeps Bevy's vertex stage. The game has no depth or
+  normal prepass and fish are not sun-cascade casters, so there is no second
+  vertex stage to bend; a prepass added later must take the swim vertex too.
+  The school pipeline is warmed on the loading screen (a hidden school mesh
+  with the attributes); a real-time run logs no `LATE_PIPELINE`.
+- **Meshes drawn without the attributes** (the sea's places, the lineup)
+  are bent on the CPU by the same wave, cruising on the world clock. A seal
+  (a floater) cruises the same way.
+- **The lure is drawn**: a leader on from the float to a baited hook (M37's
+  Proposed), the float leaning toward a lure the fish tugs or drags.
+- **The angler** of `--fish-play` strikes 0.3 s into a bite, as M37's does.
+
+### 9.1 Measured (M4 Max, real time, windowed, `--fish-play --hold-pointer
+--watch-hook --time 10 --no-vsync`, 60 s, fresh worlds; the machine was busy
+with other agents' builds and games, 15 to 60 fps)
+
+`PBD_MOTION_TRACE` and `tools/motion_graph.py` (the fish the line works, by
+phase; before = `main` with the instrument alone, `104de7a8`):
+
+| | before | after |
+| --- | --- | --- |
+| move on the frames a nibble starts | 1.8, **41.8**, 2.1, **34.9** cm | 0.5, 0.4 cm |
+| moves over 5 m/s, nibble | 2 | 0 |
+| up flips over 20 deg, approach | 3 (worst 113 deg) | 0 (worst 2.3) |
+| nearest mouth to lure in each dip | 26.0, 49.0 cm | 1.1 cm |
+| turns over 1000 deg/s, any phase | 1 | 0 |
+| hooked: frames over 20 deg | 0 (never turned: held) | 14, all on frames of 40 to 120 ms |
+
+On the line the fish now turns (300 deg/s and an 18 deg shake at 3.5 Hz):
+on a slow frame that is over 20 deg in one frame, never over 1000 deg/s.
+The core test runs the same at 60 frames a second and finds no frame over
+20 deg in any phase. Hooked, the fish's fast moves are the drawn float's
+(19 of 26 frames over 5 m/s are the float's own; before, 11 of 11): the
+float itself steps up to 30 cm a frame while reeled, which is the line's
+place (`feet + away * line_m`), left alone here and worth its own look.

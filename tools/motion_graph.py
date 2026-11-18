@@ -318,9 +318,9 @@ def main() -> None:
 def behaviour(rows: list[dict]) -> list[str]:
     """`fish-behaviour`: the fish the line works, frame by frame, by the
     line's phase. Flips: frames its forward turns over 20 deg, or its up
-    (its roll, with the turn) over 20 deg. Pops: frames it moves over 5 cm
-    (local, the same fish both frames), and the move on the frame a nibble
-    starts. At the dips: the nearest its drawn mouth comes to the drawn lure
+    (its roll, with the turn) over 20 deg. Pops: frames it moves faster than
+    5 m/s (local, the same fish both frames; no fish here swims that fast),
+    and the move on the frame a nibble starts and the one after. At the dips: the nearest its drawn mouth comes to the drawn lure
     in each nibble's dip (the last 0.12 s of a nibble's timer)."""
     def angle(a: tuple, b: tuple) -> float:
         na, nb = math.hypot(*a), math.hypot(*b)
@@ -348,22 +348,29 @@ def behaviour(rows: list[dict]) -> list[str]:
         f = angle((r["fish_fx"], r["fish_fy"], r["fish_fz"]), (p["fish_fx"], p["fish_fy"], p["fish_fz"]))
         u = angle((r["fish_ux"], r["fish_uy"], r["fish_uz"]), (p["fish_ux"], p["fish_uy"], p["fish_uz"]))
         d = math.dist((r["fish_lx"], r["fish_ly"], r["fish_lz"]), (p["fish_lx"], p["fish_ly"], p["fish_lz"]))
+        dt = r["dt_s"] if r["dt_s"] > 0 else math.nan
         if not math.isnan(f):
-            turn[ph].append(f)
+            turn[ph].append((f, f / dt))
         if not math.isnan(u):
-            roll[ph].append(u)
-        if not math.isnan(d) and d < 2.0:
-            step[ph].append(d)
-            if ph == "Nibble" and p["phase"] == "Floating":
+            roll[ph].append((u, u / dt))
+        if not math.isnan(d) and d < 2.0 and r["dt_s"] > 0:
+            step[ph].append((d, d / r["dt_s"]))
+            if ph == "Nibble" and (p["phase"] == "Floating" or (i > 1 and rows[i - 2]["phase"] == "Floating")):
                 nibble_start.append(d)
     for ph in phases:
         t, u, s = turn[ph], roll[ph], step[ph]
         if not t:
             continue
-        out.append(f"line fish, {ph}: frames {len(t)}; forward turn max {max(t):.1f} deg, "
-                   f"over 20 deg {sum(1 for x in t if x > 20)}; up turn max {max(u, default=0):.1f} deg, "
-                   f"over 20 deg {sum(1 for x in u if x > 20)}; move max {100 * max(s, default=0):.1f} cm, "
-                   f"over 5 cm {sum(1 for x in s if x > 0.05)}")
+        # Per frame, and as a rate: a hitch of a slow frame turns a fish
+        # further in it at the same rate. Over 1000 deg/s is past every limit
+        # (the peck's 900).
+        out.append(f"line fish, {ph}: frames {len(t)}; forward turn max {max(x[0] for x in t):.1f} deg, "
+                   f"over 20 deg {sum(1 for x in t if x[0] > 20)}, over 1000 deg/s "
+                   f"{sum(1 for x in t if x[1] > 1000)}; up turn max {max((x[0] for x in u), default=0):.1f} deg, "
+                   f"over 20 deg {sum(1 for x in u if x[0] > 20)}, over 1000 deg/s "
+                   f"{sum(1 for x in u if x[1] > 1000)}; move max "
+                   f"{100 * max((x[0] for x in s), default=0):.1f} cm; pops (over 5 m/s) "
+                   f"{sum(1 for x in s if x[1] > 5.0)}")
     if nibble_start:
         out.append("line fish, move on the frame the nibble starts: "
                    + ", ".join(f"{100 * d:.1f} cm" for d in nibble_start))
