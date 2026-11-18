@@ -49,3 +49,13 @@
       show the rowboat or the cog: none names them (they are part of the
       towns mockup's harbour, and M19 is the Kestrel, Tern and Loon), so
       nothing changes there.
+
+## 4. Open: in-game validation (owner, 2026-11-18: "Validate later, just unit tests and fast build is fine for now")
+
+- [ ] 4.1 Play an old save with harbour rowboats, a cog and a crafted
+      rowboat on the owner's machine: refund once, pack, put ashore. (The
+      captures in 3.2 were taken before this ask; the owner's own pass is
+      still to come.)
+- [ ] 4.2 A harbour with its rafts (`harbour-rafts` 2.2) and a river swim
+      (`swim-pace-and-current` 2.3), screenshots or a trace.
+

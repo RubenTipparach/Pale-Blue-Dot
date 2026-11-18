@@ -351,10 +351,14 @@ pub struct GroundState {
     /// The piece whose floor holds the feet, where a piece's floor and not
     /// the terrain holds them.
     pub on: Option<Piece>,
-    /// A way along the ground the walker is carried with while its feet are
-    /// off it, m/s: kept while it is in the air or the water, and gone when
-    /// it lands. (It was a moving deck's way, until `retire-rowboat-and-cog`.)
+    /// The way the water's current carries the walker along the ground,
+    /// m/s (`swim-pace-and-current`): eased toward the current while it
+    /// swims with its feet off the bottom, and to nothing otherwise.
     pub drift: Vec3,
+    /// Whether the sweep found a floor under the feet this tick, before the
+    /// submerged rule clears `grounded`: a walker on a river's bed with its
+    /// eyes under is not grounded for a jump, but its feet are down.
+    pub feet_down: bool,
 }
 
 #[derive(Resource)]
@@ -590,6 +594,7 @@ fn setup_walking(world: &mut World) {
                 grounded: true,
                 on: None,
                 drift: Vec3::ZERO,
+                feet_down: false,
             },
         ))
         .id();
@@ -813,6 +818,7 @@ pub fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
             grounded: false,
             on: None,
             drift: Vec3::ZERO,
+            feet_down: false,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -855,6 +861,7 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
             grounded: false,
             on: None,
             drift: Vec3::ZERO,
+            feet_down: false,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -1016,6 +1023,7 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
             grounded: !floating,
             on: None,
             drift: Vec3::ZERO,
+            feet_down: false,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -1127,6 +1135,39 @@ fn walk_axis_scale() -> Option<f32> {
     })
 }
 
+/// A walker's speed with the swim's pace (`swim-pace-and-current`
+/// design 1): `swim_speed_mult` of it while swimming, as it was otherwise.
+pub fn swim_speed(speed: f32, swimming: bool, swim: &crate::config::SwimSettings) -> f32 {
+    if swimming {
+        speed * swim.swim_speed_mult
+    } else {
+        speed
+    }
+}
+
+/// The water's push on a walker over one tick (`swim-pace-and-current`
+/// design 2): the carried way `drift` eased toward `current_share` of the
+/// water's velocity `flow` along the ground (up removed), capped at
+/// `current_max_mps`, while `pushed` (in the water, feet off the bottom),
+/// and toward nothing otherwise, at `current_rate_per_s`.
+pub fn swim_push(
+    drift: Vec3,
+    flow: Vec3,
+    up: Vec3,
+    pushed: bool,
+    swim: &crate::config::SwimSettings,
+    dt: f32,
+) -> Vec3 {
+    let target = if pushed {
+        ((flow - up * flow.dot(up)) * swim.current_share).clamp_length_max(swim.current_max_mps)
+    } else {
+        Vec3::ZERO
+    };
+    let along = drift - up * drift.dot(up);
+    let next = along + (target - along) * (1.0 - (-swim.current_rate_per_s * dt).exp());
+    if next.is_finite() { next } else { Vec3::ZERO }
+}
+
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn drive_walker(
     mut state: ResMut<WalkingState>,
@@ -1148,9 +1189,12 @@ fn drive_walker(
         Query<Forces, With<Walker>>,
     )>,
     meals: Option<Res<crate::kitchen::MealEffects>>,
+    swim: Option<Res<crate::config::SwimSettings>>,
+    air: Option<Res<crate::atmosphere::Air>>,
     space: crate::SimSpace,
 ) {
     let o = space.origin();
+    let swim = swim.as_deref().copied().unwrap_or_default();
     // Stride (`cooking` design S5): sprinting and swimming are faster while
     // it runs; walking is not.
     let stride = meals.as_deref().map_or(1.0, |m| m.stride);
@@ -1189,23 +1233,28 @@ fn drive_walker(
         } else {
             config.walk_speed
         };
+        let swimming = (wet.eyes && !wading) || (wet.body && !ground.grounded);
         if wet.body {
             speed *= config.water_movement_mult;
             if !state.sprinting {
                 speed *= stride;
             }
         }
-        // A way kept off the ground (`GroundState::drift`), until the feet
-        // are down; water takes it off as it takes a fall.
-        if ground.grounded {
-            ground.drift = Vec3::ZERO;
-        } else if wet.body {
-            ground.drift *= (-config.water_drag_per_s * dt).exp();
-        }
-        let drift = ground.drift - up * ground.drift.dot(up);
+        speed = swim_speed(speed, swimming, &swim);
+        // The water's current (`swim-pace-and-current` design 2): it carries
+        // a walker in the water whose feet are off the bottom, eased in and
+        // out. Asked at the walker's planet point, as its water test is.
+        let pushed = wet.body && !ground.feet_down;
+        let flow = if pushed {
+            let at = o.query_point(position);
+            sea.current(at, air.as_deref())
+        } else {
+            Vec3::ZERO
+        };
+        ground.drift = swim_push(ground.drift, flow, up, pushed, &swim, dt);
+        let drift = ground.drift;
         let planar = (right * state.axes.x + state.heading * state.axes.y) * speed + drift;
         let mut vertical = velocity.0.dot(up);
-        let swimming = (wet.eyes && !wading) || (wet.body && !ground.grounded);
         if state.jump || (state.jump_held && swimming) {
             if swimming {
                 // Continuous while held, as the reference does it. The second
@@ -1295,6 +1344,20 @@ pub(crate) struct Sea<'w> {
 }
 
 impl Sea<'_> {
+    /// The water's velocity at a planet point, m/s, along the planet's frame
+    /// (`swim-pace-and-current` design 2): a river's or a lake's flow from
+    /// the water rule's levels, the one boats float on
+    /// (`vehicles::fresh_water`), else the sea's surface current from the
+    /// weather, as a boat at sea takes it. Zero with neither.
+    fn current(&self, at: Vec3, air: Option<&crate::atmosphere::Air>) -> Vec3 {
+        if let Some(fresh) = crate::vehicles::fresh_water(&self.terrain, at.as_dvec3()) {
+            return fresh.current.as_vec3();
+        }
+        air.map_or(Vec3::ZERO, |air| {
+            air.now.sample(at.normalize_or(Vec3::Y)).current
+        })
+    }
+
     /// The sheet the water pass draws over a direction: the mean sea, less
     /// the sheet's offset, plus the tide there.
     fn sheet_radius(&self, direction: Vec3) -> f32 {
@@ -1856,6 +1919,7 @@ fn resolve_ground(
         position.0 = accepted;
         ground.previous = accepted;
         ground.grounded = grounded && !submerged;
+        ground.feet_down = grounded;
         // The piece the feet are on.
         let on = if ground.grounded {
             footprint_in(
@@ -1868,9 +1932,6 @@ fn resolve_ground(
         } else {
             None
         };
-        if ground.grounded {
-            ground.drift = Vec3::ZERO;
-        }
         ground.on = on;
     }
 }
@@ -2295,6 +2356,7 @@ mod tests {
                 grounded,
                 on: None,
                 drift: Vec3::ZERO,
+                feet_down: false,
             },
         ));
         walker
@@ -2833,6 +2895,7 @@ mod tests {
                     grounded: false,
                     on: None,
                     drift: Vec3::ZERO,
+                    feet_down: false,
                 },
             ));
             let mut ticks = 0;
@@ -2882,6 +2945,7 @@ mod tests {
                     grounded: false,
                     on: None,
                     drift: Vec3::ZERO,
+                    feet_down: false,
                 },
             ));
             let ship = crate::spawn_ship(
@@ -4410,5 +4474,97 @@ mod sim_origin_tests {
         assert!((world.pos - pose.position.as_dvec3()).length() < 1e-5);
         assert!(app.world().get_resource::<SimFrame>().is_some());
         let _ = WorldPos::new(crate::sim_origin::HOME, world.pos);
+    }
+}
+
+/// `swim-pace-and-current`: the swim's pace and the water's push.
+#[cfg(test)]
+mod swim_pace_tests {
+    use super::*;
+    use crate::config::SwimSettings;
+
+    const DT: f32 = 1.0 / 60.0;
+
+    /// Design 1: swimming, at the surface, under it or sprinting, is half
+    /// the speed it was; wading (not swimming) is not slowed.
+    #[test]
+    fn a_swimmer_goes_half_as_fast_and_a_wader_does_not() {
+        let swim = SwimSettings::default();
+        let config = WalkingConfig::default();
+        for base in [config.walk_speed, config.sprint_speed] {
+            let before = base * config.water_movement_mult;
+            assert_eq!(swim_speed(before, true, &swim), before * 0.5);
+            assert_eq!(swim_speed(before, false, &swim), before, "wading");
+        }
+        assert_eq!(swim.swim_speed_mult, 0.5);
+    }
+
+    /// Design 2: floating with its feet off the bottom, a swimmer drifts
+    /// along the flow at half its speed, capped; with its feet down the
+    /// current does not push it, and what it carried eases away.
+    #[test]
+    fn a_current_carries_a_swimmer_downstream_and_not_one_standing() {
+        let swim = SwimSettings::default();
+        let up = Vec3::Y;
+        let flow = Vec3::new(1.2, 0.3, 0.0);
+        let mut drift = Vec3::ZERO;
+        for _ in 0..(10.0 / DT) as usize {
+            drift = swim_push(drift, flow, up, true, &swim, DT);
+        }
+        let along = Vec3::new(1.2, 0.0, 0.0);
+        assert!(
+            drift.normalize().dot(along.normalize()) > 0.999,
+            "along the flow: {drift}"
+        );
+        assert!(
+            (drift.length() - 0.6).abs() < 0.01,
+            "half the flow: {drift}"
+        );
+        assert!(drift.dot(up).abs() < 1e-6, "along the ground");
+        // A fast river: capped.
+        let mut fast = Vec3::ZERO;
+        for _ in 0..(10.0 / DT) as usize {
+            fast = swim_push(fast, Vec3::X * 4.0, up, true, &swim, DT);
+        }
+        assert!((fast.length() - swim.current_max_mps).abs() < 0.01);
+        // Feet down: no push from rest, and the carried way eases to nothing.
+        assert_eq!(
+            swim_push(Vec3::ZERO, flow, up, false, &swim, DT),
+            Vec3::ZERO
+        );
+        let mut d = drift;
+        for _ in 0..(5.0 / DT) as usize {
+            d = swim_push(d, flow, up, false, &swim, DT);
+        }
+        assert!(d.length() < 0.001, "eased away: {d}");
+    }
+
+    /// Design 2: no jolt. Entering the water, or crossing into a cell whose
+    /// flow turns about, the carried way changes by at most its ease's share
+    /// a tick: under 2.5 % of the step in its target.
+    #[test]
+    fn the_push_eases_without_a_jolt() {
+        let swim = SwimSettings::default();
+        let up = Vec3::Y;
+        let share = 1.0 - (-swim.current_rate_per_s * DT).exp();
+        assert!(share < 0.025);
+        let a = swim_push(Vec3::ZERO, Vec3::X * 2.0, up, true, &swim, DT);
+        assert!(a.length() <= 1.0 * share + 1e-6, "entering: {a}");
+        let mut d = Vec3::X;
+        let mut biggest = 0.0f32;
+        for k in 0..600 {
+            let flow = if k < 300 {
+                Vec3::X * 2.0
+            } else {
+                Vec3::NEG_X * 2.0
+            };
+            let next = swim_push(d, flow, up, true, &swim, DT);
+            biggest = biggest.max((next - d).length());
+            d = next;
+        }
+        assert!(
+            biggest <= 2.0 * share + 1e-5,
+            "largest step a tick {biggest}"
+        );
     }
 }

@@ -67,6 +67,24 @@ the feet this tick, before the submerged rule. A walker standing on a
 river's bed with its eyes under is not grounded for the jump, but its feet
 are down, so the current does not push it.
 
+## Found: half the pace breaks two earlier swim rules' tests
+
+Measured with the unit tests (2026-11-18), the pace alone (the current off
+gives the same): a slower swimmer holding forward sinks further before it
+reaches a bank or a shelf, so
+- `walking::tests::a_swimmer_steps_from_two_layer_water_onto_a_one_layer_shelf`
+  (`swimming` 5, the owner: "my feet hits the floor when swimming to depth
+  1"): starting 1.5 m under, 0.5 m from the shelf, the feet now touch the
+  bed (1.95 m under) before the step up;
+- `walking::tests::a_swimmer_climbs_out_onto_a_one_or_two_layer_bank`
+  (`swimming` 4): the swimmer reaches the bank deeper, so the 0.4 s climb
+  lifts it further, 0.40 m in a tick against the test's 0.35 m.
+At `swim_speed_mult` 0.75 the shelf case passes and the climb still steps
+0.36 m; at 1.0 both pass. Both are the owner's earlier asks against this
+one, so the pace is shipped as asked (0.5) and the two tests left failing
+for the owner's call. Ways out: make the climb's time grow with its height
+(a step capped per tick), or let a swimmer pressing forward sink slower.
+
 ## Risks / Trade-offs
 
 - **Ocean currents move a swimmer at sea** too, at half their speed. Most

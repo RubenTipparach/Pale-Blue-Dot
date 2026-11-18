@@ -1,0 +1,18 @@
+// The player in the water (openspec/changes/swim-pace-and-current). Every
+// field here is the code default written out (crates/pbd-app/src/config.rs,
+// SwimSettings); a test holds the two together.
+(
+    // A swimmer's speed as a share of what it was before (owner,
+    // 2026-11-18: "Slow down swimming by 50% for the player"): surface,
+    // under water and sprinting alike. Wading is not swimming. Ratio.
+    swim_speed_mult: 0.5,
+    // The water's current carries a swimmer whose feet are off the bottom
+    // toward this share of the water's velocity (a river's flow, the sea's
+    // surface current). Ratio.
+    current_share: 0.5,
+    // ... never faster than this, m/s.
+    current_max_mps: 1.0,
+    // ... easing toward it at this rate, per second (time constant 1/rate
+    // s), in and out, so nothing jolts. Feet down, it eases to nothing.
+    current_rate_per_s: 1.5,
+)

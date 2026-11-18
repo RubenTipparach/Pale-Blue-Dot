@@ -1751,6 +1751,61 @@ impl Validated for crate::held::HeldSettings {
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct HeldConfig(pub crate::held::HeldSettings);
 
+/// The player in the water (`swim-pace-and-current`): how fast a swimmer
+/// goes, and how the water's current carries one whose feet are off the
+/// bottom. `assets/config/swimming.ron`.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SwimSettings {
+    /// A swimmer's speed as a share of what it was in the water before
+    /// (owner, 2026-11-18: "slow down swimming by 50%"), at the surface,
+    /// under it and sprinting. A ratio, 0 < m <= 1.
+    pub swim_speed_mult: f32,
+    /// The share of the water's velocity a swimmer is carried toward. A
+    /// ratio, 0..=1.
+    pub current_share: f32,
+    /// The most the current carries a swimmer, m/s.
+    pub current_max_mps: f32,
+    /// How fast the carried way eases toward its target, per second: a
+    /// time constant of 1 / this. Above 0.
+    pub current_rate_per_s: f32,
+}
+
+impl Default for SwimSettings {
+    fn default() -> Self {
+        Self {
+            swim_speed_mult: 0.5,
+            current_share: 0.5,
+            current_max_mps: 1.0,
+            current_rate_per_s: 1.5,
+        }
+    }
+}
+
+impl Validated for SwimSettings {
+    fn validate(&self) -> Result<(), String> {
+        finite(
+            "swimming",
+            &[
+                self.swim_speed_mult,
+                self.current_share,
+                self.current_max_mps,
+                self.current_rate_per_s,
+            ],
+        )?;
+        if !(self.swim_speed_mult > 0.0 && self.swim_speed_mult <= 1.0) {
+            return Err("swim_speed_mult must be in (0, 1]".into());
+        }
+        if !(0.0..=1.0).contains(&self.current_share) || self.current_max_mps < 0.0 {
+            return Err("current_share must be in 0..=1 and current_max_mps 0 or more".into());
+        }
+        if self.current_rate_per_s <= 0.0 {
+            return Err("current_rate_per_s must be above 0".into());
+        }
+        Ok(())
+    }
+}
+
 /// The lighting model (`lighting-model`): which one draws, and its knobs.
 #[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
 #[serde(default, deny_unknown_fields)]
@@ -2241,6 +2296,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(GatherConfig(load("gather")))
+            .insert_resource(load::<SwimSettings>("swimming"))
             .insert_resource(recipes)
             .insert_resource(kitchen);
         #[cfg(feature = "desktop")]
@@ -2357,6 +2413,10 @@ mod tests {
             ron::from_str(include_str!("../../../assets/config/gather.ron")).unwrap();
         Validated::validate(&gather).unwrap();
         assert_eq!(gather, Default::default());
+        let swim: SwimSettings =
+            ron::from_str(include_str!("../../../assets/config/swimming.ron")).unwrap();
+        swim.validate().unwrap();
+        assert_eq!(swim, SwimSettings::default());
         #[cfg(feature = "desktop")]
         {
             let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();
