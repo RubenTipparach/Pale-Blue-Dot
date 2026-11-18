@@ -24,7 +24,7 @@
 
 ## 4. Proof
 
-- [ ] 4.1 Map biome layer, version 10 and version 11, and an eye-level
+- [x] 4.1 Map biome layer, version 10 and version 11, and an eye-level
       swamp, in `docs/screenshots/swamps/` with a README.
 - [ ] 4.2 The owner's look at the captures.
 - [ ] 4.3 Generation time and frame cost on the owner's machine (not
