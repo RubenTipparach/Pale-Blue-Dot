@@ -357,7 +357,8 @@ pub struct FlowVertex {
     pub prev: Vec3,
     pub normal: Vec3,
     /// The flow in the face's tangent frame as the sea's fragment reads it.
-    /// The flow lane: a top's pan (xy) and how near a fall's lip it is (z);
+    /// The flow lane: a top's pan (xy, north and east at the vertex,
+    /// `flow_lane`) and how near a fall's lip it is (z);
     /// a face's froth weight (x) and how far under its fall's lip it is (z).
     pub flow: Vec3,
     /// The face's kind, and the sky's share at it, 0..1.
@@ -526,12 +527,122 @@ pub struct LiquidMesh {
     pub pieces: Vec<PieceSpan>,
 }
 
-/// The tangent frame the sea's fragment builds off a face (`fragment` in
-/// `water.wgsl`): X, or Y where the face is near X, off the face.
-fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
+/// The frame a top's flow lane is written in and read back from: the body
+/// frame's north and east at the point itself (`geo::north_east`;
+/// `flow_north_east` in `water.wgsl`). Not the face's own tangent frame: a
+/// slanted top's triangles each have their own normal, and that frame flips
+/// from X to Y within 26 degrees of the X axis, so a triangle read its cell's
+/// flow turned or backwards (`water-flow`, "The surface streaming against
+/// its arrows").
+fn flow_frame(at: Vec3) -> (Vec3, Vec3) {
+    pbd_core::geo::north_east(at)
+}
+
+/// A top's flow at `at`, `velocity` in the body frame, as its lane's two
+/// numbers.
+fn flow_lane(at: Vec3, velocity: Vec3) -> Vec2 {
+    let (north, east) = flow_frame(at);
+    Vec2::new(velocity.dot(north), velocity.dot(east))
+}
+
+/// How the sea's fragment reads a top's flow lane back into the body frame
+/// (`fragment` in `water.wgsl`, the `advected` line): the surface's pattern
+/// streams along what this returns. `face` is the fragment's normal, `at`
+/// its body-local position.
+pub fn shader_flow_read(_face: Vec3, at: Vec3, flow: Vec2) -> Vec3 {
+    let (north, east) = flow_frame(at);
+    north * flow.x + east * flow.y
+}
+
+/// What [`flow_uv_audit`] counts: top triangles that stream, those whose
+/// stream is over 90 degrees from their cell's arrow (against it) and over
+/// 45 (off it), and the flowing tops with at least one triangle off.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FlowUvAudit {
+    pub triangles: usize,
+    pub against: usize,
+    pub off: usize,
+    pub tops: usize,
+    pub split_tops: usize,
+    /// The same triangles as the mesher and fragment had them before the
+    /// fix (the slope written in the centre's face frame, read back in the
+    /// triangle's): the measurement's before, off the same mesh.
+    pub legacy_against: usize,
+    pub legacy_off: usize,
+}
+
+/// The tangent frame the fragment built off a face before the fix, and the
+/// rain rings still do: X, or Y where the face is near X, off the face.
+fn legacy_face_frame(face: Vec3) -> (Vec3, Vec3) {
     let reference = if face.x.abs() > 0.9 { Vec3::Y } else { Vec3::X };
     let u = (reference - face * reference.dot(face)).normalize_or(Vec3::X);
     (u, face.cross(u))
+}
+
+/// A measurement instrument (`water-flow`, "The surface streaming against
+/// its arrows"): for every top triangle of `mesh`, the way the fragment
+/// streams it ([`shader_flow_read`] of its flow lane) against its cell's
+/// arrow, the downhill slope recomputed from the top's own corners exactly
+/// as `cell_pieces` takes it. Independent of how the lane is encoded.
+pub fn flow_uv_audit(mesh: &LiquidMesh) -> FlowUvAudit {
+    let mut out = FlowUvAudit::default();
+    for span in &mesh.pieces {
+        let (first, n) = (span.first as usize, span.n as usize);
+        let vs = &mesh.vertices[first..first + n];
+        if vs.is_empty() || vs[0].kind != KIND_TOP || n % 3 != 0 {
+            continue;
+        }
+        // The fan: middle, corner i, corner i + 1.
+        let middle = vs[0].position;
+        let centre = middle.normalize_or(Vec3::Y);
+        let mean = middle.length();
+        let mut gradient = Vec3::ZERO;
+        for tri in vs.chunks(3) {
+            let p = tri[1].position;
+            let offset = p.normalize_or(centre) * mean - middle;
+            let offset = offset - centre * offset.dot(centre);
+            gradient += offset * (p.length() - mean);
+        }
+        let arrow = (-gradient).normalize_or_zero();
+        if arrow == Vec3::ZERO {
+            continue;
+        }
+        let mut split = false;
+        let mut streams = false;
+        for tri in vs.chunks(3) {
+            let at = (tri[0].position + tri[1].position + tri[2].position) / 3.0;
+            let flow = (tri[0].flow + tri[1].flow + tri[2].flow) / 3.0;
+            let dir = shader_flow_read(tri[0].normal, at, flow.truncate());
+            if dir.length_squared() < 1e-8 {
+                continue;
+            }
+            streams = true;
+            out.triangles += 1;
+            let cos = dir.normalize().dot(arrow);
+            if cos < 0.0 {
+                out.against += 1;
+            }
+            if cos < std::f32::consts::FRAC_1_SQRT_2 {
+                out.off += 1;
+                split = true;
+            }
+            let (t, b) = legacy_face_frame(centre);
+            let (u, v) = legacy_face_frame(tri[0].normal.normalize_or(centre));
+            let legacy = (u * arrow.dot(t) + v * arrow.dot(b)).normalize_or_zero();
+            let cos = legacy.dot(arrow);
+            if cos < 0.0 {
+                out.legacy_against += 1;
+            }
+            if cos < std::f32::consts::FRAC_1_SQRT_2 {
+                out.legacy_off += 1;
+            }
+        }
+        if streams {
+            out.tops += 1;
+            out.split_tops += usize::from(split);
+        }
+    }
+    out
 }
 
 impl LiquidMesh {
@@ -724,9 +835,6 @@ struct CellFrame {
     /// the sheet's (`planet::column::sheet_listed`, `ocean-environments`
     /// B22): in a cave the sea reaches too, not only under sea level.
     sheet_listed: bool,
-    /// The shader's tangent frame at the centre.
-    t: Vec3,
-    b: Vec3,
 }
 
 impl CellFrame {
@@ -737,15 +845,12 @@ impl CellFrame {
         for (i, corner) in corners.iter_mut().enumerate().take(degree) {
             *corner = Vec3::from_slice(&cell.corners[i][..3]).normalize_or(centre);
         }
-        let (t, b) = shader_frame(centre);
         Self {
             degree,
             centre,
             corners,
             sides: tier.sides_of(slot),
             sheet_listed: crate::planet::column::sheet_listed(cell),
-            t,
-            b,
         }
     }
 
@@ -938,13 +1043,14 @@ fn cell_pieces(
         if let Some(out) = out.as_deref_mut() {
             out.tops += 1;
         }
-        // The waves stream along the flow, faster on a steeper top.
+        // The waves stream along the flow, faster on a steeper top: one
+        // body-frame velocity for the whole top, written at each vertex in
+        // north and east there (`flow_lane`).
         let pan = if flowing {
             let speed = PAN_K * (slope.length() / PAN_SLOPE).clamp(0.35, 1.5);
-            let dir = slope.normalize();
-            Vec2::new(dir.dot(f.t), dir.dot(f.b)) * speed / SHADER_FLOW
+            slope.normalize() * speed / SHADER_FLOW
         } else {
-            Vec2::ZERO
+            Vec3::ZERO
         };
         // How near each corner is to a fall's lip (owner, 2026-11-15:
         // "can we have the edge transition into froth?"): one at a corner on
@@ -984,7 +1090,7 @@ fn cell_pieces(
                     PieceVertex {
                         p: v,
                         n,
-                        flow: pan.extend(lip),
+                        flow: flow_lane(v, pan).extend(lip),
                         kind: KIND_TOP,
                     },
                     top_of(v),
@@ -1030,7 +1136,7 @@ fn cell_pieces(
             continue;
         }
         let normal = f.side_normal(s);
-        let edge = (z - a).normalize_or(f.t);
+        let edge = (z - a).normalize_or(centre.any_orthonormal_vector());
         // A falling cell's face is white water streaming down; a sheet's
         // edge and a source's face stand still. A fall's froth is densest at
         // its lip and its foot.
@@ -1518,6 +1624,14 @@ fn rebuild_water(
             made.flowing_tops,
             made.vertices.len() / 3,
             started.elapsed().as_secs_f64() * 1e3
+        );
+    }
+    if std::env::var_os("PBD_FLOW_UV_AUDIT").is_some() {
+        let a = flow_uv_audit(&made);
+        info!(
+            "FLOW_UV_AUDIT triangles={} against={} off45={} tops={} split_tops={} \
+             legacy_against={} legacy_off45={}",
+            a.triangles, a.against, a.off, a.tops, a.split_tops, a.legacy_against, a.legacy_off
         );
     }
     flowing.lanes = Arc::new(made.lanes());
@@ -2207,6 +2321,126 @@ mod tests {
             drawn_at(&made, liquid::TICK_S - at),
             "and reaches its end when it would have"
         );
+    }
+
+    /// The ring's records turned by `q`: the same seven cells anywhere on
+    /// the sphere, at any heading.
+    fn ring_cells_turned(q: Quat) -> Vec<GpuCell> {
+        let mut cells = ring_cells();
+        for cell in &mut cells {
+            let d = q * Vec3::from_slice(&cell.direction_height[..3]);
+            cell.direction_height[..3].copy_from_slice(&d.to_array());
+            for k in &mut cell.corners {
+                let c = q * Vec3::from_slice(&k[..3]);
+                k[..3].copy_from_slice(&c.to_array());
+            }
+        }
+        cells
+    }
+
+    /// Where the ring is set down for the flow audit: the owner's cascade
+    /// (frame 23.225, -3.012), the default spawn, the twelve pentagons'
+    /// directions, the frame's switch rings either side of +X and -X, and
+    /// a Fibonacci sweep of the sphere.
+    fn audit_places() -> Vec<Vec3> {
+        let at = |lat: f32, lon: f32| {
+            pbd_core::geo::direction(pbd_core::geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            })
+        };
+        let mut places = vec![
+            at(23.225, -3.012),
+            Vec3::new(0.8776, 0.4794, 0.0).normalize(),
+        ];
+        let phi = (1.0 + 5f32.sqrt()) / 2.0;
+        for (a, b) in [(1.0, phi), (-1.0, phi), (1.0, -phi), (-1.0, -phi)] {
+            places.push(Vec3::new(0.0, a, b).normalize());
+            places.push(Vec3::new(a, b, 0.0).normalize());
+            places.push(Vec3::new(b, 0.0, a).normalize());
+        }
+        for lon in (0..360).step_by(15) {
+            for x in [0.9f32, -0.9] {
+                let r = (1.0 - x * x).sqrt();
+                let a = (lon as f32).to_radians();
+                places.push(Vec3::new(x, r * a.cos(), r * a.sin()));
+            }
+        }
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        for i in 0..200 {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / 200.0;
+            let r = (1.0 - y * y).max(0.0).sqrt();
+            let a = golden * i as f32;
+            places.push(Vec3::new(a.cos() * r, y, a.sin() * r));
+        }
+        places
+    }
+
+    /// Slanted tops stream with their arrows (`water-flow`, "The surface
+    /// streaming against its arrows"): a top stepping down to a fall's lip
+    /// and one sloping gently, every way round, set down everywhere in
+    /// [`audit_places`]: no top triangle streams more than 45 degrees off
+    /// its cell's arrow.
+    #[test]
+    fn every_top_triangle_streams_with_its_arrow() {
+        let mut total = FlowUvAudit::default();
+        for (i, &place) in audit_places().iter().enumerate() {
+            let before = total;
+            for k in 0..6usize {
+                for spin in [0.0f32, 0.4, 1.1] {
+                    let q = Quat::from_rotation_arc(Vec3::Y, place) * Quat::from_rotation_y(spin);
+                    let cells = ring_cells_turned(q);
+                    for steep in [true, false] {
+                        // Downhill across side k: air there (a step down
+                        // to a lip) or water a few levels lower; a source
+                        // uphill.
+                        let down = if steep {
+                            Material::Air
+                        } else {
+                            Material::flowing(3, false)
+                        };
+                        let tier = ring(&[
+                            (0, AT, Material::flowing(6, false)),
+                            (k + 1, AT, down),
+                            ((k + 3) % 6 + 1, AT, Material::Water),
+                        ]);
+                        let made = liquid_mesh_eased(&tier, None, &cells, RADIUS);
+                        let a = flow_uv_audit(&made);
+                        total.triangles += a.triangles;
+                        total.against += a.against;
+                        total.off += a.off;
+                        total.tops += a.tops;
+                        total.split_tops += a.split_tops;
+                        total.legacy_against += a.legacy_against;
+                        total.legacy_off += a.legacy_off;
+                    }
+                }
+            }
+            if i < 2 {
+                println!(
+                    "FLOW_UV_AUDIT place {i}: {} of {} triangles against, {} off \
+                     (before the fix {} against, {} off)",
+                    total.against - before.against,
+                    total.triangles - before.triangles,
+                    total.off - before.off,
+                    total.legacy_against - before.legacy_against,
+                    total.legacy_off - before.legacy_off
+                );
+            }
+        }
+        // The audit's read is the fragment's.
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        for read in [
+            "let flow_frame = flow_north_east(radial);",
+            "(flow_frame[0]*in.flow_uv.x + flow_frame[1]*in.flow_uv.y)*time*0.35*horizontal",
+            "east = vec3<f32>(-d.z/across, 0.0, d.x/across);",
+            "return array<vec3<f32>, 2>(normalize(cross(east, d)), east);",
+        ] {
+            assert!(shader.contains(read), "{read}");
+        }
+        println!("FLOW_UV_AUDIT {total:?}");
+        assert!(total.triangles > 10_000, "{total:?}");
+        assert_eq!((total.against, total.off), (0, 0), "{total:?}");
     }
 
     /// `lanes` and `vertex_flowing` agree on the layout: the stride, and

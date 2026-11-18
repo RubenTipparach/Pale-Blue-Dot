@@ -1320,3 +1320,91 @@ rolls as the mockup's does. In a cascade of side-by-side falls the wall blend
 fades each puff against the neighbouring sheets, so the mist reads thinner
 than the mockup's single fall; narrowing the blend there would change the
 approved look and is the owner's to ask for.
+
+## The surface streaming against its arrows (owner, 2026-11-17)
+
+The owner, with the flow arrows on (F5) over a cascade of one-layer steps at
+frame 23.225, -3.012 (map 23.2255S 3.012W): "detected some uv going against
+the direction of the arrow", "its easy to see on waterfalls", and "where you
+have slanted water blocks, the uv splits to per triangle".
+
+**What the arrow and the surface each read.** The arrow is the cell's
+downhill slope (`cell_pieces`, `along = slope.normalize()`), drawn in the
+body frame: it cannot be wrong about the cell. The surface streams by the
+top's flow lane, two numbers: the mesher writes the slope in the tangent
+frame of the cell's *centre* (`shader_frame(centre)`), and the fragment
+rebuilds a frame to read them back from the *triangle's own normal*
+(`tangent_u` off X, or off Y where `|face.x| > 0.9`, projected off `face`).
+On a flat top the two frames agree to a hundredth of a degree. On a slanted
+top every triangle is lit by its own slope (up to ~35 degrees off the
+centre on a step), so each triangle reads the same two numbers in its own
+frame: the per-triangle split the owner saw. Where the frame is
+ill-conditioned it reverses: within about 26 degrees of the body's +X or -X
+axis the reference flips from X to Y, and a tilted triangle lands on the
+other side of the flip from its centre. There `X - n(n.X)` and
+`Y - n(n.Y)` are nearly opposite (at the owner's spot, n = (0.918, 0.394,
+-0.048), they are 180 degrees apart to within 4 degrees), so that triangle
+streams backwards. The owner's cascade sits at |x| = 0.918, 2.6 degrees from
+the flip; the default spawn, (0.878, 0.479, 0), at 1.3 degrees on the other
+side. Both are inside the band where the X-projected axis is short and a
+small tilt swings it round.
+
+The falling faces themselves do not read the flow lane: they stream along
+the body radial, down, for both the waves (`advected`, `fall_c`) and the
+froth's streaks, and the fall arrows point down the face (`-centre`). The
+waterfalls show it because a step's top is the most slanted water there is
+and each one leads straight into a fall, and the lip's froth band and
+Glassy band sit on those slanted tops.
+
+**The fbm's own drift is not the cause.** `fbm3` moves each octave at a
+fixed body-frame velocity, about 0.38 to 0.43 m per shader second at
+`ripple_scale` 1.5; the slowest top streams at 0.56 (`PAN_K` x 0.35), so on
+a top the drift can turn the pattern by up to about 50 degrees but never
+reverse it, and on a fall face (1 m/s and speeding up) by about 25 degrees.
+It is the sea's own look and is left alone.
+
+**Measurement (an instrument, no behaviour change).** `water_flow::flow_uv_audit`
+mirrors the fragment's read of a top's flow lane: for every top triangle it
+decodes the lane in the frame the fragment builds and compares it with the
+cell's arrow. A triangle disagrees where the two are more than 90 degrees
+apart (against the arrow) and is off where more than 45. `PBD_FLOW_UV_AUDIT=1`
+logs `FLOW_UV_AUDIT` from the live mesh each rebuild; a unit test runs it on
+slanted cells placed round the sphere, the owner's spot and the pentagon
+neighbourhoods among them.
+
+**Fix.** One frame for both ends that does not depend on a triangle's
+normal and has no flip: the body frame's north and east (`geo::north_east`)
+at the point itself. The mesher writes each top vertex's flow in north and
+east at that vertex's own direction; the fragment reads it back in north and
+east at the fragment's direction, so every triangle of a cell reads the
+cell's own slope and the lane interpolates smoothly. Its only singularity is
+the two poles, where north and east turn round within a cell; a cell within
+a few metres of a pole may still read its flow rotated, and none is at a
+river the owner has shown. The fall faces, the sea sheet (no flow) and the
+rain rings (which keep the face's own frame, as they are round) are not
+touched. Speeds, the lip's froth and every fall look are as they are.
+
+Not changed: each cell still streams at its own slope's speed, so where two
+cells of different slope meet, their patterns slide past each other along
+the shared edge as before. Making the field continuous across cells needs
+the flow blended at the corners and a two-phase reset (the pool's
+method) to keep it from shearing, which changes how the river looks; that
+is the owner's to ask for, in a mockup.
+
+**Measured (2026-11-17, the Mac).** The live mesh at the owner's cascade
+(`PBD_FLOW_UV_AUDIT=1`, a throwaway world): before, 1048 of 2946 top
+triangles streamed against their arrows (35.6 %), every one of them more than
+90 degrees off, on 491 tops; after, 0 against and 0 off by more than 45
+degrees. The unit sweep (`every_top_triangle_streams_with_its_arrow`: a
+stepped top and a gently sloped one, six ways round and three spins, at the
+owner's spot, the default spawn, the twelve pentagon directions, 48 points on
+the old switch rings and 200 over the sphere; 84,888 triangles): before,
+5299 against and 9885 off by more than 45 degrees, with 4114 of 14,148 tops
+split between triangles; at the owner's spot alone 155 of 324 against; after,
+none. The "before" is the old encode and read modelled on the same mesh
+(`legacy_*` in the audit), checked against the old code itself: the sweep run
+on `origin/main` with the audit gave the same 155 and 81 at the two named
+spots. The fix is two extra lines a fragment on the game's water and one
+`north_east` a top vertex in the mesher; frame time was not measured
+(`perf_suite.py` has no river scenario, and the read replaces one frame with
+another of the same cost).

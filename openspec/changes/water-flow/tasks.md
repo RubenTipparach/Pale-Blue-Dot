@@ -116,3 +116,16 @@
       fall_*` and its stop on walking away.
 - [ ] 8.4 (On the Sounds page, version 2, 2026-11-16; waiting for the owner's ears.) The three loops on the Sounds page for the owner to hear; the
       owner's ears approve them.
+
+## 9. The surface streaming against its arrows (design "The surface streaming against its arrows"; owner, 2026-11-17)
+
+- [x] 9.1 The measurement: `water_flow::flow_uv_audit` (each top triangle's stream as the fragment reads its
+      lane, against its cell's arrow recomputed from the top's corners; the before's frames modelled beside
+      it) and `PBD_FLOW_UV_AUDIT=1`'s `FLOW_UV_AUDIT` log. Verify: at the owner's cascade (frame 23.225,
+      -3.012) and in the unit sweep, the before's counts are the bug's.
+- [x] 9.2 The fix: a top's flow lane written in the body frame's north and east at each vertex
+      (`flow_lane`) and read back in north and east at the fragment (`flow_north_east` in `water.wgsl`),
+      not in the triangle's own face frame. Falls, the sea, the rain rings, speeds and looks untouched.
+      Verify: `every_top_triangle_streams_with_its_arrow` (no triangle over 45 degrees off its arrow,
+      everywhere in the sweep, the pentagons' directions and the frame's old switch rings among them);
+      the cascade's live count is zero; the strip in `docs/screenshots/water-flow-uv/`.
