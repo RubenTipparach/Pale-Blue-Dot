@@ -14,6 +14,9 @@ use crate::fauna::{FishingSettings, FlockSettings, Rng, School, Species, Water};
 use crate::world_frame::SimOrigin;
 use glam::Vec3;
 
+/// The last this long of each nibble's timer the float dips, s.
+pub const NIBBLE_DIP_S: f32 = 0.12;
+
 /// Where the line is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Phase {
@@ -501,7 +504,7 @@ impl Line {
         if matches!(self.phase, Phase::Floating | Phase::Nibble | Phase::Bite) {
             let want = match self.phase {
                 Phase::Bite => s.bite_dip_m,
-                Phase::Nibble if self.timer < 0.12 => s.nibble_dip_m,
+                Phase::Nibble if self.timer < NIBBLE_DIP_S => s.nibble_dip_m,
                 _ => 0.0,
             };
             self.dip += (want - self.dip) * (dt * 14.0).min(1.0);
