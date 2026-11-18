@@ -216,8 +216,8 @@ impl Default for ShovelSettings {
             pull_m: 0.05,
             scoop_s: 0.26,
             across_m: 0.0,
-            arm_follow: 1.0,
-            fist_drop_m: 0.04,
+            arm_follow: 0.7,
+            fist_drop_m: 0.16,
             fist_fwd_m: 0.12,
         }
     }
@@ -1159,6 +1159,11 @@ mod tests {
             Vec3::new(-v.across_m, -v.fist_drop_m, -v.fist_fwd_m)
         );
         assert_eq!(k.hit.shift.x, 0.0, "a straight wrist");
+        // The shoulder stays low (decision 9, version 12): the fist drops
+        // 0.16 m below its rest at the hit and the arm follows 0.7 of the
+        // spade's turn.
+        assert_eq!((v.fist_drop_m, v.arm_follow), (0.16, 0.7));
+        assert!(k.hit.shift.y <= -0.16 && k.coil.shift.y < 0.0);
         let slide = k.coil.shift - k.hit.shift;
         assert!((slide - Vec3::new(0.0, v.slide_drop_m, v.slide_m)).length() < 1e-6);
         assert_eq!(k.coil.pitch, k.hit.pitch, "the slide keeps the angle");

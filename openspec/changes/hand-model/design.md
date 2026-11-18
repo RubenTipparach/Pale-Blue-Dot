@@ -180,3 +180,50 @@ look like sausges", "thumb is really big".
 big finger": the thumb's first segment starts 0.4 of the way from the
 game's thumb root toward the palm's centre (`thumb_sink`), so it grows out
 of the hand's mass; the palm's outline still reaches to the old root.
+
+## 6. As built (2026-11-18): Tools in Hand versions 9 to 13
+
+The owner on the mockup: "cool now implement all these". Sections 5 to 5.3
+in the game, as the mockup builds them.
+
+- **Where the geometry is built.** The model file now carries each tool's
+  19 bones (`held_tools.ron` `bones`, the same numbers as the mockup's
+  `HELD` data) and the hand's look once (`hand`: `thumb_len` 0.72,
+  `thumb_sink` 0.4, `grip_turn_deg` 45, `ao` 0.6, `tip_flush` 0.22 toward
+  (226, 140, 128), the skin (227, 176, 137)). `pbd_core::hand::build`
+  ports `proposedHandGeometry` whole: `palmMesh` (the traced outline,
+  bevels, the domed back), `chamferBlock` (with `taper` and `round`),
+  `HandBuilder` (the sides by normal, the islands, `setFlush`), `bakeAO`
+  and the grip turn. The generator's own block port (section 4) is gone:
+  one port, in Rust, so the sleeve keeps its `held.ron` length and the
+  rules of the shape have one home. Checked against the page: the mockup's
+  `proposedHandGeometry` run in node and the game's `build` give the same
+  vertices for all four grips (1584 triangles each, the same texture
+  groups, positions within 5e-6 tool units, UVs, occlusion and flush within
+  f32 rounding).
+- **Textures.** Six, by `pbd_core::hand::Texture`: the skin (the back's
+  tone, skin × (0.86, 0.82, 0.80)) and the nails on it, the cloth, the
+  cuff, the palm (32 × 32, its island) and the fold (16 × 16). The
+  generator draws them as `handTextures`, `palmTexture` and `foldTexture`
+  do, one generator through the first four as before; all six are the
+  mockup's pixel for pixel (checked against the page's functions in node).
+  `skin.png` and `nail.png` changed, being drawn on the back's tone now.
+- **Shade.** The vertex colour is the wrapped light (re-baked in eye space
+  as before, `shade_hands`) times the baked shade (the knuckle crease times
+  the occlusion) times the fingertip's flush, per channel, the mockup's
+  `paintProposedHand` in its textured mode. Six materials, one per texture,
+  unlit and lit by the field at the eye (`light_held`).
+- **The arm.** The wrist, the cuff, the sleeve and its hem are built with
+  the hand and split off by bone (16 and up) onto the arm's pivot, as the
+  mockup's `HandPair` builds them twice. The pivot is the wrist bone's end
+  before the grip's turn, as `HandPair` takes it.
+- **One skin tone.** The game has the "Game" swatch only; the picker's other
+  tones are the mockup's.
+
+Differences from the mockup: none in the shape, the textures or the
+shade. The mockup builds the hand and the arm in two passes and the game in
+one, which gives the same faces (every occluder is in both of the mockup's
+passes).
+
+Frame cost was not measured (a cloud container, no GPU). The hand is built
+once at startup, about 4,750 vertices a tool.

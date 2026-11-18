@@ -183,3 +183,16 @@ values are gone. Where it differs from the mockup, and why:
 
 Frame cost was not measured: the work was done in a cloud container with no
 GPU (CLAUDE.md). The captures are on lavapipe.
+
+## As built (2026-11-18): the shoulder stays low
+
+Tools in Hand version 12's shovel in the game (owner, 2026-11-18: "cool now
+implement all these"). `held/stroke.rs` already had `shovelKeys` and
+`shovelAt` as the mockup now has them (tip down to `entry_deg` 6, the slide
+forward along the ground, the lever about the blade's point, the pull up
+and back); the change is two defaults, in the code and in `held.ron`:
+`fist_drop_m` 0.04 to 0.16 and `arm_follow` 1 to 0.7. The wrist takes the
+other 0.3 of the spade's turn, about the wrist joint as the mockup's
+`HandPair` turns it. No difference from the mockup.
+
+Frame cost was not measured (a cloud container, no GPU).

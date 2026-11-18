@@ -199,6 +199,9 @@ fn rebase_fishery(world: &mut World, shift: Vec3) {
     if let Some(mut drawn) = world.get_resource_mut::<draw::DrawnFloat>() {
         drawn.rebase(shift);
     }
+    if let Some(mut trail) = world.get_resource_mut::<draw::CastTrail>() {
+        trail.rebase(shift);
+    }
     if let Some(mut watch) = world.get_resource_mut::<WatchHook>()
         && let Some((eye, target)) = watch.view.as_mut()
     {
@@ -217,6 +220,7 @@ impl Plugin for FishPlugin {
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
+            .init_resource::<draw::CastTrail>()
             .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
@@ -1516,10 +1520,12 @@ pub(crate) mod draw {
         time: Res<Time>,
         fishery: Res<Fishery>,
         mut drawn: ResMut<DrawnFloat>,
+        mut trail: ResMut<CastTrail>,
         space: crate::SimSpace,
     ) {
         let line = &fishery.line;
         let o = space.origin();
+        trail.update(line.phase, line.float, time.delta_secs().min(0.1));
         drawn.update(
             &o,
             time.delta_secs().min(0.1),
@@ -1527,6 +1533,114 @@ pub(crate) mod draw {
             line.phase,
             line.run,
         );
+    }
+
+    /// How far the float flies between the places the cast's trail keeps,
+    /// m (the mockup's).
+    pub(crate) const TRAIL_STEP_M: f32 = 0.15;
+
+    /// How long the line takes to ease from the cast's trail to its hanging
+    /// curve once the float is down, s.
+    pub(crate) const TRAIL_EASE_S: f32 = 0.6;
+
+    /// The cast's line as drawn (`rod-motion` design 8): while the float
+    /// flies the line lies along the path it took, from the rod tip back to
+    /// where it was let go and out along its arc; once it is down the line
+    /// eases to its hanging curve. Drawing only: the line's rule never reads
+    /// it.
+    #[derive(Resource, Clone, Debug, Default, PartialEq)]
+    pub struct CastTrail {
+        /// The float's places since it was let go, planet-local, m: the
+        /// first where it left the tip, then one every `TRAIL_STEP_M`.
+        pub points: Vec<Vec3>,
+        flying: bool,
+        /// How long the float has been down, s.
+        landed_s: Option<f32>,
+    }
+
+    impl CastTrail {
+        /// One frame: the line's phase and float after this frame's step.
+        pub fn update(&mut self, phase: Phase, float: Vec3, dt: f32) {
+            match phase {
+                Phase::Flying => {
+                    if !self.flying {
+                        *self = Self {
+                            points: vec![float],
+                            flying: true,
+                            landed_s: None,
+                        };
+                    } else if self
+                        .points
+                        .last()
+                        .is_some_and(|last| last.distance(float) > TRAIL_STEP_M)
+                    {
+                        self.points.push(float);
+                    }
+                }
+                Phase::Floating | Phase::Nibble | Phase::Bite if !self.points.is_empty() => {
+                    if self.flying {
+                        self.flying = false;
+                        self.landed_s = Some(0.0);
+                    } else if let Some(t) = self.landed_s.as_mut() {
+                        *t += dt.max(0.0);
+                    }
+                }
+                _ => *self = Self::default(),
+            }
+        }
+
+        /// How much of the line lies along the trail: all of it while the
+        /// float flies, easing to none over `TRAIL_EASE_S` once it is down.
+        pub fn blend(&self) -> f32 {
+            if self.points.is_empty() {
+                return 0.0;
+            }
+            if self.flying {
+                return 1.0;
+            }
+            match self.landed_s {
+                Some(t) if t < TRAIL_EASE_S => {
+                    let u = t / TRAIL_EASE_S;
+                    1.0 - u * u * (3.0 - 2.0 * u)
+                }
+                _ => 0.0,
+            }
+        }
+
+        /// The origin was rebased: the trail moves with it.
+        pub fn rebase(&mut self, shift: Vec3) {
+            for p in &mut self.points {
+                *p -= shift;
+            }
+        }
+    }
+
+    /// `n` points evenly along the cast's path (the mockup's `trailPoints`):
+    /// from the rod tip back to where the float was let go, along the
+    /// float's places, to `end`, where the line is tied.
+    pub(crate) fn trail_points(tip: Vec3, trail: &[Vec3], end: Vec3, n: usize) -> Vec<Vec3> {
+        let path: Vec<Vec3> = std::iter::once(tip)
+            .chain(trail.iter().copied())
+            .chain(std::iter::once(end))
+            .collect();
+        let mut acc = vec![0.0f32];
+        for k in 1..path.len() {
+            acc.push(acc[k - 1] + path[k].distance(path[k - 1]));
+        }
+        let total = *acc.last().unwrap();
+        let total = if total > 0.0 { total } else { 1.0 };
+        (0..n)
+            .map(|k| {
+                let d = total * k as f32 / (n.max(2) - 1) as f32;
+                let mut j = 1;
+                while j < acc.len() - 1 && acc[j] < d {
+                    j += 1;
+                }
+                let seg = acc[j] - acc[j - 1];
+                let seg = if seg > 0.0 { seg } else { 1.0 };
+                path[j - 1].lerp(path[j], (d - acc[j - 1]) / seg)
+            })
+            .collect()
     }
 
     #[derive(Component)]
@@ -2164,6 +2278,7 @@ pub(crate) mod draw {
         sun: Option<Res<crate::sky::Sun>>,
         tip_now: Option<Res<crate::held::RodTipNow>>,
         drawn: Res<DrawnFloat>,
+        trail: Res<CastTrail>,
         cameras: Query<&Transform, With<WalkingCamera>>,
         rods: Query<
             (&crate::held::Held, &Transform),
@@ -2250,6 +2365,10 @@ pub(crate) mod draw {
             // It ends on the top of the float, where it is tied.
             let end = float + o.up_at(float) * FLOAT_TOP_M;
             let end_point = o.query_point(end);
+            // While the float flies the line follows its path, easing to the
+            // hanging curve once it is down (`rod-motion` 8).
+            let blend = trail.blend();
+            let cast = (blend > 0.0).then_some((trail.points.as_slice(), blend));
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -2261,11 +2380,11 @@ pub(crate) mod draw {
                         end_point,
                         seconds,
                     );
-                    line_points(&o, tip_local, end, slack, |p| {
+                    line_points(&o, tip_local, end, slack, cast, |p| {
                         line_floor(&water, end_point, o.query_point(p))
                     })
                 }
-                None => line_points(&o, tip_local, end, slack, |_| 0.0),
+                None => line_points(&o, tip_local, end, slack, cast, |_| 0.0),
             };
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
@@ -2345,16 +2464,21 @@ pub(crate) mod draw {
     /// through the origin in f64. The first point is the tip
     /// and the last is the float, exactly: a float pulled under on a bite
     /// is still where the line ends (`fishing-and-equipment` design 4, the
-    /// line's far end).
+    /// line's far end). With a cast's trail (its places, local, and how
+    /// much of the line lies along it) each point between is moved that far
+    /// toward the trail's (`rod-motion` 8).
     pub(crate) fn line_points(
         origin: &SimOrigin,
         tip: Vec3,
         float: Vec3,
         slack: f32,
+        cast: Option<(&[Vec3], f32)>,
         surface: impl Fn(Vec3) -> f32,
     ) -> Vec<Vec3> {
         let down = -origin.up_at(tip);
         let last = LINE_POINTS - 1;
+        let along =
+            cast.map(|(trail, blend)| (trail_points(tip, trail, float, LINE_POINTS), blend));
         (0..LINE_POINTS)
             .map(|k| {
                 if k == 0 {
@@ -2364,7 +2488,10 @@ pub(crate) mod draw {
                     return float - tip;
                 }
                 let u = k as f32 / last as f32;
-                let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                let mut offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                if let Some((trail, blend)) = &along {
+                    offset = offset.lerp(trail[k] - tip, *blend);
+                }
                 let at = tip + offset;
                 let r = origin.radius_at(at);
                 let floor = f64::from(surface(at) + LINE_CLEARANCE_M);

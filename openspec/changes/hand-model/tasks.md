@@ -9,4 +9,7 @@
 - [ ] 2.4 The owner's look in the game
 - [x] 3.1 Mockup: palm and back (design 5) on the Hand tab of Tools in Hand, with a switch against one tone
 - [x] 3.2 The owner's look at the mockup: version 10's hand ("You know what that hand looks good", 2026-11-17)
-- [ ] 3.3 (after approval) The generator and the game: a fifth texture (the palm), the faces split by side
+- [x] 3.3 (after approval; owner, 2026-11-18: "cool now implement all these") The generator and the game: versions 9 to 13 (design 5 to 5.3, as built in design 6): the traced palm, the slimmer tapering fingers, the thumb's round tip and sunk root, the faces split by side with the palm's and folds' islands, the palm (32 px) and fold (16 px) textures, the back's tone, the baked AO, the fingertips' flush, the 45 degree grip turn; `pbd_core::hand::build` from the bones in `held_tools.ron`
+- [x] 3.4 Tests: the palm closed and facing out, the palm and back sides and the island, the thumb's two segments rooted in the palm, the AO between the fingers, the grip's turn, the textures' sizes and palettes, the flush (`held::tests`, `pbd_core::hand::tests`)
+- [x] 3.5 Captures before and after (`docs/screenshots/hand-model/`), on lavapipe; frame cost not measured
+- [ ] 3.6 The owner's look in the game

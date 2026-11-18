@@ -1,33 +1,63 @@
-//! The first-person hand as chamfered blocks (`openspec/changes/hand-model`):
-//! each bone of the hand is a block with an octagonal section and bevelled
-//! ends, every face flat with its own normal, so the silhouette reads rounder
-//! while the faces stay hard. The blocks come from `tools/gen_held_tools.py`
-//! (the Tools in Hand mockup's `proposedHandGeometry`), already placed on
-//! each tool's grip; this builds their triangles, texture coordinates and
-//! knuckle shade, and gives the wrapped light the hand is shaded by.
+//! The first-person hand (`openspec/changes/hand-model`, design 5 to 5.3),
+//! built from the hand's bones as the Tools in Hand mockup's
+//! `proposedHandGeometry` builds it (`docs/mockups/tool-motion.html`):
 //!
-//! Engine-free: blocks in, triangles out. The app draws the result.
+//! - the palm is one traced piece: its outline taken off the bones in the
+//!   palm's plane, extruded through the hand's thickness with bevelled
+//!   edges and a slightly domed back (`palmMesh`);
+//! - every other bone is a chamfered block, an octagonal section with
+//!   bevelled ends, the fingers slimmer and tapering, the thumb's tip a
+//!   rounded pad (`chamferBlock`);
+//! - the thumb is two equal segments, its root sunk toward the palm;
+//! - each skin face is the palm's side or the back's by its normal against
+//!   the side the fingertips curl to, and a palm-side face takes its part's
+//!   UV island (`HandBuilder`);
+//! - an ambient occlusion is baked into each vertex from spheres along the
+//!   bones and the handle (`bakeAO`);
+//! - the whole hand is turned about the handle through the fist
+//!   (`grip_turn`).
+//!
+//! The bones come from `tools/gen_held_tools.py`, placed on each tool's
+//! grip in its units; so do the textures. Every face is flat with its own
+//! normal. Engine-free: bones in, triangles out. The app draws the result
+//! and lights it with [`wrapped`].
 
-use glam::{Vec2, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use serde::Deserialize;
 
-/// Tool units per texel: the textures are 16 px and tile, about 9 mm a
-/// texel on the pickaxe's hand (the mockup's `TEX_UNIT`).
+/// Tool units per texel where a face is textured flat: the 16 px textures
+/// tile at about 9 mm a texel on the pickaxe's hand (the mockup's
+/// `TEX_UNIT`).
 pub const TEX_UNIT: f32 = 0.24;
-/// The hand's textures are this many texels on a side.
+/// The tiling textures are this many texels on a side.
 pub const TEX_SIZE: u32 = 16;
+/// The palm's texture is this many on a side: it covers one island.
+pub const PALM_TEX_SIZE: u32 = 32;
 
-/// Which texture a block is drawn with.
+/// Which texture a face is drawn with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Texture {
+    /// The back of the hand and of the fingers.
     Skin,
     Nail,
     Cloth,
     Cuff,
+    /// The palm's side of the back of the hand: one island.
+    Palm,
+    /// The palm's side of a finger, the thumb or the wrist: an island per
+    /// segment, a fold at each joint.
+    Fold,
 }
 
 impl Texture {
-    pub const ALL: [Texture; 4] = [Texture::Skin, Texture::Nail, Texture::Cloth, Texture::Cuff];
+    pub const ALL: [Texture; 6] = [
+        Texture::Skin,
+        Texture::Nail,
+        Texture::Cloth,
+        Texture::Cuff,
+        Texture::Palm,
+        Texture::Fold,
+    ];
 
     pub fn index(self) -> usize {
         self as usize
@@ -40,153 +70,414 @@ impl Texture {
             Texture::Nail => "nail",
             Texture::Cloth => "cloth",
             Texture::Cuff => "cuff",
+            Texture::Palm => "palm",
+            Texture::Fold => "fold",
+        }
+    }
+
+    /// Its size in texels.
+    pub fn size(self) -> u32 {
+        if self == Texture::Palm {
+            PALM_TEX_SIZE
+        } else {
+            TEX_SIZE
         }
     }
 }
 
-/// One chamfered block of the hand, in tool units.
+/// One bone of the hand, in tool units: a hex prism's place as the game's
+/// rig posed it (`tools/gen_held_hand.py`). The 19 bones are, in order, the
+/// back of the hand, four fingers of three segments (index to little,
+/// proximal to distal), the thumb's three, the wrist, the cuff and the
+/// sleeve.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Block {
-    /// Which bone (`back`, `finger2.1`, `thumb.0`, `wrist`, `hem`,
-    /// `finger4.2.nail`, ...).
-    pub part: String,
+pub struct Bone {
     pub at: [f32; 3],
-    /// Along the block.
     pub axis: [f32; 3],
-    /// Across it: the half size `w` runs along `u`, `h` along `axis x u`.
-    pub u: [f32; 3],
-    pub w: f32,
-    pub h: f32,
-    pub len: f32,
-    /// How far the octagon's corners are cut, and the ends bevelled.
-    pub chamfer: f32,
-    pub texture: Texture,
-    /// The shade of the bevel at the near and the far end: below 1 at a
-    /// knuckle, the crease.
-    pub crease: [f32; 2],
-    /// The texture runs along the block from end to end (the cuff, so its
-    /// stitch rows sit at its edges), not flat on each face.
-    pub along: bool,
-    /// Part of the arm (the wrist, the cuff, the sleeve and its hem), which
-    /// may turn about the wrist apart from the hand.
-    pub arm: bool,
-    /// The sleeve: lengthened along this way by the held settings' sleeve.
-    pub grow: Option<[f32; 3]>,
+    pub radius: f32,
+    pub length: f32,
+    /// Across `across`, where it differs from the radius (the back of the
+    /// hand).
+    pub width: Option<f32>,
+    pub across: Option<[f32; 3]>,
 }
 
-impl Block {
+/// The bones a hand has.
+pub const BONES: usize = 19;
+/// The first of the arm's bones (the wrist, the cuff, the sleeve), which
+/// may turn about the wrist apart from the hand.
+pub const ARM: usize = 16;
+
+impl Bone {
+    fn at(&self) -> Vec3 {
+        Vec3::from(self.at)
+    }
+
+    fn axis(&self) -> Vec3 {
+        Vec3::from(self.axis).normalize()
+    }
+
+    fn width(&self) -> f32 {
+        self.width.unwrap_or(self.radius)
+    }
+
     /// Whether every number is finite and every size positive.
     pub fn is_sound(&self) -> bool {
         let finite = self
             .at
             .iter()
             .chain(&self.axis)
-            .chain(&self.u)
-            .chain(&self.crease)
-            .chain(self.grow.iter().flatten())
-            .chain([self.w, self.h, self.len, self.chamfer].iter())
+            .chain(self.across.iter().flatten())
+            .chain([self.radius, self.length, self.width()].iter())
             .all(|v| v.is_finite());
         finite
             && Vec3::from(self.axis).length() > 1e-3
-            && Vec3::from(self.u).length() > 1e-3
-            && self.w > 0.0
-            && self.h > 0.0
-            && self.len > 0.0
-            && self.chamfer > 0.0
+            && self.across.is_none_or(|a| Vec3::from(a).length() > 1e-3)
+            && self.radius > 0.0
+            && self.length > 0.0
+            && self.width() > 0.0
     }
 
-    /// Its two end centres, along the axis.
-    pub fn ends(&self) -> (Vec3, Vec3) {
-        let axis = Vec3::from(self.axis).normalize();
-        let at = Vec3::from(self.at);
-        (at - axis * self.len / 2.0, at + axis * self.len / 2.0)
+    /// Its end nearer `to`.
+    fn end_near(&self, to: Vec3) -> Vec3 {
+        let (ax, at) = (self.axis(), self.at());
+        let (e1, e2) = (at + ax * self.length / 2.0, at - ax * self.length / 2.0);
+        if e1.distance(to) < e2.distance(to) {
+            e1
+        } else {
+            e2
+        }
+    }
+}
+
+/// The hand's look and shape (`held_tools.ron` `hand`): the mockup's
+/// `HAND_SHAPE` and the parts of `HAND_LOOK` the geometry and its shade
+/// use (the tones are in the textures).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Look {
+    /// The thumb's length, a share of the rig's.
+    pub thumb_len: f32,
+    /// How far the thumb's root sinks from the rig's root toward the palm's
+    /// centre, 0..1.
+    pub thumb_sink: f32,
+    /// The grip turned about the handle through the fist, degrees.
+    pub grip_turn_deg: f32,
+    /// The baked occlusion's strength, 0..1.
+    pub ao: f32,
+    /// How far the fingertips flush toward `tip_to`, 0..1.
+    pub tip_flush: f32,
+    pub tip_to: [u8; 3],
+    /// The skin the textures are drawn from, straight sRGB.
+    pub skin: [u8; 3],
+}
+
+impl Look {
+    pub fn is_sound(&self) -> bool {
+        let unit = [self.thumb_sink, self.ao, self.tip_flush];
+        self.thumb_len.is_finite()
+            && self.thumb_len > 0.0
+            && self.grip_turn_deg.is_finite()
+            && unit.iter().all(|v| (0.0..=1.0).contains(v))
+            && self.skin.iter().all(|c| *c > 0)
+    }
+
+    /// What a vertex flushed by `flush` is multiplied by, per channel: the
+    /// skin moved toward `tip_to` (the mockup's `paintProposedHand`).
+    pub fn tint(&self, flush: f32) -> [f32; 3] {
+        std::array::from_fn(|q| {
+            1.0 + flush * (f32::from(self.tip_to[q]) / f32::from(self.skin[q]) - 1.0)
+        })
     }
 }
 
 /// A hand's triangles for one texture: a list, not indexed, each triangle
-/// wound to face out from its block's centre, with a flat normal, a texture
-/// coordinate (wgpu's: v down the image) and the knuckle shade per vertex.
+/// wound to face out, with a flat normal, a texture coordinate (wgpu's: v
+/// down the image), the shade baked into it (a knuckle's crease times the
+/// occlusion), the fingertip's flush and which bone it belongs to.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HandMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
-    pub crease: Vec<f32>,
+    pub shade: Vec<f32>,
+    pub flush: Vec<f32>,
+    pub part: Vec<u8>,
 }
 
 impl HandMesh {
     pub fn triangles(&self) -> usize {
         self.positions.len() / 3
     }
+}
 
+/// The meshes of a hand, one per texture, by `Texture::index`.
+pub type HandMeshes = [HandMesh; 6];
+
+/// A built hand: the hand's meshes and the arm's (the wrist, the cuff, the
+/// sleeve and its hem), and the wrist joint the arm turns about, tool units.
+#[derive(Clone, Debug, Default)]
+pub struct Hand {
+    pub hand: HandMeshes,
+    pub arm: HandMeshes,
+    pub wrist: Vec3,
+}
+
+/// The thumb in two equal segments (hand-model 5.2, 5.3): the rig's three
+/// shortened to `thumb_len` and chained from its root, split half way along,
+/// the root then sunk `thumb_sink` toward the palm's centre.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Thumb {
+    /// The rig's root, where the palm's outline reaches.
+    pub rig_root: Vec3,
+    /// The first segment's start, sunk toward the palm.
+    pub root: Vec3,
+    pub joint: Vec3,
+    pub tip: Vec3,
+}
+
+impl Thumb {
+    pub fn new(bones: &[Bone], look: &Look) -> Self {
+        let mut pts = Vec::with_capacity(4);
+        let first = &bones[13];
+        let mut start = first.at() - first.axis() * first.length / 2.0;
+        pts.push(start);
+        for bone in &bones[13..=15] {
+            start += bone.axis() * bone.length * look.thumb_len;
+            pts.push(start);
+        }
+        let rig_root = pts[0];
+        pts[0] = pts[0].lerp(bones[0].at(), look.thumb_sink);
+        let lens: Vec<f32> = (0..3).map(|k| pts[k].distance(pts[k + 1])).collect();
+        let half = lens.iter().sum::<f32>() / 2.0;
+        let (mut joint, mut run) = (pts[3], 0.0);
+        for k in 0..3 {
+            if run + lens[k] >= half {
+                joint = pts[k].lerp(pts[k + 1], (half - run) / lens[k]);
+                break;
+            }
+            run += lens[k];
+        }
+        Self {
+            rig_root,
+            root: pts[0],
+            joint,
+            tip: pts[3],
+        }
+    }
+
+    /// Segment 13 (root to joint) or 15 (joint to tip): its centre, length
+    /// and axis.
+    fn segment(&self, bone: usize) -> (Vec3, f32, Vec3) {
+        let (a, b) = if bone == 13 {
+            (self.root, self.joint)
+        } else {
+            (self.joint, self.tip)
+        };
+        ((a + b) / 2.0, a.distance(b), (b - a).normalize())
+    }
+}
+
+/// A palm-side island: the faces of a part turned toward `dir` (more than
+/// 0.35 of the way) take `group` and a UV laid on the plane across `pu`
+/// and along `axis`, centred on `at`, `2 e` by `len`.
+#[derive(Clone, Copy, Debug)]
+struct Island {
+    dir: Vec3,
+    group: Texture,
+    at: Vec3,
+    axis: Vec3,
+    pu: Vec3,
+    e: f32,
+    len: f32,
+    flip_u: bool,
+    flip_v: bool,
+}
+
+/// A face's UV along its block (the cuff's, so its stitch rows sit at its
+/// edges): across by the face's own tangent, along from end to end.
+#[derive(Clone, Copy, Debug)]
+struct Along {
+    at: Vec3,
+    axis: Vec3,
+    z0: f32,
+    len: f32,
+}
+
+/// The builder (`HandBuilder`): flat faces, each wound out from a centre.
+#[derive(Default)]
+struct Builder {
+    p: Vec<Vec3>,
+    n: Vec<Vec3>,
+    uv: Vec<Vec2>,
+    k: Vec<f32>,
+    flush: Vec<f32>,
+    part: Vec<u8>,
+    group: Vec<Texture>,
+    now_part: u8,
+    now_flush: f32,
+}
+
+impl Builder {
+    #[allow(clippy::too_many_arguments)]
     fn tri(
         &mut self,
-        mut t: [Vec3; 3],
+        a: Vec3,
+        mut b: Vec3,
+        mut c: Vec3,
         centre: Vec3,
-        crease: f32,
-        along: Option<(Vec3, f32, f32)>,
+        mut group: Texture,
+        k: f32,
+        along: Option<Along>,
+        palm: Option<&Island>,
     ) {
-        let n = (t[1] - t[0]).cross(t[2] - t[0]);
+        let n = (b - a).cross(c - a);
         if n.length_squared() < 1e-14 {
             return;
         }
         let mut n = n.normalize();
-        let mid = (t[0] + t[1] + t[2]) / 3.0 - centre;
+        let mid = (a + b + c) / 3.0 - centre;
         if n.dot(mid) < 0.0 {
-            t.swap(1, 2);
+            std::mem::swap(&mut b, &mut c);
             n = -n;
         }
-        let tangent = (t[1] - t[0]).normalize();
-        let bitangent = n.cross(tangent);
-        let k = TEX_UNIT * TEX_SIZE as f32;
-        for p in t {
-            let uv = match along {
-                Some((axis, z0, len)) => {
-                    let z = (p - centre).dot(axis);
-                    let ta = n.cross(axis).normalize_or_zero();
-                    Vec2::new(p.dot(ta) / k, (z - z0) / len)
-                }
-                None => Vec2::new(p.dot(tangent) / k, p.dot(bitangent) / k),
+        // A skin face turned toward the palm's side is the palm, and takes
+        // its part's island.
+        let mut island = None;
+        if let Some(palm) = palm
+            && group == Texture::Skin
+            && n.dot(palm.dir) > 0.35
+        {
+            group = palm.group;
+            island = Some(*palm);
+        }
+        let t = (b - a).normalize();
+        let bt = n.cross(t);
+        let k_tex = TEX_UNIT * TEX_SIZE as f32;
+        for p in [a, b, c] {
+            let uv = if let Some(is) = island {
+                let d = p - is.at;
+                let u = d.dot(is.pu) / (2.0 * is.e) + 0.5;
+                let v = d.dot(is.axis) / is.len + 0.5;
+                Vec2::new(
+                    if is.flip_u { 1.0 - u } else { u },
+                    if is.flip_v { 1.0 - v } else { v },
+                )
+            } else if let Some(al) = along {
+                let z = (p - al.at).dot(al.axis);
+                let ta = n.cross(al.axis).normalize();
+                Vec2::new(p.dot(ta) / k_tex, (z - al.z0) / al.len)
+            } else {
+                Vec2::new(p.dot(t) / k_tex, p.dot(bt) / k_tex)
             };
-            self.positions.push(p.to_array());
-            self.normals.push(n.to_array());
-            // The mockup's coordinates have v up the image (three.js flips
-            // its textures); wgpu's run down it.
-            self.uvs.push([uv.x, 1.0 - uv.y]);
-            self.crease.push(crease);
+            self.p.push(p);
+            self.n.push(n);
+            self.uv.push(uv);
+            self.k.push(k);
+            self.flush.push(self.now_flush);
+            self.part.push(self.now_part);
+            self.group.push(group);
         }
     }
 
-    fn face(&mut self, p: &[Vec3], centre: Vec3, crease: f32, along: Option<(Vec3, f32, f32)>) {
-        self.tri([p[0], p[1], p[2]], centre, crease, along);
-        if p.len() == 4 {
-            self.tri([p[0], p[2], p[3]], centre, crease, along);
+    #[allow(clippy::too_many_arguments)]
+    fn face(
+        &mut self,
+        pts: &[Vec3],
+        centre: Vec3,
+        group: Texture,
+        k: f32,
+        along: Option<Along>,
+        palm: Option<&Island>,
+    ) {
+        let along = along.map(|a| Along { at: centre, ..a });
+        self.tri(pts[0], pts[1], pts[2], centre, group, k, along, palm);
+        if pts.len() == 4 {
+            self.tri(pts[0], pts[2], pts[3], centre, group, k, along, palm);
+        }
+    }
+
+    /// The baked occlusion (`bakeAO`): each vertex darkened by the spheres
+    /// of the other bones in front of it, `sum (r/d)^2 max(0, n.d)`, by
+    /// `1 - strength min(1, sum)`.
+    fn bake_ao(&mut self, spheres: &[Sphere], strength: f32) {
+        for i in 0..self.k.len() {
+            let (p, n) = (self.p[i], self.n[i]);
+            let mut sum = 0.0;
+            for sp in spheres {
+                if sp.part == Some(self.part[i]) {
+                    continue;
+                }
+                let d = sp.c - p;
+                let dd = d.length();
+                if dd < 1e-6 {
+                    continue;
+                }
+                let cos = n.dot(d) / dd;
+                if cos <= 0.0 {
+                    continue;
+                }
+                sum += (sp.r * sp.r / (dd * dd)).min(1.0) * cos;
+            }
+            self.k[i] *= 1.0 - strength * sum.min(1.0);
         }
     }
 }
 
-/// The meshes of a hand, one per texture, by `Texture::index`.
-pub type HandMeshes = [HandMesh; 4];
+/// An occluder: a sphere on a bone (`part`), or on the handle (`None`).
+struct Sphere {
+    c: Vec3,
+    r: f32,
+    part: Option<u8>,
+}
 
-/// A block's faces, added to the mesh of its texture: the octagonal sides,
-/// the bevel bands at each end (shaded by the crease) and the end caps.
-/// `sleeve_extra` lengthens a block that grows (the sleeve) at its far end,
-/// tool units.
-pub fn block(b: &Block, sleeve_extra: f32, out: &mut HandMeshes) {
-    let axis = Vec3::from(b.axis).normalize();
-    let u = Vec3::from(b.u).normalize();
+/// Which way the palm's side of a part looks, and the texture its faces
+/// take there.
+#[derive(Clone, Copy, Debug)]
+struct Side {
+    dir: Vec3,
+    group: Texture,
+}
+
+/// A chamfered block (`chamferBlock`).
+struct Block {
+    at: Vec3,
+    axis: Vec3,
+    u: Vec3,
+    w: f32,
+    h: f32,
+    len: f32,
+    c: f32,
+    group: Texture,
+    crease: [f32; 2],
+    uv_along: bool,
+    palm: Option<Side>,
+    round: bool,
+    taper: Option<[f32; 2]>,
+}
+
+fn chamfer_block(b: &mut Builder, o: &Block) {
+    let (at, axis, u, w, h, len, c) = (o.at, o.axis, o.u, o.w, o.h, o.len, o.c);
+    let palm = o.palm.map(|s| Island {
+        dir: s.dir,
+        group: s.group,
+        at,
+        axis,
+        pu: axis.cross(s.dir).normalize(),
+        e: w.max(h),
+        len,
+        flip_u: false,
+        flip_v: false,
+    });
     let v = axis.cross(u);
-    let mut at = Vec3::from(b.at);
-    let mut len = b.len;
-    if let Some(grow) = b.grow {
-        at += Vec3::from(grow).normalize_or_zero() * sleeve_extra.max(0.0) / 2.0;
-        len += sleeve_extra.max(0.0);
-    }
-    let (w, h, c) = (b.w, b.h, b.chamfer);
+    let taper_at = |z: f32| match o.taper {
+        Some([t0, t1]) => t0 + (t1 - t0) * (z / len + 0.5),
+        None => 1.0,
+    };
     // The octagon, scaled inward by s at the bevels.
-    let section = |s: f32| -> [Vec2; 8] {
-        let (ww, hh, cc) = (w - s, h - s, (c - s * 0.4).max(0.0001));
+    let section = |s: f32, z: f32| -> [Vec2; 8] {
+        let (ww, hh, cc) = (w * taper_at(z) - s, h - s, (c - s * 0.4).max(0.0001));
         [
             Vec2::new(ww - cc, -hh),
             Vec2::new(ww, -hh + cc),
@@ -198,27 +489,438 @@ pub fn block(b: &Block, sleeve_extra: f32, out: &mut HandMeshes) {
             Vec2::new(-ww + cc, -hh),
         ]
     };
-    let bevel = c.min(len * 0.3);
+    let bev = c.min(len * 0.3);
     let ring =
-        |z: f32, s: f32| -> [Vec3; 8] { section(s).map(|p| at + u * p.x + v * p.y + axis * z) };
+        |z: f32, s: f32| -> [Vec3; 8] { section(s, z).map(|p| at + u * p.x + v * p.y + axis * z) };
     let (z0, z1) = (-len / 2.0, len / 2.0);
-    let (r0, r1, r2, r3) = (
-        ring(z0, bevel),
-        ring(z0 + bevel, 0.0),
-        ring(z1 - bevel, 0.0),
-        ring(z1, bevel),
-    );
+    // A round tip (the thumb's): a longer bevel at the far end in two steps.
+    let tb = if o.round {
+        (w.min(h) * 0.75).min(len * 0.45)
+    } else {
+        bev
+    };
+    let (r0, r1, r2) = (ring(z0, bev), ring(z0 + bev, 0.0), ring(z1 - tb, 0.0));
+    let r3 = ring(z1, tb * if o.round { 0.95 } else { 1.0 });
+    let rm = o.round.then(|| ring(z1 - tb * 0.35, tb * 0.32));
     let (bottom, top) = (at + axis * z0, at + axis * z1);
-    let mesh = &mut out[b.texture.index()];
-    let along = b.along.then_some((axis, z0, len));
+    let along = Along { at, axis, z0, len };
+    let g = o.group;
+    let island = palm.as_ref();
     for i in 0..8 {
         let j = (i + 1) % 8;
-        mesh.face(&[r1[i], r1[j], r2[j], r2[i]], at, 1.0, along);
-        mesh.face(&[r0[i], r0[j], r1[j], r1[i]], at, b.crease[0], None);
-        mesh.face(&[r2[i], r2[j], r3[j], r3[i]], at, b.crease[1], None);
-        mesh.face(&[bottom, r0[j], r0[i]], at, b.crease[0], None);
-        mesh.face(&[top, r3[i], r3[j]], at, b.crease[1], None);
+        b.face(
+            &[r1[i], r1[j], r2[j], r2[i]],
+            at,
+            g,
+            1.0,
+            o.uv_along.then_some(along),
+            island,
+        );
+        b.face(
+            &[r0[i], r0[j], r1[j], r1[i]],
+            at,
+            g,
+            o.crease[0],
+            None,
+            island,
+        );
+        if let Some(rm) = rm {
+            b.face(&[r2[i], r2[j], rm[j], rm[i]], at, g, 1.0, None, island);
+            b.face(&[rm[i], rm[j], r3[j], r3[i]], at, g, 1.0, None, island);
+        } else {
+            b.face(
+                &[r2[i], r2[j], r3[j], r3[i]],
+                at,
+                g,
+                o.crease[1],
+                None,
+                island,
+            );
+        }
+        b.face(&[bottom, r0[j], r0[i]], at, g, o.crease[0], None, island);
+        b.face(&[top, r3[i], r3[j]], at, g, o.crease[1], None, island);
     }
+}
+
+/// The palm as one traced piece (`palmMesh`).
+#[allow(clippy::too_many_arguments)]
+fn palm_mesh(
+    b: &mut Builder,
+    bones: &[Bone],
+    thumb: &Thumb,
+    at: Vec3,
+    axis: Vec3,
+    h: f32,
+    nd: Vec3,
+    sided: bool,
+) {
+    let pu = axis.cross(nd).normalize();
+    let to2 = |q: Vec3| {
+        let d = q - at;
+        Vec2::new(d.dot(pu), d.dot(axis))
+    };
+    let k: Vec<Vec2> = [1, 4, 7, 10]
+        .iter()
+        .map(|&i| to2(bones[i].end_near(at)))
+        .collect();
+    let wr = to2(bones[16].end_near(at));
+    let ww = bones[16].width() * 0.95;
+    let t = to2(thumb.rig_root);
+    let sign = |x: f32| {
+        if x > 0.0 {
+            1.0
+        } else if x < 0.0 {
+            -1.0
+        } else {
+            1.0
+        }
+    };
+    let up = sign(k[1].y - wr.y);
+    let ts = sign(k[0].x - k[3].x);
+    let fr = bones[1].radius * 0.75;
+    let v2 = Vec2::new;
+    // The outline, going round: the knuckles, the little finger's side, the
+    // wrist, the thumb's mound, the thumb's root, the web.
+    let mut o = vec![
+        v2(k[0].x + ts * fr * 0.4, k[0].y + up * fr * 0.3),
+        v2(k[1].x, k[1].y + up * fr * 0.55),
+        v2(k[2].x, k[2].y + up * fr * 0.5),
+        v2(k[3].x - ts * fr * 0.2, k[3].y + up * fr * 0.2),
+        v2(k[3].x - ts * fr * 0.9, k[3].y - up * fr * 0.9),
+        v2(
+            k[3].x * 0.55 + wr.x * 0.45 - ts * fr * 1.0,
+            (k[3].y + wr.y) / 2.0,
+        ),
+        v2(wr.x - ts * ww, wr.y + up * fr * 0.4),
+        v2(wr.x + ts * ww * 0.9, wr.y + up * fr * 0.3),
+        v2((wr.x + t.x) / 2.0 + ts * fr * 1.1, (wr.y + t.y) / 2.0),
+        v2(t.x + ts * fr * 0.5, t.y),
+        v2(t.x + ts * fr * 0.1, t.y + up * fr * 0.9),
+        v2(
+            (t.x + k[0].x) / 2.0 + ts * fr * 0.2,
+            (t.y + k[0].y) / 2.0 + up * fr * 0.4,
+        ),
+    ];
+    // Counter-clockwise in (pu, axis).
+    let n = o.len();
+    let area: f32 = (0..n).map(|i| o[i].perp_dot(o[(i + 1) % n])).sum();
+    if area < 0.0 {
+        o.reverse();
+    }
+    let centre = o.iter().copied().sum::<Vec2>() / n as f32;
+    let (cx, cy) = (centre.x, centre.y);
+    let ext = o.iter().map(|q| (q.x - cx).abs()).fold(0.0, f32::max);
+    let eyy = o.iter().map(|q| (q.y - cy).abs()).fold(0.0, f32::max);
+    let thick = |y: f32| {
+        let s = (up * (y - wr.y) / (up * (k[1].y - wr.y)).max(1e-6)).clamp(0.0, 1.0);
+        h * (0.82 + 0.18 * s)
+    };
+    let p3 = |x: f32, y: f32, z: f32| at + pu * x + axis * y + nd * z;
+    let c = h * 0.45;
+    let inset = |q: Vec2, d: f32| {
+        let dir = centre - q;
+        let l = dir.length();
+        let l = if l > 0.0 { l } else { 1.0 };
+        q + dir / l * d
+    };
+    let ring = |sgn: f32, s: f32| -> Vec<Vec3> {
+        o.iter()
+            .map(|&q| {
+                let r = inset(q, s);
+                let z = if s > 0.0 { 1.0 } else { 1.0 - 0.45 * c / h };
+                p3(r.x, r.y, sgn * thick(q.y) * z)
+            })
+            .collect()
+    };
+    let (bk0, bk1, pm1, pm0) = (ring(-1.0, c), ring(-1.0, 0.0), ring(1.0, 0.0), ring(1.0, c));
+    let island = Island {
+        dir: nd,
+        group: Texture::Palm,
+        at: p3(cx, cy, 0.0),
+        axis,
+        pu,
+        e: ext,
+        len: 2.0 * eyy,
+        flip_u: t.x - cx > 0.0,
+        flip_v: up < 0.0,
+    };
+    let is = sided.then_some(&island);
+    let g = Texture::Skin;
+    let mid = p3(cx, cy, 0.0);
+    let (cb, cp) = (p3(cx, cy, -thick(cy) * 1.12), p3(cx, cy, thick(cy) * 0.98));
+    for i in 0..n {
+        let m = (i + 1) % n;
+        let e = o[m] - o[i];
+        let half = (o[i] + o[m]) / 2.0;
+        let inside = p3(half.x - e.y, half.y + e.x, 0.0);
+        b.face(&[bk0[i], bk0[m], bk1[m], bk1[i]], inside, g, 0.92, None, is);
+        b.face(&[bk1[i], bk1[m], pm1[m], pm1[i]], inside, g, 1.0, None, is);
+        b.face(&[pm1[i], pm1[m], pm0[m], pm0[i]], inside, g, 1.0, None, is);
+        // The back, a little domed; the palm, flat.
+        b.face(&[cb, bk0[m], bk0[i]], mid, g, 1.0, None, is);
+        b.face(&[cp, pm0[i], pm0[m]], mid, g, 1.0, None, is);
+    }
+}
+
+/// The handle's direction through the fist: from the index finger's first
+/// segment to the little finger's.
+pub fn handle_dir(bones: &[Bone]) -> Vec3 {
+    (bones[10].at() - bones[1].at()).normalize()
+}
+
+/// The wrist joint the arm turns about (`HandPair`): the wrist bone's end
+/// nearer the back of the hand, before the grip's turn.
+pub fn wrist_joint(bones: &[Bone]) -> Vec3 {
+    bones[16].end_near(bones[0].at())
+}
+
+/// Build a hand (`proposedHandGeometry`) from its 19 bones, the fist on the
+/// handle (tool units), its look, and the sleeve lengthened `sleeve_extra`
+/// tool units at its far end.
+pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand {
+    assert_eq!(bones.len(), BONES, "a hand has {BONES} bones");
+    let mut b = Builder::default();
+    let handle = handle_dir(bones);
+    let thumb = Thumb::new(bones, look);
+    let tips = [3, 6, 9, 12].iter().map(|&i| bones[i].at()).sum::<Vec3>() / 4.0;
+    for (i, p) in bones.iter().enumerate() {
+        if i == 14 {
+            continue; // the thumb is two segments: 13 and 15
+        }
+        b.now_part = i as u8;
+        let (mut at, mut len, mut axis) = (p.at(), p.length, p.axis());
+        if i == 13 || i == 15 {
+            (at, len, axis) = thumb.segment(i);
+        }
+        let first =
+            p.across
+                .map(Vec3::from)
+                .unwrap_or(if axis.x.abs() < 0.9 { Vec3::X } else { Vec3::Y });
+        let mut u = (first - axis * first.dot(axis)).normalize();
+        let finger = (1..=15).contains(&i);
+        let distal = finger && i % 3 == 0;
+        let seg = if finger { (i - 1) % 3 } else { 0 };
+        // A finger block turned so a flat face looks away from the handle
+        // (the back of the finger), so the nail and the knuckles sit on it.
+        let mut out = None;
+        if finger {
+            let mut rel = at - fist;
+            rel -= handle * rel.dot(handle);
+            rel -= axis * rel.dot(axis);
+            if rel.length_squared() > 1e-8 {
+                let o = rel.normalize();
+                u = axis.cross(o).normalize();
+                out = Some(o);
+            }
+        }
+        let (mut w, mut h) = (p.width(), p.radius);
+        let mut group = Texture::Skin;
+        let mut uv_along = false;
+        let mut crease = [1.0, 1.0];
+        let flush = if distal { look.tip_flush } else { 0.0 };
+        // The palm's side: a finger's is opposite its back; the back of the
+        // hand's and the wrist's where the fingertips curl to, square to
+        // the bone.
+        let mut palm = None;
+        if i <= 16 {
+            if let Some(o) = out {
+                palm = Some(Side {
+                    dir: -o,
+                    group: Texture::Fold,
+                });
+            } else if i == 0 || i == 16 {
+                let mut d = tips - at;
+                d -= axis * d.dot(axis);
+                if d.length_squared() > 1e-8 {
+                    palm = Some(Side {
+                        dir: d.normalize(),
+                        group: if i == 0 { Texture::Palm } else { Texture::Fold },
+                    });
+                }
+            }
+        }
+        if i == 17 {
+            group = Texture::Cuff;
+            uv_along = true;
+        }
+        if i == 18 {
+            group = Texture::Cloth;
+            // Lengthen the sleeve at its far end, away from the cuff.
+            let cuff = bones[17].at();
+            let far = if (at + axis * len / 2.0).distance(cuff)
+                > (at - axis * len / 2.0).distance(cuff)
+            {
+                1.0
+            } else {
+                -1.0
+            };
+            at += axis * far * sleeve_extra / 2.0;
+            len += sleeve_extra;
+        }
+        // Slimmer fingers with flatter sides, each segment tapering.
+        let mut taper = None;
+        if finger {
+            w *= 0.8;
+            h *= 0.84;
+            crease = if seg < 2 { [1.0, 0.88] } else { [1.0, 1.0] };
+            taper = Some(if seg == 2 { [0.95, 0.8] } else { [1.0, 0.92] });
+        }
+        let is_thumb = (13..=15).contains(&i);
+        if is_thumb {
+            w *= 1.08;
+            h *= 1.04;
+        }
+        if i == 16 {
+            w *= 1.05;
+            h *= 0.92;
+            len *= 1.15;
+        }
+        let c = w.min(h) * if finger { 0.26 } else { 0.3 };
+        b.now_flush = flush;
+        if i == 0 {
+            let dir = palm.map_or(axis.cross(handle).normalize(), |s| s.dir);
+            palm_mesh(
+                &mut b,
+                bones,
+                &thumb,
+                at,
+                axis,
+                h * 1.05,
+                dir,
+                palm.is_some(),
+            );
+        } else {
+            chamfer_block(
+                &mut b,
+                &Block {
+                    at,
+                    axis,
+                    u,
+                    w,
+                    h,
+                    len,
+                    c,
+                    group,
+                    crease,
+                    uv_along,
+                    palm,
+                    round: is_thumb && distal,
+                    taper,
+                },
+            );
+        }
+        b.now_flush = 0.0;
+        // The hem: a ring of the sleeve's cloth where it meets the cuff.
+        if i == 18 {
+            let (pa, pl, cuff) = (p.at(), p.length, bones[17].at());
+            let toward =
+                if (pa + axis * pl / 2.0).distance(cuff) < (pa - axis * pl / 2.0).distance(cuff) {
+                    1.0
+                } else {
+                    -1.0
+                };
+            chamfer_block(
+                &mut b,
+                &Block {
+                    at: pa + axis * toward * (pl / 2.0 - 0.3),
+                    axis,
+                    u,
+                    w: w * 1.06,
+                    h: h * 1.06,
+                    len: 0.5,
+                    c: c * 1.06,
+                    group,
+                    crease: [1.0, 1.0],
+                    uv_along: false,
+                    palm: None,
+                    round: false,
+                    taper: None,
+                },
+            );
+        }
+        // A nail plate on each tip, on the back face near the end.
+        if distal && let Some(o) = out {
+            let (nw, nl, nz) = if is_thumb {
+                (0.7, 0.5, 0.08)
+            } else {
+                (0.62, 0.56, 0.14)
+            };
+            let nat = at + axis * len * 0.14 + o * h * 0.93;
+            chamfer_block(
+                &mut b,
+                &Block {
+                    at: at + axis * len * (nz - 0.14) + (nat - at),
+                    axis,
+                    u,
+                    w: w * nw,
+                    h: h * 0.14,
+                    len: len * nl,
+                    c: h * 0.08,
+                    group: Texture::Nail,
+                    crease: [1.0, 1.0],
+                    uv_along: false,
+                    palm: None,
+                    round: false,
+                    taper: None,
+                },
+            );
+        }
+    }
+    // The occluders: three spheres along every bone and five along the
+    // handle through the fist.
+    if look.ao > 0.0 {
+        let mut spheres = Vec::new();
+        for (i, p) in bones.iter().enumerate() {
+            if i == 14 {
+                continue;
+            }
+            let (at, len, ax) = if i == 13 || i == 15 {
+                thumb.segment(i)
+            } else {
+                (p.at(), p.length, p.axis())
+            };
+            let r = p.width().min(p.radius);
+            for t in [-0.33, 0.0, 0.33] {
+                spheres.push(Sphere {
+                    c: at + ax * t * len,
+                    r,
+                    part: Some(i as u8),
+                });
+            }
+        }
+        for t in -2..=2 {
+            spheres.push(Sphere {
+                c: fist + handle * t as f32 * 0.8,
+                r: 0.55,
+                part: None,
+            });
+        }
+        b.bake_ao(&spheres, look.ao);
+    }
+    // The grip turned about the handle through the fist.
+    let turn = Quat::from_axis_angle(handle, look.grip_turn_deg.to_radians());
+    let mut built = Hand {
+        wrist: wrist_joint(bones),
+        ..Hand::default()
+    };
+    for i in 0..b.p.len() {
+        let set = if (b.part[i] as usize) < ARM {
+            &mut built.hand
+        } else {
+            &mut built.arm
+        };
+        let mesh = &mut set[b.group[i].index()];
+        mesh.positions
+            .push((turn * (b.p[i] - fist) + fist).to_array());
+        mesh.normals.push((turn * b.n[i]).to_array());
+        // The mockup's coordinates have v up the image (three.js flips its
+        // textures); wgpu's run down it.
+        mesh.uvs.push([b.uv[i].x, 1.0 - b.uv[i].y]);
+        mesh.shade.push(b.k[i]);
+        mesh.flush.push(b.flush[i]);
+        mesh.part.push(b.part[i]);
+    }
+    built
 }
 
 /// How the hand is lit (`held.ron` `hand_light`): a wrapped light, so the
@@ -248,106 +950,101 @@ pub fn wrapped(shade: Shade, n: Vec3, l: Vec3, f: Vec3) -> f32 {
 mod tests {
     use super::*;
 
-    fn finger() -> Block {
-        Block {
-            part: "finger1.0".into(),
-            at: [1.0, 2.0, 3.0],
-            axis: [0.0, 0.0, 1.0],
-            u: [1.0, 0.0, 0.0],
-            w: 0.5,
-            h: 0.4,
-            len: 2.0,
-            chamfer: 0.15,
-            texture: Texture::Skin,
-            crease: [1.0, 0.9],
-            along: false,
-            arm: false,
-            grow: None,
+    fn block(round: bool, taper: Option<[f32; 2]>) -> HandMesh {
+        let mut b = Builder::default();
+        chamfer_block(
+            &mut b,
+            &Block {
+                at: Vec3::new(1.0, 2.0, 3.0),
+                axis: Vec3::Z,
+                u: Vec3::X,
+                w: 0.5,
+                h: 0.4,
+                len: 2.0,
+                c: 0.15,
+                group: Texture::Skin,
+                crease: [1.0, 0.9],
+                uv_along: false,
+                palm: Some(Side {
+                    dir: Vec3::Y,
+                    group: Texture::Fold,
+                }),
+                round,
+                taper,
+            },
+        );
+        let mut m = HandMesh::default();
+        for i in 0..b.p.len() {
+            m.positions.push(b.p[i].to_array());
+            m.normals.push(b.n[i].to_array());
+            m.uvs.push(b.uv[i].to_array());
+            m.shade.push(b.k[i]);
+            m.part.push(b.group[i].index() as u8);
         }
+        m
     }
 
-    /// A block is closed and every face looks out from its centre: 8 sides,
-    /// 16 bevel quads and 16 cap triangles, 64 triangles; its bevels carry
-    /// the crease and it stays inside its half sizes.
-    #[test]
-    fn a_block_is_closed_and_faces_out() {
-        let b = finger();
-        let mut out = HandMeshes::default();
-        block(&b, 0.0, &mut out);
-        let m = &out[0];
-        assert_eq!(m.triangles(), 64);
-        assert!(out[1..].iter().all(|m| m.positions.is_empty()));
-        let at = Vec3::from(b.at);
-        for t in 0..m.triangles() {
-            let p: Vec<Vec3> = (0..3).map(|i| Vec3::from(m.positions[t * 3 + i])).collect();
-            let n = Vec3::from(m.normals[t * 3]);
-            let mid = (p[0] + p[1] + p[2]) / 3.0 - at;
-            assert!(n.dot(mid) > 0.0, "triangle {t} faces in");
-            let wound = (p[1] - p[0]).cross(p[2] - p[0]).normalize();
-            assert!(
-                wound.dot(n) > 0.999,
-                "triangle {t}: wound against its normal"
-            );
-            for q in &p {
-                let d = *q - at;
-                assert!(d.x.abs() <= b.w + 1e-5 && d.y.abs() <= b.h + 1e-5);
-                assert!(d.z.abs() <= b.len / 2.0 + 1e-5);
-            }
-        }
-        // The sides are plain; the near bevel and cap are creased at the
-        // far end only.
-        assert_eq!(
-            m.crease.iter().filter(|k| **k == 1.0).count(),
-            3 * (16 + 16 + 8)
-        );
-        assert_eq!(
-            m.crease.iter().filter(|k| (**k - 0.9).abs() < 1e-6).count(),
-            3 * 24
-        );
-        // Every edge is shared by exactly two triangles: closed.
+    /// Every edge of a triangle list is shared by exactly two triangles.
+    pub(crate) fn closed(positions: &[[f32; 3]]) -> bool {
         let key = |a: [f32; 3]| a.map(|v| (v * 1e4).round() as i64);
         let mut edges = std::collections::HashMap::new();
-        for t in 0..m.triangles() {
+        for t in 0..positions.len() / 3 {
             for e in 0..3 {
                 let (a, b) = (
-                    key(m.positions[t * 3 + e]),
-                    key(m.positions[t * 3 + (e + 1) % 3]),
+                    key(positions[t * 3 + e]),
+                    key(positions[t * 3 + (e + 1) % 3]),
                 );
                 *edges
                     .entry(if a < b { (a, b) } else { (b, a) })
                     .or_insert(0) += 1;
             }
         }
-        assert!(edges.values().all(|n| *n == 2), "an open edge");
+        edges.values().all(|n| *n == 2)
     }
 
-    /// The texture tiles at one texel per `TEX_UNIT`: along a side face, one
-    /// tool unit is 1 / (16 * 0.24) of the texture.
+    /// A block is closed and every face looks out from its centre, wound
+    /// with its normal; tapered and round-tipped too. Its bevels carry the
+    /// crease, and its faces toward the palm's side take the fold's island.
+    #[test]
+    fn a_block_is_closed_and_faces_out() {
+        for (round, taper) in [(false, None), (false, Some([1.0, 0.92])), (true, None)] {
+            let m = block(round, taper);
+            let tris = if round { 80 } else { 64 };
+            assert_eq!(m.triangles(), tris, "{round} {taper:?}");
+            let at = Vec3::new(1.0, 2.0, 3.0);
+            for t in 0..m.triangles() {
+                let p: Vec<Vec3> = (0..3).map(|i| Vec3::from(m.positions[t * 3 + i])).collect();
+                let n = Vec3::from(m.normals[t * 3]);
+                assert!(n.dot((p[0] + p[1] + p[2]) / 3.0 - at) > 0.0, "{t} faces in");
+                let wound = (p[1] - p[0]).cross(p[2] - p[0]).normalize();
+                assert!(wound.dot(n) > 0.999, "{t}: wound against its normal");
+                let fold = m.part[t * 3] == Texture::Fold.index() as u8;
+                assert_eq!(fold, n.y > 0.35, "{t}: the palm's side by its normal");
+            }
+            assert!(closed(&m.positions), "an open edge");
+        }
+        let m = block(false, None);
+        assert_eq!(
+            m.shade.iter().filter(|k| (**k - 0.9).abs() < 1e-6).count(),
+            3 * 24
+        );
+    }
+
+    /// Off the palm's side a face's texture tiles at one texel per
+    /// `TEX_UNIT`.
     #[test]
     fn a_texel_is_a_fixed_size() {
-        let mut out = HandMeshes::default();
-        block(&finger(), 0.0, &mut out);
-        let m = &out[0];
-        let (p0, p1) = (Vec3::from(m.positions[0]), Vec3::from(m.positions[1]));
-        let (t0, t1) = (Vec2::from(m.uvs[0]), Vec2::from(m.uvs[1]));
+        let m = block(false, None);
+        let t = (0..m.triangles())
+            .find(|&t| m.part[t * 3] == Texture::Skin.index() as u8)
+            .unwrap();
+        let (p0, p1) = (
+            Vec3::from(m.positions[t * 3]),
+            Vec3::from(m.positions[t * 3 + 1]),
+        );
+        let (t0, t1) = (Vec2::from(m.uvs[t * 3]), Vec2::from(m.uvs[t * 3 + 1]));
         let ratio = t0.distance(t1) / p0.distance(p1);
         assert!((ratio - 1.0 / (TEX_UNIT * 16.0)).abs() < 1e-4, "{ratio}");
-    }
-
-    /// A growing block lengthens at its far end only.
-    #[test]
-    fn the_sleeve_grows_at_its_far_end() {
-        let mut b = finger();
-        b.grow = Some([0.0, 0.0, 1.0]);
-        let mut out = HandMeshes::default();
-        block(&b, 6.0, &mut out);
-        let zs: Vec<f32> = out[0].positions.iter().map(|p| p[2]).collect();
-        let lo = zs.iter().cloned().fold(f32::INFINITY, f32::min);
-        let hi = zs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        assert!(
-            (lo - 2.0).abs() < 1e-5 && (hi - 10.0).abs() < 1e-5,
-            "{lo} {hi}"
-        );
     }
 
     /// The wrapped light, `0.45 + 0.55 (0.5 + 0.5 n.l)^2 + 0.12 max(n.f, 0)`:
@@ -367,5 +1064,27 @@ mod tests {
         let n = Vec3::new(0.6, 0.8, 0.0);
         let half: f32 = 0.5 + 0.5 * 0.8;
         assert!((wrapped(s, n, l, f) - (0.45 + 0.55 * half * half)).abs() < 1e-6);
+    }
+
+    /// The fingertip's flush moves the skin toward `tip_to`: none at 0, the
+    /// whole way at 1.
+    #[test]
+    fn the_flush_tints_toward_the_tip_colour() {
+        let look = Look {
+            thumb_len: 0.72,
+            thumb_sink: 0.4,
+            grip_turn_deg: 45.0,
+            ao: 0.6,
+            tip_flush: 0.22,
+            tip_to: [226, 140, 128],
+            skin: [227, 176, 137],
+        };
+        assert_eq!(look.tint(0.0), [1.0, 1.0, 1.0]);
+        let full = look.tint(1.0);
+        for ((got, to), skin) in full.iter().zip(look.tip_to).zip(look.skin) {
+            assert!((got - f32::from(to) / f32::from(skin)).abs() < 1e-6);
+        }
+        let some = look.tint(0.22);
+        assert!(some[1] < 1.0 && some[1] > full[1], "redder, not red");
     }
 }

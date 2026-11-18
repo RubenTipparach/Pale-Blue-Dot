@@ -8,6 +8,7 @@
 - [x] 2.4 The shovel's clump of dirt: seven dirt-coloured hex chips on the blade, shown while it scoops (the tip, the pull up and the first part of the return).
 - [x] 2.5 Captures before and after (`docs/screenshots/held-swing/`), on lavapipe in the cloud; frame cost not measured (no GPU).
 - [ ] 2.6 The owner's look in the game.
+- [x] 2.7 The shoulder stays low (decision 9, Tools in Hand version 12): `fist_drop_m` 0.16, `arm_follow` 0.7 in `held.ron` and the defaults; the keys and `shovelAt` were already the mockup's; a test on the keyed poses; a capture (`docs/screenshots/held-swing/shovel-low-*.jpg`).
 
 Follow-ups, not built:
 - A camera kick on the impact (`camera_kick_rad`, approved at 0): the walking camera's look is the player's raw mouse, so a kick needs its own decision; `held.ron` refuses any value but 0 until then.

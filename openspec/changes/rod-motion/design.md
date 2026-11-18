@@ -198,3 +198,43 @@ mesh in `PostUpdate` reads this frame's.
   players, right click should be clearly shown to cancle, and left click to
   hook fish"; `fishing-and-equipment` design, "Why no fish"). Built in the
   game with the mockup, as the owner asked for the game's prompt directly.
+
+## 9. As built (2026-11-18): design 8 in the game
+
+The owner on the mockup: "cool now implement all these".
+
+- **Settings.** `RodSettings` and `held.ron` `rod` take the mockup's six:
+  `flex` 0.07, `bend_max_rad` 0.6, `bend_hz` 4.5, `bend_damping` 0.3,
+  `follow_rad` 0.55, `follow_reach` 0.8. The test that `held.ron` is the
+  defaults holds them together.
+- **The bend.** `RodMotion` carries `bend`: a damped spring toward
+  `-flex` times the rod's own pitch rate, clamped to `bend_max_rad`, as the
+  mockup's `rodPose`. The rod's own rate is the pose's pitch rate less the
+  forearm's turn on the cast's arc: the game's spring carries the drawn
+  pitch (the rod's and the arm's together), so the arm's turn rides the
+  same spring as a sixth value and is taken off, which is the mockup's
+  `spring.p.v`. The mockup steps the bend once a frame (semi-implicit
+  Euler); the game steps it the same way in steps of at most 1/240 s, so a
+  long frame cannot throw it. `held::bend_rod` moves the rod model's
+  vertices past the fist by `bend · L · s²` square to the rod, toward the
+  side a positive pitch turns its tip, on the CPU whenever the bend changes
+  (the mockup's `bend`). The hand is not bent.
+- **The tip.** `RodTipNow` is the bent tip, the mockup's `tipBend` (the
+  straight tip moved by `bend · L` along eye x crossed with the rod), so
+  the line and the cast leave it.
+- **The follow-through.** While the float flies, after the flick, the
+  rod's target is `-follow_rad` with the arm at `-follow_reach` down the
+  cast's arc; it settles on the fishing pose when the float lands. The
+  game's other phases are unchanged (the mockup's fight dip, catch dip and
+  flick wobble are page values the game does not read, as before).
+- **The cast's line.** `fish::draw::CastTrail` keeps the float's place
+  where it left the tip and one every 0.15 m while it flies (planet-local,
+  moved with a rebase). `line_points` lays each point between the tip and
+  the float along the path tip, release, trail, float (`trail_points`,
+  evenly along its length), all of it while flying and easing to the
+  hanging curve over 0.6 s once the float is down (`drawLine`), then held
+  over the water as before. Drawing only: the line's rule never reads it.
+  The game's line has 24 points, the mockup's 40.
+
+Differences from the mockup: the bend's substeps and the 24 points, above.
+Frame cost was not measured (a cloud container, no GPU).

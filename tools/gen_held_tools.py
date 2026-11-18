@@ -391,139 +391,47 @@ def fmt(v):
     return "(" + ", ".join(f"{x:.6g}" for x in v) + ")"
 
 
-# ---- the proposed hand (hand-model, approved with Tools in Hand v8) -----------
-# Ported from docs/mockups/tool-motion.html: `proposedHandGeometry` (the
-# blocks), `HandPair` (the wrist joint the arm bends about) and
-# `handTextures` (the four 16 px textures). The game's bones above, each drawn
-# as a chamfered block (`pbd_core::hand::block`), the thumb in two equal
-# segments 0.72 of the game's length, nails on the five tips, a hem on the
-# sleeve. The sleeve's lengthening (`held.ron` stroke.sleeve_extra) is the
-# game's, along each sleeve block's `grow`.
+# ---- the proposed hand (hand-model, Tools in Hand v8 to v13) ----------------
+# The game's bones above, in each tool's units, are what the model file
+# carries: `pbd_core::hand::build` ports the mockup's `proposedHandGeometry`
+# (docs/mockups/tool-motion.html: the traced palm, the chamfered blocks, the
+# thumb in two equal segments, the palm and back sides, the islands, the
+# baked AO and the grip turn) and builds the hand from them in the game, the
+# sleeve as long as `held.ron` says. The look's numbers are the mockup's
+# `HAND_SHAPE` and `HAND_LOOK`; the textures are its `handTextures`,
+# `palmTexture` and `foldTexture`, pixel for pixel.
 HAND_TEX = os.path.join(ROOT, "assets", "textures", "hand")
-THUMB_LEN = 0.72          # the mockup's HAND_SHAPE.thumb_len
-HAND_SKIN = (227, 176, 137)
+HAND_SKIN = (227, 176, 137)         # the "Game" swatch
 HAND_CLOTH = (77, 106, 140)
 HAND_CUFF = (58, 82, 110)
-BONE_NAMES = (["back"] + [f"finger{f + 1}.{s}" for f in range(4) for s in range(3)]
-              + ["thumb.0", "thumb.1", "thumb.2", "wrist", "cuff", "sleeve"])
+HAND_SHAPE = {"thumb_len": 0.72, "thumb_sink": 0.4, "grip_turn_deg": 45.0}
+BACK_K = (0.86, 0.82, 0.80)         # the back of the hand: the skin darker and browner
+PALM_MIX, PALM_TO = 0.45, (252, 214, 204)
+HAND_AO = 0.6
+TIP_FLUSH, TIP_TO = 0.22, (226, 140, 128)
 
 
-def length(a): return math.sqrt(dot(a, a))
-def lerp3(a, b, t): return tuple(x + (y - x) * t for x, y in zip(a, b))
+def back_tone(): return tuple(c * k for c, k in zip(HAND_SKIN, BACK_K))
+def palm_tone(): return tuple(c + (t - c) * PALM_MIX for c, t in zip(HAND_SKIN, PALM_TO))
 
 
-def quat_conj_apply(q, v):
-    """v turned by the inverse of the unit quaternion q (x, y, z, w)."""
-    x, y, z, w = q
-    qv = (-x, -y, -z)
-    t = mul(cross(qv, v), 2.0)
-    return add(add(v, mul(t, w)), cross(qv, t))
+def hand_look_ron():
+    """The hand's look as the model file carries it (`pbd_core::hand::Look`)."""
+    return [f"    hand: (thumb_len: {HAND_SHAPE['thumb_len']}, thumb_sink: {HAND_SHAPE['thumb_sink']},"
+            f" grip_turn_deg: {HAND_SHAPE['grip_turn_deg']}, ao: {HAND_AO}, tip_flush: {TIP_FLUSH},"
+            f" tip_to: {fmt(TIP_TO)}, skin: {fmt(HAND_SKIN)}),"]
 
 
-def proposed_blocks(t):
-    """The proposed hand's blocks for a tool, in tool units, from the bones
-    as the game's model file rounds them (so they are the mockup's)."""
-    rot, scale, butt = pose(t, GAME_SIZE)
-    q = quat(rot)
-    parts = [{"axis": tuple(p["axis"]), "at": tuple(p["at"]), "radius": p["r"], "length": p["len"],
-              "across": tuple(p["across"]) if "across" in p else None, "width": p.get("w")}
-             for p in hand_parts(t, GAME_SIZE)]
-    fist_t = mul(quat_conj_apply(q, sub(FIST_AT[GAME_SIZE], butt)), 1.0 / scale)
-    pc = lambda i: parts[i]["at"]
-    handle_dir = norm(sub(pc(10), pc(1)))
-    # The thumb, shortened from its root and chained, then split in two
-    # equal halves from the root to the tip.
-    pts, start = [], None
-    for i in (13, 14, 15):
-        p = parts[i]
-        ax = norm(p["axis"])
-        if start is None:
-            start = add(p["at"], mul(ax, -p["length"] / 2))
-            pts.append(start)
-        start = add(start, mul(ax, p["length"] * THUMB_LEN))
-        pts.append(start)
-    seg_len = [length(sub(pts[k + 1], pts[k])) for k in range(3)]
-    half = sum(seg_len) / 2
-    mid, run = pts[3], 0.0
-    for k in range(3):
-        if run + seg_len[k] >= half:
-            mid = lerp3(pts[k], pts[k + 1], (half - run) / seg_len[k])
-            break
-        run += seg_len[k]
-
-    def seg(a, b):
-        return {"at": mul(add(a, b), 0.5), "len": length(sub(b, a)), "axis": norm(sub(b, a))}
-    thumb = {13: seg(pts[0], mid), 15: seg(mid, pts[3])}
-    blocks = []
-    for i, p in enumerate(parts):
-        if i == 14:
-            continue
-        axis, at, ln = norm(p["axis"]), p["at"], p["length"]
-        if i in thumb:
-            at, ln, axis = thumb[i]["at"], thumb[i]["len"], thumb[i]["axis"]
-        first = p["across"] if p["across"] else ((1.0, 0.0, 0.0) if abs(axis[0]) < 0.9 else (0.0, 1.0, 0.0))
-        u = norm(sub(first, mul(axis, dot(first, axis))))
-        finger = 1 <= i <= 15
-        distal = finger and i % 3 == 0
-        sg = (i - 1) % 3 if finger else -1
-        out = None
-        if finger:
-            rel = sub(at, fist_t)
-            rel = sub(rel, mul(handle_dir, dot(rel, handle_dir)))
-            rel = sub(rel, mul(axis, dot(rel, axis)))
-            if dot(rel, rel) > 1e-8:
-                out = norm(rel)
-                u = norm(cross(axis, out))
-        w, h = (p["width"] or p["radius"]), p["radius"]
-        tex, along, crease, grow = "Skin", False, (1.0, 1.0), None
-        if i == 17:
-            tex, along = "Cuff", True
-        if i == 18:
-            tex = "Cloth"
-            plus = length(sub(add(at, mul(axis, ln / 2)), pc(17)))
-            minus = length(sub(add(at, mul(axis, -ln / 2)), pc(17)))
-            grow = axis if plus > minus else mul(axis, -1.0)
-        if finger:
-            w, h = w * 0.94, h * 0.94
-            crease = (1.0, 0.9) if sg < 2 else (1.0, 1.0)
-        if i == 0:
-            h *= 1.08
-        if i == 16:
-            w, h, ln = w * 1.05, h * 0.92, ln * 1.15
-        c = min(w, h) * (0.36 if finger else 0.3)
-        name = "thumb.1" if i == 15 else BONE_NAMES[i]
-        arm = i >= 16
-        blocks.append({"part": name, "at": at, "axis": axis, "u": u, "w": w, "h": h, "len": ln, "chamfer": c,
-                       "texture": tex, "crease": crease, "along": along, "arm": arm, "grow": grow})
-        if i == 18:
-            pa, pl = p["at"], p["length"]
-            sign = 1 if length(sub(add(pa, mul(axis, pl / 2)), pc(17))) < length(sub(add(pa, mul(axis, -pl / 2)), pc(17))) else -1
-            near = add(pa, mul(axis, sign * (pl / 2 - 0.3)))
-            blocks.append({"part": "hem", "at": near, "axis": axis, "u": u, "w": w * 1.06, "h": h * 1.06, "len": 0.5,
-                           "chamfer": c * 1.06, "texture": "Cloth", "crease": (1.0, 1.0), "along": False, "arm": True,
-                           "grow": None})
-        if distal and out:
-            nat = add(add(at, mul(axis, ln * 0.14)), mul(out, h * 0.93))
-            blocks.append({"part": name + ".nail", "at": nat, "axis": axis, "u": u, "w": w * 0.62, "h": h * 0.14,
-                           "len": ln * 0.56, "chamfer": h * 0.08, "texture": "Nail", "crease": (1.0, 1.0),
-                           "along": False, "arm": False, "grow": None})
-    # The wrist joint the arm turns about: the wrist bone's end nearer the
-    # back of the hand.
-    wr = parts[16]
-    wax = norm(wr["axis"])
-    e1, e2 = add(wr["at"], mul(wax, wr["length"] / 2)), add(wr["at"], mul(wax, -wr["length"] / 2))
-    wrist = e1 if length(sub(e1, pc(0))) < length(sub(e2, pc(0))) else e2
-    return blocks, wrist
-
-
-def hand_ron(blocks):
+def bones_ron(t):
+    """A tool's 19 hand bones in its units, as the mockup's HELD data holds
+    them: the back, four fingers of three segments, the thumb's three, the
+    wrist, the cuff and the sleeve."""
     out = []
-    for b in blocks:
-        grow = f"Some({fmt(b['grow'])})" if b["grow"] else "None"
-        out.append(f'                (part: "{b["part"]}", at: {fmt(b["at"])}, axis: {fmt(b["axis"])}, u: {fmt(b["u"])},'
-                   f' w: {b["w"]:.6g}, h: {b["h"]:.6g}, len: {b["len"]:.6g}, chamfer: {b["chamfer"]:.6g},'
-                   f' texture: {b["texture"]}, crease: {fmt(b["crease"])}, along: {str(b["along"]).lower()},'
-                   f' arm: {str(b["arm"]).lower()}, grow: {grow}),')
+    for p in hand_parts(t, GAME_SIZE):
+        width = f"Some({p['w']:.6g})" if "w" in p else "None"
+        across = f"Some({fmt(p['across'])})" if "across" in p else "None"
+        out.append(f"                (at: {fmt(p['at'])}, axis: {fmt(p['axis'])}, radius: {p['r']:.6g},"
+                   f" length: {p['len']:.6g}, width: {width}, across: {across}),")
     return out
 
 
@@ -543,10 +451,14 @@ def tone(c, k): return tuple(x * k for x in c)
 
 
 def hand_textures():
-    """The four 16 px textures, as the mockup's `handTextures` draws them:
-    rows of (r, g, b) bytes, straight sRGB, keyed by name."""
+    """The hand's textures as the mockup draws them: rows of (r, g, b)
+    bytes, straight sRGB, keyed by name. `handTextures` (16 px: the skin and
+    the nails on the back's tone, the cloth, the cuff; one generator through
+    all four, in its order), `palmTexture` (32 px, the palm's island: the
+    thumb's side on the left, the wrist at the bottom) and `foldTexture`
+    (16 px, a fold at each end of a segment)."""
     r = lcg(91)
-    skin, cloth, cuff = HAND_SKIN, HAND_CLOTH, HAND_CUFF
+    skin, cloth, cuff = back_tone(), HAND_CLOTH, HAND_CUFF
 
     def img(pick):
         return [[tuple(byte(v) for v in pick(X, Y)) for X in range(16)] for Y in range(16)]
@@ -575,8 +487,50 @@ def hand_textures():
         if (Y == 3 or Y == 12) and X % 3 != 2:
             return tone(cuff, 1.32)
         return tone(cuff, 0.95) if r() < 0.1 else cuff
-    # In the mockup's order: one generator runs through all four.
-    return {"skin": img(skin_px), "nail": img(nail_px), "cloth": img(cloth_px), "cuff": img(cuff_px)}
+    out = {"skin": img(skin_px), "nail": img(nail_px), "cloth": img(cloth_px), "cuff": img(cuff_px)}
+    out["palm"] = palm_texture()
+    out["fold"] = fold_texture()
+    return out
+
+
+def palm_texture():
+    """The palm (hand-model 5.1): 32 x 32, its mottle, then the heart, head
+    and life lines and the folds at the fingers' base."""
+    r, palm, n = lcg(173), palm_tone(), 32
+    rows = []
+    for Y in range(n):
+        row = []
+        for X in range(n):
+            u = r()
+            row.append((palm[0], palm[1] * 0.96, palm[2] * 0.95) if u < 0.07 else tone(palm, 1.02) if u < 0.14 else palm)
+        rows.append(row)
+
+    def line(pts, k):
+        for q in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[q], pts[q + 1]
+            m = max(abs(x1 - x0), abs(y1 - y0))
+            for t in range(m + 1):
+                rows[js_round(y0 + (y1 - y0) * t / m)][js_round(x0 + (x1 - x0) * t / m)] = tone(palm, k)
+    line([(31, 9), (24, 9), (17, 8), (12, 6), (9, 4)], 0.8)        # the heart line
+    line([(3, 12), (10, 13), (18, 15), (26, 18)], 0.8)             # the head line
+    line([(3, 11), (6, 15), (8, 20), (9, 25), (9, 31)], 0.8)       # the life line, round the thumb
+    for X in range(6, n, 7):
+        line([(X, 1), (X + 4, 1)], 0.86)                           # the folds at the fingers' base
+    return [[tuple(byte(v) for v in px) for px in row] for row in rows]
+
+
+def fold_texture():
+    """The inside of a finger, the thumb or the wrist: 16 x 16, a fold row
+    near each end."""
+    r, palm = lcg(211), palm_tone()
+    rows = []
+    for Y in range(16):
+        row = []
+        for X in range(16):
+            fold = (Y == 1 or Y == 14) and 2 < X < 13
+            row.append(tone(palm, 0.82) if fold else tone(palm, 0.975) if r() < 0.1 else palm)
+        rows.append(row)
+    return [[tuple(byte(v) for v in px) for px in row] for row in rows]
 
 
 def png_rgb(rows):
@@ -595,13 +549,14 @@ def png_rgb(rows):
 
 def model_ron():
     """The game's model file (`assets/models/held_tools.ron`): each tool's
-    hexes at the game's density and its held pose at the game's size, the
-    hand's chamfered blocks placed on it (hand-model), in the tool's units."""
+    hexes at the game's density and its held pose at the game's size, and the
+    hand's bones placed on it, in the tool's units; the hand's look once
+    (hand-model)."""
     out = ["// Generated by tools/gen_held_tools.py from the approved Hex Tool Bench",
            "// mockup; do not edit. openspec/changes/hex-held-tools/design.md says what",
            "// each field is. Tool units: x along the handle from the butt, y up the",
            "// drawing, z out of it. Eye space: metres, x right, y up, -z ahead.",
-           "(", f"    spacing: {1.0 / GAME_DENSITY},", "    tools: ["]
+           "(", f"    spacing: {1.0 / GAME_DENSITY},"] + hand_look_ron() + ["    tools: ["]
     for t in TOOLS:
         rot, scale, butt = pose(t, GAME_SIZE)
         tip = add(butt, mul(mat_vec(rot, (t["len"], 0.0, 0.0)), scale))
@@ -611,9 +566,8 @@ def model_ron():
                 "            hexes: ["]
         for q, r, c, d in generate(t, GAME_DENSITY):
             out.append(f"                ({q}, {r}, {fmt(srgb_bytes(COL[c]))}, {d:.6g}),")
-        blocks, wrist = proposed_blocks(t)
-        out += ["            ],", f"            wrist: {fmt(wrist)},", "            hand: ["]
-        out += hand_ron(blocks)
+        out += ["            ],", "            bones: ["]
+        out += bones_ron(t)
         out += ["            ],", "        ),"]
     out += ["    ],", ")", ""]
     return "\n".join(out)
