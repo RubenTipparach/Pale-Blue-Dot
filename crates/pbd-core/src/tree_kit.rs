@@ -298,6 +298,8 @@ pub struct TreeVertex {
     /// The mockup's root-to-tip AO, 0..1.
     pub ao: f32,
     pub leaf: bool,
+    /// A vine's card (design 12.4): drawn in its own green and cut.
+    pub vine: bool,
 }
 
 /// The mockup's `GB`, one for bark and one for leaves.
@@ -305,12 +307,14 @@ pub struct TreeVertex {
 struct Gb {
     v: Vec<TreeVertex>,
     leaf: bool,
+    vine: bool,
 }
 impl Gb {
     fn new(leaf: bool) -> Self {
         Gb {
             v: Vec::new(),
             leaf,
+            vine: false,
         }
     }
     #[allow(clippy::too_many_arguments)]
@@ -327,6 +331,7 @@ impl Gb {
                 card: card as f32,
                 ao: ao[i] as f32,
                 leaf: self.leaf,
+                vine: self.vine,
             });
         }
     }
@@ -598,6 +603,34 @@ pub struct TreeModel {
     /// The bake's frame, from just under the base to the tilted top.
     pub lo: f32,
     pub hi: f32,
+}
+
+/// A vine's cards (design 12.4): how wide a card is at its broad end, the
+/// longest piece of a strand, and a strand's cards (the least, and how many
+/// more it may have), metres.
+pub const VINE_WIDTH_M: f64 = 0.5;
+pub const VINE_PIECE_M: f64 = 0.8;
+pub const VINE_CARDS: (u32, u32) = (4, 4);
+/// A vine's own green, over the crown's leaf colour: a little yellower and
+/// lighter, in the jungle's palette. The near draw and the bake both use it.
+pub const VINE_TINT: [f32; 3] = [1.08, 1.12, 0.62];
+/// The cut a vine's card takes in `planet_surface.wgsl`'s `leaf_mask`.
+pub const VINE_MASK: u32 = 3;
+
+/// That cut (`leaf_mask`'s `m == 3u`): a stem the card's whole length and
+/// three broad leaves on it, side to side, on the tile's 32 x 32 texels. The
+/// bake keeps a vine's pixel by it, as the near draw does.
+pub fn vine_mask(uv: [f32; 2]) -> bool {
+    let q = uv.map(|c| ((c.clamp(0.0, 0.999) * 32.0).floor() + 0.5) / 32.0);
+    let (x, y) = (q[0] - 0.5, q[1]);
+    if x.abs() < 0.06 {
+        return true;
+    }
+    (0..3u32).any(|k| {
+        let s = (k % 2) as f32 * 2.0 - 1.0;
+        let d = [(x - s * 0.18) / 0.2, (y - (k as f32 + 0.5) / 3.0) / 0.2];
+        d[0] * d[0] + d[1] * d[1] < 1.0
+    })
 }
 
 /// How far above the horizontal the bake looks down (`BAKE_TILT`).
@@ -885,13 +918,17 @@ pub fn build(species: Species, v: u32) -> TreeModel {
     // the swamp's trees. A strand of narrow leaf cards falls from some of the
     // model's anchors, on a stream of its own so the tree it hangs from is the
     // one it always was. No strand is longer than the lowest anchor is high.
+    // Read from the ground (design 12.4's finding): broad crossed cards so a
+    // strand is seen from every side, long enough to hang down past the
+    // crown into the eye's height, and more of them on the jungle's trees.
     let vine_chance = match species {
-        Species::Kapok => 0.35,
-        Species::Palm => 0.2,
+        Species::Kapok => 0.6,
+        Species::Palm => 0.4,
         Species::Willow => 0.25,
         _ => 0.0,
     };
     let leaves = l.v.len();
+    l.vine = true;
     if vine_chance > 0.0 && !anchors.is_empty() {
         let mut vr = Rng::new(0x7a1e + v * 131 + species.index() * 17);
         let floor = anchors.iter().map(|a| a[1]).fold(f64::MAX, f64::min);
@@ -900,19 +937,31 @@ pub fn build(species: Species, v: u32) -> TreeModel {
             if vr.float() >= vine_chance {
                 continue;
             }
-            let cards = 3 + (vr.float() * 4.0) as u32;
-            let piece = (reach / f64::from(cards)).min(0.5);
+            let cards = VINE_CARDS.0 + (vr.float() * f64::from(VINE_CARDS.1)) as u32;
+            let piece = (reach / f64::from(cards)).min(VINE_PIECE_M);
             if piece < 0.1 {
                 continue;
             }
             let az = vr.float() * 6.28;
-            let face = [az.cos(), 0.0, az.sin()];
+            let faces = [[az.cos(), 0.0, az.sin()], [-az.sin(), 0.0, az.cos()]];
             let mut at = *a;
             for c in 0..cards {
                 let sway = (vr.float() - 0.5) * 0.12;
                 let dir = norm([sway, -1.0, sway * 0.5]);
                 let cid = 900.0 + k as f64 + f64::from(c) * 0.01;
-                leaf_card(&mut l, at, dir, piece, 0.16, &mut vr, cid, face, None);
+                for face in faces {
+                    leaf_card(
+                        &mut l,
+                        at,
+                        dir,
+                        piece,
+                        VINE_WIDTH_M,
+                        &mut vr,
+                        cid,
+                        face,
+                        None,
+                    );
+                }
                 at = add(at, scl(dir, piece * 0.95));
             }
         }
@@ -1094,7 +1143,8 @@ pub fn build_kit(tex: &Textures) -> Kit {
             let fx = |x: f32| ((x * 4096.0).round().clamp(0.0, 65535.0)) as u32;
             words.push(fx(v.uv[0]) | fx(v.uv[1]) << 16);
             let b = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u32;
-            words.push(b(v.card) | b(v.ao) << 8 | u32::from(v.leaf) << 16);
+            words
+                .push(b(v.card) | b(v.ao) << 8 | u32::from(v.leaf) << 16 | u32::from(v.vine) << 17);
         }
         words[h + 2] = words.len() as u32;
         words[h + 3] = m.anchors.len() as u32;
@@ -1309,6 +1359,100 @@ mod tests {
         for s in SPECIES {
             let counts: Vec<_> = (0..VARIANTS).map(|v| build(s, v).vertices.len()).collect();
             println!("{:>7}: {:?}", s.name(), counts);
+        }
+    }
+
+    /// What a species' vines are, measured off its built models (design
+    /// 12.4's finding): the strands a tree carries on average, a card's
+    /// width at its broad end, the longest strand, and how high above the
+    /// ground the lowest vine leaf hangs.
+    fn vine_measure(species: Species) -> (f64, f32, f32, f32) {
+        let (mut strands, mut width, mut longest, mut lowest) = (0usize, 0.0f32, 0.0f32, f32::MAX);
+        for v in 0..VARIANTS {
+            let m = build(species, v);
+            let mut top_y = 0.0f32;
+            let mut last = [f32::MAX; 3];
+            let gap = |a: [f32; 3], b: [f32; 3]| {
+                (0..3).map(|i| (a[i] - b[i]).powi(2)).sum::<f32>().sqrt()
+            };
+            for card in m.vertices[m.vertices.len() - m.vines..].chunks(6) {
+                // The root edge's midpoint, on the anchor.
+                let top: [f32; 3] =
+                    std::array::from_fn(|i| (card[0].position[i] + card[1].position[i]) / 2.0);
+                // A strand starts at an anchor; its crossed twin starts
+                // beside the first card, and is the same strand.
+                if m.anchors.iter().any(|a| gap(*a, top) < 0.2) && gap(last, top) > 0.15 {
+                    last = top;
+                    strands += 1;
+                    top_y = top[1];
+                }
+                let (c, d) = (card[2].position, card[5].position);
+                width = width.max((0..3).map(|i| (c[i] - d[i]).powi(2)).sum::<f32>().sqrt());
+                for p in card {
+                    lowest = lowest.min(p.position[1]);
+                    longest = longest.max(top_y - p.position[1]);
+                }
+            }
+        }
+        (strands as f64 / f64::from(VARIANTS), width, longest, lowest)
+    }
+
+    /// Vines read from the ground (design 12.4): a jungle tree carries
+    /// several strands, a card is broad enough to be seen at the eye's
+    /// distance, and a kapok's strands hang down past its crown toward the
+    /// eye. Before: 4.25 strands, 0.16 m cards, the lowest leaf 4.9 m up.
+    #[test]
+    fn vines_read_from_the_ground() {
+        let (strands, width, longest, lowest) = vine_measure(Species::Kapok);
+        assert!(strands >= 6.0, "{strands} strands a kapok");
+        assert!(width >= 0.45, "cards {width} m wide");
+        assert!(longest >= 3.5, "the longest strand {longest} m");
+        assert!(lowest <= 3.5, "the lowest vine leaf {lowest} m up");
+        let (strands, ..) = vine_measure(Species::Palm);
+        assert!(strands >= 2.0, "{strands} strands a palm");
+        // Every vine card is marked a vine, and nothing else is.
+        for s in SPECIES {
+            let m = build(s, 0);
+            let n = m.vertices.len();
+            assert!(m.vertices[n - m.vines..].iter().all(|v| v.vine && v.leaf));
+            assert!(m.vertices[..n - m.vines].iter().all(|v| !v.vine));
+        }
+    }
+
+    /// The shader's vine is this one: its green, its cut's code, and the
+    /// cut's lines (`leaf_mask`'s `m == 3u`, the bake's `vine_mask`).
+    #[test]
+    fn the_shaders_vine_is_the_kits() {
+        let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let v = VINE_TINT;
+        for line in [
+            format!(
+                "const VINE_TINT = vec3<f32>({:?}, {:?}, {:?});",
+                v[0], v[1], v[2]
+            ),
+            format!("const VINE_MASK: u32 = {VINE_MASK}u;"),
+            "if ax < 0.06 { return true; }".to_string(),
+            "let d = vec2(x - s*0.18, y - (f32(k) + 0.5)/3.0)/vec2(0.2, 0.2);".to_string(),
+            "tree_split.z = f32((word >> 17u) & 1u);".to_string(),
+        ] {
+            assert!(src.contains(&line), "the shader no longer says `{line}`");
+        }
+        // The cut keeps the stem and about half the card.
+        let kept = (0..32)
+            .flat_map(|y| (0..32).map(move |x| [(x as f32 + 0.5) / 32.0, (y as f32 + 0.5) / 32.0]))
+            .filter(|uv| vine_mask(*uv))
+            .count();
+        assert!((300..700).contains(&kept), "{kept} of 1024 texels");
+        assert!((0..32).all(|y| vine_mask([0.5, (y as f32 + 0.5) / 32.0])));
+    }
+
+    #[test]
+    fn report_the_vines() {
+        for s in [Species::Kapok, Species::Palm, Species::Willow] {
+            let (strands, width, longest, lowest) = vine_measure(s);
+            println!(
+                "{s:?}: {strands:.2} strands a tree, cards {width:.2} m wide, longest {longest:.2} m, lowest leaf {lowest:.2} m up"
+            );
         }
     }
 }
