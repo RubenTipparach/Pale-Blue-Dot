@@ -579,3 +579,54 @@ mod tests {
         assert!((88.0..AHEAD_REACH_M).contains(&tier), "{tier}");
     }
 }
+
+#[cfg(test)]
+mod uphill_probe {
+    use super::*;
+    use crate::planet::terrain_config;
+
+    /// INSTRUMENT (ignored, `river-downhill`): the water's top every 2 m down
+    /// the owner's river's line, and every place it rises going downstream:
+    /// how much, and whether the reach's own level rose there (never, by the
+    /// map's construction) or the bank clamp let it back up.
+    #[test]
+    #[ignore]
+    fn where_the_river_runs_uphill() {
+        let cfg = terrain_config();
+        let src = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 19.25f32.to_radians(),
+            lon: (-6.75f32).to_radians(),
+        });
+        let path = RiverPath::through(src, 1.0).expect("river");
+        let sea = cfg.sea_level_m.round() as i32;
+        let mut last: Option<(f32, i32, i32)> = None;
+        let (mut rises, mut total, mut worst, mut points) = (0, 0, 0, 0);
+        let mut m = 0.0;
+        while m < path.length_m() {
+            let d = path.line_at(m);
+            let top = pbd_core::rivers::water(cfg, d).last().map(|w| w.0 - sea);
+            let level = pbd_core::rivers::at(cfg, d).map(|h| h.level);
+            if let (Some(top), Some(level)) = (top, level) {
+                points += 1;
+                if let Some((at, t0, l0)) = last
+                    && top > t0
+                {
+                    rises += 1;
+                    total += top - t0;
+                    worst = worst.max(top - t0);
+                    if rises <= 25 {
+                        eprintln!(
+                            "{at:5.0} -> {m:5.0} m: top {t0} -> {top} (+{}), reach level {l0} -> {level}",
+                            top - t0
+                        );
+                    }
+                }
+                last = Some((m, top, level));
+            }
+            m += 2.0;
+        }
+        eprintln!(
+            "{points} points with water; {rises} rises, {total} m in all, the worst {worst} m"
+        );
+    }
+}

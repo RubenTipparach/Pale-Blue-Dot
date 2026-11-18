@@ -144,7 +144,16 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V10;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V11;
+
+    /// Generator version 11 (`river-downhill`): version 10 with rivers that
+    /// never run uphill. A river's water is the lowest bank clamp met along
+    /// its line from its spring, so it falls or stays level downstream, and
+    /// its bed is carved under that. Off the rivers' valleys it is version 10.
+    pub const TENEBRIS_V11: Self = Self {
+        rivers: Some(crate::rivers::RiverSettings::V11),
+        ..Self::TENEBRIS_V10
+    };
 
     /// Generator version 10 (`flora-v2` design 12): version 9 with M13's
     /// forests, as dense as the approved mockup draws them, and the beach's
@@ -296,6 +305,7 @@ impl TerrainConfig {
             8 => Some(Self::TENEBRIS_V8),
             9 => Some(Self::TENEBRIS_V9),
             10 => Some(Self::TENEBRIS_V10),
+            11 => Some(Self::TENEBRIS_V11),
             _ => None,
         }
     }
@@ -903,6 +913,28 @@ mod tests {
 
     /// The digests of version 6's ground and top blocks on 10,000 directions,
     /// taken on the M4 Max Mac (2026-11-15).
+    /// Version 11 is version 10 with rivers that never run uphill
+    /// (`river-downhill`), and a new world is made on it.
+    #[test]
+    fn version_11_is_version_10_with_downhill_rivers() {
+        let v11 = TerrainConfig::for_version(11).expect("version 11 is carried");
+        assert_eq!(v11, TerrainConfig::TENEBRIS_V11);
+        assert_eq!(TerrainConfig::TENEBRIS, v11, "a new world is made on 11");
+        assert_eq!(
+            TerrainConfig {
+                rivers: Some(crate::rivers::RiverSettings::V8),
+                ..v11
+            },
+            TerrainConfig::TENEBRIS_V10
+        );
+        assert!(v11.rivers.is_some_and(|r| r.downhill));
+        assert!(
+            !TerrainConfig::TENEBRIS_V10
+                .rivers
+                .is_some_and(|r| r.downhill)
+        );
+    }
+
     /// The ground digest differs by platform: the Mac's and the Linux
     /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
     /// is the operating system's maths library, not the processor: an
@@ -986,7 +1018,6 @@ mod tests {
     fn version_10_is_version_9_s_ground_with_m13_s_trees() {
         let v10 = TerrainConfig::for_version(10).expect("version 10 is carried");
         assert_eq!(v10, TerrainConfig::TENEBRIS_V10);
-        assert_eq!(TerrainConfig::TENEBRIS, v10, "a new world is made on 10");
         let v9 = TerrainConfig::TENEBRIS_V9;
         assert_eq!(digest(&v10, 10_000), VERSION_9_DIGEST);
         assert_eq!(top_digest(&v10, 10_000), VERSION_9_TOP_DIGEST);

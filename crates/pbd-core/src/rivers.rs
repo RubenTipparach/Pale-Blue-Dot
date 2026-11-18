@@ -52,6 +52,11 @@ pub struct RiverSettings {
     /// Marsh pools stand only where the ground round them stands as high
     /// (the rim), sampled this far out, metres.
     pub rim_m: f32,
+    /// A river's water never rises downstream (generator version 11,
+    /// `river-downhill`): its top is the lowest bank clamp met along its line
+    /// from its spring, carried down every reach and across every
+    /// confluence, in place of each point's own clamp.
+    pub downhill: bool,
 }
 
 impl RiverSettings {
@@ -64,6 +69,14 @@ impl RiverSettings {
         bank_m: 7.0,
         meander_m: 7.0,
         rim_m: 2.9,
+        downhill: false,
+    };
+
+    /// Version 11 (`river-downhill`): version 8's rivers, never running
+    /// uphill.
+    pub const V11: Self = Self {
+        downhill: true,
+        ..Self::V8
     };
 }
 
@@ -117,7 +130,15 @@ pub struct RiverMap {
     /// window [`Self::at_widened`] scans, so a point whose cell says no has
     /// no river within any reach it asks for (`river-cache` design 11).
     near: Vec<bool>,
+    /// Under `downhill` (`river-downhill`): each river cell's water ceiling
+    /// along its reach, at [`CEILING_SAMPLES`] points from its centre toward
+    /// its downstream cell's, whole metres over sea level; non-increasing
+    /// along the reach and from reach to reach. Empty otherwise.
+    ceilings: std::collections::HashMap<u32, [i32; CEILING_SAMPLES]>,
 }
+
+/// How many points along a reach its water's ceiling is sampled at.
+pub const CEILING_SAMPLES: usize = 8;
 
 /// A river at a point: how far from its line, how far down its reach, its
 /// water's top and the drop into the reach.
@@ -135,6 +156,10 @@ pub struct RiverHere {
     pub upstream: Vec3,
     /// Half the river's width here, metres.
     pub half_width_m: f32,
+    /// The river cell whose reach this is, and how far down the reach,
+    /// 0..1: where its water's ceiling is read (`river-downhill`).
+    pub node: u32,
+    pub t: f32,
 }
 
 impl RiverMap {
@@ -191,6 +216,7 @@ impl RiverMap {
                 width * height
             ],
             near: Vec::new(),
+            ceilings: Default::default(),
         };
         let ground = TerrainConfig {
             rivers: None,
@@ -291,7 +317,132 @@ impl RiverMap {
             }
         }
         map.fill_near();
+        if settings.downhill {
+            map.fill_ceilings(cfg, settings, threads);
+        }
         map
+    }
+
+    /// The water's ceiling along every river's reach (`river-downhill`
+    /// design): each reach sampled at [`CEILING_SAMPLES`] points of its line
+    /// (on every core), each sample's bank clamp as `top_here` makes it, then
+    /// a running minimum carried down every reach from the springs, a
+    /// confluence taking the lower of its feeders. So the water never rises
+    /// downstream.
+    fn fill_ceilings(&mut self, cfg: &TerrainConfig, settings: &RiverSettings, threads: usize) {
+        let rivers: Vec<usize> = self.rivers().collect();
+        let sea = cfg.sea_level_m;
+        let clamp_of = |k: usize| -> [i32; CEILING_SAMPLES] {
+            let node = self.nodes[k];
+            let a = self.centre(k);
+            let b = if node.down == NONE {
+                a
+            } else {
+                self.centre(node.down as usize)
+            };
+            let dir = (b - a).normalize_or_zero();
+            let rim = (node.half_width + settings.bank_m) / cfg.radius_m;
+            std::array::from_fn(|i| {
+                let t = (i as f32 + 0.5) / CEILING_SAMPLES as f32;
+                let on = a.lerp(b, t).normalize_or(a);
+                // The line wanders as `at_widened` reads it.
+                let wander =
+                    (planet_gen::noise01(cfg.seed ^ MEANDER_SALT, on, cfg.scale_of(60.0), 2) - 0.5)
+                        * 2.0
+                        * settings.meander_m;
+                let side = on.cross(dir).normalize_or_zero();
+                let centre = (on + side * (wander / cfg.radius_m)).normalize_or(on);
+                let east = Vec3::Y.cross(centre).normalize_or(Vec3::X);
+                let north = centre.cross(east);
+                let low = (0..6)
+                    .map(|j| {
+                        let ang = j as f32 * std::f32::consts::TAU / 6.0;
+                        let n = (centre + (east * ang.cos() + north * ang.sin()) * rim).normalize();
+                        planet_gen::surface_altitude_unrivered(cfg, n)
+                    })
+                    .fold(
+                        planet_gen::surface_altitude_unrivered(cfg, centre),
+                        f32::min,
+                    );
+                (low - sea).floor() as i32 - 1
+            })
+        };
+        let mut clamps = vec![[0i32; CEILING_SAMPLES]; rivers.len()];
+        let chunk = rivers.len().div_ceil(threads.max(1)).max(1);
+        std::thread::scope(|scope| {
+            for (n, out) in clamps.chunks_mut(chunk).enumerate() {
+                let (rivers, clamp_of) = (&rivers, &clamp_of);
+                scope.spawn(move || {
+                    for (i, c) in out.iter_mut().enumerate() {
+                        *c = clamp_of(rivers[n * chunk + i]);
+                    }
+                });
+            }
+        });
+        // Feeders first: each cell after every river cell draining into it.
+        let at: std::collections::HashMap<usize, usize> =
+            rivers.iter().enumerate().map(|(i, &k)| (k, i)).collect();
+        let down_of = |i: usize| -> Option<usize> {
+            let d = self.nodes[rivers[i]].down;
+            (d != NONE)
+                .then(|| at.get(&(d as usize)).copied())
+                .flatten()
+        };
+        let mut feeders = vec![0u32; rivers.len()];
+        for i in 0..rivers.len() {
+            if let Some(d) = down_of(i) {
+                feeders[d] += 1;
+            }
+        }
+        let mut ready: Vec<usize> = (0..rivers.len()).filter(|&i| feeders[i] == 0).collect();
+        // In a fixed order, so the table is the same however it is reached.
+        ready.sort_unstable_by_key(|&i| rivers[i]);
+        let mut incoming = vec![i32::MAX; rivers.len()];
+        let mut ceilings = std::collections::HashMap::with_capacity(rivers.len());
+        while let Some(i) = ready.pop() {
+            let k = rivers[i];
+            let mut ceiling = incoming[i].min(self.nodes[k].level);
+            let mut out = [0i32; CEILING_SAMPLES];
+            for (o, &c) in out.iter_mut().zip(&clamps[i]) {
+                ceiling = ceiling.min(c);
+                *o = ceiling;
+            }
+            ceilings.insert(k as u32, out);
+            if let Some(d) = down_of(i) {
+                incoming[d] = incoming[d].min(ceiling);
+                feeders[d] -= 1;
+                if feeders[d] == 0 {
+                    ready.push(d);
+                }
+            }
+        }
+        // Each reach ends at the level the reach it runs into starts at: a
+        // stream higher than the river it joins falls into it in its last
+        // stretch, so near a junction no point reads the higher stream's
+        // water above the river's.
+        // (Its first point, which is the lowest of the junction's start and
+        // its own first bank.)
+        for i in 0..rivers.len() {
+            let Some(d) = down_of(i) else {
+                continue;
+            };
+            let Some(first) = ceilings.get(&(rivers[d] as u32)).map(|c| c[0]) else {
+                continue;
+            };
+            if let Some(c) = ceilings.get_mut(&(rivers[i] as u32)) {
+                c[CEILING_SAMPLES - 1] = c[CEILING_SAMPLES - 1].min(first);
+            }
+        }
+        self.ceilings = ceilings;
+    }
+
+    /// The water's ceiling where `here` is (`river-downhill`), whole metres
+    /// over sea level; `None` without one (not `downhill`, or a cell the
+    /// table lacks).
+    pub fn ceiling(&self, here: &RiverHere) -> Option<i32> {
+        let c = self.ceilings.get(&here.node)?;
+        let i = ((here.t * CEILING_SAMPLES as f32) as usize).min(CEILING_SAMPLES - 1);
+        Some(c[i])
     }
 
     /// The near-river mask from the nodes.
@@ -358,6 +509,7 @@ impl RiverMap {
                 })
                 .collect(),
             near: Vec::new(),
+            ceilings: Default::default(),
         };
         map.fill_near();
         Some(map)
@@ -439,6 +591,8 @@ impl RiverMap {
                         } else {
                             Vec3::ZERO
                         },
+                        node: k as u32,
+                        t,
                     });
                 }
             }
@@ -615,8 +769,12 @@ pub fn map(cfg: &TerrainConfig, settings: &RiverSettings) -> &'static RiverMap {
         let path = river_cache::dir().map(|dir| river_cache::path_for(&dir, cfg.seed, w.digest));
         if let Some(path) = &path
             && let Some((size, nodes)) = river_cache::read(path, w.digest, &w.field)
-            && let Some(map) = RiverMap::from_filed(settings, size, nodes)
+            && let Some(mut map) = RiverMap::from_filed(settings, size, nodes)
         {
+            if settings.downhill {
+                let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+                map.fill_ceilings(cfg, settings, threads);
+            }
             return map;
         }
         let map = RiverMap::build(cfg, settings);
@@ -761,7 +919,7 @@ fn carve_near(cfg: &TerrainConfig, settings: &RiverSettings, d: Vec3, base: f32)
         let past = here.across_m - here.half_width_m - settings.bank_m - LEVEE_M;
         return base.max(levee_m(cfg, &here) - past.max(0.0));
     }
-    let top = top_here(cfg, settings, &here, d, base);
+    let top = top_of(cfg, settings, map(cfg, settings), &here, d, base);
     let water = cfg.sea_level_m + top as f32;
     // Under a fall of three layers or more, a plunge pool: two layers deeper
     // for two cells downstream of the step (M25's river tab).
@@ -790,6 +948,25 @@ fn carve_near(cfg: &TerrainConfig, settings: &RiverSettings, d: Vec3, base: f32)
     // valley meets it without a step.
     let rim = base.max(levee_m(cfg, &here));
     (bed + (rim - bed) * t).min(rim)
+}
+
+/// The water's top at a point of a river, whole metres over sea level:
+/// under `downhill` the river's ceiling there (`river-downhill`), so it never
+/// rises downstream; otherwise each point's own bank clamp ([`top_here`]).
+fn top_of(
+    cfg: &TerrainConfig,
+    settings: &RiverSettings,
+    map: &RiverMap,
+    here: &RiverHere,
+    d: Vec3,
+    base: f32,
+) -> i32 {
+    if settings.downhill
+        && let Some(c) = map.ceiling(here)
+    {
+        return c.min(here.level).max(0);
+    }
+    top_here(cfg, settings, here, d, base)
 }
 
 /// The levee's top round a reach, metres over the radius: a layer over its
@@ -872,7 +1049,7 @@ fn top_near(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Ve
     if base < cfg.sea_level_m - 1.0 {
         return None;
     }
-    let level = top_here(cfg, settings, &here, d, base);
+    let level = top_of(cfg, settings, map, &here, d, base);
     (level > 0).then_some(level)
 }
 
@@ -919,7 +1096,7 @@ fn far_near(
         return None;
     }
     let base = planet_gen::surface_altitude_unrivered(cfg, d);
-    let top = top_here(cfg, settings, &here, d, base);
+    let top = top_of(cfg, settings, map, &here, d, base);
     (top > 0).then_some(cfg.sea_level_m + top as f32)
 }
 
@@ -998,6 +1175,102 @@ mod tests {
 
     /// The drainage map built on many threads is the one-thread map, node for
     /// node (`river-cache` design 2): a core count never changes a river.
+    /// Version 11's rivers never run uphill (`river-downhill`): down every
+    /// river's line from its spring to the sea, every 2 m, the water's top
+    /// never rises. A river is a path of nodes, and no node is higher than
+    /// any before it.
+    #[test]
+    fn version_11_rivers_never_rise_downstream() {
+        let cfg = TerrainConfig::for_version(11).expect("version 11");
+        let settings = cfg.rivers.expect("rivers");
+        assert!(settings.downhill);
+        let map = map(&cfg, &settings);
+        let sea = cfg.sea_level_m.round() as i32;
+        // The springs: river cells no river cell drains into, spread over
+        // the body.
+        let fed: std::collections::HashSet<usize> =
+            map.rivers().filter_map(|k| map.down(k)).collect();
+        let springs: Vec<usize> = map
+            .rivers()
+            .filter(|k| !fed.contains(k))
+            .step_by(11)
+            .take(40)
+            .collect();
+        assert!(springs.len() >= 20, "{} springs", springs.len());
+        let (mut readings, mut rises, mut before_water) = (0, Vec::new(), 0);
+        // Version 10, the same rivers, for how much water they keep.
+        let v10 = TerrainConfig::for_version(10).unwrap();
+        for &k in &springs {
+            let course = map.course(map.describe(k).0, 0);
+            let mut last: Option<i32> = None;
+            for w in course.windows(2) {
+                if !w[0].river {
+                    break;
+                }
+                let metres = w[0].centre.angle_between(w[1].centre) * cfg.radius_m;
+                let steps = (metres / 2.0).ceil().max(1.0) as usize;
+                for i in 0..steps {
+                    let d = w[0]
+                        .centre
+                        .lerp(w[1].centre, i as f32 / steps as f32)
+                        .normalize();
+                    if !water(&v10, d).is_empty() {
+                        before_water += 1;
+                    }
+                    let Some(top) = water(&cfg, d).last().map(|w| w.0 - sea) else {
+                        continue;
+                    };
+                    readings += 1;
+                    if let Some(before) = last
+                        && top > before
+                    {
+                        rises.push((k, before, top));
+                    }
+                    last = Some(top);
+                }
+            }
+        }
+        assert!(readings > 2_000, "{readings} readings");
+        assert!(
+            rises.is_empty(),
+            "{} rises, the first {:?}",
+            rises.len(),
+            &rises[..rises.len().min(5)]
+        );
+        // A low bank upstream lowers what is below it; it does not dry the
+        // river out: nearly all of version 10's water points keep water.
+        assert!(
+            readings * 10 >= before_water * 9,
+            "{readings} points with water, version 10 had {before_water}"
+        );
+        eprintln!("{readings} points with water, version 10 had {before_water}");
+    }
+
+    /// Off the rivers' valleys version 11 is version 10: the ground the same,
+    /// bit for bit, wherever no river is near.
+    #[test]
+    fn version_11_is_version_10_off_the_rivers() {
+        let v10 = TerrainConfig::for_version(10).unwrap();
+        let v11 = TerrainConfig::for_version(11).unwrap();
+        let mut checked = 0;
+        for i in 0..4_000 {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / 4_000.0;
+            let r = (1.0 - y * y).sqrt();
+            let a = i as f32 * 2.399_963;
+            let d = Vec3::new(a.cos() * r, y, a.sin() * r);
+            if near(&v11, d, 40.0) {
+                continue;
+            }
+            checked += 1;
+            assert_eq!(
+                planet_gen::surface_altitude(&v10, d).to_bits(),
+                planet_gen::surface_altitude(&v11, d).to_bits(),
+                "at {d}"
+            );
+        }
+        assert!(checked > 3_000, "{checked}");
+    }
+
     #[test]
     fn the_map_built_on_every_core_is_the_one_thread_map() {
         let cfg = v8();

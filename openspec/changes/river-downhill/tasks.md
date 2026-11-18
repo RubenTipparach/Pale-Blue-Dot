@@ -9,12 +9,12 @@
       `GENERATOR_VERSION` 11; `for_version(11)`.
 - [x] The ceiling table, made with the map and on reading it.
 - [x] `top_at`, `carve` and `far_surface` take the ceiling under `downhill`.
-- [ ] Settled climate for version 11 shipped.
+- [x] Settled climate for version 11 shipped (`settle_climate` levels 3 and 5, 2 h 8 min on the desktop).
 
 ## 3. Tests
 - [x] `version_11_rivers_never_rise_downstream`.
 - [x] `version_11_is_version_10_off_the_rivers`.
-- [ ] Versions 8 to 10's ground unchanged.
+- [x] Versions 8 to 10's ground unchanged (their digests as `origin/main`'s; the pinned values fail on main too).
 
 ## 4. Show it
 - [ ] The instrument down the owner's river reads no rises; screenshots of
