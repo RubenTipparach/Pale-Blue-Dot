@@ -257,10 +257,13 @@ impl Builder<'_> {
 
 /// Hang a craft's meshes under its entity.
 pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
-    // Lit by the field wherever it stands (`lamps-and-lanterns` decision 10).
-    world
-        .entity_mut(entity)
-        .insert(crate::field_light::LitByField);
+    // Lit by the field wherever it stands (`lamps-and-lanterns` decision 10),
+    // and as the terrain is: its own sun and shadows, not Bevy's
+    // (`craft-lighting`; the owner: "can you properly light the raft?").
+    world.entity_mut(entity).insert((
+        crate::field_light::LitByField,
+        crate::field_light::LitLikeTerrain,
+    ));
     if super::model::AUTHORED.contains(&craft.kind) {
         super::model::build(world, entity, craft)
             .expect("vehicle model: regenerate and export from Blender");
