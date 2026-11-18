@@ -420,6 +420,16 @@ pub fn show_fish_keys(
             if row.left != shake {
                 row.left = shake;
             }
+            // A button with nothing to say is not shown (the right click
+            // before the line is cast).
+            let display = if line.is_empty() {
+                Display::None
+            } else {
+                Display::Flex
+            };
+            if row.display != display {
+                row.display = display;
+            }
         }
     }
     for (mut text, which) in &mut caps {

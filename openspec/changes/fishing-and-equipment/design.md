@@ -1008,11 +1008,16 @@ crosshair, which is F's again.
 
 | Phase | Left click | Right click |
 | --- | --- | --- |
-| Ready | HOLD TO CAST | CANCEL (dim) |
-| Charging | LET GO TO CAST | CANCEL (dim) |
-| Flying, Floating, Nibble | HOOK (dim) | CANCEL |
-| Bite | HOOK | CANCEL |
-| Hooked | HOLD TO REEL | CANCEL (dim) |
+| Ready | HOLD TO CAST | (not shown) |
+| Charging | LET GO TO CAST | (not shown) |
+| Flying, Floating, Nibble | HOOK (grey) | CANCEL (grey) |
+| Bite | HOOK (yellow, shaking) | CANCEL (grey) |
+| Hooked | HOLD TO REEL | (not shown) |
+
+The right click's CANCEL is always grey, never lit, though it works while
+the line is out and not hooked (owner, 2026-11-18: "right click cancle
+doesnt need to be highlighted"), and shows only while the line is cast
+("right click doesnt show up if the line isnt cast").
 
 The line under the crosshair no longer repeats what the corner says
 (Ready's "Hold the left button to cast" and Charging's "Let go to cast"

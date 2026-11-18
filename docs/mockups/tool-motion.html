@@ -86,6 +86,7 @@
      nothing now is dimmed (owner, 2026-11-18). Outlined text, no box. */
   .keys { position: absolute; left: 12px; bottom: 12px; display: grid; gap: 6px; font: 12px "IBM Plex Mono", monospace; color: #fffefe; pointer-events: none; text-shadow: -1px -1px 0 #010000, 1px -1px 0 #010000, -1px 1px 0 #010000, 1px 1px 0 #010000; }
   .keys div { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .keys div[hidden] { display: none; }
   .keys b { font-weight: 600; color: #fffefe; background: #4a5560; border: 1px solid #2a3138; border-radius: 2px; padding: 1px 5px; text-shadow: none; }
   .keys div.dim { opacity: 0.45; filter: grayscale(1); }   /* idle: grey and faded */
   .keys div.alert span { color: #faaf5c; }                    /* the bite: yellow, shaking */
@@ -2018,7 +2019,8 @@ views.fish = View("fish", v => {
         const L = { ready: "HOLD TO CAST", charging: "LET GO TO CAST", hooked: "HOLD TO REEL" }[F.phase] || "HOOK";
         const Llive = F.phase !== "flying" && F.phase !== "floating" && F.phase !== "nibble";
         const set = (k, text, live) => { const d = keysEl.querySelector(`[data-k="${k}"]`); d.lastElementChild.textContent = text; d.classList.toggle("dim", !live); };
-        set("left", L, Llive); set("right", "CANCEL", out);
+        set("left", L, Llive); set("right", "CANCEL", false);   // never lit (owner)
+        keysEl.querySelector('[data-k="right"]').hidden = !out;   // only once the line is cast (owner)
         keysEl.querySelector('[data-k="left"]').classList.toggle("alert", F.phase === "bite"); }
       const m = F.phase === "charging" ? ["CAST", F.power] : F.phase === "hooked" ? ["TENSION", F.tension] : null;
       meter.hidden = !m;

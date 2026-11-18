@@ -1108,9 +1108,13 @@ pub fn land(
     true
 }
 
-/// What the left and the right click do in `phase`, and whether each does
-/// anything now (`fishing-and-equipment`, "Both buttons, bottom left").
+/// What the left and the right click do in `phase`, and whether each is
+/// drawn lit (`fishing-and-equipment`, "Both buttons, bottom left"). The
+/// right click's CANCEL is never lit (owner, 2026-11-18: "right click cancle
+/// doesnt need to be highlighted"); the left lights when it does something.
 pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
+    // The right click shows only while the line is out (owner, 2026-11-18:
+    // "right click doesnt show up if the line isnt cast").
     let out = matches!(
         phase,
         Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
@@ -1122,7 +1126,7 @@ pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
         Phase::Bite => ("HOOK", true),
         Phase::Flying | Phase::Floating | Phase::Nibble => ("HOOK", false),
     };
-    [left, ("CANCEL", out)]
+    [left, (if out { "CANCEL" } else { "" }, false)]
 }
 
 /// The standing line under the crosshair while the rod is out.

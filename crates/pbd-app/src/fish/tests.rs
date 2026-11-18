@@ -524,8 +524,8 @@ fn smaller_water_makes_smaller_fish() {
 }
 
 /// Both buttons show in every phase with what each does now (owner,
-/// 2026-11-18): only the left hooks, and only at the bite is it live; the
-/// right cancels whenever the line is out and not hooked.
+/// 2026-11-18): only the left hooks, lit only at the bite; the right's
+/// CANCEL is never lit.
 #[test]
 fn both_buttons_say_what_they_do_in_every_phase() {
     use pbd_core::fishing::Phase;
@@ -538,9 +538,14 @@ fn both_buttons_say_what_they_do_in_every_phase() {
         (Phase::Bite, ("HOOK", true), true),
         (Phase::Hooked, ("HOLD TO REEL", true), false),
     ];
-    for (phase, left, cancel) in table {
+    for (phase, left, _) in table {
         let [l, r] = super::keys_for(phase);
         assert_eq!(l, left, "{phase:?}");
-        assert_eq!(r, ("CANCEL", cancel), "{phase:?}");
+        let cancel = if matches!(phase, Phase::Ready | Phase::Charging | Phase::Hooked) {
+            ""
+        } else {
+            "CANCEL"
+        };
+        assert_eq!(r, (cancel, false), "{phase:?}");
     }
 }
