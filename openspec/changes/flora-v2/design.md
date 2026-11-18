@@ -793,6 +793,83 @@ are baked into its impostors and fade with it, and the near draw's vertex
 count is the model's (`near_vertices` reads the kit). A core test pins that a
 vine hangs from an anchor and that no vine is longer than the trunk is tall.
 
+**Faint from the ground (measured 2026-11-18).** `v10-jungle.jpg` shows the
+vines only faintly. Measured off the built models (`tree_kit::tests::
+report_the_vines`, an instrument: strands per tree, card width, longest
+strand, lowest vine leaf, over the four variants) and the draw's own numbers:
+
+| | strands a tree | card width | longest strand | lowest vine leaf |
+| --- | ---: | ---: | ---: | ---: |
+| kapok | 4.25 | 0.16 m | 2.9 m | 4.9 m up |
+| palm | 1.25 | 0.16 m | 1.9 m | 4.8 m up |
+| willow | 9.75 | 0.16 m | 2.4 m | 0.7 m up |
+
+What each suspect came to:
+
+- **Thin cards: the main cause.** A card is 0.08 m wide at its root and
+  0.16 m at its tip, a tenth of a crown card's 1.3 m. The camera's 60°
+  vertical view on 1200 rows is 0.96 cm a pixel at 10 m, so a card is 8 to
+  17 px wide there; and the kapok's twig cut (`leaf_mask` 1, five leaflets on
+  a midrib) keeps 37 % of the card, with a 2-texel midrib (1 cm, one pixel)
+  and leaflets of about 3 cm (three pixels). A strand is a dotted line.
+- **Colour equal to the leaves: the second.** A vine took the crown's leaf
+  tile and colour exactly, and from the ground it hangs in front of the
+  crown's own underside, so the few pixels it has are the crown's.
+- **Distance: strands stay in the crown.** A kapok's anchors are on its
+  limbs at 7 to 8.5 m; strands of 3 to 6 cards of at most 0.5 m end 4.9 m
+  up at the lowest, above the eye's view from the ground at a level pitch.
+- **Count per tree: thin.** 4.25 strands a kapok, 1.25 a palm.
+- **Culling: not a cause.** A leaf card's triangle turns to face the eye
+  (the pass culls back faces), so both sides draw; but a single card seen
+  edge-on is nothing, and each strand faced one random bearing.
+- **The far bake: not a cause from the ground.** The near model reaches
+  `tree_near_m` (44 m); past it the bake carries the vines at 48 px a view,
+  where a 0.16 m card is under a pixel. It matters only at a distance.
+
+**Fix (draw-time, the kit only).** In `tree_kit::build`:
+
+- each strand's card is **crossed** (two cards at right angles), so it reads
+  from every side;
+- a card is **0.5 m wide** at its broad end (`VINE_WIDTH_M`), pieces up to
+  0.8 m (`VINE_PIECE_M`), 4 to 7 cards a strand (`VINE_CARDS`), still no
+  longer than 0.8 of the lowest anchor's height, so a kapok's strands hang to
+  2.4 m and a palm's to 1.6 m: into the eye's height;
+- a kapok's chance of a vine on an anchor goes from 0.35 to 0.6, a palm's
+  from 0.2 to 0.4; a willow's (whose weeping strands are already long) stays
+  0.25.
+
+In `planet_surface.wgsl`, a vine card (bit 17 of the kit's vertex word,
+`TreeVertex::vine`, carried in `split.z`) takes:
+
+- **its own cut** (`leaf_mask` 3, `VINE_MASK`): a stem the card's whole
+  length and three broad leaves on it side to side, 55 % of the card, so a
+  strand of cards is one leafy rope and not a dotted line;
+- **its own green**, the crown's leaf colour times `VINE_TINT` (1.08, 1.12,
+  0.62): a little yellower and lighter than the crown, lit and shaded as the
+  crown's leaves are, no outline and no dark edge.
+
+The bake (`tree_bake`) takes the same green and the same cut
+(`tree_kit::vine_mask`), so a far tree's strands are leafy and the same
+colour. After: kapok 6.75 strands a tree, palm 2.25, cards 0.5 m, the longest
+5.4 m, the lowest leaf 2.4 m up (kapok) and 1.6 m (palm). Near vertices a
+tree, largest variant: kapok 708 to 1068, palm 498 to 696, willow 1548 to
+2028 (still under the oak's 2844 and the pine's 6066); the frame cost was not
+measured (a cloud session).
+
+**Saved worlds.** Nothing a save holds changes. Where a tree stands, its
+species, variant, size and turn are the generator's and untouched; a model's
+bark, crown and fruit anchors are built before the vines, from the model's
+own stream, and are the same; the vines draw from their own stream
+(`0x7a1e + ...`), so which anchors carry one changes, and that is all. No
+record names a vertex, and no generator version moves.
+
+Verify: `vines_read_from_the_ground` (kapok at least 6 strands, cards at
+least 0.45 m, a strand at least 3.5 m, the lowest leaf at most 3.5 m up;
+palm at least 2 strands; every vine card and nothing else marked a vine);
+`the_shaders_vine_is_the_kits` (the WGSL's tint, cut code and cut lines);
+the jungle from the ground before and after, the same view and time
+(`docs/screenshots/flora-2-1/`).
+
 ### 12.5 Fruit to pick
 
 9.6 drew the fruit and left it "not gatherable yet". Now:
@@ -824,6 +901,21 @@ vine hangs from an anchor and that no vine is longer than the trunk is tall.
   `identity.ron` the first time one is stored; nothing else in a save
   changes. Fruit decided by the generator's table is derived and never saved;
   only what a player took is.
+
+**The capture instrument's 26 m (found 2026-11-18).** `--take-trees` picked
+and felled nothing nearer than 26 m though trunks stood 3 m from the eye.
+Logged at the moment it chose: the eye was where it should be (1.6 m over
+the ground, 63.6 m elevation), but the nearest finest record lay 23.4 m off
+along the ground. Its 30 frames counted from `READY`, and with `--spawn` the
+set standing then was laid before the walker came to rest, so it had no
+records under the eye and the trees it chose were the nearest at that
+set's edge. Now the frames count only once the set has a record within 4 m
+of the eye: at the same spot it picks at 3, 6 and 11 m and fells from 6 m
+(53 trees in view against 19). It also fired twice (`> 30` let frame 30
+through and then 31); it fires once. `--pick-trees` is the same instrument
+picking only, so a picked tree is shown bare among the trees it stood with.
+The game's own F and axe read the set as it stands while the player plays,
+long after any spawn; this was the instrument's timing, not theirs.
 
 ### 12.6 The ground follows the seasons
 
@@ -1082,6 +1174,31 @@ rule, as 12.10 is:
   beach, which the owner's question asks for.
 - A tide range set to nought in `water.ron` puts the line at the sheet,
   0.5 m under the sea level, which is what the sea covers then.
+
+**Measured 2026-11-18: it leaves no acacia at all** (task 7.8). An
+instrument, `planet::lod::flooded_ground::where_a_beach_acacia_stands`
+(ignored; `--ignored --nocapture` prints), sweeps the body a degree at a
+time for beach cells (1,527 of them) and searches the finest cells within
+40 m of each for one whose far record and tier record both stand a tree. It
+finds none: the highest beach cell tops out at **1.0 m**, under the high
+water's **1.5 m**, so every beach cell carries `FLOODED_BIT`. The beach is
+the band under `sea + beach_band_m` (2 m), and the surface comes in whole
+metres, so its tops are at 0 and 1 m only. The acacia is the beach's one
+species (`BIOME_TREES`, the shader's `tree_species`) and grows nowhere
+else, so since 12.11 no version 10 world shows one. The acacia captured on
+2026-11-15 (`v10-beach-acacias.jpg`, `44.333 -15.791`, its sand at 1.0 m)
+stood in the tide; the same spot today is bare sand
+(`docs/screenshots/flora-2-1/beach-acacia-then-now.jpg`).
+
+What would bring it back is the owner's to choose, with these shots beside
+it (a look change; not made):
+- **A. Stand the acacia on the dry grass behind the beach** (the first cells
+  over the 2 m line, by the beach): what a coastal acacia looks like, and no
+  tree in the tide. It moves where trees stand, so it is a new generator
+  version (12.1), version 11, and old worlds keep theirs.
+- **B. Leave beaches bare** and give the acacia a dry biome of its own when
+  one exists (the savanna is not a biome yet). Nothing to build now.
+- Recommendation: A, when the owner next looks at the beaches.
 
 **Verify.**
 - A test at the owner's spot: no tier or far record under the high-water

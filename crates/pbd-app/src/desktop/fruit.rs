@@ -296,7 +296,8 @@ pub fn pick(
 /// are marked picked today and the next twelve trees felled, as `fruit` and
 /// `tree` records stored as the player's (the records a player's hands
 /// write; the instrument's liberty is not walking to each). The draw then
-/// leaves their fruit and the felled trees out.
+/// leaves their fruit and the felled trees out. `--pick-trees` picks and
+/// fells nothing.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
@@ -311,17 +312,12 @@ pub fn scripted(
     gather: Option<Res<pbd_app::config::GatherConfig>>,
     mut done: Local<u32>,
 ) {
-    if !launch.take_trees || *done > 30 {
+    if !launch.take_trees || *done >= 30 {
         return;
     }
     let (Some(scatter), Some(gather)) = (scatter, gather) else {
         return;
     };
-    *done += 1;
-    if *done < 30 {
-        // A few frames for the fine set to land round the camera.
-        return;
-    }
     let (Some(fine), Some(save)) = (fine, save.as_deref_mut()) else {
         return;
     };
@@ -332,6 +328,26 @@ pub fn scripted(
         pbd_app::render_origin::local_of(frame.as_deref(), transform.translation()),
         transform.forward().as_vec3(),
     );
+    // The frames count once the fine set has records under the camera. A
+    // set laid before the walker came to rest has none there: the trees
+    // chosen from it were the nearest at its edge, 26 m and more away.
+    let under = fine
+        .set
+        .finest_records()
+        .iter()
+        .map(|r| {
+            let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+            d.angle_between(eye.normalize_or(Vec3::Y)) * PLANET_RADIUS
+        })
+        .fold(f32::MAX, f32::min);
+    if under > 4.0 {
+        return;
+    }
+    *done += 1;
+    if *done < 30 {
+        // A few frames for the fine set to land round the camera.
+        return;
+    }
     let table = pbd_app::planet::terrain_config().trees;
     let day = sun
         .as_ref()
@@ -364,13 +380,40 @@ pub fn scripted(
     let felled_at: Vec<(f32, u32)> = trees
         .iter()
         .filter(|t| !picked.contains(&t.1))
-        .take(12)
+        .take(if launch.pick_only { 0 } else { 12 })
         .map(|t| (t.0, t.1))
         .collect();
     let felled: Vec<u32> = felled_at.iter().map(|t| t.1).collect();
     info!(
-        "TAKE_TREES felled at {:?} m",
-        felled_at.iter().map(|t| t.0.round()).collect::<Vec<_>>()
+        "TAKE_TREES felled at {:?} m, picked at {:?} m; eye {:.1} m from the centre, \
+         the nearest finest record {:.1} m off; under the eye (along the ground, \
+         height over it) {:?}; the set's anchor {:.1} m off, its finest ring {:?} m",
+        felled_at.iter().map(|t| t.0.round()).collect::<Vec<_>>(),
+        trees
+            .iter()
+            .filter(|t| picked.contains(&t.1))
+            .map(|t| t.0.round())
+            .collect::<Vec<_>>(),
+        eye.length(),
+        fine.set
+            .finest_records()
+            .iter()
+            .map(|r| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+                (d * (PLANET_RADIUS + r.direction_height[3]) - eye).length()
+            })
+            .fold(f32::MAX, f32::min),
+        fine.set
+            .finest_records()
+            .iter()
+            .map(|r| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+                let along = d.angle_between(eye.normalize_or(Vec3::Y)) * PLANET_RADIUS;
+                (along, eye.length() - PLANET_RADIUS - r.direction_height[3])
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0)),
+        fine.set.metres_from_anchor(eye),
+        fine.set.rings()[3],
     );
     let mut records = Vec::new();
     for cell in &picked {

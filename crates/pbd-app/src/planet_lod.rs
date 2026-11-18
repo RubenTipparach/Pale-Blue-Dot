@@ -3041,4 +3041,80 @@ mod flooded_ground {
             "the spot stood no tree in the water before"
         );
     }
+
+    /// `flora-v2` 7.8's instrument: where a beach's acacia stands above the
+    /// high water since 12.11. A one-degree sweep finds beach cells, then the
+    /// finest cells within 40 m of each are searched for one whose far record
+    /// and tier record both stand a tree on beach sand. Prints the first
+    /// few, with the eye's `--at` (lat lon); run with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore = "an instrument: prints where a beach acacia stands"]
+    fn where_a_beach_acacia_stands() {
+        let cfg = crate::planet::terrain_config();
+        let flooded = 1 << crate::planet::terrain::FLOODED_BIT;
+        let mut found = 0;
+        let (mut spots, mut dry, mut far_trees, mut near_trees) = (0, 0, 0, 0);
+        let mut highest = f32::MIN;
+        'sweep: for lat in (-50..=50).map(|d| d as f32) {
+            for lon in (-180..180).map(|d| d as f32) {
+                let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                    lat: lat.to_radians(),
+                    lon: lon.to_radians(),
+                });
+                let word = surface_code(d, surface_height(d));
+                if (word >> 8) & 0xff != 1 {
+                    continue;
+                }
+                spots += 1;
+                let cells =
+                    Lattice::default().cells_in_band(FINEST_LEVEL, d, 0.0, 40.0 / PLANET_RADIUS);
+                for local in &cells {
+                    let dir = local.cell.direction;
+                    let height = surface_height(dir);
+                    let far = surface_code(dir, height);
+                    if (far >> 8) & 0xff == 1 {
+                        highest = highest.max(height);
+                    }
+                    if (far >> 8) & 0xff != 1 || far & flooded != 0 {
+                        continue;
+                    }
+                    dry += 1;
+                    let column = pbd_core::column::generate_solid(cfg, dir);
+                    let mut finest = vec![<crate::planet::GpuCell as bytemuck::Zeroable>::zeroed()];
+                    finest[0].metadata[1] = far;
+                    crate::planet::column::reconcile_surface(&mut finest, &[], 0, &column);
+                    let near = finest[0].metadata[1];
+                    let id = tree_id(local);
+                    far_trees += usize::from(pbd_core::flora::grows_tree(&cfg.trees, id, far));
+                    near_trees += usize::from(pbd_core::flora::grows_tree(&cfg.trees, id, near));
+                    if pbd_core::flora::grows_tree(&cfg.trees, id, far)
+                        && pbd_core::flora::grows_tree(&cfg.trees, id, near)
+                    {
+                        let at = pbd_core::geo::lat_lon(dir).degrees();
+                        println!(
+                            "BEACH_ACACIA at {:.4} {:.4}, top {height:.1} m, material {}",
+                            at.0,
+                            at.1,
+                            near & 0xff
+                        );
+                        found += 1;
+                        if found >= 6 {
+                            break 'sweep;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        println!(
+            "BEACH_ACACIA swept {spots} beach spots, {dry} dry beach cells near them, \
+             {far_trees} far and {near_trees} tier records standing a tree; the highest \
+             beach cell {highest:.2} m, the high water {:.2} m",
+            crate::planet::terrain::high_water_m()
+        );
+        // 2026-11-18: none. Every beach cell tops out at 1 m, under the high
+        // water (1.5 m), so 12.11 stands no tree on any beach (flora-v2 7.8).
+        let _ = found;
+    }
 }

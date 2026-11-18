@@ -1317,6 +1317,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // The mockup's root-to-tip AO.
             out_shade = mix(0.45, 1.0, f32((word >> 8u) & 0xffu)/255.0);
             tree_split.y = card;
+            // A vine's card (design 12.4): its own green and cut.
+            tree_split.z = f32((word >> 17u) & 1u);
         } else if local >= vmax && local < vmax + 60u {
             // ---- fruit (`flora-v2` design 9.6, 10.6): four hanging from the
             // model's anchors (its last twigs, "on wood, never floating"),
@@ -2386,6 +2388,11 @@ fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f
 // LEAF_DETAIL and SOLID_DETAIL; a test holds them.
 const LEAF_DETAIL: f32 = 0.45;
 const SOLID_DETAIL: f32 = 0.7;
+// A vine's own green and cut (design 12.4): the crown's leaf colour turned a
+// little yellower and lighter, and a leafy rope rather than a twig's leaves.
+// `pbd_core::tree_kit`'s VINE_TINT and VINE_MASK; a test holds them.
+const VINE_TINT = vec3<f32>(1.08, 1.12, 0.62);
+const VINE_MASK: u32 = 3u;
 const BEACH_BIOME: u32 = 1u;
 // The savanna's dry olive (`foliage.html`, `RAMPS.savannaLeaf`): linear
 // luminance from 0.07 to 0.23 through three sRGB colours.
@@ -2597,6 +2604,18 @@ fn leaf_mask(uv: vec2<f32>, m: u32) -> bool {
         }
         return false;
     }
+    if m == 3u {
+        // A vine (design 12.4): a stem the card's whole length and three
+        // broad leaves on it, side to side, so a strand of cards reads as
+        // one leafy rope.
+        if ax < 0.06 { return true; }
+        for (var k = 0u; k < 3u; k++) {
+            let s = f32(k%2u)*2.0 - 1.0;
+            let d = vec2(x - s*0.18, y - (f32(k) + 0.5)/3.0)/vec2(0.2, 0.2);
+            if dot(d, d) < 1.0 { return true; }
+        }
+        return false;
+    }
     if m == 2u {
         if ax < 0.035 && y < 0.95 { return true; }
         if ax > 0.46*(1.0 - y*0.8) || y > 0.95 { return false; }
@@ -2770,6 +2789,7 @@ fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
         var albedo = tree_texel(kit[sh + 1u], input.uv);
         if (flags & 2u) != 0u { albedo = olive(albedo); }
         albedo = mix(vec3(kit_f(sh + 8u), kit_f(sh + 9u), kit_f(sh + 10u)), albedo, LEAF_DETAIL);
+        if input.split.z > 0.5 { albedo *= VINE_TINT; }
         // The last leaves hanging on into winter keep their autumn colour.
         let season = season_at(normalized(input.position));
         if deciduous { albedo = tree_autumn(albedo, tree, input.split.y, max(season.x, season.y)); }
@@ -2787,7 +2807,7 @@ fn tree_dropped(input: VertexOut) -> bool {
     if code == IMPOSTOR_CODE && (impostor_pixel(input) >> 24u) < 128u { return true; }
     if code == TREE_LEAF_CODE {
         let sh = min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS;
-        if !leaf_mask(input.uv, kit[sh + 2u]) { return true; }
+        if !leaf_mask(input.uv, select(kit[sh + 2u], VINE_MASK, input.split.z > 0.5)) { return true; }
         if (kit[sh + 3u] & 1u) != 0u
             && h12(vec2(floor(input.split.y*255.0), f32(input.seed & 1023u))) < season_at(normalized(input.position)).y {
             return true;
