@@ -92,41 +92,6 @@ fn heading(c: &Craft) -> f64 {
 fn main() {
     println!("defaults; R=4799.5m; g=25m/s^2; 60Hz x4; flat sea; no gusts; clock=1000s");
     let mut w = World::new();
-    w.wind = Vec3::X * 11.0;
-    let course = 30_f64.to_radians();
-    let mut c = craft(Kind::Tern, 0.2, course);
-    if let CraftState::Tern(s) = &mut c.state {
-        s.sheet = 0.3;
-    }
-    w.run(&mut c, 60.0, |c| {
-        let error = (course - heading(c) + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
-            - std::f64::consts::PI;
-        Input {
-            steer: (error * 3.0).clamp(-1.0, 1.0) as f32,
-            ..Default::default()
-        }
-    });
-    if let Telemetry::Tern(t) = &c.telemetry {
-        println!(
-            "Tern 60deg close reach 11m/s wind 60s sheet=.3 helm: speed={:.4}m/s VMG={:.4}m/s heel={:.4}deg",
-            t.speed,
-            t.upwind,
-            t.heel.to_degrees()
-        );
-    }
-    let mut w = World::new();
-    w.current = DVec3::X * 2.0;
-    let mut c = craft(Kind::Tern, 0.2, 0.0);
-    c.body.velocity = w.current;
-    w.run(&mut c, DT, |_| Input::default());
-    if let Telemetry::Tern(t) = &c.telemetry {
-        println!(
-            "Tern comoving 2m/s cross-current one tick: leeway={:.4}deg",
-            t.leeway.to_degrees()
-        );
-    }
-
-    let mut w = World::new();
     let mut c = craft(Kind::Loon, 0.1, 0.0);
     w.run(&mut c, 20.0, |_| Input {
         forward: 1.0,

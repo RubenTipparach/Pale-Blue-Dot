@@ -35,9 +35,10 @@ pub struct VehicleRecord {
     pub mooring: Option<([f64; 3], f64, bool)>,
     /// Who it belongs to; nobody yet, in a world with one player.
     pub owner: Option<String>,
-    /// The Kestrel's nacelles and brake, kept in layout 1 for the retired
-    /// records that carry them (`retire-kestrel` decision 2); the Tern's
-    /// sheet.
+    /// The Kestrel's nacelles and brake and the Tern's sheet, kept in
+    /// layout 1 for the retired records that carry them (`retire-kestrel`
+    /// decision 2, `retire-tern` decision 1). No craft this build sails
+    /// writes them.
     pub nacelle: Option<f64>,
     pub brake: Option<bool>,
     pub sheet: Option<f64>,
@@ -70,10 +71,6 @@ impl Craft {
     /// quits aboard comes back on foot beside the craft, which is where the
     /// load puts them, and the craft is unattended until they board again.
     pub fn record(&self) -> VehicleRecord {
-        let (nacelle, brake, sheet) = match &self.state {
-            CraftState::Tern(s) => (None, None, Some(s.sheet)),
-            CraftState::Loon(_) | CraftState::Cog(_) => (None, None, None),
-        };
         let yard = match &self.state {
             CraftState::Cog(s) => Some(s.yard),
             _ => None,
@@ -91,9 +88,9 @@ impl Craft {
                 .mooring
                 .map(|m| (m.at.to_array(), m.length, m.anchored)),
             owner: None,
-            nacelle,
-            brake,
-            sheet,
+            nacelle: None,
+            brake: None,
+            sheet: None,
             berth: self.berth,
             yard,
             made: self.made,
@@ -155,11 +152,6 @@ impl Craft {
             anchored,
         });
         match &mut craft.state {
-            CraftState::Tern(s) => {
-                if let Some(sheet) = record.sheet.filter(|s| s.is_finite()) {
-                    s.sheet = sheet.clamp(0.0, 1.0);
-                }
-            }
             CraftState::Cog(s) => {
                 let reach = (craft.specs.cog.sail.brace_deg as f64).to_radians();
                 if let Some(yard) = record.yard.filter(|y| y.is_finite()) {
@@ -182,7 +174,7 @@ mod tests {
         let hulls = Hulls::new(&specs);
         let q = DQuat::from_rotation_y(0.7);
         let mut craft = Craft::new(
-            Kind::Tern,
+            Kind::Rowboat,
             42,
             specs.clone(),
             hulls.clone(),
@@ -206,7 +198,7 @@ mod tests {
         let file: VehicleFile = ron::from_str(&text).unwrap();
         let back = Craft::from_record(&file.vehicles[0], specs, hulls).unwrap();
         assert_eq!(back.id, 42);
-        assert_eq!(back.kind, Kind::Tern);
+        assert_eq!(back.kind, Kind::Rowboat);
         assert!((back.reference_position() - craft.reference_position()).length() < 1e-9);
         assert!(back.body.orientation.angle_between(q) < 1e-9);
         assert_eq!(back.bilge_kg, 12.5);

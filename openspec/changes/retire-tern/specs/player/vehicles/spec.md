@@ -4,7 +4,7 @@
 When a world opens with the walker over the sea within 6 m of a craft record
 the game has retired, the walker SHALL be put on the nearest dry land,
 keeping its heading. A walker anywhere else SHALL be loaded exactly where the
-save left it (`vehicles::place::tests::a_walker_at_a_retired_craft_over_the_sea_goes_ashore`).
+save left it (`vehicles::tests::a_walker_at_a_retired_craft_over_the_sea_goes_ashore`).
 
 #### Scenario: Saved aboard a Tern
 - **WHEN** a world saved with the player aboard its Tern is opened by a build
@@ -14,7 +14,7 @@ save left it (`vehicles::place::tests::a_walker_at_a_retired_craft_over_the_sea_
 ### Requirement: Harbours moor no Tern
 A harbour template's `sail` boats SHALL make no craft, and a berth whose
 craft is held as a retired record SHALL count as made, so it is not filled
-again (`towns::tests::harbours_moor_their_boats_on_the_water_once`).
+again (`towns::tests::every_harbours_boats_are_made_once_at_their_berths`).
 
 #### Scenario: A harbour in an old world
 - **WHEN** a world saved with harbour Terns is opened and the player comes to
@@ -25,7 +25,8 @@ again (`towns::tests::harbours_moor_their_boats_on_the_water_once`).
 ### Requirement: A chase camera avoids terrain
 A chase camera SHALL shorten its boom when terrain obstructs it, with a
 positive clearance, and retain the requested zoom distance for when the
-obstruction clears. This correction SHALL NOT ease or delay raw mouse look.
+obstruction clears. This correction SHALL NOT ease or delay raw mouse look
+(`vehicles::chase::tests::a_shore_shortens_the_boom_and_clear_ground_restores_it`).
 
 #### Scenario: Canoe beside a steep shore
 - **WHEN** the Loon's desired chase camera lies behind shoreline terrain
@@ -33,7 +34,7 @@ obstruction clears. This correction SHALL NOT ease or delay raw mouse look.
 
 ### Requirement: Boat telemetry reads water motion apart from ground motion
 Boat telemetry SHALL report motion through water separately from motion over
-ground.
+ground (`vehicle::tests::loon_instruments_separate_water_motion_from_ground_motion`).
 
 #### Scenario: Drifting with a cross-current
 - **WHEN** a boat moves with the water in a cross-current

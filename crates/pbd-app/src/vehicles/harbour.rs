@@ -2,8 +2,9 @@
 //! use any boat you find"), and the stowing that keeps a world of them cheap.
 //!
 //! Each boat the harbour's template moors on the water is a craft record,
-//! made once when the fleet first meets the harbour: a sailing boat is a
-//! Tern, a rowboat or a canoe a Loon. It lies at its berth on the planet's
+//! made once when the fleet first meets the harbour: a rowboat is a
+//! Rowboat, a canoe a Loon. (A sailing boat was a Tern, retired in
+//! `retire-tern`; its berth stays empty.) It lies at its berth on the planet's
 //! water, anchored to the seabed under it, and is tagged with its berth so it
 //! is never made twice, wherever the player sails it. A craft further than
 //! [`STOW_M`] from the viewer is kept as its record only, and comes back
@@ -34,31 +35,32 @@ pub const STOW_M: f64 = 1500.0;
 pub const WAKE_M: f64 = 1200.0;
 
 /// The game's craft for a mockup boat (`cities-in-the-world` task 4.2b): a
-/// sailing boat is a Tern, a rowboat a Rowboat and a canoe a Loon, each
-/// drawn as the mockup draws it.
-pub fn kind_of(boat: &str) -> Kind {
+/// rowboat is a Rowboat and a canoe a Loon, each drawn as the mockup draws
+/// it. A sailing boat was a Tern, which is retired (`retire-tern`, owner
+/// 2026-11-17): its berth is left empty.
+pub fn kind_of(boat: &str) -> Option<Kind> {
     match boat {
-        "sail" => Kind::Tern,
-        "rowboat" => Kind::Rowboat,
-        _ => Kind::Loon,
+        "sail" => None,
+        "rowboat" => Some(Kind::Rowboat),
+        _ => Some(Kind::Loon),
     }
 }
 
 /// The water a harbour boat needs under it at a mooring, m of the drawn sea,
-/// from its hull in `vehicles.ron`. The Loon's hull is 0.36 m deep; the
-/// Tern's keel lifts into its hull in shallow water (`TernSpec::lift`), and
-/// then it draws 0.3 m. The drawn sea lies half a metre under the layers' sea
+/// from its hull in `vehicles.ron`. The Loon's hull is 0.36 m deep. The
+/// drawn sea lies half a metre under the layers' sea
 /// level (`water.ron`), so a seabed one layer down holds 0.5 m of it, which
-/// floats either. (A new world's own two boats are placed with more margin,
-/// `place::TERN_DEPTH_M` and `LOON_DEPTH_M`, in open water.)
+/// floats it. (A new world's own Loon is placed with more margin,
+/// `place::LOON_DEPTH_M`, in open water.)
 const DRAWS_M: f32 = 0.5;
 
 /// A harbour's boats the fleet does not hold yet (`made` names the berths it
 /// does), each at its berth on the water, anchored to the seabed under it
 /// and tagged with its berth, numbered from `next_id`. `floor` is the solid
 /// ground's radius under a direction and `sea_radius` the water's. Returns
-/// the craft, and how many berths were skipped: over land, or over water
-/// shallower than a harbour boat draws ([`DRAWS_M`]).
+/// the craft, and how many berths were skipped: over land, over water
+/// shallower than a harbour boat draws ([`DRAWS_M`]), or a sailing boat's,
+/// whose Tern is retired.
 #[allow(clippy::too_many_arguments)]
 pub fn boats_for(
     site: u32,
@@ -82,6 +84,10 @@ pub fn boats_for(
         if made.contains(&berth) {
             continue;
         }
+        let Some(kind) = kind_of(&boat.kind) else {
+            skipped += 1;
+            continue;
+        };
         let Some((direction, bow)) = sea::boat_pose(&chart, patch, boat, template.grid.cell_m)
         else {
             skipped += 1;
@@ -89,7 +95,6 @@ pub fn boats_for(
         };
         let bed = floor(direction);
         let depth = sea_radius - bed;
-        let kind = kind_of(&boat.kind);
         if depth < DRAWS_M {
             skipped += 1;
             continue;
@@ -327,12 +332,15 @@ fn viewer(world: &mut World) -> Option<DVec3> {
         .map(|(_, at)| at.translation().as_dvec3() - centre)
 }
 
-/// Every berth the fleet holds a craft of, in the world or stowed.
-fn made(world: &mut World) -> BTreeSet<(u32, u32)> {
+/// Every berth the fleet holds a craft of: in the world, stowed, or held
+/// as a retired kind's record (`retire-tern` decision 3), so a retired
+/// boat's berth is never filled again.
+pub(super) fn made(world: &mut World) -> BTreeSet<(u32, u32)> {
     let mut query = world.query::<&Vehicle>();
     let mut out: BTreeSet<(u32, u32)> = query.iter(world).filter_map(|v| v.craft.berth).collect();
     if let Some(fleet) = world.get_resource::<Fleet>() {
         out.extend(fleet.stowed.iter().filter_map(|r| r.berth));
+        out.extend(fleet.retired.iter().filter_map(|r| r.berth));
     }
     out
 }
@@ -417,7 +425,7 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
             continue;
         }
         info!(
-            "{}: {} boats moored{}, {skipped} berths skipped (over land or too shallow)",
+            "{}: {} boats moored{}, {skipped} berths skipped (over land, too shallow, or a retired sailing boat's)",
             h.site.name,
             crafts.len() - usize::from(cog),
             if cog { " and its cog" } else { "" }

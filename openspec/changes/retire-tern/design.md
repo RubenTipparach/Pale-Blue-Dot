@@ -75,7 +75,9 @@ aboard, so a player who quit aboard loads at the seat. With the Tern held
 aside that is open water, possibly far from land.
 
 On the fleet's first spawn after a load, if the walker stands over the sea
-within 6 m of a held retired record, it is moved to the nearest dry land
+(the ground under it, a harbour's dug berths included, below the sea's
+surface: `place::floor`) within 6 m of a held retired record, it is moved to
+the nearest dry land
 (`PlanetContact::find_land_near`, the start search's own rule), keeping its
 heading. The log says so. Any other load is untouched: a player who was
 merely swimming somewhere else is not moved.
@@ -139,8 +141,13 @@ moored craft lie within 1 degree of upright, which a wrong frame after
 So the boats that stay can show the same thing: a Loon or rowboat in a world
 made before the tide fix, or one that ships water at its berth, lies swamped
 and tipped until a player boards it and bails. A fresh world on the current
-build was run for 100 s near Marenstrand: its harbour rowboat nearest the
-player took on 57 kg, and none heeled past 1 degree. Fixing it (a drain for
+build was run for 100 s near Marenstrand with no rain: its harbour rowboat
+nearest the player took on 70 kg over its rim at the berth (57 kg in the
+first 10 s) and kept it, though it still sat within 1 degree of upright.
+Two others nearby did tip: opened with the walker beside them for 5 s,
+harbour rowboats 13 and 14 took on 150 kg each and heeled 27 to 34 degrees,
+the same in the build before this change and after it
+(`docs/screenshots/retire-tern/swamped-rowboat.jpg`). Fixing it (a drain for
 an unattended open boat, or righting a swamped one) changes how the kept
 boats behave, so it is not done here; it is reported to the owner.
 
