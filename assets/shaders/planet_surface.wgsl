@@ -2430,7 +2430,7 @@ const ORE_BLOCK: f32 = 4.0;
 const ORE_SHARE: f32 = 0.38;
 const ORE_COAL = vec3<f32>(0.030, 0.027, 0.026);
 const ORE_COPPER = vec3<f32>(0.42, 0.13, 0.040);
-const ORE_TIN = vec3<f32>(0.46, 0.45, 0.40);
+const ORE_TIN = vec3<f32>(0.24, 0.28, 0.34);
 fn ore_flecks(art: vec3<f32>, uv: vec2<f32>, id: u32, biome_in: u32) -> vec3<f32> {
     let t = floor(fract(uv)*32.);
     let b = floor(t/ORE_BLOCK);

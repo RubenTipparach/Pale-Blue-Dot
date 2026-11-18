@@ -1144,7 +1144,8 @@ only some of its texels:
   own hash: about a third of blocks;
 - a nugget is two to five texels, never smaller than the stone's own grain;
 - the ore is a third coal (near black), a third copper (rust orange) and a
-  third tin (pale grey), as the mixed ore yields;
+  third tin (a cool steel grey, which reads on pale stone as well as dark), as
+  the mixed ore yields;
 - each colour is shaded by the stone texel under it, with its upper left
   lit and its lower right in shade (the light the sheets are drawn under),
   so the ore stays in the stone's palette and value range;
