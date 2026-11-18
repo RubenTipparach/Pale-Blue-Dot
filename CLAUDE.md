@@ -499,6 +499,13 @@ which wait for a request.
   launcher that pulls the latest from itch io based on your OS", "this
   launcher should be responsible for keeping the game up to date always";
   `game-launcher`). No mockup yet.
+- **Then survival, phase 3c** (owner, 2026-11-18: "3c will add survival
+  mode, falling from high places, dangeroous animals (we'll introduce
+  predators), fighting with villagers, hunger, and oxygen - underwater can t
+  breath, or in space"): a Survival mode per world beside today's calm
+  Explorer, with health, fall damage, hunger, breath and suit air, hunting
+  predators, townsfolk who fight back, and a dropped pack on death
+  (`survival-mode`). No mockup yet.
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for
