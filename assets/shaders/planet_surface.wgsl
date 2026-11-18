@@ -240,6 +240,11 @@ fn placed_sheet_at(slot: u32, layer: u32) -> u32 {
 // which the cap and its heightfield wall carry to the fragment.
 const PLACED_SHEET_SHIFT: u32 = 26u;
 const PLACED_SHEET_MASK: u32 = 0x3c000000u;
+// `flora-v2` design 12.12: the field's spare value, never a sheet plus one
+// (14 tilesets): the layer is ore, generated or placed. It keeps the stone's
+// code and is drawn from its biome's stone with ore flecks
+// (`planet_terrain::ORE_SHEET`, `planet_column::drawn_sheet_mark`).
+const ORE_SHEET: u32 = 15u;
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -2413,6 +2418,45 @@ fn plant_art(texel: vec3<f32>, uv: vec2<f32>, tile: vec2<f32>, code: u32, biome_
     return mix(mean, art, select(SOLID_DETAIL, LEAF_DETAIL, code == 9u));
 }
 
+// `flora-v2` design 12.12: ore in a stone face, on the stone tile's own
+// 32-texel grid. The tile is cut into 4 by 4 texel blocks, and a block holds
+// a nugget on its own hash (`ORE_SHARE` of them): a 2 by 2 core at a hashed
+// corner of its block, with up to three texels more beside it. A third coal,
+// a third copper, a third tin, as the mixed ore digs. Each texel is shaded by
+// the stone texel it replaces against the stone tile's mean (`plant_means.z`),
+// so the ore keeps the stone's value range; the core's upper left is lit and
+// its lower right in shade, the light the sheets are drawn under. No outline.
+const ORE_BLOCK: f32 = 4.0;
+const ORE_SHARE: f32 = 0.38;
+const ORE_COAL = vec3<f32>(0.030, 0.027, 0.026);
+const ORE_COPPER = vec3<f32>(0.42, 0.13, 0.040);
+const ORE_TIN = vec3<f32>(0.46, 0.45, 0.40);
+fn ore_flecks(art: vec3<f32>, uv: vec2<f32>, id: u32, biome_in: u32) -> vec3<f32> {
+    let t = floor(fract(uv)*32.);
+    let b = floor(t/ORE_BLOCK);
+    let key = hash(id ^ ((u32(b.x) + u32(b.y)*8u + 1u)*2246822519u));
+    if f32(key & 0xffffu)/65535. >= ORE_SHARE { return art; }
+    let corner = vec2(f32((key >> 16u) & 1u), f32((key >> 17u) & 1u));
+    let p = t - b*ORE_BLOCK - corner;
+    let core = p.x >= 0. && p.x <= 1. && p.y >= 0. && p.y <= 1.;
+    var spur = false;
+    if (key & (1u << 18u)) != 0u && p.x == 2. && p.y == f32((key >> 21u) & 1u) { spur = true; }
+    if (key & (1u << 19u)) != 0u && p.y == 2. && p.x == f32((key >> 22u) & 1u) { spur = true; }
+    if (key & (1u << 20u)) != 0u && p.x == -1. && p.y == f32((key >> 23u) & 1u) { spur = true; }
+    if !(core || spur) { return art; }
+    let kind = (key >> 24u) % 3u;
+    var c = ORE_COAL;
+    if kind == 1u { c = ORE_COPPER; }
+    if kind == 2u { c = ORE_TIN; }
+    let stone = rgb8(params.plant_means[min(biome_in, 7u)].z);
+    let luma = vec3(0.299, 0.587, 0.114);
+    let shade = clamp(dot(art, luma)/max(dot(stone, luma), 0.02), 0.6, 1.4);
+    var lit = 1.0;
+    if core && p.x == 0. && p.y == 0. { lit = 1.35; }
+    if core && p.x == 1. && p.y == 1. { lit = 0.72; }
+    return mix(c, stone, 0.12)*shade*lit;
+}
+
 // Fallen leaves (design 9.4), the mockup's terrain block: the cap's 32-texel
 // grid cut into slots of about two texels, two leaves a slot, each with its
 // own moment in the fall; a leaf down by now is an ellipse of texels in one
@@ -3587,7 +3631,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // (`placed-blocks-keep-material`): dirt on desert sand is the meadow's
     // earth, not the desert's. The cap carries its record's.
     let placed_cap = (input.material & PLACED_SHEET_MASK) >> PLACED_SHEET_SHIFT;
-    if input.kind==0u && placed_cap != 0u { slot = placed_cap - 1u; }
+    // Design 12.12: the ore mark is no sheet; the face keeps its biome's.
+    let cap_ore = placed_cap == ORE_SHEET;
+    var ore = input.kind==0u && cap_ore;
+    var ore_layer = light_layer(face_altitude-0.5);
+    if input.kind==0u && placed_cap != 0u && !cap_ore { slot = placed_cap - 1u; }
     if input.kind==1u {
         // The heightfield's own wall, which stands only where a cell has no
         // column: no layer to ask, so the depth rule, which is the
@@ -3596,7 +3644,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         code = face_code(cap,depth);
         // Its top metre is the placed block's own side; under it, the
         // generated ground.
-        if placed_cap != 0u && depth <= 1.0 { slot = placed_cap - 1u; }
+        if placed_cap != 0u && !cap_ore && depth <= 1.0 { slot = placed_cap - 1u; }
+        ore = cap_ore && depth <= 1.0;
+        ore_layer = light_layer(input.height-0.5);
     }
     if input.kind==4u {
         // A column-pass face wears the LAYER it bounds: the block under an
@@ -3614,7 +3664,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         let own = material_at(input.slot, layer);
         code = own;
         let placed = placed_sheet_at(input.slot, layer);
-        if placed != 0u { slot = placed - 1u; }
+        ore = placed == ORE_SHEET;
+        ore_layer = layer;
+        if placed != 0u && !ore { slot = placed - 1u; }
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }
@@ -3674,6 +3726,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     var art = base;
 #else
     var art = pixel_tile(input.uv,tile,slot);
+    if ore && code == 5u {
+        art = ore_flecks(art, input.uv, hash(input.seed ^ (ore_layer*2654435761u)),
+            (input.material >> 8u) & 0xffu);
+    }
 #endif
     // `flora-v2` design 10: a detailed tree's own texel, or its impostor's,
     // which needs no far fade (it is already the far picture).

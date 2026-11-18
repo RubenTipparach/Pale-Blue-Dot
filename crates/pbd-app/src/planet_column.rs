@@ -148,14 +148,12 @@ pub(crate) fn pack_materials(column: &Column, out: &mut [u32]) {
 }
 
 /// One column's placed sheets into `out`: one slot of
-/// [`ColumnTier::gpu_placed_sheets`], zeroes for a column nobody built on.
+/// [`ColumnTier::gpu_placed_sheets`], zeroes for a column nobody built on
+/// and with no ore in it ([`drawn_sheet_mark`]).
 pub(crate) fn pack_placed_sheets(column: &Column, out: &mut [u32]) {
     out.fill(0);
-    if !column.any_placed() {
-        return;
-    }
     for layer in 0..LAYERS {
-        let sheet = placed_sheet(column, layer);
+        let sheet = drawn_sheet_mark(column, layer);
         if sheet != 0 {
             out[layer / MATERIAL_PER_WORD] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
         }
@@ -182,6 +180,20 @@ pub fn placed_sheet(column: &Column, layer: usize) -> u32 {
 }
 // Every sheet, plus one, fits its nibble, and so the record's four bits.
 const _: () = assert!(super::terrain::TILESETS.len() < 16);
+
+/// What the per-layer sheet field and the record's sheet bits carry for a
+/// layer: [`ORE_SHEET`] for ore, generated in a vein or placed (`flora-v2`
+/// design 12.12), else [`placed_sheet`]. The ore keeps the stone's render
+/// code; the mark is what the shader draws its flecks from, on the stone of
+/// the biome it stands in.
+///
+/// [`ORE_SHEET`]: super::terrain::ORE_SHEET
+pub fn drawn_sheet_mark(column: &Column, layer: usize) -> u32 {
+    if column.material(layer) == Material::Ore {
+        return super::terrain::ORE_SHEET;
+    }
+    placed_sheet(column, layer)
+}
 
 /// The columns around one anchor, and the map from a finest record to its slot.
 #[derive(Clone)]
@@ -1286,6 +1298,8 @@ pub fn reconcile_surface(
     // Set or cleared, so a pool that drains grows its plants again. The code
     // above is left as it was: under the sea it is the beach's sand, which
     // stood a beach tree in the sea before this bit.
+    // An exposed ore top carries the ore mark instead (design 12.12).
+    let mark = drawn_sheet_mark(column, top);
     let flooded = column.water_over(top) || top_m < super::terrain::high_water_m();
     let flood_bit = 1 << super::terrain::FLOODED_BIT;
     let sheet_bits = 0xf << super::terrain::PLACED_SHEET_SHIFT;
@@ -1293,7 +1307,7 @@ pub fn reconcile_surface(
     finest[index].metadata[1] = word
         | code
         | if flooded { flood_bit } else { 0 }
-        | placed << super::terrain::PLACED_SHEET_SHIFT;
+        | mark << super::terrain::PLACED_SHEET_SHIFT;
     let Some(table) = neighbors.get(index).copied() else {
         return;
     };
@@ -4083,7 +4097,12 @@ mod placed_block_tests {
                 // The column the tier builds holds it, placed.
                 assert_eq!(built.material(layer), m, "{what}: stored");
                 assert!(built.placed(layer), "{what}: placed");
-                let sheet = tileset_slot(column::home_biome(m).unwrap()) + 1;
+                // Ore carries the ore mark, not its home sheet (design 12.12).
+                let sheet = if m == Material::Ore {
+                    super::super::terrain::ORE_SHEET
+                } else {
+                    tileset_slot(column::home_biome(m).unwrap()) + 1
+                };
                 // The column pass draws it in its own code, from its own sheet.
                 let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
                 let codes = tier.gpu_materials();
@@ -4125,14 +4144,112 @@ mod placed_block_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A column of version 10's land that holds ore within 14 m of its top.
+    fn ore_ground() -> (Vec3, Column, usize) {
+        let cfg = terrain_config();
+        let d = find(|d, c| {
+            let top = c.surface().unwrap();
+            column::surface_m(cfg, d) > cfg.sea_level_m + 2.0
+                && !c.water_over(top)
+                && (top.saturating_sub(14)..top).any(|l| c.material(l) == Material::Ore)
+        });
+        let column = column::generate_solid(terrain_config(), d);
+        let top = column.surface().unwrap();
+        let ore = (top.saturating_sub(14)..top)
+            .rev()
+            .find(|&l| column.material(l) == Material::Ore)
+            .unwrap();
+        (d, column, ore)
+    }
+
+    /// Design 12.12: a generated ore layer packs the ore mark (15) in the
+    /// per-layer sheets and keeps the stone's render code; stone beside it
+    /// packs nought; no sheet plus one reaches the mark.
+    #[test]
+    fn generated_ore_carries_the_ore_mark_and_the_stone_s_code() {
+        use super::super::terrain::ORE_SHEET;
+        let (_, column, ore) = ore_ground();
+        let tier = ColumnTier::for_tests(vec![column.clone()], &[[NO_NEIGHBOR; 6]]);
+        let codes = tier.gpu_materials();
+        let sheets = tier.gpu_placed_sheets();
+        assert_eq!(nibble(&sheets, ore), ORE_SHEET);
+        assert_eq!(nibble(&codes, ore), render_code(Material::Stone));
+        assert_eq!(drawn_sheet_mark(&column, ore), ORE_SHEET);
+        assert_eq!(placed_sheet(&column, ore), 0, "nobody placed it");
+        let stone = (0..LAYERS)
+            .find(|&l| column.material(l) == Material::Stone)
+            .unwrap();
+        assert_eq!(nibble(&sheets, stone), 0);
+        assert_eq!(nibble(&codes, stone), render_code(Material::Stone));
+    }
+
+    /// Design 12.12: an ore top laid bare by digging carries the mark in its
+    /// record's sheet bits, keeps the stone's code and its cell's biome; a
+    /// placed ore block carries it too, and placed stone still its own sheet.
+    #[test]
+    fn dug_and_placed_ore_carry_the_ore_mark() {
+        use super::super::terrain::{ORE_SHEET, PLACED_SHEET_SHIFT};
+        let (d, generated, ore) = ore_ground();
+        let mut dug = generated.clone();
+        let top = dug.surface().unwrap();
+        for layer in ore + 1..=top {
+            assert!(dug.place(layer, Material::Air));
+        }
+        assert_eq!(dug.surface(), Some(ore));
+        let height = super::super::terrain::surface_height(d);
+        let word = super::super::terrain::surface_code(d, height);
+        let mut finest = vec![<GpuCell as Zeroable>::zeroed()];
+        finest[0].metadata[1] = word;
+        reconcile_surface(&mut finest, &[], 0, &dug);
+        let record = finest[0].metadata[1];
+        assert_eq!(
+            record >> PLACED_SHEET_SHIFT & 0xf,
+            ORE_SHEET,
+            "the cap's mark"
+        );
+        assert_eq!(
+            record & 0xff,
+            render_code(Material::Stone),
+            "the cap's code"
+        );
+        assert_eq!(record & 0xff00, word & 0xff00, "the cell's biome stays");
+
+        // A block of ore placed on the dug top, and stone on that.
+        let mut built = dug.clone();
+        assert!(built.place(ore + 1, Material::Ore));
+        assert!(built.place(ore + 2, Material::Stone));
+        let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
+        let sheets = tier.gpu_placed_sheets();
+        assert_eq!(nibble(&sheets, ore + 1), ORE_SHEET, "placed ore");
+        assert_eq!(
+            nibble(&sheets, ore + 2),
+            tileset_slot(column::home_biome(Material::Stone).unwrap()) + 1,
+            "placed stone keeps its own sheet"
+        );
+        assert_eq!(nibble(&sheets, ore + 3), 0, "air");
+    }
+
     /// Ground nobody touched is drawn as it was: its record carries no
-    /// placed sheet, and its column's layers none.
+    /// placed sheet, and its column's layers none but the ore mark on its
+    /// ore (design 12.12).
     #[test]
     fn untouched_ground_takes_its_biomes_sheet() {
         for (name, d) in grounds() {
             let column = column::generate_solid(terrain_config(), d);
             let tier = ColumnTier::for_tests(vec![column.clone()], &[[NO_NEIGHBOR; 6]]);
-            assert!(tier.gpu_placed_sheets().iter().all(|&w| w == 0), "{name}");
+            let sheets = tier.gpu_placed_sheets();
+            for layer in 0..LAYERS {
+                let ore = column.material(layer) == Material::Ore;
+                assert_eq!(
+                    nibble(&sheets, layer),
+                    if ore {
+                        super::super::terrain::ORE_SHEET
+                    } else {
+                        0
+                    },
+                    "{name}, layer {layer}"
+                );
+            }
             let height = super::super::terrain::surface_height(d);
             let word = super::super::terrain::surface_code(d, height);
             let mut finest = vec![<GpuCell as Zeroable>::zeroed()];
