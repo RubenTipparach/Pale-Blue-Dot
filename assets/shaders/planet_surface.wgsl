@@ -1951,11 +1951,24 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 let side = tangent*cos(ang+1.5708)+bitangent*sin(ang+1.5708);
                 let len = 0.6*size*fade*(1.-clutter_sunk(id,3u));
                 let sway = sin(1.5*params.settings.z+f32(frond)*2.1+roll(id,SALT_FERN+5u)*TAU)*0.04*len;
-                let tip = bottom+out_dir*(len*0.8)+axis*(len*0.55)+side*sway;
-                let hw = 0.12*size;
-                quad = array<vec3<f32>,4>(bottom-side*hw,bottom+side*hw,tip+side*hw,tip-side*hw);
-                quad_uv = array<vec2<f32>,4>(vec2(f32(frond),0.),vec2(f32(frond)+0.999,0.),
-                    vec2(f32(frond)+0.999,1.),vec2(f32(frond),1.));
+                var tip = bottom+out_dir*(len*0.8)+axis*(len*0.55)+side*sway;
+                var foot = bottom;
+                var hw = 0.12*size;
+                // `swamps` decision 5: the swamp grows M13's reeds where the
+                // other biomes grow ferns, four near-upright stalks about a
+                // metre tall round the seat, each with its dark head. Their
+                // frond index runs 4 to 7 in the quad's u, which `fern_cut`
+                // and `flora_albedo` read as a reed.
+                var first = f32(frond);
+                if biome == SWAMP_BIOME {
+                    foot = bottom+out_dir*(0.12*size);
+                    tip = foot+out_dir*(len*0.25)+axis*(len*1.9)+side*sway*2.0;
+                    hw = 0.06*size;
+                    first = first+4.;
+                }
+                quad = array<vec3<f32>,4>(foot-side*hw,foot+side*hw,tip+side*hw,tip-side*hw);
+                quad_uv = array<vec2<f32>,4>(vec2(first,0.),vec2(first+0.999,0.),
+                    vec2(first+0.999,1.),vec2(first,1.));
                 material = FERN_CODE;
                 is_quad = true;
                 grown = len > 0.0001;
@@ -2060,6 +2073,7 @@ const SNOW_SIDE_CODE = 12u;
 const TILLED_CODE = 14u;
 const FORGE_CODE = 15u;
 const FIELDS_BIOME = 2u;
+const SWAMP_BIOME = 5u;
 const MOUNTAINS_BIOME = 6u;
 // What the side tile averages to. A face seen from far enough away fades to
 // it, exactly as a cap fades to its flat base, because a point-sampled tile
@@ -2305,9 +2319,24 @@ fn tuft_on(uv: vec2<f32>) -> bool {
     return false;
 }
 
+// Whether a pixel of a reed is cut away (`swamps` decision 5): a stalk two
+// texels wide up the middle, a head six wide over its upper fifth, and a
+// thin tip above the head.
+fn reed_cut(uv: vec2<f32>) -> bool {
+    let off = abs(floor(fract(uv.x)*16.0) - 7.5);
+    let v = clamp(uv.y, 0.0, 1.0);
+    if v >= REED_HEAD.x && v < REED_HEAD.y { return off > 2.5; }
+    return off > 1.0;
+}
+
+// The reed's head, as a span of the quad's height: `flora_albedo` darkens it.
+const REED_HEAD: vec2<f32> = vec2(0.70, 0.92);
+
 // Whether a pixel of a fern frond is cut away (design 3): a stem up the
 // middle and leaflets either side in alternate rows, inside a frond's taper.
+// A swamp's piece is a reed (frond 4 to 7 in the quad's u).
 fn fern_cut(uv: vec2<f32>) -> bool {
+    if uv.x >= 4.0 { return reed_cut(uv); }
     let u = fract(uv.x);
     let v = clamp(uv.y, 0.0, 1.0);
     let tx = floor(u*16.0);
@@ -2351,6 +2380,11 @@ fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f
     }
     if cap == FLOWER_CODE {
         albedo = flower_colour(min(u32(max(floor(input.uv.x), 0.0)), 3u))*(0.75 + 0.5*grain);
+    }
+    if cap == FERN_CODE && input.uv.x >= 4.0 {
+        // A reed's head (`swamps` decision 5), the brown of a cattail.
+        let v = clamp(input.uv.y, 0.0, 1.0);
+        if v >= REED_HEAD.x && v < REED_HEAD.y { albedo = vec3(0.24, 0.14, 0.07)*(0.8 + 0.4*grain); }
     }
     if cap == MUSH_STEM_CODE { albedo = vec3(0.72, 0.66, 0.52)*(0.8 + 0.4*grain); }
     if cap == FRUIT_CODE { albedo = fruit_colour(input.uv, fruit_pixel(input.uv)); }

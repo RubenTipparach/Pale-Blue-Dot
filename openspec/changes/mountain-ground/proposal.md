@@ -17,8 +17,9 @@ Measured in version 10 (`design.md`, "Measured"):
 
 ## What Changes
 
-- **Generator version 11** (`TENEBRIS_V11`, beside V4-V10, which stay cell
-  for cell): a Mountains cell that is flat (no neighbour more than a metre
+- **Generator version 12** (`TENEBRIS_V12`, beside V4-V11, which stay cell
+  for cell; version 11 went to `swamps`, 2026-11-18, so this builds on
+  version 11's ground): a Mountains cell that is flat (no neighbour more than a metre
   off) takes alpine grass or dirt below a ragged snow line and snow above
   it; steep cells stay rock; the snow line comes down onto the flats.
 - **Mountain grass and dirt drawn as alpine soil**, not as the mountains
@@ -33,9 +34,9 @@ Measured in version 10 (`design.md`, "Measured"):
 ## Impact
 
 - `pbd-core`: `planet_gen.rs` (V11, a slope test in `top_material`),
-  `terrain.rs` (`GENERATOR_VERSION = 11`), a digest test of V10 taken first.
+  `terrain.rs` (`GENERATOR_VERSION = 12`), a digest test of V11 taken first.
 - `pbd-app`: `planet_surface.wgsl` (rock tile per cell, alpine grass and
   soil, risers' far colour).
 - Saves: no change to any existing world (CLAUDE.md, "Saved games survive
-  every change"); new worlds are made on version 11.
+  every change"); new worlds are made on version 12.
 - Look changes go to the owner with before-and-after captures.
