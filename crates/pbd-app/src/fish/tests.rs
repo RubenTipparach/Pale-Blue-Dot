@@ -81,7 +81,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
     let roster = fauna.roster(HOME_BODY).to_vec();
     let minnow = roster.iter().position(|s| s.id == "minnow").unwrap();
 
-    for (strike, seed) in [("left", 70), ("right", 71)] {
+    // Only the left button hooks; a right click at the bite cancels (owner,
+    // 2026-11-18), pinned in pbd_core's `a_right_click_at_the_bite_cancels`.
+    for (strike, seed) in [("left", 70), ("left", 71)] {
         let mut line = Line::new(seed);
         let mut schools = vec![School::spawn(
             &PLANET,
@@ -114,13 +116,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                     released: true,
                     ..Default::default()
                 },
-                Phase::Bite if strike == "left" => Controls {
+                Phase::Bite => Controls {
                     pressed: true,
                     held: true,
-                    ..Default::default()
-                },
-                Phase::Bite => Controls {
-                    reel_in: true,
                     ..Default::default()
                 },
                 Phase::Hooked => Controls {
@@ -433,7 +431,7 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
         let centre =
             pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
-        let points = draw::line_points(&centre, tip, tied, slack, floor);
+        let points = draw::line_points(&centre, tip, tied, slack, None, floor);
         assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
         let end = tip + *points.last().unwrap();
         assert!(
@@ -449,7 +447,9 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
             (feet.as_dvec3() / 128.0).round() * 128.0,
         );
         let (tip_l, tied_l) = (near.from_query_point(tip), near.from_query_point(tied));
-        let local = draw::line_points(&near, tip_l, tied_l, slack, |p| floor(near.query_point(p)));
+        let local = draw::line_points(&near, tip_l, tied_l, slack, None, |p| {
+            floor(near.query_point(p))
+        });
         assert!((tip_l + *local.last().unwrap()).distance(tied_l) < 1e-5);
         for (a, b) in points.iter().zip(&local) {
             assert!(a.distance(*b) < 2e-3, "{a} {b}");
@@ -545,6 +545,33 @@ fn smaller_water_makes_smaller_fish() {
     assert!((puddle - 0.35).abs() < 1e-3, "puddle {puddle}");
     assert!(brook > puddle && brook < river, "brook {brook}");
     assert!((river - 1.0).abs() < 1e-3, "river {river}");
+}
+
+/// Both buttons show in every phase with what each does now (owner,
+/// 2026-11-18): only the left hooks, lit only at the bite; the right's
+/// CANCEL is never lit.
+#[test]
+fn both_buttons_say_what_they_do_in_every_phase() {
+    use pbd_core::fishing::Phase;
+    let table = [
+        (Phase::Ready, ("HOLD TO CAST", true), false),
+        (Phase::Charging, ("LET GO TO CAST", true), false),
+        (Phase::Flying, ("HOOK", false), true),
+        (Phase::Floating, ("HOOK", false), true),
+        (Phase::Nibble, ("HOOK", false), true),
+        (Phase::Bite, ("HOOK", true), true),
+        (Phase::Hooked, ("HOLD TO REEL", true), false),
+    ];
+    for (phase, left, _) in table {
+        let [l, r] = super::keys_for(phase);
+        assert_eq!(l, left, "{phase:?}");
+        let cancel = if matches!(phase, Phase::Ready | Phase::Charging | Phase::Hooked) {
+            ""
+        } else {
+            "CANCEL"
+        };
+        assert_eq!(r, (cancel, false), "{phase:?}");
+    }
 }
 
 /// The hooked float's one-frame jump when a run starts or stops is drawn
@@ -670,4 +697,99 @@ fn a_fish_turns_over_frames_not_in_one() {
     let f = headings.ease(key, Vec3::Z, up, false, 1.0 / 60.0);
     headings.end();
     assert!(f.dot(Vec3::Z) > 0.9999);
+}
+
+/// The cast's line (`rod-motion` 8): while the float flies the line runs
+/// from the rod tip back to where the float was let go and out along the
+/// float's path, ending at the float; the trail keeps a place every
+/// 0.15 m; once the float is down the line eases to its hanging curve over
+/// 0.6 s, and a wound-in line forgets the trail.
+#[test]
+fn the_cast_line_follows_the_float_from_the_tip() {
+    let up = Vec3::Y;
+    let feet = up * 100.0;
+    let tip = feet + Vec3::new(0.1, 1.9, 0.3);
+    let mut trail = draw::CastTrail::default();
+    // Let go at the tip, the float thrown up and away.
+    let (mut float, mut v) = (tip, Vec3::new(0.0, 4.0, -9.0));
+    trail.update(Phase::Flying, float, 1.0 / 60.0);
+    assert_eq!(
+        trail.points,
+        vec![tip],
+        "the trail starts where it was let go"
+    );
+    for _ in 0..30 {
+        v -= up * 9.81 / 60.0;
+        float += v / 60.0;
+        trail.update(Phase::Flying, float, 1.0 / 60.0);
+    }
+    assert_eq!(trail.blend(), 1.0);
+    for w in trail.points.windows(2) {
+        assert!(w[0].distance(w[1]) > draw::TRAIL_STEP_M && w[0].distance(w[1]) < 0.4);
+    }
+    // The rod has come forward since: the drawn tip is ahead and lower.
+    let tip_now = tip + Vec3::new(0.0, -0.3, -0.4);
+    let tied = float + up * draw::FLOAT_TOP_M;
+    let path = draw::trail_points(tip_now, &trail.points, tied, 24);
+    assert_eq!(path.len(), 24);
+    assert_eq!(path[0], tip_now, "starts at the tip");
+    assert!(path[23].distance(tied) < 1e-4, "ends at the float");
+    // It runs back up to the release point before it goes out.
+    assert!(
+        path.iter().any(|p| p.distance(tip) < 0.2),
+        "through the release"
+    );
+    // Evenly along the path: no chord longer than the path's length over
+    // the 23 steps (a chord across a corner is shorter).
+    let length: f32 = std::iter::once(tip_now)
+        .chain(trail.points.iter().copied())
+        .chain(std::iter::once(tied))
+        .collect::<Vec<_>>()
+        .windows(2)
+        .map(|w| w[0].distance(w[1]))
+        .sum();
+    assert!(
+        path.windows(2)
+            .all(|w| w[0].distance(w[1]) <= length / 23.0 + 1e-4),
+        "evenly along"
+    );
+    // Drawn: the line's points lie on the trail while flying.
+    let points = draw::line_points(
+        &PLANET,
+        tip_now,
+        tied,
+        0.6,
+        Some((&trail.points, trail.blend())),
+        |_| 0.0,
+    );
+    for (k, p) in points.iter().enumerate() {
+        assert!((tip_now + *p).distance(path[k]) < 1e-4, "{k}");
+    }
+    // Down on the water: eased out over 0.6 s.
+    trail.update(Phase::Floating, float, 1.0 / 60.0);
+    assert_eq!(trail.blend(), 1.0);
+    trail.update(Phase::Floating, float, 0.3);
+    assert!(
+        trail.blend() > 0.3 && trail.blend() < 0.7,
+        "{}",
+        trail.blend()
+    );
+    trail.update(Phase::Floating, float, 0.31);
+    assert_eq!(trail.blend(), 0.0);
+    let hanging = draw::line_points(&PLANET, tip_now, tied, 0.6, None, |_| 0.0);
+    let eased = draw::line_points(
+        &PLANET,
+        tip_now,
+        tied,
+        0.6,
+        Some((&trail.points, 0.0)),
+        |_| 0.0,
+    );
+    assert_eq!(hanging, eased);
+    trail.update(Phase::Ready, float, 1.0 / 60.0);
+    assert!(trail.points.is_empty() && trail.blend() == 0.0);
+    // A rebase moves the trail with the origin.
+    trail.update(Phase::Flying, tip, 1.0 / 60.0);
+    trail.rebase(Vec3::X);
+    assert_eq!(trail.points, vec![tip - Vec3::X]);
 }

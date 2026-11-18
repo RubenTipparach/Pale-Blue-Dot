@@ -28,6 +28,14 @@ how tenebris c does it." Proposed; the mockups (M25, M28) show it.
   pattern on each falling face moves down, and a pool of sources at rest
   stands still
 
+#### Scenario: A slanted top streams with its arrow on every triangle
+- **WHEN** a flowing top slopes down to a lip, anywhere on the body and
+  facing any way, and the flow arrows are on
+- **THEN** every triangle of that top streams its pattern within 45 degrees
+  of the cell's arrow: the flow is read back in a frame that does not depend
+  on the triangle's own normal (owner, 2026-11-17: "where you have slanted
+  water blocks, the uv splits to per triangle")
+
 ### Requirement: A flow-arrow overlay
 The game SHALL offer an overlay, off by default, that draws an arrow on every
 water cell whose flow vector is not zero, pointing along that vector and

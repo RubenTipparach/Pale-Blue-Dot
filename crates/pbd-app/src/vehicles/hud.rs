@@ -9,7 +9,7 @@
 
 use super::{Aboard, Vehicle, view::VehicleView};
 use bevy::prelude::*;
-use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
+use pbd_core::vehicle::{CraftState, Kind, Telemetry};
 use std::fmt::Write;
 
 /// The instruments behind F3: plain text, a developer's.
@@ -269,47 +269,6 @@ fn instruments(vehicle: &Vehicle, seat: bool) -> String {
     let craft = &vehicle.craft;
     let mut s = String::new();
     match (&craft.telemetry, &craft.state) {
-        (Telemetry::Tern(t), CraftState::Tern(_)) => {
-            let sail = match t.sail_state {
-                SailState::Luffing => "luffing",
-                SailState::Driving => "drawing",
-                SailState::Stalled => "stalled",
-            };
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  hull speed {:>3.0}%  heel {:>+4.0} deg",
-                t.water_speed,
-                t.speed,
-                t.hull_speed * 100.0,
-                t.heel.to_degrees()
-            );
-            let _ = writeln!(
-                s,
-                "apparent wind {:>4.1} m/s  {} {:>3.0} deg  windward VMG (ground) {:>+4.1} m/s",
-                t.apparent.length(),
-                side(t.apparent_angle),
-                t.apparent_angle.to_degrees().abs(),
-                t.upwind
-            );
-            let _ = writeln!(
-                s,
-                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg{}",
-                t.sheet * 100.0,
-                t.leeway.to_degrees(),
-                craft.bilge_kg,
-                if t.keel_down < 0.95 {
-                    format!("  KEEL UP {:.0}%, shallow", (1.0 - t.keel_down) * 100.0)
-                } else {
-                    String::new()
-                }
-            );
-            let hint = match t.sail_state {
-                SailState::Luffing => "Bear away from headwind or trim the sheet in.",
-                SailState::Stalled => "Ease the sheet to restore attached flow.",
-                SailState::Driving => "Trim for windward VMG; hike against the heel.",
-            };
-            let _ = writeln!(s, "{hint}");
-        }
         (Telemetry::Loon(t), CraftState::Loon(_)) => {
             let _ = writeln!(
                 s,

@@ -147,10 +147,17 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
-    /// The float is out and a right click reels it in: the interact prompt
-    /// shows that button under the crosshair (owner, 2026-11-16: "just have a
-    /// button prompt to right click to reel in").
-    pub reel_prompt: bool,
+    /// The fishing buttons, bottom left, while the rod is out at fishable
+    /// water: what the left and the right click do now, and whether each does
+    /// anything in this phase (owner, 2026-11-18: "need to show both right
+    /// and left click for fishing, and they both need to be on the left
+    /// corner of the screen"; `fishing-and-equipment`, "Both buttons, bottom
+    /// left").
+    pub keys: Option<[(&'static str, bool); 2]>,
+    /// The bite: the left click's row turns yellow and shakes (owner,
+    /// 2026-11-18: "when fish bites, the left click buton prompt should
+    /// highlight yellow and vibrate").
+    pub bite: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -192,6 +199,9 @@ fn rebase_fishery(world: &mut World, shift: Vec3) {
     if let Some(mut drawn) = world.get_resource_mut::<draw::DrawnFloat>() {
         drawn.rebase(shift);
     }
+    if let Some(mut trail) = world.get_resource_mut::<draw::CastTrail>() {
+        trail.rebase(shift);
+    }
     if let Some(mut watch) = world.get_resource_mut::<WatchHook>()
         && let Some((eye, target)) = watch.view.as_mut()
     {
@@ -210,6 +220,7 @@ impl Plugin for FishPlugin {
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
+            .init_resource::<draw::CastTrail>()
             .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
@@ -375,6 +386,10 @@ fn fish(
     mut save: Option<ResMut<WorldSave>>,
     mut did: MessageWriter<crate::missions::Did>,
     mut heard: MessageWriter<crate::audio::hooks::FishHeard>,
+    (tip_now, mut cue): (
+        Option<Res<crate::held::RodTipNow>>,
+        Option<ResMut<crate::held::RodCue>>,
+    ),
     mut was_aboard: Local<Option<Entity>>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
@@ -492,9 +507,13 @@ fn fish(
             reel_in: pressed(MouseButton::Right),
         };
         let angler = Angler {
-            // The rod model's own tip (`held.rs`): eye space, -z ahead.
+            // The rod tip as last drawn (`held.rs`, `RodTipNow`): eye
+            // space, -z ahead. A cast leaves from where the drawn-back tip is
+            // when the button comes up.
             tip: {
-                let t = crate::held::rod_tip();
+                let t = tip_now
+                    .as_deref()
+                    .map_or_else(crate::held::rod_tip, |t| t.0);
                 eye + right * t.x + cam_up * t.y - look * t.z
             },
             look,
@@ -541,6 +560,11 @@ fn fish(
             crate::sea::surface_gravity(),
             factor,
         );
+        if let Some(cue) = cue.as_deref_mut() {
+            cue.reeling = controls.held && fishery.line.phase == Phase::Hooked;
+            let to_float = (fishery.line.float - angler.tip).normalize_or_zero();
+            cue.pull = to_float.dot(right).clamp(-1.0, 1.0);
+        }
         for event in events {
             // The rod's sounds (`audio-and-ambience` build decision 5).
             heard.write(crate::audio::hooks::FishHeard {
@@ -548,6 +572,9 @@ fn fish(
                 at: o.query_point(fishery.line.float),
             });
             let float = o.query_point(fishery.line.float);
+            if let Some(cue) = cue.as_deref_mut() {
+                cue.events.push(event);
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -570,8 +597,17 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.reel_prompt =
-        rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
+    status.keys = (rod && walking && !roster.is_empty()).then(|| keys_for(fishery.line.phase));
+    status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
+    // The rod in hand moves with the line (`held.rs`, `rod-motion`).
+    if let Some(cue) = cue.as_deref_mut() {
+        cue.phase = fishery.line.phase;
+        cue.power = fishery.line.power;
+        cue.tension = fishery.line.tension;
+        if fishery.line.phase != Phase::Hooked {
+            cue.reeling = false;
+        }
+    }
     status.meter = match fishery.line.phase {
         Phase::Charging => Some(("CAST", fishery.line.power)),
         Phase::Hooked => Some(("TENSION", fishery.line.tension)),
@@ -1157,7 +1193,7 @@ fn report(
     };
     match event {
         Event::Dry => status.say("The float came down on dry ground", 1.5),
-        Event::Bite { .. } => status.say("Bite! Click now", 0.3),
+        Event::Bite { .. } => status.say("Bite! Left click", 0.3),
         Event::TooEarly { species } => status.say(
             format!("Too early - the {} bolted", name(species).to_lowercase()),
             2.0,
@@ -1243,6 +1279,27 @@ pub fn land(
     true
 }
 
+/// What the left and the right click do in `phase`, and whether each is
+/// drawn lit (`fishing-and-equipment`, "Both buttons, bottom left"). The
+/// right click's CANCEL is never lit (owner, 2026-11-18: "right click cancle
+/// doesnt need to be highlighted"); the left lights when it does something.
+pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
+    // The right click shows only while the line is out (owner, 2026-11-18:
+    // "right click doesnt show up if the line isnt cast").
+    let out = matches!(
+        phase,
+        Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
+    );
+    let left = match phase {
+        Phase::Ready => ("HOLD TO CAST", true),
+        Phase::Charging => ("LET GO TO CAST", true),
+        Phase::Hooked => ("HOLD TO REEL", true),
+        Phase::Bite => ("HOOK", true),
+        Phase::Flying | Phase::Floating | Phase::Nibble => ("HOOK", false),
+    };
+    [left, (if out { "CANCEL" } else { "" }, false)]
+}
+
 /// The standing line under the crosshair while the rod is out.
 fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
     if !rod {
@@ -1252,13 +1309,10 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         return "Nothing lives in this water".into();
     }
     match line.phase {
-        Phase::Ready => "Hold the left button to cast".into(),
-        Phase::Charging => "Let go to cast".into(),
-        Phase::Flying => String::new(),
-        // The button prompt says it (`reel_prompt`).
-        Phase::Floating => String::new(),
+        // The buttons in the corner say these (`keys_for`).
+        Phase::Ready | Phase::Charging | Phase::Flying | Phase::Floating => String::new(),
         Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
-        Phase::Bite => "Bite! Click now".into(),
+        Phase::Bite => "Bite! Left click".into(),
         Phase::Hooked => "Hold to reel - ease off when it runs".into(),
     }
 }
@@ -1466,10 +1520,12 @@ pub(crate) mod draw {
         time: Res<Time>,
         fishery: Res<Fishery>,
         mut drawn: ResMut<DrawnFloat>,
+        mut trail: ResMut<CastTrail>,
         space: crate::SimSpace,
     ) {
         let line = &fishery.line;
         let o = space.origin();
+        trail.update(line.phase, line.float, time.delta_secs().min(0.1));
         drawn.update(
             &o,
             time.delta_secs().min(0.1),
@@ -1477,6 +1533,114 @@ pub(crate) mod draw {
             line.phase,
             line.run,
         );
+    }
+
+    /// How far the float flies between the places the cast's trail keeps,
+    /// m (the mockup's).
+    pub(crate) const TRAIL_STEP_M: f32 = 0.15;
+
+    /// How long the line takes to ease from the cast's trail to its hanging
+    /// curve once the float is down, s.
+    pub(crate) const TRAIL_EASE_S: f32 = 0.6;
+
+    /// The cast's line as drawn (`rod-motion` design 8): while the float
+    /// flies the line lies along the path it took, from the rod tip back to
+    /// where it was let go and out along its arc; once it is down the line
+    /// eases to its hanging curve. Drawing only: the line's rule never reads
+    /// it.
+    #[derive(Resource, Clone, Debug, Default, PartialEq)]
+    pub struct CastTrail {
+        /// The float's places since it was let go, planet-local, m: the
+        /// first where it left the tip, then one every `TRAIL_STEP_M`.
+        pub points: Vec<Vec3>,
+        flying: bool,
+        /// How long the float has been down, s.
+        landed_s: Option<f32>,
+    }
+
+    impl CastTrail {
+        /// One frame: the line's phase and float after this frame's step.
+        pub fn update(&mut self, phase: Phase, float: Vec3, dt: f32) {
+            match phase {
+                Phase::Flying => {
+                    if !self.flying {
+                        *self = Self {
+                            points: vec![float],
+                            flying: true,
+                            landed_s: None,
+                        };
+                    } else if self
+                        .points
+                        .last()
+                        .is_some_and(|last| last.distance(float) > TRAIL_STEP_M)
+                    {
+                        self.points.push(float);
+                    }
+                }
+                Phase::Floating | Phase::Nibble | Phase::Bite if !self.points.is_empty() => {
+                    if self.flying {
+                        self.flying = false;
+                        self.landed_s = Some(0.0);
+                    } else if let Some(t) = self.landed_s.as_mut() {
+                        *t += dt.max(0.0);
+                    }
+                }
+                _ => *self = Self::default(),
+            }
+        }
+
+        /// How much of the line lies along the trail: all of it while the
+        /// float flies, easing to none over `TRAIL_EASE_S` once it is down.
+        pub fn blend(&self) -> f32 {
+            if self.points.is_empty() {
+                return 0.0;
+            }
+            if self.flying {
+                return 1.0;
+            }
+            match self.landed_s {
+                Some(t) if t < TRAIL_EASE_S => {
+                    let u = t / TRAIL_EASE_S;
+                    1.0 - u * u * (3.0 - 2.0 * u)
+                }
+                _ => 0.0,
+            }
+        }
+
+        /// The origin was rebased: the trail moves with it.
+        pub fn rebase(&mut self, shift: Vec3) {
+            for p in &mut self.points {
+                *p -= shift;
+            }
+        }
+    }
+
+    /// `n` points evenly along the cast's path (the mockup's `trailPoints`):
+    /// from the rod tip back to where the float was let go, along the
+    /// float's places, to `end`, where the line is tied.
+    pub(crate) fn trail_points(tip: Vec3, trail: &[Vec3], end: Vec3, n: usize) -> Vec<Vec3> {
+        let path: Vec<Vec3> = std::iter::once(tip)
+            .chain(trail.iter().copied())
+            .chain(std::iter::once(end))
+            .collect();
+        let mut acc = vec![0.0f32];
+        for k in 1..path.len() {
+            acc.push(acc[k - 1] + path[k].distance(path[k - 1]));
+        }
+        let total = *acc.last().unwrap();
+        let total = if total > 0.0 { total } else { 1.0 };
+        (0..n)
+            .map(|k| {
+                let d = total * k as f32 / (n.max(2) - 1) as f32;
+                let mut j = 1;
+                while j < acc.len() - 1 && acc[j] < d {
+                    j += 1;
+                }
+                let seg = acc[j] - acc[j - 1];
+                let seg = if seg > 0.0 { seg } else { 1.0 };
+                path[j - 1].lerp(path[j], (d - acc[j - 1]) / seg)
+            })
+            .collect()
     }
 
     #[derive(Component)]
@@ -2112,7 +2276,9 @@ pub(crate) mod draw {
         air: Option<Res<Air>>,
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
+        tip_now: Option<Res<crate::held::RodTipNow>>,
         drawn: Res<DrawnFloat>,
+        trail: Res<CastTrail>,
         cameras: Query<&Transform, With<WalkingCamera>>,
         rods: Query<
             (&crate::held::Held, &Transform),
@@ -2164,22 +2330,32 @@ pub(crate) mod draw {
             // The camera is a top-level entity: its `Transform`, which
             // `follow_walker` has just set, is where the rod is drawn this
             // frame. (Its `GlobalTransform` is still last frame's here.)
-            // The rod's tip as the rod is posed this frame (`held::hold`,
-            // in `Update`, has swayed it): `movement-smoothness` 7.3.
-            let tip = rods
-                .iter()
-                .find(|(held, _)| held.tool() == Tool::Rod)
-                .map_or(crate::held::rod_tip(), |(held, pose)| {
-                    held.posed(pose, crate::held::rod_tip())
-                });
+            // The tip is where the rod is drawn this frame (`held.rs` poses
+            // it in `Update`, rod-motion), else the swayed rest tip
+            // (`movement-smoothness` 7.3).
+            let tip = tip_now.as_deref().map_or_else(
+                || {
+                    rods.iter()
+                        .find(|(held, _)| held.tool() == Tool::Rod)
+                        .map_or(crate::held::rod_tip(), |(held, pose)| {
+                            held.posed(pose, crate::held::rod_tip())
+                        })
+                },
+                |t| t.0,
+            );
             // The line's shape is laid in local points (`world-frames`
             // 10.1), from the drawn rod tip to the drawn float; the water is
             // asked at planet query points.
             let tip_render = eye.transform_point(tip);
             let tip_local = crate::sim_origin::local_from_render(&frame, tip_render);
             transform.translation = tip_render;
+            // With a fish on the line it is taut: nearly straight at the bite
+            // and through the fight, a touch of sag only at the lowest
+            // tension (owner, 2026-11-18: "I dont think the line in real life
+            // would slack wheren theres a fish connected to it").
             let slack = match line.phase {
-                Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
+                Phase::Bite => 0.03,
+                Phase::Hooked => 0.01 + 0.05 * (1.0 - line.tension.min(1.0)),
                 _ => 0.6,
             };
             // A slack line is held just over the water rather than hanging
@@ -2189,6 +2365,10 @@ pub(crate) mod draw {
             // It ends on the top of the float, where it is tied.
             let end = float + o.up_at(float) * FLOAT_TOP_M;
             let end_point = o.query_point(end);
+            // While the float flies the line follows its path, easing to the
+            // hanging curve once it is down (`rod-motion` 8).
+            let blend = trail.blend();
+            let cast = (blend > 0.0).then_some((trail.points.as_slice(), blend));
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -2200,11 +2380,11 @@ pub(crate) mod draw {
                         end_point,
                         seconds,
                     );
-                    line_points(&o, tip_local, end, slack, |p| {
+                    line_points(&o, tip_local, end, slack, cast, |p| {
                         line_floor(&water, end_point, o.query_point(p))
                     })
                 }
-                None => line_points(&o, tip_local, end, slack, |_| 0.0),
+                None => line_points(&o, tip_local, end, slack, cast, |_| 0.0),
             };
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
@@ -2284,16 +2464,21 @@ pub(crate) mod draw {
     /// through the origin in f64. The first point is the tip
     /// and the last is the float, exactly: a float pulled under on a bite
     /// is still where the line ends (`fishing-and-equipment` design 4, the
-    /// line's far end).
+    /// line's far end). With a cast's trail (its places, local, and how
+    /// much of the line lies along it) each point between is moved that far
+    /// toward the trail's (`rod-motion` 8).
     pub(crate) fn line_points(
         origin: &SimOrigin,
         tip: Vec3,
         float: Vec3,
         slack: f32,
+        cast: Option<(&[Vec3], f32)>,
         surface: impl Fn(Vec3) -> f32,
     ) -> Vec<Vec3> {
         let down = -origin.up_at(tip);
         let last = LINE_POINTS - 1;
+        let along =
+            cast.map(|(trail, blend)| (trail_points(tip, trail, float, LINE_POINTS), blend));
         (0..LINE_POINTS)
             .map(|k| {
                 if k == 0 {
@@ -2303,7 +2488,10 @@ pub(crate) mod draw {
                     return float - tip;
                 }
                 let u = k as f32 / last as f32;
-                let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                let mut offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                if let Some((trail, blend)) = &along {
+                    offset = offset.lerp(trail[k] - tip, *blend);
+                }
                 let at = tip + offset;
                 let r = origin.radius_at(at);
                 let floor = f64::from(surface(at) + LINE_CLEARANCE_M);

@@ -594,7 +594,16 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // `planet::column::sheet_listed` is this test for the CPU's readers.
     if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
         && (cell.spare.z & 2u) == 0u || (cell.spare.z & 4u) != 0u || cell.spare.w != 0u) {
-        let sea = params.water_absorption.w;
+        // A far river's sheet stands at its own surface, metres over the sea
+        // (`water.wgsl`'s vertex: over the cell's ground by a hair at least),
+        // not on the sea's sphere: tested there, a river a hundred metres up
+        // was culled wherever the sea's level under it was out of the view,
+        // which from its bank is every cell within a few hundred metres
+        // (`river-cache` design 7).
+        var sea = params.water_absorption.w;
+        if cell.spare.w != 0u {
+            sea = radius + max(bitcast<f32>(cell.spare.w), cell.direction_height.w + 0.05);
+        }
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
         for (var i=0u; i<degree; i++) {

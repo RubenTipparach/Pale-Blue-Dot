@@ -1408,7 +1408,8 @@ fn print_where_the_harbours_stand() {
 
 /// Task 4.2b: each harbour of the shipped seed moors its boats once, each
 /// afloat at its berth, anchored and tagged with its berth; the berths over
-/// land or too shallow are skipped and counted; asked again, it makes none.
+/// land or too shallow, and the sailing boats' (`retire-tern`), are skipped
+/// and counted; asked again, it makes none.
 #[test]
 fn every_harbours_boats_are_made_once_at_their_berths() {
     use crate::vehicles::harbour::boats_for;
@@ -1435,20 +1436,19 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
             crate::vehicles::place::floor,
         );
         println!(
-            "{}: {} boats moored ({} Terns), {skipped} berths skipped",
+            "{}: {} boats moored, {skipped} berths skipped",
             site.name,
             made.len(),
-            made.iter()
-                .filter(|c| c.kind == pbd_core::vehicle::Kind::Tern)
-                .count()
         );
         assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
-        // Every sailing berth over water takes its sailboat, the Tern, its
-        // keel lifted in the shallows.
+        // Each boat is its berth's kind, and a sailing berth makes none: its
+        // Tern is retired (`retire-tern` decision 3).
         for c in &made {
             let (_, n) = c.berth.expect("tagged with its berth");
-            let want = crate::vehicles::harbour::kind_of(&template.boats[n as usize].kind);
-            assert_eq!(c.kind, want, "{}: berth {n}", site.name);
+            let boat = &template.boats[n as usize].kind;
+            assert_ne!(boat, "sail", "{}: berth {n} made a sailing boat", site.name);
+            let want = crate::vehicles::harbour::kind_of(boat);
+            assert_eq!(Some(c.kind), want, "{}: berth {n}", site.name);
         }
         let berths: std::collections::BTreeSet<(u32, u32)> =
             made.iter().filter_map(|c| c.berth).collect();
@@ -1691,51 +1691,6 @@ fn print_the_pose_of_holinghavens_boats() {
                 c.reference_position().length() - f64::from(sea_radius)
             );
         }
-    }
-}
-
-#[test]
-#[ignore = "instrument: the drawn water at each harbour's sailing berths, and the nearest that floats a Tern"]
-fn print_the_water_at_the_sailing_berths() {
-    let config = *crate::planet::terrain_config();
-    let template = load_template("coast");
-    let surface = sheet(&config);
-    for site in harbours() {
-        let town = lay_out(&site, &template, &config).unwrap();
-        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
-        let (chart, ground) =
-            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
-        let nat = natural(&config);
-        let depth = |d: Vec3| {
-            let n = nat(d);
-            surface - ground.at(d).map_or(n, |g| g.height(n)).floor()
-        };
-        let mut row = format!("{:>13}:", site.name);
-        for boat in template.boats.iter().filter(|b| b.kind == "sail") {
-            let Some((d, bow)) = sea::boat_pose(&chart, &patch, boat, template.grid.cell_m) else {
-                row += " off-chart";
-                continue;
-            };
-            // The nearest point within 30 m, in steps of 1 m, with 2 m of
-            // drawn water, the Tern's need.
-            let side = d.cross(bow).normalize();
-            let mut near: Option<f32> = None;
-            for r in 0..=30 {
-                for k in 0..16 {
-                    let a = k as f32 * std::f32::consts::TAU / 16.0;
-                    let off = (bow * a.cos() + side * a.sin()) * (r as f32 / config.radius_m);
-                    if depth((d + off).normalize()) >= 2.0 {
-                        near.get_or_insert(r as f32);
-                    }
-                }
-            }
-            row += &format!(
-                " | {:.1} m deep, 2 m at {}",
-                depth(d),
-                near.map_or("none in 30 m".into(), |r| format!("{r:.0} m"))
-            );
-        }
-        println!("{row}");
     }
 }
 

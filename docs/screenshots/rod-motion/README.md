@@ -1,0 +1,85 @@
+# rod-motion
+
+The rod in hand moving with the line, and the back of the hand shaded by its
+true face normals (`openspec/changes/rod-motion`, tasks 1.2 and 2.5).
+
+| Shot | Before | After |
+| --- | --- | --- |
+| The hand close (2x crop of the rest frame) | `hand-before.jpg` | `hand-after.jpg` |
+| Rod at rest, the float not yet cast | `rest-before.jpg` | `rest-after.jpg` |
+| Charging the cast, the button held | `charging-before.jpg` | `charging-after.jpg` |
+| Just after the cast, the float in the air | `cast-before.jpg` | `cast-after.jpg` |
+| The float on the water | `floating-before.jpg` | `floating-after.jpg` |
+| A bite: the tip dips | (the still rod of `floating-before.jpg`) | `bite-after.jpg` |
+| A fish on, reeling: rod up, rolled toward the pull, shaking | (the still rod of `floating-before.jpg`) | `hooked-after.jpg` |
+| Charging, the overhead cast (decision 7): the fist raised above the right shoulder, the rod up and back | `charging-after.jpg` | `charging-raised.jpg` |
+
+- Before is `db8f17e8`, the commit before this change: the rod stands still
+  in every phase, so a bite and a fight look like the float shot. Its
+  `held.ron` is that commit's (the new one has the `rod` block it would
+  refuse).
+- After is this change: the charge draws the rod back over the shoulder, the
+  cast flicks it forward, it settles forward of rest while the float is out,
+  dips on a bite, and is held up with a fish on.
+- The hand: before, the slanted faces on the back of the hand were shaded as
+  if they pointed sideways, so the back read as patchy bands; after, each
+  face is shaded by its own normal.
+
+How they were taken:
+- In-game captures on 2026-11-17 in a cloud container with no GPU, on
+  lavapipe (software Vulkan), 1440 x 900, the `fast` build, a new
+  memory-only world. They show how things look, never how smoothly: frame
+  cost was not measured.
+- One run per row group, each saving a burst of frames along the way with
+  `PBD_CAPTURE_RUN=<dir>,<first>,<count>,<stride>`; the stills are frames of
+  those bursts.
+- Logs: no `ERROR` lines. 37 `LATE_PIPELINE` lines in each run, before and
+  after alike (the same pipelines; lavapipe compiles late), none from this
+  change.
+
+Launch lines (on a river bank, facing east across it):
+
+    PBD_CAPTURE_RUN=bite-burst,0,520,8 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture after-bite.png --rod-cue bite --frames 520
+    PBD_CAPTURE_RUN=hooked-burst,200,140,10 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture hooked-after.png --rod-cue hooked --frames 340
+    PBD_CAPTURE_RUN=before-burst,0,240,8 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture before-float.png --frames 240
+
+`--cast` takes up the rod and casts once (a capture instrument).
+`--rod-cue nibble|bite|hooked` is a capture instrument added for these
+stills: no fish is near this bank, so a second after the float lands it
+draws the rod as if the line were in that phase (for `hooked`, at tension
+0.7, reeling, the fish pulling right). It writes only the rod's cue, which
+nothing but the drawn rod reads: the line, the float, the catch rules and
+the fish are untouched, so in `bite-after.jpg` and `hooked-after.jpg` the
+float still floats.
+
+`charging-raised.jpg` (2026-11-17, `rod-motion` decision 7, after the owner's
+"the casting fishing line the hand should be raised above shoulder"): the
+same bank, the same lavapipe and `fast` build, the cast meter at about 85 %,
+so the windup is done and the coil is under way. Its
+before is `charging-after.jpg`, the fist risen 5 cm. One frame of a burst:
+
+    PBD_CAPTURE_RUN=burst,70,56,8 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture charging.png --frames 118
+
+The run was stopped once the burst had the charge. Log: no `ERROR` lines,
+the same 37 `LATE_PIPELINE` lines as the runs above.
+
+## The cast in flight: flex, follow-through and the cast's line (design 8, 2026-11-18)
+
+| Shot | Before | After |
+| --- | --- | --- |
+| The float in the air, 12 fixed-step frames after the release in both | `flight-before.jpg` | `flight-after.jpg` |
+| From just before the release, every 3rd frame (right two thirds) | `flight-before-burst.jpg` | `flight-after-burst.jpg` |
+
+- Before is `8438582e`: the line hangs in a sag straight from the tip to the
+  float while it flies, and the rod settles forward of rest.
+- After: the line runs from the tip up and back toward where the float was
+  let go, above and behind the head, and arcs out along the float's path;
+  the rod is held out low with the arm reaching (the sleeve in view) and
+  bends through the flick. The hand is `hand-model` version 13's.
+
+Taken on 2026-11-18 on lavapipe under Xvfb, 1440 x 900, the `fast` build;
+frame cost not measured. Each build loads at its own pace, so the bursts are
+lined up on the release (frame 563 before, 576 after). Logs: no `ERROR`
+lines, 38 `LATE_PIPELINE` lines in each (a capture does not warm).
+
+    PBD_CAPTURE_RUN=burst,100,115,1 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture cast.png --frames 215

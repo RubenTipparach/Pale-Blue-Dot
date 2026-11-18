@@ -1133,23 +1133,24 @@ mod tests {
         assert_eq!(again, keys, "and reads back the same");
     }
 
-    /// `retire-kestrel` decision 3: a rebind of a key the retired Kestrel
-    /// read (its group went with it) is ignored on load, moves no key, and
-    /// is still in the file after the next change is written.
+    /// `retire-kestrel` decision 3 (and `retire-tern` decision 5): a rebind
+    /// of a key a retired craft read (its group went with it) is ignored on
+    /// load, moves no key, and is still in the file after the next change is
+    /// written.
     #[test]
     fn a_rebind_of_a_retired_slot_is_ignored_and_kept() {
         let path = scratch("retired-slot");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
-            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "on_foot:ShiftLeft": "KeyK"})"#,
+            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "tern:KeyW": "KeyJ", "on_foot:ShiftLeft": "KeyK"})"#,
         )
         .unwrap();
         let (read, keys, loaded) = PlayerSettings::load_from(&path);
         assert_eq!(loaded, Loaded::Read(3));
         assert!(
-            crate::controls::slots().all(|s| s.name() != "kestrel:KeyW"),
-            "no slot reads it"
+            crate::controls::slots().all(|s| s.name() != "kestrel:KeyW" && s.name() != "tern:KeyW"),
+            "no slot reads them"
         );
         // Every key reads as it would with only the known rebind.
         let (known, _) = KeyBinds::from_names(&BTreeMap::from([(
@@ -1159,7 +1160,7 @@ mod tests {
         for now in [
             crate::controls::Live::OnFoot,
             crate::controls::Live::Flying,
-            crate::controls::Live::Aboard(pbd_core::vehicle::Kind::Tern),
+            crate::controls::Live::Aboard(pbd_core::vehicle::Kind::Loon),
         ] {
             assert_eq!(
                 crate::controls::live_pairs(&keys, now, false),
@@ -1182,6 +1183,11 @@ mod tests {
                 .map(String::as_str),
             Some("KeyI"),
             "and the retired rebind is still in the file: {text}"
+        );
+        assert_eq!(
+            keys_again.to_names().get("tern:KeyW").map(String::as_str),
+            Some("KeyJ"),
+            "the Tern's too: {text}"
         );
         assert_eq!(
             keys_again

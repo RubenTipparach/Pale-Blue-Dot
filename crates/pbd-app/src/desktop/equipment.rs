@@ -191,7 +191,7 @@ pub fn spawn_pack_hand(parent: &mut ChildSpawnerCommands, kit: &UiKit, icons: &I
 
 /// A click on the pack's hand cell opens or shuts its list; a click on a
 /// row puts that tool in hand, saved as the G picker saves it.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn pack_hand(
     screen: Res<super::menu::Screen>,
     mut open: ResMut<HandListOpen>,

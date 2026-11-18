@@ -172,7 +172,7 @@ struct WaterView {
 // The game's own water that the sheet does not draw (`water-flow` E6): four
 // lanes a vertex, triangles end to end. xyz body-local position, w the sky's
 // share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
-// still face); xy the flow in the face's tangent frame, m/s over 0.35; xyz
+// still face); xy the flow in north and east at the vertex, m/s over 0.35; xyz
 // where the vertex was the tick before, w its ease flags (1 a front, eased
 // linearly; 2 a dried piece, hidden once the tick has played).
 @group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
@@ -739,6 +739,15 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
 // ---- A fall's look (`water-flow` 6.6; M35, `waterfall-mist/mist.js`) -------
 // The most feet the fragment and the bubbles loop over (`FALL_FEET_MAX`).
 const FALL_FEET: u32 = 8u;
+// The body frame's north and east at `d` (`geo::north_east`): the frame a
+// top's flow lane is written in. At a pole, along longitude 0.
+fn flow_north_east(d: vec3<f32>) -> array<vec3<f32>, 2> {
+    let across = sqrt(d.x*d.x + d.z*d.z);
+    var east = vec3<f32>(0.0, 0.0, 1.0);
+    if (across > 1e-6) { east = vec3<f32>(-d.z/across, 0.0, d.x/across); }
+    return array<vec3<f32>, 2>(normalize(cross(east, d)), east);
+}
+
 // The falling column's radius from its foot, m, where the pool's terms start.
 const FALL_COLUMN_M: f32 = 1.25;
 
@@ -790,8 +799,12 @@ fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return e;
 }
 
-@fragment
-fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+// Whether the sheet or the game's water draws nothing at this pixel
+// (`cascade-perf`): every discard of `fragment` that does not hang on its
+// shading, first, so a fragment hidden behind the scene or dithered away
+// costs none of the waves, and the same test for the flowing water's depth
+// pre-pass, which leaves the shading one fragment a pixel.
+fn water_hidden(in: VertexOut) -> bool {
     let radial = safe_normal(in.body_position);
     // The same partition the terrain applies, in the same pixel's dither
     // class (`distance-lod-fade`): the sheet is drawn where its owner (the
@@ -804,29 +817,53 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     if (in.part_mark != 0u) {
         let dissolve = fract(52.9829189*fract(dot(in.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
         let new_half = dissolve < view.lod_prev.w;
-        if (in.part_mark == 1u && !new_half) { discard; }
-        if (in.part_mark == 2u && new_half) { discard; }
+        if (in.part_mark == 1u && !new_half) { return true; }
+        if (in.part_mark == 2u && new_half) { return true; }
     }
     let m = water_bayer4(in.clip.xy);
-    if (in.fade_t.z > m) { discard; }
+    if (in.fade_t.z > m) { return true; }
     // The tier's water and the far river's sheet share its last 25 m by the
     // same dither, so the one gives way to the other with no seam (design 13).
     if (in.kind != 0u && view.column.w > 0.0) {
         let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
             * length(in.body_position);
         let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
-        if (in.kind == 4u && far <= m) { discard; }
-        if (in.kind != 4u && far > m) { discard; }
+        if (in.kind == 4u && far <= m) { return true; }
+        if (in.kind != 4u && far > m) { return true; }
     }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
-        if (owner_t <= m) { discard; }
+        if (owner_t <= m) { return true; }
     }
+    // Behind the scene (the main pass's depth; reversed Z, larger nearer).
+    let uv = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
+    if (load_depth(uv) > in.clip.z + 1e-6) { return true; }
+    // The back of the game's water seen from dry air: the face toward the
+    // eye draws it (as `fragment` decides `below` for it).
+    if (in.kind != 0u && view.fx.y < 0.25
+        && dot(view.camera_time.xyz - in.local_position, safe_normal(in.normal)) < 0.0) {
+        return true;
+    }
+    return false;
+}
+
+// The flowing water's depth pre-pass (`cascade-perf`): its depth alone, so
+// its shading pass runs `fragment` once a pixel, for the nearest face, not
+// for every face behind it drawn first (a cascade stacks many).
+@fragment
+fn flowing_depth(in: VertexOut) {
+    if (water_hidden(in)) { discard; }
+}
+
+@fragment
+fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let radial = safe_normal(in.body_position);
+    if (water_hidden(in)) { discard; }
     let face = safe_normal(in.normal);
     let sun_direction = safe_normal(view.sun.xyz);
     let time = view.camera_time.w;
     // Tangent frame off X or Y, projected off the face, exactly as Tenebris
-    // builds it; the flow vector lives in this frame.
+    // builds it: the rain rings' frame. A top's flow is not in it.
     var tangent_u = vec3<f32>(1.0,0.0,0.0);
     if (abs(face.x) > 0.9) { tangent_u = vec3<f32>(0.0,1.0,0.0); }
     tangent_u = safe_normal(tangent_u - face*dot(tangent_u,face));
@@ -847,9 +884,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // A top of the water near a foot takes its churn, ripples and flow.
     let pool_top = in.kind <= 1u && horizontal >= 0.5 && view.fall_look.x > 0.5;
     let feet_n = min(u32(view.fall_look.x), FALL_FEET);
+    // A top's flow lane is north and east at the point (`water_flow::flow_lane`),
+    // not the face's frame: a slanted top's triangles each have their own
+    // normal, and read in theirs a triangle streamed turned or backwards
+    // (`water-flow`, "The surface streaming against its arrows").
+    let flow_frame = flow_north_east(radial);
     let advected = rest
         + radial*(time*view.deep_color.w*(1.0-horizontal)*falls)
-        - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
+        - (flow_frame[0]*in.flow_uv.x + flow_frame[1]*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
     let t = time*view.ripple.y;
     // Not Tenebris's: once the fbm's features fall under a pixel, its

@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct VehicleSpecs {
-    pub tern: TernSpec,
     pub loon: LoonSpec,
     /// The harbour's cog (`sail-the-cog`).
     pub cog: CogSpec,
@@ -29,7 +28,6 @@ pub struct VehicleSpecs {
 impl Default for VehicleSpecs {
     fn default() -> Self {
         Self {
-            tern: Default::default(),
             loon: Default::default(),
             cog: Default::default(),
             rowboat: LoonSpec::rowboat(),
@@ -41,7 +39,6 @@ impl Default for VehicleSpecs {
 
 impl VehicleSpecs {
     pub fn validate(&self) -> Result<(), String> {
-        self.tern.validate()?;
         self.loon.validate()?;
         self.rowboat.validate()?;
         self.tube.validate()?;
@@ -112,93 +109,6 @@ fn positive(name: &str, values: &[f32]) -> Result<(), String> {
         .ok_or_else(|| format!("{name} must be positive"))
 }
 
-// ---- Tern ---------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct SailSpec {
-    /// Where the mast steps on the deck.
-    pub mast: [f32; 3],
-    /// Boom height over the step and its length, and the head's height over
-    /// the step, m.
-    pub boom_height_m: f32,
-    pub boom_length_m: f32,
-    pub head_height_m: f32,
-    pub area_m2: f32,
-    pub aspect: f32,
-    pub cl_max: f32,
-    pub cd0: f32,
-    /// The boom's reach at sheet in and at sheet out, deg.
-    pub sheet_deg: [f32; 2],
-    /// How fast the sheet is hauled or eased, share per second.
-    pub sheet_rate: f32,
-    /// How fast the boom swings, rad/s, plus per m/s of apparent wind.
-    pub swing_rate: f32,
-    pub swing_per_mps: f32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct CrewSpec {
-    pub mass_kg: f32,
-    pub at: [f32; 3],
-    /// How far out the crew can hike, m, and how fast they move, m/s.
-    pub hike_m: f32,
-    pub hike_rate: f32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct TernSpec {
-    pub parts: [Part; 3],
-    pub inertia_box: InertiaBox,
-    pub crew: CrewSpec,
-    pub hull: HullSpec,
-    pub sail: SailSpec,
-    pub keel: FoilSpec,
-    pub rudder: FoilSpec,
-    /// The tiller's reach, rad, and how fast it is put over, rad/s.
-    pub rudder_max_rad: f32,
-    pub rudder_rate: f32,
-    pub resistance: ResistanceSpec,
-    pub windage: WindageSpec,
-    pub bilge: BilgeSpec,
-    pub contacts: [ContactSpec; 3],
-    /// Heave damping per m^3 submerged, N s/m^4; and damping of turning.
-    pub heave_damping: f32,
-    pub angular_damping: f32,
-    /// Where a mooring line is made fast.
-    pub bow: [f32; 3],
-    pub seat: SeatSpec,
-    /// How its keel lifts in shallow water.
-    pub lift: KeelLift,
-}
-
-/// A keel that lifts (`cities-in-the-world` task 4.2b): it goes as deep as
-/// the water under it allows, its ballast with it. It rises at once when the
-/// seabed comes up under it, as a keel kicks up on the bottom, and lowers at
-/// its rate when the water deepens.
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct KeelLift {
-    /// How far it rises from all the way down to all the way up, m.
-    pub rise_m: f32,
-    /// How fast it lowers: its travel a second.
-    pub rate: f32,
-    /// How far its tip keeps off the seabed, m.
-    pub clearance_m: f32,
-    /// Which of the craft's parts is its ballast, and which contact its tip.
-    pub ballast: usize,
-    pub tip: usize,
-}
-
-impl KeelLift {
-    /// How far the keel is lifted, m, `down` of the way down (1 all the way).
-    pub fn raised_m(&self, down: f64) -> f64 {
-        self.rise_m as f64 * (1.0 - down.clamp(0.0, 1.0))
-    }
-}
-
 fn seabed(at: [f32; 3], stiffness: f32, damping: f32) -> ContactSpec {
     ContactSpec {
         at,
@@ -207,155 +117,6 @@ fn seabed(at: [f32; 3], stiffness: f32, damping: f32) -> ContactSpec {
         friction_rolling: 0.5,
         friction_braked: 0.5,
         friction_side: 0.5,
-    }
-}
-
-impl Default for TernSpec {
-    fn default() -> Self {
-        let part = |mass_kg, at| Part { mass_kg, at };
-        Self {
-            parts: [
-                part(380.0, [0.0, -0.05, 0.2]),
-                part(220.0, [0.0, -1.45, 0.15]),
-                part(40.0, [0.0, 3.0, -0.4]),
-            ],
-            inertia_box: InertiaBox {
-                mass_kg: 380.0,
-                size_m: [2.3, 1.0, 6.2],
-            },
-            crew: CrewSpec {
-                mass_kg: 80.0,
-                at: [0.0, 0.75, 1.6],
-                hike_m: 1.1,
-                hike_rate: 1.4,
-            },
-            hull: HullSpec {
-                length_m: 6.2,
-                beam_m: 2.3,
-                depth_m: 1.0,
-                sheer_m: 0.62,
-                cell_m: 0.25,
-                bow_power: 1.6,
-                stern_power: 3.5,
-                section_power: 1.8,
-                deck: true,
-            },
-            sail: SailSpec {
-                mast: [0.0, 0.62, -0.6],
-                boom_height_m: 1.3,
-                boom_length_m: 3.3,
-                head_height_m: 7.0,
-                area_m2: 9.4,
-                aspect: 3.4,
-                cl_max: 1.5,
-                cd0: 0.06,
-                sheet_deg: [5.0, 85.0],
-                sheet_rate: 0.35,
-                swing_rate: 1.5,
-                swing_per_mps: 0.25,
-            },
-            keel: FoilSpec {
-                at: [0.0, -0.95, 0.15],
-                chord: [0.0, 0.0, -1.0],
-                normal: [1.0, 0.0, 0.0],
-                area_m2: 1.0,
-                aspect: 2.2,
-                cl_max: 1.2,
-                cd0: 0.01,
-            },
-            rudder: FoilSpec {
-                at: [0.0, -0.4, 3.0],
-                chord: [0.0, 0.0, -1.0],
-                normal: [1.0, 0.0, 0.0],
-                area_m2: 0.3,
-                aspect: 1.6,
-                cl_max: 1.1,
-                cd0: 0.012,
-            },
-            rudder_max_rad: 0.45,
-            rudder_rate: 2.2,
-            resistance: ResistanceSpec {
-                at: [0.0, -0.25, 0.2],
-                wetted_m2: 9.0,
-                waterline_m: 5.6,
-                lateral_m2: 1.8,
-                friction: 0.0045,
-            },
-            windage: WindageSpec {
-                at: [0.0, 1.2, 0.0],
-                area_m2: [2.8, 3.0, 1.2],
-            },
-            bilge: BilgeSpec {
-                open_m2: 1.6,
-                rim_share: 0.3,
-                rim_from_z: 0.8,
-                drain_kgps: 0.6,
-                bail_kgps: 6.0,
-                capacity_kg: 900.0,
-                at: [0.0, -0.2, 0.5],
-                slosh: 1.6,
-                slosh_max_m: 0.8,
-            },
-            contacts: [
-                seabed([0.0, -1.5, 0.15], 60_000.0, 6_000.0),
-                seabed([0.0, -0.35, -2.8], 60_000.0, 6_000.0),
-                seabed([0.0, -0.35, 2.8], 60_000.0, 6_000.0),
-            ],
-            heave_damping: 17_000.0,
-            angular_damping: 40.0,
-            bow: [0.0, 0.62, -2.6],
-            seat: SeatSpec {
-                eye: [0.0, 1.55, 1.6],
-                reach_m: 4.5,
-                exit: [0.0, 0.62, 0.0],
-            },
-            // The keel's tip, 1.5 m down, rises to just under the hull.
-            lift: KeelLift {
-                rise_m: 1.08,
-                rate: 0.35,
-                clearance_m: 0.1,
-                ballast: 1,
-                tip: 0,
-            },
-        }
-    }
-}
-
-impl TernSpec {
-    fn validate(&self) -> Result<(), String> {
-        let masses: Vec<f32> = self.parts.iter().map(|p| p.mass_kg).collect();
-        positive("tern.parts", &masses)?;
-        positive(
-            "tern sizes",
-            &[
-                self.crew.mass_kg,
-                self.sail.area_m2,
-                self.sail.aspect,
-                self.sail.cl_max,
-                self.sail.boom_length_m,
-                self.sail.sheet_rate,
-                self.rudder_max_rad,
-                self.rudder_rate,
-                self.heave_damping,
-            ],
-        )?;
-        let [lo, hi] = self.sail.sheet_deg;
-        if !(0.0..hi).contains(&lo) || hi > 90.0 {
-            return Err("tern.sail.sheet_deg must rise within 0..=90".into());
-        }
-        self.hull.validate("tern")?;
-        self.keel.validate("tern.keel")?;
-        let lift = &self.lift;
-        if !(lift.rise_m >= 0.0 && lift.rate > 0.0 && lift.clearance_m >= 0.0)
-            || lift.ballast >= self.parts.len()
-            || lift.tip >= self.contacts.len()
-        {
-            return Err(
-                "tern.lift: rise_m and clearance_m at least 0, rate over 0, and ballast and tip naming a part and a contact"
-                    .into(),
-            );
-        }
-        self.rudder.validate("tern.rudder")
     }
 }
 

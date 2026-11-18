@@ -33,6 +33,8 @@ pub mod splash;
 mod ssr;
 #[path = "planet_terrain.rs"]
 pub(crate) mod terrain;
+#[path = "planet_tier_gpu.rs"]
+pub(crate) mod tier_gpu;
 #[path = "planet_topology.rs"]
 pub(crate) mod topology;
 #[path = "planet_trees.rs"]
@@ -332,6 +334,8 @@ impl Plugin for PlanetPlugin {
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
+            // Its packed image, made in the same frame (`fine-set-upload`).
+            ExtractResourcePlugin::<tier_gpu::FineGpu>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
             // The sun moves now, so the render world needs this frame's, not
             // the one the pipeline was built with.
@@ -358,6 +362,13 @@ impl Plugin for PlanetPlugin {
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
+        // The fine set's GPU image, after everything that makes a version
+        // (`fine-set-upload` D2).
+        .init_resource::<tier_gpu::PreparedGpu>()
+        .add_systems(
+            Last,
+            tier_gpu::pack_fine_gpu.before(crate::settings::PacingSet),
+        )
         // After the landing, which publishes the set's own bakes
         // (`baked-light-ease` 7.2): a bake begun before it would be of the
         // set it replaced.
@@ -1294,6 +1305,17 @@ fn fine_region(base_count: u32, half: u32, k: usize) -> u64 {
         + (u64::from(half) * u64::from(FINE_REGIONS) + k as u64) * u64::from(lod::FINE_CAPACITY)
 }
 
+/// The delta an upload may write (`fine-set-upload` D4): only one made from
+/// the version the GPU holds, and never into the other half a dissolve
+/// lands in, which holds an older set.
+fn delta_on_base(
+    delta: Option<&tier_gpu::Delta>,
+    uploaded: u64,
+    how: Landing,
+) -> Option<&tier_gpu::Delta> {
+    delta.filter(|d| d.base == uploaded && how != Landing::Dissolve)
+}
+
 /// What a fine set's upload does to the two halves (`two-set-dissolve`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Landing {
@@ -1458,9 +1480,10 @@ fn upload_planet(
 
 /// Rewrite the fine regions when a new fine set has landed. Each level's
 /// records go at its own offset; the count is what the compute pass reads.
-// Nine parameters: the seven it had, the dissolve's length, which says
+// Nine parameters: the six it had, the dissolve's length, which says
 // whether a landing would cut a running dissolve short (`two-set-dissolve`),
-// and the dusk relight's version, whose light blends in (`baked-light-ease`).
+// the dusk relight's version, whose light blends in (`baked-light-ease`),
+// and the set's packed image (`fine-set-upload`).
 #[allow(clippy::too_many_arguments)]
 fn upload_fine(
     fine: Option<Res<lod::PlanetFine>>,
@@ -1469,9 +1492,9 @@ fn upload_fine(
     bounce: Option<Res<bounce::BounceField>>,
     lamps: Option<Res<bounce::LampBakeField>>,
     clock: Res<PlanetClock>,
-    lighting: Option<Res<crate::config::LightingSettings>>,
     scatter: Option<Res<crate::config::ScatterSettings>>,
     relight: Option<Res<lod::DuskRelight>>,
+    gpu: Option<Res<tier_gpu::FineGpu>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1509,6 +1532,13 @@ fn upload_fine(
     if planet.uploaded == fine.version {
         return;
     }
+    // Only with its own image (`fine-set-upload` D4): made in the frame the
+    // version was, so this waits only if something made a version after
+    // `pack_fine_gpu` ran, and then draws the set it has, whole, for a frame.
+    let Some(gpu) = gpu.filter(|g| g.version == fine.version) else {
+        debug!("fine set version {} waits for its image", fine.version);
+        return;
+    };
     let follows = planet.uploaded.checked_add(1) == Some(fine.version);
     let timer = std::time::Instant::now();
     let old = planet.lod;
@@ -1536,68 +1566,76 @@ fn upload_fine(
         planet.counts_prev = planet.counts;
         planet.half = 1 - planet.half;
     }
+    // The image of this version, made off the render thread
+    // (`fine-set-upload`): written as it is, or only what changed since the
+    // version the GPU holds. The light goes up with the records that decide
+    // what it lights, and the materials with them (a face drawn from a stale
+    // layer is a placed stone wearing the earth that was there before), all
+    // in this one call: no frame draws half of a version.
+    //
+    // A dusk or dawn relight of the set drawn until now goes into the other
+    // half and is blended in from this one (`baked-light-ease` 7.3);
+    // anything else overwrites the newest half and is whole at once.
+    let image = &gpu.image;
+    let delta = delta_on_base(gpu.delta.as_deref(), planet.uploaded, how);
+    let (half, blending) = light_half(
+        planet.light_new,
+        relight.is_some_and(|r| r.version == fine.version),
+        follows,
+        planet
+            .light_anchor
+            .is_some_and(|a| a.distance(fine.set.anchor) < 1e-3),
+    );
+    let light_whole = half != planet.light_new;
     let stride = size_of::<GpuCell>() as u64;
-    for (k, level) in fine.set.levels.iter().enumerate() {
-        let offset = fine_region(planet.base_count, planet.half, k) * stride;
-        if !level.is_empty() {
-            queue.write_buffer(
+    let (base_count, cells_half) = (planet.base_count, planet.half);
+    let mut bytes = [0usize; 6];
+    let mut writes = 0usize;
+    tier_gpu::tier_writes(image, delta, light_whole, |target, at, data| {
+        let (buffer, offset, part) = match target {
+            tier_gpu::Target::Level(k) => (
                 &planet.cells,
-                offset,
-                bytemuck::cast_slice(level.as_slice()),
-            );
-        }
+                fine_region(base_count, cells_half, k) * stride + at,
+                0,
+            ),
+            tier_gpu::Target::Records => (&planet.columns, at, 1),
+            tier_gpu::Target::Light => {
+                (&planet.light, (half * LIGHT_HALF_WORDS * 4) as u64 + at, 2)
+            }
+            tier_gpu::Target::Materials => (&planet.materials, at, 3),
+            tier_gpu::Target::Sheets => (
+                &planet.materials,
+                (column::PLACED_SHEETS_BASE * 4) as u64 + at,
+                4,
+            ),
+            tier_gpu::Target::Centres => (&planet.centres, at, 5),
+        };
+        queue.write_buffer(buffer, offset, data);
+        bytes[part] += data.len();
+        writes += 1;
+    });
+    for (k, level) in fine.set.levels.iter().enumerate() {
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
-    // With each column's reach top, which ends a reflected ray's walk once
-    // it has risen past everything it could still meet (`lighting-perf` 2.1).
-    let reach_m = lighting.map_or_else(
-        || crate::config::LightingSettings::default().reflection_reach_m,
-        |l| l.reflection_reach_m,
-    );
-    let records = fine.set.columns.gpu_records_with_reach(reach_m);
-    if !records.is_empty() {
-        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(&records));
-        // The light goes up with the records that decide what it lights. Two
-        // uploads a frame apart would draw one frame of the new geometry lit
-        // by the old world.
-        //
-        // A dusk or dawn relight of the set drawn until now goes into the
-        // other half and is blended in from this one (`baked-light-ease`
-        // 7.3); anything else overwrites the newest half and is whole at once.
-        let light = fine.set.columns.gpu_light();
-        let (half, blending) = light_half(
-            planet.light_new,
-            relight.is_some_and(|r| r.version == fine.version),
-            follows,
-            planet
-                .light_anchor
-                .is_some_and(|a| a.distance(fine.set.anchor) < 1e-3),
-        );
-        let words = &light[..light.len().min(LIGHT_HALF_WORDS)];
-        queue.write_buffer(
-            &planet.light,
-            (half * LIGHT_HALF_WORDS * 4) as u64,
-            bytemuck::cast_slice(words),
-        );
+    if !image.records.is_empty() {
         planet.light_new = half;
         planet.light_blending = blending;
         planet.light_from_s = clock.0;
         planet.light_anchor = Some(fine.set.anchor);
-        // And the materials, for the same reason: a face drawn from a stale
-        // layer is a placed stone wearing the earth that was there before.
-        let materials = fine.set.columns.gpu_materials();
-        queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
-        // And which of those layers somebody placed, so a placed block is
-        // drawn as itself (`placed-blocks-keep-material`).
-        let sheets = fine.set.columns.gpu_placed_sheets();
-        queue.write_buffer(
-            &planet.materials,
-            (column::PLACED_SHEETS_BASE * 4) as u64,
-            bytemuck::cast_slice(&sheets),
-        );
-        let centres = fine.set.columns.gpu_centres();
-        queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
+    // MEASUREMENT (`cascade-perf`, `fine-set-upload`): what went up, at debug
+    // level.
+    debug!(
+        "UPLOAD_PARTS {} in {:.2} ms, {writes} writes: levels {} records {} light {} materials {} sheets {} centres {} KiB",
+        if delta.is_some() { "delta" } else { "whole" },
+        timer.elapsed().as_secs_f64() * 1e3,
+        bytes[0] / 1024,
+        bytes[1] / 1024,
+        bytes[2] / 1024,
+        bytes[3] / 1024,
+        bytes[4] / 1024,
+        bytes[5] / 1024,
+    );
     planet.uploaded = fine.version;
     match how {
         // The partition is the one a running dissolve dissolves into: it runs
@@ -2569,6 +2607,19 @@ impl render_graph::Node for PlanetComputeNode {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_delta_is_used_only_on_its_base() {
+        let delta = tier_gpu::Delta {
+            base: 7,
+            ..Default::default()
+        };
+        assert!(delta_on_base(Some(&delta), 7, Landing::InPlace).is_some());
+        assert!(delta_on_base(Some(&delta), 6, Landing::InPlace).is_none());
+        assert!(delta_on_base(Some(&delta), 7, Landing::Dissolve).is_none());
+        assert!(delta_on_base(Some(&delta), 0, Landing::AtOnce).is_none());
+        assert!(delta_on_base(None, 7, Landing::InPlace).is_none());
+    }
+
     use super::*;
 
     /// `flora-v2` 13.3: a fade is a moment in time, never a place. A still

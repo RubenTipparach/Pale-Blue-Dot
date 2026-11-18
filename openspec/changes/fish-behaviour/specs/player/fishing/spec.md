@@ -37,6 +37,9 @@ vertically, and SHALL NOT take a fixed fallback heading when it is still.
 - **WHEN** a hooked fish stops running and is reeled toward the angler
 - **THEN** it turns about its mouth over a fraction of a second, never in one
   frame
+- **AND** its head shake and flank flash fade in rather than switching on
+- **AND** the drawn float and lure do not jump when the line's swing stops,
+  so the mouth does not jump with them
 
 ### Requirement: A fish's tail beat follows its speed
 

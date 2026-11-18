@@ -257,8 +257,12 @@ pub fn prism(part: &Prism, light: Vec3, out: &mut HexelMesh) {
         let k1 = (k + 1) % 6;
         out.push([bottom, lo[k], lo[k1]], -axis, part.colour, lit(-axis));
         out.push([top, hi[k], hi[k1]], axis, part.colour, lit(axis));
-        let mid = (lo[k] + lo[k1]) * 0.5 - (at - axis * part.length / 2.0);
-        let side = (mid - axis * mid.dot(axis)).normalize_or(u);
+        // The face's own normal: its edge crossed with the axis, turned
+        // outward. On a flattened prism (the back of the hand) the slanted
+        // faces point well away from the direction to their middles.
+        let mid = (lo[k] + lo[k1]) * 0.5 - bottom;
+        let edge = (lo[k1] - lo[k]).cross(axis).normalize_or(u);
+        let side = if edge.dot(mid) < 0.0 { -edge } else { edge };
         out.quad([lo[k], lo[k1], hi[k1], hi[k]], side, part.colour, lit(side));
     }
 }
@@ -421,5 +425,33 @@ mod tests {
         }
         let open = edges.values().filter(|n| **n != 0).count();
         assert_eq!(open, 0, "{open} unmatched directed edges");
+    }
+    /// A prism's side faces are shaded by their own normals: on a round one
+    /// that is the direction to the face's middle, and on a flattened one
+    /// (the back of the hand) the slanted faces point along their edge's
+    /// normal, not out through their middles.
+    #[test]
+    fn a_prism_side_is_shaded_by_its_own_normal() {
+        let part = |width: Option<f32>| Prism {
+            axis: [0.0, 0.0, 1.0],
+            at: [0.0, 0.0, 0.0],
+            radius: 0.7,
+            length: 2.0,
+            across: Some([1.0, 0.0, 0.0]),
+            width,
+            colour: [200, 160, 120],
+        };
+        for width in [None, Some(1.97)] {
+            let mut m = HexelMesh::default();
+            prism(&part(width), Vec3::Y, &mut m);
+            for tri in 0..m.triangles() {
+                let p: Vec<Vec3> = (0..3)
+                    .map(|i| Vec3::from(m.positions[tri * 3 + i]))
+                    .collect();
+                let face = (p[1] - p[0]).cross(p[2] - p[0]).normalize();
+                let n = Vec3::from(m.normals[tri * 3]);
+                assert!(face.dot(n) > 0.999, "{width:?}: face {face} drawn as {n}");
+            }
+        }
     }
 }

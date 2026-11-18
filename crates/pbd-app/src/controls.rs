@@ -348,10 +348,9 @@ pub enum Live {
 
 impl Live {
     /// Every context, for asking whether two groups can be live together.
-    pub const ALL: [Live; 8] = [
+    pub const ALL: [Live; 7] = [
         Live::OnFoot,
         Live::Flying,
-        Live::Aboard(Kind::Tern),
         Live::Aboard(Kind::Loon),
         Live::Aboard(Kind::Rowboat),
         Live::Aboard(Kind::Cog),
@@ -508,13 +507,6 @@ const VEHICLES: [Binding; 2] = [
     ),
 ];
 
-const TERN: [Binding; 4] = [
-    row(&A_D, "/", "steer"),
-    row(&W_S, "/", "pull the sail in or let it out"),
-    row(&Q_E, "/", "lean out left or right"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
-];
-
 const LOON: [Binding; 4] = [
     row(&W_S, "/", "paddle forward or back"),
     row(&A_D, "/", "turn"),
@@ -611,15 +603,15 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
 }
 
 /// Every control in the game, once. (The Kestrel's group, KESTREL on the
-/// Flying sub-tab, went with it in `retire-kestrel`; a saved rebind of one of
-/// its slots is kept in the file and read by nothing.)
-pub static BINDINGS: [Group; 14] = [
+/// Flying sub-tab, went with it in `retire-kestrel`, and the Tern's, TERN, in
+/// `retire-tern`; a saved rebind of one of their slots is kept in the file
+/// and read by nothing.)
+pub static BINDINGS: [Group; 13] = [
     group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("INTERACT", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
     group("FLYING", Tab::Flying, When::Flying, &FLYING),
     group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
-    group("TERN", Tab::Vehicles, When::Aboard(Kind::Tern), &TERN),
     group("LOON", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
     group(
         "ROWBOAT",
@@ -778,7 +770,7 @@ impl KeyBinds {
 
     /// The other actions that read `slot`'s key while it is read: a clash to
     /// flag on its row. The defaults share keys only between contexts that
-    /// are never live together (W is move on foot and sheet in in the Tern),
+    /// are never live together (W is move on foot and paddle forward in the Loon),
     /// so with no rebinds nothing is flagged.
     pub fn clashes(&self, slot: &Slot) -> Vec<&'static str> {
         let key = self.key(slot);
@@ -1307,8 +1299,8 @@ mod tests {
             binds.clashes(&sprint),
             vec!["open, harvest, pick, feed, till; board or step off"]
         );
-        // E is free on foot (owner, 2026-11-16): the Tern's hiking and the
-        // roll read it, but never on foot.
+        // E is free on foot (owner, 2026-11-16): the blade as a rudder and
+        // the roll read it, but never on foot.
         binds.set(&sprint, KeyCode::KeyE);
         assert!(binds.clashes(&sprint).is_empty());
         // A digit is the number row's, which reads every digit.
