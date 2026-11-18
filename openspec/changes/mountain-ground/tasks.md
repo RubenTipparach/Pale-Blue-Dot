@@ -4,14 +4,15 @@
 
 - [ ] 1.1 A capture of a mountain flank from the air and from the ground
       (version 10), to confirm what the tan rows are.
-- [ ] 1.2 V10's ground digest pinned (both targets).
+- [ ] 1.2 V11's ground digest pinned (both targets). Version 11 is
+      `swamps` (2026-11-18); this change is version 12.
 
-## 2. Version 11
+## 2. Version 12
 
-- [ ] 2.1 `TENEBRIS_V11` and `GENERATOR_VERSION = 11`; flat Mountains cells
+- [ ] 2.1 `TENEBRIS_V12` and `GENERATOR_VERSION = 12`; flat Mountains cells
       take snow, alpine grass or dirt (decision 1); tests: the tiers agree,
       flats get grass or snow, steep cells stay stone.
-- [ ] 2.2 Climate files for g11.
+- [ ] 2.2 Climate files for g12.
 
 ## 3. The draw
 

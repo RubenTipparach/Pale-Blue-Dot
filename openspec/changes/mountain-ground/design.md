@@ -28,13 +28,15 @@
 
 ## Decisions
 
-1. **Flat tops in version 11.** In Mountains, a cell whose six neighbours
+1. **Flat tops in version 12.** (Planned as 11; `swamps` took version 11
+   on 2026-11-18, so this is version 12, on version 11's ground.)
+   In Mountains, a cell whose six neighbours
    stand within 1 m of it takes: Snow above a snow line lowered to about
    170 m and ragged by a coarse noise (±15 m); alpine Grass below it down to
    the biome's edge, with patches of Dirt by a noise; a steep cell stays
    Stone. Under grass or dirt the column keeps two metres of soil over
    stone, as the lowlands do. Six extra `surface_altitude` calls a column,
-   at generation only. V10 keeps its ground: its digest is pinned first.
+   at generation only. V11 keeps its ground: its digest is pinned first.
 2. **Alpine soil.** Grass and Dirt on a Mountains cell draw the sheet's
    alpine soil (2,3) and the fields' grass side on their risers, so they
    read as a mountain meadow, not scree. Draw-time.
