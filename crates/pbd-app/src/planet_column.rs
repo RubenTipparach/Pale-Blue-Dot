@@ -135,6 +135,41 @@ const _: () = assert!(super::terrain::DIRT < 16);
 /// every slot's materials ([`ColumnTier::gpu_placed_sheets`]).
 pub const PLACED_SHEETS_BASE: usize = COLUMN_CAPACITY as usize * MATERIAL_WORDS;
 
+/// One column's render codes, eight to a word, into `out` (`MATERIAL_WORDS`
+/// words): one slot of [`ColumnTier::gpu_materials`].
+pub(crate) fn pack_materials(column: &Column, out: &mut [u32]) {
+    out.fill(0);
+    for layer in 0..LAYERS {
+        let shift = (layer % MATERIAL_PER_WORD) * 4;
+        // As drawn: a drowned top is a bed (`flora-v2` 12.10).
+        out[layer / MATERIAL_PER_WORD] |=
+            (render_code(column.drawn_material(layer)) & 0xf) << shift;
+    }
+}
+
+/// One column's placed sheets into `out`: one slot of
+/// [`ColumnTier::gpu_placed_sheets`], zeroes for a column nobody built on.
+pub(crate) fn pack_placed_sheets(column: &Column, out: &mut [u32]) {
+    out.fill(0);
+    if !column.any_placed() {
+        return;
+    }
+    for layer in 0..LAYERS {
+        let sheet = placed_sheet(column, layer);
+        if sheet != 0 {
+            out[layer / MATERIAL_PER_WORD] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
+        }
+    }
+}
+
+/// A record as the terrain shader reads it, its reach top in `more[2]`
+/// ([`ColumnTier::gpu_records_with_reach`]).
+pub(crate) fn with_reach_top(record: &GpuColumn, top: u16) -> GpuColumn {
+    let mut out = *record;
+    out.more[2] = (record.more[2] & DEGREE_MASK) | u32::from(top) << REACH_TOP_SHIFT;
+    out
+}
+
 /// The sheet a layer is drawn from if somebody PLACED it, plus one, or
 /// nought for generated ground (`placed-blocks-keep-material`): the tileset
 /// of the block's own home ([`column::home_biome`]), never the biome it
@@ -813,15 +848,34 @@ impl ColumnTier {
     /// and stone because those are the layers the generator wrote.
     pub fn gpu_materials(&self) -> Vec<u32> {
         let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
-        for (slot, column) in self.columns.iter().enumerate() {
-            for layer in 0..LAYERS {
-                let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
-                let shift = (layer % MATERIAL_PER_WORD) * 4;
-                // As drawn: a drowned top is a bed (`flora-v2` 12.10).
-                words[word] |= (render_code(column.drawn_material(layer)) & 0xf) << shift;
-            }
+        for (column, out) in self
+            .columns
+            .iter()
+            .zip(words.chunks_exact_mut(MATERIAL_WORDS))
+        {
+            pack_materials(column, out);
         }
         words
+    }
+
+    /// One slot's light, as [`ColumnTier::gpu_light`] lays it, into `out`
+    /// (`LIGHT_WORDS` words; `fine-set-upload` D1). Four one-byte levels to
+    /// a word, low byte first, which is `u32::from_le_bytes` of the levels as
+    /// they lie: no shifting layer by layer.
+    pub(crate) fn pack_light(&self, slot: usize, out: &mut [u32]) {
+        let Some(levels) = self.light.get(slot) else {
+            out.fill(0);
+            return;
+        };
+        for (word, four) in out.iter_mut().zip(levels.chunks_exact(LIGHT_PER_WORD)) {
+            *word = u32::from_le_bytes([four[0].0, four[1].0, four[2].0, four[3].0]);
+        }
+    }
+
+    /// Each slot's unit direction (`fine-set-upload`: a layout is the same
+    /// when these are).
+    pub(crate) fn centre_dirs(&self) -> &[Vec3] {
+        &self.centres
     }
 
     /// Every layer's PLACED sheet, eight to a word, `MATERIAL_WORDS` words per
@@ -833,17 +887,12 @@ impl ColumnTier {
     /// placed layer costs more than its zeroes.
     pub fn gpu_placed_sheets(&self) -> Vec<u32> {
         let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
-        for (slot, column) in self.columns.iter().enumerate() {
-            if !column.any_placed() {
-                continue;
-            }
-            for layer in 0..LAYERS {
-                let sheet = placed_sheet(column, layer);
-                if sheet != 0 {
-                    let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
-                    words[word] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
-                }
-            }
+        for (column, out) in self
+            .columns
+            .iter()
+            .zip(words.chunks_exact_mut(MATERIAL_WORDS))
+        {
+            pack_placed_sheets(column, out);
         }
         words
     }
@@ -865,6 +914,9 @@ impl ColumnTier {
     /// a block is in the bound the moment its records go up.
     ///
     /// [`reach top`]: REACH_TOP_SHIFT
+    /// [`TierImage::build`](super::tier_gpu::TierImage::build) makes the
+    /// same records for the upload; this is their reference.
+    #[cfg(test)]
     pub(crate) fn gpu_records_with_reach(&self, reach_m: f32) -> Vec<GpuColumn> {
         let records = self.gpu_records();
         let rings = reach_rings(records, &self.centres, reach_m);
@@ -872,11 +924,7 @@ impl ColumnTier {
         records
             .iter()
             .zip(tops)
-            .map(|(record, top)| {
-                let mut out = *record;
-                out.more[2] = (record.more[2] & DEGREE_MASK) | u32::from(top) << REACH_TOP_SHIFT;
-                out
-            })
+            .map(|(record, top)| with_reach_top(record, top))
             .collect()
     }
 

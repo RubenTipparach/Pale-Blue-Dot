@@ -80,10 +80,16 @@ SCENARIOS = {
     # dries in view the whole sample. Sampled from POUR_START to POUR_DONE.
     "pour": ["--walk", "--pitch", "-30", "--yaw", "90", "--pour", "3", "--pour-ahead", "12",
              "--pit", "9", "--pour-for", "60"],
+    # The owner's desert cascade (`cascade-perf`): a wide river down many
+    # one-layer steps, a fall's foot and its mist at every lip. Held looking
+    # down it, then walked along it.
+    "cascade": ["--walk", "--at", "23.2255", "-3.012", "--yaw", "0", "--pitch", "-10", "--stand", "45"],
+    "cascade-walk": ["--walk", "--at", "23.2255", "-3.012", "--yaw", "0", "--pitch", "-10",
+                     "--walk-distance", "250"],
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "town": "WALK_DONE",
-        "sail": "SAIL_DONE", "pour": "POUR_DONE"}
+        "sail": "SAIL_DONE", "pour": "POUR_DONE", "cascade": "STAND_DONE", "cascade-walk": "WALK_DONE"}
 # A scenario whose hard part starts on a line of its own: sampled from that
 # line (no further warm-up) to its DONE line, not from the ready line.
 START = {"pour": "POUR_START"}

@@ -230,6 +230,18 @@ pub fn run_ticks(
     }
     let set = Arc::new(set);
     contact.set_fine(&set);
+    if changed == 0 {
+        // Nothing moved (`cascade-perf`): the queue the ticks worked
+        // through is kept, but no cell, light or record is different, so
+        // the version stays and nothing derived from it is rebuilt: no
+        // re-upload of the whole tier to the GPU (8-10 ms on the render
+        // thread a tick on the M4 Max), no remesh, and the drawing's ease
+        // runs on undisturbed.
+        fine.set = set;
+        step.prev = None;
+        step.after = None;
+        return 0;
+    }
     let made = Arc::as_ptr(&set) as usize;
     fine.set = set;
     fine.version += 1;
@@ -250,10 +262,12 @@ pub fn run_ticks(
 
 /// Once a second, while anything is queued and no set is in flight (a set
 /// built before a tick would land without it).
+#[allow(clippy::too_many_arguments)]
 fn tick_water(
     time: Res<Time>,
     mut clock: ResMut<WaterClock>,
     mut step: ResMut<WaterStep>,
+    mut meshed: ResMut<Meshed>,
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<PlanetContact>>,
     save: Option<ResMut<WorldSave>>,
@@ -279,7 +293,16 @@ fn tick_water(
     }
     clock.since_s -= liquid::TICK_S;
     clock.since_s = clock.since_s.min(liquid::TICK_S);
+    let version = fine.version;
     let changed = run_ticks(&mut fine, &mut contact, &mut save, 1, &mut step);
+    // A tick that moved nothing keeps its version, and the mesh drawn is
+    // still the set's: it is not meshed again (`cascade-perf`).
+    if fine.version == version && meshed.version == version {
+        meshed.set = Arc::as_ptr(&fine.set) as usize;
+        if meshed.last_set.is_some() {
+            meshed.last_set = Some(fine.set.clone());
+        }
+    }
     clock.ticks += 1;
     debug!(
         "water tick {}: {changed} cells changed, {} queued",
@@ -2669,6 +2692,10 @@ struct SplashState {
     order: Vec<(f32, usize)>,
     /// This frame's feet: the mesher's, and those leaving it still fading.
     feet: Vec<Foot>,
+    /// The measurement's running totals (`cascade-perf`).
+    spent_us: f64,
+    spent_frames: u32,
+    spent_s: f32,
 }
 
 /// Step `v` toward `want` (0 or 1) by `dt` over `fade_s`.
@@ -2697,6 +2724,7 @@ fn animate_splash(
     mut gpu_feet: ResMut<FallFeetGpu>,
     mut state: Local<SplashState>,
 ) {
+    let spent_from = std::time::Instant::now();
     let defaults = crate::config::FallLook::default();
     let look = water.as_deref().map_or(&defaults, |w| &w.falls);
     let Some(frame) = frame else {
@@ -2942,6 +2970,22 @@ fn animate_splash(
         lanes.clear();
     }
     splash.lanes = lanes;
+    // MEASUREMENT (`cascade-perf`): what the splash costs the main world,
+    // and how much of it there is, every two seconds at debug level.
+    state.spent_us += spent_from.elapsed().as_secs_f64() * 1e6;
+    state.spent_frames += 1;
+    state.spent_s += dt;
+    if state.spent_s >= 2.0 {
+        debug!(
+            "SPLASH_STATS feet {} ({} in reach), quads {quads}, {:.0} us a frame",
+            state.feet.len(),
+            near_rank,
+            state.spent_us / f64::from(state.spent_frames.max(1))
+        );
+        state.spent_us = 0.0;
+        state.spent_frames = 0;
+        state.spent_s = 0.0;
+    }
 }
 
 #[cfg(test)]

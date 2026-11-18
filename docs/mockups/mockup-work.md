@@ -48,6 +48,7 @@ https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`, 
 | 5 (new account) | 2026-11-17 | M37 Fish Behaviour added (built on the live version 4, which carried M36 Tools in Hand from `claude/peaceful-thompson-fyoxgt`). |
 | 7 (new account) | 2026-11-17 | M37 version 2: the Body wave tab (built on the live version 6, which carried M36 version 5 and the Tools in Hand Videos page from another session). |
 | 17 (new account) | 2026-11-17 | M37 version 3: the Hooked tab's snapping fixed (built on the live version 16, which carried M36 version 12 from another session; three more bare apostrophes in M36's note escaped, which had stopped the page's script). |
+| 19 (new account) | 2026-11-17 | The `cascade-perf` benchmark (Desert Cascade Frame) added to Misc. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29

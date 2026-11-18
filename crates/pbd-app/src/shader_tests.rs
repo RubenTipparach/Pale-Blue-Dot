@@ -656,6 +656,8 @@ fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
     for entry in [
         "vertex",
         "fragment",
+        "vertex_flowing",
+        "flowing_depth",
         "compose",
         "lens",
         "lens_mist_pass",
@@ -674,6 +676,44 @@ fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
             "water.wgsl declares {entries:?}, and a water pipeline asks for `{entry}`"
         );
     }
+}
+
+/// `cascade-perf`: the flowing water's depth pre-pass discards exactly what
+/// its shading does before any shading (one function for both), so the
+/// shading, testing against that depth and writing none, draws the same
+/// nearest face as when it wrote its own; and no discard is left in
+/// `fragment` that the pre-pass does not make, bar the ones it repeats.
+#[test]
+fn the_flowing_water_s_depth_pre_pass_hides_what_its_shading_hides() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let depth = wgsl_fn_body(&src, "flowing_depth");
+    assert!(
+        depth.contains("if (water_hidden(in)) { discard; }"),
+        "{depth}"
+    );
+    let fragment = wgsl_fn_body(&src, "fragment");
+    let first = fragment.find("discard").expect("a discard");
+    let call = fragment
+        .find("if (water_hidden(in)) { discard; }")
+        .expect("the shared test");
+    assert!(call < first + 40, "a discard before the shared test");
+    // What `fragment` still discards later is the shared test's own
+    // conditions over again (the scene in front, the back of a face from
+    // dry air): nothing the pre-pass would have kept.
+    let later: Vec<&str> = fragment[call + 40..]
+        .lines()
+        .filter(|l| l.contains("discard"))
+        .map(str::trim)
+        .collect();
+    assert_eq!(
+        later,
+        [
+            "if (own_depth > in.clip.z + 1e-6) { discard; }",
+            "if (below && view.fx.y < 0.25) { discard; }"
+        ]
+    );
+    let cpu = include_str!("planet_water.rs");
+    assert!(cpu.contains("depth_write_enabled: matches!(pass, Pass::Cap | Pass::FlowingDepth),"));
 }
 
 /// `rain-under-water`: the rain is in the air. From a camera under the sea

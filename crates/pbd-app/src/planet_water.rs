@@ -1015,8 +1015,12 @@ fn initialize_pipelines(
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Pass {
     Cap,
-    /// The game's own water, by the cap's fragment (`water-flow` E6).
+    /// The game's own water, by the cap's fragment (`water-flow` E6), against
+    /// the depth its pre-pass laid.
     Flowing,
+    /// The game's own water's depth alone, first (`cascade-perf`), so its
+    /// shading runs once a pixel.
+    FlowingDepth,
     /// The fall splash, after the water and against its depth (`water-flow`
     /// 6.1).
     Splash,
@@ -1100,6 +1104,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     ..default()
                 },
                 "fragment",
+            ),
+            Pass::FlowingDepth => (
+                "Flowing water's depth, before its shading",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("vertex_flowing")),
+                    ..default()
+                },
+                "flowing_depth",
             ),
             Pass::Splash => (
                 "Fall splash over the water, against its depth",
@@ -1203,8 +1217,12 @@ impl SpecializedRenderPipeline for WaterPipelines {
             | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
-                depth_write_enabled: matches!(pass, Pass::Cap | Pass::Flowing),
-                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing) {
+                // The flowing water's shading tests against the depth its
+                // pre-pass wrote and writes none (`cascade-perf`): the same
+                // nearest face wins as when it wrote its own, and a face
+                // behind it is rejected before its fragment runs.
+                depth_write_enabled: matches!(pass, Pass::Cap | Pass::FlowingDepth),
+                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing | Pass::FlowingDepth) {
                     CompareFunction::GreaterEqual
                 } else {
                     CompareFunction::Always
@@ -1237,7 +1255,10 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     super::weather_maps::layout(),
                     self.splash_layout.clone(),
                 ]
-            } else if matches!(key.pass, Pass::Cap | Pass::Flowing | Pass::Compose) {
+            } else if matches!(
+                key.pass,
+                Pass::Cap | Pass::Flowing | Pass::FlowingDepth | Pass::Compose
+            ) {
                 vec![
                     self.data_layout.clone(),
                     scene,
@@ -1352,6 +1373,13 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         blend: Some(BlendState::ALPHA_BLENDING),
                         write_mask: ColorWrites::ALL,
                     })]
+                } else if key.pass == Pass::FlowingDepth {
+                    // Depth only: the pass's colour target, untouched.
+                    vec![Some(ColorTargetState {
+                        format: key.format,
+                        blend: None,
+                        write_mask: ColorWrites::empty(),
+                    })]
                 } else if key.pass == Pass::LensMist {
                     vec![Some(ColorTargetState {
                         format: MIST_FORMAT,
@@ -1399,6 +1427,8 @@ pub(super) struct WaterViewGpu {
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     flowing_pipe: CachedRenderPipelineId,
+    /// Its depth pre-pass (`cascade-perf`).
+    flowing_depth_pipe: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
     cloud_march: CachedRenderPipelineId,
     cloud_resolve: CachedRenderPipelineId,
@@ -2248,6 +2278,7 @@ fn prepare_water_views(
         commands.entity(entity).insert(WaterViewGpu {
             cap: pipeline(Pass::Cap),
             flowing_pipe: pipeline(Pass::Flowing),
+            flowing_depth_pipe: pipeline(Pass::FlowingDepth),
             flowing: flow,
             flowing_version,
             flowing_count,
@@ -2577,9 +2608,15 @@ impl ViewNode for WaterCompositeNode {
             pass.draw_indirect(&planet_view.indirect, 32);
             // The game's own water, in the same pass and depth, so the sheet
             // and a poured pool sort as one water.
+            // Its depth first, then its shading against it, so a cascade's
+            // faces stacked behind the nearest run none of the waves
+            // (`cascade-perf`). Both or neither: the shading writes no depth.
             if water.flowing_count > 0
+                && let Some(depth) = cache.get_render_pipeline(water.flowing_depth_pipe)
                 && let Some(flowing) = cache.get_render_pipeline(water.flowing_pipe)
             {
+                pass.set_render_pipeline(depth);
+                pass.draw(0..water.flowing_count, 0..1);
                 pass.set_render_pipeline(flowing);
                 pass.draw(0..water.flowing_count, 0..1);
             }
