@@ -241,7 +241,7 @@ mod tests {
         t.add(DIRT, 1);
         t.add(SAND, 1);
         assert_eq!(t.shown().len(), 2);
-        assert_eq!(words(&t.shown()[0]), "Dirt x2");
+        assert_eq!(words(&t.shown()[0]), "dirt x2");
         assert_eq!(
             t.shown()[0].age_s,
             0.0,
