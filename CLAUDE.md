@@ -272,7 +272,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL (`docs/design/survey.html`),
+https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9 (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -294,7 +294,7 @@ with its screenshots.
 
 **Standing instruction from the user** (the same message): every Pale Blue
 Dot artifact is listed on one master page, the mockup tracker,
-https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`).
+https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (`docs/mockups/tracker.html`).
 The playtest bug list is https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou
 (`docs/design/bug-list.html`). These links are the owner's account since
 2026-11-16 ("When the owner changes accounts" in the `mockup-tracker` skill).

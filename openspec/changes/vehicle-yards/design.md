@@ -308,7 +308,7 @@ judged by eye go to the survey with the page's screenshots:
 Everything else is "recommendation taken (ask only with screenshots)".
 
 Asked on 2026-11-12 as **A1** (chibi proportions) and **A2** (whole-cell hulls)
-in the survey (https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL), each with
+in the survey (https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9), each with
 the mockups' screenshots. The rest of decisions 2 to 4, and the decisions
 each page lists (C1 to C8, D1 to D6 and H1 to H6 on the pages), are
 recommendations taken (ask only with screenshots), recorded under the

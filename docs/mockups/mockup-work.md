@@ -8,7 +8,7 @@ itself (CLAUDE.md, "Write it up before touching code").
 
 ## The tracker
 
-https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`, `db` and `user`).
+https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (`docs/mockups/tracker.html`, `db` and `user`).
 
 | Version | Date | What changed |
 | ---: | --- | --- |
@@ -58,7 +58,7 @@ you republish all artifacts (new ones included) and update the tracker?") everyt
 back to the account that holds the tracker: M1 to M18, M20 to M24 and the Fish Range Atlas were
 updated in place at their original links from the pages committed here, M25 to M29 were published
 there as new artifacts, the survey (merged from main and claude/perf-tuning) was updated at
-https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL, and every link below, in the tracker, CLAUDE.md,
+https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9, and every link below, in the tracker, CLAUDE.md,
 the skills and the OpenSpec changes, is that account's. The second account's copies are left as they
 are: any tracker reviews or survey answers given there stayed behind and cannot be read from here,
 so the stages recorded below stand. M19 (retired), the gate and question pages and the benchmark

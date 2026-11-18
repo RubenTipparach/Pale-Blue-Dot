@@ -17,7 +17,7 @@ things stand and what to do next, in priority order.
 - **Bug list page** (the owner's bugs with screenshots):
   https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou
   (`docs/design/bug-list.html`). Keep it current, and add the bugs below to it.
-- **Tracker:** https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu
+- **Tracker:** https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA
 - **Cloud session "PDB environment improvements"** works on
   `claude/env-v2-finish`. Its PRs go into `claude/env-v2`: M34 River Craft,
   inner tubes. Keep it mergeable: merge `claude/env-v2` into it, never
