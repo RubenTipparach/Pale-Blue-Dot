@@ -85,6 +85,12 @@ pub struct Launch {
     /// walk up and down a town's lane for a video (`--walk --at` puts it
     /// there).
     pub stroll: Option<f32>,
+    /// `--stand SECONDS`: a measurement instrument (`cascade-perf`). The
+    /// walker stands where `--walk --at` put it, looking the way `--yaw` and
+    /// `--pitch` say, touching nothing; logs `STAND_START` once it stands
+    /// and `STAND_DONE` and quits that long after: a held view for the frame
+    /// log to measure.
+    pub stand: Option<f32>,
     /// `--coast-walk METRES`: a recording instrument (`coast-walk`). The
     /// walker walks (no sprint) along the shore with the sea on one side,
     /// crosses the rivers it meets, keeps off cliffs and never digs; logs
@@ -457,6 +463,7 @@ impl Launch {
             frame_log: None,
             walk_distance: None,
             stroll: None,
+            stand: None,
             coast_walk: None,
             clock_runs: false,
             stroll_leg: None,
@@ -1154,6 +1161,19 @@ impl Launch {
                         "--stroll takes seconds"
                     );
                     result.stroll = Some(seconds);
+                    result.walk = true;
+                }
+                "--stand" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--stand requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--stand takes seconds"
+                    );
+                    result.stand = Some(seconds);
                     result.walk = true;
                 }
                 "--coast-walk" => {
@@ -2045,6 +2065,14 @@ pub fn run(args: &[String]) {
     );
     cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
+        // MEASUREMENT (`cascade-perf`): a measured run is never paced by
+        // focus. Bevy holds an unfocused window to 60 Hz, which hid every
+        // frame under 16.7 ms when the window could not take focus (a
+        // locked screen); the run still logs it lost focus.
+        app.insert_resource(bevy::winit::WinitSettings {
+            focused_mode: bevy::winit::UpdateMode::Continuous,
+            unfocused_mode: bevy::winit::UpdateMode::Continuous,
+        });
         // A route that ends the run when it lands, like `--walk-distance`.
         app.add_systems(
             Last,
@@ -2253,6 +2281,9 @@ pub fn run(args: &[String]) {
         }
         if launch.stroll.is_some() {
             app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
+        }
+        if launch.stand.is_some() {
+            app.add_systems(PreUpdate, stand_script.after(bevy::input::InputSystems));
         }
         if launch.coast_walk.is_some() {
             app.add_systems(
@@ -3595,6 +3626,35 @@ fn walk_script(
 fn ground_m(a: Vec3, b: Vec3) -> f32 {
     let chord = a.normalize_or(Vec3::Y).distance(b.normalize_or(Vec3::Y));
     2.0 * (chord * 0.5).min(1.0).asin() * pbd_app::planet::PLANET_RADIUS
+}
+
+/// The `--stand` instrument: hold still where the walker was put, for the
+/// frame log, and quit after that long.
+fn stand_script(
+    launch: Res<Launch>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<(), With<pbd_app::walking::Walker>>,
+    mut exit: MessageWriter<AppExit>,
+    mut started: Local<Option<Instant>>,
+    mut done: Local<bool>,
+) {
+    let Some(seconds) = launch.stand else {
+        return;
+    };
+    if !state.active || *done || walkers.single().is_err() {
+        return;
+    }
+    state.captured = true;
+    state.scripted = true;
+    let since = *started.get_or_insert_with(|| {
+        info!("STAND_START {seconds:.0} s");
+        Instant::now()
+    });
+    if since.elapsed().as_secs_f32() >= seconds {
+        *done = true;
+        info!("STAND_DONE {seconds:.0} s");
+        exit.write(AppExit::Success);
+    }
 }
 
 /// The `--stroll` instrument: walk ahead at walking pace for a video, hop

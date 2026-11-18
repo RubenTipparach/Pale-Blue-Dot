@@ -790,8 +790,12 @@ fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return e;
 }
 
-@fragment
-fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+// Whether the sheet or the game's water draws nothing at this pixel
+// (`cascade-perf`): every discard of `fragment` that does not hang on its
+// shading, first, so a fragment hidden behind the scene or dithered away
+// costs none of the waves, and the same test for the flowing water's depth
+// pre-pass, which leaves the shading one fragment a pixel.
+fn water_hidden(in: VertexOut) -> bool {
     let radial = safe_normal(in.body_position);
     // The same partition the terrain applies, in the same pixel's dither
     // class (`distance-lod-fade`): the sheet is drawn where its owner (the
@@ -804,24 +808,48 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     if (in.part_mark != 0u) {
         let dissolve = fract(52.9829189*fract(dot(in.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
         let new_half = dissolve < view.lod_prev.w;
-        if (in.part_mark == 1u && !new_half) { discard; }
-        if (in.part_mark == 2u && new_half) { discard; }
+        if (in.part_mark == 1u && !new_half) { return true; }
+        if (in.part_mark == 2u && new_half) { return true; }
     }
     let m = water_bayer4(in.clip.xy);
-    if (in.fade_t.z > m) { discard; }
+    if (in.fade_t.z > m) { return true; }
     // The tier's water and the far river's sheet share its last 25 m by the
     // same dither, so the one gives way to the other with no seam (design 13).
     if (in.kind != 0u && view.column.w > 0.0) {
         let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
             * length(in.body_position);
         let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
-        if (in.kind == 4u && far <= m) { discard; }
-        if (in.kind != 4u && far > m) { discard; }
+        if (in.kind == 4u && far <= m) { return true; }
+        if (in.kind != 4u && far > m) { return true; }
     }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
-        if (owner_t <= m) { discard; }
+        if (owner_t <= m) { return true; }
     }
+    // Behind the scene (the main pass's depth; reversed Z, larger nearer).
+    let uv = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
+    if (load_depth(uv) > in.clip.z + 1e-6) { return true; }
+    // The back of the game's water seen from dry air: the face toward the
+    // eye draws it (as `fragment` decides `below` for it).
+    if (in.kind != 0u && view.fx.y < 0.25
+        && dot(view.camera_time.xyz - in.local_position, safe_normal(in.normal)) < 0.0) {
+        return true;
+    }
+    return false;
+}
+
+// The flowing water's depth pre-pass (`cascade-perf`): its depth alone, so
+// its shading pass runs `fragment` once a pixel, for the nearest face, not
+// for every face behind it drawn first (a cascade stacks many).
+@fragment
+fn flowing_depth(in: VertexOut) {
+    if (water_hidden(in)) { discard; }
+}
+
+@fragment
+fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let radial = safe_normal(in.body_position);
+    if (water_hidden(in)) { discard; }
     let face = safe_normal(in.normal);
     let sun_direction = safe_normal(view.sun.xyz);
     let time = view.camera_time.w;

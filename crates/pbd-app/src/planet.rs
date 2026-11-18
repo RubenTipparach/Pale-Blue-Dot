@@ -1536,6 +1536,13 @@ fn upload_fine(
         planet.counts_prev = planet.counts;
         planet.half = 1 - planet.half;
     }
+    // MEASUREMENT (`cascade-perf`): the upload's parts, at debug level.
+    let mut parts = [0.0f64; 6];
+    let mut part = std::time::Instant::now();
+    let mut lap = |i: usize, part: &mut std::time::Instant| {
+        parts[i] = part.elapsed().as_secs_f64() * 1e3;
+        *part = std::time::Instant::now();
+    };
     let stride = size_of::<GpuCell>() as u64;
     for (k, level) in fine.set.levels.iter().enumerate() {
         let offset = fine_region(planet.base_count, planet.half, k) * stride;
@@ -1554,7 +1561,9 @@ fn upload_fine(
         || crate::config::LightingSettings::default().reflection_reach_m,
         |l| l.reflection_reach_m,
     );
+    lap(0, &mut part);
     let records = fine.set.columns.gpu_records_with_reach(reach_m);
+    lap(1, &mut part);
     if !records.is_empty() {
         queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(&records));
         // The light goes up with the records that decide what it lights. Two
@@ -1565,6 +1574,7 @@ fn upload_fine(
         // other half and is blended in from this one (`baked-light-ease`
         // 7.3); anything else overwrites the newest half and is whole at once.
         let light = fine.set.columns.gpu_light();
+        lap(2, &mut part);
         let (half, blending) = light_half(
             planet.light_new,
             relight.is_some_and(|r| r.version == fine.version),
@@ -1585,6 +1595,7 @@ fn upload_fine(
         planet.light_anchor = Some(fine.set.anchor);
         // And the materials, for the same reason: a face drawn from a stale
         // layer is a placed stone wearing the earth that was there before.
+        lap(3, &mut part);
         let materials = fine.set.columns.gpu_materials();
         queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
         // And which of those layers somebody placed, so a placed block is
@@ -1595,8 +1606,21 @@ fn upload_fine(
             (column::PLACED_SHEETS_BASE * 4) as u64,
             bytemuck::cast_slice(&sheets),
         );
+        lap(4, &mut part);
         let centres = fine.set.columns.gpu_centres();
         queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
+        lap(5, &mut part);
+        debug!(
+            "UPLOAD_PARTS levels {:.2} records {:.2} light {:.2} light-write {:.2} materials {:.2} centres {:.2} ms ({} records, {} light words)",
+            parts[0],
+            parts[1],
+            parts[2],
+            parts[3],
+            parts[4],
+            parts[5],
+            records.len(),
+            light.len()
+        );
     }
     planet.uploaded = fine.version;
     match how {

@@ -618,6 +618,10 @@ scenario, at night, with vsync, and the slow frames classified;
 https://claude.ai/artifact/Mytd1vV76J9UqSBfkQv6QQ.
 The one-part-off breakdown (where the frame goes, the same Mac) is
 https://claude.ai/artifact/G23GqozWQUZG6g5vAWb5sE.
+The `cascade-perf` page (the owner's desert river cascade on the Mac: where
+the frame goes, the same-picture cuts, and the A/B still owed on an unlocked
+machine; `docs/benchmarks/2026-11-17-cascade-perf/`) is
+https://claude.ai/artifact/9q2VTvHkTYwAniaxYbKjWJ.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 
