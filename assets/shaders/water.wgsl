@@ -456,11 +456,16 @@ fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
     out.normal = safe_normal(mix(f.xyz, b.xyz, t));
     out.sky_light = mix(e.w, a.w, t);
     out.flow_uv = mix(e.xyz, c.xyz, t);
-    out.level = 0u;
+    // The river's real water is the finest level's (`river-cache` design
+    // 14): it fades out across the finest band's ring with the ground it
+    // stands on, where the coarser levels' still sheet fades in.
+    let finest = u32(view.lod.w) + 4u;
+    let band = water_band_t(safe_normal(p), finest, view.lod.xyz, view.bands, view.bands_in);
+    out.level = finest;
     out.owner_a = safe_normal(p);
     out.owner_b = out.owner_a;
     out.sea_slope = vec3<f32>(0.0);
-    out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
+    out.fade_t = vec3<f32>(band, band, 0.0);
     out.part_mark = 0u;
     out.kind = max(u32(b.w + 0.5), 1u);
     return out;
@@ -827,15 +832,12 @@ fn water_hidden(in: VertexOut) -> bool {
     }
     let m = water_bayer4(in.clip.xy);
     if (in.fade_t.z > m) { return true; }
-    // The tier's water and the far river's sheet share its last 25 m by the
-    // same dither, so the one gives way to the other with no seam (design 13).
-    if (in.kind != 0u && view.column.w > 0.0) {
-        let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
-            * length(in.body_position);
-        let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
-        if (in.kind == 4u && far <= m) { return true; }
-        if (in.kind != 4u && far > m) { return true; }
-    }
+    // A river's still sheet stands in only where the ground is a level of
+    // detail (`river-cache` design 14; the owner: "there should be no stand
+    // in sheets ... thats for orbital view, or when terrain is in LOD"):
+    // over the finest level the river's real water is drawn, by the tier and
+    // the river band, so no distance dither hands one to the other.
+    if (in.kind == 4u && in.level >= u32(view.lod.w) + 4u) { return true; }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
         if (owner_t <= m) { return true; }
