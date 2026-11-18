@@ -489,7 +489,9 @@ which wait for a request.
   underwater overhaul (M25, `ocean-environments`).
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20).
+  first rungs only: water and wind (M20), and logging ("add logging system
+  to the game (in phase 3)": logs on a raft, or dropped in a river to float
+  down it and stop where the water stops flowing; M34, `log-drives`).
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for
