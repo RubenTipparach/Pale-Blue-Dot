@@ -489,7 +489,9 @@ which wait for a request.
   underwater overhaul (M25, `ocean-environments`).
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20).
+  first rungs only: water and wind (M20), and logging ("add logging system
+  to the game (in phase 3)": logs on a raft, or dropped in a river to float
+  down it and stop where the water stops flowing; M34, `log-drives`).
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
