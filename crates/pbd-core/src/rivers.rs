@@ -92,6 +92,19 @@ struct Node {
     half_width: f32,
 }
 
+/// One cell of a river's [`RiverMap::course`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CourseStep {
+    /// The lattice cell's centre, a unit direction.
+    pub centre: Vec3,
+    /// The river's half width there, metres.
+    pub half_width_m: f32,
+    /// Its water's top, whole metres over sea level.
+    pub level: i32,
+    /// False for the last step: the sea cell the river runs into.
+    pub river: bool,
+}
+
 /// The body's drainage, built once per world.
 #[derive(Debug, PartialEq)]
 pub struct RiverMap {
@@ -395,6 +408,76 @@ impl RiverMap {
         let d = self.nodes[k].down;
         (d != NONE).then_some(d as usize)
     }
+
+    /// The whole river through the river cell nearest `d` within `within`
+    /// cells of its lattice cell, from its source to the cell it meets the
+    /// sea in (`river-cache` design 8, the river walk): up from that cell by
+    /// the widest feeder (the one most water drains through) until no river
+    /// feeds it, then down to the sea. Each step is a cell's centre, its
+    /// river's half width, m, and its level. Empty with no river near.
+    pub fn course(&self, d: Vec3, within: i64) -> Vec<CourseStep> {
+        let d = d.normalize_or(Vec3::Y);
+        let (ci, cj) = self.cell_of(d);
+        let mut nearest: Option<(f32, usize)> = None;
+        for dj in -within..=within {
+            for di in -within..=within {
+                let Some(k) = self.index(ci + di, cj + dj) else {
+                    continue;
+                };
+                if !self.nodes[k].river {
+                    continue;
+                }
+                let gap = self.centre(k).angle_between(d);
+                if nearest.is_none_or(|(g, _)| gap < g) {
+                    nearest = Some((gap, k));
+                }
+            }
+        }
+        let Some((_, start)) = nearest else {
+            return Vec::new();
+        };
+        // Up: a feeder drains into its neighbour, so the eight cells round a
+        // cell hold every one; the widest, ties to the lowest index.
+        let mut source = start;
+        for _ in 0..self.nodes.len() {
+            let (i, j) = (source % self.width, source / self.width);
+            let mut best: Option<usize> = None;
+            for dj in -1i64..=1 {
+                for di in -1i64..=1 {
+                    let Some(k) = self.index(i as i64 + di, j as i64 + dj) else {
+                        continue;
+                    };
+                    let n = self.nodes[k];
+                    if k == source || !n.river || n.down != source as u32 {
+                        continue;
+                    }
+                    if best.is_none_or(|b| n.half_width > self.nodes[b].half_width) {
+                        best = Some(k);
+                    }
+                }
+            }
+            match best {
+                Some(up) => source = up,
+                None => break,
+            }
+        }
+        let mut out = Vec::new();
+        let mut k = source;
+        for _ in 0..self.nodes.len() {
+            let n = self.nodes[k];
+            out.push(CourseStep {
+                centre: self.centre(k),
+                half_width_m: n.half_width,
+                level: n.level,
+                river: n.river,
+            });
+            if !n.river || n.down == NONE {
+                break;
+            }
+            k = n.down as usize;
+        }
+        out
+    }
 }
 
 type Maps = Mutex<HashMap<(u64, u32, u32), &'static OnceLock<RiverMap>>>;
@@ -648,6 +731,40 @@ mod tests {
 
     fn v8() -> TerrainConfig {
         TerrainConfig::for_version(8).expect("version 8")
+    }
+
+    /// A river's course runs from a source no river feeds, down cells each
+    /// draining into the next, to the sea; and it passes the cell it was
+    /// asked about (`river-cache` design 8). The owner's river at 20.885
+    /// -6.393 is 1.6 km long.
+    #[test]
+    fn a_course_runs_from_its_source_to_the_sea() {
+        let cfg = TerrainConfig::for_version(crate::terrain::GENERATOR_VERSION).unwrap();
+        let settings = cfg.rivers.expect("rivers");
+        let map = map(&cfg, &settings);
+        let d = crate::geo::direction(crate::geo::LatLon {
+            lat: 20.885f32.to_radians(),
+            lon: (-6.393f32).to_radians(),
+        });
+        let course = map.course(d, 2);
+        assert!(course.len() > 10, "{} steps", course.len());
+        let last = course.last().unwrap();
+        assert!(!last.river, "the course ends in the sea");
+        assert!(course[..course.len() - 1].iter().all(|s| s.river));
+        assert!(
+            course.windows(2).all(|w| w[1].level <= w[0].level),
+            "its water never rises"
+        );
+        let metres: f32 = course
+            .windows(2)
+            .map(|w| w[0].centre.angle_between(w[1].centre) * cfg.radius_m)
+            .sum();
+        assert!((1_400.0..1_800.0).contains(&metres), "{metres} m");
+        let nearest = course
+            .iter()
+            .map(|s| s.centre.angle_between(d) * cfg.radius_m)
+            .fold(f32::INFINITY, f32::min);
+        assert!(nearest < 60.0, "passes the spot: {nearest} m");
     }
 
     /// The drainage map built on many threads is the one-thread map, node for

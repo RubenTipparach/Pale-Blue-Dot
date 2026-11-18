@@ -229,3 +229,193 @@ estimate, not a measurement: task 3 asks for the desktop's `READY` line.
 
 `rivers::far_surface` over a fine set's records, measured after only: 30-78
 ms of one-thread CPU (design 5's candidates apply to it too).
+
+## 7. The dry channel: far river sheets culled at the sea's level (2026-11-17)
+
+**The report.** The owner, twice on one river (map 20.150S 6.618W and
+20.885S 6.393W, 90-92 m elevation, generator version 10): "river still not
+cached, meaning it takes a while for it to load", with the debug line "70 m
+from anchor | 3117 columns | rebuilding 1.9 s"; then, standing on the bank
+looking downstream, "it doesnt even load in the distance": full near the
+player, and past a small fall a few tens of metres down, a dry terraced
+channel to the horizon, even after standing there.
+
+**What design 1 promised, and what it missed.** Sections 1-6 measured the
+CPU: river water is derived with the set it belongs to, the settle is 6-9
+ms, and "the player never sees a river fill in". That is true of the data and
+not of the picture. Nothing a cache would save is what the owner saw.
+
+**Reproduced** at `--walk --at 20.885 -6.393` (the owner's spot to the
+decimetre: 91.6 m elevation) on `origin/main` (`2de3c03a`), `--profile
+fast`, M4 Max. A measurement instrument, not committed: the far river's
+sheet (`kind == 4` in `water.wgsl`) drawn flat magenta after its depth test.
+
+- The generator's data is whole. An ignored probe over a 600 m square at 2
+  m (`rivers::far_surface` at the finest cell width against
+  `rivers::floods`): 3,317 points the column water floods, 2,728 with a far
+  surface, the rest within a cell of the bank. The river runs unbroken
+  1,593 m from its source (19.250 -6.750, 140 m upstream) to the sea, with
+  12 falls.
+- Seen from 80 m up, pitched down 25 degrees: the column tier's water near
+  the anchor, then **no water at all** for the next ~90-150 m of channel,
+  then the far sheet. From the bank, eye 1.6 m up and level, the sheet is
+  never drawn closer than about 250 m, which on this river is behind the
+  banks: the whole downstream channel reads dry.
+
+**The cause.** `compact_visible` in `planet_visibility.wgsl` lists a cell's
+water sheet when its sheet's bounding sphere is in the frustum, and it puts
+that sphere **on the sea's sphere**, `direction * (R - depth_offset)`, for
+every sheet. That was right for the sea. A far river's sheet is drawn at its
+own surface (`water.wgsl`'s vertex: `R + max(surface_m, ground + 0.05)`),
+here 88-90 m above the sea. A cell 100 m ahead of an eye on that bank has its
+tested point 92 m under the eye, 43 degrees down; the camera's vertical
+half-angle is smaller, so it is culled while the river on it is in plain
+view. The cull distance is `height over the sea / tan(half the vertical
+field of view)` and grows with the river's height: every inland river
+loses its far sheet from the tier's edge out to a distance set by the camera's
+pitch, and a mountain river all of it in view.
+
+It is one cause for both reports:
+
+- **"Doesn't load in the distance":** past the column tier (90 m from its
+  anchor, dithered over its last 25 m) only the far sheet can draw a river.
+  Culled, the channel is dry.
+- **"Takes a while to load":** walking, the tier is rebuilt 40 m from its
+  anchor and a rebuild takes 1.9-3.4 s (section 1), so the tier's edge is as
+  little as 20-50 m ahead. Everything past it was dry until the next tier
+  landed and brought its column water: the river "loaded" in steps behind the
+  player.
+
+**The fix (built).** The listing tests a far river's sheet at the radius the
+vertex draws it at: `R + max(surface, ground + 0.05)` where `spare.w` holds a
+river, the sea's sphere otherwise. The sea's listing is unchanged. No data,
+generator, save or shading changes; a sheet that was culled while in view is
+now drawn, and nothing else is listed. Cost: one branch and a bitcast in a
+pass that already reads the record; the extra sheets are the river cells in
+view, a few hundred instances of an 18-vertex fan.
+
+Test: `planet_visibility_tests::actual_gpu_lists_a_far_river_s_sheet_at_its_own_surface`
+runs the shipped shader on a real GPU with a river cell 90 m over the sea,
+100 m ahead of an eye on its bank looking level: listed; behind the eye: not.
+
+**Measured after** (same spot, same flags): see section 9.
+
+**What this does not change.** The tier's own water and the far sheet still
+meet on a dither across the tier's last 25 m that moves with the anchor when a
+set lands; the two draw the same surface, so the swap is not a gap. The far
+sheet is a still sheet at each cell's surface: falls between reaches are
+steps in it, not flowing faces, past the tier.
+
+### Why not the cache (sections 3-4) for this
+
+The water the owner saw missing was computed and uploaded; it was culled.
+A drainage-map cache would shave the ~0.4 s the map costs inside the
+loading screen and would not have drawn a single missing cell. Section 3
+stays designed and unbuilt, waiting on its decision; it is not this bug.
+
+## 8. The river walk (a recording instrument)
+
+The owner asked for the fix to be shown "with an uploaded recording of
+walking along a whole river". `--walk-river` walks the walker down a whole
+river through the player's own inputs (W, sprint, jump, the view turned as
+a mouse turns it), in the shape of `--coast-walk`:
+
+- **The river:** the drainage map's course through the lattice cell nearest
+  the start (`--at`): up to its source (each step up the widest feeder) and
+  down to the sea. Its length is logged at the start.
+- **The path:** the course's cell centres, offset a bank's width to one side
+  (`half width + 9 m`, either bank: `--walk-river left|right`), so the
+  walker keeps to the bank, a few metres off the water. It moves toward the
+  point 24 m further along that path, sprinting, with the keys a player
+  strafes with (W, A, S, D relative to the view), while the view turns (no
+  faster than 70 degrees a second, as a mouse does) to look 50 m down the
+  river's own line, so the river and its distance are what is filmed. A
+  rise the auto step will not take is hopped; after 1.5 s stuck the walker
+  turns its way 40 degrees away from the river; stuck twice in one place it
+  takes the river's channel for 10 s, swimming. A plain launch's title
+  screen is not opened in front of it, as for a capture.
+- **The log:** `RIVER_WALK_START <length> m`, a `RIVER_WALK` line every
+  second (seconds, metres walked, the share of the river's length passed,
+  place), and `RIVER_WALK_DONE` at the mouth or when the river's last cell
+  is behind it; then it quits.
+- **The water ahead, per second (a model, not pixels):** along the river's
+  course ahead of the walker, out to 600 m, the first point where the river
+  is in the camera's view but would not be drawn, under each listing rule:
+  the old one (the sheet tested at the sea's sphere) and the new (at its own
+  surface); inside the column tier the tier's water counts as drawn.
+  `RIVER_AHEAD old <m> new <m>` each second. It mirrors the shader's frustum
+  test on the CPU with the camera's own view and projection; the video is
+  the check that the pixels agree.
+
+The recording: the same build, run once with `origin/main`'s
+`planet_visibility.wgsl` beside it (the shader is read at launch from the
+`assets` folder by the executable) and once with this change's, so the two
+walks differ in that one file and nothing else. Real time, `obs-record`,
+one OBS.
+
+## 9. Measured after (2026-11-17, M4 Max, `--profile fast`)
+
+**At the owner's spot** (`--at 20.885 -6.393`, captures in
+`docs/screenshots/river-cache/`, `origin/main`'s visibility shader against
+this change's, the same executable otherwise):
+
+- From 80 m up, pitched down 25 degrees (`owner-spot-air-*`): before, the
+  water stops at the fall at the tier's edge and the channel is dry for the
+  next ~100-150 m, then the far sheet resumes; after, the river is unbroken
+  from the tier to the sea.
+- From 12 m up looking downstream (`owner-spot-h12-*`,
+  `owner-spot-past-the-fall-*`): before, past the fall a dry red bed; after,
+  the river's sheet runs on past it.
+- From the bank at eye height looking the owner's way (`owner-spot-bank-*`):
+  the two are the same. From there the downstream reach turns behind the
+  bank and drops under the eye; nothing of it is in view to draw. The owner's
+  frame was taken facing along a reach that was in view.
+- On arrival: the far sheet's record (`spare.w`) is uploaded with the
+  ground's own record in the set that lands, and the listing that draws the
+  ground is the one that now draws the sheet, so a river past the tier comes
+  with its ground in the same frame; the tier's own water was already in the
+  set (section 1). That is by construction and by the walk below (each
+  second, every set): no arrival was filmed frame by frame.
+
+**Along the whole river** (`--walk-river right --at 19.25 -6.75`, the
+owner's river, 1,593 m from its source at level 88 to the sea, 35 lattice
+cells, 12 falls; walked source to mouth in 261-269 s in each recording):
+`RIVER_AHEAD`, the drawn water ahead each second, is a CPU model of the
+listing test with the camera's own view, so each run logs both rules:
+
+| | old rule (sea's sphere) | new rule (own surface) |
+| --- | ---: | ---: |
+| Median metres of river drawn ahead (of up to 600 measured) | 56 | 600 |
+| Tenth percentile | 28-36 | 179-201 (the river's end in reach) |
+| Seconds the whole measured stretch was drawn | 3-5% | 100% |
+
+The old rule's median is the distance to the column tier's edge: past it,
+nothing. The new rule's shortfalls from 600 m are all the river ending
+(the mouth within 600 m), never a culled sheet.
+
+**Frame time.** One branch and a bitcast per cell in the visibility pass,
+and more water instances listed: the river cells actually in view (at most
+a few hundred 18-vertex fans). The perf suite's verdict is in section 10.
+
+**The recording.** `river-walk-before-after-2026-11-17-900p60.mp4`: the
+before walk, the after walk, then the two side by side matched by progress
+along the river, captioned with the share of the river, the metres walked
+and `RIVER_AHEAD` under that recording's rule. Real time, OBS, one instance;
+the game rendered at the window's 2880 x 1800 and the video is half that.
+OBS's cadence check: median 46 (before) and 56 (after) new frames a second
+of 60, on a machine other sessions were also using (load average 6-30), so
+the video shows what is drawn, not how smoothly. The two walks are the same
+script from the same start but not the same frames: the walker's path
+differs a little run to run.
+
+## 10. Frame time: not measured
+
+`tools/perf_suite.py --scenarios walk,far-side --repeats 2` (before:
+`origin/main`'s assets on the same release exe; after: this change) refused
+to start at 22:05: the screen had locked, and macOS throttles a locked
+screen's window, so every run would be paced, not measured. No number is
+claimed. What the change adds per frame: one branch and a bitcast for each
+listed cell in `compact_visible`, and an 18-vertex instance for each far
+river cell now in view that was culled before (the river's cells past the
+tier, at most a few hundred). The owner's sitting on an unlocked screen
+decides it.
