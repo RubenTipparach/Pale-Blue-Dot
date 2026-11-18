@@ -51,3 +51,35 @@
       the river and water tests, `openspec validate --all`.
 - [ ] Video or screenshots: none, the picture does not change (the map is
       the same bytes).
+
+## 7. The dry channel (design 7), 2026-11-17
+- [x] Reproduce at the owner's spot (`--walk --at 20.885 -6.393`, 91.6 m):
+      the channel dry past the fall; the far sheet tinted (an uncommitted
+      instrument) shows the gap from the tier's edge outward.
+- [x] Probe the data: the river's far surface and column water are whole
+      along its 1,593 m (an ignored probe, not kept).
+- [x] The cause: the visibility pass tests every water sheet on the sea's
+      sphere; a far river's sheet is drawn at its own surface.
+- [x] The fix: `compact_visible` tests a far river's sheet at
+      `R + max(surface, ground + 0.05)`, the radius `water.wgsl` draws it at.
+- [x] GPU test on the shipped shader:
+      `actual_gpu_lists_a_far_river_s_sheet_at_its_own_surface` (fails on
+      `origin/main`'s shader: one of two listed).
+- [x] Requirement "A far river is drawn wherever it is in view" moved to
+      `openspec/specs/world/water` with its test.
+- [x] Screenshots before and after at the owner's spot
+      (`docs/screenshots/river-cache/`).
+
+## 8. The river walk (design 8)
+- [x] `RiverMap::course`: a river's cells from its source to the sea, with
+      `a_course_runs_from_its_source_to_the_sea`.
+- [x] `river_walk::RiverPath`: the bank path, progress and the drawn-water
+      measure, with tests.
+- [x] `--walk-river`: the walk through the player's inputs, its log lines.
+- [ ] The recording: before and after, one OBS, real time, cut into one
+      video with progress captions; uploaded to Drive.
+
+## 9. Measure again
+- [ ] `RIVER_AHEAD` along the whole walk, old rule against new, summarised
+      in design 9.
+- [ ] The perf suite on the release build (the fix lists more sheets).
