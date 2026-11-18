@@ -1518,3 +1518,12 @@ its system. `--grass` now takes only `tufts`, so old capture recipes still
 run, and `blades` is refused. A settings file's `pixel_grass` value is still
 read, so old files load, but nothing reads it any more.
 
+
+
+### 12.13 Beach acacias stand behind the beach (owner, 2026-11-18)
+
+Survey F1, answered 2026-11-18: "On the dry ground just behind the beach
+(grass and sand above the high water), in version 11". Generator version 11
+(`swamps`, not yet shipped, so no save names it) moves the acacia's ground
+from beach sand under the high water to the dry cells just inland of the
+beach; version 10 keeps its rule, cell for cell.
