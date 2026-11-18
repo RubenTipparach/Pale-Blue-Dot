@@ -41,16 +41,16 @@ echo The first build may take several minutes.
 echo Opening the planet explorer. Use --headless 600 for a console smoke run.
 echo.
 
-REM The build runs under a watchdog (toolsuild_watch.ps1): it warns about
+REM The build runs under a watchdog (tools/build_watch.ps1): it warns about
 REM the game still running, other Rust tools holding the lock and a full disk
 REM before it starts, and says what cargo is doing whenever it goes quiet.
-powershell -NoProfile -ExecutionPolicy Bypass -File "toolsuild_watch.ps1" -Profile %profile%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools/build_watch.ps1" -Profile %profile%
 set "run_exit_code=%errorlevel%"
 if not "%run_exit_code%"=="0" (
     echo Build failed with exit code %run_exit_code%.
     goto finish
 )
-"target\%profile%\pbd-app.exe"%app_args%
+"%~dp0target/%profile%/pbd-app.exe"%app_args%
 set "run_exit_code=%errorlevel%"
 if not "%run_exit_code%"=="0" echo The game exited with code %run_exit_code%.
 

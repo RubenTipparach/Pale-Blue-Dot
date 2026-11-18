@@ -116,7 +116,17 @@ while (-not $proc.HasExited -or -not $queue.IsEmpty) {
     $quiet = ((Get-Date) - $script:lastAt).TotalSeconds
     if ($quiet -gt 20 -and ((Get-Date) - $lastReport).TotalSeconds -gt 20) {
         $lastReport = Get-Date
-        $kids = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $proc.Id }
+        # Every process under the build: `cargo` here is rustup's proxy, so
+        # the real cargo and its rustc and linker are grandchildren and lower.
+        $all = Get-CimInstance Win32_Process
+        $ids = @($proc.Id)
+        $kids = @()
+        do {
+            $next = @($all | Where-Object { $ids -contains $_.ParentProcessId -and -not ($kids.ProcessId -contains $_.ProcessId) })
+            $kids += $next
+            $ids = @($next.ProcessId)
+        } while ($next.Count -gt 0)
+        $kids = @($kids | Where-Object { $_.Name -ne 'cargo.exe' -and $_.Name -ne 'conhost.exe' })
         $names = ($kids | ForEach-Object { $_.Name }) -join ', '
         $mins = [math]::Round(((Get-Date) - $started).TotalMinutes, 1)
         $why = if ($script:last -match 'Blocking waiting') { "waiting on another tool's lock (see above)" }
