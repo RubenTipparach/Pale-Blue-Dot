@@ -6,6 +6,10 @@
   beside Proposed, three tabs, sliders with units, night lit by a lantern.
 - [x] 1.2 Published and listed on the tracker.
 - [ ] 1.3 The owner's approval of M37 (the tracker's review, or their words).
+- [x] 1.4 The Hooked tab's snapping (the owner, 2026-11-17): the drawn
+  float eases the swing's jump, the turn rate is eased, the shake and flash
+  fade in and out on the frame's clock and turn the body about the mouth
+  (design 3.1); a per-frame probe finds no frame over 20 deg.
 
 ## 2. Draw side (after approval, on request)
 
@@ -15,6 +19,10 @@
 - [ ] 2.3 The line's fish: approach settle, hover, pecks timed to the nibble
   dip, the take, the bolt, the fight, as a pure function of line state.
 - [ ] 2.4 The drawn lure and float follow the tug and the take.
+- [ ] 2.5 The fight as design 3.1: eased turn rate (1200 deg/s^2), one
+  0.35 s envelope for shake and flash with a per-frame phase, the shake
+  about the mouth, the lure on `DrawnFloat`; a test that a fight with run
+  and rest switches never turns the drawn fish over 20 deg in a frame.
 
 ## 3. Sim side (after approval, on request)
 
