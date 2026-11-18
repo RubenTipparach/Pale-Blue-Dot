@@ -1707,8 +1707,13 @@ pub(crate) mod draw {
                 .map_or_else(crate::held::rod_tip, |t| t.0);
             let tip_local = (eye.transform_point(tip).as_dvec3() - frame.center).as_vec3();
             transform.translation = (frame.center + tip_local.as_dvec3()).as_vec3();
+            // With a fish on the line it is taut: nearly straight at the bite
+            // and through the fight, a touch of sag only at the lowest
+            // tension (owner, 2026-11-18: "I dont think the line in real life
+            // would slack wheren theres a fish connected to it").
             let slack = match line.phase {
-                Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
+                Phase::Bite => 0.03,
+                Phase::Hooked => 0.01 + 0.05 * (1.0 - line.tension.min(1.0)),
                 _ => 0.6,
             };
             // A slack line is held just over the water rather than hanging

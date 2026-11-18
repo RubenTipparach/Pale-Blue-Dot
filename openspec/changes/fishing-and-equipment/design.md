@@ -1022,3 +1022,11 @@ doesnt need to be highlighted"), and shows only while the line is cast
 The line under the crosshair no longer repeats what the corner says
 (Ready's "Hold the left button to cast" and Charging's "Let go to cast"
 are dropped); the nibble, bite and fight lines stay.
+
+## A fish on the line pulls it taut (owner, 2026-11-18)
+
+"when fish biting hook, the line should have tension, I dont think the line
+in real life would slack wheren theres a fish connected to it". The drawn
+line's sag at the bite is 0.03 m (was 0.6) and through the fight 0.01 +
+0.05 × (1 − tension) m (was 0.1 + 0.5 × (1 − tension)); a line with no fish
+on keeps its 0.6 m. Drawn only.

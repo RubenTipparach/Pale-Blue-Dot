@@ -2006,7 +2006,7 @@ views.fish = View("fish", v => {
       const fp = drawnFloat();
       fl.position.copy(fp);
       fglow.visible = NIGHT.on; flight.intensity = NIGHT.on ? 0.5 : 0;
-      if (line.visible) drawLine(tipEye.clone().applyMatrix4(eye()), F.phase === "hooked" ? 0.1 + 0.5 * (1 - Math.min(1, F.tension)) : 0.6, fp);
+      if (line.visible) drawLine(tipEye.clone().applyMatrix4(eye()), F.phase === "hooked" ? 0.01 + 0.05 * (1 - Math.min(1, F.tension)) : F.phase === "bite" ? 0.03 : 0.6, fp);   // taut with a fish on (owner)
       // The game's HUD: the line under the crosshair, the meter, the reel prompt.
       const texts = { nibble: "Something is nibbling - wait for the float to go under", bite: "Bite! Left click", hooked: "Hold to reel - ease off when it runs" };
       sayEl.textContent = F.sayT > 0 ? F.say : (texts[F.phase] || "");
