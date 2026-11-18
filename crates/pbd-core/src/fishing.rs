@@ -113,6 +113,10 @@ pub struct Target {
 }
 
 /// One rod's line.
+/// How fast the float's weave follows the fish's run, 1/s: it settles in
+/// about half a second.
+const WEAVE_RATE: f32 = 4.0;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Line {
     pub phase: Phase,
@@ -138,6 +142,10 @@ pub struct Line {
     pub stamina: f32,
     pub run: f32,
     run_s: f32,
+    /// The run as the float's weave follows it: eased toward `run` so a run
+    /// starting or stopping never jumps the float across the water (owner,
+    /// 2026-11-18: "fish also kinda teleports around when i reel it in").
+    weave: f32,
     pub line_m: f32,
     /// Which way the fish runs, along the surface at the angler, fixed at the
     /// hook; its swing across the line is measured from this, never from
@@ -164,6 +172,7 @@ impl Line {
             tension: 0.0,
             stamina: 1.0,
             run: 0.0,
+            weave: 0.0,
             run_s: 0.0,
             line_m: 0.0,
             heading: Vec3::X,
@@ -267,13 +276,16 @@ impl Line {
             school.lure = None;
             school.held = None;
         }
-        // The strike: while the float is under, either button hooks the
-        // fish. A player who sees the bite and pulls with the button the
-        // prompt says winds in means to strike, not to let the fish go
-        // (owner, 2026-11-16: "I seem to have pulled it in at the right
-        // moment, but no fish is added").
-        let strike = controls.pressed || (controls.reel_in && self.phase == Phase::Bite);
-        if controls.reel_in && matches!(self.phase, Phase::Flying | Phase::Floating | Phase::Nibble)
+        // The left button hooks the fish; the right button cancels, winding
+        // the line in, whenever it is out and not hooked, at the bite too
+        // (owner, 2026-11-18: "left click to hook fish, right click to cancel
+        // for fishing"). The prompt names both buttons.
+        let strike = controls.pressed;
+        if controls.reel_in
+            && matches!(
+                self.phase,
+                Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
+            )
         {
             if let Some(species) = self.working(schools) {
                 events.push(Event::Lost { species });
@@ -408,6 +420,7 @@ impl Line {
                     self.tension = 0.2;
                     self.stamina = 1.0;
                     self.run = pull;
+                    self.weave = 0.0;
                     self.run_s = self.rng.range(0.8, 1.6);
                     let out = tangent(o, self.float - angler.feet, angler.feet);
                     self.line_m = out.length();
@@ -456,7 +469,8 @@ impl Line {
                 // The fish runs away from the angler and across the line, so
                 // the float weaves while it runs.
                 let up = o.up_at(angler.feet);
-                let swing = (self.clock * 1.7).sin() * 0.12 * self.run;
+                self.weave += (self.run - self.weave) * (dt * WEAVE_RATE).min(1.0);
+                let swing = (self.clock * 1.7).sin() * 0.12 * self.weave;
                 let away = rotate_about(
                     tangent(o, self.heading, angler.feet).normalize_or(self.heading),
                     up,

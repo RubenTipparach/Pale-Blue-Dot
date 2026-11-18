@@ -1,8 +1,9 @@
 //! Where a world's craft come from: back from its save exactly where they were
 //! left, or, in a world that has none yet, placed once near the player - the
-//! Tern and the Loon at anchor in water deep enough for each. (The Kestrel,
-//! placed on dry, level ground beside them until `retire-kestrel`, is no
-//! longer placed; a save's Kestrel is held aside as its record.)
+//! Loon at anchor in water deep enough for it. (The Kestrel, placed on dry,
+//! level ground until `retire-kestrel`, and the Tern, placed at anchor beside
+//! the Loon until `retire-tern`, are no longer placed; a save's Kestrel or
+//! Tern is held aside as its record.)
 
 use super::{Fleet, Vehicle, draw};
 use crate::planet::PlanetContact;
@@ -31,11 +32,8 @@ const LEVEL_HALF_M: f32 = 5.5;
 /// A new world's start is a level plain: this many of the 120 samples in the
 /// ring 20 to 36 m round it are level spots (`level_plain`).
 const START_LEVEL_SPOTS: usize = 8;
-/// Water a boat is put in, m under the sea surface, and how far apart the two
-/// boats lie.
-const TERN_DEPTH_M: f32 = 3.0;
+/// Water the Loon is put in, m under the sea surface.
 const LOON_DEPTH_M: f32 = 1.2;
-const BOATS_APART_M: f32 = 14.0;
 /// A new anchor's rode, per metre of depth, plus a margin, m.
 const RODE_PER_DEPTH: f64 = 3.0;
 const RODE_MARGIN_M: f64 = 2.0;
@@ -65,6 +63,27 @@ pub fn spawn_fleet(world: &mut World) {
     else {
         return;
     };
+    // A player saved aboard a craft since retired loads at its seat, over
+    // the sea where nothing now floats: put them ashore (`retire-tern`
+    // decision 2), before the craft are placed round the new origin.
+    // `walker` is already the planet's frame (`query_point`), as the
+    // saved pose and the records are.
+    let body = walker.as_dvec3();
+    // Over the sea: the ground there (a harbour's dug berths included) lies
+    // under the sea's surface.
+    let sea_radius = world.resource::<Sea>().radius;
+    if let Some(record) = at_a_retired_craft(body, &retired, |d| floor(d) < sea_radius) {
+        info!(
+            "the player was aboard craft {}, a retired {}: put ashore",
+            record.id, record.kind
+        );
+        crate::walking::put_ashore(world, body.normalize_or(DVec3::Y).as_vec3());
+    }
+    let local = world
+        .query_filtered::<&Position, With<Walker>>()
+        .iter(world)
+        .next()
+        .map_or(local, |p| p.0);
     let center = world
         .resource::<crate::planet::PlanetRenderFrame>()
         .physics_center();
@@ -90,6 +109,27 @@ pub fn spawn_fleet(world: &mut World) {
     fleet.spawned = true;
     // A new fleet is a world mutation like any other: written now.
     fleet.dirty |= fresh;
+}
+
+/// How near a held retired craft a loaded walker over the sea is taken to
+/// have been aboard it, m: a seat is within a few metres of its craft's
+/// reference point.
+pub(crate) const ABOARD_REACH_M: f64 = 6.0;
+
+/// The retired craft a loaded walker at `walker` (body-local) was aboard: one
+/// within [`ABOARD_REACH_M`] of it, where `over_sea` says the walker's
+/// direction is over the sea. `None` anywhere else, so a load that is not at
+/// a retired craft is never moved.
+pub(crate) fn at_a_retired_craft(
+    walker: DVec3,
+    retired: &[pbd_core::vehicle::record::VehicleRecord],
+    over_sea: impl Fn(Vec3) -> bool,
+) -> Option<&pbd_core::vehicle::record::VehicleRecord> {
+    let near = retired.iter().find(|r| {
+        r.frame == pbd_core::vehicle::record::PLANET_FRAME
+            && DVec3::from(r.position).distance(walker) <= ABOARD_REACH_M
+    })?;
+    over_sea(walker.normalize_or(DVec3::Y).as_vec3()).then_some(near)
 }
 
 /// A craft into the world as an entity, drawn, at its pose.
@@ -210,7 +250,7 @@ struct Berth {
     anchor_floor: Option<f64>,
 }
 
-struct Berths([(Kind, Option<Berth>); 2]);
+struct Berths([(Kind, Option<Berth>); 1]);
 
 #[cfg(test)]
 mod frame_tests {
@@ -241,7 +281,7 @@ mod frame_tests {
             .crafts;
         assert_eq!(
             original.len(),
-            2,
+            1,
             "{:?}",
             original.iter().map(|c| c.kind).collect::<Vec<_>>()
         );
@@ -254,32 +294,51 @@ mod frame_tests {
 }
 
 impl Berths {
-    /// The Loon in the nearest water deep enough for it, and the Tern in the
-    /// nearest water deep enough for IT round the Loon, so both boats lie off
-    /// one shore rather than wherever each happened to find water first.
+    /// The Loon in the nearest water deep enough for it. (The Tern was put
+    /// in the nearest water deep enough for it round the Loon, until
+    /// `retire-tern`; the Loon's search never depended on it, so the Loon
+    /// lies where it did.)
     fn find(sea: &Sea, up: Vec3) -> Self {
         let radius = sea.radius;
         let depth = |direction: Vec3| radius - floor(direction);
         let loon = rings(radius, up, |direction, _| depth(direction) >= LOON_DEPTH_M);
-        let tern = loon.and_then(|(from, _)| {
-            rings(radius, from, |direction, distance| {
-                distance >= BOATS_APART_M && depth(direction) >= TERN_DEPTH_M
-            })
-        });
         let boat = |(direction, outward): (Vec3, Vec3)| Berth {
             position: direction.as_dvec3() * radius as f64,
             // Bow out to sea, stern to the shore it was found from.
             orientation: facing(direction.as_dvec3(), outward.as_dvec3()),
             anchor_floor: Some(floor(direction) as f64),
         };
-        Self([(Kind::Tern, tern.map(boat)), (Kind::Loon, loon.map(boat))])
+        Self([(Kind::Loon, loon.map(boat))])
     }
+}
+
+/// Open water `depth_m` deep and at least `apart_m` from `from`, nearest
+/// first, with its bow out along the way it was found: a berth for a craft a
+/// test puts in deeper water than the Loon's (where the retired Tern lay,
+/// 14 m off the Loon in 3 m of water).
+#[cfg(test)]
+pub(crate) fn deep_berth_near(
+    sea: &Sea,
+    from: Vec3,
+    apart_m: f32,
+    depth_m: f32,
+) -> Option<(DVec3, DQuat)> {
+    let radius = sea.radius;
+    rings(radius, from, |direction, distance| {
+        distance >= apart_m && radius - floor(direction) >= depth_m
+    })
+    .map(|(direction, outward)| {
+        (
+            direction.as_dvec3() * radius as f64,
+            facing(direction.as_dvec3(), outward.as_dvec3()),
+        )
+    })
 }
 
 /// The water a new world's Loon would be berthed in round `up`, body-local.
 #[cfg(test)]
 pub(crate) fn berth_near(sea: &Sea, up: Vec3) -> Option<DVec3> {
-    Berths::find(sea, up).0[1].1.map(|b| b.position)
+    Berths::find(sea, up).0[0].1.map(|b| b.position)
 }
 
 /// Open water at least `apart_m` from `from` and `depth_m` deep, nearest
@@ -364,7 +423,7 @@ fn rings(radius: f32, centre: Vec3, good: impl Fn(Vec3, f32) -> bool) -> Option<
 /// The solid ground under a direction, m from the centre, as a craft will meet
 /// it (`ground_under`) away from the tier: the exact height field. NOT
 /// `PlanetContact::sample`: far from the player that answers from the coarse
-/// level, which put the Tern's berth in 3.5 m of water that was 1.5 m deep once
+/// level, which put the (since retired) Tern's berth in 3.5 m of water that was 1.5 m deep once
 /// the tier arrived, and ran it aground on its first tick.
 pub(crate) fn floor(direction: Vec3) -> f32 {
     super::ground_under(

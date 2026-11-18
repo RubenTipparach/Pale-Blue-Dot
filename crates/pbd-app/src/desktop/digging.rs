@@ -522,16 +522,33 @@ pub fn dig_and_place(
     if let Some(ground) = ground.as_mut() {
         ground.0 = None;
     }
-    // The tool in hand chops while a block is being broken: last frame's
-    // answer, a frame behind, which nobody can see.
-    let breaking = mining.progress().is_some();
-    if let Some(mut swinging) = swinging
-        && swinging.0 != breaking
-    {
-        swinging.0 = breaking;
-    }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
+    // The tool in hand strokes on the dig's beat (`held-swing` decision 5):
+    // last frame's answer, a frame behind, which nobody can see. While a
+    // block breaks, its time and how far in; in the pause after it, on
+    // past the break.
+    if let Some(mut swinging) = swinging {
+        let was = swinging.0;
+        let beat = match mining.breaking.timing() {
+            Some((break_s, elapsed_s)) => pbd_app::held::stroke::DigBeat {
+                working: true,
+                break_s,
+                between_s: between,
+                local_s: elapsed_s,
+            },
+            None if was.working && mining.breaking.pause_left() > 0.0 => {
+                pbd_app::held::stroke::DigBeat {
+                    local_s: was.break_s + (between - mining.breaking.pause_left()).max(0.0),
+                    ..was
+                }
+            }
+            None => pbd_app::held::stroke::DigBeat::default(),
+        };
+        if was != beat {
+            swinging.0 = beat;
+        }
+    }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         mining.breaking.step(dt, false, None, between);
         return;

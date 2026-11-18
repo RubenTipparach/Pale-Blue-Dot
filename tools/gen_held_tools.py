@@ -11,7 +11,8 @@ about its handle so its working end points where it should. The hand is hex
 prisms in metres, laid out in a frame built on the grip.
 
     python3 tools/gen_held_tools.py                 # write the mockup's data, the game's
-                                                    # model file and the four tool icons
+                                                    # model file, the four tool icons and
+                                                    # the hand's textures
     python3 tools/gen_held_tools.py --check         # fail if any of the three is stale
     <python with bpy> tools/gen_held_tools.py --render DIR   # Blender views of it
 
@@ -253,10 +254,13 @@ def rod_along(elevation_deg):
 TOOLS = [
     {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 19.2, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
-    # The same setup as the pickaxe and the axe: upright, gripped a quarter of
-    # the way up, the head (the blade) pointing ahead.
+    # Upright and gripped a quarter of the way up like the pickaxe and the
+    # axe, but rolled a quarter turn about the handle so the spade's face is
+    # toward the eye, as a spade is held to scoop (owner, 2026-11-17: "the
+    # spade on the shovel needs to look like its scooping, so roll the shovel
+    # by 90 degrees"). With its blade ahead it was seen edge on.
     {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 24.4, "fist": 5.0,
-     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
+     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": (-1.0, 0.0, 0.0), "back": BACK_RIGHT},
     # The blade ahead, its edge facing away.
     {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
@@ -383,27 +387,176 @@ def srgb_bytes(hex_colour, k=1.0):
     return tuple(min(255, int(round(int(hex_colour[i:i + 2], 16) * k))) for i in (1, 3, 5))
 
 
-def hand_colours():
-    """The hand's straight sRGB colours by role: the first skin tone, its
-    knuckles a shade darker, the cuff and the sleeve."""
-    return {"skin": srgb_bytes(SKINS[0]), "knuckle": srgb_bytes(SKINS[0], 0.86),
-            "cuff": srgb_bytes(CUFF), "sleeve": srgb_bytes(SLEEVE)}
-
-
 def fmt(v):
     return "(" + ", ".join(f"{x:.6g}" for x in v) + ")"
 
 
+# ---- the proposed hand (hand-model, Tools in Hand v8 to v13) ----------------
+# The game's bones above, in each tool's units, are what the model file
+# carries: `pbd_core::hand::build` ports the mockup's `proposedHandGeometry`
+# (docs/mockups/tool-motion.html: the traced palm, the chamfered blocks, the
+# thumb in two equal segments, the palm and back sides, the islands, the
+# baked AO and the grip turn) and builds the hand from them in the game, the
+# sleeve as long as `held.ron` says. The look's numbers are the mockup's
+# `HAND_SHAPE` and `HAND_LOOK`; the textures are its `handTextures`,
+# `palmTexture` and `foldTexture`, pixel for pixel.
+HAND_TEX = os.path.join(ROOT, "assets", "textures", "hand")
+HAND_SKIN = (227, 176, 137)         # the "Game" swatch
+HAND_CLOTH = (77, 106, 140)
+HAND_CUFF = (58, 82, 110)
+HAND_SHAPE = {"thumb_len": 0.72, "thumb_sink": 0.4, "grip_turn_deg": 45.0}
+BACK_K = (0.86, 0.82, 0.80)         # the back of the hand: the skin darker and browner
+PALM_MIX, PALM_TO = 0.45, (252, 214, 204)
+HAND_AO = 0.6
+TIP_FLUSH, TIP_TO = 0.22, (226, 140, 128)
+
+
+def back_tone(): return tuple(c * k for c, k in zip(HAND_SKIN, BACK_K))
+def palm_tone(): return tuple(c + (t - c) * PALM_MIX for c, t in zip(HAND_SKIN, PALM_TO))
+
+
+def hand_look_ron():
+    """The hand's look as the model file carries it (`pbd_core::hand::Look`)."""
+    return [f"    hand: (thumb_len: {HAND_SHAPE['thumb_len']}, thumb_sink: {HAND_SHAPE['thumb_sink']},"
+            f" grip_turn_deg: {HAND_SHAPE['grip_turn_deg']}, ao: {HAND_AO}, tip_flush: {TIP_FLUSH},"
+            f" tip_to: {fmt(TIP_TO)}, skin: {fmt(HAND_SKIN)}),"]
+
+
+def bones_ron(t):
+    """A tool's 19 hand bones in its units, as the mockup's HELD data holds
+    them: the back, four fingers of three segments, the thumb's three, the
+    wrist, the cuff and the sleeve."""
+    out = []
+    for p in hand_parts(t, GAME_SIZE):
+        width = f"Some({p['w']:.6g})" if "w" in p else "None"
+        across = f"Some({fmt(p['across'])})" if "across" in p else "None"
+        out.append(f"                (at: {fmt(p['at'])}, axis: {fmt(p['axis'])}, radius: {p['r']:.6g},"
+                   f" length: {p['len']:.6g}, width: {width}, across: {across}),")
+    return out
+
+
+def lcg(seed):
+    """The mockup's `rng`: a 32-bit LCG, 0..1."""
+    state = [seed & 0xFFFFFFFF]
+
+    def r():
+        state[0] = (state[0] * 1664525 + 1013904223) & 0xFFFFFFFF
+        return state[0] / 4294967296.0
+    return r
+
+
+def js_round(v): return int(math.floor(v + 0.5))
+def byte(v): return max(0, min(255, js_round(v)))
+def tone(c, k): return tuple(x * k for x in c)
+
+
+def hand_textures():
+    """The hand's textures as the mockup draws them: rows of (r, g, b)
+    bytes, straight sRGB, keyed by name. `handTextures` (16 px: the skin and
+    the nails on the back's tone, the cloth, the cuff; one generator through
+    all four, in its order), `palmTexture` (32 px, the palm's island: the
+    thumb's side on the left, the wrist at the bottom) and `foldTexture`
+    (16 px, a fold at each end of a segment)."""
+    r = lcg(91)
+    skin, cloth, cuff = back_tone(), HAND_CLOTH, HAND_CUFF
+
+    def img(pick):
+        return [[tuple(byte(v) for v in pick(X, Y)) for X in range(16)] for Y in range(16)]
+
+    def skin_px(X, Y):
+        u = r()
+        if u < 0.07:
+            return (skin[0] * 1.0, skin[1] * 0.95, skin[2] * 0.93)
+        if u < 0.13:
+            return tone(skin, 1.03)
+        if u < 0.19:
+            return tone(skin, 0.975)
+        return skin
+    nail_c = tuple(skin[i] * 0.55 + (240, 214, 200)[i] * 0.45 for i in range(3))
+
+    def nail_px(X, Y):
+        if Y < 3:
+            return tone(nail_c, 1.07)
+        return tone(nail_c, 0.97) if r() < 0.15 else nail_c
+
+    def cloth_px(X, Y):
+        w = ((X >> 1) + (Y >> 1)) & 1
+        return tone(cloth, 0.88) if r() < 0.05 else tone(cloth, 1.03 if w else 0.96)
+
+    def cuff_px(X, Y):
+        if (Y == 3 or Y == 12) and X % 3 != 2:
+            return tone(cuff, 1.32)
+        return tone(cuff, 0.95) if r() < 0.1 else cuff
+    out = {"skin": img(skin_px), "nail": img(nail_px), "cloth": img(cloth_px), "cuff": img(cuff_px)}
+    out["palm"] = palm_texture()
+    out["fold"] = fold_texture()
+    return out
+
+
+def palm_texture():
+    """The palm (hand-model 5.1): 32 x 32, its mottle, then the heart, head
+    and life lines and the folds at the fingers' base."""
+    r, palm, n = lcg(173), palm_tone(), 32
+    rows = []
+    for Y in range(n):
+        row = []
+        for X in range(n):
+            u = r()
+            row.append((palm[0], palm[1] * 0.96, palm[2] * 0.95) if u < 0.07 else tone(palm, 1.02) if u < 0.14 else palm)
+        rows.append(row)
+
+    def line(pts, k):
+        for q in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[q], pts[q + 1]
+            m = max(abs(x1 - x0), abs(y1 - y0))
+            for t in range(m + 1):
+                rows[js_round(y0 + (y1 - y0) * t / m)][js_round(x0 + (x1 - x0) * t / m)] = tone(palm, k)
+    line([(31, 9), (24, 9), (17, 8), (12, 6), (9, 4)], 0.8)        # the heart line
+    line([(3, 12), (10, 13), (18, 15), (26, 18)], 0.8)             # the head line
+    line([(3, 11), (6, 15), (8, 20), (9, 25), (9, 31)], 0.8)       # the life line, round the thumb
+    for X in range(6, n, 7):
+        line([(X, 1), (X + 4, 1)], 0.86)                           # the folds at the fingers' base
+    return [[tuple(byte(v) for v in px) for px in row] for row in rows]
+
+
+def fold_texture():
+    """The inside of a finger, the thumb or the wrist: 16 x 16, a fold row
+    near each end."""
+    r, palm = lcg(211), palm_tone()
+    rows = []
+    for Y in range(16):
+        row = []
+        for X in range(16):
+            fold = (Y == 1 or Y == 14) and 2 < X < 13
+            row.append(tone(palm, 0.82) if fold else tone(palm, 0.975) if r() < 0.1 else palm)
+        rows.append(row)
+    return [[tuple(byte(v) for v in px) for px in row] for row in rows]
+
+
+def png_rgb(rows):
+    import struct
+    import zlib
+    h, w = len(rows), len(rows[0])
+    raw = b"".join(b"\x00" + b"".join(bytes(px) for px in row) for row in rows)
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    header = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
 def model_ron():
     """The game's model file (`assets/models/held_tools.ron`): each tool's
-    hexes at the game's density and its held pose at the game's size, the
-    hand's prisms placed on it, in the tool's units."""
-    roles = hand_colours()
+    hexes at the game's density and its held pose at the game's size, and the
+    hand's bones placed on it, in the tool's units; the hand's look once
+    (hand-model)."""
     out = ["// Generated by tools/gen_held_tools.py from the approved Hex Tool Bench",
            "// mockup; do not edit. openspec/changes/hex-held-tools/design.md says what",
            "// each field is. Tool units: x along the handle from the butt, y up the",
            "// drawing, z out of it. Eye space: metres, x right, y up, -z ahead.",
-           "(", f"    spacing: {1.0 / GAME_DENSITY},", "    tools: ["]
+           "(", f"    spacing: {1.0 / GAME_DENSITY},"] + hand_look_ron() + ["    tools: ["]
     for t in TOOLS:
         rot, scale, butt = pose(t, GAME_SIZE)
         tip = add(butt, mul(mat_vec(rot, (t["len"], 0.0, 0.0)), scale))
@@ -413,13 +566,8 @@ def model_ron():
                 "            hexes: ["]
         for q, r, c, d in generate(t, GAME_DENSITY):
             out.append(f"                ({q}, {r}, {fmt(srgb_bytes(COL[c]))}, {d:.6g}),")
-        out += ["            ],", "            hand: ["]
-        for p in hand_parts(t, GAME_SIZE):
-            extra = ""
-            if "across" in p:
-                extra = f" across: Some({fmt(p['across'])}), width: Some({p['w']:.6g}),"
-            out.append(f"                (axis: {fmt(p['axis'])}, at: {fmt(p['at'])}, radius: {p['r']:.6g},"
-                       f" length: {p['len']:.6g},{extra} colour: {fmt(roles[p['c']])}),")
+        out += ["            ],", "            bones: ["]
+        out += bones_ron(t)
         out += ["            ],", "        ),"]
     out += ["    ],", ")", ""]
     return "\n".join(out)
@@ -480,6 +628,8 @@ def write_outputs(check):
     want = {MODEL: model_ron().encode("utf-8")}
     for t in TOOLS:
         want[os.path.join(ICONS, f"{t['id']}.png")] = png(*icon(t))
+    for name, rows in hand_textures().items():
+        want[os.path.join(HAND_TEX, f"{name}.png")] = png_rgb(rows)
     stale = []
     for path, data in want.items():
         if check:
@@ -491,7 +641,7 @@ def write_outputs(check):
                 f.write(data)
     if stale:
         sys.exit("stale (run tools/gen_held_tools.py): " + ", ".join(stale))
-    print(("checked " if check else "wrote ") + "the held-tool model file and the four tool icons")
+    print(("checked " if check else "wrote ") + "the held-tool model file, the four tool icons and the hand's textures")
 
 
 def write_mockup(check):

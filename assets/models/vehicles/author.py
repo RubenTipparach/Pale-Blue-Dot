@@ -206,53 +206,6 @@ def gunwales(h, tag):
         poly('gunwale_'+side,points,faces,tag)
 
 
-def build_tern():
-    s=reset('tern')
-    h=boat_hull('tern','white')
-    gunwales(h,'pale')
-    # Deck follows the authoritative rim, with a real recessed cockpit opening.
-    deck=[]; faces=[]; hole=[]
-    half=.52; seat_z=s['seat']['eye'][2]
-    for i in range(h['stations']):
-        l0,r0,l1,r1=h['deck'][2*i:2*i+4]
-        cockpit=l0[2]>=seat_z-.85 and l1[2]<=seat_z+.85
-        regions=[(l0,r0,l1,r1)]
-        if cockpit:
-            a=[-half,l0[1],l0[2]]; b=[half,r0[1],r0[2]]
-            c=[-half,l1[1],l1[2]]; d=[half,r1[1],r1[2]]
-            regions=[(l0,a,l1,c),(b,r0,d,r1)]
-            hole.extend((l0[2],l1[2]))
-        for a,b,c,d in regions:
-            k=len(deck); deck.extend((a,b,c,d)); faces.append((k,k+2,k+3,k+1))
-    poly('deck',deck,faces,'coral',closed=False)
-    z0,z1=min(hole),max(hole); y=s['hull']['sheer_m']
-    box('cockpit_floor',(half*2,.055,z1-z0),(0,y-.32,(z0+z1)/2),'navy')
-    for side in (-1,1):
-        box('cockpit_side_'+str(side),(.055,.32,z1-z0),(side*half,y-.16,(z0+z1)/2),'coral')
-    for end,z in (('front',z0),('rear',z1)):
-        box('cockpit_'+end,(half*2,.32,.055),(0,y-.16,z),'coral')
-    box('cockpit_seat',(half*2,.09,.30),(0,y-.08,seat_z+.12),'pale')
-    fixed_foil('keel',s['keel'])
-    rings('ballast',[(-.54,.02,.02),(-.33,.17,.14),(.33,.17,.14),(.54,.02,.02)],
-          'navy',at=s['parts'][1]['at'],sides=8)
-    sail=s['sail']; mast=Vector(sail['mast']); head=sail['head_height_m']
-    rings('mast',[(0,.06,.06),(head,.035,.035)],'metal',at=mast,axis='Y',sides=8)
-    boom=node('boom',at=mast+Vector((0,sail['boom_height_m'],0)))
-    length=sail['boom_length_m']; rise=head-sail['boom_height_m']
-    rings('boom_skin',[(0,.045,.045),(length,.045,.045)],'metal',boom,sides=8)
-    foot=2*sail['area_m2']/rise
-    poly('sail',[(0,0,0),(0,rise,0),(0,0,foot)],[(0,1,2)],'pale',boom,closed=False)
-    for side in (-1,1):
-        rod('shroud_'+str(side),(side*s['hull']['beam_m']*.42,y,-.35),mast+Vector((0,head*.82,0)),.012,'navy')
-    rudder=node('rudder',at=s['rudder']['at'])
-    fixed_foil('rudder_foil',s['rudder'],rudder,(0,0,0),.055)
-    tiller=node('tiller',at=s['rudder']['at'])
-    handle_y=y-s['rudder']['at'][1]+.15
-    rod('rudder_stock',(0,0,0),(0,handle_y,0),.028,'metal',rudder)
-    rod('tiller_handle',(0,handle_y,0),(0,handle_y,-1.05),.035,'pale',tiller)
-    crew(s['seat']['eye'])
-
-
 def build_loon():
     s=reset('loon')
     h=boat_hull('loon','teal')
@@ -532,7 +485,6 @@ def texture_and_export():
 
 
 def build(kind):
-    if kind=='tern': build_tern()
-    elif kind=='loon': build_loon()
+    if kind=='loon': build_loon()
     else: raise ValueError('Craft authoring is not implemented: '+kind)
     texture_and_export()

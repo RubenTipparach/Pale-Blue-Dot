@@ -75,6 +75,27 @@ any process that opens the world.
 - **Cheaper river lookups** (design 5), later: the river terms are a fifth to
   a half of every altitude near a river.
 
+## Follow-up, 2026-11-17: the river that "doesn't load"
+
+The owner, on one river at 90 m elevation: "river still not cached, meaning
+it takes a while for it to load", then "it doesnt even load in the
+distance" (a dry terraced channel past a fall, even standing still). The
+measurement above was right about the data and wrong about the picture: the
+water was computed and uploaded, and then culled. The visibility pass tested
+every water sheet's bounds on the sea's sphere, and a far river's sheet
+stands at its own surface, up to hundreds of metres higher; from a river's
+bank everything past the column tier's edge failed the frustum test
+(design 7). One cause for both reports: walking, the tier's edge is as
+little as 20-50 m ahead and the river past it was dry until the next tier
+landed.
+
+- **The listing tests a far river's sheet at its own surface** (design 7).
+  Built, with a GPU test on the shipped shader.
+- **`--walk-river`**, a recording instrument: the walker walks a whole river
+  from its source to the sea on the bank, logging its progress and, each
+  second, how far ahead the river is drawn under the old rule and the new
+  (design 8).
+
 ## Impact
 
 - `pbd_core::rivers::RiverMap::build`: the ground sampled on scoped threads.
