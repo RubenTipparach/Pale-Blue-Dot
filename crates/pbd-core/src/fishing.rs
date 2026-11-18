@@ -172,6 +172,18 @@ impl Line {
         }
     }
 
+    /// The phase's own clock, s: what is left of a nibble before its dip
+    /// ends, of the hook window in a bite. Read only (`fish-behaviour`: the
+    /// fish at the lure is drawn in time with it).
+    pub fn timer(&self) -> f32 {
+        self.timer
+    }
+
+    /// Nibbles left before the bite, counting the one under way.
+    pub fn nibbles_left(&self) -> u8 {
+        self.nibbles
+    }
+
     /// Whether the float is out, in the air or on the water.
     pub fn is_out(&self) -> bool {
         !matches!(self.phase, Phase::Ready | Phase::Charging)

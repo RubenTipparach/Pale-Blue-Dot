@@ -47,7 +47,9 @@ impl Plugin for MotionTracePlugin {
              hand_rx,hand_ry,hand_rz,\
              origin_x,origin_y,origin_z,\
              line_vx,line_vy,line_vz,tip_vx,tip_vy,tip_vz,\
-             fish_key,fish_fx,fish_fy,fish_fz,fish_ux,fish_uy,fish_uz"
+             fish_key,fish_fx,fish_fy,fish_fz,fish_ux,fish_uy,fish_uz,\
+             fish_lx,fish_ly,fish_lz,mouth_x,mouth_y,mouth_z,lure_x,lure_y,lure_z,\
+             mouth_lure_m,dip,timer,run,targeted"
         )
         .expect("PBD_MOTION_TRACE: cannot write");
         info!("MOTION_TRACE writing {}", path.display());
@@ -226,7 +228,24 @@ fn trace(
     trace.followed = now_followed;
     // The followed creature's drawn forward and up, as its mesh was built.
     let pose = now_followed.and_then(|key| headings.as_deref()?.map.get(&key).copied());
-    let (fwd, top) = pose.map_or((Vec3::NAN, Vec3::NAN), |h| (h.forward, h.up));
+    let (fwd, top, mouth) = pose.map_or((Vec3::NAN, Vec3::NAN, Vec3::NAN), |h| {
+        (h.forward, h.up, h.mouth)
+    });
+    // `fish-behaviour`: the lure as drawn (under the drawn float, moved by
+    // what the fish does to it), the drawn mouth's distance from it, and the
+    // line's dip, timer and run, local.
+    let (lure, dip, timer, run) =
+        fishery
+            .as_deref()
+            .map_or((Vec3::NAN, f32::NAN, f32::NAN, f32::NAN), |f| {
+                let float = drawn_float.as_deref().copied().unwrap_or_default();
+                let lure = if f.line.is_out() {
+                    crate::fish::draw::drawn_lure(&o, f, &float)
+                } else {
+                    Vec3::NAN
+                };
+                (lure, f.line.dip, f.line.timer(), f.line.run)
+            });
     let key = now_followed.map_or(String::new(), |(seed, id)| format!("{seed:x}-{id}"));
     let fish_view = view.transform_point3(crate::render_origin::render_from_physics(
         &frame, fish_local,
@@ -235,7 +254,7 @@ fn trace(
     let float_local = local(float);
     let wall = now.duration_since(trace.start).as_secs_f64();
     let row = format!(
-        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
+        "{},{:.6},{:.6},{},{:.4},{:.5},{:.5},{:.5},{:.6},{:.6},{:.6},{:.6},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{},{:.5},{:.5},{:.5},{},{},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.7},{:.7},{:.7},{:.1},{:.1},{:.1},{:.7},{:.7},{:.7},{:.7},{:.7},{:.7},{},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5},{:.4},{:.4},{}",
         trace.frame,
         wall,
         real.delta_secs_f64(),
@@ -291,6 +310,20 @@ fn trace(
         top.x,
         top.y,
         top.z,
+        fish_local.x,
+        fish_local.y,
+        fish_local.z,
+        mouth.x,
+        mouth.y,
+        mouth.z,
+        lure.x,
+        lure.y,
+        lure.z,
+        mouth.distance(lure),
+        dip,
+        timer,
+        run,
+        u8::from(fishery.as_deref().is_some_and(|f| f.line.target.is_some())),
     );
     let _ = writeln!(trace.file, "{row}");
     if let Some(seconds) = trace.seconds

@@ -1521,6 +1521,9 @@ pub(crate) mod draw {
     pub struct Heading {
         pub forward: Vec3,
         pub up: Vec3,
+        /// Where its mouth is drawn, local (`fish-behaviour`'s trace): the
+        /// model's nose, laid rigid.
+        pub mouth: Vec3,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -1962,6 +1965,13 @@ pub(crate) mod draw {
         }
     }
 
+    /// The lure as drawn this frame, local: a hand's width under the drawn
+    /// float (`fish-behaviour`'s trace reads it).
+    pub(crate) fn drawn_lure(o: &SimOrigin, fishery: &Fishery, float: &DrawnFloat) -> Vec3 {
+        let drawn = float.drawn(o, fishery.line.float);
+        drawn - o.up_at(drawn) * 0.35
+    }
+
     /// How far under a diving duck is drawn when wholly dived, m.
     const DUCK_UNDER_M: f32 = 0.8;
 
@@ -2065,9 +2075,14 @@ pub(crate) mod draw {
                 tint = water.albedo(tint, (f64::from(surface) - o.radius_at(*p)) as f32);
             }
             let look = bodies::Look { t, phase, pose };
-            headings
-                .map
-                .insert((school.seed, id), Heading { forward, up: top });
+            headings.map.insert(
+                (school.seed, id),
+                Heading {
+                    forward,
+                    up: top,
+                    mouth: school.anchor + origin + forward * body.nose * scale,
+                },
+            );
             let place = bodies::Place {
                 origin,
                 forward,

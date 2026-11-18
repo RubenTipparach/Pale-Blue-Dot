@@ -72,6 +72,9 @@ pub struct Body {
     /// The model's extent along its length axis (X; Y for a worm), model
     /// units: a species' `length_m` over this is its scale.
     pub length: f32,
+    /// Where its nose is along +X, model units: the front of the model,
+    /// where a fish's mouth is.
+    pub nose: f32,
 }
 
 impl Body {
@@ -910,6 +913,7 @@ impl Body {
             base,
             parts,
             length: 1.0,
+            nose: 0.0,
         };
         let axis = |p: Vec3| if kind == Kind::TubeWorm { p.y } else { p.x };
         let mut lo = f32::INFINITY;
@@ -924,6 +928,13 @@ impl Body {
             hi = hi.max(axis(p));
         }
         body.length = (hi - lo).max(1e-3);
+        body.nose = body
+            .base
+            .positions
+            .iter()
+            .map(|p| p.x)
+            .fold(f32::NEG_INFINITY, f32::max)
+            .max(0.0);
         body
     }
 }
