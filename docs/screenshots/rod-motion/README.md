@@ -62,3 +62,24 @@ before is `charging-after.jpg`, the fist risen 5 cm. One frame of a burst:
 
 The run was stopped once the burst had the charge. Log: no `ERROR` lines,
 the same 37 `LATE_PIPELINE` lines as the runs above.
+
+## The cast in flight: flex, follow-through and the cast's line (design 8, 2026-11-18)
+
+| Shot | Before | After |
+| --- | --- | --- |
+| The float in the air, 12 fixed-step frames after the release in both | `flight-before.jpg` | `flight-after.jpg` |
+| From just before the release, every 3rd frame (right two thirds) | `flight-before-burst.jpg` | `flight-after-burst.jpg` |
+
+- Before is `8438582e`: the line hangs in a sag straight from the tip to the
+  float while it flies, and the rod settles forward of rest.
+- After: the line runs from the tip up and back toward where the float was
+  let go, above and behind the head, and arcs out along the float's path;
+  the rod is held out low with the arm reaching (the sleeve in view) and
+  bends through the flick. The hand is `hand-model` version 13's.
+
+Taken on 2026-11-18 on lavapipe under Xvfb, 1440 x 900, the `fast` build;
+frame cost not measured. Each build loads at its own pace, so the bursts are
+lined up on the release (frame 563 before, 576 after). Logs: no `ERROR`
+lines, 38 `LATE_PIPELINE` lines in each (a capture does not warm).
+
+    PBD_CAPTURE_RUN=burst,100,115,1 pbd-app --walk --at 28.25 0.63 --yaw 180 --pitch -15 --cast --time 11 --rain 0 --weather-at 7200 --capture cast.png --frames 215
