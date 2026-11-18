@@ -175,6 +175,12 @@ pub struct Launch {
     /// stands (`--at`), scripted as `--fish` casts on its shore
     /// (`small-boats` design 6). A capture instrument.
     pub cast: bool,
+    /// `--rod-cue nibble|bite|hooked`: once a cast's float has been on the
+    /// water a second, the rod in hand is drawn as if the line were in that
+    /// phase, for a still of the rod's motion (`rod-motion` 2.5). Only the
+    /// drawn rod sees it: the line, its rules and any fish do not. A capture
+    /// instrument.
+    pub rod_cue: Option<pbd_core::fishing::Phase>,
     /// `--load-hold`: aboard a raft, put twelve logs in its hold through the
     /// pack's own move and save (`small-boats` design 5). A capture
     /// instrument.
@@ -488,6 +494,7 @@ impl Launch {
             fish_play: false,
             watch_hook: false,
             cast: false,
+            rod_cue: None,
             load_hold: false,
             husbandry: None,
             life: None,
@@ -1233,6 +1240,17 @@ impl Launch {
                 }
                 "--watch-hook" => result.watch_hook = true,
                 "--cast" => result.cast = true,
+                "--rod-cue" => {
+                    i += 1;
+                    use pbd_core::fishing::Phase;
+                    let name = args.get(i).expect("--rod-cue requires a phase");
+                    result.rod_cue = Some(match name.to_lowercase().as_str() {
+                        "nibble" => Phase::Nibble,
+                        "bite" => Phase::Bite,
+                        "hooked" => Phase::Hooked,
+                        other => panic!("--rod-cue: nibble, bite or hooked, not {other}"),
+                    });
+                }
                 "--load-hold" => result.load_hold = true,
                 "--life" => {
                     i += 1;
@@ -1767,6 +1785,7 @@ pub fn run(args: &[String]) {
             farm::make_looks,
             farm::spawn_note,
             pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+            pbd_app::interact::spawn_fish_keys.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
         ),
     )
     // The interact key's offers from the fruit and the farm (the husbandry
@@ -1782,6 +1801,7 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::saves::WorldSave>),
             pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
+            pbd_app::interact::show_fish_keys,
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -2189,6 +2209,14 @@ pub fn run(args: &[String]) {
             app.add_systems(
                 PreUpdate,
                 cast_afloat_script.after(bevy::input::InputSystems),
+            );
+        }
+        if let Some(phase) = launch.rod_cue {
+            app.insert_resource(RodCueScript(phase)).add_systems(
+                Update,
+                rod_cue_script
+                    .after(pbd_app::fish::FishSet)
+                    .before(pbd_app::held::HoldSet),
             );
         }
         if launch.load_hold {
@@ -4298,6 +4326,50 @@ fn cast_afloat_script(
             fishery.line.phase,
             space.origin().radius_at(fishery.line.float) as f32 - pbd_app::planet::PLANET_RADIUS
         );
+    }
+}
+
+/// `--rod-cue`'s phase.
+#[derive(Resource, Clone, Copy)]
+struct RodCueScript(pbd_core::fishing::Phase);
+
+/// `--rod-cue`: a second after the float lands, the rod in hand is drawn as
+/// if the line were in the scripted phase, with that phase's event once.
+/// It writes only the rod's cue, which nothing but the drawn rod reads.
+fn rod_cue_script(
+    script: Res<RodCueScript>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    mut cue: ResMut<pbd_app::held::RodCue>,
+    mut floating: Local<u32>,
+) {
+    use pbd_core::fishing::{Event, Phase};
+    let Some(fishery) = fishery else {
+        return;
+    };
+    if fishery.line.phase != Phase::Floating {
+        return;
+    }
+    *floating += 1;
+    if *floating < 60 {
+        return;
+    }
+    cue.phase = script.0;
+    if *floating == 60 {
+        let event = match script.0 {
+            Phase::Nibble => Event::Nibble { species: 0 },
+            Phase::Bite => Event::Bite {
+                species: 0,
+                window_s: 1.0,
+            },
+            _ => Event::Hooked { species: 0 },
+        };
+        cue.events.push(event);
+        info!("rod cue script: the rod drawn as {:?}", script.0);
+    }
+    if script.0 == Phase::Hooked {
+        cue.tension = 0.7;
+        cue.reeling = true;
+        cue.pull = 0.5;
     }
 }
 

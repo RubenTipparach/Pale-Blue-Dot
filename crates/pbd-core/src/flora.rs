@@ -929,9 +929,9 @@ mod tests {
         assert!(picked.bare_at(17.9) && !picked.bare_at(18.0));
     }
 
-    /// The ground follows the trees' calendar (design 12.6): green in
-    /// summer and spring, dry through autumn and winter, frosted only in a
-    /// cold winter, never in the tropics; and the WGSL is the same numbers.
+    // The ground follows the trees' calendar (design 12.6): green in
+    // summer and spring, dry through autumn and winter, frosted only in a
+    // cold winter, never in the tropics; and the WGSL is the same numbers.
 
     /// Each fruit counted hangs somewhere on its tree (`fruit-aim`): as many
     /// points as `hanging_fruit` counts, in the crown, above the ground and

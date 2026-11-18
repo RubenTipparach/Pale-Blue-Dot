@@ -24,6 +24,7 @@ pub mod gather;
 pub mod geo;
 pub mod goods;
 pub mod gravity;
+pub mod hand;
 pub mod hex;
 pub mod hexel;
 pub mod husbandry;
