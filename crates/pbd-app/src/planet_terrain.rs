@@ -136,6 +136,15 @@ pub const CLEARED_BIT: u32 = 24;
 pub const PLACED_SHEET_SHIFT: u32 = 26;
 const _: () = assert!(PLACED_SHEET_SHIFT > FLOODED_BIT && PLACED_SHEET_SHIFT + 4 <= 30);
 
+/// The placed-sheet field's spare value: "this stone is ore" (`flora-v2`
+/// design 12.12). A sheet plus one is 1 to 14, so 15 is never a sheet; a
+/// layer marked with it keeps the stone's render code and is drawn from its
+/// biome's stone tile with ore flecks. Generated veins and placed ore both
+/// carry it ([`crate::planet::column::drawn_sheet_mark`]).
+pub const ORE_SHEET: u32 = 15;
+// No tileset, plus one, may reach the mark: a fifteenth sheet widens the field.
+const _: () = assert!(TILESETS.len() < ORE_SHEET as usize && ORE_SHEET < 16);
+
 /// The bit of a record's material word that says water stands on the cell
 /// at some tide, so nothing grows there (`flora-v2` 12.11).
 pub const FLOODED_BIT: u32 = pbd_core::flora::FLOODED_BIT;
@@ -511,6 +520,7 @@ mod tests {
                 crate::planet::column::PLACED_SHEETS_BASE
             ),
             format!("const PLACED_SHEET_SHIFT: u32 = {PLACED_SHEET_SHIFT}u;"),
+            format!("const ORE_SHEET: u32 = {ORE_SHEET}u;"),
             format!(
                 "const PLACED_SHEET_MASK: u32 = {:#010x}u;",
                 0xf << PLACED_SHEET_SHIFT

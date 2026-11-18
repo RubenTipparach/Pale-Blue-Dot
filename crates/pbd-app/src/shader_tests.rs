@@ -29,11 +29,18 @@ fn validated_entry_points(label: &str, source: &str) -> Vec<String> {
         .collect()
 }
 
-/// `planet_surface.wgsl` as Bevy's composer hands it to naga: its import of
-/// the cloud module replaced by that module's own items. The terrain imports
-/// only functions and names nothing it does not also define, so splicing the
-/// module whole is the composition.
+/// `planet_surface.wgsl` as Bevy's composer hands it to naga for the draw
+/// pipeline: its import of the cloud module replaced by that module's own
+/// items, and no shader defs set. The terrain imports only functions and
+/// names nothing it does not also define, so splicing the module whole is the
+/// composition.
 pub(crate) fn planet_surface_source() -> String {
+    planet_surface_with(&[])
+}
+
+/// The terrain shader with the shader defs `defs` set, as a variant's
+/// pipeline compiles it.
+fn planet_surface_with(defs: &[&str]) -> String {
     let surface = include_str!("../../../assets/shaders/planet_surface.wgsl");
     let clouds: String = include_str!("../../../assets/shaders/clouds.wgsl")
         .lines()
@@ -50,9 +57,10 @@ pub(crate) fn planet_surface_source() -> String {
         surface.contains(shadow),
         "planet_surface.wgsl's shadow import moved; update the splice"
     );
-    surface
+    let spliced = surface
         .replacen(import, &clouds, 1)
-        .replacen(shadow, &sun_shadow_source(), 1)
+        .replacen(shadow, &sun_shadow_source(), 1);
+    resolve_defs(&spliced, defs)
 }
 
 /// `sun_shadow.wgsl` as naga reads it: the module's items, without the
@@ -80,8 +88,44 @@ fn the_sea_module_compiles() {
     validated_entry_points("sea.wgsl", &sea_source());
 }
 
+/// A shader's `#ifdef`/`#ifndef`/`#else`/`#endif` resolved as Bevy's
+/// preprocessor resolves them for the shader defs `defs`: the branches not
+/// taken dropped and the directive lines blanked, so line numbers keep. The
+/// terrain's shadow caster and its `TERRAIN_OFF_*` instruments carry these,
+/// and naga reads none of them: without this every check that parsed the
+/// terrain stopped at the first `#ifdef SHADOW_CASTER`.
+pub(crate) fn resolve_defs(source: &str, defs: &[&str]) -> String {
+    let mut taking: Vec<bool> = Vec::new();
+    let mut out = Vec::new();
+    for line in source.lines() {
+        let directive = line.trim_start();
+        let name = |prefix: &str| directive.strip_prefix(prefix).map(str::trim);
+        if let Some(def) = name("#ifdef ") {
+            taking.push(defs.contains(&def));
+        } else if let Some(def) = name("#ifndef ") {
+            taking.push(!defs.contains(&def));
+        } else if directive.starts_with("#else") {
+            let last = taking.last_mut().expect("an #else outside any #ifdef");
+            *last = !*last;
+        } else if directive.starts_with("#endif") {
+            taking.pop().expect("an #endif outside any #ifdef");
+        } else {
+            out.push(if taking.iter().all(|&t| t) { line } else { "" });
+            continue;
+        }
+        out.push("");
+    }
+    assert!(taking.is_empty(), "an #ifdef with no #endif");
+    out.join("\n")
+}
+
 #[test]
 fn the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names() {
+    // The shadow caster's variant compiles too.
+    validated_entry_points(
+        "planet_surface.wgsl (SHADOW_CASTER)",
+        &planet_surface_with(&["SHADOW_CASTER"]),
+    );
     let entries = validated_entry_points("planet_surface.wgsl", &planet_surface_source());
     for entry in [
         "vertex",
