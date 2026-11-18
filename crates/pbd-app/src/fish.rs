@@ -135,10 +135,13 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
-    /// The float is out and a right click reels it in: the interact prompt
-    /// shows that button under the crosshair (owner, 2026-11-16: "just have a
-    /// button prompt to right click to reel in").
+    /// The float is out and a right click cancels, winding it in: the
+    /// interact prompt shows that button under the crosshair (owner,
+    /// 2026-11-16: "just have a button prompt to right click to reel in";
+    /// 2026-11-18: "right click should be clearly shown to cancle").
     pub reel_prompt: bool,
+    /// The bite: the prompt adds the left button, which hooks the fish.
+    pub hook_prompt: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -518,8 +521,15 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.reel_prompt =
-        rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
+    // The buttons while the float is out: left hooks, right cancels.
+    status.reel_prompt = rod
+        && walking
+        && matches!(
+            fishery.line.phase,
+            Phase::Floating | Phase::Nibble | Phase::Bite
+        )
+        && !roster.is_empty();
+    status.hook_prompt = status.reel_prompt && fishery.line.phase == Phase::Bite;
     // The rod in hand moves with the line (`held.rs`, `rod-motion`).
     if let Some(cue) = cue.as_deref_mut() {
         cue.phase = fishery.line.phase;
@@ -1015,7 +1025,7 @@ fn report(
     };
     match event {
         Event::Dry => status.say("The float came down on dry ground", 1.5),
-        Event::Bite { .. } => status.say("Bite! Click now", 0.3),
+        Event::Bite { .. } => status.say("Bite! Left click", 0.3),
         Event::TooEarly { species } => status.say(
             format!("Too early - the {} bolted", name(species).to_lowercase()),
             2.0,
@@ -1116,7 +1126,7 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         // The button prompt says it (`reel_prompt`).
         Phase::Floating => String::new(),
         Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
-        Phase::Bite => "Bite! Click now".into(),
+        Phase::Bite => "Bite! Left click".into(),
         Phase::Hooked => "Hold to reel - ease off when it runs".into(),
     }
 }

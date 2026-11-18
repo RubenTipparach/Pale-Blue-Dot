@@ -269,6 +269,12 @@ pub struct PromptKey;
 #[derive(Component)]
 pub struct PromptWords;
 
+/// The fishing prompt's second button, shown beside the first while the
+/// float is out: the left button hooks (owner, 2026-11-18: "right click
+/// should be clearly shown to cancle, and left click to hook fish").
+#[derive(Component)]
+pub struct HookTip;
+
 /// The prompt, just under the crosshair: a stone tooltip holding the key in
 /// an oak cap and the verb and thing.
 pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
@@ -281,12 +287,33 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 right: px(0),
                 top: percent(52),
                 justify_content: JustifyContent::Center,
+                column_gap: px(18),
                 ..default()
             },
             Visibility::Hidden,
             Prompt,
         ))
         .with_children(|row| {
+            row.spawn((
+                Node {
+                    column_gap: px(5),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                Visibility::Hidden,
+                HookTip,
+            ))
+            .with_children(|tip| {
+                let left = crate::controls::Key::Mouse(MouseButton::Left).label();
+                crate::ui_kit::key_cap(tip, &kit, left, ());
+                tip.spawn((
+                    Node {
+                        padding: UiRect::top(px(2)),
+                        ..default()
+                    },
+                    KitText::new("HOOK", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
+                ));
+            });
             // No box round it (owner, 2026-11-17: "we dont have a box around
             // stuff, just the letter glyph and teh text with black outline"),
             // as the boat panel.
@@ -314,7 +341,8 @@ pub fn show_prompt(
     interact: Res<Interact>,
     binds: Option<Res<crate::controls::KeyBinds>>,
     fishing: Option<Res<crate::fish::FishingStatus>>,
-    mut prompt: Query<&mut Visibility, With<Prompt>>,
+    mut prompt: Query<&mut Visibility, (With<Prompt>, Without<HookTip>)>,
+    mut hook: Query<&mut Visibility, (With<HookTip>, Without<Prompt>)>,
     mut key_text: Query<&mut crate::ui_kit::KitText, (With<PromptKey>, Without<PromptWords>)>,
     mut words: Query<&mut crate::ui_kit::KitText, (With<PromptWords>, Without<PromptKey>)>,
 ) {
@@ -323,6 +351,17 @@ pub fn show_prompt(
     let reel = shown.is_none() && fishing.as_deref().is_some_and(|f| f.reel_prompt);
     for mut visibility in &mut prompt {
         let want = if shown.is_some() || reel {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+    let bite = reel && fishing.as_deref().is_some_and(|f| f.hook_prompt);
+    for mut visibility in &mut hook {
+        let want = if bite {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -341,7 +380,7 @@ pub fn show_prompt(
         }
         None if reel => (
             crate::controls::Key::Mouse(MouseButton::Right).label(),
-            "REEL IN".to_string(),
+            "CANCEL".to_string(),
         ),
         None => return,
     };

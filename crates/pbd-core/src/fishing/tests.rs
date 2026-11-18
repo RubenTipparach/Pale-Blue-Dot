@@ -303,11 +303,11 @@ fn a_missed_bite_lets_the_fish_go() {
     );
 }
 
-/// The strike is either button while the float is under: a right click at
-/// the bite, the button the prompt says winds in, hooks the fish rather than
-/// letting it go (owner, 2026-11-16).
+/// The right button cancels at the bite too: it winds the line in and says
+/// the fish got away; only the left button hooks (owner, 2026-11-18: "left
+/// click to hook fish, right click to cancel for fishing").
 #[test]
-fn a_right_click_at_the_bite_hooks_the_fish() {
+fn a_right_click_at_the_bite_cancels() {
     let mut world = World::new(50);
     world.add("minnow", at(0.0, 1.0, 8.0), 50);
     world.cast(0.6);
@@ -319,10 +319,14 @@ fn a_right_click_at_the_bite_hooks_the_fish() {
         ..Default::default()
     });
     assert!(
-        matches!(events.first(), Some(Event::Hooked { .. })),
+        matches!(events.first(), Some(Event::Lost { .. })),
         "{events:?}"
     );
-    assert_eq!(world.line.phase, Phase::Hooked);
+    assert!(
+        events.iter().any(|e| matches!(e, Event::ReeledIn)),
+        "{events:?}"
+    );
+    assert_eq!(world.line.phase, Phase::Ready);
 }
 
 /// Winding in with a fish nibbling says it got away, so a line that was not
@@ -342,4 +346,33 @@ fn winding_in_on_a_nibble_says_the_fish_got_away() {
     });
     assert_eq!(events, vec![Event::Lost { species }, Event::ReeledIn]);
     assert_eq!(world.line.phase, Phase::Ready);
+}
+
+/// The float follows the fish smoothly through its runs: a run starting or
+/// stopping never jumps it across the water between two ticks (owner,
+/// 2026-11-18: "fish also kinda teleports around when i reel it in").
+#[test]
+fn the_hooked_float_never_jumps() {
+    let mut world = World::new(14);
+    world.add("deepback", at(0.0, 1.0, 8.0), 14);
+    fish_until_hooked(&mut world);
+    let mut last = world.line.float;
+    let mut worst = 0.0f32;
+    for k in 0..30 * 20 {
+        if world.line.phase != Phase::Hooked {
+            break;
+        }
+        // Reel in bursts, so runs start and stop under both buttons.
+        let held = world.line.tension < 0.5 && (k / 45) % 2 == 0;
+        world.tick(Controls {
+            held,
+            ..Default::default()
+        });
+        if world.line.phase == Phase::Hooked {
+            worst = worst.max(world.line.float.distance(last));
+        }
+        last = world.line.float;
+    }
+    // Reeling and running move it under 0.1 m a tick at 30 per second.
+    assert!(worst < 0.1, "the float jumped {worst} m in one tick");
 }
