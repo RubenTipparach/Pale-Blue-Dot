@@ -836,3 +836,108 @@ point memo shrinks to what pieces don't cover, or goes.
   (design 1). Design 14 moves it into the job.
 - The terrain's GPU cost is as the play-budget study left it (median 8-10
   ms here); the water passes weren't priced separately in this sitting.
+
+## 16. Design 14, built (2026-11-18, the owner's desktop, `--profile fast`)
+
+The owner: "build it".
+
+**What was built.**
+- **The river band** (`river_band::build`, called from the fine-set job after
+  the column tier).
+  - Every finest cell within a river's banks' reach (`rivers::near`, 6 m)
+    out to the finest band (300 m), less the column tier's deep cells. It's
+    built over `column::build_with`, the tier's own build over any chosen
+    cells, with its own settle, meshed by `water_flow::liquid_mesh`.
+  - It lands with the set (`FineSet::river`) and is drawn after the tier's
+    water in the same flowing-water pass.
+- **Cached by cell.** A cell's water (its still vertices) is kept by cell key
+  once the cell was at least `SETTLE_KEEP_CELLS + 1` (13) cells inside the
+  tier it was built in. A job reads every cached cell and builds only the
+  missing ones, grown by 14 rings so each is that deep.
+  - In memory, and in `<saves>/cache/river-band-<seed>-g<version>.bin`,
+    written with the river cache (every 30 s and on exit, atomic), read at
+    start.
+  - **An edit** within 40 m of a river drops the cached cells within 40 m
+    (`FineSet::write_layer`), so the next job builds them with the edit.
+- **The column tier draws only its deep interior** (13 cells in from its
+  rim, `liquid_mesh_from`); the band draws the ring outside it, so neither
+  draws water its rim has shaped.
+- **No stand-in at full detail.** The still sheet (`kind == 4`) is dropped
+  at the finest level, and the tier's 25 m water dither is gone. The flowing
+  water fades out across the finest band's ring like its ground. On the
+  coarser levels the still sheet now covers every cell the river floods
+  (`rivers::flood_top`).
+- **The water past the tier is real to the walker too.** Where the tier has
+  no column, the eye's water test (`eye_water_at`) and the walker's contact
+  (`PlanetContact::stand`) read the band's water tops (`RiverBand::tops`).
+  - A held-set test (`PBD_HOLD_SET=<n>`, an instrument that stops new sets)
+    found the walker walking a river's bed under the band's water with the
+    eye treated as dry: a dry channel on screen.
+- **The tier leads and keeps up.** A set is anchored where the walker will
+  be when it lands (`led_anchor`: velocity times the last build's time, up
+  to half the tier's reach ahead). A set is also requested whenever, at the
+  walker's speed, it would reach within 15 m of the tier's edge before the
+  next lands.
+- **The point memo**: capped (2 M values each for the ground and the water
+  tops, 0.5 M for far sheets and settled cells), and only values a river
+  changes are written. Its file went from 342 MB to 37-62 MB. Stale
+  temporary files from a stopped write are cleared after each write.
+- **The arrival banner**: a world opened while the last one's banner is up
+  takes it down. The owner saw two names drawn over each other.
+
+**Tests.**
+- `a_band_read_from_the_cache_is_the_band_built_fresh`: a set 40 m on reads
+  most of its cells, and its water equals the same set built with the cache
+  empty, vertex for vertex. It failed at a 2-cell keep (7,788 against 7,698
+  vertices) and passes at 13.
+- `the_cache_file_reads_back_or_is_refused`: only river-changed values are
+  written.
+- The water-flow tests pass with the rim and keep rules.
+
+**Measured** (the whole river from its source, day, warm caches):
+
+| | Before design 14 (section 15) | After |
+| --- | ---: | ---: |
+| Real water drawn to | the tier, 90 m from its anchor | 300 m |
+| Stand-in sheets within 300 m | from the tier's edge out | none once the first set at the river lands |
+| Seconds off the tier (of the walk) | not logged | 10 of 167 (6 at the start, 4 single ones) |
+| Rebuild, mean | 4.5-5.0 s | 6.4-6.6 s |
+| Band per rebuild | - | 6,080 cells, 6,050 read, 30 built, 60 k vertices, 72 ms |
+| Frame median / p99 | 15.8-16.4 / 29-33 ms | 15.1 / 25.1 ms |
+| Main thread median | 13.9-14.4 ms | 13.3 ms |
+| GPU median | 9.6-10.3 ms | 9.8 ms |
+| Frames over 50 ms (walk) | 12-36 | 1 |
+| River cache files | 342 MB | 62 MB + 7.7 MB band |
+
+- A cold band builds about 1,100 cells a rebuild (300 ms on the job).
+- Rebuilds take longer than before (6.4 s against 4.5-5.0 s). They're
+  requested earlier and back to back now, and anchored ahead, so they cover
+  more new ground. The band itself is 72 ms of that, warm.
+- The first ~6 s after a world opens still show the river by its stand-in
+  where the first set is still the old world's. That's the launch, not
+  play: a new world opens the last one first.
+
+**Not measured:** `tools/perf_suite.py` on the release build.
+
+**After the test run found two more faults** (fixed):
+- **The cache was keyed by seed, not by save.** Water built in one save with
+  its edits could be read in another save of the same seed. Now a cell
+  within 40 m of any edit is never read from the cache nor kept in it: the
+  cache holds only the generated river.
+- **The band's tier gathered caves round its own anchor**, so a cell's
+  column could depend on which anchor built it. Band columns are built
+  without caves; a river's valley is sealed from them anyway.
+
+**Checks.**
+- The generator's ground is unchanged: the version 8, 9 and 10 ground
+  digests are the same on this branch as on `origin/main`.
+- `planet_gen`'s seven digest tests fail on main too (pinned values out of
+  date there).
+- The app's twelve CRLF and GPU test failures (shaders, fish wiki, vehicle
+  records, the lens) are in files this change doesn't touch.
+
+**The recording** (`river-band-2026-11-18-450p60.mp4`, 2 min 56 s, Drive
+validation folder): the whole river from its source, day, the frame graph
+on. Real water to the horizon, the walker off the tier 4 of 175 seconds,
+and two stalls at one spot, each freed.
+

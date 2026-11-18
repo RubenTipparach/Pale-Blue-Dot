@@ -54,6 +54,7 @@ pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod render_origin;
 pub mod repro;
+pub mod river_band;
 pub mod river_fill;
 pub mod river_walk;
 #[cfg(feature = "desktop")]

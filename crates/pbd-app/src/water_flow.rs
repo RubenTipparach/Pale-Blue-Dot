@@ -402,6 +402,24 @@ pub struct FlowVertex {
 }
 
 impl FlowVertex {
+    /// A vertex drawn where it is, not moving (`river-cache` design 14: the
+    /// river band's water, read back from its cache).
+    pub fn still(position: Vec3, normal: Vec3, flow: Vec3, kind: f32, sky: f32) -> Self {
+        Self {
+            position,
+            prev: position,
+            normal,
+            flow,
+            kind,
+            sky,
+            flags: 0,
+            prev_normal: normal,
+            prev_flow: flow,
+            prev_sky: sky,
+            start: 0.0,
+        }
+    }
+
     /// How far through its ease it is at `now` seconds since its mesh's
     /// epoch, eased as `vertex_flowing` eases it.
     fn eased(&self, now: f32) -> (f32, f32) {
@@ -1384,7 +1402,21 @@ pub fn liquid_mesh_eased(
     finest: &[GpuCell],
     radius: f32,
 ) -> LiquidMesh {
+    liquid_mesh_from(tier, prev, finest, radius, 1)
+}
+
+/// [`liquid_mesh_eased`] over the cells at least `from_rim` cells in from
+/// the tier's rim (`river-cache` design 14): the column tier draws only the
+/// water its rim cannot have shaped, and the river band draws the rest.
+pub fn liquid_mesh_from(
+    tier: &ColumnTier,
+    prev: Option<&ColumnTier>,
+    finest: &[GpuCell],
+    radius: f32,
+    from_rim: u16,
+) -> LiquidMesh {
     let mut out = LiquidMesh::default();
+    let depth = tier.rim_depth(from_rim);
     // The tick before is eased from only when it is the same tier.
     let prev = prev
         .filter(|p| p.columns.len() == tier.columns.len() && p.water.records == tier.water.records);
@@ -1400,6 +1432,13 @@ pub fn liquid_mesh_eased(
             .collect()
     });
     for slot in 0..tier.columns.len() {
+        // The rim's water is meshed against neighbours the tier does not
+        // hold, and the rule never settles it: the river band draws those
+        // cells, meshed against their real neighbours (`river-cache` design
+        // 14).
+        if depth.get(slot).is_none_or(|&d| d < from_rim) {
+            continue;
+        }
         let Some(&record) = tier.water.records.get(slot) else {
             continue;
         };
@@ -1615,11 +1654,12 @@ fn rebuild_water(
     } else {
         None
     };
-    let mut made = liquid_mesh_eased(
+    let mut made = liquid_mesh_from(
         &fine.set.columns,
         prev.as_deref().map(|p| &p.columns),
         fine.set.finest_records(),
         PLANET_RADIUS,
+        crate::river_band::TIER_KEEP,
     );
     if step.smooth {
         // What the last mesh is drawing now, and how far its epoch is from
@@ -1657,7 +1697,13 @@ fn rebuild_water(
             a.triangles, a.against, a.off, a.tops, a.split_tops, a.legacy_against, a.legacy_off
         );
     }
+    // The river band's water (`river-cache` design 14), built with the set
+    // on its task: still, so it is drawn as it is, after the tier's own.
+    let tier_vertices = made.vertices.len();
+    made.vertices
+        .extend_from_slice(&fine.set.river.mesh.vertices);
     flowing.lanes = Arc::new(made.lanes());
+    made.vertices.truncate(tier_vertices);
     flowing.version += 1;
     feet.0 = made.feet.clone();
     if let Ok(handle) = arrows.single()

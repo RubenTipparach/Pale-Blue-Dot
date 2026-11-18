@@ -4388,10 +4388,16 @@ fn river_walk_script(
             progress,
             length,
             100.0 * progress / length.max(1.0),
-            if pbd_app::coast_walk::in_river(up) {
-                "in the river"
-            } else {
-                "on the bank"
+            match (
+                pbd_app::coast_walk::in_river(up),
+                contact
+                    .as_deref()
+                    .is_none_or(|c| c.column_water(here).is_some()),
+            ) {
+                (true, true) => "in the river",
+                (false, true) => "on the bank",
+                (true, false) => "in the river, off the tier",
+                (false, false) => "on the bank, off the tier",
             },
             pbd_app::place::Place::of(here).line(),
             pbd_app::place::yaw_of(up, state.view().0).to_degrees()

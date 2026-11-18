@@ -923,6 +923,20 @@ fn far_near(
     (top > 0).then_some(cfg.sea_level_m + top as f32)
 }
 
+/// The water's surface where a river floods the ground at `d`, metres over
+/// the radius as [`far_surface`] gives it: the top the column there holds
+/// ([`water`]'s), `None` where no river water stands. What a coarse level's
+/// still sheet covers besides the river's line, so a far valley's flooded
+/// ground has its sheet and never shows a dry bed (`river-cache` design 14).
+pub fn flood_top(cfg: &TerrainConfig, d: Vec3) -> Option<f32> {
+    let settings = cfg.rivers.as_ref()?;
+    let d = d.normalize_or(Vec3::Y);
+    let top = top_at(cfg, settings, map(cfg, settings), d)?;
+    let sea = cfg.sea_level_m.round() as i32;
+    ((planet_gen::surface_altitude(cfg, d).floor() as i32 - sea) < top)
+        .then_some(cfg.sea_level_m + top as f32)
+}
+
 /// Whether a marsh pool may stand at `d` (version 8): the ground round it,
 /// `rim_m` out each way, is not lower, so the pool is held.
 pub fn rimmed(cfg: &TerrainConfig, d: Vec3, surface_m: f32) -> bool {
@@ -1093,8 +1107,13 @@ mod tests {
         let map = map(&cfg, &settings);
         let field = RiverField::new();
         field.carve.put([1, 2, 3, 4], 5.5);
-        field.top.put([7, 8, 9], i32::MIN);
-        field.far.put([1, 1, 1, 1], u32::MAX);
+        field.top.put([7, 8, 9], 12);
+        field.far.put([1, 1, 1, 1], 0x4000_0000);
+        // What no river changes is not written: a carve that left its base,
+        // no water top, no far sheet.
+        field.carve.put([5, 6, 7, 8], f32::from_bits(8));
+        field.top.put([9, 9, 9], i32::MIN);
+        field.far.put([2, 2, 2, 2], u32::MAX);
         field
             .settled
             .put(42, vec![(130u16, 1u8), (131, 9)].into_boxed_slice());

@@ -91,6 +91,12 @@ pub fn banner(
         }
         let (name, kind) = arrival.lines();
         info!("ARRIVE banner '{name}' {kind}");
+        // One banner at a time: a world opened while the last one's banner
+        // is still up (a launch into a new world opens the last world first)
+        // takes it down, or the two names are drawn over each other.
+        for entity in &banners {
+            commands.entity(entity).despawn();
+        }
         spawn(&mut commands, &name, kind);
         arrival.shown_s = Some(0.0);
         return;

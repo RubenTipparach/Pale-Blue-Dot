@@ -270,7 +270,7 @@ fn edited_water(edits: &Edits, key: u32, layer: usize) -> bool {
 pub struct TierGrid<'a>(pub &'a mut ColumnTier);
 
 impl ColumnTier {
-    fn rim(&self, slot: usize) -> bool {
+    pub(crate) fn rim(&self, slot: usize) -> bool {
         self.records
             .get(slot)
             .is_none_or(|record| record.more[3] & RIM_BIT != 0)
@@ -572,6 +572,34 @@ impl ColumnTier {
             p.settle_changed = changed.len();
         });
         changed.len()
+    }
+
+    /// Each slot's distance from the tier's rim in cells, counted to
+    /// `limit` (slots at least that far in read `limit`): what says a cell
+    /// was meshed against its real neighbours (`river-cache` design 14).
+    pub(crate) fn rim_depth(&self, limit: u16) -> Vec<u16> {
+        let n = self.columns.len();
+        let mut depth = vec![limit; n];
+        let mut front = std::collections::VecDeque::new();
+        for (s, d) in depth.iter_mut().enumerate() {
+            if self.rim(s) {
+                *d = 0;
+                front.push_back(s);
+            }
+        }
+        while let Some(s) = front.pop_front() {
+            let next = depth[s] + 1;
+            if next >= limit {
+                continue;
+            }
+            for t in self.sides_of(s).into_iter().flatten() {
+                if depth[t] > next {
+                    depth[t] = next;
+                    front.push_back(t);
+                }
+            }
+        }
+        depth
     }
 
     /// Which slots' settled water may be stamped from the cache and kept in
@@ -1668,6 +1696,50 @@ pub fn build(
     edits: &Edits,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
+    let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
+    build_with(
+        anchor,
+        finest,
+        neighbors,
+        settings,
+        edits,
+        &Members {
+            worms_m: settings.reach_m.max(0.),
+            select: &|_, direction: Vec3| direction.dot(anchor) > reach,
+            capacity: COLUMN_CAPACITY as usize,
+            light: true,
+        },
+    )
+}
+
+/// Which finest cells a tier is built over, and how (`river-cache` design
+/// 14): the column tier takes every cell within its reach and is lit; the
+/// river band takes a river's cells out to the finest band, and needs no
+/// caves (a river's valley is sealed from them) but its light, which its
+/// water's faces are shaded by.
+pub struct Members<'a> {
+    /// How far round the anchor caves are gathered from, m.
+    pub worms_m: f32,
+    /// Whether the finest record at an index, at a direction, is a member.
+    pub select: &'a dyn Fn(usize, Vec3) -> bool,
+    /// The most members.
+    pub capacity: usize,
+    /// Whether the tier is lit (`relight`).
+    pub light: bool,
+}
+
+/// [`build`] over the chosen members. The records' slot bits are written as
+/// the column tier's are: a caller building anything but the column tier
+/// passes a copy of the records.
+pub fn build_with(
+    anchor: Vec3,
+    finest: &mut [GpuCell],
+    neighbors: &[[u32; 6]],
+    settings: &ColumnSettings,
+    edits: &Edits,
+    members_of: &Members,
+) -> ColumnTier {
+    let anchor = anchor.normalize_or(Vec3::Y);
     // No finest level (the player is too high for it to be live): no column
     // to build, and no worms to gather for them.
     if finest.is_empty() {
@@ -1678,8 +1750,7 @@ pub fn build(
     // built it. This is the regional pre-pass the design said worms need,
     // done at the one place columns are built in bulk.
     let field = settings.worms();
-    let region = worms::gather(&field, terrain_config(), anchor, settings.reach_m.max(0.));
-    let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
+    let region = worms::gather(&field, terrain_config(), anchor, members_of.worms_m);
     let mut slots = vec![usize::MAX; finest.len()];
     let mut members = Vec::new();
     for (index, cell) in finest.iter_mut().enumerate() {
@@ -1691,7 +1762,7 @@ pub fn build(
             key != crate::planet::NO_KEY && flora::glows(key, settings.glow_flower_chance);
         cell.spare[2] = (cell.spare[2] & !GLOW_FLOWER_BIT) | glowing as u32;
         let direction = Vec3::from_slice(&cell.direction_height[..3]);
-        if direction.dot(anchor) <= reach || members.len() >= COLUMN_CAPACITY as usize {
+        if !(members_of.select)(index, direction) || members.len() >= members_of.capacity {
             cell.metadata[2] &= SKYLIGHT_MASK;
             continue;
         }
@@ -1744,7 +1815,10 @@ pub fn build(
         // by the rule above and takes its edits too - a wall you dug in is
         // still a wall you dug in when the tier moves and it becomes the rim.
         let made = &edits.for_cell(cell.key());
-        let column = if rim {
+        // No caves where none are gathered (the river band, `worms_m` 0): a
+        // river's valley is sealed from them, and a column is then the same
+        // whatever anchor built it.
+        let column = if rim || members_of.worms_m <= 0.0 {
             column::generate_edited_solid(terrain_config(), direction, made)
         } else {
             column::generate_edited(&region, &field, terrain_config(), direction, made)
@@ -1846,7 +1920,9 @@ pub fn build(
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.
-    tier.relight();
+    if members_of.light {
+        tier.relight();
+    }
     #[cfg(test)]
     {
         let ms = phase.elapsed().as_secs_f64() * 1000.;
@@ -1891,7 +1967,6 @@ pub fn mouth_of(cell: &GpuCell, runs: &[column::Run]) -> Option<(f32, f32, usize
 
 /// The slot a cell record carries, or `None`. What the shaders read off the
 /// same word, written here so a test can hold the two together.
-#[cfg(test)]
 pub(crate) fn slot_of(cell: &GpuCell) -> Option<u32> {
     // Zero is what a record is born with, so it is what "no column" means and
     // nothing has to be cleared to say it.
