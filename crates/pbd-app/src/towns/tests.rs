@@ -13,16 +13,7 @@ fn no_room_face_lies_on_a_lights_band_edge() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(
-        &site,
-        &town,
-        None,
-        &load_kits(),
-        &|_: &str| 2.0,
-        &config,
-        sheet(&config),
-    )
-    .unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     let on_edge = |slack: f32| {
         let mut found = Vec::new();
         for (lights, rooms) in laid.lights.iter().zip(&laid.rooms) {
@@ -85,8 +76,7 @@ fn holbrook_is_laid_out_on_its_own_ground() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{e}"));
-    let laid = build(&site, &town, None, &kits, &repeat, &config, sheet(&config))
-        .unwrap_or_else(|e| panic!("{e}"));
+    let laid = build(&site, &town, None, &kits, &repeat, &config).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(
         laid.chart.cells.len(),
         town.cells.len(),
@@ -242,16 +232,7 @@ fn holbrooks_ground_is_pinned() {
     let mut stored = town.clone();
     stored.layout = 1;
     for (town, pinned) in [(&stored, HOLBROOK_GROUND), (&town, HOLBROOK_GROUND_V2)] {
-        let laid = build(
-            &site,
-            town,
-            None,
-            &load_kits(),
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap();
+        let laid = build(&site, town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
         let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
         let (footprint, margin) = laid.ground.counts();
         println!(
@@ -281,16 +262,7 @@ fn print_where_to_stand_for_the_mockup_shots() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(
-        &site,
-        &town,
-        None,
-        &load_kits(),
-        &repeat,
-        &config,
-        sheet(&config),
-    )
-    .unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &repeat, &config).unwrap();
     let radius = config.radius_m;
     // `--at` and `--yaw` for standing at `stand` looking along `toward`.
     let spot = |name: &str, stand: Vec3, toward: Vec3| {
@@ -427,16 +399,7 @@ fn a_door_opened_is_open_when_the_world_is_opened_again() {
     let site = holbrook();
     let template = load_template("village");
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(
-        &site,
-        &town,
-        None,
-        &load_kits(),
-        &|_: &str| 2.0,
-        &config,
-        sheet(&config),
-    )
-    .unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     let door = record::door_id(
         record::building_id(site.id, 0),
         laid.solids[0].doors[0].index,
@@ -483,16 +446,7 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(
-        &site,
-        &town,
-        None,
-        &load_kits(),
-        &|_: &str| 2.0,
-        &config,
-        sheet(&config),
-    )
-    .unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     assert_eq!(laid.rooms.len(), laid.solids.len());
     for (b, rooms) in laid.rooms.iter().enumerate() {
         assert!(!rooms.is_empty(), "building {b} has no rooms");
@@ -601,16 +555,8 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         println!(
             "{}: turn {}, a terrace at {} m over {footprint} cells eased over {margin}, laid and cut in {:.2} s",
@@ -1005,16 +951,8 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         let levels: std::collections::BTreeSet<i8> = town.levels.iter().copied().collect();
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
@@ -1052,16 +990,8 @@ fn walled_town_gate_spots() {
     for site in &sites_of(SiteKind::Walled) {
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
         let between = |a: (i32, i32), b: (i32, i32)| {
             let (ax, az) = sea::centre(a.0, a.1, cell_m);
@@ -1150,16 +1080,8 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
         let placed = started.elapsed().as_secs_f32();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
         println!(
             "{}: --at {lat:.5} {lon:.5}, {:.0}% of its cells agree about the sea, placed in {placed:.2} s, laid and cut in {:.2} s, {} pieces",
@@ -1194,8 +1116,6 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
             "{}: its dressing",
             site.name
         );
-        // `sail-the-cog` design 6, step 1: its cog at its mooring.
-        assert!(laid.cog.is_some(), "{}: its cog", site.name);
         a_towns_casters_are_its_triangles_in_chunks(&laid);
     }
 }
@@ -1328,7 +1248,6 @@ fn print_where_the_harbours_stand() {
             &kits,
             &|_: &str| 2.0,
             &config,
-            sheet(&config),
         )
         .unwrap();
         let at = |d: Vec3| {
@@ -1408,7 +1327,8 @@ fn print_where_the_harbours_stand() {
 
 /// Task 4.2b: each harbour of the shipped seed moors its boats once, each
 /// afloat at its berth, anchored and tagged with its berth; the berths over
-/// land or too shallow, and the sailing boats' (`retire-tern`), are skipped
+/// land or too shallow, and the retired kinds' (the sailing boats',
+/// `retire-tern`, and the rowboats', `retire-rowboat-and-cog`), are skipped
 /// and counted; asked again, it makes none.
 #[test]
 fn every_harbours_boats_are_made_once_at_their_berths() {
@@ -1441,12 +1361,14 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
             made.len(),
         );
         assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
-        // Each boat is its berth's kind, and a sailing berth makes none: its
-        // Tern is retired (`retire-tern` decision 3).
+        // Each boat is its berth's kind, and only a canoe's berth makes one:
+        // the Tern and the rowboat are retired (`retire-tern` decision 3,
+        // `retire-rowboat-and-cog` decision 5).
         for c in &made {
             let (_, n) = c.berth.expect("tagged with its berth");
             let boat = &template.boats[n as usize].kind;
-            assert_ne!(boat, "sail", "{}: berth {n} made a sailing boat", site.name);
+            assert_eq!(boat, "canoe", "{}: berth {n} made a {boat}", site.name);
+            assert_eq!(c.kind, pbd_core::vehicle::Kind::Loon);
             let want = crate::vehicles::harbour::kind_of(boat);
             assert_eq!(Some(c.kind), want, "{}: berth {n}", site.name);
         }
@@ -1486,62 +1408,6 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
         total += made.len();
     }
     assert!(total > 0, "some boats moored");
-}
-
-/// `sail-the-cog` step 3, part 3: each harbour of the shipped seed makes its
-/// cog once, at its berth, on a bollard and on the drawn sea, riding its
-/// swing; asked again, it makes none.
-#[test]
-fn every_harbours_cog_is_made_once_at_its_berth() {
-    use crate::vehicles::harbour::{COG, cog_berth, cog_for, on_swing};
-    let config = *crate::planet::terrain_config();
-    let template = load_template("coast");
-    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
-    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
-    let mut made = 0;
-    for site in harbours() {
-        let town = lay_out(&site, &template, &config).unwrap();
-        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
-        let mut next = 1;
-        let make = |made: &std::collections::BTreeSet<(u32, u32)>, next: &mut u64| {
-            cog_for(
-                site.id,
-                &town,
-                &template,
-                &patch,
-                config.radius_m,
-                sea_radius,
-                made,
-                &fleet.specs,
-                &fleet.hulls,
-                next,
-            )
-        };
-        let cog = make(&Default::default(), &mut next)
-            .unwrap_or_else(|| panic!("{}: its cog", site.name));
-        assert_eq!(cog.kind, pbd_core::vehicle::Kind::Cog);
-        assert_eq!(cog.berth, Some((site.id, COG)), "{}", site.name);
-        assert!(on_swing(&cog), "{}: on its bollard", site.name);
-        let (origin, _) = cog_berth(&town, &template, &patch, config.radius_m, sea_radius).unwrap();
-        assert!(
-            cog.reference_position().distance(origin.as_dvec3()) < 1e-3,
-            "{}: at its berth",
-            site.name
-        );
-        let afloat = cog.reference_position().length() - f64::from(sea_radius);
-        assert!(
-            afloat.abs() < 0.01,
-            "{}: on the drawn sea, {afloat:.3} m",
-            site.name
-        );
-        assert!(
-            make(&[(site.id, COG)].into_iter().collect(), &mut next).is_none(),
-            "{}: made once",
-            site.name
-        );
-        made += 1;
-    }
-    assert!(made > 0, "some cogs made");
 }
 
 /// An instrument for the finding in Coringport's beach (2026-10-01): how
@@ -1650,11 +1516,6 @@ fn print_the_seabed_under_the_harbours_berths() {
     }
 }
 
-/// The drawn sea's surface over the radius, as the game draws it.
-fn sheet(config: &TerrainConfig) -> f32 {
-    sheet_m(config, &crate::config::WaterSettings::default())
-}
-
 #[test]
 #[ignore = "instrument: the pose each harbour boat is made in, upright or not"]
 fn print_the_pose_of_holinghavens_boats() {
@@ -1742,16 +1603,8 @@ fn every_desert_lays_and_cuts() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         assert_eq!(
             laid.solids.len(),
             template.buildings.len() + template.stairs.len() + template.dressing.len(),
@@ -1881,16 +1734,8 @@ fn every_tundra_camp_lays_and_cuts() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         assert_eq!(
             laid.solids.len(),
             template.buildings.len() + 1 + template.masonry.len(),
@@ -2061,16 +1906,8 @@ fn every_jungle_village_lays_and_cuts() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(
-            site,
-            &town,
-            Some(&template),
-            &kits,
-            &|_: &str| 2.0,
-            &config,
-            sheet(&config),
-        )
-        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         assert_eq!(
             laid.solids.len(),
             template.buildings.len() + template.kapoks.len() + template.platforms.len() + spans,
@@ -2628,7 +2465,6 @@ fn every_towns_path_risers_have_their_stairs() {
                 &kits,
                 &|_: &str| 2.0,
                 config.radius_m,
-                sheet(&config),
                 natural(&config),
             )
             .unwrap_or_else(|e| panic!("{}: {e}", site.name));

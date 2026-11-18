@@ -2,8 +2,8 @@
 //! left, or, in a world that has none yet, placed once near the player - the
 //! Loon at anchor in water deep enough for it. (The Kestrel, placed on dry,
 //! level ground until `retire-kestrel`, and the Tern, placed at anchor beside
-//! the Loon until `retire-tern`, are no longer placed; a save's Kestrel or
-//! Tern is held aside as its record.)
+//! the Loon until `retire-tern`, are no longer placed; a save's Kestrel,
+//! Tern, rowboat or cog is held aside as its record.)
 
 use super::{Fleet, Vehicle, draw};
 use crate::planet::PlanetContact;
@@ -115,9 +115,22 @@ pub fn spawn_fleet(world: &mut World) {
 /// have been aboard it, m: a seat is within a few metres of its craft's
 /// reference point.
 pub(crate) const ABOARD_REACH_M: f64 = 6.0;
+/// The same for a held cog, m: its deck was walked on, and its 15 m length
+/// puts a player standing at its bow or stern 7.5 m from its middle
+/// (`retire-rowboat-and-cog` decision 4).
+pub(crate) const COG_REACH_M: f64 = 9.0;
+
+/// How near a held record of `kind` a loaded walker is taken to be on it.
+fn reach_of(kind: &str) -> f64 {
+    if kind == "cog" {
+        COG_REACH_M
+    } else {
+        ABOARD_REACH_M
+    }
+}
 
 /// The retired craft a loaded walker at `walker` (body-local) was aboard: one
-/// within [`ABOARD_REACH_M`] of it, where `over_sea` says the walker's
+/// within [`ABOARD_REACH_M`] of it ([`COG_REACH_M`] of a cog), where `over_sea` says the walker's
 /// direction is over the sea. `None` anywhere else, so a load that is not at
 /// a retired craft is never moved.
 pub(crate) fn at_a_retired_craft(
@@ -127,7 +140,7 @@ pub(crate) fn at_a_retired_craft(
 ) -> Option<&pbd_core::vehicle::record::VehicleRecord> {
     let near = retired.iter().find(|r| {
         r.frame == pbd_core::vehicle::record::PLANET_FRAME
-            && DVec3::from(r.position).distance(walker) <= ABOARD_REACH_M
+            && DVec3::from(r.position).distance(walker) <= reach_of(&r.kind)
     })?;
     over_sea(walker.normalize_or(DVec3::Y).as_vec3()).then_some(near)
 }

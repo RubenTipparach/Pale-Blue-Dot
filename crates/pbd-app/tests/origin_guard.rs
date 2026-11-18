@@ -8,18 +8,17 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 11] = [
+const FILES: [&str; 10] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
     "crates/pbd-app/src/sim_origin.rs",
     "crates/pbd-core/src/fauna/school.rs",
     "crates/pbd-core/src/fishing.rs",
-    // `world-frames` 10: the herd, drops and decks.
+    // `world-frames` 10: the herd and drops (the decks went with the cog).
     "crates/pbd-app/src/husbandry.rs",
     "crates/pbd-app/src/husbandry/breed.rs",
     "crates/pbd-app/src/drops.rs",
-    "crates/pbd-app/src/decks.rs",
     // `fish-behaviour`: the drawn poses and the line's fish.
     "crates/pbd-core/src/fauna/swim.rs",
 ];

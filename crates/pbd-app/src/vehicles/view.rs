@@ -17,7 +17,7 @@ pub struct VehicleCamera;
 /// How far the look turns, rad.
 const PITCH_LIMIT: f32 = 1.45;
 /// The chase camera's stand-off, m, per craft, and its range.
-const CHASE_M: [f32; 5] = [8.0, 34.0, 9.0, 5.0, 9.0];
+const CHASE_M: [f32; 3] = [8.0, 5.0, 9.0];
 const CHASE_RANGE_M: [f32; 2] = [4.0, 80.0];
 /// How far one wheel line moves it, as a share.
 const ZOOM_STEP: f32 = 0.12;
@@ -25,10 +25,8 @@ const ZOOM_STEP: f32 = 0.12;
 pub(super) fn default_distance(kind: Kind) -> f32 {
     CHASE_M[match kind {
         Kind::Loon => 0,
-        Kind::Cog => 1,
-        Kind::Rowboat => 2,
-        Kind::Tube => 3,
-        Kind::Raft => 4,
+        Kind::Tube => 1,
+        Kind::Raft => 2,
     }]
 }
 

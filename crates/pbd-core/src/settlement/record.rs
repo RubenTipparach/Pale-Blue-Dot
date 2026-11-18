@@ -18,7 +18,7 @@
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
-    BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, desert, dressing, harbour,
+    BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, desert, dressing, harbour,
     jungle, steps, tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
@@ -538,15 +538,6 @@ pub struct Built {
     /// left out for standing off its chart.
     pub dressing: usize,
     pub dressing_skipped: usize,
-    /// Its cog's ship among its solids, where it stands at its mooring
-    /// (`sail-the-cog` design 6): the gangplank is the piece after it, and
-    /// the dressing comes after both.
-    pub cog: Option<usize>,
-    /// The ship's faces, by texture, apart from the town's: it rides the
-    /// water, so it is drawn on its own.
-    pub cog_meshes: Meshes,
-    /// Which way its bow points, a planet-local unit tangent.
-    pub cog_bow: Vec3,
     /// Where its dressing's faces are in `meshes` (`crab-breeze-lessons`
     /// rank 5): for each texture, the run of vertices its dressing things
     /// added. They are small, and cast only into the finer cascades.
@@ -743,9 +734,6 @@ pub fn build(
         lights,
         dressing: 0,
         dressing_skipped: 0,
-        cog: None,
-        cog_meshes: Meshes::new(),
-        cog_bow: Vec3::ZERO,
         props: BTreeMap::new(),
         stairs: Vec::new(),
         stairs_yielded: 0,
@@ -759,10 +747,7 @@ pub fn build(
 /// every world. A masonry cell stands on its own cell's terrace and rises to
 /// the template's top over the datum; a gate's vault starts as far over its
 /// ground as the template has it. Masonry comes after the buildings, each
-/// with no rooms and no lights. `sheet_m` is the drawn sea's surface,
-/// metres over the radius, which a harbour's cog floats on (`sail-the-cog`
-/// design 6): the game draws it under the sea level the layers are filled
-/// to.
+/// with no rooms and no lights.
 #[allow(clippy::too_many_arguments)]
 pub fn build_town(
     town: &Town,
@@ -771,7 +756,6 @@ pub fn build_town(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     radius_m: f32,
-    sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
     build_town_yielding(
@@ -781,7 +765,6 @@ pub fn build_town(
         kits,
         repeat_m,
         radius_m,
-        sheet_m,
         natural,
         &|_| false,
     )
@@ -800,7 +783,6 @@ pub fn build_town_yielding(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     radius_m: f32,
-    sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
     yielded: &dyn Fn(u32) -> bool,
 ) -> Result<Built, String> {
@@ -857,44 +839,9 @@ pub fn build_town_yielding(
                 terrace,
             )?);
         }
-        // Its cog at its mooring (`sail-the-cog` design 6), drawn apart from
-        // the town since it rides the water, and the gangplank up to it, off
-        // the chart in a harbour stored before it.
-        if let Some(c) = &template.cog {
-            let ship = cog::ship(
-                &mut built.cog_meshes,
-                repeat_m,
-                patch,
-                &built.chart,
-                template,
-                c,
-                radius_m,
-                sheet_m,
-            );
-            let plank = cog::gangplank(
-                &mut built.meshes,
-                repeat_m,
-                patch,
-                &built.chart,
-                template,
-                c,
-                radius_m,
-                (terrace, sheet_m),
-            );
-            let bow = cog::bow(patch, &built.chart, template, c);
-            match (ship, plank, bow) {
-                (Some(ship), Some(plank), Some(bow)) => {
-                    built.cog = Some(built.solids.len() + cut.len());
-                    built.cog_bow = bow;
-                    cut.push(ship);
-                    cut.push(plank);
-                }
-                _ => {
-                    built.cog_meshes.clear();
-                    built.dressing_skipped += 1;
-                }
-            }
-        }
+        // Its cog's ship and gangplank were cut here until
+        // `retire-rowboat-and-cog`: the cog is retired, so neither is. The
+        // cells under them are still laid (`sea::over_water`).
         // Its dressing (task 4.2c), each thing on what is under it.
         let before = counts(&built.meshes);
         let (things, skipped) = dressing::dressing(

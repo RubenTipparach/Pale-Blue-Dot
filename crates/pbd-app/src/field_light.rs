@@ -906,7 +906,7 @@ fn light_from_the_field(
 }
 
 /// Pack a mesh's room lights again when they change: a light a craft carries
-/// moves with it (`sail-the-cog` step 3, part 4).
+/// moves with it.
 /// The field-lit meshes whose room lights changed this frame.
 type ChangedRoomLights<'w, 's> = Query<
     'w,

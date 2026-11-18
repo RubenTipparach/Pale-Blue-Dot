@@ -540,14 +540,14 @@ pub fn about_watch(
     let craft = aboard
         .and_then(|a| a.0)
         .and_then(|e| vehicles.get(e).ok().map(|v| (e, v)))
+        // A town's boat (a craft with a harbour berth, `retire-rowboat-and-cog`:
+        // the harbours' canoes) or a made one.
         .filter(|(_, v)| {
-            matches!(
-                v.craft.kind,
-                pbd_core::vehicle::Kind::Rowboat
-                    | pbd_core::vehicle::Kind::Cog
-                    | pbd_core::vehicle::Kind::Raft
-                    | pbd_core::vehicle::Kind::Tube
-            )
+            v.craft.berth.is_some()
+                || matches!(
+                    v.craft.kind,
+                    pbd_core::vehicle::Kind::Raft | pbd_core::vehicle::Kind::Tube
+                )
         });
     match (craft, state.aboard) {
         (Some((e, v)), Some((was, from))) if e == was => {

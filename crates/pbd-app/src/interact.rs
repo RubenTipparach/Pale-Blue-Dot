@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn the_highest_offer_wins() {
         let mut i = Interact::default();
-        i.offer(Offer::new(Act::Board, "rowboat"));
+        i.offer(Offer::new(Act::Board, "loon"));
         i.offer(Offer::new(Act::Harvest, "wheat"));
         i.offer(Offer::new(Act::Till, "grass"));
         i.settle(0.016, false);
@@ -510,7 +510,7 @@ mod tests {
         assert!(i.lets(Reader::Farm));
         assert!(!i.lets(Reader::Boats));
         assert_eq!(i.now.as_ref().unwrap().words(), "Harvest wheat");
-        i.offer(Offer::new(Act::Board, "rowboat"));
+        i.offer(Offer::new(Act::Board, "loon"));
         i.settle(0.016, false);
         assert!(i.lets(Reader::Boats), "nothing usable aimed: F boards");
     }

@@ -348,12 +348,10 @@ pub enum Live {
 
 impl Live {
     /// Every context, for asking whether two groups can be live together.
-    pub const ALL: [Live; 7] = [
+    pub const ALL: [Live; 5] = [
         Live::OnFoot,
         Live::Flying,
         Live::Aboard(Kind::Loon),
-        Live::Aboard(Kind::Rowboat),
-        Live::Aboard(Kind::Cog),
         Live::Aboard(Kind::Tube),
         Live::Aboard(Kind::Raft),
     ];
@@ -514,13 +512,6 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const ROWBOAT: [Binding; 4] = [
-    row(&W_S, "/", "row forward or back"),
-    row(&A_D, "/", "turn"),
-    row(&Q_E, "/", "steer with an oar"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
-];
-
 const TUBE: [Binding; 2] = [
     row(&W_S, "/", "kick forward or back"),
     row(&A_D, "/", "turn"),
@@ -545,12 +536,6 @@ const AFLOAT: [Binding; 3] = [
         " ",
         "hold for the tools; the wheel picks one",
     ),
-];
-
-const COG: [Binding; 3] = [
-    row(&A_D, "/", "steer"),
-    row(&W_S, "/", "turn the sail"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
 const WORLD: [Binding; 5] = [
@@ -603,23 +588,16 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
 }
 
 /// Every control in the game, once. (The Kestrel's group, KESTREL on the
-/// Flying sub-tab, went with it in `retire-kestrel`, and the Tern's, TERN, in
-/// `retire-tern`; a saved rebind of one of their slots is kept in the file
-/// and read by nothing.)
-pub static BINDINGS: [Group; 13] = [
+/// Flying sub-tab, went with it in `retire-kestrel`, the Tern's, TERN, in
+/// `retire-tern`, and ROWBOAT and COG in `retire-rowboat-and-cog`; a saved
+/// rebind of one of their slots is kept in the file and read by nothing.)
+pub static BINDINGS: [Group; 11] = [
     group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("INTERACT", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
     group("FLYING", Tab::Flying, When::Flying, &FLYING),
     group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
     group("LOON", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
-    group(
-        "ROWBOAT",
-        Tab::Vehicles,
-        When::Aboard(Kind::Rowboat),
-        &ROWBOAT,
-    ),
-    group("COG", Tab::Vehicles, When::Aboard(Kind::Cog), &COG),
     group("INNER TUBE", Tab::Vehicles, When::Aboard(Kind::Tube), &TUBE),
     group("RAFT", Tab::Vehicles, When::Aboard(Kind::Raft), &RAFT),
     group("FISHING AFLOAT", Tab::Vehicles, When::Paddled, &AFLOAT),
@@ -1274,7 +1252,7 @@ mod tests {
         assert_eq!(on("ON FOOT"), Tab::OnFoot);
         assert_eq!(on("HANDS"), Tab::Hands);
         assert_eq!(on("FLYING"), Tab::Flying);
-        assert_eq!(on("COG"), Tab::Vehicles);
+        assert_eq!(on("RAFT"), Tab::Vehicles);
         assert_eq!(on("SCREEN"), Tab::Menus);
     }
 

@@ -67,10 +67,9 @@ pub struct LoonTelemetry {
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
     let (s, hull) = match craft.kind {
-        Kind::Rowboat => (&specs.rowboat, craft.hulls.rowboat.clone()),
         Kind::Tube => (&specs.tube, craft.hulls.tube.clone()),
         Kind::Raft => (&specs.raft, craft.hulls.raft.clone()),
-        _ => (&specs.loon, craft.hulls.loon.clone()),
+        Kind::Loon => (&specs.loon, craft.hulls.loon.clone()),
     };
     let p = &s.paddle;
     let occupied = craft.occupied;
@@ -86,9 +85,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         bilge_kg: bilge,
         ..
     } = craft;
-    let CraftState::Loon(st) = state else {
-        return;
-    };
+    let CraftState::Loon(st) = state;
 
     // The stroke: begun when the last has recovered and a key is held.
     if let Some(stroke) = &mut st.stroke {
