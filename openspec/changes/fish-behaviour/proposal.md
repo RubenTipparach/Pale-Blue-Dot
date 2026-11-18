@@ -31,7 +31,7 @@ What reads as unnatural today, from the video and the code (design 1):
   game's behaviour, ported constant for constant, beside a proposed one, in
   three tabs (At the lure, Swimming, Hooked), Today / Proposed / Split, 1x to
   1/4x, day and night, with every proposed value on a slider with its unit.
-  https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz (version 2, with the Body wave tab).
+  https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2 (version 2, with the Body wave tab).
 - **Proposed** (design 2 to 4), for the game once approved:
   - the fish at the lure comes in on a curve, slows, hovers a body length off
     and pecks: darts in so its mouth meets the lure as the float dips, shakes

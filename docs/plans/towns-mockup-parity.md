@@ -5,7 +5,7 @@ are implemented too? make sure its in the roadmap and when you do the videos,
 post the prototype too so I can compare/contrast stuff".**
 
 Every feature of `docs/mockups/towns.html`
-([published](https://claude.ai/artifact/B5FqbGTTMsznmUiP4rSLUv)), with the
+([published](https://claude.ai/artifact/5kpyRd9sqcTqheTSzoShgR)), with the
 change and task that builds it in the game. A row is closed when its video
 shot shows the game beside the prototype (`step-videos`) and the owner has
 seen it.

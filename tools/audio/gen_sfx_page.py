@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio_page  # noqa: E402  (the page's one look and player)
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TRACKER = "https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu"
+TRACKER = "https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA"
 
 # page sections, in order: (key, heading)
 SECTIONS = {

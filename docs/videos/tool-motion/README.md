@@ -1,7 +1,7 @@
 # Tools in Hand: videos
 
 The step's video for the Tools in Hand mockup (M36, `docs/mockups/tool-motion.html`,
-https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX): a technical montage of the motion of the
+https://claude.ai/artifact/CwwZtbNGjZSVtjivQAMuzL): a technical montage of the motion of the
 tool in hand, today against proposed, and a clip per topic. The owner, 2026-11-17: "make some
 videos of the animations. they look freaking awesome, though I think the casting fishing line the
 hand should be raised above shoulder". The cast shown is the raised, overhead one that note asked

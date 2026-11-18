@@ -4,7 +4,7 @@ Every number here is either measured in this repository, read from Tenebris
 (`tenebris-rs`, whose path and line are given), or a proposal marked as a
 tunable that goes into validated RON. The mockup
 (`docs/mockups/fishing.html`,
-<https://claude.ai/artifact/1PQXEj8bs9HSzFhGLRyxtz>) runs every mechanic
+<https://claude.ai/artifact/Gn9W8sYEPTFKdDC2R5wWqh>) runs every mechanic
 below. Where the mockup differs from what is proposed, the difference is
 stated.
 
@@ -603,7 +603,7 @@ cold survive only as words in the field guide.
 
 ### The ranges, measured: the Fish Range Atlas
 
-<https://claude.ai/artifact/3nFWs1XJ6ywSq5cqfHpgE3> (`docs/wiki/fish-ranges/`). It has:
+<https://claude.ai/artifact/Sr32H5K9cCmkteSDytP3hj> (`docs/wiki/fish-ranges/`). It has:
 - one greyscale range map per species, in the style of a field guide: land
   grey, water paler with depth, frozen water hatched, the species' range in
   red, and the part of its range it holds only some of the year in orange;
