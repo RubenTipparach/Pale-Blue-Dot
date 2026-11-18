@@ -114,6 +114,9 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .st.building { color: var(--done); background: var(--done-soft); }
 .st.planned { color: var(--accent); }
 .st.later { color: var(--muted); }
+.miss { display: grid; gap: 4px; }
+.miss-h { font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--warn); }
+.miss ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 12.5px; color: var(--ink); }
 </style>
 
 <div class="wrap">
@@ -498,9 +501,14 @@ const ROADMAP = [
     { title: 'Starter missions', status: 'built', change: 'starter-missions', refs: [], text: 'Nineteen missions through the loop, from gathering by hand to a farm meal, with a HUD line and a Missions tab (O). On the phase-1 branch.' },
   ] },
   { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
-    { title: 'Advanced foliage and flora', status: 'building', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
-    { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.' },
-    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25', 'M31'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.' },
+    { title: 'Advanced foliage and flora', status: 'building', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.',
+      missing: ['The fungal forest (a new biome, so a new generator version)', 'Ore drawn as ore in a dug wall (it shows as stone)', 'Vines are faint from the ground', 'Acacias on beaches and swamp willows not yet seen in a capture', 'Fruit picking not yet shown in a capture'] },
+    { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.',
+      missing: ['Beavers and their dams', 'Reef rock, sea ice, basalt and mussel beds as blocks you can dig (drawn as pieces now)', 'Gale spray and foam, never filmed in a real gale', 'Fish schools in lakes and rivers above sea level not yet shown', 'Your M25 questions (Q1 to Q3) not yet in the survey'] },
+    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25', 'M31'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.',
+      missing: ['The waterfall look (M31): froth on falling faces and the splash tab wait on your approval, then the game', 'Rain splashes on water', 'Water drying away smoothly: built, waiting on your look at the videos', 'Waterfall sounds: on the Sounds page, waiting for your listen'] },
+    { title: 'Checks', status: 'planned', change: '', refs: [], text: 'What the whole phase still owes before it is done.',
+      missing: ['Frame cost on your hardware: the flow, its smoothing, the light under water', 'Videos of every phase 2 feature (the batch)', 'Your playtest of environment v2'] },
   ] },
   { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
@@ -565,12 +573,15 @@ function roadmap() {
         const m = MOCKUPS.find((x) => x.id === id);
         if (m) refs.append(m.url ? el('a', { href: m.url, target: '_blank', rel: 'noopener', title: m.title, text: id }) : el('span', { text: id }));
       }
-      if (!st.refs.length) refs.append(el('span', { text: 'no mockup yet' }));
+      if (!st.refs.length && !st.missing) refs.append(el('span', { text: 'no mockup yet' }));
       if (st.change) refs.append(el('span', { text: st.change }));
       list.append(el('li', { class: 'step' },
         el('div', { class: 'top', 'data-n': `${p}.${i}` }, el('b', { text: st.title })),
         el('span', { class: `st ${st.status}`, text: STATUS[st.status] }),
-        el('p', { text: st.text }), refs));
+        el('p', { text: st.text }),
+        st.missing ? el('div', { class: 'miss' }, el('span', { class: 'miss-h', text: 'Missing' }),
+          el('ul', {}, st.missing.map((t) => el('li', { text: t })))) : null,
+        refs));
     });
     root.append(el('div', { class: 'phase', id: `phase-${p}` },
       el('div', { class: 'phase-h' }, el('span', { class: 'pnum', text: `Phase ${p}` }), el('h3', { text: ph.title }), el('span', { class: `when ${ph.when}`, text: ({ now: 'Now', next: 'Next', later: 'Later' })[ph.when] }), el('p', { text: ph.note })),
