@@ -135,13 +135,17 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
-    /// The float is out and a right click cancels, winding it in: the
-    /// interact prompt shows that button under the crosshair (owner,
-    /// 2026-11-16: "just have a button prompt to right click to reel in";
-    /// 2026-11-18: "right click should be clearly shown to cancle").
-    pub reel_prompt: bool,
-    /// The bite: the prompt adds the left button, which hooks the fish.
-    pub hook_prompt: bool,
+    /// The fishing buttons, bottom left, while the rod is out at fishable
+    /// water: what the left and the right click do now, and whether each does
+    /// anything in this phase (owner, 2026-11-18: "need to show both right
+    /// and left click for fishing, and they both need to be on the left
+    /// corner of the screen"; `fishing-and-equipment`, "Both buttons, bottom
+    /// left").
+    pub keys: Option<[(&'static str, bool); 2]>,
+    /// The bite: the left click's row turns yellow and shakes (owner,
+    /// 2026-11-18: "when fish bites, the left click buton prompt should
+    /// highlight yellow and vibrate").
+    pub bite: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -521,15 +525,8 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    // The buttons while the float is out: left hooks, right cancels.
-    status.reel_prompt = rod
-        && walking
-        && matches!(
-            fishery.line.phase,
-            Phase::Floating | Phase::Nibble | Phase::Bite
-        )
-        && !roster.is_empty();
-    status.hook_prompt = status.reel_prompt && fishery.line.phase == Phase::Bite;
+    status.keys = (rod && walking && !roster.is_empty()).then(|| keys_for(fishery.line.phase));
+    status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
     // The rod in hand moves with the line (`held.rs`, `rod-motion`).
     if let Some(cue) = cue.as_deref_mut() {
         cue.phase = fishery.line.phase;
@@ -1111,6 +1108,23 @@ pub fn land(
     true
 }
 
+/// What the left and the right click do in `phase`, and whether each does
+/// anything now (`fishing-and-equipment`, "Both buttons, bottom left").
+pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
+    let out = matches!(
+        phase,
+        Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
+    );
+    let left = match phase {
+        Phase::Ready => ("HOLD TO CAST", true),
+        Phase::Charging => ("LET GO TO CAST", true),
+        Phase::Hooked => ("HOLD TO REEL", true),
+        Phase::Bite => ("HOOK", true),
+        Phase::Flying | Phase::Floating | Phase::Nibble => ("HOOK", false),
+    };
+    [left, ("CANCEL", out)]
+}
+
 /// The standing line under the crosshair while the rod is out.
 fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
     if !rod {
@@ -1120,11 +1134,8 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         return "Nothing lives in this water".into();
     }
     match line.phase {
-        Phase::Ready => "Hold the left button to cast".into(),
-        Phase::Charging => "Let go to cast".into(),
-        Phase::Flying => String::new(),
-        // The button prompt says it (`reel_prompt`).
-        Phase::Floating => String::new(),
+        // The buttons in the corner say these (`keys_for`).
+        Phase::Ready | Phase::Charging | Phase::Flying | Phase::Floating => String::new(),
         Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
         Phase::Bite => "Bite! Left click".into(),
         Phase::Hooked => "Hold to reel - ease off when it runs".into(),

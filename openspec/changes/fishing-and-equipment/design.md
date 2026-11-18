@@ -991,3 +991,29 @@ the line out and the catch are unchanged; only where the float is drawn
 between runs moves. Pinned by `the_hooked_float_never_jumps` (under 0.1 m
 a tick at 30 ticks a second). The Tools in Hand mockup's fight uses the
 same easing.
+
+## Both buttons, bottom left (owner, 2026-11-18)
+
+"need to show both right and left click for fishing, and they both need to
+be on the left corner of the screen", then "you didnt listen to me at all
+regarding those inputs". While the rod is in hand at fishable water, the
+bottom-left corner shows both mouse buttons, every phase, each with what it
+does now; the button that does nothing in this phase is grey and faded,
+never hidden ("otherwise it should appear grey and faded"). At the bite the
+left click's row turns yellow and shakes ("when fish bites, the left click
+buton prompt should highlight yellow and vibrate"): the words in the kit's
+title gold, the row jittering 2 px side to side at 18 Hz. Outlined text and the key glyph, no box (the prompt's look, owner
+2026-11-17). The fishing buttons leave the interact prompt under the
+crosshair, which is F's again.
+
+| Phase | Left click | Right click |
+| --- | --- | --- |
+| Ready | HOLD TO CAST | CANCEL (dim) |
+| Charging | LET GO TO CAST | CANCEL (dim) |
+| Flying, Floating, Nibble | HOOK (dim) | CANCEL |
+| Bite | HOOK | CANCEL |
+| Hooked | HOLD TO REEL | CANCEL (dim) |
+
+The line under the crosshair no longer repeats what the corner says
+(Ready's "Hold the left button to cast" and Charging's "Let go to cast"
+are dropped); the nibble, bite and fight lines stay.

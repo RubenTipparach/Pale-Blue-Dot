@@ -269,11 +269,24 @@ pub struct PromptKey;
 #[derive(Component)]
 pub struct PromptWords;
 
-/// The fishing prompt's second button, shown beside the first while the
-/// float is out: the left button hooks (owner, 2026-11-18: "right click
-/// should be clearly shown to cancle, and left click to hook fish").
+/// The fishing buttons, bottom left: both mouse buttons in every phase, each
+/// with what it does now, the idle one dimmed (owner, 2026-11-18: "need to
+/// show both right and left click for fishing, and they both need to be on
+/// the left corner of the screen").
 #[derive(Component)]
-pub struct HookTip;
+pub struct FishKeys;
+
+/// What one of the fishing buttons does now: 0 the left, 1 the right.
+#[derive(Component)]
+pub struct FishKeyWords(pub usize);
+
+/// The label on one fishing button's key glyph: 0 the left, 1 the right.
+#[derive(Component)]
+pub struct FishKeyCap(pub usize);
+
+/// A fishing button that does nothing now: grey and faded (owner,
+/// 2026-11-18: "otherwise it should appear grey and faded").
+const FADED: Color = Color::srgba(0.57, 0.6, 0.62, 0.45);
 
 /// The prompt, just under the crosshair: a stone tooltip holding the key in
 /// an oak cap and the verb and thing.
@@ -287,33 +300,12 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 right: px(0),
                 top: percent(52),
                 justify_content: JustifyContent::Center,
-                column_gap: px(18),
                 ..default()
             },
             Visibility::Hidden,
             Prompt,
         ))
         .with_children(|row| {
-            row.spawn((
-                Node {
-                    column_gap: px(5),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                Visibility::Hidden,
-                HookTip,
-            ))
-            .with_children(|tip| {
-                let left = crate::controls::Key::Mouse(MouseButton::Left).label();
-                crate::ui_kit::key_cap(tip, &kit, left, ());
-                tip.spawn((
-                    Node {
-                        padding: UiRect::top(px(2)),
-                        ..default()
-                    },
-                    KitText::new("HOOK", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
-                ));
-            });
             // No box round it (owner, 2026-11-17: "we dont have a box around
             // stuff, just the letter glyph and teh text with black outline"),
             // as the boat panel.
@@ -336,21 +328,61 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
         });
 }
 
-/// Show `now`, or hide the prompt.
-pub fn show_prompt(
-    interact: Res<Interact>,
-    binds: Option<Res<crate::controls::KeyBinds>>,
+/// The fishing buttons, bottom left (`FishKeys`): a key glyph and its words
+/// for each mouse button, hidden until the rod is out at fishable water.
+pub fn spawn_fish_keys(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
+    use crate::ui_kit::KitText;
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(12),
+                bottom: px(12),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(4),
+                ..default()
+            },
+            Visibility::Hidden,
+            FishKeys,
+        ))
+        .with_children(|col| {
+            for (k, button) in [MouseButton::Left, MouseButton::Right]
+                .into_iter()
+                .enumerate()
+            {
+                col.spawn(Node {
+                    column_gap: px(5),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|row| {
+                    let label = crate::controls::Key::Mouse(button).label();
+                    crate::ui_kit::key_cap(row, &kit, label, FishKeyCap(k));
+                    row.spawn((
+                        Node {
+                            padding: UiRect::top(px(2)),
+                            ..default()
+                        },
+                        KitText::new("", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
+                        FishKeyWords(k),
+                    ));
+                });
+            }
+        });
+}
+
+/// Show the fishing buttons with what each does now, or hide them.
+pub fn show_fish_keys(
+    time: Res<Time>,
     fishing: Option<Res<crate::fish::FishingStatus>>,
-    mut prompt: Query<&mut Visibility, (With<Prompt>, Without<HookTip>)>,
-    mut hook: Query<&mut Visibility, (With<HookTip>, Without<Prompt>)>,
-    mut key_text: Query<&mut crate::ui_kit::KitText, (With<PromptKey>, Without<PromptWords>)>,
-    mut words: Query<&mut crate::ui_kit::KitText, (With<PromptWords>, Without<PromptKey>)>,
+    mut root: Query<&mut Visibility, With<FishKeys>>,
+    mut words: Query<(&mut crate::ui_kit::KitText, &FishKeyWords, &ChildOf), Without<FishKeyCap>>,
+    mut caps: Query<(&mut crate::ui_kit::KitText, &FishKeyCap), Without<FishKeyWords>>,
+    mut rows: Query<&mut Node, Without<FishKeyWords>>,
 ) {
-    let shown = interact.now.as_ref();
-    // With nothing to interact with, a float out shows its own button.
-    let reel = shown.is_none() && fishing.as_deref().is_some_and(|f| f.reel_prompt);
-    for mut visibility in &mut prompt {
-        let want = if shown.is_some() || reel {
+    let keys = fishing.as_deref().and_then(|f| f.keys);
+    for mut visibility in &mut root {
+        let want = if keys.is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -359,9 +391,60 @@ pub fn show_prompt(
             *visibility = want;
         }
     }
-    let bite = reel && fishing.as_deref().is_some_and(|f| f.hook_prompt);
-    for mut visibility in &mut hook {
-        let want = if bite {
+    let Some(keys) = keys else { return };
+    let bite = fishing.as_deref().is_some_and(|f| f.bite);
+    for (mut text, which, parent) in &mut words {
+        let (line, live) = keys[which.0];
+        // At the bite the left click's words turn yellow and its row shakes.
+        let alert = bite && which.0 == 0;
+        let colour = if alert {
+            crate::ui_kit::TITLE
+        } else if live {
+            crate::ui_kit::LABEL
+        } else {
+            FADED
+        };
+        if text.text != line || text.colour != colour {
+            text.text = line.to_string();
+            text.colour = colour;
+        }
+        if let Ok(mut row) = rows.get_mut(parent.parent()) {
+            let shake = if alert {
+                px((time.elapsed_secs() * 2.0 * std::f32::consts::PI * 18.0)
+                    .sin()
+                    .round()
+                    * 2.0)
+            } else {
+                px(0)
+            };
+            if row.left != shake {
+                row.left = shake;
+            }
+        }
+    }
+    for (mut text, which) in &mut caps {
+        let colour = if keys[which.0].1 {
+            crate::ui_kit::LABEL
+        } else {
+            FADED
+        };
+        if text.colour != colour {
+            text.colour = colour;
+        }
+    }
+}
+
+/// Show `now`, or hide the prompt.
+pub fn show_prompt(
+    interact: Res<Interact>,
+    binds: Option<Res<crate::controls::KeyBinds>>,
+    mut prompt: Query<&mut Visibility, With<Prompt>>,
+    mut key_text: Query<&mut crate::ui_kit::KitText, (With<PromptKey>, Without<PromptWords>)>,
+    mut words: Query<&mut crate::ui_kit::KitText, (With<PromptWords>, Without<PromptKey>)>,
+) {
+    let shown = interact.now.as_ref();
+    for mut visibility in &mut prompt {
+        let want = if shown.is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -378,10 +461,6 @@ pub fn show_prompt(
                 offer.words().to_uppercase(),
             )
         }
-        None if reel => (
-            crate::controls::Key::Mouse(MouseButton::Right).label(),
-            "CANCEL".to_string(),
-        ),
         None => return,
     };
     for mut text in &mut key_text {

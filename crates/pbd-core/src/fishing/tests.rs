@@ -356,7 +356,9 @@ fn the_hooked_float_never_jumps() {
     let mut world = World::new(14);
     world.add("deepback", at(0.0, 1.0, 8.0), 14);
     fish_until_hooked(&mut world);
-    let mut last = world.line.float;
+    let feet = angler().feet;
+    let mut last = (world.line.float - feet).normalize();
+    let mut step = None::<f32>;
     let mut worst = 0.0f32;
     for k in 0..30 * 20 {
         if world.line.phase != Phase::Hooked {
@@ -368,11 +370,23 @@ fn the_hooked_float_never_jumps() {
             held,
             ..Default::default()
         });
+        let dir = (world.line.float - feet).normalize();
         if world.line.phase == Phase::Hooked {
-            worst = worst.max(world.line.float.distance(last));
+            // A teleport is sideways: a sudden change in how far the float
+            // swings round the angler in a tick. Reeling and running only
+            // change the line's length.
+            let now = dir.angle_between(last);
+            if let Some(before) = step {
+                worst = worst.max((now - before).abs());
+            }
+            step = Some(now);
         }
-        last = world.line.float;
+        last = dir;
     }
-    // Reeling and running move it under 0.1 m a tick at 30 per second.
-    assert!(worst < 0.1, "the float jumped {worst} m in one tick");
+    assert!(
+        // The weave switched at once jumped 0.16 rad here; eased, the worst
+        // is the ease starting, about 0.02.
+        worst < 0.05,
+        "the float jumped sideways: its swing changed by {worst} rad in one tick"
+    );
 }

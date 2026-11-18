@@ -1744,6 +1744,7 @@ pub fn run(args: &[String]) {
             farm::make_looks,
             farm::spawn_note,
             pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+            pbd_app::interact::spawn_fish_keys.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
         ),
     )
     // The interact key's offers from the fruit and the farm (the husbandry
@@ -1759,6 +1760,7 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::saves::WorldSave>),
             pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
+            pbd_app::interact::show_fish_keys,
         ),
     )
     // The column tier is built by a startup system and its records land when

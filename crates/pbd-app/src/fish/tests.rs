@@ -76,7 +76,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
     let roster = fauna.roster(HOME_BODY).to_vec();
     let minnow = roster.iter().position(|s| s.id == "minnow").unwrap();
 
-    for (strike, seed) in [("left", 70), ("right", 71)] {
+    // Only the left button hooks; a right click at the bite cancels (owner,
+    // 2026-11-18), pinned in pbd_core's `a_right_click_at_the_bite_cancels`.
+    for (strike, seed) in [("left", 70), ("left", 71)] {
         let mut line = Line::new(seed);
         let mut schools = vec![School::spawn(
             minnow as u16,
@@ -108,13 +110,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                     released: true,
                     ..Default::default()
                 },
-                Phase::Bite if strike == "left" => Controls {
+                Phase::Bite => Controls {
                     pressed: true,
                     held: true,
-                    ..Default::default()
-                },
-                Phase::Bite => Controls {
-                    reel_in: true,
                     ..Default::default()
                 },
                 Phase::Hooked => Controls {
@@ -523,4 +521,26 @@ fn smaller_water_makes_smaller_fish() {
     assert!((puddle - 0.35).abs() < 1e-3, "puddle {puddle}");
     assert!(brook > puddle && brook < river, "brook {brook}");
     assert!((river - 1.0).abs() < 1e-3, "river {river}");
+}
+
+/// Both buttons show in every phase with what each does now (owner,
+/// 2026-11-18): only the left hooks, and only at the bite is it live; the
+/// right cancels whenever the line is out and not hooked.
+#[test]
+fn both_buttons_say_what_they_do_in_every_phase() {
+    use pbd_core::fishing::Phase;
+    let table = [
+        (Phase::Ready, ("HOLD TO CAST", true), false),
+        (Phase::Charging, ("LET GO TO CAST", true), false),
+        (Phase::Flying, ("HOOK", false), true),
+        (Phase::Floating, ("HOOK", false), true),
+        (Phase::Nibble, ("HOOK", false), true),
+        (Phase::Bite, ("HOOK", true), true),
+        (Phase::Hooked, ("HOLD TO REEL", true), false),
+    ];
+    for (phase, left, cancel) in table {
+        let [l, r] = super::keys_for(phase);
+        assert_eq!(l, left, "{phase:?}");
+        assert_eq!(r, ("CANCEL", cancel), "{phase:?}");
+    }
 }
