@@ -509,10 +509,23 @@ pub fn eye_water_at(
     else {
         return EyeWater::Unknown;
     };
+    let altitude = body.length() - terrain::PLANET_RADIUS;
     let Some(column) = fine.set.columns.column(record) else {
+        // Off the tier, the river band's water (`river-cache` design 14): an
+        // eye under a river past the tier is under its water, not in a dry
+        // channel looking up at the back of the water's top.
+        let key = fine.set.levels[3].get(record).map(|c| c.key());
+        if let Some(&top) = key.and_then(|k| fine.set.river.tops.get(&k)) {
+            return if altitude < top {
+                EyeWater::Water {
+                    surface_radius: terrain::PLANET_RADIUS + top,
+                }
+            } else {
+                EyeWater::Air
+            };
+        }
         return EyeWater::Unknown;
     };
-    let altitude = body.length() - terrain::PLANET_RADIUS;
     match column.water_surface(altitude) {
         Some(surface) => {
             // The surface the eye SEES: a flowing top is drawn through its

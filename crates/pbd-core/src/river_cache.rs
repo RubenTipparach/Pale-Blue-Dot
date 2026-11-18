@@ -69,13 +69,18 @@ pub fn thread_lookups() -> u64 {
 pub struct Memo<Key, V> {
     shards: Vec<RwLock<FxMap<Key, V>>>,
     len: AtomicUsize,
+    /// The most values held: past it nothing more is kept, and a miss is
+    /// worked out (`river-cache` design 15: the point memo reached 16 M
+    /// values and 342 MB).
+    cap: usize,
 }
 
 impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
-    fn new() -> Self {
+    fn new(cap: usize) -> Self {
         Self {
             shards: (0..SHARDS).map(|_| RwLock::new(FxMap::default())).collect(),
             len: AtomicUsize::new(0),
+            cap,
         }
     }
 
@@ -91,6 +96,9 @@ impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
     }
 
     pub fn put(&self, key: Key, value: V) {
+        if self.len() >= self.cap {
+            return;
+        }
         if let Ok(mut shard) = self.shard(&key).write()
             && shard.insert(key, value).is_none()
         {
@@ -149,10 +157,10 @@ pub struct RiverField {
 impl RiverField {
     pub(crate) fn new() -> Self {
         Self {
-            carve: Memo::new(),
-            top: Memo::new(),
-            far: Memo::new(),
-            settled: Memo::new(),
+            carve: Memo::new(2_000_000),
+            top: Memo::new(2_000_000),
+            far: Memo::new(500_000),
+            settled: Memo::new(500_000),
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             filed: AtomicUsize::new(0),
@@ -323,19 +331,36 @@ pub(crate) fn write(
         o.u32(n.drop as u32);
         o.u32(n.half_width.to_bits());
     }
-    let carve = field.carve.entries();
+    // Only what a river changes is written: a point it leaves as it was is
+    // cheap to work out again, and was most of the file.
+    let carve: Vec<_> = field
+        .carve
+        .entries()
+        .into_iter()
+        .filter(|(k, v)| v.to_bits() != k[3])
+        .collect();
     o.u64(carve.len() as u64);
     for (k, v) in &carve {
         k.iter().for_each(|&x| o.u32(x));
         o.u32(v.to_bits());
     }
-    let top = field.top.entries();
+    let top: Vec<_> = field
+        .top
+        .entries()
+        .into_iter()
+        .filter(|(_, v)| *v != i32::MIN)
+        .collect();
     o.u64(top.len() as u64);
     for (k, v) in &top {
         k.iter().for_each(|&x| o.u32(x));
         o.u32(*v as u32);
     }
-    let far = field.far.entries();
+    let far: Vec<_> = field
+        .far
+        .entries()
+        .into_iter()
+        .filter(|(_, v)| *v != u32::MAX)
+        .collect();
     o.u64(far.len() as u64);
     for (k, v) in &far {
         k.iter().for_each(|&x| o.u32(x));
@@ -354,6 +379,7 @@ pub(crate) fn write(
     let sum = fnv(&o.0);
     o.u64(sum);
     let entries = carve.len() + top.len() + far.len() + settled.len();
+    let held = field.total();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -364,8 +390,29 @@ pub(crate) fn write(
         f.sync_all()?;
     }
     std::fs::rename(&temp, path)?;
-    field.filed.store(entries, Ordering::Relaxed);
+    clear_stale_temps(path);
+    field.filed.store(held, Ordering::Relaxed);
     Ok(entries)
+}
+
+/// Remove temporary files beside `path` that a process stopped mid-write
+/// left behind (`<name>.tmp<pid>`): a cache file can be hundreds of MB.
+pub fn clear_stale_temps(path: &Path) {
+    let (Some(dir), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str())) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with(&format!("{stem}.tmp")) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// Read `path` into `field`, returning the map's size and nodes; `None` for

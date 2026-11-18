@@ -125,6 +125,13 @@ fn fill_rivers(
 fn save(saving: Arc<AtomicBool>) {
     let started = Instant::now();
     let written = pbd_core::rivers::save_caches();
+    let band = crate::river_band::save();
+    if band > 0 {
+        info!(
+            "RIVER_BAND_SAVED {band} cells' water in {:.2} s",
+            started.elapsed().as_secs_f32()
+        );
+    }
     if written > 0 {
         info!(
             "RIVER_CACHE_SAVED {written} values in {:.2} s",

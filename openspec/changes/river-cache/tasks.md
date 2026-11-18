@@ -116,16 +116,22 @@
       (`river-cache-runs-v2-2026-11-18-450p60.mp4`).
 
 ## 12. Far rivers drawn the way terrain is (design 14), proposed
-- [ ] Real water across the finest band (300 m), built in the fine-set job
+- [x] Real water across the finest band (300 m), built in the fine-set job
       with the ground, landing with it; the flowing-water mesh off the frame.
-- [ ] Water pieces cached by drainage-lattice cell, in memory and in the
+- [x] Water pieces cached (by cell, not by lattice cell: finer, and exact), in memory and in the
       file; a job assembles from pieces and builds only the missing ones;
       edits drop the pieces they reach.
-- [ ] The background fill settles and builds pieces along the whole river.
-- [ ] Stand-in sheets only past the finest band and from orbit, over every
+- [ ] The background fill settles and builds pieces along the whole river
+      (not built: each job builds the new strip it reaches, about 30 cells
+      warm, 1,100 cold).
+- [x] Stand-in sheets only past the finest band and from orbit, over every
       flooded cell.
-- [ ] The handover at the band's edge rides the ground's cross-fade; the
+- [x] The handover at the band's edge rides the ground's cross-fade; the
       tier's 25 m water dither removed.
-- [ ] The tier anchored ahead of a moving walker.
-- [ ] Measured against the perf study (section 15), and recorded down the
+- [x] The tier anchored ahead of a moving walker.
+- [x] Measured against the perf study (section 15), and recorded down the
       owner's river.
+- [x] Off the tier, the eye and the walker read the band's water tops.
+- [x] A rebuild requested before the walker outruns the tier.
+- [x] The point memo capped; only river-changed values written.
+- [ ] The perf suite on the release build.
