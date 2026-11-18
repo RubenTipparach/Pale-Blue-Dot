@@ -58,6 +58,40 @@ line. The fish is drawn from that, never changing it:
 - the turn between the two is rate-limited (300 deg/s) and eased (0.22 s), so
   a change from run to rest is a turn about the mouth, not a flip.
 
+### 3.1 Nothing switches in one frame (the owner, 2026-11-17: "theres some snapping around in the hooked version")
+
+A per-frame probe of the mockup's Hooked tab (Chrome on the GPU, 60 Hz, 60 s
+at 1x with 26 run/rest switches, and 120 s at 1/4x) found three snaps in
+Proposed, all draw side:
+
+| Cause | Seen as | Count before (1x) |
+| --- | --- | --- |
+| The line's swing goes on or off in one step when a run starts or stops (`swing = sin(1.7 t) * 0.12 * run`); at 9 m of line the float, the lure and the mouth jump 0.9 m | the fish lurches sideways | 46 frames moving > 0.1 m |
+| Shake and flash switched on and off with `run`, at full amplitude | head and roll jump up to 23 and 32 deg in a frame | 6 frames turning > 20 deg, 13 rolling > 20 deg |
+| Shake and flash phased off the line's clock, which moves only on 30 Hz steps | the shake and roll stutter, held every other frame at 1x and for 8 frames at 1/4x | 252 frames turning > 10 deg at 1/4x |
+
+So the fight's drawing is:
+
+- **The drawn float** is the game's `DrawnFloat` (`movement-smoothness` 7.1):
+  a jump of the line's float when `run` changes, and on the first hooked step
+  after the strike, goes into an offset that is eased out, critically damped
+  at 14/s. The mouth follows the drawn lure.
+- **The turn rate is eased** as well as the heading: the rate wanted is
+  `min(error / 0.22 s, sqrt(2 a error), 300 deg/s)`, and the rate moves toward
+  it at no more than `a` = 1200 deg/s^2, yaw and pitch each (pitch at 0.6 of
+  the cap). The rate a turn ends with carries into the next.
+- **Shake and flash share one envelope**, eased toward 1 while reeled and 0
+  while running with a 0.35 s time constant, multiplying both. Their phase is
+  integrated per frame (`phase += 2 pi * 3.5 Hz * dt`), never read from the
+  30 Hz line clock.
+- **A shake turns the body about the mouth**, not its middle, so the mouth
+  stays on the lure.
+
+After: 0 frames over 20 deg (worst 10 deg, a 3.5 Hz shake at its fastest),
+none rolling over 10 deg, no position step over 5 cm, at 1x; at 1/4x the worst
+frame turns 2.5 deg. The float still changes speed in one step when the reel
+is pressed or let go: that is `Line::step`'s rule, left alone.
+
 ## 4. Proposed: every fish
 
 - **Heading** is a per-fish pose, turned every frame toward the drawn

@@ -91,6 +91,8 @@ const GROUPS = [
   ["The fight", [
     ["fightTurn", "Turn rate on the line", 30, 900, 10, 300, "deg/s"],
     ["fightTau", "Follow the line", 0.02, 1, 0.01, 0.22, "s"],
+    ["fightAccel", "Turn acceleration on the line", 100, 6000, 50, 1200, "deg/s2"],
+    ["fightEase", "Ease shake and flash in and out", 0.02, 1.5, 0.01, 0.35, "s"],
     ["fightShake", "Head shake when reeled", 0, 50, 1, 18, "deg"],
     ["fightShakeHz", "Head shake rate", 0.5, 10, 0.1, 3.5, "Hz"],
     ["flashRoll", "Roll (flash) when reeled", 0, 80, 1, 30, "deg"],
@@ -334,6 +336,7 @@ class Body {
     this.pos = pos.clone(); this.fwd = normOr(flat(vel.clone()), V(1, 0, 0)); this.len = len;
     this.roll = 0; this.yawRate = 0; this.speed = vel.length(); this.prevSpeed = this.speed; this.accel = 0;
     this.tail = phase * TAU; this.amp = P.ampRest; this.shake = 0; this.extraRoll = 0;
+    this.yawVel = 0; this.pitVel = 0; this.fightEnv = 0; this.shakePh = 0;
   }
   // Turn by yaw and pitch, each eased and rate-limited, so a half turn goes round level and never
   // through nose-down; pitch is held inside the max pitch.
@@ -349,7 +352,28 @@ class Body {
     const dp = pitT - pit0, sp = Math.sign(dp) * Math.min(Math.abs(dp) * k, rate * 0.6);
     const yaw = yaw0 + sy, pit = clamp(pit0 + sp, -lim, lim);
     f.set(Math.cos(pit) * Math.cos(yaw), Math.sin(pit), -Math.cos(pit) * Math.sin(yaw));
+    this.yawVel = sy / dt; this.pitVel = (pit - pit0) / dt;   // so a turnEased that follows starts at this rate
     this.yawRate += (sy / dt - this.yawRate) * Math.min(1, dt / 0.08);
+  }
+  // The same turn by yaw and pitch, but with a turn RATE that is eased too: it builds up and dies
+  // away at a limited angular acceleration, so starting or reversing a turn is never a jump in
+  // rate. The rate wanted is the eased one (error / tau), capped by the turn limit and by what can
+  // still be braked to a stop in the angle left (sqrt(2 a e)).
+  turnEased(dir, rateDeg, accelDeg, tau, dt){
+    if (dir.lengthSq() < 1e-10 || dt <= 0) return;
+    const d = dir.clone().normalize(), f = this.fwd;
+    const yaw0 = Math.atan2(-f.z, f.x), pit0 = Math.asin(clamp(f.y, -1, 1));
+    const yawT = Math.atan2(-d.z, d.x), lim = P.maxPitch * DEG, pitT = clamp(Math.asin(clamp(d.y, -1, 1)), -lim, lim);
+    let dy = yawT - yaw0; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    if (Math.abs(d.x) + Math.abs(d.z) < 1e-6) dy = 0;
+    const acc = accelDeg * DEG, t = Math.max(tau, 1e-3);
+    const want = (e, cap) => Math.sign(e) * Math.min(Math.abs(e) / t, Math.sqrt(2 * acc * Math.abs(e)), cap);
+    this.yawVel += clamp(want(dy, rateDeg * DEG) - this.yawVel, -acc * dt, acc * dt);
+    this.pitVel += clamp(want(pitT - pit0, rateDeg * DEG * 0.6) - this.pitVel, -acc * dt, acc * dt);
+    const yaw = yaw0 + this.yawVel * dt, pit = clamp(pit0 + this.pitVel * dt, -lim, lim);
+    if (pit !== pit0 + this.pitVel * dt) this.pitVel = (pit - pit0) / dt;
+    f.set(Math.cos(pit) * Math.cos(yaw), Math.sin(pit), -Math.cos(pit) * Math.sin(yaw));
+    this.yawRate += (this.yawVel - this.yawRate) * Math.min(1, dt / 0.08);
   }
   // Tail: frequency from speed in body lengths a second; amplitude from what the fish is doing.
   beat(dt, mode){
@@ -371,7 +395,9 @@ class Body {
     const r = this.roll + this.extraRoll;
     let top = top0.clone().multiplyScalar(Math.cos(r)).addScaledVector(side0, Math.sin(r)).normalize();
     if (this.shake){ fwd.applyAxisAngle(top, this.shake); }
-    return { fwd, top };
+    // A head shake turns the body about its mouth, so the mouth stays where it is (on the lure).
+    const origin = this.pos.clone().addScaledVector(this.fwd, 0.5 * this.len).addScaledVector(fwd, -0.5 * this.len);
+    return { fwd, top, origin };
   }
   sway(){ const amp = this.amp, ph = this.tail; return x => { const w = clamp((0.3 - x) / 0.8, 0, 1); return Math.sin(ph - x * 6) * amp * w * w; }; }
   mouth(){ return this.pos.clone().addScaledVector(this.fwd, 0.5 * this.len); }
@@ -500,22 +526,24 @@ class Choreo {
 // PROPOSED fight: the mouth stays on the lure and the body swings round it, along the line.
 // Running: head away from the rod, diving a little, across with the line's swing.
 // Being reeled: the hook pulls the head toward the rod; the fish shakes its head and rolls, flashing.
+// Nothing switches in one frame: the turn's rate is eased (turnEased), the shake and the flash fade
+// in and out on one envelope, and their phase runs on the frame's own clock (never the line's 30 Hz
+// one, which would step them).
 function fight(b, line, lure, dt){
   const away = normOr(flat(lure.clone().sub(line.feet)), V(1, 0, 0));
   const prev = b.pos.clone();
-  let mode;
-  if (line.run > 0){
-    const want = away.clone(); want.y = -Math.tan(P.runDive * DEG); want.normalize();
-    b.turnToward(want, P.fightTurn, P.fightTau, dt); b.shake = 0; b.extraRoll = 0; mode = "burst";
-  } else {
-    const want = away.clone().negate(); want.y = 0.12;
-    b.turnToward(want, P.fightTurn, P.fightTau, dt);
-    b.shake = P.fightShake * DEG * Math.sin(line.clock * TAU * P.fightShakeHz);
-    b.extraRoll = P.flashRoll * DEG * Math.sin(line.clock * TAU * P.fightShakeHz * 0.5 + 0.7);
-    mode = "cruise";
-  }
+  const reeled = !(line.run > 0);
+  let want;
+  if (!reeled){ want = away.clone(); want.y = -Math.tan(P.runDive * DEG); want.normalize(); }
+  else { want = away.clone().negate(); want.y = 0.12; }
+  b.turnEased(want, P.fightTurn, P.fightAccel, P.fightTau, dt);
+  b.fightEnv += ((reeled ? 1 : 0) - b.fightEnv) * (1 - Math.exp(-dt / Math.max(P.fightEase, 1e-3)));
+  b.shakePh = (b.shakePh + TAU * P.fightShakeHz * dt) % (TAU * 2);
+  b.shake = b.fightEnv * P.fightShake * DEG * Math.sin(b.shakePh);
+  b.extraRoll = b.fightEnv * P.flashRoll * DEG * Math.sin(b.shakePh * 0.5 + 0.7);
+  const mode = reeled ? "cruise" : "burst";
   b.pos.copy(lure).addScaledVector(b.fwd, -0.5 * b.len);
-  b.speed = Math.max(prev.distanceTo(b.pos) / Math.max(dt, 1e-4), line.run > 0 ? 1.2 : 0.4);
+  b.speed = Math.max(prev.distanceTo(b.pos) / Math.max(dt, 1e-4), reeled ? 0.4 : 1.2);
   return mode;
 }
 
@@ -593,6 +621,7 @@ class World {
     this.kind = kind; this.tab = tab; this.sp = SPECIES[spId]; this.seed = seed; this.proposed = kind === "proposed";
     this.scene = new THREE.Scene(); this.env = environment(this.scene);
     this.clock = 0; this.acc = 0; this.alpha = 0; this.lureOffset = V(); this.done = 0;
+    this.floatOff = V(); this.floatVel = V(); this.struck = false;   // PROPOSED's drawn float (floatNow)
     const hooked = tab === "hooked";
     const count = tab === "swim" ? this.sp.count + 4 : hooked ? 1 : this.sp.count;
     const anchor = tab === "swim" ? V(0, -1.2, 0) : hooked ? V(0, -0.35, 0) : V(4.2, -1.2, -2.6);
@@ -610,18 +639,43 @@ class World {
         this.line.float.set(0, SURFACE - FISHING.bite_dip_m, 0); this.line.dip = FISHING.bite_dip_m; this.line.floatBefore.copy(this.line.float);
         this.school.positions[0] = this.line.lure(); this.school.before[0] = this.line.lure();
         this.line.hook(this.school);
-        this.bodies[0].pos.copy(this.line.lure()); this.bodies[0].fwd.set(1, 0, 0);
+        this.bodies[0].fwd.set(1, 0, 0); this.bodies[0].pos.copy(this.line.lure()).addScaledVector(this.bodies[0].fwd, -0.5 * this.sp.length);
       }
     }
     this.tackle.visible(!!this.line);
     this.choreo = this.proposed && this.line ? new Choreo(this) : null;
     if (this.choreo && hooked){ this.choreo.begin(0); this.choreo.mode = "hooked"; }
     this.strikeAt = -1; this.hookedFor = 0; this.pressNext = false;
+    this.draw(0);   // placed before the first frame is drawn, never at the origin for one frame
+  }
+  // PROPOSED draws the float as the game now does (fish.rs DrawnFloat, movement-smoothness 7.1): the
+  // line puts its swing on or off in one step when a run starts or stops (and on the first step after
+  // the strike), so the float would jump up to a metre and the mouth with it. That jump is taken into
+  // an offset, drawn where it was, and eased out, critically damped at 14/s. Draw only.
+  floatNow(){
+    const l = this.line;
+    if (!this.proposed) return l.float.clone();
+    return l.floatBefore.clone().lerp(l.float, this.alpha).add(this.floatOff);
   }
   lureNow(){
     if (!this.line) return V();
-    const f = this.proposed ? this.line.floatBefore.clone().lerp(this.line.float, this.alpha) : this.line.float.clone();
-    return f.addScaledVector(UP, -0.35);
+    return this.floatNow().addScaledVector(UP, -0.35);
+  }
+  absorbJump(was, run){
+    const l = this.line, hooked = l.phase === "hooked";
+    let jump = false;
+    if (hooked && was === "hooked" && (run !== l.run || this.struck)){ jump = true; this.struck = false; }
+    else if (hooked && was === "bite"){ jump = true; this.struck = true; }
+    if (l.phase === "ready") return;   // caught or snapped: what is left of the offset eases out
+    if (!hooked){ this.floatOff.set(0, 0, 0); this.floatVel.set(0, 0, 0); this.struck = false; return; }
+    if (jump){ this.floatOff.add(l.floatBefore.clone().sub(l.float)); this.floatOff.y = 0; l.floatBefore.copy(l.float); }
+  }
+  easeFloat(dt){
+    if (dt <= 0) return;
+    const w = 14, e = Math.exp(-w * dt), c = this.floatVel.clone().addScaledVector(this.floatOff, w);
+    this.floatOff.addScaledVector(c, dt).multiplyScalar(e);
+    this.floatVel.addScaledVector(c, -w * dt).multiplyScalar(e);
+    this.floatOff.y = 0; this.floatVel.y = 0;
   }
   bot(){
     // The angler: strikes 0.3 s into the bite, reels while the fish rests, lets it run.
@@ -629,13 +683,22 @@ class World {
     if (!l) return c;
     if (this.pressNext){ c.pressed = true; this.pressNext = false; }
     if (l.phase === "bite"){ if (this.strikeAt < 0) this.strikeAt = l.clock + 0.3; if (l.clock >= this.strikeAt) c.pressed = true; }
-    if (l.phase === "hooked") c.held = l.run === 0 ? l.tension < 0.85 : l.tension < 0.35;
+    // It gives line through a run; in a rest it reels up to a tension of 0.85 and waits for 0.6 before
+    // reeling again (a band, so the reel is not pressed and let go on alternate steps, which buzzed
+    // the float back and forth 2 cm at 15 Hz).
+    if (l.phase === "hooked"){
+      if (l.run > 0) this.reeling = false;
+      else if (l.tension >= 0.85) this.reeling = false; else if (l.tension <= 0.6 || this.reeling === undefined) this.reeling = true;
+      c.held = !!this.reeling;
+    }
     return c;
   }
   step(dt){
     const l = this.line;
     if (l){
+      const was = l.phase, run = l.run;
       l.step(dt, this.bot(), this.school);
+      if (this.proposed) this.absorbJump(was, run);
       if (l.phase === "nibble" || l.phase === "bite" || l.phase === "hooked") this.hookedFor += l.phase === "hooked" ? dt : 0;
       if (this.choreo){
         if (l.events.includes("interest")) this.choreo.begin(l.target);
@@ -649,6 +712,7 @@ class World {
     let n = 0;
     while (this.acc >= 1 / STEP_HZ && n++ < 8){ this.acc -= 1 / STEP_HZ; this.step(1 / STEP_HZ); }
     this.alpha = clamp(this.acc * STEP_HZ, 0, 1);
+    if (this.proposed && this.line) this.easeFloat(dt);
     if (this.choreo) this.choreo.update(dt, this.line);
     this.draw(dt);
   }
@@ -672,15 +736,15 @@ class World {
           const phase = (s.clock / P.burstPeriod + s.ph[i]) % 1;
           b.beat(dt, phase < P.burstFrac ? "burst" : "glide");
         }
-        const { fwd, top } = b.frame();
-        placeFish(fm, b.pos, fwd, top, len, b.sway());
+        const { fwd, top, origin } = b.frame();
+        placeFish(fm, origin, fwd, top, len, b.sway());
       }
     }
     if (this.line){
       const l = this.line;
       let float, lure;
       if (this.proposed){
-        float = l.floatBefore.clone().lerp(l.float, this.alpha);
+        float = this.floatNow();
         lure = float.clone().addScaledVector(UP, -0.35).add(this.lureOffset);
         // The float leans toward a lure that is pulled aside.
         float.x += this.lureOffset.x * 0.45; float.z += this.lureOffset.z * 0.45; float.y -= Math.max(0, -this.lureOffset.y) * 0.3;
@@ -718,6 +782,7 @@ function makeView(tab, cam0){
   function build(){
     worlds = { today: new World("today", tab, state.species, seed), proposed: new World("proposed", tab, state.species, seed) };
     worlds.today.env.night(state.night); worlds.proposed.env.night(state.night); restartAt = -1;
+    for (const k in targets) delete targets[k];   // a new run starts framed as on load: a cut, not an 8 m swoop
   }
   function frame(now){
     raf = requestAnimationFrame(frame);
