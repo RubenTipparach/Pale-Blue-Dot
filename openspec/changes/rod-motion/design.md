@@ -163,3 +163,38 @@ mesh in `PostUpdate` reads this frame's.
   stays in view at the top of the draw (0.25 m back put it half off the
   right edge). Recommendation taken (ask only with screenshots): the owner
   sees it on the mockup and in `docs/screenshots/rod-motion/charging-raised.jpg`.
+
+## 8. The cast's line and the mockup's controls (owner, 2026-11-18)
+
+- "the fish line needs to apeear like it was pulled from behind you and
+  arcs into the water" (with a fly-fishing reference): while the float
+  flies, the line is drawn along the path the float took, from the rod tip
+  back to where it was let go (up and behind the head at the top of the
+  draw) and out along its arc; after it lands the line eases into its
+  hanging curve over 0.6 s. Drawn only. Mockup first; the game waits.
+- "the first few frames of releasing the line the thing gets stuck": a
+  mockup bug, the float drawn at the water's edge while it was still over
+  the bank. The game has no such rule.
+- "left click to hook fish, right click to cancel for fishing. just have
+  text on the side be clear": the controls stay as they are in the game
+  (left casts, hooks and reels; right winds the line in). The mockup's Fish
+  tab lists the steps beside the view, the one happening now lit, and calls
+  right click "cancel".
+- The rod flexes (owner, 2026-11-18, a GIF of a lure rod cast from the
+  surf: the blank loads into a deep curve, whips through bent, springs
+  straight and ends pointing out low over the water). In the mockup the
+  rod's mesh bends past the fist by `bend · L · s²` toward the side a
+  positive pitch turns the tip; `bend` is a damped spring (`bend_hz` 4.5,
+  `bend_damping` 0.3) toward −`flex` (0.07) × the rod's pitch rate, capped
+  at `bend_max_rad` 0.6, so it loads on the draw, lags through the flick
+  and wobbles straight. The line leaves the bent tip. While the float flies
+  the rod is held out low (`follow_rad` 0.55 below rest) with the arm
+  reaching (`follow_reach` 0.8), then settles when it lands. Mockup first;
+  the game waits.
+- The right button cancels at the bite too, and only the left button
+  hooks; the game's prompt reads "RIGHT CLICK CANCEL" while the float is
+  out and adds "LEFT CLICK HOOK" at the bite, and the bite's line reads
+  "Bite! Left click" (owner, 2026-11-18: "this shouldnt show to confuse
+  players, right click should be clearly shown to cancle, and left click to
+  hook fish"; `fishing-and-equipment` design, "Why no fish"). Built in the
+  game with the mockup, as the owner asked for the game's prompt directly.

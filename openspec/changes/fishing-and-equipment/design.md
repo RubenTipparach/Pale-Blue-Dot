@@ -405,10 +405,17 @@ pulled it in at the right moment, but no fish is added to my inventory".
   - Winding in, walking out of reach, or putting the rod away with a fish
     nibbling or hooked dropped it the same silent way.
 - **Fix.**
-  - The strike is either button while the float is under: a right click at
-    the bite hooks the fish, as a left click does. Before and after the bite
-    the right button still winds in. (Recommendation taken, ask only with
-    screenshots.)
+  - ~~The strike is either button while the float is under: a right click at
+    the bite hooks the fish, as a left click does.~~ Replaced 2026-11-18 by
+    the owner's own rule: "left click to hook fish, right click to cancel for
+    fishing", and on the prompt "this shouldnt show to confuse players, right
+    click should be clearly shown to cancle, and left click to hook fish".
+    The left button alone hooks the fish; the right button cancels (winds the
+    line in) whenever the line is out and not hooked, at the bite too. While
+    the float is out the prompt shows both buttons: "LEFT CLICK HOOK" and
+    "RIGHT CLICK CANCEL", and the bite's line reads "Bite! Left click". The
+    silent loss that the old rule fixed stays fixed by `Event::Lost` and the
+    prompt that names the button.
   - A new `Event::Lost { species }`, raised before `ReeledIn` when the line
     held a fish nibbling, biting or hooked; the HUD says "Wound in - the
     minnow got away". Putting the rod away or boarding with a fish on says
@@ -970,3 +977,17 @@ render graph, and is left until it is seen to matter.
   under it, a felled tree, and the field guide open on a species.
 - **Limitation:** the feel of the bite and reel, and whether the schools read
   as schools on screen, can only be confirmed by the owner in game.
+
+## The hooked float moves smoothly (owner, 2026-11-18)
+
+"fish also kinda teleports around when i reel it in". Measured in
+`pbd_core::fishing::Line::step`: the float's weave across the line was
+`sin(1.7 t) · 0.12 · run`, and `run` switches between 0 and the species'
+pull at the start and end of each run, so the float jumped sideways by up
+to 0.12 · pull · line out in one tick (about 1.8 m on 10 m of line). Fix: the
+weave follows the run through a new `weave`, eased at `WEAVE_RATE` 4/s
+(settled in about half a second), and starts at 0 on the hook. The tension,
+the line out and the catch are unchanged; only where the float is drawn
+between runs moves. Pinned by `the_hooked_float_never_jumps` (under 0.1 m
+a tick at 30 ticks a second). The Tools in Hand mockup's fight uses the
+same easing.

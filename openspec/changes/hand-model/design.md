@@ -173,3 +173,10 @@ look like sausges", "thumb is really big".
   shows the back of the hand and the thumb toward the eye; 45° matches it.
   It changes the arm's line in every stroke, so the owner judges it in the
   Dig and Chop tabs too.
+
+### 5.3 The thumb grows out of the palm (owner, 2026-11-18)
+
+"root or bottom of thumb is floating above the palm making it look like a
+big finger": the thumb's first segment starts 0.4 of the way from the
+game's thumb root toward the palm's centre (`thumb_sink`), so it grows out
+of the hand's mass; the palm's outline still reaches to the old root.
