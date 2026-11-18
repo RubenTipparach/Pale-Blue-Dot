@@ -284,6 +284,9 @@ pub struct Launch {
     /// `--take-trees`: a capture's instrument that marks the nearest trees
     /// picked bare and the next felled (`flora-v2` 12.5).
     pub take_trees: bool,
+    /// `--pick-trees`: the same instrument picking only, felling nothing, so a
+    /// picked tree is seen bare among the trees it stood with.
+    pub pick_only: bool,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -556,6 +559,7 @@ impl Launch {
             tree_hover: None,
             dig_ahead: false,
             take_trees: false,
+            pick_only: false,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -828,6 +832,10 @@ impl Launch {
                 }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--take-trees" => result.take_trees = true,
+                "--pick-trees" => {
+                    result.take_trees = true;
+                    result.pick_only = true;
+                }
                 "--pitch" => {
                     i += 1;
                     let degrees: f32 = args

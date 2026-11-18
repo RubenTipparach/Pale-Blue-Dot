@@ -902,6 +902,21 @@ the jungle from the ground before and after, the same view and time
   changes. Fruit decided by the generator's table is derived and never saved;
   only what a player took is.
 
+**The capture instrument's 26 m (found 2026-11-18).** `--take-trees` picked
+and felled nothing nearer than 26 m though trunks stood 3 m from the eye.
+Logged at the moment it chose: the eye was where it should be (1.6 m over
+the ground, 63.6 m elevation), but the nearest finest record lay 23.4 m off
+along the ground. Its 30 frames counted from `READY`, and with `--spawn` the
+set standing then was laid before the walker came to rest, so it had no
+records under the eye and the trees it chose were the nearest at that
+set's edge. Now the frames count only once the set has a record within 4 m
+of the eye: at the same spot it picks at 3, 6 and 11 m and fells from 6 m
+(53 trees in view against 19). It also fired twice (`> 30` let frame 30
+through and then 31); it fires once. `--pick-trees` is the same instrument
+picking only, so a picked tree is shown bare among the trees it stood with.
+The game's own F and axe read the set as it stands while the player plays,
+long after any spawn; this was the instrument's timing, not theirs.
+
 ### 12.6 The ground follows the seasons
 
 The owner, 2026-11-15: "winter isn't changing terrain texture". A winter
@@ -1159,6 +1174,31 @@ rule, as 12.10 is:
   beach, which the owner's question asks for.
 - A tide range set to nought in `water.ron` puts the line at the sheet,
   0.5 m under the sea level, which is what the sea covers then.
+
+**Measured 2026-11-18: it leaves no acacia at all** (task 7.8). An
+instrument, `planet::lod::flooded_ground::where_a_beach_acacia_stands`
+(ignored; `--ignored --nocapture` prints), sweeps the body a degree at a
+time for beach cells (1,527 of them) and searches the finest cells within
+40 m of each for one whose far record and tier record both stand a tree. It
+finds none: the highest beach cell tops out at **1.0 m**, under the high
+water's **1.5 m**, so every beach cell carries `FLOODED_BIT`. The beach is
+the band under `sea + beach_band_m` (2 m), and the surface comes in whole
+metres, so its tops are at 0 and 1 m only. The acacia is the beach's one
+species (`BIOME_TREES`, the shader's `tree_species`) and grows nowhere
+else, so since 12.11 no version 10 world shows one. The acacia captured on
+2026-11-15 (`v10-beach-acacias.jpg`, `44.333 -15.791`, its sand at 1.0 m)
+stood in the tide; the same spot today is bare sand
+(`docs/screenshots/flora-2-1/beach-acacia-then-now.jpg`).
+
+What would bring it back is the owner's to choose, with these shots beside
+it (a look change; not made):
+- **A. Stand the acacia on the dry grass behind the beach** (the first cells
+  over the 2 m line, by the beach): what a coastal acacia looks like, and no
+  tree in the tide. It moves where trees stand, so it is a new generator
+  version (12.1), version 11, and old worlds keep theirs.
+- **B. Leave beaches bare** and give the acacia a dry biome of its own when
+  one exists (the savanna is not a biome yet). Nothing to build now.
+- Recommendation: A, when the owner next looks at the beaches.
 
 **Verify.**
 - A test at the owner's spot: no tier or far record under the high-water
