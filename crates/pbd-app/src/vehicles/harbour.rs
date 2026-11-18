@@ -2,7 +2,8 @@
 //! use any boat you find"), and the stowing that keeps a world of them cheap.
 //!
 //! Each canoe the harbour's template moors on the water is a craft record,
-//! made once when the fleet first meets the harbour: a Loon. (A sailing boat
+//! made once when the fleet first meets the harbour: a Loon, and a raft at
+//! the rowboats' and sailing boats' berths (`harbour-rafts`). (A sailing boat
 //! was a Tern, a rowboat a Rowboat and the harbour's ship its cog, all
 //! retired, `retire-tern` and `retire-rowboat-and-cog`; their berths stay
 //! empty.) It lies at its berth on the planet's
@@ -41,6 +42,38 @@ pub fn kind_of(boat: &str) -> Option<Kind> {
     }
 }
 
+/// A harbour raft's berth number: `RAFT_BERTH` plus the template berth it
+/// stands in, past every template index and short of the retired cog's
+/// `u32::MAX`, so a berth held by a retired record still gets its raft
+/// (`harbour-rafts` decision 2).
+pub const RAFT_BERTH: u32 = 1 << 16;
+
+/// How far apart two harbour rafts' middles stand at least, m: twice a
+/// raft's half-diagonal (4.4 m by 2.4 m) and a little, so no two touch at any
+/// heading (`harbour-rafts` decision 1).
+pub const RAFT_APART_M: f32 = 5.1;
+
+/// The template berths a harbour moors a raft at (`harbour-rafts` decision
+/// 1): its `rowboat` and `sail` berths, in template order, each unless its
+/// middle is within [`RAFT_APART_M`] of a raft before it. A rowing launch
+/// (M23) will take the rowboat berths once it is built.
+pub fn raft_berths(template: &Template) -> Vec<usize> {
+    let mut picked: Vec<usize> = Vec::new();
+    for (n, boat) in template.boats.iter().enumerate() {
+        if !matches!(boat.kind.as_str(), "rowboat" | "sail") {
+            continue;
+        }
+        let clear = picked.iter().all(|&m| {
+            let o = &template.boats[m];
+            (boat.x - o.x).hypot(boat.z - o.z) >= RAFT_APART_M
+        });
+        if clear {
+            picked.push(n);
+        }
+    }
+    picked
+}
+
 /// The water a harbour boat needs under it at a mooring, m of the drawn sea,
 /// from its hull in `vehicles.ron`. The Loon's hull is 0.36 m deep. The
 /// drawn sea lies half a metre under the layers' sea
@@ -55,7 +88,7 @@ const DRAWS_M: f32 = 0.5;
 /// ground's radius under a direction and `sea_radius` the water's. Returns
 /// the craft, and how many berths were skipped: over land, over water
 /// shallower than a harbour boat draws ([`DRAWS_M`]), or a retired kind's
-/// (a sailing boat's or a rowboat's).
+/// (a sailing boat's or a rowboat's) that the raft rule passes over.
 #[allow(clippy::too_many_arguments)]
 pub fn boats_for(
     site: u32,
@@ -74,15 +107,22 @@ pub fn boats_for(
     };
     let mut crafts = Vec::new();
     let mut skipped = 0;
+    let rafts = raft_berths(template);
     for (n, boat) in template.boats.iter().enumerate() {
-        let berth = (site, n as u32);
+        // A canoe's craft at its own berth; a raft at a retired boat's
+        // berth the raft rule picks, numbered apart from it
+        // (`harbour-rafts` decisions 1 and 2).
+        let (kind, berth) = match kind_of(&boat.kind) {
+            Some(kind) => (kind, (site, n as u32)),
+            None if rafts.contains(&n) => (Kind::Raft, (site, RAFT_BERTH + n as u32)),
+            None => {
+                skipped += 1;
+                continue;
+            }
+        };
         if made.contains(&berth) {
             continue;
         }
-        let Some(kind) = kind_of(&boat.kind) else {
-            skipped += 1;
-            continue;
-        };
         let Some((direction, bow)) = sea::boat_pose(&chart, patch, boat, template.grid.cell_m)
         else {
             skipped += 1;

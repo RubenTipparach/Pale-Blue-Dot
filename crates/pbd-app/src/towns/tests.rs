@@ -1361,16 +1361,40 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
             made.len(),
         );
         assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
-        // Each boat is its berth's kind, and only a canoe's berth makes one:
-        // the Tern and the rowboat are retired (`retire-tern` decision 3,
-        // `retire-rowboat-and-cog` decision 5).
+        // A canoe's berth makes a Loon; a retired rowboat's or sailing
+        // boat's makes a raft where the raft rule picks it, numbered apart
+        // (`retire-rowboat-and-cog` decision 5, `harbour-rafts` 1 and 2).
+        use crate::vehicles::harbour::{RAFT_APART_M, RAFT_BERTH, raft_berths};
+        let picked = raft_berths(&template);
         for c in &made {
             let (_, n) = c.berth.expect("tagged with its berth");
-            let boat = &template.boats[n as usize].kind;
-            assert_eq!(boat, "canoe", "{}: berth {n} made a {boat}", site.name);
-            assert_eq!(c.kind, pbd_core::vehicle::Kind::Loon);
-            let want = crate::vehicles::harbour::kind_of(boat);
-            assert_eq!(Some(c.kind), want, "{}: berth {n}", site.name);
+            if n >= RAFT_BERTH {
+                let n = (n - RAFT_BERTH) as usize;
+                assert!(picked.contains(&n), "{}: raft at berth {n}", site.name);
+                assert!(matches!(
+                    template.boats[n].kind.as_str(),
+                    "rowboat" | "sail"
+                ));
+                assert_eq!(c.kind, pbd_core::vehicle::Kind::Raft);
+            } else {
+                let boat = &template.boats[n as usize].kind;
+                assert_eq!(boat, "canoe", "{}: berth {n} made a {boat}", site.name);
+                assert_eq!(c.kind, pbd_core::vehicle::Kind::Loon);
+            }
+        }
+        let rafts: Vec<_> = made
+            .iter()
+            .filter(|c| c.kind == pbd_core::vehicle::Kind::Raft)
+            .collect();
+        for (i, a) in rafts.iter().enumerate() {
+            for b in &rafts[i + 1..] {
+                let apart = a.reference_position().distance(b.reference_position());
+                assert!(
+                    apart >= f64::from(RAFT_APART_M) - 0.05,
+                    "{}: rafts {apart:.2} m apart",
+                    site.name
+                );
+            }
         }
         let berths: std::collections::BTreeSet<(u32, u32)> =
             made.iter().filter_map(|c| c.berth).collect();
@@ -1389,9 +1413,35 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
             );
         }
         assert_eq!(next, made.len() as u64 + 1);
-        let all: std::collections::BTreeSet<(u32, u32)> = (0..template.boats.len() as u32)
+        let all: std::collections::BTreeSet<(u32, u32)> =
+            made.iter().filter_map(|c| c.berth).collect();
+        // `harbour-rafts` decision 2: an old world whose template berths are
+        // held by retired records (`(site, n)`) still gets its rafts.
+        let retired: std::collections::BTreeSet<(u32, u32)> = (0..template.boats.len() as u32)
+            .filter(|&n| template.boats[n as usize].kind != "canoe")
             .map(|n| (site.id, n))
             .collect();
+        let mut n2 = 1;
+        let (old, _) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &retired,
+            &fleet.specs,
+            &fleet.hulls,
+            &mut n2,
+            crate::vehicles::place::floor,
+        );
+        assert_eq!(
+            old.iter()
+                .filter(|c| c.kind == pbd_core::vehicle::Kind::Raft)
+                .count(),
+            rafts.len(),
+            "{}: retired berths get their rafts",
+            site.name
+        );
         let (again, _) = boats_for(
             site.id,
             &town,

@@ -167,9 +167,18 @@ over the rim of an open boat at its berth (the tide, before `small-boats`
 1.4; rain into the open hull) never leaves it unattended, because the Loon
 and the rowboat drain nothing (`drain_kgps: 0.0`) and only a paddler's
 bailing empties them. With the rowboat gone, the open boat left is the Loon:
-a new world's own Loon, and each harbour's three canoes. Whether they swamp
-at their berths is measured on this change's runs and reported in the
-tasks (3.4); the behaviour is not changed here.
+a new world's own Loon, and each harbour's canoes. Measured on this branch
+(fast build, a new world beside Marenstrand, 3600 fixed frames = 60 s, read
+from the saved vehicle file):
+- no rain: the spawn's Loon and the harbour canoe stay dry (0 kg) and
+  upright;
+- heavy rain (`--rain 1`): the spawn's Loon fills to its capacity, 700 kg,
+  and lies heeled 53 degrees; Marenstrand's canoe holds 19.5 kg, upright.
+So the Loon still swamps, from rain into its open hull, and keeps the water
+for good (it drains nothing; only a paddler bails). The fix (a drain for an
+unattended open boat, or a cover) changes how the Loon behaves, so it is not
+done here; it is the owner's call. The raft and the tube are decked and do
+not take water.
 
 ## Risks / Trade-offs
 

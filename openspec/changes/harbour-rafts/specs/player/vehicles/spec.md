@@ -7,8 +7,7 @@ given a berth before it; its cog SHALL make none. A raft's berth SHALL be
 numbered apart from the template boat's, so a berth held by a retired record
 still gets its raft, and a berth whose craft is held SHALL count as made, so
 it is not filled again
-(`towns::tests::every_harbours_boats_are_made_once_at_their_berths`,
-`vehicles::tests::an_old_harbours_retired_berths_get_their_rafts`).
+(`towns::tests::every_harbours_boats_are_made_once_at_their_berths`).
 
 #### Scenario: A harbour in an old world
 - **WHEN** a world saved with harbour Terns, rowboats and a cog is opened and
