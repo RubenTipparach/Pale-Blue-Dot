@@ -28,6 +28,7 @@ mod showcase;
 mod slots;
 mod sounds;
 mod time_ui;
+mod toasts;
 mod water;
 mod weather_ui;
 
@@ -1818,6 +1819,7 @@ pub fn run(args: &[String]) {
     )))
     .init_resource::<menu::NameField>()
     .init_resource::<equipment::HandListOpen>()
+    .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
@@ -1831,6 +1833,7 @@ pub fn run(args: &[String]) {
                 slots::load_icons,
                 (
                     equipment::spawn,
+                    toasts::spawn,
                     guide::spawn,
                     drops_view::dress,
                     pack::spawn,
@@ -1906,6 +1909,8 @@ pub fn run(args: &[String]) {
                 equipment::pack_hand,
                 equipment::paint,
                 menu::hide_hud_on_title,
+                toasts::gather,
+                toasts::paint,
             )
                 .chain(),
             (

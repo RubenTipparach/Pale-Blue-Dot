@@ -38,6 +38,7 @@ pub struct DropsSet;
 impl Plugin for DropsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Drops>()
+            .add_message::<crate::hotbar::PickedUp>()
             .add_systems(Update, (gather, draw).chain().in_set(DropsSet));
     }
 }
@@ -96,6 +97,7 @@ pub fn gather(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     space: crate::SimSpace,
+    mut picked: MessageWriter<crate::hotbar::PickedUp>,
 ) {
     let now = sun.clock.seconds;
     drops.live.retain(|drop| !drop.expired(now));
@@ -130,6 +132,12 @@ pub fn gather(
                 }
                 debug!("picked up {taken} of {:?} (drop {})", moved.item, moved.id);
                 hotbar.0 = slots;
+                if taken > 0 {
+                    picked.write(crate::hotbar::PickedUp {
+                        item: moved.item,
+                        count: taken,
+                    });
+                }
                 *drop = moved;
                 if drop.count == 0 {
                     gone.push(index);
@@ -355,6 +363,7 @@ mod tests {
             .insert_resource(Drops { live: drops })
             .insert_resource(slots)
             .insert_resource(WorldSave::memory_only())
+            .add_message::<crate::hotbar::PickedUp>()
             .add_systems(Update, gather);
         app.world_mut().spawn((
             Walker,

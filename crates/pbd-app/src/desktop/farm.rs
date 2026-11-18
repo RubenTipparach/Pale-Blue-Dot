@@ -270,7 +270,6 @@ pub fn gather(
         count,
         how: How::Gathered,
     });
-    note.say(wall_s, format!("+{count} {}", good.name()));
     info!("gathered {kind:?} at cell {key}: +{count} {code}");
     true
 }
@@ -866,10 +865,8 @@ pub fn use_key(
                 how: How::Found,
             });
         }
-        match seed {
-            Some(seed) => note.say(wall_s, format!("Tilled. Found {}", seed.name())),
-            None => note.say(wall_s, "Tilled"),
-        }
+        // A seed turned up is the toast's to say (`item-toasts` decision 6).
+        note.say(wall_s, "Tilled");
     }
 }
 

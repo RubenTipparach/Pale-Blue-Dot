@@ -737,7 +737,6 @@ pub fn dig_and_place(
                     count: 1,
                     how: pbd_app::hotbar::How::Found,
                 });
-                note.say(wall_s, format!("Found {}", good.name()));
             }
             if taken == Material::Tilled {
                 super::farm::uproot(&mut edits, &slots.0, cell);
@@ -1034,14 +1033,7 @@ fn take_log(
         count: 1,
         how: pbd_app::hotbar::How::Found,
     });
-    note.say(
-        wall_s,
-        if by_axe {
-            "+1 log"
-        } else {
-            "+1 log: a branch pulled down"
-        },
-    );
+    // The toast says it (`item-toasts` decision 6).
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
     // The axe's last log fells the tree (`starter-missions` H.1).
     if by_axe && gather.0.tree_gives(taken.logs + 1, true).is_err() {
