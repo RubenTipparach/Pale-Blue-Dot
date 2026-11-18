@@ -349,3 +349,23 @@ the river".
   hand on the controls, exactly as `river-craft.html`'s raft: 0.12 forward at
   rest, 0.5 with W or S, tilted 0.35 to the side with A, D, Q or E
   (`vehicles::draw::pole`). Video: `raft-pole-up-and-down-v2-2026-11-18-450p60.mp4`.
+
+## 2e. The inner tube is made of leather (owner, 2026-11-18)
+
+The owner: "tubes: would probably need just leather", then, on where leather
+comes from, "cows and horses should".
+
+- **A new good, `leather`** (stack 32), appended to the goods table, with a
+  16 px icon of a tanned hide, drawn by `tools/gen_item_icons.py` in the
+  husbandry palette.
+- **The plodder (the cow) gives it** as a kept product, collected as wool is:
+  1 leather every 6 days, either sex (`assets/config/husbandry.ron`).
+  - The animals mockup already lists the hide ("Leather for packs and
+    tents"); the game had no good for it.
+  - There is no horse in the game yet; when there is one, it gives leather
+    too.
+- **INNER TUBE is 3 leather at the workbench**, nothing else
+  (`recipes.ron` and the code default in `station.rs`). Before, it took
+  4 wool and 2 rope.
+- **Not changed:** the tube's model and icon (M34's felted-wool ring). Whether
+  it should read as leather is the owner's call, with screenshots.

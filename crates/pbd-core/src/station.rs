@@ -313,7 +313,8 @@ impl Default for RecipeFile {
                 "INNER TUBE",
                 "workbench",
                 4.0,
-                &[("wool", 4), ("rope", 2)],
+                // Leather alone (small-boats design 2e).
+                &[("leather", 3)],
                 &[("inner-tube", 1)],
             ),
             recipe(

@@ -74,3 +74,8 @@ logs with rope across, and the rowboat a planked hull from above with its
 thwart and oars. The palette is the fence's two browns and ink (`FARM`),
 with the fibre's straw and the rope's tan. Each is an inventory icon with
 the 1 px outline.
+
+## Leather (`small-boats` design 2e)
+
+`leather` is drawn by `tools/gen_item_icons.py` from its own pixel grid: a
+tanned hide stretched out, in the fence's browns with a lighter grain.

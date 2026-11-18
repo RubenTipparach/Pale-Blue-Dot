@@ -147,6 +147,10 @@ pub const GOODS: &[GoodRow] = &[
     row("inner-tube", "inner tube", 1, "items/goods/inner-tube.png"),
     row("raft", "raft", 1, "items/goods/raft.png"),
     row("rowboat", "rowboat", 1, "items/goods/rowboat.png"),
+    // ---- small-boats design 2e: a cow's hide, tanned; what an inner tube is
+    // made of (owner, 2026-11-18: "tubes: would probably need just leather",
+    // "cows and horses should").
+    row("leather", "leather", 32, "items/goods/leather.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the

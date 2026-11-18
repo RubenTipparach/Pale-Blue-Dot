@@ -154,6 +154,16 @@ ICONS.update({
 })
 
 
+# Leather (`small-boats` design 2e): a tanned hide, stretched out, in the fence's
+# browns with a lighter grain, from a kept plodder.
+ICONS["goods/leather"] = ([
+    "................", "..kk........kk..", ".khLk......kLhk.", "..kLLkkkkkkLLk..",
+    "...kLhhLLhhLk...", "..kLLhLLLLLhLk..", "..kLhLLLLlLLLk..", "..kLLLLlLLLLhk..",
+    "..kLhLLLLLLLLk..", "..kLLLLLLhLLLk..", "..kLLhLLLLLlLk..", "...kLLLLLLLLk...",
+    "..kLLkkkkkkLLk..", ".khLk......kLhk.", "..kk........kk..", "................",
+], {"k": "#3a2614", "L": "#9a6a3c", "l": "#7a5230", "h": "#b9844f"})
+
+
 # Design 13's two (`animal-husbandry` E3, E4): the fertile egg is the egg
 # with the warm brown speckle of a laid-under-a-cockerel egg, and the
 # incubator a small crate of the fence's wood with a glass lid.
