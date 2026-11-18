@@ -342,3 +342,10 @@ the river".
     and wedges, and poled backward it spins.
 - **Videos:** `inner-tube-float-2026-11-18-450p60.mp4` and
   `raft-pole-up-and-down-2026-11-18-450p60.mp4`, Drive validation folder.
+- **The pole moves as M34's does** (owner: "why his stick flyaway?", "why is
+  the game implmenetation different on how the pole moves", "the mockup worked
+  well"). The game drew the raft's pole at a paddle's blade, out to whichever
+  side the stroke was on, 1.35 m from the rider's hands. It now hangs from his
+  hand on the controls, exactly as `river-craft.html`'s raft: 0.12 forward at
+  rest, 0.5 with W or S, tilted 0.35 to the side with A, D, Q or E
+  (`vehicles::draw::pole`). Video: `raft-pole-up-and-down-v2-2026-11-18-450p60.mp4`.
