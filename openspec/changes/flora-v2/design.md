@@ -1182,6 +1182,34 @@ The far fade to the flat mean is the stone's, unchanged.
 - Before (`claude/river-cache-full`) and after captures of a dug wall with a
   vein, in `docs/screenshots/ore-veins/`.
 
+**As built** (2026-11-18):
+- `ORE_SHEET` in `planet_terrain.rs` with its compile-time guard;
+  `drawn_sheet_mark` in `planet_column.rs`, written by `pack_placed_sheets`
+  and by `reconcile_surface` into the record's bits.
+- In `planet_surface.wgsl`: `ORE_SHEET`, the mark read by the cap, the
+  heightfield's top metre and the column pass, and `ore_flecks`. Tin was
+  first a pale grey, which matched the fields' pale stone in the first
+  capture; it is now a cool steel grey.
+- Tests: `generated_ore_carries_the_ore_mark_and_the_stone_s_code`,
+  `dug_and_placed_ore_carry_the_ore_mark`, and the two updated
+  placed-block tests. The WGSL constant is held by the shader-lines test.
+- **A finding on the way.** The terrain shader's naga check
+  (`the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names`)
+  and two pipeline-layout tests had been failing since the shader gained
+  `#ifdef SHADOW_CASTER`: naga cannot read a directive. `shader_tests`
+  now resolves `#ifdef`/`#ifndef`/`#else`/`#endif` as Bevy's preprocessor
+  does, for no defs and for `SHADOW_CASTER`. All 578 `pbd-app` lib tests
+  pass.
+- Captures in `docs/screenshots/ore-veins/` (lavapipe, 1920 x 1200). Where
+  to dig was found by an uncommitted instrument over the column tier's own
+  columns. Ore is stone turned to ore, so it shows only where the ground is
+  dug or caved. Desert and mountain cliffs are `Rock`, which never turns.
+- **Seen in passing, not fixed.** On this branch, a capture from a fixed
+  camera (`--view cave`, `--view column`) panics on its first frame: a
+  system's `messages` parameter is "not initialized". Walking captures run.
+  The build before this change does the same (checked).
+- Frame cost not measured.
+
 ## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
 
 The owner, on a terraced valley in rain: "theres massive artifacts here";
