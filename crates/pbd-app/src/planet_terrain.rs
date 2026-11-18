@@ -719,6 +719,8 @@ mod tests {
             format!("const FORGE_CODE = {FORGE}u;"),
             format!("const FIELDS_BIOME = {}u;", Biome::Fields as u32),
             format!("const MOUNTAINS_BIOME = {}u;", Biome::Mountains as u32),
+            // The swamp's reeds (`swamps` decision 5).
+            format!("const SWAMP_BIOME = {}u;", Biome::Swamp as u32),
         ] {
             assert!(shader.contains(&line), "the shader should declare `{line}`");
         }

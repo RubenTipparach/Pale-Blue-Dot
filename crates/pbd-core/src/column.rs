@@ -889,7 +889,10 @@ mod tests {
             }
             let column = generate(&worms, &FIELD, &TERRAIN, d);
             let top = column.surface().expect("land has a solid layer");
-            let top_m = layer_altitude(top) + 1.0;
+            // A swamp's pool (`swamps` decision 3) stands in the top layer,
+            // the ground a layer under it: the pool's water is the top.
+            let pool = planet_gen::top_material(&TERRAIN, d, surface_m.floor()) == Material::Water;
+            let top_m = layer_altitude(top) + if pool { 2.0 } else { 1.0 };
             assert!(
                 top_m <= surface_m + 1.0,
                 "the carve never raises the ground"

@@ -122,6 +122,54 @@ pub struct TerrainConfig {
     /// Ore veins in the stone (`flora-v2` design 12.8): `None` for versions
     /// 4 to 9, version 10's from it.
     pub ore: Option<crate::ore::OreVeins>,
+    /// Swamps on the low wet land by the sea and the rivers (`swamps`):
+    /// `None` for versions 4 to 10, which keep only `swamp_max_elev_m`'s
+    /// strip of the wet coast; version 11's from it.
+    pub swamps: Option<Swamps>,
+}
+
+/// Where a swamp stands (generator version 11, `swamps` design): low, wet
+/// land by the sea and by the rivers, and how its pools and mud lie. Every
+/// term reads a smooth field (height, moisture, a river's distance and
+/// level, a patch noise), never a cell's neighbours, so a swamp is a place
+/// with edges a walker crosses, not a speckle of single cells.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Swamps {
+    /// The moisture a coastal swamp begins at and the moisture it reaches
+    /// its full height at: below `wet_from` none, between them a lower one.
+    pub wet_from: f32,
+    pub wet_full: f32,
+    /// How high over the sea a coastal swamp reaches at full wetness, m.
+    pub coast_m: f32,
+    /// A river's swamp: how far past its banks it spreads, m, and how far
+    /// over the reach's water the ground may stand, m. Wetter ground than
+    /// `river_wet_from` only.
+    pub river_m: f32,
+    pub river_rise_m: f32,
+    pub river_wet_from: f32,
+    /// Open water and mud: a patch field of this size, m. A swamp cell is a
+    /// pool where the field is over `pool_above` and the ground round it
+    /// holds water (`rivers::rimmed`); a cell that holds none is mud where
+    /// the field is over `mud_above`, the wettest of the patches, and moss
+    /// where it is not.
+    pub patch_m: f32,
+    pub pool_above: f32,
+    pub mud_above: f32,
+}
+
+impl Swamps {
+    /// Version 11's (`swamps` design, "Measured" and decision 2).
+    pub const V11: Self = Self {
+        wet_from: 0.47,
+        wet_full: 0.56,
+        coast_m: 12.0,
+        river_m: 40.0,
+        river_rise_m: 3.0,
+        river_wet_from: 0.47,
+        patch_m: 36.0,
+        pool_above: 0.47,
+        mud_above: 0.58,
+    };
 }
 
 /// A second ridge field, wider than the mountain field and standing only in
@@ -144,7 +192,17 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V10;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V11;
+
+    /// Generator version 11 (`swamps`): version 10 with swamps on the low
+    /// wet land by the sea and the rivers, several percent of the land where
+    /// version 10 had about one, with pools and mud in patches. Every height
+    /// is version 10's, so its rivers, sea and sites are too; only which
+    /// biome the low wet land is, and so its top block and its trees, moves.
+    pub const TENEBRIS_V11: Self = Self {
+        swamps: Some(Swamps::V11),
+        ..Self::TENEBRIS_V10
+    };
 
     /// Generator version 10 (`flora-v2` design 12): version 9 with M13's
     /// forests, as dense as the approved mockup draws them, and the beach's
@@ -280,6 +338,7 @@ impl TerrainConfig {
         rivers: None,
         trees: crate::flora::TreeTable::V4,
         ore: None,
+        swamps: None,
     };
 }
 
@@ -296,6 +355,7 @@ impl TerrainConfig {
             8 => Some(Self::TENEBRIS_V8),
             9 => Some(Self::TENEBRIS_V9),
             10 => Some(Self::TENEBRIS_V10),
+            11 => Some(Self::TENEBRIS_V11),
             _ => None,
         }
     }
@@ -309,6 +369,20 @@ impl TerrainConfig {
     pub fn site_ground(&self) -> Self {
         Self {
             rivers: None,
+            // Version 11's swamps are not surveyed either (`swamps` decision
+            // 6): its sites are version 10's, the list approved for a new
+            // world.
+            swamps: None,
+            ..*self
+        }
+    }
+
+    /// The ground the climate reads (`crate::atmosphere`): version 11
+    /// without its swamps, so its settled climate is version 10's (`swamps`
+    /// decision 7).
+    pub fn climate_ground(&self) -> Self {
+        Self {
+            swamps: None,
             ..*self
         }
     }
@@ -335,6 +409,7 @@ const MOISTURE_SEED_SALT: u64 = 0xB10E_5EED;
 const ROCKY_SEED_SALT: u64 = 0x0C0C_5EED;
 const RIVER_SEED_SALT: u64 = 0x217E_5EED;
 const ISLAND_SEED_SALT: u64 = 0x151A_D5ED;
+const SWAMP_PATCH_SALT: u64 = 0x5A4D_9001;
 
 // ---- The noise primitive: 3D gradient noise, seeded, bit for bit ----------
 
@@ -670,6 +745,11 @@ pub fn biome_at(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Biome {
     if m < cfg.desert_below {
         return Biome::Desert;
     }
+    if let Some(swamps) = cfg.swamps.as_ref()
+        && swamp_holds(cfg, swamps, direction, surface_m, m)
+    {
+        return Biome::Swamp;
+    }
     if m > cfg.wet_above {
         return if surface_m < cfg.swamp_max_elev_m {
             Biome::Swamp
@@ -678,6 +758,42 @@ pub fn biome_at(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Biome {
         };
     }
     Biome::Fields
+}
+
+/// Whether version 11's swamp stands at a direction of temperate land with
+/// moisture `m` (`swamps` decision 1): low over the sea for how wet it is,
+/// or low over a river's water beside it. A smoothstep of the moisture sets
+/// the coastal swamp's height, so it thins out toward the drier land rather
+/// than stopping at a line.
+pub fn swamp_holds(
+    cfg: &TerrainConfig,
+    swamps: &Swamps,
+    direction: Vec3,
+    surface_m: f32,
+    m: f32,
+) -> bool {
+    let over_sea = surface_m - cfg.sea_level_m;
+    let wet = ((m - swamps.wet_from) / (swamps.wet_full - swamps.wet_from)).clamp(0.0, 1.0);
+    if over_sea < swamps.coast_m * smooth(wet) {
+        return true;
+    }
+    if m < swamps.river_wet_from || cfg.rivers.is_none() {
+        return false;
+    }
+    crate::rivers::beside(cfg, direction, swamps.river_m).is_some_and(|here| {
+        over_sea - here.level as f32 <= swamps.river_rise_m * (0.5 + 0.5 * smooth(wet))
+    })
+}
+
+/// The swamp's patch field at a direction, in [0, 1]: where its open water
+/// and its mud lie (`swamps` decision 3).
+pub fn swamp_patch(cfg: &TerrainConfig, swamps: &Swamps, direction: Vec3) -> f32 {
+    noise01(
+        cfg.seed ^ SWAMP_PATCH_SALT,
+        direction,
+        cfg.scale_of(swamps.patch_m),
+        3,
+    )
 }
 
 // ---- The top block -----------------------------------------------------------
@@ -731,6 +847,22 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
                 Material::Rock
             } else {
                 Material::Sand
+            }
+        }
+        // Version 11: pools in the patch field's high ground where the
+        // ground round them holds water, mud about them, moss between; and
+        // the coast's lowest layer as version 10 has it.
+        (Biome::Swamp, Some(_)) if cfg.swamps.is_some() => {
+            let swamps = cfg.swamps.as_ref().expect("checked");
+            let above_beach = surface_m - (sea + cfg.beach_band_m);
+            let patch = swamp_patch(cfg, swamps, direction);
+            let pool = above_beach < 1.0 || patch > swamps.pool_above;
+            if pool && crate::rivers::rimmed(cfg, direction, surface_m) {
+                Material::Water
+            } else if above_beach < 2.0 || patch > swamps.mud_above {
+                Material::Dirt
+            } else {
+                Material::Grass
             }
         }
         // Standing water in a swamp's lowest layer, mud one above.
@@ -986,7 +1118,6 @@ mod tests {
     fn version_10_is_version_9_s_ground_with_m13_s_trees() {
         let v10 = TerrainConfig::for_version(10).expect("version 10 is carried");
         assert_eq!(v10, TerrainConfig::TENEBRIS_V10);
-        assert_eq!(TerrainConfig::TENEBRIS, v10, "a new world is made on 10");
         let v9 = TerrainConfig::TENEBRIS_V9;
         assert_eq!(digest(&v10, 10_000), VERSION_9_DIGEST);
         assert_eq!(top_digest(&v10, 10_000), VERSION_9_TOP_DIGEST);
@@ -1003,6 +1134,145 @@ mod tests {
         assert_eq!(v10.trees, crate::flora::TreeTable::V10);
         assert_eq!(v9.ore, None, "version 9 grows no ore");
         assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
+    }
+
+    /// Version 11 (`swamps`) is version 10's ground with its swamps: every
+    /// altitude is version 10's bit for bit, every version 10 swamp is still
+    /// one, and a cell that is not a swamp in version 11 has version 10's
+    /// biome and top block. Only `swamps` differs in the config.
+    #[test]
+    fn version_11_is_version_10_s_ground_with_its_swamps() {
+        let v11 = TerrainConfig::for_version(11).expect("version 11 is carried");
+        assert_eq!(v11, TerrainConfig::TENEBRIS_V11);
+        assert_eq!(TerrainConfig::TENEBRIS, v11, "a new world is made on 11");
+        let v10 = TerrainConfig::TENEBRIS_V10;
+        assert_eq!(v11.climate_ground(), v10);
+        assert_eq!(v10.swamps, None, "version 10 has no swamps rule");
+        let (mut swamps, mut kept) = (0usize, 0usize);
+        for d in sphere(60_000) {
+            let h = surface_altitude(&v11, d);
+            assert_eq!(h.to_bits(), surface_altitude(&v10, d).to_bits(), "{d}");
+            let (b10, b11) = (biome_at(&v10, d, h), biome_at(&v11, d, h));
+            if b10 == Biome::Swamp {
+                assert_eq!(b11, Biome::Swamp, "a version 10 swamp at {d}");
+                kept += 1;
+            }
+            if b11 == Biome::Swamp {
+                swamps += 1;
+            } else {
+                assert_eq!(b11, b10, "{d}");
+                // The top block reads the biome at the floored surface,
+                // which can be a swamp where the surface itself is not.
+                let f = h.floor();
+                if biome_at(&v11, d, f) != Biome::Swamp {
+                    assert_eq!(top_material(&v11, d, f), top_material(&v10, d, f), "{d}");
+                }
+            }
+        }
+        assert!(kept > 50, "only {kept} version 10 swamp samples");
+        assert!(swamps > kept * 3, "{swamps} swamp samples against {kept}");
+    }
+
+    /// The swamps are several percent of the land (the owner: "the swamps do
+    /// need to be on this planet"): between 4% and 9% on the shipped seed and
+    /// two others, none of it in the cold band, where version 10 had under
+    /// 2% (`swamps` design, "Measured": 1.19% against 6.57%).
+    #[test]
+    fn swamps_hold_several_percent_of_the_land() {
+        let mut failures = Vec::new();
+        for seed in [TerrainConfig::TENEBRIS.seed, 1, 0xB10E_5EED] {
+            for version in [10, 11] {
+                let cfg = TerrainConfig {
+                    seed,
+                    ..TerrainConfig::for_version(version).unwrap()
+                };
+                let (mut land, mut swamp) = (0usize, 0usize);
+                for d in sphere(100_000) {
+                    let h = surface_altitude(&cfg, d);
+                    let b = biome_at(&cfg, d, h);
+                    if b == Biome::Ocean {
+                        continue;
+                    }
+                    land += 1;
+                    if b == Biome::Swamp {
+                        swamp += 1;
+                        assert!(d.y.abs() <= cfg.cold_latitude, "a swamp in the cold at {d}");
+                    }
+                }
+                let share = swamp as f32 / land as f32;
+                let band = if version == 11 {
+                    0.04..=0.09
+                } else {
+                    0.0..=0.02
+                };
+                eprintln!(
+                    "seed {seed:#x} version {version}: swamp {:.2}% of the land",
+                    share * 100.0
+                );
+                if !band.contains(&share) {
+                    failures.push(format!(
+                        "seed {seed:#x} version {version}: swamp {:.2}%",
+                        share * 100.0
+                    ));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("; "));
+    }
+
+    /// A version 11 swamp is moss, pools and mud (`swamps` decision 3): every
+    /// pool is held (no ground 2.9 m round it is lower), moss is the most of
+    /// it and stands the willows, and there is open water and mud in it.
+    #[test]
+    fn a_swamp_is_moss_pools_and_mud() {
+        let cfg = TerrainConfig::TENEBRIS_V11;
+        let mut tops = std::collections::BTreeMap::<u16, usize>::new();
+        for d in sphere(200_000) {
+            let h = surface_altitude(&cfg, d);
+            if biome_at(&cfg, d, h) != Biome::Swamp {
+                continue;
+            }
+            let top = top_material(&cfg, d, h.floor());
+            if top == Material::Water {
+                assert!(
+                    crate::rivers::rimmed(&cfg, d, h.floor()),
+                    "a pool spills at {d}"
+                );
+            }
+            *tops.entry(top as u16).or_default() += 1;
+        }
+        let all = tops.values().sum::<usize>().max(1) as f32;
+        let share = |m: Material| tops.get(&(m as u16)).copied().unwrap_or(0) as f32 / all;
+        let (moss, water, mud) = (
+            share(Material::Grass),
+            share(Material::Water),
+            share(Material::Dirt),
+        );
+        let measured = format!(
+            "moss {:.0}%, water {:.0}%, mud {:.0}% of {all} swamp samples",
+            moss * 100.0,
+            water * 100.0,
+            mud * 100.0
+        );
+        assert!(
+            (moss + water + mud - 1.0).abs() < 1e-6,
+            "other tops: {tops:?}"
+        );
+        assert!(moss > 0.45 && moss > water && moss > mud, "{measured}");
+        assert!((0.08..=0.3).contains(&water), "{measured}");
+        assert!((0.1..=0.35).contains(&mud), "{measured}");
+    }
+
+    /// The city survey and the climate read version 11 without its swamps
+    /// (`swamps` decisions 6 and 7), so its sites and its settled climate
+    /// are version 10's.
+    #[test]
+    fn sites_and_climate_read_version_11_without_its_swamps() {
+        let v11 = TerrainConfig::TENEBRIS_V11;
+        let v10 = TerrainConfig::TENEBRIS_V10;
+        assert_eq!(v11.site_ground(), v10.site_ground());
+        assert_eq!(v11.climate_ground(), v10.climate_ground());
+        assert_eq!(v11.climate_ground(), v10);
     }
 
     /// Version 10's ground, biomes and top blocks, pinned on constants of
@@ -1562,6 +1832,219 @@ mod tests {
             "height, 20 m bins from -100: {:?}",
             hist.iter().map(pct).collect::<Vec<_>>()
         );
+    }
+
+    /// The measurement instrument behind `swamps` (design, "Measured"): for a
+    /// generator version (`PBD_SWAMP_VERSIONS`, default "10"), each biome's
+    /// share of the land, where the swamps are (latitude, height, by a river
+    /// or the sea), and how much land is low, wet, flat and by water, which
+    /// is the land a swamp rule could take. Run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn swamp_report() {
+        const TILE: f32 = 2.833;
+        let versions: Vec<u32> = std::env::var("PBD_SWAMP_VERSIONS")
+            .unwrap_or_else(|_| "10".into())
+            .split(',')
+            .filter_map(|v| v.trim().parse().ok())
+            .collect();
+        for version in versions {
+            let cfg = TerrainConfig::for_version(version).unwrap();
+            let n = 200_000;
+            let mut land = 0usize;
+            let mut biomes = std::collections::BTreeMap::<Biome, usize>::new();
+            let mut swamp_lat = [0usize; 10];
+            let mut swamp_h = [0usize; 8];
+            let (mut swamp_river, mut swamp_coast) = (0usize, 0usize);
+            let mut swamp_rimmed = 0usize;
+            let mut swamp_wet = 0usize;
+            let mut swamp_was = std::collections::BTreeMap::<Biome, usize>::new();
+            let mut patches = Vec::new();
+            let mut swamp_tops = std::collections::BTreeMap::<u16, usize>::new();
+            // Jungle by height, the moisture over temperate land.
+            let mut jungle_h = [0usize; 8];
+            let mut moist = Vec::new();
+            // Low (2..=H m), flat (no neighbour over 1 m off), by water
+            // (river within 60 m or sea within 120 m), by moisture third.
+            let heights = [5.0f32, 8.0, 10.0, 12.0, 15.0, 20.0];
+            let mut low = [[0usize; 3]; 6];
+            let mut low_flat = [[0usize; 3]; 6];
+            let mut low_flat_water = [[0usize; 3]; 6];
+            let step = TILE / cfg.radius_m;
+            let ring = |d: Vec3, metres: f32| {
+                let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+                let north = d.cross(east);
+                (0..6).map(move |k| {
+                    let a = k as f32 * std::f32::consts::TAU / 6.0;
+                    (d + (east * a.cos() + north * a.sin()) * (metres / cfg.radius_m)).normalize()
+                })
+            };
+            let hbin = |h: f32| match h {
+                h if h < 5.0 => 0,
+                h if h < 8.0 => 1,
+                h if h < 10.0 => 2,
+                h if h < 12.0 => 3,
+                h if h < 15.0 => 4,
+                h if h < 20.0 => 5,
+                h if h < 30.0 => 6,
+                _ => 7,
+            };
+            let _ = step;
+            for d in sphere(n) {
+                let h = surface_altitude(&cfg, d);
+                let b = biome_at(&cfg, d, h);
+                if b == Biome::Ocean {
+                    continue;
+                }
+                land += 1;
+                *biomes.entry(b).or_default() += 1;
+                let temperate = matches!(
+                    b,
+                    Biome::Fields | Biome::Desert | Biome::Jungle | Biome::Swamp
+                );
+                let m = moisture(&cfg, d);
+                if temperate {
+                    moist.push(m);
+                }
+                if b == Biome::Jungle {
+                    jungle_h[hbin(h)] += 1;
+                }
+                let third = usize::from(m >= cfg.desert_below) + usize::from(m > cfg.wet_above);
+                let by_river = crate::rivers::near(&cfg, d, 60.0) || in_river(&cfg, d);
+                let by_sea = || {
+                    [40.0, 80.0, 120.0]
+                        .iter()
+                        .any(|&r| ring(d, r).any(|p| surface_altitude(&cfg, p) < cfg.sea_level_m))
+                };
+                if b == Biome::Swamp {
+                    let lat = crate::geo::lat_lon(d).lat.to_degrees().abs();
+                    swamp_lat[((lat / 10.0) as usize).min(9)] += 1;
+                    swamp_h[hbin(h)] += 1;
+                    swamp_river += usize::from(by_river);
+                    swamp_coast += usize::from(by_sea());
+                    *swamp_tops
+                        .entry(top_material(&cfg, d, h.floor()) as u16)
+                        .or_default() += 1;
+                    swamp_rimmed += usize::from(crate::rivers::rimmed(&cfg, d, h.floor()));
+                    swamp_wet += usize::from(m > cfg.wet_above);
+                    let without = TerrainConfig {
+                        swamps: None,
+                        ..cfg
+                    };
+                    *swamp_was.entry(biome_at(&without, d, h)).or_default() += 1;
+                    if let Some(s) = cfg.swamps.as_ref() {
+                        patches.push(swamp_patch(&cfg, s, d));
+                    }
+                }
+                if temperate && h >= cfg.sea_level_m + cfg.beach_band_m && h < 20.0 {
+                    let flat = ring(d, TILE)
+                        .all(|p| (surface_altitude(&cfg, p).floor() - h.floor()).abs() <= 1.0);
+                    let water = flat && (by_river || by_sea());
+                    for (i, &top) in heights.iter().enumerate() {
+                        if h < top {
+                            low[i][third] += 1;
+                            low_flat[i][third] += usize::from(flat);
+                            low_flat_water[i][third] += usize::from(water);
+                        }
+                    }
+                }
+            }
+            let pct = |c: usize| 100.0 * c as f64 / land as f64;
+            println!("== version {version}: land {land} of {n} samples");
+            println!(
+                "  biomes (% of land): {}",
+                biomes
+                    .iter()
+                    .map(|(k, v)| format!("{k:?} {:.2}", pct(*v)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let swamp = biomes.get(&Biome::Swamp).copied().unwrap_or(0);
+            let sw = |c: usize| 100.0 * c as f64 / swamp.max(1) as f64;
+            println!(
+                "  swamp {swamp} samples; by latitude (10-degree bands from the equator, % of swamp): {:?}",
+                swamp_lat
+                    .iter()
+                    .map(|&c| format!("{:.0}", sw(c)))
+                    .collect::<Vec<_>>()
+            );
+            println!(
+                "  swamp by height (<5,<8,<10,<12,<15,<20,<30,more; % of swamp): {:?}",
+                swamp_h
+                    .iter()
+                    .map(|&c| format!("{:.0}", sw(c)))
+                    .collect::<Vec<_>>()
+            );
+            println!(
+                "  swamp within 60 m of a river {:.0}%, within 120 m of the sea {:.0}%; tops {:?}",
+                sw(swamp_river),
+                sw(swamp_coast),
+                swamp_tops
+                    .iter()
+                    .map(|(k, v)| format!("{k}:{:.0}%", sw(*v)))
+                    .collect::<Vec<_>>()
+            );
+            patches.sort_by(f32::total_cmp);
+            let patch_at = |p: f32| {
+                patches
+                    .get(((patches.len().max(1) - 1) as f32 * p) as usize)
+                    .copied()
+                    .unwrap_or(0.0)
+            };
+            println!(
+                "  swamp in the wet third (jungle moisture) {:.0}%; without the swamp rule it would be {}",
+                sw(swamp_wet),
+                swamp_was
+                    .iter()
+                    .map(|(k, v)| format!("{k:?} {:.0}%", sw(*v)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            println!(
+                "  swamp rimmed (a pool would hold) {:.0}%; patch field p25 {:.3} p50 {:.3} p75 {:.3} p90 {:.3}",
+                sw(swamp_rimmed),
+                patch_at(0.25),
+                patch_at(0.5),
+                patch_at(0.75),
+                patch_at(0.9)
+            );
+            let jungle = biomes.get(&Biome::Jungle).copied().unwrap_or(0).max(1);
+            println!(
+                "  jungle by height (<5,<8,<10,<12,<15,<20,<30,more; % of jungle): {:?}",
+                jungle_h
+                    .iter()
+                    .map(|&c| format!("{:.1}", 100.0 * c as f64 / jungle as f64))
+                    .collect::<Vec<_>>()
+            );
+            moist.sort_by(f32::total_cmp);
+            let at = |p: f32| moist[((moist.len() - 1) as f32 * p) as usize];
+            println!(
+                "  moisture over temperate land: p10 {:.3} p25 {:.3} p50 {:.3} p75 {:.3} p90 {:.3}; desert below {:.3}, wet above {:.3}",
+                at(0.1),
+                at(0.25),
+                at(0.5),
+                at(0.75),
+                at(0.9),
+                cfg.desert_below,
+                cfg.wet_above
+            );
+            for (i, top) in heights.iter().enumerate() {
+                let f = |a: [usize; 3]| {
+                    format!(
+                        "dry {:.2} mid {:.2} wet {:.2}",
+                        pct(a[0]),
+                        pct(a[1]),
+                        pct(a[2])
+                    )
+                };
+                println!(
+                    "  temperate land 2..{top} m (% of land): all [{}]; flat [{}]; flat by water [{}]",
+                    f(low[i]),
+                    f(low_flat[i]),
+                    f(low_flat_water[i])
+                );
+            }
+        }
     }
 
     /// Every land altitude of `cfg` on `n` directions, sorted.
