@@ -267,6 +267,46 @@ fn river_word(direction: Vec3, level: u8) -> u32 {
         .map_or(RIVER_WORD_NONE, |m| m.max(0.001).to_bits())
 }
 
+/// Fill the river cache round `points` (`river-cache` design 11): every
+/// fine level's cells within `corridor_m` (and a cell) of each point, asked
+/// what a fine set asks of them (their heights and their neighbours', the
+/// far sheet's word, and at the finest level a column's water), so a later
+/// rebuild finds the river terms worked out. The cells are the lattice's own,
+/// whose directions are the same floats whatever the anchor. Returns the
+/// cells asked about.
+pub fn fill_river_cache(points: &[Vec3], corridor_m: f32) -> usize {
+    let cfg = super::terrain::terrain_config();
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return 0;
+    };
+    let map = pbd_core::rivers::map(cfg, settings);
+    let mut lattice = Lattice::default();
+    let mut seen: std::collections::HashSet<[u32; 3]> = Default::default();
+    for &p in points {
+        for &level in &FINE_LEVELS {
+            let cell_m = crate::river_fill::cell_m(level);
+            let reach = (corridor_m + cell_m) / PLANET_RADIUS;
+            for local in lattice.cells_in_band(level, p, 0.0, reach) {
+                let d = local.cell.direction;
+                if !seen.insert([level as u32, d.x.to_bits(), d.y.to_bits() ^ d.z.to_bits()])
+                    || !map.may_reach(d)
+                {
+                    continue;
+                }
+                std::hint::black_box(surface_height(d));
+                for &n in &local.neighbor_directions {
+                    std::hint::black_box(surface_height(n));
+                }
+                std::hint::black_box(river_word(d, level));
+                if level == super::FINEST_LEVEL {
+                    std::hint::black_box(pbd_core::rivers::water(cfg, d));
+                }
+            }
+        }
+    }
+    seen.len()
+}
+
 /// The base level's records from the whole-sphere dual. Owners are the cell
 /// itself: the base has no level below it to be partitioned by.
 ///

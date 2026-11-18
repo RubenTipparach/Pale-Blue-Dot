@@ -1495,6 +1495,10 @@ pub fn run(args: &[String]) {
         return;
     }
     let launch = Launch::parse(args);
+    // The river cache's file lives beside the worlds (`river-cache` design
+    // 11): set before anything asks an altitude, so the drainage map is read
+    // from it rather than built.
+    pbd_core::river_cache::set_dir(Some(pbd_app::paths::saves_dir().join("cache")));
     if let Some(path) = &launch.capture
         && let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
     {
@@ -2095,6 +2099,7 @@ pub fn run(args: &[String]) {
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
+    app.add_plugins(pbd_app::river_fill::RiverFillPlugin);
     // The player's settings (`player-settings`): the file in a plain run;
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
@@ -2886,6 +2891,32 @@ fn fibonacci_sphere(count: usize) -> impl Iterator<Item = Vec3> {
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    // The river run starts in the river (owner, 2026-11-18: "You should
+    // start out spawn in middle of a river. You know the map already"): the
+    // drainage map's river nearest `--at` (or the default spawn), 15 m down
+    // its line from its source, in its water.
+    if launch.walk_river {
+        let near = launch.at.map_or(default, |(lat, lon)| {
+            pbd_core::geo::direction(pbd_core::geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            })
+        });
+        let cfg = pbd_app::planet::terrain_config();
+        if let Some(settings) = cfg.rivers.as_ref()
+            && let Some(source) = pbd_core::rivers::map(cfg, settings)
+                .course(near, 40)
+                .first()
+            && let Some(path) = pbd_app::river_walk::RiverPath::through(source.centre, 1.0)
+        {
+            let start = path.line_at(15.0);
+            info!(
+                "RIVER_WALK spawn in the river 15 m from its source, {}",
+                pbd_app::place::Place::of(start * PLANET_RADIUS).line()
+            );
+            return start;
+        }
+    }
     if let Some((lat, lon)) = launch.at {
         return pbd_core::geo::direction(pbd_core::geo::LatLon {
             lat: lat.to_radians(),
@@ -4018,23 +4049,36 @@ struct RiverWalk {
     started: Option<Instant>,
     /// When the next once-a-second line is due.
     next_log: Option<Instant>,
-    /// The heading the view is turning toward.
+    /// The heading the walker moves toward.
     target: Option<Vec3>,
-    steered: Option<Instant>,
     last: Option<(Vec3, Instant)>,
-    /// Where the stall clock last reset, and when.
-    anchor: Option<(Vec3, Instant)>,
     walked_m: f32,
     /// The furthest along the river the walker has been, m.
     best_m: f32,
     /// When `best_m` last grew by 5 m.
     gained: Option<(f32, Instant)>,
-    turns: u32,
-    trapped: u32,
-    trap_at: Option<Vec3>,
+    /// The last second and a bit of where the walker was: seconds since the
+    /// start and the unit direction (`river-cache` design 12).
+    trail: std::collections::VecDeque<(f32, Vec3)>,
+    /// The hex route being walked, cell centre to cell centre.
+    route: Option<pbd_app::river_walk::HexRoute>,
+    /// Cells that stuck it, kept out of the next routes.
+    blocked: Vec<[u32; 3]>,
+    /// Stuck this many times in a row near `stuck_at`.
+    stuck: u32,
+    stuck_at: Option<Vec3>,
+    /// When it last found itself stuck: the next check waits a second.
+    stuck_when: Option<Instant>,
+    stuck_total: u32,
+    routes: u32,
+    /// Where `--walk-river` spawned it.
+    spawn: Option<Vec3>,
+    /// When a route was last planned: at most twice a second.
+    planned: Option<Instant>,
+    hop_until: Option<Instant>,
+    /// The jump key went down last frame: on land it is let up between taps.
+    jump_down: bool,
     backing: Option<Instant>,
-    /// Walking the river's channel instead of its bank until then.
-    channel_until: Option<Instant>,
     done: bool,
 }
 
@@ -4063,8 +4107,10 @@ fn river_walk_script(
     mut exit: MessageWriter<AppExit>,
     mut walk: Local<RiverWalk>,
     space: pbd_app::SimSpace,
+    contact: Option<Res<pbd_app::planet::PlanetContact>>,
 ) {
     use pbd_app::river_walk::{RiverPath, STEER_AHEAD_M};
+    let _ = STEER_AHEAD_M;
     /// How far down the river's line the view looks, m.
     const LOOK_AHEAD_M: f32 = 50.0;
     if !state.active || walk.done {
@@ -4079,6 +4125,13 @@ fn river_walk_script(
     state.captured = true;
     state.scripted = true;
     if walk.path.is_none() {
+        // Not before the walker stands where it was spawned, in the river:
+        // a world opening may hold it elsewhere for a few frames, and a
+        // river measured from there is measured from the wrong place.
+        let spawn = *walk.spawn.get_or_insert_with(|| spawn_direction(&launch));
+        if launch.walk_river && up.angle_between(spawn) * PLANET_RADIUS > 60.0 {
+            return;
+        }
         let side = if launch.walk_river_right { -1.0 } else { 1.0 };
         let Some(path) = RiverPath::through(up, side) else {
             error!(
@@ -4103,56 +4156,29 @@ fn river_walk_script(
         state.face(up, toward * pbd_app::planet::PLANET_RADIUS);
         walk.started = Some(now);
         walk.next_log = Some(now);
-        walk.anchor = Some((here, now));
         walk.gained = Some((path.progress_m(up), now));
         walk.path = Some(path);
     }
     let path = walk.path.clone().expect("the river");
     let started = walk.started.unwrap_or(now);
     let progress = path.progress_m(up);
-    walk.best_m = walk.best_m.max(progress);
+    // Never a jump: a meander's nearest line point can lie far along.
+    walk.best_m = walk.best_m.max(progress.min(walk.best_m + 30.0));
     keys.press(KeyCode::ShiftLeft);
-    if let Some(until) = walk.backing {
-        if now < until {
-            keys.release(KeyCode::KeyW);
-            keys.release(KeyCode::KeyA);
-            keys.release(KeyCode::KeyD);
-            keys.press(KeyCode::KeyS);
-            keys.press(KeyCode::Space);
-            return;
-        }
-        walk.backing = None;
-        keys.release(KeyCode::KeyS);
-        keys.release(KeyCode::Space);
-        walk.anchor = Some((here, now));
+    let t = now.duration_since(started).as_secs_f32();
+    walk.trail.push_back((t, up));
+    while walk.trail.len() > 2 && walk.trail[1].0 <= t - 1.0 {
+        walk.trail.pop_front();
     }
-    // The view looks down the river, 50 m along its line, so the river and
-    // its distance are in the picture; the walker moves toward its own
-    // target on the bank with the keys a player strafes with (W, A, S, D
-    // relative to the view), so the two can differ.
-    let look = path.line_at(walk.best_m.max(progress) + LOOK_AHEAD_M);
-    let look = (look - up * look.dot(up)).normalize_or(state.view().0);
-    let heading = state.view().0;
-    let moving = walk
-        .target
-        .map(|t| (t - up * t.dot(up)).normalize_or(heading))
-        .unwrap_or(heading);
-    let left = up.cross(heading).normalize_or_zero();
-    let (ahead, aside) = (moving.dot(heading), moving.dot(left));
-    for (key, on) in [
-        (KeyCode::KeyW, ahead > 0.38),
-        (KeyCode::KeyS, ahead < -0.38),
-        (KeyCode::KeyA, aside > 0.38),
-        (KeyCode::KeyD, aside < -0.38),
-    ] {
-        if on {
-            keys.press(key);
-        } else {
-            keys.release(key);
-        }
-    }
-    if let Some((last, at)) = walk.last {
+    if let Some((last, _)) = walk.last {
         walk.walked_m += ground_m(here, last).min(5.0);
+    }
+    let heading = state.view().0;
+    // The view looks down the river, 50 m along its line, so the river and
+    // its distance are in the picture, turning no faster than a mouse does.
+    let look = path.line_at(walk.best_m.max(progress) + LOOK_AHEAD_M);
+    let look = (look - up * look.dot(up)).normalize_or(heading);
+    if let Some((_, at)) = walk.last {
         let dt = now.duration_since(at).as_secs_f32();
         let angle = heading.angle_between(look);
         let sign = up.dot(heading.cross(look)).signum();
@@ -4162,80 +4188,186 @@ fn river_walk_script(
         }
     }
     walk.last = Some((here, now));
-    if walk
-        .steered
-        .is_none_or(|t| now.duration_since(t).as_secs_f32() >= 0.2)
-        && walk.trapped == 0
-    {
-        walk.steered = Some(now);
-        // Twice stuck in one place: the bank is walled there, so take the
-        // river's own channel past it for a while, swimming, as a player
-        // would; then back to the bank.
-        let channel = walk.channel_until.is_some_and(|t| now < t);
-        let ahead = walk.best_m.max(progress) + STEER_AHEAD_M;
-        let toward = if channel {
-            path.line_at(ahead)
-        } else {
-            path.bank_at(ahead)
-        };
-        walk.target = Some((toward - up).normalize_or_zero());
-    }
-    // Stalls, as the coast walk takes them.
-    if walk.trap_at.is_some_and(|at| ground_m(here, at) > 4.0) {
-        walk.trapped = 0;
-        walk.trap_at = None;
-    }
-    let (anchor, since) = walk.anchor.unwrap_or((here, now));
-    let swimming = pbd_app::planet::surface_height(up) < 0.0 || pbd_app::coast_walk::in_river(up);
-    // A rise the auto step will not take, just ahead along the heading: hop
-    // it, as a player does, rather than walk into it and stall.
-    let rise = {
-        let ahead = (up + moving * (2.5 / pbd_app::planet::PLANET_RADIUS)).normalize();
-        pbd_app::planet::surface_height(ahead) - pbd_app::planet::surface_height(up) > 0.8
-    };
-    if ground_m(here, anchor) > 1.5 {
-        walk.anchor = Some((here, now));
-        if swimming || rise {
-            keys.press(KeyCode::Space);
-        } else {
-            keys.release(KeyCode::Space);
+    let backing = walk.backing.is_some_and(|until| now < until);
+    if backing {
+        for key in [KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyD] {
+            keys.release(key);
         }
+        keys.press(KeyCode::KeyS);
+        keys.press(KeyCode::Space);
     } else {
-        let stalled = now.duration_since(since).as_secs_f32();
-        if swimming || walk.trapped >= 3 || (stalled > 0.5 && (stalled % 0.7) < 0.05) {
+        if walk.backing.take().is_some() {
+            keys.release(KeyCode::KeyS);
+            walk.route = None;
+        }
+        // Hex by hex (`river-cache` design 12): a route over the finest
+        // cells to the bank 40 m on (or the channel when the bank has none),
+        // walked centre to centre; planned again near its end or off it.
+        let due = walk
+            .planned
+            .is_none_or(|at| now.duration_since(at).as_secs_f32() >= 0.5);
+        let replan = walk
+            .route
+            .as_ref()
+            .is_none_or(|r| r.left_m() < 15.0 || r.off_m(up) > 6.0);
+        if replan && due {
+            walk.planned = Some(now);
+            let ahead = progress.min(walk.best_m) + 40.0;
+            let blocked = walk.blocked.clone();
+            let live = contact.as_deref();
+            walk.route =
+                pbd_app::river_walk::HexRoute::plan(up, path.line_at(ahead), &blocked, live)
+                    .or_else(|| {
+                        pbd_app::river_walk::HexRoute::plan(up, path.bank_at(ahead), &blocked, live)
+                    });
+            walk.routes += 1;
+            if walk.route.is_none() {
+                info!(
+                    "RIVER_WALK_ROUTE none from {:.0} m along: straight for the channel",
+                    progress
+                );
+            }
+        }
+        let aim = match walk.route.as_mut() {
+            Some(route) => route.aim(up),
+            None => path.line_at(walk.best_m.max(progress) + 10.0),
+        };
+        walk.target = Some((aim - up).normalize_or_zero());
+        let moving = walk
+            .target
+            .map(|t| (t - up * t.dot(up)).normalize_or(heading))
+            .unwrap_or(heading);
+        let left = up.cross(heading).normalize_or_zero();
+        let (ahead, aside) = (moving.dot(heading), moving.dot(left));
+        for (key, on) in [
+            (KeyCode::KeyW, ahead > 0.38),
+            (KeyCode::KeyS, ahead < -0.38),
+            (KeyCode::KeyA, aside > 0.38),
+            (KeyCode::KeyD, aside < -0.38),
+        ] {
+            if on {
+                keys.press(key);
+            } else {
+                keys.release(key);
+            }
+        }
+        // Jump: swimming, a hop being taken, or the next cell a rise the
+        // auto step will not take.
+        // In water by the live column at the feet, as the walker's own
+        // physics has it; the generator's river says "river" over a dry bed.
+        let feet = here - up * pbd_app::walking::HALF_HEIGHT;
+        let swimming = contact.as_deref().map_or_else(
+            || pbd_app::planet::surface_height(up) < 0.0 || pbd_app::coast_walk::in_river(up),
+            |c| c.stand(feet).water_depth > 0.5,
+        );
+        // A step the auto step will not take, measured from the feet: the
+        // next cell's floor, live, over where the walker stands now.
+        let feet_m = feet.length() - pbd_app::planet::PLANET_RADIUS;
+        let rise = walk.route.as_ref().is_some_and(|r| {
+            let next = r.cells[r.next];
+            let (floor, _) = pbd_app::river_walk::cell_heights(contact.as_deref(), next);
+            floor - feet_m > 0.6 && next.angle_between(up) * pbd_app::planet::PLANET_RADIUS < 4.0
+        });
+        // In water the jump is held to swim up; on land a jump is a press,
+        // so it is tapped (a held key jumps once and never again).
+        let want = swimming || rise || walk.hop_until.is_some_and(|until| now < until);
+        if want && (swimming || !walk.jump_down) {
             keys.press(KeyCode::Space);
+            walk.jump_down = true;
         } else {
             keys.release(KeyCode::Space);
+            walk.jump_down = false;
         }
-        if walk.trapped >= 2 && walk.channel_until.is_none_or(|t| now >= t) {
-            walk.channel_until = Some(now + std::time::Duration::from_secs(10));
-            walk.trapped = 0;
-            walk.trap_at = None;
-            info!(
-                "RIVER_WALK_CHANNEL the bank is walled at {:.0} m along: the channel for 10 s",
-                progress
+        // Stuck: under a few metres of ground in the last second, measured
+        // on the planet with height left out, so a hop or a slide is not
+        // motion. Each stuck in one place escalates.
+        let threshold = if swimming {
+            pbd_app::river_walk::STUCK_SWIM_M
+        } else {
+            pbd_app::river_walk::STUCK_LAND_M
+        };
+        let trail: Vec<(f32, Vec3)> = walk.trail.iter().copied().collect();
+        if let Some(moved) = pbd_app::river_walk::moved_in_last_second(&trail)
+            && moved < threshold
+            && walk
+                .stuck_when
+                .is_none_or(|at| now.duration_since(at).as_secs_f32() >= 1.0)
+        {
+            if walk.stuck_at.is_some_and(|at| ground_m(here, at) < 8.0) {
+                walk.stuck += 1;
+            } else {
+                walk.stuck = 1;
+                walk.stuck_at = Some(here);
+            }
+            walk.stuck_total += 1;
+            walk.stuck_when = Some(now);
+            walk.trail.clear();
+            // The cells it was walking into stay out of the next routes.
+            if let Some(route) = &walk.route {
+                let keys: Vec<[u32; 3]> = route.cells[route.next..]
+                    .iter()
+                    .take(2)
+                    .map(|&d| pbd_app::river_walk::cell_key(d))
+                    .collect();
+                walk.blocked.extend(keys);
+            }
+            // A swimmer already holds the jump: a hop adds nothing, so it
+            // goes straight to a route round the spot.
+            if swimming && walk.stuck == 1 {
+                walk.stuck = 2;
+            }
+            let action = match walk.stuck {
+                1 => {
+                    walk.hop_until = Some(now + std::time::Duration::from_millis(700));
+                    "a hop forward"
+                }
+                2 => {
+                    walk.route = None;
+                    walk.hop_until = Some(now + std::time::Duration::from_millis(700));
+                    "a new route round it"
+                }
+                _ => {
+                    walk.route = None;
+                    walk.backing = Some(now + std::time::Duration::from_millis(1200));
+                    walk.stuck = 1;
+                    "backing out, then a new route"
+                }
+            };
+            if walk.blocked.len() > 64 {
+                let drop = walk.blocked.len() - 64;
+                walk.blocked.drain(..drop);
+            }
+            // What it was doing, to find what holds it.
+            let held: Vec<&str> = [
+                (KeyCode::KeyW, "W"),
+                (KeyCode::KeyA, "A"),
+                (KeyCode::KeyS, "S"),
+                (KeyCode::KeyD, "D"),
+                (KeyCode::Space, "jump"),
+            ]
+            .into_iter()
+            .filter(|(k, _)| keys.pressed(*k))
+            .map(|(_, n)| n)
+            .collect();
+            let aiming = walk.route.as_ref().map_or_else(
+                || "no route".to_string(),
+                |r| {
+                    format!(
+                        "cell {} of {} at {:.1} m, rise {:.1} m, its ground {:.1} m, here {:.1} m",
+                        r.next,
+                        r.cells.len(),
+                        r.cells[r.next].angle_between(up) * pbd_app::planet::PLANET_RADIUS,
+                        r.rise_ahead(),
+                        r.heights[r.next],
+                        pbd_app::river_walk::walked_on(up)
+                    )
+                },
             );
-        }
-        if walk.trapped >= 4 {
-            walk.backing = Some(now + std::time::Duration::from_millis(1500));
-            walk.trapped = 0;
-            walk.trap_at = None;
-            info!("RIVER_WALK_BACK backing out at {:.0} m along", progress);
-        }
-        if stalled > 1.5 {
-            // Away from the river: a left bank turns right, a right bank left.
-            let side = if launch.walk_river_right { -1.0 } else { 1.0 };
-            let away = Quat::from_axis_angle(up, -side * 40f32.to_radians()) * moving;
-            walk.target = Some(away);
-            walk.steered = Some(now);
-            walk.turns += 1;
-            walk.trapped += 1;
-            walk.trap_at.get_or_insert(here);
-            walk.anchor = Some((here, now));
             info!(
-                "RIVER_WALK_TURN stalled 1.5 s at {:.0} m along, {}",
-                progress,
-                pbd_app::place::Place::of(here).line()
+                "RIVER_WALK_STUCK {moved:.1} m in the last second at {progress:.0} m along, {}, {} in a row: {action}; holding {:?}, swimming {swimming}, {aiming}",
+                pbd_app::place::Place::of(here).line(),
+                walk.stuck,
+                held
             );
         }
     }
@@ -4244,14 +4376,35 @@ fn river_walk_script(
         walk.next_log = Some(now + std::time::Duration::from_secs(1));
         let seconds = now.duration_since(started).as_secs_f32();
         info!(
-            "RIVER_WALK {seconds:.0} s, {:.0} m walked, {:.0} of {:.0} m along ({:.0}%), {}, --yaw {:.0}",
+            "RIVER_WALK {seconds:.0} s, {:.0} m walked, {:.0} of {:.0} m along ({:.0}%), {}, {}, --yaw {:.0}",
             walk.walked_m,
             progress,
             length,
             100.0 * progress / length.max(1.0),
+            if pbd_app::coast_walk::in_river(up) {
+                "in the river"
+            } else {
+                "on the bank"
+            },
             pbd_app::place::Place::of(here).line(),
             pbd_app::place::yaw_of(up, state.view().0).to_degrees()
         );
+        // The river cache (`river-cache` design 11): what it holds, and the
+        // share of river lookups it answered since the start.
+        if let Some(field) = pbd_core::rivers::field(pbd_app::planet::terrain_config()) {
+            use std::sync::atomic::Ordering;
+            let [carve, top, far, settled] = field.counts();
+            let (hits, misses) = (
+                field.hits.load(Ordering::Relaxed),
+                field.misses.load(Ordering::Relaxed),
+            );
+            info!(
+                "RIVER_CACHE {seconds:.0} s: {:.1}% of {} lookups from the cache; holds {carve} ground, {top} water tops, {far} far sheets, {settled} settled cells; stuck {} times so far",
+                100.0 * hits as f64 / (hits + misses).max(1) as f64,
+                hits + misses,
+                walk.stuck_total
+            );
+        }
         if let (Ok((camera, projection)), Some(fine)) = (cameras.single(), fine.as_deref()) {
             let fov = match projection {
                 Projection::Perspective(p) => Some((p.fov, p.aspect_ratio)),
@@ -4309,14 +4462,14 @@ fn river_walk_script(
     if at_sea || stuck {
         walk.done = true;
         info!(
-            "RIVER_WALK_DONE {} at {:.0} of {:.0} m ({:.0}%), {:.0} m walked in {:.1} s, {} turns",
+            "RIVER_WALK_DONE {} at {:.0} of {:.0} m ({:.0}%), {:.0} m walked in {:.1} s, stuck {} times",
             if stuck { "stuck" } else { "at the mouth" },
             progress,
             length,
             100.0 * progress / length.max(1.0),
             walk.walked_m,
             now.duration_since(started).as_secs_f32(),
-            walk.turns
+            walk.stuck_total
         );
         keys.release(KeyCode::KeyW);
         keys.release(KeyCode::ShiftLeft);

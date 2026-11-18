@@ -442,6 +442,29 @@ impl ColumnTier {
             return 0;
         }
         let sea = sea_layer();
+        // The settled water kept from earlier tiers (`river-cache` design
+        // 11), stamped where this tier's rim cannot reach and no edit is
+        // near; the rule then settles what nobody has kept yet.
+        let cache = pbd_core::rivers::field(terrain_config()).filter(|_| settle_cache_on());
+        let keep = cache.map(|_| self.settle_keepable(edits));
+        if let (Some(cache), Some(keep)) = (cache, keep.as_ref()) {
+            let mut stamped = Vec::new();
+            for (slot, _) in keep.iter().enumerate().filter(|(_, k)| **k) {
+                let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+                let Some(cells) = cache.settled.get(&key) else {
+                    continue;
+                };
+                for &(layer, code) in cells.iter() {
+                    if let Some(material) = pbd_core::river_cache::liquid_of(code).material() {
+                        self.columns[slot].set(usize::from(layer), material);
+                    }
+                }
+                stamped.push(slot);
+            }
+            for slot in stamped {
+                self.repack_slot(slot);
+            }
+        }
         let mut queue = liquid::Queue::new();
         for slot in 0..self.columns.len() {
             if self.rim(slot) {
@@ -507,8 +530,39 @@ impl ColumnTier {
         let mut slots: Vec<usize> = changed.iter().map(|&(id, _)| water_cell(id).0).collect();
         slots.sort_unstable();
         slots.dedup();
-        for slot in slots {
+        for &slot in &slots {
             self.repack_slot(slot);
+        }
+        // Keep what the rule settled, where the rim could not reach: each
+        // changed layer and the liquid it holds now, merged with what was
+        // kept there before.
+        if let (Some(cache), Some(keep)) = (cache, keep.as_ref()) {
+            let mut layers: std::collections::BTreeMap<usize, Vec<u16>> = Default::default();
+            for &(id, _) in &changed {
+                let (slot, layer) = water_cell(id);
+                if keep[slot] {
+                    layers.entry(slot).or_default().push(layer as u16);
+                }
+            }
+            for (slot, mut list) in layers {
+                let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+                if key == u32::MAX {
+                    continue;
+                }
+                if let Some(old) = cache.settled.get(&key) {
+                    list.extend(old.iter().map(|&(l, _)| l));
+                }
+                list.sort_unstable();
+                list.dedup();
+                let cells: Box<[(u16, u8)]> = list
+                    .into_iter()
+                    .filter_map(|layer| {
+                        let cell = LiquidCell::of(self.columns[slot].material(usize::from(layer)));
+                        pbd_core::river_cache::liquid_code(cell).map(|c| (layer, c))
+                    })
+                    .collect();
+                cache.settled.put(key, cells);
+            }
         }
         #[cfg(test)]
         instrument(|p| {
@@ -518,6 +572,51 @@ impl ColumnTier {
             p.settle_changed = changed.len();
         });
         changed.len()
+    }
+
+    /// Which slots' settled water may be stamped from the cache and kept in
+    /// it (`river-cache` design 11): at least [`SETTLE_KEEP_CELLS`] from the
+    /// tier's rim, where the rim could not have shaped it, and as far from
+    /// any edited column, so a dug bank never meets water kept from before.
+    fn settle_keepable(&self, edits: &Edits) -> Vec<bool> {
+        let n = self.columns.len();
+        let walk = |seeds: Vec<usize>| {
+            let mut depth = vec![u16::MAX; n];
+            let mut front = std::collections::VecDeque::new();
+            for s in seeds {
+                depth[s] = 0;
+                front.push_back(s);
+            }
+            while let Some(s) = front.pop_front() {
+                let next = depth[s] + 1;
+                if usize::from(next) >= SETTLE_KEEP_CELLS {
+                    continue;
+                }
+                for t in self.sides_of(s).into_iter().flatten() {
+                    if depth[t] > next {
+                        depth[t] = next;
+                        front.push_back(t);
+                    }
+                }
+            }
+            depth
+        };
+        let rim = walk((0..n).filter(|&s| self.rim(s)).collect());
+        let edited = walk(
+            (0..n)
+                .filter(|&s| {
+                    let key = self.water.keys.get(s).copied().unwrap_or(u32::MAX);
+                    !edits.for_cell(key).is_empty()
+                })
+                .collect(),
+        );
+        (0..n)
+            .map(|s| {
+                rim[s] == u16::MAX
+                    && edited[s] == u16::MAX
+                    && self.water.keys.get(s).is_some_and(|&k| k != u32::MAX)
+            })
+            .collect()
     }
 
     /// One tick of the rule over the tier: every cell that changed, by slot,
@@ -580,6 +679,27 @@ fn instrument(f: impl FnOnce(&mut BuildPhases)) {
         c.set(p);
     });
 }
+
+/// A test turns the settle's cache off to build a tier fresh.
+#[cfg(test)]
+pub(crate) static SETTLE_CACHE_OFF: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn settle_cache_on() -> bool {
+    #[cfg(test)]
+    {
+        !SETTLE_CACHE_OFF.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+/// How many cells from a tier's rim (and from an edited column) its settled
+/// river water is kept and stamped (`river-cache` design 11): past the
+/// rule's seven-cell reach with room for a fall's run below it.
+pub const SETTLE_KEEP_CELLS: usize = 12;
 
 /// The most ticks a tier's rivers are settled for at its build: longer than
 /// any reach's sheet and any fall in it takes to settle.
@@ -3502,6 +3622,45 @@ mod river_tier_tests {
         for anchor in falls() {
             a_tier_s_rivers_are_what_the_rule_keeps(anchor);
         }
+    }
+
+    /// The settled water kept from one tier and stamped by the next is the
+    /// water that tier settles fresh (`river-cache` design 11): a tier 40 m
+    /// on from one already built, cold and stamped, cell for cell.
+    #[test]
+    fn a_stamped_tier_s_rivers_are_the_fresh_ones() {
+        use std::sync::atomic::Ordering;
+        let mut stamped_any = 0;
+        for anchor in falls() {
+            let east = Vec3::Y.cross(anchor).normalize_or(Vec3::X);
+            let on = (anchor + east * (40.0 / PLANET_RADIUS)).normalize();
+            SETTLE_CACHE_OFF.store(true, Ordering::Relaxed);
+            let fresh = lod::generate_fine(on, &ColumnSettings::default(), &Edits::new()).columns;
+            SETTLE_CACHE_OFF.store(false, Ordering::Relaxed);
+            let _ = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+            let stamped = lod::generate_fine(on, &ColumnSettings::default(), &Edits::new()).columns;
+            assert_eq!(fresh.columns.len(), stamped.columns.len());
+            let cache = pbd_core::rivers::field(terrain_config()).expect("the cache");
+            stamped_any += stamped
+                .water
+                .keys
+                .iter()
+                .filter(|k| cache.settled.get(k).is_some())
+                .count();
+            let differ: Vec<(usize, usize)> = (0..fresh.columns.len())
+                .flat_map(|slot| (0..LAYERS).map(move |layer| (slot, layer)))
+                .filter(|&(slot, layer)| {
+                    fresh.columns[slot].material(layer) != stamped.columns[slot].material(layer)
+                })
+                .collect();
+            assert!(
+                differ.is_empty(),
+                "{} cells differ, first {:?}",
+                differ.len(),
+                &differ[..differ.len().min(6)]
+            );
+        }
+        assert!(stamped_any > 0, "no tier found kept water to stamp");
     }
 
     fn a_tier_s_rivers_are_what_the_rule_keeps(anchor: Vec3) {

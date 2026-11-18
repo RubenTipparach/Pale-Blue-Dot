@@ -419,3 +419,221 @@ listed cell in `compact_visible`, and an 18-vertex instance for each far
 river cell now in view that was culled before (the river's cells past the
 tier, at most a few hundred). The owner's sitting on an unlocked screen
 decides it.
+
+## 11. The whole river cached (owner, 2026-11-18)
+
+**The report.** The owner, on this change as merged: "critical issue, the
+"water" cache was built to help cache riivers ... this is not the full river
+sim data, this is only partuial, please cahche the fiull river sim". They're
+right. Nothing of a river was cached. Design 2 only sampled the drainage map
+on more cores. Design 3's file was never built. Every rebuild worked out
+again every river term of every altitude, column and far record, and the
+rule's settle. So did every launch.
+
+**What "the full river sim" is here.** Every derived river value the game
+computes, all pure functions of the world's generator version, seed and river
+settings:
+
+| Part | Computed by | Cached as |
+| --- | --- | --- |
+| The drainage map | `RiverMap::build` | the map's nodes, in the cache file |
+| Which lattice cells have a river within reach | (new) built with the map | a mask on the map: a point with no river node in its 5 x 5 window answers "no river" without the scan |
+| The river's ground (bed, valley, levee, plunge pool) | `rivers::carve` | a memo by the point (its `f32` bits) and its unrivered altitude |
+| The water's top in a channel (columns' sources, `floods`) | `top_at` | a memo by the point |
+| The far sheet over a far cell | `rivers::far_surface` | a memo by the point and the cell's width |
+| The flowing water the rule keeps | `ColumnTier::settle_rivers` | the settled cells, by cell key, kept where the tier's rim could not reach them |
+
+**Exact by construction.** Every memo's key is the call's input, bit for
+bit, and its value is what the call returned. A hit is the same number the
+call would have made, so no ground, water or save changes. Cells keep fixed
+directions whatever the anchor (the topology is fixed), so a cell asked
+about by one rebuild is the same key in the next. Tests: a tier's columns,
+the fine set's records and the far words are the same with the cache cold,
+warm, and read back from its file.
+
+**The settled water.** The rule's result near a tier's rim depends on the
+rim (design 4). So only cells more than `SETTLE_KEEP_CELLS` (12, past the
+rule's seven-cell range) from the rim are kept: by cell key, the layers the
+settle changed and to what. A later tier stamps the kept cells that are
+inside its own margin before it settles, and the settle then runs as before.
+It finds them already at rest, and settles only the cells nobody has kept
+yet. A test builds a tier at one anchor, then a tier 40 m on twice, cold and
+stamped, and holds their water equal away from the rim. An edit drops every
+kept cell within the rule's reach of it, so a dug bank never meets stale
+water.
+
+**Filled ahead: the whole river, not only what was walked.** After `READY`,
+a background thread finds the rivers within 600 m of the player. For each, it
+fills the cache along the whole course, from source to sea. That covers every
+finest cell and every fine level's cell within the river's corridor
+(`Lattice::cells_in_band` round each course point). It runs at low priority
+on spare cores. A rebuild near any part of that river then finds its terms
+already worked out.
+
+**The file.** It sits beside the worlds, at
+`<saves>/cache/rivers-<seed>-<digest of the whole config>.bin`. That answers
+design 3's open decision ("as part of world data", the owner's words of
+2026-11-17), and one file serves every slot of the same seed.
+- **Header:** a magic, the format, the generator version, the seed, the
+  settings' bits and a digest. Then the map's nodes, then the memos.
+- **Writing:** atomic (a temporary file, then a rename). Written off the
+  frame every 30 s while the cache has grown, and on exit.
+- **Reading:** a missing, short, mismatched or corrupt file is rebuilt, and
+  never fails a load.
+- **Not player data:** it's never a record and is never in the durable path.
+  Deleting it costs one rebuild.
+
+**Measured** with `river_cost` (design 1) extended to a cold, a warm and a
+filed cache. The numbers are in section 12.
+
+## 12. The river run (owner, 2026-11-18)
+
+**The report.** "a bot was used to validate ... this bot often got stuck on
+the bank/sides of rivers this made the bot useless for actualy running
+through a river fast enough to analyze the caching", "when validating river
+cache, make sure to bump the time of day to day", "Only need to record about
+5 minutes of river runs, also MAKE SURE THE PALYER DOESNOT GET STUCK,
+measure ground deltas properly and detect if the player's position didnt
+movemcuh in 1 second".
+
+**Why it stuck.** `--walk-river` decided "stuck" when it hadn't moved 1.5 m
+from an anchor point. A walker hopping against a terraced bank, or sliding
+down it, moves more than that and resets the anchor, while it makes no way
+down the river. So the 1.5 s turn rarely fired. And the bank path, half a
+width plus 9 m off the line, runs along the valley's own slope, a stair of
+one-metre layers (`carve`), where most of the steps are.
+
+**The fix (an instrument change).** The owner, after the first trial:
+"bot should have specifc hex by hex naviation, I think this would avoid it
+trying to take shortcuts that cause it to bump into sides", then "The bot
+isn't even in the river. You should start out spawn in middle of a river.
+You know the map already. Do not artificially move the bot."
+
+- **It starts in the river.** `--walk-river` spawns the walker on the
+  drainage map's river nearest `--at`, 15 m down its line from its source,
+  in its water. It is placed once, at the spawn, like any `--at`. After that
+  it moves only by the player's inputs. The walk waits until the walker
+  stands there, because a world opening can hold it elsewhere for a few
+  frames.
+- **Hex by hex** (`river_walk::HexRoute`). A route is planned over the
+  finest cells (the lattice's own, each with its column's height), from the
+  walker's cell to the cell nearest the river's line 40 m on. It's at most
+  60 m at a time, a few hundred cells, a couple of milliseconds.
+  - A rise of one layer is walked, two are jumped at a cost of four cells,
+    and more is never taken (from water, more than one and a half).
+  - Water costs less than land, so the run keeps to the river.
+  - The walker walks centre to centre, so it never cuts a corner into a
+    bank. It plans again as a route runs out, or when it is 6 m off it, no
+    more than twice a second.
+- **Stuck is measured on the ground, over a second.** The walker keeps its
+  last second of positions. It is stuck when its ground distance (the arc
+  over the planet, height left out) is under 3 m on foot or 1.5 m swimming;
+  sprinting covers 14 m a second. A hop or a slide is not motion.
+- **Unsticking escalates.** First a hop. Then the cells it was walking into
+  are kept out and a new route goes round them. Then it backs out 1.2 s and
+  takes a new route. Each step is logged (`RIVER_WALK_STUCK`).
+- **Day.** `--time 11`. **The frame graph** is on (`--frame-graph`).
+- **Each second** logs "in the river" or "on the bank", and `RIVER_CACHE`:
+  the share of river lookups the cache answered and what it holds.
+
+**What still stopped it, and the fixes** (owner, after the first
+recording: "Fix these bot isuses"). The first recording stalled 8 and 11
+times, always at 0.0 m in a second and at the same spots in both runs. A
+log of what the bot held and aimed at at each stall found four causes:
+
+1. **The router read the reach's level, not the water standing there.**
+   A reach's water is held lower wherever its banks are, so a stepped
+   channel looked flat and the route ran into its steps. Now each cell is
+   read from the live column tier (`river_walk::cell_heights`): its floor,
+   and the top of the water in it, the rule's flowing water included (a
+   fall's lip, a sheet between reaches). The generator's values are used
+   only outside the tier.
+2. **A swimmer steps up nothing.** It is never grounded
+   (`walking::sweep`'s `can_step`), so any rise of the bed above its feet is
+   a wall. The router's step rule is now the walker's
+   (`river_walk::step_allowed`):
+   - swimming, it goes on only where there is 2 m of water to float over,
+     or where the bed doesn't rise;
+   - out of the water, only onto ground within 1.5 m of the surface;
+   - on foot, one layer stepped and two jumped.
+   Leaving the water costs 8 m more, so the route stays in the river.
+3. **"Swimming" came from the generator.** The generator says "river" over
+   a dry stretch of channel bed. Now the bot asks the live column for water
+   at its feet (`PlanetContact::stand`), as the physics does.
+4. **On land a jump is a press, not a hold** (`state.jump |=
+   just_pressed`). The bot held the key whenever it believed it was
+   swimming, so on a dry bed it jumped once and never again. It now holds
+   the key only in water and taps it on land, jumping whenever the next
+   cell's live floor stands 0.6 m over its feet.
+
+After the fixes the whole river, source to mouth, ran with no stall four
+times running (150-170 s each). A swimmer that does stall skips the hop
+(it already holds the jump) and takes a new route round the spot.
+
+**A lag found in the trial, and fixed.** The first trial's frames spiked to
+1.4 s. Its walk started before the walker was placed, so it read its
+progress 657 m down the river and planned routes hundreds of metres long:
+tens of thousands of cells, on the main thread, every frame it was off its
+route. Hence the start wait, the 60 m cap and the half-second limit. It was
+the instrument's cost, not the game's.
+
+**The recording.** About five minutes of river runs, real time, one OBS,
+day. A run along the owner's river, then rivers near it, with each second's
+`RIVER_WALK` progress, the rebuild timings and the cache's hit rate in the
+log. Uploaded to the Drive videos folder.
+
+## 13. Measured (2026-11-18, the owner's desktop, RTX 3070, `--profile fast`)
+
+**`river_cost` before the cache** (design 1's instrument): the fine set
+972-1,508 ms whole. Its records' altitudes 260-365 ms with the river terms
+against 164-220 ms without (one thread). The far sheets 33-78 ms. The
+drainage map 140 ms on 8 threads (512 ms on one).
+
+**The river run, A/B** (the same walk down the owner's river from its
+source, about 75 s each, new worlds, one sitting, day):
+
+| | Cache on | `PBD_RIVER_CACHE=off` |
+| --- | ---: | ---: |
+| Fine set rebuild, mean | **3.6 s** (16 sets) | 5.9 s (11 sets) |
+| River lookups answered by the cache | 97% | - |
+| Frame, median / p99 (past 35 s) | 15.3 / 24.6 ms | 14.9 / 27.4 ms |
+| Frames over 50 ms | 6 | 9 |
+| Stuck | 0 | 13 |
+
+The rebuilds while walking are longer than `river_cost`'s one-shot set
+because the game builds on its background threads beside the frame. The
+cache takes about two-fifths off them, so the river past the tier lands
+sooner. Frame time is the same within the spread.
+
+**The recording** (`river-cache-runs-v2-2026-11-18-450p60.mp4`, 5 min
+40 s, in the Drive validation folder; it replaces the first,
+`river-cache-runs-2026-11-18-450p60.mp4`, whose bot still stalled). Two
+runs down the owner's river from its source, day, the frame graph on, real
+time, one OBS, 1440 x 900 window, video at half:
+
+| | Run 1, cold (no file) | Run 2, warm (run 1's file) |
+| --- | ---: | ---: |
+| Whole river, source to mouth | 170.5 s | 169.8 s |
+| Stalls | **0** | **0** |
+| Seconds on the bank | 0 | 0 |
+| Lookups from the cache | 86.7% | 97.5% |
+| Fine set rebuild, mean | 4.1 s (35 sets) | 4.2 s (35 sets) |
+
+The warm run's rebuilds are not faster here: with the fill running ahead
+of the walker, the cold run's lookups are already 87% hits. The cache's gain
+is the A/B above, against no cache at all.
+
+**Frames.** In play, past `READY`, no frame of the bot's runs went over
+210 ms, and those are fine-set landings, as before this change. Writing the
+cache file runs on its own thread. The one long frame, about 2 s, is the
+game quitting: the cache is written once more on exit, before the window
+closes.
+
+**What it holds.** After a run of the one river and its feeders, about 7.6
+million values (5.0 M ground, 1.9-2.4 M water tops, 0.35 M far sheets,
+3,500 settled cells). That's a file of about 150 MB beside the worlds. The
+near-river mask keeps everything away from rivers out of it. Its size as a
+player wanders is owed: a cap, or keeping only values a river changes, is
+the next cut if it grows past what a save folder should hold.
+
+**Not measured:** `tools/perf_suite.py` on the release build.

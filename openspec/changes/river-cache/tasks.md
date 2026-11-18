@@ -85,3 +85,32 @@
       in design 9.
 - [ ] The perf suite on the release build (the fix lists more sheets):
       refused, the screen locked (design 10). Owed.
+
+## 10. The whole river cached (design 11), 2026-11-18
+- [x] The map's near-river mask; `at_widened` answers from it
+      (`the_near_mask_never_hides_a_river`).
+- [x] The memos for `carve`, `top_at` and `far_surface`, sharded, by bits
+      (`the_cached_river_terms_are_the_worked_out_ones`).
+- [x] The settled water kept away from the rim and stamped by the next tier;
+      edited columns and their neighbours never stamped or kept
+      (`a_stamped_tier_s_rivers_are_the_fresh_ones`).
+- [x] The cache file: header, nodes, memos; atomic write every 30 s and on
+      exit; any mismatch rebuilds (`the_cache_file_reads_back_or_is_refused`).
+- [x] The background fill along whole rivers near the camera (`river_fill`).
+- [x] `river_cost` before; the river run with the cache on and off (design 13).
+- [ ] The perf suite on the release build.
+- [ ] The file's size as a player wanders: a cap if it grows.
+
+## 11. The river run (design 12)
+- [x] Spawned in the river at its source; inputs only after.
+- [x] Hex by hex: `HexRoute` over the finest cells
+      (`a_hex_route_runs_down_the_owner_s_river`).
+- [x] Stuck: under 3 m (1.5 m swimming) of ground in the last second
+      (`stuck_is_ground_covered_in_a_second`).
+- [x] Unsticking escalates: hop, route round, back out.
+- [x] Day, the frame graph on.
+- [x] Five minutes of river runs, cold and warm, OBS, uploaded.
+- [x] Its stalls fixed: the live tier's floors and water, the walker's own
+      step rule (`the_step_rule_is_the_walker_s`), swimming read at the
+      feet, jumps tapped on land; re-recorded with no stall
+      (`river-cache-runs-v2-2026-11-18-450p60.mp4`).

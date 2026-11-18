@@ -23,10 +23,11 @@
 //! begins.
 
 use crate::planet_gen::{self, TerrainConfig};
+use crate::river_cache::{self, RiverField};
 use crate::terrain::Material;
 use glam::Vec3;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::sync::{Mutex, OnceLock};
 
 /// How rivers are laid out (generator version 8).
@@ -112,6 +113,10 @@ pub struct RiverMap {
     height: usize,
     cell_deg: f32,
     nodes: Vec<Node>,
+    /// Per lattice cell, whether any river cell is in its 5 x 5 window: the
+    /// window [`Self::at_widened`] scans, so a point whose cell says no has
+    /// no river within any reach it asks for (`river-cache` design 11).
+    near: Vec<bool>,
 }
 
 /// A river at a point: how far from its line, how far down its reach, its
@@ -185,6 +190,7 @@ impl RiverMap {
                 };
                 width * height
             ],
+            near: Vec::new(),
         };
         let ground = TerrainConfig {
             rivers: None,
@@ -284,7 +290,77 @@ impl RiverMap {
                 }
             }
         }
+        map.fill_near();
         map
+    }
+
+    /// The near-river mask from the nodes.
+    fn fill_near(&mut self) {
+        let mut near = vec![false; self.nodes.len()];
+        for (k, n) in near.iter_mut().enumerate() {
+            let (i, j) = ((k % self.width) as i64, (k / self.width) as i64);
+            *n = (-2..=2).any(|dj| {
+                (-2..=2).any(|di| {
+                    self.index(i + di, j + dj)
+                        .is_some_and(|m| self.nodes[m].river)
+                })
+            });
+        }
+        self.near = near;
+    }
+
+    /// Whether a river cell is in the window round `d`'s lattice cell: false
+    /// means [`Self::at_widened`] finds no river at `d` whatever the reach.
+    pub fn may_reach(&self, d: Vec3) -> bool {
+        let (ci, cj) = self.cell_of(d.normalize_or(Vec3::Y));
+        self.index(ci, cj).is_none_or(|k| self.near[k])
+    }
+
+    /// The map's nodes as the cache file holds them.
+    fn filed(&self) -> Vec<crate::river_cache::FiledNode> {
+        self.nodes
+            .iter()
+            .map(|n| crate::river_cache::FiledNode {
+                down: n.down,
+                river: n.river,
+                level: n.level,
+                drop: n.drop,
+                half_width: n.half_width,
+            })
+            .collect()
+    }
+
+    /// The map read back from the cache file.
+    fn from_filed(
+        settings: &RiverSettings,
+        (width, height): (u32, u32),
+        nodes: Vec<crate::river_cache::FiledNode>,
+    ) -> Option<Self> {
+        let (width, height) = (width as usize, height as usize);
+        if width != (360.0 / settings.cell_deg).round() as usize
+            || height != (180.0 / settings.cell_deg).round() as usize
+            || nodes.len() != width * height
+        {
+            return None;
+        }
+        let mut map = Self {
+            width,
+            height,
+            cell_deg: settings.cell_deg,
+            nodes: nodes
+                .into_iter()
+                .map(|n| Node {
+                    down: n.down,
+                    river: n.river,
+                    level: n.level,
+                    drop: n.drop,
+                    half_width: n.half_width,
+                })
+                .collect(),
+            near: Vec::new(),
+        };
+        map.fill_near();
+        Some(map)
     }
 
     /// The river at a direction, if `d` is within its banks' reach.
@@ -304,6 +380,9 @@ impl RiverMap {
         let d = d.normalize_or(Vec3::Y);
         let radius = cfg.radius_m;
         let (ci, cj) = self.cell_of(d);
+        if self.index(ci, cj).is_some_and(|k| !self.near[k]) {
+            return None;
+        }
         let mut best: Option<RiverHere> = None;
         let mut best_q = f32::INFINITY;
         for dj in -2..=2 {
@@ -480,37 +559,105 @@ impl RiverMap {
     }
 }
 
-type Maps = Mutex<HashMap<(u64, u32, u32), &'static OnceLock<RiverMap>>>;
+/// One world's rivers: its config, its drainage map and its cache
+/// (`river-cache` design 11). Leaked once per world, which lives as long as
+/// the program.
+struct World {
+    cfg: TerrainConfig,
+    settings: RiverSettings,
+    digest: u64,
+    map: OnceLock<RiverMap>,
+    field: RiverField,
+}
 
-/// The drainage map of a world, built the first time it is asked for. One
-/// cell is leaked per world, which lives as long as the program.
-pub fn map(cfg: &TerrainConfig, settings: &RiverSettings) -> &'static RiverMap {
-    static MAPS: OnceLock<Maps> = OnceLock::new();
-    type Last = std::cell::Cell<Option<((u64, u32, u32), &'static OnceLock<RiverMap>)>>;
+static WORLDS: Mutex<Vec<&'static World>> = Mutex::new(Vec::new());
+
+fn world(cfg: &TerrainConfig, settings: &RiverSettings) -> &'static World {
+    type Last = std::cell::Cell<Option<&'static World>>;
     thread_local! {
-        // Every altitude asks: the last world's map without the lock.
+        // Every altitude asks: the last world without the lock.
         static LAST: Last = const { std::cell::Cell::new(None) };
     }
-    let key = (
-        cfg.seed,
-        settings.cell_deg.to_bits(),
-        settings.min_catchment,
-    );
-    if let Some((k, cell)) = LAST.with(|l| l.get())
-        && k == key
-        && let Some(map) = cell.get()
+    if let Some(w) = LAST.with(|l| l.get())
+        && w.cfg == *cfg
+        && w.settings == *settings
     {
-        return map;
+        return w;
     }
-    let cell = *MAPS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .expect("river maps")
-        .entry(key)
-        .or_insert_with(|| Box::leak(Box::new(OnceLock::new())));
-    let map = cell.get_or_init(|| RiverMap::build(cfg, settings));
-    LAST.with(|l| l.set(Some((key, cell))));
-    map
+    let mut worlds = WORLDS.lock().expect("river worlds");
+    let w = match worlds
+        .iter()
+        .find(|w| w.cfg == *cfg && w.settings == *settings)
+    {
+        Some(w) => *w,
+        None => {
+            let w: &'static World = Box::leak(Box::new(World {
+                cfg: *cfg,
+                settings: *settings,
+                digest: river_cache::fnv(format!("{cfg:?} {settings:?}").as_bytes()),
+                map: OnceLock::new(),
+                field: RiverField::new(),
+            }));
+            worlds.push(w);
+            w
+        }
+    };
+    drop(worlds);
+    LAST.with(|l| l.set(Some(w)));
+    w
+}
+
+/// The drainage map of a world: read from its cache file when one matches,
+/// built (and written) otherwise, the first time it is asked for.
+pub fn map(cfg: &TerrainConfig, settings: &RiverSettings) -> &'static RiverMap {
+    let w = world(cfg, settings);
+    w.map.get_or_init(|| {
+        let path = river_cache::dir().map(|dir| river_cache::path_for(&dir, cfg.seed, w.digest));
+        if let Some(path) = &path
+            && let Some((size, nodes)) = river_cache::read(path, w.digest, &w.field)
+            && let Some(map) = RiverMap::from_filed(settings, size, nodes)
+        {
+            return map;
+        }
+        let map = RiverMap::build(cfg, settings);
+        if let Some(path) = &path {
+            let size = (map.width as u32, map.height as u32);
+            let _ = river_cache::write(path, w.digest, size, &map.filed(), &w.field);
+        }
+        map
+    })
+}
+
+/// A world's river cache: the tier's settled water and the counts. `None`
+/// without rivers or with the cache off.
+pub fn field(cfg: &TerrainConfig) -> Option<&'static RiverField> {
+    let settings = cfg.rivers.as_ref()?;
+    river_cache::enabled().then(|| &world(cfg, settings).field)
+}
+
+/// Write every world's cache that has grown since it was last written or
+/// read: the app calls it off the frame every half minute and on exit.
+/// Returns the entries written.
+pub fn save_caches() -> usize {
+    let Some(dir) = river_cache::dir() else {
+        return 0;
+    };
+    let worlds: Vec<&'static World> = WORLDS.lock().map(|w| w.clone()).unwrap_or_default();
+    let mut written = 0;
+    for w in worlds {
+        let Some(map) = w.map.get() else {
+            continue;
+        };
+        if !river_cache::grown(&w.field) {
+            continue;
+        }
+        let path = river_cache::path_for(&dir, w.cfg.seed, w.digest);
+        let size = (map.width as u32, map.height as u32);
+        if let Ok(n) = river_cache::write(&path, w.digest, size, &map.filed(), &w.field) {
+            written += n;
+        }
+    }
+    written
 }
 
 /// The river at a direction under a config with rivers.
@@ -581,9 +728,26 @@ pub fn carve(cfg: &TerrainConfig, d: Vec3, base: f32) -> f32 {
     let Some(settings) = cfg.rivers.as_ref() else {
         return base;
     };
-    if base < cfg.sea_level_m - 1.0 {
+    if base < cfg.sea_level_m - 1.0 || !map(cfg, settings).may_reach(d) {
         return base;
     }
+    if !river_cache::enabled() {
+        return carve_near(cfg, settings, d, base);
+    }
+    let field = &world(cfg, settings).field;
+    let key = [d.x.to_bits(), d.y.to_bits(), d.z.to_bits(), base.to_bits()];
+    if let Some(v) = field.carve.get(&key) {
+        field.hit();
+        return v;
+    }
+    field.miss();
+    let v = carve_near(cfg, settings, d, base);
+    field.carve.put(key, v);
+    v
+}
+
+/// [`carve`] where the map may have a river, worked out.
+fn carve_near(cfg: &TerrainConfig, settings: &RiverSettings, d: Vec3, base: f32) -> f32 {
     let Some(here) = map(cfg, settings).at_widened(cfg, settings, d, LEVEE_M + LEVEE_FOOT_M) else {
         return base;
     };
@@ -679,6 +843,26 @@ pub fn floods(cfg: &TerrainConfig, d: Vec3) -> bool {
 /// The water's top at a point of a river's channel, whole metres over sea
 /// level, or `None` off the channel or at the sea.
 fn top_at(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3) -> Option<i32> {
+    if !map.may_reach(d) {
+        return None;
+    }
+    if !river_cache::enabled() {
+        return top_near(cfg, settings, map, d);
+    }
+    let field = &world(cfg, settings).field;
+    let key = [d.x.to_bits(), d.y.to_bits(), d.z.to_bits()];
+    if let Some(v) = field.top.get(&key) {
+        field.hit();
+        return (v != i32::MIN).then_some(v);
+    }
+    field.miss();
+    let v = top_near(cfg, settings, map, d);
+    field.top.put(key, v.unwrap_or(i32::MIN));
+    v
+}
+
+/// [`top_at`] where the map may have a river, worked out.
+fn top_near(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3) -> Option<i32> {
     // Anywhere the valley's ground is under the reach's water, banks too.
     let here = map.at(cfg, settings, d)?;
     if here.level <= 0 {
@@ -699,6 +883,37 @@ fn top_at(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3
 pub fn far_surface(cfg: &TerrainConfig, d: Vec3, cell_m: f32) -> Option<f32> {
     let settings = cfg.rivers.as_ref()?;
     let map = map(cfg, settings);
+    if !map.may_reach(d) {
+        return None;
+    }
+    if !river_cache::enabled() {
+        return far_near(cfg, settings, map, d, cell_m);
+    }
+    let field = &world(cfg, settings).field;
+    let key = [
+        d.x.to_bits(),
+        d.y.to_bits(),
+        d.z.to_bits(),
+        cell_m.to_bits(),
+    ];
+    if let Some(v) = field.far.get(&key) {
+        field.hit();
+        return (v != u32::MAX).then(|| f32::from_bits(v));
+    }
+    field.miss();
+    let v = far_near(cfg, settings, map, d, cell_m);
+    field.far.put(key, v.map_or(u32::MAX, f32::to_bits));
+    v
+}
+
+/// [`far_surface`] where the map may have a river, worked out.
+fn far_near(
+    cfg: &TerrainConfig,
+    settings: &RiverSettings,
+    map: &RiverMap,
+    d: Vec3,
+    cell_m: f32,
+) -> Option<f32> {
     let here = map.at_widened(cfg, settings, d, (cell_m * 0.5 - settings.bank_m).max(0.0))?;
     if here.level <= 0 || here.across_m > (cell_m * 0.5).max(here.half_width_m) {
         return None;
@@ -781,6 +996,136 @@ mod tests {
             );
         }
         assert!(one.rivers().count() > 0);
+    }
+
+    /// Points round a few river cells and a few dry ones, in a fixed order.
+    fn sample_points(map: &RiverMap) -> Vec<Vec3> {
+        let mut out = Vec::new();
+        let rivers: Vec<usize> = map.rivers().step_by(211).take(12).collect();
+        for k in rivers {
+            let (c, ..) = map.describe(k);
+            let east = Vec3::Y.cross(c).normalize_or(Vec3::X);
+            let north = c.cross(east);
+            for i in -12..=12 {
+                for j in -12..=12 {
+                    let off = (east * i as f32 + north * j as f32) * (4.7 / 4_800.0);
+                    out.push((c + off).normalize());
+                }
+            }
+        }
+        out
+    }
+
+    /// The near-river mask is exact: where it says no river is in reach,
+    /// no river cell is in the window `at_widened` scans, so no reach finds
+    /// one (`river-cache` design 11).
+    #[test]
+    fn the_near_mask_never_hides_a_river() {
+        let cfg = v8();
+        let settings = cfg.rivers.unwrap();
+        let map = map(&cfg, &settings);
+        let mut hidden = 0;
+        for k in 0..map.nodes.len() {
+            let (i, j) = ((k % map.width) as i64, (k / map.width) as i64);
+            let any = (-2..=2).any(|dj| {
+                (-2..=2).any(|di| {
+                    map.index(i + di, j + dj)
+                        .is_some_and(|m| map.nodes[m].river)
+                })
+            });
+            if any != map.near[k] {
+                hidden += 1;
+            }
+        }
+        assert_eq!(hidden, 0);
+        assert!(map.near.iter().any(|&n| !n) && map.near.iter().any(|&n| n));
+    }
+
+    /// The memos give what the calls give, bit for bit, on a miss and on a
+    /// hit (`river-cache` design 11).
+    #[test]
+    fn the_cached_river_terms_are_the_worked_out_ones() {
+        if !river_cache::enabled() {
+            return;
+        }
+        let cfg = v8();
+        let settings = cfg.rivers.unwrap();
+        let map = map(&cfg, &settings);
+        let mut checked = 0;
+        for d in sample_points(map) {
+            let base = planet_gen::surface_altitude_unrivered(&cfg, d);
+            let direct = if base < cfg.sea_level_m - 1.0 || !map.may_reach(d) {
+                base
+            } else {
+                carve_near(&cfg, &settings, d, base)
+            };
+            for _ in 0..2 {
+                assert_eq!(carve(&cfg, d, base).to_bits(), direct.to_bits());
+                let top = map
+                    .may_reach(d)
+                    .then(|| top_near(&cfg, &settings, map, d))
+                    .flatten();
+                assert_eq!(top_at(&cfg, &settings, map, d), top);
+                for cell_m in [11.3, 45.3] {
+                    let far = map
+                        .may_reach(d)
+                        .then(|| far_near(&cfg, &settings, map, d, cell_m))
+                        .flatten();
+                    assert_eq!(
+                        far_surface(&cfg, d, cell_m).map(f32::to_bits),
+                        far.map(f32::to_bits)
+                    );
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked > 1000);
+        assert!(!world(&cfg, &settings).field.carve.is_empty());
+    }
+
+    /// The cache file reads back what was written: the same map and every
+    /// memo; and a file of another world, a cut-short one or a corrupt one
+    /// is refused, leaving the field as it was.
+    #[test]
+    fn the_cache_file_reads_back_or_is_refused() {
+        let cfg = v8();
+        let settings = cfg.rivers.unwrap();
+        let map = map(&cfg, &settings);
+        let field = RiverField::new();
+        field.carve.put([1, 2, 3, 4], 5.5);
+        field.top.put([7, 8, 9], i32::MIN);
+        field.far.put([1, 1, 1, 1], u32::MAX);
+        field
+            .settled
+            .put(42, vec![(130u16, 1u8), (131, 9)].into_boxed_slice());
+        let dir = std::env::temp_dir().join(format!("pbd-river-cache-{}", std::process::id()));
+        let path = river_cache::path_for(&dir, cfg.seed, 99);
+        let size = (map.width as u32, map.height as u32);
+        let written = river_cache::write(&path, 99, size, &map.filed(), &field).unwrap();
+        assert_eq!(written, 4);
+        let back = RiverField::new();
+        let (size, nodes) = river_cache::read(&path, 99, &back).expect("read back");
+        let again = RiverMap::from_filed(&settings, size, nodes).expect("the map");
+        assert!(again == *map, "the map read back differs");
+        assert_eq!(back.counts(), [1, 1, 1, 1]);
+        assert_eq!(back.carve.get(&[1, 2, 3, 4]), Some(5.5));
+        assert_eq!(
+            back.settled.get(&42).as_deref(),
+            Some(&[(130u16, 1u8), (131, 9)][..])
+        );
+        // Another world's digest.
+        assert!(river_cache::read(&path, 98, &RiverField::new()).is_none());
+        // Cut short, and one byte flipped.
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        assert!(river_cache::read(&path, 99, &RiverField::new()).is_none());
+        let mut flipped = bytes.clone();
+        flipped[100] ^= 1;
+        std::fs::write(&path, &flipped).unwrap();
+        let untouched = RiverField::new();
+        assert!(river_cache::read(&path, 99, &untouched).is_none());
+        assert_eq!(untouched.counts(), [0, 0, 0, 0]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Every river cell drains to the sea, down a path whose water never

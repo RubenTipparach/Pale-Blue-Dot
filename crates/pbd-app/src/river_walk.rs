@@ -169,6 +169,272 @@ impl RiverPath {
     }
 }
 
+/// The tallest rise between two metre steps the walker takes with a jump,
+/// m: one is auto-stepped, two are a jump (`river-cache` design 12).
+pub const JUMPABLE_M: f32 = 2.0;
+/// Under this much ground covered in the last second the walker is stuck,
+/// m: on foot it sprints 14 m a second, swimming half that.
+pub const STUCK_LAND_M: f32 = 3.0;
+pub const STUCK_SWIM_M: f32 = 1.5;
+/// What a walker stands on along the river at `d`, metres over the sea: the
+/// ground, or a river's water over it.
+pub fn walked_on(d: Vec3) -> f32 {
+    let cfg = terrain_config();
+    let ground = crate::planet::surface_height(d);
+    // The water standing in this column, as the column is built with it
+    // (`rivers::water`: sources to the water's top here), not the reach's
+    // level: a reach's water is held lower wherever its banks are, and
+    // reading the reach's level made a stepped channel look flat to the
+    // router, which then walked into its steps.
+    let sea = cfg.sea_level_m.round() as i32;
+    let water = pbd_core::rivers::water(cfg, d)
+        .last()
+        .map_or(0.0, |&(top, _)| (top - sea) as f32);
+    ground.max(water).max(0.0)
+}
+
+/// A cell's ground and what is walked on there (its water's top where water
+/// stands over it), m over the sea: from the live column tier where the cell
+/// is in it, so the flowing water the rule settled (a fall's lip, a sheet
+/// between reaches) is seen as the walker meets it; from the generator
+/// otherwise.
+pub fn cell_heights(contact: Option<&crate::planet::PlanetContact>, d: Vec3) -> (f32, f32) {
+    let d = d.normalize_or(Vec3::Y);
+    if let Some(contact) = contact {
+        let high = d * (PLANET_RADIUS + 400.0);
+        if contact.column_water(high).is_some() {
+            let floor = contact.stand(high).floor_radius - PLANET_RADIUS;
+            let top = match contact.column_water(d * (PLANET_RADIUS + floor + 0.1)) {
+                Some(Some(water)) => water.max(floor),
+                _ => floor,
+            };
+            return (floor, top.max(0.0));
+        }
+    }
+    (crate::planet::surface_height(d), walked_on(d))
+}
+
+/// The ground from `from` to `to` (unit directions) in metre steps: the
+/// tallest rise between two steps, m, and the share of steps in water.
+pub fn profile(from: Vec3, to: Vec3) -> (f32, f32) {
+    let metres = from.angle_between(to) * PLANET_RADIUS;
+    let steps = (metres.ceil() as usize).max(1);
+    let mut last = walked_on(from);
+    let (mut rise, mut wet) = (0.0f32, 0usize);
+    for i in 1..=steps {
+        let d = from.slerp(to, i as f32 / steps as f32);
+        let h = walked_on(d);
+        rise = rise.max(h - last);
+        if crate::coast_walk::in_river(d) || crate::planet::surface_height(d) < 0.0 {
+            wet += 1;
+        }
+        last = h;
+    }
+    (rise, wet as f32 / steps as f32)
+}
+
+/// Ground covered over the last second from a trail of `(seconds, unit
+/// direction)`, newest last: the arc over the planet (height left out, so a
+/// hop or a slide down a bank is not progress). `None` until the trail
+/// spans a second.
+pub fn moved_in_last_second(trail: &[(f32, Vec3)]) -> Option<f32> {
+    let &(now, here) = trail.last()?;
+    let &(_, then) = trail.iter().rev().find(|(t, _)| now - t >= 1.0)?;
+    Some(here.angle_between(then) * PLANET_RADIUS)
+}
+
+/// A route over the finest hex cells, centre to centre (owner, 2026-11-18:
+/// "bot should have specifc hex by hex naviation, I think this would avoid it
+/// trying to take shortcuts that cause it to bump into sides"). Planned on
+/// the cells' own column heights, so every step it takes is one the walker
+/// can make: a rise of one layer walked, two jumped, more never.
+#[derive(Clone, Debug)]
+pub struct HexRoute {
+    /// Cell centres in walking order, unit directions; the first is the
+    /// walker's own cell.
+    pub cells: Vec<Vec3>,
+    /// Each cell's ground (or water), m over the sea.
+    pub heights: Vec<f32>,
+    /// The cell being walked to.
+    pub next: usize,
+}
+
+/// How deep water must be over a cell's bed for a swimmer at the surface to
+/// float over it, m: a swimmer is never grounded, so it steps up nothing,
+/// and its feet hang about this far under the surface.
+pub const FLOAT_OVER_M: f32 = 2.0;
+/// How far over the water's surface a swimmer climbs out onto a bank, m:
+/// well inside the walker's own reach (`water_climb_reach_m`, 4.5 m), since
+/// it has to rise to the surface by the bank first.
+pub const CLIMB_OUT_M: f32 = 1.5;
+
+/// Whether the walker can go from cell `a` to its neighbour `b`, each as
+/// (ground, what is walked on, wet), the way the walker's physics allows
+/// (`walking::sweep`): on foot a rise of one layer is stepped and up to
+/// [`JUMPABLE_M`] jumped; a swimmer, never grounded, steps up nothing, so it
+/// goes on only where the water is deep enough to float over or the bed does
+/// not rise; out of the water, onto ground no more than [`CLIMB_OUT_M`] over
+/// the surface.
+pub fn step_allowed(a: (f32, f32, bool), b: (f32, f32, bool)) -> bool {
+    let ((ground_a, top_a, wet_a), (ground_b, top_b, wet_b)) = (a, b);
+    match (wet_a, wet_b) {
+        (false, false) | (false, true) => ground_b - ground_a <= JUMPABLE_M,
+        (true, true) => top_b - ground_b >= FLOAT_OVER_M || ground_b <= ground_a + 0.05,
+        (true, false) => ground_b - top_a <= CLIMB_OUT_M,
+    }
+}
+
+/// A cell's key: its centre's bits, the same whatever the anchor.
+pub fn cell_key(d: Vec3) -> [u32; 3] {
+    d.to_array().map(f32::to_bits)
+}
+
+impl HexRoute {
+    /// The cheapest walk over the finest cells from the walker's cell to the
+    /// cell nearest `goal`, through the cells within the ellipse round the
+    /// two; `None` if no walkable route joins them. A step costs its length,
+    /// more on land than in the river (the run keeps to the water), and a two-layer jump four
+    /// cells more (the trial walk stuck at them: taken only where needed);
+    /// a rise past [`JUMPABLE_M`] (from water, past one layer and a half) and
+    /// a `blocked` cell are never taken.
+    pub fn plan(
+        here: Vec3,
+        goal: Vec3,
+        blocked: &[[u32; 3]],
+        contact: Option<&crate::planet::PlanetContact>,
+    ) -> Option<Self> {
+        use std::cmp::Reverse;
+        use std::collections::BinaryHeap;
+        let here = here.normalize_or(Vec3::Y);
+        let goal = goal.normalize_or(Vec3::Y);
+        // Never more than 60 m at a time: a route is a few hundred cells, a
+        // couple of milliseconds, and planned again as it runs out.
+        let far = here.angle_between(goal) * PLANET_RADIUS;
+        let goal = if far > 60.0 {
+            here.slerp(goal, 60.0 / far)
+        } else {
+            goal
+        };
+        let span = here.angle_between(goal) * PLANET_RADIUS;
+        let mid = here.slerp(goal, 0.5);
+        let radius = (span * 0.5 + 18.0) / PLANET_RADIUS;
+        let mut lattice = crate::planet::lattice::Lattice::default();
+        let cells = lattice.cells_in_band(crate::planet::FINEST_LEVEL, mid, 0.0, radius);
+        if cells.is_empty() {
+            return None;
+        }
+        let dirs: Vec<Vec3> = cells.iter().map(|c| c.cell.direction).collect();
+        let (ground, heights): (Vec<f32>, Vec<f32>) =
+            dirs.iter().map(|&d| cell_heights(contact, d)).unzip();
+        // Wet where water stands over the ground: the column's own water.
+        let wet: Vec<bool> = (0..dirs.len())
+            .map(|i| heights[i] > ground[i] + 0.01)
+            .collect();
+        let nearest = |p: Vec3| {
+            (0..dirs.len())
+                .max_by(|&a, &b| dirs[a].dot(p).total_cmp(&dirs[b].dot(p)))
+                .expect("cells")
+        };
+        let (start, end) = (nearest(here), nearest(goal));
+        let off: Vec<bool> = dirs
+            .iter()
+            .map(|&d| blocked.contains(&cell_key(d)))
+            .collect();
+        let metres = |a: usize, b: usize| dirs[a].angle_between(dirs[b]) * PLANET_RADIUS;
+        let mut cost = vec![f32::INFINITY; dirs.len()];
+        let mut from = vec![usize::MAX; dirs.len()];
+        let mut heap = BinaryHeap::new();
+        let key = |c: f32| (c * 1000.0) as u64;
+        cost[start] = 0.0;
+        heap.push(Reverse((key(metres(start, end)), start)));
+        while let Some(Reverse((_, a))) = heap.pop() {
+            if a == end {
+                break;
+            }
+            for &b in &cells[a].cell.neighbors {
+                if b == usize::MAX || b >= dirs.len() || off[b] {
+                    continue;
+                }
+                let rise = heights[b] - heights[a];
+                if !step_allowed(
+                    (ground[a], heights[a], wet[a]),
+                    (ground[b], heights[b], wet[b]),
+                ) {
+                    continue;
+                }
+                let step = metres(a, b);
+                let c = cost[a]
+                    + step * if wet[b] { 1.0 } else { 1.6 }
+                    + if rise > 1.1 { 12.0 } else { 0.0 }
+                    // Out of the river only where it has to: a climb out is
+                    // where a swimmer is slowest to get going.
+                    + if wet[a] && !wet[b] { 8.0 } else { 0.0 };
+                if c < cost[b] {
+                    cost[b] = c;
+                    from[b] = a;
+                    heap.push(Reverse((key(c + metres(b, end)), b)));
+                }
+            }
+        }
+        if !cost[end].is_finite() {
+            return None;
+        }
+        let mut order = vec![end];
+        while let Some(&last) = order.last() {
+            if last == start {
+                break;
+            }
+            order.push(from[last]);
+        }
+        order.reverse();
+        Some(Self {
+            cells: order.iter().map(|&i| dirs[i]).collect(),
+            heights: order.iter().map(|&i| heights[i]).collect(),
+            next: 1.min(order.len() - 1),
+        })
+    }
+
+    /// The cell centre to walk to from `here`: on past a cell once within
+    /// 1.2 m of its centre, or once the cell after it is nearer.
+    pub fn aim(&mut self, here: Vec3) -> Vec3 {
+        let here = here.normalize_or(Vec3::Y);
+        let gap = |d: Vec3| d.angle_between(here) * PLANET_RADIUS;
+        while self.next + 1 < self.cells.len()
+            && (gap(self.cells[self.next]) < 1.2
+                || gap(self.cells[self.next + 1]) < gap(self.cells[self.next]))
+        {
+            self.next += 1;
+        }
+        self.cells[self.next]
+    }
+
+    /// The rise to the cell being walked to from the one before it, m.
+    pub fn rise_ahead(&self) -> f32 {
+        if self.next == 0 {
+            return 0.0;
+        }
+        self.heights[self.next] - self.heights[self.next - 1]
+    }
+
+    /// The route's length still to walk from the cell being walked to, m.
+    pub fn left_m(&self) -> f32 {
+        self.cells[self.next.min(self.cells.len() - 1)..]
+            .windows(2)
+            .map(|w| w[0].angle_between(w[1]) * PLANET_RADIUS)
+            .sum()
+    }
+
+    /// How far `here` is off the route's current leg, m.
+    pub fn off_m(&self, here: Vec3) -> f32 {
+        let here = here.normalize_or(Vec3::Y);
+        let a = self.cells[self.next.saturating_sub(1)];
+        let b = self.cells[self.next];
+        let seg = b - a;
+        let t = ((here - a).dot(seg) / seg.length_squared().max(1e-12)).clamp(0.0, 1.0);
+        (a + seg * t).normalize().angle_between(here) * PLANET_RADIUS
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,6 +467,96 @@ mod tests {
         assert!((end - length).abs() < 1.0, "{end} of {length}");
         let mid = path.progress_m(path.bank_at(length * 0.5));
         assert!((mid - length * 0.5).abs() < 30.0, "{mid}");
+    }
+
+    /// Stuck is ground covered over a second, not height: a walker hopping
+    /// on the spot is stuck, one sprinting is not, and a trail shorter than a
+    /// second says nothing yet.
+    #[test]
+    fn stuck_is_ground_covered_in_a_second() {
+        let a = at(20.0, -6.0);
+        let east = Vec3::Y.cross(a).normalize();
+        let step = |m: f32| along(a, east, m);
+        let short = [(0.0, a), (0.5, step(0.2))];
+        assert_eq!(moved_in_last_second(&short), None);
+        let hopping: Vec<(f32, Vec3)> = (0..=12)
+            .map(|i| (i as f32 * 0.1, step(0.1 * (i % 2) as f32)))
+            .collect();
+        assert!(moved_in_last_second(&hopping).unwrap() < STUCK_LAND_M);
+        let sprint: Vec<(f32, Vec3)> = (0..=12)
+            .map(|i| (i as f32 * 0.1, step(1.4 * i as f32)))
+            .collect();
+        assert!(moved_in_last_second(&sprint).unwrap() > 13.0);
+    }
+
+    /// A hex route down the owner's river from bank point to bank point 40 m
+    /// on: found all the way, every step a neighbour's (no shortcut over a
+    /// cell), and no step rising past a jump.
+    #[test]
+    fn a_hex_route_runs_down_the_owner_s_river() {
+        if terrain_config().rivers.is_none() {
+            return;
+        }
+        let path = RiverPath::through(at(20.885, -6.393), -1.0).expect("a river");
+        let (mut found, mut n) = (0, 0);
+        let mut m = 0.0;
+        while m < path.length_m() - 45.0 {
+            let here = path.bank_at(m);
+            let route = HexRoute::plan(here, path.bank_at(m + 40.0), &[], None)
+                .or_else(|| HexRoute::plan(here, path.line_at(m + 40.0), &[], None));
+            n += 1;
+            if let Some(route) = route {
+                found += 1;
+                for (w, h) in route.cells.windows(2).zip(route.heights.windows(2)) {
+                    let step = w[0].angle_between(w[1]) * PLANET_RADIUS;
+                    // A neighbour is 2.6 to 3.8 m off (the dual's spread);
+                    // two cells across is 4.9 m or more.
+                    assert!(
+                        step < 4.4,
+                        "{m} m: a step of {step} m is not to a neighbour"
+                    );
+                    assert!(
+                        h[1] - h[0] <= JUMPABLE_M,
+                        "{m} m: a rise of {}",
+                        h[1] - h[0]
+                    );
+                }
+            }
+            m += 40.0;
+        }
+        assert!(found * 10 >= n * 9, "routes found {found} of {n}");
+    }
+
+    /// The router's step rule is the walker's: a swimmer passes over deep
+    /// water or a bed that does not rise, never up a shallow bed's step; it
+    /// climbs out near the surface; on foot it steps one layer and jumps two.
+    #[test]
+    fn the_step_rule_is_the_walker_s() {
+        // (ground, walked on, wet)
+        let deep = |bed: f32| (bed, bed + 2.0, true);
+        let shallow = |bed: f32| (bed, bed + 0.5, true);
+        let dry = |g: f32| (g, g, false);
+        assert!(
+            step_allowed(deep(60.0), deep(61.0)),
+            "floats over deep water"
+        );
+        assert!(
+            step_allowed(deep(60.0), shallow(60.0)),
+            "a bed that does not rise"
+        );
+        assert!(
+            !step_allowed(deep(60.0), shallow(61.0)),
+            "a shallow bed's step stops it"
+        );
+        assert!(
+            step_allowed(deep(60.0), dry(63.0)),
+            "climbs out at the surface"
+        );
+        assert!(
+            !step_allowed(deep(60.0), dry(64.0)),
+            "not a bank over its reach"
+        );
+        assert!(step_allowed(dry(60.0), dry(62.0)) && !step_allowed(dry(60.0), dry(63.0)));
     }
 
     /// The measure: with every sheet listed the water is drawn to the
