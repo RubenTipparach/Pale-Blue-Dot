@@ -490,6 +490,11 @@ which wait for a request.
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
   first rungs only: water and wind (M20).
+- **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
+  should be 3b"): server authority over everything stored, the server
+  mediating every interaction near or far, each client building its own LOD,
+  and per-region checksums that make a client re-fetch a region that does not
+  match (`multiplayer`). No mockup yet.
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for
