@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* Layout: the game's HUD at night; one column of question cards, each with the screenshots it turns on, a sticky tally bar.
    Tokens keep the template's names (paper, brass, done) so its rules stay as written. */
@@ -10,7 +10,7 @@
   --bg: #0b1119; --paper: #131c28; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f;
   --brass: #e8b44c; --brass-soft: #3a2c12; --done: #7fcf86; --done-soft: #17301c;
   --sun: #e8b44c; --crescent: #7fcf86; --star: #f07a6a; --eagle: #7fb2f0;
-  --display: "Pixelify Sans", "Courier New", monospace;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
@@ -146,7 +146,7 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
     <div class="eyebrow">Owner survey · opened 2026-11-12</div>
     <h1>Pale Blue Dot Survey</h1>
     <div class="suits" aria-hidden="true"><span style="background:var(--sun)"></span><span style="background:var(--crescent)"></span><span style="background:var(--star)"></span><span style="background:var(--eagle)"></span></div>
-    <p class="lede">Open questions about the game. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p class="lede">Open questions about the game. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   </header>
 
   <div class="tally">
@@ -182,12 +182,12 @@ const SECTIONS = [
         options: ['A. Keep the invariant: rockets fly in today\'s bounded field', 'B. Rockets fly in Tenebris\'s orbital field, with the predicted line, no maneuver nodes; the fusion tier\'s nav computer plans', 'C. All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes'], rec: 1,
         why: 'It is the orbital play you liked, with the part the invariant was written against (a second model of motion that has to agree with the integrator) left out; CLAUDE.md changes in one clause, in the commit that builds it.',
         change: 'ship-tiers', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/Af9oUZTdnhRzF1UYtxqUq6#orbit', label: 'Rockets and Landers, tab 2: flip "Inverse-square (B)" and "Today\'s band (A)"; tab 3 for the course to Lantern' } },
+        link: { url: 'https://claude.ai/artifact/LehpNoszMuPLvryYhLeqsV#orbit', label: 'Rockets and Landers, tab 2: flip "Inverse-square (B)" and "Today\'s band (A)"; tab 3 for the course to Lantern' } },
       { id: 'G4a', q: 'You asked for "a solar system with navigation nodes to plot flight paths and rocket burns", and the mockup\'s new Planner tab has them: click the predicted line to place a node, drag its prograde, normal and radial handles, and the line ahead moves; hold B when it comes up and the ship burns it. CLAUDE.md says "Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation", and G4\'s recommended B had no nodes. In the planner a node is a burn the integrator flies: the line is the flight itself run forward (a coasting ship ends 0 m from it), every body pulls, and nothing is solved as a conic. Flown with it: low orbit to Taper, a 600 m test moon, for 77 m/s, and home for 43 m/s.',
         options: ['Allow nodes: finite burns planned on the integrated line and flown by hand; patched conics, sphere-of-influence solvers, transfer windows and ship-to-ship gravity stay out', 'Keep nodes out: the line, Ap/Pe and the SAS holds stay, the planner\'s nodes go (G4\'s B)', 'All of Tenebris: conics, spheres of influence and nodes (G4\'s C)'], rec: 0,
         why: 'It is what you asked for, and it keeps what the rule was written to protect: one model of motion, so the line can never disagree with the ship. CLAUDE.md changes only on your answer, in the commit that builds it.',
         change: 'ship-tiers (design 11.4)', asked: '2026-11-14',
-        link: { url: 'https://claude.ai/artifact/Af9oUZTdnhRzF1UYtxqUq6#plan', label: 'Rockets and Landers, the Planner tab: try "Transfer to Taper", then hold B at each node' },
+        link: { url: 'https://claude.ai/artifact/LehpNoszMuPLvryYhLeqsV#plan', label: 'Rockets and Landers, the Planner tab: try "Transfer to Taper", then hold B at each node' },
         images: [
           { src: 'img/g4a-nodes.jpg', alt: 'Low orbit round Tenebris with three maneuver nodes to Taper, each with six coloured handles, and the line purple after the first node', caption: 'The nav computer\'s three nodes to Taper: depart, capture, round off.' },
           { src: 'img/g4a-handles.jpg', alt: 'A maneuver node close up beside the ship: yellow prograde and retrograde handles, purple normal, cyan radial', caption: 'A node close up: drag a handle and the line ahead moves.' },
@@ -202,7 +202,7 @@ const SECTIONS = [
         options: ['As drawn', 'Chibbier: bigger canopies, rounder noses, even shorter wings', 'Less chibi: closer to true proportions'], rec: 0,
         why: 'It reads as your references (the shark-mouth fighter and the utility helicopters) while every part stays a part you placed, so a design still flies by its own numbers.',
         change: 'vehicle-yards (decision 4)', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/WUugWkXMLPRKMGVMd4w9mG', label: 'Hangar and Chibi Aircraft: the airfield and the builder' },
+        link: { url: 'https://claude.ai/artifact/Jcb3oo89Vb8puHfaBUBWAm', label: 'Hangar and Chibi Aircraft: the airfield and the builder' },
         images: [
           { src: 'img/a1-presets.jpg', alt: 'The five chibi presets: Sharky the prop fighter, Bumble the helicopter, Puffin the tiltrotor, Gull the floatplane and Dart the jet', caption: 'The five presets by day.' },
           { src: 'img/a1-builder.jpg', alt: 'The aircraft builder with Sharky on the grid and its 3D preview', caption: 'The builder: Sharky on the grid, its preview and its numbers.' },
@@ -211,7 +211,7 @@ const SECTIONS = [
         options: ['Whole cells, as drawn', 'Whole cells, plus sloped hull pieces on the bow and bilge (look only; the cell still floats whole)', 'Smaller ship cells (breaks the one-cell rule)'], rec: 0,
         why: 'Every cell of a ship is then a cell you can stand on, break and save like the ground. Sloped pieces can be added later without changing a saved ship, so nothing is lost by starting plain.',
         change: 'vehicle-yards (decision 3)', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/K2uLF3kCJGu57tg4bk6ect', label: 'Drydock and Hex Ship Builder: the dock, the builder and the walk on deck' },
+        link: { url: 'https://claude.ai/artifact/YC3SViwisspS7kfu4BhMkE', label: 'Drydock and Hex Ship Builder: the dock, the builder and the walk on deck' },
         images: [
           { src: 'img/a2-dock-day.jpg', alt: 'A three-masted hex-cell ship on its keel blocks in the dry dock, under the gantry crane', caption: 'The three-master in the dry dock by day.' },
           { src: 'img/a2-afloat-night.jpg', alt: 'The ship afloat in the flooded dock at night, its lanterns lit', caption: 'Afloat in the flooded dock at night.' },

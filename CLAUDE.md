@@ -272,7 +272,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL (`docs/design/survey.html`),
+https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9 (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -294,8 +294,8 @@ with its screenshots.
 
 **Standing instruction from the user** (the same message): every Pale Blue
 Dot artifact is listed on one master page, the mockup tracker,
-https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`).
-The playtest bug list is https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou
+https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (`docs/mockups/tracker.html`).
+The playtest bug list is https://claude.ai/artifact/7WA7dq9PM5bC2CtxpwGBtB
 (`docs/design/bug-list.html`). These links are the owner's account since
 2026-11-16 ("When the owner changes accounts" in the `mockup-tracker` skill).
 Its sections are Game mockups (each approved by the owner for build, then for
@@ -603,41 +603,41 @@ baseline, a regression, a cost that moved) - regenerate the page with
 `tools/perf_report_html.py <run dir> --notes <report.md> --out
 docs/benchmarks/<date>-<name>/report.html`, check it in, and republish the
 artifact so the owner's link shows the latest: the baseline page is
-https://claude.ai/artifact/8YhrUTuqtTByNepg9UKFEd (update it with that URL;
+https://claude.ai/artifact/EpH7ncfGEZwmVqZAj8AcJF (update it with that URL;
 a new baseline may get its own page, linked from here). The `cloud-close-up`
-before-and-after page is https://claude.ai/artifact/QjRaKRRunUyhUQj4a2FEDA.
-The `detail-fade` one is https://claude.ai/artifact/UCBFii7A4VFLyvHn63WDaN.
+before-and-after page is https://claude.ai/artifact/4wtXNsTG4Nn68HFD2zdprA.
+The `detail-fade` one is https://claude.ai/artifact/CUbEJx9FTCEioPQeH7NzgJ.
 The `town-frame-time` A/B (a town walk, main against the branch) is
-https://claude.ai/artifact/Y6piR4LxxRaAoLdYLHxakL.
+https://claude.ai/artifact/6Fpf2J6CBj3frPuamobp7Z.
 The `cloud-puffs` march-against-puffs page (an M4 Max Mac, not the desktop) is
-https://claude.ai/artifact/W9NwxmDmwuoQsRD2UgJFmP.
+https://claude.ai/artifact/TbBiyMCUrTo5WvFgxczBf7.
 The `rain-shells` volume-against-shells page (the same Mac) is
-https://claude.ai/artifact/TtLkRYScSY4j8NssGMYtqE.
+https://claude.ai/artifact/HZCWkFZhP7wxVioP1F9iLf.
 The `lighting-model` today-against-new page (the same Mac; the full
 sitting of 2026-10-29, `docs/benchmarks/2026-10-29-lighting-full/`) is
-https://claude.ai/artifact/Vt9PqBQoHg5UkVEHzga2Ns.
+https://claude.ai/artifact/1dJus67qTpusARH9NnwpDr.
 The `puff-frustum-cull` + `wet-near-detail` before-and-after page (the same
-Mac) is https://claude.ai/artifact/BxzRGCWsDbKvGZiLP9beY3.
+Mac) is https://claude.ai/artifact/6NXGt8Hmkvh9ATpgCW1ACe.
 The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
-is https://claude.ai/artifact/GPcLRxsF7KjkfifVFJ1C6r.
+is https://claude.ai/artifact/15fKGPpXQhM5eUhvRCJg42.
 The `lighting-perf` close (main's lighting, `f15a647`, against the branch
 after 2.8's half-size reflections: every scenario inside 16.7 ms at p99;
 `docs/benchmarks/2026-11-12-worst-case-60/`) is
-https://claude.ai/artifact/GdAq364GxwbZcsTiJSnQUq.
+https://claude.ai/artifact/X2DcwHBfAw6nzB9mQJp2sk.
 The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
 branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
-https://claude.ai/artifact/Mytd1vV76J9UqSBfkQv6QQ.
+https://claude.ai/artifact/V3wNXcyxuhppzGckaRWkAw.
 The one-part-off breakdown (where the frame goes, the same Mac) is
-https://claude.ai/artifact/G23GqozWQUZG6g5vAWb5sE.
+https://claude.ai/artifact/X7epG3KF28YGpHq8KVcB3L.
 The `cascade-perf` page (the owner's desert river cascade on the Mac: where
 the frame goes, the same-picture cuts, and the A/B still owed on an unlocked
 machine; `docs/benchmarks/2026-11-17-cascade-perf/`) is
-https://claude.ai/artifact/9q2VTvHkTYwAniaxYbKjWJ.
+https://claude.ai/artifact/7tt2bWmjsMv6dUNrXKxUHH.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

@@ -1,6 +1,6 @@
 # Proposal: river craft (rafts, a tug and its tow, a log drive, net boats, anchoring)
 
-**Mockup:** M34 River Craft, https://claude.ai/artifact/93iZ1pBszzY8u6gmWZFRyJ
+**Mockup:** M34 River Craft, https://claude.ai/artifact/GZTZJ4Vg1bSbg4SH2rYY97
 (`docs/mockups/river-craft.html`), published 2026-11-16; on the tracker.
 
 ## Why

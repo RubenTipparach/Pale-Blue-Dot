@@ -62,7 +62,7 @@
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
-- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo: "alright, I'm happy
+- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/1SPmrnALwj2f2x4o932J2X: "alright, I'm happy
       with this, send it yo". The game port is 6.6, with the mockup's defaults: the proposed mist rule, smooth FX,
       opacity 2, size 1.65, wall blend 1.2, droplets as single drops (no streaks, owner), speed-up 2, ripples 0.5 /
       0.9 m / 6 m, pool flow 0.1 / 6 m, Glassy lip 0.70 / 0.50 / 2.25 / green 0.25 / highlight 0. Mockup:
