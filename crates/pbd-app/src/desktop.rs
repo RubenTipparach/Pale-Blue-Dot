@@ -206,6 +206,9 @@ pub struct Launch {
     /// seat rather than the chase view: a headless run has nobody to walk up
     /// to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
+    /// `--pole-run`: aboard a raft, pole it up the river and back down
+    /// (`vehicles::pole_run`).
+    pub pole_run: bool,
     pub seat: bool,
     /// Test instrument: hold the render origin this far from the camera's
     /// cell, so the planet's centre and the eye are both away from 0 in
@@ -502,6 +505,7 @@ impl Launch {
             husbandry: None,
             life: None,
             aboard: None,
+            pole_run: false,
             seat: false,
             render_offset: Vec3::ZERO,
             height: None,
@@ -1307,6 +1311,7 @@ impl Launch {
                     result.walk = true;
                 }
                 "--seat" => result.seat = true,
+                "--pole-run" => result.pole_run = true,
                 "--fixed-dt" => result.fixed = true,
                 "--clock-runs" => result.clock_runs = true,
                 "--real-time" => result.real_time = true,
@@ -2186,6 +2191,8 @@ pub fn run(args: &[String]) {
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
+            at: launch.at.map(|_| spawn_direction(&launch)),
+            pole_run: launch.pole_run,
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);

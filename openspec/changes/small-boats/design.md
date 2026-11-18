@@ -304,3 +304,48 @@ change; it is noted here so it is not mistaken for one.
 This runs in a Claude Code cloud container with no GPU, so the frame cost is
 not measured. The change adds at most a few craft, each the Loon's step, and a
 row of UI.
+
+## 2d. A river's own current, a raft that floats, a pole (owner, 2026-11-18)
+
+The owner: "float an inner tube down a river ... see if its fast enough,
+otherwise we can tweak it", then "please ensure the raft is boyant first",
+then "get me a 1 minute video of the raft guy pushing the raft up and down
+the river".
+
+- **A river's own current.** 2b's current was the surface's slope alone, and
+  a river's reaches are level between their steps: a tube sat still, or made
+  0.8 m/s and stopped in a level pool. A craft in a river's channel now also
+  takes 2 m/s down the drainage map's course (`RIVER_FLOW_MPS`), and a pull
+  of up to 0.8 m/s toward the river's line, so meanders carry it round their
+  bends rather than into a bank. The slope's push stays on top; the cap is
+  3.5 m/s. Measured: a tube floated 44-55 m in 30 s with no input, never
+  stopping.
+- **Floating on the drawn water** (`PlanetContact::drawn_water`). A flowing
+  top is drawn through its corners, up to a layer's share over the column's
+  level; craft floated on the level, so a raft could sit under the water seen
+  over it.
+- **The raft is 1,200 kg, not 2,000.** That's nine 4.4 m logs about 0.3 m
+  thick, green. At 2,000 kg its deck rode 7 cm clear, awash in the ripples;
+  now 16 cm, steady (`PBD_BOAT_TRACE`). The core vehicle tests pass.
+- **The raft's stroke is a pole** (`PaddleSpec::pole`). It pushes on the bed,
+  measured against the ground, where a paddle pushes on the water: a paddle
+  can't beat a current, and the raft poled flat out only slowed its drift
+  from 2 to 1.1 m/s. Its push area is 0.7 m². Now it poles up the river
+  against 2 m/s at 0.2-0.65 m/s.
+- **Instruments.**
+  - `--aboard tube|raft` with `--at` launches on the river there, at the
+    water's drawn surface.
+  - `TUBE` lines log a scripted craft's drift each second.
+  - `--pole-run` poles a raft up the river for 55 s from its launch, then
+    lets the current carry it back down. It's launched facing upstream,
+    because a 4.4 m raft turned round in a narrow channel swings broadside
+    and wedges, and poled backward it spins.
+- **Videos:** `inner-tube-float-2026-11-18-450p60.mp4` and
+  `raft-pole-up-and-down-2026-11-18-450p60.mp4`, Drive validation folder.
+- **The pole moves as M34's does** (owner: "why his stick flyaway?", "why is
+  the game implmenetation different on how the pole moves", "the mockup worked
+  well"). The game drew the raft's pole at a paddle's blade, out to whichever
+  side the stroke was on, 1.35 m from the rider's hands. It now hangs from his
+  hand on the controls, exactly as `river-craft.html`'s raft: 0.12 forward at
+  rest, 0.5 with W or S, tilted 0.35 to the side with A, D, Q or E
+  (`vehicles::draw::pole`). Video: `raft-pole-up-and-down-v2-2026-11-18-450p60.mp4`.

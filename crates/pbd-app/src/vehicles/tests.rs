@@ -1022,14 +1022,16 @@ fn a_held_record_keeps_its_id_from_every_new_craft() {
 
 /// The moving things' light (`lamps-and-lanterns` decision 10), pinned on
 /// the boats now that the Kestrel and its cave rig are gone
-/// (`retire-kestrel` decision 5): every craft placed is lit by the field.
+/// (`retire-kestrel` decision 5): every craft placed is lit by the field,
+/// and as the terrain is, by its own sun and shadows (`craft-lighting`).
 #[test]
 fn every_craft_is_lit_by_the_field() {
     let mut app = app(crate::saves::WorldSave::memory_only());
     app.update();
-    let mut lit = app
-        .world_mut()
-        .query_filtered::<&Vehicle, With<crate::field_light::LitByField>>();
+    let mut lit = app.world_mut().query_filtered::<&Vehicle, (
+        With<crate::field_light::LitByField>,
+        With<crate::field_light::LitLikeTerrain>,
+    )>();
     let kinds: Vec<Kind> = lit.iter(app.world()).map(|v| v.craft.kind).collect();
     assert_eq!(kinds.len(), crafts(&mut app).len());
     assert!(kinds.contains(&Kind::Loon));

@@ -175,6 +175,8 @@ impl Plugin for VehiclePlugin {
                     harbour::moor_harbours,
                     harbour::stow_and_wake,
                     scripted_board,
+                    float_log,
+                    pole_run,
                 )
                     .chain(),
             )
@@ -435,7 +437,17 @@ const FRESH_WAVE_DEPTH_M: f32 = 0.15;
 /// A river's surface current per unit slope, and its cap, m/s: the water
 /// mesher's pan, 1.6 m/s at a slope of 0.12.
 const FRESH_FLOW_PER_SLOPE: f64 = 1.6 / 0.12;
-const FRESH_FLOW_MAX: f64 = 2.0;
+const FRESH_FLOW_MAX: f64 = 3.5;
+/// A river's own current, m/s, down its course from the drainage map, where
+/// its surface is level as well as where it falls: a river flows in its
+/// level reaches too (the owner, 2026-11-18, floating a tube: "see if its
+/// fast enough, otherwise we can tweak it"; on the slope alone a tube sat
+/// still in a level reach).
+const RIVER_FLOW_MPS: f64 = 2.0;
+/// How hard the current turns a craft toward the river's line, m/s at the
+/// river's edge: so a meander carries it round the bend rather than into
+/// the bank.
+const RIVER_CENTRING_MPS: f64 = 0.8;
 /// How far round a craft the surface's slope is read, m.
 const FRESH_PROBE_M: f64 = 1.5;
 
@@ -448,7 +460,7 @@ pub fn fresh_water(contact: &PlanetContact, point: DVec3) -> Option<FreshWater> 
     let top = |p: DVec3| -> Option<f32> {
         [p, p - up * 0.5, p - up * 1.0]
             .into_iter()
-            .find_map(|q| contact.column_water(q.as_vec3()).flatten())
+            .find_map(|q| contact.drawn_water(q.as_vec3()).flatten())
     };
     let here = top(point)?;
     // The sea's own cells fill every layer under the sea layer, so their
@@ -473,6 +485,29 @@ pub fn fresh_water(contact: &PlanetContact, point: DVec3) -> Option<FreshWater> 
         slope += axis * f64::from(at(1.0) - at(-1.0)) / (2.0 * FRESH_PROBE_M);
     }
     let mut current = -slope * FRESH_FLOW_PER_SLOPE;
+    // A river's own flow, down its course, and toward its line.
+    let cfg = crate::planet::terrain_config();
+    let dir = up.as_vec3();
+    if let Some(river) = pbd_core::rivers::at(cfg, dir)
+        && river.across_m < river.half_width_m + 1.0
+    {
+        let down = (-river.upstream).as_dvec3();
+        let down = (down - up * down.dot(up)).normalize_or_zero();
+        current += down * RIVER_FLOW_MPS;
+        // Toward the line: the side a step makes the river nearer.
+        let side = up.cross(down).normalize_or_zero();
+        let across = |sign: f64| {
+            let q = (point + side * sign).normalize().as_vec3();
+            pbd_core::rivers::at(cfg, q).map_or(f32::INFINITY, |h| h.across_m)
+        };
+        let toward = if across(1.0) < across(-1.0) {
+            side
+        } else {
+            -side
+        };
+        let off = (f64::from(river.across_m) / f64::from(river.half_width_m.max(1.0))).min(1.0);
+        current += toward * RIVER_CENTRING_MPS * off;
+    }
     if current.length() > FRESH_FLOW_MAX {
         current = current.normalize() * FRESH_FLOW_MAX;
     }
@@ -679,6 +714,142 @@ pub struct VehicleScript {
     pub board: Option<Kind>,
     /// In the seat rather than the chase view.
     pub seat: bool,
+    /// Where to launch a tube or raft (a unit direction, `--at`) when a river
+    /// runs there: on the river's water, facing downstream (the owner,
+    /// 2026-11-18: "float an inner tube down a river"). Else by the Loon.
+    pub at: Option<Vec3>,
+    /// `--pole-run`: the rider poles the raft up the river against its
+    /// current, then back down with it, by the craft's own keys (the owner,
+    /// 2026-11-18: "the raft guy pushing the raft up and down the river").
+    pub pole_run: bool,
+}
+
+/// The pole run's script (`--pole-run`, a recording instrument): settle five
+/// seconds, turn upstream and pole against the current to 32 s, then turn
+/// and pole down with it. It steers toward the river's own course where the
+/// raft is (A and D), and poles with W, as a player does.
+pub fn pole_run(
+    script: Option<Res<VehicleScript>>,
+    log: Option<Res<FloatLog>>,
+    aboard: Res<Aboard>,
+    vehicles: Query<&Vehicle>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut said: Local<u8>,
+) {
+    if !script.is_some_and(|s| s.pole_run) {
+        return;
+    }
+    let (Some(log), Some(entity)) = (log, aboard.0) else {
+        return;
+    };
+    let Ok(vehicle) = vehicles.get(entity) else {
+        return;
+    };
+    let t = log.started.elapsed().as_secs_f32();
+    for key in [KeyCode::KeyW, KeyCode::KeyS, KeyCode::KeyA, KeyCode::KeyD] {
+        keys.release(key);
+    }
+    if t < 5.0 {
+        return;
+    }
+    let upstream = t < 55.0;
+    let phase = if upstream { 1 } else { 2 };
+    if *said != phase {
+        *said = phase;
+        info!(
+            "POLE_RUN {t:.0} s: poling {}",
+            if upstream {
+                "up the river, against its current"
+            } else {
+                "down the river, with it"
+            }
+        );
+    }
+    let at = vehicle.craft.body.position;
+    let up = at.normalize();
+    let cfg = crate::planet::terrain_config();
+    let Some(river) = pbd_core::rivers::at(cfg, up.as_vec3()) else {
+        keys.press(KeyCode::KeyW);
+        return;
+    };
+    // Launched facing upstream (a 4.4 m raft turned round in a narrow
+    // channel swings broadside and wedges): the rider poles it up the river
+    // against the current, steering, then stops and rides the current back
+    // down past where it started.
+    let along = river.upstream.as_dvec3();
+    let target = (along - up * along.dot(up)).normalize_or_zero();
+    let forward = vehicle.craft.body.orientation * DVec3::NEG_Z;
+    let forward = (forward - up * forward.dot(up)).normalize_or_zero();
+    let left = up.cross(forward);
+    let side = target.dot(left);
+    let ahead = target.dot(forward);
+    if upstream {
+        if side > 0.15 {
+            keys.press(KeyCode::KeyA);
+        } else if side < -0.15 {
+            keys.press(KeyCode::KeyD);
+        }
+        if ahead > 0.6 {
+            keys.press(KeyCode::KeyW);
+        }
+    }
+    if ((t * 10.0) as u32).is_multiple_of(10) {
+        let v = vehicle.craft.body.velocity;
+        info!(
+            "POLE_DEBUG {t:.1} s: ahead {ahead:+.2} side {side:+.2}, speed up the river {:+.2} m/s, keys W {} S {} A {} D {}",
+            v.dot(target),
+            keys.pressed(KeyCode::KeyW),
+            keys.pressed(KeyCode::KeyS),
+            keys.pressed(KeyCode::KeyA),
+            keys.pressed(KeyCode::KeyD)
+        );
+    }
+}
+
+/// The float log (`river-downhill`'s tube test): once a second while aboard a
+/// scripted tube or raft, how far it has come from its launch and how fast it
+/// goes, with no input, carried by the river alone.
+#[derive(Resource)]
+pub struct FloatLog {
+    from: DVec3,
+    started: std::time::Instant,
+    next: std::time::Instant,
+    travelled_m: f64,
+    last: DVec3,
+}
+
+pub fn float_log(log: Option<ResMut<FloatLog>>, aboard: Res<Aboard>, vehicles: Query<&Vehicle>) {
+    let Some(mut log) = log else {
+        return;
+    };
+    let Some(entity) = aboard.0 else {
+        return;
+    };
+    let Ok(vehicle) = vehicles.get(entity) else {
+        return;
+    };
+    let at = vehicle.craft.body.position;
+    let step = at.distance(log.last);
+    if step < 50.0 {
+        log.travelled_m += step;
+    }
+    log.last = at;
+    let now = std::time::Instant::now();
+    if now < log.next {
+        return;
+    }
+    log.next = now + std::time::Duration::from_secs(1);
+    let up = at.normalize().as_vec3();
+    let speed = vehicle.craft.body.velocity;
+    let speed = (speed - at.normalize() * speed.dot(at.normalize())).length();
+    info!(
+        "TUBE {:.0} s: {:.0} m along its path, {:.0} m from its launch, {speed:.1} m/s, {} | {} m elevation",
+        now.duration_since(log.started).as_secs_f32(),
+        log.travelled_m,
+        up.angle_between(log.from.normalize().as_vec3()) * crate::planet::PLANET_RADIUS,
+        crate::place::Place::of(up * crate::planet::PLANET_RADIUS).line(),
+        (at.length() - crate::planet::PLANET_RADIUS as f64).round()
+    );
 }
 
 fn scripted_board(world: &mut World) {
@@ -696,6 +867,55 @@ fn scripted_board(world: &mut World) {
         .iter(world)
         .find(|(_, v)| v.craft.kind == kind)
         .map(|(e, _)| e);
+    // On the river at `--at`, facing downstream: what a player floating a
+    // river would do.
+    let found = found.or_else(|| {
+        if !matches!(kind, Kind::Tube | Kind::Raft) {
+            return None;
+        }
+        let at = script.at?;
+        let cfg = crate::planet::terrain_config();
+        let top = pbd_core::rivers::water(cfg, at).last()?.0 as f64;
+        // Facing downstream to float; upstream for a pole run, which poles
+        // up the river first.
+        let down = pbd_core::rivers::at(cfg, at).map_or(Vec3::ZERO, |h| {
+            if script.pole_run {
+                h.upstream
+            } else {
+                -h.upstream
+            }
+        });
+        // On the surface the craft floats on (`fresh_water`, the tier's own
+        // water, the flowing water over the last whole layer included), not
+        // the generator's last layer: launched there it started 1.6 m under
+        // and took seconds to come up.
+        let layer = at.as_dvec3() * (crate::planet::PLANET_RADIUS as f64 + top);
+        let surface = world
+            .get_resource::<PlanetContact>()
+            .and_then(|c| fresh_water(c, layer + at.as_dvec3() * 2.0))
+            .map_or(crate::planet::PLANET_RADIUS as f64 + top + 1.0, |w| {
+                w.surface
+            });
+        let on = at.as_dvec3() * surface;
+        let toward = (down.as_dvec3()).normalize_or(on.any_orthonormal_vector());
+        let craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
+        let entity = place::spawn_craft(world, craft);
+        launch::write_fleet(world);
+        let now = std::time::Instant::now();
+        world.insert_resource(FloatLog {
+            from: on,
+            started: now,
+            next: now,
+            travelled_m: 0.0,
+            last: on,
+        });
+        info!(
+            "--aboard: launched a {} on the river at {}, its water {top:.0} m",
+            kind.name(),
+            crate::place::Place::of(at * crate::planet::PLANET_RADIUS).line()
+        );
+        Some(entity)
+    });
     // A made boat a fresh world has none of: launched where its Loon lies,
     // as a player would launch it (`small-boats`).
     let found = found.or_else(|| {

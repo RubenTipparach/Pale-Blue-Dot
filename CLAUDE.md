@@ -93,6 +93,23 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## Everything in the world is lit as the terrain is (owner, 2026-11-18)
+
+**Standing instruction from the user:** "moving forward we need to apply
+proper lighting to stuff" (after the raft, and before it the dropped items,
+glowed in the shade: "they shouldnt be glowing like that").
+
+Anything placed in the 3D world is lit the way the ground under it is:
+- the terrain's own sun, with its shadows;
+- the cell light field (sky and lamps);
+- never Bevy's own unshadowed sun.
+
+A new mesh in the world gets `field_light::LitByField` and
+`field_light::LitLikeTerrain` on its root when it is spawned. That covers
+craft, drops, props, creatures and anything held up in the world, so in a
+canyon's shade, a cave or the night it is as dark as the ground there. UI
+and inventory icons are not in the world and keep their own look.
+
 ## Notes stay out of the game (owner, 2026-11-15)
 
 **Standing instruction from the user:** "notes belong in mockups and chats,
