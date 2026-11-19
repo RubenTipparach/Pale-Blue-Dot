@@ -56,8 +56,10 @@ own lights, with its life moving. What each scene proposes:
   so the deep is dark; turbidity per place; caustics, god rays and marine snow.
 - **Depth zones fitted to the column**: sunlit to 40 m, twilight to 90 m,
   midnight to the floor. Nothing about the column changes.
-- **Tides**: an offset of the one sea function, 3 m on Tenebris (the home planet, in the Aubade system),
-  derived from the clock.
+- **Tides**: removed. Built 2026-11-15 as an offset of the one sea function
+  (3 m on Tenebris, from its moon), then taken out at the owner's word on
+  2026-11-19 ("Remove literal tide feature"; `no-tides`). The sea stands at
+  one level; its waves stay.
 - **Places from the planet's data**: reefs in warm shallows, kelp on cool
   rocky shelf where the current upwells, sea ice from the climate normals,
   vents on the ridges, trenches where plates meet, rivers from drainage, marshes
@@ -88,7 +90,7 @@ version, for new worlds**; every old world keeps its own version cell for cell
 ## Impact
 
 - **Data:** a new `assets/config/ocean.ron` (environment rules, turbidity,
-  tide range, zones); `water.ron` gains `downwell_per_m`, `caustics`,
+  zones); `water.ron` gains `downwell_per_m`, `caustics`,
   `shafts`, `snow`, `spray_from_mps`; `fauna.ron` gains species (appended) and
   `env:` tags.
 - **Shaders:** `water.wgsl` (downwelling, turbidity, shafts, snow) and

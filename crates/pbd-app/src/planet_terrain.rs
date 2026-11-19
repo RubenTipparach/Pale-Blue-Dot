@@ -113,7 +113,7 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 /// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
 /// decision 3): the foliage pass grows no tree there.
 ///
-/// Bit [`FLOODED_BIT`] is set where the top is under the high tide's sheet
+/// Bit [`FLOODED_BIT`] is set where the top is under the high-water line
 /// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
 ///
 /// Bit [`pbd_core::flora::BEACH_BACK_BIT`] is set on the dry ground just
@@ -152,36 +152,17 @@ pub const ORE_SHEET: u32 = 15;
 // No tileset, plus one, may reach the mark: a fifteenth sheet widens the field.
 const _: () = assert!(TILESETS.len() < ORE_SHEET as usize && ORE_SHEET < 16);
 
-/// The bit of a record's material word that says water stands on the cell
-/// at some tide, so nothing grows there (`flora-v2` 12.11).
+/// The bit of a record's material word that says water stands on the cell,
+/// so nothing grows there (`flora-v2` 12.11).
 pub const FLOODED_BIT: u32 = pbd_core::flora::FLOODED_BIT;
 
-/// How far over the sea level the drawn sea stands at its highest tide, as
-/// `f32` bits; `u32::MAX` until the water settings are loaded, when the
-/// shipped settings stand in. Set once at launch ([`set_high_water`]).
-static HIGH_WATER: AtomicU32 = AtomicU32::new(u32::MAX);
-
-/// How far over the sea level the drawn sea stands at its highest tide, m:
-/// the tide's highest less the depth the sheet is drawn under the sea's
-/// layer top (`flora-v2` 12.11).
-pub fn high_water_over_sea(water: &crate::config::WaterSettings) -> f32 {
-    pbd_core::sea::tide_high_m(water.tide_range_m) - water.depth_offset_m
-}
-
-/// Take the high-water line from the loaded water settings, before any
-/// record is built.
-pub fn set_high_water(water: &crate::config::WaterSettings) {
-    HIGH_WATER.store(high_water_over_sea(water).to_bits(), Ordering::Release);
-}
-
 /// The high-water line, metres over the radius: a top under it has water
-/// standing on it for part of every day, and grows nothing.
+/// standing on it, and grows nothing. The sea's level (`no-tides` design 3):
+/// the sea has no tide, the column's own sea stands to this level, and the
+/// half metre between it and the drawn sheet (`depth_offset_m`) is the
+/// waves' margin at a shore, where a wave is held to 0.6 of the depth.
 pub fn high_water_m() -> f32 {
-    let over = match HIGH_WATER.load(Ordering::Acquire) {
-        u32::MAX => high_water_over_sea(&crate::config::WaterSettings::default()),
-        bits => f32::from_bits(bits),
-    };
-    terrain_config().sea_level_m + over
+    terrain_config().sea_level_m
 }
 
 /// The record's code for a top with water standing on it, already

@@ -27,17 +27,6 @@ struct SeaView {
     heading: vec4<f32>,
     // Tangent fade lo and hi, filter spacings, depth limit.
     limits: vec4<f32>,
-    // The tide: the moon's unit direction in the planet's frame, w the range
-    // m (zero: none). `pbd_core::sea::tide_m`.
-    tide: vec4<f32>,
-}
-
-// The tide over a direction, m: `pbd_core::sea::tide_m`, the second Legendre
-// term of the moon's angle, scaled to the range.
-fn sea_tide(tide: vec4<f32>, normal: vec3<f32>) -> f32 {
-    if (tide.w == 0.0) { return 0.0; }
-    let c = dot(normal, tide.xyz);
-    return tide.w / 1.5 * (1.5 * c * c - 0.5);
 }
 
 struct SeaSurface {
@@ -121,6 +110,5 @@ fn sea_surface(view: SeaView, p: vec3<f32>, normal: vec3<f32>, depth: f32, spaci
         out.height = out.height * scale;
         out.gradient = out.gradient * scale;
     }
-    out.height = out.height + sea_tide(view.tide, normal);
     return out;
 }

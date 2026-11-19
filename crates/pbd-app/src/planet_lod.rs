@@ -2989,14 +2989,14 @@ mod landing_replay {
 /// `flora-v2` 12.11: the owner's sea shore (`18.86 27.54`, "is that tree in
 /// your screenshot in the river?"). No record under the high-water line, on
 /// the column tier or beyond it, stands a tree; the same words without the
-/// bit, which is what the records were before, stood beach trees in the sea
-/// and the tide.
+/// bit, which is what the records were before, stood beach trees in the
+/// sea.
 #[cfg(test)]
 mod flooded_ground {
     use super::*;
 
     #[test]
-    fn no_tree_stands_where_the_sea_or_the_tide_covers_the_cell() {
+    fn no_tree_stands_where_the_sea_covers_the_cell() {
         let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
             lat: 18.86_f32.to_radians(),
             lon: 27.54_f32.to_radians(),
@@ -3088,7 +3088,7 @@ mod flooded_ground {
                     for word in [far, near] {
                         if word & flooded != 0 {
                             under += 1;
-                            assert!(!grows_tree(&cfg.trees, id, word), "a tree in the tide");
+                            assert!(!grows_tree(&cfg.trees, id, word), "a tree in the sea");
                         }
                     }
                     if (far >> BEACH_BACK_BIT) & 1 == 0 {

@@ -132,8 +132,6 @@ pub struct Surroundings<'a> {
     pub sea: &'a SeaTable,
     /// The sea state at the craft.
     pub sea_state: SeaState,
-    /// The tide (`crate::sea::tide_m`): the moon's direction and the range.
-    pub tide: glam::Vec4,
     pub sea_radius: f64,
     /// Water depth under the craft, m; zero on land.
     pub depth: f32,
@@ -554,8 +552,7 @@ impl Craft {
             let up = self.body.position.normalize_or(DVec3::Y);
             let sea = env
                 .sea
-                .local(&env.sea_state, up.as_vec3(), env.depth, seconds)
-                .with_tide(env.tide);
+                .local(&env.sea_state, up.as_vec3(), env.depth, seconds);
             let cx = Context {
                 env,
                 sea,

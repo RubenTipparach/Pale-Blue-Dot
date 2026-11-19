@@ -399,21 +399,16 @@ fn the_float_rides_the_sea_the_hulls_ride() {
     assert!(spread > 0.01, "the float rises and falls: {heights:?}");
 }
 
-/// The drawn line starts at the rod tip and ends at the drawn float, at low
-/// tide, in a wave trough and pulled under on a bite, and lies on the water
-/// between rather than through it (owner, 2026-11-16: "end of fishing rod
-/// rope is not connected to bobber"; `fishing-and-equipment` design 4). The
-/// line was held over the mean sea, so at low water its end hung over the
-/// float.
+/// The drawn line starts at the rod tip and ends at the drawn float, in a
+/// wave trough and pulled under on a bite, and lies on the water between
+/// rather than through it (owner, 2026-11-16: "end of fishing rod rope is
+/// not connected to bobber"; `fishing-and-equipment` design 4).
 #[test]
 fn the_line_runs_from_the_rod_tip_to_the_float() {
     let water = crate::config::WaterSettings::default();
-    let mut sea = Sea::new(&water);
+    let sea = Sea::new(&water);
     let beds = Mutex::new(HashMap::new());
     let direction = Vec3::new(0.3, 0.9, 0.2).normalize();
-    // Low water here: the moon a quarter turn round, the tide's full range.
-    sea.set_moon(direction.any_orthonormal_vector());
-    assert!(sea.tide_at(direction) < -0.9, "low water");
     let side = direction.any_orthonormal_vector();
     let feet = direction * (sea.radius + 1.5);
     let tip = feet + direction * 1.6 + side * 0.8;
@@ -423,10 +418,6 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         let surface = |p: Vec3| here.surface(p);
         // The float as `Line` places it: on the sea, less its dip.
         let float = out * (surface(out * sea.radius) - dip);
-        assert!(
-            float.length() < sea.radius - 0.5,
-            "the float rides under the mean"
-        );
         let tied = float + float.normalize() * draw::FLOAT_TOP_M;
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
         let centre =
@@ -460,15 +451,15 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
                 at.length() >= floor(at) + draw::LINE_CLEARANCE_M - 1e-3,
                 "a point of the line is not held clear of the water"
             );
-            // Clear of the drawn sea and of the composite's tided waterline,
-            // so nothing of it is drawn as under water.
+            // Clear of the drawn sea and of the composite's waterline, the
+            // sea's mean, so nothing of it is drawn as under water.
             assert!(
                 at.length() > draw::drawn_surface(&here, at),
                 "a point of the line is under the drawn sea"
             );
             assert!(
-                at.length() > sea.radius + sea.tide_at(at),
-                "a point of the line is under the tided waterline"
+                at.length() > sea.radius,
+                "a point of the line is under the waterline"
             );
         }
     }

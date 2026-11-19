@@ -212,7 +212,13 @@ cells and the picture could disagree.
 - **Frame time was not measured** (a cloud session has no GPU: CLAUDE.md).
   No shader changed.
 
-## 7. Not built now: the tide as flow (next task)
+## 7. Not built now: the tide as flow (dropped)
+
+**Dropped, 2026-11-19.** The owner had the tide removed ("Remove literal
+tide feature"; `no-tides`). The sea's surface stands at one level, so there
+is no intertidal beach and nothing for the tide to flow into; task 4.1 is
+closed as dropped. The rest of this section is the record of the plan.
+
 
 The tide stays a picture. A dug pit in a beach the high tide overtops is
 dry, and at a tide over its rim the sheet stops at its edge. The sheet has
@@ -249,3 +255,93 @@ the next task (tasks 4.1) and not built in this pass.
 - `dry_hole_report` at the places above, before and after.
 - Captures, before and after, in `docs/screenshots/dry-holes/` (lavapipe,
   fixed step: looks, not frame time).
+
+## 10. A dry hole is not shaded as sea (the owner, 2026-11-19)
+
+The owner, on `beach-pit-inside-before-after.jpg` and
+`beach-pit-above-before-after.jpg`: "It shouldn't shade dry holes at all",
+and on the second one's AFTER half: "This is green as fuck." In both AFTER
+halves the pit's floor and lower walls are green, and its upper walls the
+tan sand of the beach. The boundary between the two is level, about half a
+metre under the sea's level: the height of the drawn sheet.
+
+**Question.** Is that (a) the sea's underwater shading
+(`planet_surface.wgsl`, "Submerged terrain": downwelling attenuation, the
+deep colour mix, caustics, the `above_water` gate on rain wetness) still
+reaching fragments of a dry pit, or (b) ordinary shade, sand lit only by the
+blue sky in the pit's shadow?
+
+**The instrument.** Copies of the capture build with a modified
+`planet_surface.wgsl` in a scratch asset folder beside the exe (a "shipped"
+build reads its own `assets/`, `paths::assets_dir`), so nothing in the
+repository's source changes for it. Every fragment the submerged branch
+tints (`water_depth > 0`) is painted by why its water surface stood over it:
+- blue: `input.slot == 0`, off the tier: the sea's sphere, the sheet radius;
+- red: on the tier, the column's packed water top within half a metre of
+  the sea's level, which leaves the sea's sphere in place;
+- magenta: on the tier, the column's own water over the fragment.
+A fragment the branch leaves alone is drawn as the game draws it. The same
+pit, inside and above, as the captures above.
+
+**What the instrument found: (a), in the water's compose.** Five scratch
+copies of the shaders, each over the same pit from 9 m up (`--fly --at
+39.61458 15.39634 --pit 5 --pour-ahead 0.1 --time 12 --rain 0`, the eye
+path's key `0 39.61458 15.39634 9 30 -80`), 400 frames, long after the
+dig's ground has faded in (`lod_fade_s` is 1 s, 60 frames):
+1. **The terrain's submerged branch** (the instrument above): no fragment of
+   the pit is painted. The column says it is dry, and the branch agrees. The
+   sea's seabed round the beach is painted red (the column's water top at
+   the sea's level), so the instrument is live. Nor is any fragment blue:
+   the pit is on the tier.
+2. **The face's own albedo**, drawn unlit at the same point: green on the
+   floor and the lower walls, tan above.
+3. **Which sheet** each face draws from (by hue): the beach's for the pit's
+   walls and its west floor, a neighbouring biome's for its east floor; never
+   the ocean's.
+4. **Which material code** each face draws (by hue): sand on the walls,
+   stone on the floor, nothing else. Yet the instrument's own flat colours
+   come out shifted toward blue-green in the pit, more the deeper the face:
+   whatever greens the pit runs AFTER the terrain's fragment.
+5. **The water's compose** (`water.wgsl` `compose`), painting magenta every
+   pixel it takes as seen through the sea: the whole pit under the sheet's
+   level is magenta.
+
+So the green is the sea's murk, and not shade. The compose decides "wet" by
+one test, the pixel under the sea's surface sphere ("a heightfield has no
+geometry below the sea radius that is not seabed"). A pit dug on the tier
+is exactly such geometry, so its floor and walls were mixed toward the
+deep's colour by their depth under the sheet and wobbled: the green of the
+floor, and the lower walls greener the deeper they go. Its edge is level at
+the sheet's height, as the captures show. (The crosshatch in the earlier
+captures was the dig's dither fade still running; at 400 frames it is gone.)
+
+The same test tints a dry cave dug under the sea's level seen from air, and
+anything the column holds dry under the sheet.
+
+**Decision: the compose takes a pixel for wet only where the terrain says
+water may stand over it.** The terrain's fragment already knows, from its
+column (the submerged branch's own `water_depth`). It writes that to the
+scene's alpha, which nothing else reads: nought where it is on the tier and
+no water stands over it, one elsewhere (off the tier, the height field's sea
+is the sphere, as before; anything not terrain stays one). The compose, for
+an eye not under the water, multiplies its wet mask by that alpha. So:
+- a dry dug pit or cave under the sea's level is seen through air: no murk,
+  no wobble, no rain-ring gate change (the terrain's own `above_water`
+  already said dry);
+- the sea's seabed, a flooded pit and a pool are as before;
+- an eye under the water is unchanged: everything it sees is through water;
+- off the tier nothing changes. A dug pit beyond the tier is not drawn at
+  all (the far records draw the generator's height field), so there is no
+  dry pit there to tint;
+- the half-size reflections' compose blends colour only and keeps the alpha.
+
+What stays: a dropped item or a creature standing in a dry pit is not
+terrain and still reads as under the sea there. Recorded as a known limit.
+
+**Measured after the change**, by the same compose instrument at the same
+pit and frame: 121,276 pixels taken for wet before, 74 after. The 74 are
+single specks over the floor that are not terrain (small particles, which
+keep alpha one, the known limit above); no face of the pit is wet. The
+captures are in `docs/screenshots/dry-holes/` (`beach-pit-*-dry-*`,
+`beach-pit-floor-sun-*`). Frame time was not measured (a cloud session); the
+change is one multiply in the compose and one store in the terrain.

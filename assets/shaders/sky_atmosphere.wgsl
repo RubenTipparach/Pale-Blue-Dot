@@ -199,7 +199,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     // From inside, a ray that meets the solid sphere is one the sea or the
     // ground should have covered: what the dome draws there shows only where
     // they do not reach it (`horizon-haze` 4, the sea's horizon line). The
-    // sheet's tide and troughs take it as much as a metre under that sphere,
+    // sheet's offset and troughs take it as much as a metre under that sphere,
     // and its silhouette under the sphere's tangent, so a few rows of rays
     // under the horizon met no sea. Cut at the ground a few hundred metres
     // out, their air was too thin to cover the black behind the dome: a hard

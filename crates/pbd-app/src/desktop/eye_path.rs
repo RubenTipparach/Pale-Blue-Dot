@@ -104,7 +104,7 @@ pub fn setup(mut commands: Commands) {
 }
 
 /// The water surface over or under the eye, metres over the sea's level, as
-/// the column has it; the sea's own water at the drawn, tided sheet.
+/// the column has it; the sea's own water at the drawn sheet.
 fn surface_near(
     contact: &PlanetContact,
     fine: Option<&PlanetFine>,
@@ -130,7 +130,7 @@ fn surface_near(
         }
         a -= 0.05;
     }
-    // No water in the column: the sea's tided sheet where its surface
+    // No water in the column: the sea's sheet where its surface
     // reaches this cell (`ocean-environments` B22, the mark the sheet is
     // listed by), else where the height field's ground is under it.
     (contact.sea_reached(direction) || pbd_app::planet::surface_height(direction) < sheet)
@@ -144,7 +144,6 @@ pub fn drive(
     count: Option<Res<super::CaptureState>>,
     contact: Option<Res<PlanetContact>>,
     fine: Option<Res<PlanetFine>>,
-    sea: Option<Res<pbd_app::sea::Sea>>,
     water: Option<Res<pbd_app::config::WaterSettings>>,
     mut cameras: Query<(&mut Transform, &Camera), With<Camera3d>>,
     mut now: ResMut<EyePathNow>,
@@ -171,8 +170,7 @@ pub fn drive(
     // `PBD_EYE_PATH_RELATIVE=1`: the altitudes are over the water surface
     // under the eye (the ground where it is dry), so a path follows the
     // water across a step.
-    let tide = sea.as_deref().map_or(0.0, |s| s.tide_at(up));
-    let sheet0 = -water.depth_offset_m + tide;
+    let sheet0 = -water.depth_offset_m;
     let mut key = key;
     if std::env::var("PBD_EYE_PATH_RELATIVE").is_ok_and(|v| v == "1")
         && let Some(c) = contact.as_deref()
@@ -190,17 +188,17 @@ pub fn drive(
             *transform = Transform::from_translation(drawn).looking_to(look, up);
         }
     }
-    let sheet = -water.depth_offset_m + tide;
+    let sheet = -water.depth_offset_m;
     let surface = contact
         .as_deref()
         .and_then(|c| surface_near(c, fine.as_deref(), up, key.alt, sheet));
-    now.0 = Some((position, key.alt, surface, tide, frame));
+    now.0 = Some((position, key.alt, surface, frame));
 }
 
 /// This frame's eye for the label: where, its altitude, the water found
-/// under or over it, the tide, the frame.
+/// under or over it, the frame.
 #[derive(Resource, Default)]
-pub struct EyePathNow(Option<(Vec3, f32, Option<f32>, f32, u32)>);
+pub struct EyePathNow(Option<(Vec3, f32, Option<f32>, u32)>);
 
 /// Label the frame with the renderer's own answer: after the eye's water is
 /// published for THIS frame's camera, so the label and the picture are one.
@@ -211,13 +209,12 @@ pub fn label(
     water: Option<Res<pbd_app::config::WaterSettings>>,
     mut labels: Query<&mut Text, With<EyePathLabel>>,
 ) {
-    let (Some((position, alt, surface, tide, frame)), Some(water)) = (now.0, water) else {
+    let (Some((position, alt, surface, frame)), Some(water)) = (now.0, water) else {
         return;
     };
     // The eye's water by the renderer's own rule, at this frame's eye.
-    let high_water = pbd_core::sea::tide_high_m(water.tide_range_m);
     let eye_state = match (contact.as_deref(), fine.as_deref()) {
-        (Some(c), Some(f)) => pbd_app::planet::eye_water_at(position, c, f, high_water),
+        (Some(c), Some(f)) => pbd_app::planet::eye_water_at(position, c, f),
         _ => EyeWater::Unknown,
     };
     // The renderer's own test: the eye's surface as `eye_surface_radius`
@@ -226,7 +223,6 @@ pub fn label(
         eye_state,
         position,
         PLANET_RADIUS - water.depth_offset_m,
-        tide,
     );
     let in_water = judged.is_some_and(|s| position.length() < s);
     // The height shown is against the renderer's surface where it has one

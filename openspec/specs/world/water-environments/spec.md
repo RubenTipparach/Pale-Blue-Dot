@@ -3,8 +3,9 @@
 ## Purpose
 The water places of a body and how they look from inside: today, the light
 under water (`pbd_core::ocean`, `water.wgsl`, `planet_surface.wgsl`). Where
-each place occurs, tides and the places' cells are designed in
-`openspec/changes/ocean-environments` and not built.
+each place occurs and the places' cells are designed in
+`openspec/changes/ocean-environments` and not built. The sea has no tide: its
+surface stands at one level (`no-tides`).
 
 ## Requirements
 
@@ -61,15 +62,17 @@ sheet the near plane clips (`ocean-environments` B21).
 - **THEN** the surface is the murk, shaded by the waves
 - **AND** no part of the sea floor or the scene under the water is drawn in it
 
-### Requirement: The composite's waterline is the tided sea for an eye in air
+### Requirement: The composite's waterline is the sea's surface for an eye in air
 
 The composite SHALL measure the waterline from the surface of the water the
-eye is in, and for an eye in air from the sea's tided surface, never the
-sea's mean sphere, so a jump or a flight over a beach at low tide tints and
-wobbles none of the dry sand between the tided water and the mean
-(`ocean-environments` B21).
+eye is in, and for an eye in air from the sea's drawn surface (the sheet,
+half a metre under the sea's level), never a sphere of its own, so a jump or
+a flight over a beach tints and wobbles none of the dry sand over the water
+(`ocean-environments` B21). The sea's surface SHALL stand at one level: it
+SHALL NOT rise and fall with the moon or the time of day (`no-tides`).
 
-#### Scenario: A jump on a beach at low tide
+#### Scenario: A jump on a beach
 
-- **WHEN** the eye rises from standing on a beach within the high tide's reach into air over it
-- **THEN** the composite's waterline stays at the sea's tided surface
+- **WHEN** the eye rises from standing on a beach over the sea's water into air over it
+- **THEN** the composite's waterline stays at the sea's drawn surface
+  (`planet::water::tests::a_jump_over_a_beach_keeps_the_composites_waterline_at_the_sea`)
