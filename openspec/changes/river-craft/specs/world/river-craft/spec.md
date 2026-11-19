@@ -38,25 +38,31 @@ fast again within reach.
 - **THEN** the line comes taut, the barge follows, and easing off lets the
   line go slack again
 
-### Requirement: An anchor drags until it holds, by bed
+### Requirement: A set anchor holds the craft
 
-An anchor on the bed SHALL hold up to the bed's holding force times how far
-it has set times the lift of its rode, and SHALL drag toward its craft while
-the rode's pull exceeds that. Mud SHALL set within about a metre of dragging,
-sand SHALL never fully set, and rock SHALL hold once a fluke catches. A rode
-hauled short SHALL break the anchor out so it can be weighed.
+An anchor dropped to the bed SHALL set within two seconds on any bed, the
+bed changing only how fast it sets. A set anchor SHALL hold: neither the
+current, nor rowing, nor shortening the rode SHALL move it, and the craft
+SHALL move only within its swing on the rode, at most the rode's length
+round the anchor. With a bow and a stern anchor both set the craft SHALL
+hold still on its heading. Weighing SHALL be the only way to free it.
 
-#### Scenario: Sand against mud
+#### Scenario: Rowing against a set anchor
 
-- **WHEN** the same skiff anchors in the same current on sand and on mud
-- **THEN** on sand the anchor keeps dragging slowly, and on mud it bites and
-  the skiff lies still to its rode
+- **WHEN** a skiff with its bow anchor set rows away from the anchor
+- **THEN** the rode comes taut and the skiff stops
+
+#### Scenario: Swinging in the current
+
+- **WHEN** a skiff's anchor is set and nobody rows
+- **THEN** the skiff swings to lie downstream of the anchor on its rode and
+  stays there
 
 #### Scenario: Weighing anchor
 
-- **WHEN** the rode of a holding anchor is hauled in
-- **THEN** the craft is pulled up toward the anchor, the anchor breaks out
-  and comes aboard
+- **WHEN** the rode of a set anchor is hauled in
+- **THEN** the craft is pulled up toward the anchor, the anchor comes aboard
+  and the craft is free
 
 ### Requirement: Logs drive, jam and are caught by a boom
 
@@ -101,7 +107,7 @@ a world saved before river craft existed SHALL open unchanged.
 
 ### Requirement: A raft is rowed in strokes on one beat
 
-A raft SHALL be rowed with two oars on pins, each stroke in five stages
+A raft SHALL be rowed with two oars on pins and no pole, each stroke in five stages
 (reach, catch, drive, release, recovery) timed by one stroke clock shared by
 both oars. The raft's push SHALL be the drag of each oar's blade through the
 water while it is under, at the blade, so that one oar alone turns the raft.
@@ -121,10 +127,11 @@ read by any rule.
 - **WHEN** the player holds A
 - **THEN** only the right oar rows, and the raft turns left
 
-#### Scenario: The pole past its reach
+#### Scenario: Rowing in the shallows
 
-- **WHEN** the player poles where the bed is deeper than the pole's reach
-- **THEN** the pole does not plant and pushes nothing
+- **WHEN** a blade comes down where the bed is shallower than its stroke
+- **THEN** it rests on the bed and pushes nothing off it; only the water
+  above the bed pulls on it
 
 ### Requirement: A raft carries its own lantern, lit at night
 

@@ -26,8 +26,8 @@ before touching code"):
 
 - **`docs/mockups/river-craft.html`, mockup M34 "River Craft"**, a playable
   three.js toy on a river, one 3D view at a time in five tabs:
-  1. **Raft** (`#raft`): a log raft carried by the flow, poled where the bed
-     is in reach and paddled where it is not, spun by shear, held in the eddy
+  1. **Raft** (`#raft`): a log raft carried by the flow, rowed with two oars
+     (version 4; it was poled and paddled before), spun by shear, held in the eddy
      behind a rock, bumping off rocks and banks, over a one-layer fall. Flow
      arrows on a toggle.
   2. **Tug** (`#tug`): a steam tug towing two barges on lines that go slack
@@ -39,11 +39,12 @@ before touching code"):
      top), fish schools caught by it, the full net dragging harder, hauling
      it in.
   5. **Anchor** (`#anchor`): a bow and a stern anchor, the rode paying out,
-     the anchor dragging until it bites, the boat swinging to the current,
-     weighing anchor; sand, mud and rock beds that hold differently.
+     the anchor setting and then holding the boat within its swing on the
+     rode (version 4, owner: "anchor in mockup should stop you from moving"),
+     weighing anchor; the bed changes only how fast it sets.
 - **Rowing** (`#rowing`, added 2026-11-19 on "mockup better rowing on a
   raft"): today's raft stroke beside the proposed one (two oars on a rowing
-  frame in five stages on one beat, the pole for the shallows, splash and
+  frame in five stages on one beat, no pole (version 4), splash and
   swirls, first-person hands), and the raft's own lantern lit at night
   ("Rafts should also have a light that comes with it at night"); design 9.
 - **The design of the port** (`design.md`): a current in `Surroundings`
@@ -59,7 +60,7 @@ asks for the port.
 ### New Capabilities
 
 - `world/river-craft`: craft on flowing water feel its current; lines between
-  craft; anchors that drag or hold by bed; rafts, logs, booms and nets.
+  craft; anchors that set and hold; rafts, logs, booms and nets.
 
 ### Modified Capabilities
 
