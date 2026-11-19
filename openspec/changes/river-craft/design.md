@@ -103,8 +103,11 @@ Anchor tab: "anchor in mockup should stop you from moving". The rule is now:
   from the anchor brings the rode taut and the craft stops (the line's pull
   is the existing mooring rule, stiff enough that the stretch is about
   0.1 m at 500 N). The HUD shows "Anchored".
-- **Bow and stern.** The first anchor down veers to five times the depth.
-  One dropped while the other holds is snubbed short where it lands, so the
+- **The rode stops at the bed.** By default the rode pays out only until
+  the anchor touches the bed, then stops: no extra scope is veered (the
+  owner, 2026-11-19: "by default anchor rope should stop extending as soon
+  as it touches ground"). Pay out lets more out for a longer swing.
+- **Bow and stern.** One dropped while the other holds is snubbed short where it lands, so the
   two together hold the craft still on its heading.
 - **Weighing is the only way to move again.** It hauls the rode in to
   straight up and down and lifts the anchor aboard.

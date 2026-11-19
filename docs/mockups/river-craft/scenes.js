@@ -511,7 +511,8 @@ RC.scenes.nets = function () {
 };
 
 // ======================================================================================================================
-// 5. Anchor: a skiff drops a bow anchor (and a stern one). The rode pays out and the anchor sets on the bed in under
+// 5. Anchor: a skiff drops a bow anchor (and a stern one). The rode pays out only until the anchor touches the bed
+// (the owner, 2026-11-19: "by default anchor rope should stop extending as soon as it touches ground"), and the anchor sets on the bed in under
 // two seconds (sand slowest, mud fastest); once set it holds the boat (the owner, 2026-11-19: "anchor in mockup should
 // stop you from moving"): rowing and the current move the boat only as far as its swing on the rode. With bow and
 // stern both down the boat holds still on its heading. Weighing is the only way to move again.
@@ -548,7 +549,7 @@ RC.scenes.anchor = function () {
       a.rode = Math.max(a.rode, Math.hypot(b[0] - a.x, b[1] - a.y, b[2] - a.z) + 0.3);
       // the first anchor down veers to five times the depth; one dropped while the other holds is snubbed short where it
       // lands, so bow and stern together hold the boat still on its heading
-      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; const other = anchors.find(o => o !== a && o.state === "down"); a.target = other ? a.rode + 0.3 : Math.max(a.rode, (b[1] - floor) * 5); }
+      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; const other = anchors.find(o => o !== a && o.state === "down"); a.target = other ? a.rode + 0.3 : a.rode; }   // the rode stops paying out the moment the anchor touches the bed (owner, 2026-11-19); Pay out lets more out
     } else if (a.state === "down") {
       if (a.rode < a.target) a.rode = Math.min(a.target, a.rode + 1.5 * h);     // veering to the scope
       const dy = Math.max(0.2, b[1] - a.y), Lh = Math.sqrt(Math.max(0.04, a.rode * a.rode - dy * dy));

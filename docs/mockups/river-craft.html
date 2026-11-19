@@ -191,6 +191,7 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
 
     <h2 id="m-changes">Changes</h2>
     <ul>
+      <li><b>Version 5, 2026-11-19.</b> The anchor's rode stops paying out the moment the anchor touches the bed, so it lies straight up and down with no extra chain until you Pay out (<q>by default anchor rope should stop extending as soon as it touches ground</q>).</li>
       <li><b>Version 4, 2026-11-19.</b> The raft is rowed with two oars only; the pole is no longer proposed (the owner: <q>no pole just oar is best, pole you have to actually move, and the pole is clipping, overall too much awkwardness</q>). The Rowing tab's Pole gear, its Too deep chip and its poses are gone, and the Raft tab rows with the same oars instead of a pole and a paddle. The stroke is smoothed: the seat is nearer the pins and the sweep shorter, so the hands stay on the handles through the whole stroke, the arms straight at the release; the oars ride in swivel locks above the posts; nothing clips the deck, the frame, the body or the hands (checked at 160 points a stroke); the rower's cap peak and nose show he faces the bow. The first-person hands are drawn only in first person, the rower's body and arms only in third (<q>why is fps arm in third person</q>). Today's pole now hangs just outboard of the deck, so it no longer runs through the deck and the poler. The Tube rider sits back in the ring and paddles with the hands in the water, and the tube has no lantern (<q>no light for tube guy, fix arms/body</q>). A set anchor holds the boat (<q>anchor in mockup should stop you from moving</q>).</li>
       <li><b>Version 3, 2026-11-19.</b> The Rowing tab: today's raft stroke beside the proposed oars, and the raft's own lantern.</li>
       <li><b>Version 2, 2026-11-16.</b> The Tube tab.</li>
@@ -232,7 +233,7 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
     <p>A skiff with two spars at its stern and a net between them: a cork line on top that floats, a lead line below that sinks, twine between. <b>Cast net</b> pays it out behind. Row against the current and the water streams the net out into a bag; drift with the current and it hangs slack. Three schools of fish hold in the river: in the eddy behind the rock, in the pool, and off the left bank. They dart from the hull, but a fish the net sweeps round is caught and stays in the bag. Every fish makes the net drag harder and slows the boat (the <b>Net drag</b> chip). <b>Haul in</b> draws the net up to the spars over five seconds and lands the catch; the boat sits lower for it.</p>
 
     <h2 id="m-anchor">Anchor</h2>
-    <p>A skiff in a strong current (1.45 m/s mid-stream), with a bow anchor and a stern anchor. <b>Drop bow</b>: the anchor falls to the bed and the rode (a chain) pays out to five times the depth. The anchor sets in under two seconds, and from then on it holds the boat (the owner, 2026-11-19: <q>anchor in mockup should stop you from moving</q>): the boat swings to the current and lies downstream of it on the rode, and rowing or the current moves it only within that swing. Row away from the anchor and the rode comes taut and the boat stops; the <b>Anchored</b> chip shows while an anchor holds. <b>Drop stern</b> as well: it is snubbed short where it lands, and bow and stern together hold the boat still on its heading. <b>Weigh</b> hauls the rode in, the boat comes up to the anchor, and the anchor comes aboard; weighing is the only way to move on.</p>
+    <p>A skiff in a strong current (1.45 m/s mid-stream), with a bow anchor and a stern anchor. <b>Drop bow</b>: the anchor falls to the bed and the rode (a chain) pays out only until the anchor touches the bed, then stops (the owner, 2026-11-19: <q>by default anchor rope should stop extending as soon as it touches ground</q>); <b>Pay out</b> lets more out for a longer swing. The anchor sets in under two seconds, and from then on it holds the boat (the owner, 2026-11-19: <q>anchor in mockup should stop you from moving</q>): the boat swings to the current and lies downstream of it on the rode, and rowing or the current moves it only within that swing. Row away from the anchor and the rode comes taut and the boat stops; the <b>Anchored</b> chip shows while an anchor holds. <b>Drop stern</b> as well: it is snubbed short where it lands, and bow and stern together hold the boat still on its heading. <b>Weigh</b> hauls the rode in, the boat comes up to the anchor, and the anchor comes aboard; weighing is the only way to move on.</p>
     <ul>
       <li><b>Sand</b>, <b>Mud</b>, <b>Rock</b>: the bed changes only how fast the anchor sets (sand 1.8 s, rock 1.3 s, mud 0.8 s). While it sets, a hard pull slides it a little and leaves a furrow.</li>
       <li><b>Pay out</b> and <b>Shorten</b> change the bow rode, and so how far the boat can swing. Shortening never breaks the anchor out.</li>
@@ -319,11 +320,11 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="river-craft/engine.js?v=4"></script>
-<script src="river-craft/physics.js?v=4"></script>
-<script src="river-craft/scenes.js?v=4"></script>
-<script src="river-craft/hand.js?v=4"></script>
-<script src="river-craft/rowing.js?v=4"></script>
-<script src="river-craft/app.js?v=4"></script>
+<script src="river-craft/engine.js?v=5"></script>
+<script src="river-craft/physics.js?v=5"></script>
+<script src="river-craft/scenes.js?v=5"></script>
+<script src="river-craft/hand.js?v=5"></script>
+<script src="river-craft/rowing.js?v=5"></script>
+<script src="river-craft/app.js?v=5"></script>
 </body>
 </html>
