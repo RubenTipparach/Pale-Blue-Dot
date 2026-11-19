@@ -566,9 +566,11 @@ item nothing made.
 - **The good.** `bait` ("bait worms", a stack of 99, `items/goods/bait.png`,
   drawn by `tools/gen_item_icons.py`), appended to the goods table.
 - **Where it turns up.** Digging dirt, soil, grass or sand, by hand or by
-  tool, where the dug layer is wet ground at the shore. That means its
-  altitude is within `bait_band_m` of the sea's level (from 2 m under to
-  1 m over). It turns up in one such cell in `bait_one_in` (3), picked by
+  tool, by the water: a river's or the sea's water within
+  `bait_reach_cells` (3) cells, from 3 m under the dug layer to 2 m over it
+  (`dig-fixes` 2, which replaced the first rule, a band of altitude round
+  the sea's level that no river inland ever met). It turns up in one such
+  cell in `bait_one_in` (3), picked by
   the cell's hash as fibre and loose stone are:
   - the same cell always answers the same;
   - a block a player placed turns up nothing;
