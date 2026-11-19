@@ -131,6 +131,9 @@ pub struct FieldView {
     /// The sky's light (L2), clear then under a full deck
     /// ([`crate::tone::SkyLight`]).
     pub sky_sh: [Vec4; 18],
+    /// The lights players carry, two vec4s a light (`glowing-mushrooms`
+    /// design 9, [`crate::carried_light::CarriedLights::packed`]).
+    pub carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// Bytes of a run of vec4s as WGSL lays them out in storage: packed, 16 a
@@ -168,12 +171,13 @@ impl LightRow {
 }
 
 impl FieldView {
-    const BYTES: u64 = 21 * 16;
+    const BYTES: u64 = (21 + 2 * crate::carried_light::MAX_CARRIED_LIGHTS as u64) * 16;
     fn bytes(&self) -> Vec<u8> {
         vec4_bytes(
             [&self.centre, &self.sun, &self.model]
                 .into_iter()
-                .chain(self.sky_sh.iter()),
+                .chain(self.sky_sh.iter())
+                .chain(self.carried.iter()),
         )
     }
 }
@@ -516,6 +520,8 @@ impl Plugin for FieldLightPlugin {
                 )
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate)
+                    // This frame's carried lights (`glowing-mushrooms`).
+                    .after(crate::carried_light::gather)
                     // The swap from the standard material to the field-lit one
                     // must land before Bevy lists the meshes to specialise this
                     // frame. Otherwise the render world gets the new material
@@ -723,6 +729,7 @@ fn light_from_the_field(
     >,
     faded: Query<&Faded>,
     sky_light: Option<Res<crate::tone::SkyLight>>,
+    carried: Option<Res<crate::carried_light::CarriedLights>>,
     mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
     frame_count: Option<Res<crate::loading::FrameCount>>,
@@ -745,6 +752,10 @@ fn light_from_the_field(
             sky_light.shadow_spread,
         ),
         sky_sh: sky_light.sh,
+        carried: carried.as_deref().map_or(
+            [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+            crate::carried_light::CarriedLights::packed,
+        ),
     };
     let key = match (&fine, &contact) {
         (Some(fine), Some(contact)) => (

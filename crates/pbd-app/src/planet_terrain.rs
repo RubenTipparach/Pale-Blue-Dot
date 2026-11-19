@@ -571,6 +571,18 @@ mod tests {
                 "const GLOW_FLOWER_BIT: u32 = {}u;",
                 crate::planet::column::GLOW_FLOWER_BIT
             ),
+            // `glowing-mushrooms` design 4: a picked cell draws no flower.
+            format!(
+                "const GLOW_PICKED_BIT: u32 = {}u;",
+                crate::planet::column::GLOW_PICKED_BIT
+            ),
+            "if green && !picked && (glowing || roll(id,SALT_FLOWER) < params.clutter_chance.y) {"
+                .to_string(),
+            // The cap's night colour is the core's, which the body glow takes.
+            {
+                let [r, g, b] = pbd_core::flora::GLOW_HEAD_RGB;
+                format!("const GLOW_HEAD_RGB: vec3<f32> = vec3<f32>({r:?}, {g:?}, {b:?});")
+            },
             // The shader's `grassy`, which is where it grows flowers, is the
             // list the bake lights a glowing flower's ground by.
             format!(

@@ -62,6 +62,7 @@ struct Params {
     picked: array<vec4<u32>,8>,   // and the trees picked bare
     clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
     shake: vec4<u32>,          // `tree-punch-shake`: x the worked tree's id, y its last hit's time (f32 bits), z one once hit, w spare
+    carried: array<vec4<f32>,8>, // `glowing-mushrooms`: the carried lights, two a light (`carried_light`)
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -315,6 +316,11 @@ const LAMP_BLOOM: f32 = 4.0;
 // `the_shader_carries_the_reference_light_constants` pins them.
 const GLOW_FLOWER_BIT: u32 = 1u;
 const GLOW_LIT_BIT: u32 = 0x20000000u;
+// The record bit that says a cell's glowing mushroom is picked
+// (`glowing-mushrooms` design 4): its flower slot draws nothing.
+const GLOW_PICKED_BIT: u32 = 8u;
+// The glowing mushroom's head at night, linear RGB (`flora::GLOW_HEAD_RGB`).
+const GLOW_HEAD_RGB: vec3<f32> = vec3<f32>(0.62, 1.0, 0.88);
 // A glowing flower's head by day: pale, and cooler than the white and warm
 // blooms, so the species is known before dark.
 const BLOOM_CODE: u32 = 244u;
@@ -348,6 +354,29 @@ fn lamp_strength(level: f32) -> f32 {
 // shade, indoors and at night. `light::lamp_share` in the core, word for word.
 fn lamp_share(sky: f32, daylight: f32) -> f32 {
     return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);
+}
+
+// `glowing-mushrooms` design 8: the lights players carry (`carried_light.rs`),
+// at most CARRIED_LIGHTS, two vec4s each: where (planet frame, w its reach,
+// zero ending the list), then its colour times strength. Each is a lamp's
+// windowed inverse square and N.L (`lamp_bake::falloff`) from its exact
+// position, with no shadow, times a torch's gain; the same in every shader
+// that takes it, which a test holds.
+const CARRIED_LIGHTS: u32 = 4u;
+const CARRIED_GAIN: f32 = 3.0;
+fn carried_light(lights: array<vec4<f32>, 8>, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    var sum = vec3<f32>(0.0);
+    for (var i = 0u; i < CARRIED_LIGHTS; i++) {
+        let at = lights[2u*i];
+        if at.w <= 0.0 { break; }
+        let to = at.xyz - p;
+        let d = max(length(to), 1e-3);
+        let nl = dot(n, to/d);
+        if d > at.w || nl <= 0.0 { continue; }
+        let w = max(1.0 - pow(d/at.w, 4.0), 0.0);
+        sum += lights[2u*i + 1u].rgb*(nl*w*w/(1.0 + (d/2.2)*(d/2.2))*CARRIED_GAIN);
+    }
+    return sum;
 }
 
 // One vertex of a lamp.
@@ -1855,7 +1884,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // its own roll said: the record's bit is the one decider, and the
             // rolls below only place and turn it (decision 8).
             let glowing = (cell.spare.z & GLOW_FLOWER_BIT) != 0u;
-            if green && (glowing || roll(id,SALT_FLOWER) < params.clutter_chance.y) {
+            let picked = (cell.spare.z & GLOW_PICKED_BIT) != 0u;
+            if green && !picked && (glowing || roll(id,SALT_FLOWER) < params.clutter_chance.y) {
                 let k = u32(roll(id,SALT_FLOWER+1u)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,SALT_FLOWER+2u);
                 let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
@@ -3969,6 +3999,15 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         torch = mix(older, newer, params.lamp_bake.x);
     }
     color += torch;
+    // The lights players carry (`glowing-mushrooms` design 8): from their
+    // exact place this frame, no shadow, as much as a lamp shows here. None
+    // to evaluate in the open by day, nor when nobody carries one.
+    if params.carried[0].w > 0.0 {
+        let share = lamp_share(skylight, daylight);
+        if share > 1.0/255.0 {
+            color += albedo*carried_light(params.carried, input.position, n)*share;
+        }
+    }
     // A lamp's own light is drawn as the light it is, whatever lights the
     // cell around it. A lantern is lit panes in its iron frame; a brazier's
     // fire and a candle's flame are white-gold at the root and orange at the
@@ -3976,7 +4015,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // A glowing flower's head at night: its own cool light, whatever the
     // field around it holds.
     if lamp > LAMP_BLOOM - 0.25 {
-        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain)*GLOW_HEAD_GAIN;
+        color = GLOW_HEAD_RGB*(0.85 + 0.3*grain)*GLOW_HEAD_GAIN;
     } else if input.kind == KIND_LAMP && lamp > LAMP_PANES - 0.5 {
         if lamp > LAMP_FLAME - 0.5 {
             let height = clamp((lamp - LAMP_FLAME)/FLAME_RISE, 0.0, 1.0);

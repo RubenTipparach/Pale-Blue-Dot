@@ -12,6 +12,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod glow_plants;
 mod guide;
 mod hud;
 mod kitchen;
@@ -296,6 +297,13 @@ pub struct Launch {
     /// turns onto the nearest hanging fruit in reach and F is pressed on the
     /// script's FRAME-th frame (counted from the aim), as a player would.
     pub pick_fruit: Option<u32>,
+    /// `--pick-glow FRAME`: the same for the nearest glowing mushroom
+    /// (`glowing-mushrooms` 2.3), F pressed by the player's own key.
+    pub pick_glow: Option<u32>,
+    /// `--hold <item>`: that item in the selected hotbar slot from the
+    /// start, as a player holds it (`glowing-mushrooms` part B): a block as
+    /// `block:torch`, a good by its code.
+    pub hold: Option<String>,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -567,6 +575,8 @@ impl Launch {
             take_trees: false,
             pick_only: false,
             pick_fruit: None,
+            pick_glow: None,
+            hold: None,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -839,6 +849,22 @@ impl Launch {
                         args.get(i)
                             .and_then(|n| n.parse().ok())
                             .expect("--pick-fruit takes the frame to press F on"),
+                    );
+                }
+                "--pick-glow" => {
+                    i += 1;
+                    result.pick_glow = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-glow takes the frame to press F on"),
+                    );
+                }
+                "--hold" => {
+                    i += 1;
+                    result.hold = Some(
+                        args.get(i)
+                            .cloned()
+                            .expect("--hold takes an item: block:torch, glowing-mushroom"),
                     );
                 }
                 "--pick-trees" => {
@@ -1817,6 +1843,7 @@ pub fn run(args: &[String]) {
         PostUpdate,
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
@@ -1978,6 +2005,12 @@ pub fn run(args: &[String]) {
                 .before(farm::use_key)
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
+            // The glowing mushrooms (`glowing-mushrooms` design 3, 4): a
+            // pick, then the resident set brought round to it.
+            (glow_plants::pick, glow_plants::follow)
+                .chain()
+                .after(fruit::pick)
+                .before(farm::use_key),
             (
                 farm::use_key,
                 forge::work,
@@ -2004,6 +2037,7 @@ pub fn run(args: &[String]) {
                 .after(pbd_app::husbandry::HusbandryHands),
             (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
             kitchen::scripted.after(farm::scripted),
+            glow_plants::hold_script.run_if(pbd_app::loading::ready),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),
@@ -2199,7 +2233,13 @@ pub fn run(args: &[String]) {
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
+            // The light a player carries (`glowing-mushrooms` part B).
+            pbd_app::carried_light::CarriedLightPlugin,
         ))
+        .add_systems(
+            Update,
+            glow_plants::hand_item.before(pbd_app::held::HoldSet),
+        )
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
@@ -2222,6 +2262,12 @@ pub fn run(args: &[String]) {
             app.add_systems(
                 PreUpdate,
                 fruit::pick_script.after(bevy::input::InputSystems),
+            );
+        }
+        if launch.pick_glow.is_some() {
+            app.add_systems(
+                PreUpdate,
+                glow_plants::pick_script.after(bevy::input::InputSystems),
             );
         }
         if launch.break_s.is_some() || launch.tool.is_some() {

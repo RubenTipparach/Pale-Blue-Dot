@@ -879,6 +879,9 @@ struct PlanetParams {
     // `tree-punch-shake`: x the worked tree's id, y its last hit's time as
     // bits, z one once a tree is hit, w spare (`tree_shake::TreeShake`).
     shake: UVec4,
+    // `glowing-mushrooms` design 8: the lights players carry, two vec4s a
+    // light (`carried_light::CarriedLights::packed`).
+    carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1865,6 +1868,8 @@ pub(crate) struct Tunables<'w> {
     clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
     /// The tree being chopped or punched (`tree-punch-shake`).
     shake: Option<Res<'w, crate::tree_shake::TreeShake>>,
+    /// The lights players carry (`glowing-mushrooms`).
+    carried: Option<Res<'w, crate::carried_light::CarriedLights>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2210,6 +2215,10 @@ fn prepare_views(
                 .shake
                 .as_deref()
                 .map_or(UVec4::ZERO, crate::tree_shake::TreeShake::lane),
+            carried: tunables.carried.as_deref().map_or(
+                [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+                crate::carried_light::CarriedLights::packed,
+            ),
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`
