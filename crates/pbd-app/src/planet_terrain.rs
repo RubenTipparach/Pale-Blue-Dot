@@ -125,7 +125,12 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let biome = planet_gen::biome_at(cfg, d, height);
     let cleared = pbd_core::settlement::ground::cleared(cfg, d);
     let back = planet_gen::beach_back(cfg, d, height, biome);
+    // A sea cell's top far off is drawn from its own sheet, as the column
+    // draws it near (`ocean-environments` B24).
+    let own = pbd_core::column::own_sheet(planet_gen::top_material(cfg, d, height.floor()))
+        .map_or(0, |name| sheet_index(name) + 1);
     material_index(d, height, biome)
+        | own << PLACED_SHEET_SHIFT
         | (biome as u32) << 8
         | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
@@ -206,6 +211,18 @@ pub fn render_code(material: Material) -> u32 {
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
         Material::Workbench => WOOD,
+        // A beaver's sticks (B25): the bark of the local trees, as the
+        // workbench is drawn.
+        Material::Sticks => WOOD,
+        // The sea's cells (`ocean-environments` B24), each an existing code
+        // drawn from its own sheet (`column::own_sheet`): reef rock and
+        // basalt are the stone tile of the ocean's and the basalt wastes'
+        // sheets, sea ice the wood tile of the frozen wastes' (its layered
+        // glacial ice), and a mussel bed the shell code, the ocean sheet's
+        // shell bed.
+        Material::ReefRock | Material::Basalt => 5,
+        Material::SeaIce => WOOD,
+        Material::MusselBed => SHELL,
         // Grass and dry grass: the shader's own default green.
         _ => 2,
     }
@@ -232,6 +249,14 @@ pub const TILESETS: [&str; 14] = [
     "swamp",
     "tundra",
 ];
+
+/// Where a tileset sits in `atlas.png`, by its name.
+pub fn sheet_index(name: &str) -> u32 {
+    TILESETS
+        .iter()
+        .position(|&t| t == name)
+        .expect("a shipped tileset") as u32
+}
 
 /// Which tileset a biome is drawn from. Every sheet keeps the same layout -
 /// (0,0) its own ground, (1,0) that ground fading into the earth under it,
@@ -312,6 +337,10 @@ pub const TILLED: u32 = 14;
 /// bricks. The LAST code the four-bit material word has: a later station
 /// shares it or the word widens.
 pub const FORGE: u32 = 15;
+/// A ground face drawn from its sheet's (3,1) tile, the ocean sheet's shell
+/// bed (`ocean-environments` B24): the mussel bed. Nine was never a cell's
+/// code (the plants' leaf tile, a piece's), so a cell may take it.
+pub const SHELL: u32 = 9;
 /// Tree wood: the trunk's code in the surface pass (the sheet's (2,1),
 /// "oak bark" on the fields sheet), which the workbench block shares.
 pub const WOOD: u32 = 8;
@@ -727,6 +756,26 @@ mod tests {
         assert_eq!(render_code(Material::Workbench), WOOD);
         assert_eq!(index(tile_of(WOOD)), 6, "the workbench is the trunk's wood");
         assert!(sheet_tile_names("fields")[6].contains("bark"));
+        // The sea's cells (`ocean-environments` B24): each an existing code
+        // on a sheet of its own, on the tile named for it.
+        assert!(shader.contains(&format!("const SHELL_CODE = {SHELL}u;")));
+        assert!(shader.contains("tile=vec2(3.,1.)"), "the shell bed's tile");
+        for (material, sheet, at, word) in [
+            (Material::ReefRock, "ocean", tile_of(5), "reef limestone"),
+            (Material::Basalt, "basalt_wastes", tile_of(5), "basalt"),
+            (
+                Material::SeaIce,
+                "frozen_wastes",
+                tile_of(WOOD),
+                "glacial ice",
+            ),
+            (Material::MusselBed, "ocean", (3, 1), "shell bed"),
+        ] {
+            assert_eq!(pbd_core::column::own_sheet(material), Some(sheet));
+            let name = &sheet_tile_names(sheet)[index(at)];
+            assert!(name.contains(word), "{material:?} draws \"{name}\"");
+        }
+        assert_eq!(render_code(Material::MusselBed), SHELL);
     }
 
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its
@@ -886,7 +935,10 @@ mod tests {
         let samples = 300_000;
         let golden = std::f32::consts::PI * (3. - 5_f32.sqrt());
         for version in 4..=pbd_core::terrain::GENERATOR_VERSION {
-            let cfg = TerrainConfig::for_version(version).unwrap();
+            // A number never shipped (13, `ocean-environments` B24) has none.
+            let Some(cfg) = TerrainConfig::for_version(version) else {
+                continue;
+            };
             let peak = (0..samples)
                 .map(|i| {
                     let y = 1. - 2. * (i as f32 + 0.5) / samples as f32;

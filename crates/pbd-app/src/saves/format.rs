@@ -156,6 +156,14 @@ pub fn material_code(material: Material) -> u8 {
         Material::Forge => 19,
         Material::Workbench => 20,
         Material::Campfire => 21,
+        // The sea's cells (`ocean-environments` B24); 22 and 23 are held for
+        // the kitchen. An older build reads none of them, as it reads no
+        // code it does not know.
+        Material::ReefRock => 24,
+        Material::SeaIce => 25,
+        Material::Basalt => 26,
+        Material::MusselBed => 27,
+        Material::Sticks => 28,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ pbd_core::flowing_water!() => flowing as u16 as u8,
@@ -186,6 +194,11 @@ pub fn material_of(code: u8) -> Option<Material> {
         19 => Material::Forge,
         20 => Material::Workbench,
         21 => Material::Campfire,
+        24 => Material::ReefRock,
+        25 => Material::SeaIce,
+        26 => Material::Basalt,
+        27 => Material::MusselBed,
+        28 => Material::Sticks,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })
@@ -1046,6 +1059,19 @@ mod tests {
         assert_eq!(back, slots);
         assert_eq!(material_of(21), Some(Material::Campfire));
         assert_eq!(material_of(20), Some(Material::Workbench));
+        // The sea's cells and a beaver's sticks (`ocean-environments` B24,
+        // B25), each its own number, read back as itself.
+        for material in [
+            Material::ReefRock,
+            Material::SeaIce,
+            Material::Basalt,
+            Material::MusselBed,
+            Material::Sticks,
+        ] {
+            assert_eq!(material_of(material_code(material)), Some(material));
+        }
+        assert_eq!(material_code(Material::ReefRock), 24);
+        assert_eq!(material_code(Material::Sticks), 28);
     }
 
     /// A good this build does not have costs its own line and no other.

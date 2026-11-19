@@ -58,10 +58,18 @@ impl Class {
             | Material::Sand
             | Material::Snow
             | Material::Tilled => Class::Dirt,
-            Material::Stone | Material::Forge => Class::Stone,
+            // The sea's cells (`ocean-environments` B24): reef rock, basalt
+            // and sea ice take a pick as stone does; a mussel bed is dug
+            // as loose ground.
+            Material::Stone
+            | Material::Forge
+            | Material::ReefRock
+            | Material::Basalt
+            | Material::SeaIce => Class::Stone,
+            Material::MusselBed => Class::Dirt,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
-            Material::Workbench => Class::Wood,
+            Material::Workbench | Material::Sticks => Class::Wood,
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall
@@ -565,6 +573,7 @@ mod tests {
             Material::Snow,
             Material::Tilled,
             Material::Torch,
+            Material::MusselBed,
         ] {
             assert!(s.secs_by(soft, Digger::Hands).is_ok(), "{soft:?}");
         }
@@ -574,6 +583,12 @@ mod tests {
             Material::Ore,
             Material::Forge,
             Material::Workbench,
+            // The sea's cells (`ocean-environments` B24) and a beaver's
+            // sticks (B25).
+            Material::ReefRock,
+            Material::Basalt,
+            Material::SeaIce,
+            Material::Sticks,
         ] {
             assert_eq!(
                 s.secs_by(hard, Digger::Hands),

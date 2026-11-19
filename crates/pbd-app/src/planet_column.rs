@@ -176,7 +176,11 @@ pub fn placed_sheet(column: &Column, layer: usize) -> u32 {
     if !column.placed(layer) {
         return 0;
     }
-    column::home_biome(column.material(layer)).map_or(0, |home| tileset_slot(home) + 1)
+    let material = column.material(layer);
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
+    }
+    column::home_biome(material).map_or(0, |home| tileset_slot(home) + 1)
 }
 // Every sheet, plus one, fits its nibble, and so the record's four bits.
 const _: () = assert!(super::terrain::TILESETS.len() < 16);
@@ -189,8 +193,14 @@ const _: () = assert!(super::terrain::TILESETS.len() < 16);
 ///
 /// [`ORE_SHEET`]: super::terrain::ORE_SHEET
 pub fn drawn_sheet_mark(column: &Column, layer: usize) -> u32 {
-    if column.material(layer) == Material::Ore {
+    let material = column.material(layer);
+    if material == Material::Ore {
         return super::terrain::ORE_SHEET;
+    }
+    // A sea cell is drawn from its own sheet, generated or placed
+    // (`ocean-environments` B24).
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
     }
     placed_sheet(column, layer)
 }
@@ -1987,7 +1997,12 @@ pub fn build_with(
         // put out does not grow back through it and whatever stands on it
         // (`edit-pipeline`, the owner's vanished lamp, 2026-11-16).
         let edited = !edits.for_cell(finest[index].key()).is_empty();
-        if top_m >= finest[index].direction_height[3] && !edited {
+        // A floe of sea ice (generator version 14, `ocean-environments` B24)
+        // is the one generated top that stands over the record: it floats
+        // on the sea, which the height field's record is the bed under. The
+        // record takes its top, so its cap is drawn and the walls follow.
+        let floe = column.material(top) == pbd_core::terrain::Material::SeaIce;
+        if top_m >= finest[index].direction_height[3] && !edited && !floe {
             continue;
         }
         reconcile_surface(finest, neighbors, index, column);
@@ -4534,8 +4549,11 @@ mod placed_block_tests {
                 assert_eq!(built.material(layer), m, "{what}: stored");
                 assert!(built.placed(layer), "{what}: placed");
                 // Ore carries the ore mark, not its home sheet (design 12.12).
+                // A sea cell, its own sheet (`ocean-environments` B24).
                 let sheet = if m == Material::Ore {
                     super::super::terrain::ORE_SHEET
+                } else if let Some(own) = column::own_sheet(m) {
+                    super::super::terrain::sheet_index(own) + 1
                 } else {
                     tileset_slot(column::home_biome(m).unwrap()) + 1
                 };

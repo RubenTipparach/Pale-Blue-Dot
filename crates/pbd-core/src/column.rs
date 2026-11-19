@@ -436,13 +436,34 @@ pub fn home_biome(material: Material) -> Option<Biome> {
         | Material::Stone
         | Material::Ore
         | Material::Tilled
-        | Material::Workbench => Biome::Fields,
+        | Material::Workbench
+        | Material::Sticks => Biome::Fields,
         Material::JungleGrass => Biome::Jungle,
         Material::Sand => Biome::Beach,
         Material::Rock | Material::Forge => Biome::Mountains,
         Material::Snow => Biome::Tundra,
         Material::Water | crate::flowing_water!() => Biome::Ocean,
+        // The sea's cells (`ocean-environments` B24): the ocean's, and each
+        // drawn from its own sheet ([`own_sheet`]), which no biome names.
+        Material::ReefRock | Material::SeaIce | Material::Basalt | Material::MusselBed => {
+            Biome::Ocean
+        }
     })
+}
+
+/// The tileset a block is ALWAYS drawn from, generated or placed, when it is
+/// not a biome's (`ocean-environments` B24): the name of its sheet. The sea's
+/// cells are drawn as an existing render code from their own sheet, as ore
+/// is drawn as stone with flecks, so the column's four-bit material word
+/// need not widen. `None` for every other block, which takes its biome's
+/// sheet where generated and [`home_biome`]'s where placed.
+pub fn own_sheet(material: Material) -> Option<&'static str> {
+    match material {
+        Material::ReefRock | Material::MusselBed => Some("ocean"),
+        Material::SeaIce => Some("frozen_wastes"),
+        Material::Basalt => Some("basalt_wastes"),
+        _ => None,
+    }
 }
 
 pub fn generate_edited(
@@ -542,6 +563,10 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
     if depth_m <= SOIL_DEPTH_M {
         return match top {
             Material::Sand => Material::Sand,
+            // A reef is built of its rock; a vent's beds lie on basalt
+            // (`ocean-environments` B24).
+            Material::ReefRock => Material::ReefRock,
+            Material::Basalt | Material::MusselBed => Material::Basalt,
             Material::Snow | Material::Rock | Material::Stone => Material::Stone,
             _ => Material::Soil,
         };
@@ -622,6 +647,14 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
         {
             layers[i] = material;
         }
+    }
+    // Sea ice standing on polar water (generator version 14,
+    // `ocean-environments` B24): one cell from the sea's level up.
+    if crate::ocean::cells::sea_ice(terrain, direction, surface_m)
+        && let Some(i) = layer_at(terrain.sea_level_m + 0.5)
+        && layers[i] == Material::Air
+    {
+        layers[i] = Material::SeaIce;
     }
     // A town's street lamp or lantern (`cities-in-the-world` task 5.2), in
     // the air over its cell. A lamp is walked through, so it blocks no lane.

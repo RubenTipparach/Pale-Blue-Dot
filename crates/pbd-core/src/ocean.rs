@@ -18,6 +18,7 @@
 //!
 //! Everything here is derived and never saved.
 
+pub mod cells;
 pub mod places;
 pub mod plates;
 

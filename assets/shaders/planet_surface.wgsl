@@ -2117,6 +2117,8 @@ const SNOW_SIDE_CODE = 12u;
 // TILLED and FORGE, and the biomes' order in `Biome`; a test holds them.
 const TILLED_CODE = 14u;
 const FORGE_CODE = 15u;
+// The mussel bed's code (`planet_terrain::SHELL`, B24).
+const SHELL_CODE = 9u;
 const FIELDS_BIOME = 2u;
 const SWAMP_BIOME = 5u;
 const MOUNTAINS_BIOME = 6u;
@@ -3800,6 +3802,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
     if code==14u { base=vec3(0.36,0.25,0.16); tile=vec2(2.,3.); }
     if code==15u { base=vec3(0.30,0.31,0.33); tile=vec2(1.,3.); }
+    // `ocean-environments` B24: on a ground face the shell code is a mussel
+    // bed, its sheet's (3,1) (the ocean sheet's shell bed). No ground face
+    // carried code 9 before; a plant's leaf keeps its (0,2).
+    if code==SHELL_CODE && (input.kind==0u || input.kind==1u || input.kind==4u) {
+        base=vec3(0.62,0.64,0.58); tile=vec2(3.,1.);
+    }
     // `flora-v2`: a fern frond wears its biome's leaves (the jungle sheet's
     // fern ground is fronds on bare soil, which a cut frond shows as brown);
     // a mushroom and a flower head the stone tile's grain under their own

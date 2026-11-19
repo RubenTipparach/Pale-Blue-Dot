@@ -29,7 +29,11 @@
 ## Decisions
 
 1. **Flat tops in version 13.** (Planned as 11; `swamps` took version 12
-   and `river-downhill` version 11 on 2026-11-18, so this is version 13.)
+   and `river-downhill` version 11 on 2026-11-18, so this is version 13.
+   Version 14 went to `ocean-environments`' sea cells on 2026-11-19, built
+   on version 12 and now a new world's; 13 was left free for this. Built
+   after it, this takes the next free number on version 14's config, so a
+   new world has both, and 13 stays unused.)
    In Mountains, a cell whose six neighbours
    stand within 1 m of it takes: Snow above a snow line lowered to about
    170 m and ragged by a coarse noise (±15 m); alpine Grass below it down to

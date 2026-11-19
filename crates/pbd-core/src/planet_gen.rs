@@ -130,6 +130,11 @@ pub struct TerrainConfig {
     /// cells just inland of a beach stand the beach's acacias. `None` for
     /// versions 4 to 11; version 12's from it.
     pub beach_back: Option<BeachBack>,
+    /// The sea's cells (`ocean-environments` design B24): reef rock, basalt,
+    /// mussel beds and sea ice, by [`crate::ocean::cells`]. `None` for
+    /// versions 4 to 12, whose sea floor is sand and stone and whose floes
+    /// are pieces; version 14's from it.
+    pub sea_cells: Option<crate::ocean::cells::SeaCells>,
 }
 
 /// The beach's back (generator version 12, `flora-v2` design 12.13, survey
@@ -220,7 +225,18 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V12;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V14;
+
+    /// Generator version 14 (`ocean-environments` design B24): version 12
+    /// with the sea's cells. Every height, biome and land top is version
+    /// 12's; under the sea a reef's top is reef rock in patches, a vent's
+    /// basalt with mussel beds, and polar water stands floes of sea ice one
+    /// cell high. 13 was planned for `mountain-ground`, not built; built
+    /// later, it takes the next number on this config.
+    pub const TENEBRIS_V14: Self = Self {
+        sea_cells: Some(crate::ocean::cells::SeaCells::V14),
+        ..Self::TENEBRIS_V12
+    };
 
     /// Generator version 11 (`river-downhill`): version 10 with rivers that
     /// never run uphill. A river's water is the lowest bank clamp met along
@@ -378,6 +394,7 @@ impl TerrainConfig {
         ore: None,
         swamps: None,
         beach_back: None,
+        sea_cells: None,
     };
 }
 
@@ -396,6 +413,7 @@ impl TerrainConfig {
             10 => Some(Self::TENEBRIS_V10),
             11 => Some(Self::TENEBRIS_V11),
             12 => Some(Self::TENEBRIS_V12),
+            14 => Some(Self::TENEBRIS_V14),
             _ => None,
         }
     }
@@ -415,6 +433,7 @@ impl TerrainConfig {
             // trees read.
             swamps: None,
             beach_back: None,
+            sea_cells: None,
             ..*self
         }
     }
@@ -426,6 +445,8 @@ impl TerrainConfig {
         Self {
             swamps: None,
             beach_back: None,
+            // Version 14's sea cells are drawn and dug, not weather.
+            sea_cells: None,
             ..*self
         }
     }
@@ -910,6 +931,11 @@ pub fn swamp_patch(cfg: &TerrainConfig, swamps: &Swamps, direction: Vec3) -> f32
 /// is where a biome becomes something a player can see.
 pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Material {
     let sea = cfg.sea_level_m;
+    // The sea's cells (version 14, `ocean-environments` B24): a reef's rock,
+    // a vent's basalt and mussel beds. `None` on every older version.
+    if let Some(cell) = crate::ocean::cells::top(cfg, direction, surface_m) {
+        return cell;
+    }
     let latitude = direction.y.abs();
     let polar = latitude > cfg.polar_latitude;
     let cold = latitude > cfg.cold_latitude;
@@ -1273,7 +1299,14 @@ mod tests {
     fn version_12_is_version_11_s_ground_with_its_swamps() {
         let v12 = TerrainConfig::for_version(12).expect("version 12 is carried");
         assert_eq!(v12, TerrainConfig::TENEBRIS_V12);
-        assert_eq!(TerrainConfig::TENEBRIS, v12, "a new world is made on 12");
+        assert_eq!(
+            TerrainConfig {
+                sea_cells: None,
+                ..TerrainConfig::TENEBRIS
+            },
+            v12,
+            "a new world is made on 14, which is 12 with the sea's cells"
+        );
         let v11 = TerrainConfig::TENEBRIS_V11;
         assert_eq!(v12.climate_ground(), v11);
         assert_eq!(v11.swamps, None, "version 11 has no swamps rule");
@@ -1391,6 +1424,61 @@ mod tests {
         assert!(moss > 0.45 && moss > water && moss > mud, "{measured}");
         assert!((0.08..=0.3).contains(&water), "{measured}");
         assert!((0.1..=0.35).contains(&mud), "{measured}");
+    }
+
+    /// Version 12's ground and top blocks, as every world made on it was:
+    /// taken before version 14 landed (CLAUDE.md, "Saved games survive
+    /// every change"; `ocean-environments` B24), and this fails if anything
+    /// moves them. The ground digest is the Linux container's (the Mac's
+    /// maths library gives another, as for versions 4 to 9); on the Mac it is
+    /// held to version 11's ground live. The top blocks agree on both.
+    #[test]
+    fn version_12_makes_the_ground_its_worlds_are_made_on() {
+        let v12 = TerrainConfig::for_version(12).expect("version 12 is carried");
+        assert_eq!(v12, TerrainConfig::TENEBRIS_V12);
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(digest(&v12, 10_000), VERSION_12_DIGEST);
+        assert_eq!(top_digest(&v12, 10_000), VERSION_12_TOP_DIGEST);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    const VERSION_12_DIGEST: u64 = 3_631_865_128_439_293_125;
+    const VERSION_12_TOP_DIGEST: u64 = 18_195_140_677_291_593_827;
+
+    /// Version 14 (`ocean-environments` B24) is version 12's ground with the
+    /// sea's cells: every altitude and biome is version 12's (the ground
+    /// digest is version 12's), and a top block differs only where
+    /// `ocean::cells::top` makes a reef's rock, a vent's basalt or a mussel
+    /// bed. Only `sea_cells` differs in the config.
+    #[test]
+    fn version_14_is_version_12_s_ground_with_the_sea_s_cells() {
+        let v14 = TerrainConfig::for_version(14).expect("version 14 is carried");
+        assert_eq!(v14, TerrainConfig::TENEBRIS_V14);
+        assert_eq!(TerrainConfig::TENEBRIS, v14, "a new world is made on 14");
+        assert_eq!(TerrainConfig::for_version(13), None, "13 was never shipped");
+        let v12 = TerrainConfig::TENEBRIS_V12;
+        assert_eq!(
+            TerrainConfig {
+                sea_cells: None,
+                ..v14
+            },
+            v12
+        );
+        assert_eq!(digest(&v14, 10_000), digest(&v12, 10_000));
+        let mut cells = 0;
+        for d in sphere(60_000) {
+            let f = surface_altitude(&v14, d).floor();
+            let (t12, t14) = (top_material(&v12, d, f), top_material(&v14, d, f));
+            match crate::ocean::cells::top(&v14, d, f) {
+                Some(cell) => {
+                    assert_eq!(t14, cell, "{d}");
+                    assert!(f < v14.sea_level_m, "a sea cell on land at {d}");
+                    cells += 1;
+                }
+                None => assert_eq!(t14, t12, "{d}"),
+            }
+        }
+        assert!(cells > 0, "no sea cell in the sample");
     }
 
     /// Version 12's beach back (`flora-v2` 12.13): dry, warm ground of the

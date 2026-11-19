@@ -51,8 +51,8 @@ pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, generator_version,
-    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
-    terrain_config, terrain_epoch, terrain_radius, tileset_slot,
+    nearest_ground_near, river_channel, sheet_index, snow_slot, surface_code, surface_height,
+    switch_generator, terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{
     EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
