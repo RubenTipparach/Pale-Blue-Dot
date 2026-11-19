@@ -39,6 +39,7 @@ Each item: what changed, how to see it, and the cloud's screenshot to compare.
 | 11 | **Trees shake when hit** (`tree-punch-shake` 2) | Chop or punch a tree: its crown sways about 12 cm and settles about 0.6 s after the last hit; neighbours stay still; its shadow should move with it (not yet seen in a capture). | `docs/screenshots/tree-punch-shake/` |
 | 9 | **Tools that stopped digging** (`dig-fixes` 1) | Fell a tree with an axe or by hand, then stand on or beside where it stood and dig: the ground digs (before, the felled tree's invisible trunk took every swing). | none |
 | 10 | **Bait by rivers and the sea** (`dig-fixes` 2) | Dig dirt, grass or sand within about 3 cells of a river or the sea: worms in about one dig in three; the "Dig for bait" mission counts them. | none |
+| 12 | **Dry holes, and the sea flowing in** (`dry-holes`) | Dig a pit below sea level a few cells behind a beach: it stays dry (before, the sea's surface was drawn over it and you swam in it). Then cut a channel from the shore into it: the sea runs in along it, falls over the lip and fills the pit to sea level, not higher. Water poured from a bucket into a sealed pit stays ordinary water. Old saves: old dug holes open dry; old holes beside the sea flood at load as before. | `docs/screenshots/dry-holes/` |
 | 8 | **Item toasts** (merged earlier) | Dig dirt or sand: "DIRT X1", "X2" stacking, icon, 3 s, then fade; up to 10, the rest paged. | `docs/screenshots/item-toasts/` |
 
 Watch for anything that looks wrong at full speed on the GPU that a still on
@@ -84,19 +85,15 @@ None of these were taken in the cloud.
   0.56 +/- 0.03; it came in with main's `river-downhill` merge (the same with
   the acacias switched off). Worth a look on the desktop.
 
-## 6. Still in flight in the cloud (not on the branch yet)
+## 6. Still in flight in the cloud
 
-These are being built by cloud agents and will land on the same branch:
-- **Dry holes and a sea that flows** (`dry-holes`): a hole dug below the
-  waterline stays dry unless it touches water; the sea near the player flows
-  in like river water through a channel or a breach.
-
+Nothing. Still open in `dry-holes`: the tide itself does not flow yet (task 4.1). At a tide high enough to reach over the rim of a beach pit, the sea's surface stops at the pit's edge. Also, each edit at the coast now does one more walk over the tier, about 1.2 ms on the cloud CPU; time it on the desktop (task 4.2).
 
 ## 7. Where things are
 
 - Mockup tracker: https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (phase 2.1 shows built).
 - Survey: https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9 (F1 answered; all pictures restored).
 - Write-ups: `openspec/changes/flora-v2`, `swamps`, `tree-punch-shake`,
-  `drop-lighting`, `item-toasts`, `log-drives` (phase 3, planned only).
+  `drop-lighting`, `item-toasts`, `dry-holes`, `log-drives` (phase 3, planned only).
 - Generator versions: 10 (flora-v2), 11 (`river-downhill`, main), 12
   (`swamps` + beach acacias, this branch). `mountain-ground` is planned as 13.
