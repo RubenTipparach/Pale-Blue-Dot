@@ -38,10 +38,18 @@ before touching code"):
   4. **Nets** (`#nets`): a skiff dragging a net (a cloth of points, corks on
      top), fish schools caught by it, the full net dragging harder, hauling
      it in.
-  5. **Anchor** (`#anchor`): a bow and a stern anchor, the rode paying out,
-     the anchor setting and then holding the boat within its swing on the
-     rode (version 4, owner: "anchor in mockup should stop you from moving"),
-     weighing anchor; the bed changes only how fast it sets.
+  5. **Anchor** (`#anchor`): one anchor per boat (version 6, owner: "also
+     only really need one anchor per boat"), the rode paying out only to the
+     bed (version 5), the anchor setting and then holding the boat within
+     its swing on the rode (version 4, owner: "anchor in mockup should stop
+     you from moving"), weighing anchor; the bed changes only how fast it
+     sets.
+- **The boat's menu** (version 6, owner, 2026-11-19: "rope length can be
+  controlled in the boat menu, yes boats have menus for inventory and
+  various stuff"): opened with C aboard or aiming at a boat, it holds the
+  boat's hold beside the pack, its anchor (drop or weigh, the rope's length
+  from "to the bed" up to the rode's maximum) and its lantern; on the
+  Anchor, Raft and Rowing tabs; design 10.
 - **Rowing** (`#rowing`, added 2026-11-19 on "mockup better rowing on a
   raft"): today's raft stroke beside the proposed one (two oars on a rowing
   frame in five stages on one beat, no pole (version 4), splash and

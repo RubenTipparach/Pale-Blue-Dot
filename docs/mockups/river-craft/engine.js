@@ -541,7 +541,11 @@ RC.Stage = function (canvas, def) {
   function lamps() {
     const L = [];
     for (const p of posts) { p.userData.lantern.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, 1, p.userData.lantern]); }
-    for (const l of def.lanterns ? def.lanterns() : []) { if (!l.visible && l.parent) continue; l.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, l.userData.warm, l]); }
+    for (const l of def.lanterns ? def.lanterns() : []) {
+      if (!l.visible && l.parent) continue;
+      // a lantern put out in the boat's menu: dark glass, no glow, lights nothing
+      if (l.userData.out) { l.userData.glass.color.set(0x3a3226); l.userData.glow.visible = false; continue; }
+      l.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, l.userData.warm, l]); }
     for (let i = 0; i < RC.LAMPS; i++) {
       const e = L[i];
       if (e && S.night) { U.uLampPos.value[i].set(e[0], e[1], e[2]); const w = e[3]; U.uLampCol.value[i].set(LAMP_RGB[0] * 2.4, (LAMP_RGB[1] + 0.3 * (1 - w)) * 2.4, (LAMP_RGB[2] + 0.55 * (1 - w)) * 2.4); }

@@ -43,7 +43,8 @@
       test that a slack line pulls nothing and a taut one pulls both ends.
 - [ ] 3.4 Anchors that set and hold (design 4), with tests that a set
       anchor holds a rowing craft within its rode's swing on every bed, that
-      bow and stern hold it still, and that only weighing frees it.
+      the rode stops at the bed unless a longer rope is set, and that only
+      weighing frees it. One anchor per boat (owner, 2026-11-19).
 - [ ] 3.5 Raft, tug, barge, log and bundle kinds; the boom (design 5).
 - [ ] 3.6 Nets and their catch, beside the rod (design 6).
 - [ ] 3.7 Durable records for craft, lines, anchors, booms and bundles;
@@ -105,5 +106,30 @@
 - [x] Anchor v4 (owner, 2026-11-19: "anchor in mockup should stop you from
       moving"): design 4 rewritten, a set anchor holds; the Anchored chip;
       stills `anchor-v4-*.png`.
+- [x] Anchor v5 (owner, 2026-11-19: "by default anchor rope should stop
+      extending as soon as it touches ground"): the rode stops at the bed.
+- [x] The boat's menu, write-up (owner, 2026-11-19: "rope length can be
+      controlled in the boat menu, yes boats have menus for inventory and
+      various stuff"): design 10 (what the game has today, C to open,
+      the hold, the anchor's rope, the lantern, per kind, what saves) and the
+      spec deltas "A boat has a menu for its hold, anchor and lantern" and
+      "The boat's settings survive saves". Recommendations taken (ask only
+      with screenshots): C, one hold size of ten slots, no menu on the tube,
+      no boat names or damage, a rode maximum of 40 m in the game.
+- [x] One anchor per boat (owner, 2026-11-19: "also only really need one
+      anchor per boat"): design 4 and the spec delta; the stern anchor and
+      the two-point mooring dropped.
+- [x] Version 6 of the page: `river-craft/boatmenu.js`, Boat (C) on the
+      Anchor, Raft and Rowing tabs; the Anchor tab's one anchor on T and the
+      menu, the rope control in place of Pay out and Shorten; the hold with
+      a few things, a tap sends a stack; the lantern check; phone width;
+      the stern anchor's mesh, rope, button and HUD line removed; the info
+      modal and its change-log line.
+- [x] Stills `docs/screenshots/raft-rowing/boat-menu-v6-*.png` (Chromium on
+      SwiftShader): the menu open on the Anchor tab, the rope lengthened to
+      14 m with the boat dropped back, night, phone width, the Rowing tab's
+      raft.
+- [ ] The owner's look at the boat's menu (the tracker, M34).
+- [ ] The port of the boat's menu (design 10.2 to 10.5), only on a request.
 - [ ] The owner's look at the Rowing tab (the tracker, M34).
 - [ ] The port (design 9.9), only on a request after the owner's look.

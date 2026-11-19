@@ -8,12 +8,16 @@ const stages = {}, defs = {};
 const shared = {night: false, arrows: false, speed: 1};
 let cur = null;
 const $ = id => document.getElementById(id);
+// the boat's menu (boatmenu.js): a control in it (drop, weigh, the rope) starts Play as any craft control does
+const boatMenu = RC.BoatMenu($("stage"), () => wake());
 
 function make(name) {
   const def = RC.scenes[name]();
   // held actions (Pay out, Shorten) run every physics step while they are held
   const step = def.step;
   def.step = h => { for (const a of def.actions) if (a.hold && a.down) a.run(h); step(h); };
+  // a boat with a menu (version 6): the Boat button and C open it; opening it starts nothing
+  if (def.menu) def.actions.unshift({id: "boat", label: "Boat", key: "C", quiet: true, run() { boatMenu.toggle(def.menu); }});
   defs[name] = def;
   const canvas = document.querySelector(`canvas[data-tab="${name}"]`);
   const st = RC.Stage(canvas, def);
@@ -39,6 +43,7 @@ function hud() {
     c.appendChild(document.createTextNode(v)); box.appendChild(c);
   }
   for (const a of def.actions) if (a.label2 && a.btn) { const t = a.label2(); if (a.btn.firstChild.textContent !== t + " ") a.btn.firstChild.textContent = t + " "; }
+  boatMenu.refresh();
 }
 function buildActions() {
   const box = $("acts"), def = defs[cur]; box.innerHTML = "";
@@ -64,7 +69,7 @@ function buildActions() {
       const on = e => { e.preventDefault(); a.down = true; b.classList.add("held"); wake(); };
       const off = () => { a.down = false; b.classList.remove("held"); };
       b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off); b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off);
-    } else b.addEventListener("click", () => { a.run(); wake(); hud(); });
+    } else b.addEventListener("click", () => { a.run(); if (!a.quiet) wake(); hud(); });
     a.btn = b; g.appendChild(b);
   }
   box.appendChild(g); box.appendChild(keys);
@@ -72,6 +77,7 @@ function buildActions() {
 function show(name) {
   if (!TABS.includes(name)) name = "raft";
   if (cur && stages[cur]) stages[cur].stop();
+  boatMenu.close();
   for (const a of (defs[cur] && defs[cur].actions) || []) a.down = false;
   cur = name;
   for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === name));
@@ -122,13 +128,14 @@ function press(dir, down) {
 }
 document.addEventListener("keydown", e => {
   if ($("modal").open || e.target.closest("select, input")) return;
+  if (e.key === "Escape" && boatMenu.isOpen) { boatMenu.close(); return; }
   if (e.target.closest(".tabs") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
   if (e.code === "Space") { e.preventDefault(); $("play").click(); return; }
   const dir = KEYMAP[e.code];
   if (dir) { e.preventDefault(); if (!e.repeat) press(dir, true); return; }
   const def = defs[cur]; if (!def || e.repeat) return;
   for (const a of def.actions) if (e.key.toUpperCase() === a.key) {
-    if (a.hold) { a.down = true; a.btn && a.btn.classList.add("held"); wake(); } else { a.run(); wake(); hud(); }
+    if (a.hold) { a.down = true; a.btn && a.btn.classList.add("held"); wake(); } else { a.run(); if (!a.quiet) wake(); hud(); }
   }
 });
 document.addEventListener("keyup", e => {
@@ -158,6 +165,6 @@ modal.querySelector(".mnav").addEventListener("click", e => {
   const t = document.querySelector(a.getAttribute("href")); if (t) t.scrollIntoView({block: "start"});
 });
 
-window.RCApp = {stages, defs, show, get cur() { return cur; }};
+window.RCApp = {stages, defs, show, boatMenu, get cur() { return cur; }};
 show(location.hash.slice(1));
 })();

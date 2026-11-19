@@ -106,6 +106,7 @@ RC.scenes.raft = function () {
     rocks: [[2, 2.6], [15, -3.2], [25, 2.4], [62, -2.8]], bed: (x, z) => (x > 28 && x < 62) ? "gravel" : "sand"};
   let ctx, R, raft, crew, model, bumpT = 0, wasGround = 0;
   const inp = hold();
+  const raftHold = [{item: "log", n: 12}, {item: "rope", n: 2}, null, null, null, null, null, null, null, null], lantern = {lit: true};
   const def = {
     river, posts: [[-38, -1], [40, 1]], followDefault: true,
     home: {yaw: 0.5, pitch: -0.42, dist: 17},
@@ -127,9 +128,11 @@ RC.scenes.raft = function () {
       wasGround = raft.grounded;
       if (raft.x > R.cfg.x1 - 6) def.reset();
     },
-    sync() { place(model, raft); crew.sync(false); model.updateMatrixWorld(true); },
+    sync() { place(model, raft); crew.sync(false); model.userData.lantern.userData.out = !lantern.lit; model.updateMatrixWorld(true); },
     lanterns: () => [model.userData.lantern],
     follow: () => [raft.x, raft.y, raft.z],
+    // the boat's menu (boatmenu.js): the raft's hold of ten slots (the game's, vehicle/hold.rs) and its lantern
+    menu: {title: "Raft", condition: () => "Dry", hold: raftHold, lantern: {get: () => lantern.lit, set: v => { lantern.lit = v; }}},
     hud() {
       const depth = R.surf(raft.x, raft.z) - R.top(raft.x, raft.z);
       R.flow(raft.x, raft.z, OUT);
@@ -511,11 +514,13 @@ RC.scenes.nets = function () {
 };
 
 // ======================================================================================================================
-// 5. Anchor: a skiff drops a bow anchor (and a stern one). The rode pays out only until the anchor touches the bed
-// (the owner, 2026-11-19: "by default anchor rope should stop extending as soon as it touches ground"), and the anchor sets on the bed in under
-// two seconds (sand slowest, mud fastest); once set it holds the boat (the owner, 2026-11-19: "anchor in mockup should
-// stop you from moving"): rowing and the current move the boat only as far as its swing on the rode. With bow and
-// stern both down the boat holds still on its heading. Weighing is the only way to move again.
+// 5. Anchor: a skiff with one anchor at its bow (the owner, 2026-11-19: "also only really need one anchor per boat").
+// The rode pays out only until the anchor touches the bed (the owner, 2026-11-19: "by default anchor rope should stop
+// extending as soon as it touches ground"); a longer rope is set in the boat's menu (the owner, 2026-11-19: "rope
+// length can be controlled in the boat menu, yes boats have menus for inventory and various stuff"). The anchor sets
+// on the bed in under two seconds (sand slowest, mud fastest); once set it holds the boat (the owner, 2026-11-19:
+// "anchor in mockup should stop you from moving"): rowing and the current move the boat only as far as its swing on
+// the one rode. Weighing is the only way to move again.
 RC.scenes.anchor = function () {
   // the bed decides only how fast the anchor sets (seconds from touching the bed to holding); while it sets it can
   // slide a little toward the boat, leaving a furrow, and then it holds whatever pulls on it
@@ -524,14 +529,19 @@ RC.scenes.anchor = function () {
     mud: {tile: "mud", set_s: 0.8, slide: 1200},
     rock: {tile: "stone", set_s: 1.3, slide: 900},
   };
-  let bed = "sand";
+  // the rope: null is "to the bed" (it stops paying out the moment the anchor touches); otherwise metres, up to the
+  // rode's maximum. A setting of the boat's, kept while the anchor is stowed and used on the next drop.
+  const ROPE_MAX = 30, VEER = 1.5, HAUL = 1.0;
+  let bed = "sand", rope = null;
   const mkRiver = () => ({x0: -70, x1: 80, z0: -36, z1: 38, center: x => 4 * Math.sin(x / 30), half: () => 11, depth: () => 2.0, U: () => 1.45,
     level0: 0.55, slope: 0.002, steps: [], rocks: [], bed: () => BEDS[bed].tile});
-  let ctx, R, U, boat, model, stroke = 0, simT = 0;
+  let ctx, R, U, boat, model, stroke = 0, simT = 0, a = null;
   const inp = hold();
-  const anchors = [];
-  function makeAnchor(lx, name) {
-    const a = {lx, name, state: "stowed", x: 0, y: 0, z: 0, rode: 0, set: 0, drag: 0, dragV: 0, line: null, rope: new RC.Rope(18, true), tube: null, mesh: null, trail: [], marks: [], target: 0};
+  // the skiff's hold: ten slots, as the game's raft has (vehicle/hold.rs); a few things already in it
+  const hold10 = [{item: "rope", n: 4}, {item: "bait", n: 12}, {item: "grilled-fish", n: 3}, null, null, null, null, null, null, null];
+  const lantern = {lit: true};
+  function makeAnchor(lx) {
+    const a = {lx, state: "stowed", x: 0, y: 0, z: 0, rode: 0, set: 0, dragV: 0, line: null, rope: new RC.Rope(18, true), tube: null, mesh: null, marks: [], target: 0};
     a.line = new RC.Line(boat, [lx, 0], null, null, 1); a.line.at = [0, 0];
     a.tube = new RC.Tube(18, 0.09, mat(U, 0xc8ccd2)); a.tube.mesh.visible = false; ctx.scene.add(a.tube.mesh);
     a.mesh = anchorModel(U); a.mesh.scale.setScalar(1.35); ctx.scene.add(a.mesh);
@@ -539,19 +549,23 @@ RC.scenes.anchor = function () {
     a.mark = 0; a.lastMark = null;
     return a;
   }
-  const bow = a => p3(boat, a.lx, 0, 0.45);
-  function anchorStep(a, h) {
-    const B = BEDS[bed], b = bow(a);
+  const bow = () => p3(boat, a.lx, 0, 0.45);
+  // the rode the setting asks for, given the anchor's height under the bow: never shorter than straight up and down
+  const plumb = () => Math.max(0.2, bow()[1] - a.y) + 0.3;
+  const wanted = () => rope === null ? plumb() : clamp(rope, plumb(), ROPE_MAX);
+  function anchorStep(h) {
+    const B = BEDS[bed], b = bow();
     if (a.state === "stowed") return;
     if (a.state === "drop") {
       a.y -= 2.4 * h; R.flow(a.x, a.z, OUT); a.x += OUT[0] * 0.15 * h; a.z += OUT[1] * 0.15 * h;
       const floor = R.top(a.x, a.z);
       a.rode = Math.max(a.rode, Math.hypot(b[0] - a.x, b[1] - a.y, b[2] - a.z) + 0.3);
-      // the first anchor down veers to five times the depth; one dropped while the other holds is snubbed short where it
-      // lands, so bow and stern together hold the boat still on its heading
-      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; const other = anchors.find(o => o !== a && o.state === "down"); a.target = other ? a.rode + 0.3 : a.rode; }   // the rode stops paying out the moment the anchor touches the bed (owner, 2026-11-19); Pay out lets more out
+      // on the bed the rode stops paying out (owner, 2026-11-19), unless the boat's menu has a longer rope set
+      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; a.target = rope === null ? a.rode : Math.max(a.rode, wanted()); }
     } else if (a.state === "down") {
-      if (a.rode < a.target) a.rode = Math.min(a.target, a.rode + 1.5 * h);     // veering to the scope
+      // veering to a longer setting, or hauling in to a shorter one: the boat swings out or is pulled up
+      if (a.rode < a.target) a.rode = Math.min(a.target, a.rode + VEER * h);
+      else if (a.rode > a.target) a.rode = Math.max(a.target, a.rode - HAUL * h);
       const dy = Math.max(0.2, b[1] - a.y), Lh = Math.sqrt(Math.max(0.04, a.rode * a.rode - dy * dy));
       a.line.length = Lh; a.line.at[0] = a.x; a.line.at[1] = a.z;
       const T = a.line.step();
@@ -565,11 +579,11 @@ RC.scenes.anchor = function () {
           const m = a.marks[a.mark++ % a.marks.length]; m.visible = true; m.position.set(a.x, a.y + 0.02, a.z); m.rotation.y = -Math.atan2(dz, dx); a.lastMark = [a.x, a.z];
         }
       }
-      const k = Math.min(1, 1.5 * h); a.T = (a.T || 0) + (T - (a.T || 0)) * k; a.dv = (a.dv || 0) + (a.dragV - (a.dv || 0)) * k;
+      const k = Math.min(1, 1.5 * h); a.T = (a.T || 0) + (T - (a.T || 0)) * k;
       // weighing: the rode hauled in to straight up and down, then the anchor broken out and lifted. The only way
-      // an anchor lets go.
+      // the anchor lets go.
       if (a.weigh) {
-        a.rode = Math.max(dy + 0.2, a.rode - 1.0 * h); a.target = a.rode;
+        a.rode = Math.max(dy + 0.2, a.rode - HAUL * h); a.target = a.rode;
         if (a.rode <= dy + 0.45) a.state = "up";
       }
     } else if (a.state === "up") {
@@ -579,19 +593,26 @@ RC.scenes.anchor = function () {
     }
     if (a.state !== "stowed") a.rope.step(h, R, b, [a.x, a.y + 0.75, a.z], a.rode);
   }
-  function drop(a) {
+  function drop() {
     if (a.state !== "stowed") return;
-    const b = bow(a); a.x = b[0]; a.y = b[1] - 0.3; a.z = b[2]; a.rode = 0.5; a.state = "drop"; a.set = 0; a.drag = 0; a.weigh = false;
+    const b = bow(); a.x = b[0]; a.y = b[1] - 0.3; a.z = b[2]; a.rode = 0.5; a.state = "drop"; a.set = 0; a.weigh = false;
     a.rope.lay(b, [a.x, a.y, a.z]); a.tube.mesh.visible = true;
   }
-  function anchorLabel(a) {
-    if (a.state === "stowed") return [a.name, "stowed", ""];
-    if (a.state === "drop") return [a.name, "dropping", "on"];
-    if (a.state === "up") return [a.name, "aweigh", "on"];
-    if (a.weigh) return [a.name, "weighing", "on"];
-    if (a.set < 1) return [a.name, "setting", "on"];
-    if (a.T < 5) return [a.name, "set", ""];
-    return [a.name, "holding " + fmtN(a.T), "on"];
+  function dropOrWeigh() { if (a.state === "stowed") drop(); else if (a.state === "down") a.weigh = !a.weigh; }
+  // the anchor's state in plain words, for the HUD and the boat's menu
+  function anchorWord() {
+    if (a.state === "stowed") return ["Stowed", ""];
+    if (a.state === "drop") return ["Dropping", "on"];
+    if (a.state === "up") return ["Coming aboard", "on"];
+    if (a.weigh) return ["Weighing", "on"];
+    if (a.set < 1) return ["Setting", "on"];
+    if (a.rode < a.target - 0.05) return ["Paying out", "on"];
+    if (a.rode > a.target + 0.05) return ["Hauling in", "on"];
+    return ["Holding", "on"];
+  }
+  function setRope(v) {
+    rope = v === null ? null : clamp(Math.round(v * 2) / 2, 1, ROPE_MAX);
+    if (a.state === "down" && !a.weigh) a.target = wanted();
   }
   const def = {
     river: mkRiver(), posts: [[-12, -1], [26, 1]], followDefault: true,
@@ -604,52 +625,62 @@ RC.scenes.anchor = function () {
       boat = new RC.Hull({L: 5, B: 1.8, m: 520, draft: 0.34, cA: 90, cS: 1300, pointed: true});
       model = skiffModel(c.U, 5, 1.8); c.scene.add(model);
       model.userData.lantern.userData.warm = 0;   // an anchor light shows white
-      anchors.push(makeAnchor(2.3, "Bow"), makeAnchor(-2.4, "Stern"));
+      a = makeAnchor(2.3);
       def.reset();
     },
     reset() {
       Object.assign(boat, {x: -4, z: R.cfg.center(-4) + 1.5, yaw: Math.PI + 0.55, vx: 0, vz: 0, w: 0}); boat.settle(R);
-      for (const a of anchors) { a.state = "stowed"; a.weigh = false; a.tube.mesh.visible = false; a.T = 0; a.dv = 0; a.dragV = 0; for (const m of a.marks) m.visible = false; a.lastMark = null; }
+      a.state = "stowed"; a.weigh = false; a.tube.mesh.visible = false; a.T = 0; a.dragV = 0; for (const m of a.marks) m.visible = false; a.lastMark = null;
     },
     step(h) {
       simT += h;
       boat.water(R);
       stroke = rowDrive(boat, inp, {thrust: 380, turn: 1000});
-      for (const a of anchors) anchorStep(a, h);
+      anchorStep(h);
       boat.integrate(h, R); boat.terrain(R);
       if (boat.x > R.cfg.x1 - 6 || boat.x < R.cfg.x0 + 4) def.reset();
     },
     sync() {
       place(model, boat); animateOars(model, boat, stroke, simT);
-      for (const a of anchors) {
-        if (a.state === "stowed") { const b = p3(boat, a.lx * 0.92, 0, 0.1); a.mesh.position.set(b[0], b[1], b[2]); a.mesh.rotation.set(0, -boat.yaw, 0); }
-        else {
-          a.mesh.position.set(a.x, a.y, a.z);
-          const b = bow(a), lay = a.state === "down" ? 1.2 : 0;
-          a.mesh.rotation.set(0, -Math.atan2(b[2] - a.z, b[0] - a.x), -lay, "YZX");
-          a.tube.set(a.rope.p);
-        }
+      model.userData.lantern.userData.out = !lantern.lit;
+      if (a.state === "stowed") { const b = p3(boat, a.lx * 0.92, 0, 0.1); a.mesh.position.set(b[0], b[1], b[2]); a.mesh.rotation.set(0, -boat.yaw, 0); }
+      else {
+        a.mesh.position.set(a.x, a.y, a.z);
+        const b = bow(), lay = a.state === "down" ? 1.2 : 0;
+        a.mesh.rotation.set(0, -Math.atan2(b[2] - a.z, b[0] - a.x), -lay, "YZX");
+        a.tube.set(a.rope.p);
       }
     },
     lanterns: () => [model.userData.lantern],
-    follow: () => { const a = anchors[0]; return a.state === "down" ? [(boat.x * 2 + a.x) / 3, boat.y - 0.5, (boat.z * 2 + a.z) / 3] : [boat.x, boat.y, boat.z]; },
+    follow: () => a.state === "down" ? [(boat.x * 2 + a.x) / 3, boat.y - 0.5, (boat.z * 2 + a.z) / 3] : [boat.x, boat.y, boat.z],
     hud() {
-      const a = anchors[0], s = anchors[1], b = bow(a);
-      const anchored = anchors.some(x => x.state === "down" && x.set >= 1 && !x.weigh);
-      const out = [...(anchored ? [["", "Anchored", "on"]] : []), ["Bed", BEDS[bed] && bed[0].toUpperCase() + bed.slice(1)], anchorLabel(a), anchorLabel(s)];
-      if (a.state === "down") out.push(["Rode", a.rode.toFixed(1) + " m"]);
+      const anchored = a.state === "down" && a.set >= 1 && !a.weigh;
+      const [w, tone] = anchorWord();
+      const out = [...(anchored ? [["", "Anchored", "on"]] : []), ["Bed", bed[0].toUpperCase() + bed.slice(1)], ["Anchor", w, tone]];
+      if (a.state === "down") out.push(["Rope", a.rode.toFixed(1) + " m"]);
+      if (anchored && a.T >= 5) out.push(["Pull", fmtN(a.T)]);
       out.push(["Speed", speedOf(boat).toFixed(2) + " m/s"]);
       return out;
     },
-    keys: "W S row · A D turn · R F pay out or shorten the bow rode",
-    probe: () => ({boat, anchors}),
+    keys: "W S row · A D turn · T drop or weigh · C the boat",
+    probe: () => ({boat, anchor: a, rope: () => rope}),
+    // the boat's menu (boatmenu.js): the hold, the anchor and its rope, the lantern
+    menu: {
+      title: "Skiff",
+      condition: () => "Dry",
+      hold: hold10,
+      anchor: {
+        state: () => anchorWord()[0],
+        button: () => a.state === "stowed" ? "Drop" : a.weigh ? "Stop" : a.state === "down" ? "Weigh" : null,
+        toggle: () => dropOrWeigh(),
+        rope: () => rope, setRope, max: ROPE_MAX,
+        rode: () => a.state === "stowed" ? null : a.rode,
+      },
+      lantern: {get: () => lantern.lit, set: v => { lantern.lit = v; }},
+    },
     actions: [
-      {id: "bow", label: "Drop bow", key: "Z", run() { const a = anchors[0]; if (a.state === "stowed") drop(a); else if (a.state === "down") a.weigh = !a.weigh; },
-        label2: () => { const a = anchors[0]; return a.state === "stowed" ? "Drop bow" : a.weigh ? "Stop hauling" : a.state === "down" ? "Weigh bow" : "Bow anchor"; }},
-      {id: "stern", label: "Drop stern", key: "X", run() { const a = anchors[1]; if (a.state === "stowed") drop(a); else if (a.state === "down") a.weigh = !a.weigh; },
-        label2: () => { const a = anchors[1]; return a.state === "stowed" ? "Drop stern" : a.weigh ? "Stop hauling" : a.state === "down" ? "Weigh stern" : "Stern anchor"; }},
-      {id: "payout", label: "Pay out", key: "R", hold: true, run(dt) { const a = anchors[0]; if (a.state === "down") { a.weigh = false; a.target = a.rode = Math.min(30, a.rode + 1.2 * dt); } }},
-      {id: "shorten", label: "Shorten", key: "F", hold: true, run(dt) { const a = anchors[0]; if (a.state === "down") { const dy = bow(a)[1] - a.y; a.target = a.rode = Math.max(dy + 1.0, a.rode - 1.0 * dt); } }},
+      {id: "anchor", label: "Drop anchor", key: "T", run: dropOrWeigh,
+        label2: () => a.state === "stowed" ? "Drop anchor" : a.weigh ? "Stop hauling" : a.state === "down" ? "Weigh anchor" : "Anchor"},
     ],
   };
   return def;

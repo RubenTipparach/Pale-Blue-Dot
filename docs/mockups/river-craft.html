@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>River Craft</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Pale Blue Dot mockup M34, version 4: rafting, rowing a raft, a tug and its tow, a log drive with a boom, a net boat and anchoring, as playable toys on the game's flowing river.">
+<meta name="description" content="Pale Blue Dot mockup M34, version 6: rafting, rowing a raft, a tug and its tow, a log drive with a boom, a net boat, anchoring and the boat's menu, as playable toys on the game's flowing river.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -109,7 +109,42 @@ details.tune summary { font: 600 15px/1.6 var(--display); color: var(--text-dim)
 .sl output { color: var(--rune); text-align: right; }
 .ronrow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(--text); border: 1px solid var(--stone-2); font: 12.5px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+/* the boat's menu (version 6): an overlay over the river in the game's kit, the dressed-stone frame (assets/ui/stone/frame.png,
+   9-slice 14 px at 8x, drawn at 2x), the oak lintel for the boat's name, 24 px slots and 16 px item icons at 2x */
+.boatmenu { position: absolute; top: 8px; right: 8px; max-height: calc(100% - 16px); width: min(420px, calc(100% - 16px)); z-index: 4; overflow-y: auto; overscroll-behavior: contain;
+  border-style: solid; border-width: 28px 24px; border-image: url(river-craft/ui/stone-frame.png) 112 fill stretch; image-rendering: pixelated;
+  color: var(--text); font: 16px/1.2 var(--body); padding: 0 2px; }
+.boatmenu[hidden], .boatmenu [hidden] { display: none !important; }
+.stage.menu-open .pad { display: none; }
+.bm-head { display: flex; align-items: center; gap: 8px; margin: -6px 0 4px; }
+.bm-lintel { border-style: solid; border-width: 10px 18px; border-image: url(river-craft/ui/stone-lintel.png) 40 72 fill stretch; image-rendering: pixelated;
+  color: var(--oak-label); font: 700 18px/1 var(--display); letter-spacing: 2px; height: 34px; display: inline-flex; align-items: center; padding: 0 4px; }
+.bm-cond { flex: 1; color: var(--text-dim); font-size: 15px; }
+.bm-x { min-width: 44px; height: 40px; font-size: 18px; }
+.bm-h { font: 600 14px/1 var(--display); color: var(--title); letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; text-shadow: 0 2px 0 var(--ink); }
+.bm-grid { display: grid; grid-template-columns: repeat(5, 48px); gap: 3px; }
+.bm-slot { position: relative; width: 48px; height: 48px; padding: 0; border: 0; cursor: pointer; background: url(river-craft/ui/stone-slot-idle.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-slot:hover { background-image: url(river-craft/ui/stone-slot-hover.png); }
+.bm-slot:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
+.bm-slot img { position: absolute; left: 8px; top: 8px; width: 32px; height: 32px; image-rendering: pixelated; }
+.bm-n { position: absolute; right: 4px; bottom: 2px; font: 600 14px/1 var(--body); color: var(--label); text-shadow: 1px 1px 0 var(--ink), -1px 1px 0 var(--ink); }
+.bm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0; }
+.bm-state { min-width: 96px; color: var(--rune); }
+.bm-lab { font: 600 14px/1 var(--display); color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; min-width: 40px; }
+.bm-rope, .bm-outv { min-width: 76px; text-align: center; color: var(--label); font-size: 17px; }
+.bm-less, .bm-more { min-width: 44px; font-size: 22px; }
+.bm-range { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 2px 0; background: transparent; cursor: pointer; }
+.bm-range::-webkit-slider-runnable-track { height: 16px; background: url(river-craft/ui/stone-slider-track.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 26px; margin-top: -5px; border: 0; background: url(river-craft/ui/oak-slider-knob.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-range::-moz-range-track { height: 16px; background: url(river-craft/ui/stone-slider-track.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-range::-moz-range-thumb { width: 18px; height: 26px; border: 0; border-radius: 0; background: url(river-craft/ui/oak-slider-knob.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-range:focus-visible { outline: 2px solid var(--rune); }
+.bm-check { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; background: none; border: 0; padding: 0 4px; color: var(--label); font: 17px/1 var(--body); cursor: pointer; }
+.bm-check::before { content: ""; width: 24px; height: 24px; background: url(river-craft/ui/stone-check-off.png) 0 0 / 100% 100%; image-rendering: pixelated; }
+.bm-check[aria-pressed="true"]::before { background-image: url(river-craft/ui/stone-check-on.png); }
+.bm-check:focus-visible { outline: 2px solid var(--rune); }
 @media (max-width: 560px) {
+  .boatmenu { inset: 0; width: auto; max-height: none; border-width: 22px 18px; }
   header.top h1 { font-size: 21px; }
   .tab { font-size: 16px; border-width: 10px 9px 0; }
   .btn { height: 38px; font-size: 16px; min-width: 44px; }
@@ -181,7 +216,7 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
 
 <dialog class="infomodal" id="modal" aria-labelledby="mtitle">
   <div class="mhead"><b id="mtitle">River Craft</b><button id="mclose" aria-label="Close">&#x2715;</button></div>
-  <nav class="mnav"><a href="#m-about">About</a><a href="#m-changes">Changes</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-rowing">Rowing</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-changes">Changes</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-boat">Boat menu</a><a href="#m-rowing">Rowing</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
   <div class="mbody" id="mbody">
     <h2 id="m-about">About M34, River Craft</h2>
     <p>The owner, 2026-11-16, playing the new flowing rivers: <q>dude the river stuff is so much fun, can you make a mock up of stuff like rafting physics? or design a boat that can tug other boats? log hauling? boats with nets, also anchoring</q>.</p>
@@ -191,6 +226,7 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
 
     <h2 id="m-changes">Changes</h2>
     <ul>
+      <li><b>Version 6, 2026-11-19.</b> The boat's menu (<b>Boat</b>, <b>C</b>): the boat's hold beside the pack, its anchor with drop or weigh and the rope's length, and its lantern (<q>rope length can be controlled in the boat menu, yes boats have menus for inventory and various stuff</q>). One anchor per boat: the stern anchor is gone (<q>also only really need one anchor per boat</q>). Pay out and Shorten are replaced by the menu's rope control; the anchor drops and weighs on T, the game's key.</li>
       <li><b>Version 5, 2026-11-19.</b> The anchor's rode stops paying out the moment the anchor touches the bed, so it lies straight up and down with no extra chain until you Pay out (<q>by default anchor rope should stop extending as soon as it touches ground</q>).</li>
       <li><b>Version 4, 2026-11-19.</b> The raft is rowed with two oars only; the pole is no longer proposed (the owner: <q>no pole just oar is best, pole you have to actually move, and the pole is clipping, overall too much awkwardness</q>). The Rowing tab's Pole gear, its Too deep chip and its poses are gone, and the Raft tab rows with the same oars instead of a pole and a paddle. The stroke is smoothed: the seat is nearer the pins and the sweep shorter, so the hands stay on the handles through the whole stroke, the arms straight at the release; the oars ride in swivel locks above the posts; nothing clips the deck, the frame, the body or the hands (checked at 160 points a stroke); the rower's cap peak and nose show he faces the bow. The first-person hands are drawn only in first person, the rower's body and arms only in third (<q>why is fps arm in third person</q>). Today's pole now hangs just outboard of the deck, so it no longer runs through the deck and the poler. The Tube rider sits back in the ring and paddles with the hands in the water, and the tube has no lantern (<q>no light for tube guy, fix arms/body</q>). A set anchor holds the boat (<q>anchor in mockup should stop you from moving</q>).</li>
       <li><b>Version 3, 2026-11-19.</b> The Rowing tab: today's raft stroke beside the proposed oars, and the raft's own lantern.</li>
@@ -233,10 +269,19 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
     <p>A skiff with two spars at its stern and a net between them: a cork line on top that floats, a lead line below that sinks, twine between. <b>Cast net</b> pays it out behind. Row against the current and the water streams the net out into a bag; drift with the current and it hangs slack. Three schools of fish hold in the river: in the eddy behind the rock, in the pool, and off the left bank. They dart from the hull, but a fish the net sweeps round is caught and stays in the bag. Every fish makes the net drag harder and slows the boat (the <b>Net drag</b> chip). <b>Haul in</b> draws the net up to the spars over five seconds and lands the catch; the boat sits lower for it.</p>
 
     <h2 id="m-anchor">Anchor</h2>
-    <p>A skiff in a strong current (1.45 m/s mid-stream), with a bow anchor and a stern anchor. <b>Drop bow</b>: the anchor falls to the bed and the rode (a chain) pays out only until the anchor touches the bed, then stops (the owner, 2026-11-19: <q>by default anchor rope should stop extending as soon as it touches ground</q>); <b>Pay out</b> lets more out for a longer swing. The anchor sets in under two seconds, and from then on it holds the boat (the owner, 2026-11-19: <q>anchor in mockup should stop you from moving</q>): the boat swings to the current and lies downstream of it on the rode, and rowing or the current moves it only within that swing. Row away from the anchor and the rode comes taut and the boat stops; the <b>Anchored</b> chip shows while an anchor holds. <b>Drop stern</b> as well: it is snubbed short where it lands, and bow and stern together hold the boat still on its heading. <b>Weigh</b> hauls the rode in, the boat comes up to the anchor, and the anchor comes aboard; weighing is the only way to move on.</p>
+    <p>A skiff in a strong current (1.45 m/s mid-stream), with one anchor at its bow (the owner, 2026-11-19: <q>also only really need one anchor per boat</q>). <b>Drop anchor</b> (<b>T</b>, the game's anchor key): the anchor falls to the bed and the rode (a chain) pays out only until the anchor touches the bed, then stops (the owner, 2026-11-19: <q>by default anchor rope should stop extending as soon as it touches ground</q>). The anchor sets in under two seconds, and from then on it holds the boat (the owner, 2026-11-19: <q>anchor in mockup should stop you from moving</q>): the boat swings to the current and lies downstream of it on its one rode, and rowing or the current moves it only within that swing. Row away from the anchor and the rode comes taut and the boat stops; the <b>Anchored</b> chip shows while it holds. <b>Weigh</b> hauls the rode in, the boat comes up to the anchor, and the anchor comes aboard; weighing is the only way to move on.</p>
     <ul>
       <li><b>Sand</b>, <b>Mud</b>, <b>Rock</b>: the bed changes only how fast the anchor sets (sand 1.8 s, rock 1.3 s, mud 0.8 s). While it sets, a hard pull slides it a little and leaves a furrow.</li>
-      <li><b>Pay out</b> and <b>Shorten</b> change the bow rode, and so how far the boat can swing. Shortening never breaks the anchor out.</li>
+      <li>A longer rope is set in the boat's menu (below): longer and the boat swings further downstream, shorter and the rode is hauled in and the boat is pulled up toward the anchor. Shortening never breaks the anchor out.</li>
+    </ul>
+    <h3 id="m-boat">The boat's menu</h3>
+    <p>The owner, 2026-11-19: <q>rope length can be controlled in the boat menu, yes boats have menus for inventory and various stuff</q>. <b>Boat</b> (<b>C</b>) opens it on the Anchor, Raft and Rowing tabs; <b>C</b>, <b>Esc</b> or its &#x2715; close it. In the game it opens with C while aboard, or with C while looking at a boat within reach on foot (the same aim that boards it with F). C is free in the game's bindings today. Opening it starts nothing; the river runs on behind it, as it does behind the game's pack.</p>
+    <ul>
+      <li><b>The name and condition</b> on the oak lintel: the game tracks the kind (Raft, Inner tube, Loon) and the water aboard, nothing else, so the menu shows the kind's name and <b>Dry</b> or <b>Water aboard</b>. Naming a boat is left for later.</li>
+      <li><b>Hold</b> and <b>Pack</b>: the boat's ten slots (the game's raft already has them, <code>vehicle/hold.rs</code>) above the first ten of the pack. A tap sends the whole stack across, merging first, as a shift-click does in the game's pack; the game's own pick-up-and-place click is left out here.</li>
+      <li><b>Anchor</b>: its state, <b>Drop</b> or <b>Weigh</b>, and the <b>Rope</b>: <b>To the bed</b> by default (it stops paying out when the anchor touches); <b>+</b> and <b>&minus;</b> step it a metre at a time and the slider sets it, up to 30 m, the rode's length. <b>Out</b> is how much is out now. Set with the anchor stowed, the length is used on the next drop. The setting is the boat's own and is saved with it.</li>
+      <li><b>Lantern</b>: on or out. On a raft it is the raft's lantern (Rowing, design 9.8), lit from dusk to dawn while it is on; on the skiff it is its white anchor light.</li>
+      <li>The Tug, Log drive, Nets and Tube tabs have no menu yet. In the design: the tug's has its tow lines (length, cast off), the net boat's its net (cast, haul in) and its catch in the hold, and the tube has none: it carries nothing and has nothing to set.</li>
     </ul>
 
     <h2 id="m-rowing">Rowing</h2>
@@ -277,7 +322,8 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
       <tr><td>C, L</td><td>Cast off, Long line</td><td>Tug: let go or make fast the tow; change the lines' length.</td></tr>
       <tr><td>P, B, H, O</td><td>Break jam, Bundle, Hitch, Open boom</td><td>Log drive.</td></tr>
       <tr><td>C, H</td><td>Cast net, Haul in</td><td>Nets.</td></tr>
-      <tr><td>Z, X, R, F</td><td>Drop or weigh bow and stern, Pay out, Shorten</td><td>Anchor (R and F while held).</td></tr>
+      <tr><td>T</td><td>Drop anchor, Weigh anchor</td><td>Anchor: drop it, or weigh it.</td></tr>
+      <tr><td>C, Esc</td><td>Boat</td><td>Anchor, Raft and Rowing: open or close the boat's menu (the hold, the anchor's rope, the lantern).</td></tr>
     </table></div>
     <p>Pressing a craft control also starts Play. Drag the view to turn it, wheel or pinch to come closer.</p>
 
@@ -320,11 +366,12 @@ textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(-
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="river-craft/engine.js?v=5"></script>
-<script src="river-craft/physics.js?v=5"></script>
-<script src="river-craft/scenes.js?v=5"></script>
-<script src="river-craft/hand.js?v=5"></script>
-<script src="river-craft/rowing.js?v=5"></script>
-<script src="river-craft/app.js?v=5"></script>
+<script src="river-craft/engine.js?v=6"></script>
+<script src="river-craft/physics.js?v=6"></script>
+<script src="river-craft/scenes.js?v=6"></script>
+<script src="river-craft/hand.js?v=6"></script>
+<script src="river-craft/rowing.js?v=6"></script>
+<script src="river-craft/boatmenu.js?v=6"></script>
+<script src="river-craft/app.js?v=6"></script>
 </body>
 </html>

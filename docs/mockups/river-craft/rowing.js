@@ -521,6 +521,8 @@ RC.scenes.rowing = function () {
   // today's stroke (loon.rs): one at a time, alternating sides on W
   const today = {stroke: null, lastSide: 1, strokes: []};
   let stageName = "", speedHist = [];
+  // the boat's menu (boatmenu.js): the raft's hold of ten slots (the game's) and its lantern, on or out
+  const raftHold = [{item: "log", n: 12}, {item: "planks", n: 6}, {item: "rope", n: 2}, null, null, null, null, null, null, null], lantern = {lit: true};
   const acts = {};
   const keyHeld = id => acts[id] && acts[id].down;
 
@@ -621,6 +623,7 @@ RC.scenes.rowing = function () {
         const f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), t = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
         ud.pivot.rotation.set(-Math.abs(t) * 0.35, 0, f ? -0.5 * f : 0.12);
       }
+      ud.lantern.userData.out = !lantern.lit;
       model.updateMatrixWorld(true);
       crew.after();
       if (!proposed) { const u = ud.lantern.userData; u.glass.color.set(ctx.S.night ? 0xffd28a : 0x3a3226); u.glow.visible = ctx.S.night; }
@@ -644,6 +647,7 @@ RC.scenes.rowing = function () {
     // Proposed: the raft's lantern is a lamp and lights the deck, the water, the oars, the splash and the hands.
     // Today: the game's lantern flame shows at dusk (draw.rs, Moving::Flame) but lights nothing.
     lanterns: () => S.mode === "proposed" ? [model.userData.lantern] : [],
+    menu: {title: "Raft", condition: () => "Dry", hold: raftHold, lantern: {get: () => lantern.lit, set: v => { lantern.lit = v; }}},
     follow: () => [raft.x, raft.y + 0.8, raft.z],
     hud() {
       R.flow(raft.x, raft.z, OUT);

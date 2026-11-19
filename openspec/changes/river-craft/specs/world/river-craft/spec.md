@@ -44,12 +44,14 @@ An anchor dropped to the bed SHALL set within two seconds on any bed, the
 bed changing only how fast it sets. A set anchor SHALL hold: neither the
 current, nor rowing, nor shortening the rode SHALL move it, and the craft
 SHALL move only within its swing on the rode, at most the rode's length
-round the anchor. With a bow and a stern anchor both set the craft SHALL
-hold still on its heading. Weighing SHALL be the only way to free it.
+round the anchor. A boat SHALL have one anchor, at its bow, and swing on
+its one rode. By default the rode SHALL stop paying out when the anchor
+touches the bed; a longer rope SHALL be paid out only to the length set in
+the boat's menu. Weighing SHALL be the only way to free it.
 
 #### Scenario: Rowing against a set anchor
 
-- **WHEN** a skiff with its bow anchor set rows away from the anchor
+- **WHEN** a skiff with its anchor set rows away from the anchor
 - **THEN** the rode comes taut and the skiff stops
 
 #### Scenario: Swinging in the current
@@ -63,6 +65,56 @@ hold still on its heading. Weighing SHALL be the only way to free it.
 - **WHEN** the rode of a set anchor is hauled in
 - **THEN** the craft is pulled up toward the anchor, the anchor comes aboard
   and the craft is free
+
+#### Scenario: The rope stops at the bed
+
+- **WHEN** an anchor is dropped with its rope set to the bed
+- **THEN** the rode stops paying out when the anchor touches the bed
+
+### Requirement: A boat has a menu for its hold, anchor and lantern
+
+A boat with a hold, an anchor or a lantern SHALL have a menu, opened with
+one key while aboard or while aiming at the boat within reach, and closed
+with the same key or Escape. It SHALL show the boat's kind and whether
+water is aboard; its hold beside the player's slots, a stack moving between
+them by the pack's own rule; its anchor with drop or weigh and the rope's
+length, from "to the bed" up to the rode's maximum; and its lantern, on or
+out. Its text SHALL be plain labels. An inner tube SHALL have no menu.
+
+#### Scenario: Lengthening the rope at anchor
+
+- **WHEN** a boat's anchor holds and the rope is set longer in the menu
+- **THEN** the rode is paid out to the new length and the boat drops back
+  further downstream on it
+
+#### Scenario: Shortening the rope at anchor
+
+- **WHEN** the rope of a holding anchor is set back to the bed
+- **THEN** the rode is hauled in and the boat is pulled up toward the
+  anchor, and the anchor still holds
+
+#### Scenario: Moving a stack into the hold
+
+- **WHEN** the player sends a stack from their slots to the boat's hold in
+  the menu
+- **THEN** it is in the hold and out of the slots, in one durable write
+
+#### Scenario: Putting the lantern out
+
+- **WHEN** a raft's lantern is put out in the menu at night
+- **THEN** it adds no light until it is put back on
+
+### Requirement: The boat's settings survive saves
+
+A boat's rope length and whether its lantern is out SHALL be kept on the
+boat's own record through the durable path when they change. A world saved
+before them SHALL open with every rope "to the bed", every lantern on, and
+every anchored boat's rode at the length it was saved with.
+
+#### Scenario: Reopening a world
+
+- **WHEN** a boat's rope is set to 12 m, the world is closed and opened again
+- **THEN** the boat's rope is still 12 m
 
 ### Requirement: Logs drive, jam and are caught by a boom
 
@@ -136,7 +188,8 @@ read by any rule.
 ### Requirement: A raft carries its own lantern, lit at night
 
 Every raft SHALL come with a lantern fitted to it, needing no crafting or
-placing. It SHALL be lit from dusk to dawn on the town lamps' switch and,
+placing. Unless it is put out in the boat's menu, it SHALL be lit from
+dusk to dawn on the town lamps' switch and,
 while lit, SHALL light what is near it (the raft, the water round it, the
 oars and the rower's hands) through the light field's lamp term. The raft
 SHALL stay lit as the terrain is.

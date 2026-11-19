@@ -106,16 +106,26 @@ Anchor tab: "anchor in mockup should stop you from moving". The rule is now:
 - **The rode stops at the bed.** By default the rode pays out only until
   the anchor touches the bed, then stops: no extra scope is veered (the
   owner, 2026-11-19: "by default anchor rope should stop extending as soon
-  as it touches ground"). Pay out lets more out for a longer swing.
-- **Bow and stern.** One dropped while the other holds is snubbed short where it lands, so the
-  two together hold the craft still on its heading.
+  as it touches ground"). A longer rope is set in the boat's menu (10),
+  for a longer swing.
+- **One anchor per boat** (the owner, 2026-11-19: "also only really need
+  one anchor per boat"). Every boat that anchors has one, at the bow, and
+  swings on its one rode. The stern anchor and the two-point mooring of
+  versions 3 to 5 (bow and stern together holding the craft still on its
+  heading) are dropped. The game already has one: `Craft::mooring` is a
+  single `Mooring`, and nothing changes there.
 - **Weighing is the only way to move again.** It hauls the rode in to
   straight up and down and lifts the anchor aboard.
 
 Dropped as proposals: the sand anchor that never sets and drags, the rock
 anchor that skips until a fluke catches, and a short rode lifting the shank
-and breaking the anchor out. Pay out and Shorten change only how far the
-craft can swing. The existing anchor's depth limit and default rode stand.
+and breaking the anchor out. The rope's length changes only how far the
+craft can swing: lengthened, the rode is veered at 1.5 m/s and the craft
+drops back; shortened, it is hauled in at 1.0 m/s and the craft is pulled
+up toward the anchor, never breaking it out. The existing anchor's depth
+limit (35 m) stands; its default rode (`place::rode`, 3 x depth + 2 m)
+becomes "to the bed" for a new drop, and a rode already saved keeps its
+length.
 
 ### 5. Rafts, logs, booms and bundles
 
@@ -149,7 +159,8 @@ rod with its own catch rule.
 Every craft, line, anchor (its bed point, set and rode), boom and bundle is
 a record on the durable path, named with its author. A world saved before
 this change has none of them and opens unchanged. The current is derived and
-never saved.
+never saved. The boat's menu adds two settings to a craft's record, the
+anchor's rope length and the lantern put out (10.4).
 
 ### 8. The look
 
@@ -396,8 +407,9 @@ lamp: (
 ```
 
   The mockup's Rowing tab prints the same block under `lamp:`.
-- **Saves.** Nothing new: the lamp is part of the raft, and whether it
-  burns is the clock's answer.
+- **Saves.** The lamp is part of the raft, and whether it burns is the
+  clock's answer, unless the player puts it out in the boat's menu (10.3),
+  which the craft's record keeps (10.5).
 - **The inner tube has none** (the owner, 2026-11-19: "no light for tube
   guy"): at night a tube is lit only by the lamps near it and the moon.
 
@@ -453,6 +465,143 @@ nose forward, hair at the back, the feet braced on the frame's beam. Today's
 pole hangs just outboard of the logs (z 1.3 m) and tilts outboard for
 either key, so it no longer runs through the deck and the poler; what it
 shows (a pole leaning on the held key, snapping) is unchanged.
+
+### 10. The boat's menu (owner, 2026-11-19: "rope length can be controlled in the boat menu, yes boats have menus for inventory and various stuff")
+
+The owner, on the Anchor tab of version 5, where the rope now stops at the
+bed: "rope length can be controlled in the boat menu, yes boats have menus
+for inventory and various stuff". And with it: "also only really need one
+anchor per boat" (4). So a longer rope is not a pair of buttons on the
+screen; it is a setting in the boat's own menu, beside its hold.
+
+#### 10.1 What the game has today, measured
+
+Searched `crates/pbd-app/src/vehicles*`, `crates/pbd-core/src/vehicle/`,
+and `crates/pbd-app/src/desktop/` (`pack.rs`, `slots.rs`, `menu.rs`, the
+station screens).
+
+- **No boat menu.** No screen belongs to a craft. Aboard, the only UI is
+  the craft's panel of key rows (`vehicles/hud.rs`, `panel`: the kind's
+  name, "at anchor" or "tied up", the keys, T to drop or raise the anchor,
+  F to step off, V for the camera, B to bail while there is water).
+- **A hold, shown inside the pack.** A raft has a hold of ten slots
+  (`pbd_core::vehicle::hold`, `HOLD = 10`, `small-boats` design 5). The
+  pack (I or Tab) shows it as a HOLD panel under the pack's own grid while
+  the player is aboard a raft or on foot within `HOLD_REACH_M` of one
+  (`desktop/pack.rs`, `find_hold`, `paint_hold`, `click_with_hold`). A click
+  picks up and places as in the pack; a shift-click sends a whole stack
+  across (`hold::send`). It is stored as its own record (`HOLD_KIND`, keyed
+  by the craft's id) in ONE line with the player's slots
+  (`vehicles/hold.rs`, `WorldSave::store_with_hands`), so a moved stack is
+  never in both or neither. Only the raft has a hold; the Loon and the
+  inner tube have none.
+- **One anchor, no length control.** T drops the anchor where the water is
+  at most 35 m deep (`ANCHOR_DEPTH_M`) with a rode of 3 x depth + 2 m
+  (`place::rode`), or casts it off; `Craft::mooring` is one
+  `Mooring { at, length, anchored }`. Nothing sets the length afterwards.
+- **What a craft's record keeps** (`vehicle/record.rs`, `VehicleRecord`):
+  id, kind, frame, pose and velocities, the water aboard (`bilge_kg`), the
+  mooring (point, length, anchored), `owner` (always none in a one-player
+  world), a harbour berth, and `made`. There is no name and no damage: the
+  kind's name ("Raft", "Inner tube", "Loon") and the water aboard are all
+  the game knows of a boat's identity and condition.
+- **The lantern** is the raft's, fitted and lit by the clock (`DuskLamps`);
+  nothing turns it off (9.8).
+- **Keys in use** (`controls.rs`, `BINDINGS`, and the readers): W A S D,
+  Q E, F (interact, board), G, B (bail, brake, breeding), T (anchor), V
+  (camera), X, M, R, H, P, L, J, I and Tab (pack), O, Space, Shift, Ctrl,
+  Alt, Esc, the digits and F-keys. **C, K, N, U, Y and Z are free.**
+
+#### 10.2 Opening it
+
+- **C while aboard** opens the boat's menu; C or Esc closes it, like every
+  menu screen (it holds the pointer, `MenuOpen`). Recommendation taken (ask
+  only with screenshots): C, which is free, sits beside the boat's other
+  keys (V camera, B bail, T anchor) under the left hand, and is rebindable
+  in the bindings table as `vehicles:KeyC`, "the boat".
+- **C while looking at a boat on foot**, within reach: the same aim that
+  boards it with F (`interact`), so a moored boat's hold can be loaded
+  from the bank. The prompt over the boat gains a line, "C  boat".
+- The craft's panel (`hud.rs`) gains the row "C  the boat".
+- The pack keeps its HOLD panel as it is (built, and played): the boat's
+  menu shows the same hold with the same rule (`pack::click_with_hold`,
+  `hold::send`, `vehicles::hold::store`). One rule, two views.
+
+#### 10.3 What it holds
+
+A panel in the stone-and-carved-wood kit (the dressed-stone frame, the oak
+lintel for the title, the pack's 24 px slots, the kit's slider and check),
+in this order:
+
+1. **Name and condition**, on the lintel: the kind's name ("RAFT") and
+   "Dry" or "Water aboard" from `bilge_kg` (with B to bail as today).
+   Naming a boat, and damage, are not added (recommendation taken, ask only
+   with screenshots): the game tracks neither, and neither is asked for.
+2. **Hold** and **Pack**: the boat's ten slots above the player's slots,
+   with the pack's own clicks (click to pick up and place, shift-click to
+   send a stack across; on a phone, a tap sends).
+3. **Anchor**: its state ("Stowed", "Setting", "Holding", "Weighing"),
+   **Drop** or **Weigh** (T does the same without the menu), and **Rope**:
+   "To the bed" by default; **+** and **-** step it a metre, a slider sets
+   it from the bed up to the rode's maximum; **To the bed** puts it back.
+   **Out** shows how much rode is out now. Set while the anchor is
+   stowed, it is used on the next drop: the rode stops at the bed, then
+   veers to the set length.
+4. **Lantern**: a check, on or out. On, it is lit from dusk to dawn (9.8);
+   out, it is dark all night and adds no light.
+
+Plain labels only (CLAUDE.md, "Game text is plain" and "No notes in the
+game"): no explanations of what a setting does, no costs, no "default".
+
+#### 10.4 Per kind
+
+| Kind | Hold | Anchor | Lantern | Its own |
+| --- | --- | --- | --- | --- |
+| Raft (game) | 10 slots (today's) | one, rope control | yes (9.8) | |
+| Loon (game) | none (as today) | one, rope control | no | |
+| Inner tube (game) | none | none | none | no menu: it carries nothing and has nothing to set; C does nothing aboard |
+| Skiff | 10 slots | one, rope control | the anchor light | |
+| Tug | 10 slots | one, rope control | yes | **Tow lines**: each line's length (the same stepper, up to its rope's length) and **Cast off** / **Make fast** (within reach) |
+| Net boat | 10 slots; the catch lands in it | one, rope control | yes | **Net**: **Cast net** / **Haul in**, and the fish in the bag |
+
+Recommendation taken (ask only with screenshots): one hold size for every
+kind that has one, the game's ten slots, so the `hold` record keeps its one
+shape; the tube has no menu at all.
+
+**The rode's maximum** is a tunable per kind in `assets/config/vehicles.ron`
+(`anchor: (rode_max_m: 40.0)`, metres): 40 m for the raft and the Loon, so
+the 35 m depth limit still leaves scope. The mockup uses 30 m on its 2 m
+river.
+
+#### 10.5 What saves
+
+On the durable path, the same record as the craft (`VehicleRecord`, written
+by `save_vehicles` the moment `Fleet.dirty` is set, as dropping the anchor
+is today), two optional fields written only when set, so every existing
+record reads and writes as it was (the `berth` and `made` pattern):
+
+- `rope_m: Option<f64>`: the anchor's rope setting, per craft (one anchor,
+  so one value). Absent is "to the bed". The rode actually out stays in
+  `mooring.length`.
+- `lantern_out: bool` (skipped when false): the lantern put out.
+
+The hold is already saved (`hold` record, one line with the slots). An old
+save opens with every boat's rope "to the bed" and its lantern on, and an
+anchored boat keeps the rode length it was saved with.
+
+#### 10.6 In the mockup (version 6)
+
+`docs/mockups/river-craft/boatmenu.js`: **Boat** (C) on the Anchor, Raft
+and Rowing tabs opens the panel over the river; C, Esc or its X close it.
+On the Anchor tab the one anchor drops and weighs on T or the menu's
+**Drop** / **Weigh**; the menu's rope control replaces Pay out and Shorten,
+and the boat visibly drops back further when it is lengthened and is pulled
+up when it is shortened. The hold shows a few things (rope, bait, grilled
+fish on the skiff; logs, planks and rope on the raft) beside the first ten
+pack slots, and a tap sends a stack across. The Lantern check puts the
+skiff's anchor light or the raft's lantern out. At phone width the panel
+fills the river view and scrolls. The Tug, Log drive, Nets and Tube tabs
+have no menu yet.
 
 ## Risks / Trade-offs
 
