@@ -1527,8 +1527,8 @@ is touched, and nothing is drawn on a vertical face (E12). The tide is gone
   (`rain_detail_reach_m`, 20 m, faded over the last 4 m).
 
 **Drawn after the water.** The whole splash draw (ground and water) moves
-from before the transparent pass to the water's own pass, right after the
-fall splash (6.1) and before the clouds, the rain volume and the lens, so the
+from before the transparent pass to the water's own pass, after the water
+and before the fall splash (6.1), whose soft mist must not be painted over by a droplet behind it, the clouds, the rain volume and the lens, so the
 rain fog and the drops on the lens still lie over it. Its pipeline keeps its
 own shader and group layout (`planet_splash.rs`); it has no depth
 attachment and tests in its fragment, as the fall splash does: a droplet
