@@ -63,9 +63,8 @@ is at the sea's top layer in it. Proven by
 
 #### Scenario: A pit dug beside a beach
 
-- **WHEN** a pit is dug from the land next to a beach the high tide
-  overtops, its floor three metres under the sea's level, and its walls
-  touch no water
+- **WHEN** a pit is dug from the land next to a beach at the sea's level,
+  its floor three metres under the sea's level, and its walls touch no water
 - **THEN** its cells are air after the rule has run and after a reload, no
   sea sheet is listed over it, and the eye and the walker in it are dry
 

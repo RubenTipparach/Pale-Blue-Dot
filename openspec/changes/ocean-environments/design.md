@@ -268,7 +268,13 @@ version. The river tab is that target: steps of one layer are riffles, two or
 three a rapid, four or more a fall; the flow field (`water-flow`'s, zero today)
 then carries a vector downstream on every cap.
 
-### 10. Tides
+### 10. Tides (removed 2026-11-19)
+
+**Removed.** The owner, 2026-11-19: "Remove literal tide feature." The tide
+below was built (task 5.1) and is taken out by `no-tides`: the sea's surface
+stands at one level, the waves still move on it, and nothing here plans a
+tide any more. Rock pools above a falling sea are dropped with it. Kept as
+the record of what was built:
 
 A tide is an offset added to the one sea function, so the drawn sea, the
 floated hull and the walker agree, as they do today. Range 3 m on
@@ -549,7 +555,7 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
 | Foam | crest and slope foam | spray and streaked foam in a gale | `water.ron` `spray_from_mps` |
 | Seeing under water | murk by one absorption, Snell's window | downwelling by depth, turbidity per place | `water.ron` `downwell_per_m`; `ocean.ron` `turbidity` |
 | Caustics, shafts, snow | none | all three | `water.ron` `caustics`, `shafts`, `snow` |
-| Tides | none | sea function offset | `ocean.ron` `tide_range_m` per body |
+| Tides | none | none (built, then removed by `no-tides`) | none |
 | Depth zones | none | by light left | `ocean.ron` `zones_m` |
 | Reef, kelp, vents, trench, ice | none | environment classes, cells and pieces, new generator version | `ocean.ron` rules |
 | Water life | eight species | appended species, `env:` tags, crawler and floater movers | `fauna.ron` |
@@ -584,7 +590,8 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
 ## Questions for the owner (with screenshots)
 
 - **Q1. Tides.** `coast-low-tide-day.jpg` beside `coast-high-tide-day.jpg`.
-  Recommend yes, 3 m from the moon.
+  Recommend yes, 3 m from the moon. (Built, then removed by the owner,
+  2026-11-19: "Remove literal tide feature"; `no-tides`.)
 - **Q2. Creatures as pixel cards.** Answered by the owner, 2026-11-15: animals
   are 3D in the world; a dropped catch is a 2D item sprite (decision 11). Mark
   it answered in the survey.

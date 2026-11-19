@@ -34,10 +34,11 @@
 
 ## 4. Next
 
-- [ ] 4.1 The tide as flow (design 7): the sea's cells near the player rise
-  and fall with the tide, so the high tide flows into a dug pit in an
-  intertidal beach and the ebb leaves a tide pool. It needs tide water the
-  save can tell from a player's. Not started: written up, waiting for a
-  request.
+- [x] 4.1 Dropped (2026-11-19). It was the tide as flow (design 7): the
+  sea's cells near the player rising and falling with the tide. The owner
+  had the tide itself removed ("Remove literal tide feature"; `no-tides`),
+  so there is no tide left to flow, no intertidal beach for a pit to sit in
+  and no tide water for a save to tell from a player's. Nothing is built for
+  it.
 - [ ] 4.2 Frame time of an edit at the coast on the desktop (the extra
   walk, design 6), on the owner's machine. Not measured in the cloud.

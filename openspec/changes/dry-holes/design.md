@@ -212,7 +212,13 @@ cells and the picture could disagree.
 - **Frame time was not measured** (a cloud session has no GPU: CLAUDE.md).
   No shader changed.
 
-## 7. Not built now: the tide as flow (next task)
+## 7. Not built now: the tide as flow (dropped)
+
+**Dropped, 2026-11-19.** The owner had the tide removed ("Remove literal
+tide feature"; `no-tides`). The sea's surface stands at one level, so there
+is no intertidal beach and nothing for the tide to flow into; task 4.1 is
+closed as dropped. The rest of this section is the record of the plan.
+
 
 The tide stays a picture. A dug pit in a beach the high tide overtops is
 dry, and at a tide over its rim the sheet stops at its edge. The sheet has
