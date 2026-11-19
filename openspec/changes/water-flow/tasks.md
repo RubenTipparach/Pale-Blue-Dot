@@ -58,7 +58,10 @@
       under the river); a launch to READY with no LATE_PIPELINE.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
-- [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
+- [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well (design "Rain splashes on the water").
+  - [x] 6.3.1 The write-up: the look, the order, the gates, the settings and the cost. Verify: `openspec validate --all`.
+  - [ ] 6.3.2 The near list keeps water columns: a river's or a pool's drawn top, the sea's mean surface with its depth; every impact on water a crown, coloured as the water, the sea's riding `sea_surface`. Verify: unit tests on a fine set with water; the shader validates with `pbd::sea` spliced.
+  - [ ] 6.3.3 The splash draw after the water, tested against the main pass's and the water's depth in its fragment. Verify: captures of rain on a river and on the sea, before and after, in `docs/screenshots/rain-on-water/`; a launch to READY with no LATE_PIPELINE.
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
