@@ -36,6 +36,7 @@ Each item: what changed, how to see it, and the cloud's screenshot to compare.
 | 5 | **Beach acacias, generator 12** (12.13) | New world: acacias on the dry grass just behind warm beaches (none stand in the tide). | `flora-2-1/v12-beach-acacias.jpg` |
 | 6 | **Punching trees for logs** (`tree-punch-shake` 1) | Bare hands on a tree: a log about every 2.4 s, up to 4, and the tree falls. A stone axe is about 4x faster. The first mission says "Punch a tree for logs". | none yet |
 | 7 | **Dropped items lit like the ground** (`drop-lighting`, merged in #129) | Dig sand in a pit: the floating block is as dark as the pit, no glow. | `docs/screenshots/drop-lighting/` |
+| 11 | **Trees shake when hit** (`tree-punch-shake` 2) | Chop or punch a tree: its crown sways about 12 cm and settles about 0.6 s after the last hit; neighbours stay still; its shadow should move with it (not yet seen in a capture). | `docs/screenshots/tree-punch-shake/` |
 | 9 | **Tools that stopped digging** (`dig-fixes` 1) | Fell a tree with an axe or by hand, then stand on or beside where it stood and dig: the ground digs (before, the felled tree's invisible trunk took every swing). | none |
 | 10 | **Bait by rivers and the sea** (`dig-fixes` 2) | Dig dirt, grass or sand within about 3 cells of a river or the sea: worms in about one dig in three; the "Dig for bait" mission counts them. | none |
 | 8 | **Item toasts** (merged earlier) | Dig dirt or sand: "DIRT X1", "X2" stacking, icon, 3 s, then fade; up to 10, the rest paged. | `docs/screenshots/item-toasts/` |
@@ -86,8 +87,6 @@ None of these were taken in the cloud.
 ## 6. Still in flight in the cloud (not on the branch yet)
 
 These are being built by cloud agents and will land on the same branch:
-- **Tree shake** (`tree-punch-shake` 2): a tree chopped or punched sways and
-  settles.
 - **Dry holes and a sea that flows** (`dry-holes`): a hole dug below the
   waterline stays dry unless it touches water; the sea near the player flows
   in like river water through a channel or a breach.
