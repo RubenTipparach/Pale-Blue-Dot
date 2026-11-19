@@ -864,9 +864,22 @@ pub(super) fn spawn_lights(
         commands.entity(camera).add_child(holder);
     }
     // The flame, its glow and the embers: in eye space under the camera.
+    // Each starts as one tiny triangle with every attribute it will carry,
+    // hidden, so the loading screen compiles its pipeline (a glow's additive
+    // blend is a pipeline nothing else uses) before play.
     for (fx, material) in [(Fx::Flame, flame_m), (Fx::Glow, glow), (Fx::Embers, embers)] {
-        let mut mesh = Build::default().mesh();
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
+        let mut seed = Build::default();
+        seed.tri(
+            [
+                Vec3::new(0.0, 0.0, -1.0),
+                Vec3::new(1e-4, 0.0, -1.0),
+                Vec3::new(0.0, 1e-4, -1.0),
+            ],
+            Vec3::Z,
+            [[0.0, 0.0]; 3],
+            [1.0; 4],
+        );
+        let mesh = seed.mesh();
         let fx_entity = commands
             .spawn((
                 Name::new(format!("held {fx:?}")),
