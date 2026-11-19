@@ -61,6 +61,7 @@ struct Params {
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
     picked: array<vec4<u32>,8>,   // and the trees picked bare
     clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
+    shake: vec4<u32>,          // `tree-punch-shake`: x the worked tree's id, y its last hit's time (f32 bits), z one once hit, w spare
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -1004,6 +1005,12 @@ const SALT_SIZE: u32 = 0x5cu;
 const TREE_WIND: f32 = 0.35;
 const TREE_GUST: f32 = 0.5;
 const TREE_WIND_H: f32 = 8.0;
+// `tree-punch-shake` design 3: a hit's sway at the crown, m; how fast, Hz;
+// how long it lasts, s; the leaves' share more (`tree_shake.rs`).
+const TREE_SHAKE_M: f32 = 0.12;
+const TREE_SHAKE_HZ: f32 = 9.0;
+const TREE_SHAKE_S: f32 = 0.6;
+const TREE_SHAKE_LEAF: f32 = 1.3;
 
 fn kit_f(i: u32) -> f32 { return bitcast<f32>(kit[i]); }
 fn kit_v3(i: u32) -> vec3<f32> { return vec3(kit_f(i), kit_f(i + 1u), kit_f(i + 2u)); }
@@ -1060,6 +1067,27 @@ fn tree_sway(t: TreeFrame, w: vec3<f32>, amp: f32) -> vec3<f32> {
     let bend = h*h*amp;
     return w + wind*bend*sway - t.up*bend*sway*sway*0.25*TREE_WIND_H
         + side*bend*TREE_WIND*0.18*sin(time*2.7 + ph*1.7);
+}
+// `tree-punch-shake` design 3: a tree being chopped or punched sways from
+// each hit, from rest, and settles over TREE_SHAKE_S (`tree_shake::wave`).
+fn tree_shake_wave(age: f32) -> f32 {
+    if age < 0.0 || age >= TREE_SHAKE_S { return 0.0; }
+    let k = 1.0 - age/TREE_SHAKE_S;
+    return k*k*sin(age*TAU*TREE_SHAKE_HZ);
+}
+// The worked tree's point `w` pushed away from the eye by its last hit,
+// growing with the square of its height over the base as the wind's bend
+// does, a little sideways too; any other tree as it is (`tree_shake::offset_m`).
+// The sun's cascades draw with the camera's params, so its shadow moves with it.
+fn tree_shake(t: TreeFrame, id: u32, w: vec3<f32>, leaf: bool) -> vec3<f32> {
+    if params.shake.z == 0u || params.shake.x != id { return w; }
+    let age = params.settings.z - bitcast<f32>(params.shake.y);
+    let h = clamp(dot(w - t.base, t.up)/max(kit_f(t.header + 4u)*t.size, 1.0), 0.0, 1.2);
+    let s = TREE_SHAKE_M*h*h*select(1.0, TREE_SHAKE_LEAF, leaf)*tree_shake_wave(age);
+    var away = t.base - params.camera.xyz;
+    away = normalized(away - t.up*dot(away, t.up));
+    let side = cross(t.up, away);
+    return w + away*s + side*s*0.35*cos(age*TAU*TREE_SHAKE_HZ*0.7);
 }
 // A tree's cross-fade is a moment in time, never a place (design 13.3;
 // owner, 2026-11-16: "dithering should either stay or go, dont have it
@@ -1320,7 +1348,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             let word = kit[w + 5u];
             let card = f32(word & 0xffu)/255.0;
             normal = tree_dir(t, unpack4x8snorm(kit[w + 3u]).xyz);
-            var p = tree_sway(t, ps[pick], select(0.1, 0.16, leaf));
+            var p = tree_shake(t, id, tree_sway(t, ps[pick], select(0.1, 0.16, leaf)), leaf);
             if leaf {
                 // The card's own flutter, masked: its root stays on the branch.
                 let time = params.settings.z;
@@ -1375,7 +1403,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         // A hanging fruit: two crossed cards, the top edge at
                         // an anchor, its stem on the wood.
                         let at = min(u32(roll(id,SALT_FRUIT+10u+item)*f32(anchors)), anchors - 1u);
-                        let top = tree_sway(t, tree_point(t, kit_v3(kit[t.header + 2u] + at*3u)), 0.1);
+                        let top = tree_shake(t, id, tree_sway(t, tree_point(t, kit_v3(kit[t.header + 2u] + at*3u)), 0.1), false);
                         let a = roll(id,SALT_FRUIT+40u+item)*TAU+f32((f%12u)/6u)*TAU*0.25;
                         let dir = tangent*cos(a)+bitangent*sin(a);
                         let half_w = size*0.5;
