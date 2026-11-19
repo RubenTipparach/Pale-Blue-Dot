@@ -8,13 +8,14 @@
 
 ## 2. Cut (the same picture)
 
-- [ ] 2.1 `fish::draw::build` lays into the buffers the mesh holds; flat normals written in place. Verify: `a_school_is_laid_into_the_buffers_it_holds`, `a_school_relaid_is_the_school_laid_fresh`.
-- [ ] 2.2 The kelp's sway writes into the positions it holds. Verify: the `places` tests.
+- [x] 2.1 `fish::draw::build` lays into the buffers the mesh holds; flat normals written in place. Verify: `a_school_is_laid_into_the_buffers_it_holds`, `a_school_relaid_is_the_school_laid_fresh`.
+- [x] 2.2 The kelp's sway writes into the positions it holds. Verify: `cargo test -p pbd-app --lib fish` (the kelp tests unchanged).
 
 ## 3. Prove
 
-- [ ] 3.1 The 15-minute walk, `main` against the branch, release, RSS, footprint and frame time by minute. Verify: `docs/benchmarks/2026-11-19-memory-leak/report.md` and its plot.
-- [ ] 3.2 The `alloc-trace` table of the branch's walk. Verify: no `fish::draw` stack above 256 KiB after the first minute.
+- [x] 3.1 The 15-minute walk, `main` against the branch, release, RSS, footprint and frame time by minute, screen locked. Verify: `docs/benchmarks/2026-11-19-memory-leak/report.md` and `memory.png`.
+- [ ] 3.1b The same with the screen unlocked, where the walking RSS climb shows (report, "Owed").
+- [x] 3.2 The `alloc-trace` table of the branch's walk. Verify: no `fish::draw` stack above 256 KiB after the first minute.
 
 ## 4. Left for the owning changes
 

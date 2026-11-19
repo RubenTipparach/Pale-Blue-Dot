@@ -1554,14 +1554,14 @@ fn tile_fade(metres: f32, since_s: f32) -> f32 {
 /// Bend a swaying mesh in the surge, `bend` 0 at rest to 1 full: its
 /// positions only. Returns the vertices written.
 fn bend_mesh(mesh: &mut Mesh, still: &Sway, seconds: f32, bend: f32) -> usize {
-    let positions: Vec<[f32; 3]> = (0..still.rest.len())
-        .map(|i| {
-            let h = still.height[i];
-            let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
-            let reach = (0.07 * h).min(0.7) * bend;
-            (still.rest[i] + still.axis[i] * wave * reach).to_array()
-        })
-        .collect();
+    // Into the positions the mesh holds (`memory-leak`): bent every frame.
+    let mut positions = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+    positions.extend((0..still.rest.len()).map(|i| {
+        let h = still.height[i];
+        let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
+        let reach = (0.07 * h).min(0.7) * bend;
+        (still.rest[i] + still.axis[i] * wave * reach).to_array()
+    }));
     let n = positions.len();
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     n

@@ -78,9 +78,10 @@ The first walk's step at minute 8 (p50 15 to 22 ms) is all in
 `acquire_ms`, the CPU waiting for the GPU to hand back a frame; the main
 world's own time (`cpu_main_ms`) stayed at 3 ms. It is not memory pressure:
 in the fast-profile repeat, which stepped at minute 5, `phys_footprint` is
-flat across the step. Whether it is the view the walker reached or
-something that grows on the GPU is settled by the before-and-after runs
-below (design, "Proof").
+flat across the step, and so is every asset count. Whether it is the view
+the walker reached is not settled: GPU timestamps read NaN on this Mac, and
+the sitting for the before-and-after runs had the screen locked, which
+paces every frame to 15.2 ms (report, section 4).
 
 ## What changes
 
@@ -105,3 +106,16 @@ below (design, "Proof").
 - No picture or sound changes: the same vertices go to the same draw.
 - No allocator swap (mimalloc and similar): it would hide the churn, not
   remove it, and changes every allocation in the game.
+
+## Results
+
+`docs/benchmarks/2026-11-19-memory-leak/report.md`:
+
+- The branch's walk has no allocation of 256 KiB or more under
+  `fish::draw` or `fish::bodies` (5.4 GB a minute on main).
+- Release, main against the branch one after the other, screen locked
+  (the only sitting available): the main thread 0.13-0.15 ms a frame
+  faster every minute (p50 `cpu_main_ms` 3.43 to 3.30 ms), RSS 100-150 MB
+  lower; both flat, since a locked screen paces the game and stops the
+  fine set landing.
+- Owed: the same walk with the screen unlocked, where the RSS climb shows.

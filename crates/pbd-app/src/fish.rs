@@ -1415,6 +1415,58 @@ pub fn water_here(
 pub mod bodies;
 pub mod places;
 
+/// A mesh's attribute buffers taken back to be laid into again
+/// (`memory-leak`): emptied, their capacity kept, so a mesh rebuilt every
+/// frame stops allocating once it has reached its size.
+pub(crate) mod kept {
+    use bevy::mesh::{Mesh, MeshVertexAttribute, VertexAttributeValues, triangle_normal};
+
+    /// The attribute's buffer out of `mesh`, empty, or a new one if it has
+    /// none of that type.
+    pub fn float2(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 2]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x2(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], three floats a vertex.
+    pub fn float3(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 3]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x3(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], four floats a vertex.
+    pub fn float4(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 4]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x4(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The flat normals of an unindexed triangle list, into `out`: what
+    /// `Mesh::compute_flat_normals` works out, without a new buffer.
+    pub fn flat_normals(positions: &[[f32; 3]], out: &mut Vec<[f32; 3]>) {
+        out.clear();
+        out.reserve(positions.len());
+        for p in positions.chunks_exact(3) {
+            let normal = triangle_normal(p[0], p[1], p[2]);
+            out.extend([normal; 3]);
+        }
+    }
+}
+
 pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
@@ -2217,7 +2269,7 @@ pub(crate) mod draw {
     /// a diver under the water is not drawn and a hidden octopus is small in
     /// its den.
     #[allow(clippy::too_many_arguments)]
-    fn build(
+    pub(super) fn build(
         o: &SimOrigin,
         mesh: &mut Mesh,
         school: &School,
@@ -2228,10 +2280,18 @@ pub(crate) mod draw {
         held: Vec3,
         (headings, swim, dt): (&mut DrawnHeadings, &DrawnSwim, f32),
     ) {
-        let mut positions: Vec<[f32; 3]> = Vec::new();
-        let mut colours: Vec<[f32; 4]> = Vec::new();
-        let mut uvs: Vec<[f32; 2]> = Vec::new();
-        let mut waves = bodies::SwimAttributes::default();
+        // Laid into the buffers the mesh already holds (`memory-leak`): a
+        // school is laid every frame, and new buffers grown from empty each
+        // time were most of the game's large allocations.
+        let mut positions = kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+        let mut colours = kept::float4(mesh, Mesh::ATTRIBUTE_COLOR);
+        let mut uvs = kept::float2(mesh, Mesh::ATTRIBUTE_UV_0);
+        let mut waves = bodies::SwimAttributes {
+            axes: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_AXES),
+            wave: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_WAVE),
+            up: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_UP),
+        };
+        let mut normals = kept::float3(mesh, Mesh::ATTRIBUTE_NORMAL);
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for i in 0..school.len() {
             let id = school.ids.get(i).copied().unwrap_or(0);
@@ -2356,25 +2416,25 @@ pub(crate) mod draw {
         // triangle, so its mesh keeps the layout the loading screen warmed
         // and never asks for a pipeline of its own.
         if positions.is_empty() {
-            positions = vec![[0.0; 3]; 3];
-            colours = vec![[0.0; 4]; 3];
-            uvs = vec![bodies::white_uv(); 3];
-            waves = bodies::SwimAttributes {
-                axes: vec![[0.0; 4]; 3],
-                wave: vec![[0.0; 4]; 3],
-                up: vec![[0.0; 4]; 3],
-            };
+            positions.extend([[0.0; 3]; 3]);
+            colours.extend([[0.0; 4]; 3]);
+            uvs.extend([bodies::white_uv(); 3]);
+            waves.axes.extend([[0.0; 4]; 3]);
+            waves.wave.extend([[0.0; 4]; 3]);
+            waves.up.extend([[0.0; 4]; 3]);
         }
+        // Flat normals of the rigid body: the vertex stage turns them with
+        // the bend. `Mesh::compute_flat_normals`'s arithmetic, into the
+        // buffer the mesh held.
+        kept::flat_normals(&positions, &mut normals);
+        mesh.remove_indices();
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, waves.axes);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, waves.wave);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, waves.up);
-        mesh.remove_indices();
-        // Flat normals of the rigid body: the vertex stage turns them with
-        // the bend.
-        mesh.compute_flat_normals();
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     }
 
     /// The float on the water and the line from the rod's tip to it, placed

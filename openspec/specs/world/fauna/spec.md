@@ -144,3 +144,21 @@ with the reason.
 - **WHEN** the float lands by a reef turtle
 - **THEN** no turtle takes the lure, and the reason is "protected: it may
   not be caught"
+
+### Requirement: A school is laid each frame into the buffers it holds
+A school's mesh, laid again every frame, SHALL be laid into the attribute
+buffers it already holds, so that once a school has reached its size a frame
+allocates no new buffer for it; and what it lays SHALL be what laying it
+into a new mesh would, flat normals included (`memory-leak`).
+
+#### Scenario: Thirty frames of one school
+- **WHEN** a school is laid into its mesh thirty frames in a row
+- **THEN** no attribute's buffer moves or changes length after the first
+  (`fish::tests::laid_in_place::a_school_is_laid_into_the_buffers_it_holds`)
+
+#### Scenario: Relaid against fresh
+- **WHEN** the same school with the same history is laid once into a mesh
+  that already held it and once into a new mesh
+- **THEN** every attribute is the same, byte for byte, and the normals are
+  what `Mesh::compute_flat_normals` makes of the positions
+  (`fish::tests::laid_in_place::a_school_relaid_is_the_school_laid_fresh`)

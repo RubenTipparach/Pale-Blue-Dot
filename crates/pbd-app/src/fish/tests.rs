@@ -793,3 +793,133 @@ fn the_cast_line_follows_the_float_from_the_tip() {
     trail.rebase(Vec3::X);
     assert_eq!(trail.points, vec![tip - Vec3::X]);
 }
+
+/// A school laid every frame lays into the buffers its mesh already holds
+/// (`memory-leak`): once it has reached its size a frame moves no attribute's
+/// buffer, so nothing is allocated for it, and what it lays is what laying
+/// it into a new mesh would.
+mod laid_in_place {
+    use super::*;
+    use bevy::mesh::{MeshVertexAttribute, VertexAttributeValues};
+
+    struct Deep;
+    impl Water for Deep {
+        fn surface(&self, point: Vec3) -> f32 {
+            let _ = point;
+            1000.0
+        }
+        fn bed(&self, point: Vec3) -> f32 {
+            let _ = point;
+            990.0
+        }
+    }
+
+    const ATTRIBUTES: [MeshVertexAttribute; 7] = [
+        Mesh::ATTRIBUTE_POSITION,
+        Mesh::ATTRIBUTE_COLOR,
+        Mesh::ATTRIBUTE_UV_0,
+        Mesh::ATTRIBUTE_NORMAL,
+        bodies::ATTRIBUTE_SWIM_AXES,
+        bodies::ATTRIBUTE_SWIM_WAVE,
+        bodies::ATTRIBUTE_SWIM_UP,
+    ];
+
+    fn school() -> (School, Species) {
+        let roster = FaunaConfig::default().0.roster(HOME_BODY).to_vec();
+        let species = roster[0].clone();
+        let school = School::spawn(&PLANET, 0, &species, Vec3::Y * 995.0, 11, &Deep);
+        assert!(!school.is_empty(), "a school with fish in it");
+        (school, species)
+    }
+
+    fn lay(
+        mesh: &mut Mesh,
+        school: &School,
+        species: &Species,
+        headings: &mut draw::DrawnHeadings,
+    ) {
+        let swim = draw::DrawnSwim::default();
+        draw::build(
+            &PLANET,
+            mesh,
+            school,
+            species,
+            None,
+            None,
+            0.5,
+            Vec3::ZERO,
+            (headings, &swim, 1.0 / 60.0),
+        );
+    }
+
+    fn new_mesh() -> Mesh {
+        Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+    }
+
+    /// Each attribute's buffer: where it is and how long.
+    fn buffers(mesh: &Mesh) -> Vec<(usize, usize)> {
+        ATTRIBUTES
+            .iter()
+            .map(|a| match mesh.attribute(a.id).expect("laid") {
+                VertexAttributeValues::Float32x2(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x3(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x4(v) => (v.as_ptr() as usize, v.len()),
+                _ => panic!("an attribute of another type"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_school_is_laid_into_the_buffers_it_holds() {
+        let (school, species) = school();
+        let mut headings = draw::DrawnHeadings::default();
+        let mut mesh = new_mesh();
+        lay(&mut mesh, &school, &species, &mut headings);
+        let first = buffers(&mesh);
+        for frame in 0..30 {
+            lay(&mut mesh, &school, &species, &mut headings);
+            assert_eq!(buffers(&mesh), first, "frame {frame} moved a buffer");
+        }
+    }
+
+    #[test]
+    fn a_school_relaid_is_the_school_laid_fresh() {
+        let (school, species) = school();
+        // The same history of eased headings for both, so only the mesh
+        // each is laid into differs.
+        let (mut a, mut b) = (
+            draw::DrawnHeadings::default(),
+            draw::DrawnHeadings::default(),
+        );
+        let mut relaid = new_mesh();
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut new_mesh(), &school, &species, &mut b);
+        let mut fresh = new_mesh();
+        lay(&mut fresh, &school, &species, &mut b);
+        for a in ATTRIBUTES {
+            let (x, y) = (relaid.attribute(a.id), fresh.attribute(a.id));
+            assert_eq!(
+                x.map(VertexAttributeValues::get_bytes),
+                y.map(VertexAttributeValues::get_bytes),
+                "{} differs",
+                a.name
+            );
+        }
+        // And the normals are what `compute_flat_normals` makes of the
+        // positions.
+        let mut bevy_normals = fresh.clone();
+        bevy_normals.compute_flat_normals();
+        assert_eq!(
+            bevy_normals
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes),
+            fresh
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes)
+        );
+    }
+}

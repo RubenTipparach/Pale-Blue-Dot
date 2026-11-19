@@ -59,7 +59,7 @@ fn walk(out: &mut [usize; DEPTH]) -> usize {
     }
     let start = fp;
     let mut n = 0;
-    while n < DEPTH && fp != 0 && fp % 8 == 0 && fp >= start && fp - start < (8 << 20) {
+    while n < DEPTH && fp != 0 && fp.is_multiple_of(8) && fp >= start && fp - start < (8 << 20) {
         // SAFETY: a frame record on this thread's stack: [fp] the caller's
         // frame pointer, [fp + 8] the return address. The bounds above keep
         // the walk inside the stack the walk started on.
