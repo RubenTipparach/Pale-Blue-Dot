@@ -288,6 +288,14 @@ pub struct Launch {
     /// `--take-trees`: a capture's instrument that marks the nearest trees
     /// picked bare and the next felled (`flora-v2` 12.5).
     pub take_trees: bool,
+    /// `--pick-trees`: the same instrument picking only, felling nothing, so a
+    /// picked tree is seen bare among the trees it stood with.
+    pub pick_only: bool,
+    /// `--pick-fruit FRAME`: a pick played by the player's own key
+    /// (`flora-v2` 9.6). Once the fine set stands round the walker, the look
+    /// turns onto the nearest hanging fruit in reach and F is pressed on the
+    /// script's FRAME-th frame (counted from the aim), as a player would.
+    pub pick_fruit: Option<u32>,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -561,6 +569,8 @@ impl Launch {
             tree_hover: None,
             dig_ahead: false,
             take_trees: false,
+            pick_only: false,
+            pick_fruit: None,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -833,6 +843,18 @@ impl Launch {
                 }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--take-trees" => result.take_trees = true,
+                "--pick-fruit" => {
+                    i += 1;
+                    result.pick_fruit = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-fruit takes the frame to press F on"),
+                    );
+                }
+                "--pick-trees" => {
+                    result.take_trees = true;
+                    result.pick_only = true;
+                }
                 "--pitch" => {
                     i += 1;
                     let degrees: f32 = args
@@ -2205,6 +2227,12 @@ pub fn run(args: &[String]) {
                 shut,
                 bounce: launch.room_bounce.unwrap_or(base.bounce),
             });
+        }
+        if launch.pick_fruit.is_some() {
+            app.add_systems(
+                PreUpdate,
+                fruit::pick_script.after(bevy::input::InputSystems),
+            );
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));

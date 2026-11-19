@@ -457,8 +457,11 @@ pub fn generate_edited(
     // A river's valley and its levee are sealed rock down to well under its
     // water (`water-flow` E16): a cave opening under a river would drain it
     // into the cave, and its water would run on underground forever.
-    let sealed =
-        crate::rivers::sealed_from(terrain, direction).map(|floor| (floor, column.clone()));
+    // A version 11 swamp is sealed the same way, its top `SWAMP_SEAL_M`
+    // (`swamps` decision 3): a cave under it would drain its pools.
+    let sealed = crate::rivers::sealed_from(terrain, direction)
+        .or_else(|| swamp_sealed_from(terrain, direction))
+        .map(|floor| (floor, column.clone()));
     carve_worms(&mut column, worms, field, terrain, direction, crust);
     if let Some((floor, solid)) = sealed {
         for (index, layer) in column.layers.iter_mut().enumerate() {
@@ -469,6 +472,15 @@ pub fn generate_edited(
     }
     apply_edits(&mut column, edits);
     column
+}
+
+/// Where a version 11 swamp's ground is sealed from caves: `SWAMP_SEAL_M`
+/// under its surface. `None` off the swamp and for every earlier version.
+fn swamp_sealed_from(terrain: &TerrainConfig, direction: Vec3) -> Option<f32> {
+    terrain.swamps.as_ref()?;
+    let surface = planet_gen::surface_altitude(terrain, direction);
+    (planet_gen::biome_at(terrain, direction, surface) == Biome::Swamp)
+        .then(|| surface.floor() - planet_gen::SWAMP_SEAL_M)
 }
 
 /// How many layers under a town's ground no cave opens (survey T14,
@@ -889,7 +901,10 @@ mod tests {
             }
             let column = generate(&worms, &FIELD, &TERRAIN, d);
             let top = column.surface().expect("land has a solid layer");
-            let top_m = layer_altitude(top) + 1.0;
+            // A swamp's pool (`swamps` decision 3) stands in the top layer,
+            // the ground a layer under it: the pool's water is the top.
+            let pool = planet_gen::top_material(&TERRAIN, d, surface_m.floor()) == Material::Water;
+            let top_m = layer_altitude(top) + if pool { 2.0 } else { 1.0 };
             assert!(
                 top_m <= surface_m + 1.0,
                 "the carve never raises the ground"

@@ -71,6 +71,7 @@ pub mod sky;
 pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
+pub mod tree_shake;
 pub mod trees_taken;
 #[cfg(feature = "desktop")]
 pub mod ui_kit;

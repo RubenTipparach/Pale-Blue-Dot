@@ -7,7 +7,9 @@
 //! depth-tested rasteriser does the drawing, so the bake is deterministic
 //! and nothing is read back from the GPU.
 
-use crate::tree_kit::{Look, OLIVE_COLOURS, Tex, Textures, TreeModel, TreeVertex, olive};
+use crate::tree_kit::{
+    Look, OLIVE_COLOURS, Tex, Textures, TreeModel, TreeVertex, VINE_TINT, olive, vine_mask,
+};
 
 pub const VIEW_W: usize = 48;
 pub const VIEW_H: usize = 72;
@@ -125,6 +127,11 @@ fn shade(v: &ShadeIn, look: &Look, tex: &Textures, means: &([f32; 3], [f32; 3]))
     for c in 0..3 {
         alb[c] = mean[c] + (alb[c] - mean[c]) * detail;
     }
+    if v.vine {
+        for c in 0..3 {
+            alb[c] *= VINE_TINT[c];
+        }
+    }
     let key = if v.leaf {
         1.15
     } else {
@@ -152,6 +159,8 @@ struct ShadeIn {
     normal: [f32; 3],
     y: f32,
     leaf: bool,
+    /// A vine's card: its own green (design 12.4).
+    vine: bool,
 }
 
 /// The crown's own three tones: the leaf tile's texels as the bake shades
@@ -172,6 +181,7 @@ fn leaf_ramp(look: &Look, tex: &Textures, means: &([f32; 3], [f32; 3])) -> Vec<[
                 normal: [0.0, 1.0, 0.0],
                 y: 0.25,
                 leaf: true,
+                vine: false,
             };
             shaded.push(shade(&input, look, tex, means));
         }
@@ -291,11 +301,18 @@ fn draw(
                     continue;
                 }
                 let lerp2 = |k: usize| w0 * tri[0].uv[k] + w1 * tri[1].uv[k] + w2 * tri[2].uv[k];
+                let uv = [lerp2(0), lerp2(1)];
+                // A vine keeps its cut in the bake, as the near draw does,
+                // so a far strand is leafy and not a solid ribbon.
+                if tri[0].vine && !vine_mask(uv) {
+                    continue;
+                }
                 let input = ShadeIn {
-                    uv: [lerp2(0), lerp2(1)],
+                    uv,
                     normal: tri[0].normal,
                     y: w0 * tri[0].position[1] + w1 * tri[1].position[1] + w2 * tri[2].position[1],
                     leaf: tri[0].leaf,
+                    vine: tri[0].vine,
                 };
                 target.depth[i] = d;
                 target.colour[i] = shade(&input, look, tex, means);

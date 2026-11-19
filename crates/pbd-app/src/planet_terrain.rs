@@ -115,12 +115,19 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 ///
 /// Bit [`FLOODED_BIT`] is set where the top is under the high tide's sheet
 /// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
+///
+/// Bit [`pbd_core::flora::BEACH_BACK_BIT`] is set on the dry ground just
+/// behind a warm beach (`planet_gen::beach_back`, `flora-v2` 12.13): its
+/// trees are the beach's acacias.
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
-    let biome = planet_gen::biome_at(terrain_config(), d, height);
-    let cleared = pbd_core::settlement::ground::cleared(terrain_config(), d);
+    let cfg = terrain_config();
+    let biome = planet_gen::biome_at(cfg, d, height);
+    let cleared = pbd_core::settlement::ground::cleared(cfg, d);
+    let back = planet_gen::beach_back(cfg, d, height, biome);
     material_index(d, height, biome)
         | (biome as u32) << 8
+        | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
         | u32::from(height < high_water_m()) << FLOODED_BIT
 }
@@ -135,6 +142,15 @@ pub const CLEARED_BIT: u32 = 24;
 /// `planet_surface.wgsl` reads it for the cap.
 pub const PLACED_SHEET_SHIFT: u32 = 26;
 const _: () = assert!(PLACED_SHEET_SHIFT > FLOODED_BIT && PLACED_SHEET_SHIFT + 4 <= 30);
+
+/// The placed-sheet field's spare value: "this stone is ore" (`flora-v2`
+/// design 12.12). A sheet plus one is 1 to 14, so 15 is never a sheet; a
+/// layer marked with it keeps the stone's render code and is drawn from its
+/// biome's stone tile with ore flecks. Generated veins and placed ore both
+/// carry it ([`crate::planet::column::drawn_sheet_mark`]).
+pub const ORE_SHEET: u32 = 15;
+// No tileset, plus one, may reach the mark: a fifteenth sheet widens the field.
+const _: () = assert!(TILESETS.len() < ORE_SHEET as usize && ORE_SHEET < 16);
 
 /// The bit of a record's material word that says water stands on the cell
 /// at some tide, so nothing grows there (`flora-v2` 12.11).
@@ -511,6 +527,7 @@ mod tests {
                 crate::planet::column::PLACED_SHEETS_BASE
             ),
             format!("const PLACED_SHEET_SHIFT: u32 = {PLACED_SHEET_SHIFT}u;"),
+            format!("const ORE_SHEET: u32 = {ORE_SHEET}u;"),
             format!(
                 "const PLACED_SHEET_MASK: u32 = {:#010x}u;",
                 0xf << PLACED_SHEET_SHIFT
@@ -719,6 +736,8 @@ mod tests {
             format!("const FORGE_CODE = {FORGE}u;"),
             format!("const FIELDS_BIOME = {}u;", Biome::Fields as u32),
             format!("const MOUNTAINS_BIOME = {}u;", Biome::Mountains as u32),
+            // The swamp's reeds (`swamps` decision 5).
+            format!("const SWAMP_BIOME = {}u;", Biome::Swamp as u32),
         ] {
             assert!(shader.contains(&line), "the shader should declare `{line}`");
         }

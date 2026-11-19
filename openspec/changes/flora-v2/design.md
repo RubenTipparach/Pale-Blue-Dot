@@ -793,6 +793,83 @@ are baked into its impostors and fade with it, and the near draw's vertex
 count is the model's (`near_vertices` reads the kit). A core test pins that a
 vine hangs from an anchor and that no vine is longer than the trunk is tall.
 
+**Faint from the ground (measured 2026-11-18).** `v10-jungle.jpg` shows the
+vines only faintly. Measured off the built models (`tree_kit::tests::
+report_the_vines`, an instrument: strands per tree, card width, longest
+strand, lowest vine leaf, over the four variants) and the draw's own numbers:
+
+| | strands a tree | card width | longest strand | lowest vine leaf |
+| --- | ---: | ---: | ---: | ---: |
+| kapok | 4.25 | 0.16 m | 2.9 m | 4.9 m up |
+| palm | 1.25 | 0.16 m | 1.9 m | 4.8 m up |
+| willow | 9.75 | 0.16 m | 2.4 m | 0.7 m up |
+
+What each suspect came to:
+
+- **Thin cards: the main cause.** A card is 0.08 m wide at its root and
+  0.16 m at its tip, a tenth of a crown card's 1.3 m. The camera's 60°
+  vertical view on 1200 rows is 0.96 cm a pixel at 10 m, so a card is 8 to
+  17 px wide there; and the kapok's twig cut (`leaf_mask` 1, five leaflets on
+  a midrib) keeps 37 % of the card, with a 2-texel midrib (1 cm, one pixel)
+  and leaflets of about 3 cm (three pixels). A strand is a dotted line.
+- **Colour equal to the leaves: the second.** A vine took the crown's leaf
+  tile and colour exactly, and from the ground it hangs in front of the
+  crown's own underside, so the few pixels it has are the crown's.
+- **Distance: strands stay in the crown.** A kapok's anchors are on its
+  limbs at 7 to 8.5 m; strands of 3 to 6 cards of at most 0.5 m end 4.9 m
+  up at the lowest, above the eye's view from the ground at a level pitch.
+- **Count per tree: thin.** 4.25 strands a kapok, 1.25 a palm.
+- **Culling: not a cause.** A leaf card's triangle turns to face the eye
+  (the pass culls back faces), so both sides draw; but a single card seen
+  edge-on is nothing, and each strand faced one random bearing.
+- **The far bake: not a cause from the ground.** The near model reaches
+  `tree_near_m` (44 m); past it the bake carries the vines at 48 px a view,
+  where a 0.16 m card is under a pixel. It matters only at a distance.
+
+**Fix (draw-time, the kit only).** In `tree_kit::build`:
+
+- each strand's card is **crossed** (two cards at right angles), so it reads
+  from every side;
+- a card is **0.5 m wide** at its broad end (`VINE_WIDTH_M`), pieces up to
+  0.8 m (`VINE_PIECE_M`), 4 to 7 cards a strand (`VINE_CARDS`), still no
+  longer than 0.8 of the lowest anchor's height, so a kapok's strands hang to
+  2.4 m and a palm's to 1.6 m: into the eye's height;
+- a kapok's chance of a vine on an anchor goes from 0.35 to 0.6, a palm's
+  from 0.2 to 0.4; a willow's (whose weeping strands are already long) stays
+  0.25.
+
+In `planet_surface.wgsl`, a vine card (bit 17 of the kit's vertex word,
+`TreeVertex::vine`, carried in `split.z`) takes:
+
+- **its own cut** (`leaf_mask` 3, `VINE_MASK`): a stem the card's whole
+  length and three broad leaves on it side to side, 55 % of the card, so a
+  strand of cards is one leafy rope and not a dotted line;
+- **its own green**, the crown's leaf colour times `VINE_TINT` (1.08, 1.12,
+  0.62): a little yellower and lighter than the crown, lit and shaded as the
+  crown's leaves are, no outline and no dark edge.
+
+The bake (`tree_bake`) takes the same green and the same cut
+(`tree_kit::vine_mask`), so a far tree's strands are leafy and the same
+colour. After: kapok 6.75 strands a tree, palm 2.25, cards 0.5 m, the longest
+5.4 m, the lowest leaf 2.4 m up (kapok) and 1.6 m (palm). Near vertices a
+tree, largest variant: kapok 708 to 1068, palm 498 to 696, willow 1548 to
+2028 (still under the oak's 2844 and the pine's 6066); the frame cost was not
+measured (a cloud session).
+
+**Saved worlds.** Nothing a save holds changes. Where a tree stands, its
+species, variant, size and turn are the generator's and untouched; a model's
+bark, crown and fruit anchors are built before the vines, from the model's
+own stream, and are the same; the vines draw from their own stream
+(`0x7a1e + ...`), so which anchors carry one changes, and that is all. No
+record names a vertex, and no generator version moves.
+
+Verify: `vines_read_from_the_ground` (kapok at least 6 strands, cards at
+least 0.45 m, a strand at least 3.5 m, the lowest leaf at most 3.5 m up;
+palm at least 2 strands; every vine card and nothing else marked a vine);
+`the_shaders_vine_is_the_kits` (the WGSL's tint, cut code and cut lines);
+the jungle from the ground before and after, the same view and time
+(`docs/screenshots/flora-2-1/`).
+
 ### 12.5 Fruit to pick
 
 9.6 drew the fruit and left it "not gatherable yet". Now:
@@ -824,6 +901,21 @@ vine hangs from an anchor and that no vine is longer than the trunk is tall.
   `identity.ron` the first time one is stored; nothing else in a save
   changes. Fruit decided by the generator's table is derived and never saved;
   only what a player took is.
+
+**The capture instrument's 26 m (found 2026-11-18).** `--take-trees` picked
+and felled nothing nearer than 26 m though trunks stood 3 m from the eye.
+Logged at the moment it chose: the eye was where it should be (1.6 m over
+the ground, 63.6 m elevation), but the nearest finest record lay 23.4 m off
+along the ground. Its 30 frames counted from `READY`, and with `--spawn` the
+set standing then was laid before the walker came to rest, so it had no
+records under the eye and the trees it chose were the nearest at that
+set's edge. Now the frames count only once the set has a record within 4 m
+of the eye: at the same spot it picks at 3, 6 and 11 m and fells from 6 m
+(53 trees in view against 19). It also fired twice (`> 30` let frame 30
+through and then 31); it fires once. `--pick-trees` is the same instrument
+picking only, so a picked tree is shown bare among the trees it stood with.
+The game's own F and axe read the set as it stands while the player plays,
+long after any spawn; this was the instrument's timing, not theirs.
 
 ### 12.6 The ground follows the seasons
 
@@ -934,7 +1026,8 @@ show the veins. Drawing ore needs a fifth bit in the material word (six
 codes a word, both the Rust packing and `material_at` in
 `planet_surface.wgsl`, and the runs' code field) and an ore tile on the
 atlas's stone sheet. That is a rendering change of its own, proposed as the
-next step (task 9.9) and not taken here.
+next step (task 9.9) and not taken here. Superseded by 12.12: no fifth bit;
+the placed-sheet field's spare value marks ore.
 
 ### 12.10 Captures draw the grass the player sees (owner, 2026-11-16)
 
@@ -1083,12 +1176,156 @@ rule, as 12.10 is:
 - A tide range set to nought in `water.ron` puts the line at the sheet,
   0.5 m under the sea level, which is what the sea covers then.
 
+**Measured 2026-11-18: it leaves no acacia at all** (task 7.8). An
+instrument, `planet::lod::flooded_ground::where_a_beach_acacia_stands`
+(ignored; `--ignored --nocapture` prints), sweeps the body a degree at a
+time for beach cells (1,527 of them) and searches the finest cells within
+40 m of each for one whose far record and tier record both stand a tree. It
+finds none: the highest beach cell tops out at **1.0 m**, under the high
+water's **1.5 m**, so every beach cell carries `FLOODED_BIT`. The beach is
+the band under `sea + beach_band_m` (2 m), and the surface comes in whole
+metres, so its tops are at 0 and 1 m only. The acacia is the beach's one
+species (`BIOME_TREES`, the shader's `tree_species`) and grows nowhere
+else, so since 12.11 no version 10 world shows one. The acacia captured on
+2026-11-15 (`v10-beach-acacias.jpg`, `44.333 -15.791`, its sand at 1.0 m)
+stood in the tide; the same spot today is bare sand
+(`docs/screenshots/flora-2-1/beach-acacia-then-now.jpg`).
+
+What would bring it back is the owner's to choose, with these shots beside
+it (a look change; not made):
+- **A. Stand the acacia on the dry grass behind the beach** (the first cells
+  over the 2 m line, by the beach): what a coastal acacia looks like, and no
+  tree in the tide. It moves where trees stand, so it is a new generator
+  version (12.1), version 11, and old worlds keep theirs.
+- **B. Leave beaches bare** and give the acacia a dry biome of its own when
+  one exists (the savanna is not a biome yet). Nothing to build now.
+- Recommendation: A, when the owner next looks at the beaches.
+
 **Verify.**
 - A test at the owner's spot: no tier or far record under the high-water
   line grows a tree or clutter. It fails before: 29 tier trees.
 - A test that bit 25 stops `grows_tree`.
 - A shader test holding the visibility and surface passes to the bit.
 - Before and after `--capture` of the shore in `docs/screenshots/water-gameplay/`.
+
+### 12.12 Ore drawn as ore: the placed-sheet field's spare value (task 9.9; owner, 2026-11-18)
+
+Roadmap phase 2.1, "Ore drawn as ore in a dug wall (it shows as stone)".
+
+**Finding.** 12.8 proposed a fifth bit in the column's material word. Before
+taking that, the other per-layer field was measured:
+- `placed-blocks-keep-material` added a second four-bit field per layer, the
+  PLACED sheets (`ColumnTier::gpu_placed_sheets`, `PLACED_SHEETS_BASE`,
+  `placed_sheet_at` in `planet_surface.wgsl`), and the same four bits in the
+  record's material word at bit 26 (`PLACED_SHEET_SHIFT`) for the cap. It
+  holds nought for generated ground and a placed block's sheet plus one.
+- There are 14 tilesets, so it holds 0 to 14. **Fifteen is never written**:
+  the only guard was `TILESETS.len() < 16`.
+- The four-bit render codes are a different story. A per-layer nibble never
+  holds 4, 7, 9, 11 or 12 (`render_code` returns none of them), but the
+  shader's code space is shared with the record's eight-bit cap code and the
+  face codes it derives (4 is the desert's ground, 9 the leaves, 11 and 12
+  the sod and snow sides). Taking one for ore means teaching every reader of
+  a code what it now means in which buffer. Not a cheaper route.
+
+**Decision.** The spare value 15 is `ORE_SHEET` (`planet_terrain::ORE_SHEET`,
+the WGSL `ORE_SHEET`): "this stone is ore".
+- **Rust.** `planet_column::drawn_sheet_mark(column, layer)` is
+  `ORE_SHEET` for an ore layer, generated or placed, and the placed sheet
+  (`placed_sheet`, unchanged) otherwise. `pack_placed_sheets` and the
+  record's bits in `reconcile_surface` write it. `placed_sheet` keeps its
+  meaning ("somebody placed this"), so the drowned-bed rule is unchanged.
+- **The layer keeps the stone's code (5).** Every rule that reads a code
+  sees stone as before: the side rule, the plant tint, the reflections'
+  `vox_albedo`, the visibility and rain passes. Only the albedo changes.
+- **Shader.** Where the mark is 15, the face keeps its biome's sheet, and
+  stone faces (code 5) get ore flecks. The cap (kind 0), the heightfield's
+  top metre (kind 1) and a column-pass face (kind 4) read it, as they read
+  a placed sheet.
+- **Guard.** `TILESETS.len() < ORE_SHEET` at compile time, so a fifteenth
+  tileset fails the build instead of turning into ore. That is the price:
+  the field is now full, and the next tileset widens it.
+
+**Why not the fifth bit.** Six codes a word turns 63 words a column into 84:
+the material buffer, its upload and `PLACED_SHEETS_BASE` grow by a third for
+every column, for one material, and the packing changes in Rust and in every
+WGSL reader. The spare value costs no byte and no new layout.
+
+**The look.** Procedural in the shader, on the stone tile's own 32-texel
+grid, rather than an ore tile on the atlas. The atlas has no free tile: every
+sheet's 16 slots are named materials (`assets/tilesets/biomes.json`). An ore
+tile would need new art on all 14 sheets, or a fifteenth sheet that draws
+one stone everywhere. The flecks keep each biome's own stone and overwrite
+only some of its texels:
+- the tile is cut into 4 by 4 texel blocks, and a block holds a nugget on its
+  own hash: about a third of blocks;
+- a nugget is two to five texels, never smaller than the stone's own grain;
+- the ore is a third coal (near black), a third copper (rust orange) and a
+  third tin (a cool steel grey, which reads on pale stone as well as dark), as
+  the mixed ore yields;
+- each colour is shaded by the stone texel under it, with its upper left
+  lit and its lower right in shade (the light the sheets are drawn under),
+  so the ore stays in the stone's palette and value range;
+- no outline (owner, 2026-11-15);
+- the hash takes the cell and the layer, so neighbouring blocks differ, and
+  the pattern is fixed per block face (nearest sampling, nothing moves).
+The far fade to the flat mean is the stone's, unchanged.
+
+**What this leaves.**
+- **A placed ore block takes the stone of where it stands**, not its home
+  sheet (the fields'). Fifteen carries no sheet, and ore is a vein in the
+  local rock. This is the one exception to `placed-blocks-keep-material`.
+  Mining is unchanged: the CPU column says `Ore`, and `station::ore_yield`
+  decides the drop.
+- The far records (`surface_code`) never show ore. A generated top is never
+  ore; only a dug face shows a vein, and that is a tier column.
+- Reflections (`vox_albedo`) draw ore as plain stone.
+- Saves: nothing stored changes. The mark is derived from the column's
+  material on every pack, so an old world shows its veins on open, and a
+  version 9 world has none to show.
+- Frame cost not measured (cloud session, no GPU). The pack now walks every
+  layer of every column for ore, as `pack_materials` already does. The
+  shader adds a hash and a branch on stone faces only.
+
+**Verify.**
+- Rust tests on the packing:
+  - an ore layer packs 15 and its neighbours 0;
+  - a placed ore block packs 15;
+  - an exposed ore top's record carries 15;
+  - a placed stone still packs its sheet;
+  - generated ground with no ore packs nothing.
+- An `include_str` test holding the WGSL's `ORE_SHEET` to the Rust constant.
+- Shader validation.
+- Before (`claude/river-cache-full`) and after captures of a dug wall with a
+  vein, in `docs/screenshots/ore-veins/`.
+
+**As built** (2026-11-18):
+- `ORE_SHEET` in `planet_terrain.rs` with its compile-time guard;
+  `drawn_sheet_mark` in `planet_column.rs`, written by `pack_placed_sheets`
+  and by `reconcile_surface` into the record's bits.
+- In `planet_surface.wgsl`: `ORE_SHEET`, the mark read by the cap, the
+  heightfield's top metre and the column pass, and `ore_flecks`. Tin was
+  first a pale grey, which matched the fields' pale stone in the first
+  capture; it is now a cool steel grey.
+- Tests: `generated_ore_carries_the_ore_mark_and_the_stone_s_code`,
+  `dug_and_placed_ore_carry_the_ore_mark`, and the two updated
+  placed-block tests. The WGSL constant is held by the shader-lines test.
+- **A finding on the way.** The terrain shader's naga check
+  (`the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names`)
+  and two pipeline-layout tests had been failing since the shader gained
+  `#ifdef SHADOW_CASTER`: naga cannot read a directive. `shader_tests`
+  now resolves `#ifdef`/`#ifndef`/`#else`/`#endif` as Bevy's preprocessor
+  does, for no defs and for `SHADOW_CASTER`. All 578 `pbd-app` lib tests
+  pass.
+- Captures in `docs/screenshots/ore-veins/` (lavapipe, 1920 x 1200). Where
+  to dig was found by an uncommitted instrument over the column tier's own
+  columns. Ore is stone turned to ore, so it shows only where the ground is
+  dug or caved. Desert and mountain cliffs are `Rock`, which never turns.
+- **Seen in passing, not fixed.** On this branch, a capture from a fixed
+  camera (`--view cave`, `--view column`) panics on its first frame: a
+  system's `messages` parameter is "not initialized". Walking captures run.
+  The build before this change does the same (checked).
+- Frame cost not measured.
 
 ## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
 
@@ -1281,3 +1518,73 @@ its system. `--grass` now takes only `tufts`, so old capture recipes still
 run, and `blades` is refused. A settings file's `pixel_grass` value is still
 read, so old files load, but nothing reads it any more.
 
+
+
+### 12.13 Beach acacias stand behind the beach (owner, 2026-11-18)
+
+Survey F1, answered 2026-11-18: "On the dry ground just behind the beach
+(grass and sand above the high water), in version 11", now version 12:
+`river-downhill` took 11 and shipped (PR #131). Generator version 12
+(`swamps`, not yet shipped, so no save names it) moves the acacia's ground
+from beach sand under the high water to the dry cells just inland of the
+beach; versions 10 and 11 keep their rule, cell for cell.
+
+**The rule (version 12, `TerrainConfig::beach_back`, `BeachBack::V12`).**
+A cell is the beach's back (`planet_gen::beach_back`) where all of these
+hold:
+- its surface is dry and low: at or over `sea + beach_band_m` (2 m, the
+  beach's top, which is over the 1.5 m high water) and under that plus
+  `rise_m` (3 m), so the tops at 2, 3 and 4 m;
+- it is warm: `|y|` at most `warm_latitude` (0.64, about 40 degrees), the
+  acacia's own belt; the cold band and the temperate north and south keep
+  their trees (recommendation taken, ask only with screenshots);
+- its biome is the fields, the jungle or the desert: a swamp keeps its
+  willows and its pools, a mountain and the tundra are never by a beach;
+- a beach lies within `reach_m` (12 m, about four cells) of it: one of 16
+  points on two rings (6 and 12 m, eight each) has a surface in the beach's
+  band (`sea - 1` to `sea + beach_band_m`). The rings read the smooth
+  surface field, never a neighbour's record, as `swamp_pool_held` does, so
+  every reader gets the same strip.
+
+**Only the trees read it.** The cell keeps its biome and its top block, so
+its ground, its tileset, its ground cover, the map and everything else that
+reads the biome are version 11's. The record carries the fact in a bit of
+its material word, `flora::BEACH_BACK_BIT` (16, unused until now; the
+biome byte is 8 to 15, the cleared and flooded bits 24 and 25), set by
+`surface_code` and kept by `reconcile_surface`, which rewrites only the
+low byte and the flooded and sheet bits. `flora::tree_biome(word)` reads a
+back cell as the beach for its trees, and every tree reader goes through
+it: `TreeTable::grows` (the beach's entry of the world's table, version
+10's 15 in 256, unchanged in versions 11 and 12, so the tree digests hold), the
+species (`tree_kit::pick`, the shaders' `tree_species`: the acacia), the
+fruit (`hanging_fruit`, the beach's), and the shaders' copies of the rule
+in the visibility pass (`has_nearby_foliage`, the species it lists) and the
+surface pass (`stands_tree`, the near model and the cards). A back cell of
+the desert's sand (render code 4) counts as the beach's sand, so the owner's
+"grass and sand" both stand it, and it grows no cactus (`grows_cactus`, and
+the visibility pass's cactus reads the tree biome).
+
+Version 11 and older have no `beach_back` (`None`), so no record of theirs
+carries the bit and their trees, biomes and top blocks are theirs, digest
+for digest. Version 12's sites and settled climate stay version 11's:
+`site_ground` and `climate_ground` drop the back as they drop the swamps
+(`swamps` decisions 6 and 7), which they do not read anyway.
+
+**Verify.**
+- `version_12_s_beach_back_is_dry_warm_ground_behind_a_beach` (core): a
+  sweep of the sphere finds back cells on version 12 and none on version 11;
+  every one is dry (over the 1.5 m high water), warm, fields, jungle or
+  desert, and within 12 m of a beach.
+- `a_beach_back_stands_the_beach_s_acacias` (core): a back word grows trees
+  at the beach's rate on grass and on desert sand, every one an acacia, and
+  no cactus; without the bit the same word is the biome's own.
+- `beach_acacias_stand_behind_the_beach_on_the_newest_version` (app): the far and
+  tier records of the finest cells round warm beaches on version 12 stand
+  acacias, a share of the back's cells, and none on a cell under the high
+  water.
+- The shaders hold the bit and the lines (`planet_trees` tests).
+- Versions 10's and 11's digests (`version_10_keeps_its_ground`,
+  `version_11_keeps_its_ground`, the tree digests, the column digest)
+  unchanged.
+- An eye-level capture by day of acacias behind a version 12 beach,
+  `docs/screenshots/flora-2-1/v12-beach-acacias.jpg`.

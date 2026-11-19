@@ -453,6 +453,21 @@ impl WalkingState {
         self.pitch = 0.0;
     }
 
+    /// Turn the look along `toward`, heading and pitch, as a mouse would
+    /// turn it: the capture scripts' aim (`--pick-fruit`); gameplay turns
+    /// with the mouse.
+    pub fn look_toward(&mut self, toward: Vec3) {
+        let Some(toward) = toward.try_normalize() else {
+            return;
+        };
+        self.heading = tangent_heading(toward, self.up);
+        self.pitch = toward
+            .dot(self.up)
+            .clamp(-1.0, 1.0)
+            .asin()
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT);
+    }
+
     fn transport_up(&mut self, up: Vec3) {
         self.heading = Quat::from_rotation_arc(self.up, up) * self.heading;
         self.heading = tangent_heading(self.heading, up);
