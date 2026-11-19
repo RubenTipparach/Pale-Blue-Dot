@@ -16,10 +16,12 @@ use crate::hex::{Hex, Voxel};
 /// the sea; version 9 (design B15) puts back the reefs version 8 lost;
 /// version 10 (`flora-v2` design 12) grows M13's forests on version 9's
 /// ground; version 11 (`river-downhill`) keeps every river's water from
-/// rising downstream. A new world is made with this version;
+/// rising downstream; version 12 (`swamps`) puts swamps on the low wet land
+/// by the sea and the rivers, on version 11's heights. A new world is made
+/// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 11;
+pub const GENERATOR_VERSION: u32 = 12;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the

@@ -140,7 +140,7 @@ pub(super) struct WaterView {
     sea: SeaView,
     /// x how far the sheet sits below sea level, m; y the surface of the
     /// water the eye is in or over, a body radius: an inland water's drawn
-    /// top (`inland_surface`), else the sea's tided surface at the eye; z
+    /// top (`inland_surface`), else the sea's surface at the eye; z
     /// seconds since the water was meshed, w the tick's length: the clock
     /// the flowing water's vertices ease on.
     sea_frame: Vec4,
@@ -294,8 +294,6 @@ pub(crate) struct SeaView {
     phase: [Vec4; pbd_core::sea::COMPONENTS / 4],
     heading: Vec4,
     limits: Vec4,
-    /// The tide: the moon's direction and the range (`pbd_core::sea::tide_m`).
-    tide: Vec4,
 }
 
 impl From<&pbd_core::sea::SeaGpu> for SeaView {
@@ -306,7 +304,6 @@ impl From<&pbd_core::sea::SeaGpu> for SeaView {
             phase: sea.phase,
             heading: sea.heading,
             limits: sea.limits,
-            tide: sea.tide,
         }
     }
 }
@@ -370,15 +367,15 @@ pub struct EyeWaterState(pub EyeWater);
 /// question a height field can answer is "is the camera under sea level over
 /// a cell whose ground is", which drowns a camera standing in a dry cave
 /// carved below sea level.
-pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye: EyeWater) -> f32 {
+pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) -> f32 {
     if camera_body.length_squared() < 1e-6 {
         return 0.0;
     }
     // The one surface every reader judges the eye against (B18, second
     // review): it took the column's own sea top, half a metre over the drawn
-    // sheet, plus the tide, so an eye over the tided sheet was "under" and
-    // its whole sky went to murk.
-    let Some(surface) = eye_surface_radius(eye, camera_body, sea_radius, wave) else {
+    // sheet, so an eye over the sheet was "under" and its whole sky went to
+    // murk.
+    let Some(surface) = eye_surface_radius(eye, camera_body, sea_radius) else {
         return 0.0;
     };
     let radius = camera_body.length();
@@ -409,22 +406,18 @@ pub fn inland_surface(eye: EyeWater) -> Option<f32> {
 }
 
 /// The surface the eye's side of the water is judged against, as a body
-/// radius: an inland water's drawn top; the sea's mean surface lifted by the
-/// tide (never the waves) where the eye's water is the sea's, or where off
-/// the tier the ground under it is below the sea; `None` in air. The ONE
-/// answer the tri-state, the composite's measure and the capture label read.
-pub fn eye_surface_radius(
-    eye: EyeWater,
-    camera_body: Vec3,
-    sea_radius: f32,
-    tide: f32,
-) -> Option<f32> {
+/// radius: an inland water's drawn top; the sea's mean surface, the drawn
+/// sheet (never the waves; the sea has no tide, `no-tides`), where the eye's
+/// water is the sea's, or where off the tier the ground under it is below
+/// the sea; `None` in air. The ONE answer the tri-state, the composite's
+/// measure and the capture label read.
+pub fn eye_surface_radius(eye: EyeWater, camera_body: Vec3, sea_radius: f32) -> Option<f32> {
     match eye {
         EyeWater::Air => None,
-        EyeWater::Water { .. } => Some(inland_surface(eye).unwrap_or(sea_radius + tide)),
+        EyeWater::Water { .. } => Some(inland_surface(eye).unwrap_or(sea_radius)),
         EyeWater::Unknown => (camera_body.length_squared() > 1e-6
             && terrain::surface_height(camera_body) < 0.0)
-            .then_some(sea_radius + tide),
+            .then_some(sea_radius),
     }
 }
 
@@ -456,19 +449,9 @@ pub fn publish_eye_water(
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<crate::planet::PlanetContact>>,
     fine: Option<Res<crate::planet::PlanetFine>>,
-    settings: Option<Res<WaterSettings>>,
     mut eye: ResMut<EyeWaterState>,
 ) {
-    let high_water = settings
-        .as_deref()
-        .map_or(0.0, |s| pbd_core::sea::tide_high_m(s.tide_range_m));
-    let answer = eye_water(
-        &cameras,
-        &frame,
-        contact.as_deref(),
-        fine.as_deref(),
-        high_water,
-    );
+    let answer = eye_water(&cameras, &frame, contact.as_deref(), fine.as_deref());
     if eye.0 != answer {
         eye.0 = answer;
     }
@@ -479,7 +462,6 @@ fn eye_water(
     frame: &PlanetRenderFrame,
     contact: Option<&crate::planet::PlanetContact>,
     fine: Option<&crate::planet::PlanetFine>,
-    high_water: f32,
 ) -> EyeWater {
     let (Some(contact), Some(fine)) = (contact, fine) else {
         return EyeWater::Unknown;
@@ -488,7 +470,7 @@ fn eye_water(
         return EyeWater::Unknown;
     };
     let body = (transform.translation().as_dvec3() - frame.center).as_vec3();
-    eye_water_at(body, contact, fine, high_water)
+    eye_water_at(body, contact, fine)
 }
 
 /// What the tier says is at a body-local eye: the one rule
@@ -498,7 +480,6 @@ pub fn eye_water_at(
     body: Vec3,
     contact: &crate::planet::PlanetContact,
     fine: &crate::planet::PlanetFine,
-    high_water: f32,
 ) -> EyeWater {
     let Some(direction) = body.try_normalize() else {
         return EyeWater::Unknown;
@@ -544,15 +525,14 @@ pub fn eye_water_at(
                 surface_radius: terrain::PLANET_RADIUS + drawn.unwrap_or(surface),
             }
         }
-        // Air the sea's surface reaches at some tide: the sea's, at its
-        // mean; `submersion` adds the tide and the swell, so an eye under the
-        // tided sheet over a beach is under the sea there (the owner's
-        // "submerged at just the right height": one layer down at high
-        // water the column held only air, and the eye was dry under the
-        // sheet). The sea's reach is the mark the sheet is listed by
-        // (`ocean-environments` B22): a pit or a cavern the tide overtops is
-        // the sea's, roofed or not, and a hollow no water joins is dry.
-        None if altitude < terrain::terrain_config().sea_level_m + high_water
+        // Air the sea's surface reaches, under the high-water line: the
+        // sea's, at its mean; `submersion` judges the eye against the sheet,
+        // so an eye under the sheet there is under the sea (the owner's
+        // "submerged at just the right height"). The sea's reach is the mark
+        // the sheet is listed by (`ocean-environments` B22): a pit or a
+        // cavern the sea's surface reaches is the sea's, roofed or not, and a
+        // hollow no water joins is dry.
+        None if altitude < terrain::high_water_m()
             && pbd_core::column::layer_at(altitude)
                 .is_some_and(|l| column.material(l) == pbd_core::terrain::Material::Air)
             && fine
@@ -573,19 +553,13 @@ pub fn eye_water_at(
 
 /// The surface the composite measures the waterline from, as a body radius
 /// (`sea_frame.y`): the eye's own water's ([`eye_surface_radius`]), and for an
-/// eye in air the sea's TIDED surface (`ocean-environments` B21). It was
-/// nought in air, and the shader fell back to the sea's mean sphere: at low
-/// tide a dry beach between the tided water and the mean was taken for
-/// under water, tinted blue-green and wobbled, whenever the eye rose out of
-/// the high tide's reach over it, as in a jump (owner, 2026-11-16: "this
-/// only happens when you jump above water").
-pub fn composite_surface_radius(
-    eye: EyeWater,
-    camera_body: Vec3,
-    sea_radius: f32,
-    tide: f32,
-) -> f32 {
-    eye_surface_radius(eye, camera_body, sea_radius, tide).unwrap_or(sea_radius + tide)
+/// eye in air the sea's drawn surface (`ocean-environments` B21). It was
+/// nought in air, and the shader fell back to a sphere of its own, so a dry
+/// beach over the water was taken for under water, tinted blue-green and
+/// wobbled, whenever the eye rose into air over it, as in a jump (owner,
+/// 2026-11-16: "this only happens when you jump above water").
+pub fn composite_surface_radius(eye: EyeWater, camera_body: Vec3, sea_radius: f32) -> f32 {
+    eye_surface_radius(eye, camera_body, sea_radius).unwrap_or(sea_radius)
 }
 
 /// The drops on the lens (`weather-rain` R3): how wet the glass is, 0..1,
@@ -1673,19 +1647,19 @@ fn prepare_water_views(
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
         // The straddle band about the surface (B18): the swell is in the
         // surface the CPU measures (`camera_height` is the sea's own height
-        // at the eye, tide and waves), so no band is left to hold it. With
+        // at the eye, with its waves), so no band is left to hold it. With
         // one, an eye a hand under the surface was "straddling": the sheet
         // over it was not drawn from below and the bank past the sheet's
         // edge was seen dry and bright ("submerged at just the right
         // height", "I dont see water surface above the player").
         let band = settings.partial_band_m.min(INLAND_BAND_M);
-        // Against the sea's TIDED surface, not its waves (B18, second
+        // Against the sea's mean surface, not its waves (B18, second
         // review): with no band left to hold the swell, a crest passing a
         // hand over the mean put an eye that is above the drawn sheet "under"
         // for that frame, and the whole sky above the water went to murk.
         // The sheet drawn over a crest is the sheet's own business, seen
         // from below where it stands over the eye.
-        let state = submersion(camera, sea_radius, sea_now.tide_here, band, eye.0);
+        let state = submersion(camera, sea_radius, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
             .map(|gpu| (gpu.was_under, gpu.emerge_until))
@@ -1935,12 +1909,10 @@ fn prepare_water_views(
             // clock every vertex's ease runs on (`water_flow::WaterEase`).
             sea_frame: Vec4::new(
                 s.depth_offset_m,
-                // The sea's own surface over the eye is its tided, swelling
-                // one: the composite measured the sea from its mean, so the
-                // tide's water between was dry (a bright band at high water).
-                // An eye in the air is over the same tided sea (`fishing-and-equipment`
-                // design 4, `ocean-environments` B21): one helper says it.
-                composite_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here),
+                // The sea's own surface over the eye. An eye in the air is
+                // over the same sea (`fishing-and-equipment` design 4,
+                // `ocean-environments` B21): one helper says it.
+                composite_surface_radius(eye.0, camera, sea_radius),
                 ease.since_mesh_s,
                 pbd_core::liquid::TICK_S,
             ),
@@ -3217,9 +3189,7 @@ mod tests {
         );
         let sea = terrain::PLANET_RADIUS - WaterSettings::default().depth_offset_m;
         let body = river * (surface - 0.8);
-        for swell in [-1.5, 0.0, 1.5] {
-            assert_eq!(submersion(body, sea, swell, 0.3, eye), 1.0, "swell {swell}");
-        }
+        assert_eq!(submersion(body, sea, 0.3, eye), 1.0);
         // Out over the river: dry.
         app.world_mut()
             .get_mut::<Transform>(camera)
@@ -3403,52 +3373,45 @@ mod tests {
         // Twenty metres under the sea's own surface, over a cell whose ground
         // is under it: the height field drowns it and the column does not.
         let deep = ocean * (sea - 20.0);
-        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Unknown), 1.0);
-        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Air), 0.0);
+        assert_eq!(submersion(deep, sea, band, EyeWater::Unknown), 1.0);
+        assert_eq!(submersion(deep, sea, band, EyeWater::Air), 0.0);
         // A pool whose surface is ten metres down: over it is dry, in it is
         // under, and the band straddles its own surface rather than the sea's.
         let pool = EyeWater::Water {
             surface_radius: sea - 10.0,
         };
-        assert_eq!(submersion(ocean * (sea - 5.0), sea, 0.0, band, pool), 0.0);
-        assert_eq!(submersion(ocean * (sea - 10.5), sea, 0.0, band, pool), 0.5);
-        assert_eq!(submersion(deep, sea, 0.0, band, pool), 1.0);
+        assert_eq!(submersion(ocean * (sea - 5.0), sea, band, pool), 0.0);
+        assert_eq!(submersion(ocean * (sea - 10.5), sea, band, pool), 0.5);
+        assert_eq!(submersion(deep, sea, band, pool), 1.0);
     }
 
     /// `ocean-environments` B21 (owner, 2026-11-16: "dry ground had the weird
     /// water blur pass ... only happens when you jump above water"). On a
-    /// beach at low tide the eye standing within the high tide's reach is
-    /// over the sea's water, and the same eye a jump higher is in air; the
-    /// composite measures the waterline from the sea's tided surface for
-    /// both, never the mean sphere, which lies over the dry sand at low tide.
+    /// beach the eye standing over the sea's water and the same eye a jump
+    /// higher in air are measured from one waterline, the sea's drawn
+    /// surface, never a sphere of the composite's own (`no-tides`: the sea
+    /// stands at one level).
     #[test]
-    fn a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide() {
+    fn a_jump_over_a_beach_keeps_the_composites_waterline_at_the_sea() {
         let sea = terrain::PLANET_RADIUS - 0.5;
-        let low_tide = -1.2;
         let up = Vec3::Y;
         let sea_level = terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m;
         let standing = EyeWater::Water {
             surface_radius: sea_level,
         };
-        let stand = composite_surface_radius(standing, up * (sea + 1.0), sea, low_tide);
-        let jump = composite_surface_radius(EyeWater::Air, up * (sea + 2.6), sea, low_tide);
-        assert_eq!(stand, sea + low_tide);
+        let stand = composite_surface_radius(standing, up * (sea + 1.0), sea);
+        let jump = composite_surface_radius(EyeWater::Air, up * (sea + 2.6), sea);
+        assert_eq!(stand, sea);
         assert_eq!(jump, stand, "the jump moved the composite's waterline");
         // Both dry: no tint, wobble or murk is armed for the eye itself.
-        assert_eq!(
-            submersion(up * (sea + 1.0), sea, low_tide, 0.0, standing),
-            0.0
-        );
-        assert_eq!(
-            submersion(up * (sea + 2.6), sea, low_tide, 0.0, EyeWater::Air),
-            0.0
-        );
+        assert_eq!(submersion(up * (sea + 1.0), sea, 0.0, standing), 0.0);
+        assert_eq!(submersion(up * (sea + 2.6), sea, 0.0, EyeWater::Air), 0.0);
         // An inland water's own top is still the eye's.
         let river = EyeWater::Water {
             surface_radius: sea + 30.0,
         };
         assert_eq!(
-            composite_surface_radius(river, up * (sea + 29.0), sea, low_tide),
+            composite_surface_radius(river, up * (sea + 29.0), sea),
             sea + 30.0
         );
     }
@@ -3470,47 +3433,44 @@ mod tests {
             .unwrap()
             .direction;
         assert_eq!(
-            submersion(land * (sea - 10.0), sea, 0.0, band, EyeWater::Unknown),
+            submersion(land * (sea - 10.0), sea, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 10.0), sea, 0.0, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 10.0), sea, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 1.0), sea, 0.0, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 1.0), sea, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 1.0), sea, 0.0, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 1.0), sea, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 3.0), sea, 0.0, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 3.0), sea, band, EyeWater::Unknown),
             1.0
         );
-        assert_eq!(
-            submersion(Vec3::ZERO, sea, 0.0, band, EyeWater::Unknown),
-            0.0
-        );
+        assert_eq!(submersion(Vec3::ZERO, sea, band, EyeWater::Unknown), 0.0);
     }
 
-    /// The band stands about the surface under the camera as it is now, not
-    /// about the mean sea: a trough passing under a camera just over the sea
-    /// leaves it dry, and a crest over it puts it in the water.
+    /// The camera is judged against the sea's mean surface, the drawn sheet
+    /// (`no-tides`; the waves are the sheet's own business, B18): a hand over
+    /// it is dry and a hand under it is in the water.
     #[test]
-    fn in_a_trough_the_camera_is_dry() {
+    fn the_camera_is_judged_against_the_seas_mean_surface() {
         let sea = terrain::PLANET_RADIUS - 0.5;
-        let band = 0.8;
         let cells = super::super::topology::dual_sphere(3);
         let ocean = cells
             .iter()
             .find(|c| terrain::surface_height(c.direction) < 0.0)
             .unwrap()
             .direction;
-        let eye = ocean * (sea + 0.3);
-        assert_eq!(submersion(eye, sea, -1.0, band, EyeWater::Unknown), 0.0);
-        assert_eq!(submersion(eye, sea, 2.0, band, EyeWater::Unknown), 1.0);
+        let over = ocean * (sea + 0.3);
+        let under = ocean * (sea - 0.3);
+        assert_eq!(submersion(over, sea, 0.0, EyeWater::Unknown), 0.0);
+        assert_eq!(submersion(under, sea, 0.0, EyeWater::Unknown), 1.0);
     }
 
     #[test]
@@ -4063,5 +4023,252 @@ mod sea_hole_dig_report {
             }
         }
         println!("dug {tried}, holes {holes} (high water {high:.2} m, sea layer {sea})");
+    }
+}
+
+/// MEASUREMENT (`dry-holes`, the owner 2026-11-18: "We should be able to dig
+/// holes below water line and not have it filled with water too"): a pit of
+/// seven cells dug from dry land near the sea, or beside a river, through the
+/// edit's own path (`FineSet::write_layer`, the relight, `mark_sea`), its
+/// floor `PBD_DEPTH` layers under the sea's (or the river's) top layer, the
+/// pit's wall kept whole between it and the water. Reports what each dug cell
+/// holds, whether the sea's sheet is listed over it, what the eye in the pit
+/// is told, after the rule has run on what the dig queued, and after a reload
+/// (the tier built again from the save). `PBD_AT='lat lon'`, `PBD_RIVER=1`
+/// for a river's bank.
+#[cfg(test)]
+mod dry_hole_report {
+    use crate::planet::column::{DRY_SHEET_BIT, SEA_REACH_BIT, sea_layer, sheet_listed};
+    use crate::planet::lod::FineSet;
+    use crate::planet::terrain;
+    use bevy::math::Vec3;
+    use pbd_core::edits::{Edit, Edits};
+    use pbd_core::terrain::Material;
+    use std::sync::Arc;
+
+    #[test]
+    #[ignore = "a report: PBD_AT='lat lon' cargo test -p pbd-app dry_hole_report -- --ignored --nocapture"]
+    fn dry_hole_report() {
+        let at = std::env::var("PBD_AT").unwrap_or_else(|_| "39.725 15.339".into());
+        let river = std::env::var("PBD_RIVER").is_ok();
+        let depth: usize = std::env::var("PBD_DEPTH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3);
+        let v: Vec<f32> = at
+            .split_whitespace()
+            .filter_map(|x| x.parse().ok())
+            .collect();
+        let up = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: v[0].to_radians(),
+            lon: v[1].to_radians(),
+        });
+        let settings = crate::config::ColumnSettings::default();
+        let set = crate::planet::lod::generate_fine(up, &settings, &Edits::new());
+        let sea = sea_layer();
+        let r = terrain::PLANET_RADIUS;
+        let n = set.levels[3].len();
+        let neighbours = |record: usize| -> Vec<usize> {
+            set.finest_neighbors[record]
+                .iter()
+                .filter(|&&x| x != u32::MAX)
+                .map(|&x| x as usize)
+                .collect()
+        };
+        // The water's level: the topmost water layer of a column.
+        let water_top = |record: usize| -> Option<usize> {
+            let column = set.columns.column(record)?;
+            (1..pbd_core::column::LAYERS)
+                .rev()
+                .find(|&l| column.material(l).is_water())
+        };
+        let near = |record: usize| -> f32 {
+            let p = Vec3::from_slice(&set.levels[3][record].direction_height[..3]);
+            (p - up).length() * r
+        };
+        let mut order: Vec<usize> = (0..n)
+            .filter(|&rec| set.columns.column(rec).is_some())
+            .collect();
+        order.sort_by(|&a, &b| near(a).total_cmp(&near(b)));
+        // A pit centre: dry land whose two rings hold no water at all and
+        // whose third ring does (the sea, or a river over the sea's level):
+        // the wall between the pit and the water is a cell thick at least.
+        let mut found = None;
+        'search: for &record in &order {
+            if near(record) > 250.0 {
+                break;
+            }
+            let column = set.columns.column(record).unwrap();
+            let Some(top) = column.surface() else {
+                continue;
+            };
+            // By the sea: land a little over it. By a river: land well over
+            // the high water, so the pit's floor is too.
+            let shore = std::env::var("PBD_SHORE").is_ok();
+            let (low, high_top) = if river {
+                (sea + 4, sea + 80)
+            } else {
+                (sea + usize::from(!shore), sea + 5)
+            };
+            if top < low || top > high_top || water_top(record).is_some() {
+                continue;
+            }
+            // `PBD_SHORE`: a centre on the shore itself, the sea's water in a
+            // neighbour at its top layer, where a pit dug lets the sea in.
+            if shore {
+                if neighbours(record)
+                    .iter()
+                    .any(|&c| water_top(c) == Some(sea - 1))
+                {
+                    found = Some((record, sea - 1));
+                    break 'search;
+                }
+                continue;
+            }
+            let mut ring: Vec<usize> = vec![record];
+            for _ in 0..2 {
+                let mut next = ring.clone();
+                for &c in &ring {
+                    next.extend(neighbours(c));
+                }
+                next.sort_unstable();
+                next.dedup();
+                ring = next;
+            }
+            // `PBD_HIGH`: the pit's two rings stand over the high water too,
+            // so no beach the sea covers is beside it.
+            let high_ground = std::env::var("PBD_HIGH").is_ok();
+            if ring.iter().any(|&c| {
+                set.columns.column(c).is_none()
+                    || water_top(c).is_some()
+                    || (high_ground
+                        && set.levels[3][c].direction_height[3] <= terrain::high_water_m())
+            }) {
+                continue;
+            }
+            let mut third = ring.clone();
+            for &c in &ring {
+                third.extend(neighbours(c));
+            }
+            for &c in &third {
+                let Some(w) = water_top(c) else {
+                    continue;
+                };
+                let is_river = w >= sea;
+                if is_river == river && (!river || (w >= sea + 3 && w + 4 >= top)) {
+                    found = Some((record, w));
+                    break 'search;
+                }
+            }
+        }
+        let Some((centre, level)) = found else {
+            println!("no pit site within 250 m of {at}");
+            return;
+        };
+        let cell = &set.levels[3][centre];
+        let p = Vec3::from_slice(&cell.direction_height[..3]).normalize();
+        let ll = pbd_core::geo::lat_lon(p);
+        let top = set.columns.column(centre).unwrap().surface().unwrap();
+        let floor = if river { level } else { sea }.saturating_sub(depth);
+        println!(
+            "pit at {:.5} {:.5} (key {}): ground top layer {top} ({:+} m over the sea's top layer), water's top layer {level} ({}), floor layer {floor}, sea layer {sea}",
+            ll.lat.to_degrees(),
+            ll.lon.to_degrees(),
+            cell.key(),
+            top as i32 - sea as i32,
+            if river { "river" } else { "sea" },
+        );
+        let mut pit = vec![centre];
+        pit.extend(neighbours(centre));
+        let mut dug = set.clone();
+        let mut edits = Edits::new();
+        for &record in &pit {
+            let key = dug.levels[3][record].key();
+            let Some(top) = dug.columns.column(record).and_then(|c| c.surface()) else {
+                continue;
+            };
+            for layer in (floor..=top).rev() {
+                edits.set(Edit {
+                    cell: key,
+                    layer: layer as u16,
+                    material: Material::Air,
+                });
+                dug.write_layer(record, layer, Material::Air, &edits);
+            }
+            dug.columns.relight();
+            dug.mark_sea();
+        }
+        let report = |name: &str, s: &FineSet| {
+            for &record in &pit {
+                let key = set.levels[3][record].key();
+                let Some(rec) = s.levels[3].iter().position(|c| c.key() == key) else {
+                    continue;
+                };
+                let Some(column) = s.columns.column(rec) else {
+                    println!("{name} cell {key}: no column");
+                    continue;
+                };
+                let c = &s.levels[3][rec];
+                let stack: String = (floor.saturating_sub(1)..floor + depth + 4)
+                    .map(|l| match column.material(l) {
+                        Material::Air => '.',
+                        Material::Water => 'W',
+                        m if m.is_water() => 'f',
+                        _ => '#',
+                    })
+                    .collect();
+                let wet = (floor..=top).any(|l| column.material(l).is_water());
+                println!(
+                    "{name} cell {key}: h {:.2} [{stack}] water {wet} listed {} reach {} dry {}",
+                    c.direction_height[3],
+                    sheet_listed(c),
+                    c.spare[2] & SEA_REACH_BIT != 0,
+                    c.spare[2] & DRY_SHEET_BIT != 0,
+                );
+            }
+            // The eye in the pit, 1.6 m over its floor.
+            let fine = crate::planet::PlanetFine {
+                set: Arc::new(s.clone()),
+                version: 1,
+            };
+            let mut contact = crate::planet::PlanetContact::test_planet(5);
+            contact.set_fine(&fine.set);
+            let eye = p * (r + pbd_core::column::layer_altitude(floor) + 1.6);
+            println!(
+                "{name} eye at {:.2} m: {:?}; column water {:?}; sea reached {}",
+                pbd_core::column::layer_altitude(floor) + 1.6,
+                super::eye_water_at(eye, &contact, &fine),
+                contact.column_water(eye),
+                contact.sea_reached(p),
+            );
+        };
+        report("built ", &set);
+        report("dug   ", &dug);
+        // What the two walks cost on this tier, on this machine's CPU.
+        let started = std::time::Instant::now();
+        let reach = dug.columns.sea_reach();
+        let reach_ms = started.elapsed().as_secs_f64() * 1e3;
+        let started = std::time::Instant::now();
+        let joined = dug.columns.sea_joined();
+        let joined_ms = started.elapsed().as_secs_f64() * 1e3;
+        println!(
+            "tier {} columns: sea_reach {reach_ms:.2} ms ({} reached), sea_joined {joined_ms:.2} ms ({} cells joined)",
+            reach.len(),
+            reach.iter().filter(|&&r| r).count(),
+            joined.iter().filter(|&&j| j).count(),
+        );
+        // The rule run on what the dig queued, as the game ticks it.
+        let mut ticked = dug.clone();
+        let mut ticks = 0;
+        while !ticked.columns.water.queue.is_empty() && ticks < 120 {
+            ticked.columns.tick_water(pbd_core::liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        ticked.columns.relight();
+        ticked.mark_sea();
+        println!("ran {ticks} ticks of the rule");
+        report("ticked", &ticked);
+        let reload = crate::planet::lod::generate_fine(up, &settings, &edits);
+        report("reload", &reload);
     }
 }

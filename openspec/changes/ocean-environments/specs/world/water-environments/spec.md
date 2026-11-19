@@ -3,7 +3,7 @@
 ## Purpose
 
 Where each water place occurs and what it is made of, how light behaves under
-water, tides and depth zones, and the beaver dams that change a valley.
+water, depth zones, and the beaver dams that change a valley.
 Proposed with the seas, rivers and marshes mockup; nothing here is built.
 
 ## ADDED Requirements
@@ -49,33 +49,21 @@ off the water class that `world/water-environments` makes today.
 - **WHEN** the eye is in water the environment function calls marsh
 - **THEN** the turbidity is the marsh's, 0.35 per metre
 
-### Requirement: The tide is an offset of the one sea function
-
-A tide SHALL be added to the sea function's height, so the drawn sea, a
-floating hull and a swimmer agree. Its range SHALL be a body's number and its
-phase SHALL follow the world clock. It SHALL NOT be saved.
-
-#### Scenario: Shader and core agree with the tide on
-
-- **WHEN** the shader's height and the core function are evaluated at the
-  same point and time with a 3 m tide
-- **THEN** they agree within 1 mm
-
 ### Requirement: The sea's surface reaches every cell its water reaches
 
 The sea's drawn surface, the eye's water test and the swimmer SHALL agree on
 where the sea is: on the column tier, every cell joined to the open sea
 through cells that are not solid, up to the high water's layer, SHALL be
-under the sea's tided surface, roofed or open, and a cell no water reaches
+under the sea's surface, roofed or open, and a cell no water reaches
 SHALL be dry. The sea's own water SHALL be drawn by one surface at one
 height, in a cave as in the open.
 
 #### Scenario: A cavern behind a beach is under the sea
 
 - **WHEN** a dry pit and a roofed cavern under sea level are joined to the
-  sea across a beach under the high water
+  sea across a beach at the sea's level
 - **THEN** both are marked reached, the sheet is listed over them, and an
-  eye in either under the tided surface is in the sea's water
+  eye in either under the sea's surface is in the sea's water
 
 #### Scenario: A hollow inland stays dry
 
@@ -90,7 +78,7 @@ height, in a cave as in the open.
 ### Requirement: Floes float
 
 A floe SHALL be laid only where the water under it is deep enough for its
-ice at low water, and SHALL ride the tide there. No floe SHALL stand on a
+ice at the sea's mean. No floe SHALL stand on a
 beach, a shore terrace or any ground its ice would reach.
 
 #### Scenario: No floes on the beach

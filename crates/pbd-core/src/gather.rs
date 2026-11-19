@@ -22,12 +22,16 @@ pub struct GatherSettings {
     pub stone_one_in: u32,
     /// The most logs a tree gives an axe, counting the branch a hand took.
     pub axe_logs: u16,
-    /// Wet ground at the shore gives bait in one cell in this many
-    /// (`starter-missions` G1).
+    /// Earth by the water gives bait in one cell in this many
+    /// (`starter-missions` G1, `dig-fixes` 2).
     pub bait_one_in: u32,
-    /// Wet ground: a dug layer whose altitude, m from the sea's level, lies
-    /// in this band, lowest first.
-    pub bait_band_m: (f32, f32),
+    /// By the water: a water cell within this many cells of the dug one,
+    /// counted in steps across the cell's neighbours (0 is the dug cell's own
+    /// column only).
+    pub bait_reach_cells: u32,
+    /// And that water's layer this many metres from the dug layer, the
+    /// water's altitude less the dug layer's, lowest first.
+    pub bait_water_m: (f32, f32),
 }
 
 impl Default for GatherSettings {
@@ -37,7 +41,8 @@ impl Default for GatherSettings {
             stone_one_in: 3,
             axe_logs: 4,
             bait_one_in: 3,
-            bait_band_m: (-2.0, 1.0),
+            bait_reach_cells: 3,
+            bait_water_m: (-3.0, 2.0),
         }
     }
 }
@@ -68,31 +73,38 @@ impl GatherSettings {
                 self.bait_one_in
             ));
         }
-        let (low, high) = self.bait_band_m;
-        if !(low.is_finite() && high.is_finite() && low < high) {
+        if self.bait_reach_cells > 8 {
             return Err(format!(
-                "gather.bait_band_m must be two finite metres, lowest first, got {:?}",
-                self.bait_band_m
+                "gather.bait_reach_cells must be 0 to 8, got {}",
+                self.bait_reach_cells
+            ));
+        }
+        let (low, high) = self.bait_water_m;
+        if !(low.is_finite() && high.is_finite() && low <= high && low >= -16.0 && high <= 16.0) {
+            return Err(format!(
+                "gather.bait_water_m must be two finite metres in [-16, 16], lowest first, \
+                 got {:?}",
+                self.bait_water_m
             ));
         }
         Ok(())
     }
 
-    /// Bait out of `material` dug from `cell`/`layer`, whose altitude is
-    /// `altitude_m` from the sea's level: earth, grass or sand in the wet
-    /// band at the shore, one cell in a few, never from a block a player
-    /// `placed`. A find beside [`Self::find`], from its own hash, so the
-    /// fibre and stone a cell gives do not change.
+    /// Bait out of `material` dug from `cell`/`layer`: earth, grass or sand
+    /// `by_water` ([`Self::by_water`]), one cell in a few, never from a
+    /// block a player `placed`. A find beside [`Self::find`], from its own
+    /// hash, so the fibre and stone a cell gives do not change.
+    ///
+    /// Sand counts: the sea's edge is a band of beach sand, and bait there is
+    /// half of what the owner asked for (`dig-fixes` 2).
     pub fn bait(
         &self,
         material: Material,
         cell: u32,
         layer: u16,
         placed: bool,
-        altitude_m: f32,
+        by_water: bool,
     ) -> Option<Good> {
-        let (low, high) = self.bait_band_m;
-        let wet = altitude_m.is_finite() && (low..=high).contains(&altitude_m);
         let earth = matches!(
             material,
             Material::Grass
@@ -102,12 +114,69 @@ impl GatherSettings {
                 | Material::Soil
                 | Material::Sand
         );
-        if placed || !wet || !earth {
+        if placed || !by_water || !earth {
             return None;
         }
         let h = mix((u64::from(cell) << 16 | u64::from(layer)) ^ 0xba17_e000_u64);
         h.is_multiple_of(u64::from(self.bait_one_in))
             .then_some(Good::BAIT)
+    }
+
+    /// Whether ground dug at `layer` of cell `from` is by the water, for
+    /// bait (`dig-fixes` 2): a water cell, still or flowing, of a river or the
+    /// sea, in a column within [`Self::bait_reach_cells`] steps of `from`
+    /// across `neighbours` (the dug cell's own column included), whose layer
+    /// lies [`Self::bait_water_m`] from `layer`.
+    ///
+    /// The one nearness rule. The caller hands it its neighbour table and its
+    /// columns (`material` of a cell and layer, `None` where it has none):
+    /// the column tier's water, which carries the rivers, the sea and every
+    /// edit, is what the CPU holds authoritatively.
+    pub fn by_water<K, N>(
+        &self,
+        from: K,
+        layer: usize,
+        mut neighbours: impl FnMut(K) -> N,
+        mut material: impl FnMut(K, usize) -> Option<Material>,
+    ) -> bool
+    where
+        K: Copy + PartialEq,
+        N: IntoIterator<Item = K>,
+    {
+        let (low, high) = self.bait_water_m;
+        let dug = crate::column::layer_altitude(layer);
+        let layers: Vec<usize> = (0..crate::column::LAYERS)
+            .filter(|&l| {
+                let rise = crate::column::layer_altitude(l) - dug;
+                (low..=high).contains(&rise)
+            })
+            .collect();
+        let mut seen = vec![from];
+        let mut ring = vec![from];
+        for step in 0..=self.bait_reach_cells {
+            for &cell in &ring {
+                if layers
+                    .iter()
+                    .any(|&l| material(cell, l).is_some_and(Material::is_water))
+                {
+                    return true;
+                }
+            }
+            if step == self.bait_reach_cells {
+                break;
+            }
+            let mut next = Vec::new();
+            for &cell in &ring {
+                for n in neighbours(cell) {
+                    if !seen.contains(&n) {
+                        seen.push(n);
+                        next.push(n);
+                    }
+                }
+            }
+            ring = next;
+        }
+        false
     }
 
     /// What digging `material` out of `cell`/`layer` turns up besides the
@@ -131,19 +200,15 @@ impl GatherSettings {
     }
 
     /// Whether a tree that has given `taken` logs gives another, to hands
-    /// (`by_axe` false) or an axe (`tool-crafting` decision 3): hands take
-    /// the one branch, an axe takes logs up to `axe_logs` in all.
-    pub fn tree_gives(&self, taken: u16, by_axe: bool) -> Result<(), TreeSpent> {
-        if by_axe {
-            if taken < self.axe_logs {
-                Ok(())
-            } else {
-                Err(TreeSpent::Felled)
-            }
-        } else if taken == 0 {
+    /// (`by_axe` false) or an axe: either takes logs up to `axe_logs` in all,
+    /// hands only slower (`tree-punch-shake` decision 1; owner, 2026-11-18:
+    /// "allow punching trees to get wood logs for the first axe. Just takes
+    /// longer"). `by_axe` is kept for the callers that say which it was.
+    pub fn tree_gives(&self, taken: u16, _by_axe: bool) -> Result<(), TreeSpent> {
+        if taken < self.axe_logs {
             Ok(())
         } else {
-            Err(TreeSpent::BranchTaken)
+            Err(TreeSpent::Felled)
         }
     }
 }
@@ -151,8 +216,6 @@ impl GatherSettings {
 /// Why a tree gives no log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TreeSpent {
-    /// Hands have had its branch; an axe takes more.
-    BranchTaken,
     /// It has given all its wood.
     Felled,
 }
@@ -208,35 +271,135 @@ mod tests {
         }
     }
 
-    /// Bait turns up in a third of wet shore cells, the same cells every
-    /// time, and never above or below the band, from rock or a placed block
-    /// (`starter-missions` G1).
+    /// Bait turns up in a third of earth cells by the water, the same cells
+    /// every time, and never away from it, from rock or a placed block
+    /// (`starter-missions` G1, `dig-fixes` 2).
     #[test]
-    fn wet_ground_at_the_shore_gives_bait_in_a_share_of_cells() {
+    fn earth_by_the_water_gives_bait_in_a_share_of_cells() {
         let g = GatherSettings::default();
-        let share = (0..30_000u32)
-            .filter(|&c| g.bait(Material::Sand, c, 145, false, 0.0) == Some(Good::BAIT))
-            .count();
-        assert!((9_000..11_000).contains(&share), "{share}");
+        for earth in [
+            Material::Sand,
+            Material::Dirt,
+            Material::Grass,
+            Material::Soil,
+        ] {
+            let share = (0..30_000u32)
+                .filter(|&c| g.bait(earth, c, 145, false, true) == Some(Good::BAIT))
+                .count();
+            assert!((9_000..11_000).contains(&share), "{earth:?}: {share}");
+        }
         for c in 0..2_000 {
             assert_eq!(
-                g.bait(Material::Dirt, c, 144, false, -1.0),
-                g.bait(Material::Dirt, c, 144, false, -1.0)
+                g.bait(Material::Dirt, c, 144, false, true),
+                g.bait(Material::Dirt, c, 144, false, true)
             );
-            assert_eq!(g.bait(Material::Dirt, c, 150, false, 5.0), None, "dry");
-            assert_eq!(g.bait(Material::Dirt, c, 140, false, -6.0), None, "deep");
-            assert_eq!(g.bait(Material::Grass, c, 145, true, 0.0), None, "placed");
-            assert_eq!(g.bait(Material::Rock, c, 145, false, 0.0), None, "rock");
-            assert_eq!(g.bait(Material::Dirt, c, 145, false, f32::NAN), None);
+            assert_eq!(g.bait(Material::Dirt, c, 150, false, false), None, "dry");
+            assert_eq!(g.bait(Material::Grass, c, 145, true, true), None, "placed");
+            assert_eq!(g.bait(Material::Rock, c, 145, false, true), None, "rock");
+            assert_eq!(g.bait(Material::Stone, c, 145, false, true), None, "stone");
+            assert_eq!(g.bait(Material::Snow, c, 145, false, true), None, "snow");
         }
     }
 
-    /// Hands take one branch; an axe takes logs up to the limit.
+    /// A strip of cells in a row, each the next's neighbour, and their
+    /// columns: ground to `ground` (its top layer), and over cells `wet` water
+    /// from `bed` to `top`, layers inclusive.
+    fn strip(
+        ground: impl Fn(i32) -> usize,
+        wet: impl Fn(i32) -> Option<(usize, usize)>,
+    ) -> impl Fn(i32, usize) -> Option<Material> {
+        move |cell, layer| {
+            if let Some((bed, top)) = wet(cell)
+                && (bed..=top).contains(&layer)
+            {
+                return Some(Material::Water);
+            }
+            Some(if layer <= ground(cell) {
+                Material::Dirt
+            } else {
+                Material::Air
+            })
+        }
+    }
+
+    fn row(cell: i32) -> [i32; 2] {
+        [cell - 1, cell + 1]
+    }
+
+    /// The nearness rule (`dig-fixes` 2): a river's water inland, metres
+    /// over the sea, and the sea's own, both count within the reach; past
+    /// the reach, far over the water or deep under it, nothing does.
     #[test]
-    fn a_tree_gives_a_branch_by_hand_and_logs_to_an_axe() {
+    fn by_the_water_is_a_few_cells_from_a_river_or_the_sea() {
+        let g = GatherSettings::default();
+        // An inland river: its water in cells 0 and 1, layers 160 and 161,
+        // on banks whose top is layer 161, far over any sea.
+        let river = strip(|_| 161, |c| (0..=1).contains(&c).then_some((160, 161)));
+        let reach = g.bait_reach_cells as i32;
+        for cell in 2..=1 + reach {
+            assert!(g.by_water(cell, 161, row, &river), "bank cell {cell}");
+            assert!(g.by_water(cell, 160, row, &river), "under the bank {cell}");
+        }
+        assert!(!g.by_water(2 + reach, 161, row, &river), "past the reach");
+        assert!(!g.by_water(40, 161, row, &river), "far inland");
+        // A cliff top over the river, and a mine under it, are dry.
+        assert!(!g.by_water(2, 170, row, &river), "a cliff over it");
+        assert!(!g.by_water(2, 150, row, &river), "a mine under it");
+        // The sea: water from the bed up to its level, layer 140, in every
+        // cell below zero; a beach rising one layer a cell from there.
+        let sea = strip(
+            |c| if c < 0 { 130 } else { 140 + c as usize },
+            |c| (c < 0).then_some((131, 140)),
+        );
+        assert!(g.by_water(0, 140, row, &sea), "the beach at the water");
+        assert!(g.by_water(2, 142, row, &sea), "two cells up the beach");
+        assert!(!g.by_water(3, 143, row, &sea), "four cells off the water");
+        assert!(!g.by_water(1, 145, row, &sea), "a cliff over the sea");
+        assert!(!g.by_water(20, 160, row, &sea), "the hills behind");
+        // Flowing water is water too.
+        let falls = |c: i32, l: usize| {
+            Some(if c == 0 && l == 150 {
+                Material::flowing(3, true)
+            } else if l <= 149 {
+                Material::Dirt
+            } else {
+                Material::Air
+            })
+        };
+        assert!(g.by_water(1, 149, row, falls));
+        // A cell with no column answers nothing.
+        assert!(!g.by_water(1, 149, row, |_, _| None));
+        // Nothing reached when the reach is zero but the dug cell's own.
+        let own = GatherSettings {
+            bait_reach_cells: 0,
+            ..g
+        };
+        assert!(!own.by_water(2, 161, row, &river));
+        assert!(own.by_water(1, 161, row, &river));
+        let bad = GatherSettings {
+            bait_water_m: (2.0, -3.0),
+            ..g
+        };
+        assert!(bad.validate().is_err());
+        let bad = GatherSettings {
+            bait_reach_cells: 99,
+            ..g
+        };
+        assert!(bad.validate().is_err());
+    }
+
+    /// Hands and an axe both take logs up to the limit (`tree-punch-shake`).
+    #[test]
+    fn hands_and_an_axe_take_a_tree_s_logs_alike() {
         let g = GatherSettings::default();
         assert_eq!(g.tree_gives(0, false), Ok(()));
-        assert_eq!(g.tree_gives(1, false), Err(TreeSpent::BranchTaken));
+        assert_eq!(
+            g.tree_gives(1, false),
+            Ok(()),
+            "hands take more than a branch"
+        );
+        assert_eq!(g.tree_gives(3, false), Ok(()));
+        assert_eq!(g.tree_gives(4, false), Err(TreeSpent::Felled));
         assert_eq!(g.tree_gives(1, true), Ok(()));
         assert_eq!(g.tree_gives(3, true), Ok(()));
         assert_eq!(g.tree_gives(4, true), Err(TreeSpent::Felled));

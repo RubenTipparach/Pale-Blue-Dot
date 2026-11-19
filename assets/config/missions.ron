@@ -58,7 +58,7 @@
             branch: "trunk",
             icon: "tools/stone-axe",
             title: "Craft an axe",
-            help: "Pull a branch from a tree by hand, then make a stone axe in the pack's Craft row (I).",
+            help: "Punch a tree for logs, then make a stone axe in the pack's Craft row (I).",
             needs: ["gather"],
             objectives: [
                 (kind: craft, what: "tool:axe|recipe:stone-axe", count: 1, label: "axe"),
@@ -158,7 +158,7 @@
             branch: "fishing",
             icon: "tools/stone-shovel",
             title: "Dig for bait",
-            help: "Dig wet ground at the water's edge for bait worms; cast with them in your pack and they go on the hook.",
+            help: "Dig dirt by a river or the sea for bait worms; cast with them in your pack and they go on the hook.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: gather, what: "bait", count: 3, label: "dig bait"),

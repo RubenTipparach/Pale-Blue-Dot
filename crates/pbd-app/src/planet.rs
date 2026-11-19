@@ -359,6 +359,10 @@ impl Plugin for PlanetPlugin {
         .add_plugins(ExtractResourcePlugin::<crate::clutter::ClutterTaken>::default())
         .init_resource::<crate::clutter::ClutterTaken>()
         .add_systems(Update, crate::clutter::refresh)
+        // And the tree being chopped or punched, which shakes
+        // (`tree-punch-shake`).
+        .add_plugins(ExtractResourcePlugin::<crate::tree_shake::TreeShake>::default())
+        .init_resource::<crate::tree_shake::TreeShake>()
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -872,6 +876,9 @@ struct PlanetParams {
     // `gather-by-hand`: the cells with a piece a hand took, two a lane, each
     // its clutter id and a sink byte a piece (`clutter::ClutterTaken`).
     clutter_taken: [UVec4; crate::clutter::TAKEN_CELLS / 2],
+    // `tree-punch-shake`: x the worked tree's id, y its last hit's time as
+    // bits, z one once a tree is hit, w spare (`tree_shake::TreeShake`).
+    shake: UVec4,
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1852,12 +1859,12 @@ pub(crate) struct Tunables<'w> {
     maps: Res<'w, weather_maps::WeatherMapsNow>,
     /// The night side's far lights (`night-lights-from-space`).
     far: Option<Res<'w, crate::night_lights::FarLights>>,
-    /// The sea now, for the tide (`ocean-environments` 5.1).
-    sea_now: Option<Res<'w, crate::sea::SeaNow>>,
     /// The trees felled and picked near the camera (`flora-v2` 12.5).
     taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
     /// The ground clutter taken near the camera (`gather-by-hand`).
     clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
+    /// The tree being chopped or punched (`tree-punch-shake`).
+    shake: Option<Res<'w, crate::tree_shake::TreeShake>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1878,15 +1885,6 @@ fn prepare_views(
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let water_settings = &tunables.water;
-    let (tide_here, sheet_reach) = tunables.sea_now.as_deref().map_or((0.0, 0.0), |now| {
-        let range = now.gpu.tide.w;
-        let reach = if range > 0.0 {
-            pbd_core::sea::tide_high_m(range) - water_settings.depth_offset_m + 1.0
-        } else {
-            0.0
-        };
-        (now.tide_here, reach.max(0.0))
-    });
     let weather_settings = &tunables.weather;
     let scatter = &tunables.scatter;
     let columns = &tunables.columns;
@@ -1993,10 +1991,9 @@ fn prepare_views(
             // only reader is that light, and the sea radius in w.
             water_absorption: Vec3::from_array(water_settings.downwell_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
-            // w: the tide at the camera, m, which lifts or lowers the sea's
-            // tint on the ground with the drawn sheet (`ocean-environments`
-            // 5.1). The tide moves by centimetres over a view.
-            water_deep: Vec3::from_array(water_settings.deep_color).extend(tide_here),
+            // w spare (it was the tide at the camera, which `no-tides`
+            // removed).
+            water_deep: Vec3::from_array(water_settings.deep_color).extend(0.0),
             weather: Vec4::new(
                 weather.wetness,
                 // The rain's rings and sheen are water's: none in snow.
@@ -2117,10 +2114,11 @@ fn prepare_views(
                 water_settings.caustic_cell_m,
                 water_settings.caustic_fade_m,
                 // The visibility pass lists the sea sheet over every cell
-                // whose ground is under this height (m over sea level): the
-                // highest the tide brings the sheet, so at high water it runs
-                // on over the beach and never stands as a lip (B7).
-                sheet_reach,
+                // whose ground is under this height, m over the radius: the
+                // high-water line, the CPU's own (`planet::column::sheet_listed`),
+                // so the sheet runs on to the shore and never stands as a lip
+                // (B7, `no-tides`).
+                crate::planet::terrain::high_water_m(),
             ),
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,
@@ -2208,6 +2206,10 @@ fn prepare_views(
             felled,
             picked,
             clutter_taken,
+            shake: tunables
+                .shake
+                .as_deref()
+                .map_or(UVec4::ZERO, crate::tree_shake::TreeShake::lane),
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`

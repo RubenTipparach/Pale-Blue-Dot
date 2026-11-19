@@ -98,9 +98,66 @@ pub(super) fn material_of(
     }
 }
 
+/// Whether ground dug at `block` is by the water, for bait (`dig-fixes` 2):
+/// the core's one rule ([`pbd_core::gather::GatherSettings::by_water`]) over
+/// the fine set's neighbour table and its columns. A record past the tier's
+/// edge answers from the column the edit path would adopt for it, which
+/// carries the river and the sea as the tier's do.
+pub(super) fn by_water(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    gather: &pbd_core::gather::GatherSettings,
+    (cell, layer): Block,
+) -> bool {
+    let Some(record) = record_of(fine, cell) else {
+        return false;
+    };
+    let neighbours = &fine.set.finest_neighbors;
+    let mut rim: Vec<(usize, Option<pbd_core::column::Column>)> = Vec::new();
+    gather.by_water(
+        record,
+        layer,
+        |r| {
+            neighbours
+                .get(r)
+                .into_iter()
+                .flatten()
+                .filter(|&&n| n != u32::MAX)
+                .map(|&n| n as usize)
+                .collect::<Vec<_>>()
+        },
+        |r, l| {
+            if let Some(column) = fine.set.columns.column(r) {
+                return Some(column.material(l));
+            }
+            let at = match rim.iter().position(|(k, _)| *k == r) {
+                Some(at) => at,
+                None => {
+                    rim.push((r, fine.set.adoptable(r, &save.edits)));
+                    rim.len() - 1
+                }
+            };
+            rim[at].1.as_ref().map(|column| column.material(l))
+        },
+    )
+}
+
 /// Whether a tree has been felled: the axe has taken all its logs.
 pub(super) fn tree_felled(taken: u16, axe_logs: u16) -> bool {
     taken >= axe_logs
+}
+
+/// Whether the tree of `cell` (one that grows a tree) still stands: its
+/// `tree` record has given fewer than `axe_logs`. What the rooted ground
+/// and the ray's tree test both read (`dig-fixes` 1).
+pub(super) fn tree_standing(save: &WorldSave, axe_logs: u16, cell: u32) -> bool {
+    use pbd_core::gather::{TREE_KIND, TreeTaken};
+    let taken = save
+        .records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .map_or(0, |t| t.logs);
+    !tree_felled(taken, axe_logs)
 }
 
 /// Whether `block` is the ground a standing tree grows from: its cell grows a
@@ -113,7 +170,6 @@ pub(super) fn under_standing_tree(
     axe_logs: u16,
     (cell, layer): Block,
 ) -> bool {
-    use pbd_core::gather::{TREE_KIND, TreeTaken};
     let Some(record) = record_of(fine, cell) else {
         return false;
     };
@@ -125,12 +181,7 @@ pub(super) fn under_standing_tree(
     ) {
         return false;
     }
-    let taken = save
-        .records
-        .get(TREE_KIND, u64::from(cell))
-        .and_then(|r| r.read::<TreeTaken>())
-        .map_or(0, |t| t.logs);
-    if tree_felled(taken, axe_logs) {
+    if !tree_standing(save, axe_logs, cell) {
         return false;
     }
     material_of(fine, save, (cell, layer)).is_some_and(|m| m != Material::Air && !m.is_water())
@@ -231,7 +282,7 @@ pub enum Hands {
     /// A dig that also turns up finds into the hands, on the same line: a
     /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
     /// of grass and loose stone out of earth (`tool-crafting` decision 2),
-    /// bait out of wet ground at the shore (`starter-missions` G1).
+    /// bait out of earth by the water (`starter-missions` G1, `dig-fixes` 2).
     TakeFinds([Option<Item>; 3]),
 }
 
@@ -485,9 +536,11 @@ pub fn apply_edit(
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    (cameras, frame): (
+    (cameras, frame, mut shake): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+        // The worked tree's shake (`tree-punch-shake`); drawn only.
+        Option<ResMut<pbd_app::tree_shake::TreeShake>>,
     ),
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
@@ -591,7 +644,9 @@ pub fn dig_and_place(
     // A tree's trunk nearer than the ground is worked for a log (decision 3).
     if buttons.pressed(MouseButton::Left)
         && digger.is_some()
-        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M))
+        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M), |cell| {
+            tree_standing(&edits, gather.0.axe_logs, cell)
+        })
     {
         let by_axe = matches!(digger, Some(Digger::Tool(Tool::Axe, _)));
         let wood = dig.0.wood.axe;
@@ -604,6 +659,16 @@ pub fn dig_and_place(
         let step = mining
             .breaking
             .step(dt, true, Some(((tree, TREE_LAYER), secs)), between);
+        // A hit shakes the tree: each log, and every half second the button
+        // is held on it (`tree-punch-shake` design 4).
+        let now = time.elapsed_secs();
+        if let Some(shake) = shake.as_mut()
+            && (matches!(step, Step::Broken(_)) || shake.due(tree, now))
+            && let Some(id) = pbd_app::tree_shake::tree_id(&fine, tree)
+        {
+            shake.hit(tree, id, now);
+            debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
+        }
         if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
@@ -702,11 +767,11 @@ pub fn dig_and_place(
                 .any(|&(l, e)| usize::from(l) == layer && e == m)
         });
         let find = was.and_then(|m| gather.0.find(m, cell, layer as u16, placed));
-        // Bait worms out of wet ground at the shore (`starter-missions` G1).
-        let bait = was.and_then(|m| {
-            gather
-                .0
-                .bait(m, cell, layer as u16, placed, column::layer_altitude(layer))
+        // Bait worms out of earth by a river or the sea (`starter-missions`
+        // G1, `dig-fixes` 2).
+        let bait = was.filter(|_| !placed).and_then(|m| {
+            let wet = by_water(&fine, &edits, &gather.0, (cell, layer));
+            gather.0.bait(m, cell, layer as u16, placed, wet)
         });
         let hands = if seed.is_none() && find.is_none() && bait.is_none() {
             Hands::Take
@@ -927,7 +992,17 @@ pub fn dig_and_place(
 /// reach, by its cell's key: a vertical column at the centre of a cell that
 /// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
 /// the trunk's width low down and the canopy's higher up.
-pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> Option<u32> {
+///
+/// Only a tree `standing` says still stands: a felled tree is not drawn, and
+/// its trunk taking the ray left the ground where it stood undiggable by any
+/// tool (`dig-fixes` 1).
+pub fn tree_on_ray(
+    fine: &PlanetFine,
+    eye: Vec3,
+    look: Vec3,
+    before_m: f32,
+    standing: impl Fn(u32) -> bool,
+) -> Option<u32> {
     let reach = before_m.min(aim::REACH_M);
     let toward = eye.normalize_or(Vec3::Y);
     let near = ((aim::REACH_M + 3.0) / PLANET_RADIUS).cos();
@@ -972,7 +1047,10 @@ pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> O
                 continue;
             }
             let height = (rel + look * t).dot(up);
-            if (low..=high).contains(&height) && best.is_none_or(|(bt, _)| t < bt) {
+            if (low..=high).contains(&height)
+                && best.is_none_or(|(bt, _)| t < bt)
+                && standing(record.key())
+            {
                 best = Some((t, record.key()));
             }
         }
@@ -1001,8 +1079,6 @@ fn take_log(
         .and_then(|r| r.read())
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
-        // Nothing to say (owner, 2026-11-17: the line "sounds like AI writing").
-        Err(TreeSpent::BranchTaken) => return,
         Err(TreeSpent::Felled) => {
             note.say(wall_s, "No more wood");
             return;
@@ -1035,8 +1111,9 @@ fn take_log(
     });
     // The toast says it (`item-toasts` decision 6).
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
-    // The axe's last log fells the tree (`starter-missions` H.1).
-    if by_axe && gather.0.tree_gives(taken.logs + 1, true).is_err() {
+    // The last log fells the tree, by axe or by hand (`starter-missions`
+    // H.1; `tree-punch-shake` decision 2).
+    if gather.0.tree_gives(taken.logs + 1, by_axe).is_err() {
         did.write(pbd_app::missions::Did::new(
             pbd_core::missions::Kind::Fell,
             "tree",
@@ -1490,6 +1567,327 @@ mod placed_tests {
             );
             // And the sand under it is still the desert's sand.
             assert_eq!(built.material(under), Material::Sand);
+        }
+    }
+}
+
+/// `dig-fixes` 1: a felled tree no longer takes the dig. Through
+/// `dig_and_place` itself, on the shipped world's ground.
+#[cfg(test)]
+mod felled_tree_tests {
+    use super::*;
+    use bevy::time::TimeUpdateStrategy;
+    use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeTaken};
+    use std::time::Duration;
+
+    /// A tree near the fields spawn on level ground, and an eye a pace east
+    /// of it: the tree's key, the ground at its foot, and the eye.
+    fn tree_and_eye(fine: &PlanetFine, anchor: Vec3) -> (u32, Vec3, Vec3) {
+        fine.set
+            .finest_records()
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| {
+                pbd_core::flora::grows_tree(
+                    &pbd_app::planet::terrain_config().trees,
+                    r.spare[0],
+                    r.metadata[1],
+                )
+            })
+            .filter(|(_, r)| r.direction_height[3] > 2.0)
+            .filter(|(record, _)| fine.set.columns.column(*record).is_some())
+            .filter_map(|(_, r)| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize();
+                let base = d * (PLANET_RADIUS + r.direction_height[3]);
+                let east = Vec3::Y.cross(d).normalize();
+                let stand_d = (base + east * 1.7).normalize();
+                let h = surface_height(stand_d);
+                ((h - r.direction_height[3]).abs() < 0.3).then(|| {
+                    let eye = stand_d * (PLANET_RADIUS + h + pbd_app::walking::EYE_HEIGHT);
+                    (r.key(), base, eye, d.distance(anchor))
+                })
+            })
+            .min_by(|a, b| a.3.total_cmp(&b.3))
+            .map(|(k, base, eye, _)| (k, base, eye))
+            .expect("a tree near the spawn")
+    }
+
+    /// Hold the left button with a shovel for `frames`, looking at the foot
+    /// of a tree that is felled or standing: the logs the tree has given and
+    /// the cells dug.
+    fn hold_at_the_foot(felled: bool, frames: usize) -> (u16, usize) {
+        let anchor = super::super::spawn_direction(&super::super::Launch::parse(&[
+            "--walk".into(),
+            "--spawn".into(),
+            "fields".into(),
+        ]));
+        let (fine, contact) = pbd_app::planet::test_ground(anchor);
+        let (tree, base, eye) = tree_and_eye(&fine, anchor);
+        let gather = pbd_app::config::GatherConfig::default();
+        let mut save = WorldSave::memory_only();
+        let hotbar = super::super::slots::Hotbar::restore(&mut save);
+        if felled {
+            let record = pbd_core::records::Record::of(
+                TREE_KIND,
+                u64::from(tree),
+                TREE_SCHEMA,
+                &TreeTaken {
+                    logs: gather.0.axe_logs,
+                },
+            );
+            assert!(save.store_with_hands(record, TREE_SCHEMA, &hotbar.0));
+        }
+        let mut tools = pbd_app::fish::ToolSlot::default();
+        assert!(tools.0.hold(Tool::Shovel));
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 60.0,
+            )))
+            .insert_resource(fine)
+            .insert_resource(contact)
+            .insert_resource(save)
+            .insert_resource(hotbar)
+            .insert_resource(tools)
+            .insert_resource(gather)
+            .insert_resource(pbd_app::walking::WalkingReadout {
+                active: true,
+                captured: true,
+                ..default()
+            })
+            .insert_resource(pbd_app::sky::Sun::default())
+            .init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<Aim>()
+            .init_resource::<Mining>()
+            .init_resource::<NearField>()
+            .init_resource::<Drops>()
+            .init_resource::<pbd_app::config::DigConfig>()
+            .init_resource::<pbd_app::config::FarmConfig>()
+            .init_resource::<super::super::farm::FarmNote>()
+            .add_message::<pbd_app::hotbar::Gained>()
+            .add_message::<pbd_app::hotbar::Planted>()
+            .add_message::<pbd_app::missions::Did>()
+            .add_systems(First, |mut b: ResMut<ButtonInput<MouseButton>>| b.clear())
+            .add_systems(Update, dig_and_place);
+        let up = eye.normalize();
+        let at = Transform::from_translation(eye).looking_at(base, up);
+        app.world_mut()
+            .spawn((Camera3d::default(), Camera::default(), at));
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        for _ in 0..frames {
+            app.update();
+        }
+        let save = app.world().resource::<WorldSave>();
+        let logs = save
+            .records
+            .get(TREE_KIND, u64::from(tree))
+            .and_then(|r| r.read::<TreeTaken>())
+            .map_or(0, |t| t.logs);
+        (logs, save.edits.all().len())
+    }
+
+    /// Standing, the tree takes the hold and gives a log, and the ground
+    /// under it holds. Felled, the hold goes on to the ground and digs it:
+    /// before `dig-fixes`, the felled tree's invisible trunk took every
+    /// stroke ("No more wood") and nothing was dug.
+    #[test]
+    fn the_ground_at_a_felled_tree_s_foot_digs() {
+        let (logs, dug) = hold_at_the_foot(false, 200);
+        assert_eq!(logs, 1, "a standing tree is worked by the hold");
+        assert_eq!(dug, 0, "and its ground is not dug");
+        let axe_logs = pbd_app::config::GatherConfig::default().0.axe_logs;
+        let (logs, dug) = hold_at_the_foot(true, 120);
+        assert_eq!(logs, axe_logs, "a felled tree gives nothing more");
+        assert!(dug > 0, "the ground where it stood digs");
+    }
+}
+
+/// `dig-fixes` 2: bait from earth by a river or the sea, on the shipped
+/// world's own ground, and the mission counting it.
+#[cfg(test)]
+mod bait_tests {
+    use super::*;
+    use pbd_core::gather::GatherSettings;
+
+    fn earth(m: Material) -> bool {
+        matches!(
+            m,
+            Material::Grass
+                | Material::DryGrass
+                | Material::JungleGrass
+                | Material::Soil
+                | Material::Dirt
+                | Material::Sand
+        )
+    }
+
+    /// Over a fine set: the earth tops beside water whose top water layer
+    /// passes `which` (a direct neighbour, the top at most 3 m over the
+    /// water's), and the earth tops more than 30 m from any water at all,
+    /// each as its cell and top layer.
+    #[allow(clippy::type_complexity)]
+    fn beside_and_far(
+        fine: &PlanetFine,
+        which: impl Fn(usize) -> bool,
+    ) -> (Vec<(u32, usize)>, Vec<(u32, usize)>) {
+        let records = fine.set.finest_records();
+        let dir = |r: usize| Vec3::from_slice(&records[r].direction_height[..3]).normalize();
+        let water_top = |r: usize| {
+            let column = fine.set.columns.column(r)?;
+            (0..LAYERS).rev().find(|&l| column.material(l).is_water())
+        };
+        let wet: Vec<(usize, usize)> = (0..records.len())
+            .filter_map(|r| water_top(r).map(|top| (r, top)))
+            .collect();
+        let mut beside = Vec::new();
+        let mut far = Vec::new();
+        for (r, record) in records.iter().enumerate() {
+            let Some(column) = fine.set.columns.column(r) else {
+                continue;
+            };
+            let Some(top) = column.surface() else {
+                continue;
+            };
+            if !earth(column.material(top)) || column.material(top + 1) != Material::Air {
+                continue;
+            }
+            let next_to = fine.set.finest_neighbors[r].iter().any(|&n| {
+                n != u32::MAX
+                    && water_top(n as usize).is_some_and(|w| which(w) && top >= w && top <= w + 3)
+            });
+            if next_to {
+                beside.push((record.key(), top));
+            }
+            // Far: 30 m from every water cell the tier holds, and inside the
+            // tier by four cells, so no water past its edge is in reach.
+            let d = dir(r);
+            let within = (30.0 / PLANET_RADIUS).cos();
+            let mut ring = vec![r];
+            let mut inside = true;
+            for _ in 0..4 {
+                ring = ring
+                    .iter()
+                    .flat_map(|&k| fine.set.finest_neighbors[k])
+                    .filter(|&n| n != u32::MAX)
+                    .map(|n| n as usize)
+                    .collect();
+                inside &=
+                    ring.len() >= 5 && ring.iter().all(|&k| fine.set.columns.column(k).is_some());
+            }
+            if inside && wet.iter().all(|&(w, _)| d.dot(dir(w)) < within) {
+                far.push((record.key(), top));
+            }
+        }
+        (beside, far)
+    }
+
+    /// Every earth top beside the water is by it, about a third give bait,
+    /// and none far from water is (`dig-fixes` 2).
+    fn check(fine: &PlanetFine, which: impl Fn(usize) -> bool, place: &str) {
+        let save = WorldSave::memory_only();
+        let g = GatherSettings::default();
+        let (beside, far) = beside_and_far(fine, which);
+        assert!(
+            beside.len() >= 6,
+            "{place}: {} earth cells beside",
+            beside.len()
+        );
+        assert!(!far.is_empty(), "{place}: no earth far from water");
+        let mut baits = 0;
+        for &(cell, top) in &beside {
+            assert!(
+                by_water(fine, &save, &g, (cell, top)),
+                "{place}: cell {cell}"
+            );
+            let m = material_of(fine, &save, (cell, top)).unwrap();
+            if g.bait(m, cell, top as u16, false, true).is_some() {
+                baits += 1;
+            }
+            assert_eq!(g.bait(m, cell, top as u16, true, true), None, "placed");
+        }
+        assert!(
+            baits > 0 && baits < beside.len(),
+            "{place}: {baits} of {}",
+            beside.len()
+        );
+        for &(cell, top) in &far {
+            assert!(
+                !by_water(fine, &save, &g, (cell, top)),
+                "{place}: far cell {cell}"
+            );
+        }
+    }
+
+    /// A river inland, its water metres over the sea: the river run's own
+    /// spawn, in a river near its source.
+    #[test]
+    fn earth_by_a_river_inland_gives_bait() {
+        let anchor =
+            super::super::spawn_direction(&super::super::Launch::parse(&["--walk-river".into()]));
+        let (fine, _) = pbd_app::planet::test_ground(anchor);
+        // Water whose top is 3 m and more over the sea's level: a river's.
+        check(&fine, |w| column::layer_altitude(w) >= 3.0, "river");
+    }
+
+    /// The shore: the ground at the sea's waterline nearest the default
+    /// spawn, the sea's water at its level.
+    #[test]
+    fn earth_by_the_sea_gives_bait() {
+        let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let shore = pbd_app::planet::nearest_ground_near(default, 0.5..4.0).expect("a shore");
+        let (fine, _) = pbd_app::planet::test_ground(shore);
+        let sea = column::layer_at(-0.5).unwrap();
+        check(&fine, |w| w == sea, "sea");
+    }
+
+    /// Three baits dug while "Dig for bait" is open, each raised as the dig
+    /// raises a find (`Gained`, one, `Found`), meet its `dig bait 3`.
+    #[test]
+    fn three_baits_dug_meet_the_mission() {
+        use pbd_app::missions::{MissionChain, Missions};
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (recipes, _) = pbd_app::config::recipe_book();
+        app.insert_resource(recipes)
+            .insert_resource(pbd_app::config::FaunaConfig(
+                ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap(),
+            ))
+            .insert_resource(pbd_app::config::HusbandryConfig(Default::default()))
+            .insert_resource(WorldSave::memory_only())
+            .insert_resource(pbd_app::hotbar::Hotbar::default())
+            .insert_resource(pbd_app::fish::ToolSlot(
+                pbd_core::inventory::Equipment::new_world(),
+            ))
+            .add_plugins(pbd_app::missions::MissionsPlugin);
+        app.update();
+        // Everything "Dig for bait" needs, done.
+        let chain = app.world().resource::<MissionChain>().0.clone();
+        let mut need = chain.get("bait").expect("the bait mission").needs.clone();
+        while let Some(id) = need.pop() {
+            let mut missions = app.world_mut().resource_mut::<Missions>();
+            if missions.progress.done.insert(id.clone()) {
+                need.extend(chain.get(&id).map(|m| m.needs.clone()).unwrap_or_default());
+            }
+        }
+        app.update();
+        let bait = chain.get("bait").unwrap();
+        let dug = |app: &App| app.world().resource::<Missions>().progress.counts(bait)[0];
+        assert_eq!(dug(&app), 0);
+        assert_eq!(
+            pbd_core::missions::item_code(Item::Good(Good::BAIT)),
+            "bait"
+        );
+        for n in 1..=3 {
+            app.world_mut().write_message(pbd_app::hotbar::Gained {
+                item: Item::Good(Good::BAIT),
+                count: 1,
+                how: pbd_app::hotbar::How::Found,
+            });
+            app.update();
+            assert_eq!(dug(&app), n, "bait {n}");
         }
     }
 }

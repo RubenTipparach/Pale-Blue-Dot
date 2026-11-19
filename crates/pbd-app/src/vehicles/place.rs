@@ -241,7 +241,6 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                         anchored: true,
                     });
                 }
-                on_the_tide(&mut craft, sea.tide);
                 crafts.push(craft);
             }
         }
@@ -473,19 +472,6 @@ fn level_on(direction: Vec3, ground: f32, floor: impl Fn(Vec3) -> f32) -> bool {
 /// The rode an anchor pays out in `depth` metres of water, m.
 pub fn rode(depth: f64) -> f64 {
     depth * RODE_PER_DEPTH + RODE_MARGIN_M
-}
-
-/// Put a new craft, made on the sea's mean surface, on the water as it
-/// stands now: the tide's height over the mean there (`small-boats`). A boat
-/// put on the mean under a high tide had the water over its gunwale before
-/// it could rise, and swamped. Only for a craft being made: one restored
-/// from a save is where it was left.
-pub(crate) fn on_the_tide(craft: &mut Craft, tide: Vec4) {
-    let at = craft.reference_position();
-    let up = at.normalize_or(DVec3::Y);
-    let tide = f64::from(pbd_core::sea::tide_m(up.as_vec3(), tide));
-    let orientation = craft.body.orientation;
-    craft.set_reference_pose(at + up * tide, orientation);
 }
 
 /// The pose standing on `up` with its bow (-z) along `forward`.

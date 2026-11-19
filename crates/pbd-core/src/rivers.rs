@@ -836,6 +836,14 @@ pub fn near(cfg: &TerrainConfig, d: Vec3, extra_m: f32) -> bool {
         .is_some()
 }
 
+/// The river whose banks reach within `extra_m` of `d`, if any: what a
+/// river's swamp asks (`swamps` decision 1), its reach's level and how far
+/// off its line `d` is.
+pub fn beside(cfg: &TerrainConfig, d: Vec3, extra_m: f32) -> Option<RiverHere> {
+    let settings = cfg.rivers.as_ref()?;
+    map(cfg, settings).at_widened(cfg, settings, d, extra_m.max(0.0))
+}
+
 /// Where a river's valley and a margin past its banks are sealed from
 /// caves (`water-flow` E16): the altitude, metres over the radius, above
 /// which no cave opens in a column here. Four metres under the sea's level,

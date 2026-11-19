@@ -296,11 +296,10 @@ pub(crate) struct Underfoot {
 
 /// [`Underfoot`] at `position`: the walker's own answer
 /// ([`crate::walking::Sea`]), so a walker the physics wades is the walker
-/// the audio splashes. The column's sea tops at the sea level whatever the
-/// tide; the drawn sheet is half a metre under it and moves with the tide,
-/// and the walker swims to the sheet, so a seabed block over the low tide
-/// is dry land to both (owner, 2026-11-16: "water sfx also plays when I'm
-/// standing on land").
+/// the audio splashes. The column's sea tops at the sea level; the drawn
+/// sheet is half a metre under it, and the walker swims to the sheet, so
+/// feet over the sheet are dry to both (owner, 2026-11-16: "water sfx also
+/// plays when I'm standing on land").
 pub(crate) fn water_underfoot(
     sea: &crate::walking::Sea,
     config: &WalkingConfig,
@@ -859,12 +858,13 @@ mod tests {
     /// "water sfx also plays when I'm standing on land (the blue stuff
     /// peeking above water)"). On the real column tier at a version 10 sea
     /// shore, a seabed block 1 m under the sea level, the sea's water in its
-    /// column over it: at the lowest tide it stands over the drawn sheet and
-    /// is dry to the steps; at the highest it is under it and wet. Before,
-    /// the audio read the column's own sea, which tops at the sea level
-    /// whatever the tide, and splashed at every tide.
+    /// column over it: the drawn sheet stands half a metre over the block,
+    /// so feet on it are wet; feet a hand over the sheet, in the same
+    /// column's sea, are dry to the steps. The column's own sea, which tops
+    /// at the sea level, would call both wet. (The sea has no tide,
+    /// `no-tides`: the sheet is one level.)
     #[test]
-    fn a_seabed_block_over_the_low_tide_is_dry_underfoot() {
+    fn feet_over_the_drawn_sheet_are_dry_underfoot() {
         use pbd_core::column::layer_altitude;
         let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
             lat: 18.86_f32.to_radians(),
@@ -886,19 +886,17 @@ mod tests {
             })
             .expect("a seabed block 1 m under the sea level at the shore");
         let up = Vec3::from_slice(&set.finest_records()[block].direction_height[..3]).normalize();
-        let position = up * (PLANET_RADIUS + sea_level - 1.0 + 0.01 + HALF_HEIGHT);
         let water = crate::config::WaterSettings::default();
-        // The moon over the block is the highest tide; a quarter turn away,
-        // the lowest.
-        for (moon, wet) in [(up.any_orthonormal_vector(), false), (up, true)] {
+        let sheet = sea_level - water.depth_offset_m;
+        // On the block, under the sheet: wet. A hand over the sheet: dry.
+        for (feet, wet) in [(sea_level - 1.0 + 0.01, true), (sheet + 0.05, false)] {
+            let position = up * (PLANET_RADIUS + feet + HALF_HEIGHT);
             let mut contact = PlanetContact::test_planet(5);
             contact.set_fine(&set);
-            let mut sea = crate::sea::Sea::new(&water);
-            sea.set_moon(moon);
             let mut world = World::new();
             world.insert_resource(contact);
             world.insert_resource(water.clone());
-            world.insert_resource(sea);
+            world.insert_resource(crate::sea::Sea::new(&water));
             let heard = bevy::ecs::system::RunSystemOnce::run_system_once(
                 &mut world,
                 move |sea: crate::walking::Sea| {
@@ -909,12 +907,7 @@ mod tests {
             assert_eq!(
                 heard.feet_wet,
                 wet,
-                "the moon {}: the feet are {}",
-                if wet {
-                    "overhead"
-                } else {
-                    "a quarter turn away"
-                },
+                "feet at {feet:+.2} m: {}",
                 if heard.feet_wet { "wet" } else { "dry" }
             );
         }

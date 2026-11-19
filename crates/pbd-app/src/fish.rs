@@ -293,8 +293,7 @@ impl<'a> PlanetWater<'a> {
         let state = sea.state_at(air, direction);
         let local = sea
             .table
-            .local(&state, direction, sea.depth_at(direction), seconds)
-            .with_tide(sea.tide);
+            .local(&state, direction, sea.depth_at(direction), seconds);
         Self {
             sea,
             local,
@@ -1982,7 +1981,7 @@ pub(crate) mod draw {
         // What the water does to a creature's colour at its depth
         // (`ocean-environments` B12, B23): the depth under the surface of
         // the water its school swims in, a lake's or a river's own top, the
-        // sea's tided one otherwise, never the mean sea sphere.
+        // sea's otherwise.
         let under = super::places::UnderWater::of(water.as_deref());
         let seconds = now.map_or(0.0, |(seconds, _)| seconds);
         let o = crate::sim_origin::from_render_frame(&frame);
@@ -2514,8 +2513,7 @@ pub(crate) mod draw {
             };
             // A slack line is held just over the water rather than hanging
             // through it (the mockup's sag ran under the surface and looped
-            // back up): the water the float rides, with its waves and tide,
-            // not the mean sea, which stands a metre over it at low water.
+            // back up): the water the float rides, with its waves.
             // It ends on the top of the float, where it is tied.
             let end = float + o.up_at(float) * FLOAT_TOP_M;
             let end_point = o.query_point(end);
@@ -2590,9 +2588,9 @@ pub(crate) mod draw {
     ///
     /// - Never under the drawn sea ([`drawn_surface`]).
     /// - Never under the waterline the frame's composite tints
-    ///   (`water.wgsl` `compose`): the mean sea lifted by the tide, without
-    ///   the waves. A line under it is drawn as seen through water, dark.
-    /// - Over the crests: every wave at its crest, on the tide here. The eye
+    ///   (`water.wgsl` `compose`): the sea's mean surface, without the
+    ///   waves. A line under it is drawn as seen through water, dark.
+    /// - Over the crests: every wave at its crest. The eye
     ///   looks down on the line from the rod, so a line over every crest has
     ///   no wave between it and the eye. A line lying low on the water in
     ///   front of the float was seen through the crests nearer the eye, dark
@@ -2601,11 +2599,9 @@ pub(crate) mod draw {
     ///   down onto the float where it is tied.
     pub(crate) fn line_floor(water: &PlanetWater, end: Vec3, point: Vec3) -> f32 {
         let sea = water.sea;
-        let under = drawn_surface(water, point).max(sea.radius + sea.tide_at(point));
-        // Every wave at its crest: the table's reach less the tide's highest,
-        // which it adds; the tide here instead.
-        let waves = water.local.reach() - pbd_core::sea::tide_high_m(sea.tide.w.max(0.0));
-        let crests = sea.radius + waves.max(0.0) + sea.tide_at(point);
+        let under = drawn_surface(water, point).max(sea.radius);
+        // Every wave at its crest.
+        let crests = sea.radius + water.local.reach().max(0.0);
         let up = end.normalize_or(Vec3::Y);
         let rel = point - end;
         let across = (rel - up * rel.dot(up)).length();

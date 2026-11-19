@@ -1157,9 +1157,9 @@ struct Sway {
 #[derive(Default)]
 struct Built {
     pieces: Verts,
-    /// The floes, in a mesh of their own: they float, so they ride the tide
-    /// (a floe built at the mean sea was drowned by the flood and the water
-    /// sheet cut across its top in streaks; owner, 2026-11-15).
+    /// The floes, in a mesh of their own (a floe built into the pieces was
+    /// drowned by the flood and the water sheet cut across its top in
+    /// streaks; owner, 2026-11-15).
     floes: Verts,
     glow: Verts,
     sway: Sway,
@@ -1212,9 +1212,9 @@ fn lay_swaying(
 /// less what stands above).
 const FLOE_DRAFT_M: f32 = 0.6;
 
-/// Whether a floe at `dir` of radius `r` floats at low water: the ground
-/// under its middle and its six corners stands at least its draft under the
-/// sea at its lowest (`low_water_m` under the mean). A floe the environment
+/// Whether a floe at `dir` of radius `r` floats: the ground under its
+/// middle and its six corners stands at least its draft under the sea's
+/// mean (the sea has no tide, `no-tides`). A floe the environment
 /// function puts on a beach or a shore terrace is not laid at all, where it
 /// stood in the sand tipped and stacked (`ocean-environments` B18).
 fn floe_floats(
@@ -1223,9 +1223,8 @@ fn floe_floats(
     r: f32,
     bed: &impl Fn(Vec3) -> f32,
     sea_radius: f32,
-    low_water_m: f32,
 ) -> bool {
-    let lowest = sea_radius - low_water_m - FLOE_DRAFT_M;
+    let lowest = sea_radius - FLOE_DRAFT_M;
     let centre = dir * sea_radius;
     (0..7).all(|k| {
         let at = if k == 0 {
@@ -1243,7 +1242,6 @@ fn build_tile(
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
-    low_water_m: f32,
     water: UnderWater,
     seed: u32,
 ) -> Built {
@@ -1253,7 +1251,7 @@ fn build_tile(
     for (i, p) in pieces.iter().enumerate() {
         let axes = frame_at(p.dir, p.yaw);
         if p.floe {
-            if !floe_floats(p.dir, axes, p.reach, &bed, sea_radius, low_water_m) {
+            if !floe_floats(p.dir, axes, p.reach, &bed, sea_radius) {
                 continue;
             }
             let origin = p.dir * sea_radius - anchor;
@@ -1363,7 +1361,6 @@ fn ambient(
     list: &mut [Ambient],
     t: f32,
     clock: f32,
-    tide: f32,
     eye: Vec3,
     seen: &dyn Fn(Vec3) -> [f32; 3],
     lit: &mut Verts,
@@ -1462,8 +1459,7 @@ fn ambient(
                 tall,
                 ref mut state,
             } => {
-                // On its floe, which rides the tide.
-                let at = at + up * tide;
+                // On its floe.
                 let (e, n) = frame_tangents(up);
                 let forward = e * yaw.cos() + n * yaw.sin();
                 // It slides off and swims away once the eye is within its
@@ -1573,8 +1569,6 @@ struct Drawn {
     sway: Option<(Entity, Handle<Mesh>)>,
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
-    /// The floes' mesh, lifted by the tide at the tile each frame.
-    floes: Option<Entity>,
     anchor: Vec3,
     landed_s: f32,
     still: Sway,
@@ -1752,7 +1746,6 @@ fn tiles(
     sun: Option<Res<crate::sky::Sun>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut roots: Query<(&mut Transform, &mut crate::field_light::Faded)>,
-    mut parts: Query<&mut Transform, Without<crate::field_light::Faded>>,
     mut shown: Query<&mut Visibility>,
 ) {
     let _timer = TilesTimer(std::time::Instant::now());
@@ -1821,17 +1814,6 @@ fn tiles(
                 faded.0 = fade;
             }
         }
-        // The floes float: they rise and fall with the tide over the tile.
-        let tile_up = drawn.anchor.normalize_or(Vec3::Y);
-        let tide = sea.tide_at(tile_up);
-        if let Some(floes) = drawn.floes
-            && let Ok(mut transform) = parts.get_mut(floes)
-        {
-            let lift = tile_up * tide;
-            if transform.translation != lift {
-                transform.translation = lift;
-            }
-        }
         // The unlit glow and smoke cannot take the mask: they go at half.
         for entity in [drawn.glow, drawn.smoke.as_ref().map(|s| s.0)]
             .into_iter()
@@ -1871,15 +1853,14 @@ fn tiles(
         if !drawn.ambient.is_empty() {
             let (mut lit, mut smoke) = (Verts::default(), Verts::default());
             if fade < 1.0 {
-                // Depth under the sea's tided surface over the tile.
-                let surface = sea.radius + tide;
+                // Depth under the sea's surface over the tile.
+                let surface = sea.radius;
                 let anchor = drawn.anchor;
                 let seen = |at: Vec3| under.albedo([1.0; 3], surface - (at + anchor).length());
                 ambient(
                     &mut drawn.ambient,
                     seconds,
                     now,
-                    tide,
                     local_eye,
                     &seen,
                     &mut lit,
@@ -1963,9 +1944,7 @@ fn tiles(
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    // The tide's lowest under the mean: a third of its range.
-    let low_water_m = sea.tide_range_m / 3.0;
-    let built = build_tile(&pieces, anchor, bed, sea.radius, low_water_m, under, seed);
+    let built = build_tile(&pieces, anchor, bed, sea.radius, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -2026,14 +2005,14 @@ fn tiles(
             "Sea pieces",
         );
     }
-    let floes = (!built.floes.positions.is_empty()).then(|| {
+    if !built.floes.positions.is_empty() {
         child(
             &mut commands,
             meshes.add(mesh_of(built.floes, true)),
             life.0.clone(),
             "Ice floes",
-        )
-    });
+        );
+    }
     let glow_id = (!built.glow.positions.is_empty()).then(|| {
         child(
             &mut commands,
@@ -2116,7 +2095,6 @@ fn tiles(
             sway,
             life: (life_id, life_handle),
             smoke,
-            floes,
             anchor,
             landed_s: now,
             still: built.sway,
@@ -2182,8 +2160,8 @@ mod tests {
         assert_eq!(water.albedo([0.85, 0.63, 0.23], -2.0), [0.85, 0.63, 0.23]);
     }
 
-    /// Design B18: a floe is laid only where its ice clears the ground at
-    /// low water, so none stands on a beach or a terrace; and the floe seal
+    /// Design B18: a floe is laid only where its ice clears the ground, so
+    /// none stands on a beach or a terrace; and the floe seal
     /// is drawn on every frame of its slide off, its swim and its climb back,
     /// never moving further in a frame than it could swim.
     #[test]
@@ -2192,11 +2170,11 @@ mod tests {
         let dir = Vec3::Y;
         let axes = frame_at(dir, 0.3);
         let flat = |depth: f32| move |_: Vec3| radius - depth;
-        // 3 m of water clears 0.6 m of ice at a 1 m low water; 1.2 m does not.
-        assert!(floe_floats(dir, axes, 1.3, &flat(3.0), radius, 1.0));
-        assert!(!floe_floats(dir, axes, 1.3, &flat(1.2), radius, 1.0));
+        // 3 m of water clears 0.6 m of ice; 0.4 m does not.
+        assert!(floe_floats(dir, axes, 1.3, &flat(3.0), radius));
+        assert!(!floe_floats(dir, axes, 1.3, &flat(0.4), radius));
         // Dry sand above the sea: none.
-        assert!(!floe_floats(dir, axes, 1.3, &flat(-0.6), radius, 1.0));
+        assert!(!floe_floats(dir, axes, 1.3, &flat(-0.6), radius));
         // A terrace under one corner only (the bed takes a direction): none.
         let step = |p: Vec3| {
             if p.x > 0.001 {
@@ -2205,7 +2183,7 @@ mod tests {
                 radius - 3.0
             }
         };
-        assert!(!floe_floats(dir, axes, 1.3, &step, radius, 1.0));
+        assert!(!floe_floats(dir, axes, 1.3, &step, radius));
         let pieces = [Piece {
             dir,
             kind: None,
@@ -2222,7 +2200,6 @@ mod tests {
             dir * radius,
             flat(-0.6),
             radius,
-            1.0,
             UnderWater::of(None),
             1,
         );
@@ -2232,7 +2209,6 @@ mod tests {
             dir * radius,
             flat(4.0),
             radius,
-            1.0,
             UnderWater::of(None),
             1,
         );

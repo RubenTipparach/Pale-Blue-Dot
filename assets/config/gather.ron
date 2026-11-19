@@ -8,11 +8,14 @@
     fibre_one_in: 3,
     // Dug dirt, soil and sand give loose stone in one cell in this many.
     stone_one_in: 3,
-    // The most logs a tree gives an axe, counting the branch a hand took.
+    // The most logs a tree gives, to an axe or to hands (hands are slower).
     axe_logs: 4,
-    // Wet ground at the shore gives bait worms in one cell in this many
-    // (`starter-missions` G1), where the dug layer sits this many metres
-    // from the sea's level, lowest first.
+    // Earth by the water gives bait worms in one cell in this many
+    // (`starter-missions` G1, `dig-fixes` 2): grass, soil, dirt or sand,
+    // where a river's or the sea's water stands within this many cells,
     bait_one_in: 3,
-    bait_band_m: (-2.0, 1.0),
+    bait_reach_cells: 3,
+    // its layer this many metres from the dug one (the water's altitude
+    // less the dug layer's), lowest first.
+    bait_water_m: (-3.0, 2.0),
 )

@@ -309,7 +309,7 @@ impl Default for WalkingConfig {
             water_swim_force: 20.0,
             water_swim_max_rise: 14.0,
             water_submerged_jump_mult: 0.30,
-            // Two terrain layers of water, plus a skin for the tide and the
+            // Two terrain layers of water, plus a skin for the waves and the
             // sheet's offset.
             water_wade_depth: 2.0 * crate::planet::column::STEP_M + 0.1,
             water_climb_m: 2.0 * crate::planet::column::STEP_M + 0.6,
@@ -451,6 +451,21 @@ impl WalkingState {
         self.up = up.normalize_or(Vec3::Y);
         self.heading = tangent_heading(target, self.up);
         self.pitch = 0.0;
+    }
+
+    /// Turn the look along `toward`, heading and pitch, as a mouse would
+    /// turn it: the capture scripts' aim (`--pick-fruit`); gameplay turns
+    /// with the mouse.
+    pub fn look_toward(&mut self, toward: Vec3) {
+        let Some(toward) = toward.try_normalize() else {
+            return;
+        };
+        self.heading = tangent_heading(toward, self.up);
+        self.pitch = toward
+            .dot(self.up)
+            .clamp(-1.0, 1.0)
+            .asin()
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
     fn transport_up(&mut self, up: Vec3) {
@@ -1290,30 +1305,24 @@ impl WaterState {
 pub(crate) struct Sea<'w> {
     terrain: Res<'w, PlanetContact>,
     settings: Res<'w, crate::config::WaterSettings>,
-    /// The tide (`ocean-environments` 5.1), where the sea is set up.
-    sea: Option<Res<'w, crate::sea::Sea>>,
 }
 
 impl Sea<'_> {
-    /// The sheet the water pass draws over a direction: the mean sea, less
-    /// the sheet's offset, plus the tide there.
-    fn sheet_radius(&self, direction: Vec3) -> f32 {
-        let tide = self
-            .sea
-            .as_deref()
-            .map_or(0.0, |sea| sea.tide_at(direction));
-        PLANET_RADIUS - self.settings.depth_offset_m + tide
+    /// The sheet the water pass draws: the sea's level less the sheet's
+    /// offset. One level everywhere: the sea has no tide (`no-tides`).
+    fn sheet_radius(&self) -> f32 {
+        PLANET_RADIUS - self.settings.depth_offset_m
     }
 
     /// `point` is a planet point (`SimOrigin::query_point`).
     pub(crate) fn state(&self, config: &WalkingConfig, point: Vec3) -> WaterState {
         let direction = point.normalize_or(Vec3::Y);
         let feet = point.length() - HALF_HEIGHT;
-        let sheet = self.sheet_radius(direction);
+        let sheet = self.sheet_radius();
         let sea_level = PLANET_RADIUS + crate::planet::terrain_config().sea_level_m;
         // The column first (`water-flow` E1, task 2 of the second pass): the
         // water the body is in, a pool or a flowing cell at its own level,
-        // and the sea's own water at the drawn, tided sheet. Probed from the
+        // and the sea's own water at the drawn sheet. Probed from the
         // feet up to the eye, so a swimmer whose feet are over the bed still
         // finds the water they are in.
         let probe = |height: f32| {
@@ -1384,13 +1393,13 @@ pub fn walker_feet(world: &mut World) -> Option<Vec3> {
 /// The surface a body swims under, as a radius, or `None` where it is dry
 /// (`water-flow` E10). `on_tier`: the column answers here; `in_water`: the
 /// top of the water the column puts the body in (a pool, a flowing cell at
-/// its own level, the sea's water); `sheet`: the drawn sea's radius here, the
-/// tide on it; `ground`: the ground under the body (on the tier the feet,
-/// off it the height field's); `reached`: the sea's surface reaches this cell
-/// at some tide (`ocean-environments` B22). The sea's water in the column is
-/// swum to the tided sheet; a dry column the sea reaches to the sheet where
-/// the tide stands over its ground (a beach at high water, a pit or a cavern
-/// the tide overtops); off the tier, the height field's sea.
+/// its own level, the sea's water); `sheet`: the drawn sea's radius;
+/// `ground`: the ground under the body (on the tier the feet, off it the
+/// height field's); `reached`: the sea's surface reaches this cell
+/// (`ocean-environments` B22). The sea's water in the column is swum to the
+/// sheet; a dry column the sea reaches to the sheet where it stands over its
+/// ground (a pit or a cavern the sea's surface reaches); off the tier, the
+/// height field's sea.
 pub(crate) fn swim_surface(
     on_tier: bool,
     in_water: Option<f32>,
@@ -1401,7 +1410,7 @@ pub(crate) fn swim_surface(
 ) -> Option<f32> {
     if on_tier {
         match in_water {
-            // Water topping out at sea level is the sea's: the tided sheet.
+            // Water topping out at sea level is the sea's: the sheet.
             Some(top) if (top - sea_level).abs() < 0.01 => Some(sheet),
             Some(top) => Some(top),
             None => (reached && ground < sheet).then_some(sheet),
@@ -2128,43 +2137,41 @@ mod swim_tests {
     const R: f32 = 4800.0;
 
     #[test]
-    fn the_walker_swims_in_a_pool_a_flowing_cell_and_a_high_tide() {
+    fn the_walker_swims_in_a_pool_a_flowing_cell_and_the_sea() {
         let sea = R;
-        // Mean sheet half a metre under sea level; the tide adds 1.5 m.
-        let calm = R - 0.5;
-        let high = calm + 1.5;
+        // The sheet half a metre under sea level (`no-tides`: one level).
+        let sheet = R - 0.5;
         // A pool on a hill, water to 52 m: its own surface.
         assert_eq!(
-            swim_surface(true, Some(R + 52.0), calm, sea, R + 50.0, true),
+            swim_surface(true, Some(R + 52.0), sheet, sea, R + 50.0, true),
             Some(R + 52.0)
         );
         // A flowing cell at level 3 tops at 3.5/8 of its layer.
         let flowing = R + 30.0 + 3.5 / 8.0;
         assert_eq!(
-            swim_surface(true, Some(flowing), calm, sea, R + 29.0, true),
+            swim_surface(true, Some(flowing), sheet, sea, R + 29.0, true),
             Some(flowing)
         );
-        // The sea's own water in the column: the tided sheet, not the layer.
+        // The sea's own water in the column: the sheet, not the layer.
         assert_eq!(
-            swim_surface(true, Some(R), high, sea, R - 3.0, true),
-            Some(high)
+            swim_surface(true, Some(R), sheet, sea, R - 3.0, true),
+            Some(sheet)
         );
-        // A beach half a metre up, dry in its column, under a high tide
-        // (the sheet a metre up): swum to it.
+        // A beach half a metre up, dry in its column: dry.
+        assert_eq!(swim_surface(true, None, sheet, sea, R + 0.5, true), None);
+        // A cavern the sea reaches, its floor under the sheet: swum to it.
         assert_eq!(
-            swim_surface(true, None, high, sea, R + 0.5, true),
-            Some(high)
+            swim_surface(true, None, sheet, sea, R - 2.0, true),
+            Some(sheet)
         );
-        // The same beach at the mean tide: dry.
-        assert_eq!(swim_surface(true, None, calm, sea, R + 0.5, true), None);
         // A dry cave below sea level under rock: dry, whatever the sea.
-        assert_eq!(swim_surface(true, None, high, sea, R - 20.0, false), None);
-        // Off the tier: the height field's sea to the tided sheet.
+        assert_eq!(swim_surface(true, None, sheet, sea, R - 20.0, false), None);
+        // Off the tier: the height field's sea to the sheet.
         assert_eq!(
-            swim_surface(false, None, high, sea, R + 0.5, true),
-            Some(high)
+            swim_surface(false, None, sheet, sea, R - 1.0, true),
+            Some(sheet)
         );
-        assert_eq!(swim_surface(false, None, calm, sea, R + 0.5, true), None);
+        assert_eq!(swim_surface(false, None, sheet, sea, R + 0.5, true), None);
     }
 }
 

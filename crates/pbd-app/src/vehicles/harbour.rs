@@ -176,7 +176,6 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
         return;
     }
     let sea_radius = sea.radius;
-    let tide = sea.tide;
     let templates: Vec<Option<Template>> = harbours
         .iter()
         .map(|h| assets.template_named(&h.town.template).cloned())
@@ -194,7 +193,7 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
             let mut fleet = world.resource_mut::<Fleet>();
             let (specs, hulls) = (fleet.specs.clone(), fleet.hulls.clone());
             let mut next = fleet.next_id;
-            let (mut crafts, skipped) = boats_for(
+            let (crafts, skipped) = boats_for(
                 h.site.id,
                 &h.town,
                 &template,
@@ -206,10 +205,6 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
                 &mut next,
                 place::floor,
             );
-            // The boats on the tide (`small-boats`).
-            for craft in &mut crafts {
-                place::on_the_tide(craft, tide);
-            }
             fleet.next_id = next;
             (crafts, skipped)
         };

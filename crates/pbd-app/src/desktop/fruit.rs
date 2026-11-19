@@ -65,7 +65,7 @@ fn fruit_on_ray(
         {
             continue;
         }
-        let biome = (record.metadata[1] >> 8) & 0xff;
+        let biome = pbd_core::flora::tree_biome(record.metadata[1]);
         let points = pbd_core::flora::hanging_fruit_points(
             record.spare[0],
             biome,
@@ -108,7 +108,7 @@ fn on_tree(
     let record = fine.set.finest_records().iter().find(|r| r.key() == cell)?;
     let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
     let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
-    let biome = (record.metadata[1] >> 8) & 0xff;
+    let biome = pbd_core::flora::tree_biome(record.metadata[1]);
     let (kind, hanging) = hanging_fruit(
         record.spare[0],
         biome,
@@ -291,12 +291,130 @@ pub fn pick(
     );
 }
 
+/// `--pick-fruit FRAME` (`flora-v2` 9.6): a pick played with the player's
+/// own inputs. Once the fine set has records under the walker, the nearest
+/// hanging fruit within 40 m is chosen; the look turns onto it every frame
+/// (the aim a player makes with the mouse) and W walks toward it until it is
+/// within reach; then, on the FRAME-th frame after arriving, F is pressed,
+/// and released on the next, and [`pick`] does the rest as it does for a
+/// player: the record, the slots, the item's toast. Nothing is stored by
+/// the script.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn pick_script(
+    launch: Res<super::Launch>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
+    fine: Option<Res<PlanetFine>>,
+    sun: Option<Res<pbd_app::sky::Sun>>,
+    scatter: Option<Res<pbd_app::config::ScatterSettings>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut count: Local<u32>,
+    mut target: Local<Option<Vec3>>,
+    mut arrived: Local<bool>,
+) {
+    let Some(press_at) = launch.pick_fruit else {
+        return;
+    };
+    if !state.active {
+        return;
+    }
+    state.scripted = true;
+    state.captured = true;
+    let (Some(fine), Some(scatter)) = (fine, scatter) else {
+        return;
+    };
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+    if target.is_none() {
+        // The fine set must stand round the walker, as for `scripted`.
+        let under = fine
+            .set
+            .finest_records()
+            .iter()
+            .map(|r| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+                d.angle_between(eye.normalize_or(Vec3::Y)) * PLANET_RADIUS
+            })
+            .fold(f32::MAX, f32::min);
+        if under > 4.0 {
+            return;
+        }
+        *count += 1;
+        if *count < 30 {
+            return;
+        }
+        let year = sun.as_deref().map_or(0.0, |s| s.clock.year_fraction());
+        let table = &pbd_app::planet::terrain_config().trees;
+        let mut best: Option<(f32, Vec3)> = None;
+        for record in fine.set.finest_records() {
+            if !pbd_core::flora::grows_tree(table, record.spare[0], record.metadata[1]) {
+                continue;
+            }
+            let up = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
+            let points = pbd_core::flora::hanging_fruit_points(
+                record.spare[0],
+                pbd_core::flora::tree_biome(record.metadata[1]),
+                up.to_array(),
+                PLANET_RADIUS,
+                record.direction_height[3],
+                year,
+                scatter.fruit_chance,
+            );
+            for (centre, _) in points {
+                let centre = Vec3::from(centre);
+                let d = (centre - eye).length();
+                if d < 40.0 && best.is_none_or(|(bd, _)| d < bd) {
+                    best = Some((d, centre));
+                }
+            }
+        }
+        let Some((d, centre)) = best else {
+            if *count == 30 {
+                warn!("PICK_SCRIPT no hanging fruit within 40 m");
+            }
+            return;
+        };
+        info!("PICK_SCRIPT going to a fruit {d:.2} m from the eye");
+        *target = Some(centre);
+        *count = 0;
+    }
+    let Some(centre) = *target else {
+        return;
+    };
+    state.look_toward(centre - eye);
+    let d = (centre - eye).length();
+    if !*arrived {
+        *count += 1;
+        if d > pbd_core::aim::REACH_M - 1.0 && *count < 600 {
+            keys.press(KeyCode::KeyW);
+            return;
+        }
+        keys.release(KeyCode::KeyW);
+        *arrived = true;
+        *count = 0;
+        info!("PICK_SCRIPT in reach, the fruit {d:.2} m from the eye");
+    }
+    *count += 1;
+    if *count == press_at {
+        keys.press(KeyCode::KeyF);
+        info!("PICK_SCRIPT pressed F on frame {press_at} in reach");
+    } else if *count == press_at + 1 {
+        keys.release(KeyCode::KeyF);
+    }
+}
+
 /// `--take-trees`: a capture's instrument (`flora-v2` 12.5). Once the fine set
 /// stands round the camera, the three nearest fruiting trees in front of it
 /// are marked picked today and the next twelve trees felled, as `fruit` and
 /// `tree` records stored as the player's (the records a player's hands
 /// write; the instrument's liberty is not walking to each). The draw then
-/// leaves their fruit and the felled trees out.
+/// leaves their fruit and the felled trees out. `--pick-trees` picks and
+/// fells nothing.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
@@ -311,17 +429,12 @@ pub fn scripted(
     gather: Option<Res<pbd_app::config::GatherConfig>>,
     mut done: Local<u32>,
 ) {
-    if !launch.take_trees || *done > 30 {
+    if !launch.take_trees || *done >= 30 {
         return;
     }
     let (Some(scatter), Some(gather)) = (scatter, gather) else {
         return;
     };
-    *done += 1;
-    if *done < 30 {
-        // A few frames for the fine set to land round the camera.
-        return;
-    }
     let (Some(fine), Some(save)) = (fine, save.as_deref_mut()) else {
         return;
     };
@@ -332,6 +445,26 @@ pub fn scripted(
         pbd_app::render_origin::local_of(frame.as_deref(), transform.translation()),
         transform.forward().as_vec3(),
     );
+    // The frames count once the fine set has records under the camera. A
+    // set laid before the walker came to rest has none there: the trees
+    // chosen from it were the nearest at its edge, 26 m and more away.
+    let under = fine
+        .set
+        .finest_records()
+        .iter()
+        .map(|r| {
+            let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+            d.angle_between(eye.normalize_or(Vec3::Y)) * PLANET_RADIUS
+        })
+        .fold(f32::MAX, f32::min);
+    if under > 4.0 {
+        return;
+    }
+    *done += 1;
+    if *done < 30 {
+        // A few frames for the fine set to land round the camera.
+        return;
+    }
     let table = pbd_app::planet::terrain_config().trees;
     let day = sun
         .as_ref()
@@ -349,7 +482,7 @@ pub fn scripted(
             let ahead = to.normalize_or(Vec3::ZERO).dot(look);
             let fruiting = hanging_fruit(
                 r.spare[0],
-                (r.metadata[1] >> 8) & 0xff,
+                pbd_core::flora::tree_biome(r.metadata[1]),
                 d.to_array(),
                 PLANET_RADIUS,
                 year,
@@ -364,13 +497,40 @@ pub fn scripted(
     let felled_at: Vec<(f32, u32)> = trees
         .iter()
         .filter(|t| !picked.contains(&t.1))
-        .take(12)
+        .take(if launch.pick_only { 0 } else { 12 })
         .map(|t| (t.0, t.1))
         .collect();
     let felled: Vec<u32> = felled_at.iter().map(|t| t.1).collect();
     info!(
-        "TAKE_TREES felled at {:?} m",
-        felled_at.iter().map(|t| t.0.round()).collect::<Vec<_>>()
+        "TAKE_TREES felled at {:?} m, picked at {:?} m; eye {:.1} m from the centre, \
+         the nearest finest record {:.1} m off; under the eye (along the ground, \
+         height over it) {:?}; the set's anchor {:.1} m off, its finest ring {:?} m",
+        felled_at.iter().map(|t| t.0.round()).collect::<Vec<_>>(),
+        trees
+            .iter()
+            .filter(|t| picked.contains(&t.1))
+            .map(|t| t.0.round())
+            .collect::<Vec<_>>(),
+        eye.length(),
+        fine.set
+            .finest_records()
+            .iter()
+            .map(|r| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+                (d * (PLANET_RADIUS + r.direction_height[3]) - eye).length()
+            })
+            .fold(f32::MAX, f32::min),
+        fine.set
+            .finest_records()
+            .iter()
+            .map(|r| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+                let along = d.angle_between(eye.normalize_or(Vec3::Y)) * PLANET_RADIUS;
+                (along, eye.length() - PLANET_RADIUS - r.direction_height[3])
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0)),
+        fine.set.metres_from_anchor(eye),
+        fine.set.rings()[3],
     );
     let mut records = Vec::new();
     for cell in &picked {
