@@ -4065,3 +4065,252 @@ mod sea_hole_dig_report {
         println!("dug {tried}, holes {holes} (high water {high:.2} m, sea layer {sea})");
     }
 }
+
+/// MEASUREMENT (`dry-holes`, the owner 2026-11-18: "We should be able to dig
+/// holes below water line and not have it filled with water too"): a pit of
+/// seven cells dug from dry land near the sea, or beside a river, through the
+/// edit's own path (`FineSet::write_layer`, the relight, `mark_sea`), its
+/// floor `PBD_DEPTH` layers under the sea's (or the river's) top layer, the
+/// pit's wall kept whole between it and the water. Reports what each dug cell
+/// holds, whether the sea's sheet is listed over it, what the eye in the pit
+/// is told, after the rule has run on what the dig queued, and after a reload
+/// (the tier built again from the save). `PBD_AT='lat lon'`, `PBD_RIVER=1`
+/// for a river's bank.
+#[cfg(test)]
+mod dry_hole_report {
+    use crate::planet::column::{DRY_SHEET_BIT, SEA_REACH_BIT, sea_layer, sheet_listed};
+    use crate::planet::lod::FineSet;
+    use crate::planet::terrain;
+    use bevy::math::Vec3;
+    use pbd_core::edits::{Edit, Edits};
+    use pbd_core::terrain::Material;
+    use std::sync::Arc;
+
+    #[test]
+    #[ignore = "a report: PBD_AT='lat lon' cargo test -p pbd-app dry_hole_report -- --ignored --nocapture"]
+    fn dry_hole_report() {
+        let at = std::env::var("PBD_AT").unwrap_or_else(|_| "39.725 15.339".into());
+        let river = std::env::var("PBD_RIVER").is_ok();
+        let depth: usize = std::env::var("PBD_DEPTH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3);
+        let v: Vec<f32> = at
+            .split_whitespace()
+            .filter_map(|x| x.parse().ok())
+            .collect();
+        let up = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: v[0].to_radians(),
+            lon: v[1].to_radians(),
+        });
+        let settings = crate::config::ColumnSettings::default();
+        let set = crate::planet::lod::generate_fine(up, &settings, &Edits::new());
+        let sea = sea_layer();
+        let r = terrain::PLANET_RADIUS;
+        let n = set.levels[3].len();
+        let neighbours = |record: usize| -> Vec<usize> {
+            set.finest_neighbors[record]
+                .iter()
+                .filter(|&&x| x != u32::MAX)
+                .map(|&x| x as usize)
+                .collect()
+        };
+        // The water's level: the topmost water layer of a column.
+        let water_top = |record: usize| -> Option<usize> {
+            let column = set.columns.column(record)?;
+            (1..pbd_core::column::LAYERS)
+                .rev()
+                .find(|&l| column.material(l).is_water())
+        };
+        let near = |record: usize| -> f32 {
+            let p = Vec3::from_slice(&set.levels[3][record].direction_height[..3]);
+            (p - up).length() * r
+        };
+        let mut order: Vec<usize> = (0..n)
+            .filter(|&rec| set.columns.column(rec).is_some())
+            .collect();
+        order.sort_by(|&a, &b| near(a).total_cmp(&near(b)));
+        // A pit centre: dry land whose two rings hold no water at all and
+        // whose third ring does (the sea, or a river over the sea's level):
+        // the wall between the pit and the water is a cell thick at least.
+        let mut found = None;
+        'search: for &record in &order {
+            if near(record) > 250.0 {
+                break;
+            }
+            let column = set.columns.column(record).unwrap();
+            let Some(top) = column.surface() else {
+                continue;
+            };
+            // By the sea: land a little over it. By a river: land well over
+            // the high water, so the pit's floor is too.
+            let shore = std::env::var("PBD_SHORE").is_ok();
+            let (low, high_top) = if river {
+                (sea + 4, sea + 80)
+            } else {
+                (sea + usize::from(!shore), sea + 5)
+            };
+            if top < low || top > high_top || water_top(record).is_some() {
+                continue;
+            }
+            // `PBD_SHORE`: a centre on the shore itself, the sea's water in a
+            // neighbour at its top layer, where a pit dug lets the sea in.
+            if shore {
+                if neighbours(record)
+                    .iter()
+                    .any(|&c| water_top(c) == Some(sea - 1))
+                {
+                    found = Some((record, sea - 1));
+                    break 'search;
+                }
+                continue;
+            }
+            let mut ring: Vec<usize> = vec![record];
+            for _ in 0..2 {
+                let mut next = ring.clone();
+                for &c in &ring {
+                    next.extend(neighbours(c));
+                }
+                next.sort_unstable();
+                next.dedup();
+                ring = next;
+            }
+            // `PBD_HIGH`: the pit's two rings stand over the high water too,
+            // so no beach the tide covers is beside it.
+            let high_ground = std::env::var("PBD_HIGH").is_ok();
+            if ring.iter().any(|&c| {
+                set.columns.column(c).is_none()
+                    || water_top(c).is_some()
+                    || (high_ground
+                        && set.levels[3][c].direction_height[3] <= terrain::high_water_m())
+            }) {
+                continue;
+            }
+            let mut third = ring.clone();
+            for &c in &ring {
+                third.extend(neighbours(c));
+            }
+            for &c in &third {
+                let Some(w) = water_top(c) else {
+                    continue;
+                };
+                let is_river = w >= sea;
+                if is_river == river && (!river || (w >= sea + 3 && w + 4 >= top)) {
+                    found = Some((record, w));
+                    break 'search;
+                }
+            }
+        }
+        let Some((centre, level)) = found else {
+            println!("no pit site within 250 m of {at}");
+            return;
+        };
+        let cell = &set.levels[3][centre];
+        let p = Vec3::from_slice(&cell.direction_height[..3]).normalize();
+        let ll = pbd_core::geo::lat_lon(p);
+        let top = set.columns.column(centre).unwrap().surface().unwrap();
+        let floor = if river { level } else { sea }.saturating_sub(depth);
+        println!(
+            "pit at {:.5} {:.5} (key {}): ground top layer {top} ({:+} m over the sea's top layer), water's top layer {level} ({}), floor layer {floor}, sea layer {sea}",
+            ll.lat.to_degrees(),
+            ll.lon.to_degrees(),
+            cell.key(),
+            top as i32 - sea as i32,
+            if river { "river" } else { "sea" },
+        );
+        let mut pit = vec![centre];
+        pit.extend(neighbours(centre));
+        let mut dug = set.clone();
+        let mut edits = Edits::new();
+        for &record in &pit {
+            let key = dug.levels[3][record].key();
+            let Some(top) = dug.columns.column(record).and_then(|c| c.surface()) else {
+                continue;
+            };
+            for layer in (floor..=top).rev() {
+                edits.set(Edit {
+                    cell: key,
+                    layer: layer as u16,
+                    material: Material::Air,
+                });
+                dug.write_layer(record, layer, Material::Air, &edits);
+            }
+            dug.columns.relight();
+            dug.mark_sea();
+        }
+        let report = |name: &str, s: &FineSet| {
+            for &record in &pit {
+                let key = set.levels[3][record].key();
+                let Some(rec) = s.levels[3].iter().position(|c| c.key() == key) else {
+                    continue;
+                };
+                let Some(column) = s.columns.column(rec) else {
+                    println!("{name} cell {key}: no column");
+                    continue;
+                };
+                let c = &s.levels[3][rec];
+                let stack: String = (floor.saturating_sub(1)..floor + depth + 4)
+                    .map(|l| match column.material(l) {
+                        Material::Air => '.',
+                        Material::Water => 'W',
+                        m if m.is_water() => 'f',
+                        _ => '#',
+                    })
+                    .collect();
+                let wet = (floor..=top).any(|l| column.material(l).is_water());
+                println!(
+                    "{name} cell {key}: h {:.2} [{stack}] water {wet} listed {} reach {} dry {}",
+                    c.direction_height[3],
+                    sheet_listed(c),
+                    c.spare[2] & SEA_REACH_BIT != 0,
+                    c.spare[2] & DRY_SHEET_BIT != 0,
+                );
+            }
+            // The eye in the pit, 1.6 m over its floor.
+            let fine = crate::planet::PlanetFine {
+                set: Arc::new(s.clone()),
+                version: 1,
+            };
+            let mut contact = crate::planet::PlanetContact::test_planet(5);
+            contact.set_fine(&fine.set);
+            let eye = p * (r + pbd_core::column::layer_altitude(floor) + 1.6);
+            let high =
+                pbd_core::sea::tide_high_m(crate::config::WaterSettings::default().tide_range_m);
+            println!(
+                "{name} eye at {:.2} m: {:?}; column water {:?}; sea reached {}",
+                pbd_core::column::layer_altitude(floor) + 1.6,
+                super::eye_water_at(eye, &contact, &fine, high),
+                contact.column_water(eye),
+                contact.sea_reached(p),
+            );
+        };
+        report("built ", &set);
+        report("dug   ", &dug);
+        // What the two walks cost on this tier, on this machine's CPU.
+        let started = std::time::Instant::now();
+        let reach = dug.columns.sea_reach();
+        let reach_ms = started.elapsed().as_secs_f64() * 1e3;
+        let started = std::time::Instant::now();
+        let joined = dug.columns.sea_joined();
+        let joined_ms = started.elapsed().as_secs_f64() * 1e3;
+        println!(
+            "tier {} columns: sea_reach {reach_ms:.2} ms ({} reached), sea_joined {joined_ms:.2} ms ({} cells joined)",
+            reach.len(),
+            reach.iter().filter(|&&r| r).count(),
+            joined.iter().filter(|&&j| j).count(),
+        );
+        // The rule run on what the dig queued, as the game ticks it.
+        let mut ticked = dug.clone();
+        let mut ticks = 0;
+        while !ticked.columns.water.queue.is_empty() && ticks < 120 {
+            ticked.columns.tick_water(pbd_core::liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        ticked.columns.relight();
+        ticked.mark_sea();
+        println!("ran {ticks} ticks of the rule");
+        report("ticked", &ticked);
+        let reload = crate::planet::lod::generate_fine(up, &settings, &edits);
+        report("reload", &reload);
+    }
+}

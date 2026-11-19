@@ -244,6 +244,17 @@ pub struct TierWater {
     pub keys: Vec<u32>,
     /// Each slot's finest record.
     pub records: Vec<usize>,
+    /// Each slot: whether a player's edit put something other than water in
+    /// its column (dug it, or built in it). The sea's reach never runs down
+    /// through such a column's air under the sea's level (`dry-holes`
+    /// design 3). Out of range reads as not dug.
+    pub dug: Vec<bool>,
+    /// The cells under the sea's level the sea is joined to through what is
+    /// not solid, `slot * sea_layer + layer` (`dry-holes` design 4): where
+    /// the rule's water is the sea's. Empty until the tier's sea is marked
+    /// (so a build's river settle runs on the rule alone), and again after
+    /// every edit.
+    pub joined: Vec<bool>,
 }
 
 /// Layers a slot's water ids are spaced by: a cell is `slot * 512 + layer`.
@@ -392,10 +403,13 @@ impl ColumnTier {
         seeds
     }
 
-    /// An edit at a finest record's layer, for the water: the sea floods in if
-    /// the edit opened a cell to it, and the cell and its neighbours are
-    /// queued for the rule (`water-flow` decision 5). Returns the slots the
-    /// flood changed, which the caller repacks.
+    /// An edit at a finest record's layer, for the water (`dry-holes` design
+    /// 4): the cell the edit opened fills with the sea at once if the sea's
+    /// own water is over it or beside it under the sea's level, and the cell
+    /// and its neighbours are queued for the rule (`water-flow` decision 5),
+    /// which brings the sea in from there at its own pace. A column dug or
+    /// built in is marked so (design 3). Returns the slots the edit's fill
+    /// changed, which the caller repacks.
     pub fn water_after_edit(&mut self, record: usize, layer: usize, edits: &Edits) -> Vec<usize> {
         let Some(&slot) = self.slots.get(record) else {
             return Vec::new();
@@ -403,26 +417,43 @@ impl ColumnTier {
         if slot == usize::MAX || slot >= self.columns.len() {
             return Vec::new();
         }
+        if !self.columns[slot].material(layer).is_water() {
+            if self.water.dug.len() <= slot {
+                self.water.dug.resize(slot + 1, false);
+            }
+            self.water.dug[slot] = true;
+        }
         let at = water_id(slot, layer);
-        let mut seeds = Vec::new();
-        for id in std::iter::once(at).chain(self.water_around(at).into_iter().flatten()) {
+        let sea = sea_layer();
+        let around = self.water_around(at);
+        // The sea's own water: generated, under its level, not the edits'.
+        let sea_water = |id: u32| {
             let (s, l) = water_cell(id);
             let key = self.water.keys.get(s).copied().unwrap_or(u32::MAX);
-            if self.columns.get(s).map(|c| c.material(l)) == Some(Material::Water)
+            l < sea
+                && !self.rim(s)
+                && self.columns.get(s).map(|c| c.material(l)) == Some(Material::Water)
                 && !edited_water(edits, key, l)
-            {
-                seeds.push(id);
-            }
-        }
-        let flooded = if seeds.is_empty() {
-            Vec::new()
+        };
+        let opened = layer < sea
+            && !self.rim(slot)
+            && self.columns[slot].material(layer) == Material::Air
+            && around[liquid::UP..liquid::DOWN]
+                .iter()
+                .flatten()
+                .any(|&id| sea_water(id));
+        let filled = if opened {
+            // Derived, as the build's flood is: never saved, and a reload's
+            // flood fills the same cell from the same water.
+            self.columns[slot].set(layer, Material::Water);
+            vec![slot]
         } else {
-            self.flood_from(seeds)
+            Vec::new()
         };
         let mut queue = std::mem::take(&mut self.water.queue);
         queue.touch(&TierGrid(self), at);
         self.water.queue = queue;
-        flooded
+        filled
     }
 
     /// Queue every cell of the tier that holds water the edits put there, and
@@ -761,6 +792,15 @@ impl Grid for TierGrid<'_> {
     }
     fn around(&self, at: u32) -> [Option<u32>; 8] {
         self.0.water_around(at)
+    }
+    fn sea(&self, at: u32) -> bool {
+        let (slot, layer) = water_cell(at);
+        let joined = &self.0.water.joined;
+        if joined.is_empty() {
+            return false;
+        }
+        let sea = sea_layer();
+        layer < sea && joined.get(slot * sea + layer).copied().unwrap_or(false)
     }
 }
 
@@ -1276,6 +1316,7 @@ impl ColumnTier {
                 queue: liquid::Queue::new(),
                 keys: (0..n as u32).map(|i| 100 + i).collect(),
                 records: (0..n).collect(),
+                ..Default::default()
             },
         };
         tier.sides = tier.neighbor_slots();
@@ -1627,28 +1668,20 @@ impl ColumnTier {
         let mut open: std::collections::VecDeque<(usize, usize)> = Default::default();
         // Air, or water under the sea's level: a river's or a pool's water
         // over it is its own, and the sea's surface does not run through it.
+        // Not the air under the sea's level in a column a player dug or
+        // built in (`dry-holes` design 3): a dug hole is the sea's only where
+        // the sea's water has flowed into it, never because the tide stands
+        // over ground beside it.
+        let dug = |slot: usize| self.water.dug.get(slot).copied().unwrap_or(false);
         let passable = |slot: usize, layer: usize| {
             let m = self.columns[slot].material(layer);
-            layer >= 1 && (m == Material::Air || (m.is_water() && layer < sea))
+            layer >= 1
+                && ((m == Material::Air && (layer >= sea || !dug(slot)))
+                    || (m.is_water() && layer < sea))
         };
-        for slot in 0..n {
-            let column = &self.columns[slot];
-            let under_sea = self
-                .water
-                .records
-                .get(slot)
-                .and_then(|_| column.surface())
-                .is_none_or(|top| {
-                    column::layer_altitude(top) + 1.0 <= terrain_config().sea_level_m
-                });
-            if column.material(sea - 1) == Material::Water
-                && !column.solid(sea)
-                && !column.material(sea).is_water()
-                && under_sea
-            {
-                seen[slot * band + sea - 1] = true;
-                open.push_back((slot, sea - 1));
-            }
+        for slot in self.open_sea() {
+            seen[slot * band + sea - 1] = true;
+            open.push_back((slot, sea - 1));
         }
         while let Some((slot, layer)) = open.pop_front() {
             reached[slot] = true;
@@ -1666,7 +1699,84 @@ impl ColumnTier {
                 visit(side, layer, &mut open);
             }
         }
+        // A dug column the walk met only over the sea's level (the tide's air
+        // over a beach beside it) is the sea's where its top layer under the
+        // sea's level is the sea's water or solid; with air there, it is a
+        // dry hole, or one the sea is still flowing into.
+        for (slot, reach) in reached.iter_mut().enumerate() {
+            if *reach && dug(slot) && self.columns[slot].material(sea - 1) == Material::Air {
+                *reach = false;
+            }
+        }
         reached
+    }
+
+    /// The open sea's columns: the sea's water at its top layer with open air
+    /// over it, under sea level. Where the sea's reach and its joined walk
+    /// start.
+    fn open_sea(&self) -> Vec<usize> {
+        let sea = sea_layer();
+        if sea == 0 {
+            return Vec::new();
+        }
+        (0..self.columns.len())
+            .filter(|&slot| {
+                let column = &self.columns[slot];
+                let under_sea = self
+                    .water
+                    .records
+                    .get(slot)
+                    .and_then(|_| column.surface())
+                    .is_none_or(|top| {
+                        column::layer_altitude(top) + 1.0 <= terrain_config().sea_level_m
+                    });
+                column.material(sea - 1) == Material::Water
+                    && !column.solid(sea)
+                    && !column.material(sea).is_water()
+                    && under_sea
+            })
+            .collect()
+    }
+
+    /// Which cells under the sea's level the sea is joined to (`dry-holes`
+    /// design 4): a walk from the open sea's top layer through every cell
+    /// under the sea's level that is not solid (air or water), across the
+    /// sides and up and down. Indexed `slot * sea_layer + layer`. Where the
+    /// rule's water is the sea's ([`liquid::transform_at`]): a pit whose wall
+    /// is breached is joined, so the sea fills it; a sealed pit is not, so a
+    /// bucket poured into it stays the bucket's. A function of the solids
+    /// alone, so the water the rule moves never changes it.
+    pub fn sea_joined(&self) -> Vec<bool> {
+        let sea = sea_layer();
+        let n = self.columns.len();
+        let mut joined = vec![false; n * sea];
+        if sea == 0 || n == 0 {
+            return joined;
+        }
+        let mut open: std::collections::VecDeque<(usize, usize)> = Default::default();
+        for slot in self.open_sea() {
+            joined[slot * sea + sea - 1] = true;
+            open.push_back((slot, sea - 1));
+        }
+        while let Some((slot, layer)) = open.pop_front() {
+            let mut visit = |s: usize, l: usize, open: &mut std::collections::VecDeque<_>| {
+                if l >= 1
+                    && l < sea
+                    && !joined[s * sea + l]
+                    && !self.rim(s)
+                    && !self.columns[s].solid(l)
+                {
+                    joined[s * sea + l] = true;
+                    open.push_back((s, l));
+                }
+            };
+            visit(slot, layer + 1, &mut open);
+            visit(slot, layer.saturating_sub(1), &mut open);
+            for side in self.sides_of(slot).into_iter().flatten() {
+                visit(side, layer, &mut open);
+            }
+        }
+        joined
     }
 }
 
@@ -1895,6 +2005,17 @@ pub fn build_with(
             queue: liquid::Queue::new(),
             keys: members.iter().map(|&i| finest[i].key()).collect(),
             records: members.clone(),
+            // A column the save digs or builds in (`dry-holes` design 3).
+            dug: members
+                .iter()
+                .map(|&i| {
+                    edits
+                        .for_cell(finest[i].key())
+                        .iter()
+                        .any(|&(_, m)| !m.is_water())
+                })
+                .collect(),
+            joined: Vec::new(),
         },
     };
     // The sea floods what a carve or an edit opened onto it (`volumetric-water`
@@ -1945,6 +2066,9 @@ pub fn build_with(
     // And where the sea's sheet lies, from the sea's reach and the light
     // (`ocean-environments` B22): none over a pit the sea has not reached.
     mark_sea(&tier, finest);
+    // And where the rule's water is the sea's (`dry-holes` design 4), after
+    // the rivers have settled by the rule alone.
+    tier.water.joined = tier.sea_joined();
     tier
 }
 
@@ -3478,6 +3602,7 @@ mod water_tier_tests {
                 queue: liquid::Queue::new(),
                 keys: (0..N as u32).map(|i| 100 + i).collect(),
                 records: (0..N).collect(),
+                ..Default::default()
             },
         };
         tier.sides = tier.neighbor_slots();
@@ -3595,15 +3720,19 @@ mod water_tier_tests {
         assert_eq!(mesh.tops, 0, "no second surface under the sheet");
     }
 
-    /// An edit's flood: digging the rock between the flooded tunnel and the
-    /// pocket lets the sea in, at once.
+    /// An edit into the sea (`dry-holes` design 4): digging the rock between
+    /// the flooded tunnel and the pocket fills the opened cell from the sea at
+    /// once, and the rule brings the sea on into the pocket, a cell a tick,
+    /// to the same water the old flood made at once, never climbing past the
+    /// hole it came through.
     #[test]
-    fn digging_through_to_the_sea_floods_on_the_edit() {
+    fn digging_through_to_the_sea_lets_it_flow_in() {
         let mut tier = line();
         carve(&mut tier, 5..=7, BED + 5..=BED + 7);
         carve(&mut tier, 9..=10, BED + 5..=BED + 7);
         let seeds = tier.sea_seeds(&Edits::new());
         tier.flood_from(seeds);
+        tier.water.joined = tier.sea_joined();
         let mut edits = Edits::new();
         edits.set(Edit {
             cell: 108,
@@ -3611,15 +3740,245 @@ mod water_tier_tests {
             material: Material::Air,
         });
         tier.columns[8].set(BED + 6, Material::Air);
-        let flooded = tier.water_after_edit(8, BED + 6, &edits);
-        assert_eq!(flooded, vec![8, 9, 10]);
-        assert_eq!(tier.columns[10].material(BED + 5), Material::Water);
+        let filled = tier.water_after_edit(8, BED + 6, &edits);
+        assert_eq!(filled, vec![8], "the opened cell, from the sea beside it");
+        assert_eq!(tier.columns[8].material(BED + 6), Material::Water);
         assert_eq!(
-            tier.columns[10].material(BED + 7),
+            tier.columns[9].material(BED + 6),
             Material::Air,
-            "the flood does not climb past the hole it came through"
+            "the pocket is not filled by the edit"
         );
         assert!(!tier.water.queue.is_empty(), "and the edit is queued");
+        // The edit's caller marks the sea after it (`FineSet::mark_sea`).
+        tier.water.joined = tier.sea_joined();
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 50 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+            if ticks == 1 {
+                assert!(
+                    tier.columns[10].material(BED + 6) != Material::Water,
+                    "the far end is not reached on the first tick"
+                );
+            }
+        }
+        for slot in 9..=10 {
+            for layer in BED + 5..=BED + 7 {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    if layer == BED + 7 {
+                        Material::Air
+                    } else {
+                        Material::Water
+                    },
+                    "slot {slot} layer {layer}: the sea to the hole's height, no higher"
+                );
+            }
+        }
+    }
+
+    /// Dig `layers` out of `slot`'s column, top down, through the edit's
+    /// water path, as `FineSet::write_layer` does, then mark the sea as the
+    /// edit's caller does.
+    fn dig(
+        tier: &mut ColumnTier,
+        edits: &mut Edits,
+        slot: usize,
+        layers: std::ops::RangeInclusive<usize>,
+    ) {
+        for layer in layers.rev() {
+            edits.set(Edit {
+                cell: 100 + slot as u32,
+                layer: layer as u16,
+                material: Material::Air,
+            });
+            tier.columns[slot].set(layer, Material::Air);
+            tier.water_after_edit(slot, layer, edits);
+            tier.water.joined = tier.sea_joined();
+        }
+    }
+
+    /// The records of the line, their heights the columns' tops, marked for
+    /// the sea's sheet as a build or an edit marks them.
+    fn marked(tier: &mut ColumnTier) -> Vec<GpuCell> {
+        tier.relight();
+        let mut finest: Vec<GpuCell> = (0..N)
+            .map(|slot| {
+                let mut cell = GpuCell::zeroed();
+                cell.direction_height[3] = tier.columns[slot]
+                    .surface()
+                    .map_or(-100.0, |top| column::layer_altitude(top) + 1.0);
+                cell
+            })
+            .collect();
+        mark_sea(tier, &mut finest);
+        finest
+    }
+
+    fn settle(tier: &mut ColumnTier) -> usize {
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 200 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        ticks
+    }
+
+    /// `dry-holes` (the owner, 2026-11-18: "We should be able to dig holes
+    /// below water line and not have it filled with water too"): a pit dug
+    /// from the land beside a beach the high tide covers, its floor four
+    /// layers under the sea's, joins no water. It stays air after the rule
+    /// has run, the sea's reach does not take it, no sheet is listed over it
+    /// and it is marked dry; the same hollow made by the generator (no edit)
+    /// is still under the tide's sheet (`ocean-environments` B22).
+    #[test]
+    fn a_pit_dug_below_the_sea_beside_a_beach_stays_dry() {
+        let sea = sea_layer();
+        let mut tier = line();
+        // Column 5 a beach whose sand tops out a metre over the sea's level,
+        // under the high water; 6 and 7 dug from the land to four layers
+        // under the sea's level.
+        carve(&mut tier, 5..=5, sea + 1..=LAND);
+        let generated = {
+            let mut t = tier.clone();
+            carve(&mut t, 6..=7, sea - 4..=LAND);
+            t
+        };
+        let mut edits = Edits::new();
+        for slot in 6..=7 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        assert!(tier.water.dug[6] && tier.water.dug[7] && !tier.water.dug[5]);
+        settle(&mut tier);
+        for slot in 6..=7 {
+            for layer in sea - 4..=LAND {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    Material::Air,
+                    "slot {slot} layer {layer} stays dry"
+                );
+            }
+        }
+        let reach = tier.sea_reach();
+        assert!(reach[5], "the beach is the tide's");
+        assert!(!reach[6] && !reach[7], "the dug pit is not");
+        let finest = marked(&mut tier);
+        for (slot, cell) in finest.iter().enumerate().take(8).skip(6) {
+            assert!(!sheet_listed(cell), "no sheet over the pit {slot}");
+            assert!(cell.spare[2] & DRY_SHEET_BIT != 0, "dry {slot}");
+        }
+        assert!(sheet_listed(&finest[5]), "the tide's sheet over the beach");
+        // The generator's own hollow there keeps B22's sheet.
+        let mut generated = generated;
+        let finest = marked(&mut generated);
+        assert!(sheet_listed(&finest[6]) && sheet_listed(&finest[7]));
+    }
+
+    /// `dry-holes` design 4: a pit dug behind a wall is dry; breaching the
+    /// wall at the sea's top layer lets the sea in. It pours over the lip as
+    /// falling water first, then fills the pit from its floor up to the sea's
+    /// level and no higher, and only then is the sea's sheet listed over it.
+    #[test]
+    fn a_breached_pit_fills_from_the_sea_over_its_lip() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=7 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        settle(&mut tier);
+        assert_eq!(tier.columns[6].material(sea - 4), Material::Air, "dry");
+        // The wall, column 5, cut down to the sea's top layer.
+        dig(&mut tier, &mut edits, 5, sea - 1..=LAND);
+        assert_eq!(
+            tier.columns[5].material(sea - 1),
+            Material::Water,
+            "the breach fills from the sea beside it"
+        );
+        tier.tick_water(liquid::LOOP_MAX);
+        assert_eq!(
+            tier.columns[6].material(sea - 1).flow(),
+            Some((7, true)),
+            "the sea falls over the lip"
+        );
+        // Part way: the pit's top layer is not yet the sea's, so no sheet.
+        tier.tick_water(liquid::LOOP_MAX);
+        let finest = marked(&mut tier);
+        assert!(!sheet_listed(&finest[7]), "no sheet while it fills");
+        let ticks = settle(&mut tier);
+        assert!(ticks > 2, "it fills over ticks, not at once");
+        for slot in 6..=7 {
+            for layer in sea - 4..sea {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    Material::Water,
+                    "slot {slot} layer {layer}: the sea's"
+                );
+            }
+            assert_eq!(tier.columns[slot].material(sea), Material::Air, "no higher");
+        }
+        let finest = marked(&mut tier);
+        assert!(sheet_listed(&finest[6]) && sheet_listed(&finest[7]));
+    }
+
+    /// `dry-holes` design 4: a channel two layers deep dug inland from the
+    /// shore, then opened to the sea, fills along its length by the rule,
+    /// a cell every tick or two, to the sea's level.
+    #[test]
+    fn a_channel_cut_from_the_shore_fills_along_it() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=10 {
+            dig(&mut tier, &mut edits, slot, sea - 2..=LAND);
+        }
+        // The dry channel, its queue run out, as the game's ticks leave it.
+        settle(&mut tier);
+        dig(&mut tier, &mut edits, 5, sea - 2..=LAND);
+        assert_eq!(tier.columns[5].material(sea - 2), Material::Water);
+        assert_ne!(tier.columns[7].material(sea - 2), Material::Water);
+        let mut ticks = 0;
+        while tier.columns[10].material(sea - 2) != Material::Water && ticks < 100 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        assert!(
+            (5..=12).contains(&ticks),
+            "five cells in {ticks} ticks: the rule's pace"
+        );
+        settle(&mut tier);
+        for slot in 5..=10 {
+            assert_eq!(tier.columns[slot].material(sea - 1), Material::Water);
+            assert_eq!(tier.columns[slot].material(sea - 2), Material::Water);
+            assert_eq!(tier.columns[slot].material(sea), Material::Air);
+        }
+        assert_eq!(tier.columns[11].material(sea - 2), Material::Stone, "rim");
+    }
+
+    /// `dry-holes` design 4: a source poured into a sealed pit under the
+    /// sea's level is the bucket's, not the sea's: it runs by Luanti's rule
+    /// and makes no new source.
+    #[test]
+    fn a_bucket_in_a_sealed_pit_under_the_sea_is_not_the_sea() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=9 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        let floor = sea - 4;
+        edits.set(Edit {
+            cell: 106,
+            layer: floor as u16,
+            material: Material::Water,
+        });
+        tier.columns[6].set(floor, Material::Water);
+        tier.water_after_edit(6, floor, &edits);
+        tier.water.joined = tier.sea_joined();
+        settle(&mut tier);
+        assert_eq!(tier.columns[7].material(floor), Material::Flow7);
+        assert_eq!(tier.columns[8].material(floor), Material::Flow6);
+        assert_eq!(tier.columns[6].material(floor + 1), Material::Air);
     }
 
     /// A poured source on land runs by the rule over the tier, a level less
