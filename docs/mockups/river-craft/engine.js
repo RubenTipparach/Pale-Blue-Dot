@@ -552,6 +552,7 @@ RC.Stage = function (canvas, def) {
   // ---- the camera: orbit about a target; drag to turn, wheel or pinch to come closer. Never turns on its own.
   const V = Object.assign({tx: 0, ty: 0, tz: 0, yaw: 0, pitch: -0.5, dist: 20}, def.home);
   function place() {
+    if (def.camera && def.camera(camera, V)) return;   // a scene's own camera (the Rowing tab's first person)
     if (S.follow && def.follow) { const f = def.follow(); V.tx = f[0]; V.ty = f[1]; V.tz = f[2]; }
     const cp = Math.cos(V.pitch);
     camera.position.set(V.tx - cp * Math.cos(V.yaw) * V.dist, V.ty - Math.sin(V.pitch) * V.dist, V.tz - cp * Math.sin(V.yaw) * V.dist);
@@ -561,7 +562,8 @@ RC.Stage = function (canvas, def) {
   canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = clamp(V.pitch - (e.clientY - py) * 0.006, -1.45, -0.08); }
+    if (ptrs.size === 1 && def.look && def.look(e.clientX - px, e.clientY - py)) { /* the scene turned its own view */ }
+    else if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = clamp(V.pitch - (e.clientY - py) * 0.006, -1.45, -0.08); }
     else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) V.dist = clamp(V.dist * pinch0 / d, 4, 90); pinch0 = d; }
     place(); dirty = true;
   });

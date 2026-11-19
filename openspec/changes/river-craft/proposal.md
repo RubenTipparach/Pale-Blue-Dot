@@ -41,6 +41,11 @@ before touching code"):
   5. **Anchor** (`#anchor`): a bow and a stern anchor, the rode paying out,
      the anchor dragging until it bites, the boat swinging to the current,
      weighing anchor; sand, mud and rock beds that hold differently.
+- **Rowing** (`#rowing`, added 2026-11-19 on "mockup better rowing on a
+  raft"): today's raft stroke beside the proposed one (two oars on a rowing
+  frame in five stages on one beat, the pole for the shallows, splash and
+  swirls, first-person hands), and the raft's own lantern lit at night
+  ("Rafts should also have a light that comes with it at night"); design 9.
 - **The design of the port** (`design.md`): a current in `Surroundings`
   derived from the flowing water, craft-to-craft lines generalising
   `Mooring`, anchor holding by bed, logs and booms as floating bodies, nets
