@@ -120,6 +120,16 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 .scene,.rack{margin-top:46px}
 .notes{z-index:50}
 body[data-page="glow"] > #view, body[data-page="glow"] > .panel{display:none!important}
+body[data-page="sand"] > #view, body[data-page="sand"] > .panel{display:none!important}
+#sandCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none;background:#05070d}
+.s-tiles{position:fixed;top:calc(62px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));padding:10px 12px;display:grid;gap:8px;width:min(372px,calc(100vw - 32px))}
+.s-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.s-pair figure{margin:0;display:grid;gap:3px}
+.s-pair canvas{width:100%;aspect-ratio:1;image-rendering:pixelated;display:block;border-radius:3px}
+.s-pair figcaption{font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.s-label{position:fixed;top:calc(50% - 12px);font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.14em;color:var(--ink);background:rgba(10,12,9,.65);padding:3px 9px;border-radius:4px;pointer-events:none;transform:translateX(-50%)}
+.s-split{position:fixed;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(233,236,220,.7);pointer-events:none}
+@media (max-width:860px){ .s-tiles{top:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(300px,calc(100vw - 32px))} .s-tiles[data-open="false"] > :not(.headrow){display:none} }
 #glowCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none;background:#05070d}
 .g-cross{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;background:linear-gradient(#fff,#fff) center/2px 14px no-repeat,linear-gradient(#fff,#fff) center/14px 2px no-repeat;opacity:.75;mix-blend-mode:difference}
 .g-hint{position:fixed;left:50%;top:calc(50% + 22px);transform:translateX(-50%);font-family:var(--display);font-size:15px;letter-spacing:.06em;color:var(--ink);background:rgba(10,12,9,.6);padding:3px 9px;border-radius:4px;pointer-events:none}
@@ -290,7 +300,8 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
 <nav class="pagetabs" role="tablist" aria-label="Views">
   <a role="tab" href="#playground" data-page="playground">Playground</a>
   <a role="tab" href="#glow" data-page="glow">Glow and carried light</a>
-  <span class="pagever">v3</span>
+  <a role="tab" href="#sand" data-page="sand">Sand</a>
+  <span class="pagever">v4</span>
 </nav>
 
 <section id="glowTab" aria-label="Glow and carried light" hidden>
@@ -374,6 +385,70 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
       <li>The lantern hangs from its bail under the fist and swings a little as you walk; its panes glow from dusk to dawn. The mushroom is held by its stalk, its cap a hand's width above the fist, at its own size.</li>
       <li>The game's placed torch is a plain post with one flat triangle. The recommendation, as a separate look change, is to give it this head and flame so a torch is the same thing in the hand and on the ground. The game is not changed here.</li>
     </ul>
+  </section>
+</section>
+
+<section id="sandTab" aria-label="Sand" hidden>
+  <canvas id="sandCanvas" tabindex="0" aria-label="A beach running into the sea beside desert dunes, drawn in the game's sand tiles. Drag to orbit, wheel or pinch to zoom."></canvas>
+  <div class="s-split" id="sSplit" hidden></div>
+  <div class="s-label" id="sLabL" style="left:25%" hidden>TODAY</div>
+  <div class="s-label" id="sLabR" style="left:75%" hidden>NEW</div>
+  <section class="panel g-ctl" aria-label="Sand controls">
+    <div class="headrow"><h1>Sand</h1><button class="btn" id="sInfo" aria-haspopup="dialog" aria-label="About this tab">i</button></div>
+    <p class="pbd-tracker" style="margin:0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <div class="g-row"><span>Time</span><div class="chips" id="sTime"><button class="btn" data-v="day">Day</button><button class="btn" data-v="night">Night</button></div></div>
+    <div class="g-row"><span>Beach</span><div class="chips" id="sBeach"><button class="btn" data-v="0">Today</button><button class="btn" data-v="1">New</button></div></div>
+    <div class="g-row"><span>Desert</span><div class="chips" id="sDesert"><button class="btn" data-v="0">Today</button><button class="btn" data-v="1">New</button></div></div>
+    <div class="g-row"><span>Compare</span><div class="chips" id="sCompare"><button class="btn" data-v="off">Off</button><button class="btn" data-v="split">Today | New</button></div></div>
+    <div class="g-row"><span>View</span><div class="chips" id="sView"><button class="btn" data-v="beach">Beach</button><button class="btn" data-v="desert">Desert</button><button class="btn" data-v="both">Both</button></div></div>
+  </section>
+  <section class="panel s-tiles" id="sTiles" data-open="true" aria-label="Tiles, today and new">
+    <div class="headrow"><span class="eyebrow">Tiles, 4 × 4</span><button class="btn" id="sTilesToggle" aria-expanded="true">Hide</button></div>
+    <div class="chips" id="sTile"><button class="btn" data-v="b0">Beach top</button><button class="btn" data-v="b1">Beach side</button><button class="btn" data-v="b2">Wet sand</button><button class="btn" data-v="d0">Desert top</button><button class="btn" data-v="d1">Desert side</button></div>
+    <div class="s-pair"><figure><canvas id="sTileOld" width="128" height="128"></canvas><figcaption>Today</figcaption></figure><figure><canvas id="sTileNew" width="128" height="128"></canvas><figcaption>New</figcaption></figure></div>
+  </section>
+
+  <section class="panel notes" id="sNotes" hidden aria-label="About the sand tab">
+    <button class="btn close" id="sClose" aria-label="Close">&#x2715;</button>
+    <h2>Sand</h2>
+    <p><b>Changes.</b> v4 (2026-11-19): this tab, first drawn.</p>
+    <p>The owner, 2026-11-19: "can you redo sand texture? its got a lot of these weird blue shells. also desert sand and beach sand should be different", and "beach would have shells and stuff". The write-up is <code>openspec/changes/sand-tiles</code>. Nothing on this tab is in the game yet: <b>Today</b> is the game's own atlas, texel for texel, and <b>New</b> is the candidate.</p>
+
+    <h3>Controls</h3>
+    <ul>
+      <li>Drag to orbit, wheel or pinch to zoom. Nothing turns on its own.</li>
+      <li><b>Beach</b> and <b>Desert</b> switch each sand between today's tile and the new one.</li>
+      <li><b>Compare: Today | New</b> splits the view: the same camera, today on the left and new on the right, for both sands at once.</li>
+      <li><b>Night</b>: a dim moon, and torches and a lantern on the sand, each lighting what is near it with the game's lamp falloff.</li>
+      <li>The tile panel lays each changed tile 4 × 4, today beside new, flat and unlit.</li>
+    </ul>
+
+    <h3>What was blue</h3>
+    <p>The beach sheet's top, "dry shell sand", is speckled with teal and turquoise flecks: the sheet's accent is "pale turquoise sea glass". Its side and wet sand carry them too. Those are the blue shells. And the game has one sand block, which is the beach's: sand dug anywhere is beach sand, so a hole in the dunes filled back in showed the beach's teal flecks.</p>
+
+    <h3>The new beach</h3>
+    <ul>
+      <li>Warm pale sand off the sheet's own colour, with a scatter of small shells (a scallop, a clam, a spiral, an auger) in cream, white and soft pink and coral, shell bits, a pebble and driftwood grit.</li>
+      <li>No teal or blue anywhere; the drawing script refuses a blue texel.</li>
+      <li>Lit from the top left like the other sheets, low in contrast, and no outline: a shell's shadow is one sand step darker.</li>
+      <li>The side and the wet sand under it match: the same sand over damp sand, with fewer and duller shell bits.</li>
+    </ul>
+
+    <h3>The new desert</h3>
+    <ul>
+      <li>A warmer orange-ochre off the desert sheet's own colours, fine and even, wind-sorted grain with a few rust grains, and faint ripples. No shells.</li>
+      <li>The game already fades the desert to an orange this colour at range; today's near tile is paler than its own far colour, and the new one agrees with it.</li>
+      <li>The desert's side keeps its red strata; only the pale band at its top takes the new sand.</li>
+    </ul>
+
+    <h3>Which tiles the game draws</h3>
+    <p>Sand shows its top tile on every face down to 4 m, so the top is almost all of what a player sees of either sand, and it is what this patch draws. The beach side and wet sand are drawn only under a grassy or earth cap in a beach cell, which is rare; they are in the tile panel. Placed sand, the pack's sand icon and the beach's tufts all come from the beach top.</p>
+
+    <h3>Placed sand</h3>
+    <p>Recommended (<code>sand-tiles</code> design 5): sand dug in a desert becomes <b>desert sand</b>, a block of its own, drawn from the desert sheet wherever it is put down; sand dug on a beach stays sand. The rule is in the dig, not the generator, so worlds are generated as they are now and old saves keep their sand.</p>
+
+    <h3>In the engine</h3>
+    <p>The tiles go into <code>assets/tilesets/beach.png</code> and <code>desert.png</code>, the atlas is rebaked, and the beach and desert tuft ramps move with them. The patch here draws them as <code>planet_surface.wgsl</code> does: 32 texels a tile, nearest, top UVs over 1.5 tile widths, the top tile on every face of sand to 4 m and stone under it. This tab's screenshots were rendered with SwiftShader in a cloud container: they show the look, not the frame time.</p>
   </section>
 </section>
 
@@ -2391,11 +2466,12 @@ function startPlayground() {
 }
 // Page tabs: only the open tab's 3D view is on the page and drawing; each tab is a bare #anchor.
 function showPage() {
-  const want = location.hash === "#glow" ? "glow" : "playground";
+  const want = location.hash === "#glow" ? "glow" : location.hash === "#sand" ? "sand" : "playground";
   PAGE_TAB = want; document.body.dataset.page = want;
   for (const a of document.querySelectorAll(".pagetabs a")) a.setAttribute("aria-selected", a.dataset.page === want ? "true" : "false");
   $("glowTab").hidden = want !== "glow";
-  if (want === "glow") window.glowOpen(); else startPlayground();
+  $("sandTab").hidden = want !== "sand";
+  if (want === "glow") window.glowOpen(); else if (want === "sand") window.sandOpen(); else startPlayground();
 }
 addEventListener("hashchange", showPage);
 </script>
@@ -3453,6 +3529,345 @@ G.api = {
   },
   lookAtPlant(i, back = 1.2) { const p = PLANTS[i]; const dx = Math.sin(G.yaw), dz = Math.cos(G.yaw); this.pose(p.x + dx * back, p.z + dz * back, G.yaw, 0); const e = G.eyeY; G.pitch = -Math.atan2(e - (p.y + 0.3), back); },
 };
+})();
+
+// =====================================================================
+// Sand (sand-tiles): a beach into the sea beside desert dunes, today's tiles
+// against the candidates. Its own scene, renderer and loop, made the first
+// time the tab opens and stopped while it is closed.
+// =====================================================================
+(() => {
+"use strict";
+const GW = 2.833, GR = GW / Math.sqrt(3), S3 = Math.sqrt(3);
+const N = 13, SEA = 0.5, SAND_V = 1;
+const TILE_UV = 1.5 * GW;                     // a top's UVs: the cell's local position over 1.5 tile widths
+const $s = id => document.getElementById(id);
+const S = { started: false, running: false, night: false, beach: 1, desert: 1, compare: "off", view: "beach", tile: "b0",
+  orbit: { yaw: 0, pitch: 0, dist: 0, tx: 0, ty: 0, tz: 0 } };
+window.__sand = S;
+function hh(a, b, s) { let h = (a * 374761393 + b * 668265263 + s * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const centre = (q, r) => [GW * (q + r / 2), GW * S3 / 2 * r];
+const ring = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a) * GR, Math.sin(a) * GR]; };
+const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const K = (q, r) => q + "," + r;
+
+// ---------- the patch: a beach running down into the sea in the west, dunes in the east ----------
+const CELLS = new Map();
+for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) {
+  if (ring(q, r) > N) continue;
+  const [x, z] = centre(q, r);
+  const desert = x > 1.5 + 2.5 * Math.sin(z * 0.11);
+  let h;
+  if (!desert) h = Math.round(-2.2 + 4.6 * (x + 22) / 24 + 0.5 * Math.sin(z * 0.21 + 1.3));
+  else h = Math.round(2.6 + 0.9 * Math.sin(x * 0.19 + z * 0.06) + 0.7 * Math.sin(z * 0.15 - x * 0.08 + 0.7) + 0.4 * (hh(q, r, 5) - 0.5) + 0.04 * x);
+  h = Math.max(-3, Math.min(desert ? 5 : 3, h));
+  CELLS.set(K(q, r), { q, r, x, z, h, sheet: desert ? 1 : 0 });
+}
+const cellAt = (q, r) => CELLS.get(K(q, r));
+// Lamps on posts: torches (level 14) and a lantern post (13), as Material::emission has them.
+const LAMPS = [];
+for (const [q, r, level] of [[-4, 1, 14], [-6, -3, 14], [-2, -6, 13], [3, -1, 14], [6, 2, 14], [2, 5, 13]]) {
+  const c = cellAt(q, r); if (!c) continue;
+  LAMPS.push({ x: c.x + 0.5, z: c.z - 0.3, y: Math.max(c.h, SEA) + 1.15, base: Math.max(c.h, SEA), level, phase: hh(q, r, 9) * 6.28 });
+}
+
+// ---------- geometry ----------
+class GB {
+  constructor() { this.p = []; this.n = []; this.uv = []; this.t = []; this.c = []; }
+  v(p, n, uv, t, c) { this.p.push(...p); this.n.push(...n); this.uv.push(...uv); this.t.push(...t); this.c.push(...c); }
+  tri(a, b, c, n, uvs, t, col) { this.v(a, n, uvs[0], t, col); this.v(b, n, uvs[1], t, col); this.v(c, n, uvs[2], t, col); }
+  quad(a, b, c, d, n, uvs, t, col) { this.tri(a, b, c, n, [uvs[0], uvs[1], uvs[2]], t, col); this.tri(a, c, d, n, [uvs[0], uvs[2], uvs[3]], t, col); }
+  geo() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute("tile", new THREE.Float32BufferAttribute(this.t, 3));
+    g.setAttribute("col", new THREE.Float32BufferAttribute(this.c, 3));
+    return g;
+  }
+}
+const WHITE = [1, 1, 1];
+function buildTerrain() {
+  const g = new GB(), BOTTOM = -6;
+  for (const c of CELLS.values()) {
+    // the top: the sheet's (0,0), UVs from the cell's own position over 1.5 tile widths
+    const off = [hh(c.q, c.r, 1), hh(c.q, c.r, 2)];
+    const uvOf = (dx, dz) => [dx / TILE_UV + off[0], dz / TILE_UV + off[1]];
+    for (let i = 0; i < 6; i++) {
+      const a = corner(i), b = corner((i + 1) % 6);
+      g.tri([c.x, c.h, c.z], [c.x + b[0], c.h, c.z + b[1]], [c.x + a[0], c.h, c.z + a[1]], [0, 1, 0],
+        [uvOf(0, 0), uvOf(b[0], b[1]), uvOf(a[0], a[1])], [0, c.sheet, 0], WHITE);
+    }
+    // the walls: sand shows its top tile on every face down to 4 m, then the stone (3,0)
+    for (let i = 0; i < 6; i++) {
+      const nb = cellAt(c.q + NB[i][0], c.r + NB[i][1]);
+      const low = nb ? nb.h : BOTTOM;
+      if (low >= c.h) continue;
+      const a = corner(i), b = corner((i + 1) % 6);
+      const nx = (a[0] + b[0]) / 2, nz = (a[1] + b[1]) / 2, l = Math.hypot(nx, nz);
+      const n = [nx / l, 0, nz / l];
+      for (let y = c.h; y > low; y--) {
+        const y0 = Math.max(y - 1, low), depth = c.h - y;
+        const tile = depth < 4 ? 0 : 3;
+        const v1 = (y - y0);
+        g.quad([c.x + a[0], y0, c.z + a[1]], [c.x + b[0], y0, c.z + b[1]], [c.x + b[0], y, c.z + b[1]], [c.x + a[0], y, c.z + a[1]], n,
+          [[0, v1 * 0.999], [0.999, v1 * 0.999], [0.999, 0], [0, 0]], [tile, c.sheet, 0], WHITE);
+      }
+    }
+  }
+  return g.geo();
+}
+function box(g, cx, cy, cz, sx, sy, sz, col, kind) {
+  const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2, uv = [[0, 0], [1, 0], [1, 1], [0, 1]], t = [0, 0, kind];
+  g.quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], uv, t, col);
+  g.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], uv, t, col);
+  g.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], uv, t, col);
+  g.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], uv, t, col);
+  g.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], uv, t, col);
+}
+function buildLamps() {
+  const g = new GB();
+  for (const L of LAMPS) {
+    const post = L.y - L.base - 0.12;
+    box(g, L.x, L.base + post / 2, L.z, 0.09, post, 0.09, [0.36, 0.25, 0.15], 1);
+    if (L.level === 13) {   // a lantern: an iron cage round a lit pane
+      box(g, L.x, L.y, L.z, 0.22, 0.28, 0.22, [0.98, 0.78, 0.38], 2);
+      box(g, L.x, L.y + 0.17, L.z, 0.27, 0.05, 0.27, [0.16, 0.16, 0.18], 1);
+    } else {                // a torch head and its flame
+      box(g, L.x, L.y - 0.05, L.z, 0.13, 0.12, 0.13, [0.20, 0.13, 0.09], 1);
+      for (let k = 0; k < 2; k++) { const a = k * Math.PI / 2, dx = Math.cos(a) * 0.09, dz = Math.sin(a) * 0.09;
+        g.quad([L.x - dx, L.y + 0.01, L.z - dz], [L.x + dx, L.y + 0.01, L.z + dz], [L.x + dx * 0.2, L.y + 0.26, L.z + dz * 0.2], [L.x - dx * 0.2, L.y + 0.26, L.z - dz * 0.2], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], [0, 0, 2], [1.0, 0.62, 0.22]); }
+    }
+  }
+  return g.geo();
+}
+function buildWater() {
+  const g = new GB();
+  for (const c of CELLS.values()) {
+    if (c.h >= SEA) continue;
+    for (let i = 0; i < 6; i++) {
+      const a = corner(i), b = corner((i + 1) % 6);
+      g.tri([c.x, SEA, c.z], [c.x + b[0] * 1.002, SEA, c.z + b[1] * 1.002], [c.x + a[0] * 1.002, SEA, c.z + a[1] * 1.002], [0, 1, 0], [[0, 0], [0, 0], [0, 0]], [0, 0, 0], [SEA - c.h, 0, 0]);
+    }
+  }
+  return g.geo();
+}
+function heightTexture() {
+  const d = new Uint8Array(32 * 32 * 4);
+  for (let i = 0; i < 32 * 32; i++) { d[i * 4] = 0; d[i * 4 + 3] = 255; }
+  for (const c of CELLS.values()) { const i = ((c.r + 16) * 32 + (c.q + 16)) * 4; const v = Math.round((Math.max(c.h, -6) + 6) * 16); d[i] = d[i + 1] = d[i + 2] = v; }
+  const t = new THREE.DataTexture(d, 32, 32, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+
+// ---------- shading: the sun with a column-walk shadow, the fill, and every lamp ----------
+const VS = `
+attribute vec3 tile; attribute vec3 col;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol;
+void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vP = wp.xyz; vN = normalize(mat3(modelMatrix)*normal);
+  vUv = uv; vT = tile; vCol = col; gl_Position = projectionMatrix*viewMatrix*wp; }`;
+const COMMON = `
+precision highp float;
+uniform sampler2D tiles; uniform sampler2D hmap;
+uniform float uBeachNew; uniform float uDesertNew;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uFill; uniform float uExpo; uniform float uNight;
+uniform vec4 uLamps[6]; uniform vec3 uFog; uniform vec3 uCam; uniform float uTime;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol;
+const float GW = 2.833;
+float hAt(vec2 xz){
+  float r = xz.y/(GW*0.8660254); float q = xz.x/GW - r*0.5; float s = -q - r;
+  float rq = floor(q+0.5), rr = floor(r+0.5), rs = floor(s+0.5);
+  float dq = abs(rq-q), dr = abs(rr-r), ds = abs(rs-s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  vec2 t = (vec2(rq, rr) + 16.5)/32.0;
+  if (t.x < 0.0 || t.y < 0.0 || t.x > 1.0 || t.y > 1.0) return -6.0;
+  return texture2D(hmap, t).r*255.0/16.0 - 6.0;
+}
+float walk(vec3 a, vec3 b){
+  vec3 d = b - a; float L = length(d); vec3 u = d/L; float n = min(ceil(L/0.45), 32.0); float st = L/n;
+  for (int i = 1; i < 32; i++){ if (float(i) >= n) break; vec3 s = a + u*(st*float(i)); if (s.y < hAt(s.xz) - 0.01) return 0.0; }
+  return 1.0;
+}
+// lamp_bake::falloff: N.L x w^2 / (1 + (d/2.2)^2) x 2.4, w = 1 - (d/16)^4, at level/14, in the field's warm tint.
+vec3 lamps(vec3 p, vec3 n){
+  vec3 lit = vec3(0.0);
+  for (int i = 0; i < 6; i++) {
+    vec4 lp = uLamps[i]; if (lp.w <= 0.0) continue;
+    vec3 to = lp.xyz - p; float d = max(length(to), 0.001); float nl = dot(n, to/d);
+    if (d < 16.0 && nl > 0.0) { float w = max(1.0 - pow(d/16.0, 4.0), 0.0); lit += vec3(1.0, 0.7, 0.3)*lp.w*nl*w*w/(1.0 + (d/2.2)*(d/2.2))*2.4; }
+  }
+  return lit;
+}
+vec3 finish(vec3 c){
+  float fd = length(vP - uCam); c = mix(c, uFog, 1.0 - exp(-fd*0.006));
+  c = vec3(1.0) - exp(-c*uExpo);
+  return pow(c, vec3(1.0/2.2));
+}`;
+const FS = COMMON + `
+void main(){
+  vec3 n = normalize(vN);
+  if (vT.z > 1.5) { gl_FragColor = vec4(finish(vCol*(2.2 + 0.25*sin(uTime*21.0 + vP.x*13.0))), 1.0); return; }   // a flame, a lit pane
+  vec3 alb;
+  if (vT.z < 0.5) {
+    float row = vT.y < 0.5 ? uBeachNew : 2.0 + uDesertNew;
+    vec2 px = vec2(vT.x*32.0, row*32.0) + floor(fract(vUv)*32.0) + 0.5;
+    alb = pow(texture2D(tiles, px/128.0).rgb, vec3(2.2));
+  } else alb = pow(vCol, vec3(2.2));
+  float sl = max(dot(n, uSunDir), 0.0);
+  float sv = sl > 0.0 ? walk(vP + n*0.06, vP + uSunDir*14.0) : 1.0;
+  vec3 lit = uSunCol*sl*sv + uFill*(0.6 + 0.4*n.y) + lamps(vP + n*0.02, n);
+  vec3 c = alb*lit;
+  // under the sea: the water column over the bed takes the light (a seabed, as the game darkens it)
+  float under = 0.5 - vP.y;
+  if (under > 0.0) c *= mix(vec3(1.0), vec3(0.42, 0.62, 0.66), clamp(under/2.5, 0.0, 1.0));
+  gl_FragColor = vec4(finish(c), 1.0);
+}`;
+const WFS = COMMON + `
+void main(){
+  float depth = vCol.r;
+  vec3 v = normalize(uCam - vP);
+  vec3 n = normalize(vec3(0.04*sin(vP.x*1.7 + uTime*0.9), 1.0, 0.04*sin(vP.z*1.3 - uTime*0.7)));
+  vec3 h = normalize(v + uSunDir);
+  float spec = pow(max(dot(n, h), 0.0), 120.0)*(1.0 - uNight*0.85);
+  vec3 body = mix(vec3(0.10, 0.36, 0.40), vec3(0.02, 0.10, 0.16), clamp(depth/3.5, 0.0, 1.0));
+  vec3 lit = uSunCol*max(dot(n, uSunDir), 0.0) + uFill + lamps(vP, n)*0.6;
+  vec3 c = body*lit + uSunCol*spec*0.6;
+  float a = clamp(0.35 + depth*0.18, 0.35, 0.86);
+  gl_FragColor = vec4(finish(c), a);
+}`;
+
+let renderer, scene, camera, U, terrain, lampMesh, water, stars, tilesImg;
+function start() {
+  if (S.started) return; S.started = true;
+  const canvas = $s("sandCanvas");
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
+  const tiles = new THREE.TextureLoader().load("sand/sand_tiles.png?v=" + SAND_V);
+  tiles.flipY = false; tiles.magFilter = tiles.minFilter = THREE.NearestFilter; tiles.generateMipmaps = false;
+  const lamps = []; for (let i = 0; i < 6; i++) lamps.push(new THREE.Vector4());
+  U = {
+    tiles: { value: tiles }, hmap: { value: heightTexture() }, uBeachNew: { value: 1 }, uDesertNew: { value: 1 },
+    uSunDir: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Vector3() }, uFill: { value: new THREE.Vector3() },
+    uExpo: { value: 1 }, uNight: { value: 0 }, uLamps: { value: lamps }, uFog: { value: new THREE.Vector3() },
+    uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
+  };
+  const mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: U, side: THREE.DoubleSide });
+  terrain = new THREE.Mesh(buildTerrain(), mat); scene.add(terrain);
+  lampMesh = new THREE.Mesh(buildLamps(), new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: U, side: THREE.DoubleSide })); scene.add(lampMesh);
+  water = new THREE.Mesh(buildWater(), new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: WFS, uniforms: U, transparent: true, depthWrite: false })); scene.add(water);
+  const sp = []; for (let i = 0; i < 600; i++) { const a = hh(i, 1, 41) * Math.PI * 2, e = 0.12 + hh(i, 2, 41) * 1.35; sp.push(Math.cos(a) * Math.cos(e) * 300, Math.sin(e) * 300, Math.sin(a) * Math.cos(e) * 300); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+  stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0x9aa8c8, size: 1.4, sizeAttenuation: false })); scene.add(stars);
+  tilesImg = new Image(); tilesImg.onload = drawTiles; tilesImg.src = "sand/sand_tiles.png?v=" + SAND_V;
+  bindInput(); setView(S.view); setNight(S.night); resize(); syncButtons();
+}
+function setNight(n) {
+  S.night = n; if (!U) return;
+  if (n) {
+    U.uSunDir.value.set(-0.35, 0.75, 0.45).normalize(); U.uSunCol.value.set(0.022, 0.026, 0.040);
+    U.uFill.value.set(0.017, 0.022, 0.030); U.uExpo.value = 1.6; U.uNight.value = 1;
+    U.uFog.value.set(0.006, 0.008, 0.014); scene.background = new THREE.Color(0x05070d); stars.visible = true;
+  } else {
+    U.uSunDir.value.set(0.42, 0.74, -0.52).normalize(); U.uSunCol.value.set(1.12, 1.03, 0.87);
+    U.uFill.value.set(0.26, 0.34, 0.43); U.uExpo.value = 1.15; U.uNight.value = 0;
+    U.uFog.value.set(0.42, 0.56, 0.68); scene.background = new THREE.Color(0x9cc4e0); stars.visible = false;
+  }
+}
+const VIEWS = {
+  beach: { tx: -5, ty: 1.0, tz: 1, yaw: -2.2, pitch: 0.58, dist: 12 },
+  desert: { tx: 9, ty: 3.0, tz: 1, yaw: 0.9, pitch: 0.55, dist: 12 },
+  both: { tx: 0, ty: 1.5, tz: 2, yaw: -0.25, pitch: 0.78, dist: 30 },
+};
+function setView(v) { S.view = v; Object.assign(S.orbit, VIEWS[v]); }
+function placeCamera(aspect) {
+  const o = S.orbit;
+  camera.position.set(o.tx + Math.sin(o.yaw) * Math.cos(o.pitch) * o.dist, o.ty + Math.sin(o.pitch) * o.dist, o.tz + Math.cos(o.yaw) * Math.cos(o.pitch) * o.dist);
+  camera.lookAt(o.tx, o.ty, o.tz); camera.aspect = aspect; camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+  U.uCam.value.copy(camera.position);
+}
+function bindInput() {
+  const cv = $s("sandCanvas"); const ptrs = new Map(); let pinch = 0;
+  cv.addEventListener("pointerdown", e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    if (ptrs.size === 2) {
+      p.x = e.clientX; p.y = e.clientY; const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) S.orbit.dist = Math.max(4, Math.min(70, S.orbit.dist * pinch / d)); pinch = d; return;
+    }
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    S.orbit.yaw -= dx * 0.005; S.orbit.pitch = Math.max(0.08, Math.min(1.45, S.orbit.pitch + dy * 0.004));
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch = 0; };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("wheel", e => { S.orbit.dist = Math.max(4, Math.min(70, S.orbit.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
+}
+// ---------- the flat tile panel: today beside new, each tiled 4 x 4, unlit ----------
+const TILE_SRC = { b0: [0, 0], b1: [1, 0], b2: [2, 0], d0: [0, 2], d1: [1, 2] };
+function drawTiles() {
+  if (!tilesImg || !tilesImg.complete) return;
+  const [tx, row] = TILE_SRC[S.tile];
+  for (const [id, r] of [["sTileOld", row], ["sTileNew", row + 1]]) {
+    const x = $s(id).getContext("2d"); x.imageSmoothingEnabled = false;
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) x.drawImage(tilesImg, tx * 32, r * 32, 32, 32, i * 32, j * 32, 32, 32);
+  }
+}
+function resize() {
+  if (!renderer) return; renderer.setSize(innerWidth, innerHeight, false);
+}
+addEventListener("resize", resize);
+let last = 0;
+function lampUniforms(t) {
+  U.uLamps.value.forEach((v, i) => {
+    const L = LAMPS[i]; if (!L || !S.night) { v.set(0, 0, 0, 0); return; }
+    const flick = L.level === 14 ? 1 + 0.06 * Math.sin(t * 13 + L.phase) + 0.04 * Math.sin(t * 29 + L.phase * 2) : 1;
+    v.set(L.x, L.y + 0.1, L.z, L.level / 14 * flick);
+  });
+}
+function frame(now) {
+  if (PAGE_TAB !== "sand") { S.running = false; return; }
+  const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+  U.uTime.value += dt; lampUniforms(U.uTime.value);
+  const w = innerWidth, h = innerHeight, split = S.compare === "split";
+  lampMesh.visible = true;
+  if (!split) {
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+    U.uBeachNew.value = S.beach; U.uDesertNew.value = S.desert;
+    placeCamera(w / h); renderer.render(scene, camera);
+  } else {
+    renderer.setScissorTest(true);
+    for (const [x0, v] of [[0, 0], [w / 2, 1]]) {
+      renderer.setViewport(x0, 0, w / 2, h); renderer.setScissor(x0, 0, w / 2, h);
+      U.uBeachNew.value = v; U.uDesertNew.value = v;
+      placeCamera((w / 2) / h); renderer.render(scene, camera);
+    }
+    renderer.setScissorTest(false);
+  }
+  requestAnimationFrame(frame);
+}
+function syncButtons() {
+  const set = (id, v) => { for (const b of $s(id).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); };
+  set("sTime", S.night ? "night" : "day"); set("sBeach", S.beach); set("sDesert", S.desert); set("sCompare", S.compare); set("sView", S.view); set("sTile", S.tile);
+  const split = S.compare === "split";
+  $s("sSplit").hidden = !split; $s("sLabL").hidden = !split; $s("sLabR").hidden = !split;
+}
+function chips(id, fn) { for (const b of $s(id).querySelectorAll("button")) b.onclick = () => { fn(b.dataset.v); syncButtons(); }; }
+chips("sTime", v => setNight(v === "night"));
+chips("sBeach", v => { S.beach = +v; });
+chips("sDesert", v => { S.desert = +v; });
+chips("sCompare", v => { S.compare = v; });
+chips("sView", v => setView(v));
+chips("sTile", v => { S.tile = v; drawTiles(); });
+$s("sTilesToggle").onclick = () => { const p = $s("sTiles"), open = p.dataset.open !== "false"; p.dataset.open = open ? "false" : "true"; $s("sTilesToggle").textContent = open ? "Show" : "Hide"; $s("sTilesToggle").setAttribute("aria-expanded", String(!open)); };
+$s("sInfo").onclick = () => { $s("sNotes").hidden = false; $s("sClose").focus(); };
+$s("sClose").onclick = () => { $s("sNotes").hidden = true; $s("sInfo").focus(); };
+addEventListener("pointerdown", e => { const n = $s("sNotes"); if (!n.hidden && !n.contains(e.target) && e.target !== $s("sInfo")) n.hidden = true; });
+addEventListener("keydown", e => { if (e.key === "Escape") $s("sNotes").hidden = true; });
+window.sandOpen = () => { start(); resize(); syncButtons(); if (!S.running) { S.running = true; last = 0; requestAnimationFrame(frame); } };
+// For the screenshot instrument.
+S.api = { setNight, setView, sync: syncButtons, drawTiles, orbit: S.orbit };
 })();
 
 showPage();
