@@ -65,7 +65,7 @@ fn fruit_on_ray(
         {
             continue;
         }
-        let biome = (record.metadata[1] >> 8) & 0xff;
+        let biome = pbd_core::flora::tree_biome(record.metadata[1]);
         let points = pbd_core::flora::hanging_fruit_points(
             record.spare[0],
             biome,
@@ -108,7 +108,7 @@ fn on_tree(
     let record = fine.set.finest_records().iter().find(|r| r.key() == cell)?;
     let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
     let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
-    let biome = (record.metadata[1] >> 8) & 0xff;
+    let biome = pbd_core::flora::tree_biome(record.metadata[1]);
     let (kind, hanging) = hanging_fruit(
         record.spare[0],
         biome,
@@ -365,7 +365,7 @@ pub fn scripted(
             let ahead = to.normalize_or(Vec3::ZERO).dot(look);
             let fruiting = hanging_fruit(
                 r.spare[0],
-                (r.metadata[1] >> 8) & 0xff,
+                pbd_core::flora::tree_biome(r.metadata[1]),
                 d.to_array(),
                 PLANET_RADIUS,
                 year,

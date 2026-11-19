@@ -115,12 +115,19 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 ///
 /// Bit [`FLOODED_BIT`] is set where the top is under the high tide's sheet
 /// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
+///
+/// Bit [`pbd_core::flora::BEACH_BACK_BIT`] is set on the dry ground just
+/// behind a warm beach (`planet_gen::beach_back`, `flora-v2` 12.13): its
+/// trees are the beach's acacias.
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
-    let biome = planet_gen::biome_at(terrain_config(), d, height);
-    let cleared = pbd_core::settlement::ground::cleared(terrain_config(), d);
+    let cfg = terrain_config();
+    let biome = planet_gen::biome_at(cfg, d, height);
+    let cleared = pbd_core::settlement::ground::cleared(cfg, d);
+    let back = planet_gen::beach_back(cfg, d, height, biome);
     material_index(d, height, biome)
         | (biome as u32) << 8
+        | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
         | u32::from(height < high_water_m()) << FLOODED_BIT
 }

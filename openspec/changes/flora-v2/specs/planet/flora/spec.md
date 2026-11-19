@@ -192,3 +192,19 @@ stored, and the layer's render code SHALL stay the stone's.
 #### Scenario: A placed ore block
 - **WHEN** a player places a block of mixed ore
 - **THEN** it is drawn with the same flecks
+
+### Requirement: Acacias stand behind a warm beach
+From generator version 12, the dry, low cells within 12 m of a beach in the
+warm belt (`|y|` at most 0.64), which would otherwise be fields, jungle or
+desert, SHALL stand the beach's acacias by the beach's tree table, while
+keeping their own biome and top block for everything else. No tree SHALL stand on a cell under the high water. A world made on
+version 11 or older SHALL keep its biomes, top blocks and trees cell for cell.
+
+#### Scenario: A warm coast on a new world
+- **WHEN** a player walks up from a warm beach on a version 12 world
+- **THEN** acacias stand on the grass and sand just behind the beach
+- **AND** none stands on the beach's sand under the high water
+
+#### Scenario: An old world's coast
+- **WHEN** a version 11 world is opened
+- **THEN** its coast has the same biomes, ground and trees as before

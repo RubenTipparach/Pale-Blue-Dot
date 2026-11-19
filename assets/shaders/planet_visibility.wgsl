@@ -177,6 +177,17 @@ fn clear_indirect() {
     }
 }
 
+// `flora-v2` design 12.13: a beach's back (version 12, the dry ground just
+// behind a warm beach) stands the beach's trees on its own ground: bit 16 of
+// the material word, `pbd_core::flora::BEACH_BACK_BIT`. The biome a cell's
+// trees are of (`pbd_core::flora::tree_biome`): the beach's there, else the
+// biome byte. Only the trees read it.
+const BEACH_BACK_BIT: u32 = 16u;
+fn tree_biome(word: u32) -> u32 {
+    if ((word >> BEACH_BACK_BIT) & 1u) == 1u { return 1u; }
+    return (word >> 8u) & 0xffu;
+}
+
 // `flora-v2` design 12.5: whether a tree a player felled, or picked bare, is
 // in the uniform's short lists (`trees_taken::TreesTaken`, nearest first).
 fn tree_felled(id: u32) -> bool {
@@ -295,14 +306,15 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
-    let biome = (cell.metadata.y >> 8u) & 0xffu;
+    let back = ((cell.metadata.y >> BEACH_BACK_BIT) & 1u) == 1u;
+    let biome = tree_biome(cell.metadata.y);
     // `flora-v2` design 12.1: the world's tree table, from the uniform: the
     // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
     // so an old world keeps its trees and version 10 grows M13's forests.
     let entry = params.plant_means[min(biome, 7u)].w;
     let density = (entry >> 16u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
-    let sand = ((entry >> 24u) & 1u) == 1u && material==1u;
+    let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));
     let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
     let tree = (grass||sand||pine) && roll < density;
     // A tree felled for its wood is gone (design 12.5).
@@ -633,7 +645,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
         // Inside the near ring, the near model as well (design 10.4): it
         // cross-fades with the mid cards across the ring's last 0.3.
         let close = distance(params.camera.xyz, center) < params.flora_more.z;
-        let species = tree_species(cell.spare.x, (cell.metadata.y >> 8u) & 0xffu);
+        let species = tree_species(cell.spare.x, tree_biome(cell.metadata.y));
         for (var e = 0u; e < 2u; e++) {
             if entries[e] != 0xffffffffu {
                 let slot = atomicAdd(&args[1].instance_count,1u);

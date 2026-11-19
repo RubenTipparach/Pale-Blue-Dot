@@ -65,6 +65,8 @@ const GRASS_CODES: u32 = 1 << 2 | 1 << 3 | 1 << 7;
 const SNOW_CODE: u32 = 1 << 6;
 /// A beach's dry sand (code 1).
 const SAND_CODE: u32 = 1 << 1;
+/// A desert's sand (code 4): the beach's sand to a beach back's trees.
+const DESERT_SAND_CODE: u32 = 1 << 4;
 
 impl TreeTable {
     /// Versions 4 to 9: the Tenebris scatter rule at its own rates
@@ -109,10 +111,17 @@ impl TreeTable {
             return false;
         }
         let material = word & 0xff;
-        let biome = ((word >> 8) & 0xff) as usize;
+        let biome = tree_biome(word) as usize;
         let (Some(&density), Some(&ground)) = (self.density.get(biome), self.ground.get(biome))
         else {
             return false;
+        };
+        // A beach's back on the desert's sand (render code 4) is the beach's
+        // sand to its trees (design 12.13).
+        let ground = if (word >> BEACH_BACK_BIT) & 1 == 1 && ground & SAND_CODE != 0 {
+            ground | DESERT_SAND_CODE
+        } else {
+            ground
         };
         material < 32 && (ground >> material) & 1 == 1 && shader_hash(tree_id) & 0xff < density
     }
@@ -137,6 +146,26 @@ impl TreeTable {
 /// by [`TreeTable::grows`] and the visibility and surface passes. A draw-time
 /// fact, never saved, so no generator version moves for it.
 pub const FLOODED_BIT: u32 = 25;
+
+/// The bit of a record's material word that says the cell is the dry
+/// ground just behind a warm beach (`flora-v2` design 12.13, generator
+/// version 12, `planet_gen::beach_back`): it stands the beach's trees, the
+/// acacia, on its own ground. Set by the app's `surface_code`; read through
+/// [`tree_biome`] here and by the visibility and surface passes. Derived
+/// from the generator, never saved.
+pub const BEACH_BACK_BIT: u32 = 16;
+
+/// The biome a cell's trees are of (`flora-v2` design 12.13): the record's
+/// biome byte, or the beach's (1) on a beach back ([`BEACH_BACK_BIT`]). The
+/// density, the ground, the species and the fruit read it; everything else
+/// reads the biome byte.
+pub fn tree_biome(word: u32) -> u32 {
+    if (word >> BEACH_BACK_BIT) & 1 == 1 {
+        1
+    } else {
+        (word >> 8) & 0xff
+    }
+}
 
 /// Whether a finest cell stands a tree (`tool-crafting` decision 3) under
 /// the world's table: the foliage pass's rule (`planet_visibility.wgsl`,
@@ -665,11 +694,14 @@ mod tests {
         let lines = [
             "let roll = hash(cell.spare.x) & 0xffu;",
             "let material = cell.metadata.y & 0xffu;",
-            "let biome = (cell.metadata.y >> 8u) & 0xffu;",
+            "let back = ((cell.metadata.y >> BEACH_BACK_BIT) & 1u) == 1u;",
+            "let biome = tree_biome(cell.metadata.y);",
+            "if ((word >> BEACH_BACK_BIT) & 1u) == 1u { return 1u; }",
+            "return (word >> 8u) & 0xffu;",
             "let entry = params.plant_means[min(biome, 7u)].w;",
             "let density = (entry >> 16u) & 0xffu;",
             "let grass = material==2u || material==3u || material==7u;",
-            "let sand = ((entry >> 24u) & 1u) == 1u && material==1u;",
+            "let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));",
             "let pine = ((entry >> 25u) & 1u) == 1u && material==6u;",
             "let tree = (grass||sand||pine) && roll < density;",
             "if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }",
@@ -709,11 +741,12 @@ mod tests {
             }
             let roll = shader_hash(id) & 0xff;
             let material = word & 0xff;
-            let biome = (word >> 8) & 0xff;
+            let back = (word >> BEACH_BACK_BIT) & 1 == 1;
+            let biome = if back { 1 } else { (word >> 8) & 0xff };
             let entry = means_w[biome.min(7) as usize];
             let density = (entry >> 16) & 0xff;
             let grass = material == 2 || material == 3 || material == 7;
-            let sand = (entry >> 24) & 1 == 1 && material == 1;
+            let sand = (entry >> 24) & 1 == 1 && (material == 1 || (back && material == 4));
             let pine = (entry >> 25) & 1 == 1 && material == 6;
             (grass || sand || pine) && roll < density
         }
@@ -724,7 +757,13 @@ mod tests {
             let w: [u32; 8] = std::array::from_fn(|b| BIOME_FRUIT[b] | table.packed(b));
             for biome in 0..8u32 {
                 for material in 0..16u32 {
-                    for cleared in [0, 1 << 24, 1 << FLOODED_BIT] {
+                    for cleared in [
+                        0,
+                        1 << 24,
+                        1 << FLOODED_BIT,
+                        1 << BEACH_BACK_BIT,
+                        1 << BEACH_BACK_BIT | 1 << FLOODED_BIT,
+                    ] {
                         let word = material | biome << 8 | cleared;
                         for id in 0..10_000u32 {
                             assert_eq!(
@@ -821,6 +860,46 @@ mod tests {
                 assert_eq!(grows_tree(&TreeTable::V4, id, word), before(id, word));
             }
         }
+    }
+
+    /// A beach's back (`flora-v2` 12.13, `BEACH_BACK_BIT`) stands the
+    /// beach's trees on its own ground: the fields' dry grass, the jungle's
+    /// grass and the desert's sand grow trees at the beach's rate, every one
+    /// an acacia bearing the beach's fruit, and no cactus. Without the bit
+    /// the same word is its biome's own; under the high water nothing.
+    #[test]
+    fn a_beach_back_stands_the_beach_s_acacias() {
+        use crate::tree_kit::{Species, grows_cactus, pick};
+        let table = TreeTable::V10;
+        let back = 1 << BEACH_BACK_BIT;
+        let beach_rate = (0..100_000u32)
+            .filter(|&id| grows_tree(&table, id, 2 | 1 << 8))
+            .count();
+        for (biome, material) in [(2u32, 3u32), (4, 7), (3, 4)] {
+            let word = material | biome << 8 | back;
+            assert_eq!(tree_biome(word), 1);
+            assert_eq!(tree_biome(word & !back), biome);
+            let ids: Vec<u32> = (0..100_000u32)
+                .filter(|&id| grows_tree(&table, id, word))
+                .collect();
+            assert_eq!(ids.len(), beach_rate, "biome {biome} material {material}");
+            for &id in &ids {
+                assert_eq!(pick(id, tree_biome(word)).unwrap().species, Species::Acacia);
+            }
+            assert!(!(0..10_000u32).any(|id| grows_cactus(id, word)));
+            assert!(
+                !(0..10_000u32).any(|id| grows_tree(&table, id, word | 1 << FLOODED_BIT)),
+                "a tree under the high water"
+            );
+        }
+        // The desert's sand without the bit stands cacti, not trees.
+        assert!(!(0..10_000u32).any(|id| grows_tree(&table, id, 4 | 3 << 8)));
+        assert!((0..10_000u32).any(|id| grows_cactus(id, 4 | 3 << 8)));
+        // The fields without it keep their own density.
+        let fields = (0..100_000u32)
+            .filter(|&id| grows_tree(&table, id, 3 | 2 << 8))
+            .count();
+        assert!(fields > beach_rate * 3, "{fields} against {beach_rate}");
     }
 
     const V4_TREE_DIGEST: u64 = 16_944_701_438_888_284_610;

@@ -40,6 +40,11 @@ muddy beach. It is there; a player does not see it as a place.
   show them.
 - **The map's biome layer** shows the new swamps (it already has a swamp
   colour and share in its key).
+- **Acacias behind the beach** (`flora-v2` design 12.13, survey F1): the
+  dry, low cells within 12 m of a warm beach stand the beach's acacias, on
+  their own ground and biome (a bit of the record's material word), in
+  version 12 only. Versions 10 and 11 grow their acacia on beach sand,
+  which since `flora-v2` 12.11 is all under the high water.
 - **`mountain-ground`'s version moves to 12**: it planned version 11 and is
   not built.
 
