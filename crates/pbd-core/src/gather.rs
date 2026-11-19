@@ -131,19 +131,15 @@ impl GatherSettings {
     }
 
     /// Whether a tree that has given `taken` logs gives another, to hands
-    /// (`by_axe` false) or an axe (`tool-crafting` decision 3): hands take
-    /// the one branch, an axe takes logs up to `axe_logs` in all.
-    pub fn tree_gives(&self, taken: u16, by_axe: bool) -> Result<(), TreeSpent> {
-        if by_axe {
-            if taken < self.axe_logs {
-                Ok(())
-            } else {
-                Err(TreeSpent::Felled)
-            }
-        } else if taken == 0 {
+    /// (`by_axe` false) or an axe: either takes logs up to `axe_logs` in all,
+    /// hands only slower (`tree-punch-shake` decision 1; owner, 2026-11-18:
+    /// "allow punching trees to get wood logs for the first axe. Just takes
+    /// longer"). `by_axe` is kept for the callers that say which it was.
+    pub fn tree_gives(&self, taken: u16, _by_axe: bool) -> Result<(), TreeSpent> {
+        if taken < self.axe_logs {
             Ok(())
         } else {
-            Err(TreeSpent::BranchTaken)
+            Err(TreeSpent::Felled)
         }
     }
 }
@@ -151,8 +147,6 @@ impl GatherSettings {
 /// Why a tree gives no log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TreeSpent {
-    /// Hands have had its branch; an axe takes more.
-    BranchTaken,
     /// It has given all its wood.
     Felled,
 }
@@ -231,12 +225,18 @@ mod tests {
         }
     }
 
-    /// Hands take one branch; an axe takes logs up to the limit.
+    /// Hands and an axe both take logs up to the limit (`tree-punch-shake`).
     #[test]
-    fn a_tree_gives_a_branch_by_hand_and_logs_to_an_axe() {
+    fn hands_and_an_axe_take_a_tree_s_logs_alike() {
         let g = GatherSettings::default();
         assert_eq!(g.tree_gives(0, false), Ok(()));
-        assert_eq!(g.tree_gives(1, false), Err(TreeSpent::BranchTaken));
+        assert_eq!(
+            g.tree_gives(1, false),
+            Ok(()),
+            "hands take more than a branch"
+        );
+        assert_eq!(g.tree_gives(3, false), Ok(()));
+        assert_eq!(g.tree_gives(4, false), Err(TreeSpent::Felled));
         assert_eq!(g.tree_gives(1, true), Ok(()));
         assert_eq!(g.tree_gives(3, true), Ok(()));
         assert_eq!(g.tree_gives(4, true), Err(TreeSpent::Felled));

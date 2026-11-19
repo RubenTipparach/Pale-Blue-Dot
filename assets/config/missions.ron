@@ -58,7 +58,7 @@
             branch: "trunk",
             icon: "tools/stone-axe",
             title: "Craft an axe",
-            help: "Pull a branch from a tree by hand, then make a stone axe in the pack's Craft row (I).",
+            help: "Punch a tree for logs, then make a stone axe in the pack's Craft row (I).",
             needs: ["gather"],
             objectives: [
                 (kind: craft, what: "tool:axe|recipe:stone-axe", count: 1, label: "axe"),

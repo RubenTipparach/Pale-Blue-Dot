@@ -8,7 +8,7 @@
     fibre_one_in: 3,
     // Dug dirt, soil and sand give loose stone in one cell in this many.
     stone_one_in: 3,
-    // The most logs a tree gives an axe, counting the branch a hand took.
+    // The most logs a tree gives, to an axe or to hands (hands are slower).
     axe_logs: 4,
     // Wet ground at the shore gives bait worms in one cell in this many
     // (`starter-missions` G1), where the dug layer sits this many metres

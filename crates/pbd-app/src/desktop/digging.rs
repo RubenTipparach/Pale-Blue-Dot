@@ -1001,8 +1001,6 @@ fn take_log(
         .and_then(|r| r.read())
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
-        // Nothing to say (owner, 2026-11-17: the line "sounds like AI writing").
-        Err(TreeSpent::BranchTaken) => return,
         Err(TreeSpent::Felled) => {
             note.say(wall_s, "No more wood");
             return;
@@ -1035,8 +1033,9 @@ fn take_log(
     });
     // The toast says it (`item-toasts` decision 6).
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
-    // The axe's last log fells the tree (`starter-missions` H.1).
-    if by_axe && gather.0.tree_gives(taken.logs + 1, true).is_err() {
+    // The last log fells the tree, by axe or by hand (`starter-missions`
+    // H.1; `tree-punch-shake` decision 2).
+    if gather.0.tree_gives(taken.logs + 1, by_axe).is_err() {
         did.write(pbd_app::missions::Did::new(
             pbd_core::missions::Kind::Fell,
             "tree",
