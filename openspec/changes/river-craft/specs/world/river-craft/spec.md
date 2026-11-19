@@ -98,3 +98,49 @@ a world saved before river craft existed SHALL open unchanged.
 
 - **WHEN** a world saved before this change is opened
 - **THEN** it opens with no river craft records and nothing else changed
+
+### Requirement: A raft is rowed in strokes on one beat
+
+A raft SHALL be rowed with two oars on pins, each stroke in five stages
+(reach, catch, drive, release, recovery) timed by one stroke clock shared by
+both oars. The raft's push SHALL be the drag of each oar's blade through the
+water while it is under, at the blade, so that one oar alone turns the raft.
+An oar whose key goes down mid-stroke SHALL join at the next reach, and one
+whose key comes up SHALL finish its stroke; no drawn pose SHALL jump. The
+drawing (arms, body, splash, swirls) SHALL read the stroke and SHALL NOT be
+read by any rule.
+
+#### Scenario: Rowing both oars
+
+- **WHEN** the player holds W on a raft in still water
+- **THEN** both blades enter on the same catch, the raft surges through each
+  drive and glides through each recovery, at one steady stroke rate
+
+#### Scenario: Rowing one oar
+
+- **WHEN** the player holds A
+- **THEN** only the right oar rows, and the raft turns left
+
+#### Scenario: The pole past its reach
+
+- **WHEN** the player poles where the bed is deeper than the pole's reach
+- **THEN** the pole does not plant and pushes nothing
+
+### Requirement: A raft carries its own lantern, lit at night
+
+Every raft SHALL come with a lantern fitted to it, needing no crafting or
+placing. It SHALL be lit from dusk to dawn on the town lamps' switch and,
+while lit, SHALL light what is near it (the raft, the water round it, the
+oars and the rower's hands) through the light field's lamp term. The raft
+SHALL stay lit as the terrain is.
+
+#### Scenario: Rowing at night
+
+- **WHEN** a raft is rowed after dusk far from any town
+- **THEN** its deck, the water round it and the rower's hands are lit by its
+  lantern, and the water beyond the lantern's range stays dark
+
+#### Scenario: Day
+
+- **WHEN** the clock passes dawn
+- **THEN** the raft's lantern goes out and adds no light

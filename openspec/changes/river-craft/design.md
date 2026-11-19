@@ -147,6 +147,254 @@ each boat carries a lantern (the anchored skiff's is white, an anchor light)
 and a lantern post stands on the bank; every lamp lights what is near it,
 and the moon is dim.
 
+### 9. Rowing the raft (owner, 2026-11-19: "mockup better rowing on a raft")
+
+Built in M34 as a seventh tab, **Rowing** (`#rowing`), with a Today /
+Proposed switch (the raft's own lantern, 9.8, lit only in Proposed), a first- and third-person view, and the tunables on
+sliders that print the RON below. The method is the `animation` skill's.
+
+#### 9.1 What the game does today, measured
+
+Read off `crates/pbd-core/src/vehicle/loon.rs` (the stroke and its force),
+`crates/pbd-core/src/vehicle/spec.rs` (`LoonSpec::raft`, `vehicles.ron`
+`raft:`) and `crates/pbd-app/src/vehicles/draw.rs` (`pole`, `paddle`,
+`paddle_blade`, `Moving::Paddle`):
+
+| What | Today |
+| --- | --- |
+| The beat | A stroke starts when the last has ended and a key is held: power 0.8 s, recovery 0.7 s, so 1.5 s a stroke, 40 a minute. |
+| Which side | W alternates sides every stroke; A strokes on the right, D on the left. |
+| The force | One "blade" 0.7 m² (Cd 1.25) at x = ±1.35 m, 0.3 m under the waterline mark, dragged aft 1.4 m from z = -0.2; its speed is `stroke_m / power_s * pi/2 * sin(pi u)`, against the ground (`pole: true`), so it pushes off the bed in any depth. |
+| The drawn pole | Hangs from a fixed hand at (0.62, 1.45, 0.55) on the right. It leans 0.5 rad while W or S is held, stands at 0.12 otherwise, tilts 0.35 rad sideways while A or D is held. It is set from the keys, not from the stroke: it snaps to the lean on the frame the key goes down and snaps back on release. |
+| The water | Nothing: no splash, no swirl, no wake from the pole or the stroke. |
+| First person | The seat camera at the poler's eye (0.35, 1.75, 0.7); the crew figure is hidden, so the player sees a pole floating in front of them, no hands. |
+| Third person | The blocky poler has no arms; the pole hangs beside him. |
+
+What reads badly, in the order the owner will see it:
+
+1. **The pole does not do the stroke.** The force works 1.35 m out on
+   alternate sides at 40 a minute while the drawn pole stays on the right
+   and holds one lean. Nothing on screen shows a stroke: no reach, no catch,
+   no push, no release, no recovery. The skill's "do not move a tool only by
+   pitching it about a fixed fist" is exactly today's pole.
+2. **Every change is a snap.** Pressing W tips the pole 0.62 rad in one
+   frame; letting go tips it back in one frame.
+3. **The raft fishtails without a cause.** W strokes alternate sides 1.35 m
+   out, so the raft yaws one way then the other every 1.5 s; the drawn pole
+   gives no reason for it.
+4. **The surge has no event.** The push rises and falls as a sine through
+   the power phase; there is no catch for the surge to start on, and no
+   splash or puddle for the eye to tie it to.
+5. **No hands, no body.** First person shows a floating pole; third person a
+   man standing beside one.
+6. **The pole works in any depth.** It pushes off the bed in 6 m of water.
+
+#### 9.2 Paddle, sweep, pole or oars: recommendation
+
+| Way | For | Against |
+| --- | --- | --- |
+| A paddle per side (the Loon's) | Built (the Loon); one rule | A 2.4 m raft is too wide to paddle from the middle: the paddler must kneel at an edge and change sides for every correction; weak on 1.3 t of green logs |
+| A sweep oar at the stern | The log raftsmen's way; steers well | It steers more than it drives; one person sculls slowly; better kept for the big log bundles (design 5) |
+| A pole | Built; pushes off the bed, so it beats the current upstream (the owner, 2026-11-18: "the raft guy pushing the raft up and down the river") | Only where the bed is in reach; in deep water it does nothing |
+| **Two oars on a rowing frame** | The real way to row a raft (a river oar rig); W rows both, A or D rows one, so the turn is plain; seated and facing the bow, so the player sees where the raft goes | New: a frame, two oars, a seat |
+
+**Recommendation: two oars on a rowing frame, rowed facing the bow (the
+push stroke), with the pole kept for the shallows.** The rower sits on a
+bench aft of the middle; the pins stand on the frame at the raft's edges.
+In water the pole reaches (bed within `pole.reach_m`, 2.7 m, the Raft tab's
+rule) the player can stand and pole (R takes up the pole; R again goes back
+to the oars), which keeps today's upstream push. In deeper water the pole
+cannot be planted and says so ("Too deep"). Recommendation taken (ask only
+with screenshots); the Rowing tab's Gear switch shows both, and the owner
+judges them there.
+
+#### 9.3 The oar stroke: five stages
+
+One oar swings about its pin: a sweep angle `theta` about the pin's upright
+(+ toward the bow), a droop `phi` that puts the blade in or out of the
+water, and a feather `psi` about the loom (square in the water, flat in the
+air). The hand holds the handle end, so the hand moves on an arc about the
+pin, and the arm reaches it from a shoulder that swings with the body about
+the hip. The stages map onto the skill's four:
+
+| Stage | Skill stage | What happens | Curve |
+| --- | --- | --- | --- |
+| **Reach** | windup, anticipation | Hands drawn in to the chest, blades forward at `catch_deg`, squared; the body upright, a little back (`lean_catch_deg`). It coils `coil_deg` further and holds. | slow ease into a held pose |
+| **Catch** | hit | The hands lift, the blades drop in: `phi` from clear to buried. Fastest as the blade meets the water; the splash and the start of the surge land on its end. | ease in (t cubed) |
+| **Drive** | hit, carried | The hands push forward and the body swings forward (`lean_release_deg`): `theta` from `catch_deg` to `release_deg`. The force is the blade's drag through the water, so it peaks mid-drive. The blade throws a wash. | ease in-out (half cosine), the body leads by `body_lead` |
+| **Release** | recoil | The hands press down, the blades lift out and feather flat in a wrist flick; the sweep carries `follow_deg` past the release. Two swirls (the oar's puddles) are left where the blade came out. | quick kick, ease out |
+| **Recovery** | recover | The hands draw back to the chest, the body comes upright, the blades travel forward flat and clear, dripping. | ease in-out |
+
+Backing (S) runs the same stages with the sweep reversed: the catch at
+`release_deg`, the drive toward `catch_deg`, the body leaning back on the
+drive.
+
+#### 9.4 One beat; the surge and the turn
+
+- **One clock for both oars.** While any row key is held one stroke clock
+  runs, period `P = reach_s + catch_s + drive_s + release_s + recovery_s`
+  (1.70 s by default, 35 strokes a minute). An oar whose key goes down
+  mid-stroke waits for the next reach, so the two oars never fall out of
+  step. An oar whose key comes up finishes its stroke and rests at the
+  reach pose; nothing snaps.
+- **Keys.** W rows both oars; S backs both; A rows the right oar alone
+  (the raft turns left); D the left (it turns right); Q and E row the left
+  or right oar on its own, held with W or alone. A and D with W row both,
+  the turn's side a little harder (`turn_share`).
+- **The surge is the force, not a drawing.** The blade's own velocity (from
+  the schedule) plus the raft's at the blade, less the water's, makes the
+  drag `F = -1/2 rho Cd A s |v| v` (`s` the share of the blade under
+  water), applied at the blade. So the raft surges from the catch to the
+  release and glides through the recovery, and one oar alone pushes 2.75 m
+  off the centre line and turns the raft with no separate turn force. The
+  physics reads the stroke schedule (it is the rule); the arms, the body
+  and the splash only draw it.
+- **The pole** keeps today's law (drag against the ground at the tip) with
+  its own stages: reach (the pole swung forward, high), catch (the tip
+  stabbed down to the bed ahead, `plant_ahead_m`), drive (the tip stays on
+  the bed where it landed while the poler walks his hands down the pole and
+  the raft slides past it), release (pulled free), recovery (swung forward
+  hand over hand). A plant that would be deeper than `reach_m` does not
+  land, and the pole pushes nothing.
+
+#### 9.5 The water's answer
+
+- **Catch:** a splash at the blade: `splash_drops` drops thrown up and out
+  at up to `splash_speed_mps`, falling under gravity, and a small ring.
+- **Drive:** wash at the blade, a few drops and foam a step.
+- **Release:** two swirls, the puddles an oar leaves (a pair of eddies
+  turning opposite ways, one at each edge of the blade), `puddle_m` across,
+  carried by the current, turning, and fading over `puddle_s`.
+- **Recovery:** drips off the blade, `drips` a stroke.
+- Drops and swirls are lit as the water is: the sun, the sky and every lamp
+  near them (the lantern on the raft at night). Drawn only; nothing reads
+  them.
+
+#### 9.6 First person
+
+The rower's eye rides the body: it moves forward with the lean on the drive
+and back on the recovery (`head_follow`, a share of the shoulders' move),
+added to the view, never to the mouse look. Each hand is the approved hand
+of M36 Tools in Hand (the Hand tab, `hand-model` design 5, approved
+2026-11-17), copied into the page from `tool-motion.html`, closed on the
+oar's handle (or the pole), its arm turned toward an elbow solved from the
+shoulder (two bones, the elbow out and down). The hands and arms are lit as
+the terrain is (`LitByField`, `LitLikeTerrain` in the port): at night they
+are as dark as the raft except where the lantern reaches. Third person draws
+the same pose on the blocky rower, his arms two blocks a side.
+
+#### 9.7 Tunables
+
+For `assets/config/vehicles.ron`, `raft:`, beside `paddle:` (which stays for
+the Loon and the tube), validated at load (every time and length positive,
+`release_deg < catch_deg`, the blade's droop able to reach the water).
+Defaults; the Rowing tab's sliders print the same block:
+
+```ron
+oars: (
+    pin: (0.0, 0.62, 1.0),      // m: along (+bow), over the waterline, out (mirrored for the left)
+    length_m: 3.0,              // m, handle end to blade tip
+    inboard_m: 0.95,            // m, handle end to the pin (the handles meet a shoulder's width apart)
+    blade_m2: 0.14,
+    blade_cd: 1.3,
+    catch_deg: 26.0,            // sweep at the catch, + toward the bow
+    release_deg: -20.0,         // sweep at the release
+    coil_deg: 3.0,              // the reach's extra coil before the catch
+    follow_deg: 4.0,            // the release's carry past release_deg
+    blade_depth_m: 0.12,        // blade centre under the water through the drive
+    blade_clear_m: 0.22,        // blade centre over the water through the recovery
+    feather_deg: 80.0,
+    turn_share: 0.35,           // A or D with W: the outer oar's extra sweep share
+),
+stroke: (
+    reach_s: 0.16, catch_s: 0.12, drive_s: 0.62, release_s: 0.14, recovery_s: 0.66,
+    exaggerate: 1.0,            // scales coil, follow-through, lean and the head's follow together
+),
+rower: (
+    seat: (-0.78, 0.62, 0.0),   // m, the hip
+    shoulder_m: 0.5, shoulder_half_m: 0.19, upper_arm_m: 0.3,
+    lean_catch_deg: -6.0, lean_release_deg: 22.0,
+    body_lead: 0.25,            // share of the drive the body swings ahead of the arms
+    head_follow: 0.6,
+    hand_scale_m: 0.03,         // metres a hand-model unit (the fist closes on a 34 mm handle)
+),
+pole: (
+    reach_m: 2.7, length_m: 4.6, plant_ahead_m: 1.1, side_m: 1.35,
+    reach_s: 0.3, catch_s: 0.16, drive_s: 1.1, release_s: 0.22, recovery_s: 0.8,
+    blade_m2: 0.7, blade_cd: 1.25,   // today's push law, against the ground
+),
+water: (
+    splash_drops: 16, splash_speed_mps: 2.4, drips: 5,
+    puddle_m: 0.24, puddle_s: 4.0, puddle_spin_rps: 0.6,
+),
+```
+
+#### 9.8 The raft's own lantern (owner, 2026-11-19: "Rafts should also have a light that comes with it at night")
+
+- **Today.** The game's raft already carries a lantern on its bow post
+  (`vehicles/draw.rs`, `Builder::lantern`): an emissive flame
+  (`Moving::Flame`) shown while `DuskLamps.lit`. It lights nothing: it is
+  not a lamp in the light field, so at night the raft, its poler and the
+  water round it are as dark as open water, with a glowing box at the bow.
+  The raft's own meshes are lit as the terrain is (`LitByField`,
+  `LitLikeTerrain`, `craft-lighting`), so they would answer to a lamp if
+  there were one.
+- **Proposed.** Every raft comes with its lantern fitted: nothing to craft
+  or place, and it cannot be taken off. It is lit at dusk and out at dawn on
+  the same switch as the town lamps (`DuskLamps`, `lamps-and-lanterns`
+  decision 1), and while lit it is a lamp in the light field's lamp term:
+  it lights the raft's deck, the water round the raft, the oars, the splash
+  and the swirls, and the rower's first-person hands, with the town lamps'
+  colour and falloff. The raft stays lit like the terrain.
+- **How it joins the field.** The town lamps are baked into the cell light
+  field (a lamp record in the column, relit twice a day). A raft moves every
+  frame, so its lamp cannot be a baked cell record without a re-bake as it
+  drifts. Recommendation taken (ask only with screenshots): a short list of
+  moving lamps (the four nearest lit craft lamps to the camera), uploaded
+  each frame and summed into the same lamp term the field-lit shaders
+  already read (terrain, water, `LitLikeTerrain` meshes, the held hand), at
+  the bake's colour and falloff. Limitation, stated: a moving lamp has no
+  baked shadow or bounce; the deck and the rower do not shadow it.
+- **Tunables**, in `assets/config/vehicles.ron`, `raft:`, beside `oars:`
+  (`LoonSpec` gains `lamp: Option<CraftLampSpec>`, `None` for the Loon and
+  the tube, so their saves and looks are unchanged):
+
+```ron
+lamp: (
+    at: (-0.95, 1.45, -1.95),   // m, the bow post's lantern, the game's frame (+x right, -z the bow)
+    range_m: 15.0,              // where the light falls to nothing (the town lamps' falloff; a pool about 8 m across reads on the water)
+    colour: (1.0, 0.62, 0.30),  // linear, the town lantern's warm flame
+    intensity: 2.4,             // the town lantern's, in the lamp term's units
+),
+```
+
+  The mockup's Rowing tab prints the same block under `lamp:`.
+- **Saves.** Nothing new: the lamp is part of the raft, and whether it
+  burns is the clock's answer.
+
+#### 9.9 In the game (on a request, after the owner's look)
+
+- `pbd_core::vehicle`: a `RaftState` (the stroke clock, each oar's stage
+  and whether it rows, the gear) and one function `oar_pose(spec, clock,
+  oar)` that gives the stage, the sweep, droop and feather and the impact
+  events. `loon.rs`'s stroke is left as it is for the Loon and the tube;
+  the raft's force reads the oar's blade from `oar_pose`. Tests pin the
+  schedule: which stage at which time, the catch event on the catch's end,
+  one oar joining only at the next reach, no pose jump when a key comes up,
+  a one-oar stroke turning the raft toward the other side, a pole that does
+  not plant past `reach_m`.
+- `pbd-app` `vehicles/draw.rs`: the oars and frame as moving parts reading
+  `oar_pose`; the first-person hands from `held_tools.ron`'s approved hand,
+  closed on the handle; splash, drips and swirls as particles lit by the
+  field (`LitByField`, `LitLikeTerrain`).
+- `vehicles/draw.rs` and the field-lit shaders: the raft's lantern as a
+  moving lamp (9.8), with a test that it is lit only while `DuskLamps.lit`
+  and that a raft without one (the Loon) adds no lamp.
+- Saves: the frame and oars are part of the raft; nothing new is stored
+  except the gear in hand, which is derived on boarding.
+- Not measured here: frame cost (no GPU in this session), and the feel of
+  the beat in real time (judged on the owner's machine).
+
 ## Risks / Trade-offs
 
 - **Stiff lines on light craft.** The mooring rule's cap was found the hard

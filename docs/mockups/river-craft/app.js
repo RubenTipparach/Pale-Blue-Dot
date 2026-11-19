@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 const RC = window.RC;
-const TABS = ["raft", "tube", "tug", "logs", "nets", "anchor"];
+const TABS = ["raft", "tube", "tug", "logs", "nets", "anchor", "rowing"];
 const stages = {}, defs = {};
 const shared = {night: false, arrows: false, speed: 1};
 let cur = null;
@@ -43,12 +43,14 @@ function hud() {
 function buildActions() {
   const box = $("acts"), def = defs[cur]; box.innerHTML = "";
   const keys = document.createElement("span"); keys.className = "lab"; keys.textContent = def.keys; keys.style.textTransform = "none";
-  if (def.choice) {
-    const g = document.createElement("span"); g.className = "grp"; g.setAttribute("role", "group"); g.setAttribute("aria-label", def.choice.label);
-    const l = document.createElement("span"); l.className = "lab"; l.textContent = def.choice.label; g.appendChild(l);
-    for (const [v, t] of def.choice.options) {
-      const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.setAttribute("aria-pressed", String(def.choice.get() === v));
-      b.addEventListener("click", () => { def.choice.set(v); for (const x of g.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b)); stages[cur].draw(); hud(); });
+  // one choice (def.choice) or several (def.choices: the Rowing tab's Today / Proposed, gear and view)
+  for (const ch of def.choices || (def.choice ? [def.choice] : [])) {
+    if (ch.visible && !ch.visible()) continue;
+    const g = document.createElement("span"); g.className = "grp"; g.setAttribute("role", "group"); g.setAttribute("aria-label", ch.label);
+    const l = document.createElement("span"); l.className = "lab"; l.textContent = ch.label; g.appendChild(l);
+    for (const [v, t] of ch.options) {
+      const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.setAttribute("aria-pressed", String(ch.get() === v));
+      b.addEventListener("click", () => { ch.set(v); if (def.choices) buildActions(); else for (const x of g.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b)); stages[cur].draw(); hud(); });
       g.appendChild(b);
     }
     box.appendChild(g);
@@ -73,11 +75,15 @@ function show(name) {
   for (const a of (defs[cur] && defs[cur].actions) || []) a.down = false;
   cur = name;
   for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === name));
-  for (const c of document.querySelectorAll("#stage canvas")) c.hidden = c.dataset.tab !== name;
+  for (const c of document.querySelectorAll("#stage canvas[data-tab]")) c.hidden = c.dataset.tab !== name;
+  for (const el of document.querySelectorAll("[data-only]")) el.hidden = el.dataset.only !== name;
   const st = stages[name] || make(name);
   Object.assign(st.S, {night: shared.night, arrows: shared.arrows, speed: shared.speed});
   st.apply(); st.resize(); st.start();
   buildActions(); syncTime(); hud();
+  // the Rowing tab's tunables: sliders and the RON they make, under the controls
+  const tune = $("tune");
+  if (tune) { tune.hidden = !defs[name].tune; if (defs[name].tune && !tune.dataset.built) { defs[name].tune($("tunebody")); tune.dataset.built = "1"; } }
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
 }
 

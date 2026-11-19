@@ -56,3 +56,28 @@
       `docs/screenshots/mockup-river-craft/tube-*.png`.
 - [ ] The owner's look at the Tube tab; the recipe (pine pitch, inner tube)
       goes into the port on a request.
+
+## Rowing the raft (owner, 2026-11-19: "mockup better rowing on a raft")
+
+- [x] Write-up: design 9 (today's stroke measured, what reads badly, the
+      five stages, one beat, the surge and the turn from the force, the
+      splash and swirls, first-person hands, tunables for `vehicles.ron`),
+      and the spec delta "A raft is rowed in strokes on one beat".
+- [x] Recommendation taken (ask only with screenshots): two oars on a
+      rowing frame, rowed facing the bow, the pole kept for the shallows.
+- [x] Rowing tab in M34 (`#rowing`, version 2 of the page): Today / Proposed,
+      Oars / Pole, first and third person, hold W S A D Q E to row, Show
+      poses, Tune sliders printing the RON block, day and night (a lantern
+      on the raft and the bank posts). The hand is M36's approved hand,
+      copied into `river-craft/hand.js` from `tool-motion.html`.
+- [x] Stills in `docs/screenshots/raft-rowing/` (software renderer): the
+      catch, mid-drive with the splash, the recovery, today against
+      proposed (day and night, first and third person), the one-oar turn,
+      the swirls, the pole.
+- [x] The raft's own lantern (owner, 2026-11-19: "Rafts should also have a
+      light that comes with it at night"): design 9.8 and the spec delta
+      "A raft carries its own lantern, lit at night"; in the Rowing tab the
+      lantern lights the deck, water, oars, splash and hands in Proposed and
+      nothing in Today; night stills today against proposed.
+- [ ] The owner's look at the Rowing tab (the tracker, M34).
+- [ ] The port (design 9.9), only on a request after the owner's look.
