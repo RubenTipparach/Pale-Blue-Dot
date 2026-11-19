@@ -1950,3 +1950,185 @@ red of a bed 2.4 m down and 5 m off. Tinting them further than the water
 over them would be a look of its own, for the owner to decide with the
 frames, and is not built here. The `--life lineup` instrument is tinted by
 its depth too, so a body can be read on the bed beside the sand.
+
+### B24. Reef rock, sea ice, basalt and mussel beds as cells (6.2; 2026-11-19)
+
+The owner, 2026-11-19: "Build rest of phase 2". B10 left these four cells
+waiting for the column's material word to widen, and wrote the widening up
+as "the next step" without laying it out. Measured first, on
+`claude/phase-2-1`:
+
+- **The per-layer word is four bits, but five of its sixteen values are
+  never a cell's.** `render_code` gives a cell 0, 1, 2, 3, 5, 6, 8, 10, 13,
+  14 or 15. Codes 4 (a desert dune) and 7 (a swamp sward) are given only
+  to a far record's cap by the biome, 11 and 12 are faces, and 9 (the
+  plant's leaf tile) to pieces. No column layer and no cap of a column cell
+  carries 9.
+- **The per-layer sheet field already draws a cell from a sheet that is not
+  its biome's.** A placed block keeps its home sheet
+  (`placed-blocks-keep-material`), and ore is drawn as the stone code with a
+  mark in that field (`flora-v2` 12.12). The field is four bits, 0 for the
+  biome's sheet, 1 to 14 for a sheet plus one, 15 for ore.
+- **The four tiles exist.** `ocean.png` (3,0) is "reef limestone" and
+  (3,1) "shell bed"; `basalt_wastes.png` (3,0) is "basalt";
+  `frozen_wastes.png` (2,1) is "layered glacial ice" (`biomes.json`).
+
+So the word does NOT widen. Each new cell is drawn as an existing code from
+its own sheet, the way ore is:
+
+| Cell | Code | Its sheet, always (generated or placed) | Tile |
+| --- | --- | --- | --- |
+| Reef rock | 5, stone | `ocean` | (3,0) reef limestone |
+| Basalt | 5, stone | `basalt_wastes` | (3,0) basalt |
+| Sea ice | 8, wood | `frozen_wastes` | (2,1) layered glacial ice |
+| Mussel bed | 9, the shell code | `ocean` | (3,1) shell bed |
+
+The one shader change is code 9 on a ground face (a cap, a heightfield wall
+or a column face): the sheet's (3,1). Nothing else moves in
+`planet_surface.wgsl`, no buffer changes size, and the save's edit line is
+unchanged: an edit names its material by number, the four take numbers
+24 to 27 (20 and 21 are taken, 22 and 23 are held for the kitchen), and an
+old save never names them. Their names in the save's material table are
+appended, so an old save opens as it did and a new one written by this
+build names the four by their numbers.
+
+**Where they are: generator version 14** (`TENEBRIS_V14`, version 12 with
+`sea_cells: Some(SeaCells::V14)`). `mountain-ground` holds 13, planned and
+not built; whichever of the two lands second keeps its number and builds on
+whatever is the newest then. Version 12's ground and top blocks are pinned
+by digest before 14 lands. On a version 14 world, by
+`ocean::places::environment_at` at the floored surface:
+
+- **Reef**: the top is reef rock where a 7 m patch noise is over its median,
+  sand elsewhere; reef rock runs under it to the soil's depth, then stone.
+- **Vent**: the top is basalt, with mussel beds in patches (a quarter of
+  the vent ground); basalt runs under both to the soil's depth.
+- **Polar**: sea ice, one cell standing on the sea (its bottom at the sea's
+  level, the layer 0 to 1 m) where a 9 m floe noise is high, over water at
+  least 2 m deep, so a floe is never on a beach (B18) and comes one to four
+  cells together. The floe PIECES are not drawn on a version 14 world: its
+  floes are the cells, which do not bob. The seal hauled out on a floe (B13,
+  B18) is a decoration of the piece and so is not on a version 14 floe; the
+  `seal` species still hauls out on the water. Recommendation taken (ask
+  only with screenshots).
+
+Off the column tier the far record draws the top as the column does: its
+code, and its own sheet in the record's sheet bits, so a basalt vent field
+far off is basalt and not the ocean sheet's limestone.
+
+**Items, digging and icons.** Each is a block item (`Item::Block`), named
+"reef rock", "basalt", "sea ice" and "mussel bed". Digging: reef rock and
+basalt are stone (a pickaxe), sea ice is stone too (it is hard; ice takes a
+pick), and the mussel bed is dirt (a shovel), each giving itself. The pack's
+icon is the same tile from the same sheet (`slots::block_art`), the 1 px
+outline the inventory gives every block. Placed anywhere, each keeps its
+sheet.
+
+**The pieces' dither fade (B12)** is already built: B13 put every sea-places
+tile under the terrain's screen-door fade (`detail-fade`). 6.2's note that
+the pieces "have no dither fade yet" predates B13 and is struck.
+
+**Validation**: a digest test of version 12 taken before 14; a test that
+version 14 is version 12 everywhere but under the sea's reef, vent and polar
+places; a test that each cell is drawn from its own sheet's tile; the dig
+and item tests; an old save opening on its own version
+(`tests/generator_switch.rs` style); captures of each on a version 14 world.
+
+### B25. Beavers and their dams in the game (section 8, 8.2; 2026-11-19)
+
+Decision 8 gives the colony record, the `beaver` process and its three
+proposals (fell, dam, lodge), and the yield rule. What it leaves open, and
+what is taken here (recommendation taken, ask only with screenshots):
+
+- **Where a colony is.** A *beaver site* is a river cell (`pbd_core::rivers`,
+  version 8 and up) that is a still reach, not a riffle or a fall, on
+  Fields ground between 40 and 60 degrees of latitude, with a tree of the
+  generator's own (`flora`) within 20 m. Sites are derived: a pure function
+  of the seed and the version, never saved.
+- **When a colony is made.** The first time the player comes within 120 m
+  of a site, a colony record is created by the world's creation
+  (`Author::Creation`), as a site's is: `rec colony-<n> colony {site,
+  sites, members, built, last_h, state}`, where `sites` is the next two
+  sites up the same river (where it moves on), `built` the cells its dam and
+  lodge are made of so far, `last_h` the world hour it last acted, `state`
+  `felling`, `damming`, `lodged` or `gone`. A world made before beavers (any
+  version under 8, which has no rivers) has no sites and no colony.
+- **The process.** `beaver`, a period of one in-game hour, runs only while
+  the world is played (world time passes only while played). It catches up
+  every hour since `last_h`, bounded at 40 days, in one call, so a colony
+  the player left on day 3 and comes back to on day 40 is where hourly
+  steps would have put it (the catch-up test). Each hour it proposes at
+  most one thing, through `WorldSave::propose`, authored
+  `@wbeaver:colony/<n>`:
+  - *fell*: every sixth hour while fewer than six trees are down, the
+    nearest standing tree within 20 m becomes a stump (the tree record the
+    player's axe would write, `trees_taken`);
+  - *dam*: once three trees are down, one **sticks** cell an hour, across
+    the reach's downstream lip (the cell the river leaves the site by and
+    its two neighbours across the stream), bottom layer first, up to the
+    bank's top and never more than four layers;
+  - *lodge*: once the dam is whole, three sticks cells in the reach beside
+    the bank, then the colony is `lodged` and only mends.
+- **Sticks** is a cell (`Material::Sticks`, 28), drawn as the wood code
+  from the fields sheet (its bark, (2,1)), dug with the axe or by hand as
+  wood, giving "sticks". It is solid and opaque, so the flowing-water rule
+  treats a dam as any wall.
+- **What a dam does to the water.** Under `pbd_core::liquid` (Luanti's
+  rule) water never rises over its sources: a dam cannot lift a pond above
+  the reach. What it does do is hold the water back: the reach behind it
+  keeps its sources, and the flowing water the lip fed downstream loses its
+  feed and drains away tick by tick, so the stream below a whole dam runs
+  dry to the next reach. Break the dam and the lip's water flows again.
+  Nothing about the water is saved; the dam is.
+- **The yield rule.** Every proposal is checked whole against the cells
+  the player has touched. A refused *dam* (the player built on the lip
+  first, or broke the dam, which makes those cells theirs) moves the colony:
+  its record's `site` becomes the next of `sites` (authored by the process),
+  `built` is cleared, and it starts felling there. With no site left it is
+  `gone`. A broken dam is never rebuilt on the player's cells.
+- **Beavers seen.** `beaver` is appended to `fauna.ron` as a protected
+  river floater (the otter's mover: it swims the surface and dives), `env`
+  riffle, and spawns only in the river cells within 40 m of a colony that is
+  not `gone`; it is never caught. Its body is a low-poly body in M25's
+  manner, with no outline, under the water life's material with
+  `LitByField` and `LitLikeTerrain`, so it is lit as the terrain is.
+- **The journal.** The colony's entries are the save's own lines with
+  their author, which the save already writes; no new screen. Game text,
+  if any is shown, stays plain ("A beaver dam").
+
+**Saves.** A colony and its sticks are records and edits with an author,
+taken through the durable path; an old save has no colony and opens as it
+did. No generator version moves: sites are derived from version 8's rivers.
+
+**Validation**: core tests of the site rule, of the process to day 40 in
+hourly steps and in one catch-up (equal), of a broken dam not rebuilt on
+the player's cells and the colony moving to its next site, of the lip
+draining under the liquid rule behind a whole dam; an app test that the
+proposals go through the save with the process's author; a capture of a
+colony's dam on a river.
+
+### B26. Two capture instruments: a school in a lake, and a gale (18.2, 4.3; 2026-11-19)
+
+Both are measurement instruments in CLAUDE.md's sense: they make a frame
+the write-up needs and change nothing a player meets. No default moves.
+
+- **18.2, a school under a lake's surface.** B23's code already reads a
+  school's depth from `PlanetWater::surface` at its anchor, which is the
+  column's fresh water top where water stands over the sea's cells and the
+  sea's otherwise; the spawner already puts a fresh-water school at that
+  top. What could not show it was the `--life` instrument, which only ever
+  put a group in the sea (it asked the height field's sea depth, nought
+  over a lake). It now asks the water the spawner asks, so `--life perch`
+  puts the school in a lake or a river. The before frame needs B23's old
+  rule, the depth off the sea's mean sphere: `PBD_SCHOOL_DEPTH=sea` gives
+  it, for the capture only. A test pins the rule: a school in the river by
+  the spawn reads the river's top as its surface.
+- **4.3, the gale.** B11 found no gale over the sea in the first day of a
+  new world, and no way to hold the eye on the surface over deep water.
+  `--gale <m/s>` holds the wind the sea has caught up with at that speed
+  over every direction, blowing along the atmosphere's own wind (east where
+  calm): the waves (the table's state) and the spray's wind (`SeaNow`) both
+  read it. The eye is held on the surface by boarding the raft
+  (`--aboard raft`), which floats on the same table. The storm capture is
+  taken beside `sea-storm-day.jpg` at 28 m/s, where the spray and streaks
+  are at their full strength (from 17 m/s to 34).

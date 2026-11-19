@@ -257,6 +257,9 @@ pub struct Launch {
     pub at: Option<(f32, f32)>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--gale <m/s>`: the sea held at a gale (`ocean-environments` 4.3), an
+    /// instrument for filming the spray.
+    pub gale: Option<f32>,
     /// `--weather-at SECONDS` starts the weather field that far into its own
     /// time, so a capture can be taken under a chosen sky: the spawn is a wet
     /// meadow whose cover sits near 0.6 at launch, and the body's average is
@@ -525,6 +528,7 @@ impl Launch {
             spawn: None,
             at: None,
             rain: 0.0,
+            gale: None,
             weather_at: 0.0,
             open_doors: false,
             no_shadows: false,
@@ -1391,6 +1395,16 @@ impl Launch {
                             .find(|o| o.name().eq_ignore_ascii_case(name))
                             .unwrap_or_else(|| panic!("no overlay called {name}")),
                     );
+                }
+                "--gale" => {
+                    i += 1;
+                    let mps: f32 = args
+                        .get(i)
+                        .expect("--gale requires a wind in m/s")
+                        .parse()
+                        .expect("invalid gale wind");
+                    assert!((0.0..=60.0).contains(&mps), "gale must be within 0..60 m/s");
+                    result.gale = Some(mps);
                 }
                 "--rain" => {
                     i += 1;
@@ -2272,6 +2286,9 @@ pub fn run(args: &[String]) {
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if let Some(mps) = launch.gale {
+            app.insert_resource(pbd_app::sea::SeaGale(mps));
         }
         if let Some(id) = launch.life.clone() {
             // `--life ID:METRES` puts the group that far ahead, for a close
