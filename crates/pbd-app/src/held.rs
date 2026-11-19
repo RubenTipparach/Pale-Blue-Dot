@@ -1220,7 +1220,7 @@ fn light_held(
     if let Some(own) = carried.as_deref().and_then(|c| c.own()) {
         let share = pbd_core::light::lamp_share(sample.0, daylight);
         let near = (own.at - point).length();
-        let add = pbd_core::light::carried_on(own, near, 1.0, settings.0.light.hand_min_m);
+        let add = pbd_core::light::carried_on_hand(own, near, settings.0.light.hand_min_m);
         light += Vec3::from(add) * share;
     }
     let colour = Color::linear_rgb(light.x, light.y, light.z);

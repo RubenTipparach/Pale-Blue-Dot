@@ -657,6 +657,16 @@ pub fn carried_on(light: &Carried, d: f32, nl: f32, min_m: f32) -> [f32; 3] {
     light.colour.map(|c| c * f)
 }
 
+/// What a carried light lays on the hand and the thing held in it, `d`
+/// metres off and no nearer than `min_m`: the falloff's shape without the
+/// bake's gain, so a torch in hand lights the hand as standing in a placed
+/// torch's own cell does ([`lamp_light`] at the torch's level: warm, not
+/// blown out), and less as it is held farther off.
+pub fn carried_on_hand(light: &Carried, d: f32, min_m: f32) -> [f32; 3] {
+    let f = crate::lamp_bake::falloff(d.max(min_m), 1.0) / crate::lamp_bake::GAIN * TORCH_GAIN;
+    light.colour.map(|c| c * f)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -745,6 +755,15 @@ mod tests {
             "past its reach"
         );
         assert_eq!(carried_on(&held, 2.0, -0.2, 0.0), [0.0; 3], "facing away");
+        // The hand: no brighter than standing in a placed torch's own cell.
+        let hand = carried_on_hand(&held, 0.1, 0.5);
+        let cell = lamp_light(14.0 / 15.0);
+        for k in 0..3 {
+            assert!(
+                hand[k] <= cell[k] * 1.05 && hand[k] > cell[k] * 0.8,
+                "{hand:?} {cell:?}"
+            );
+        }
     }
 
     /// "No step at a cell boundary": the light on a face 2 m ahead of a

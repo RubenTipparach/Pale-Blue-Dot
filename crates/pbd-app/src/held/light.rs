@@ -705,7 +705,7 @@ pub(super) fn spawn_lights(
     // lays its light over them (`hold_lights`).
     let pane_lit = add(
         StandardMaterial {
-            base_color: Color::linear_rgb(1.3, 1.3, 1.3),
+            base_color: Color::linear_rgb(0.9, 0.9, 0.9),
             ..unlit(Some(texture(
                 include_bytes!("../../../../assets/textures/held_light/pane.png"),
                 &mut images,
@@ -723,7 +723,9 @@ pub(super) fn spawn_lights(
     let cap = add(unlit(None), false);
     let flame_m = add(
         StandardMaterial {
-            base_color: Color::linear_rgb(1.25, 1.25, 1.25),
+            // Under the tonemapper's shoulder, as the placed flame is
+            // (`planet_surface.wgsl`), so it reads orange, not white.
+            base_color: Color::linear_rgb(0.75, 0.75, 0.75),
             alpha_mode: AlphaMode::Mask(0.5),
             ..unlit(Some(texture(
                 include_bytes!("../../../../assets/textures/held_light/flame.png"),
@@ -732,13 +734,19 @@ pub(super) fn spawn_lights(
         },
         false,
     );
+    // The glow is a soft light round the head, not pixel art: sampled
+    // smoothly, as the mockup's shader draws it.
+    let glow_texture = texture(
+        include_bytes!("../../../../assets/textures/held_light/glow.png"),
+        &mut images,
+    );
+    if let Some(image) = images.get_mut(&glow_texture) {
+        image.sampler = ImageSampler::linear();
+    }
     let glow = add(
         StandardMaterial {
             alpha_mode: AlphaMode::Add,
-            ..unlit(Some(texture(
-                include_bytes!("../../../../assets/textures/held_light/glow.png"),
-                &mut images,
-            )))
+            ..unlit(Some(glow_texture))
         },
         false,
     );
