@@ -1260,6 +1260,34 @@ onto a floe needs the floes in the water the schools read, and is not done
 here. The `--life` approach ends at 5 m at the polar shore: no water nearer
 is deep enough for a seal.
 
+### B24. Bright outlines round everything seen under water (owner, 2026-11-19)
+
+The owner, under the sea, with the fishing rod held: "there seems to be
+outlining issues when under water", and a close-up of the rod edged in a
+jagged pale line. The tops of the hex columns ahead carried the same thin
+bright teal line.
+
+**Cause** (read in `water.wgsl`, `compose`): under the water the composite
+wobbles the picture. It samples the scene at `uv + wobble` (`fx.x`, 0.0015
+of the screen, so 2 to 4 pixels at 1080p), but fogs that sample with the
+distance of the pixel at `uv`. At a silhouette the two are different
+things. A pixel on the rod's edge takes its colour from the background
+beside it, which is the seabed or the far wall before any murk (bright
+teal), and fogs it with the rod's few centimetres of water. So the far
+ground's unfogged colour shows as a rim round everything near. The same
+happens at every step of the hex columns, where a near top edge stands
+against far water.
+
+**Fix (proposed):** keep the wobble only where it moves within one surface.
+The composite reads the depth at the wobbled point. If that point is sky
+while the pixel is not, or the reverse, or if its distance differs from
+the pixel's by more than a sliver (15% of the distance plus 0.3 m), it
+takes the unwobbled colour. Then colour and fog always come from the
+same surface. The wobble still runs across a surface. At an edge it
+stands still for the 2 to 4 pixels the shift would have crossed, which
+is not visible at that size. No other shader term changes, and nothing
+changes above the water.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

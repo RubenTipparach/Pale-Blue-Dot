@@ -118,3 +118,7 @@ against what it would cost.
 - [ ] 18.2 (Built 2026-11-17 on `claude/underwater-fish-light`; not yet shown: the perch frame is at a sea shore, and no school in a lake or river over sea level was filmed.) A school's depth is read from the surface of the water it is in (a lake's or river's top, the sea's tided surface), `PlanetWater::surface` at its anchor. Verify: before and after of a school under a lake's surface.
 - [x] 18.3 (Built 2026-11-17 on `claude/underwater-fish-light`; `docs/screenshots/underwater-fish-light/`.) Sea life is lit as the terrain is (`LitLikeTerrain`): the terrain's fill, sun after the air, cascades and lamps. Verify: READY with no new `LATE_PIPELINE`; the night frame with a torch.
 - [x] 18.4 (Built 2026-11-17 on `claude/underwater-fish-light`; `docs/screenshots/underwater-fish-light/`.) Before and after stills of the same frames (near the surface, about 9 m down, from above, at night with a torch) in `docs/screenshots/underwater-fish-light/`. Verify: the README.
+
+## 19. Bright outlines round everything seen under water (owner, 2026-11-19; design B24)
+
+- [ ] 19.1 The underwater wobble takes a sample only from the same surface as the pixel (depth checked at the wobbled point), so colour and fog never come from two surfaces. Verify: before and after stills under the sea with the rod held and hex steps against far water, in `docs/screenshots/underwater-outlines/`.
