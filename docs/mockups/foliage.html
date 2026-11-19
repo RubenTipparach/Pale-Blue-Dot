@@ -111,6 +111,40 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   .biomes button img{width:28px;height:28px}
 }
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+/* Page tabs: one 3D view at a time. The playground and the glow tab each own a renderer. */
+.pagetabs{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:40;display:flex;gap:4px;align-items:center;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);max-width:calc(100vw - 32px)}
+.pagetabs a{font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink);text-decoration:none;padding:5px 10px;border-radius:4px;white-space:nowrap}
+.pagetabs a[aria-selected="true"]{background:var(--amber);color:var(--ground)}
+.pagetabs a:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.pagever{font-family:var(--mono);font-size:11px;color:var(--muted);padding:0 6px}
+.scene,.rack{margin-top:46px}
+.notes{z-index:50}
+body[data-page="glow"] > #view, body[data-page="glow"] > .panel{display:none!important}
+#glowCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none;background:#05070d}
+.g-cross{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;background:linear-gradient(#fff,#fff) center/2px 14px no-repeat,linear-gradient(#fff,#fff) center/14px 2px no-repeat;opacity:.75;mix-blend-mode:difference}
+.g-hint{position:fixed;left:50%;top:calc(50% + 22px);transform:translateX(-50%);font-family:var(--display);font-size:15px;letter-spacing:.06em;color:var(--ink);background:rgba(10,12,9,.6);padding:3px 9px;border-radius:4px;pointer-events:none}
+kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-radius:3px;padding:0 4px;margin-right:4px}
+.g-toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(120px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--panel);border:1px solid var(--line);border-radius:4px;font-family:var(--display);font-size:15px;letter-spacing:.04em;opacity:0;pointer-events:none}
+.g-toast canvas,.g-buff canvas,.g-slot canvas{width:32px;height:32px;image-rendering:pixelated}
+.g-toast b{font-family:var(--mono);font-weight:600;color:var(--leaf)}
+.g-bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));display:grid;justify-items:center;gap:8px}
+.g-buff{display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:3px 8px}
+.g-hotbar{display:flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.g-slot{all:unset;cursor:pointer;position:relative;width:48px;height:48px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;background:rgba(0,0,0,.25)}
+.g-slot[aria-pressed="true"]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
+.g-slot:focus-visible{outline:2px solid var(--amber)}
+.g-n{position:absolute;right:3px;bottom:1px;font-family:var(--mono);font-size:11px;font-weight:600}
+.g-k{position:absolute;left:3px;top:1px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+.g-acts{display:flex;gap:6px}
+@media (hover:hover) and (pointer:fine){.g-acts{display:none}}
+.g-ctl{position:fixed;top:calc(62px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));width:min(300px,calc(100vw - 32px));padding:10px 12px;display:grid;gap:7px}
+.g-ctl h1{margin:0;font-family:var(--display);font-weight:700;font-size:20px;line-height:1.05}
+.g-row{display:grid;grid-template-columns:70px 1fr;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips .btn{font-size:13px;padding:4px 8px}
+.g-light{font-family:var(--mono);font-size:11.5px;color:var(--ink);min-height:1.4em}
+@media (max-width:860px){ .g-ctl{top:auto;bottom:calc(150px + env(safe-area-inset-bottom,0px));gap:5px;padding:8px} .g-ctl .g-row{grid-template-columns:62px 1fr} .g-toast{bottom:auto;top:calc(62px + env(safe-area-inset-top,0px))} .pagetabs a{font-size:12.5px;padding:4px 7px} }
+
 </style>
 
 <canvas id="view" tabindex="0" aria-label="A patch of hex terrain covered in trees, grass and ground clutter. Drag to orbit, or walk it."></canvas>
@@ -252,9 +286,86 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <p>Per the standing rule, answers to these go in the survey with screenshots from this page; until then the recommendations stand.</p>
 </section>
 
+
+<nav class="pagetabs" role="tablist" aria-label="Views">
+  <a role="tab" href="#playground" data-page="playground">Playground</a>
+  <a role="tab" href="#glow" data-page="glow">Glow and carried light</a>
+  <span class="pagever">v2</span>
+</nav>
+
+<section id="glowTab" aria-label="Glow and carried light" hidden>
+  <canvas id="glowCanvas" tabindex="0" aria-label="First-person view of a damp wood at night with glowing mushrooms. Drag to look, WASD to walk, F to pick, right click to eat."></canvas>
+  <div class="g-cross" id="gCross" aria-hidden="true"></div>
+  <div class="g-hint" id="gHint" hidden><kbd>F</kbd> Pick</div>
+  <div class="g-toast" id="gToast" role="status" aria-live="polite"><canvas id="gToastIcon" width="16" height="16"></canvas><span>Glowing mushroom</span><b id="gToastCount">1</b></div>
+  <div class="g-bottom">
+    <div class="g-buff" id="gBuff" hidden><canvas id="gBuffIcon" width="16" height="16"></canvas><span id="gBuffT">3:00</span></div>
+    <div class="g-hotbar" id="gHotbar"></div>
+    <div class="g-acts"><button class="btn" id="gPick" hidden>Pick</button><button class="btn" id="gEat" hidden>Eat</button></div>
+  </div>
+  <section class="panel g-ctl" aria-label="Glow controls">
+    <div class="headrow"><h1>Glow and carried light</h1><button class="btn" id="gInfo" aria-haspopup="dialog" aria-label="About this tab">i</button></div>
+    <p class="pbd-tracker" style="margin:0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <div class="g-row"><span>Time</span><div class="chips" id="gTime"><button class="btn" data-v="night">Night</button><button class="btn" data-v="day">Day</button></div></div>
+    <div class="g-row"><span>Light</span><div class="chips" id="gCompare"><button class="btn" data-v="today">Today</button><button class="btn" data-v="new">Carried</button></div></div>
+    <div class="g-row"><span>View</span><div class="chips" id="gView"><button class="btn" data-v="fp">First person</button><button class="btn" data-v="over">Overview</button></div></div>
+    <div class="g-row"><span>Cap</span><div class="chips" id="gCap"><button class="btn" data-v="today">Today</button><button class="btn" data-v="proposed">Proposed</button></div></div>
+    <div class="g-row"><span>Glow time</span><div class="chips" id="gSpeed"><button class="btn" data-v="1">×1</button><button class="btn" data-v="10">×10</button></div></div>
+    <div class="g-row"><span></span><div class="chips"><button class="btn" id="gRoute" aria-pressed="false">Walk the route</button></div></div>
+    <div class="g-light" id="gLight"></div>
+  </section>
+
+  <section class="panel notes" id="gNotes" hidden aria-label="About the glow tab">
+    <button class="btn close" id="gClose" aria-label="Close">&#x2715;</button>
+    <h2>Glow and carried light</h2>
+    <p>The owner, 2026-11-19: "Players also asked to pick up glowing mushrooms. You can eat them and glow light from your body temporarily", "Allow players to pick up the glowing mushrooms that exist in the game today", "Holding a light source, torches lamps or mushrooms or anything that is a light should illuminate surrounding area", and "Need to make this fast so this would be realtime for the light emanating from player". The write-up is <code>openspec/changes/glowing-mushrooms</code>. Nothing on this tab is in the game yet.</p>
+
+    <h3>Controls</h3>
+    <ul>
+      <li>Drag to look, <b>WASD</b> or the arrow keys to walk, or <b>Walk the route</b> to be walked past the mushrooms and through the doorway in the stone wall.</li>
+      <li><b>F</b> (or the Pick button) picks the glowing mushroom under the crosshair, within 5 m. A toast shows its icon, its name and how many.</li>
+      <li><b>1-4</b> or a tap selects a hotbar slot: torch, lantern, glowing mushroom, bare hand.</li>
+      <li><b>Right click</b> (or Eat) with the mushroom selected eats one. The buff over the hotbar counts down. <b>Glow time ×10</b> runs the clock ten times faster to see the fade.</li>
+      <li><b>Light: Today</b> is the game now: nothing carried lights anything. <b>Carried</b> is the proposal.</li>
+      <li><b>Overview</b> shows the player from above, so the pool of light and where the wall cuts it can be seen.</li>
+    </ul>
+
+    <h3>The plant is the game's own</h3>
+    <p>It is the glowing plant of <code>lamps-and-lanterns</code> decision 8, drawn as <code>planet_surface.wgsl</code>'s flower slot draws it: a 6 cm stalk 0.32 m tall and a low four-sided cap 14 cm across, 3 cm high. It stands at a corner share of its cell from the cell's own rolls. At night its cap burns in its own cyan, <code>(0.62, 1.0, 0.88) × 0.25</code>, and it lights its own cell on the field at level 3, which the field draws in its one warm tint. By day the cap is pale. The game grows one in a hundred green cells (<code>glow_flower_chance</code> 0.01); this patch has more so that a few are in view. The code calls it a flower, and the owner calls it a mushroom. <b>Cap: Proposed</b> is the recommended look change, an eight-sided dome 16 cm across, 6 cm high and darker underneath. It goes to the survey with screenshots, and the game keeps today's cap until the owner answers.</p>
+
+    <h3>Picking, saving, regrowth</h3>
+    <ul>
+      <li>F aims at the plant itself (as <code>fruit-aim</code> does), within 0.25 m of its stalk or cap.</li>
+      <li>A pick gives one glowing mushroom and writes a <code>glow-plant</code> record by the cell's exact key. A picked cell draws no plant, and no other flower, and gives no light.</li>
+      <li>It grows back after 8 world days, but only when its cell is rebuilt more than 120 m from the camera. It never appears in front of the player.</li>
+      <li>No generator version: where they grow is a function of the cell key and the config chance, which a digest test pins. A world nobody picked from saves nothing new.</li>
+    </ul>
+
+    <h3>Eating and the body glow</h3>
+    <ul>
+      <li>Right click eats one, as a dish is eaten. It runs Glow for 3 minutes of play. There is no hunger.</li>
+      <li>Eating another while it runs sets the time back to the full 3 minutes. It never stacks, and it is never brighter: cooking's rule for every effect.</li>
+      <li>The glow is a level 10 light (between a candle's 8 and a hanging lantern's 12) in the cap's cyan, at the chest. It rises over 0.6 s and falls on a smoothstep over the last 20 s, so it dims and goes out and never cuts.</li>
+    </ul>
+
+    <h3>One carried light</h3>
+    <ul>
+      <li>Whatever is in the selected slot and gives light when placed gives the same light in hand: a torch at level 14, a lantern at 13, the mushroom at 3, all in the field's warm tint. The values are <code>Material::emission</code> and <code>GLOW_FLOWER_LEVEL</code>, never a copy. A lantern and a mushroom light from dusk to dawn, as they do when placed. In the pack, a light gives nothing.</li>
+      <li>The strength is level / 14, and the falloff is the lamp bake's own: <code>N·L × w² / (1 + (d/2.2)²) × 2.4</code> with <code>w = 1 − (d/16)⁴</code>. So a held torch lights the ground as a placed torch at the same distance does.</li>
+      <li>The body glow and a held light add: one light per player, at the stronger source, its colour the sum.</li>
+      <li>It is worked out every frame from the exact position, so it never lags and never steps from cell to cell. Its shadow is a walk through the columns from each pixel toward the light, stopped by the first solid cell. Walk up to the stone wall: the ground on the far side stays dark, and the doorway lets the light through.</li>
+      <li>It lights the ground, the trees, the plants, the dropped log (a 2D item, lit like the ground), and the hand, which takes it unshadowed and no nearer than 0.5 m.</li>
+    </ul>
+
+    <h3>In the engine</h3>
+    <p>The recommended way is a point light evaluated in the terrain, field-lit and water shaders beside the baked field, with the column walk for its shadow. That is about 0.3-0.5 ms on the RTX 3070 at 1080p and 0.3-0.6 ms on the M4 Max, estimated from L8's measured voxel walk. A light volume on the GPU would be cheaper but blockier and leaky, and re-baking the field on the CPU would step and lag. The owner measures it with <code>perf_suite.py</code>'s night walk with a torch, A/B in one sitting. This page draws the same terms in WebGL on hex columns. The sun and moon use the same walk for their shadows here, which the game does with its cascades instead.</p>
+  </section>
+</section>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 "use strict";
+let PAGE_TAB = "playground", playStarted = false, playRunning = false;   // which page tab is open
 // =====================================================================
 // Constants: the cell is Tenebris's gold standard
 // =====================================================================
@@ -2231,6 +2342,7 @@ addEventListener("resize", resize);
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, msAvg = 16, statT = 0;
 function frame() {
+  if (PAGE_TAB !== "playground") { playRunning = false; return; }   // its loop stops while another tab is open
   const now = performance.now();   // one clock for animation and fades (a rAF timestamp can lag it)
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   G.uTime.value = now / 1000;
@@ -2255,8 +2367,607 @@ function frame() {
   }
   requestAnimationFrame(frame);
 }
-buildBiomeButtons(); buildLayerRows();
-resize(); rebuild();
-if (pending <= 0) doneLoading();
-requestAnimationFrame(frame);
+function startPlayground() {
+  if (!playStarted) { playStarted = true; buildBiomeButtons(); buildLayerRows(); resize(); rebuild(); if (pending <= 0) doneLoading(); }
+  if (!playRunning) { playRunning = true; last = performance.now(); requestAnimationFrame(frame); }
+}
+// Page tabs: only the open tab's 3D view is on the page and drawing; each tab is a bare #anchor.
+function showPage() {
+  const want = location.hash === "#glow" ? "glow" : "playground";
+  PAGE_TAB = want; document.body.dataset.page = want;
+  for (const a of document.querySelectorAll(".pagetabs a")) a.setAttribute("aria-selected", a.dataset.page === want ? "true" : "false");
+  $("glowTab").hidden = want !== "glow";
+  if (want === "glow") window.glowOpen(); else startPlayground();
+}
+addEventListener("hashchange", showPage);
+</script>
+<script>
+// =====================================================================
+// Glow and carried light (glowing-mushrooms): its own scene, renderer and
+// loop, made the first time the tab opens and stopped while it is closed.
+// =====================================================================
+(() => {
+"use strict";
+const GW = 2.833, GR = GW / Math.sqrt(3), S3 = Math.sqrt(3);
+const N = 11;                       // rings of cells round the centre
+const TORCH_TINT = [1.0, 0.70, 0.30];          // pbd_core::light::TORCH_TINT
+const GLOW_TINT = [0.62, 1.0, 0.88];           // the cap's own colour (planet_surface.wgsl)
+const GLOW_FLOWER_LEVEL = 3;                   // pbd_core::flora
+const GLOW_MIN = 3, GLOW_FADE_S = 20, GLOW_RISE_S = 0.6, GLOW_LEVEL = 10;
+const REACH = 5.0, PICK_R = 0.25;              // aim::REACH_M, glow_pick_radius_m
+// What each hotbar item gives when held: Material::emission and dusk_lit, the flower's level.
+const ITEMS = [
+  { id: "torch", name: "Torch", level: 14, tint: TORCH_TINT, dusk: false },
+  { id: "lantern", name: "Lantern", level: 13, tint: TORCH_TINT, dusk: true },
+  { id: "mushroom", name: "Glowing mushroom", level: GLOW_FLOWER_LEVEL, tint: TORCH_TINT, dusk: true },
+  { id: "hand", name: "Hand", level: 0, tint: TORCH_TINT, dusk: false },
+];
+const $g = id => document.getElementById(id);
+const G = {
+  started: false, running: false, night: true, compare: "new", view: "fp", cap: "today", speed: 1,
+  sel: 0, count: 0, clock: 0, glowStart: -1, glowUntil: -1, yaw: 0, pitch: -0.12,
+  pos: [0, 0, 0], eyeY: 0, eyeH: 1.62, orbit: { yaw: 0.6, pitch: 0.72, dist: 17 }, route: null, keys: {},
+};
+window.__glow = G;
+
+function hh(a, b, s) { let h = (a * 374761393 + b * 668265263 + s * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const centre = (q, r) => [GW * (q + r / 2), GW * S3 / 2 * r];
+function axial(x, z) {
+  const r = z / (GW * S3 / 2), q = x / GW - r / 2, s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return [rq, rr];
+}
+const ring = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a) * GR, Math.sin(a) * GR]; };
+const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];   // across edge i, between corners i and i+1
+
+// ---------- the patch: a damp wood, a stone wall with a doorway ----------
+const CELLS = new Map(); const K = (q, r) => q + "," + r;
+const WALL_R = 2, DOOR_Q = -2;
+for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) {
+  if (ring(q, r) > N) continue;
+  const [x, z] = centre(q, r);
+  let h = Math.max(0, Math.round(1 + 0.8 * Math.sin(x * 0.08 + 0.5) + 0.6 * Math.cos(z * 0.1 + 1.2) + (hh(q, r, 3) - 0.5) * 0.6));
+  const c = { q, r, x, z, h, mat: "grass", tree: false };
+  if (r === WALL_R && q >= -8 && q <= 4 && q !== DOOR_Q) { c.mat = "stone"; c.h = h + 4; }
+  CELLS.set(K(q, r), c);
+}
+// level the doorway's own cell and the ones either side of it, so it can be walked through
+for (const [q, r] of [[DOOR_Q, WALL_R], [DOOR_Q, WALL_R - 1], [DOOR_Q + 1, WALL_R - 1], [DOOR_Q, WALL_R + 1], [DOOR_Q - 1, WALL_R + 1]]) { const c = CELLS.get(K(q, r)); if (c) c.h = 1; }
+const START = [0, -6];
+const ROUTE_CELLS = [[0, -6], [0, -4], [-1, -2], [DOOR_Q, 0], [DOOR_Q, WALL_R], [DOOR_Q - 1, WALL_R + 2], [-5, WALL_R + 2], [-7, WALL_R + 3], [-7, WALL_R + 1]];
+for (const c of CELLS.values()) {
+  if (c.mat !== "grass" || ring(c.q - START[0], c.r - START[1]) < 3) continue;
+  if (ROUTE_CELLS.some(([q, r]) => ring(c.q - q, c.r - r) < 2)) continue;   // the route stays clear
+  if (Math.abs(c.r - WALL_R) <= 1 && Math.abs(c.q - DOOR_Q) <= 2) continue;
+  if (hh(c.q, c.r, 7) < 0.085) c.tree = true;
+}
+// The glowing plants, placed by the game's own rule in the cell: a corner, a share toward it, a turn.
+// More than the game's one cell in a hundred, so a few stand in view.
+const PLANTS = [];
+const forced = new Set([K(0, -4), K(1, -5), K(-1, -3), K(2, -3), K(-3, 4), K(-6, 5), K(0, 4)]);
+for (const c of CELLS.values()) {
+  if (c.mat !== "grass" || c.tree) continue;
+  if (!(forced.has(K(c.q, c.r)) || hh(c.q, c.r, 11) < 0.03)) continue;
+  const k = Math.floor(hh(c.q, c.r, 21) * 6), f0 = 0.15 + 0.6 * hh(c.q, c.r, 22), ang = hh(c.q, c.r, 23) * Math.PI * 2;
+  const [cx, cz] = corner(k);
+  PLANTS.push({ x: c.x + cx * f0, z: c.z + cz * f0, y: c.h, ang, picked: false });
+}
+const DROP = (() => { const c = CELLS.get(K(-1, -1)); return { x: c.x + 0.6, z: c.z - 0.4, y: c.h }; })();
+const cellAt = (x, z) => { const [q, r] = axial(x, z); return CELLS.get(K(q, r)); };
+const groundAt = (x, z) => { const c = cellAt(x, z); return c ? c.h : -3; };
+
+// ---------- geometry ----------
+class GB {
+  constructor() { this.p = []; this.n = []; this.uv = []; this.t = []; this.c = []; this.k = []; }
+  v(p, n, uv, t, c, k) { this.p.push(...p); this.n.push(...n); this.uv.push(...uv); this.t.push(...t); this.c.push(...c); this.k.push(k); }
+  tri(a, b, c, n, uvs, t, col, k) { this.v(a, n, uvs[0], t, col, k); this.v(b, n, uvs[1], t, col, k); this.v(c, n, uvs[2], t, col, k); }
+  quad(a, b, c, d, n, uvs, t, col, k) { this.tri(a, b, c, n, [uvs[0], uvs[1], uvs[2]], t, col, k); this.tri(a, c, d, n, [uvs[0], uvs[2], uvs[3]], t, col, k); }
+  geo() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute("tile", new THREE.Float32BufferAttribute(this.t, 2));
+    g.setAttribute("col", new THREE.Float32BufferAttribute(this.c, 3));
+    g.setAttribute("kind", new THREE.Float32BufferAttribute(this.k, 1));
+    return g;
+  }
+}
+// Tiles of the fields sheet (slot 4) of the game's atlas, as pixel origins.
+const T = { top: [0, 128], sod: [32, 128], earth: [64, 128], stone: [96, 128], wood: [64, 160], leaves: [0, 192] };
+const NOT = [-1, -1], WHITE = [1, 1, 1];
+function norm(v) { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
+function sideBand(g, ax, az, bx, bz, y0, y1, tile, vTop) {
+  const n = norm([bz - az, 0, -(bx - ax)]);
+  const L = Math.hypot(bx - ax, bz - az) / 1.5;
+  g.quad([ax, y1, az], [bx, y1, bz], [bx, y0, bz], [ax, y0, az], n, [[0, vTop], [L, vTop], [L, vTop + y1 - y0], [0, vTop + y1 - y0]], tile, WHITE, 0);
+}
+function buildTerrain() {
+  const g = new GB();
+  for (const c of CELLS.values()) {
+    const top = c.mat === "stone" ? T.stone : T.top;
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
+      g.tri([c.x, c.h, c.z], [c.x + bx, c.h, c.z + bz], [c.x + ax, c.h, c.z + az], [0, 1, 0],
+        [[c.x / 1.5, c.z / 1.5], [(c.x + bx) / 1.5, (c.z + bz) / 1.5], [(c.x + ax) / 1.5, (c.z + az) / 1.5]], top, WHITE, 0);
+    }
+    for (let i = 0; i < 6; i++) {
+      const nb = CELLS.get(K(c.q + NB[i][0], c.r + NB[i][1]));
+      const hn = nb ? nb.h : -3;
+      if (hn >= c.h) continue;
+      const [ax0, az0] = corner(i), [bx0, bz0] = corner((i + 1) % 6);
+      const ax = c.x + ax0, az = c.z + az0, bx = c.x + bx0, bz = c.z + bz0;
+      // the outward normal must face away from the cell
+      const mx = (ax + bx) / 2 - c.x, mz = (az + bz) / 2 - c.z;
+      const flip = (bz - az) * mx - (bx - ax) * mz < 0;
+      const A = flip ? [bx, bz] : [ax, az], B = flip ? [ax, az] : [bx, bz];
+      if (c.mat === "stone") { sideBand(g, A[0], A[1], B[0], B[1], hn, c.h, T.stone, 0); continue; }
+      const sod = Math.max(hn, c.h - 1), earth = Math.max(hn, c.h - 4);
+      sideBand(g, A[0], A[1], B[0], B[1], sod, c.h, T.sod, 0);
+      if (earth < sod) sideBand(g, A[0], A[1], B[0], B[1], earth, sod, T.earth, 0);
+      if (hn < earth) sideBand(g, A[0], A[1], B[0], B[1], hn, earth, T.stone, 0);
+    }
+  }
+  return g.geo();
+}
+function prism(g, x, z, y0, y1, rad, tile, rot) {
+  const pts = []; for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; pts.push([x + Math.cos(a) * rad, z + Math.sin(a) * rad]); }
+  for (let i = 0; i < 6; i++) {
+    const a = pts[i], b = pts[(i + 1) % 6];
+    const n = norm([(a[0] + b[0]) / 2 - x, 0, (a[1] + b[1]) / 2 - z]);
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    g.quad([b[0], y1, b[1]], [a[0], y1, a[1]], [a[0], y0, a[1]], [b[0], y0, b[1]], n, [[0, 0], [L, 0], [L, y1 - y0], [0, y1 - y0]], tile, WHITE, 0);
+    g.tri([x, y1, z], [a[0], y1, a[1]], [b[0], y1, b[1]], [0, 1, 0], [[x / 1.2, z / 1.2], [a[0] / 1.2, a[1] / 1.2], [b[0] / 1.2, b[1] / 1.2]], tile, WHITE, 0);
+    g.tri([x, y0, z], [b[0], y0, b[1]], [a[0], y0, a[1]], [0, -1, 0], [[x / 1.2, z / 1.2], [b[0] / 1.2, b[1] / 1.2], [a[0] / 1.2, a[1] / 1.2]], tile, WHITE, 0);
+  }
+}
+function buildTrees() {
+  const g = new GB();
+  for (const c of CELLS.values()) if (c.tree) {
+    const s = 0.85 + hh(c.q, c.r, 31) * 0.4, rot = hh(c.q, c.r, 32);
+    prism(g, c.x, c.z, c.h, c.h + 3.0 * s, 0.3, T.wood, rot);
+    prism(g, c.x, c.z, c.h + 2.3 * s, c.h + 4.3 * s, 1.45 * s, T.leaves, rot + 0.3);
+    prism(g, c.x, c.z, c.h + 4.3 * s, c.h + 5.1 * s, 0.85 * s, T.leaves, rot + 0.8);
+  }
+  return g.geo();
+}
+const STALK = [0.42, 0.55, 0.30], HEAD_DAY = [0.80, 0.93, 0.88], UNDER = [0.36, 0.52, 0.47];
+// The plant as planet_surface.wgsl's flower slot draws it: a stalk 6 cm wide and
+// 0.32 m tall, and a head of four triangles out to 7 cm with its centre 3 cm up.
+// "proposed": an eight-sided dome 16 cm across, 6 cm high, darker underneath.
+function plantInto(g, x, y, z, ang, s, cap) {
+  const H = 0.32 * s, side = [Math.cos(ang), 0, Math.sin(ang)], hw = 0.03 * s;
+  const nS = [-side[2], 0, side[0]];
+  g.quad([x - side[0] * hw, y, z - side[2] * hw], [x + side[0] * hw, y, z + side[2] * hw], [x + side[0] * hw, y + H, z + side[2] * hw], [x - side[0] * hw, y + H, z - side[2] * hw], nS, [[0, 0], [1, 0], [1, 1], [0, 1]], NOT, STALK, 3);
+  if (cap === "today") {
+    const top = [x, y + H + 0.03 * s, z];
+    for (let t = 0; t < 4; t++) {
+      const a0 = ang + t * Math.PI / 2, a1 = ang + (t + 1) * Math.PI / 2;
+      const p0 = [x + Math.cos(a0) * 0.07 * s, y + H, z + Math.sin(a0) * 0.07 * s], p1 = [x + Math.cos(a1) * 0.07 * s, y + H, z + Math.sin(a1) * 0.07 * s];
+      const n = norm([Math.cos((a0 + a1) / 2) * 0.4, 1, Math.sin((a0 + a1) / 2) * 0.4]);
+      g.tri(p0, top, p1, n, [[0, 0], [0.5, 1], [1, 0]], NOT, HEAD_DAY, 1);
+    }
+  } else {
+    const r0 = 0.08 * s, r1 = 0.055 * s, yb = y + H, ym = yb + 0.045 * s, ya = yb + 0.06 * s;
+    for (let i = 0; i < 8; i++) {
+      const a0 = ang + i * Math.PI / 4, a1 = a0 + Math.PI / 4, am = (a0 + a1) / 2;
+      const P = (rr, yy, a) => [x + Math.cos(a) * rr, yy, z + Math.sin(a) * rr];
+      const nO = norm([Math.cos(am), 0.9, Math.sin(am)]);
+      g.quad(P(r0, yb, a0), P(r1, ym, a0), P(r1, ym, a1), P(r0, yb, a1), nO, [[0, 0], [0, 1], [1, 1], [1, 0]], NOT, HEAD_DAY, 1);
+      g.tri(P(r1, ym, a0), [x, ya, z], P(r1, ym, a1), norm([Math.cos(am) * 0.3, 1, Math.sin(am) * 0.3]), [[0, 0], [0.5, 1], [1, 0]], NOT, HEAD_DAY, 1);
+      g.tri(P(r0, yb, a1), [x, yb - 0.004, z], P(r0, yb, a0), [0, -1, 0], [[0, 0], [0.5, 1], [1, 0]], NOT, UNDER, 5);
+    }
+  }
+}
+function buildPlants() {
+  const g = new GB();
+  for (const p of PLANTS) if (!p.picked) plantInto(g, p.x, p.y, p.z, p.ang, 1, G.cap);
+  return g.geo();
+}
+
+// ---------- pixel icons (UI icons keep their 1 px outline) ----------
+function icon(draw) {
+  const c = document.createElement("canvas"); c.width = c.height = 16; const x = c.getContext("2d");
+  draw((px, py, w, h, col) => { x.fillStyle = col; x.fillRect(px, py, w, h); });
+  const d = x.getImageData(0, 0, 16, 16), a = i => d.data[i * 4 + 3] > 0;
+  const out = new Set();
+  for (let y = 0; y < 16; y++) for (let X = 0; X < 16; X++) if (!a(y * 16 + X)) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = X + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < 16 && yy < 16 && a(yy * 16 + xx)) { out.add(y * 16 + X); break; } }
+  }
+  x.fillStyle = "#1b1a22"; for (const i of out) x.fillRect(i % 16, Math.floor(i / 16), 1, 1);
+  return c;
+}
+const ICONS = {
+  torch: icon(f => { f(7, 6, 2, 9, "#7a4f2a"); f(8, 6, 1, 9, "#9b6a3a"); f(6, 2, 4, 4, "#f2a23a"); f(7, 1, 2, 2, "#ffd36b"); f(7, 3, 2, 2, "#fff0b0"); }),
+  lantern: icon(f => { f(6, 1, 4, 1, "#3c3f48"); f(4, 3, 8, 1, "#3c3f48"); f(4, 13, 8, 1, "#3c3f48"); f(4, 4, 1, 9, "#3c3f48"); f(11, 4, 1, 9, "#3c3f48"); f(5, 4, 6, 9, "#f6c75a"); f(7, 6, 2, 5, "#fff2b8"); f(7, 2, 2, 1, "#55595f"); }),
+  mushroom: icon(f => { f(7, 8, 2, 7, "#9fb27a"); f(8, 8, 1, 7, "#c4d39c"); f(3, 6, 10, 2, "#59c7b0"); f(4, 4, 8, 2, "#8ff0d8"); f(6, 3, 4, 1, "#c9fff0"); f(6, 4, 2, 1, "#ffffff"); f(4, 7, 8, 1, "#3c8f86"); }),
+  hand: icon(f => { f(5, 5, 6, 7, "#d6a07c"); f(4, 6, 1, 4, "#d6a07c"); f(11, 7, 1, 3, "#c88c68"); f(5, 12, 6, 2, "#b87a58"); f(6, 6, 4, 1, "#e8b894"); }),
+  log: icon(f => { f(2, 6, 12, 5, "#8a5a30"); f(2, 6, 12, 1, "#a8743e"); f(12, 6, 2, 5, "#d7b07a"); f(12, 8, 1, 1, "#a8743e"); }),
+};
+
+// ---------- renderer, made on first open ----------
+let renderer, scene, camera, eye, U, mats = {}, meshes = {}, hand, items = {}, body, stars;
+const VS = `
+attribute vec2 tile; attribute vec3 col; attribute float kind;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec2 vTile; varying vec3 vCol; varying float vKind;
+void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vP = wp.xyz; vN = normalize(mat3(modelMatrix)*normal);
+  vUv = uv; vTile = tile; vCol = col; vKind = kind; gl_Position = projectionMatrix*viewMatrix*wp; }`;
+const FS = `
+precision highp float;
+uniform sampler2D atlas; uniform sampler2D hmap; uniform sampler2D icon;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uFill; uniform float uExpo; uniform float uNight;
+uniform vec4 uPlants[24]; uniform vec3 uCarryPos; uniform vec3 uCarryCol; uniform float uHand; uniform float uIcon;
+uniform vec3 uFog; uniform vec3 uCam; uniform float uTime;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec2 vTile; varying vec3 vCol; varying float vKind;
+const float GW = 2.833;
+float hAt(vec2 xz){
+  float r = xz.y/(GW*0.8660254); float q = xz.x/GW - r*0.5; float s = -q - r;
+  float rq = floor(q+0.5), rr = floor(r+0.5), rs = floor(s+0.5);
+  float dq = abs(rq-q), dr = abs(rr-r), ds = abs(rs-s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  vec2 t = (vec2(rq, rr) + 16.5)/32.0;
+  if (t.x < 0.0 || t.y < 0.0 || t.x > 1.0 || t.y > 1.0) return -3.0;
+  return texture2D(hmap, t).r*255.0/8.0 - 3.0;
+}
+// The column walk: from a point toward the light, stopped by the first solid cell.
+float walk(vec3 a, vec3 b){
+  vec3 d = b - a; float L = length(d); if (L < 0.05) return 1.0;
+  vec3 u = d/L; float n = min(ceil(L/0.3), 48.0); float st = L/n;
+  for (int i = 1; i < 48; i++){ if (float(i) >= n) break; vec3 s = a + u*(st*float(i)); if (s.y < hAt(s.xz) - 0.01) return 0.0; }
+  return 1.0;
+}
+void main(){
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  vec3 alb;
+  if (uIcon > 0.5) { vec4 t = texture2D(icon, vUv); if (t.a < 0.5) discard; alb = pow(t.rgb, vec3(2.2)); }
+  else if (vTile.x >= 0.0) { vec2 px = vTile + floor(fract(vUv)*32.0) + 0.5; alb = pow(texture2D(atlas, px/512.0).rgb, vec3(2.2)); }
+  else alb = pow(vCol, vec3(2.2));
+  // the sun (or the moon), with its shadow from the same walk
+  float sl = max(dot(n, uSunDir), 0.0);
+  float sv = (sl > 0.0 && uHand < 0.5 && uNight < 0.5) ? walk(vP + n*0.06, vP + uSunDir*12.0) : 1.0;
+  vec3 lit = uSunCol*sl*sv + uFill*(0.6 + 0.4*n.y);
+  // the glowing plants' own pools: level 3 on the field, a step across costs 3 (decision 7)
+  if (uNight > 0.5) for (int i = 0; i < 24; i++) {
+    vec4 pl = uPlants[i]; if (pl.w < 0.5) continue;
+    float dy = vP.y - pl.y; if (dy < -0.2 || dy > 1.5) continue;
+    float lev = 3.0 - 3.0*length(vP.xz - pl.xz)/GW; if (lev <= 0.0) continue;
+    float f = lev/15.0; float k = f*(2.0 - f); lit += vec3(1.0, 0.7, 0.3)*1.25*k*k;
+  }
+  // the carried light: lamp_bake::falloff from its exact position, shadowed by the walk
+  if (uCarryCol.r + uCarryCol.g + uCarryCol.b > 0.0) {
+    vec3 to = uCarryPos - vP; float dl = max(length(to), 0.001); vec3 l = to/dl;
+    float d = uHand > 0.5 ? max(dl, 0.5) : dl;
+    float nl = dot(n, l); if (uHand > 0.5) nl = 0.35 + 0.65*max(nl, 0.0);
+    if (d < 16.0 && nl > 0.0) {
+      float w = max(1.0 - pow(d/16.0, 4.0), 0.0);
+      float fall = nl*w*w/(1.0 + (d/2.2)*(d/2.2))*2.4;
+      float occ = uHand > 0.5 ? 1.0 : walk(vP + n*0.06, uCarryPos);
+      lit += uCarryCol*fall*occ;
+    }
+  }
+  vec3 c = alb*lit;
+  if (vKind > 0.5 && vKind < 1.5 && uNight > 0.5) c = vec3(0.62, 1.0, 0.88)*0.25*1.5;     // the head burns
+  if (vKind > 4.5 && uNight > 0.5) c = vec3(0.62, 1.0, 0.88)*0.12*1.5;                       // its underside, dimmer
+  if (vKind > 1.5 && vKind < 2.5) c = vCol*(0.9 + 0.1*sin(uTime*23.0 + vP.y*40.0));          // a flame, a lit pane
+  float fd = length(vP - uCam); c = mix(c, uFog, uHand > 0.5 ? 0.0 : 1.0 - exp(-fd*0.014));
+  c = vec3(1.0) - exp(-c*uExpo);
+  gl_FragColor = vec4(pow(c, vec3(1.0/2.2)), 1.0);
+}`;
+function material(extra) {
+  return new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: Object.assign({}, U, extra || {}), side: THREE.DoubleSide });
+}
+function heightTexture() {
+  const d = new Uint8Array(32 * 32 * 4);
+  for (const c of CELLS.values()) { const i = ((c.r + 16) * 32 + (c.q + 16)) * 4; const v = Math.round((c.h + 3) * 8); d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+  for (let i = 0; i < 32 * 32; i++) if (d[i * 4 + 3] === 0) { d[i * 4 + 3] = 255; }
+  const t = new THREE.DataTexture(d, 32, 32, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+function handBox(g, cx, cy, cz, sx, sy, sz, col, k) {
+  const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
+  const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  g.quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], uv, NOT, col, k);
+  g.quad([x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0], [0, -1, 0], uv, NOT, col, k);
+  g.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], uv, NOT, col, k);
+  g.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], uv, NOT, col, k);
+  g.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], uv, NOT, col, k);
+  g.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], uv, NOT, col, k);
+}
+// Where each held item gives its light, in the camera's frame.
+const HELD_LIGHT = { torch: [0.30, -0.10, -0.68], lantern: [0.30, -0.20, -0.58], mushroom: [0.30, -0.17, -0.58] };
+function buildHand() {
+  hand = new THREE.Group();
+  const skin = [0.84, 0.64, 0.50], sleeve = [0.30, 0.34, 0.42];
+  const arm = new GB(); handBox(arm, 0.36, -0.44, -0.42, 0.075, 0.075, 0.30, sleeve, 3); handBox(arm, 0.32, -0.36, -0.60, 0.085, 0.08, 0.10, skin, 3);
+  hand.add(new THREE.Mesh(arm.geo(), mats.hand));
+  const t = new GB(); handBox(t, 0.30, -0.30, -0.68, 0.03, 0.30, 0.03, [0.48, 0.32, 0.18], 3);
+  handBox(t, 0.30, -0.145, -0.68, 0.042, 0.025, 0.042, [0.25, 0.25, 0.27], 3);
+  for (let i = 0; i < 2; i++) { const a = i * Math.PI / 2, dx = Math.cos(a) * 0.035, dz = Math.sin(a) * 0.035;
+    t.quad([0.30 - dx, -0.135, -0.68 - dz], [0.30 + dx, -0.135, -0.68 + dz], [0.30 + dx * 0.25, -0.05, -0.68 + dz * 0.25], [0.30 - dx * 0.25, -0.05, -0.68 - dz * 0.25], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], NOT, [0.9, 0.36, 0.08], 2); }
+  items.torch = new THREE.Mesh(t.geo(), mats.hand);
+  const l = new GB(); handBox(l, 0.30, -0.29, -0.6, 0.02, 0.06, 0.02, [0.2, 0.2, 0.22], 3);
+  handBox(l, 0.30, -0.20, -0.58, 0.12, 0.13, 0.12, [0.85, 0.66, 0.34], 2);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) handBox(l, 0.30 + dx * 0.062, -0.20, -0.58 + dz * 0.062, 0.016, 0.15, 0.016, [0.17, 0.17, 0.19], 3);
+  handBox(l, 0.30, -0.12, -0.58, 0.14, 0.02, 0.14, [0.17, 0.17, 0.19], 3); handBox(l, 0.30, -0.28, -0.58, 0.14, 0.02, 0.14, [0.17, 0.17, 0.19], 3);
+  items.lantern = new THREE.Mesh(l.geo(), mats.hand);
+  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); items.mushroom = new THREE.Mesh(m.geo(), mats.handNight);
+  for (const k in items) hand.add(items[k]);
+  camera.add(hand);
+}
+function buildBody() {
+  const g = new GB(); handBox(g, 0, 0.85, 0, 0.42, 1.0, 0.26, [0.30, 0.34, 0.42], 3); handBox(g, 0, 1.55, 0, 0.26, 0.28, 0.26, [0.84, 0.64, 0.50], 3);
+  handBox(g, -0.11, 0.18, 0, 0.14, 0.36, 0.18, [0.22, 0.20, 0.18], 3); handBox(g, 0.11, 0.18, 0, 0.14, 0.36, 0.18, [0.22, 0.20, 0.18], 3);
+  body = new THREE.Mesh(g.geo(), mats.world); body.visible = false; scene.add(body);
+}
+function start() {
+  if (G.started) return; G.started = true;
+  const canvas = $g("glowCanvas");
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(72, 1, 0.03, 400); camera.rotation.order = "YXZ"; scene.add(camera);
+  eye = new THREE.Object3D(); eye.rotation.order = "YXZ"; scene.add(eye);
+  const atlas = new THREE.TextureLoader().load(TEXDIR + "game/atlas.png?v=" + ART_V);
+  atlas.flipY = false; atlas.magFilter = atlas.minFilter = THREE.NearestFilter; atlas.generateMipmaps = false;
+  const iconTex = new THREE.CanvasTexture(ICONS.log); iconTex.magFilter = iconTex.minFilter = THREE.NearestFilter; iconTex.generateMipmaps = false;
+  const plants = []; for (let i = 0; i < 24; i++) plants.push(new THREE.Vector4());
+  U = {
+    atlas: { value: atlas }, hmap: { value: heightTexture() }, icon: { value: iconTex },
+    uSunDir: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Vector3() }, uFill: { value: new THREE.Vector3() },
+    uExpo: { value: 1 }, uNight: { value: 1 }, uPlants: { value: plants },
+    uCarryPos: { value: new THREE.Vector3() }, uCarryCol: { value: new THREE.Vector3() },
+    uFog: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
+  };
+  mats.world = material({ uHand: { value: 0 }, uIcon: { value: 0 } });
+  mats.hand = material({ uHand: { value: 1 }, uIcon: { value: 0 } });
+  mats.handNight = mats.hand;
+  mats.icon = material({ uHand: { value: 0 }, uIcon: { value: 1 } });
+  meshes.terrain = new THREE.Mesh(buildTerrain(), mats.world); scene.add(meshes.terrain);
+  meshes.trees = new THREE.Mesh(buildTrees(), mats.world); scene.add(meshes.trees);
+  meshes.plants = new THREE.Mesh(buildPlants(), mats.world); scene.add(meshes.plants);
+  // a dropped log: a 2D item standing in the world, lit as the ground is
+  const dg = new GB(); dg.quad([-0.22, 0, 0], [0.22, 0, 0], [0.22, 0.44, 0], [-0.22, 0.44, 0], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], NOT, WHITE, 0);
+  meshes.drop = new THREE.Mesh(dg.geo(), mats.icon); meshes.drop.position.set(DROP.x, DROP.y + 0.02, DROP.z); scene.add(meshes.drop);
+  const sp = []; for (let i = 0; i < 500; i++) { const a = hh(i, 1, 41) * Math.PI * 2, e = 0.15 + hh(i, 2, 41) * 1.3; sp.push(Math.cos(a) * Math.cos(e) * 300, Math.sin(e) * 300, Math.sin(a) * Math.cos(e) * 300); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+  stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0x9aa8c8, size: 1.4, sizeAttenuation: false })); scene.add(stars);
+  buildHand(); buildBody();
+  const s = CELLS.get(K(...START)); G.pos = [s.x, s.h, s.z]; G.eyeY = s.h + 1.62; G.yaw = Math.PI * 0.94; G.pitch = -0.32;
+  bindInput(); buildHotbar(); setNight(G.night); resize(); syncButtons();
+}
+
+// ---------- lighting state ----------
+function setNight(n) {
+  G.night = n;
+  if (!U) return;
+  if (n) {
+    U.uSunDir.value.set(-0.35, 0.75, 0.45).normalize(); U.uSunCol.value.set(0.022, 0.026, 0.040);
+    U.uFill.value.set(0.019, 0.025, 0.032).multiplyScalar(0.9); U.uExpo.value = 1.6; U.uNight.value = 1;
+    U.uFog.value.set(0.006, 0.008, 0.014); scene.background = new THREE.Color(0x05070d); stars.visible = true;
+  } else {
+    U.uSunDir.value.set(0.45, 0.78, 0.35).normalize(); U.uSunCol.value.set(1.12, 1.03, 0.87);
+    U.uFill.value.set(0.26, 0.34, 0.43); U.uExpo.value = 1.15; U.uNight.value = 0;
+    U.uFog.value.set(0.42, 0.56, 0.68); scene.background = new THREE.Color(0x9cc4e0); stars.visible = false;
+  }
+}
+function plantUniforms() {
+  const live = PLANTS.filter(p => !p.picked);
+  U.uPlants.value.forEach((v, i) => { const p = live[i]; if (p) v.set(p.x, p.y, p.z, 1); else v.set(0, 0, 0, 0); });
+}
+// Glow strength 0..1: rises over 0.6 s, falls on a smoothstep over the last 20 s.
+function glowStrength() {
+  if (G.glowUntil < 0) return 0;
+  const left = G.glowUntil - G.clock; if (left <= 0) return 0;
+  const rise = Math.min(1, (G.clock - G.glowStart) / GLOW_RISE_S);
+  const t = Math.min(1, left / GLOW_FADE_S), fade = t * t * (3 - 2 * t);
+  return Math.max(0, rise) * fade;
+}
+const tmpV = new THREE.Vector3();
+function carried() {
+  // One light per player: the held source and the body glow add, at the stronger one's place.
+  const out = { pos: null, col: [0, 0, 0], parts: [] };
+  if (G.compare === "today") return out;
+  const it = heldItem();
+  let held = null;
+  if (it && it.level > 0 && (!it.dusk || G.night)) {
+    const s = it.level / 14; const o = HELD_LIGHT[it.id];
+    tmpV.set(o[0], o[1], o[2]); eye.localToWorld(tmpV);
+    held = { s, pos: tmpV.toArray(), tint: it.tint };
+  }
+  const gs = glowStrength() * GLOW_LEVEL / 14;
+  let glow = null;
+  if (gs > 0) glow = { s: gs, pos: [G.pos[0], G.eyeY - 0.55, G.pos[2]], tint: GLOW_TINT };
+  for (const src of [held, glow]) if (src) { out.col = out.col.map((c, i) => c + src.tint[i] * src.s); out.parts.push(src); }
+  if (out.parts.length) out.pos = out.parts.reduce((a, b) => (b.s > a.s ? b : a)).pos;
+  return out;
+}
+function heldItem() { const it = ITEMS[G.sel]; if (it.id === "mushroom" && G.count <= 0) return ITEMS[3]; return it; }
+
+// ---------- HUD ----------
+function buildHotbar() {
+  const bar = $g("gHotbar"); bar.innerHTML = "";
+  ITEMS.forEach((it, i) => {
+    const b = document.createElement("button"); b.className = "g-slot"; b.dataset.i = i; b.setAttribute("aria-label", it.name);
+    const c = document.createElement("canvas"); c.width = c.height = 16; c.getContext("2d").drawImage(ICONS[it.id], 0, 0); b.appendChild(c);
+    const n = document.createElement("span"); n.className = "g-n"; b.appendChild(n);
+    const k = document.createElement("span"); k.className = "g-k"; k.textContent = i + 1; b.appendChild(k);
+    b.onclick = () => { G.sel = i; syncHud(); };
+    bar.appendChild(b);
+  });
+  const bi = $g("gBuffIcon"); bi.getContext("2d").drawImage(ICONS.mushroom, 0, 0);
+  const ti = $g("gToastIcon"); ti.getContext("2d").drawImage(ICONS.mushroom, 0, 0);
+  syncHud();
+}
+function syncHud() {
+  [...$g("gHotbar").children].forEach((b, i) => {
+    b.setAttribute("aria-pressed", i === G.sel ? "true" : "false");
+    const empty = ITEMS[i].id === "mushroom" && G.count <= 0;
+    b.querySelector("canvas").style.opacity = empty ? 0.18 : 1;
+    b.querySelector(".g-n").textContent = ITEMS[i].id === "mushroom" && G.count > 0 ? G.count : "";
+  });
+  const it = heldItem();
+  for (const k in items) items[k].visible = k === it.id;
+  $g("gEat").hidden = !(ITEMS[G.sel].id === "mushroom" && G.count > 0);
+}
+let toastT = 0, toastN = 0;
+function toastPick() {
+  toastN = toastT > 0 ? toastN + 1 : 1; toastT = 3.4;
+  $g("gToastCount").textContent = toastN; $g("gToast").style.opacity = 1;
+}
+function fmt(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+
+// ---------- aim, pick, eat ----------
+function aimed() {
+  if (G.view !== "fp") return null;
+  const o = camera.position, d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  let best = null, bt = REACH;
+  for (const p of PLANTS) {
+    if (p.picked) continue;
+    for (let s = 0; s <= 1.0001; s += 0.125) {   // the segment from the stalk's foot to the cap
+      const q = new THREE.Vector3(p.x, p.y + 0.36 * s, p.z), t = q.clone().sub(o).dot(d);
+      if (t < 0 || t > bt) continue;
+      if (o.clone().addScaledVector(d, t).distanceTo(q) <= PICK_R) { best = p; bt = t; }
+    }
+  }
+  return best;
+}
+function pick() {
+  const p = aimed(); if (!p) return false;
+  p.picked = true; G.count++;
+  meshes.plants.geometry.dispose(); meshes.plants.geometry = buildPlants(); plantUniforms();
+  toastPick(); syncHud(); return true;
+}
+function eat() {
+  if (ITEMS[G.sel].id !== "mushroom" || G.count <= 0) return false;
+  G.count--;
+  const until = G.clock + GLOW_MIN * 60;
+  if (G.glowUntil <= G.clock) G.glowStart = G.clock;
+  G.glowUntil = Math.max(G.glowUntil, until);   // the longer time counts; it never stacks
+  syncHud(); return true;
+}
+function setCap(c) {
+  G.cap = c; if (!G.started) return;
+  meshes.plants.geometry.dispose(); meshes.plants.geometry = buildPlants();
+  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); items.mushroom.geometry.dispose(); items.mushroom.geometry = m.geo();
+}
+
+// ---------- input ----------
+function bindInput() {
+  const cv = $g("glowCanvas"); let drag = null;
+  cv.addEventListener("pointerdown", e => { if (e.button === 2) return; drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => {
+    if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY };
+    if (G.view === "fp") { G.yaw -= dx * 0.004; G.pitch = Math.max(-1.45, Math.min(1.3, G.pitch - dy * 0.004)); }
+    else { G.orbit.yaw -= dx * 0.005; G.orbit.pitch = Math.max(0.12, Math.min(1.45, G.orbit.pitch + dy * 0.004)); }
+  });
+  cv.addEventListener("pointerup", () => { drag = null; });
+  cv.addEventListener("wheel", e => { if (G.view === "over") { G.orbit.dist = Math.max(5, Math.min(45, G.orbit.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); } }, { passive: false });
+  cv.addEventListener("contextmenu", e => { e.preventDefault(); eat(); });
+  addEventListener("keydown", e => {
+    if (PAGE_TAB !== "glow" || (e.target.closest && e.target.closest("input,textarea,select"))) return;
+    G.keys[e.code] = true;
+    if (e.code === "KeyF") pick();
+    if (/^Digit[1-4]$/.test(e.code)) { G.sel = +e.code.slice(5) - 1; syncHud(); }
+  });
+  addEventListener("keyup", e => { G.keys[e.code] = false; });
+  $g("gPick").onclick = pick; $g("gEat").onclick = eat;
+}
+const ROUTE = ROUTE_CELLS.map(([q, r]) => centre(q, r));
+function moveTo(nx, nz, force) {
+  const here = groundAt(G.pos[0], G.pos[2]), there = groundAt(nx, nz);
+  if (!cellAt(nx, nz) || (!force && there - here > 1.1)) return;
+  G.pos[0] = nx; G.pos[2] = nz; G.pos[1] = there;
+}
+function step(dt) {
+  G.clock += dt * G.speed;
+  U.uTime.value += dt;
+  if (G.route) {
+    const r = G.route, tgt = ROUTE[r.i]; const dx = tgt[0] - G.pos[0], dz = tgt[1] - G.pos[2], d = Math.hypot(dx, dz);
+    if (d < 0.2) { r.i++; if (r.i >= ROUTE.length) { G.route = null; syncButtons(); } }
+    else { const sp = Math.min(d, 2.6 * dt); moveTo(G.pos[0] + dx / d * sp, G.pos[2] + dz / d * sp, true);
+      const want = Math.atan2(-dx, -dz); let dy = want - G.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); G.yaw += dy * Math.min(1, dt * 3); G.pitch += (-0.22 - G.pitch) * Math.min(1, dt * 2); }
+  } else if (G.view === "fp") {
+    const f = (G.keys.KeyW || G.keys.ArrowUp ? 1 : 0) - (G.keys.KeyS || G.keys.ArrowDown ? 1 : 0);
+    const s = (G.keys.KeyD || G.keys.ArrowRight ? 1 : 0) - (G.keys.KeyA || G.keys.ArrowLeft ? 1 : 0);
+    if (f || s) { const sp = 4 * dt, sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
+      moveTo(G.pos[0] + (-sy * f + cy * s) * sp, G.pos[2] + (-cy * f - sy * s) * sp); }
+  }
+  G.eyeY += (G.pos[1] + G.eyeH - G.eyeY) * Math.min(1, dt * 10);
+  if (toastT > 0) { toastT -= dt; if (toastT < 0.4) $g("gToast").style.opacity = Math.max(0, toastT / 0.4); }
+}
+function placeCamera() {
+  eye.position.set(G.pos[0], G.eyeY, G.pos[2]); eye.rotation.set(G.pitch, G.yaw, 0); eye.updateMatrixWorld(true);
+  if (G.view === "fp") {
+    camera.position.set(G.pos[0], G.eyeY, G.pos[2]); camera.rotation.set(G.pitch, G.yaw, 0); hand.visible = true; body.visible = false;
+  } else {
+    const o = G.orbit, tx = G.pos[0], ty = G.pos[1] + 1, tz = G.pos[2];
+    camera.position.set(tx + Math.sin(o.yaw) * Math.cos(o.pitch) * o.dist, ty + Math.sin(o.pitch) * o.dist, tz + Math.cos(o.yaw) * Math.cos(o.pitch) * o.dist);
+    camera.lookAt(tx, ty, tz); hand.visible = false;
+    body.visible = true; body.position.set(G.pos[0], G.pos[1], G.pos[2]); body.rotation.y = G.yaw;
+  }
+  camera.updateMatrixWorld(true);
+}
+function resize() {
+  if (!renderer) return; const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+let last = 0;
+function frame(now) {
+  if (PAGE_TAB !== "glow") { G.running = false; return; }
+  const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+  step(dt); placeCamera();
+  const c = carried();
+  if (c.pos) { U.uCarryPos.value.fromArray(c.pos); U.uCarryCol.value.fromArray(c.col); } else U.uCarryCol.value.set(0, 0, 0);
+  U.uCam.value.copy(camera.position);
+  plantUniforms();
+  // HUD
+  const left = G.glowUntil - G.clock, on = left > 0;
+  $g("gBuff").hidden = !on; if (on) $g("gBuffT").textContent = fmt(left);
+  const a = aimed(); $g("gHint").hidden = !a; $g("gPick").hidden = !a;
+  $g("gCross").hidden = G.view !== "fp";
+  const it = heldItem(), parts = [];
+  if (G.compare === "today") parts.push("Today: no carried light");
+  else { if (it.level && (!it.dusk || G.night)) parts.push(it.name + " " + it.level); if (on) parts.push("Glow " + GLOW_LEVEL + " × " + glowStrength().toFixed(2)); if (!parts.length) parts.push("No light held"); }
+  $g("gLight").textContent = parts.join(" + ");
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+function syncButtons() {
+  const set = (id, v) => { for (const b of $g(id).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); };
+  set("gTime", G.night ? "night" : "day"); set("gCompare", G.compare); set("gView", G.view); set("gCap", G.cap); set("gSpeed", G.speed);
+  $g("gRoute").setAttribute("aria-pressed", G.route ? "true" : "false");
+}
+function chips(id, fn) { for (const b of $g(id).querySelectorAll("button")) b.onclick = () => { fn(b.dataset.v); syncButtons(); }; }
+chips("gTime", v => setNight(v === "night"));
+chips("gCompare", v => { G.compare = v; });
+chips("gView", v => { G.view = v; });
+chips("gCap", v => setCap(v));
+chips("gSpeed", v => { G.speed = +v; });
+$g("gRoute").onclick = () => { if (G.route) G.route = null; else { const s = ROUTE[0]; moveTo(s[0], s[1]); G.pos = [s[0], groundAt(s[0], s[1]), s[1]]; G.route = { i: 1 }; } syncButtons(); };
+$g("gInfo").onclick = () => { $g("gNotes").hidden = false; $g("gClose").focus(); };
+$g("gClose").onclick = () => { $g("gNotes").hidden = true; $g("gInfo").focus(); };
+addEventListener("pointerdown", e => { const n = $g("gNotes"); if (!n.hidden && !n.contains(e.target) && e.target !== $g("gInfo")) n.hidden = true; });
+addEventListener("keydown", e => { if (e.key === "Escape") $g("gNotes").hidden = true; });
+
+window.glowOpen = () => { start(); resize(); if (!G.running) { G.running = true; last = 0; requestAnimationFrame(frame); } };
+// For the screenshot instrument: pose the player and the clock.
+G.api = {
+  pose(x, z, yaw, pitch) { G.pos = [x, groundAt(x, z), z]; G.eyeY = G.pos[1] + G.eyeH; G.yaw = yaw; G.pitch = pitch; },
+  poseCell(q, r, yaw, pitch, dx = 0, dz = 0) { const [x, z] = centre(q, r); this.pose(x + dx, z + dz, yaw, pitch); },
+  plants: PLANTS, cells: CELLS, centre, pick, eat, setNight, setCap, syncHud, syncButtons, carried,
+  // Stand `back` metres from the k-th nearest standing plant to (x, z), on the side toward (x, z), and look at it.
+  facePlant(k, back, x, z) {
+    const live = PLANTS.filter(p => !p.picked).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
+    const p = live[k]; const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz) || 1;
+    const px = p.x + dx / d * back, pz = p.z + dz / d * back;
+    this.pose(px, pz, Math.atan2(dx, dz), 0);
+    G.pitch = -Math.atan2(G.eyeY - (p.y + 0.22), back); return p;
+  },
+  lookAtPlant(i, back = 1.2) { const p = PLANTS[i]; const dx = Math.sin(G.yaw), dz = Math.cos(G.yaw); this.pose(p.x + dx * back, p.z + dz * back, G.yaw, 0); const e = G.eyeY; G.pitch = -Math.atan2(e - (p.y + 0.3), back); },
+};
+})();
+
+showPage();
 </script>
