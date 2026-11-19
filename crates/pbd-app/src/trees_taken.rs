@@ -49,6 +49,25 @@ fn felled(taken: &TreeTaken, axe_logs: u16) -> bool {
     taken.logs >= axe_logs
 }
 
+/// The trees the save says are taken at `day`, by cell key: `true` felled
+/// (a `tree` record whose wood is all given), `false` picked bare (a `fruit`
+/// record younger than the regrowth). [`refresh`] lists those standing in
+/// the resident fine set.
+pub(crate) fn wanted(save: &WorldSave, axe_logs: u16, day: f64) -> HashMap<u32, bool> {
+    let mut want: HashMap<u32, bool> = HashMap::new();
+    for r in save.records.of_kind(TREE_KIND) {
+        if r.read::<TreeTaken>().is_some_and(|t| felled(&t, axe_logs)) {
+            want.insert(r.id as u32, true);
+        }
+    }
+    for r in save.records.of_kind(FRUIT_RECORD) {
+        if r.read::<FruitPicked>().is_some_and(|p| p.bare_at(day)) {
+            want.entry(r.id as u32).or_insert(false);
+        }
+    }
+    want
+}
+
 /// Rebuild the lists twice a second: the records a save holds for trees,
 /// matched to the resident fine set's cells, nearest the camera first.
 #[allow(clippy::too_many_arguments)]
@@ -73,17 +92,7 @@ pub(crate) fn refresh(
     };
     let axe_logs = gather.map_or(4, |g| g.0.axe_logs);
     let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
-    let mut want: HashMap<u32, bool> = HashMap::new();
-    for r in save.records.of_kind(TREE_KIND) {
-        if r.read::<TreeTaken>().is_some_and(|t| felled(&t, axe_logs)) {
-            want.insert(r.id as u32, true);
-        }
-    }
-    for r in save.records.of_kind(FRUIT_RECORD) {
-        if r.read::<FruitPicked>().is_some_and(|p| p.bare_at(day)) {
-            want.entry(r.id as u32).or_insert(false);
-        }
-    }
+    let want = wanted(&save, axe_logs, day);
     if want.is_empty() {
         if !taken.felled.is_empty() || !taken.picked.is_empty() {
             *taken = TreesTaken::default();
@@ -147,5 +156,56 @@ mod tests {
             !felled(&TreeTaken { logs: 1 }, 4),
             "a branch taken, still standing"
         );
+    }
+
+    /// `flora-v2` 9.6: a pick survives a reload. The `fruit` record a pick
+    /// writes (with the hands, as `fruit::pick` stores it) is read back from
+    /// the save on the disk: the tree still reads bare
+    /// (`FruitPicked::bare_at`) until its regrowth, and the trees-taken list
+    /// names it as picked; after the regrowth it does not.
+    #[test]
+    fn a_pick_survives_a_reload() {
+        use pbd_core::flora::{FRUIT_REGROW_DAYS, FRUIT_SCHEMA};
+        use pbd_core::goods::Good;
+        use pbd_core::inventory::{Item, Slots};
+        use pbd_core::records::Record as StoredRecord;
+        let root = std::env::temp_dir().join(format!("pbd-fruit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = crate::saves::create(&root, "Fruit", 31).unwrap();
+        let (cell, day) = (1_234_567u32, 20.25);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let mut slots = Slots::new();
+            slots.give(Item::Good(Good::by_code("plum").unwrap()), 3);
+            let body = FruitPicked { day, took: 3 };
+            let line = StoredRecord::of(FRUIT_RECORD, u64::from(cell), FRUIT_SCHEMA, &body);
+            assert!(save.store_with_hands(line, FRUIT_SCHEMA, &slots));
+            assert_eq!(wanted(&save, 4, day).get(&cell), Some(&false));
+            save.drain();
+        }
+        let listed = crate::saves::list(&root);
+        let reopened = WorldSave::open(root.clone(), listed[0].clone());
+        let read = reopened
+            .records
+            .get(FRUIT_RECORD, u64::from(cell))
+            .and_then(|r| r.read::<FruitPicked>())
+            .expect("the fruit record is in the reopened save");
+        assert_eq!(read, FruitPicked { day, took: 3 });
+        assert!(
+            read.bare_at(day + 1.0),
+            "the tree reads bare after the reload"
+        );
+        assert!(
+            !read.bare_at(day + FRUIT_REGROW_DAYS),
+            "and bears again later"
+        );
+        let taken = wanted(&reopened, 4, day + 1.0);
+        assert_eq!(
+            taken.get(&cell),
+            Some(&false),
+            "the list names it as picked"
+        );
+        assert!(!wanted(&reopened, 4, day + FRUIT_REGROW_DAYS).contains_key(&cell));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
