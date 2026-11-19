@@ -3,6 +3,11 @@
 Written 2026-11-19, before any code. This change is the write-up and a
 mockup. No game code is in it.
 
+Revised the same day on the owner's notes on the v2 mockup: "no need for
+shadow caster from my light source, please improve torch look". The carried
+light now casts no shadow (design 7, 8, 13), and how a light looks in the
+hand is new (Part C, design 14; mockup version 3).
+
 ## Context
 
 The owner made three requests on 2026-11-19, in this order:
@@ -44,7 +49,7 @@ What exists, read in the code:
 - A torch, lantern or glowing mushroom in hand lights the world around the
   player, and so does the body glow. Both use one mechanism.
 - That light follows the player every frame, with no lag and no steps from
-  cell to cell, and stops at rock.
+  cell to cell. It casts no shadow (design 7, owner, 2026-11-19).
 - Old saves open as they did.
 
 **Non-Goals**
@@ -206,55 +211,61 @@ emanating from player." So:
   from the new position. There is no queue, no off-thread bake and no frame
   of lag.
 - **It never steps.** Crossing from one cell to the next changes nothing in
-  how it looks. Its falloff and its shadow are worked out from the exact
-  position, not from the cell the player is in.
-- **It stops at rock.** A wall between the light and a face leaves that face
-  dark, and a doorway lets the light through.
-- **It costs little and is measured.** The budget is at most 0.5 ms of GPU
-  time at p50 for one carried light at 1080p on the RTX 3070, on a night walk.
-  If the measurement misses that, the cut in design 8's fallback is taken
-  before the light ships.
+  how it looks. Its falloff is worked out from the exact position, not from
+  the cell the player is in.
+- **It casts no shadow.** The owner, on the v2 mockup (2026-11-19): "no need
+  for shadow caster from my light source, please improve torch look". The
+  carried light, from a held item and from the body glow alike, is not
+  stopped by anything. The column walk from each pixel toward the light
+  (v2's design 8 A), its cached-per-cell fallback, and the CPU's walks to
+  the eight corners of field-lit things are all dropped.
+- **What the player will see because of that.** The light reaches through a
+  thin wall: standing beside a one-cell stone wall with a torch, the ground
+  on the far side is lit as if the wall were not there, within the light's
+  16 m reach and falling off as it does in the open. In a cave or a house it
+  lights the next chamber or the next room through the rock or the wall
+  between, faintly at a few metres and not at all past its reach. A face
+  turned away from the light still takes none (N·L), so the far face of the
+  wall itself stays dark and the near face is lit. Placed lamps keep their
+  shadows: the baked field is unchanged, and so is the L8 voxel walk for
+  the lamps the bake hands to a pixel.
+- **It costs little and is measured.** The budget is at most 0.1 ms of GPU
+  time at p50 for one carried light at 1080p on the RTX 3070, on a night walk
+  (design 8's estimate, with a margin).
 
 ### 8. Three ways to draw it, and the one recommended
 
 All three keep the baked field for the placed lamps. They differ only in how
 the light that moves is drawn.
 
-**A. A point light in the shaders, with its shadow from a short walk through
-the column records (recommended).**
+**A. A point light in the shaders, with no shadow (recommended).**
 - The light is a uniform: a position in the planet frame, an RGB colour times
   strength, and its reach. The terrain fragment (`planet_surface.wgsl`, which
   also draws the trees and the ground clutter), `field_lit.wgsl` and
   `water.wgsl` add `carried(p, n)`, which is `lamp_bake::falloff` on the exact
   distance and N·L, the function every baked lamp uses. One copy, as a WGSL
   function, held to the Rust one by the existing constants test.
-- **Its shadow** is a walk from the pixel toward the light through the column
-  records the shader already reads (`solid_at`, the L8 voxel walk's hex-prism
-  DDA). It stops at the first solid cell, which gives 0, or when it reaches
-  the light, which gives 1. Inside the 16 m reach that is at most about 6
-  cells across and 16 layers. In practice it is 2 to 8 steps, because most
-  pixels lie a few metres away and level with the light.
-- **Early outs:** a pixel beyond the reach, or one whose falloff is under
-  1/255, or one facing away (N·L ≤ 0), does no walk. In daylight, with the
-  sun term far above the carried term, the light is skipped altogether when
-  `lamp_share` is under 1/255.
-- **Cost estimate.** Measured on the RTX 3070 at 1440 x 900
-  (`2026-11-12-l8-split`): L8's voxel walk, up to 72 cells, on wet pixels
-  costs 1.50 ms of the terrain pass's GPU time. The carried walk takes about
-  a fifth of the steps, on the share of the screen within reach (about half
-  at night on foot), at 1080p's 1.6 times the pixels. That is about
-  1.50 × 0.2 × 0.8 × 1.6, or 0.3-0.5 ms for one light. On the M4 Max, where L8
-  cost 1.3-1.9 ms at p50 (`2026-10-29-lighting-full`, 1440 x 900), it is
-  about the same, 0.3-0.6 ms. These are estimates, not measurements
-  (design 13).
-- **Fallback, if it misses 0.5 ms:** the walk's answer is cached per cell
-  rather than per pixel. When the light crosses a cell boundary, the CPU walks
-  from the light to every cell in reach (about 40 columns × 16 layers; the
-  lamp bake's own walk) and uploads a bit per cell, about 1 KB. The shader
-  reads the bit, blended between neighbouring cells, and cross-fades a
-  changed bit over 0.15 s. The GPU cost is about 0.05 ms. The shadows' edges
-  then follow the player's cell rather than the exact position, which is the
-  look the owner would judge on a capture.
+- **No shadow** (design 7). Nothing is walked, read back or cached for it:
+  the term is the falloff and N·L, and nothing else. v2 of this design walked
+  the column records from each pixel toward the light and had a per-cell
+  cache as its fallback; the owner dropped the shadow, and both went with it.
+- **Early outs:** a pixel beyond the 16 m reach, or one facing away
+  (N·L ≤ 0), skips the term. In daylight, with the sun far above the carried
+  term, the light is skipped altogether when `lamp_share` is under 1/255.
+- **Cost estimate (re-estimated for no shadow).** v2 estimated 0.3-0.5 ms on
+  the RTX 3070 at 1080p, and nearly all of that was the walk: L8's voxel walk
+  of up to 72 cells costs 1.50 ms of the terrain pass on wet pixels
+  (`2026-11-12-l8-split`, 1440 x 900), and the carried walk was taken as a
+  fifth of its steps. Without it, the carried term is one uniform read, a
+  distance, a dot product and the falloff's few multiplies: about 20
+  arithmetic operations, the size of one of the baked lamp terms the
+  fragment already evaluates, on the pixels inside the reach. At 1080p that
+  is 2 M pixels × about 20 operations, well under 0.05 ms on the 3070 even
+  allowing for the extra registers it holds live, and about the same on the
+  M4 Max. `field_lit.wgsl` gains the same handful of operations per fragment
+  and the CPU loses its corner walks. So the estimate falls from 0.3-0.5 ms
+  to **under 0.05 ms** for one light, and four lights (design 12) stay under
+  0.1 ms. These are estimates, not measurements (design 13).
 
 **B. A small light volume around the player, spread on the GPU each frame.**
 - A 32 × 32 × 32 grid at 1 m (32 KB of occupancy, re-uploaded as the player
@@ -283,20 +294,19 @@ the column records (recommended).**
   arrives one or more frames late. Both break requirement zero, whatever the
   cost. Ruled out.
 
-**Recommended: A**, with A's fallback ready if the measurement asks for it.
-It is the only option that is exact every frame. It reuses the falloff and
-the walk the game already has, and its cost is paid only on pixels near the
-light.
+**Recommended: A.** It is the only option that is exact every frame. It
+reuses the falloff the game already has, and with no shadow it is the cost
+of one more lamp term on the pixels near the light.
 
 ### 9. What it lights, and how each thing picks it up
 
 | Thing | Drawn by | How it takes the carried light |
 | --- | --- | --- |
-| Ground, walls, caves | `planet_surface.wgsl` | `carried(p, n)` × walk, added beside `lamp_near` |
+| Ground, walls, caves | `planet_surface.wgsl` | `carried(p, n)`, added beside `lamp_near`. No shadow |
 | Trees and ground clutter (tufts, flowers, the mushrooms themselves) | the same pass | The same term per fragment. Their normals are the ones the lamp term uses |
-| Water | `water.wgsl` | The same term on the surface and the lit fog, with the same walk where the pass has the column records bound. Where it does not (a task checks), the falloff alone: water is open air |
-| `LitByField` / `LitLikeTerrain`: drops, craft, props, creatures, a held-up catch | `field_lit.wgsl` | A `CarriedLights` uniform beside `room_lights` (a position, colour times strength and reach per light). Per fragment: falloff and N·L. Occlusion: each frame the CPU walks from the light to the eight corners it already samples the field at, and passes the eight answers, blended across the model as the field's are. That is a few dozen things × 8 corners × about 6 steps |
-| The hand and the held item | `field_lit.wgsl` (they are `LitByField`, `lamps-and-lanterns` decision 10) | The same uniform with the occlusion fixed at 1, since the light is in the hand. The distance is clamped to `carried_hand_min_m` (0.5 m), so the hand holding a torch is lit warm and not blown out |
+| Water | `water.wgsl` | The same term on the surface and the lit fog |
+| `LitByField` / `LitLikeTerrain`: drops, craft, props, creatures, a held-up catch | `field_lit.wgsl` | A `CarriedLights` uniform beside `room_lights` (a position, colour times strength and reach per light). Per fragment: falloff and N·L. No occlusion, so nothing is walked on the CPU |
+| The hand and the held item | `field_lit.wgsl` (they are `LitByField`, `lamps-and-lanterns` decision 10) | The same uniform. The distance is clamped to `carried_hand_min_m` (0.5 m), so the hand holding a torch is lit warm and not blown out |
 | The sky, clouds, rain | - | Not lit. The light is local |
 
 The terrain pass's clutter and trees are drawn in the same fragment path as
@@ -336,7 +346,7 @@ table, derived and never hand-copied:
 Recommendation taken (ask only with screenshots): **they add.** Two lights on
 the same spot add in the real world, and the baked lamps add in the shader.
 "Brighter wins" would make a torch hide the glow you just ate. To keep the
-cost at one walk, a player's sources are merged into one carried light: its
+cost at one light term, a player's sources are merged into one carried light: its
 position is the stronger source's (the hand for a torch, the chest for the
 glow alone), and its colour is the sum of colour × strength. The tonemapper
 rolls the top off, so the sum never goes white.
@@ -357,7 +367,7 @@ rolls the top off, so the sum never goes white.
   carries the light at the held item's bone, or at the chest for the glow.
   Until then the third-person position is the same offset from the eye.
 - **How many.** `MAX_CARRIED_LIGHTS` = 4 per frame: your own and the three
-  nearest others within 32 m. Each costs one walk on the pixels it reaches.
+  nearest others within 32 m. Each costs one falloff term on the pixels it reaches.
 - **Multiplayer (phase 3b, `multiplayer`).** The server owns the picks (a
   `glow-plant` record is a world write, made through its durable path and
   named with its author), what is eaten (the `meal` record), and which slot
@@ -380,24 +390,102 @@ is a frame time. The plan, for when the light is built:
    `night-carry`. It walks the same 1,000 m with a torch held
    (`--hold torch`), then again having eaten a glowing mushroom
    (`--eat glowing-mushroom`), then with both. It also has a cave leg
-   (`--at` a known cave mouth) where the walk and the occlusion work hardest.
+   (`--at` a known cave mouth), where the most pixels are inside the reach.
 2. **A/B in one sitting**: `--variant "before|<main exe>" --variant after`,
-   plus `PBD_CARRIED=0` on the after build to price the light alone, and
-   `PBD_CARRIED_WALK=0` to price the occlusion walk apart from the falloff.
+   plus `PBD_CARRIED=0` on the after build to price the light alone.
    Release build, nothing else running, frame latency as shipped, 1080p.
 3. **Read**: p50, p95 and p99 against the spread between repeats, and the GPU
    per pass (`main_transparent_pass_3d`, where the terrain is drawn; and
    `main_opaque_pass_3d` for the field-lit things).
-4. **Budget**: at most 0.5 ms at p50 for one light on the 3070. If it is over,
-   take A's fallback (design 8) and measure again in the same sitting.
+4. **Budget**: at most 0.1 ms at p50 for one light on the 3070. With no walk
+   there is no fallback to take: if it is over, the early outs (design 8) are
+   where to look, and it is measured again in the same sitting.
 5. **Both machines**: the desktop (RTX 3070) and the M4 Max, the report in
    `docs/benchmarks/<date>-carried-light/`, and the HTML page republished.
 
 The owner's own check of smoothness is a real-time `obs-record` walk at night
-with a torch past the wall and through the doorway. A `--capture` sequence
+with a torch past the wall and through the doorway, where the light now
+reaches the far side through the wall. A `--capture` sequence
 steps at a fixed rate and cannot show it.
 
 ---
+
+## Part C: how a carried light looks in hand
+
+### 14. The torch, the lantern and the mushroom in the hand
+
+The owner, on v2's held torch (2026-11-19): "please improve torch look". In
+v2 (`held-torch.jpg`) the torch was a flat brown stick with a pale orange
+cone on top, in a plain box hand, and it read as a pencil. This is a look
+change, so it is drawn in the mockup first (v3) and the game changes only on
+a request. The motion follows the `animation` skill: the flame and the hold
+are drawn only, and nothing about them feeds a rule.
+
+- **The haft.** A six-sided stick 4 cm across and 0.45 m long, in an
+  8 x 32 pixel bark texture: strands down it from the wood ramp, darker
+  grain runs, the odd pale fleck and a knot. Flat faces, so it reads as a
+  stick at pixel size, as the placed torch's post does.
+- **The head.** A rag wound round the top of the haft and soaked in pitch,
+  14 cm tall and 8.6 cm across at its fattest, in a 16 x 14 texture: the
+  cloth in diagonal wraps with dark seams and pitch stains, a cord binding
+  its foot, the crown scorched to a charred crust with a few live embers in
+  it. Lit like the terrain (and by its own flame, through the carried light
+  with the hand's clamp), with no outline.
+- **The flame.** Three camera-facing cards in a pixel flame sheet (eight
+  12 x 20 frames, 11 a second), each card on a different frame. Every frame
+  is quantised to the flame ramp of the palette: a white-yellow core, yellow,
+  orange, and red tips, with no soft edge. The outer card keeps its red rim,
+  the middle one only its orange and hotter texels, the inner one only its
+  yellow and white heart, so the colours stack and the tongue licks
+  irregularly. A few square ember pixels rise from it, drift, cool from
+  yellow to red and go out, and they rise in the world, so a walking torch
+  leaves them behind. A soft additive glow sits round the head. Fire moves
+  on its own, which the "nothing spins on its own" rule allows.
+- **The flicker drives the light.** One function gives the flame's height,
+  its glow and the carried light's strength: a few slow waves plus a small
+  step each time the sheet changes frame, about ±15 % in all. So the light on
+  the ground flickers in step with the flame drawn. The held torch's light
+  level is still `Material::emission` (14); the flicker only scales it about
+  that value. In the game this is one more term on the uniform's strength,
+  worked out on the CPU each frame.
+- **The flame stands on the view's up in the hand.** A flame on the world's
+  up splays outward at the edge of the view when the player looks down, so
+  the held flame is drawn upright on the screen, as first-person games draw a
+  held flame. A placed flame stands on the world's up. The flame leans back
+  a little against the hand's motion when walking.
+- **The hold.** The approved hand (M36 Tools in Hand, the Hand tab,
+  hand-model design 5; the copy in `docs/mockups/river-craft/hand.js`) closes
+  on the haft at the game's scale (`held_tools.ron`'s 0.0374 m a tool unit),
+  held up and to the right with the head leaning a little away and in. The
+  flame stands at the right of the view about chest-high, clear of the
+  crosshair. The hold has a light idle sway: the step's side-to-side and bob
+  while walking (one step per 0.75 m, 1 cm across, 0.8 cm of bob, 0.02 rad of
+  roll, eased in and out over about a sixth of a second) and a 3 mm breath at
+  rest. These are the hold's tunables, a block like `held_tools.ron`'s.
+- **The lantern** is held by its bail, the fist closed on it palm down, the
+  lantern hanging under it: an iron frame (a pixel iron texture), a roof and
+  a base, and four lit panes, each a small flame behind glass, glowing as the
+  game's lantern panes do from dusk to dawn and dark glass over a dead wick
+  by day. It swings a little from the bail as the player walks, behind the
+  step. Its light flickers at a third of the torch's.
+- **The glowing mushroom** is held by its stalk, the cap a hand's width over
+  the fist at its own size: the plant's own cap (today's four-sided one, or
+  the proposed dome when the Cap switch says so) on a round stalk in a small
+  pale-green texture, since the ground's flat stalk card reads as a blade
+  that close. Its light does not flicker.
+- **The placed torch is the same object.** The game's placed torch
+  (`planet_surface.wgsl`'s lamp slot, `LAMP_TORCH`) is a four-sided post
+  0.55 m tall in `LAMP_WOOD_CODE`'s flat brown with one flat triangle 26 cm
+  wide and 16 cm tall on it, shaded orange to red: it looks worse than the
+  new held torch and does not match it. The mockup's Placed row stands both
+  side by side (`torch-v3-placed.jpg`). **Recommended, as a separate future
+  look change:** the placed torch takes the held torch's head, flame cards,
+  embers and flicker, on a 0.55 m haft, so a torch is the same object in the
+  hand and on the ground or a wall. That is a change to the lamp slot's
+  vertices (the flame needs cards, so more than its 30 vertices today) and
+  to the lamp fragment's colours, so it goes to the owner with those
+  screenshots and is not made here. Until then the held torch is drawn as
+  above and the placed one as today.
 
 ## Tunables, with units (validated RON)
 
@@ -414,16 +502,25 @@ steps at a fixed rate and cannot show it.
 | `carried_hand_min_m` | `held.ron` | 0.5 | m | 0.1..2 |
 | `carried_max_lights` | `column.ron` | 4 | lights | 1..8 (the shader's array size; a test holds them together) |
 | `carried_others_m` | `column.ron` | 32.0 | m | 0..128 |
+| `torch_flicker` | `held.ron` | 0.15 | share of the light's strength, peak to mean | 0..0.5 |
+| `flame_fps` | `held.ron` | 11 | frames a second | 4..24 |
+| hold `grip`, `up`, `arm` per held light | `held_tools.ron` | design 14 (the mockup's `HOLD` block) | m and directions in the eye frame | as `held_tools.ron`'s |
+| sway `step_m`, `side_m`, `bob_m`, `roll_rad`, `breathe_m`, `ease_hz` | `held.ron` | 0.75, 0.010, 0.008, 0.02, 0.003, 6 | m, rad, Hz | each ≥ 0 |
 
 Levels for held lamps are not tunables. They are `Material::emission`, the
 one authoritative value.
 
 ## Risks / Trade-offs
 
-- **The estimate could be wrong.** The walk's cost is extrapolated from L8's.
-  The fallback is designed, and the budget is checked before shipping.
-- **Several players with torches in a cave** make four walks per pixel there.
-  `carried_max_lights` caps it, and the scenario's cave leg measures it.
+- **Light through walls.** With no shadow, a carried light reaches through a
+  thin wall into the next room or chamber (design 7). The owner chose this
+  ("no need for shadow caster from my light source"). It is faint past a few
+  metres and gone past 16 m.
+- **The estimate could be wrong.** It is now one lamp term per pixel in
+  reach, and the budget is checked before shipping.
+- **Several players with torches in a cave** make four light terms per pixel
+  there. `carried_max_lights` caps it, and the scenario's cave leg measures
+  it.
 - **Tint mismatch.** A held glowing mushroom gives a warm light while its cap
   is cyan, because its planted pool is warm today. The fix is one look change
   for both (design 10), asked with screenshots.
@@ -451,11 +548,14 @@ Each goes to the survey with the mockup's screenshots:
    plant's own level, so the planted pool grows too. Raising only the held
    value would make a second copy. This goes to the survey with
    `held-compare.jpg`.
+6. The placed torch matching the held one (design 14): a future look change,
+   recommended, with `torch-v3-placed.jpg`. Not made here.
 
 ## Mockup
 
 The Glow and carried light tab of the Foliage Detail Playground (M13,
-`docs/mockups/foliage.html#glow`, version 2). M13 was chosen over M14
+`docs/mockups/foliage.html#glow`, version 3; version 2 drew the first
+write-up, with the shadow and the box torch). M13 was chosen over M14
 (Lighting) and M27 (Hearth and Kitchen) for three reasons:
 - the plant is ground cover, and M13 is the flora page;
 - its hex patch, the game's atlas and the Tenebris trees are already there;
@@ -463,6 +563,10 @@ The Glow and carried light tab of the Foliage Detail Playground (M13,
 
 The playground and the tab each own a renderer. A renderer is made when its
 tab first opens, and its loop stops while the other tab is open. Its
-shader ports the terms named above: the lamp falloff, the level-3 pools, the
-column walk for the shadow, and the cap's night colour. Shots, rendered in
-software, are in `docs/screenshots/glowing-mushrooms/`.
+shader ports the terms named above: the lamp falloff with no shadow for the
+carried light, the level-3 pools, and the cap's night colour. Version 3 adds
+the held torch, lantern and mushroom of design 14 in the approved hand, a
+Held switch (Before is v2's boxes, Now is v3), and a Placed switch that
+stands the game's placed torch beside the matching one. Shots, rendered in
+software (Chromium on SwiftShader), are in
+`docs/screenshots/glowing-mushrooms/`, the v3 ones as `torch-v3-*.jpg`.

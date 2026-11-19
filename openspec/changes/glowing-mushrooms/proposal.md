@@ -52,29 +52,39 @@ What the game has today (read in the code, 2026-11-19):
   world around the player, as the body glow does. The level and colour of
   each come from the placed thing's own values (`Material::emission`,
   `GLOW_FLOWER_LEVEL`, `TORCH_TINT`), through one table. The light moves every
-  frame with no lag and no steps from cell to cell. Rock blocks it. It lights
+  frame with no lag and no steps from cell to cell. It casts no shadow (the
+  owner, 2026-11-19: "no need for shadow caster from my light source"), so it
+  reaches through a thin wall into the next room. It lights
   the ground, walls, trees, clutter, water, and everything `LitByField`
   (drops, craft, creatures, the hand and the held item). Nothing about it is
   saved (design 7 to 12).
 - **Speed is the first requirement.** The carried light is a point light that
-  the terrain, field-lit and water shaders evaluate beside the baked field.
-  Its shadow is a short walk through the column records, from the exact
-  light position to the pixel. The field is not re-baked as the player moves
-  (design 8). Three approaches are compared, with a cost estimate for each.
+  the terrain, field-lit and water shaders evaluate beside the baked field,
+  with no shadow: one more lamp term on the pixels in its reach, estimated
+  under 0.05 ms on the RTX 3070 at 1080p. The field is not re-baked as the
+  player moves (design 7, 8). Three approaches are compared, with a cost estimate for each.
   The owner measures the cost on the RTX 3070 and the M4 Max with a
   `perf_suite` A/B. A cloud session cannot measure it (design 13).
 - **Mockup:** a new tab, Glow and carried light, on the Foliage Detail
   Playground (M13, `docs/mockups/foliage.html`, version 2). It shows a night
   patch of the plants as the game draws them, picking with F and the toast,
   eating and the body glow with its timer and fade, a held torch, lantern and
-  mushroom compared with Today, a wall and a doorway that block the light, and
-  a day view.
+  mushroom compared with Today, a wall and a doorway, and a day view.
+  Version 3 drops the light's shadow and redraws what is held (design 14):
+  a torch with a wrapped, charred head and a flickering pixel flame with
+  embers, its light flickering in step, a lantern and the mushroom, all in
+  the approved hand from Tools in Hand with an idle sway, and the game's
+  placed torch beside a matching one.
+- **The held torch's look** (owner: "please improve torch look"): drawn in the
+  mockup only. Making the placed torch match it is recommended as a separate
+  future look change (design 14).
 
 ## Capabilities
 
 - `planet/flora`: picking a glowing mushroom; a picked cell draws none and
   lights nothing; regrowth.
-- `planet/light`: the carried light, its sources, its shadow, what it lights.
+- `planet/light`: the carried light, its sources, that it casts no shadow,
+  what it lights.
 - `player/glow`: eating a glowing mushroom, the Glow effect, its fade.
 
 ## Impact

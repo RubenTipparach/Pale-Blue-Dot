@@ -290,7 +290,7 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
 <nav class="pagetabs" role="tablist" aria-label="Views">
   <a role="tab" href="#playground" data-page="playground">Playground</a>
   <a role="tab" href="#glow" data-page="glow">Glow and carried light</a>
-  <span class="pagever">v2</span>
+  <span class="pagever">v3</span>
 </nav>
 
 <section id="glowTab" aria-label="Glow and carried light" hidden>
@@ -309,6 +309,8 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
     <div class="g-row"><span>Time</span><div class="chips" id="gTime"><button class="btn" data-v="night">Night</button><button class="btn" data-v="day">Day</button></div></div>
     <div class="g-row"><span>Light</span><div class="chips" id="gCompare"><button class="btn" data-v="today">Today</button><button class="btn" data-v="new">Carried</button></div></div>
     <div class="g-row"><span>View</span><div class="chips" id="gView"><button class="btn" data-v="fp">First person</button><button class="btn" data-v="over">Overview</button></div></div>
+    <div class="g-row"><span>Held</span><div class="chips" id="gLook"><button class="btn" data-v="v2">Before</button><button class="btn" data-v="v3">Now</button></div></div>
+    <div class="g-row"><span>Placed</span><div class="chips" id="gPlaced"><button class="btn" data-v="off">Off</button><button class="btn" data-v="on">Both torches</button></div></div>
     <div class="g-row"><span>Cap</span><div class="chips" id="gCap"><button class="btn" data-v="today">Today</button><button class="btn" data-v="proposed">Proposed</button></div></div>
     <div class="g-row"><span>Glow time</span><div class="chips" id="gSpeed"><button class="btn" data-v="1">×1</button><button class="btn" data-v="10">×10</button></div></div>
     <div class="g-row"><span></span><div class="chips"><button class="btn" id="gRoute" aria-pressed="false">Walk the route</button></div></div>
@@ -318,6 +320,7 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
   <section class="panel notes" id="gNotes" hidden aria-label="About the glow tab">
     <button class="btn close" id="gClose" aria-label="Close">&#x2715;</button>
     <h2>Glow and carried light</h2>
+    <p><b>Changes.</b> v3 (2026-11-19): the carried light casts no shadow, so it reaches through the wall; a torch that burns (a wrapped, charred head and a flickering pixel flame with embers and a glow, its light flickering in step) held in the approved hand with an idle sway; the lantern and the mushroom in the same hand; Held (Before / Now) and Placed switches. v2 (2026-11-19): this tab, first drawn.</p>
     <p>The owner, 2026-11-19: "Players also asked to pick up glowing mushrooms. You can eat them and glow light from your body temporarily", "Allow players to pick up the glowing mushrooms that exist in the game today", "Holding a light source, torches lamps or mushrooms or anything that is a light should illuminate surrounding area", and "Need to make this fast so this would be realtime for the light emanating from player". The write-up is <code>openspec/changes/glowing-mushrooms</code>. Nothing on this tab is in the game yet.</p>
 
     <h3>Controls</h3>
@@ -327,7 +330,9 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
       <li><b>1-4</b> or a tap selects a hotbar slot: torch, lantern, glowing mushroom, bare hand.</li>
       <li><b>Right click</b> (or Eat) with the mushroom selected eats one. The buff over the hotbar counts down. <b>Glow time ×10</b> runs the clock ten times faster to see the fade.</li>
       <li><b>Light: Today</b> is the game now: nothing carried lights anything. <b>Carried</b> is the proposal.</li>
-      <li><b>Overview</b> shows the player from above, so the pool of light and where the wall cuts it can be seen.</li>
+      <li><b>Overview</b> shows the player from above, so the pool of light, reaching over the wall, can be seen.</li>
+      <li><b>Held: Before</b> is v2's box torch, lantern and mushroom in the box hand; <b>Now</b> is v3.</li>
+      <li><b>Placed: Both torches</b> stands two torches ahead of the start: on the left the game's placed torch as it is drawn today, on the right the same torch as the held one.</li>
     </ul>
 
     <h3>The plant is the game's own</h3>
@@ -353,16 +358,29 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
       <li>Whatever is in the selected slot and gives light when placed gives the same light in hand: a torch at level 14, a lantern at 13, the mushroom at 3, all in the field's warm tint. The values are <code>Material::emission</code> and <code>GLOW_FLOWER_LEVEL</code>, never a copy. A lantern and a mushroom light from dusk to dawn, as they do when placed. In the pack, a light gives nothing.</li>
       <li>The strength is level / 14, and the falloff is the lamp bake's own: <code>N·L × w² / (1 + (d/2.2)²) × 2.4</code> with <code>w = 1 − (d/16)⁴</code>. So a held torch lights the ground as a placed torch at the same distance does.</li>
       <li>The body glow and a held light add: one light per player, at the stronger source, its colour the sum.</li>
-      <li>It is worked out every frame from the exact position, so it never lags and never steps from cell to cell. Its shadow is a walk through the columns from each pixel toward the light, stopped by the first solid cell. Walk up to the stone wall: the ground on the far side stays dark, and the doorway lets the light through.</li>
-      <li>It lights the ground, the trees, the plants, the dropped log (a 2D item, lit like the ground), and the hand, which takes it unshadowed and no nearer than 0.5 m.</li>
+      <li>It is worked out every frame from the exact position, so it never lags and never steps from cell to cell.</li>
+      <li>It casts no shadow (owner, 2026-11-19: "no need for shadow caster from my light source"). Walk up to the stone wall: the ground on the far side is lit through it, as it would be through a thin wall into the next room. The face of the wall turned away from the light stays dark. Placed lamps keep their shadows.</li>
+      <li>It lights the ground, the trees, the plants, the dropped log (a 2D item, lit like the ground), and the hand, which takes it no nearer than 0.5 m.</li>
     </ul>
 
     <h3>In the engine</h3>
-    <p>The recommended way is a point light evaluated in the terrain, field-lit and water shaders beside the baked field, with the column walk for its shadow. That is about 0.3-0.5 ms on the RTX 3070 at 1080p and 0.3-0.6 ms on the M4 Max, estimated from L8's measured voxel walk. A light volume on the GPU would be cheaper but blockier and leaky, and re-baking the field on the CPU would step and lag. The owner measures it with <code>perf_suite.py</code>'s night walk with a torch, A/B in one sitting. This page draws the same terms in WebGL on hex columns. The sun and moon use the same walk for their shadows here, which the game does with its cascades instead.</p>
+    <p>The recommended way is a point light evaluated in the terrain, field-lit and water shaders beside the baked field, with no shadow. That is one more lamp term on the pixels within its reach: estimated well under 0.05 ms on the RTX 3070 at 1080p and on the M4 Max, down from v2's 0.3-0.5 ms, which was nearly all the shadow's walk. A light volume on the GPU would be blockier, and re-baking the field on the CPU would step and lag. The owner measures it with <code>perf_suite.py</code>'s night walk with a torch, A/B in one sitting. This page draws the same terms in WebGL on hex columns. The sun uses a column walk for its shadow here, which the game does with its cascades instead.</p>
+
+    <h3>In the hand</h3>
+    <ul>
+      <li>The torch: a 0.45 m haft in a pixel bark texture, and a head of rag wound round its top and soaked in pitch, its crown charred with a few live embers, lit like the ground and by its own flame. No outline.</li>
+      <li>The flame: three camera-facing cards on a pixel flame sheet (eight frames, 11 a second) in the palette's flame ramp: a red rim, orange, yellow, a white heart. Embers rise from it and drift behind a walking torch, and a soft glow sits round the head. One flicker drives the flame's height, its glow and the light on the ground, so they move together.</li>
+      <li>The hand is the approved one from Tools in Hand, closed on the haft, held up and to the right so the flame stands at chest height clear of the crosshair. It sways a little with each step and breathes at rest.</li>
+      <li>The lantern hangs from its bail under the fist and swings a little as you walk; its panes glow from dusk to dawn. The mushroom is held by its stalk, its cap a hand's width above the fist, at its own size.</li>
+      <li>The game's placed torch is a plain post with one flat triangle. The recommendation, as a separate look change, is to give it this head and flame so a torch is the same thing in the hand and on the ground. The game is not changed here.</li>
+    </ul>
   </section>
 </section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- The approved first-person hand (M36 Tools in Hand, the Hand tab), the copy River Craft lifted into its own file. -->
+<script>window.RC = window.RC || {};</script>
+<script src="river-craft/hand.js?v=3"></script>
 <script>
 "use strict";
 let PAGE_TAB = "playground", playStarted = false, playRunning = false;   // which page tab is open
@@ -2404,7 +2422,7 @@ const ITEMS = [
 ];
 const $g = id => document.getElementById(id);
 const G = {
-  started: false, running: false, night: true, compare: "new", view: "fp", cap: "today", speed: 1,
+  started: false, running: false, night: true, compare: "new", view: "fp", cap: "today", speed: 1, look: "v3", placed: false,
   sel: 0, count: 0, clock: 0, glowStart: -1, glowUntil: -1, yaw: 0, pitch: -0.12,
   pos: [0, 0, 0], eyeY: 0, eyeH: 1.62, orbit: { yaw: 0.6, pitch: 0.72, dist: 17 }, route: null, keys: {},
 };
@@ -2601,6 +2619,7 @@ uniform sampler2D atlas; uniform sampler2D hmap; uniform sampler2D icon;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uFill; uniform float uExpo; uniform float uNight;
 uniform vec4 uPlants[24]; uniform vec3 uCarryPos; uniform vec3 uCarryCol; uniform float uHand; uniform float uIcon;
 uniform vec3 uFog; uniform vec3 uCam; uniform float uTime;
+uniform sampler2D uMap; uniform float uMapOn; uniform float uEmit; uniform vec4 uLamps[2];
 varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec2 vTile; varying vec3 vCol; varying float vKind;
 const float GW = 2.833;
 float hAt(vec2 xz){
@@ -2623,6 +2642,7 @@ void main(){
   vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
   vec3 alb;
   if (uIcon > 0.5) { vec4 t = texture2D(icon, vUv); if (t.a < 0.5) discard; alb = pow(t.rgb, vec3(2.2)); }
+  else if (uMapOn > 0.5) { vec4 t = texture2D(uMap, vUv); if (t.a < 0.5) discard; alb = pow(t.rgb, vec3(2.2))*vCol; }
   else if (vTile.x >= 0.0) { vec2 px = vTile + floor(fract(vUv)*32.0) + 0.5; alb = pow(texture2D(atlas, px/512.0).rgb, vec3(2.2)); }
   else alb = pow(vCol, vec3(2.2));
   // the sun (or the moon), with its shadow from the same walk
@@ -2636,7 +2656,15 @@ void main(){
     float lev = 3.0 - 3.0*length(vP.xz - pl.xz)/GW; if (lev <= 0.0) continue;
     float f = lev/15.0; float k = f*(2.0 - f); lit += vec3(1.0, 0.7, 0.3)*1.25*k*k;
   }
-  // the carried light: lamp_bake::falloff from its exact position, shadowed by the walk
+  // placed torches (the Placed row): the same falloff, at level 14
+  for (int i = 0; i < 2; i++) {
+    vec4 lp = uLamps[i]; if (lp.w <= 0.0) continue;
+    vec3 to = lp.xyz - vP; float d = max(length(to), 0.001); float nl = dot(n, to/d);
+    if (uHand > 0.5) nl = 0.35 + 0.65*max(nl, 0.0);
+    if (d < 16.0 && nl > 0.0) { float w = max(1.0 - pow(d/16.0, 4.0), 0.0); lit += vec3(1.0, 0.7, 0.3)*lp.w*nl*w*w/(1.0 + (d/2.2)*(d/2.2))*2.4; }
+  }
+  // the carried light: lamp_bake::falloff from its exact position. No shadow (owner, 2026-11-19:
+  // "no need for shadow caster from my light source"), so it reaches through a thin wall.
   if (uCarryCol.r + uCarryCol.g + uCarryCol.b > 0.0) {
     vec3 to = uCarryPos - vP; float dl = max(length(to), 0.001); vec3 l = to/dl;
     float d = uHand > 0.5 ? max(dl, 0.5) : dl;
@@ -2644,11 +2672,11 @@ void main(){
     if (d < 16.0 && nl > 0.0) {
       float w = max(1.0 - pow(d/16.0, 4.0), 0.0);
       float fall = nl*w*w/(1.0 + (d/2.2)*(d/2.2))*2.4;
-      float occ = uHand > 0.5 ? 1.0 : walk(vP + n*0.06, uCarryPos);
-      lit += uCarryCol*fall*occ;
+      lit += uCarryCol*fall;
     }
   }
   vec3 c = alb*lit;
+  if (uEmit > 0.0) c = alb*uEmit;                                                            // a lit pane: its own light
   if (vKind > 0.5 && vKind < 1.5 && uNight > 0.5) c = vec3(0.62, 1.0, 0.88)*0.25*1.5;     // the head burns
   if (vKind > 4.5 && uNight > 0.5) c = vec3(0.62, 1.0, 0.88)*0.12*1.5;                       // its underside, dimmer
   if (vKind > 1.5 && vKind < 2.5) c = vCol*(0.9 + 0.1*sin(uTime*23.0 + vP.y*40.0));          // a flame, a lit pane
@@ -2675,26 +2703,466 @@ function handBox(g, cx, cy, cz, sx, sy, sz, col, k) {
   g.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], uv, NOT, col, k);
   g.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], uv, NOT, col, k);
 }
-// Where each held item gives its light, in the camera's frame.
+// ---------- what is held ----------
+// v2 (before): boxes in a box hand, kept for the before and after (Held: Old). Its lights' places, in the camera's frame.
 const HELD_LIGHT = { torch: [0.30, -0.10, -0.68], lantern: [0.30, -0.20, -0.58], mushroom: [0.30, -0.17, -0.58] };
-function buildHand() {
-  hand = new THREE.Group();
+let oldHand, rig, oldItems = {}, anchors = {}, held = {}, FLAMES = [], embers, placed;
+function buildOldHand() {
+  oldHand = new THREE.Group();
   const skin = [0.84, 0.64, 0.50], sleeve = [0.30, 0.34, 0.42];
   const arm = new GB(); handBox(arm, 0.36, -0.44, -0.42, 0.075, 0.075, 0.30, sleeve, 3); handBox(arm, 0.32, -0.36, -0.60, 0.085, 0.08, 0.10, skin, 3);
-  hand.add(new THREE.Mesh(arm.geo(), mats.hand));
+  oldItems.arm = new THREE.Mesh(arm.geo(), mats.hand); oldHand.add(oldItems.arm);
   const t = new GB(); handBox(t, 0.30, -0.30, -0.68, 0.03, 0.30, 0.03, [0.48, 0.32, 0.18], 3);
   handBox(t, 0.30, -0.145, -0.68, 0.042, 0.025, 0.042, [0.25, 0.25, 0.27], 3);
   for (let i = 0; i < 2; i++) { const a = i * Math.PI / 2, dx = Math.cos(a) * 0.035, dz = Math.sin(a) * 0.035;
     t.quad([0.30 - dx, -0.135, -0.68 - dz], [0.30 + dx, -0.135, -0.68 + dz], [0.30 + dx * 0.25, -0.05, -0.68 + dz * 0.25], [0.30 - dx * 0.25, -0.05, -0.68 - dz * 0.25], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], NOT, [0.9, 0.36, 0.08], 2); }
-  items.torch = new THREE.Mesh(t.geo(), mats.hand);
+  oldItems.torch = new THREE.Mesh(t.geo(), mats.hand);
   const l = new GB(); handBox(l, 0.30, -0.29, -0.6, 0.02, 0.06, 0.02, [0.2, 0.2, 0.22], 3);
   handBox(l, 0.30, -0.20, -0.58, 0.12, 0.13, 0.12, [0.85, 0.66, 0.34], 2);
   for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) handBox(l, 0.30 + dx * 0.062, -0.20, -0.58 + dz * 0.062, 0.016, 0.15, 0.016, [0.17, 0.17, 0.19], 3);
   handBox(l, 0.30, -0.12, -0.58, 0.14, 0.02, 0.14, [0.17, 0.17, 0.19], 3); handBox(l, 0.30, -0.28, -0.58, 0.14, 0.02, 0.14, [0.17, 0.17, 0.19], 3);
-  items.lantern = new THREE.Mesh(l.geo(), mats.hand);
-  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); items.mushroom = new THREE.Mesh(m.geo(), mats.handNight);
-  for (const k in items) hand.add(items[k]);
-  camera.add(hand);
+  oldItems.lantern = new THREE.Mesh(l.geo(), mats.hand);
+  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); oldItems.mushroom = new THREE.Mesh(m.geo(), mats.hand);
+  for (const k of ["torch", "lantern", "mushroom"]) oldHand.add(oldItems[k]);
+}
+
+// v3: pixel textures drawn in code from the Sweaft-64 palette, short ramps lit by the scene, no outline.
+const SW = {
+  char: ["#161612", "#2c2c25", "#434137"], wood: ["#41322c", "#725244", "#7d4636", "#a8633e"],
+  rag: ["#522b2f", "#7d4636", "#a8633e", "#cfaa81"], cord: ["#2e0d06", "#41322c", "#725244"],
+  flame: ["#a61e1f", "#d4462b", "#fe6420", "#fb902f", "#faaf5c", "#fffefe"], iron: ["#161612", "#2c2c25", "#434137", "#5d778d"],
+};
+function rngS(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+// A pixel texture, v = 0 at the top row, nearest-sampled.
+function pixTex(w, h, draw) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d");
+  draw((X, Y, col) => { x.fillStyle = col; x.fillRect(X, Y, 1, 1); }, w, h);
+  const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; return t;
+}
+const TEX = {};
+function heldTextures() {
+  // The haft: 8 x 32 texels round and along a 4 cm stick 0.45 m long. Bark strands down it, darker grain
+  // runs, the odd pale fleck, a knot.
+  let r = rngS(17);
+  TEX.haft = pixTex(8, 32, (px, w, h) => {
+    const W = SW.wood;
+    for (let X = 0; X < w; X++) { let run = 0;
+      for (let Y = 0; Y < h; Y++) {
+        if (run <= 0 && r() < 0.09) run = 2 + (r() * 6 | 0);
+        let col = X % 3 === 0 ? W[2] : W[1];
+        if (run > 0) { col = W[0]; run--; } else if (r() < 0.06) col = W[3];
+        px(X, Y, col);
+      } }
+    px(5, 21, W[0]); px(6, 21, W[0]); px(5, 22, W[0]); px(6, 22, W[3]); px(4, 22, W[2]);
+  });
+  // The head: 16 x 14, a rag wound round the top of the stick and soaked in pitch. From the top: charred
+  // crust with live embers in it, scorched cloth, the wraps in diagonal bands with dark seams and pitch
+  // stains, the cord that binds it.
+  r = rngS(29);
+  const stains = new Set(); for (let i = 0; i < 7; i++) { const sx = r() * 16 | 0, sy = 4 + (r() * 7 | 0); stains.add(sx + "," + sy); stains.add(((sx + 1) % 16) + "," + sy); if (r() < 0.5) stains.add(sx + "," + (sy + 1)); }
+  TEX.head = pixTex(16, 14, (px, w) => {
+    for (let X = 0; X < w; X++) {
+      px(X, 0, r() < 0.16 ? SW.flame[2] : r() < 0.3 ? SW.char[1] : SW.char[0]);
+      px(X, 1, r() < 0.06 ? SW.flame[0] : r() < 0.35 ? SW.char[1] : SW.char[0]);
+      px(X, 2, (X & 1) ? SW.char[1] : SW.char[2]);
+      px(X, 3, r() < 0.5 ? SW.rag[0] : SW.char[1]);
+      for (let Y = 4; Y < 12; Y++) {
+        const bp = (Y + Math.floor(X / 2)) % 3, band = Math.floor((Y + Math.floor(X / 2)) / 3);
+        let col = bp === 0 ? SW.rag[0] : band % 2 ? SW.rag[1] : SW.rag[2];
+        if (bp === 1 && band % 2 === 0 && r() < 0.12) col = SW.rag[3];
+        if (stains.has(X + "," + Y)) col = SW.char[1];
+        px(X, Y, col);
+      }
+      px(X, 12, (X + 0) % 2 ? SW.cord[1] : SW.cord[2]); px(X, 13, (X + 1) % 2 ? SW.cord[0] : SW.cord[1]);
+    }
+  });
+  // A lantern's pane, lit: 8 x 10, the glass glowing round a small flame, a bar across.
+  TEX.pane = pixTex(8, 10, (px, w, h) => {
+    for (let X = 0; X < w; X++) for (let Y = 0; Y < h; Y++) px(X, Y, SW.flame[3]);
+    for (let Y = 2; Y < 8; Y++) for (let X = 2; X < 6; X++) px(X, Y, SW.flame[4]);
+    px(3, 3, SW.flame[5]); px(4, 4, SW.flame[5]); px(3, 4, SW.flame[5]); px(3, 5, SW.flame[5]); px(4, 5, SW.flame[5]); px(3, 6, SW.flame[4]); px(4, 6, SW.flame[4]);
+    for (let X = 0; X < w; X++) px(X, 0, SW.flame[2]);
+  });
+  // ...and dark by day (a lantern lights from dusk to dawn): glass over a dead wick.
+  TEX.paneDay = pixTex(8, 10, (px, w, h) => {
+    for (let X = 0; X < w; X++) for (let Y = 0; Y < h; Y++) px(X, Y, (X + Y) % 5 === 0 ? "#53998b" : "#204f63");
+    px(3, 6, SW.char[1]); px(4, 6, SW.char[1]); px(3, 7, SW.cord[1]); px(4, 7, SW.cord[1]);
+  });
+  // The mushroom's stalk: the plant's pale green, a darker streak or two, a pale fleck.
+  r = rngS(53);
+  TEX.stalk = pixTex(6, 16, (px, w, h) => { for (let X = 0; X < w; X++) for (let Y = 0; Y < h; Y++) px(X, Y, X === 2 && Y > 3 ? "#559642" : r() < 0.08 ? "#c1f1d8" : "#9bb675"); });
+  // Iron: dark, a lighter speck of wear.
+  r = rngS(41);
+  TEX.iron = pixTex(8, 8, (px, w, h) => { for (let X = 0; X < w; X++) for (let Y = 0; Y < h; Y++) px(X, Y, r() < 0.1 ? SW.iron[2] : r() < 0.5 ? SW.iron[1] : SW.iron[0]); });
+  TEX.flame = flameSheet();
+}
+// The flame: eight 12 x 20 frames of a pixel flame in the flame ramp, its tongue licking up and over.
+// Each frame is quantised to the ramp: a white-yellow core, yellow, orange, red tips. No soft edge.
+const FLAME_FR = 8, FW = 12, FH = 20;
+function flameSheet() {
+  return pixTex(FW * FLAME_FR, FH, px => {
+    for (let f = 0; f < FLAME_FR; f++) {
+      const ph = f / FLAME_FR * Math.PI * 2;
+      for (let py = 0; py < FH; py++) {
+        const t = (FH - 1 - py) / (FH - 1);   // 0 at the root, 1 at the tip
+        const wid = (t < 0.22 ? 0.7 + 1.3 * t : Math.pow(Math.max(0, 1 - (t - 0.22) / 0.8), 0.85)) * FW * 0.46;
+        const cx = FW / 2 + Math.sin(ph + t * 4.2) * t * 1.1 + Math.sin(2 * ph + t * 7.0 + 1.0) * t * 0.6;
+        for (let x = 0; x < FW; x++) {
+          const n = 0.5 + 0.25 * Math.sin(x * 1.7 + py * 0.9 - ph * 2) + 0.25 * Math.sin(x * 0.6 - py * 1.3 + ph * 3 + 2);
+          let v = 1 - Math.abs(x + 0.5 - cx) / Math.max(0.3, wid);
+          v = v * (1 - 0.3 * t) - (n - 0.5) * 0.35 * t + (t < 0.12 ? 0.1 : 0);
+          // a tongue that breaks off at the top on some frames
+          if (t > 0.86 && Math.abs(x + 0.5 - cx - Math.sin(ph * 2) * 1.2) < 0.9 && Math.sin(ph * 3 + 1) > 0.2) v = Math.max(v, 0.15);
+          let col = null;
+          if (v > 0.74) col = SW.flame[5]; else if (v > 0.56) col = SW.flame[4]; else if (v > 0.4) col = SW.flame[3];
+          else if (v > 0.24) col = SW.flame[2]; else if (v > 0.12) col = t > 0.45 ? SW.flame[0] : SW.flame[1];
+          if (col) px(f * FW + x, py, col);
+        }
+      }
+    }
+  });
+}
+// The flicker, shared by the flame's height, its glow and the light it gives: smooth waves plus a step
+// on each change of the flame's frame, so the light jumps when the drawing does.
+function flick(t, seed) {
+  const fr = Math.floor(t * 11 + seed);
+  return 1 + 0.05 * Math.sin(t * 12.7 + seed) + 0.04 * Math.sin(t * 21.3 + seed * 2.1) + 0.03 * Math.sin(t * 5.9 + seed * 0.7) + (hh(fr, 3, 77) - 0.5) * 0.08;
+}
+const FLAME_VS = `
+attribute vec2 corner; attribute float card;
+uniform vec3 uBase; uniform vec3 uLean; uniform vec3 uUp; uniform float uSize; uniform float uTime; uniform float uFlick; uniform float uSeed;
+varying vec2 vUv; varying float vCard;
+void main(){
+  vec3 up = normalize(uUp);
+  vec3 toCam = cameraPosition - uBase; toCam -= up*dot(toCam, up);
+  if (dot(toCam, toCam) < 1e-6) toCam = vec3(0.0, 0.0, 1.0);
+  toCam = normalize(toCam);
+  vec3 right = normalize(cross(up, toCam));
+  float k = card < 0.5 ? 1.0 : (card < 1.5 ? 0.8 : 0.56);
+  float hgt = uSize*k*(1.0 + 1.6*(uFlick - 1.0));
+  float wid = uSize*k*0.68;
+  float fr = mod(floor(uTime*11.0 + uSeed) + card*3.0, 8.0);
+  float ux = clamp(card > 0.5 && card < 1.5 ? 0.5 - corner.x : corner.x + 0.5, 0.002, 0.998);
+  vUv = vec2((fr + ux)/8.0, 1.0 - corner.y); vCard = card;
+  vec3 p = uBase + right*(corner.x*wid + (card - 1.0)*0.004*uSize/0.25) + up*(corner.y*hgt) + uLean*corner.y*corner.y + toCam*(0.003*card);
+  gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.0);
+}`;
+const FLAME_FS = `
+precision highp float;
+uniform sampler2D uSheet; uniform float uGain; varying vec2 vUv; varying float vCard;
+// The layers: the outer card keeps its red tips, the middle one only its orange and hotter, the inner one only
+// its yellow and white core, so the colours stack from a red rim to a white heart.
+void main(){ vec4 t = texture2D(uSheet, vUv); if (t.a < 0.5) discard;
+  if (vCard > 0.5 && t.g < 0.36) discard; if (vCard > 1.5 && t.g < 0.55) discard;
+  gl_FragColor = vec4(min(t.rgb*uGain, vec3(1.0)), 1.0); }`;
+const GLOW_VS = `
+attribute vec2 corner; uniform vec3 uBase; uniform float uSize; varying vec2 vC;
+void main(){
+  vec3 r = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), u = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+  vC = corner*2.0; gl_Position = projectionMatrix*viewMatrix*vec4(uBase + (r*corner.x + u*corner.y)*uSize, 1.0);
+}`;
+const GLOW_FS = `
+precision highp float;
+uniform float uGlow; varying vec2 vC;
+void main(){ float a = clamp(1.0 - length(vC), 0.0, 1.0); a *= a; gl_FragColor = vec4(vec3(1.0, 0.55, 0.22)*a*uGlow, 1.0); }`;
+let cardGeo, glowGeo;
+function cardGeometry() {
+  const corners = [], cards = [], pos = [];
+  for (let c = 0; c < 3; c++) for (const [x, y] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 0], [0.5, 1], [-0.5, 1]]) { corners.push(x, y); cards.push(c); pos.push(0, 0, 0); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("corner", new THREE.Float32BufferAttribute(corners, 2)); g.setAttribute("card", new THREE.Float32BufferAttribute(cards, 1));
+  return g;
+}
+function glowGeometry() {
+  const g = new THREE.BufferGeometry(), c = [-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5];
+  g.setAttribute("position", new THREE.Float32BufferAttribute(new Array(18).fill(0), 3)); g.setAttribute("corner", new THREE.Float32BufferAttribute(c, 2));
+  return g;
+}
+// One burning flame: three camera-facing cards (cylindrical, so it always stands up), each on its own frame
+// of the sheet, a soft additive glow round the head, and embers. `size` is its height in metres.
+function makeFlame(size, seed, rate) {
+  const f = { size, seed, rate, base: new THREE.Vector3(), lean: new THREE.Vector3(), on: false, flick: 1, acc: 0, glowK: 1 };
+  f.mat = new THREE.ShaderMaterial({ vertexShader: FLAME_VS, fragmentShader: FLAME_FS,
+    uniforms: { uSheet: { value: TEX.flame }, uBase: { value: f.base }, uLean: { value: f.lean }, uUp: { value: f.up = new THREE.Vector3(0, 1, 0) }, uSize: { value: size }, uTime: U.uTime, uFlick: { value: 1 }, uSeed: { value: seed }, uGain: { value: 1 } } });
+  f.mesh = new THREE.Mesh(cardGeo, f.mat); f.mesh.frustumCulled = false; f.mesh.renderOrder = 2; scene.add(f.mesh);
+  f.glowMat = new THREE.ShaderMaterial({ vertexShader: GLOW_VS, fragmentShader: GLOW_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uBase: { value: new THREE.Vector3() }, uSize: { value: size * 3.0 }, uGlow: { value: 0.3 } } });
+  f.glow = new THREE.Mesh(glowGeo, f.glowMat); f.glow.frustumCulled = false; f.glow.renderOrder = 3; scene.add(f.glow);
+  FLAMES.push(f); return f;
+}
+// Embers: square pixels in the flame ramp, rising and drifting in the world (so they trail a walking torch),
+// cooling from yellow to orange to red before they go out.
+function makeEmbers(n) {
+  const pos = new Float32Array(n * 3), life = new Float32Array(n), P = [];
+  for (let i = 0; i < n; i++) P.push({ p: [0, -99, 0], v: [0, 0, 0], t: 0, max: 1, s: i * 1.7 });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("aLife", new THREE.BufferAttribute(life, 1));
+  const mat = new THREE.ShaderMaterial({ uniforms: { uPx: { value: 500 } },
+    vertexShader: `uniform float uPx; attribute float aLife; varying float vL;
+      void main(){ vec4 mv = viewMatrix*modelMatrix*vec4(position, 1.0); gl_Position = projectionMatrix*mv; vL = aLife;
+        gl_PointSize = aLife > 0.0 ? max(2.0, floor(0.005*uPx/max(0.05, -mv.z))) : 0.0; }`,
+    fragmentShader: `precision highp float; varying float vL;
+      void main(){ if (vL <= 0.0) discard; vec3 c = vL > 0.62 ? vec3(0.98, 0.686, 0.361) : (vL > 0.3 ? vec3(0.996, 0.392, 0.125) : vec3(0.651, 0.118, 0.122)); gl_FragColor = vec4(c, 1.0); }` });
+  const pts = new THREE.Points(g, mat); pts.frustumCulled = false; scene.add(pts);
+  let next = 0;
+  return {
+    mat,
+    spawn(b, r) { const e = P[next]; next = (next + 1) % n; e.p = [b.x + (r() - 0.5) * 0.05, b.y + 0.05 + r() * 0.06, b.z + (r() - 0.5) * 0.05]; e.v = [(r() - 0.5) * 0.15, 0.35 + r() * 0.4, (r() - 0.5) * 0.15]; e.max = 0.7 + r() * 0.9; e.t = e.max; },
+    step(dt, time) {
+      P.forEach((e, i) => {
+        if (e.t > 0) {
+          e.t -= dt; e.v[1] += 0.25 * dt; e.v[0] += Math.sin(time * 3.1 + e.s) * 0.5 * dt; e.v[2] += Math.cos(time * 2.7 + e.s) * 0.5 * dt;
+          for (let k = 0; k < 3; k++) { e.v[k] *= 1 - 0.8 * dt; e.p[k] += e.v[k] * dt; }
+        }
+        pos[i * 3] = e.p[0]; pos[i * 3 + 1] = e.p[1]; pos[i * 3 + 2] = e.p[2]; life[i] = e.t > 0 ? e.t / e.max : 0;
+      });
+      g.attributes.position.needsUpdate = true; g.attributes.aLife.needsUpdate = true;
+    },
+  };
+}
+const emberRng = rngS(5);
+
+// Geometry helpers for round things: a ring of flat faces (so a stick reads as a stick at pixel size),
+// wound outward whatever order the corners come in.
+function quadOut(g, a, b, c, d, n, uvs, col, k) {
+  const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+  const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+  if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0) g.quad(a, d, c, b, n, [uvs[0], uvs[3], uvs[2], uvs[1]], NOT, col, k);
+  else g.quad(a, b, c, d, n, uvs, NOT, col, k);
+}
+function triOut(g, a, b, c, n, uvs, col, k) {
+  const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+  if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0) g.tri(a, c, b, n, [uvs[0], uvs[2], uvs[1]], NOT, col, k);
+  else g.tri(a, b, c, n, uvs, NOT, col, k);
+}
+function ringOut(g, n, y0, y1, r0, r1, v0, v1, uRep, rot, col, k) {
+  for (let i = 0; i < n; i++) {
+    const a0 = rot + i / n * Math.PI * 2, a1 = rot + (i + 1) / n * Math.PI * 2, am = (a0 + a1) / 2;
+    const P = (r, y, a) => [Math.cos(a) * r, y, Math.sin(a) * r];
+    const nn = norm([Math.cos(am), (r0 - r1) / Math.max(1e-4, y1 - y0), Math.sin(am)]);
+    const u0 = i / n * uRep, u1 = (i + 1) / n * uRep;
+    quadOut(g, P(r0, y0, a0), P(r0, y0, a1), P(r1, y1, a1), P(r1, y1, a0), nn, [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], col, k);
+  }
+}
+function discOut(g, n, y, r, up, rot, uvAt, col, k) {
+  for (let i = 0; i < n; i++) {
+    const a0 = rot + i / n * Math.PI * 2, a1 = rot + (i + 1) / n * Math.PI * 2;
+    const p0 = [Math.cos(a0) * r, y, Math.sin(a0) * r], p1 = [Math.cos(a1) * r, y, Math.sin(a1) * r], c = [0, y + up * 0.004, 0];
+    triOut(g, c, p0, p1, [0, up, 0], [uvAt(c), uvAt(p0), uvAt(p1)], col, k);
+  }
+}
+function boxMap(g, cx, cy, cz, sx, sy, sz, col, k) {   // a box with planar uvs at 1 cm a texel on an 8 px texture
+  const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2, s = 1 / 0.08;
+  const F = (a, b, c, d, n, uvf) => quadOut(g, a, b, c, d, n, [a, b, c, d].map(uvf), col, k);
+  F([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], p => [p[0] * s, p[2] * s]);
+  F([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], p => [p[0] * s, p[2] * s]);
+  F([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], p => [p[0] * s, p[1] * s]);
+  F([x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1], p => [p[0] * s, p[1] * s]);
+  F([x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0], [1, 0, 0], p => [p[2] * s, p[1] * s]);
+  F([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], p => [p[2] * s, p[1] * s]);
+}
+const mapMat = (tex, handLit, emit) => material({ uHand: { value: handLit ? 1 : 0 }, uIcon: { value: 0 }, uMap: { value: tex }, uMapOn: { value: 1 }, uEmit: { value: emit || 0 } });
+
+// The torch, in its own frame: y up the haft, the origin where the fist closes on it. The haft runs from
+// `bottom` to 0.28 m, so in the hand it is 0.45 m of stick; the head, a rag wound round its top, from 0.19
+// to 0.33 m, fattest at 0.26 m, its crown charred; the flame stands on the crown.
+const HEAD_BOT = 0.19, HEAD_MID = 0.26, HEAD_TOP = 0.33, HAFT_TOP = 0.28;
+function torchModel(bottom, handLit) {
+  const grp = new THREE.Group();
+  const hg = new GB(); const L = HAFT_TOP - bottom;
+  ringOut(hg, 6, bottom, HAFT_TOP, 0.017, 0.02, L / 0.45, 0, 1, 0.3, WHITE, 3);
+  discOut(hg, 6, bottom, 0.017, -1, 0.3, p => [p[0] * 12 + 0.5, p[2] * 12 + 0.5], WHITE, 3);
+  grp.add(new THREE.Mesh(hg.geo(), handLit ? mats.haftH : mats.haftW));
+  const dg = new GB(), vOf = y => (HEAD_TOP - y) / (HEAD_TOP - HEAD_BOT);
+  ringOut(dg, 8, HEAD_BOT, HEAD_MID, 0.032, 0.043, vOf(HEAD_BOT), vOf(HEAD_MID), 1, 0, WHITE, 3);
+  ringOut(dg, 8, HEAD_MID, HEAD_TOP - 0.012, 0.043, 0.04, vOf(HEAD_MID), vOf(HEAD_TOP - 0.012), 1, 0, WHITE, 3);
+  ringOut(dg, 8, HEAD_TOP - 0.012, HEAD_TOP, 0.04, 0.03, 0.12, 0.02, 1, 0, WHITE, 3);
+  discOut(dg, 8, HEAD_TOP, 0.03, 1, 0, p => [p[0] * 8 + 0.5, 0.01 + (p[2] + 0.03) * 1.2], WHITE, 3);
+  discOut(dg, 8, HEAD_BOT, 0.032, -1, 0, p => [p[0] * 8 + 0.5, 0.9], WHITE, 3);
+  grp.add(new THREE.Mesh(dg.geo(), handLit ? mats.headH : mats.headW));
+  const a = new THREE.Object3D(); a.position.set(0, HEAD_TOP - 0.025, 0); grp.add(a); grp.userData.flameAt = a;
+  return grp;
+}
+// The lantern, hung from its bail: the origin is where the fist closes on the bail, y up, x along the bail.
+function lanternModel() {
+  const grp = new THREE.Group(), ig = new GB();
+  boxMap(ig, 0, 0, 0, 0.10, 0.009, 0.009, WHITE, 3);
+  boxMap(ig, -0.05, -0.035, 0, 0.007, 0.07, 0.007, WHITE, 3); boxMap(ig, 0.05, -0.035, 0, 0.007, 0.07, 0.007, WHITE, 3);
+  boxMap(ig, 0, -0.064, 0, 0.035, 0.012, 0.035, WHITE, 3);
+  boxMap(ig, 0, -0.078, 0, 0.12, 0.018, 0.12, WHITE, 3);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) boxMap(ig, dx * 0.052, -0.15, dz * 0.052, 0.014, 0.13, 0.014, WHITE, 3);
+  boxMap(ig, 0, -0.222, 0, 0.125, 0.022, 0.125, WHITE, 3);
+  grp.add(new THREE.Mesh(ig.geo(), mats.ironH));
+  const pg = new GB(), y0 = -0.211, y1 = -0.087, e = 0.05;
+  const P = [[-e, -e], [e, -e], [e, e], [-e, e]];
+  for (let i = 0; i < 4; i++) { const a = P[i], b = P[(i + 1) % 4], n = norm([(a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2]);
+    quadOut(pg, [a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], n, [[0, 1], [1, 1], [1, 0], [0, 0]], WHITE, 3); }
+  held.panes = new THREE.Mesh(pg.geo(), mats.paneH); grp.add(held.panes);
+  const a = new THREE.Object3D(); a.position.set(0, -0.15, 0); grp.add(a); grp.userData.lightAt = a;
+  return grp;
+}
+
+// The approved hand (M36, hand-model design 5), from river-craft/hand.js, lit like the terrain: the sun and
+// sky, the placed lamps and the carried light (unshadowed, no nearer than 0.5 m), never a view light.
+let HK;
+function handKit() {
+  const H = window.RC.HAND, tool = H.TOOL, v3 = H.v3;
+  const geo = H.proposedHandGeometry(tool, 0, undefined);
+  const q = new THREE.Quaternion(...tool.rotation).normalize();
+  const fistT = v3(tool.fist).sub(v3(tool.butt)).applyQuaternion(q.clone().invert()).multiplyScalar(1 / tool.scale);
+  const pc = i => v3(tool.hand[i].at);
+  const h = pc(10).sub(pc(1)).normalize();   // index to little finger: along the handle
+  const n = geo.userData.N, K = geo.userData.k, FL = geo.userData.flush, look = H.HAND_LOOK, cnt = geo.getAttribute("position").count;
+  const col = new Float32Array(cnt * 3);
+  for (let i = 0; i < cnt; i++) {
+    const t = FL && FL[i] ? look.tip_to.map((c, j) => 1 + FL[i] * (c / look.skin[j] - 1)) : [1, 1, 1];
+    col[i * 3] = K[i] * t[0]; col[i * 3 + 1] = K[i] * t[1]; col[i * 3 + 2] = K[i] * t[2];
+  }
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(n, 3));
+  geo.setAttribute("col", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("tile", new THREE.Float32BufferAttribute(new Float32Array(cnt * 2).fill(-1), 2));
+  geo.setAttribute("kind", new THREE.Float32BufferAttribute(new Float32Array(cnt).fill(3), 1));
+  const P = geo.getAttribute("position"), grp = geo.groups[H.HAND_PARTS.cloth], arm = new THREE.Vector3(), tmp = new THREE.Vector3();
+  for (let i = grp.start; i < grp.start + grp.count; i++) arm.add(tmp.fromBufferAttribute(P, i).sub(fistT));
+  arm.addScaledVector(h, -arm.dot(h)).normalize();
+  const toolBasis = new THREE.Matrix4().makeBasis(h, arm, h.clone().cross(arm));
+  const tex = Object.assign(H.handTextures(), { palm: H.palmTexture(), fold: H.foldTexture() });
+  const hmats = ["skin", "nail", "cloth", "cuff", "palm", "fold"].map(k => {
+    const t = new THREE.CanvasTexture(tex[k]); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return mapMat(t, true);
+  });
+  return { geo, fistT, toolBasis, sc: tool.scale, mats: hmats };
+}
+// Close the hand on a handle: the grip point G and the handle's way Hw (index to little finger) and the
+// forearm's way A (from the grip toward the elbow), all in the camera's frame.
+function gripHand(G, Hw, A) {
+  const m = new THREE.Mesh(HK.geo, HK.mats); m.matrixAutoUpdate = false; m.frustumCulled = false;
+  const hw = Hw.clone().normalize(), a = A.clone().addScaledVector(hw, -A.dot(hw)).normalize(), c = hw.clone().cross(a);
+  const R = new THREE.Matrix4().makeBasis(hw, a, c).multiply(HK.toolBasis.clone().transpose());
+  m.matrix.makeTranslation(G.x, G.y, G.z).multiply(R).multiply(new THREE.Matrix4().makeScale(HK.sc, HK.sc, HK.sc)).multiply(new THREE.Matrix4().makeTranslation(-HK.fistT.x, -HK.fistT.y, -HK.fistT.z));
+  return m;
+}
+const upTo = v => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+// The holds, in the camera's frame (x right, y up, -z ahead). The torch is held up and to the right, its
+// head leaning a little away and in, so the flame stands about chest-high at the right of the view, clear
+// of the crosshair. A tunable block, as the game's held_tools.ron would take it.
+const HOLD = {
+  torch: { grip: [0.24, -0.33, -0.52], up: [-0.12, 1, -0.35], arm: [0.35, -0.55, 0.75] },
+  lantern: { grip: [0.25, -0.07, -0.62], along: [1, -0.05, 0.25], arm: [0.05, -0.25, 1] },
+  mushroom: { grip: [0.22, -0.31, -0.46], up: [-0.15, 1, -0.5], arm: [0.35, -0.55, 0.75] },
+  hand: { grip: [0.27, -0.43, -0.50], up: [-0.25, 1, -0.5], arm: [0.35, -0.55, 0.75] },
+  sway: { step_m: 0.75, side_m: 0.010, bob_m: 0.008, roll_rad: 0.02, breathe_m: 0.003, ease_hz: 6 },
+};
+const V = a => new THREE.Vector3(...a);
+// The held mushroom's cap: the plant's own (today's four-sided cap or the proposed dome, at its own size and
+// colours, its head burning at night), set on a round stalk instead of the flat card the ground's plant uses.
+function capGeo(cap) {
+  const g = new GB(); plantInto(g, 0, -0.17, 0, 0.6, 1, cap);
+  const P = g.p, N = []; const keep = { p: [], n: [], uv: [], t: [], c: [], k: [] };
+  for (let i = 0; i < g.k.length; i++) if (g.k[i] !== 3) {   // drop the flat stalk card
+    keep.p.push(P[i * 3], P[i * 3 + 1] + 0.0, P[i * 3 + 2]); keep.n.push(g.n[i * 3], g.n[i * 3 + 1], g.n[i * 3 + 2]); keep.uv.push(g.uv[i * 2], g.uv[i * 2 + 1]);
+    keep.t.push(g.t[i * 2], g.t[i * 2 + 1]); keep.c.push(g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]); keep.k.push(g.k[i]); }
+  Object.assign(g, keep); return g.geo();
+}
+function buildHand() {
+  heldTextures();
+  mats.haftH = mapMat(TEX.haft, true); mats.haftW = mapMat(TEX.haft, false);
+  mats.headH = mapMat(TEX.head, true); mats.headW = mapMat(TEX.head, false);
+  mats.ironH = mapMat(TEX.iron, true); mats.stalkH = mapMat(TEX.stalk, true); mats.paneH = mapMat(TEX.pane, true, 1.15); mats.paneDay = mapMat(TEX.paneDay, true);
+  hand = new THREE.Group(); camera.add(hand);
+  buildOldHand(); hand.add(oldHand);
+  rig = new THREE.Group(); hand.add(rig);
+  HK = handKit();
+  // the torch
+  { const h = HOLD.torch, g = new THREE.Group(), up = V(h.up).normalize();
+    const t = torchModel(-0.17, true); t.position.copy(V(h.grip)); t.quaternion.copy(upTo(up)); g.add(t);
+    g.add(gripHand(V(h.grip), up.clone().negate(), V(h.arm)));
+    anchors.torch = t.userData.flameAt; items.torch = g; }
+  // the lantern: hung from its bail, swinging a little from it as you walk
+  { const h = HOLD.lantern, g = new THREE.Group(), along = V(h.along).normalize();
+    const pivot = new THREE.Group(); pivot.position.copy(V(h.grip));
+    pivot.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(along.x, 0, along.z).normalize()));
+    const l = lanternModel(); pivot.add(l); g.add(pivot); held.lanternSwing = l;
+    g.add(gripHand(V(h.grip), along, V(h.arm)));
+    anchors.lantern = l.userData.lightAt; items.lantern = g; }
+  // the glowing mushroom: held by its stalk, its cap a hand's width over the fist, at its own size
+  { const h = HOLD.mushroom, g = new THREE.Group(), up = V(h.up).normalize();
+    const p = new THREE.Group(); p.position.copy(V(h.grip)); p.quaternion.copy(upTo(up)); g.add(p);
+    const sg = new GB(); ringOut(sg, 6, -0.17, 0.15, 0.015, 0.012, 1, 0, 1, 0.2, WHITE, 3); discOut(sg, 6, -0.17, 0.015, -1, 0.2, q => [q[0] * 20 + 0.5, 0.95], WHITE, 3);
+    p.add(new THREE.Mesh(sg.geo(), mats.stalkH));
+    const m = new THREE.Mesh(capGeo(G.cap), mats.hand); p.add(m); held.mushroomMesh = m;
+    const a = new THREE.Object3D(); a.position.set(0, 0.27, 0); p.add(a); anchors.mushroom = a;
+    g.add(gripHand(V(h.grip), up.clone().negate(), V(h.arm))); items.mushroom = g; }
+  // the bare hand: a loose fist low at the right
+  { const h = HOLD.hand, g = new THREE.Group(); g.add(gripHand(V(h.grip), V(h.up).normalize().negate(), V(h.arm))); items.hand = g; }
+  for (const k of ["torch", "lantern", "mushroom", "hand"]) rig.add(items[k]);
+  // the flames: the held torch's, and the two placed torches' (the Placed row)
+  cardGeo = cardGeometry(); glowGeo = glowGeometry();
+  held.flame = makeFlame(0.19, 0.0, 9);
+  embers = makeEmbers(64);
+  buildPlaced();
+}
+// Two torches standing on the ground ahead of the start, for the Placed row: the game's placed torch today
+// (planet_surface.wgsl's lamp slot: a 4-sided post 0.55 m tall, LAMP_WOOD_CODE's flat brown, and one flat
+// triangle 0.26 m wide and 0.16 m tall from orange to red), and the same torch as the held one, standing.
+function buildPlaced() {
+  placed = new THREE.Group(); placed.visible = false; scene.add(placed);
+  const c = CELLS.get(K(0, -5)), y = c.h;
+  placed.userData.today = [c.x + 0.5, y, c.z]; placed.userData.match = [c.x - 0.5, y, c.z];
+  const g = new GB(), [tx, , tz] = placed.userData.today, rad = 0.06, post = 0.55;
+  const wood = [0.36, 0.22, 0.12].map(v => Math.pow(v, 1 / 2.2));
+  for (let f = 0; f < 4; f++) { const a0 = f * Math.PI / 2, a1 = a0 + Math.PI / 2, am = a0 + Math.PI / 4;
+    quadOut(g, [tx + Math.cos(a0) * rad, y, tz + Math.sin(a0) * rad], [tx + Math.cos(a1) * rad, y, tz + Math.sin(a1) * rad], [tx + Math.cos(a1) * rad, y + post, tz + Math.sin(a1) * rad], [tx + Math.cos(a0) * rad, y + post, tz + Math.sin(a0) * rad], [Math.cos(am), 0, Math.sin(am)], [[0, 0], [1, 0], [1, 1], [0, 1]], wood, 3); }
+  const hy = y + post, w = rad * 2.2;
+  g.v([tx - w, hy, tz], [0, 0, 1], [0, 0], NOT, [0.98, 0.66, 0.22], 2); g.v([tx + w, hy, tz], [0, 0, 1], [1, 0], NOT, [0.98, 0.66, 0.22], 2); g.v([tx, hy + 0.16, tz], [0, 0, 1], [0.5, 1], NOT, [0.86, 0.28, 0.05], 2);
+  placed.add(new THREE.Mesh(g.geo(), mats.world));
+  const [mx, , mz] = placed.userData.match, t = torchModel(-0.27, false); t.position.set(mx, y + 0.27, mz); placed.add(t);
+  placed.userData.anchor = t.userData.flameAt;
+  placed.userData.flame = makeFlame(0.19, 3.7, 6);
+}
+// The hold's idle sway: a step's side-to-side and bob while walking, eased in and out, and a breath at rest.
+let walkPh = 0, walkAmp = 0, lastPos = null;
+const _v = new THREE.Vector3(), _p = new THREE.Vector3();
+function updateHeld(dt, time) {
+  const sp = lastPos ? Math.hypot(G.pos[0] - lastPos[0], G.pos[2] - lastPos[1]) / Math.max(dt, 1e-4) : 0; lastPos = [G.pos[0], G.pos[2]];
+  const S = HOLD.sway; walkAmp += ((sp > 0.3 ? 1 : 0) - walkAmp) * Math.min(1, dt * S.ease_hz);
+  walkPh += sp * dt / S.step_m * Math.PI;
+  rig.position.set(S.side_m * walkAmp * Math.sin(walkPh), -S.bob_m * walkAmp * (1 - Math.cos(2 * walkPh)) / 2 + S.breathe_m * Math.sin(time * 1.7), 0);
+  rig.rotation.set(0, 0, S.roll_rad * walkAmp * Math.sin(walkPh));
+  if (held.lanternSwing) held.lanternSwing.rotation.x = 0.10 * walkAmp * Math.sin(walkPh - 0.7) + 0.015 * Math.sin(time * 1.3);
+  camera.updateMatrixWorld(true);
+  // the flames
+  const fpTorch = G.look === "v3" && G.view === "fp" && heldItem().id === "torch";
+  const f = held.flame; f.on = fpTorch;
+  if (f.on) {
+    anchors.torch.getWorldPosition(_p);
+    if (f.prev) { _v.copy(_p).sub(f.prev).divideScalar(Math.max(dt, 1e-4)); f.vel = (f.vel || new THREE.Vector3()).lerp(_v, Math.min(1, dt * 6)); }
+    f.prev = (f.prev || new THREE.Vector3()).copy(_p); f.base.copy(_p);
+    if (f.vel) { f.lean.copy(f.vel).multiplyScalar(-0.03); f.lean.y = 0; if (f.lean.length() > 0.07) f.lean.setLength(0.07); }
+    // Held, the flame stands on the view's up, so a look down does not splay it outward at the edge of the
+    // view (a first-person drawing choice, as games draw a held flame; a placed flame stands on the world's up).
+    f.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  } else f.prev = null;
+  const pf = placed.userData.flame; pf.on = placed.visible;
+  if (pf.on) { placed.userData.anchor.getWorldPosition(pf.base); pf.lean.set(0, 0, 0); }
+  for (const fl of FLAMES) {
+    fl.flick = flick(time, fl.seed); fl.mesh.visible = fl.glow.visible = fl.on;
+    if (!fl.on) continue;
+    fl.mat.uniforms.uFlick.value = fl.flick;
+    fl.glowMat.uniforms.uBase.value.copy(fl.base).add(_v.set(0, fl.size * 0.3, 0));
+    fl.glowMat.uniforms.uGlow.value = (G.night ? 0.5 : 0.08) * fl.flick;
+    fl.acc += dt * fl.rate; while (fl.acc > 1) { fl.acc -= 1; embers.spawn(fl.base, emberRng); }
+  }
+  embers.step(dt, time);
+  embers.mat.uniforms.uPx.value = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+  // the placed torches' light, at night
+  U.uLamps.value[0].set(...placed.userData.today, 0); U.uLamps.value[1].set(...placed.userData.match, 0);
+  if (placed.visible && G.night) {
+    U.uLamps.value[0].y += 0.62; U.uLamps.value[0].w = 1;
+    U.uLamps.value[1].y += 0.62; U.uLamps.value[1].w = pf.flick;
+  }
 }
 function buildBody() {
   const g = new GB(); handBox(g, 0, 0.85, 0, 0.42, 1.0, 0.26, [0.30, 0.34, 0.42], 3); handBox(g, 0, 1.55, 0, 0.26, 0.28, 0.26, [0.84, 0.64, 0.50], 3);
@@ -2719,6 +3187,7 @@ function start() {
     uExpo: { value: 1 }, uNight: { value: 1 }, uPlants: { value: plants },
     uCarryPos: { value: new THREE.Vector3() }, uCarryCol: { value: new THREE.Vector3() },
     uFog: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
+    uMap: { value: null }, uMapOn: { value: 0 }, uEmit: { value: 0 }, uLamps: { value: [new THREE.Vector4(), new THREE.Vector4()] },
   };
   mats.world = material({ uHand: { value: 0 }, uIcon: { value: 0 } });
   mats.hand = material({ uHand: { value: 1 }, uIcon: { value: 0 } });
@@ -2742,6 +3211,7 @@ function start() {
 function setNight(n) {
   G.night = n;
   if (!U) return;
+  if (held.panes) held.panes.material = n ? mats.paneH : mats.paneDay;
   if (n) {
     U.uSunDir.value.set(-0.35, 0.75, 0.45).normalize(); U.uSunCol.value.set(0.022, 0.026, 0.040);
     U.uFill.value.set(0.019, 0.025, 0.032).multiplyScalar(0.9); U.uExpo.value = 1.6; U.uNight.value = 1;
@@ -2770,16 +3240,22 @@ function carried() {
   const out = { pos: null, col: [0, 0, 0], parts: [] };
   if (G.compare === "today") return out;
   const it = heldItem();
-  let held = null;
+  let heldL = null;
   if (it && it.level > 0 && (!it.dusk || G.night)) {
-    const s = it.level / 14; const o = HELD_LIGHT[it.id];
-    tmpV.set(o[0], o[1], o[2]); eye.localToWorld(tmpV);
-    held = { s, pos: tmpV.toArray(), tint: it.tint };
+    let s = it.level / 14;
+    if (G.look === "v3") {
+      // from the flame (or the lantern's glass, or the cap) as drawn this frame, flickering with the flame
+      // in the eye's frame, so the Overview's camera lights from the player, not from where it hangs
+      anchors[it.id].getWorldPosition(tmpV); camera.worldToLocal(tmpV); eye.localToWorld(tmpV);
+      if (it.id === "torch") { tmpV.y += 0.08; s *= held.flame.flick; }
+      if (it.id === "lantern") s *= 1 + (held.flame.flick - 1) * 0.3;
+    } else { const o = HELD_LIGHT[it.id]; tmpV.set(o[0], o[1], o[2]); eye.localToWorld(tmpV); }
+    heldL = { s, pos: tmpV.toArray(), tint: it.tint };
   }
   const gs = glowStrength() * GLOW_LEVEL / 14;
   let glow = null;
   if (gs > 0) glow = { s: gs, pos: [G.pos[0], G.eyeY - 0.55, G.pos[2]], tint: GLOW_TINT };
-  for (const src of [held, glow]) if (src) { out.col = out.col.map((c, i) => c + src.tint[i] * src.s); out.parts.push(src); }
+  for (const src of [heldL, glow]) if (src) { out.col = out.col.map((c, i) => c + src.tint[i] * src.s); out.parts.push(src); }
   if (out.parts.length) out.pos = out.parts.reduce((a, b) => (b.s > a.s ? b : a)).pos;
   return out;
 }
@@ -2809,6 +3285,10 @@ function syncHud() {
   });
   const it = heldItem();
   for (const k in items) items[k].visible = k === it.id;
+  for (const k of ["torch", "lantern", "mushroom"]) oldItems[k].visible = k === it.id;
+  oldHand.visible = G.look === "v2"; rig.visible = G.look === "v3";
+  placed.visible = G.placed;
+  if (held.panes) held.panes.material = G.night ? mats.paneH : mats.paneDay;
   $g("gEat").hidden = !(ITEMS[G.sel].id === "mushroom" && G.count > 0);
 }
 let toastT = 0, toastN = 0;
@@ -2850,7 +3330,8 @@ function eat() {
 function setCap(c) {
   G.cap = c; if (!G.started) return;
   meshes.plants.geometry.dispose(); meshes.plants.geometry = buildPlants();
-  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); items.mushroom.geometry.dispose(); items.mushroom.geometry = m.geo();
+  const m = new GB(); plantInto(m, 0.30, -0.34, -0.64, 0.4, 0.45, G.cap); oldItems.mushroom.geometry.dispose(); oldItems.mushroom.geometry = m.geo();
+  held.mushroomMesh.geometry.dispose(); held.mushroomMesh.geometry = capGeo(G.cap);
 }
 
 // ---------- input ----------
@@ -2917,7 +3398,7 @@ let last = 0;
 function frame(now) {
   if (PAGE_TAB !== "glow") { G.running = false; return; }
   const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
-  step(dt); placeCamera();
+  step(dt); placeCamera(); updateHeld(dt, U.uTime.value);
   const c = carried();
   if (c.pos) { U.uCarryPos.value.fromArray(c.pos); U.uCarryCol.value.fromArray(c.col); } else U.uCarryCol.value.set(0, 0, 0);
   U.uCam.value.copy(camera.position);
@@ -2936,7 +3417,7 @@ function frame(now) {
 }
 function syncButtons() {
   const set = (id, v) => { for (const b of $g(id).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); };
-  set("gTime", G.night ? "night" : "day"); set("gCompare", G.compare); set("gView", G.view); set("gCap", G.cap); set("gSpeed", G.speed);
+  set("gTime", G.night ? "night" : "day"); set("gCompare", G.compare); set("gView", G.view); set("gCap", G.cap); set("gSpeed", G.speed); set("gLook", G.look); set("gPlaced", G.placed ? "on" : "off");
   $g("gRoute").setAttribute("aria-pressed", G.route ? "true" : "false");
 }
 function chips(id, fn) { for (const b of $g(id).querySelectorAll("button")) b.onclick = () => { fn(b.dataset.v); syncButtons(); }; }
@@ -2944,6 +3425,8 @@ chips("gTime", v => setNight(v === "night"));
 chips("gCompare", v => { G.compare = v; });
 chips("gView", v => { G.view = v; });
 chips("gCap", v => setCap(v));
+chips("gLook", v => { G.look = v; syncHud(); });
+chips("gPlaced", v => { G.placed = v === "on"; syncHud(); });
 chips("gSpeed", v => { G.speed = +v; });
 $g("gRoute").onclick = () => { if (G.route) G.route = null; else { const s = ROUTE[0]; moveTo(s[0], s[1]); G.pos = [s[0], groundAt(s[0], s[1]), s[1]]; G.route = { i: 1 }; } syncButtons(); };
 $g("gInfo").onclick = () => { $g("gNotes").hidden = false; $g("gClose").focus(); };
@@ -2957,6 +3440,9 @@ G.api = {
   pose(x, z, yaw, pitch) { G.pos = [x, groundAt(x, z), z]; G.eyeY = G.pos[1] + G.eyeH; G.yaw = yaw; G.pitch = pitch; },
   poseCell(q, r, yaw, pitch, dx = 0, dz = 0) { const [x, z] = centre(q, r); this.pose(x + dx, z + dz, yaw, pitch); },
   plants: PLANTS, cells: CELLS, centre, pick, eat, setNight, setCap, syncHud, syncButtons, carried,
+  held: () => ({ held, FLAMES, HOLD, anchors, items }),
+  fov(v) { camera.fov = v; camera.updateProjectionMatrix(); },
+  shift(x, y, z) { hand.position.set(x, y, z); },
   // Stand `back` metres from the k-th nearest standing plant to (x, z), on the side toward (x, z), and look at it.
   facePlant(k, back, x, z) {
     const live = PLANTS.filter(p => !p.picked).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));

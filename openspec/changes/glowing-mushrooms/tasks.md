@@ -9,6 +9,11 @@ waits for the owner's request.
 - [x] 0.2 Mockup: the Glow and carried light tab on the Foliage Detail
   Playground (M13, `docs/mockups/foliage.html`, version 2), with screenshots in
   `docs/screenshots/glowing-mushrooms/`.
+- [x] 0.5 The owner's notes on v2 (2026-11-19: "no need for shadow caster from
+  my light source, please improve torch look"): the shadow dropped from the
+  write-up and the mockup, the cost re-estimated, and the held torch,
+  lantern and mushroom redrawn in the approved hand (design 7, 8, 14; M13
+  version 3, `torch-v3-*.jpg`).
 - [ ] 0.3 Survey: the rounder cap (design 1), with `cap-today.png` and
   `cap-proposed.png`. The coordinator publishes it.
 - [ ] 0.4 The owner approves the tab for build, then for the game.
@@ -19,23 +24,30 @@ waits for the owner's request.
   `Material::emission`, `dusk_lit` and `GLOW_FLOWER_LEVEL`; `GLOW_HEAD_RGB`
   moved to the core. Verify: tests that every emitting material maps to its
   emission, and that a pickaxe and a pack-only torch give none.
-- [ ] 1.2 `carried(p, n)` and the column walk in `planet_surface.wgsl`, with
+- [ ] 1.2 `carried(p, n)` in `planet_surface.wgsl`, with no shadow (design 7),
   the falloff shared with `lamp_bake::falloff` by the constants test, and the
-  early outs. Verify: Naga validation; a capture at midnight with a torch,
-  beside the wall and the doorway.
-- [ ] 1.3 `CarriedLights` uniform in `field_lit.wgsl` with the per-corner
-  occlusion from the CPU; the hand and held item unoccluded at
-  `carried_hand_min_m`. Verify: a capture of a drop and the hand at night.
-- [ ] 1.4 `water.wgsl` takes the same term (check whether the column records
-  are bound there; if not, the falloff alone). Verify: a capture at a pond's
+  early outs. Verify: Naga validation; a capture at midnight with a torch
+  beside a one-cell wall, the far side lit through it.
+- [ ] 1.3 `CarriedLights` uniform in `field_lit.wgsl`, no occlusion; the hand
+  and held item at `carried_hand_min_m`. Verify: a capture of a drop and the
+  hand at night.
+- [ ] 1.4 `water.wgsl` takes the same term. Verify: a capture at a pond's
   edge at night.
 - [ ] 1.5 Merging the body glow with a held light, the rise and the fade, and
   `carried_max_lights` with other players' lights. Verify: unit tests of the
   merge and the fade curve.
 - [ ] 1.6 The owner's measurement (design 13): `night-carry` in
-  `perf_suite.py`, A/B with `PBD_CARRIED=0` and `PBD_CARRIED_WALK=0` on the
-  RTX 3070 and the M4 Max. Take the fallback if it is over 0.5 ms at p50.
-  Not run in a cloud session.
+  `perf_suite.py`, A/B with `PBD_CARRIED=0` on the RTX 3070 and the M4 Max,
+  against a budget of 0.1 ms at p50. Not run in a cloud session.
+- [ ] 1.7 The held look (design 14), only on the owner's approval of the v3
+  tab: the torch's haft and head textures, the flame cards and their sheet,
+  the embers, the glow, the shared flicker on the light's strength, the holds
+  for the torch, lantern and mushroom in `held_tools.ron` with the approved
+  hand, and the idle sway. Verify: captures at night beside the mockup's
+  `torch-v3-*.jpg`.
+- [ ] 1.8 The placed torch matching the held one (design 14): a separate look
+  change, asked with `torch-v3-placed.jpg`. Not part of this change until
+  the owner says so.
 
 ## 2. The glowing mushroom (part A)
 
