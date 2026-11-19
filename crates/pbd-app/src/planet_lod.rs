@@ -502,6 +502,8 @@ impl FineSet {
     /// a column, and again once the light is re-baked.
     pub fn mark_sea(&mut self) {
         column::mark_sea(&self.columns, &mut self.levels[3]);
+        // And where the rule's water is the sea's (`dry-holes` design 4).
+        self.columns.water.joined = self.columns.sea_joined();
     }
 
     /// The column a finest record would have if the tier adopted it now:
