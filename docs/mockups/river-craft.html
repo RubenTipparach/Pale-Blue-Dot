@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>River Craft</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Pale Blue Dot mockup M34: rafting, a tug and its tow, a log drive with a boom, a net boat and anchoring, as playable toys on the game's flowing river.">
+<meta name="description" content="Pale Blue Dot mockup M34, version 3: rafting, rowing a raft, a tug and its tow, a log drive with a boom, a net boat and anchoring, as playable toys on the game's flowing river.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -98,6 +98,17 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 .mbody th, .mbody td { border-top: 1px solid var(--page-line); padding: 4px 8px; text-align: left; vertical-align: top; }
 .mbody th { color: var(--label-dim); font-weight: 600; }
 
+/* the Rowing tab: the surge graph over the river, the tunables under the controls */
+.stage canvas.surge { inset: auto; left: 8px; bottom: 8px; width: 220px; height: 74px; border: 1px solid var(--stone-1); pointer-events: none; cursor: default; }
+.stage canvas.surge[hidden] { display: none; }
+details.tune { background: var(--page-2); border-top: 1px solid var(--page-line); padding-block: 4px 8px; }
+details.tune summary { font: 600 15px/1.6 var(--display); color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; cursor: pointer; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 2px 14px; margin: 4px 0; }
+.sl { display: grid; grid-template-columns: 128px 1fr 44px; align-items: center; gap: 6px; font: 14px/1.2 var(--body); color: var(--page-text); }
+.sl span { overflow-wrap: anywhere; }
+.sl output { color: var(--rune); text-align: right; }
+.ronrow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+textarea.ron { width: 100%; height: 150px; background: var(--well); color: var(--text); border: 1px solid var(--stone-2); font: 12.5px/1.35 ui-monospace, Menlo, Consolas, monospace; }
 @media (max-width: 560px) {
   header.top h1 { font-size: 21px; }
   .tab { font-size: 16px; border-width: 10px 9px 0; }
@@ -122,6 +133,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <button class="tab" role="tab" data-tab="logs" aria-selected="false">Log drive</button>
   <button class="tab" role="tab" data-tab="nets" aria-selected="false">Nets</button>
   <button class="tab" role="tab" data-tab="anchor" aria-selected="false">Anchor</button>
+  <button class="tab" role="tab" data-tab="rowing" aria-selected="false">Rowing</button>
 </nav>
 <div class="stage" id="stage">
   <canvas data-tab="raft" aria-label="The raft on the river: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
@@ -130,6 +142,8 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <canvas data-tab="logs" aria-label="The log drive, the narrows and the boom: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
   <canvas data-tab="nets" aria-label="The net boat and the fish: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
   <canvas data-tab="anchor" aria-label="The anchored skiff: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="rowing" aria-label="Rowing the raft: drag to look round, or in third person to turn the view" hidden></canvas>
+  <canvas id="surge" class="surge" data-only="rowing" width="220" height="74" aria-label="The raft's speed through the water over the last 12 seconds" hidden></canvas>
   <div class="hud" id="hud" aria-live="off"></div>
   <div class="paused" id="paused">PAUSED</div>
   <div class="pad" role="group" aria-label="Steer">
@@ -156,15 +170,23 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   </span>
 </div>
 <div class="bar wrap" id="acts" role="group" aria-label="Actions"></div>
+<details class="tune wrap" id="tune" hidden>
+  <summary>Tune</summary>
+  <div id="tunebody">
+    <div class="sliders"></div>
+    <div class="ronrow"><button class="btn" type="button">Defaults</button><span class="lab">for assets/config/vehicles.ron, raft:</span></div>
+    <textarea class="ron" readonly aria-label="The tunables as RON"></textarea>
+  </div>
+</details>
 
 <dialog class="infomodal" id="modal" aria-labelledby="mtitle">
   <div class="mhead"><b id="mtitle">River Craft</b><button id="mclose" aria-label="Close">&#x2715;</button></div>
-  <nav class="mnav"><a href="#m-about">About</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-rowing">Rowing</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
   <div class="mbody" id="mbody">
     <h2 id="m-about">About M34, River Craft</h2>
     <p>The owner, 2026-11-16, playing the new flowing rivers: <q>dude the river stuff is so much fun, can you make a mock up of stuff like rafting physics? or design a boat that can tug other boats? log hauling? boats with nets, also anchoring</q>.</p>
-    <p>Six toys on one kind of river, each in its own tab with its own reach of water. The river is a flow field over a channel of the game's hex cells (2.833 m flat to flat, 1 m layers): fastest mid-stream, slow at the banks, bent round rocks with an eddy behind each, quicker where the channel narrows, and over a one-layer fall on the Raft tab. Everything is the game's art style: blocky pixel textures on the ground and the craft, lit like the ground, with no outlines.</p>
-    <p>Nothing moves until you press <b>Play</b> or a control, except the water itself. The view turns only when you drag it; <b>Follow</b> keeps the craft in the middle without turning. <b>Night</b> lights each scene by its own lamps: a lantern post on the bank and a lantern on each boat, every one lighting what is near it; the moon is dim. The open tab is in the link (<code>#raft</code>, <code>#tube</code>, <code>#tug</code>, <code>#logs</code>, <code>#nets</code>, <code>#anchor</code>); only its view is made and drawn.</p>
+    <p>Seven toys on one kind of river (the seventh, Rowing, added in version 3, 2026-11-19), each in its own tab with its own reach of water. The river is a flow field over a channel of the game's hex cells (2.833 m flat to flat, 1 m layers): fastest mid-stream, slow at the banks, bent round rocks with an eddy behind each, quicker where the channel narrows, and over a one-layer fall on the Raft tab. Everything is the game's art style: blocky pixel textures on the ground and the craft, lit like the ground, with no outlines.</p>
+    <p>Nothing moves until you press <b>Play</b> or a control, except the water itself. The view turns only when you drag it; <b>Follow</b> keeps the craft in the middle without turning. <b>Night</b> lights each scene by its own lamps: a lantern post on the bank and a lantern on each boat, every one lighting what is near it; the moon is dim. The open tab is in the link (<code>#raft</code>, <code>#tube</code>, <code>#tug</code>, <code>#logs</code>, <code>#nets</code>, <code>#anchor</code>, <code>#rowing</code>); only its view is made and drawn.</p>
     <p>OpenSpec change: <code>openspec/changes/river-craft</code>. This page is a mockup; no game code changes until the owner approves it and asks for the port.</p>
 
     <h2 id="m-raft">Raft</h2>
@@ -209,6 +231,35 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <li><b>Rock</b>: it skips over the bed until a fluke catches a crack, then holds hardest of all.</li>
       <li><b>Pay out</b> and <b>Shorten</b> change the bow rode. A short rode lifts the anchor's shank, and a lifted anchor holds less: shorten too far and it drags.</li>
     </ul>
+
+    <h2 id="m-rowing">Rowing</h2>
+    <p>The owner, 2026-11-19: <q>mockup better rowing on a raft</q>. Version 3 of this page. The raft on a slow, wide reach (0.45 m/s), rowed the game's way today or the proposed way. OpenSpec: <code>river-craft</code> design 9.</p>
+    <h3>Today (the game)</h3>
+    <ul>
+      <li>The poler stands aft on the right with a 4.6 m pole. Holding W or S tips the pole 0.5 rad, A or D tilts it 0.35 rad sideways, in one frame, and it snaps back when the key comes up (<code>vehicles/draw.rs</code>, <code>pole</code>).</li>
+      <li>The push is somewhere else: a stroke of 0.8 s power and 0.7 s recovery (40 a minute), a "blade" 1.35 m out on alternating sides, pushing off the bed in any depth (<code>vehicle/loon.rs</code>). So the raft fishtails stroke to stroke with nothing on screen to show why.</li>
+      <li>No splash, no swirl, no hands in first person, no arms in third.</li>
+    </ul>
+    <h3>Proposed: oars (recommended)</h3>
+    <ul>
+      <li>Two oars on pins on a rowing frame, rowed from a bench facing the bow (the push stroke). Recommendation taken (ask only with screenshots): a paddle per side is too slow and fussy on a raft 2.4 m wide, a stern sweep steers more than it drives; the pole stays for the shallows.</li>
+      <li>Each stroke has five stages. <b>Reach</b>: hands in at the chest, blades forward and squared, a small coil and a held beat. <b>Catch</b>: the hands lift and the blades drop in, fastest as they meet the water, with a splash. <b>Drive</b>: the hands push forward and the body swings after them; the blades sweep aft and throw wash. <b>Release</b>: hands press down, blades out, a flick of the wrists to feather them flat, two swirls left in the water. <b>Recovery</b>: hands back to the chest, blades flat and clear, dripping.</li>
+      <li>One clock for both oars: 1.70 s a stroke (35 a minute). An oar asked for mid-stroke joins at the next reach; one let go finishes its stroke and rests. Nothing snaps.</li>
+      <li>The push is each blade's drag through the water, at the blade: the raft surges through each drive and glides through each recovery (the Surge graph), and one oar alone turns it with no separate turn force.</li>
+      <li>First person: the approved hand of Tools in Hand (M36, the Hand tab) on each oar's handle, the arm reaching it from a shoulder that swings with the body; the view moves forward a little with the body on the drive. Third person: the same pose on the blocky rower.</li>
+    </ul>
+    <h3>Proposed: pole</h3>
+    <p>For water the pole reaches (the bed within 2.7 m): reach, plant (the tip stabbed down to the bed ahead), push (the tip stays where it landed while the hands walk down the pole and the raft slides past it), free, swing forward. Deeper than its reach it does not plant and says so. A or D picks the side; W pushes ahead, S back.</p>
+    <h3>Rowing controls</h3>
+    <ul>
+      <li><b>W</b> both oars, <b>S</b> back both, <b>A</b> the right oar alone (turn left), <b>D</b> the left (turn right), <b>Q</b> or <b>E</b> one oar on its own. A or D with W rows both, the inside oar a shorter stroke.</li>
+      <li><b>Today / Proposed</b>, <b>Oars / Pole</b>, <b>First / Third person</b>. In first person drag to look round.</li>
+      <li><b>Show poses</b> (P) freezes on each keyed pose in turn: the coiled reach, the catch, mid-drive, the release, mid-recovery. <b>Speed 0.25x</b> slows the whole stroke.</li>
+      <li><b>Tune</b> (under the controls): every tunable on a slider, and the RON block they make, for <code>vehicles.ron</code>.</li>
+      <li><b>Night</b>: the bank posts are lit. <b>Proposed</b>: every raft comes with its lantern on the bow post, lit from dusk to dawn, a lamp like the town lamps: it lights the deck, the water round the raft, the oars, the splash and the rower's hands. <b>Today</b>: the game's raft lantern shows a flame at dusk but lights nothing, so the raft, the rower and the water stay dark. The owner, 2026-11-19: <q>Rafts should also have a light that comes with it at night.</q></li>
+    </ul>
+    <h3>Not like the game here</h3>
+    <ul><li>The hull is this page's simple raft, not the game's (its drag is M34's), so speeds are for comparing today and proposed on this page, not the game's numbers. The hand is copied from <code>tool-motion.html</code> and lit by this page's terrain light. In the cloud the page renders on a software renderer: it shows how things look, never how smoothly they run.</li></ul>
 
     <h2 id="m-controls">Controls</h2>
     <div class="tw"><table>
@@ -262,9 +313,11 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="river-craft/engine.js?v=1"></script>
-<script src="river-craft/physics.js?v=1"></script>
-<script src="river-craft/scenes.js?v=1"></script>
-<script src="river-craft/app.js?v=1"></script>
+<script src="river-craft/engine.js?v=3"></script>
+<script src="river-craft/physics.js?v=3"></script>
+<script src="river-craft/scenes.js?v=3"></script>
+<script src="river-craft/hand.js?v=3"></script>
+<script src="river-craft/rowing.js?v=3"></script>
+<script src="river-craft/app.js?v=3"></script>
 </body>
 </html>
