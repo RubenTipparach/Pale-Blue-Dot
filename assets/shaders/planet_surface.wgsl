@@ -847,6 +847,17 @@ const FRUIT_CODE: u32 = 23u;
 // above the biome byte, so the fallen leaves gather under it.
 const UNDER_TREE_BIT: u32 = 0x10000u;
 
+// `flora-v2` design 12.13: a beach's back (version 12, the dry ground just
+// behind a warm beach) stands the beach's trees on its own ground: bit 16 of
+// the material word, `pbd_core::flora::BEACH_BACK_BIT`. The biome a cell's
+// trees are of (`pbd_core::flora::tree_biome`): the beach's there, else the
+// biome byte. Only the trees read it.
+const BEACH_BACK_BIT: u32 = 16u;
+fn tree_biome(word: u32) -> u32 {
+    if ((word >> BEACH_BACK_BIT) & 1u) == 1u { return 1u; }
+    return (word >> 8u) & 0xffu;
+}
+
 // Whether this cell stands a tree: the visibility pass's rule
 // (`has_nearby_foliage`), the same lines, for the cap under it (design 9.4).
 // `pbd_core::flora::grows_tree` is the CPU's copy and a test holds all three.
@@ -856,14 +867,15 @@ fn stands_tree(cell: Cell) -> bool {
     if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
-    let biome = (cell.metadata.y >> 8u) & 0xffu;
+    let back = ((cell.metadata.y >> BEACH_BACK_BIT) & 1u) == 1u;
+    let biome = tree_biome(cell.metadata.y);
     // `flora-v2` design 12.1: the world's tree table, from the uniform: the
     // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
     // so an old world keeps its trees and version 10 grows M13's forests.
     let entry = params.plant_means[min(biome, 7u)].w;
     let density = (entry >> 16u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
-    let sand = ((entry >> 24u) & 1u) == 1u && material==1u;
+    let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));
     let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
     let tree = (grass||sand||pine) && roll < density;
     // A tree felled for its wood is gone (design 12.5).
@@ -1277,7 +1289,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // model's own anchors (design 10.6).
         kind = 2u;
         let id = cell.spare.x;
-        let biome = (cell.metadata.y >> 8u) & 0xffu;
+        let biome = tree_biome(cell.metadata.y);
         let t = tree_frame(id, biome, axis*radius, axis, tangent, bitangent);
         out_flags = (t.species << SPECIES_SHIFT) | (t.variant << VARIANT_SHIFT);
         tree_split = vec3(f32(hash(id) & 3u), 0.0, 0.0);
@@ -1645,7 +1657,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // cell without one.
         kind = 2u;
         let id = cell.spare.x;
-        let biome = (cell.metadata.y >> 8u) & 0xffu;
+        let biome = tree_biome(cell.metadata.y);
         let t = tree_frame(id, biome, axis*radius, axis, tangent, bitangent);
         out_flags = (t.species << SPECIES_SHIFT) | (t.variant << VARIANT_SHIFT);
         tree_split = vec3(f32(hash(id) & 3u), 0.0, 0.0);

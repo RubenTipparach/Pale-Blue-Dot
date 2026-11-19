@@ -126,6 +126,34 @@ pub struct TerrainConfig {
     /// `None` for versions 4 to 10, which keep only `swamp_max_elev_m`'s
     /// strip of the wet coast; version 11's from it.
     pub swamps: Option<Swamps>,
+    /// Acacias behind a warm beach (`flora-v2` design 12.13): the dry, low
+    /// cells just inland of a beach stand the beach's acacias. `None` for
+    /// versions 4 to 11; version 12's from it.
+    pub beach_back: Option<BeachBack>,
+}
+
+/// The beach's back (generator version 12, `flora-v2` design 12.13, survey
+/// F1): the dry ground just behind a warm beach, where the beach's acacias
+/// stand now that nothing grows under the high water (design 12.11). It
+/// reads the smooth surface field, never a neighbour's record.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BeachBack {
+    /// How far over the beach's top (`sea + beach_band_m`) the back
+    /// reaches, m.
+    pub rise_m: f32,
+    /// How far from a beach the back reaches, m.
+    pub reach_m: f32,
+    /// The warm belt: `|y|` at most this.
+    pub warm_latitude: f32,
+}
+
+impl BeachBack {
+    /// Version 12's (`flora-v2` design 12.13).
+    pub const V12: Self = Self {
+        rise_m: 3.0,
+        reach_m: 12.0,
+        warm_latitude: 0.64,
+    };
 }
 
 /// Where a swamp stands (generator version 11, `swamps` design): low, wet
@@ -210,6 +238,7 @@ impl TerrainConfig {
     /// biome the low wet land is, and so its top block and its trees, moves.
     pub const TENEBRIS_V12: Self = Self {
         swamps: Some(Swamps::V12),
+        beach_back: Some(BeachBack::V12),
         ..Self::TENEBRIS_V11
     };
 
@@ -348,6 +377,7 @@ impl TerrainConfig {
         trees: crate::flora::TreeTable::V4,
         ore: None,
         swamps: None,
+        beach_back: None,
     };
 }
 
@@ -381,8 +411,10 @@ impl TerrainConfig {
             rivers: None,
             // Version 11's swamps are not surveyed either (`swamps` decision
             // 6): its sites are version 10's, the list approved for a new
-            // world.
+            // world. Nor its beach's back (`flora-v2` 12.13), which only the
+            // trees read.
             swamps: None,
+            beach_back: None,
             ..*self
         }
     }
@@ -393,6 +425,7 @@ impl TerrainConfig {
     pub fn climate_ground(&self) -> Self {
         Self {
             swamps: None,
+            beach_back: None,
             ..*self
         }
     }
@@ -813,6 +846,44 @@ pub fn swamp_pool_held(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> 
             let a = k as f32 * std::f32::consts::TAU / 16.0;
             let n = (d + (east * a.cos() + north * a.sin()) * (r / cfg.radius_m)).normalize();
             surface_altitude(cfg, n) >= floor
+        })
+    })
+}
+
+/// Whether a cell is version 12's beach back (`flora-v2` design 12.13,
+/// survey F1): the dry ground just behind a warm beach, which stands the
+/// beach's acacias. Dry and low (a surface from the beach's top,
+/// `sea + beach_band_m`, which is over the high water, to `rise_m` over
+/// it), warm, fields, jungle or desert by `biome`, and within `reach_m` of
+/// a beach, read on two rings of eight points of the smooth surface field,
+/// never a neighbour's record. The cheap tests go first; the rings only on
+/// the strip. Always false where the config has no beach back (versions 4
+/// to 11). Only where trees stand reads it: the biome and the top block
+/// are the ground's.
+pub fn beach_back(cfg: &TerrainConfig, direction: Vec3, surface_m: f32, biome: Biome) -> bool {
+    let Some(back) = cfg.beach_back.as_ref() else {
+        return false;
+    };
+    let top = cfg.sea_level_m + cfg.beach_band_m;
+    if surface_m < top || surface_m >= top + back.rise_m {
+        return false;
+    }
+    if direction.y.abs() > back.warm_latitude {
+        return false;
+    }
+    if !matches!(biome, Biome::Fields | Biome::Jungle | Biome::Desert) {
+        return false;
+    }
+    let d = direction.normalize_or(Vec3::Y);
+    let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+    let north = d.cross(east);
+    let beach = (cfg.sea_level_m - 1.0)..top;
+    (1..=2).any(|ring| {
+        let r = back.reach_m * ring as f32 / 2.0;
+        (0..8).any(|k| {
+            let a = (k as f32 + 0.5 * ring as f32) * std::f32::consts::TAU / 8.0;
+            let n = (d + (east * a.cos() + north * a.sin()) * (r / cfg.radius_m)).normalize();
+            beach.contains(&surface_altitude(cfg, n))
         })
     })
 }
@@ -1320,6 +1391,56 @@ mod tests {
         assert!(moss > 0.45 && moss > water && moss > mud, "{measured}");
         assert!((0.08..=0.3).contains(&water), "{measured}");
         assert!((0.1..=0.35).contains(&mud), "{measured}");
+    }
+
+    /// Version 12's beach back (`flora-v2` 12.13): dry, warm ground of the
+    /// fields, the jungle or the desert just behind a beach, where the
+    /// beach's acacias stand. A sweep finds some on version 12 and none on
+    /// version 11; every one is over the high water (1.5 m), in the warm
+    /// belt, and has a beach within 12 m on a denser check of 64 points.
+    #[test]
+    fn version_12_s_beach_back_is_dry_warm_ground_behind_a_beach() {
+        let v12 = TerrainConfig::TENEBRIS_V12;
+        let v11 = TerrainConfig::TENEBRIS_V11;
+        let back = v12.beach_back.expect("version 12 has a beach back");
+        let top = v12.sea_level_m + v12.beach_band_m;
+        let (mut found, mut warm_low) = (0usize, 0usize);
+        for d in sphere(400_000) {
+            let h = surface_altitude(&v12, d).floor();
+            let b = biome_at(&v12, d, h);
+            assert!(!beach_back(&v11, d, h, b), "a version 11 back at {d}");
+            if (top..top + back.rise_m).contains(&h)
+                && d.y.abs() <= back.warm_latitude
+                && matches!(b, Biome::Fields | Biome::Jungle | Biome::Desert)
+            {
+                warm_low += 1;
+            }
+            if !beach_back(&v12, d, h, b) {
+                continue;
+            }
+            found += 1;
+            assert!(
+                h >= top && h > 1.5,
+                "a back under the high water at {d}: {h}"
+            );
+            assert!(d.y.abs() <= back.warm_latitude, "a back in the cold at {d}");
+            assert!(matches!(b, Biome::Fields | Biome::Jungle | Biome::Desert));
+            let east = Vec3::Y.cross(d).normalize();
+            let north = d.cross(east);
+            let near = (1..=4).any(|ring| {
+                (0..16).any(|k| {
+                    let a = k as f32 * std::f32::consts::TAU / 16.0;
+                    let r = 3.0 * ring as f32;
+                    let n =
+                        (d + (east * a.cos() + north * a.sin()) * (r / v12.radius_m)).normalize();
+                    ((v12.sea_level_m - 1.0)..top).contains(&surface_altitude(&v12, n))
+                })
+            });
+            assert!(near, "no beach within 12 m of the back at {d}");
+        }
+        eprintln!("beach back: {found} of {warm_low} warm low samples of 400,000");
+        assert!(found > 20, "only {found} beach back samples");
+        assert!(found < warm_low, "every warm low cell is a back");
     }
 
     /// The city survey and the climate read version 12 without its swamps

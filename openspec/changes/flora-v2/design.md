@@ -1523,7 +1523,68 @@ read, so old files load, but nothing reads it any more.
 ### 12.13 Beach acacias stand behind the beach (owner, 2026-11-18)
 
 Survey F1, answered 2026-11-18: "On the dry ground just behind the beach
-(grass and sand above the high water), in version 11", now version 12: `river-downhill` took 11. Generator version 12
+(grass and sand above the high water), in version 11", now version 12:
+`river-downhill` took 11 and shipped (PR #131). Generator version 12
 (`swamps`, not yet shipped, so no save names it) moves the acacia's ground
 from beach sand under the high water to the dry cells just inland of the
-beach; version 10 keeps its rule, cell for cell.
+beach; versions 10 and 11 keep their rule, cell for cell.
+
+**The rule (version 12, `TerrainConfig::beach_back`, `BeachBack::V12`).**
+A cell is the beach's back (`planet_gen::beach_back`) where all of these
+hold:
+- its surface is dry and low: at or over `sea + beach_band_m` (2 m, the
+  beach's top, which is over the 1.5 m high water) and under that plus
+  `rise_m` (3 m), so the tops at 2, 3 and 4 m;
+- it is warm: `|y|` at most `warm_latitude` (0.64, about 40 degrees), the
+  acacia's own belt; the cold band and the temperate north and south keep
+  their trees (recommendation taken, ask only with screenshots);
+- its biome is the fields, the jungle or the desert: a swamp keeps its
+  willows and its pools, a mountain and the tundra are never by a beach;
+- a beach lies within `reach_m` (12 m, about four cells) of it: one of 16
+  points on two rings (6 and 12 m, eight each) has a surface in the beach's
+  band (`sea - 1` to `sea + beach_band_m`). The rings read the smooth
+  surface field, never a neighbour's record, as `swamp_pool_held` does, so
+  every reader gets the same strip.
+
+**Only the trees read it.** The cell keeps its biome and its top block, so
+its ground, its tileset, its ground cover, the map and everything else that
+reads the biome are version 11's. The record carries the fact in a bit of
+its material word, `flora::BEACH_BACK_BIT` (16, unused until now; the
+biome byte is 8 to 15, the cleared and flooded bits 24 and 25), set by
+`surface_code` and kept by `reconcile_surface`, which rewrites only the
+low byte and the flooded and sheet bits. `flora::tree_biome(word)` reads a
+back cell as the beach for its trees, and every tree reader goes through
+it: `TreeTable::grows` (the beach's entry of the world's table, version
+10's 15 in 256, unchanged in versions 11 and 12, so the tree digests hold), the
+species (`tree_kit::pick`, the shaders' `tree_species`: the acacia), the
+fruit (`hanging_fruit`, the beach's), and the shaders' copies of the rule
+in the visibility pass (`has_nearby_foliage`, the species it lists) and the
+surface pass (`stands_tree`, the near model and the cards). A back cell of
+the desert's sand (render code 4) counts as the beach's sand, so the owner's
+"grass and sand" both stand it, and it grows no cactus (`grows_cactus`, and
+the visibility pass's cactus reads the tree biome).
+
+Version 11 and older have no `beach_back` (`None`), so no record of theirs
+carries the bit and their trees, biomes and top blocks are theirs, digest
+for digest. Version 12's sites and settled climate stay version 11's:
+`site_ground` and `climate_ground` drop the back as they drop the swamps
+(`swamps` decisions 6 and 7), which they do not read anyway.
+
+**Verify.**
+- `version_12_s_beach_back_is_dry_warm_ground_behind_a_beach` (core): a
+  sweep of the sphere finds back cells on version 12 and none on version 11;
+  every one is dry (over the 1.5 m high water), warm, fields, jungle or
+  desert, and within 12 m of a beach.
+- `a_beach_back_stands_the_beach_s_acacias` (core): a back word grows trees
+  at the beach's rate on grass and on desert sand, every one an acacia, and
+  no cactus; without the bit the same word is the biome's own.
+- `beach_acacias_stand_behind_the_beach_on_the_newest_version` (app): the far and
+  tier records of the finest cells round warm beaches on version 12 stand
+  acacias, a share of the back's cells, and none on a cell under the high
+  water.
+- The shaders hold the bit and the lines (`planet_trees` tests).
+- Versions 10's and 11's digests (`version_10_keeps_its_ground`,
+  `version_11_keeps_its_ground`, the tree digests, the column digest)
+  unchanged.
+- An eye-level capture by day of acacias behind a version 12 beach,
+  `docs/screenshots/flora-2-1/v12-beach-acacias.jpg`.

@@ -173,6 +173,13 @@ mod tests {
             constant(VISIBILITY, "CACTUS_DENSITY"),
             tree_kit::CACTUS_DENSITY
         );
+        // `flora-v2` 12.13: the beach's back bit, in both passes.
+        for source in [SURFACE, VISIBILITY] {
+            assert_eq!(
+                constant(source, "BEACH_BACK_BIT"),
+                pbd_core::flora::BEACH_BACK_BIT
+            );
+        }
     }
 
     /// Both shaders pick a tree's species with the same lines, and those

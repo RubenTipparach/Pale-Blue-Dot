@@ -185,7 +185,9 @@ pub const CACTUS_DENSITY: u32 = 8;
 /// a tree (`grows_tree` stays false, so it cannot be chopped). `tree_id` and
 /// `word` are the record's, as for `grows_tree`.
 pub fn grows_cactus(tree_id: u32, word: u32) -> bool {
-    if (word >> 24) & 1 == 1 {
+    // Nor on a beach's back, which stands the beach's acacias (`flora-v2`
+    // 12.13).
+    if (word >> 24) & 1 == 1 || (word >> crate::flora::BEACH_BACK_BIT) & 1 == 1 {
         return false;
     }
     let material = word & 0xff;
