@@ -68,6 +68,14 @@ is at the sea's top layer in it. Proven by
 - **THEN** its cells are air after the rule has run and after a reload, no
   sea sheet is listed over it, and the eye and the walker in it are dry
 
+#### Scenario: Seen from over it
+
+- **WHEN** the dry pit is looked into from the air over it
+- **THEN** its floor and walls are drawn as dry ground, with none of the
+  sea's murk or wobble, though they lie under the sea's surface
+  (`shader_tests::a_dry_face_is_not_seen_through_the_sea`, `dry-holes`
+  design 10)
+
 #### Scenario: A pit dug beside a river
 
 - **WHEN** a pit is dug beside a river, its floor under the river's surface,

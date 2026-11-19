@@ -282,3 +282,58 @@ tints (`water_depth > 0`) is painted by why its water surface stood over it:
 - magenta: on the tier, the column's own water over the fragment.
 A fragment the branch leaves alone is drawn as the game draws it. The same
 pit, inside and above, as the captures above.
+
+**What the instrument found: (a), in the water's compose.** Five scratch
+copies of the shaders, each over the same pit from 9 m up (`--fly --at
+39.61458 15.39634 --pit 5 --pour-ahead 0.1 --time 12 --rain 0`, the eye
+path's key `0 39.61458 15.39634 9 30 -80`), 400 frames, long after the
+dig's ground has faded in (`lod_fade_s` is 1 s, 60 frames):
+1. **The terrain's submerged branch** (the instrument above): no fragment of
+   the pit is painted. The column says it is dry, and the branch agrees. The
+   sea's seabed round the beach is painted red (the column's water top at
+   the sea's level), so the instrument is live. Nor is any fragment blue:
+   the pit is on the tier.
+2. **The face's own albedo**, drawn unlit at the same point: green on the
+   floor and the lower walls, tan above.
+3. **Which sheet** each face draws from (by hue): the beach's for the pit's
+   walls and its west floor, a neighbouring biome's for its east floor; never
+   the ocean's.
+4. **Which material code** each face draws (by hue): sand on the walls,
+   stone on the floor, nothing else. Yet the instrument's own flat colours
+   come out shifted toward blue-green in the pit, more the deeper the face:
+   whatever greens the pit runs AFTER the terrain's fragment.
+5. **The water's compose** (`water.wgsl` `compose`), painting magenta every
+   pixel it takes as seen through the sea: the whole pit under the sheet's
+   level is magenta.
+
+So the green is the sea's murk, and not shade. The compose decides "wet" by
+one test, the pixel under the sea's surface sphere ("a heightfield has no
+geometry below the sea radius that is not seabed"). A pit dug on the tier
+is exactly such geometry, so its floor and walls were mixed toward the
+deep's colour by their depth under the sheet and wobbled: the green of the
+floor, and the lower walls greener the deeper they go. Its edge is level at
+the sheet's height, as the captures show. (The crosshatch in the earlier
+captures was the dig's dither fade still running; at 400 frames it is gone.)
+
+The same test tints a dry cave dug under the sea's level seen from air, and
+anything the column holds dry under the sheet.
+
+**Decision: the compose takes a pixel for wet only where the terrain says
+water may stand over it.** The terrain's fragment already knows, from its
+column (the submerged branch's own `water_depth`). It writes that to the
+scene's alpha, which nothing else reads: nought where it is on the tier and
+no water stands over it, one elsewhere (off the tier, the height field's sea
+is the sphere, as before; anything not terrain stays one). The compose, for
+an eye not under the water, multiplies its wet mask by that alpha. So:
+- a dry dug pit or cave under the sea's level is seen through air: no murk,
+  no wobble, no rain-ring gate change (the terrain's own `above_water`
+  already said dry);
+- the sea's seabed, a flooded pit and a pool are as before;
+- an eye under the water is unchanged: everything it sees is through water;
+- off the tier nothing changes. A dug pit beyond the tier is not drawn at
+  all (the far records draw the generator's height field), so there is no
+  dry pit there to tint;
+- the half-size reflections' compose blends colour only and keeps the alpha.
+
+What stays: a dropped item or a creature standing in a dry pit is not
+terrain and still reads as under the sea there. Recorded as a known limit.
