@@ -1699,6 +1699,8 @@ pub fn run(args: &[String]) {
     // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
     .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
     .add_plugins(pbd_app::step_trace::StepTracePlugin)
+    // `PBD_MEMORY_TRACE` (`memory-leak`): absent, nothing.
+    .add_plugins(pbd_app::memory_trace::MemoryTracePlugin)
     .add_plugins(pbd_app::sim_origin::SimOriginPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
