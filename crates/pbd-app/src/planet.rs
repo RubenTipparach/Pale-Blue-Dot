@@ -359,6 +359,10 @@ impl Plugin for PlanetPlugin {
         .add_plugins(ExtractResourcePlugin::<crate::clutter::ClutterTaken>::default())
         .init_resource::<crate::clutter::ClutterTaken>()
         .add_systems(Update, crate::clutter::refresh)
+        // And the tree being chopped or punched, which shakes
+        // (`tree-punch-shake`).
+        .add_plugins(ExtractResourcePlugin::<crate::tree_shake::TreeShake>::default())
+        .init_resource::<crate::tree_shake::TreeShake>()
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -872,6 +876,9 @@ struct PlanetParams {
     // `gather-by-hand`: the cells with a piece a hand took, two a lane, each
     // its clutter id and a sink byte a piece (`clutter::ClutterTaken`).
     clutter_taken: [UVec4; crate::clutter::TAKEN_CELLS / 2],
+    // `tree-punch-shake`: x the worked tree's id, y its last hit's time as
+    // bits, z one once a tree is hit, w spare (`tree_shake::TreeShake`).
+    shake: UVec4,
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1858,6 +1865,8 @@ pub(crate) struct Tunables<'w> {
     taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
     /// The ground clutter taken near the camera (`gather-by-hand`).
     clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
+    /// The tree being chopped or punched (`tree-punch-shake`).
+    shake: Option<Res<'w, crate::tree_shake::TreeShake>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2208,6 +2217,10 @@ fn prepare_views(
             felled,
             picked,
             clutter_taken,
+            shake: tunables
+                .shake
+                .as_deref()
+                .map_or(UVec4::ZERO, crate::tree_shake::TreeShake::lane),
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`

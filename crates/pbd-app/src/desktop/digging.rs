@@ -536,9 +536,11 @@ pub fn apply_edit(
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    (cameras, frame): (
+    (cameras, frame, mut shake): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+        // The worked tree's shake (`tree-punch-shake`); drawn only.
+        Option<ResMut<pbd_app::tree_shake::TreeShake>>,
     ),
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
@@ -657,6 +659,16 @@ pub fn dig_and_place(
         let step = mining
             .breaking
             .step(dt, true, Some(((tree, TREE_LAYER), secs)), between);
+        // A hit shakes the tree: each log, and every half second the button
+        // is held on it (`tree-punch-shake` design 4).
+        let now = time.elapsed_secs();
+        if let Some(shake) = shake.as_mut()
+            && (matches!(step, Step::Broken(_)) || shake.due(tree, now))
+            && let Some(id) = pbd_app::tree_shake::tree_id(&fine, tree)
+        {
+            shake.hit(tree, id, now);
+            debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
+        }
         if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
