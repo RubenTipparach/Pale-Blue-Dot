@@ -121,6 +121,13 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 .notes{z-index:50}
 body[data-page="glow"] > #view, body[data-page="glow"] > .panel{display:none!important}
 body[data-page="sand"] > #view, body[data-page="sand"] > .panel{display:none!important}
+body[data-page="mountains"] > #view, body[data-page="mountains"] > .panel{display:none!important}
+#mtCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none;background:#05070d}
+.s-tiles.mt-layers{width:min(250px,calc(100vw - 32px));gap:6px}
+.mt-slider{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.mt-slider input{width:100%;accent-color:var(--amber);margin:0}
+.mt-slider output{font-family:var(--mono);font-size:11.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+@media (max-width:860px){ .mt-layers[data-open="false"] > :not(.headrow){display:none} .s-tiles.mt-layers{width:min(240px,calc(100vw - 32px))} }
 #sandCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none;background:#05070d}
 .s-tiles{position:fixed;top:calc(62px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));padding:10px 12px;display:grid;gap:8px;width:min(372px,calc(100vw - 32px))}
 .s-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -301,7 +308,8 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
   <a role="tab" href="#playground" data-page="playground">Playground</a>
   <a role="tab" href="#glow" data-page="glow">Glow and carried light</a>
   <a role="tab" href="#sand" data-page="sand">Sand</a>
-  <span class="pagever">v4</span>
+  <a role="tab" href="#mountains" data-page="mountains">Mountains</a>
+  <span class="pagever">v5</span>
 </nav>
 
 <section id="glowTab" aria-label="Glow and carried light" hidden>
@@ -449,6 +457,91 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
 
     <h3>In the engine</h3>
     <p>The tiles go into <code>assets/tilesets/beach.png</code> and <code>desert.png</code>, the atlas is rebaked, and the beach and desert tuft ramps move with them. The patch here draws them as <code>planet_surface.wgsl</code> does: 32 texels a tile, nearest, top UVs over 1.5 tile widths, the top tile on every face of sand to 4 m and stone under it. This tab's screenshots were rendered with SwiftShader in a cloud container: they show the look, not the frame time.</p>
+  </section>
+</section>
+
+<section id="mountTab" aria-label="Mountains" hidden>
+  <canvas id="mtCanvas" tabindex="0" aria-label="A mountainside of hex columns from the forest edge through the tree line and an alpine meadow to scree, cliffs and the snow line. Drag to orbit, wheel or pinch to zoom."></canvas>
+  <div class="s-split" id="mtSplit" hidden></div>
+  <div class="s-label" id="mtLabL" style="left:25%" hidden>TODAY</div>
+  <div class="s-label" id="mtLabR" style="left:75%" hidden>NEW</div>
+  <section class="panel g-ctl" aria-label="Mountain controls">
+    <div class="headrow"><h1>Mountains</h1><button class="btn" id="mtInfo" aria-haspopup="dialog" aria-label="About this tab">i</button></div>
+    <p class="pbd-tracker" style="margin:0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <div class="g-row"><span>Time</span><div class="chips" id="mtTime"><button class="btn" data-v="day">Day</button><button class="btn" data-v="night">Night</button></div></div>
+    <div class="g-row"><span>Mountain</span><div class="chips" id="mtLook"><button class="btn" data-v="today">Today</button><button class="btn" data-v="new">New</button></div></div>
+    <div class="g-row"><span>Compare</span><div class="chips" id="mtCompare"><button class="btn" data-v="off">Off</button><button class="btn" data-v="split">Today | New</button></div></div>
+    <div class="g-row"><span>View</span><div class="chips" id="mtView"><button class="btn" data-v="overview">Overview</button><button class="btn" data-v="meadow">Meadow</button><button class="btn" data-v="treeline">Tree line</button><button class="btn" data-v="snowline">Snow line</button></div></div>
+    <div class="g-row"><label for="mtSnow">Snow line</label><div class="mt-slider"><input type="range" id="mtSnow" min="150" max="200" step="2" value="172"><output id="mtSnowOut" for="mtSnow">172 m</output></div></div>
+  </section>
+  <section class="panel s-tiles mt-layers" id="mtLayers" data-open="true" aria-label="Layers">
+    <div class="headrow"><span class="eyebrow">Layers (New)</span><button class="btn" id="mtLayersToggle" aria-expanded="true">Hide</button></div>
+    <label class="check"><input type="checkbox" id="mtL_trees" checked> Firs and spruce</label>
+    <label class="check"><input type="checkbox" id="mtL_krumm" checked> Krummholz</label>
+    <label class="check"><input type="checkbox" id="mtL_tufts" checked> Alpine grass tufts</label>
+    <label class="check"><input type="checkbox" id="mtL_flowers" checked> Flowers and cushions</label>
+    <label class="check"><input type="checkbox" id="mtL_shrubs" checked> Juniper, heather, bilberry</label>
+    <label class="check"><input type="checkbox" id="mtL_scree" checked> Scree and boulders</label>
+    <label class="check"><input type="checkbox" id="mtL_lichen" checked> Lichen and moss</label>
+    <label class="check"><input type="checkbox" id="mtL_snowp" checked> Snow patches and ice</label>
+    <label class="check"><input type="checkbox" id="mtL_tarn" checked> Tarn and cairn (proposed)</label>
+  </section>
+
+  <section class="panel notes" id="mtNotes" hidden aria-label="About the mountains tab">
+    <button class="btn close" id="mtClose" aria-label="Close">&#x2715;</button>
+    <h2>Mountains</h2>
+    <p><b>Changes.</b> v5 (2026-11-19): this tab, first drawn.</p>
+    <p>The owner, 2026-11-19: "nice, can you add more stuff to the mountain biomes? add stuff to foliage detail playground". The write-up is <code>openspec/changes/mountain-ground</code>, design 5 to 14, beside the ground it already plans (generator version 13: grass or snow on the flats, rock varied by altitude). Nothing on this tab is in the game yet.</p>
+
+    <h3>Controls</h3>
+    <ul>
+      <li>Drag to orbit, wheel or pinch to zoom. Nothing turns on its own.</li>
+      <li><b>Mountain: Today</b> is the mountain as the game draws it now: one slate on every rock face, snow above 200 m, pebbles, dead shrubs on the snow, and no trees. <b>New</b> is the plan.</li>
+      <li><b>Compare: Today | New</b> splits the view with one camera.</li>
+      <li><b>Night</b>: a dim moon, a campfire in the meadow, and lanterns and torches up the slope. Each lights what is near it with the game's lamp falloff, wherever the camera is.</li>
+      <li><b>Snow line</b> moves the line (and the snow patches, ice, dusted rock and the snow-edge flowers with it).</li>
+      <li><b>Layers</b> turn each part of New on and off.</li>
+    </ul>
+
+    <h3>What a mountain has today</h3>
+    <p>No trees (0 in 256 cells in every generator version), no fruit, and clutter that rolls only pebbles and, on snow, dead shrubs, because the green pieces need grass and today's mountains are stone and snow. Every rock face draws one slate tile.</p>
+
+    <h3>The bands</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Band</th><th>Altitude</th><th>What grows</th></tr>
+      <tr><td>Montane forest</td><td>105 - 135 m</td><td>Firs and spruce on alpine turf; juniper and bilberry under them</td></tr>
+      <tr><td>Tree line</td><td>135 - 160 m</td><td>Firs thinning to none at 150 m; krummholz, stunted and swept east by the wind, some flagged</td></tr>
+      <tr><td>Alpine meadow</td><td>145 m to the snow line</td><td>Tufts, gentian, edelweiss, avens, moss campion, cushion plants, heather; bilberry and sedge on bare soil</td></tr>
+      <tr><td>Rock</td><td>any steep cell</td><td>Strata of slate, granite, shale and fractured slate by altitude, lichen stone, lichen blots in orange, yellow-green and grey; scree and boulders at a cliff's foot; moss where a face is wet</td></tr>
+      <tr><td>Snow edge</td><td>14 m under the line</td><td>Snow lingering on shaded flats, glacier buttercups</td></tr>
+      <tr><td>Snow</td><td>over the line</td><td>Snow on the flats, ice on the highest, snow-dusted rock, crests scoured bare</td></tr>
+    </table></div>
+    <p>The patch has 60 m of relief and stands for 150 m of a range, so a cell's altitude is 103 m plus 2.5 times its height here.</p>
+
+    <h3>What is generation and what is drawn</h3>
+    <ul>
+      <li><b>New worlds only (version 13)</b>: the turf and soil on the flats, snow on the flats, the trees and the tree line, the bare crests, and the tarn if it is built. Old worlds keep their ground and grow no mountain trees.</li>
+      <li><b>Every world (drawn)</b>: rock strata, lichen and moss, scree and boulders, snow patches and ice, and the meadow plants wherever a mountain cell is grass. These are look changes and wait for your look.</li>
+      <li>The meadow uses the clutter slots the game already has (flower, bush, mushroom, fern, pebble), so it adds no vertices; what a hand can take is unchanged.</li>
+    </ul>
+
+    <h3>Art</h3>
+    <ul>
+      <li>The ground is the game's atlas, texel for texel: the mountains sheet's rocks, scree, alpine soil, snow-dusted rock and frozen fissure, and the tundra sheet's snow and bark. The firs wear the game's needles.</li>
+      <li>The <b>alpine turf</b> is a candidate tile (the mountains sheet has no grass), proposed for its unused worn-path slot. It and the plants are drawn in code by <code>foliage/mountain_art.py</code>: no outline, lit from the top left, stems and leaves in the turf's own greens, blooms in low-saturation colours.</li>
+      <li>Every plant is lit as the ground is: the sun with its shadow, the sky fill and the lamps.</li>
+    </ul>
+
+    <h3>Proposed, not in this build</h3>
+    <ul>
+      <li>The tarn (still water in a closed basin) and the cairn on the highest crest, shown with their layer.</li>
+      <li>Bilberries as food to pick and cook; boulders taken only with a pickaxe.</li>
+      <li>Mountain goats, marmots and eagles, for the animal work.</li>
+      <li>No waterfalls here: falling water is designed in its own mockup first.</li>
+    </ul>
+
+    <h3>Cost</h3>
+    <p>Estimated, not measured: no new clutter vertices; a few instructions in the terrain and clutter fragments on mountain cells; mountain trees at most 60 in 256 cells, fewer than a field's forest; two more tree species with their impostor bakes. The owner's perf sitting measures a mountain walk. This tab's screenshots were rendered with SwiftShader in a cloud container: they show the look, not the frame time.</p>
   </section>
 </section>
 
@@ -2466,12 +2559,13 @@ function startPlayground() {
 }
 // Page tabs: only the open tab's 3D view is on the page and drawing; each tab is a bare #anchor.
 function showPage() {
-  const want = location.hash === "#glow" ? "glow" : location.hash === "#sand" ? "sand" : "playground";
+  const want = location.hash === "#glow" ? "glow" : location.hash === "#sand" ? "sand" : location.hash === "#mountains" ? "mountains" : "playground";
   PAGE_TAB = want; document.body.dataset.page = want;
   for (const a of document.querySelectorAll(".pagetabs a")) a.setAttribute("aria-selected", a.dataset.page === want ? "true" : "false");
   $("glowTab").hidden = want !== "glow";
   $("sandTab").hidden = want !== "sand";
-  if (want === "glow") window.glowOpen(); else if (want === "sand") window.sandOpen(); else startPlayground();
+  $("mountTab").hidden = want !== "mountains";
+  if (want === "glow") window.glowOpen(); else if (want === "sand") window.sandOpen(); else if (want === "mountains") window.mountainsOpen(); else startPlayground();
 }
 addEventListener("hashchange", showPage);
 </script>
@@ -3868,6 +3962,692 @@ addEventListener("keydown", e => { if (e.key === "Escape") $s("sNotes").hidden =
 window.sandOpen = () => { start(); resize(); syncButtons(); if (!S.running) { S.running = true; last = 0; requestAnimationFrame(frame); } };
 // For the screenshot instrument.
 S.api = { setNight, setView, sync: syncButtons, drawTiles, orbit: S.orbit };
+})();
+
+// =====================================================================
+// Mountains (mountain-ground design 5-14): a mountainside from the forest
+// edge through the tree line and the alpine meadow to scree, cliffs and the
+// snow line, as the game draws it today against the plan. Its own scene,
+// renderer and loop, made the first time the tab opens and stopped while it
+// is closed.
+// =====================================================================
+(() => {
+"use strict";
+const GW = 2.833, GR = GW / Math.sqrt(3), S3 = Math.sqrt(3);
+const TILE_UV = 1.5 * GW;
+const ART_V = 1;
+const $m = id => document.getElementById(id);
+const M = { started: false, running: false, night: false, look: "new", compare: "off", view: "overview", snow: 172,
+  layers: { trees: true, krumm: true, tufts: true, flowers: true, shrubs: true, scree: true, lichen: true, snowp: true, tarn: true },
+  orbit: { yaw: 0, pitch: 0, dist: 0, tx: 0, ty: 0, tz: 0 } };
+window.__mount = M;
+function hh(a, b, s) { let h = (a * 374761393 + b * 668265263 + s * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, z, s) {
+  const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hh(xi, zi, s), b = hh(xi + 1, zi, s), c = hh(xi, zi + 1, s), d = hh(xi + 1, zi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const centre = (q, r) => [GW * (q + r / 2), GW * S3 / 2 * r];
+const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a) * GR, Math.sin(a) * GR]; };
+const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const K = (q, r) => q + "," + r;
+// The patch's 60 m of relief stands for 150 m of a version 13 range: a cell's
+// altitude is 103 m (about the biome's foot) plus 2.5 times its height here.
+const ALT = h => 103 + 2.5 * h;
+const id = (sheet, tx, ty) => sheet * 16 + ty * 4 + tx;
+const MT = 8, TU = 13;      // atlas slots: the mountains and tundra sheets
+const T = {
+  slate: id(MT, 3, 0), granite: id(MT, 2, 1), shale: id(MT, 2, 2), fract: id(MT, 3, 1), lichen: id(MT, 0, 2),
+  dusted: id(MT, 1, 2), scree: id(MT, 0, 0), soil: id(MT, 2, 3), ice: id(MT, 3, 3),
+  snow: id(TU, 2, 2), snowSide: id(TU, 1, 0), bark: id(TU, 2, 1), turf: 300,
+};
+const ROCKS = [T.slate, T.granite, T.shale, T.fract];
+// Sprites in mountain/mountain_art.png (mountain_art.py's SPRITES): [x px, y px, size px].
+const SP = { tuft0: [32, 0, 16], tuft1: [48, 0, 16], tuft2: [64, 0, 16], gentian: [80, 0, 16], edelweiss: [96, 0, 16], avens: [112, 0, 16],
+  campion: [32, 16, 16], buttercup: [48, 16, 16], sedge: [64, 16, 16], cushion_pink: [80, 16, 16], cushion_white: [96, 16, 16], deadshrub: [112, 16, 16],
+  juniper: [0, 32, 32], heather: [32, 32, 32], bilberry: [64, 32, 32] };
+const WIND = [1, 0];        // the prevailing wind, west to east: krummholz leans east
+
+// ---------- the mountainside: terraced benches and cliffs rising away from the camera ----------
+const XM = 44, ZM = 78;
+function baseHeight(x, z) {
+  const t = Math.min(1, Math.max(0, (ZM - z) / (2 * ZM)));
+  let s = 50 * Math.pow(t, 1.1) + 6 * t * Math.sin(x * 0.06 + 0.8) + 2.2 * Math.sin(x * 0.15 + z * 0.09) + 3 * (vnoise(x * 0.05, z * 0.05, 3) - 0.5);
+  s += 9 * t * Math.exp(-(((x + 30) / 13) ** 2));      // a spur on the left
+  const B = 8, f = s / B, k = Math.floor(f), fr = f - k;
+  const fT = fr < 0.8 ? fr * 0.14 : 0.112 + (fr - 0.8) / 0.2 * 0.888;
+  return Math.max(0, Math.round(B * (k + fT)));
+}
+const CELLS = new Map();
+for (let q = -40; q <= 40; q++) for (let r = -33; r <= 33; r++) {
+  const [x, z] = centre(q, r);
+  if (Math.abs(x) > XM || Math.abs(z) > ZM) continue;
+  const h0 = baseHeight(x, z);
+  CELLS.set(K(q, r), { q, r, x, z, h0, h: h0 });
+}
+const cellAt = (q, r) => CELLS.get(K(q, r));
+function cellAtXZ(x, z) {
+  const r = z / (GW * S3 / 2), q = x / GW - r / 2, s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return cellAt(rq, rr);
+}
+const nbrs = c => NB.map(([dq, dr]) => cellAt(c.q + dq, c.r + dr));
+// The tarn: a closed basin on a bench above the tree line (proposed, design 13).
+const TARN = (() => {
+  let best = null, bd = 1e9;
+  for (const c of CELLS.values()) {
+    if (Math.abs(c.x - 12) > 7) continue;
+    const ns = nbrs(c); if (ns.some(n => !n || Math.abs(n.h0 - c.h0) > 0)) continue;
+    const d = Math.abs(ALT(c.h0) - 160); if (d < bd) { bd = d; best = c; }
+  }
+  if (!best) return null;
+  const H0 = best.h0; let set = new Set();
+  for (const c of CELLS.values()) if (c.h0 === H0 && Math.hypot(c.x - best.x, c.z - best.z) < 9) set.add(c);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const c of [...set]) { if (nbrs(c).some(n => !n || (!set.has(n) && n.h0 < H0))) { set.delete(c); changed = true; } }
+  }
+  return set.size >= 3 ? { cells: set, H0, level: H0 - 0.35, x: best.x, z: best.z } : null;
+})();
+
+// ---------- what each cell is, for the snow line S ----------
+function classify() {
+  const S = M.snow, lay = M.layers;
+  for (const c of CELLS.values()) c.h = (TARN && lay.tarn && TARN.cells.has(c)) ? TARN.H0 - 2 : c.h0;
+  for (const c of CELLS.values()) {
+    const ns = nbrs(c);
+    c.A = ALT(c.h); c.Sl = S + 12 * (vnoise(c.x * 0.045, c.z * 0.045, 21) * 2 - 1);
+    c.flat = ns.every(n => !n || Math.abs(n.h - c.h) <= 1);
+    c.up = Math.max(0, ...ns.map(n => n ? n.h - c.h : 0));
+    c.down = Math.max(0, ...ns.map(n => n ? c.h - n.h : 0));
+    c.ridge = ns.filter(n => n && n.h < c.h).length >= 5;
+    c.tarn = !!(TARN && lay.tarn && TARN.cells.has(c));
+    // the sky a cell sees: how much the ground round it stands above it
+    let occ = 0;
+    for (let k = 0; k < 8; k++) {
+      const a = k * Math.PI / 4; let m = 0;
+      for (const d of [4, 8, 13]) { const o = cellAtXZ(c.x + Math.cos(a) * d, c.z + Math.sin(a) * d); if (o) m = Math.max(m, (o.h - c.h) / d); }
+      occ += Math.min(1, m * 1.4);
+    }
+    c.shade = occ / 8;
+    // today's rule: Stone below 200 m, Snow above (top_material, version 12)
+    c.today = ALT(c.h0) >= 200 ? "snow" : "rock";
+    // version 13 and the draw
+    let top;
+    if (c.tarn) top = "soil";
+    else if (c.flat) {
+      if (c.A > c.Sl) top = c.ridge ? "rock" : (c.A > c.Sl + 35 && vnoise(c.x * 0.2, c.z * 0.2, 23) > 0.45 && lay.snowp ? "ice" : "snow");
+      else top = vnoise(c.x * 0.09, c.z * 0.09, 7) > 0.68 && c.A > 128 ? "soil" : "turf";
+    } else {
+      top = "rock";
+      if (lay.scree && c.up >= 3 && c.down <= 1 && c.A < c.Sl + 12) top = "scree";
+      else if (c.A > c.Sl && c.A < c.Sl + 20) top = "dusted";
+    }
+    c.top = top;
+    c.patch = 0;
+    if (lay.snowp && c.flat && (top === "turf" || top === "soil") && c.A > c.Sl - 22) {
+      const near = smooth(c.Sl - 14, c.Sl + 2, c.A);
+      const sh = Math.min(1, c.shade * 2.2 + 0.3 * (vnoise(c.x * 0.15, c.z * 0.15, 29) - 0.5));
+      c.patch = sh > 0.5 ? Math.min(0.55, near * (0.15 + 0.5 * sh)) : 0;
+    }
+  }
+}
+function rockAt(a, x, z, S) {
+  if (M.layers.lichen && a < S && vnoise(x * 0.07, z * 0.07, 13) > 0.78) return T.lichen;
+  return ROCKS[Math.floor((a + 10 * vnoise(x * 0.03, z * 0.03, 11)) / 12) & 3];
+}
+
+// ---------- geometry ----------
+class GB {
+  constructor() { this.p = []; this.n = []; this.uv = []; this.t = []; this.c = []; this.f = []; }
+  v(p, n, uv, t, c, f) { this.p.push(...p); this.n.push(...n); this.uv.push(...uv); this.t.push(...t); this.c.push(...c); this.f.push(...f); }
+  tri(a, b, c, n, uvs, t, col, fx = Z4) { this.v(a, n, uvs[0], t, col, fx); this.v(b, n, uvs[1], t, col, fx); this.v(c, n, uvs[2], t, col, fx); }
+  quad(a, b, c, d, n, uvs, t, col, fx = Z4) { this.tri(a, b, c, n, [uvs[0], uvs[1], uvs[2]], t, col, fx); this.tri(a, c, d, n, [uvs[0], uvs[2], uvs[3]], t, col, fx); }
+  geo() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute("tile", new THREE.Float32BufferAttribute(this.t, 3));
+    g.setAttribute("col", new THREE.Float32BufferAttribute(this.c, 3));
+    g.setAttribute("fx", new THREE.Float32BufferAttribute(this.f, 4));
+    return g;
+  }
+}
+const Z4 = [0, 0, 0, 0], WHITE = [1, 1, 1], UP = [0, 1, 0];
+const SUN_DAY = new THREE.Vector3(0.38, 0.62, 0.68).normalize();
+function buildTerrain(mode) {
+  const g = new GB(), BOTTOM = -8, S = M.snow, today = mode === "today", lay = M.layers;
+  const HT = o => today ? o.h0 : o.h;     // today has no tarn basin
+  for (const c0 of CELLS.values()) {
+    const c = today ? Object.assign(Object.create(c0), { h: c0.h0 }) : c0;
+    const off = [hh(c.q, c.r, 1), hh(c.q, c.r, 2)];
+    const uvOf = (dx, dz) => [dx / TILE_UV + off[0], dz / TILE_UV + off[1]];
+    let topId, over = 0, fx = Z4;
+    if (today) topId = c.today === "snow" ? T.snow : T.slate;
+    else {
+      const top = c.top;
+      topId = top === "turf" ? T.turf : top === "soil" ? T.soil : top === "snow" ? T.snow : top === "ice" ? T.ice : top === "scree" ? T.scree : top === "dusted" ? T.dusted : rockAt(c.A, c.x, c.z, c.Sl);
+      const rocky = top === "rock" || top === "scree" || top === "dusted";
+      fx = [rocky && lay.lichen && c.A < c.Sl + 10 ? 0.55 : 0, c.patch, 0, 0];
+      over = c.patch > 0 ? T.snow : 0;
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = corner(i), b = corner((i + 1) % 6);
+      g.tri([c.x, c.h, c.z], [c.x + b[0], c.h, c.z + b[1]], [c.x + a[0], c.h, c.z + a[1]], UP,
+        [uvOf(0, 0), uvOf(b[0], b[1]), uvOf(a[0], a[1])], [topId, over, 0], WHITE, fx);
+    }
+    for (let i = 0; i < 6; i++) {
+      const nb = cellAt(c.q + NB[i][0], c.r + NB[i][1]);
+      const low = nb ? HT(nb) : BOTTOM;
+      if (low >= c.h) continue;
+      const a = corner(i), b = corner((i + 1) % 6);
+      const nx = (a[0] + b[0]) / 2, nz = (a[1] + b[1]) / 2, l = Math.hypot(nx, nz);
+      const n = [nx / l, 0, nz / l];
+      const away = 1 - Math.max(0, n[0] * SUN_DAY.x + n[2] * SUN_DAY.z);
+      for (let y = c.h; y > low; y--) {
+        const y0 = Math.max(y - 1, low), depth = c.h - y, v1 = y - y0;
+        let base, ov = 0, wfx = Z4;
+        const rock = rockAt(ALT(y - 0.5), c.x, c.z, c.Sl);
+        if (today) base = c.today === "snow" ? (depth === 0 ? T.snowSide : T.slate) : T.slate;
+        else {
+          const top = c.top;
+          if (top === "turf") { base = depth < 2 ? T.soil : rock; if (depth === 0) { ov = T.turf; wfx = [0, 0, 0, 0.28]; } }
+          else if (top === "soil") base = depth < 2 ? T.soil : rock;
+          else if (top === "snow" || top === "ice") { base = rock; if (depth === 0) { ov = T.snow; wfx = [0, 0, 0, 0.22]; } }
+          else base = top === "dusted" && depth === 0 ? T.dusted : rock;
+          if (base !== T.soil && base !== T.snowSide) {
+            const lich = lay.lichen && ALT(y) < c.Sl + 10 ? 0.35 + 0.55 * away : 0;
+            const seep = lay.lichen && y0 === low && nb && (nb.tarn || nb.patch > 0.3) ? 1 : 0;
+            wfx = [lich, 0, seep, wfx[3]];
+          }
+        }
+        g.quad([c.x + a[0], y0, c.z + a[1]], [c.x + b[0], y0, c.z + b[1]], [c.x + b[0], y, c.z + b[1]], [c.x + a[0], y, c.z + a[1]], n,
+          [[0, v1 * 0.999], [0.999, v1 * 0.999], [0.999, 0], [0, 0]], [base, ov, 0], WHITE, wfx);
+      }
+    }
+  }
+  return g.geo();
+}
+// A crossed pair of cut-out cards, lit with the ground's up normal as the game's clutter is.
+function cards(g, x, y, z, w, h, rot, sp, tint = WHITE) {
+  for (const a of [rot, rot + Math.PI / 2]) {
+    const dx = Math.cos(a) * w / 2, dz = Math.sin(a) * w / 2;
+    g.quad([x - dx, y, z - dz], [x + dx, y, z + dz], [x + dx, y + h, z + dz], [x - dx, y + h, z - dz], UP,
+      [[0, 1], [1, 1], [1, 0], [0, 0]], [sp[0], sp[1], 3], tint, [0, 0, 0, sp[2]]);
+  }
+}
+// A low dome (a cushion plant), its top tiled with a 16 px cushion sprite.
+function dome(g, x, y, z, r, h, sp) {
+  const ring = [];
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ring.push([Math.cos(a), Math.sin(a)]); }
+  const lv = [[1, 0], [0.75, 0.6], [0, 1]];
+  for (let k = 0; k < 2; k++) for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8, [r0, y0] = lv[k], [r1, y1] = lv[k + 1];
+    const P = (rr, yy, e) => [x + ring[e][0] * r * rr, y + h * yy, z + ring[e][1] * r * rr];
+    const U = (rr, e) => [(ring[e][0] * r * rr + x) * 4, (ring[e][1] * r * rr + z) * 4];
+    const nrm = [ring[i][0] * 0.5, 1, ring[i][1] * 0.5];
+    g.quad(P(r0, y0, i), P(r0, y0, j), P(r1, y1, j), P(r1, y1, i), nrm, [U(r0, i), U(r0, j), U(r1, j), U(r1, i)], [sp[0], sp[1], 6], [0.92, 0.92, 0.92], [0, 0, 0, sp[2]]);
+  }
+}
+// A boulder: a squashed, jittered octahedron, flat faced, in a rock tile.
+function boulder(g, x, y, z, r, seed, tile) {
+  const v = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.5, 0.7], [-0.7, 0.4, -0.6], [0.6, 0.45, -0.7], [-0.6, 0.5, 0.7]]
+    .map((p, i) => { const j = 0.75 + 0.5 * hh(seed, i, 61); return [p[0] * r * j * 1.15, p[1] * r * j * 0.75, p[2] * r * j]; });
+  const F = [[2, 6, 0], [2, 4, 6], [6, 4, 0], [2, 9, 4], [9, 1, 4], [2, 1, 9], [2, 7, 1], [7, 5, 1], [2, 5, 7], [2, 8, 5], [8, 0, 5], [2, 0, 8],
+    [3, 0, 4], [3, 4, 1], [3, 1, 5], [3, 5, 0]];
+  const rot = hh(seed, 9, 62) * 6.28, cs = Math.cos(rot), sn = Math.sin(rot);
+  const W = p => [x + p[0] * cs - p[2] * sn, y + p[1] + r * 0.35, z + p[0] * sn + p[2] * cs];
+  for (const [a, b, c] of F) {
+    const A = W(v[a]), B = W(v[b]), C = W(v[c]);
+    const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+    let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]; const l = Math.hypot(...n) || 1; n = n.map(q => q / l);
+    if (n[1] < -0.2) { n = n.map(q => -q); }
+    const uv = P => Math.abs(n[1]) > 0.6 ? [P[0] * 0.7, P[2] * 0.7] : [(P[0] + P[2]) * 0.7, -P[1] * 0.7];
+    g.tri(A, B, C, n, [uv(A), uv(B), uv(C)], [tile, 0, 0], [0.95, 0.95, 0.95]);
+  }
+}
+// A conifer: a hex trunk and stacked hexagonal skirts, needles on top and bark below.
+function skirt(g, cx, y0, cz, rad, hgt, lean, tint, seed) {
+  const ap = [cx + lean[0], y0 + hgt, cz + lean[1]];
+  const rot = hh(seed, 3, 71) * 1.05;
+  const ring = []; for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; const j = 0.85 + 0.3 * hh(seed, i, 72); ring.push([cx + Math.cos(a) * rad * j, y0 - 0.08 * rad * hh(seed, i, 73), cz + Math.sin(a) * rad * j]); }
+  for (let i = 0; i < 6; i++) {
+    const A = ring[i], B = ring[(i + 1) % 6];
+    const mx = (A[0] + B[0]) / 2 - cx, mz = (A[2] + B[2]) / 2 - cz, ml = Math.hypot(mx, mz) || 1;
+    const n = [mx / ml * hgt, rad, mz / ml * hgt]; const l = Math.hypot(...n); const nn = n.map(q => q / l);
+    const uvs = [[(A[0] + A[2]) * 0.9, A[1] * 0.9], [(B[0] + B[2]) * 0.9, B[1] * 0.9], [((A[0] + B[0]) / 2 + (A[2] + B[2]) / 2) * 0.9, ap[1] * 0.9]];
+    g.v(A, nn, uvs[0], [0, 0, 4], tint.map(q => q * 0.62), Z4); g.v(B, nn, uvs[1], [0, 0, 4], tint.map(q => q * 0.62), Z4); g.v(ap, nn, uvs[2], [0, 0, 4], tint.map(q => q * 1.25), Z4);
+    g.tri(B, A, [cx, y0 + hgt * 0.12, cz], [0, -1, 0], [[A[0], A[2]], [B[0], B[2]], [cx, cz]], [0, 0, 4], tint.map(q => q * 0.55));
+  }
+}
+function trunk(g, x, y, z, r, h, lean) {
+  for (let i = 0; i < 6; i++) {
+    const a0 = i * Math.PI / 3, a1 = a0 + Math.PI / 3;
+    const p = (a, yy, k) => [x + Math.cos(a) * r * (1 - 0.4 * k) + lean[0] * k, yy, z + Math.sin(a) * r * (1 - 0.4 * k) + lean[1] * k];
+    const n = [Math.cos(a0 + Math.PI / 6), 0, Math.sin(a0 + Math.PI / 6)];
+    g.quad(p(a0, y, 0), p(a1, y, 0), p(a1, y + h, 1), p(a0, y + h, 1), n, [[0, h], [0.3, h], [0.3, 0], [0, 0]], [T.bark, 0, 0], WHITE);
+  }
+}
+function fir(g, x, y, z, H, seed) {
+  trunk(g, x, y - 0.2, z, 0.06 * H / 2.4 + 0.05, H * 0.5, [0, 0]);
+  const n = 5 + Math.floor(hh(seed, 1, 74) * 2), tint = [0.82 + 0.1 * hh(seed, 2, 75), 0.95, 1.02];
+  for (let i = 0; i < n; i++) {
+    const f = i / n;
+    skirt(g, x, y + H * (0.16 + 0.74 * f), z, H * 0.2 * (1 - f * 0.82) + 0.12, H * 0.24, [0, 0], tint, seed * 7 + i);
+  }
+}
+function krumm(g, x, y, z, seed, flag) {
+  const tint = [0.78, 0.9, 0.92];
+  if (flag) {     // a flag tree: a leaning trunk, its few branches on the lee side only
+    const H = 1.6 + 0.6 * hh(seed, 1, 76), lean = [WIND[0] * 0.35, WIND[1] * 0.35];
+    trunk(g, x, y - 0.1, z, 0.07, H, lean);
+    for (let i = 0; i < 4; i++) { const f = (i + 0.5) / 4; skirt(g, x + WIND[0] * (0.3 + 0.35 * f), y + H * (0.25 + 0.7 * f), z + WIND[1] * (0.3 + 0.35 * f), 0.62 - 0.1 * i, 0.3, [WIND[0] * 0.35, WIND[1] * 0.35], tint, seed * 5 + i); }
+    return;
+  }
+  // a low mat of lumps, swept downwind: tallest on the windward end, trailing off to the lee
+  const n = 4 + Math.floor(hh(seed, 2, 77) * 3);
+  trunk(g, x, y - 0.05, z, 0.05, 0.35, [WIND[0] * 0.3, WIND[1] * 0.3]);
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1), side = (hh(seed, i, 79) - 0.5) * 0.7;
+    const px = x + WIND[0] * (f * 1.4) - WIND[1] * side, pz = z + WIND[1] * (f * 1.4) + WIND[0] * side;
+    const rad = 0.3 + 0.22 * hh(seed, i, 78) + 0.12 * (1 - f), hgt = 0.28 + 0.4 * (1 - f) * hh(seed, i, 80);
+    skirt(g, px, y + 0.04 + 0.12 * (1 - f) * hh(seed, i, 81), pz, rad, hgt, [WIND[0] * 0.18, WIND[1] * 0.18], tint.map(q => q * (0.9 + 0.2 * hh(seed, i, 82))), seed * 3 + i);
+  }
+}
+function seat(c, salt, spread = 0.62) {
+  const a = hh(c.q, c.r, salt) * 6.283, d = Math.sqrt(hh(c.q, c.r, salt + 1)) * GR * spread;
+  return [c.x + Math.cos(a) * d, c.z + Math.sin(a) * d];
+}
+// ---------- lamps: a campfire in the meadow, lanterns and torches ----------
+const LAMPS = [];
+function pickCell(fn) { let best = null, bd = 1e9; for (const c of CELLS.values()) { const d = fn(c); if (d < bd) { bd = d; best = c; } } return best; }
+function placeLamps() {
+  LAMPS.length = 0;
+  const want = [["fire", 147, -2, 15], ["lantern", 124, 4, 13], ["torch", 146, -20, 14], ["lantern", 165, 20, 13], ["torch", 105, -12, 14], ["torch", 184, 2, 14]];
+  for (const [kind, a, x, level] of want) {
+    const c = pickCell(o => (o.flat && !o.tarn && o.top !== "snow" ? 0 : 1e4) + Math.abs(ALT(o.h) - a) * 1.5 + Math.abs(o.x - x));
+    if (!c) continue;
+    const [px, pz] = kind === "fire" ? [c.x, c.z] : seat(c, 81, 0.4);
+    LAMPS.push({ kind, x: px, z: pz, base: c.h, y: c.h + (kind === "fire" ? 0.35 : kind === "lantern" ? 1.5 : 1.25), level, phase: hh(c.q, c.r, 9) * 6.28, cell: c });
+  }
+}
+function box(g, cx, cy, cz, sx, sy, sz, col, kind) {
+  const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2, uv = [[0, 0], [1, 0], [1, 1], [0, 1]], t = [0, 0, kind];
+  g.quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], uv, t, col);
+  g.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], uv, t, col);
+  g.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], uv, t, col);
+  g.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], uv, t, col);
+  g.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], uv, t, col);
+}
+function flame(g, x, y, z, w, h, col) {
+  for (let k = 0; k < 2; k++) { const a = k * Math.PI / 2 + 0.4, dx = Math.cos(a) * w, dz = Math.sin(a) * w;
+    g.quad([x - dx, y, z - dz], [x + dx, y, z + dz], [x + dx * 0.2, y + h, z + dz * 0.2], [x - dx * 0.2, y + h, z - dz * 0.2], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], [0, 0, 2], col); }
+}
+function buildLamps() {
+  const g = new GB();
+  for (const L of LAMPS) {
+    if (L.kind === "fire") {
+      for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; boulder(g, L.x + Math.cos(a) * 0.55, L.base - 0.05, L.z + Math.sin(a) * 0.55, 0.14, 900 + i, T.granite); }
+      for (let i = 0; i < 3; i++) { const a = i / 3 * 6.283 + 0.3; box(g, L.x + Math.cos(a) * 0.12, L.base + 0.08, L.z + Math.sin(a) * 0.12, 0.5 * Math.abs(Math.cos(a)) + 0.1, 0.1, 0.5 * Math.abs(Math.sin(a)) + 0.1, [0.3, 0.2, 0.12], 1); }
+      flame(g, L.x, L.base + 0.1, L.z, 0.16, 0.42, [0.95, 0.42, 0.12]);
+      flame(g, L.x + 0.06, L.base + 0.1, L.z - 0.05, 0.09, 0.3, [1.0, 0.7, 0.3]);
+      flame(g, L.x - 0.07, L.base + 0.1, L.z + 0.04, 0.07, 0.24, [1.0, 0.55, 0.2]);
+      continue;
+    }
+    const post = L.y - L.base - 0.12;
+    box(g, L.x, L.base + post / 2, L.z, 0.09, post, 0.09, [0.36, 0.25, 0.15], 1);
+    if (L.kind === "lantern") {
+      box(g, L.x, L.y, L.z, 0.22, 0.28, 0.22, [0.98, 0.78, 0.38], 2);
+      box(g, L.x, L.y + 0.17, L.z, 0.27, 0.05, 0.27, [0.16, 0.16, 0.18], 1);
+    } else {
+      box(g, L.x, L.y - 0.05, L.z, 0.13, 0.12, 0.13, [0.2, 0.13, 0.09], 1);
+      flame(g, L.x, L.y + 0.01, L.z, 0.09, 0.26, [1.0, 0.62, 0.22]);
+    }
+  }
+  return g.geo();
+}
+// ---------- the plants and stones ----------
+function buildToday() {
+  const g = new GB();
+  for (const c of CELLS.values()) {
+    if (c.today === "rock" && hh(c.q, c.r, 31) < 0.22) { const [x, z] = seat(c, 32); boulder(g, x, c.h0, z, 0.09 + 0.05 * hh(c.q, c.r, 33), c.q * 99 + c.r, T.slate); }
+    if (c.today === "snow" && hh(c.q, c.r, 34) < 0.16) { const [x, z] = seat(c, 35); cards(g, x, c.h0, z, 0.55, 0.55, hh(c.q, c.r, 36) * 3, SP.deadshrub); }
+  }
+  return g.geo();
+}
+function buildNew() {
+  const L = M.layers, out = {};
+  const gT = new GB(), gK = new GB(), gG = new GB(), gF = new GB(), gS = new GB(), gB = new GB(), gX = new GB();
+  for (const c of CELLS.values()) {
+    const { q, r, A, Sl } = c, green = c.top === "turf" || c.top === "soil";
+    // trees: firs thinning to the line at 150 m, krummholz 142-160 m (TreeTable::V13)
+    if (green && !c.tarn) {
+      const pFir = 0.23 * (1 - smooth(135, 150, A));
+      const pK = 0.24 * smooth(140, 146, A) * (1 - smooth(154, 160, A));
+      const roll = hh(q, r, 41);
+      if (roll < pFir) { const [x, z] = seat(c, 42, 0.45); fir(gT, x, c.h, z, (5.4 + 2.6 * hh(q, r, 43)) * (1 - 0.35 * smooth(128, 150, A)), q * 131 + r); }
+      else if (roll < pFir + pK) { const [x, z] = seat(c, 44, 0.45); krumm(gK, x, c.h, z, q * 17 + r, hh(q, r, 45) < 0.3); }
+    }
+    // tufts on the turf, every turf cell
+    if (c.top === "turf" && !c.tarn) {
+      const n = 6 + Math.floor(hh(q, r, 50) * 4);
+      for (let i = 0; i < n; i++) { const [x, z] = seat(c, 100 + i * 3, 0.85); const s = 0.32 + 0.16 * hh(q, r, 101 + i * 3);
+        cards(gG, x, c.h, z, s, s, hh(q, r, 102 + i * 3) * 3.1, i % 5 === 4 ? SP.tuft2 : i & 1 ? SP.tuft1 : SP.tuft0); }
+    }
+    if (c.top === "soil" && !c.tarn) {
+      for (let i = 0; i < 3; i++) if (hh(q, r, 52 + i) < 0.6) { const [x, z] = seat(c, 160 + i * 3, 0.8); cards(gS, x, c.h, z, 0.42, 0.42, hh(q, r, 161 + i) * 3, SP.sedge); }
+    }
+    // the meadow: flowers in small clumps, cushions
+    if (green && !c.tarn && A > 138 && A < Sl + 3) {
+      const nearSnow = A > Sl - 6;
+      const kinds = nearSnow ? ["buttercup", "gentian", "buttercup"] : A > 156 ? ["gentian", "edelweiss", "campion", "gentian"] : ["avens", "campion", "gentian", "avens"];
+      for (let k = 0; k < 2; k++) if (hh(q, r, 60 + k * 50) < (nearSnow ? 0.3 : 0.75 - 0.25 * k)) {
+        const kind = kinds[Math.floor(hh(q, r, 61 + k * 50) * kinds.length)], [cx, cz] = seat(c, 62 + k * 50, 0.6), m = 3 + Math.floor(hh(q, r, 63 + k * 50) * 4);
+        for (let i = 0; i < m; i++) { const a = hh(q, r, 64 + i + k * 50) * 6.28, d = 0.1 + 0.4 * hh(q, r, 70 + i + k * 50);
+          cards(gF, cx + Math.cos(a) * d, c.h, cz + Math.sin(a) * d, 0.3, 0.3, hh(q, r, 80 + i + k * 50) * 3, SP[kind]); }
+      }
+      if (A > 142 && hh(q, r, 65) < 0.4) { const [x, z] = seat(c, 66, 0.6); dome(gF, x, c.h, z, 0.22 + 0.18 * hh(q, r, 67), 0.11, hh(q, r, 68) < 0.6 ? SP.cushion_pink : SP.cushion_white); }
+    }
+    // shrubs: juniper low, heather high, bilberry on soil
+    if (green && !c.tarn && A < Sl) {
+      let kind = null;
+      if (c.top === "soil" && hh(q, r, 90) < 0.5) kind = "bilberry";
+      else if (A > 128 && A < 156 && hh(q, r, 91) < 0.3) kind = A < 140 && hh(q, r, 92) < 0.4 ? "bilberry" : "juniper";
+      else if (A >= 150 && hh(q, r, 93) < 0.3) kind = "heather";
+      if (kind) { const [x, z] = seat(c, 94, 0.6); const w = kind === "juniper" ? 1.4 + 0.5 * hh(q, r, 95) : 1.0 + 0.3 * hh(q, r, 95);
+        cards(gS, x, c.h - 0.02, z, w, w, hh(q, r, 96) * 3, SP[kind]); }
+    }
+    // scree's boulders; pebbles on the other rock
+    if (c.top === "scree") { const m = 1 + Math.floor(hh(q, r, 110) * 3); for (let i = 0; i < m; i++) { const [x, z] = seat(c, 111 + i * 2, 0.75); boulder(gB, x, c.h, z, 0.28 + 0.3 * hh(q, r, 112 + i), q * 31 + r * 7 + i, rockAt(A, c.x, c.z, Sl)); } }
+    else if ((c.top === "rock" || c.top === "dusted") && hh(q, r, 31) < 0.2) { const [x, z] = seat(c, 32); boulder(gB, x, c.h, z, 0.09 + 0.05 * hh(q, r, 33), q * 99 + r, rockAt(A, c.x, c.z, Sl)); }
+    if ((c.top === "snow" || c.top === "ice") && hh(q, r, 34) < 0.12) { const [x, z] = seat(c, 35); cards(gS, x, c.h, z, 0.55, 0.55, hh(q, r, 36) * 3, SP.deadshrub); }
+  }
+  // the cairn: five stones on the highest crest (proposed, design 13)
+  if (L.tarn) {
+    let top = null; for (const c of CELLS.values()) if (c.ridge && (!top || c.h > top.h) && Math.abs(c.x) < 36 && c.z > -70) top = c;
+    if (top) { let y = top.h; for (let i = 0; i < 5; i++) { const r = 0.42 - i * 0.07; boulder(gX, top.x + 0.04 * i, y - r * 0.1, top.z, r, 500 + i, T.granite); y += r * 0.95; } out.cairn = top; }
+  }
+  out.trees = gT.geo(); out.krumm = gK.geo(); out.tufts = gG.geo(); out.flowers = gF.geo(); out.shrubs = gS.geo(); out.scree = gB.geo(); out.cairnG = gX.geo();
+  return out;
+}
+function buildWater() {
+  const g = new GB();
+  if (TARN && M.layers.tarn) for (const c of TARN.cells) {
+    for (let i = 0; i < 6; i++) { const a = corner(i), b = corner((i + 1) % 6);
+      g.tri([c.x, TARN.level, c.z], [c.x + b[0] * 1.002, TARN.level, c.z + b[1] * 1.002], [c.x + a[0] * 1.002, TARN.level, c.z + a[1] * 1.002], UP, [[0, 0], [0, 0], [0, 0]], [0, 0, 0], [TARN.level - c.h, 0, 0]); }
+  }
+  return g.geo();
+}
+function heightTexture() {
+  const d = new Uint8Array(128 * 128 * 4);
+  for (let i = 0; i < 128 * 128; i++) d[i * 4 + 3] = 255;
+  for (const c of CELLS.values()) { const i = ((c.r + 64) * 128 + (c.q + 64)) * 4; const v = Math.max(0, Math.min(255, Math.round(c.h * 4))); d[i] = d[i + 1] = d[i + 2] = v; }
+  const t = new THREE.DataTexture(d, 128, 128, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+
+// ---------- shading: the sun with a column-walk shadow, the fill, and every lamp ----------
+const VS = `
+attribute vec3 tile; attribute vec3 col; attribute vec4 fx;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx;
+void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vP = wp.xyz; vN = normalize(mat3(modelMatrix)*normal);
+  vUv = uv; vT = tile; vCol = col; vFx = fx; gl_Position = projectionMatrix*viewMatrix*wp; }`;
+const COMMON = `
+precision highp float;
+uniform sampler2D atlas; uniform sampler2D art; uniform sampler2D needles; uniform sampler2D hmap;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uFill; uniform float uExpo; uniform float uNight;
+uniform vec4 uLamps[6]; uniform vec3 uFog; uniform float uFogK; uniform vec3 uCam; uniform float uTime;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx;
+const float GW = 2.833;
+float hAt(vec2 xz){
+  float r = xz.y/(GW*0.8660254); float q = xz.x/GW - r*0.5; float s = -q - r;
+  float rq = floor(q+0.5), rr = floor(r+0.5), rs = floor(s+0.5);
+  float dq = abs(rq-q), dr = abs(rr-r), ds = abs(rs-s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  vec2 t = (vec2(rq, rr) + 64.5)/128.0;
+  if (t.x < 0.0 || t.y < 0.0 || t.x > 1.0 || t.y > 1.0) return -20.0;
+  return texture2D(hmap, t).r*255.0/4.0;
+}
+float walk(vec3 a, vec3 b){
+  vec3 d = b - a; float L = length(d); vec3 u = d/L; float n = min(ceil(L/0.7), 44.0); float st = L/n;
+  for (int i = 1; i < 44; i++){ if (float(i) >= n) break; vec3 s = a + u*(st*float(i)); if (s.y < hAt(s.xz) - 0.01) return 0.0; }
+  return 1.0;
+}
+// lamp_bake::falloff: N.L x w^2 / (1 + (d/2.2)^2) x 2.4, w = 1 - (d/16)^4, at level/14, in the field's warm tint.
+vec3 lamps(vec3 p, vec3 n){
+  vec3 lit = vec3(0.0);
+  for (int i = 0; i < 6; i++) {
+    vec4 lp = uLamps[i]; if (lp.w <= 0.0) continue;
+    vec3 to = lp.xyz - p; float d = max(length(to), 0.001); float nl = max(dot(n, to/d), 0.0)*0.85 + 0.15;
+    if (d < 16.0) { float w = max(1.0 - pow(d/16.0, 4.0), 0.0); lit += vec3(1.0, 0.7, 0.3)*lp.w*nl*w*w/(1.0 + (d/2.2)*(d/2.2))*2.4; }
+  }
+  return lit;
+}
+vec3 finish(vec3 c){
+  float fd = length(vP - uCam); c = mix(c, uFog, 1.0 - exp(-fd*uFogK));
+  c = vec3(1.0) - exp(-c*uExpo);
+  return pow(c, vec3(1.0/2.2));
+}`;
+const FS = COMMON + `
+float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(h2(i), h2(i+vec2(1.0,0.0)), f.x), mix(h2(i+vec2(0.0,1.0)), h2(i+vec2(1.0,1.0)), f.x), f.y); }
+vec3 tileTex(float id, vec2 uv){
+  vec2 f = floor(fract(uv)*32.0) + 0.5;
+  if (id > 299.5) return pow(texture2D(art, f/128.0).rgb, vec3(2.2));
+  float sheet = floor(id/16.0 + 0.001); float t = id - sheet*16.0; float tx = mod(t, 4.0); float ty = floor(t/4.0 + 0.001);
+  vec2 px = vec2(mod(sheet, 4.0)*128.0 + tx*32.0, floor(sheet/4.0 + 0.001)*128.0 + ty*32.0) + f;
+  return pow(texture2D(atlas, px/512.0).rgb, vec3(2.2));
+}
+void main(){
+  vec3 n = normalize(vN);
+  float kind = vT.z;
+  if (kind > 1.5 && kind < 2.5) { gl_FragColor = vec4(finish(vCol*(mix(0.75, 2.2, uNight) + 0.25*sin(uTime*21.0 + vP.x*13.0))), 1.0); return; }
+  vec3 alb;
+  if (kind < 0.5) {
+    alb = tileTex(vT.x, vUv);
+    vec2 tc = floor(fract(vUv)*32.0);
+    if (vFx.w > 0.0 && fract(vUv.y) < vFx.w) alb = tileTex(vT.y, vUv);          // a riser's top band: turf or snow over its earth
+    if (vFx.y > 0.0) {                                                            // a snow patch lingering on a shaded flat
+      vec2 wt = floor(vP.xz*32.0/4.2495);
+      float s = 0.7*vn(wt/7.0) + 0.3*h2(wt);
+      if (s < vFx.y) alb = tileTex(vT.y, vUv);
+    }
+    if (vFx.x > 0.0) {                                                            // lichen in the rock's own texels
+      vec2 seed = floor(tc/3.0) + vec2(floor(vP.y + 0.001)*17.0 + floor(vP.x*0.37)*5.0, floor(vP.z*0.37)*11.0);
+      if (h2(seed) < vFx.x*0.26 && h2(tc*1.37 + seed) > 0.28) {
+        float k = h2(seed + 3.1);
+        vec3 tone = k < 0.4 ? vec3(0.43, 0.16, 0.042) : k < 0.75 ? vec3(0.32, 0.36, 0.11) : vec3(0.32, 0.34, 0.31);
+        float l = dot(alb, vec3(0.2126, 0.7152, 0.0722));
+        alb = mix(alb, tone*clamp(0.35 + l*5.0, 0.45, 1.3), 0.8);
+      }
+    }
+    if (vFx.z > 0.0 && fract(vUv.y) > 0.45) {                                     // moss in a seep, the face's lowest texels
+      vec2 seed = tc + floor(vP.xz*2.0)*7.0;
+      if (h2(seed) < 0.55*vFx.z + (fract(vUv.y) - 0.45)) alb = mix(alb, vec3(0.035, 0.06, 0.028), 0.85);
+    }
+  } else if (kind < 1.5) alb = pow(vCol, vec3(2.2));
+  else if (kind < 3.5 || kind > 5.5) {                                            // a cut-out sprite: a card (3) or a tiled cushion top (6)
+    vec2 u = kind < 3.5 ? clamp(vUv, 0.0, 0.999) : fract(vUv);
+    vec4 s = texture2D(art, (vT.xy + floor(u*vFx.w) + 0.5)/128.0);
+    if (s.a < 0.5) discard;
+    alb = pow(s.rgb, vec3(2.2))*vCol;
+  } else {                                                                        // needles
+    alb = pow(texture2D(needles, (floor(fract(vUv)*32.0) + 0.5)/32.0).rgb, vec3(2.2))*vCol;
+  }
+  float sl = max(dot(n, uSunDir), 0.0);
+  float sv = sl > 0.0 ? walk(vP + n*0.08 + vec3(0.0, 0.04, 0.0), vP + uSunDir*36.0) : 1.0;
+  vec3 lit = uSunCol*sl*sv + uFill*(0.6 + 0.4*n.y) + lamps(vP + n*0.02, n);
+  gl_FragColor = vec4(finish(alb*lit), 1.0);
+}`;
+const WFS = COMMON + `
+void main(){
+  float depth = vCol.r;
+  vec3 v = normalize(uCam - vP);
+  vec3 n = normalize(vec3(0.03*sin(vP.x*1.7 + uTime*0.6), 1.0, 0.03*sin(vP.z*1.3 - uTime*0.5)));
+  vec3 h = normalize(v + uSunDir);
+  float spec = pow(max(dot(n, h), 0.0), 140.0)*(1.0 - uNight*0.85);
+  float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);
+  vec3 body = mix(vec3(0.05, 0.16, 0.18), vec3(0.015, 0.05, 0.07), clamp(depth/2.0, 0.0, 1.0));
+  vec3 lit = uSunCol*max(dot(n, uSunDir), 0.0)*0.5 + uFill + lamps(vP, n)*0.5;
+  vec3 c = body*lit + uFog*fres*0.8 + uSunCol*spec*0.6;
+  gl_FragColor = vec4(finish(c), clamp(0.55 + depth*0.2 + fres*0.3, 0.55, 0.92));
+}`;
+
+let renderer, scene, camera, U, gToday, gNew, gShared, water, stars, moon, mats;
+function texture(src) { const t = new THREE.TextureLoader().load(src); t.flipY = false; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; }
+function rebuild() {
+  classify();
+  for (const g of [gToday, gNew, gShared]) for (const o of [...g.children]) { g.remove(o); o.geometry.dispose(); }
+  if (water) { scene.remove(water); water.geometry.dispose(); }
+  U.hmap.value = heightTexture();
+  placeLamps();
+  gToday.add(new THREE.Mesh(buildTerrain("today"), mats.solid));
+  gToday.add(new THREE.Mesh(buildToday(), mats.solid));
+  gNew.add(new THREE.Mesh(buildTerrain("new"), mats.solid));
+  const N = buildNew(), L = M.layers;
+  for (const [k, on] of [["trees", L.trees], ["krumm", L.krumm], ["tufts", L.tufts], ["flowers", L.flowers], ["shrubs", L.shrubs], ["scree", L.scree], ["cairnG", L.tarn]]) {
+    const m = new THREE.Mesh(N[k], mats.solid); m.visible = on; gNew.add(m);
+  }
+  gShared.add(new THREE.Mesh(buildLamps(), mats.solid));
+  water = new THREE.Mesh(buildWater(), mats.water); scene.add(water);
+  M.cairn = N.cairn;
+}
+function start() {
+  if (M.started) return; M.started = true;
+  const canvas = $m("mtCanvas");
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
+  const lamps = []; for (let i = 0; i < 6; i++) lamps.push(new THREE.Vector4());
+  U = {
+    atlas: { value: texture("foliage/game/atlas.png") }, art: { value: texture("foliage/mountain/mountain_art.png?v=" + ART_V) },
+    needles: { value: texture("foliage/game/needles.png") }, hmap: { value: null },
+    uSunDir: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Vector3() }, uFill: { value: new THREE.Vector3() },
+    uExpo: { value: 1 }, uNight: { value: 0 }, uLamps: { value: lamps }, uFog: { value: new THREE.Vector3() }, uFogK: { value: 0.004 },
+    uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
+  };
+  mats = {
+    solid: new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: U, side: THREE.DoubleSide }),
+    water: new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: WFS, uniforms: U, transparent: true, depthWrite: false }),
+  };
+  gToday = new THREE.Group(); gNew = new THREE.Group(); gShared = new THREE.Group(); scene.add(gToday, gNew, gShared);
+  const sp = []; for (let i = 0; i < 700; i++) { const a = hh(i, 1, 41) * Math.PI * 2, e = 0.1 + hh(i, 2, 41) * 1.35; sp.push(Math.cos(a) * Math.cos(e) * 600, Math.sin(e) * 600, Math.sin(a) * Math.cos(e) * 600); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+  stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0x9aa8c8, size: 1.4, sizeAttenuation: false })); scene.add(stars);
+  const mg = new THREE.BufferGeometry(); mg.setAttribute("position", new THREE.Float32BufferAttribute([-260, 330, -420], 3));
+  moon = new THREE.Points(mg, new THREE.PointsMaterial({ color: 0xbfc6d4, size: 12, sizeAttenuation: false })); scene.add(moon);
+  rebuild();
+  bindInput(); setView(M.view); setNight(M.night); resize(); syncButtons();
+}
+function setNight(n) {
+  M.night = n; if (!U) return;
+  if (n) {
+    U.uSunDir.value.set(-0.45, 0.6, -0.55).normalize(); U.uSunCol.value.set(0.020, 0.025, 0.040);
+    U.uFill.value.set(0.016, 0.020, 0.030); U.uExpo.value = 1.6; U.uNight.value = 1; U.uFogK.value = 0.006;
+    U.uFog.value.set(0.006, 0.008, 0.014); scene.background = new THREE.Color(0x05070d); stars.visible = true; moon.visible = true;
+  } else {
+    U.uSunDir.value.copy(SUN_DAY); U.uSunCol.value.set(1.12, 1.04, 0.9);
+    U.uFill.value.set(0.25, 0.33, 0.44); U.uExpo.value = 1.15; U.uNight.value = 0; U.uFogK.value = 0.0012;
+    U.uFog.value.set(0.46, 0.58, 0.72); scene.background = new THREE.Color(0xa9c8e2); stars.visible = false; moon.visible = false;
+  }
+}
+// Views: the whole side, the meadow at the campfire, the tree line, the snow line.
+function viewTarget(a, x) { const c = pickCell(o => (o.flat ? 0 : 6) + Math.abs(ALT(o.h) - a) + 0.5 * Math.abs(o.x - x)); return c || { x: 0, h: 20, z: 0 }; }
+function setView(v) {
+  M.view = v; const o = M.orbit;
+  if (v === "overview") Object.assign(o, { tx: 0, ty: 20, tz: -8, yaw: 0.12, pitch: 0.36, dist: 112 });
+  else {
+    const fire = LAMPS.find(L => L.kind === "fire");
+    const c = v === "meadow" ? (fire ? { x: fire.x + 1.5, h: fire.base, z: fire.z } : viewTarget(158, -4)) : v === "treeline" ? viewTarget(140, -10) : viewTarget(M.snow - 4, 2);
+    const d = v === "meadow" ? 9 : v === "treeline" ? 18 : 26;
+    Object.assign(o, { tx: c.x, ty: c.h + (v === "meadow" ? 0.6 : 2), tz: c.z, yaw: v === "meadow" ? -0.35 : 0.1, pitch: v === "meadow" ? 0.3 : 0.38, dist: d });
+  }
+}
+function placeCamera(aspect) {
+  const o = M.orbit;
+  camera.position.set(o.tx + Math.sin(o.yaw) * Math.cos(o.pitch) * o.dist, o.ty + Math.sin(o.pitch) * o.dist, o.tz + Math.cos(o.yaw) * Math.cos(o.pitch) * o.dist);
+  camera.lookAt(o.tx, o.ty, o.tz); camera.aspect = aspect; camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+  U.uCam.value.copy(camera.position);
+}
+function bindInput() {
+  const cv = $m("mtCanvas"); const ptrs = new Map(); let pinch = 0;
+  cv.addEventListener("pointerdown", e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    if (ptrs.size === 2) {
+      p.x = e.clientX; p.y = e.clientY; const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) M.orbit.dist = Math.max(3, Math.min(180, M.orbit.dist * pinch / d)); pinch = d; return;
+    }
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    M.orbit.yaw -= dx * 0.005; M.orbit.pitch = Math.max(0.04, Math.min(1.45, M.orbit.pitch + dy * 0.004));
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch = 0; };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("wheel", e => { M.orbit.dist = Math.max(3, Math.min(180, M.orbit.dist * (1 + Math.sign(e.deltaY) * 0.1))); e.preventDefault(); }, { passive: false });
+}
+function resize() { if (renderer) renderer.setSize(innerWidth, innerHeight, false); }
+addEventListener("resize", resize);
+function lampUniforms(t) {
+  U.uLamps.value.forEach((v, i) => {
+    const L = LAMPS[i]; if (!L || !M.night) { v.set(0, 0, 0, 0); return; }
+    const fl = L.kind === "lantern" ? 1 : 1 + 0.06 * Math.sin(t * 13 + L.phase) + 0.04 * Math.sin(t * 29 + L.phase * 2);
+    v.set(L.x, L.y + 0.15, L.z, L.level / 14 * fl);
+  });
+}
+let last = 0;
+function frame(now) {
+  if (PAGE_TAB !== "mountains" || M.frozen) { M.running = false; return; }
+  const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+  U.uTime.value += dt; draw();
+  requestAnimationFrame(frame);
+}
+function draw() {
+  lampUniforms(U.uTime.value);
+  const w = innerWidth, h = innerHeight;
+  const show = look => { gToday.visible = look === "today"; gNew.visible = look === "new"; water.visible = look === "new"; };
+  if (M.compare !== "split") {
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+    show(M.look); placeCamera(w / h); renderer.render(scene, camera);
+  } else {
+    renderer.setScissorTest(true);
+    for (const [x0, look] of [[0, "today"], [w / 2, "new"]]) {
+      renderer.setViewport(x0, 0, w / 2, h); renderer.setScissor(x0, 0, w / 2, h);
+      show(look); placeCamera((w / 2) / h); renderer.render(scene, camera);
+    }
+    renderer.setScissorTest(false);
+  }
+}
+function syncButtons() {
+  const set = (k, v) => { for (const b of $m(k).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); };
+  set("mtTime", M.night ? "night" : "day"); set("mtLook", M.look); set("mtCompare", M.compare); set("mtView", M.view);
+  const split = M.compare === "split";
+  $m("mtSplit").hidden = !split; $m("mtLabL").hidden = !split; $m("mtLabR").hidden = !split;
+  $m("mtSnow").value = M.snow; $m("mtSnowOut").textContent = M.snow + " m";
+  for (const [k, v] of Object.entries(M.layers)) { const el = $m("mtL_" + k); if (el) el.checked = v; }
+}
+function chips(k, fn) { for (const b of $m(k).querySelectorAll("button")) b.onclick = () => { fn(b.dataset.v); syncButtons(); }; }
+chips("mtTime", v => setNight(v === "night"));
+chips("mtLook", v => { M.look = v; });
+chips("mtCompare", v => { M.compare = v; });
+chips("mtView", v => setView(v));
+let pend = 0;
+function later() { clearTimeout(pend); pend = setTimeout(() => { if (M.started) { rebuild(); if (M.view !== "overview") setView(M.view); } }, 120); }
+$m("mtSnow").addEventListener("input", e => { M.snow = +e.target.value; $m("mtSnowOut").textContent = M.snow + " m"; later(); });
+for (const k of Object.keys(M.layers)) { const el = $m("mtL_" + k); if (el) el.onchange = () => { M.layers[k] = el.checked; later(); }; }
+$m("mtLayersToggle").onclick = () => { const p = $m("mtLayers"), open = p.dataset.open !== "false"; p.dataset.open = open ? "false" : "true"; $m("mtLayersToggle").textContent = open ? "Show" : "Hide"; $m("mtLayersToggle").setAttribute("aria-expanded", String(!open)); };
+if (innerWidth < 860) { $m("mtLayers").dataset.open = "false"; $m("mtLayersToggle").textContent = "Show"; $m("mtLayersToggle").setAttribute("aria-expanded", "false"); }
+$m("mtInfo").onclick = () => { $m("mtNotes").hidden = false; $m("mtClose").focus(); };
+$m("mtClose").onclick = () => { $m("mtNotes").hidden = true; $m("mtInfo").focus(); };
+addEventListener("pointerdown", e => { const n = $m("mtNotes"); if (!n.hidden && !n.contains(e.target) && e.target !== $m("mtInfo")) n.hidden = true; });
+addEventListener("keydown", e => { if (e.key === "Escape") $m("mtNotes").hidden = true; });
+window.mountainsOpen = () => { start(); resize(); syncButtons(); if (!M.running) { M.running = true; last = 0; requestAnimationFrame(frame); } };
+// For the screenshot instrument.
+M.api = { setNight, setView, sync: syncButtons, rebuild, draw: () => { resize(); draw(); }, orbit: M.orbit, lamps: LAMPS, tarn: TARN, cells: CELLS };
 })();
 
 showPage();
