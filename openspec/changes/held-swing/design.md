@@ -196,3 +196,147 @@ other 0.3 of the spade's turn, about the wrist joint as the mockup's
 `HandPair` turns it. No difference from the mockup.
 
 Frame cost was not measured (a cloud container, no GPU).
+
+## Punch, and a swing on every click (2026-11-19)
+
+The owner, 2026-11-19: "do tools always play animations when left clicking?
+can you mock up hand punching stuff". Shown in the Punch tab of Tools in
+Hand, version 14 (`docs/mockups/tool-motion.html#punch`), beside today's.
+Nothing in the game changes until the owner approves it there.
+
+### Measured
+
+- A tool strokes only while the dig runs. `held/stroke.rs`
+  `StrokeClock::step` reads the dig's `DigBeat`, which `desktop/digging.rs`
+  sets from `mining.breaking.timing()` while a block or a tree is breaking
+  (and through the pause after a break). With nothing under the crosshair,
+  out of reach, on water, or on a block the digger is refused on, the beat
+  is `DigBeat::default()`, `working: false`: the tool eases to rest and
+  stands still however often the button is clicked.
+- Bare hands draw nothing. `held.rs` `stroke_tool` maps no tool to
+  `StrokeTool::Hands`, kept for the dig sounds' beat, and the held meshes
+  are hidden when nothing is in hand.
+- What bare hands do (`dig.ron`, `tree-punch-shake`): a log takes
+  `wood.axe` over `hand_speed`, 0.6 / 0.25 = 2.4 s; soft ground the
+  shovel's time over it, 0.5 / 0.25 = 2.0 s; stone, rock and ore are
+  refused (`Refusal::NotByHand`, the note "Too hard to dig by hand"). No
+  digging tool is refused today (the stone tier reaches ore), so the hands
+  are the only refused digger; the rod breaks nothing.
+- The tree shakes on each log and, while held on it, every 0.5 s
+  (`tree_shake::HOLD_HIT_S`), a timer of its own, on no stroke: 12 cm at
+  the crown, 9 Hz, gone in 0.6 s, leaves 1.3x (`SHAKE_M`, `SHAKE_HZ`,
+  `SHAKE_S`, `SHAKE_LEAF`).
+
+### Decisions
+
+10. **Bare hands punch.** The hand is the approved hand (`hand-model`),
+    posed from the pickaxe's grip as the game already poses bare hands, with
+    no tool and the grip's hollow closed by a plug in the palm's tone, so the
+    fist reads solid. It punches in the four stages (decision 7), on the
+    dig's steady beat (decision 5), the impacts on the rule's events: a log
+    by hand is 2.4 s and the 0.15 s pause, six punches of 0.425 s, the sixth
+    on the log; dirt by hand five of 0.43 s, the fifth on the break.
+    - **Windup** (`windup_s` 0.09, eased out): the fist draws back toward
+      the shoulder `draw_m` 0.08, down `drop_m` 0.03, the wrist cocked
+      `cock_rad` 0.3.
+    - **Anticipation** (`anticipate_s` 0.06): a further `anticipate_m` 0.025
+      and a held coil.
+    - **Hit** (`strike_s` 0.07, t cubed, then `impact_hold_s` 0.04): the
+      fist drives `reach_m` 0.3 forward, `across_m` 0.16 in and `rise_m` 0.1
+      up, to the crosshair, on a slight arc (`arc_m` 0.03), turning
+      `twist_rad` 0.6 from its guard toward palm down (a straight punch's
+      corkscrew); `sweep_rad` 0 turns the aim sideways if wanted.
+    - **Recoil** (`recoil_s` 0.07, `recoil_m` 0.06, with an overshoot, then
+      `recover_s` 0.16).
+    - The forearm stays aimed from the virtual shoulder (`stroke.shoulder`)
+      through the fist, so the fist moves on an arc about the shoulder and
+      at full reach the sleeve runs back toward it rather than across the
+      view. The fist's frame comes from the grip's own bones (wrist to the
+      back of the hand for the knuckles' way, the back's `across`), so a new
+      hand keeps working.
+    - The guard: the fist rests `fist_raise_m` 0.1 up and `fist_in_m` 0.05
+      in from a tool's fist, turned thumb up and in by `guard_twist_rad`
+      0.7, `guard_cock_rad` 0, so it is in view between punches.
+    - `hands_weight` 0.8 scales the windup, the anticipation and the hold,
+      as the tools' weights do: a bare hand is lighter and quicker.
+    - The tree shakes on each stroke's impact, the hands' and the axe's, in
+      place of the 0.5 s timer, so what is seen to land and what moves agree.
+      It stays drawn only: the shake reads the stroke's impacts, which read
+      the dig's beat, and no rule reads either. The log still comes on the
+      break. (`tree-punch-shake`'s requirement, "sway from each hit", holds.)
+11. **Every left click swings** (recommendation taken, ask only with
+    screenshots; the Punch tab shows each case). A click with a digger in
+    hand (a digging tool or bare hands) plays a stroke whatever is under the
+    crosshair, and holding repeats it. Considered:
+    - **A, recommended: always swing.** A block that breaks keeps the dig's
+      beat. Anything else runs a free beat of `stroke_target_s` (0.45 s)
+      from the press, the first impact one windup, anticipation and strike
+      after it. When the aim comes onto something that breaks, the beat
+      moves to the dig's, easing from the drawn pose as a change of block
+      does today.
+    - B, one swing per click and nothing more while held: reads as stuck
+      when held at the air.
+    - C, today: nothing; the owner's question shows it reads as broken.
+
+    By what the stroke meets (the `swing` block, tools and hands alike):
+    - **Air:** no hold, since nothing stops it. The hit carries through,
+      `air_follow_m` 0.07 further for the fist and `air_follow_rad` 0.3
+      further down the arm's arc for a tool, over `air_follow_s` 0.1, eased
+      out (a whiff), and the recover is `air_recover_k` 1.3 slower. A tool's
+      follow-through goes into the arm's angle with the tool's own pitch
+      falling with it: turning the whole holder swings the sleeve up across
+      the view (seen in the mockup and fixed there).
+    - **Refused** (a thud): the hit stops dead and holds `thud_hold_s` 0.07,
+      kicks back further (`thud_recoil_m` 0.05 for the fist,
+      `thud_recoil_rad` 0.2 for a tool), and a jolt runs through the hand,
+      `thud_shake_m` 0.008 at `thud_shake_hz` 22 over `thud_shake_s` 0.18,
+      drawn on top of the pose. No cracks; the block does not move. The note
+      ("Too hard to dig by hand") still comes once, on the press.
+    - Out of reach and water count as the air.
+    - The rod casts and is not a digger: unchanged.
+12. **Sounds and secondary action.** A whoosh on each air swing's strike and
+    a dull knock on each thud's impact, from the same schedule as the pose
+    (decision 2): new cues by the `sound-effects` skill. No chips or hit
+    marker (the game has none; see the follow-ups).
+
+The `punch` and `swing` blocks go into `held.ron` beside `stroke` and
+`shovel`, validated as `stroke` is (finite; sizes and times non-negative;
+`strike_s`, `recoil_s`, `recover_s` and `air_follow_s` positive;
+`air_recover_k` at least 1), with one source of defaults. The mockup's Tune
+prints them:
+
+```ron
+    punch: (
+        windup_s: 0.09, draw_m: 0.08, drop_m: 0.03, cock_rad: 0.3,
+        anticipate_s: 0.06, anticipate_m: 0.025,
+        strike_s: 0.07, reach_m: 0.3, across_m: 0.16, rise_m: 0.1,
+        twist_rad: 0.6, sweep_rad: 0.0, arc_m: 0.03,
+        impact_hold_s: 0.04, recoil_s: 0.07, recoil_m: 0.06, recover_s: 0.16,
+        hands_weight: 0.8,
+        fist_raise_m: 0.1, fist_in_m: 0.05, guard_twist_rad: 0.7, guard_cock_rad: 0.0,
+    ),
+    swing: (
+        air_follow_s: 0.1, air_follow_m: 0.07, air_follow_rad: 0.3, air_recover_k: 1.3,
+        thud_hold_s: 0.07, thud_recoil_m: 0.05, thud_recoil_rad: 0.2,
+        thud_shake_m: 0.008, thud_shake_hz: 22.0, thud_shake_s: 0.18,
+    ),
+```
+
+### In the game, once approved
+
+- `digging.rs` writes what the click meets beside the beat: `DigBeat`
+  gains `meets` (`Breaks`, `Air`, `Refused`) and the press time for the
+  free beat, and `working` follows the button (a digger in hand, the
+  pointer the walker's), not only the dig. Read only, as now: no rule reads
+  it back.
+- `StrokeClock::step` runs the free beat when nothing breaks and the dig's
+  beat when something does, easing between them as it eases a change of
+  block.
+- `StrokeTool::Hands` draws: the held hand is shown with no tool mesh and
+  with the fist's plug, posed by a `punch_pose` beside the stroke's.
+- `tree_shake`: a hit comes from a `StrokeImpact` on a tree, and
+  `HOLD_HIT_S` goes.
+- Tests pin the schedule: six punches per log by hand, the sixth on the
+  log; the free beat's first impact one windup, anticipation and strike
+  after the press; no hold at the air; the thud's hold; no pop when what the
+  click meets changes.
