@@ -554,10 +554,232 @@ pub fn wall_corner(
     (mean * CONTACT[occluders.min(CONTACT.len() - 1)]).clamp(0.0, 1.0)
 }
 
+// ---- `glowing-mushrooms` part B: the carried light ------------------------
+
+/// What a thing in hand gives as light (`glowing-mushrooms` design 10): the
+/// placed thing's own level, its colour and whether it burns only from dusk
+/// to dawn. Never a second copy of a number: [`carried_light`] derives it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CarriedLight {
+    /// On the field's 0..15 scale, as the placed thing's.
+    pub level: u8,
+    /// Linear RGB.
+    pub tint: [f32; 3],
+    /// Lit only from dusk to dawn, as the placed thing is.
+    pub dusk_lit: bool,
+}
+
+impl CarriedLight {
+    /// Its strength: `level / 14`, the scaling the lamp bake gives every
+    /// placed lamp (`ColumnTier::bake_lamps`), so a held torch lights the
+    /// ground as a placed one does.
+    pub fn strength(&self) -> f32 {
+        f32::from(self.level) / 14.0
+    }
+
+    /// Whether it burns now, `dusk` being whether the dusk-lit lamps are lit.
+    pub fn lit(&self, dusk: bool) -> bool {
+        !self.dusk_lit || dusk
+    }
+
+    /// Its colour times its strength.
+    pub fn colour(&self) -> [f32; 3] {
+        let s = self.strength();
+        self.tint.map(|c| c * s)
+    }
+}
+
+/// The light an item in the selected hotbar slot gives, if any: one table,
+/// derived. A block that emits ([`Material::emission`]) gives its level in
+/// the lamps' [`TORCH_TINT`], burning when the placed one does
+/// ([`Material::dusk_lit`]); a glowing mushroom gives the plant's own
+/// [`GLOW_FLOWER_LEVEL`](crate::flora::GLOW_FLOWER_LEVEL), warm as its pool
+/// on the ground is, from dusk to dawn as the plant glows. Anything that
+/// emits later joins by giving its material an `emission()`.
+///
+/// [`Material::emission`]: crate::terrain::Material::emission
+/// [`Material::dusk_lit`]: crate::terrain::Material::dusk_lit
+pub fn carried_light(item: crate::inventory::Item) -> Option<CarriedLight> {
+    use crate::inventory::Item;
+    match item {
+        Item::Block(material) if material.emission() > 0 => Some(CarriedLight {
+            level: material.emission(),
+            tint: TORCH_TINT,
+            dusk_lit: material.dusk_lit(),
+        }),
+        Item::Good(good) if good == crate::goods::Good::GLOWING_MUSHROOM => Some(CarriedLight {
+            level: crate::flora::GLOW_FLOWER_LEVEL,
+            tint: TORCH_TINT,
+            dusk_lit: true,
+        }),
+        _ => None,
+    }
+}
+
+/// One light a player carries, as the shaders draw it: where it is
+/// (body-local metres, the frame the terrain is drawn in) and its colour
+/// times strength. It falls off by [`crate::lamp_bake::falloff`] and casts no
+/// shadow (design 7).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Carried {
+    pub at: glam::Vec3,
+    pub colour: [f32; 3],
+}
+
+/// A player's carried sources merged into one light (design 11): at the
+/// stronger source's place, its colour the sum of each source's colour times
+/// strength. `None` where nothing gives light.
+pub fn merge(sources: &[(glam::Vec3, [f32; 3])]) -> Option<Carried> {
+    let weight = |c: &[f32; 3]| c[0] + c[1] + c[2];
+    let lit: Vec<_> = sources.iter().filter(|(_, c)| weight(c) > 0.0).collect();
+    let strongest = lit
+        .iter()
+        .max_by(|a, b| weight(&a.1).total_cmp(&weight(&b.1)))?;
+    let mut colour = [0.0; 3];
+    for (_, c) in &lit {
+        for k in 0..3 {
+            colour[k] += c[k];
+        }
+    }
+    Some(Carried {
+        at: strongest.0,
+        colour,
+    })
+}
+
+/// What a carried light lays on a white face `d` metres off whose normal
+/// turns `nl` toward it, before [`lamp_share`]: the terrain's
+/// `TORCH_GAIN * colour * falloff`, the falloff every baked lamp uses. The
+/// hand and the held item take it no nearer than `min_m`
+/// (`carried_hand_min_m`).
+pub fn carried_on(light: &Carried, d: f32, nl: f32, min_m: f32) -> [f32; 3] {
+    let f = crate::lamp_bake::falloff(d.max(min_m), nl) * TORCH_GAIN;
+    light.colour.map(|c| c * f)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::terrain::Material;
+
+    /// `glowing-mushrooms` 1.1: every emitting material maps to its own
+    /// emission and dusk rule, in the lamps' tint; the glowing mushroom to
+    /// the plant's level from dusk to dawn; a pickaxe, a fish and a plain
+    /// good to none.
+    #[test]
+    fn what_is_held_gives_the_placed_things_light() {
+        use crate::goods::Good;
+        use crate::inventory::{Item, Tool};
+        let mut lamps = 0;
+        for material in Material::ALL {
+            let got = carried_light(Item::Block(material));
+            if material.emission() == 0 {
+                assert_eq!(got, None, "{material:?}");
+                continue;
+            }
+            lamps += 1;
+            let got = got.expect("an emitting block gives light");
+            assert_eq!(got.level, material.emission());
+            assert_eq!(got.dusk_lit, material.dusk_lit());
+            assert_eq!(got.tint, TORCH_TINT);
+        }
+        assert!(
+            lamps >= 6,
+            "torch, three lanterns, brazier, candle, campfire"
+        );
+        let torch = carried_light(Item::Block(Material::Torch)).unwrap();
+        assert_eq!(torch.strength(), 1.0, "a torch is the bake's unit");
+        assert!(torch.lit(false) && torch.lit(true));
+        let post = carried_light(Item::Block(Material::LanternPost)).unwrap();
+        assert!(!post.lit(false) && post.lit(true), "dusk to dawn");
+        let mushroom = carried_light(Item::Good(Good::GLOWING_MUSHROOM)).unwrap();
+        assert_eq!(mushroom.level, crate::flora::GLOW_FLOWER_LEVEL);
+        assert!(mushroom.dusk_lit);
+        assert_eq!(carried_light(Item::Tool(Tool::Pickaxe)), None);
+        assert_eq!(carried_light(Item::Good(Good::WHEAT)), None);
+        assert_eq!(carried_light(Item::Fish(0)), None);
+    }
+
+    /// Design 11: the body glow and a held torch add, at the torch, the
+    /// colour the sum of both; nothing lit is no light.
+    #[test]
+    fn a_players_sources_add_as_one_light() {
+        let hand = glam::Vec3::new(0.3, -0.3, -0.5);
+        let chest = glam::Vec3::new(0.0, -0.55, 0.0);
+        let torch = [1.0, 0.7, 0.3];
+        let glow = [0.62 * 0.5, 0.5, 0.88 * 0.5];
+        let one = merge(&[(hand, torch), (chest, glow)]).unwrap();
+        assert_eq!(one.at, hand, "at the stronger source");
+        for k in 0..3 {
+            assert!((one.colour[k] - (torch[k] + glow[k])).abs() < 1e-6);
+        }
+        let alone = merge(&[(chest, glow)]).unwrap();
+        assert_eq!(alone.at, chest);
+        assert_eq!(merge(&[(hand, [0.0; 3])]), None);
+        assert_eq!(merge(&[]), None);
+    }
+
+    /// `planet/light`, "A held torch lights as a placed one": a held torch
+    /// lays on a face 3 m off what the bake's falloff gives a placed torch
+    /// there (`TORCH_GAIN * TORCH_TINT * falloff * level / 14`), and the
+    /// hand, nearer than `min_m`, takes it at `min_m`.
+    #[test]
+    fn a_held_torch_lights_as_a_placed_one() {
+        let torch = carried_light(crate::inventory::Item::Block(Material::Torch)).unwrap();
+        let held = Carried {
+            at: glam::Vec3::ZERO,
+            colour: torch.colour(),
+        };
+        let got = carried_on(&held, 3.0, 0.8, 0.0);
+        let placed = crate::lamp_bake::falloff(3.0, 0.8) * 14.0 / 14.0;
+        for k in 0..3 {
+            assert!((got[k] - TORCH_TINT[k] * TORCH_GAIN * placed).abs() < 1e-6);
+        }
+        assert_eq!(
+            carried_on(&held, 0.1, 1.0, 0.5),
+            carried_on(&held, 0.5, 1.0, 0.5)
+        );
+        assert_eq!(
+            carried_on(&held, 17.0, 1.0, 0.0),
+            [0.0; 3],
+            "past its reach"
+        );
+        assert_eq!(carried_on(&held, 2.0, -0.2, 0.0), [0.0; 3], "facing away");
+    }
+
+    /// "No step at a cell boundary": the light on a face 2 m ahead of a
+    /// player walking at a constant speed changes smoothly frame to frame,
+    /// with no jump larger than the frames either side, since it is worked
+    /// out from the exact position.
+    #[test]
+    fn the_carried_light_never_steps() {
+        let torch = carried_light(crate::inventory::Item::Block(Material::Torch)).unwrap();
+        let face = glam::Vec3::new(10.0, 0.0, 0.0);
+        let mut last: Option<f32> = None;
+        let mut steps = Vec::new();
+        for frame in 0..240 {
+            // 4 m/s at 60 frames a second, across several 2.8 m cells.
+            let at = glam::Vec3::new(frame as f32 * 4.0 / 60.0, 1.5, 0.0);
+            let light = Carried {
+                at,
+                colour: torch.colour(),
+            };
+            let to = at - face;
+            let d = to.length();
+            let nl = to.normalize().dot(glam::Vec3::Y).max(0.0);
+            let v = carried_on(&light, d, nl, 0.0)[0];
+            if let Some(was) = last {
+                steps.push((v - was).abs());
+            }
+            last = Some(v);
+        }
+        for w in steps.windows(3) {
+            assert!(
+                w[1] <= (w[0].max(w[2]) * 1.5).max(1e-4),
+                "a jump between frames: {w:?}"
+            );
+        }
+    }
 
     /// `baked-light-ease`: a new bake shows none of itself on the swap and
     /// all of itself from `BAKE_EASE_S` on, rises in between, and no frame at
