@@ -49,10 +49,10 @@
   (design 10): the instrument's captures inside and above the beach pit,
   taken after the dig's ground has finished fading in. Verify: the finding
   in design 10 (the water's compose, not shade).
-- [ ] 5.2 The terrain writes "water may stand over this" to the scene's
+- [x] 5.2 The terrain writes "water may stand over this" to the scene's
   alpha; the compose takes a pixel for wet only as far as it says (design
   10). Verify: `a_dry_face_is_not_seen_through_the_sea` and the shader
   tests; the compose instrument shows no pixel of the pit wet.
-- [ ] 5.3 Captures before and after, inside and above, and one with the sun
+- [x] 5.3 Captures before and after, inside and above, and one with the sun
   on the pit's floor (`docs/screenshots/dry-holes/`, README). Verify: the
   pit's floor and walls are the beach's tan sand, shade aside.

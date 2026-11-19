@@ -1377,7 +1377,14 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // by the sheet from below, from the scene before this pass.
     let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky || under);
     wet *= mask;
-    var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0);
+    // And only where the terrain says water may stand over the pixel
+    // (`dry-holes` design 10): its alpha is nought on a face whose column
+    // holds no water over it, so a dry pit or cave dug under the sea's level
+    // is seen through air, not sea ("It shouldn't shade dry holes at all").
+    // With the eye under, everything is seen through water, as above.
+    if (!sky && !under) { wet *= scene.a; }
+    var color = scene.rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {
         let time = view.camera_time.w;
         let wobble = vec2<f32>(sin(time*1.3+uv.y*32.0)+0.5*sin(time*0.7+uv.x*47.0),

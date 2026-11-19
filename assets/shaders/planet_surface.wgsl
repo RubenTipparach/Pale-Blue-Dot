@@ -3454,6 +3454,14 @@ fn reflect_gather(@builtin(position) at: vec4<f32>) -> GatherOut {
 // decides each light's strength now (the sky's night term there, gone near
 // the camera where the town itself stands): `night_lights::FarLights::pack`.
 var<private> far_glow: vec3<f32> = vec3<f32>(0.0);
+// What the terrain writes to the scene's alpha (`dry-holes` design 10): nought
+// where the column under the fragment says no water stands over it, one
+// elsewhere. The water's compose, which lays the sea's murk on every pixel
+// under the sea's surface, takes a pixel for wet only as far as this says it
+// may be, so a dry pit or cave dug under the sea's level is never seen through
+// sea. Off the tier (no column) it stays one: the height field's sea is the
+// sphere's, as the compose has it.
+var<private> water_over: f32 = 1.0;
 const FAR_LIGHT_TINT: vec3<f32> = vec3<f32>(1.0, 0.70, 0.36);
 // How bright a point of a light of strength one is, HDR.
 const FAR_LIGHT_GAIN: f32 = 3.0;
@@ -3534,7 +3542,7 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
     // The far lights go under the haze like the ground they stand on.
     var color = lit + far_glow;
 #ifdef TERRAIN_OFF_FOG
-    return vec4(color, 1.0);
+    return vec4(color, water_over);
 #endif
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
@@ -3556,7 +3564,7 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
     split_k = 1.-fog*0.55;
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
     color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
-    return vec4(color,1.);
+    return vec4(color,water_over);
 }
 
 @fragment
@@ -4015,6 +4023,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         }
     }
     let water_depth = max(water_surface - length(input.position), 0.);
+    if input.slot != 0u && water_depth <= 0. { water_over = 0.0; }
     if water_depth > 0. {
         // The daylight left at this depth (downwelling): the deep goes dark
         // inside the column (`ocean-environments` B2).

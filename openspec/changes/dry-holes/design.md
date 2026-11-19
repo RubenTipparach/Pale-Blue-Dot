@@ -337,3 +337,11 @@ an eye not under the water, multiplies its wet mask by that alpha. So:
 
 What stays: a dropped item or a creature standing in a dry pit is not
 terrain and still reads as under the sea there. Recorded as a known limit.
+
+**Measured after the change**, by the same compose instrument at the same
+pit and frame: 121,276 pixels taken for wet before, 74 after. The 74 are
+single specks over the floor that are not terrain (small particles, which
+keep alpha one, the known limit above); no face of the pit is wet. The
+captures are in `docs/screenshots/dry-holes/` (`beach-pit-*-dry-*`,
+`beach-pit-floor-sun-*`). Frame time was not measured (a cloud session); the
+change is one multiply in the compose and one store in the terrain.

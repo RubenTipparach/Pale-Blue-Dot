@@ -33,3 +33,28 @@ The same, measured on the CPU with `dry_hole_report` (an ignored test in
 under the sheet, reached, and the eye in it was `Water { surface 4800.0 }`.
 After, the pit is dry and unlisted and the eye reads `Air`, after the dig,
 after the rule and after a reload.
+
+## No sea shading in a dry pit (design 10, 2026-11-19)
+
+The owner, on the two beach-pit captures above: "It shouldn't shade dry
+holes at all", and on the view from above: "This is green as fuck." The
+green was the water's compose taking every pixel under the sea's surface
+for sea (design 10 has the instrument and its five shots). The crosshatch in
+the captures above was the dig's dither fade still running; these are taken
+at 400 frames, long past it (`lod_fade_s` 1 s, 60 frames).
+
+- **Renderer:** lavapipe in a cloud container, a fixed step, no GPU. Looks
+  only; frame time was not measured.
+- **Settings:** `--profile fast`, `xvfb-run`, `PBD_WINDOW=960x600`, a new
+  memory-only world, `--at 39.61458 15.39634 --pit 5 --pour-ahead 0.1 --time
+  12 --rain 0 --frames 400` (the sun 70 degrees up). Captured at the size
+  shown, 960 x 600 a half, no resize.
+- **Before:** this branch at `8b8ebec8` (no tides, the compose as it was).
+  **After:** the same build with this change's two shaders
+  (`planet_surface.wgsl`, `water.wgsl`); no Rust changed for it.
+
+| File | View | What it shows |
+| --- | --- | --- |
+| `beach-pit-inside-dry-before-after.jpg` | `--walk --pitch -15`, standing on the pit's floor | BEFORE: the walls green under the sheet's level and greener deeper, the floor blue-green. AFTER: the beach's tan sand to the floor; the lower walls are only as dark as their shade. |
+| `beach-pit-floor-sun-before-after.jpg` | `--walk --pitch -65`, looking down at the floor in the noon sun | The sun on the floor, so shade cannot be taken for tint. BEFORE: the sunlit floor and walls green. AFTER: the sunlit floor cells the beach's tan; the cell underfoot is the next biome's own stone tile (its sheet is not the beach's: design 10's third shot), dark and mossy as that sheet draws its stone, not a tint. |
+| `beach-pit-above-dry-before-after.jpg` | from 9 m up (`--fly`, `PBD_EYE_PATH` key `0 39.61458 15.39634 9 30 -80`) | BEFORE: the pit's floor and lower walls green-grey. AFTER: the walls the beach's tan sand; the west floor cells the beach's own stone (tan boulders); the east floor cells the stone of the biome the dark ground to the east belongs to, which its sheet draws mossy and green. That is the cell's own tile (design 10's third shot: not the beach's sheet, not the ocean's), not the sea's murk. The acacia over the beach is `no-tides`: the strip the tide used to cover grows what the beach's back grows. |

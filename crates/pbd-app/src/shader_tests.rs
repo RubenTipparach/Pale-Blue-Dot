@@ -786,6 +786,50 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
     );
 }
 
+/// `dry-holes` design 10 (owner, 2026-11-19: "It shouldn't shade dry holes
+/// at all"): a terrain face whose column holds no water over it writes
+/// nought to the scene's alpha, every other one writes one, and the water's
+/// compose takes a pixel for wet (the sea's murk and wobble) only as far as
+/// that alpha says, for an eye not under the water. A pit dug under the
+/// sea's level was taken for sea by the compose's sphere test alone. The
+/// half-size reflections' compose adds colour only, so the alpha survives it.
+#[test]
+fn a_dry_face_is_not_seen_through_the_sea() {
+    let surface = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    assert!(surface.contains("var<private> water_over: f32 = 1.0;"));
+    let terrain = wgsl_fn_body(&surface, "shade_terrain");
+    let decided = terrain
+        .find("if input.slot != 0u && water_depth <= 0. { water_over = 0.0; }")
+        .expect("the column's dry answer is not written");
+    let depth = terrain
+        .find("let water_depth = max(water_surface - length(input.position), 0.);")
+        .expect("the submerged branch's depth is gone");
+    assert!(depth < decided, "decided before the column's depth");
+    let finish = wgsl_fn_body(&surface, "finish");
+    assert!(finish.contains("return vec4(color, water_over);"));
+    assert!(finish.contains("return vec4(color,water_over);"));
+    assert!(
+        !finish.contains("return vec4(color,1.)") && !finish.contains("return vec4(color, 1.0)"),
+        "a terrain colour ignores the column"
+    );
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let compose = wgsl_fn_body(&water, "compose");
+    let masked = compose.find("wet *= mask;").unwrap();
+    let gated = compose
+        .find("if (!sky && !under) { wet *= scene.a; }")
+        .expect("the compose wets a dry face");
+    let used = compose.find("if (wet > 0.0 && view.fx.x > 0.0)").unwrap();
+    assert!(
+        masked < gated && gated < used,
+        "gated before the wobble and murk"
+    );
+    let reflect = include_str!("planet_reflect.rs");
+    assert!(
+        reflect.contains("write_mask: ColorWrites::COLOR,"),
+        "the reflections' compose writes the alpha"
+    );
+}
+
 /// `ocean-environments` B21 (owner, 2026-11-16: "do we really need SSR from
 /// bottom of the water?"): the surface seen from below is Snell's window and
 /// the murk, never a mirror of the scene under the water, at any REFLECTIONS
