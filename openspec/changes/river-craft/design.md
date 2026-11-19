@@ -86,27 +86,39 @@ length the player sets (Long, Short) and can be cast off and made fast again
 within reach. The drawn rope is derived state: a chain of points that sags,
 floats or sinks and is dragged by the current, never read back.
 
-### 4. Anchors hold by bed, set and lift
+### 4. A set anchor holds the boat (owner, 2026-11-19: "anchor in mockup should stop you from moving")
 
-An anchor on the bed holds up to `hold(bed) x set x lift`:
-- `hold`: by the bed cell's material: sand 600 N, mud 2600 N, rock 4200 N
-  (the mockup's numbers, for a skiff; scaled by anchor size in the port).
-- `set`: grows with the distance dragged: mud reaches 1 in about 1.2 m, sand
-  stops at 0.25 (it ploughs), rock stays near 0 until a fluke catches (a
-  chance per metre), then 1.
-- `lift`: `1 - (a / 0.5 rad)^2`, a the rode's angle at the anchor. A short
-  rode breaks an anchor out; that is how it is weighed.
+Version 3 of the mockup let a dropped anchor drag in sand, broke it out when
+the rode was shortened, and let rowing move the skiff on. The owner, on the
+Anchor tab: "anchor in mockup should stop you from moving". The rule is now:
 
-When the line's pull exceeds the hold, the anchor drags toward the craft at
-`(T - hold) / 320` m/s and leaves a furrow. Paying out (to five times the
-depth by default) and shortening change the line's length. A second anchor
-at the stern makes a two-point mooring. The existing anchor's depth limit
-and default rode stand.
+- **Dropped, it sets.** The anchor falls to the bed and sets over `set_s`
+  seconds: sand 1.8, rock 1.3, mud 0.8, so under about two seconds on any
+  bed. The bed decides only that. While it sets, a pull over `slide_n` (600 N
+  on sand, 900 on rock, 1200 on mud) slides it toward the craft at
+  `(T - slide) / 320` m/s and leaves a furrow.
+- **Set, it holds.** From then on nothing moves it: not the current, not
+  rowing, not shortening the rode. The craft swings on the rode, at most the
+  rode's length round the anchor, and settles downstream of it. Rowing away
+  from the anchor brings the rode taut and the craft stops (the line's pull
+  is the existing mooring rule, stiff enough that the stretch is about
+  0.1 m at 500 N). The HUD shows "Anchored".
+- **Bow and stern.** The first anchor down veers to five times the depth.
+  One dropped while the other holds is snubbed short where it lands, so the
+  two together hold the craft still on its heading.
+- **Weighing is the only way to move again.** It hauls the rode in to
+  straight up and down and lifts the anchor aboard.
+
+Dropped as proposals: the sand anchor that never sets and drags, the rock
+anchor that skips until a fluke catches, and a short rode lifting the shank
+and breaking the anchor out. Pay out and Shorten change only how far the
+craft can swing. The existing anchor's depth limit and default rode stand.
 
 ### 5. Rafts, logs, booms and bundles
 
 - A **raft** is a craft built from logs (the player's own, `tool-crafting`),
-  poled where the bed is within 2.7 m and paddled elsewhere.
+  rowed with two oars on a rowing frame (9), in any water that floats it.
+  No pole (the owner, 2026-11-19: "no pole just oar is best").
 - A **log** dropped in water is a floating body (a capsule) until it beaches
   or is picked up.
 - A **boom** is a chain of logs between two bank fixings: a few points with
@@ -189,24 +201,40 @@ What reads badly, in the order the owner will see it:
    man standing beside one.
 6. **The pole works in any depth.** It pushes off the bed in 6 m of water.
 
-#### 9.2 Paddle, sweep, pole or oars: recommendation
+#### 9.2 Paddle, sweep, pole or oars: two oars, no pole
 
 | Way | For | Against |
 | --- | --- | --- |
 | A paddle per side (the Loon's) | Built (the Loon); one rule | A 2.4 m raft is too wide to paddle from the middle: the paddler must kneel at an edge and change sides for every correction; weak on 1.3 t of green logs |
 | A sweep oar at the stern | The log raftsmen's way; steers well | It steers more than it drives; one person sculls slowly; better kept for the big log bundles (design 5) |
-| A pole | Built; pushes off the bed, so it beats the current upstream (the owner, 2026-11-18: "the raft guy pushing the raft up and down the river") | Only where the bed is in reach; in deep water it does nothing |
+| A pole | Built; pushes off the bed, so it beats the current upstream (the owner, 2026-11-18: "the raft guy pushing the raft up and down the river") | Only where the bed is in reach; it has to be carried along the raft and replanted every stroke, and drawn it clips the deck and the poler |
 | **Two oars on a rowing frame** | The real way to row a raft (a river oar rig); W rows both, A or D rows one, so the turn is plain; seated and facing the bow, so the player sees where the raft goes | New: a frame, two oars, a seat |
 
-**Recommendation: two oars on a rowing frame, rowed facing the bow (the
-push stroke), with the pole kept for the shallows.** The rower sits on a
-bench aft of the middle; the pins stand on the frame at the raft's edges.
-In water the pole reaches (bed within `pole.reach_m`, 2.7 m, the Raft tab's
-rule) the player can stand and pole (R takes up the pole; R again goes back
-to the oars), which keeps today's upstream push. In deeper water the pole
-cannot be planted and says so ("Too deep"). Recommendation taken (ask only
-with screenshots); the Rowing tab's Gear switch shows both, and the owner
-judges them there.
+**Two oars on a rowing frame, rowed facing the bow (the push stroke). No
+pole.** Version 3 proposed the pole beside the oars for the shallows. The
+owner, on the Rowing tab of version 3, 2026-11-19: "no pole just oar is
+best, pole you have to actually move, and the pole is clipping, overall too
+much awkwardness". So the raft carries oars only; the proposed pole, its
+stages, its "Too deep" chip and its tunables are dropped from the design and
+the mockup. Today's game pole (9.1) stays on the page only as the
+comparison.
+
+**Shallow water without a pole.** Recommendation taken (ask only with
+screenshots):
+
+- The oars work at any depth that floats the raft. The push is always the
+  blade's drag through the water (9.4), never a push off the bed.
+- Where the bed (or a bank) is shallower than the blade's stroke depth, the
+  blade comes down on it and rests there, `bed_clear_m` (0.1 m) above the
+  bed's top: a bump, no splash at the catch, and only the share of the blade
+  still in the water pulls. The HUD shows "Oar on the bed". Nothing pushes
+  off the bottom, so a raft aground is rowed off by the water still under
+  the other blade, or not at all.
+- Going upstream is rowing against the current: the Rowing tab's 1.28 t
+  raft, rowed steadily with W, makes about 0.5 m/s through the water
+  (measured on the page, 0.42 to 0.53 over a stroke), so it barely holds its
+  own on that tab's 0.45 m/s reach and cannot climb fast water. Today's push off the bed in any depth
+  (9.1, problem 6) is gone with the pole.
 
 #### 9.3 The oar stroke: five stages
 
@@ -249,13 +277,9 @@ drive.
   off the centre line and turns the raft with no separate turn force. The
   physics reads the stroke schedule (it is the rule); the arms, the body
   and the splash only draw it.
-- **The pole** keeps today's law (drag against the ground at the tip) with
-  its own stages: reach (the pole swung forward, high), catch (the tip
-  stabbed down to the bed ahead, `plant_ahead_m`), drive (the tip stays on
-  the bed where it landed while the poler walks his hands down the pole and
-  the raft slides past it), release (pulled free), recovery (swung forward
-  hand over hand). A plant that would be deeper than `reach_m` does not
-  land, and the pole pushes nothing.
+- **The bed.** Where the bed under a blade is higher than the blade's
+  stroke depth, the blade rests on it `bed_clear_m` above it and pulls only
+  with its share still in the water (9.2); it never pushes off the bed.
 
 #### 9.5 The water's answer
 
@@ -277,11 +301,15 @@ and back on the recovery (`head_follow`, a share of the shoulders' move),
 added to the view, never to the mouse look. Each hand is the approved hand
 of M36 Tools in Hand (the Hand tab, `hand-model` design 5, approved
 2026-11-17), copied into the page from `tool-motion.html`, closed on the
-oar's handle (or the pole), its arm turned toward an elbow solved from the
-shoulder (two bones, the elbow out and down). The hands and arms are lit as
+oar's handle, its arm turned toward an elbow solved from the shoulder (two
+bones, the elbow out and down). The hands and arms are lit as
 the terrain is (`LitByField`, `LitLikeTerrain` in the port): at night they
 are as dark as the raft except where the lantern reaches. Third person draws
-the same pose on the blocky rower, his arms two blocks a side.
+the same pose on the blocky rower, his arms two blocks a side and a block
+hand round each handle. **Each part is drawn in exactly one view**: the
+first-person hands and arms only in first person, the rower's body, legs and
+arms only in third (the owner, on version 3 in third person at night: "why
+is fps arm in third person").
 
 #### 9.7 Tunables
 
@@ -294,34 +322,30 @@ Defaults; the Rowing tab's sliders print the same block:
 oars: (
     pin: (0.0, 0.62, 1.0),      // m: along (+bow), over the waterline, out (mirrored for the left)
     length_m: 3.0,              // m, handle end to blade tip
-    inboard_m: 0.95,            // m, handle end to the pin (the handles meet a shoulder's width apart)
+    inboard_m: 0.95,            // m, handle end to the pin (the hand grips 0.12 m in from the end)
     blade_m2: 0.14,
     blade_cd: 1.3,
-    catch_deg: 26.0,            // sweep at the catch, + toward the bow
-    release_deg: -20.0,         // sweep at the release
+    catch_deg: 22.0,            // sweep at the catch, + toward the bow
+    release_deg: -16.0,         // sweep at the release
     coil_deg: 3.0,              // the reach's extra coil before the catch
-    follow_deg: 4.0,            // the release's carry past release_deg
+    follow_deg: 3.0,            // the release's carry past release_deg
     blade_depth_m: 0.12,        // blade centre under the water through the drive
     blade_clear_m: 0.22,        // blade centre over the water through the recovery
     feather_deg: 80.0,
     turn_share: 0.35,           // A or D with W: the outer oar's extra sweep share
+    bed_clear_m: 0.1,           // a blade on a shallow bed rests this far above it (9.2)
 ),
 stroke: (
     reach_s: 0.16, catch_s: 0.12, drive_s: 0.62, release_s: 0.14, recovery_s: 0.66,
     exaggerate: 1.0,            // scales coil, follow-through, lean and the head's follow together
 ),
 rower: (
-    seat: (-0.78, 0.62, 0.0),   // m, the hip
-    shoulder_m: 0.5, shoulder_half_m: 0.19, upper_arm_m: 0.3,
+    seat: (-0.52, 0.62, 0.0),   // m, the hip; the feet braced on the frame's beam
+    shoulder_m: 0.5, shoulder_half_m: 0.27, upper_arm_m: 0.3, forearm_m: 0.37,
     lean_catch_deg: -6.0, lean_release_deg: 22.0,
     body_lead: 0.25,            // share of the drive the body swings ahead of the arms
     head_follow: 0.6,
     hand_scale_m: 0.03,         // metres a hand-model unit (the fist closes on a 34 mm handle)
-),
-pole: (
-    reach_m: 2.7, length_m: 4.6, plant_ahead_m: 1.1, side_m: 1.35,
-    reach_s: 0.3, catch_s: 0.16, drive_s: 1.1, release_s: 0.22, recovery_s: 0.8,
-    blade_m2: 0.7, blade_cd: 1.25,   // today's push law, against the ground
 ),
 water: (
     splash_drops: 16, splash_speed_mps: 2.4, drips: 5,
@@ -371,6 +395,8 @@ lamp: (
   The mockup's Rowing tab prints the same block under `lamp:`.
 - **Saves.** Nothing new: the lamp is part of the raft, and whether it
   burns is the clock's answer.
+- **The inner tube has none** (the owner, 2026-11-19: "no light for tube
+  guy"): at night a tube is lit only by the lamps near it and the moon.
 
 #### 9.9 In the game (on a request, after the owner's look)
 
@@ -381,8 +407,8 @@ lamp: (
   the raft's force reads the oar's blade from `oar_pose`. Tests pin the
   schedule: which stage at which time, the catch event on the catch's end,
   one oar joining only at the next reach, no pose jump when a key comes up,
-  a one-oar stroke turning the raft toward the other side, a pole that does
-  not plant past `reach_m`.
+  a one-oar stroke turning the raft toward the other side, a blade over a
+  shallow bed resting on it and pushing nothing off it.
 - `pbd-app` `vehicles/draw.rs`: the oars and frame as moving parts reading
   `oar_pose`; the first-person hands from `held_tools.ron`'s approved hand,
   closed on the handle; splash, drips and swirls as particles lit by the
@@ -394,6 +420,36 @@ lamp: (
   except the gear in hand, which is derived on boarding.
 - Not measured here: frame cost (no GPU in this session), and the feel of
   the beat in real time (judged on the owner's machine).
+
+#### 9.10 Version 4: the stroke smoothed (owner, 2026-11-19: "overall too much awkwardness")
+
+Measured on version 3 with a clearance check (a measurement instrument run
+from the screenshot script, not part of the page: it samples the stroke at
+160 points, ahead and back, at full and turn range, and reports the closest
+approach of each oar, fist and arm to the deck, the frame, the crate, the
+bench and the rower's torso, head and legs):
+
+- The arms could not reach the handles: from the shoulder to the grip at
+  the release was 0.92 m against an arm of 0.6 m, so the drawn forearm
+  stretched and the first-person hand floated off its sleeve.
+- The loom ran through the top of each post (the post rose 6 cm above the
+  bottom of the loom at the pin).
+- The rower had no front: a plain head and hat, so from most third-person
+  angles he could be read as facing the stern.
+
+Version 4: the seat 0.26 m nearer the pins (x -0.52), the sweep 38 degrees
+(catch 22, release -16), a forearm length of its own (0.37 m), the
+shoulders at the torso's sides (0.27 m out), the grip 0.12 m in from the
+handle's end, the posts 2 cm lower with a swivel oarlock (two iron horns
+either side of the loom, turning with the sweep), the catch's lift and the
+release's press overlapping the sweep a little so the hands go round one
+rounded loop. Now every clearance is positive: the closest are the oar to
+the torso when backing (4 mm), the loom over a post (1 cm), the arm 1 cm
+short of straight at the release. The rower faces the bow: a cap peak and a
+nose forward, hair at the back, the feet braced on the frame's beam. Today's
+pole hangs just outboard of the logs (z 1.3 m) and tilts outboard for
+either key, so it no longer runs through the deck and the poler; what it
+shows (a pole leaning on the held key, snapping) is unchanged.
 
 ## Risks / Trade-offs
 
@@ -413,6 +469,24 @@ None for the owner yet: the mockup is the question. If its look is
 approved, the in-game captures go to the survey beside the mockup's shots.
 
 ## The inner tube (owner, 2026-11-16: "also what about innertubes?")
+
+**Version 4 (owner, 2026-11-19: "no light for tube guy, fix arms/body").**
+Version 3's rider stood stiffly in the ring with his arms straight out, and
+a lantern on a stick was tied to the ring. Now:
+
+- **No lantern.** At night the tube is lit only by the bank lamps and the
+  moon (9.8).
+- **Sitting back.** Bottom in the hole, back on the far side of the ring
+  (leaning back 40 degrees), legs over the front rim with the knees bent and
+  the feet in the water; the arms rest on the rim at the sides.
+- **Paddling.** Each hand goes round an arc beside the ring: in at the
+  front, down into the water, pulled back, out behind, back in low over the
+  rim; the rider sits up to 20 degrees to reach. W or S: both hands
+  together, ahead or back. A or D: the outer hand pulls ahead while the inner
+  one backs, half a stroke apart. A hand never goes further than the arm
+  reaches, and the elbow is solved out and down (up while the hand is in the
+  water), so no frame is a T-pose. The same blocks, sizes and colours as the
+  raft's rower, lit like the terrain.
 
 A sixth tab, Tube (`#tube`): one person in an inner tube on a slow, shallow
 reach. The ring is a hull with no keel (equal drag along and across, 115 kg

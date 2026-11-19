@@ -10,7 +10,8 @@
       a one-layer fall), flow arrows on a toggle.
 - [x] 1.3 The physics: fixed 1/120 s step, semi-implicit Euler, float
       points per hull, the game's mooring rule for every line, position-based
-      ropes and a cloth net, anchor holding by bed, set and lift.
+      ropes and a cloth net, anchor holding by bed, set and lift (since
+      version 4: a set anchor holds, design 4).
 - [x] 1.4 Play, Step and Speed, paused on load; nothing moves before Play
       or a control except the water; the view turns only when dragged.
 - [x] 1.5 Day and Night; at night every boat carries a lantern and a
@@ -40,8 +41,9 @@
       a test that a drifting hull reaches the current's speed.
 - [ ] 3.3 Lines between craft (design 3), generalising `Mooring`, with a
       test that a slack line pulls nothing and a taut one pulls both ends.
-- [ ] 3.4 Anchor holding by bed, set and lift (design 4), with tests for
-      sand dragging and mud holding under the same load.
+- [ ] 3.4 Anchors that set and hold (design 4), with tests that a set
+      anchor holds a rowing craft within its rode's swing on every bed, that
+      bow and stern hold it still, and that only weighing frees it.
 - [ ] 3.5 Raft, tug, barge, log and bundle kinds; the boom (design 5).
 - [ ] 3.6 Nets and their catch, beside the rod (design 6).
 - [ ] 3.7 Durable records for craft, lines, anchors, booms and bundles;
@@ -64,7 +66,8 @@
       splash and swirls, first-person hands, tunables for `vehicles.ron`),
       and the spec delta "A raft is rowed in strokes on one beat".
 - [x] Recommendation taken (ask only with screenshots): two oars on a
-      rowing frame, rowed facing the bow, the pole kept for the shallows.
+      rowing frame, rowed facing the bow. (Version 3 also kept a pole for the
+      shallows; dropped in version 4 on the owner's word.)
 - [x] Rowing tab in M34 (`#rowing`, version 2 of the page): Today / Proposed,
       Oars / Pole, first and third person, hold W S A D Q E to row, Show
       poses, Tune sliders printing the RON block, day and night (a lantern
@@ -79,5 +82,28 @@
       "A raft carries its own lantern, lit at night"; in the Rowing tab the
       lantern lights the deck, water, oars, splash and hands in Proposed and
       nothing in Today; night stills today against proposed.
+- [x] Oars only (owner, 2026-11-19: "no pole just oar is best, pole you
+      have to actually move, and the pole is clipping, overall too much
+      awkwardness"): design 9.2 rewritten, the shallow-water rule (the blade
+      rests on the bed and pushes nothing off it; upstream only by rowing
+      against the current, recommendation taken, ask only with screenshots),
+      the pole's stages, tunables and spec scenario removed.
+- [x] Version 4 of the page: the Pole gear, its Too deep chip, key and poses
+      removed from the Rowing tab; the Raft tab rows with the same oars
+      (`RC.Oarsman`); the stroke smoothed (design 9.10: seat, sweep, forearm,
+      swivel locks, a rounded hand loop, no clipping at any stage by the
+      clearance check); the rower faces the bow; first-person hands only in
+      first person, the body only in third; today's pole no longer through
+      the deck. Change-log line in the modal.
+- [x] Stills `docs/screenshots/raft-rowing/oars-v4-*.png` (Chromium on
+      SwiftShader): catch, drive, release, recovery in first and third
+      person, night in both (third person as the owner's shot), today, the
+      Raft tab.
+- [x] Tube v4 (owner, 2026-11-19: "no light for tube guy, fix arms/body"):
+      no lantern, the rider sits back in the ring, paddles with the hands in
+      the water; stills `tube-v4-*.png`.
+- [x] Anchor v4 (owner, 2026-11-19: "anchor in mockup should stop you from
+      moving"): design 4 rewritten, a set anchor holds; the Anchored chip;
+      stills `anchor-v4-*.png`.
 - [ ] The owner's look at the Rowing tab (the tracker, M34).
 - [ ] The port (design 9.9), only on a request after the owner's look.

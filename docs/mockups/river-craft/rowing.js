@@ -2,8 +2,10 @@
 // The raft on a slow, wide reach, rowed the game's way today (the pole leaning on the held key, the push 1.35 m out
 // on alternate sides) or the proposed way: two oars on a rowing frame, each stroke in five stages (reach, catch,
 // drive, release, recovery) on one clock for both oars, the push the blade's own drag through the water, the water
-// answering with a splash, wash, drips and the oar's swirls; or the proposed pole, planted on the bed. First person
-// with the approved hand of M36 Tools in Hand (hand.js), or third person. Needs engine.js, physics.js, hand.js.
+// answering with a splash, wash, drips and the oar's swirls. No pole is proposed (the owner, 2026-11-19: "no pole just
+// oar is best"). First person with the approved hand of M36 Tools in Hand (hand.js), or third person.
+// RC.Oarsman (the raft, its frame, oars and rower, and the stroke) is shared with the Raft tab.
+// Needs engine.js, physics.js, hand.js.
 (function () {
 "use strict";
 const RC = window.RC, clamp = RC.clamp, HAND = RC.HAND;
@@ -18,14 +20,14 @@ const easeIn = u => { u = c01(u); return u * u * u; };
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // ---------------- the tunables (design 9.7): one source, the sliders edit it, the RON is printed from it ----------
+// Version 4: the seat 0.26 m nearer the pins and the sweep 38 degrees, so the arms reach the handles through the
+// whole stroke (straight at the release, the handles at the chest at the catch); a forearm length of its own.
 const DEF = {
-  oars: {pin: [0.0, 0.62, 1.0], length_m: 3.0, inboard_m: 0.95, blade_m2: 0.14, blade_cd: 1.3, catch_deg: 26, release_deg: -20,
-    coil_deg: 3, follow_deg: 4, blade_depth_m: 0.12, blade_clear_m: 0.22, feather_deg: 80, turn_share: 0.35},
+  oars: {pin: [0.0, 0.62, 1.0], length_m: 3.0, inboard_m: 0.95, blade_m2: 0.14, blade_cd: 1.3, catch_deg: 22, release_deg: -16,
+    coil_deg: 3, follow_deg: 3, blade_depth_m: 0.12, blade_clear_m: 0.22, feather_deg: 80, turn_share: 0.35, bed_clear_m: 0.1},
   stroke: {reach_s: 0.16, catch_s: 0.12, drive_s: 0.62, release_s: 0.14, recovery_s: 0.66, exaggerate: 1.0},
-  rower: {seat: [-0.78, 0.62, 0.0], shoulder_m: 0.5, shoulder_half_m: 0.19, upper_arm_m: 0.3, lean_catch_deg: -6, lean_release_deg: 22,
+  rower: {seat: [-0.52, 0.62, 0.0], shoulder_m: 0.5, shoulder_half_m: 0.27, upper_arm_m: 0.3, forearm_m: 0.37, lean_catch_deg: -6, lean_release_deg: 22,
     body_lead: 0.25, head_follow: 0.6, hand_scale_m: 0.03},
-  pole: {reach_m: 2.7, length_m: 4.6, plant_ahead_m: 1.1, side_m: 1.35, reach_s: 0.3, catch_s: 0.16, drive_s: 1.1, release_s: 0.22,
-    recovery_s: 0.8, blade_m2: 0.7, blade_cd: 1.25},
   // the raft's own lantern (the owner, 2026-11-19: "Rafts should also have a light that comes with it at night"):
   // fitted to the bow post, lit from dusk to dawn, a lamp in the light field's lamp term; the page lights it with
   // its own lamp falloff (engine.js lampFall, range 15 m) and colour (LAMP_RGB), so these print for the RON only
@@ -33,23 +35,23 @@ const DEF = {
   water: {splash_drops: 16, splash_speed_mps: 2.4, drips: 5, puddle_m: 0.24, puddle_s: 4.0, puddle_spin_rps: 0.6},
 };
 const T = JSON.parse(JSON.stringify(DEF));
+const GROUPS = ["oars", "stroke", "rower", "lamp", "water"];
 // The sliders: [group, key, min, max, step]
 const SLIDERS = [
   ["stroke", "reach_s", 0.05, 0.5, 0.01], ["stroke", "catch_s", 0.04, 0.4, 0.01], ["stroke", "drive_s", 0.3, 1.4, 0.02],
   ["stroke", "release_s", 0.05, 0.4, 0.01], ["stroke", "recovery_s", 0.3, 1.4, 0.02], ["stroke", "exaggerate", 0, 2, 0.05],
-  ["oars", "catch_deg", 10, 50, 1], ["oars", "release_deg", -45, 0, 1], ["oars", "coil_deg", 0, 10, 0.5], ["oars", "follow_deg", 0, 12, 0.5],
+  ["oars", "catch_deg", 10, 34, 1], ["oars", "release_deg", -28, 0, 1], ["oars", "coil_deg", 0, 8, 0.5], ["oars", "follow_deg", 0, 8, 0.5],
   ["oars", "blade_depth_m", 0, 0.3, 0.01], ["oars", "blade_clear_m", 0.05, 0.45, 0.01], ["oars", "feather_deg", 0, 90, 1],
   ["oars", "blade_m2", 0.05, 0.3, 0.01], ["oars", "turn_share", 0, 1, 0.05],
-  ["rower", "lean_catch_deg", -20, 10, 1], ["rower", "lean_release_deg", 0, 40, 1], ["rower", "body_lead", 0, 0.6, 0.05],
+  ["rower", "lean_catch_deg", -20, 10, 1], ["rower", "lean_release_deg", 0, 30, 1], ["rower", "body_lead", 0, 0.6, 0.05],
   ["rower", "head_follow", 0, 1, 0.05], ["rower", "hand_scale_m", 0.016, 0.034, 0.001],
-  ["pole", "plant_ahead_m", 0.4, 2, 0.05], ["pole", "drive_s", 0.5, 2, 0.05], ["pole", "recovery_s", 0.4, 1.6, 0.05],
   ["water", "splash_drops", 0, 40, 1], ["water", "splash_speed_mps", 0.5, 4, 0.1], ["water", "drips", 0, 12, 1],
   ["water", "puddle_m", 0.1, 0.8, 0.02], ["water", "puddle_s", 1, 8, 0.25], ["water", "puddle_spin_rps", 0, 2, 0.05],
 ];
 const fmt = v => Array.isArray(v) ? "(" + v.map(fmt).join(", ") + ")" : Number.isInteger(v) && Math.abs(v) < 1000 ? v.toFixed(1) : String(+v.toFixed(4));
 function ron() {
   const grp = g => g + ": (\n" + Object.entries(T[g]).map(([k, v]) => "    " + k + ": " + fmt(v) + ",").join("\n") + "\n),";
-  return ["oars", "stroke", "rower", "pole", "lamp", "water"].map(grp).join("\n");
+  return GROUPS.map(grp).join("\n");
 }
 
 // ---------------- the stroke schedule: one function, read by the force and by the drawing ----------------
@@ -64,9 +66,12 @@ function oarPose(t, dir, range, o) {
   const coil = a.coil_deg * D * E, foll = a.follow_deg * D * E, lead = clamp(T.rower.body_lead, 0, 0.9);
   let k, th, dip, fe, body, st;
   const e1 = s.reach_s, e2 = e1 + s.catch_s, e3 = e2 + s.drive_s, e4 = e3 + s.release_s;
+  // The handle's path is one loop: the catch's lift and the release's press each overlap the sweep a little (the
+  // blade starts moving aft as it buries and keeps moving as it lifts), so the hands go round a rounded D, never a
+  // square corner.
   if (t < e1) { k = t / s.reach_s; st = 0; th = C + coil * easeOut(k); dip = 0; fe = 1 - smooth(k); body = -0.08 * E * easeOut(k); }
-  else if (t < e2) { k = (t - e1) / s.catch_s; st = 1; th = C + coil * (1 - k * k); dip = easeIn(k); fe = 0; body = -0.08 * E * (1 - k); }
-  else if (t < e3) { k = (t - e2) / s.drive_s; st = 2; th = lerp(C, Rl, halfCos(k)); dip = 1; fe = 0; body = halfCos(k / (1 - lead)); }
+  else if (t < e2) { k = (t - e1) / s.catch_s; st = 1; th = C + coil * (1 - smooth(k)) - (C - Rl) * 0.04 * k * k; dip = easeIn(k) * 0.75 + 0.25 * k; fe = 0; body = -0.08 * E * (1 - k); }
+  else if (t < e3) { k = (t - e2) / s.drive_s; st = 2; th = lerp(C - (C - Rl) * 0.04, Rl, halfCos(k)); dip = 1; fe = 0; body = halfCos(k / (1 - lead)); }
   else if (t < e4) { k = (t - e3) / s.release_s; st = 3; th = Rl - foll * easeOut(k); dip = (1 - k) * (1 - k); fe = easeOut(k); body = 1; }
   else { k = (t - e4) / s.recovery_s; st = 4; th = lerp(Rl - foll, C, halfCos(k)); dip = 0; fe = 1; body = 1 - halfCos(k); }
   if (dir < 0) { th = C + Rl - th; body = 1 - body; }
@@ -74,27 +79,22 @@ function oarPose(t, dir, range, o) {
   return o;
 }
 // The oar in the raft's frame from a pose: the pin, the loom's direction, the handle end, the grip and the blade.
-function oarGeom(side, p, g) {
+// floorY: the bed under the blade, in the raft's frame (the blade comes to rest on it and pushes nothing off it).
+function oarGeom(side, p, g, floorY) {
   const a = T.oars, rb = a.length_m - a.inboard_m - 0.3;
-  const yb = lerp(a.blade_clear_m, -a.blade_depth_m, p.dip);
+  let yb = lerp(a.blade_clear_m, -a.blade_depth_m, p.dip);
+  g.onBed = floorY !== undefined && yb < floorY;
+  if (g.onBed) yb = floorY;
   const phi = Math.asin(clamp((a.pin[1] - yb) / rb, -0.95, 0.95));
   const ct = Math.cos(p.theta), stt = Math.sin(p.theta), cp = Math.cos(phi), sp = Math.sin(phi);
   g.pin = V3(a.pin[0], a.pin[1], side * a.pin[2]);
   g.dir = V3(stt * cp, -sp, side * ct * cp);                     // outboard along the loom
   g.handle = g.pin.clone().addScaledVector(g.dir, -a.inboard_m);
-  g.grip = g.pin.clone().addScaledVector(g.dir, -(a.inboard_m - 0.1));
+  g.grip = g.pin.clone().addScaledVector(g.dir, -(a.inboard_m - 0.12));
   g.blade = g.pin.clone().addScaledVector(g.dir, rb);
-  g.phi = phi;
+  g.yb = yb; g.phi = phi;
   g.feather = p.feather * a.feather_deg * D;
   return g;
-}
-
-// ---------------- the pole's schedule (proposed): planted on the bed through the drive ----------------
-const PSTAGES = ["Reach", "Plant", "Push", "Free", "Swing"];
-function polePeriod() { const p = T.pole; return p.reach_s + p.catch_s + p.drive_s + p.release_s + p.recovery_s; }
-function poleStage(t) {
-  const p = T.pole, e = [p.reach_s, p.catch_s, p.drive_s, p.release_s, p.recovery_s];
-  let a = 0; for (let i = 0; i < 5; i++) { if (t < a + e[i] || i === 4) return [i, c01((t - a) / e[i])]; a += e[i]; }
 }
 
 // ---------------- the arm: two bones, the elbow out and down ----------------
@@ -272,140 +272,121 @@ function limb(o, A, B, w) {
   o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.multiplyScalar(1 / Math.max(L, 1e-6)));
   o.scale.set(w, L, w);
 }
-function raftKit(U) {
+// The raft's own parts, in its frame (+x the bow, +z the right, y up from the waterline). One list, read by the
+// drawing and by the clearance check (`RC.Oarsman.clear`), so the two cannot disagree.
+const LOG_TOP = 0.21, LOG_EDGE = 1.21;
+function deckBoxes() {
+  const a = DEF.oars, s = DEF.rower.seat, top = a.pin[1] - 0.08;
+  return [
+    {name: "plank aft", c: [-1.5, 0.24, 0], h: [0.15, 0.04, 1.25]}, {name: "plank mid", c: [0, 0.24, 0], h: [0.15, 0.04, 1.25]}, {name: "plank fore", c: [1.5, 0.24, 0], h: [0.15, 0.04, 1.25]},
+    {name: "crate", c: [1.2, 0.53, 0.5], h: [0.35, 0.25, 0.3]}, {name: "lantern post", c: [1.95, 0.8, -0.95], h: [0.05, 0.55, 0.05]},
+    {name: "beam", c: [a.pin[0], 0.36, 0], h: [0.08, 0.06, 1.3]},
+    {name: "post left", c: [a.pin[0], (0.42 + top) / 2, -a.pin[2]], h: [0.07, (top - 0.42) / 2, 0.07]},
+    {name: "post right", c: [a.pin[0], (0.42 + top) / 2, a.pin[2]], h: [0.07, (top - 0.42) / 2, 0.07]},
+    {name: "bench", c: [s[0], 0.43, 0], h: [0.18, 0.15, 0.45]},
+  ];
+}
+function raftKit(U, withToday) {
   const g = new THREE.Group(), m = mat(U), lg = RC.logGeo(4.4, 0.25);
   for (let i = 0; i < 5; i++) g.add(mk(lg, m, 0, -0.04, -0.96 + i * 0.48));
-  const plank = RC.box(0.3, 0.08, 2.5, "planks");
-  for (const x of [-1.5, 0, 1.5]) g.add(mk(plank, m, x, 0.24, 0));
-  g.add(mk(RC.box(0.7, 0.5, 0.6, "crate"), m, 1.2, 0.53, 0.5));
-  g.add(mk(RC.box(0.1, 1.1, 0.1, "darkPlanks"), m, 1.95, 0.8, -0.95));
-  const lan = RC.lantern(U, 0.9); lan.position.set(1.95, 1.45, -0.95); g.add(lan);
-  // the rowing frame (proposed): a beam across on two blocks, a post and pin at each end, the bench aft
+  const tiles = {"plank aft": "planks", "plank mid": "planks", "plank fore": "planks", crate: "crate", "lantern post": "darkPlanks", beam: "darkPlanks", "post left": "darkPlanks", "post right": "darkPlanks", bench: "planks"};
   const frame = new THREE.Group(); g.add(frame);
-  frame.add(mk(RC.box(0.16, 0.12, 2.6, "darkPlanks"), m, DEF.oars.pin[0], 0.36, 0));
-  for (const s of [-1, 1]) {
-    frame.add(mk(RC.box(0.14, 0.3, 0.14, "darkPlanks"), m, DEF.oars.pin[0], 0.53, s * DEF.oars.pin[2]));
-    frame.add(mk(RC.box(0.04, 0.12, 0.04, "iron"), m, DEF.oars.pin[0], 0.7, s * DEF.oars.pin[2]));
+  for (const b of deckBoxes()) {
+    const o = mk(RC.box(b.h[0] * 2, b.h[1] * 2, b.h[2] * 2, tiles[b.name]), m, ...b.c);
+    (["beam", "post left", "post right", "bench"].includes(b.name) ? frame : g).add(o);
   }
-  frame.add(mk(RC.box(0.36, 0.3, 0.9, "planks"), m, DEF.rower.seat[0], 0.43, 0));
-  // the oars: a loom and a blade on a pivot at the pin
+  const lan = RC.lantern(U, 0.9); lan.position.set(1.95, 1.45, -0.95); g.add(lan);
+  // the oars: a loom and a blade on a pivot at the pin; a swivel oarlock (two iron horns either side of the loom,
+  // turning with its sweep) on each post, so the loom rides in the lock above the post, never through it
+  const iron = mat(U, 0x9a9a9a);
   const oars = [-1, 1].map(s => {
-    const p = new THREE.Group(); frame.add(p);
     const a = DEF.oars;
-    // the loom from the pin out, the handle (thinner, for the fist) from the pin in, a knob at its end
+    const lock = new THREE.Group(); lock.position.set(a.pin[0], a.pin[1], s * a.pin[2]); frame.add(lock);
+    lock.add(mk(RC.box(0.04, 0.05, 0.04, "iron"), iron, 0, -0.06, 0));
+    lock.add(mk(RC.box(0.03, 0.12, 0.022, "iron"), iron, 0, 0.0, 0.048));
+    lock.add(mk(RC.box(0.03, 0.12, 0.022, "iron"), iron, 0, 0.0, -0.048));
+    lock.add(mk(RC.box(0.03, 0.02, 0.118, "iron"), iron, 0, -0.04, 0));
+    const p = new THREE.Group(); frame.add(p);
     const loom = mk(RC.box(a.length_m - 0.55 - a.inboard_m, 0.06, 0.06, "planks"), m, 0, 0, 0); p.add(loom);
     const handle = mk(RC.box(a.inboard_m, 0.034, 0.034, "planks"), m, 0, 0, 0); p.add(handle);
     const bladeG = new THREE.Group(); p.add(bladeG);
     bladeG.add(mk(RC.box(0.62, 0.2, 0.035, "planks"), m, 0, 0, 0));
-    const grip = mk(RC.box(0.025, 0.05, 0.05, "darkPlanks"), m, 0, 0, 0); p.add(grip);
-    return {p, loom, handle, bladeG, grip, side: s};
+    const grip = mk(RC.box(0.02, 0.044, 0.044, "darkPlanks"), m, 0, 0, 0); p.add(grip);
+    return {p, lock, loom, handle, bladeG, grip, side: s};
   });
-  // the seated rower (proposed): hips on the bench, the body a pivot at the hip
+  // the seated rower: hips on the bench, feet braced on the frame's beam, the body a pivot at the hip. He faces the
+  // bow (the push stroke): his cap's peak and his nose point the way the raft goes, the back of his head is hair.
   const rower = new THREE.Group(); g.add(rower);
-  const cloth = mat(U, 0x8a5a3a), skin = mat(U, 0xd9a77c), dark = mat(U, 0x4a5368), hat = mat(U, 0x6b5638);
+  const cloth = mat(U, 0x8a5a3a), skin = mat(U, 0xd9a77c), dark = mat(U, 0x4a5368), hat = mat(U, 0x6b5638), hair = mat(U, 0x5a4030);
   const legs = new THREE.Group(); rower.add(legs);
-  for (const s of [-1, 1]) {
-    legs.add(mk(RC.box(0.46, 0.15, 0.15, "canvas"), dark, DEF.rower.seat[0] + 0.23, DEF.rower.seat[1] + 0.02, s * 0.11));
-    legs.add(mk(RC.box(0.14, 0.4, 0.14, "canvas"), dark, DEF.rower.seat[0] + 0.44, DEF.rower.seat[1] - 0.19, s * 0.11));
+  const thighs = [], shins = [], feet = [];
+  for (const s of [-1, 1]) { thighs.push(mk(UNIT, dark)); shins.push(mk(UNIT, dark)); feet.push(mk(RC.box(0.2, 0.08, 0.12, "canvas"), mat(U, 0x3a3026))); }
+  legs.add(...thighs, ...shins, ...feet);
+  const hip = new THREE.Group(); rower.add(hip);
+  const torso = mk(RC.box(0.26, 0.58, 0.42, "canvas"), cloth, 0, 0.32, 0); hip.add(torso);
+  const head = new THREE.Group(); head.position.set(0, 0.78, 0); hip.add(head);
+  head.add(mk(RC.box(0.26, 0.28, 0.26, "canvas"), skin, 0, 0, 0));
+  head.add(mk(RC.box(0.05, 0.22, 0.27, "canvas"), hair, -0.11, 0.02, 0));
+  head.add(mk(RC.box(0.04, 0.05, 0.05, "canvas"), skin, 0.145, -0.02, 0));
+  head.add(mk(RC.box(0.3, 0.07, 0.3, "canvas"), hat, -0.01, 0.17, 0));
+  head.add(mk(RC.box(0.14, 0.025, 0.26, "canvas"), hat, 0.2, 0.14, 0));
+  const arms = [0, 1].map(() => ({up: mk(UNIT, cloth), fore: mk(UNIT, cloth), hand: mk(RC.box(0.09, 0.09, 0.1, "canvas"), skin)}));
+  for (const a of arms) rower.add(a.up, a.fore, a.hand);
+  // today's poler (the game's, draw.rs): standing aft on the right, the pole hanging from his hand at the raft's edge,
+  // leaning on the held key. Version 4 stands him at the edge and hangs the pole just outboard of the logs, so it
+  // no longer runs down through the deck and his body; the lean and tilt are the game's.
+  let today = null, man = null, pivot = null;
+  if (withToday) {
+    today = new THREE.Group(); g.add(today);
+    man = RC.person(U, 0x7a6a3a); man.position.set(-0.7, LOG_TOP, 0.92); today.add(man);
+    pivot = new THREE.Group(); pivot.position.set(-0.55, 1.45, 1.3); today.add(pivot);
+    pivot.add(mk(RC.box(0.07, 4.6, 0.07, "planks"), m, 0, -1.4, 0));
   }
-  const hip = new THREE.Group(); hip.position.set(DEF.rower.seat[0], DEF.rower.seat[1], 0); rower.add(hip);
-  const torso = mk(RC.box(0.28, 0.58, 0.44, "canvas"), cloth, 0, 0.32, 0); hip.add(torso);
-  const head = mk(RC.box(0.28, 0.28, 0.28, "canvas"), skin, 0, 0.78, 0); hip.add(head);
-  const brim = mk(RC.box(0.36, 0.08, 0.36, "canvas"), hat, 0, 0.95, 0); hip.add(brim);
-  const arms = [0, 1].map(() => ({up: mk(UNIT, cloth), fore: mk(UNIT, cloth), hand: mk(RC.box(0.1, 0.1, 0.1, "canvas"), skin)}));
-  for (const a of arms) g.add(a.up, a.fore, a.hand);
-  // today's poler (the game's, draw.rs): standing aft, the pole on the right, leaning on the held key
-  const today = new THREE.Group(); g.add(today);
-  const man = RC.person(U, 0x7a6a3a); man.position.set(-0.7, 0.28, 0.35); today.add(man);
-  const pivot = new THREE.Group(); pivot.position.set(-0.55, 1.45, 0.62); today.add(pivot);
-  pivot.add(mk(RC.box(0.07, 4.6, 0.07, "planks"), m, 0, -1.4, 0));
-  // the proposed pole and its standing poler
-  const pg = new THREE.Group(); g.add(pg);
-  const poleMesh = mk(UNIT, mat(U, 0xb08a5a)); poleMesh.geometry = RC.box(1, 1, 1, "planks"); pg.add(poleMesh);
-  const poler = RC.person(U, 0x8a5a3a); pg.add(poler);
-  const parms = [0, 1].map(() => ({up: mk(UNIT, cloth), fore: mk(UNIT, cloth), hand: mk(RC.box(0.1, 0.1, 0.1, "canvas"), skin)}));
-  for (const a of parms) pg.add(a.up, a.fore, a.hand);
-  // first-person upper arms (the hand model brings the forearm)
-  const fpUp = [0, 1].map(() => { const o = mk(UNIT, mat(U, 0x4d6a8c)); o.frustumCulled = false; g.add(o); return o; });
-  g.userData = {lantern: lan, frame, oars, rower, legs, hip, torso, head, brim, arms, today, man, pivot, pg, poleMesh, poler, parms, fpUp};
+  g.userData = {lantern: lan, frame, oars, rower, legs, thighs, shins, feet, hip, torso, head, arms, today, man, pivot};
   return g;
 }
 
 // ======================================================================================================================
-RC.scenes.rowing = function () {
-  const half = () => 11;
-  const river = {x0: -100, x1: 210, z0: -40, z1: 40, center: x => 6 * Math.sin(x / 40), half,
-    depth: () => 2.7, U: () => 0.45, level0: 0.55, slope: 0.0005, steps: [],
-    rocks: [[30, 7.4], [95, -7.8], [150, 7.2]], bed: (x, z) => (Math.sin(x * 0.07) > 0.3 ? "gravel" : "sand")};
-  let ctx, R, raft, model, hands, handL, handR, drops, swirls, graph;
-  const inp = {up: false, down: false, left: false, right: false};
-  const S = {mode: "proposed", gear: "oars", view: "first", posing: false};
-  const look = {yaw: 0, pitch: -0.5};
-  // the oars' clock and each oar's state
+// RC.Oarsman: the raft kit and its stroke. opt.fp builds the first-person hands; opt.today the game's poler.
+RC.Oarsman = function (U, opt) {
+  opt = opt || {};
+  const model = raftKit(U, opt.today), ud = model.userData;
+  const hands = opt.fp ? handKit(U) : null, handL = hands && hands.make(), handR = hands && hands.make();
   const clock = {t: 0, running: false, dir: 1, strokes: []};
-  const oar = [{rowing: false, rest: {theta: 0, dip: 0, feather: 1, body: 0}, range: 1, pose: {}, last: null, g: {}},
-               {rowing: false, rest: {theta: 0, dip: 0, feather: 1, body: 0}, range: 1, pose: {}, last: null, g: {}}];   // [left, right]
-  // today's stroke (loon.rs): one at a time, alternating sides on W
-  const today = {stroke: null, lastSide: 1, strokes: []};
-  // the proposed pole
-  const pole = {t: 0, running: false, side: 1, planted: null, tooDeep: false, strokes: []};
-  let body = 0, bodyV = 0, stageName = "", speedHist = [];
-  const acts = {};
-  const keyHeld = id => acts[id] && acts[id].down;
-
+  const mkOar = () => ({rowing: false, rest: {}, range: 1, pose: {}, last: null, g: {}, floor: undefined});
+  const oar = [mkOar(), mkOar()];   // [left, right]
+  const me = {model, hands, handL, handR, clock, oar, body: 0, stage: "Resting", lean: 0, onBed: false};
+  let bodyV = 0;
   function restPose(o) { o.theta = T.oars.catch_deg * D; o.dip = 0; o.feather = 1; o.body = 0; o.stage = -1; return o; }
-  function resetState() {
+  me.reset = () => {
     clock.t = 0; clock.running = false; clock.strokes = [];
-    for (const o of oar) { o.rowing = false; restPose(o.rest); Object.assign(o.pose, o.rest); o.last = null; o.range = 1; }
-    today.stroke = null; today.strokes = []; pole.t = 0; pole.running = false; pole.planted = null; pole.strokes = [];
-    body = 0; bodyV = 0; speedHist = [];
-    if (drops) drops.clear(); if (swirls) swirls.clear();
-  }
-
-  // which oars the keys ask for: [left, right], and the stroke's way
-  function wanted() {
-    const W = inp.up, Sb = inp.down, A = inp.left, Dd = inp.right, Q = keyHeld("qoar"), E = keyHeld("eoar");
-    const l = W || Sb || Dd || Q, r = W || Sb || A || E;
-    return {l, r, dir: Sb && !W ? -1 : 1, rangeL: W && A ? 1 - T.oars.turn_share : 1, rangeR: W && Dd ? 1 - T.oars.turn_share : 1};
-  }
-
-  // ---- the water's answer to a blade, in the world
-  function bladeWorld(g) { return [raft.wx(g.blade.x, g.blade.z), raft.y + g.blade.y, raft.wz(g.blade.x, g.blade.z)]; }
-  function splash(x, z, n, sp, side) {
-    const y = R.surf(x, z);
-    const ox = -Math.sin(raft.yaw) * side, oz = Math.cos(raft.yaw) * side;   // outboard
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, u = 0.35 + 0.65 * Math.random();
-      drops.spawn(x + Math.cos(a) * 0.12, y + 0.02, z + Math.sin(a) * 0.12,
-        (Math.cos(a) * 0.5 + ox * 0.4) * sp * u, sp * (0.55 + 0.6 * Math.random()), (Math.sin(a) * 0.5 + oz * 0.4) * sp * u, 1.2, 0.028 + 0.02 * Math.random());
-    }
-    for (let i = 0; i < 6; i++) drops.spawn(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4, 0, 0, 0, 0.8 + Math.random() * 0.6, 0.035, 1);
-  }
-  function puddles(g, side) {
-    const w = T.water, [x, , z] = bladeWorld(g);
-    // the blade's two edges, along the loom: one swirl each, turning opposite ways
-    const ex = g.dir.x, ez = g.dir.z, c = Math.cos(raft.yaw), s = Math.sin(raft.yaw);
-    const wx = ex * c - ez * s, wz = ex * s + ez * c, Lh = Math.hypot(wx, wz) || 1;
-    for (const k of [-1, 1]) swirls.spawn(x + wx / Lh * 0.32 * k, z + wz / Lh * 0.32 * k, w.puddle_m, k * side, w.puddle_s, w.puddle_spin_rps);
-  }
-
-  // ---- one physics step
-  function stepOars(h) {
-    const want = wanted(), P = period();
-    if (!clock.running && (want.l || want.r)) { clock.running = true; clock.t = 0; clock.dir = want.dir; oar[0].rowing = want.l; oar[1].rowing = want.r; oar[0].range = want.rangeL; oar[1].range = want.rangeR; clock.strokes.push(ctx.S.simT); }
+    for (let i = 0; i < 2; i++) { const o = oar[i]; o.rowing = false; restPose(o.rest); Object.assign(o.pose, o.rest); o.last = null; o.range = 1; o.floor = undefined; oarGeom(i ? 1 : -1, o.pose, o.g); }
+    me.body = 0; bodyV = 0; me.onBed = false;
+  };
+  // which oars the keys ask for: W both, S back both, A the right oar (turn left), D the left (turn right), Q E one oar
+  me.wanted = (inp, Q, E) => {
+    const W = inp.up, Sb = inp.down, A = inp.left, Dd = inp.right;
+    return {l: W || Sb || Dd || !!Q, r: W || Sb || A || !!E, dir: Sb && !W ? -1 : 1,
+      rangeL: W && A ? 1 - T.oars.turn_share : 1, rangeR: W && Dd ? 1 - T.oars.turn_share : 1};
+  };
+  // One physics step. fx (optional) draws the water's answer: fx.catch(g, side), fx.release(g, side), fx.wash(g), fx.drip(g).
+  me.step = (h, raft, R, want, fx, simT) => {
+    const P = period();
+    if (!clock.running && (want.l || want.r)) { clock.running = true; clock.t = 0; clock.dir = want.dir; oar[0].rowing = want.l; oar[1].rowing = want.r; oar[0].range = want.rangeL; oar[1].range = want.rangeR; clock.strokes.push(simT); }
     if (clock.running) {
       const t0 = clock.t; clock.t += h;
       const s = T.stroke, eCatch = s.reach_s + s.catch_s, eRel = eCatch + s.drive_s + s.release_s * 0.45;
       for (let i = 0; i < 2; i++) {
-        const o = oar[i]; if (!o.rowing) continue;
-        if (t0 < eCatch && clock.t >= eCatch) splash(...(() => { const [x, , z] = bladeWorld(o.g); return [x, z]; })(), T.water.splash_drops, T.water.splash_speed_mps, i ? 1 : -1);
-        if (t0 < eRel && clock.t >= eRel) puddles(o.g, i ? 1 : -1);
-        if (clock.t > eCatch && clock.t < eCatch + s.drive_s && Math.random() < h * 22) { const [x, , z] = bladeWorld(o.g); drops.spawn(x, R.surf(x, z) + 0.02, z, (Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.6, (Math.random() - 0.5) * 0.6, 0.6, 0.026); }
-        if (clock.t > eRel && Math.random() < h * T.water.drips / Math.max(0.2, s.recovery_s)) { const [x, y, z] = bladeWorld(o.g); drops.spawn(x, y - 0.1, z, 0, -0.2, 0, 1.2, 0.02); }
+        const o = oar[i]; if (!o.rowing || !fx) continue;
+        const side = i ? 1 : -1;
+        if (t0 < eCatch && clock.t >= eCatch && !o.g.onBed) fx.catch(o.g, side);
+        if (t0 < eRel && clock.t >= eRel) fx.release(o.g, side);
+        if (clock.t > eCatch && clock.t < eCatch + s.drive_s && Math.random() < h * 22) fx.wash(o.g);
+        if (clock.t > eRel && Math.random() < h * T.water.drips / Math.max(0.2, s.recovery_s)) fx.drip(o.g);
       }
       if (clock.t >= P) {
         clock.t -= P;
-        if (want.l || want.r) { clock.dir = want.dir; clock.strokes.push(ctx.S.simT); }
+        if (want.l || want.r) { clock.dir = want.dir; clock.strokes.push(simT); }
         for (let i = 0; i < 2; i++) {
           const o = oar[i], w = i ? want.r : want.l;
           if (o.rowing && !w) Object.assign(o.rest, o.pose);   // it finishes and rests where it ended: no snap
@@ -414,7 +395,7 @@ RC.scenes.rowing = function () {
         if (!want.l && !want.r) { clock.running = false; clock.t = 0; }
       }
     }
-    // each oar's pose: the schedule while it rows; a spring to the reach pose while it rests
+    me.onBed = false;
     for (let i = 0; i < 2; i++) {
       const o = oar[i], side = i ? 1 : -1;
       if (o.rowing && clock.running) {
@@ -426,11 +407,18 @@ RC.scenes.rowing = function () {
         for (const key of ["theta", "dip", "feather"]) r[key] += (tgt[key] - r[key]) * k;
         Object.assign(o.pose, r); o.pose.stage = -1; o.pose.body = 0;
       }
+      // the bed under the blade (from last step's blade): in shallows the blade comes to rest on it, a bump, and
+      // pushes nothing off it; the push is only ever the blade's drag through the water above the bed
+      if (o.g.blade) {
+        const bx = raft.wx(o.g.blade.x, o.g.blade.z), bz = raft.wz(o.g.blade.x, o.g.blade.z);
+        o.floor = R.top(bx, bz) - raft.y + T.oars.bed_clear_m;
+      }
       const prev = o.last ? o.g.blade.clone() : null;
-      oarGeom(side, o.pose, o.g);
+      oarGeom(side, o.pose, o.g, o.floor);
+      if (o.g.onBed && o.pose.dip > 0.3) me.onBed = true;
       // the blade's drag through the water, at the blade (loon.rs's law against the water)
       if (prev) {
-        const yb = o.g.blade.y, share = c01((0.12 - yb) / 0.24);
+        const yb = o.g.blade.y, share = c01((0.12 - yb) / 0.24) * c01((o.g.yb - (o.floor - T.oars.bed_clear_m)) / 0.2 + 0.0);
         if (share > 0) {
           const lvx = (o.g.blade.x - prev.x) / h, lvz = (o.g.blade.z - prev.z) / h, c = Math.cos(raft.yaw), s = Math.sin(raft.yaw);
           const px = raft.wx(o.g.blade.x, o.g.blade.z), pz = raft.wz(o.g.blade.x, o.g.blade.z);
@@ -445,12 +433,126 @@ RC.scenes.rowing = function () {
     // the body: the rowing oars' body share, else back to upright
     const rowingPose = oar.find(o => o.rowing && clock.running);
     const target = rowingPose ? rowingPose.pose.body : 0;
-    if (rowingPose) { body = target; bodyV = 0; } else { bodyV += ((target - body) * 60 - bodyV * 14) * h; body += bodyV * h; }
+    if (rowingPose) { me.body = target; bodyV = 0; } else { bodyV += ((target - me.body) * 60 - bodyV * 14) * h; me.body += bodyV * h; }
     const st = rowingPose ? rowingPose.pose.stage : -1;
-    stageName = st >= 0 ? STAGES[st] : "Resting";
-    // the drive's surge kicks the bow a little
+    me.stage = st >= 0 ? STAGES[st] : "Resting";
     if (rowingPose && st === 1) raft.vp -= 0.02 * h * 60 * (oar[0].rowing && oar[1].rowing ? 1 : 0.5);
+  };
+  // Show poses: freeze both oars on keyed pose i (0 the coiled reach .. 4 mid-recovery)
+  me.KEYS = ["Reach (coiled)", "Catch", "Mid-drive", "Release", "Mid-recovery"];
+  me.posed = i => {
+    const s = T.stroke, keys = [s.reach_s * 0.99, s.reach_s + s.catch_s * 0.99, s.reach_s + s.catch_s + s.drive_s * 0.5,
+      s.reach_s + s.catch_s + s.drive_s + s.release_s * 0.99, period() - s.recovery_s * 0.5];
+    for (let j = 0; j < 2; j++) { oarPose(keys[i], 1, 1, oar[j].pose); oarGeom(j ? 1 : -1, oar[j].pose, oar[j].g, oar[j].floor); }
+    me.body = oar[0].pose.body; me.stage = me.KEYS[i];
+  };
+  me.leanOf = body => T.stroke.exaggerate * lerp(T.rower.lean_catch_deg, T.rower.lean_release_deg, body) * D;
+  // The drawing. fp: first person (the M36 hands on the handles, no body); otherwise the blocky rower's own arms.
+  // Every part is drawn in exactly one view: the hands only in first person, the body and its arms only in third.
+  me.sync = (fp, showRower) => {
+    for (let i = 0; i < 2; i++) { if (!oar[i].g.pin) oarGeom(i ? 1 : -1, oar[i].pose, oar[i].g, oar[i].floor); placeOar(ud.oars[i], oar[i].g); }
+    const r = T.rower, lean = me.leanOf(me.body);
+    me.lean = lean;
+    ud.rower.visible = showRower !== false;
+    const bodyOn = ud.rower.visible && !fp;
+    for (const k of ["legs", "hip"]) ud[k].visible = bodyOn;
+    ud.hip.position.set(r.seat[0], r.seat[1], 0); ud.hip.rotation.set(0, 0, -lean);
+    // legs: hip to knee to the foot braced on the beam's aft face
+    for (let i = 0; i < 2; i++) {
+      const s = i ? 1 : -1, H = V3(r.seat[0] + 0.04, r.seat[1] + 0.06, s * 0.11), K = V3(r.seat[0] + 0.33, r.seat[1] + 0.05, s * 0.12);
+      const F = V3(DEF.oars.pin[0] - 0.08 - 0.11, 0.33, s * 0.12);
+      limb(ud.thighs[i], H, K, 0.15); limb(ud.shins[i], K, F, 0.13); ud.feet[i].position.set(F.x, F.y, F.z);
+    }
+    for (let i = 0; i < 2; i++) {
+      const side = i ? 1 : -1, g = oar[i].g, Sh = shoulders(lean, side);
+      const El = elbowOf(Sh, g.grip, r.upper_arm_m, r.forearm_m, V3(-0.2, -1, side * 0.9));
+      const a = ud.arms[i];
+      for (const k of ["up", "fore", "hand"]) a[k].visible = bodyOn;
+      limb(a.up, Sh, El, 0.11); limb(a.fore, El, g.grip, 0.1);
+      // the block hand wraps the handle at the grip, along the loom
+      a.hand.position.copy(g.grip); a.hand.quaternion.setFromUnitVectors(V3(0, 0, 1), V3(g.dir.x, g.dir.y, g.dir.z).multiplyScalar(side));
+      if (hands) hands.place(i ? handR : handL, side, g.grip, g.dir.clone(), El);
+    }
+    if (hands) handL.visible = handR.visible = !!fp && ud.rower.visible;
+    return lean;
+  };
+  // after the model's world matrix is current: the hands ride the raft (their matrices are in its frame)
+  me.after = () => { if (hands && handL.visible) for (const m of [handL, handR]) { m.matrix.premultiply(model.matrixWorld); m.matrixWorldNeedsUpdate = true; } };
+  me.eye = () => {
+    const r = T.rower, lean = me.lean, base = V3(r.seat[0], r.seat[1] + 0.74, 0), c = Math.cos(lean), s = Math.sin(lean);
+    const full = V3(r.seat[0] + s * 0.74, r.seat[1] + c * 0.74, 0);
+    return base.lerp(full, r.head_follow * T.stroke.exaggerate).add(V3(0.1, 0, 0));
+  };
+  me.reset();
+  return me;
+};
+const _Y = new THREE.Vector3(0, 1, 0), _Z = new THREE.Vector3(0, 0, 1);
+function placeOar(o, g) {
+  const u = o.p;
+  u.position.copy(g.pin);
+  // the loom along +x of the pivot: yaw about y, then droop
+  const dirH = Math.hypot(g.dir.x, g.dir.z), yaw = Math.atan2(-g.dir.z, g.dir.x);
+  u.quaternion.setFromAxisAngle(_Y, yaw);
+  u.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(_Z, Math.atan2(g.dir.y, dirH)));
+  o.lock.quaternion.setFromAxisAngle(_Y, yaw);
+  const a = T.oars, rb = a.length_m - a.inboard_m - 0.3;
+  o.loom.position.set((a.length_m - 0.55 - a.inboard_m) / 2, 0, 0);
+  o.handle.position.set(-a.inboard_m / 2, 0, 0);
+  o.bladeG.position.set(rb, 0, 0); o.bladeG.rotation.set(o.side * g.feather, 0, 0);
+  o.grip.position.set(-a.inboard_m + 0.01, 0, 0);
+}
+function shoulders(lean, side) {
+  const r = T.rower, s = r.seat, c = Math.cos(lean), sn = Math.sin(lean);
+  return V3(s[0] + sn * r.shoulder_m, s[1] + c * r.shoulder_m, side * r.shoulder_half_m);
+}
+// for the clearance check (a measurement, run from the screenshot script)
+RC.ROW = {T, DEF, oarPose, oarGeom, period, shoulders, elbowOf, deckBoxes, LOG_TOP, LOG_EDGE};
+
+// ======================================================================================================================
+RC.scenes.rowing = function () {
+  const half = () => 11;
+  const river = {x0: -100, x1: 210, z0: -40, z1: 40, center: x => 6 * Math.sin(x / 40), half,
+    depth: () => 2.7, U: () => 0.45, level0: 0.55, slope: 0.0005, steps: [],
+    rocks: [[30, 7.4], [95, -7.8], [150, 7.2]], bed: (x, z) => (Math.sin(x * 0.07) > 0.3 ? "gravel" : "sand")};
+  let ctx, R, raft, crew, model, drops, swirls, graph;
+  const inp = {up: false, down: false, left: false, right: false};
+  const S = {mode: "proposed", view: "first", posing: false};
+  const look = {yaw: 0, pitch: -0.72};
+  // today's stroke (loon.rs): one at a time, alternating sides on W
+  const today = {stroke: null, lastSide: 1, strokes: []};
+  let stageName = "", speedHist = [];
+  const acts = {};
+  const keyHeld = id => acts[id] && acts[id].down;
+
+  function resetState() {
+    crew.reset(); today.stroke = null; today.strokes = []; speedHist = [];
+    if (drops) drops.clear(); if (swirls) swirls.clear();
   }
+
+  // ---- the water's answer to a blade, in the world
+  function bladeWorld(g) { return [raft.wx(g.blade.x, g.blade.z), raft.y + g.blade.y, raft.wz(g.blade.x, g.blade.z)]; }
+  function splash(x, z, n, sp, side) {
+    const y = R.surf(x, z);
+    const ox = -Math.sin(raft.yaw) * side, oz = Math.cos(raft.yaw) * side;   // outboard
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, u = 0.35 + 0.65 * Math.random();
+      drops.spawn(x + Math.cos(a) * 0.12, y + 0.02, z + Math.sin(a) * 0.12,
+        (Math.cos(a) * 0.5 + ox * 0.4) * sp * u, sp * (0.55 + 0.6 * Math.random()), (Math.sin(a) * 0.5 + oz * 0.4) * sp * u, 1.2, 0.028 + 0.02 * Math.random());
+    }
+    for (let i = 0; i < 6; i++) drops.spawn(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4, 0, 0, 0, 0.8 + Math.random() * 0.6, 0.035, 1);
+  }
+  const fx = {
+    catch(g, side) { const [x, , z] = bladeWorld(g); splash(x, z, T.water.splash_drops, T.water.splash_speed_mps, side); },
+    release(g, side) {
+      const w = T.water, [x, , z] = bladeWorld(g);
+      // the blade's two edges, along the loom: one swirl each, turning opposite ways
+      const ex = g.dir.x, ez = g.dir.z, c = Math.cos(raft.yaw), s = Math.sin(raft.yaw);
+      const wx = ex * c - ez * s, wz = ex * s + ez * c, Lh = Math.hypot(wx, wz) || 1;
+      for (const k of [-1, 1]) swirls.spawn(x + wx / Lh * 0.32 * k, z + wz / Lh * 0.32 * k, w.puddle_m, k * side, w.puddle_s, w.puddle_spin_rps);
+    },
+    wash(g) { const [x, , z] = bladeWorld(g); drops.spawn(x, R.surf(x, z) + 0.02, z, (Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.6, (Math.random() - 0.5) * 0.6, 0.6, 0.026); },
+    drip(g) { const [x, y, z] = bladeWorld(g); drops.spawn(x, y - 0.1, z, 0, -0.2, 0, 1.2, 0.02); },
+  };
 
   function stepToday(h) {
     // loon.rs: the stroke begun when the last has recovered and a key is held
@@ -475,114 +577,6 @@ RC.scenes.rowing = function () {
     }
   }
 
-  function stepPole(h) {
-    const P = polePeriod(), pp = T.pole;
-    if (inp.left) pole.want = 1; else if (inp.right) pole.want = -1;
-    const want = inp.up || inp.down || inp.left || inp.right;
-    if (!pole.running && want) { pole.running = true; pole.t = 0; pole.side = pole.want || pole.side; pole.dir = inp.down && !inp.up ? -1 : 1; pole.strokes.push(ctx.S.simT); }
-    if (pole.running) {
-      const t0 = pole.t; pole.t += h;
-      const ePlant = pp.reach_s + pp.catch_s, eFree = ePlant + pp.drive_s;
-      if (t0 < ePlant && pole.t >= ePlant) {
-        const lx = pole.dir > 0 ? pp.plant_ahead_m : -0.6, lz = pole.side * pp.side_m;
-        const x = raft.wx(lx, lz), z = raft.wz(lx, lz), depth = R.surf(x, z) - R.top(x, z);
-        pole.tooDeep = depth > pp.reach_m;
-        pole.planted = pole.tooDeep ? null : {x, z, y: R.top(x, z)};
-        if (pole.planted) splash(x, z, Math.round(T.water.splash_drops * 0.6), T.water.splash_speed_mps * 0.7, pole.side);
-      }
-      if (t0 < eFree && pole.t >= eFree && pole.planted) { swirls.spawn(pole.planted.x, pole.planted.z, T.water.puddle_m * 0.8, pole.side, T.water.puddle_s, T.water.puddle_spin_rps); pole.planted = null; }
-      // the push: today's law against the ground, at the planted tip, while it is planted
-      if (pole.planted && pole.t > ePlant && pole.t < eFree) {
-        const u = (pole.t - ePlant) / pp.drive_s, speed = pole.dir * 1.6 / pp.drive_s * Math.PI / 2 * Math.sin(Math.PI * u);
-        const px = pole.planted.x, pz = pole.planted.z; raft.pv(px, pz, PV);
-        const c = Math.cos(raft.yaw), s = Math.sin(raft.yaw), rx = PV[0] - speed * c, rz = PV[1] - speed * s, rl = Math.hypot(rx, rz);
-        const k = -0.5 * RHO * pp.blade_cd * pp.blade_m2 * rl; raft.force(px, pz, k * rx, k * rz);
-        // let go if the raft has run past the tip
-        const lx = (px - raft.x) * c + (pz - raft.z) * s; if (lx < -1.9) pole.planted = null;
-      }
-      if (pole.t >= P) { pole.t -= P; if (want) { pole.side = pole.want || pole.side; pole.dir = inp.down && !inp.up ? -1 : 1; pole.strokes.push(ctx.S.simT); } else { pole.running = false; pole.t = 0; } }
-    }
-    const [st] = poleStage(pole.t);
-    stageName = pole.running ? PSTAGES[st] : "Resting";
-  }
-
-  // ---- drawing: the oars and the arms from the poses; the poles; the camera
-  const _a = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
-  function placeOar(o, g) {
-    const u = o.p;
-    u.position.copy(g.pin);
-    // the loom along +x of the pivot: yaw about y, then droop
-    const dirH = Math.hypot(g.dir.x, g.dir.z);
-    const yaw = Math.atan2(-g.dir.z, g.dir.x);
-    u.rotation.set(0, 0, 0); u.quaternion.setFromAxisAngle(Y, yaw);
-    u.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(g.dir.y, dirH)));
-    const a = T.oars, rb = a.length_m - a.inboard_m - 0.3;
-    o.loom.position.set((a.length_m - 0.55 - a.inboard_m) / 2, 0, 0);
-    o.handle.position.set(-a.inboard_m / 2, 0, 0);
-    o.bladeG.position.set(rb, 0, 0); o.bladeG.rotation.set(o.side * g.feather, 0, 0);
-    o.grip.position.set(-a.inboard_m + 0.0125, 0, 0);
-  }
-  function shoulders(lean, side) {
-    const r = T.rower, s = r.seat, c = Math.cos(lean), sn = Math.sin(lean);
-    return V3(s[0] + sn * r.shoulder_m, s[1] + c * r.shoulder_m, side * r.shoulder_half_m);
-  }
-  function syncRower(ud) {
-    const r = T.rower, E = T.stroke.exaggerate;
-    const lean = E * lerp(r.lean_catch_deg, r.lean_release_deg, body) * D;
-    ud.hip.rotation.set(0, 0, -lean);
-    const fore = (hands && hands.reach) ? hands.reach * r.hand_scale_m : 0.3;
-    for (let i = 0; i < 2; i++) {
-      const side = i ? 1 : -1, g = oar[i].g, Sh = shoulders(lean, side);
-      const El = elbowOf(Sh, g.grip, r.upper_arm_m, Math.max(0.24, fore), V3(-0.2, -1, side * 0.9));
-      const a = ud.arms[i];
-      limb(a.up, Sh, El, 0.11); limb(a.fore, El, g.grip, 0.1); a.hand.position.copy(g.grip);
-      ud.fpUp[i].visible = false;   // first person draws the hand and forearm only, as M36
-      limb(ud.fpUp[i], Sh, El, 0.1);
-      if (hands) {
-        const m = i ? handR : handL, Hw = g.dir.clone();   // index to little finger: outboard along the loom
-        hands.place(m, side, g.grip, Hw, El);
-      }
-    }
-    return lean;
-  }
-  function syncPole(ud) {
-    const pp = T.pole, side = pole.side, [st, k] = poleStage(pole.t);
-    const stand = V3(-0.25, 0.28, side * 0.7);
-    ud.poler.position.copy(stand); ud.poler.rotation.set(0, side > 0 ? -0.35 : 0.35, 0);
-    // the low hand's path in the raft: high and forward at the plant, low and back at the end of the push
-    const hiH = V3(0.1, 1.38, side * 0.95), loH = V3(-0.6, 0.95, side * 1.0);
-    const toLocal = (x, y, z) => { const dx = x - raft.x, dz = z - raft.z, c = Math.cos(raft.yaw), s = Math.sin(raft.yaw); return V3(dx * c + dz * s, y - raft.y, -dx * s + dz * c); };
-    const ahead = V3((pole.dir || 1) > 0 ? pp.plant_ahead_m + 0.25 : -0.4, 0.55, side * pp.side_m);
-    let tip, hand;
-    if (!pole.running) { tip = V3(0.5, 0.35, side * 1.2); hand = hiH.clone(); }
-    else if (st === 0) { tip = V3(0.5, 0.35, side * 1.2).lerp(ahead, smooth(k)); hand = hiH.clone(); }
-    else if (st === 1) {
-      const bed = pole.planted ? toLocal(pole.planted.x, pole.planted.y, pole.planted.z) : V3(ahead.x - 0.15, -pp.reach_m, ahead.z);
-      tip = ahead.clone().lerp(bed, easeIn(k)); hand = hiH.clone().add(V3(0.05, -0.1 * easeIn(k), 0));
-    }
-    else if (st === 2) {
-      tip = pole.planted ? toLocal(pole.planted.x, pole.planted.y, pole.planted.z) : V3(ahead.x - 0.15, -pp.reach_m, ahead.z).lerp(V3(-1.2, -pp.reach_m, side * pp.side_m), k);
-      hand = hiH.clone().lerp(loH, halfCos(k));
-    }
-    else if (st === 3) { const from = V3(-1.3, -1.2, side * pp.side_m); tip = from.lerp(V3(-1.3, 0.3, side * pp.side_m), easeOut(k)); hand = loH.clone().add(V3(0, 0.15 * easeOut(k), 0)); }
-    else { const from = V3(-1.3, 0.3, side * pp.side_m); tip = from.lerp(V3(0.5, 0.35, side * 1.2), halfCos(k)); tip.y += 0.6 * Math.sin(Math.PI * k); hand = loH.clone().add(V3(0, 0.15, 0)).lerp(hiH, halfCos(k)); }
-    const dir = hand.clone().sub(tip); const len = dir.length(); dir.normalize();
-    const top = tip.clone().addScaledVector(dir, pp.length_m);
-    limb(ud.poleMesh, tip, top, 0.07);
-    const hand2 = hand.clone().addScaledVector(dir, 0.6);
-    const lean = st === 2 ? 0.35 * Math.sin(Math.PI * k) : 0.1;
-    const sh = [V3(stand.x + 0.1 + lean * 0.3, 1.45 - lean * 0.08, stand.z - side * 0.19), V3(stand.x + 0.1 + lean * 0.3, 1.45 - lean * 0.08, stand.z + side * 0.19)];
-    // the near hand low on the pole, the far one above it
-    const hs = [hand2, hand];
-    for (let i = 0; i < 2; i++) {
-      const El = elbowOf(sh[i], hs[i], 0.3, 0.3, V3(-0.3, -1, side * (i ? 1 : -1)));
-      const a = ud.parms[i]; limb(a.up, sh[i], El, 0.11); limb(a.fore, El, hs[i], 0.1); a.hand.position.copy(hs[i]);
-      if (hands && (S.view === "first" || S.debugHands)) hands.place(i ? handR : handL, i ? 1 : -1, hs[i], dir.clone().multiplyScalar(i ? 1 : -1), El);
-    }
-    ud.poler.userData.eye = V3(stand.x + 0.12 + lean * 0.35, 1.72 - lean * 0.1, stand.z);
-    void len;
-  }
-
   const def = {
     river, posts: [[-62, -1], [-24, 1], [14, -1], [52, 1], [90, -1]], followDefault: true,
     home: {yaw: 0.9, pitch: -0.36, dist: 10},
@@ -590,8 +584,7 @@ RC.scenes.rowing = function () {
     build(c) {
       ctx = c; R = c.river;
       raft = new RC.Hull({L: 4.4, B: 2.4, m: 1280, draft: 0.3, cA: 420, cS: 1100, nx: 3, nz: 3});
-      model = raftKit(c.U); c.scene.add(model);
-      hands = handKit(c.U); handL = hands.make(); handR = hands.make(); c.scene.add(handL, handR);
+      crew = RC.Oarsman(c.U, {fp: true, today: true}); model = crew.model; c.scene.add(model, crew.handL, crew.handR);
       drops = Drops(c.U, 260); c.scene.add(drops.mesh);
       swirls = Swirls(c.U, 28, c.scene);
       graph = document.getElementById("surge");
@@ -604,7 +597,8 @@ RC.scenes.rowing = function () {
     step(h) {
       if (S.posing) return;
       raft.water(R);
-      if (S.mode === "today") stepToday(h); else if (S.gear === "oars") stepOars(h); else stepPole(h);
+      if (S.mode === "today") stepToday(h);
+      else { crew.step(h, raft, R, crew.wanted(inp, keyHeld("qoar"), keyHeld("eoar")), fx, ctx.S.simT); stageName = crew.stage; }
       raft.integrate(h, R); raft.terrain(R);
       drops.step(h, R); swirls.step(h, R);
       if (raft.x > R.cfg.x1 - 8) def.reset();
@@ -613,54 +607,30 @@ RC.scenes.rowing = function () {
       if (Math.round(ctx.S.simT * 120) % 6 === 0) { speedHist.push((raft.vx - OUT[0]) * c + (raft.vz - OUT[1]) * s); if (speedHist.length > 120) speedHist.shift(); }
     },
     sync() {
-      const ud = model.userData;
+      const ud = model.userData, fp = S.view === "first", proposed = S.mode === "proposed";
       // Show poses: freeze on each keyed pose in turn (both oars, forward)
-      if (S.posing && S.mode === "proposed" && S.gear === "oars") {
-        const s = T.stroke, keys = [s.reach_s * 0.99, s.reach_s + s.catch_s * 0.99, s.reach_s + s.catch_s + s.drive_s * 0.5,
-          s.reach_s + s.catch_s + s.drive_s + s.release_s * 0.99, period() - s.recovery_s * 0.5];
-        const i = Math.floor(performance.now() / 1300) % keys.length;
-        for (let j = 0; j < 2; j++) { oarPose(keys[i], 1, 1, oar[j].pose); oarGeom(j ? 1 : -1, oar[j].pose, oar[j].g); }
-        body = oar[0].pose.body; stageName = ["Reach (coiled)", "Catch", "Mid-drive", "Release", "Mid-recovery"][i];
-      } else if (S.mode === "proposed" && S.gear === "oars") { for (let j = 0; j < 2; j++) oarGeom(j ? 1 : -1, oar[j].pose, oar[j].g); }
+      if (S.posing && proposed) { crew.posed(Math.floor(performance.now() / 1300) % 5); stageName = crew.stage; }
       RC.placeHull(model, raft);
-      const proposedOars = S.mode === "proposed" && S.gear === "oars", proposedPole = S.mode === "proposed" && S.gear === "pole", fp = S.view === "first";
-      ud.frame.visible = S.mode === "proposed";
-      for (const o of ud.oars) o.p.visible = proposedOars;
-      ud.rower.visible = proposedOars; ud.today.visible = S.mode === "today"; ud.pg.visible = proposedPole;
-      for (const a of ud.arms) for (const k of ["up", "fore", "hand"]) a[k].visible = proposedOars && !fp;
-      for (const a of ud.parms) for (const k of ["up", "fore", "hand"]) a[k].visible = proposedPole && !fp;
-      for (const k of ["torso", "head", "brim", "legs"]) ud[k].visible = !fp;
-      ud.man.visible = !fp; ud.poler.visible = !fp;
-      let lean = 0;
-      if (proposedOars) { for (let i = 0; i < 2; i++) placeOar(ud.oars[i], oar[i].g); lean = syncRower(ud); }
-      if (proposedPole) syncPole(ud);
-      handL.visible = handR.visible = (fp || S.debugHands) && S.mode === "proposed";
-      if (S.mode === "today") {
-        // today's pole (draw.rs `pole`): set from the held keys, in one frame
+      ud.frame.visible = proposed;
+      for (const o of ud.oars) o.p.visible = proposed;
+      ud.today.visible = !proposed; ud.man.visible = !proposed && !fp;
+      def._lean = crew.sync(fp, proposed);
+      if (!proposed) {
+        // today's pole (draw.rs `pole`): set from the held keys, in one frame. The side tilt is drawn outboard for
+        // either key: tilted inboard (as the game does on one of them) it runs through the deck.
         const f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), t = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-        ud.pivot.rotation.set(t * 0.35, 0, f ? -0.5 * f : 0.12);
+        ud.pivot.rotation.set(-Math.abs(t) * 0.35, 0, f ? -0.5 * f : 0.12);
       }
       model.updateMatrixWorld(true);
-      // the hands ride the raft: their matrices are in its frame
-      if (handL.visible) { for (const m of [handL, handR]) { m.matrix.premultiply(model.matrixWorld); m.matrixWorldNeedsUpdate = true; } }
-      def._lean = lean;
-      if (S.mode === "today") { const u = ud.lantern.userData; u.glass.color.set(ctx.S.night ? 0xffd28a : 0x3a3226); u.glow.visible = ctx.S.night; }
+      crew.after();
+      if (!proposed) { const u = ud.lantern.userData; u.glass.color.set(ctx.S.night ? 0xffd28a : 0x3a3226); u.glow.visible = ctx.S.night; }
       drops.sync(); swirls.sync(R);
       drawGraph();
     },
-    camera(cam, V) {
+    camera(cam) {
       if (S.view !== "first") { if (cam.fov !== 50) { cam.fov = 50; cam.near = 0.1; cam.updateProjectionMatrix(); } return false; }
       if (cam.fov !== 72) { cam.fov = 72; cam.near = 0.04; cam.updateProjectionMatrix(); }
-      const r = T.rower, ud = model.userData;
-      let eye;
-      if (S.mode === "today") eye = V3(-0.7, 1.75, 0.35);
-      else if (S.gear === "pole") eye = (ud.poler.userData.eye || V3(-0.1, 1.72, 0.7)).clone();
-      else {
-        // the head rides the shoulders' move, a share of it (head_follow)
-        const lean = def._lean || 0, base = V3(r.seat[0], r.seat[1] + 0.74, 0), c = Math.cos(lean), s = Math.sin(lean);
-        const full = V3(r.seat[0] + s * 0.74, r.seat[1] + c * 0.74, 0);
-        eye = base.lerp(full, r.head_follow * T.stroke.exaggerate).add(V3(0.08, 0, 0));
-      }
+      const eye = S.mode === "today" ? V3(-0.7, 1.75, 0.92) : crew.eye();
       cam.position.copy(eye.applyMatrix4(model.matrixWorld));
       const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().extractRotation(model.matrixWorld));
       cam.quaternion.copy(q).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(look.pitch, -Math.PI / 2 + look.yaw, 0, "YXZ")));
@@ -678,25 +648,23 @@ RC.scenes.rowing = function () {
     hud() {
       R.flow(raft.x, raft.z, OUT);
       const c = Math.cos(raft.yaw), s = Math.sin(raft.yaw), thru = (raft.vx - OUT[0]) * c + (raft.vz - OUT[1]) * s;
-      const list = S.mode === "today" ? today.strokes : S.gear === "oars" ? clock.strokes : pole.strokes;
+      const list = S.mode === "today" ? today.strokes : crew.clock.strokes;
       const now = ctx.S.simT; while (list.length && now - list[0] > 8) list.shift();
       const rate = list.length > 1 && now - list[list.length - 1] < 3 ? Math.round(60 * (list.length - 1) / (list[list.length - 1] - list[0])) : 0;
       const depth = R.surf(raft.x, raft.z) - R.top(raft.x, raft.z);
-      const which = S.mode === "today" ? "Today: pole" : S.gear === "oars" ? "Proposed: oars" : "Proposed: pole";
-      return [["", which, "on"], ["Stage", stageName], ["Strokes", rate + "/min"], ["Through water", thru.toFixed(2) + " m/s"],
+      return [["", S.mode === "today" ? "Today: pole" : "Proposed: oars", "on"], ["Stage", stageName], ["Strokes", rate + "/min"], ["Through water", thru.toFixed(2) + " m/s"],
         ["Turning", (raft.w * 180 / Math.PI).toFixed(0) + "°/s"], ["Depth", depth.toFixed(1) + " m"],
-        ...(S.mode === "proposed" && S.gear === "pole" && pole.tooDeep ? [["", "Too deep", "warn"]] : [])];
+        ...(S.mode === "proposed" && crew.onBed ? [["", "Oar on the bed", "warn"]] : [])];
     },
     keys: "W both · S back · A D one side · Q E one oar · drag to look",
     choices: [
       {label: "Rowing", options: [["today", "Today"], ["proposed", "Proposed"]], get: () => S.mode, set: v => { S.mode = v; resetStroke(); }},
-      {label: "Gear", options: [["oars", "Oars"], ["pole", "Pole"]], get: () => S.gear, set: v => { S.gear = v; resetStroke(); }, visible: () => S.mode === "proposed"},
       {label: "View", options: [["first", "First person"], ["third", "Third person"]], get: () => S.view, set: v => { S.view = v; }},
     ],
     actions: [
       {id: "qoar", label: "Left oar", key: "Q", hold: true, run() {}},
       {id: "eoar", label: "Right oar", key: "E", hold: true, run() {}},
-      {id: "poses", label: "Show poses", key: "P", run() { if (S.mode === "proposed" && S.gear === "oars") S.posing = !S.posing; }, label2: () => S.posing ? "Stop poses" : "Show poses"},
+      {id: "poses", label: "Show poses", key: "P", run() { if (S.mode === "proposed") S.posing = !S.posing; }, label2: () => S.posing ? "Stop poses" : "Show poses"},
     ],
     tune(box) {
       for (const [gname, key, lo, hi, st] of SLIDERS) {
@@ -709,15 +677,17 @@ RC.scenes.rowing = function () {
       }
       const ronBox = box.querySelector("textarea"); ronBox.value = ron();
       box.querySelector("button").addEventListener("click", () => {
-        Object.assign(T.oars, JSON.parse(JSON.stringify(DEF.oars))); for (const g of ["stroke", "rower", "pole", "lamp", "water"]) Object.assign(T[g], JSON.parse(JSON.stringify(DEF[g])));
-        for (const el of box.querySelectorAll("input[type=range]")) { const [gname, key] = SLIDERS[[...box.querySelectorAll("input[type=range]")].indexOf(el)]; el.value = T[gname][key]; el.nextSibling.textContent = fmt(T[gname][key]); }
+        for (const g of GROUPS) Object.assign(T[g], JSON.parse(JSON.stringify(DEF[g])));
+        const els = [...box.querySelectorAll("input[type=range]")];
+        els.forEach((el, i) => { const [gname, key] = SLIDERS[i]; el.value = T[gname][key]; el.nextSibling.textContent = fmt(T[gname][key]); });
         ronBox.value = ron();
       });
     },
     // for the screenshots: set the clock to a time in the stroke with both oars rowing
-    _at(t, dir) { clock.running = true; clock.t = t; clock.dir = dir || 1; for (const o of oar) { o.rowing = true; o.range = 1; } },
-    _S: S, _look: look, _raft: () => raft, _pole: pole,
+    _at(t, dir) { const c = crew.clock; c.running = true; c.t = t; c.dir = dir || 1; for (const o of crew.oar) { o.rowing = true; o.range = 1; o.last = null; Object.assign(o.rest, oarPose(t, c.dir, 1, {})); } },
+    _S: S, _look: look, _raft: () => raft, _crew: () => crew,
   };
+  for (const a of def.actions) acts[a.id] = a;
   function resetStroke() { resetState(); S.posing = false; }
   // the surge: speed through the water over the last 12 s
   function drawGraph() {

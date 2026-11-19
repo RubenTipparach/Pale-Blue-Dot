@@ -18,20 +18,6 @@ const mk = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.s
 const hold = () => ({up: false, down: false, left: false, right: false});
 
 // ---------------- craft models ----------------
-function raftModel(U) {
-  const g = new THREE.Group(), lg = RC.logGeo(4.4, 0.25), m = mat(U);
-  for (let i = 0; i < 5; i++) g.add(mk(lg, m, 0, -0.04, -0.96 + i * 0.48));
-  const plank = RC.box(0.3, 0.08, 2.5, "planks");
-  for (const x of [-1.5, 0, 1.5]) g.add(mk(plank, m, x, 0.24, 0));
-  g.add(mk(RC.box(0.7, 0.5, 0.6, "crate"), m, 1.2, 0.53, 0.5));
-  const post = mk(RC.box(0.1, 1.1, 0.1, "darkPlanks"), m, 1.95, 0.8, -0.95); g.add(post);
-  const lan = RC.lantern(U, 0.9); lan.position.set(1.95, 1.45, -0.95); g.add(lan);
-  const man = RC.person(U, 0x7a6a3a); man.position.set(-0.7, 0.28, 0.35); g.add(man);
-  const pivot = new THREE.Group(); pivot.position.set(-0.55, 1.45, 0.62); g.add(pivot);
-  pivot.add(mk(RC.box(0.07, 4.6, 0.07, "planks"), m, 0, -1.4, 0));
-  g.userData = {lantern: lan, pivot};
-  return g;
-}
 function tugModel(U, L, B) {
   const g = new THREE.Group(), m = mat(U);
   g.add(new THREE.Mesh(RC.hullGeo(L, B, 0.8, 0.75, L * 0.3, "darkPlanks"), RC.litMaterial(U, {side: THREE.DoubleSide})));
@@ -110,13 +96,15 @@ function rowDrive(b, inp, F) {
 }
 
 // ======================================================================================================================
-// 1. Raft: a log raft on the current, poled where the bed is in reach, paddled where it is not.
+// 1. Raft: a log raft on the current, rowed with two oars on a rowing frame (the Rowing tab's, RC.Oarsman in
+// rowing.js: one stroke clock, the push each blade's drag through the water). No pole (the owner, 2026-11-19: "no pole
+// just oar is best"): in the shallows the blades come to rest on the bed and push nothing off it.
 RC.scenes.raft = function () {
   const half = x => 8.6 - 2.6 * Math.exp(-(((x - 36) / 13) ** 2));
   const river = {x0: -72, x1: 100, z0: -34, z1: 36, center: x => 4 * Math.sin(x / 26), half,
     depth: x => x > 45 ? 2.9 : 1.6, U: x => 1.0 * 8.6 / half(x), level0: 0.55, slope: 0.002, steps: [{x: 45, drop: 1}],
     rocks: [[2, 2.6], [15, -3.2], [25, 2.4], [62, -2.8]], bed: (x, z) => (x > 28 && x < 62) ? "gravel" : "sand"};
-  let ctx, R, raft, model, mode = "Pole", bumpT = 0, wasGround = 0;
+  let ctx, R, raft, crew, model, bumpT = 0, wasGround = 0;
   const inp = hold();
   const def = {
     river, posts: [[-38, -1], [40, 1]], followDefault: true,
@@ -125,16 +113,13 @@ RC.scenes.raft = function () {
     build(c) {
       ctx = c; R = c.river;
       raft = new RC.Hull({L: 4.4, B: 2.4, m: 720, draft: 0.3, cA: 420, cS: 520, nx: 3, nz: 3});
-      model = raftModel(c.U); c.scene.add(model);
+      crew = RC.Oarsman(c.U); model = crew.model; c.scene.add(model);
       def.reset();
     },
-    reset() { raft.x = -52; raft.z = R.cfg.center(-52); raft.yaw = 0.15; raft.vx = raft.vz = raft.w = 0; raft.settle(R); bumpT = 0; },
+    reset() { raft.x = -52; raft.z = R.cfg.center(-52); raft.yaw = 0.15; raft.vx = raft.vz = raft.w = 0; raft.settle(R); bumpT = 0; crew.reset(); },
     step(h) {
       raft.water(R);
-      const depth = R.surf(raft.x, raft.z) - R.top(raft.x, raft.z);
-      mode = depth < 2.7 ? "Pole" : "Paddle";
-      const F = mode === "Pole" ? {thrust: 520, turn: 1500} : {thrust: 210, turn: 650};
-      rowDrive(raft, inp, F);
+      crew.step(h, raft, R, crew.wanted(inp), null, ctx.S.simT);
       raft.integrate(h, R);
       raft.terrain(R);
       if (raft.bumped > 0) { bumpT = 1.2; raft.bumped = 0; }
@@ -142,21 +127,16 @@ RC.scenes.raft = function () {
       wasGround = raft.grounded;
       if (raft.x > R.cfg.x1 - 6) def.reset();
     },
-    sync() {
-      place(model, raft);
-      const pv = model.userData.pivot, f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), t = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-      pv.rotation.set(t * 0.35, 0, f ? -0.5 * f : 0.12);
-      pv.scale.y = mode === "Pole" ? 1 : 0.55;
-    },
+    sync() { place(model, raft); crew.sync(false); model.updateMatrixWorld(true); },
     lanterns: () => [model.userData.lantern],
     follow: () => [raft.x, raft.y, raft.z],
     hud() {
       const depth = R.surf(raft.x, raft.z) - R.top(raft.x, raft.z);
       R.flow(raft.x, raft.z, OUT);
-      return [["", mode, "on"], ["Speed", speedOf(raft).toFixed(1) + " m/s"], ["Current", Math.hypot(OUT[0], OUT[1]).toFixed(1) + " m/s"], ["Depth", depth.toFixed(1) + " m"],
-        ...(bumpT > 0 ? [["", "Bump", "warn"]] : []), ...(wasGround ? [["", "Aground", "warn"]] : [])];
+      return [["", crew.stage === "Resting" ? "Drifting" : "Rowing", "on"], ["Speed", speedOf(raft).toFixed(1) + " m/s"], ["Current", Math.hypot(OUT[0], OUT[1]).toFixed(1) + " m/s"], ["Depth", depth.toFixed(1) + " m"],
+        ...(crew.onBed ? [["", "Oar on the bed", "warn"]] : []), ...(bumpT > 0 ? [["", "Bump", "warn"]] : []), ...(wasGround ? [["", "Aground", "warn"]] : [])];
     },
-    keys: "W S pole or paddle · A D turn",
+    keys: "W S row ahead or back · A D one oar to turn",
     actions: [],
   };
   return def;
@@ -531,13 +511,17 @@ RC.scenes.nets = function () {
 };
 
 // ======================================================================================================================
-// 5. Anchor: a skiff drops a bow anchor (and a stern one). The rode pays out, the anchor drags until it bites (or
-// ploughs on in sand), the boat swings to the current on it, and hauling the rode short breaks it out to weigh it.
+// 5. Anchor: a skiff drops a bow anchor (and a stern one). The rode pays out and the anchor sets on the bed in under
+// two seconds (sand slowest, mud fastest); once set it holds the boat (the owner, 2026-11-19: "anchor in mockup should
+// stop you from moving"): rowing and the current move the boat only as far as its swing on the rode. With bow and
+// stern both down the boat holds still on its heading. Weighing is the only way to move again.
 RC.scenes.anchor = function () {
+  // the bed decides only how fast the anchor sets (seconds from touching the bed to holding); while it sets it can
+  // slide a little toward the boat, leaving a furrow, and then it holds whatever pulls on it
   const BEDS = {
-    sand: {tile: "sand", hold: 600, bite: 4.0, cap: 0.25},
-    mud: {tile: "mud", hold: 2600, bite: 1.2, cap: 1.0},
-    rock: {tile: "stone", hold: 4200, bite: 0, cap: 1.0},
+    sand: {tile: "sand", set_s: 1.8, slide: 600},
+    mud: {tile: "mud", set_s: 0.8, slide: 1200},
+    rock: {tile: "stone", set_s: 1.3, slide: 900},
   };
   let bed = "sand";
   const mkRiver = () => ({x0: -70, x1: 80, z0: -36, z1: 38, center: x => 4 * Math.sin(x / 30), half: () => 11, depth: () => 2.0, U: () => 1.45,
@@ -546,7 +530,7 @@ RC.scenes.anchor = function () {
   const inp = hold();
   const anchors = [];
   function makeAnchor(lx, name) {
-    const a = {lx, name, state: "stowed", x: 0, y: 0, z: 0, rode: 0, set: 0, hooked: false, drag: 0, dragV: 0, line: null, rope: new RC.Rope(18, true), tube: null, mesh: null, trail: [], marks: [], target: 0};
+    const a = {lx, name, state: "stowed", x: 0, y: 0, z: 0, rode: 0, set: 0, drag: 0, dragV: 0, line: null, rope: new RC.Rope(18, true), tube: null, mesh: null, trail: [], marks: [], target: 0};
     a.line = new RC.Line(boat, [lx, 0], null, null, 1); a.line.at = [0, 0];
     a.tube = new RC.Tube(18, 0.09, mat(U, 0xc8ccd2)); a.tube.mesh.visible = false; ctx.scene.add(a.tube.mesh);
     a.mesh = anchorModel(U); a.mesh.scale.setScalar(1.35); ctx.scene.add(a.mesh);
@@ -562,31 +546,30 @@ RC.scenes.anchor = function () {
       a.y -= 2.4 * h; R.flow(a.x, a.z, OUT); a.x += OUT[0] * 0.15 * h; a.z += OUT[1] * 0.15 * h;
       const floor = R.top(a.x, a.z);
       a.rode = Math.max(a.rode, Math.hypot(b[0] - a.x, b[1] - a.y, b[2] - a.z) + 0.3);
-      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; a.target = Math.max(a.rode, (b[1] - floor) * 5); }
+      // the first anchor down veers to five times the depth; one dropped while the other holds is snubbed short where it
+      // lands, so bow and stern together hold the boat still on its heading
+      if (a.y <= floor) { a.y = floor; a.state = "down"; a.set = 0; const other = anchors.find(o => o !== a && o.state === "down"); a.target = other ? a.rode + 0.3 : Math.max(a.rode, (b[1] - floor) * 5); }
     } else if (a.state === "down") {
       if (a.rode < a.target) a.rode = Math.min(a.target, a.rode + 1.5 * h);     // veering to the scope
       const dy = Math.max(0.2, b[1] - a.y), Lh = Math.sqrt(Math.max(0.04, a.rode * a.rode - dy * dy));
       a.line.length = Lh; a.line.at[0] = a.x; a.line.at[1] = a.z;
       const T = a.line.step();
-      // the pull's angle at the anchor: a short rode lifts the shank and breaks it out
-      const ang = T > 0 ? Math.atan2(dy, Lh) : 0, fa = clamp(1 - (ang / 0.5) ** 2, 0, 1);
-      const setF = bed === "rock" ? (a.hooked ? 1 : 0.02) : a.set;
-      const H = B.hold * setF * fa;
+      // setting: the flukes dig in over set_s; until then a hard pull slides it a little toward the boat
+      a.set = Math.min(1, a.set + h / B.set_s);
       a.dragV = 0;
-      if (T > H) {
-        const dx = b[0] - a.x, dz = b[2] - a.z, d = Math.hypot(dx, dz) || 1, v = Math.min(1.2, (T - H) / 320);
+      if (a.set < 1 && T > B.slide) {
+        const dx = b[0] - a.x, dz = b[2] - a.z, d = Math.hypot(dx, dz) || 1, v = Math.min(0.6, (T - B.slide) / 320);
         a.x += dx / d * v * h; a.z += dz / d * v * h; a.y = R.top(a.x, a.z); a.dragV = v;
-        const dist = v * h; a.drag += dist;
-        if (bed === "rock") { if (!a.hooked && Math.random() < dist * 0.5) a.hooked = true; }
-        else a.set = Math.min(B.cap, a.set + dist / B.bite);
         if (!a.lastMark || Math.hypot(a.x - a.lastMark[0], a.z - a.lastMark[1]) > 0.35) {
           const m = a.marks[a.mark++ % a.marks.length]; m.visible = true; m.position.set(a.x, a.y + 0.02, a.z); m.rotation.y = -Math.atan2(dz, dx); a.lastMark = [a.x, a.z];
         }
       }
       const k = Math.min(1, 1.5 * h); a.T = (a.T || 0) + (T - (a.T || 0)) * k; a.dv = (a.dv || 0) + (a.dragV - (a.dv || 0)) * k;
+      // weighing: the rode hauled in to straight up and down, then the anchor broken out and lifted. The only way
+      // an anchor lets go.
       if (a.weigh) {
         a.rode = Math.max(dy + 0.2, a.rode - 1.0 * h); a.target = a.rode;
-        if (a.rode <= dy + 0.45 && fa < 0.3) { a.state = "up"; }
+        if (a.rode <= dy + 0.45) a.state = "up";
       }
     } else if (a.state === "up") {
       a.x += (b[0] - a.x) * Math.min(1, 3 * h); a.z += (b[2] - a.z) * Math.min(1, 3 * h); a.y += 1.2 * h;
@@ -597,16 +580,16 @@ RC.scenes.anchor = function () {
   }
   function drop(a) {
     if (a.state !== "stowed") return;
-    const b = bow(a); a.x = b[0]; a.y = b[1] - 0.3; a.z = b[2]; a.rode = 0.5; a.state = "drop"; a.set = 0; a.hooked = false; a.drag = 0; a.weigh = false;
+    const b = bow(a); a.x = b[0]; a.y = b[1] - 0.3; a.z = b[2]; a.rode = 0.5; a.state = "drop"; a.set = 0; a.drag = 0; a.weigh = false;
     a.rope.lay(b, [a.x, a.y, a.z]); a.tube.mesh.visible = true;
   }
   function anchorLabel(a) {
     if (a.state === "stowed") return [a.name, "stowed", ""];
     if (a.state === "drop") return [a.name, "dropping", "on"];
     if (a.state === "up") return [a.name, "aweigh", "on"];
-    if (a.weigh && a.dv > 0.02) return [a.name, "breaking out", "on"];
-    if (a.dv > 0.02) return [a.name, "dragging " + a.dv.toFixed(2) + " m/s", "warn"];
-    if (a.T < 5) return [a.name, "on the bed", ""];
+    if (a.weigh) return [a.name, "weighing", "on"];
+    if (a.set < 1) return [a.name, "setting", "on"];
+    if (a.T < 5) return [a.name, "set", ""];
     return [a.name, "holding " + fmtN(a.T), "on"];
   }
   const def = {
@@ -651,8 +634,9 @@ RC.scenes.anchor = function () {
     follow: () => { const a = anchors[0]; return a.state === "down" ? [(boat.x * 2 + a.x) / 3, boat.y - 0.5, (boat.z * 2 + a.z) / 3] : [boat.x, boat.y, boat.z]; },
     hud() {
       const a = anchors[0], s = anchors[1], b = bow(a);
-      const out = [["Bed", BEDS[bed] && bed[0].toUpperCase() + bed.slice(1)], anchorLabel(a), anchorLabel(s)];
-      if (a.state === "down") out.push(["Rode", a.rode.toFixed(1) + " m, scope " + (a.rode / Math.max(0.5, b[1] - a.y)).toFixed(1) + ":1"]);
+      const anchored = anchors.some(x => x.state === "down" && x.set >= 1 && !x.weigh);
+      const out = [...(anchored ? [["", "Anchored", "on"]] : []), ["Bed", BEDS[bed] && bed[0].toUpperCase() + bed.slice(1)], anchorLabel(a), anchorLabel(s)];
+      if (a.state === "down") out.push(["Rode", a.rode.toFixed(1) + " m"]);
       out.push(["Speed", speedOf(boat).toFixed(2) + " m/s"]);
       return out;
     },
@@ -664,7 +648,7 @@ RC.scenes.anchor = function () {
       {id: "stern", label: "Drop stern", key: "X", run() { const a = anchors[1]; if (a.state === "stowed") drop(a); else if (a.state === "down") a.weigh = !a.weigh; },
         label2: () => { const a = anchors[1]; return a.state === "stowed" ? "Drop stern" : a.weigh ? "Stop hauling" : a.state === "down" ? "Weigh stern" : "Stern anchor"; }},
       {id: "payout", label: "Pay out", key: "R", hold: true, run(dt) { const a = anchors[0]; if (a.state === "down") { a.weigh = false; a.target = a.rode = Math.min(30, a.rode + 1.2 * dt); } }},
-      {id: "shorten", label: "Shorten", key: "F", hold: true, run(dt) { const a = anchors[0]; if (a.state === "down") { const dy = bow(a)[1] - a.y; a.target = a.rode = Math.max(dy + 0.3, a.rode - 1.0 * dt); } }},
+      {id: "shorten", label: "Shorten", key: "F", hold: true, run(dt) { const a = anchors[0]; if (a.state === "down") { const dy = bow(a)[1] - a.y; a.target = a.rode = Math.max(dy + 1.0, a.rode - 1.0 * dt); } }},
     ],
   };
   return def;
@@ -673,33 +657,69 @@ RC.scenes.anchor = function () {
 // ======================================================================================================================
 // 6. Tube: one person in an inner tube, carried by the current and turning slowly, steered a little with the hands.
 // The tube is a felted-wool ring sealed with pine pitch and blown up (owner, 2026-11-16: "also what about innertubes?").
+// The rider sits back in the ring as a person does in a tube: bottom in the hole, back on the far side of the ring,
+// legs over the front with the knees bent and the feet in the water, arms on the rim. Paddling, the hands reach
+// down into the water beside the ring and pull back in arcs. Built from the raft rower's blocks (the same sizes and
+// colours, lit like the terrain). No lantern (the owner, 2026-11-19: "no light for tube guy"): at night the tube is
+// lit only by the bank lamps and the moon.
+const TUBE = {ring: 0.45, rim: 0.17, ringY: 0.05, hip: [0.0, 0.04], shoulder_m: 0.5, shoulder_half_m: 0.27, upper_arm_m: 0.3, forearm_m: 0.37,
+  lean_idle_deg: 40, lean_paddle_deg: 20, knee: [0.48, 0.46], foot: [0.8, -0.08], stroke_hz: 0.95};
 function tubeModel(U) {
   const g = new THREE.Group();
-  const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(0.52, 0.22, 8, 14), "canvas", 3, 1), RC.litMaterial(U, {tint: 0x3a2a1c}));
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+  const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(TUBE.ring, TUBE.rim, 8, 14), "canvas", 3, 1), RC.litMaterial(U, {tint: 0x3a2a1c}));
+  ring.rotation.x = Math.PI / 2; ring.position.y = TUBE.ringY; g.add(ring);
   // the pitched seam: a darker band round the ring
-  const seam = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.225, 4, 14, Math.PI * 0.25), RC.litMaterial(U, {tint: 0x1e1610}));
-  seam.rotation.x = Math.PI / 2; seam.position.y = 0.05; g.add(seam);
-  const man = RC.person(U, 0x3f7a6a); man.position.set(0, -0.62, 0); man.rotation.z = -0.35; g.add(man);
-  const arms = [];
-  for (const s of [-1, 1]) {
-    const a = new THREE.Group(); a.position.set(0.0, 0.42, s * 0.24); g.add(a);
-    a.add(mk(RC.box(0.12, 0.12, 0.55, "canvas"), RC.litMaterial(U, {tint: 0x3f7a6a}), 0, 0, s * 0.3));
-    a.add(mk(RC.box(0.13, 0.1, 0.13, "canvas"), RC.litMaterial(U, {tint: 0xd9a77c}), 0, 0, s * 0.6));
-    arms.push(a);
-  }
-  // a lantern on a short pole tied to the ring, for night floats
-  const pole = mk(RC.box(0.05, 0.7, 0.05, "darkPlanks"), mat(U), -0.55, 0.4, 0); g.add(pole);
-  const lan = RC.lantern(U, 0.55); lan.position.set(-0.55, 0.82, 0); g.add(lan);
-  g.userData = {lantern: lan, arms, man};
+  const seam = new THREE.Mesh(new THREE.TorusGeometry(TUBE.ring, TUBE.rim + 0.005, 4, 14, Math.PI * 0.25), RC.litMaterial(U, {tint: 0x1e1610}));
+  seam.rotation.x = Math.PI / 2; seam.position.y = TUBE.ringY; g.add(seam);
+  const UNIT = RC.box(1, 1, 1, "canvas");
+  const cloth = RC.litMaterial(U, {tint: 0x3f7a6a}), skin = RC.litMaterial(U, {tint: 0xd9a77c}), dark = RC.litMaterial(U, {tint: 0x4a5368}),
+    hat = RC.litMaterial(U, {tint: 0x6b5638}), hair = RC.litMaterial(U, {tint: 0x5a4030}), boot = RC.litMaterial(U, {tint: 0x3a3026});
+  const hip = new THREE.Group(); hip.position.set(TUBE.hip[0], TUBE.hip[1], 0); g.add(hip);
+  hip.add(mk(RC.box(0.26, 0.58, 0.42, "canvas"), cloth, 0, 0.32, 0));
+  const head = new THREE.Group(); head.position.set(0, 0.78, 0); hip.add(head);
+  head.add(mk(RC.box(0.26, 0.28, 0.26, "canvas"), skin, 0, 0, 0));
+  head.add(mk(RC.box(0.05, 0.22, 0.27, "canvas"), hair, -0.11, 0.02, 0));
+  head.add(mk(RC.box(0.04, 0.05, 0.05, "canvas"), skin, 0.145, -0.02, 0));
+  head.add(mk(RC.box(0.3, 0.07, 0.3, "canvas"), hat, -0.01, 0.17, 0));
+  head.add(mk(RC.box(0.14, 0.025, 0.26, "canvas"), hat, 0.2, 0.14, 0));
+  const legs = [-1, 1].map(s => {
+    const th = mk(UNIT, dark), sh = mk(UNIT, dark), ft = mk(RC.box(0.2, 0.08, 0.12, "canvas"), boot); g.add(th, sh, ft);
+    const H = new THREE.Vector3(TUBE.hip[0] + 0.04, TUBE.hip[1] + 0.05, s * 0.11), K = new THREE.Vector3(TUBE.knee[0], TUBE.knee[1], s * 0.12), F = new THREE.Vector3(TUBE.foot[0], TUBE.foot[1], s * 0.13);
+    lay(th, H, K, 0.15); lay(sh, K, F, 0.13); ft.position.copy(F); ft.rotation.z = -0.5;
+    return {th, sh, ft};
+  });
+  const arms = [-1, 1].map(() => { const a = {up: mk(UNIT, cloth), fore: mk(UNIT, cloth), hand: mk(RC.box(0.09, 0.09, 0.1, "canvas"), skin)}; g.add(a.up, a.fore, a.hand); return a; });
+  g.userData = {hip, arms, legs};
   return g;
 }
+// a block laid from A to B (a limb)
+function lay(o, A, B, w) {
+  const d = B.clone().sub(A), L = d.length();
+  o.position.copy(A).addScaledVector(d, 0.5);
+  o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.multiplyScalar(1 / Math.max(L, 1e-6)));
+  o.scale.set(w, L, w);
+}
+// Each hand's target, on the rim at rest or round its paddling arc. ph: the hand's phase in its stroke; engage:
+// 0 resting .. 1 paddling. A forward stroke goes in at the front, pulls back through the water and lifts out behind;
+// a back stroke goes the other way round.
+function tubeHand(side, ph, engage) {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const rest = V(0.1, TUBE.ringY + TUBE.rim + 0.07, side * (TUBE.ring + 0.04));
+  // out of the water the hand comes back in over the rim, low, never out to the side at shoulder height
+  const wet = Math.max(0, Math.sin(ph));
+  const arc = V(-0.08 + 0.2 * Math.cos(ph), 0.1 - 0.14 * Math.sin(ph), side * (TUBE.ring + 0.14 + (TUBE.rim + 0.02) * wet));
+  return rest.lerp(arc, engage);
+}
+
 RC.scenes.tube = function () {
   const half = x => 9.5 - 2.4 * Math.exp(-(((x - 30) / 12) ** 2));
   const river = {x0: -80, x1: 95, z0: -34, z1: 36, center: x => 5 * Math.sin(x / 24), half,
     depth: x => x > 22 && x < 40 ? 1.1 : 1.7, U: x => 0.8 * 9.5 / half(x), level0: 0.55, slope: 0.0025, steps: [],
     rocks: [[-12, 3.0], [8, -3.4], [33, 2.0], [55, -2.6]], bed: (x, z) => (x > 20 && x < 42) ? "gravel" : "sand"};
   let ctx, R, tube, model, carried, onboard = true, bumpT = 0, stroke = 0, bank = {x: 0, z: 0, side: 1};
+  // each hand's stroke: its phase, its way round (+1 forward, -1 back) and how far it is into paddling
+  const handS = [{ph: 0, dir: 1, engage: 0}, {ph: 0, dir: 1, engage: 0}];
+  let lean = TUBE.lean_idle_deg * Math.PI / 180;
   const inp = hold();
   const man = () => model.userData.man;
   function landAt(x, side) {   // stand on the bank beside the river at x
@@ -716,7 +736,7 @@ RC.scenes.tube = function () {
       model = tubeModel(c.U); c.scene.add(model);
       // the tube as carried on the bank: the same ring, upright on the walker's back
       carried = RC.person(c.U, 0x3f7a6a);
-      const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(0.52, 0.2, 8, 14), "canvas", 3, 1), RC.litMaterial(c.U, {tint: 0x3a2a1c}));
+      const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(TUBE.ring, TUBE.rim, 8, 14), "canvas", 3, 1), RC.litMaterial(c.U, {tint: 0x3a2a1c}));
       ring.position.set(-0.32, 1.05, 0); ring.rotation.y = Math.PI / 2; carried.add(ring);
       carried.visible = false; c.scene.add(carried);
       def.reset();
@@ -724,6 +744,7 @@ RC.scenes.tube = function () {
     reset() {
       tube.x = -62; tube.z = R.cfg.center(-62) - 1; tube.yaw = 0.3; tube.vx = tube.vz = tube.w = 0; tube.settle(R);
       onboard = true; bumpT = 0; carried.visible = false; model.visible = true;
+      for (const hs of handS) { hs.ph = 0; hs.engage = 0; hs.dir = 1; }
     },
     step(h) {
       if (!onboard) return;
@@ -736,6 +757,18 @@ RC.scenes.tube = function () {
       tube.tq += (ul - ur) * 55 - tube.w * 18;
       // hands: a little thrust and a little turn, no more
       stroke = rowDrive(tube, inp, {thrust: 75, turn: 38});
+      // the hands: both together for ahead or back; for a turn the outer hand pulls ahead and the inner backs,
+      // half a stroke apart (A turns left: the right hand pulls)
+      const f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), turn = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+      for (let i = 0; i < 2; i++) {
+        const side = i ? 1 : -1, hs = handS[i];
+        const dir = f ? f : turn ? (side === -turn ? 1 : -1) : 0, want = dir !== 0 ? 1 : 0;
+        if (want && hs.engage < 0.05) hs.ph = Math.PI * 1.5 + (f ? 0 : (i ? Math.PI : 0));   // start at the top of the arc
+        if (want) hs.dir = dir;
+        hs.engage += (want - hs.engage) * Math.min(1, h * 5);
+        hs.ph += hs.dir * TUBE.stroke_hz * Math.PI * 2 * h * (want ? 1 : 0.35);
+      }
+      lean = (TUBE.lean_idle_deg + (TUBE.lean_paddle_deg - TUBE.lean_idle_deg) * Math.max(handS[0].engage, handS[1].engage)) * Math.PI / 180;
       tube.integrate(h, R);
       tube.terrain(R);
       if (tube.bumped > 0) { bumpT = 1.2; tube.bumped = 0; }
@@ -744,17 +777,28 @@ RC.scenes.tube = function () {
     },
     sync() {
       place(model, tube);
-      const t = ctx.S.simT, [a0, a1] = model.userData.arms;
-      const f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), turn = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-      const sw = k => (f || turn) ? Math.sin(t * 6 + k) * 0.7 : 0;
-      a0.rotation.set(0, (f || turn < 0 ? sw(0) : 0), -0.6 - 0.3 * Math.abs(sw(0)));
-      a1.rotation.set(0, (f || turn > 0 ? sw(Math.PI) : 0), -0.6 - 0.3 * Math.abs(sw(Math.PI)));
+      const ud = model.userData;
+      const V = (x, y, z) => new THREE.Vector3(x, y, z);
+      ud.hip.rotation.set(0, 0, lean);
+      for (let i = 0; i < 2; i++) {
+        const side = i ? 1 : -1, hs = handS[i], a = ud.arms[i];
+        const c = Math.cos(lean), sn = Math.sin(lean);
+        const Sh = V(TUBE.hip[0] - sn * TUBE.shoulder_m, TUBE.hip[1] + c * TUBE.shoulder_m, side * TUBE.shoulder_half_m);
+        let Hd = tubeHand(side, hs.ph, hs.engage);
+        // a hand never goes further than the arm reaches: it stops at the arm's end
+        const reach = TUBE.upper_arm_m + TUBE.forearm_m - 0.01, d = Hd.clone().sub(Sh);
+        if (d.length() > reach) Hd = Sh.clone().addScaledVector(d.normalize(), reach);
+        // the elbow out and down, and up while the hand is in the water, so the arm goes over the rim and not through it
+        const wet = hs.engage * Math.max(0, Math.sin(hs.ph));
+        const El = RC.ROW.elbowOf(Sh, Hd, TUBE.upper_arm_m, TUBE.forearm_m, V(-0.9, -0.7 + 1.3 * wet, side * 0.45));
+        lay(a.up, Sh, El, 0.11); lay(a.fore, El, Hd, 0.1); a.hand.position.copy(Hd);
+        a.hand.quaternion.setFromUnitVectors(V(0, 1, 0), Hd.clone().sub(El).normalize());
+      }
       if (!onboard) {
         const y = R.top(bank.x, bank.z);
         carried.position.set(bank.x, y, bank.z); carried.rotation.y = bank.side > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
     },
-    lanterns: () => [model.userData.lantern],
     follow: () => onboard ? [tube.x, tube.y, tube.z] : [bank.x, R.top(bank.x, bank.z) + 1, bank.z],
     hud() {
       if (!onboard) return [["", "On the bank, tube carried", "on"]];
