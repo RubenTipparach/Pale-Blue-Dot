@@ -13,9 +13,17 @@
 // grass. A droplet flies the arc `p = impact + v t - g t^2 / 2` and is gone
 // when it falls back to the top. A dead droplet is a degenerate quad.
 //
+// On water (`water-flow` 6.3) every impact is a crown, on the water's drawn
+// top; on the sea, on its waves, by the sea's own `sea_surface`. The draw
+// runs in the water's pass after the water (`planet_water.rs`), with no
+// depth attachment: the fragment discards what the main pass's depth or the
+// water's own depth has in front of it.
+//
 // Group 0 is the terrain's own (`planet.rs`, `draw_layout`): the planet's
 // params and the atlas. The items copied from `planet_surface.wgsl` below are
 // held to that file word for word by `planet_splash.rs`'s tests.
+
+#import pbd::sea::{SeaView, sea_surface}
 
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
@@ -74,8 +82,10 @@ struct SplashColumn {
     // w: the radius of the circle inside that face, metres.
     top: vec4<f32>,
     // x: the face's render code in the low byte and the biome above it, as
-    // the record packs them; y: the class (0 grass, 1 bare ground); z: the
-    // column's slot key (a stable hash of its cell); w: spare.
+    // the record packs them; y: the class (0 grass, 1 bare ground, 2 water
+    // the mesher draws, 3 the sea); z: the column's slot key (a stable hash
+    // of its cell); w: on the sea, the depth of the water there, m, as f32
+    // bits (what the waves shoal by), else zero.
     info: vec4<u32>,
 }
 struct Splash {
@@ -99,11 +109,22 @@ struct Splash {
 }
 @group(1) @binding(0) var<uniform> splash: Splash;
 @group(1) @binding(1) var<storage, read> columns: array<SplashColumn>;
+// The sea's table this frame, the water pass's own (`SeaNow`).
+@group(1) @binding(2) var<uniform> sea_view: SeaView;
+// What hides a droplet: the main pass's depth (the terrain) and the water's.
+#ifdef MULTISAMPLED
+@group(2) @binding(0) var scene_depth: texture_depth_multisampled_2d;
+#else
+@group(2) @binding(0) var scene_depth: texture_depth_2d;
+#endif
+@group(2) @binding(1) var water_depth: texture_depth_2d;
 
 const GRAVITY: f32 = 9.8;
 const KIND_GRASS: u32 = 0u;
 const KIND_GROUND: u32 = 1u;
 const KIND_CROWN: u32 = 2u;
+const CLASS_WATER: u32 = 2u;
+const CLASS_SEA: u32 = 3u;
 
 fn normalized(v: vec3<f32>) -> vec3<f32> { return v*inverseSqrt(max(dot(v,v),1e-12)); }
 fn rr_hash12(p: vec2<f32>) -> f32 {
@@ -248,7 +269,16 @@ fn vertex(@builtin(vertex_index) corner: u32, @builtin(instance_index) lane: u32
     let t2 = cross(up, t1);
     let r2 = rr_hash22(sd*0.731 + vec2(3.3, 9.1));
     let ang = r2.x*6.28318;
-    let impact = column.top.xyz + (t1*cos(ang) + t2*sin(ang))*(sqrt(r2.y)*column.top.w);
+    var impact = column.top.xyz + (t1*cos(ang) + t2*sin(ang))*(sqrt(r2.y)*column.top.w);
+    // On the sea, on its waves: the sheet's own function at the impact, with
+    // the sheet's depth and its band filter at a finest cell's corner spacing
+    // (the circle's radius over cos 30 degrees), so a crown rides the swell.
+    if cls == CLASS_SEA {
+        let n = normalized(impact);
+        let on_sea = n*length(column.top.xyz);
+        let wave = sea_surface(sea_view, on_sea, n, bitcast<f32>(column.info.w), column.top.w*1.1547);
+        impact = on_sea + n*wave.height;
+    }
     // The reach, measured along the ground from the eye.
     let flat = impact - splash.eye.xyz;
     let across = length(flat - up*dot(flat, up));
@@ -257,8 +287,11 @@ fn vertex(@builtin(vertex_index) corner: u32, @builtin(instance_index) lane: u32
     if fade <= 0.001 { return dead(); }
     // Which splash: a crown where the ground stands in a puddle, as the
     // terrain draws it; grass sprays; other bare ground splashes lower.
+    // Water is all standing water: every impact on it a crown.
     var kind = KIND_GRASS;
-    if cls == 1u {
+    if cls >= CLASS_WATER {
+        kind = KIND_CROWN;
+    } else if cls == 1u {
         kind = select(KIND_GROUND, KIND_CROWN, puddle_at(impact, up) > 0.5);
     }
     var keep = splash.keep.z;
@@ -270,7 +303,8 @@ fn vertex(@builtin(vertex_index) corner: u32, @builtin(instance_index) lane: u32
     let hk = rr_hash12(sd + vec2(f32(k)*3.1, 11.));
     let hk2 = rr_hash12(sd + vec2(f32(k)*5.7, 29.));
     let base = rr_hash12(sd + vec2(51., 2.))*6.28318;
-    let wet = mix(0.55, 1., clamp(params.weather.x, 0., 1.));
+    // A puddle's crown grows as the ground soaks; water is full from the start.
+    let wet = select(mix(0.55, 1., clamp(params.weather.x, 0., 1.)), 1., cls >= CLASS_WATER);
     var a = base;
     var vh = 0.;
     var vv = 0.;
@@ -331,6 +365,8 @@ fn vertex(@builtin(vertex_index) corner: u32, @builtin(instance_index) lane: u32
     var water = mix(ground, sky, 0.55);
     if kind == KIND_CROWN { water = mix(ground, sky, 0.6); }
     if kind == KIND_GROUND { water = mix(ground, sky, 0.45); }
+    // Off a river or the sea: the water's own deep colour, not a ground tile.
+    if cls >= CLASS_WATER { water = mix(params.water_deep.rgb, sky, 0.6); }
     let amb = max(sh_irradiance(vec3(0., 1., 0.), cover), vec3(0.006, 0.008, 0.011));
     let sun_dim = 1. - cover*params.rain[4].x;
     var lamps = vec3(0.);
@@ -363,7 +399,23 @@ fn vertex(@builtin(vertex_index) corner: u32, @builtin(instance_index) lane: u32
     return out;
 }
 
+// The depth the main pass left at a pixel (its first sample, as the water's
+// own `load_depth` reads it).
+fn scene_depth_at(pixel: vec2<i32>) -> f32 {
+#ifdef MULTISAMPLED
+    return textureLoad(scene_depth, pixel, 0);
+#else
+    return textureLoad(scene_depth, pixel, 0);
+#endif
+}
+
 @fragment
 fn fragment(input: SplashOut) -> @location(0) vec4<f32> {
+    // Behind the terrain or behind a water surface: either depth is nearer
+    // (reversed Z). From under a pool, its surface overhead hides the crowns
+    // on it; a crown on a river stands in front of the river.
+    let pixel = vec2<i32>(input.clip.xy);
+    if scene_depth_at(pixel) > input.clip.z + 1e-6 { discard; }
+    if textureLoad(water_depth, pixel, 0) > input.clip.z + 1e-6 { discard; }
     return input.color;
 }
