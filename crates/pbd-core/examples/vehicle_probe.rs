@@ -45,7 +45,6 @@ impl World {
             let env = Surroundings {
                 sea: &self.sea,
                 sea_state: self.sea.state(0.0, self.wind),
-                tide: glam::Vec4::ZERO,
                 sea_radius: R,
                 depth: 40.0,
                 air: AirHere {

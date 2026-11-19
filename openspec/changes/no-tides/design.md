@@ -121,6 +121,12 @@ the mean there) and after, side by side, in `docs/screenshots/no-tides/`.
 Lavapipe in a cloud container at a fixed step: they show what the shore
 looks like, not how smoothly it runs. Frame time is not measured here.
 
+Taken (`docs/screenshots/no-tides/beach-from-above-before-after.jpg`, from
+25 m straight down): before, the high tide's sheet over the whole beach;
+after, the beach dry and the sea at its one level, 2 m lower there. The
+after half also shows acacias standing on the strip the high tide used to
+cover (the first risk below).
+
 ## Risks
 
 - **Plants at the waterline.** The flora rules may stand a tree on a beach

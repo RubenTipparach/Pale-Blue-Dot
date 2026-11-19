@@ -91,7 +91,7 @@ struct WaterView {
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`); y the
     // surface of the water the eye is in or over, a body radius: an inland
-    // water's drawn top, else the sea's tided, swelling surface at the eye
+    // water's drawn top, else the sea's surface at the eye
     // (`ocean-environments` B17, B18); z and w how far the drawing is
     // through the water's last tick, smoothstepped (the levels) and linear
     // (the fronts), both one when it is drawn as it is (`water_flow::WaterEase`).
@@ -633,12 +633,12 @@ const NEAR_SHEET_M: f32 = 0.3;
 // eye is on, not by each fragment's wave height, m (B19).
 const SEA_SIDE_NEAR_M: f32 = 3.0;
 // The eye's surface is the sea's when it is within this of the sea's mean
-// sheet, m: the tide's whole range and some.
+// sheet, m: the waves' reach and some.
 const SEA_EYE_RANGE_M: f32 = 3.0;
 
 // The surface of the water the eye is in or over, as a body radius: a
 // river's or a pool's drawn top where the eye is in inland water, the sea's
-// tided surface at the eye otherwise, the eye in air included
+// surface at the eye otherwise, the eye in air included
 // (`ocean-environments` B17, B18, B21). Everything the underwater view
 // measures, depth, the waterline, the sky's exit, is measured from it. The
 // mean sphere is only the fallback for a view with no water lanes.
@@ -2133,7 +2133,7 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
 // The sea's horizon line (`horizon-haze` 4). A pixel whose depth says sky
 // but whose ray meets the sea's sphere looks into the gap between the sea's
-// silhouette and that sphere's tangent: the tide and the troughs take the
+// silhouette and that sphere's tangent: the sheet's offset and the troughs take the
 // sheet under the sphere, and a few rows of rays under the horizon meet no
 // sea. The cloud stops such a ray at the sphere, short of its layer, so
 // under cover the gap kept the clear dome's blue under a greyed sky: a dark

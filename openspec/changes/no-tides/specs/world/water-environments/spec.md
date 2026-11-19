@@ -14,7 +14,7 @@ a flight over a beach tints and wobbles none of the dry sand over the water
 (`ocean-environments` B21). The sea's surface SHALL stand at one level: it
 SHALL NOT rise and fall with the moon or the time of day (`no-tides`).
 
-#### Scenario: A jump on a beach at low tide
+#### Scenario: A jump on a beach
 
 - **WHEN** the eye rises from standing on a beach over the sea's water into air over it
 - **THEN** the composite's waterline stays at the sea's drawn surface

@@ -80,9 +80,6 @@
     partial_band_m: 0.8,
     emerge_dry_s: 2.6,
     flow_uv_speed_falling: 1.0,
-    // The tide's range at one place over a day, m, from the moon
-    // (`ocean-environments` design 10). 0 is no tide.
-    tide_range_m: 3.0,
     detail_fade: 4.0,
     // A fall's look (`water-flow` 6.6): mockup M35's New tab, approved by the
     // owner 2026-11-16, with its defaults. Sizes and reaches in metres.

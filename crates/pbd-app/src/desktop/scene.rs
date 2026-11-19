@@ -164,48 +164,18 @@ pub fn setup(
 
 /// The moon on its orbit, in the system frame, carried into the planet's by
 /// the spin: it crosses the sky as the planet turns under it, as the sun does.
-#[allow(clippy::too_many_arguments)]
 pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
     frame: Res<pbd_app::PhysicsFrame>,
     render: Res<pbd_app::planet::PlanetRenderFrame>,
     sun: Res<pbd_app::sky::Sun>,
-    scene: Res<pbd_app::CelestialScene>,
-    sea: Option<ResMut<pbd_app::sea::Sea>>,
-    launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut moons: Query<(&MoonOrbit, &mut Transform)>,
 ) {
     let turn = sun.sky_rotation().as_dquat();
-    let mut toward = None;
     for (orbit, mut transform) in &mut moons {
         let position = turn * orbit.0.sample(time.seconds).position;
         // Render space: physics less the render origin, in f64.
         transform.translation = (position - frame.0.origin - render.origin).as_vec3();
-        let planet = scene
-            .states
-            .first()
-            .map_or(bevy::math::DVec3::ZERO, |s| s.position);
-        toward = Some((position - planet).as_vec3());
-    }
-    // `--tide high|low`, a capture instrument: the tide's moon put over the
-    // camera, or a quarter turn round from it, so a picture can show high
-    // water and low water at one beach. The moon drawn is not moved.
-    if let Some(which) = launch.tide.as_deref()
-        && let Some((at, _)) = cameras.iter().find(|(_, c)| c.is_active)
-    {
-        let up = (at.translation().as_dvec3() - render.center)
-            .as_vec3()
-            .normalize_or(Vec3::Y);
-        toward = Some(if which == "high" {
-            up
-        } else {
-            up.any_orthonormal_vector()
-        });
-    }
-    // The tide follows this moon (`ocean-environments` design 10).
-    if let (Some(mut sea), Some(toward)) = (sea, toward) {
-        sea.set_moon(toward);
     }
 }
 

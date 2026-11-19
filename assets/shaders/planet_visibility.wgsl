@@ -253,7 +253,7 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
     // range a blade is a pixel wide at anyway.
     let level = cell.metadata.x >> 8u;
     if level != finest_level() { return false; }
-    // Nothing grows where water stands at any tide (`flora-v2` 12.11).
+    // Nothing grows where water stands (`flora-v2` 12.11).
     if ((cell.metadata.y >> 25u) & 1u) == 1u { return false; }
     if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
     if distance(params.camera.xyz,center) >= reach { return false; }
@@ -302,7 +302,7 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     // trees per level out, each wider (the surface pass), so the cover holds.
     // A town's footprint grows nothing (`cities-in-the-world` decision 3):
     // bit 24 of the material word, `planet_terrain::CLEARED_BIT`.
-    // Nor a cell water stands on at any tide (`flora-v2` 12.11): bit 25,
+    // Nor a cell water stands on (`flora-v2` 12.11): bit 25,
     // `pbd_core::flora::FLOODED_BIT`.
     if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
@@ -597,15 +597,16 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Not over a pit dug below sea level that the sea has not reached: its
     // column says dry (`volumetric-water` phase 2, the record's
     // `DRY_SHEET_BIT` in `spare.z`).
-    // Under the tide's high water too (`lod_spare.w`, nought with no tide),
-    // so the sheet runs on over a beach the tide covers (`ocean-environments`
-    // B7); where the ground stands over the sheet, the ground hides it.
+    // Under the high-water line (`lod_spare.w`, `planet_terrain::high_water_m`,
+    // the sea's level: `no-tides`), so the sheet runs on to the shore
+    // (`ocean-environments` B7); where the ground stands over the sheet, the
+    // ground hides it.
     // Or a river's water over a far cell (`spare.w`, design 13).
-    // And over every cell the sea's surface reaches at some tide whatever
+    // And over every cell the sea's surface reaches whatever
     // its ground's or roof's height (`SEA_REACH_BIT`, 4u: a cavern under a
     // bank opening onto the sea, `ocean-environments` B22); the Rust
     // `planet::column::sheet_listed` is this test for the CPU's readers.
-    if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
+    if !cascade && (cell.direction_height.w < params.lod_spare.w
         && (cell.spare.z & 2u) == 0u || (cell.spare.z & 4u) != 0u || cell.spare.w != 0u) {
         // A far river's sheet stands at its own surface, metres over the sea
         // (`water.wgsl`'s vertex: over the cell's ground by a hair at least),

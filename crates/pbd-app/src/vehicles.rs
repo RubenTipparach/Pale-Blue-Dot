@@ -264,17 +264,12 @@ fn step_vehicles(
         let over_land = crate::planet::terrain::surface_height(direction) >= 0.0;
         let global = world.frame.physics_center() + craft.body.position + world.physics.0.origin;
         // A river or a lake over the sea's level floats the craft on its own
-        // surface (`small-boats` design 2b): no tide, its waves shoaled
-        // to nothing, and the surface's slope as the current.
+        // surface (`small-boats` design 2b): its waves shoaled to nothing,
+        // and the surface's slope as the current.
         let fresh = contact.and_then(|c| fresh_water(c, craft.body.position));
         let env = Surroundings {
             sea: &sea.table,
             sea_state: sea.state_at(world.air.as_deref(), direction),
-            tide: if fresh.is_some() {
-                Vec4::ZERO
-            } else {
-                sea.tide
-            },
             sea_radius: fresh.map_or(sea.radius as f64, |f| f.surface),
             depth: fresh.map_or(sea.depth_at(direction), |f| f.depth),
             air: AirHere {
@@ -931,9 +926,7 @@ fn scripted_board(world: &mut World) {
         // Clear of the Loon, in water deep enough to float free.
         let on = place::open_water_near(sea, loon.normalize().as_vec3(), 8.0, 1.5)?;
         let toward = (on - loon).normalize_or(on.normalize().any_orthonormal_vector());
-        let tide = world.resource::<Sea>().tide;
-        let mut craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
-        place::on_the_tide(&mut craft, tide);
+        let craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
         let entity = place::spawn_craft(world, craft);
         launch::write_fleet(world);
         info!("--aboard: launched a {} for the capture", kind.name());

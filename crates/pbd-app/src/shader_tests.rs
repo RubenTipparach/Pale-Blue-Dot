@@ -397,7 +397,7 @@ fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
 
 /// `horizon-haze` 4, the sea's horizon line: from inside the shell, a ray
 /// that meets the solid sphere is one the sea should have covered, and where
-/// the tided sheet dips under that sphere it does not. The dome draws the
+/// the sheet's offset and its troughs dip under that sphere it does not. The dome draws the
 /// horizon's air there, the ray just over the sphere's tangent, instead of a
 /// sliver of air cut at the hit, which was a dark line along the horizon.
 /// From outside, the cut stays: the column over the ground needs it.
