@@ -7,28 +7,6 @@ marshes mockup; nothing here is built.
 
 ## ADDED Requirements
 
-### Requirement: Water life is seen through the water it is in
-
-Every creature and sea place under water SHALL be lit and tinted as the
-seabed beside it is: by the terrain's light (its fill, its sun, the sun's
-shadow and the lamps), dimmed by the daylight left at its depth under the
-surface of the water it is in, and taking the same share of the water's
-deep colour as the seabed at that depth. Seen from under the water it SHALL
-take the murk by distance, and from above the water's transmission, as the
-seabed does. Its atlas and palette SHALL be kept, with no outline.
-
-#### Scenario: A fish near the surface is not a sticker
-
-- **WHEN** the eye is 2 m under a shallow sea by day, looking at a school 3 m off
-- **THEN** the fish are dimmed and tinted toward the water as the reef
-  beside them is, not drawn in the atlas's full colours
-
-#### Scenario: Fresh water dims too
-
-- **WHEN** a school of perch swims 1 m under a lake's surface that stands
-  over sea level
-- **THEN** its depth is read from the lake's surface and it is dimmed by it
-
 ### Requirement: A species lives in environments as well as water classes
 
 Each species SHALL list the environments it lives in (reef, kelp, vent,
