@@ -42,3 +42,15 @@
   it.
 - [ ] 4.2 Frame time of an edit at the coast on the desktop (the extra
   walk, design 6), on the owner's machine. Not measured in the cloud.
+
+## 5. No sea shading in a dry hole (the owner, 2026-11-19)
+
+- [ ] 5.1 Measure why a dry dug pit's floor and lower walls are green
+  (design 10): the instrument's captures inside and above the beach pit,
+  taken after the dig's ground has finished fading in. Verify: the finding
+  in design 10.
+- [ ] 5.2 The fix, if the sea's shading reaches the pit. Verify: the shader
+  tests; the instrument shows no fragment of the pit tinted.
+- [ ] 5.3 Captures before and after, inside and above, and one with the sun
+  on the pit's floor (`docs/screenshots/dry-holes/`, README). Verify: the
+  pit's floor and walls are the beach's tan sand, shade aside.

@@ -255,3 +255,30 @@ the next task (tasks 4.1) and not built in this pass.
 - `dry_hole_report` at the places above, before and after.
 - Captures, before and after, in `docs/screenshots/dry-holes/` (lavapipe,
   fixed step: looks, not frame time).
+
+## 10. A dry hole is not shaded as sea (the owner, 2026-11-19)
+
+The owner, on `beach-pit-inside-before-after.jpg` and
+`beach-pit-above-before-after.jpg`: "It shouldn't shade dry holes at all",
+and on the second one's AFTER half: "This is green as fuck." In both AFTER
+halves the pit's floor and lower walls are green, and its upper walls the
+tan sand of the beach. The boundary between the two is level, about half a
+metre under the sea's level: the height of the drawn sheet.
+
+**Question.** Is that (a) the sea's underwater shading
+(`planet_surface.wgsl`, "Submerged terrain": downwelling attenuation, the
+deep colour mix, caustics, the `above_water` gate on rain wetness) still
+reaching fragments of a dry pit, or (b) ordinary shade, sand lit only by the
+blue sky in the pit's shadow?
+
+**The instrument.** Copies of the capture build with a modified
+`planet_surface.wgsl` in a scratch asset folder beside the exe (a "shipped"
+build reads its own `assets/`, `paths::assets_dir`), so nothing in the
+repository's source changes for it. Every fragment the submerged branch
+tints (`water_depth > 0`) is painted by why its water surface stood over it:
+- blue: `input.slot == 0`, off the tier: the sea's sphere, the sheet radius;
+- red: on the tier, the column's packed water top within half a metre of
+  the sea's level, which leaves the sea's sphere in place;
+- magenta: on the tier, the column's own water over the fragment.
+A fragment the branch leaves alone is drawn as the game draws it. The same
+pit, inside and above, as the captures above.
