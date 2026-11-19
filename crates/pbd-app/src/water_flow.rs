@@ -1006,7 +1006,7 @@ fn cell_pieces(
     let flow = here.flow();
     let falling = flow.is_some_and(|(_, f)| f);
     // The sea's own top: the sheet draws it wherever it is listed, under a
-    // roof too, so a sea cave has one surface at the sheet's tided height.
+    // roof too, so a sea cave has one surface at the sheet's height.
     let sheet = here == Material::Water && layer + 1 == sea && f.sheet_listed;
     let levels = top_levels(tier, f, slot, layer);
     let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);

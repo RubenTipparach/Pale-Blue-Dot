@@ -105,8 +105,8 @@ impl TreeTable {
     /// pass's rule, which reads the same numbers from the uniform
     /// ([`Self::packed`]).
     pub fn grows(&self, tree_id: u32, word: u32) -> bool {
-        // A town's cleared footprint (bit 24), or a cell water stands on at
-        // any tide ([`FLOODED_BIT`]).
+        // A town's cleared footprint (bit 24), or a cell water stands on
+        // ([`FLOODED_BIT`]).
         if (word >> 24) & 1 == 1 || (word >> FLOODED_BIT) & 1 == 1 {
             return false;
         }
@@ -140,8 +140,7 @@ impl TreeTable {
 }
 
 /// The bit of a record's material word that says water stands on the cell
-/// at some tide (`flora-v2` 12.11): the sea, the tide's reach, a river, a
-/// pool. Nothing grows there: no tree, cactus or ground clutter. Set by the
+/// (`flora-v2` 12.11): the sea, a river, a pool. Nothing grows there: no tree, cactus or ground clutter. Set by the
 /// app where it builds a record (`surface_code`, `reconcile_surface`); read
 /// by [`TreeTable::grows`] and the visibility and surface passes. A draw-time
 /// fact, never saved, so no generator version moves for it.

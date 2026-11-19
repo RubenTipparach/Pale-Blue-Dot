@@ -23,8 +23,6 @@ struct World {
     gravity: f64,
     current: DVec3,
     seconds: f64,
-    /// The tide: the moon's direction and the range (`sea::tide_m`).
-    tide: glam::Vec4,
 }
 
 impl World {
@@ -42,7 +40,6 @@ impl World {
             gravity: G,
             current: DVec3::ZERO,
             seconds: 1000.0,
-            tide: glam::Vec4::ZERO,
         }
     }
 
@@ -54,7 +51,6 @@ impl World {
             let env = Surroundings {
                 sea: &self.sea,
                 sea_state: self.sea.state(self.sea_wind, self.wind),
-                tide: self.tide,
                 sea_radius: RADIUS,
                 depth: (RADIUS - self.ground).max(0.0) as f32,
                 air: AirHere {
@@ -169,7 +165,6 @@ fn loon_skeg_immersion_is_independent_of_the_lateral_plane() {
         let env = Surroundings {
             sea: &world.sea,
             sea_state: world.sea.state(0.0, Vec3::ZERO),
-            tide: glam::Vec4::ZERO,
             sea_radius: RADIUS,
             depth: 40.0,
             air: AirHere {
@@ -221,7 +216,6 @@ fn loon_reports_a_working_rudder_at_rest_and_during_recovery() {
     let env = Surroundings {
         sea: &world.sea,
         sea_state: world.sea.state(0.0, Vec3::ZERO),
-        tide: glam::Vec4::ZERO,
         sea_radius: RADIUS,
         depth: 40.0,
         air: AirHere {
@@ -300,7 +294,6 @@ fn a_wet_foil_uses_orbital_velocity_and_current_at_its_own_depth() {
     let env = Surroundings {
         sea: &world.sea,
         sea_state: world.sea.state(12.0, Vec3::X * 12.0),
-        tide: glam::Vec4::ZERO,
         sea_radius: RADIUS,
         depth: 40.0,
         air: AirHere {
@@ -703,47 +696,6 @@ fn a_boat_good_names_its_kind() {
         "the rowboat is retired"
     );
     assert!(Kind::Tube.paddled() && Kind::Raft.paddled() && Kind::Loon.paddled());
-}
-
-/// At high water every boat floats on the tide (`small-boats`): with the moon
-/// overhead and a 1.2 m range the sea stands 0.8 m over its mean, and each
-/// open or decked boat rides up with it, its gunwale clear and its bilge dry.
-/// (Until the sea's reach counted the tide, every cell more than the waves'
-/// height over the mean was taken as dry, and boats sat on the mean and
-/// swamped under the tide.)
-#[test]
-fn every_boat_floats_on_the_tide() {
-    for kind in [Kind::Loon, Kind::Tube, Kind::Raft] {
-        // Put on the water where it stands, as a launch or a new world's
-        // placement puts it.
-        let high = f64::from(crate::sea::tide_m(
-            glam::Vec3::Y,
-            glam::Vec4::new(0.0, 1.0, 0.0, 1.2),
-        ));
-        let mut craft = at_pole(kind, high, 0.0);
-        craft.occupied = true;
-        craft.weigh();
-        let mut world = World::new(RADIUS - 40.0);
-        world.tide = glam::Vec4::new(0.0, 1.0, 0.0, 1.2);
-        world.run(&mut craft, 30.0, |_| Input::default());
-        let freeboard = match &craft.telemetry {
-            crate::vehicle::Telemetry::Loon(t) => t.freeboard,
-            _ => unreachable!(),
-        };
-        let lift = craft.reference_position().length() - RADIUS;
-        println!(
-            "{} at high water: lifted {lift:+.3} m, freeboard {freeboard:+.3} m, bilge {:.1} kg",
-            kind.name(),
-            craft.bilge_kg
-        );
-        assert!(lift > 0.4, "{kind:?} did not rise with the tide: {lift}");
-        assert!(freeboard > 0.05, "{kind:?} under the tide: {freeboard}");
-        assert!(
-            craft.bilge_kg < 5.0,
-            "{kind:?} took water: {}",
-            craft.bilge_kg
-        );
-    }
 }
 
 /// The tube's rider turns it by kicking on one side (`small-boats`): ten

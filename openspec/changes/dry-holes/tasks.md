@@ -34,10 +34,25 @@
 
 ## 4. Next
 
-- [ ] 4.1 The tide as flow (design 7): the sea's cells near the player rise
-  and fall with the tide, so the high tide flows into a dug pit in an
-  intertidal beach and the ebb leaves a tide pool. It needs tide water the
-  save can tell from a player's. Not started: written up, waiting for a
-  request.
+- [x] 4.1 Dropped (2026-11-19). It was the tide as flow (design 7): the
+  sea's cells near the player rising and falling with the tide. The owner
+  had the tide itself removed ("Remove literal tide feature"; `no-tides`),
+  so there is no tide left to flow, no intertidal beach for a pit to sit in
+  and no tide water for a save to tell from a player's. Nothing is built for
+  it.
 - [ ] 4.2 Frame time of an edit at the coast on the desktop (the extra
   walk, design 6), on the owner's machine. Not measured in the cloud.
+
+## 5. No sea shading in a dry hole (the owner, 2026-11-19)
+
+- [x] 5.1 Measure why a dry dug pit's floor and lower walls are green
+  (design 10): the instrument's captures inside and above the beach pit,
+  taken after the dig's ground has finished fading in. Verify: the finding
+  in design 10 (the water's compose, not shade).
+- [x] 5.2 The terrain writes "water may stand over this" to the scene's
+  alpha; the compose takes a pixel for wet only as far as it says (design
+  10). Verify: `a_dry_face_is_not_seen_through_the_sea` and the shader
+  tests; the compose instrument shows no pixel of the pit wet.
+- [x] 5.3 Captures before and after, inside and above, and one with the sun
+  on the pit's floor (`docs/screenshots/dry-holes/`, README). Verify: the
+  pit's floor and walls are the beach's tan sand, shade aside.

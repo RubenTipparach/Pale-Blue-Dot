@@ -863,7 +863,7 @@ fn tree_biome(word: u32) -> u32 {
 // (`has_nearby_foliage`), the same lines, for the cap under it (design 9.4).
 // `pbd_core::flora::grows_tree` is the CPU's copy and a test holds all three.
 fn stands_tree(cell: Cell) -> bool {
-    // Nor a cell water stands on at any tide (`flora-v2` 12.11): bit 25,
+    // Nor a cell water stands on (`flora-v2` 12.11): bit 25,
     // `pbd_core::flora::FLOODED_BIT`.
     if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
@@ -3454,6 +3454,14 @@ fn reflect_gather(@builtin(position) at: vec4<f32>) -> GatherOut {
 // decides each light's strength now (the sky's night term there, gone near
 // the camera where the town itself stands): `night_lights::FarLights::pack`.
 var<private> far_glow: vec3<f32> = vec3<f32>(0.0);
+// What the terrain writes to the scene's alpha (`dry-holes` design 10): nought
+// where the column under the fragment says no water stands over it, one
+// elsewhere. The water's compose, which lays the sea's murk on every pixel
+// under the sea's surface, takes a pixel for wet only as far as this says it
+// may be, so a dry pit or cave dug under the sea's level is never seen through
+// sea. Off the tier (no column) it stays one: the height field's sea is the
+// sphere's, as the compose has it.
+var<private> water_over: f32 = 1.0;
 const FAR_LIGHT_TINT: vec3<f32> = vec3<f32>(1.0, 0.70, 0.36);
 // How bright a point of a light of strength one is, HDR.
 const FAR_LIGHT_GAIN: f32 = 3.0;
@@ -3534,7 +3542,7 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
     // The far lights go under the haze like the ground they stand on.
     var color = lit + far_glow;
 #ifdef TERRAIN_OFF_FOG
-    return vec4(color, 1.0);
+    return vec4(color, water_over);
 #endif
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
@@ -3556,7 +3564,7 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
     split_k = 1.-fog*0.55;
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
     color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
-    return vec4(color,1.);
+    return vec4(color,water_over);
 }
 
 @fragment
@@ -3998,16 +4006,14 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // was a dry room full of ocean. The column says that pocket is air.
     // Capped at the sheet, which is where the sea's own surface is drawn, so
     // a column whose water reaches sea level reads exactly as it did.
-    // The tide (`water_deep.w`, at the camera) lifts or lowers the sheet, and
-    // the tint with it; a column's own water is the sea where it reaches sea
-    // level, and takes the tide too (`ocean-environments` 5.1).
+    // The sea's surface stands at one level, the sheet's (`no-tides`); a
+    // column's own water is the sea where it reaches sea level.
     // Water standing over the sea's level (a river, a pool, a flowing sheet)
     // is its own: the tint stops at ITS surface, the flowing level included,
     // and never at the sea's (owner, 2026-11-16: "underwater ground tint is
     // happening before the water line"). Each fragment is tested against it
     // by its own radius.
-    let tided = params.water_absorption.w + params.water_deep.w;
-    var water_surface = tided;
+    var water_surface = params.water_absorption.w;
     if input.slot != 0u {
         let column_top = column_water_top_m(columns[input.slot-1u]);
         if column_top < -0.5 {
@@ -4017,6 +4023,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         }
     }
     let water_depth = max(water_surface - length(input.position), 0.);
+    if input.slot != 0u && water_depth <= 0. { water_over = 0.0; }
     if water_depth > 0. {
         // The daylight left at this depth (downwelling): the deep goes dark
         // inside the column (`ocean-environments` B2).

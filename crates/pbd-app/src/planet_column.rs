@@ -1362,8 +1362,8 @@ pub fn reconcile_surface(
     } else {
         render_code(column.drawn_material(top))
     };
-    // And whether water stands on it at any tide (`flora-v2` 12.11): the
-    // column's own water on its top, or a top under the high tide's sheet.
+    // And whether water stands on it (`flora-v2` 12.11): the column's own
+    // water on its top, or a top under the high-water line.
     // Set or cleared, so a pool that drains grows its plants again. The code
     // above is left as it was: under the sea it is the beach's sand, which
     // stood a beach tree in the sea before this bit.
@@ -1561,14 +1561,14 @@ pub const GLOW_FLOWER_BIT: u32 = 1;
 
 /// Set in a finest record's `spare[2]` where its cell's ground is under the
 /// high water and yet no sea sheet lies over it: a pit or a hollow the sea's
-/// water reaches at no tide (`volumetric-water` phase 2, `ocean-environments`
+/// water does not reach (`volumetric-water` phase 2, `ocean-environments`
 /// B22), or a river's mouth whose own top is the cell's one surface (B18).
 /// The visibility pass lists no sea sheet over it, so a sealed pocket is dry
 /// on screen as it is in the column.
 pub const DRY_SHEET_BIT: u32 = 2;
 
 /// Set in a finest record's `spare[2]` where the sea's surface reaches the
-/// cell at some tide (`ocean-environments` B22, [`ColumnTier::sea_reach`]):
+/// cell (`ocean-environments` B22, [`ColumnTier::sea_reach`]):
 /// the sheet is listed over it whatever its ground's or roof's height.
 pub const SEA_REACH_BIT: u32 = 4;
 
@@ -1620,8 +1620,8 @@ pub fn mark_sea(tier: &ColumnTier, finest: &mut [GpuCell]) {
             top.is_water() && top != Material::Water
         };
         let reached = reach.get(slot).copied().unwrap_or(false) && !river_over && !flowing_top;
-        // Dry: under the high water, and the sea's surface reaches it at no
-        // tide (a pit or a hollow nothing joins to the sea), unless its
+        // Dry: under the high water, and the sea's surface does not reach it
+        // (a pit or a hollow nothing joins to the sea), unless its
         // column holds water at the sea's top (a pool somebody poured), or
         // a river stands over it.
         let dry = sea > 0
@@ -1646,11 +1646,13 @@ pub fn mark_sea(tier: &ColumnTier, finest: &mut [GpuCell]) {
 }
 
 impl ColumnTier {
-    /// Which slots the sea's surface reaches at some tide (`ocean-environments`
-    /// B22): a walk from the open sea (a column holding the sea's water at
-    /// its top layer, open air over it, its record under sea level) through
-    /// every layer that is not solid, up to the high water's, across the
-    /// sides and up and down. A pit behind a beach the tide overtops, and a
+    /// Which slots the sea's surface reaches (`ocean-environments` B22): a
+    /// walk from the open sea (a column holding the sea's water at its top
+    /// layer, open air over it, its record under sea level) through every
+    /// layer that is not solid, up to the high water's and never short of the
+    /// first layer over the sea's level (the waves' margin; `no-tides`),
+    /// across the sides and up and down. A pit behind a beach at the sea's
+    /// level, and a
     /// cavern under a bank opening onto the sea, are reached; a hollow inland
     /// that joins no water is not. The rim is walked like any column: its
     /// water is the sea's.
@@ -1670,8 +1672,8 @@ impl ColumnTier {
         // over it is its own, and the sea's surface does not run through it.
         // Not the air under the sea's level in a column a player dug or
         // built in (`dry-holes` design 3): a dug hole is the sea's only where
-        // the sea's water has flowed into it, never because the tide stands
-        // over ground beside it.
+        // the sea's water has flowed into it, never because the sea's air
+        // over ground beside it joins it.
         let dug = |slot: usize| self.water.dug.get(slot).copied().unwrap_or(false);
         let passable = |slot: usize, layer: usize| {
             let m = self.columns[slot].material(layer);
@@ -1699,8 +1701,8 @@ impl ColumnTier {
                 visit(side, layer, &mut open);
             }
         }
-        // A dug column the walk met only over the sea's level (the tide's air
-        // over a beach beside it) is the sea's where its top layer under the
+        // A dug column the walk met only over the sea's level (the air over a
+        // beach beside it) is the sea's where its top layer under the
         // sea's level is the sea's water or solid; with air there, it is a
         // dry hole, or one the sea is still flowing into.
         for (slot, reach) in reached.iter_mut().enumerate() {
@@ -3663,7 +3665,7 @@ mod water_tier_tests {
     }
 
     /// `ocean-environments` B22, the owner's caverns beside the sea: a pit
-    /// behind a beach the tide overtops and a cavern opening off it under a
+    /// behind a beach at the sea's level and a cavern opening off it under a
     /// bank are reached by the sea's surface, so the sheet lies over both
     /// and the mesher leaves the sea's top to it; a pit inland that joins no
     /// water is not, and no sheet lies over it, though its ground is as low.
@@ -3826,19 +3828,19 @@ mod water_tier_tests {
 
     /// `dry-holes` (the owner, 2026-11-18: "We should be able to dig holes
     /// below water line and not have it filled with water too"): a pit dug
-    /// from the land beside a beach the high tide covers, its floor four
+    /// from the land beside a beach at the sea's level, its floor four
     /// layers under the sea's, joins no water. It stays air after the rule
     /// has run, the sea's reach does not take it, no sheet is listed over it
     /// and it is marked dry; the same hollow made by the generator (no edit)
-    /// is still under the tide's sheet (`ocean-environments` B22).
+    /// is still under the sea's sheet (`ocean-environments` B22).
     #[test]
     fn a_pit_dug_below_the_sea_beside_a_beach_stays_dry() {
         let sea = sea_layer();
         let mut tier = line();
-        // Column 5 a beach whose sand tops out a metre over the sea's level,
-        // under the high water; 6 and 7 dug from the land to four layers
+        // Column 5 a beach whose sand tops out at the sea's level, the air
+        // over it the sea's reach; 6 and 7 dug from the land to four layers
         // under the sea's level.
-        carve(&mut tier, 5..=5, sea + 1..=LAND);
+        carve(&mut tier, 5..=5, sea..=LAND);
         let generated = {
             let mut t = tier.clone();
             carve(&mut t, 6..=7, sea - 4..=LAND);
@@ -3860,14 +3862,14 @@ mod water_tier_tests {
             }
         }
         let reach = tier.sea_reach();
-        assert!(reach[5], "the beach is the tide's");
+        assert!(reach[5], "the beach is the sea's reach");
         assert!(!reach[6] && !reach[7], "the dug pit is not");
         let finest = marked(&mut tier);
         for (slot, cell) in finest.iter().enumerate().take(8).skip(6) {
             assert!(!sheet_listed(cell), "no sheet over the pit {slot}");
             assert!(cell.spare[2] & DRY_SHEET_BIT != 0, "dry {slot}");
         }
-        assert!(sheet_listed(&finest[5]), "the tide's sheet over the beach");
+        assert!(sheet_listed(&finest[5]), "the sea's sheet over the beach");
         // The generator's own hollow there keeps B22's sheet.
         let mut generated = generated;
         let finest = marked(&mut generated);
