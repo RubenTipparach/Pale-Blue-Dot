@@ -27,19 +27,6 @@ map's environment layer SHALL all read that function.
 - **WHEN** a point is 4 m deep and its coldest month's sea is 21 C
 - **THEN** it is not a reef
 
-### Requirement: New water places are a new generator version
-
-Reef, kelp, vent, trench, sea-ice, stepped-river and marsh-pool cells SHALL be
-made only by a new terrain generator version, for new worlds. A world SHALL
-keep the generator version it names, cell for cell, and opening it SHALL NOT
-rebuild it with the new places.
-
-#### Scenario: An old world opens unchanged
-
-- **WHEN** a world saved on the previous generator version is opened by a
-  build that carries the new one
-- **THEN** its ground digest matches the previous version's pinned digest
-
 ### Requirement: Turbidity per environment
 Once the environment function exists, the turbidity SHALL be the
 environment's (reef, kelp, polar, marsh and the rest), replacing the reading

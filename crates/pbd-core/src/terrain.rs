@@ -21,7 +21,7 @@ use crate::hex::{Hex, Voxel};
 /// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 12;
+pub const GENERATOR_VERSION: u32 = 14;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the
@@ -93,6 +93,25 @@ pub enum Material {
     /// kitchen's first station and a light. Like every light it is neither
     /// solid nor opaque, and the column pass draws it as a lamp.
     Campfire = 21,
+    // 22 and 23 are held for the kitchen.
+    /// The sea's cells (`ocean-environments` design B24), made by generator
+    /// version 14 and dug like any ground. Each is drawn as an existing
+    /// render code from a sheet of its own, as ore is, so the column's
+    /// four-bit material word does not widen. Reef rock: a reef's limestone,
+    /// the ocean sheet's (3,0). Solid.
+    ReefRock = 24,
+    /// Sea ice: a floe's cell, standing on polar water; the frozen wastes'
+    /// layered glacial ice. Solid.
+    SeaIce = 25,
+    /// Basalt: the ground round a vent; the basalt wastes' own. Solid.
+    Basalt = 26,
+    /// A mussel bed: the shells packed on a vent's basalt; the ocean sheet's
+    /// shell bed (3,1). Solid.
+    MusselBed = 27,
+    /// Sticks: a beaver's dam and lodge (`ocean-environments` design B25),
+    /// laid by the `beaver` world process; the local trees' bark, as the
+    /// workbench is drawn. Solid, so flowing water treats a dam as a wall.
+    Sticks = 28,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -237,7 +256,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 22] = [
+    pub const ALL: [Material; 27] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -260,6 +279,11 @@ impl Material {
         Material::Forge,
         Material::Workbench,
         Material::Campfire,
+        Material::ReefRock,
+        Material::SeaIce,
+        Material::Basalt,
+        Material::MusselBed,
+        Material::Sticks,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the

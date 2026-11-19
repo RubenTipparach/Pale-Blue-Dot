@@ -76,3 +76,35 @@ SHALL NOT rise and fall with the moon or the time of day (`no-tides`).
 - **WHEN** the eye rises from standing on a beach over the sea's water into air over it
 - **THEN** the composite's waterline stays at the sea's drawn surface
   (`planet::water::tests::a_jump_over_a_beach_keeps_the_composites_waterline_at_the_sea`)
+
+### Requirement: New water places are a new generator version
+Reef, kelp, vent, trench, sea-ice, stepped-river and marsh-pool cells SHALL be
+made only by a new terrain generator version, for new worlds. A world SHALL
+keep the generator version it names, cell for cell, and opening it SHALL NOT
+rebuild it with the new places.
+
+#### Scenario: An old world opens unchanged
+
+- **WHEN** a world saved on the previous generator version is opened by a
+  build that carries the new one
+- **THEN** its ground digest matches the previous version's pinned digest
+
+### Requirement: The sea's cells are ground a player digs
+On a world of generator version 14 or later, a reef's top SHALL be reef rock
+in patches, a vent's ground basalt with mussel beds in patches, and polar
+water SHALL stand floes of sea ice one cell high where it is at least 2 m
+deep. Each SHALL be a cell like any ground: dug with its tool, giving its
+own block item, placed back where the player puts it, and drawn from its own
+sheet's tile whether generated or placed, with the column's four-bit
+material word unchanged. A world of an older version SHALL have none of
+them.
+
+#### Scenario: Reef rock is dug and placed
+- **WHEN** the player digs a reef rock cell with a pickaxe
+- **THEN** a reef rock block comes into the pack, and placed on land it is
+  drawn as reef limestone
+
+#### Scenario: An old world keeps its floes as pieces
+- **WHEN** a world saved on generator version 12 is opened
+- **THEN** its polar sea has no sea ice cells, its floes are the pieces
+  they were, and its ground and top-block digests match version 12's

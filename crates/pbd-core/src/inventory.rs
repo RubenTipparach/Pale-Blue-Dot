@@ -357,6 +357,11 @@ pub fn material_name(material: Material) -> &'static str {
         Material::Forge => "forge",
         Material::Workbench => "workbench",
         Material::Campfire => "campfire",
+        Material::ReefRock => "reef rock",
+        Material::SeaIce => "sea ice",
+        Material::Basalt => "basalt",
+        Material::MusselBed => "mussel bed",
+        Material::Sticks => "sticks",
         crate::flowing_water!() => "water",
     }
 }
