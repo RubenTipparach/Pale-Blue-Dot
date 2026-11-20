@@ -327,6 +327,24 @@ fn step_vehicles(
                 freeboard
             );
         }
+        // MEASUREMENT (`river-craft` 11.1): the oars' stage each time it
+        // changes, with `PBD_ROW_TRACE` set, for the captures' timing.
+        if aboard.0 == Some(entity)
+            && std::env::var_os("PBD_ROW_TRACE").is_some()
+            && let Some((_, rowing)) = vehicle.craft.rowing()
+            && rowing.stage != timing.2
+        {
+            timing.2 = rowing.stage;
+            info!(
+                "ROW_TRACE {:.3} s: {:?}, {:.2} s into the stroke, input {:?}, right grip {:.2?}, eye {:.2?}",
+                clock.0,
+                rowing.stage,
+                rowing.t,
+                input.forward,
+                rowing.oars[1].geom.grip.to_array(),
+                vehicle.craft.eye_local().to_array()
+            );
+        }
         // The player aboard is carried: the walker stands at the craft's exit,
         // so a save taken aboard puts them on foot beside it on reload.
         if aboard.0 == Some(entity) {
@@ -344,7 +362,12 @@ fn step_vehicles(
 
 /// MEASUREMENT (`town-frame-time` decision 6): seconds since the last report,
 /// and each kind's steps and seconds spent stepping.
-type StepTiming = (f32, std::collections::BTreeMap<&'static str, (u32, f64)>);
+/// The third is the last stroke stage traced (`PBD_ROW_TRACE`).
+type StepTiming = (
+    f32,
+    std::collections::BTreeMap<&'static str, (u32, f64)>,
+    Option<pbd_core::vehicle::oars::Stage>,
+);
 
 /// MEASUREMENT (`town-frame-time` decision 6): every 5 s, each kind's mean
 /// step and how many were stepped, then forget them.
@@ -366,7 +389,8 @@ fn report_steps(timing: &mut StepTiming, dt: f32) {
         })
         .collect();
     info!("VEHICLE_STEP {}", line.join("; "));
-    *timing = Default::default();
+    timing.0 = 0.0;
+    timing.1.clear();
 }
 
 /// One craft's tick: stepped, held back a tick where it left its domain,

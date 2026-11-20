@@ -218,6 +218,10 @@ impl Builder<'_> {
             .add(StandardMaterial {
                 base_color: Color::srgb(1.0, 0.8, 0.5),
                 emissive: LinearRgba::rgb(4.0, 2.4, 1.0),
+                // A flame draws its own light: unlit, so the field does not
+                // take it over and darken it with the night (`field_light`,
+                // `take_the_field`).
+                unlit: true,
                 ..default()
             });
         let flame = self.pivot(parent, Moving::Flame, Transform::from_translation(at));
