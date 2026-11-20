@@ -357,7 +357,8 @@ pub fn pick_script(
             }
             return;
         };
-        let (lat, lon) = pbd_core::geo::lat_lon(cap.normalize_or(Vec3::Y)).degrees();
+        let pbd_app::place::Place { lat, lon, .. } =
+            pbd_app::place::Place::of(cap.normalize_or(Vec3::Y));
         info!("PICK_GLOW going to a glowing mushroom {d:.2} m from the eye, at {lat:.5} {lon:.5}");
         *target = Some(cap);
         *count = 0;

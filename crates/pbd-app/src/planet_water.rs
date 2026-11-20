@@ -3299,12 +3299,13 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         // The lit rain's lamps are one array of eight lanes (`lighting-model`),
-        // and a fall's feet two (`water-flow` 6.6).
+        // a fall's feet two (`water-flow` 6.6), and the carried lights one
+        // (`glowing-mushrooms` design 8).
         let eights = block.matches("array<vec4<f32>, 8>").count();
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * eights + 8 * sh;
-        assert_eq!((mat4, vec4, eights, sh), (4, 101, 3, 1));
+        assert_eq!((mat4, vec4, eights, sh), (4, 109, 4, 1));
         assert_eq!(crate::water_flow::FALL_FEET_MAX, 8);
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
@@ -3644,12 +3645,16 @@ mod water_junction_tests {
                 overlaps += 1;
             }
             // The eye 0.3 m under the local water: the decision follows it.
+            // A sheet thinner than that (a shallow flow over its bed) takes
+            // the eye halfway down instead, since 0.3 m under its top is in
+            // the ground, where no eye can be.
             if let Here::Inland(s) | Here::Sea(s) = here {
                 let water_top = match here {
                     Here::Sea(_) => terrain::terrain_config().sea_level_m,
                     _ => s,
                 };
-                let eye_alt = water_top - 0.3;
+                let bed = pbd_core::column::layer_altitude(ground + 1);
+                let eye_alt = (water_top - 0.3).max((bed + water_top) * 0.5);
                 let eye = match column.water_surface(eye_alt) {
                     Some(surface) => {
                         let t = pbd_core::column::layer_at(surface - 1e-3);
