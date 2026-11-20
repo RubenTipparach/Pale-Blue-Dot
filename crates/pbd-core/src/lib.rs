@@ -32,6 +32,7 @@ pub mod inventory;
 pub mod lamp_bake;
 pub mod light;
 pub mod liquid;
+pub mod locale;
 pub mod map;
 pub mod missions;
 pub mod night_lights;

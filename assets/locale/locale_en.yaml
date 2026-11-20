@@ -1,0 +1,30 @@
+# Every word the player reads, by dotted key (`openspec/changes/localization`).
+#
+# - Code shows text only through tr("key") or tr_with("key", args); a literal
+#   with words in code fails `cargo test -p pbd-app --test locale`.
+# - Placeholders are named: "Catch {count} fish". Plurals are a map of forms
+#   (one, other) chosen by the `count` argument.
+# - Case is in the text: a title in capitals is written in capitals here.
+# - Another language is locale_<code>.yaml beside this file, with the same keys
+#   (tools/locale/locale_coverage.py <code> lists what it lacks).
+# - Keys are grouped by the screen or module that shows them.
+
+craft:
+  craft: CRAFT
+interact:
+  key: F
+kitchen:
+  eat_hint: RIGHT CLICK A DISH IN HAND TO EAT IT
+menu:
+  name: NAME
+mission_tree:
+  close: X
+overlay:
+  map_chooses: "M: THE MAP CHOOSES IT"
+  title: GLOBE OVERLAY
+pack:
+  hotbar: HOTBAR
+time:
+  title: TIME
+weather:
+  title: WEATHER
