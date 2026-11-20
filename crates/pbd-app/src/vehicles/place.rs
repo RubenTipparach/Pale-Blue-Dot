@@ -13,7 +13,7 @@ use crate::walking::Walker;
 use avian3d::prelude::Position;
 use bevy::math::DMat3;
 use bevy::prelude::*;
-use pbd_core::vehicle::{Craft, Kind, KindKey};
+use pbd_core::vehicle::{Craft, Kind, KindKey, Mooring};
 use pbd_core::{DQuat, DVec3};
 
 /// How far out the search for a berth goes, m, and its steps.
@@ -32,9 +32,13 @@ const LEVEL_HALF_M: f32 = 5.5;
 /// A new world's start is a level plain: this many of the 120 samples in the
 /// ring 20 to 36 m round it are level spots (`level_plain`).
 const START_LEVEL_SPOTS: usize = 8;
-/// Water the Loon was put in, m under the sea surface (new worlds moor no
-/// Loon now; the tests still find the water an old world's lay in).
-#[cfg(test)]
+/// Moors the Loon at a new world's spawn, as worlds were given one before
+/// 2026-11-19. Only the vehicle tests insert it; the game never does.
+#[derive(Resource)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct StarterLoon;
+
+/// Water the Loon is put in, m under the sea surface.
 const LOON_DEPTH_M: f32 = 1.2;
 /// A new anchor's rode, per metre of depth, plus a margin, m.
 const RODE_PER_DEPTH: f64 = 3.0;
@@ -179,7 +183,7 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
     // The contact field has to exist (it is how the walker stands, and it
     // says the planet is built) but the berths are judged on the height
     // field below, not on it.
-    let (Some(_), Some(_sea)) = (
+    let (Some(_), Some(sea)) = (
         world.get_resource::<PlanetContact>(),
         world.get_resource::<Sea>(),
     ) else {
@@ -214,14 +218,43 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                 }
             }
         }
+        // A new world moors no canoe at the spawn (owner, 2026-11-19, on the
+        // starter Loon at the shore: "this boat shoulve been removed"):
+        // boats are made now (the raft, the tube), and a town's quay moors
+        // its canoes. An old world keeps the one it was given. The vehicle
+        // tests still moor one, to board and sail (`StarterLoon`).
+        None if !world.contains_resource::<StarterLoon>() => {}
         None => {
-            // A new world moors no canoe at the spawn (owner, 2026-11-19, on
-            // the starter Loon at the shore: "this boat shoulve been
-            // removed"): boats are made now (the raft, the tube), and a
-            // town's quay moors its canoes for "Take a boat". An old world
-            // keeps the one it was given. `walker` stays the placement's
-            // anchor for a craft a later change puts here.
-            let _ = walker;
+            // The walker is a physics `Position`.
+            let center = world
+                .resource::<crate::planet::PlanetRenderFrame>()
+                .physics_center();
+            let local = walker.as_dvec3() - center;
+            let berths = Berths::find(sea, local.normalize_or(DVec3::Y).as_vec3());
+            for (kind, berth) in berths.0 {
+                let Some(berth) = berth else {
+                    warn!("no berth for the {} near the spawn", kind.name());
+                    continue;
+                };
+                let mut craft = Craft::new(
+                    kind,
+                    next_id,
+                    specs.clone(),
+                    hulls.clone(),
+                    berth.position,
+                    berth.orientation,
+                );
+                next_id += 1;
+                if let Some(floor) = berth.anchor_floor {
+                    let depth = sea.radius as f64 - floor;
+                    craft.mooring = Some(Mooring {
+                        at: craft.bow().normalize() * floor,
+                        length: rode(depth),
+                        anchored: true,
+                    });
+                }
+                crafts.push(craft);
+            }
         }
     }
     Some(Gathered {
@@ -233,9 +266,7 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
 }
 
 /// A place and a pose for a new craft.
-#[cfg(test)]
 #[derive(Clone, Copy, Debug)]
-#[allow(dead_code)]
 struct Berth {
     position: DVec3,
     orientation: DQuat,
@@ -243,7 +274,6 @@ struct Berth {
     anchor_floor: Option<f64>,
 }
 
-#[cfg(test)]
 struct Berths([(Kind, Option<Berth>); 1]);
 
 #[cfg(test)]
@@ -254,6 +284,7 @@ mod frame_tests {
     fn translated_walker_finds_the_same_body_local_berths() {
         let mut world = World::new();
         world.insert_resource(Fleet::new(Default::default()));
+        world.insert_resource(StarterLoon);
         world.insert_resource(PlanetContact::test_planet(5));
         world.insert_resource(Sea::new(&Default::default()));
         world.insert_resource(crate::saves::WorldSave::memory_only());
@@ -287,7 +318,6 @@ mod frame_tests {
     }
 }
 
-#[cfg(test)]
 impl Berths {
     /// The Loon in the nearest water deep enough for it. (The Tern was put
     /// in the nearest water deep enough for it round the Loon, until

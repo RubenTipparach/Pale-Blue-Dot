@@ -40,7 +40,7 @@ impl Default for GatherSettings {
             fibre_one_in: 3,
             stone_one_in: 3,
             axe_logs: 4,
-            bait_one_in: 3,
+            bait_one_in: 5,
             bait_reach_cells: 3,
             bait_water_m: (-3.0, 2.0),
         }
