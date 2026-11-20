@@ -930,3 +930,33 @@ mod tests {
         assert!(turning.range[0] < 1.0 && turning.range[1] == 1.0);
     }
 }
+
+#[cfg(test)]
+mod instrument {
+    use super::*;
+
+    /// MEASUREMENT (`river-craft` 11.6): where the right grip is from the
+    /// seat's eye through a stroke, as the first-person view sees it: its
+    /// angles below level and to the side.
+    #[test]
+    #[ignore = "instrument: the grip from the eye through the stroke"]
+    fn print_the_grip_from_the_eye() {
+        let s = RowingSpec::default();
+        for i in 0..=17 {
+            let t = s.period() * i as f64 / 17.0;
+            let p = oar_pose(&s, t, 1.0, 1.0);
+            let g = oar_geom(&s, 1.0, &p, 0.0, None);
+            let eye = s.eye(s.lean(p.body));
+            let d = g.grip - eye;
+            let level = (d.x * d.x + d.z * d.z).sqrt();
+            println!(
+                "t {t:.2} {:?}: grip {:.2?}, eye {:.2?}, down {:.0} deg, side {:.0} deg",
+                p.stage,
+                g.grip.to_array(),
+                eye.to_array(),
+                (-d.y).atan2(level).to_degrees(),
+                d.x.atan2(-d.z).to_degrees()
+            );
+        }
+    }
+}
