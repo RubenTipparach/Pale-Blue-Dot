@@ -28,8 +28,9 @@ code wait for the owner's approval of the Sand tab, and a request.
 - [x] 1.4 A test: no blue or teal texel in the beach's (0,0), (1,0), (2,0);
   the desert top's red over blue at least twice the beach's (spec
   "Beach sand and desert sand are drawn apart").
-- [ ] 1.5 Capture shots of a beach and a desert, before and after, into
-  `docs/screenshots/sand-tiles/`.
+- [x] 1.5 Capture shots of a beach and a desert, before and after, into
+  `docs/screenshots/sand-tiles/` (taken into `docs/screenshots/sand-game/`,
+  after only: the before is the mockup's Today).
 
 ## 2. Desert sand as its own block (design 5 (c))
 

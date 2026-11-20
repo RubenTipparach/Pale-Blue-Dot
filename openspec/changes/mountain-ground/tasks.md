@@ -22,7 +22,7 @@
 
 ## 4. Proof
 
-- [ ] 4.1 Before-and-after captures of the same flank, in the air and on
+- [x] 4.1 Before-and-after captures of the same flank, in the air and on
       foot, in `docs/screenshots/mountain-ground/`; the owner's look on 3.2.
 
 ## 5. Mountain flora: write-up and mockup (2026-11-19)
@@ -60,7 +60,8 @@
 - [x] 6.4 `TreeTable::V13` with the tree line, and the scoured ridges in
       `top_material`; Fir and Krummholz in `tree_kit` with their bakes
       (design 12); tests: the CPU and the pass agree, no tree above the line.
-- [ ] 6.5 Before-and-after captures of a range, in the air and on foot, into
+- [ ] 6.5 (Captures done, `docs/screenshots/mountain-game/`; the frame cost on
+      the owner's hardware is owed.) Before-and-after captures of a range, in the air and on foot, into
       `docs/screenshots/mountain-flora/`; the frame cost on the owner's
       hardware (a mountain walk, before and after).
 - [ ] 6.6 Proposals for the owner when asked: tarns, cairns, bilberry as

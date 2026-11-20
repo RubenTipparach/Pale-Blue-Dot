@@ -3976,7 +3976,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
             if pick == 1u { tile = vec2(2.,1.); }
             if pick == 2u { tile = vec2(2.,2.); }
             if pick == 3u { tile = vec2(3.,1.); }
-            if h < sl - 6.0 && mnoise(p/18.0) > 0.66 { tile = vec2(0.,2.); }
+            // Lichen stone a whole cell at a time (a per-fragment noise cut
+            // cells into camouflage), more of it where a coarse noise says.
+            if h < sl - 6.0 && random(input.seed ^ 0x11c4u) < 0.3*mnoise(p/60.0) { tile = vec2(0.,2.); }
             if h > sl && h < sl + 20.0 { tile = vec2(1.,2.); }
             // Scree at a cliff's foot (`pbd_core::flora::SCREE_BIT`).
             if face_up && ((input.material >> MOUNTAIN_SCREE_BIT) & 1u) == 1u { tile = vec2(0.,0.); }
@@ -4011,7 +4013,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if lichen_ok {
             let away = 1.0 - max(dot(n, params.sun.xyz), 0.0);
             let blot = tnoise(tx/3.0, input.seed);
-            if blot > 0.80 - 0.10*away {
+            if blot > 0.88 - 0.06*away {
                 let k = hash(u32(floor(tx.x/6.0)) ^ (u32(floor(tx.y/6.0)) << 8u) ^ input.seed) % 3u;
                 var lc = vec3(0.69, 0.44, 0.23);
                 if k == 1u { lc = vec3(0.60, 0.64, 0.36); }
@@ -4027,6 +4029,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
                 art = mix(art, vec3(0.16, 0.22, 0.10)*(0.7 + 0.6*dot(art, vec3(0.299, 0.587, 0.114))), 0.65);
             }
         }
+        // The fields' sod side on a riser, its grass brought to the turf's
+        // cooler, darker green so the lip meets the meadow over it.
+        if code==GRASS_SIDE_CODE && art.g > art.r*1.05 { art *= vec3(0.5, 0.47, 0.7); }
         if snow_patch > 0.0 && tnoise(tx/4.0, input.seed ^ 0x5a0eu) > 1.0 - snow_patch {
             art = pixel_tile(input.uv, vec2(2.,2.), u32(params.ground.z));
             far = vec3(0.80,0.90,0.91);
