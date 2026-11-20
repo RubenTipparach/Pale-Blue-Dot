@@ -334,10 +334,10 @@ fn find_a_coastal_start_with_hens() {
     let roster = settings
         .land
         .values()
-        .find(|r| r.iter().any(|s| s.name == "Yard hen"))
+        .find(|r| r.iter().any(|s| s.name() == "Yard hen"))
         .expect("a roster with the hen")
         .clone();
-    let hen = roster.iter().position(|s| s.name == "Yard hen").unwrap() as u16;
+    let hen = roster.iter().position(|s| s.name() == "Yard hen").unwrap() as u16;
     let seed = crate::planet::terrain_config().seed;
     let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     let mut found = Vec::new();

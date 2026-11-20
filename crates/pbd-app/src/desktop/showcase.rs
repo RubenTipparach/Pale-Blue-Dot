@@ -1829,7 +1829,7 @@ fn station(
     };
     let k = s.recipes.0.at(row.code).position(|r| r.code == code);
     let Some(k) = k else {
-        return Status::Fail(format!("the {} makes no {code}", row.name));
+        return Status::Fail(format!("the {} makes no {code}", row.name()));
     };
     match bot.phase {
         0 => {
@@ -1839,7 +1839,7 @@ fn station(
             if (bot.phase_s % 5.0) < s.dt {
                 info!(
                     "showcase: walking to the {}: {:.1} m off, {:.1} m up",
-                    row.name,
+                    row.name(),
                     tangent(at - s.feet, s.up).length(),
                     rise
                 );
@@ -1849,7 +1849,7 @@ fn station(
             } else if bot.walk_to(s, out, at, 2.0) == Walked::There {
                 info!(
                     "showcase: at the {} in cell {cell} layer {layer}, {:.1} m from the eye, {:.1} m over the feet",
-                    row.name,
+                    row.name(),
                     at.distance(s.eye),
                     (at - s.feet).dot(s.up)
                 );
@@ -1929,7 +1929,7 @@ fn station(
         _ => {}
     }
     if bot.act_s > 40.0 + times as f32 * 40.0 {
-        return Status::Fail(format!("{code} at the {} never finished", row.name));
+        return Status::Fail(format!("{code} at the {} never finished", row.name()));
     }
     Status::Running
 }
@@ -2602,7 +2602,7 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             if (bot.phase_s % 4.0) < s.dt {
                 info!(
                     "showcase: waiting for the {} at {dist:.1} m, {:?} in hand, {} wild in sight",
-                    sp.name,
+                    sp.name(),
                     s.slots.held().map(|st| st.item),
                     animals(s, species).filter(|(a, _)| a.wild).count()
                 );
@@ -2619,7 +2619,7 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
         }
     }
     if bot.act_s > 150.0 {
-        return Status::Fail(format!("the {} never trusted", sp.name));
+        return Status::Fail(format!("the {} never trusted", sp.name()));
     }
     Status::Running
 }

@@ -8,6 +8,7 @@ use crate::planet::PlanetContact;
 use crate::planet::terrain::PLANET_RADIUS;
 use crate::walking::{EYE_HEIGHT, WalkingPlugin};
 use bevy::input::mouse::AccumulatedMouseMotion;
+use pbd_core::locale::Localized;
 use pbd_core::vehicle::record::RECORD_VERSION;
 
 fn app(save: crate::saves::WorldSave) -> App {
@@ -1069,7 +1070,7 @@ fn f_boards_a_craft_only_when_nothing_usable_is_aimed() {
                 .before(InteractSet::Offer),
                 (|aimed: Res<CropAimed>, mut interact: ResMut<Interact>| {
                     if aimed.0 {
-                        interact.offer(Offer::new(Act::Harvest, "wheat"));
+                        interact.offer(Offer::new(Act::Harvest, Localized::verbatim("wheat")));
                     }
                 })
                 .in_set(InteractSet::Offer),
@@ -1104,7 +1105,7 @@ fn f_boards_a_craft_only_when_nothing_usable_is_aimed() {
     app.world_mut().resource_mut::<CropAimed>().0 = true;
     assert_eq!(
         press_beside(&mut app),
-        Some(Offer::new(Act::Harvest, "wheat"))
+        Some(Offer::new(Act::Harvest, Localized::verbatim("wheat")))
     );
     assert_eq!(app.world().resource::<Aboard>().0, None, "F harvested");
     // Nothing usable aimed: the prompt names the craft, and F boards it.
@@ -1112,7 +1113,10 @@ fn f_boards_a_craft_only_when_nothing_usable_is_aimed() {
     for _ in 0..30 {
         app.update();
     }
-    assert_eq!(press_beside(&mut app), Some(Offer::new(Act::Board, "loon")));
+    assert_eq!(
+        press_beside(&mut app),
+        Some(Offer::new(Act::Board, Kind::Loon.name()))
+    );
     assert_eq!(app.world().resource::<Aboard>().0, Some(entity), "F boards");
 }
 

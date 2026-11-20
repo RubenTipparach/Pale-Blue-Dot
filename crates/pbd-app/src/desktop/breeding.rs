@@ -255,7 +255,7 @@ pub fn paint(
             for (i, s) in &kept_species {
                 tabs.spawn((plaque(&kit, Set::Stone, 60.0), MenuAction::BreedSpecies(*i)))
                     .with_children(|p| {
-                        let name = s.name.to_uppercase();
+                        let name = s.name().to_uppercase();
                         p.spawn(text(name, 10.0, ui_kit::LABEL));
                     });
             }

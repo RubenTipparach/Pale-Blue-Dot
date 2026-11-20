@@ -18,10 +18,10 @@ use pbd_app::config::FaunaConfig;
 use pbd_app::fish::{Body, guide_facts};
 use pbd_app::hotbar::Hotbar;
 use pbd_app::saves::WorldSave;
-use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Set, UiKit, plaque};
 use pbd_core::fauna::Origin;
 use pbd_core::inventory::Item;
+use pbd_core::locale::{tr, tr_with};
 
 /// Which entry the guide is on.
 #[derive(Resource, Default, Clone, Copy, Debug)]
@@ -70,7 +70,7 @@ pub fn spawn(
                 // guide's size).
                 .spawn(menu::framed(&kit, Set::Stone, 420.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, &kit, Localized::legacy("FIELD GUIDE"));
+                    menu::lintel(panel, &kit, tr("guide.title"));
                     panel
                         .spawn(Node {
                             column_gap: px(9),
@@ -87,14 +87,10 @@ pub fn spawn(
                                 })
                                 .with_children(|list| {
                                     if roster.is_empty() {
-                                        list.spawn(text(
-                                            "Nothing lives in the water here.",
-                                            10.0,
-                                            DIM,
-                                        ));
+                                        list.spawn(text(tr("guide.nothing_lives"), 10.0, DIM));
                                     }
                                     for (index, species) in roster.iter().enumerate() {
-                                        row(list, &kit, index as u16, &species.name, &icons);
+                                        row(list, &kit, index as u16, &species.name(), &icons);
                                     }
                                 });
                             columns.spawn((
@@ -244,29 +240,26 @@ pub fn paint(
                 })
                 .with_children(|words| {
                     words.spawn(
-                        KitText::new(
-                            Localized::legacy(species.name.to_uppercase()),
-                            ui_kit::TITLE,
-                        )
-                        .shadow(ui_kit::INK)
-                        .size(2),
+                        KitText::new(species.caps_name(), ui_kit::TITLE)
+                            .shadow(ui_kit::INK)
+                            .size(2),
                     );
                     let from = match &species.from {
-                        Origin::Tenebris(kind) => format!("from Tenebris ({kind})"),
-                        Origin::New => "new to Pale Blue Dot".into(),
+                        Origin::Tenebris(kind) => tr_with("guide.from_tenebris", &[("kind", kind)]),
+                        Origin::New => tr("guide.new"),
                     };
                     words.spawn(text(from, 9.0, AMBER));
                     let caught = match record {
                         Some(r) if r.count > 0 => {
-                            format!("caught {}, best {} cm", r.count, r.best_cm)
+                            tr_with("guide.caught", &[("count", &r.count), ("best", &r.best_cm)])
                         }
-                        _ => "not caught in this world yet".into(),
+                        _ => tr("guide.not_caught"),
                     };
                     words.spawn(text(caught, 10.0, INK));
                 });
             });
         entry.spawn((
-            text(species.guide.entry.clone(), 10.0, INK),
+            text(species.entry(), 10.0, INK),
             Node {
                 max_width: px(260),
                 ..default()
@@ -287,7 +280,11 @@ pub fn paint(
                 }
             });
         entry.spawn((
-            text(format!("TIP  {}", species.guide.tip), 10.0, AMBER),
+            text(
+                tr_with("guide.tip", &[("tip", &species.tip())]),
+                10.0,
+                AMBER,
+            ),
             Node {
                 max_width: px(260),
                 ..default()

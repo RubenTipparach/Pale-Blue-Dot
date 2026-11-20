@@ -209,7 +209,6 @@
         "home": [
             (
                 id: "minnow",
-                name: "Minnow",
                 from: Tenebris("Fish"),
                 class: Fish,
                 status: WildOnly,
@@ -231,14 +230,9 @@
                 colour: (0.47, 0.59, 0.71),
                 shape: (0.5, 0.5, 1.0),
                 icon: "fish/minnow",
-                guide: (
-                    entry: "The first fish most anglers land. Minnows crowd the shallows and river mouths in schools of thirty or more and turn as one when a shadow crosses them. They bite quickly and give up easily.",
-                    tip: "Cast anywhere near a warm shore. A school finds the lure in seconds.",
-                ),
             ),
             (
                 id: "silverfin",
-                name: "Silverfin",
                 from: New,
                 class: Fish,
                 status: WildOnly,
@@ -260,14 +254,9 @@
                 colour: (0.81, 0.89, 0.92),
                 shape: (0.5, 0.5, 1.0),
                 icon: "fish/silverfin",
-                guide: (
-                    entry: "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.",
-                    tip: "Let the splash settle before you expect a bite.",
-                ),
             ),
             (
                 id: "perch",
-                name: "Banded perch",
                 from: New,
                 class: Fish,
                 status: WildOnly,
@@ -288,14 +277,9 @@
                 colour: (0.85, 0.63, 0.23),
                 shape: (0.55, 0.62, 1.0),
                 icon: "fish/perch",
-                guide: (
-                    entry: "Striped, deep-bodied and curious. Perch hold the river channels in loose groups of a dozen, in any river that does not freeze, and one will follow a lure a long way before it commits.",
-                    tip: "Nibbles come in threes. Wait for the float to go under.",
-                ),
             ),
             (
                 id: "ray",
-                name: "Ray",
                 from: Tenebris("FlatFish"),
                 class: Fish,
                 status: WildOnly,
@@ -317,14 +301,9 @@
                 colour: (0.73, 0.65, 0.49),
                 shape: (1.7, 0.22, 0.8),
                 icon: "fish/ray",
-                guide: (
-                    entry: "A flat grazer that lies on the sand and lifts off in slow wingbeats. Rays travel alone or in pairs along the bed of warm shallows and shelf, well out from the beach.",
-                    tip: "Cast long, over sand. A ray never schools, so a bite is one fish, not one of many.",
-                ),
             ),
             (
                 id: "eel",
-                name: "Eel",
                 from: Tenebris("LongFish"),
                 class: Fish,
                 status: WildOnly,
@@ -346,14 +325,9 @@
                 colour: (0.47, 0.51, 0.28),
                 shape: (0.28, 0.28, 1.8),
                 icon: "fish/eel",
-                guide: (
-                    entry: "Long, dark and patient. Eels keep to the bed of rivers and shallows in ones and twos and fight in hard, twisting runs.",
-                    tip: "Ease off whenever it runs. More lines are lost to eels than to anything else.",
-                ),
             ),
             (
                 id: "reef",
-                name: "Reef fish",
                 from: Tenebris("LargeFish"),
                 class: Fish,
                 status: WildOnly,
@@ -374,14 +348,9 @@
                 colour: (0.24, 0.59, 0.59),
                 shape: (0.5, 0.8, 1.0),
                 icon: "fish/reef",
-                guide: (
-                    entry: "The prize of warm water. Tall-finned and nervous, reef fish shoal in small groups over tropical shallows that never fall below 23 degrees, and give the shortest bite window of anything in the sea.",
-                    tip: "The hook window is under half a second. Watch the float, not the fish.",
-                ),
             ),
             (
                 id: "deepback",
-                name: "Deepback",
                 from: New,
                 class: Fish,
                 status: WildOnly,
@@ -403,14 +372,9 @@
                 colour: (0.31, 0.44, 0.56),
                 shape: (0.55, 0.55, 1.0),
                 icon: "fish/deepback",
-                guide: (
-                    entry: "A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.",
-                    tip: "Fish where the shelf drops close to the shore, where the water turns dark.",
-                ),
             ),
             (
                 id: "serpent",
-                name: "Sea serpent",
                 from: Tenebris("SerpentFish"),
                 class: Fish,
                 status: WildOnly,
@@ -431,17 +395,12 @@
                 colour: (0.19, 0.47, 0.42),
                 shape: (0.35, 0.4, 2.2),
                 icon: "fish/serpent",
-                guide: (
-                    entry: "Rare and solitary, found only past the drop-off in any deep sea that does not freeze. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.",
-                    tip: "There is at most one in any water. Deep water, a long cast and patience.",
-                ),
             ),
             // The water life (`ocean-environments` 7.1), appended after the
             // fish: crawlers, floaters and protected swimmers. Only fish
             // that swim in schools take a lure.
             (
                 id: "shore_crab",
-                name: "Shore crab",
                 from: New,
                 class: Arthropod,
                 status: WildOnly,
@@ -463,10 +422,6 @@
                 colour: (0.8, 0.36, 0.18),
                 shape: (1.6, 0.4, 0.9),
                 icon: "water_life/shore_crab",
-                guide: (
-                    entry: "A small green-brown crab of every warm or cool shore, in rock pools, river mouths and the sand of the shallows. It walks sideways along the bed and scuttles off when a shadow comes near.",
-                    tip: "Look in the shallows by the rocks. It does not take a lure.",
-                ),
                 mover: Crawler,
                 env: [Coast, Pool, Estuary, Mudflat],
                 behaviour: None,
@@ -474,7 +429,6 @@
             ),
             (
                 id: "lobster",
-                name: "Spiny lobster",
                 from: New,
                 class: Arthropod,
                 status: WildOnly,
@@ -496,10 +450,6 @@
                 colour: (0.55, 0.2, 0.12),
                 shape: (0.5, 0.35, 1.0),
                 icon: "water_life/lobster",
-                guide: (
-                    entry: "A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.",
-                    tip: "On the bed of the shelf, under kelp or along a reef. It does not take a lure.",
-                ),
                 mover: Crawler,
                 env: [Kelp, Reef],
                 behaviour: None,
@@ -507,7 +457,6 @@
             ),
             (
                 id: "giant_clam",
-                name: "Giant clam",
                 from: New,
                 class: MolluscSoft,
                 status: WildOnly,
@@ -528,10 +477,6 @@
                 colour: (0.35, 0.55, 0.75),
                 shape: (1.2, 0.6, 0.8),
                 icon: "water_life/giant_clam",
-                guide: (
-                    entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.",
-                    tip: "Swim up slowly and it still shuts. Wait a while at a distance and it opens.",
-                ),
                 mover: Crawler,
                 env: [Reef],
                 behaviour: Shuts,
@@ -539,7 +484,6 @@
             ),
             (
                 id: "reef_turtle",
-                name: "Reef turtle",
                 from: New,
                 class: ReptileAmphibian,
                 status: Protected,
@@ -561,10 +505,6 @@
                 colour: (0.36, 0.45, 0.25),
                 shape: (1.0, 0.35, 1.1),
                 icon: "water_life/reef_turtle",
-                guide: (
-                    entry: "A slow, old swimmer of warm reefs and the shelf beyond them, alone and unhurried. Reef turtles are protected: none may be caught.",
-                    tip: "Watch it go by. A line cast at one is refused.",
-                ),
                 mover: School,
                 env: [Reef, Coast],
                 behaviour: None,
@@ -572,7 +512,6 @@
             ),
             (
                 id: "sea_otter",
-                name: "Sea otter",
                 from: New,
                 class: Mammal,
                 status: Protected,
@@ -594,10 +533,6 @@
                 colour: (0.36, 0.24, 0.15),
                 shape: (0.35, 0.25, 1.0),
                 icon: "water_life/sea_otter",
-                guide: (
-                    entry: "Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught.",
-                    tip: "Cool coasts, over kelp. Keep your distance and they stay.",
-                ),
                 mover: Floater,
                 env: [Kelp, Coast],
                 behaviour: None,
@@ -605,7 +540,6 @@
             ),
             (
                 id: "reed_dabbler",
-                name: "Reed dabbler",
                 from: New,
                 class: Bird,
                 status: Protected,
@@ -627,10 +561,6 @@
                 colour: (0.42, 0.36, 0.22),
                 shape: (0.45, 0.4, 1.0),
                 icon: "water_life/reed_dabbler",
-                guide: (
-                    entry: "The common duck of rivers, marsh pools and quiet shallows. Dabblers float in small flocks, tip up to feed with their tails in the air, paddle off when you come close and sleep on the water at night. Ducks are protected; their eggs and feathers are gathered, not taken.",
-                    tip: "Slow water near reeds. Come up quietly or they paddle off.",
-                ),
                 mover: Floater,
                 env: [Marsh, Pool, Estuary, Riffle],
                 behaviour: Dabbles,
@@ -638,7 +568,6 @@
             ),
             (
                 id: "pond_diver",
-                name: "Pond diver",
                 from: New,
                 class: Bird,
                 status: Protected,
@@ -660,10 +589,6 @@
                 colour: (0.12, 0.12, 0.14),
                 shape: (0.42, 0.38, 1.0),
                 icon: "water_life/pond_diver",
-                guide: (
-                    entry: "A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.",
-                    tip: "Watch the water where it went under; it surfaces a few meters off.",
-                ),
                 mover: Floater,
                 env: [Marsh, Pool],
                 behaviour: Dives,
@@ -673,7 +598,6 @@
             // B9), appended.
             (
                 id: "octopus",
-                name: "Den octopus",
                 from: New,
                 class: MolluscSoft,
                 status: WildOnly,
@@ -695,10 +619,6 @@
                 colour: (0.83, 0.27, 0.17),
                 shape: (0.8, 0.4, 1.0),
                 icon: "water_life/octopus",
-                guide: (
-                    entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.",
-                    tip: "Look for the shells at its door, then keep back and wait.",
-                ),
                 mover: Crawler,
                 env: [Reef],
                 behaviour: Hides,
@@ -706,7 +626,6 @@
             ),
             (
                 id: "tube_worm",
-                name: "Plume worm",
                 from: New,
                 class: MolluscSoft,
                 status: WildOnly,
@@ -727,10 +646,6 @@
                 colour: (0.82, 0.18, 0.25),
                 shape: (0.15, 0.05, 0.15),
                 icon: "water_life/tube_worm",
-                guide: (
-                    entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.",
-                    tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.",
-                ),
                 mover: Crawler,
                 env: [Vent],
                 behaviour: Shuts,
@@ -738,7 +653,6 @@
             ),
             (
                 id: "seal",
-                name: "Ice seal",
                 from: New,
                 class: Mammal,
                 status: Protected,
@@ -760,10 +674,6 @@
                 colour: (0.36, 0.47, 0.55),
                 shape: (0.4, 0.35, 1.0),
                 icon: "water_life/seal",
-                guide: (
-                    entry: "Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.",
-                    tip: "Cold water, near the ice or the kelp. Where seals are, the fish are.",
-                ),
                 mover: Floater,
                 env: [UnderIce, Kelp],
                 behaviour: HaulsOut,

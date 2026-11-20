@@ -178,7 +178,10 @@ pub fn load_icons(
         .iter()
         .map(|species| assets.load(pbd_app::fish::species_icon(species)))
         .collect();
-    let fish_names = roster.iter().map(|species| species.name.clone()).collect();
+    let fish_names = roster
+        .iter()
+        .map(|species| species.name().into_string())
+        .collect();
     let tools = pbd_core::inventory::Tool::ALL
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))

@@ -38,6 +38,26 @@ const DATA_PREFIXES: &[&str] = &[
     "controls.key.",
     "controls.group.",
     "controls.does.",
+    // `goods::GOODS`: each good's name by its saved code.
+    "item.",
+    // `inventory::Tool`: each tool's capitals and tiered names by code.
+    "tool.",
+    // `interact::ACTS`: each act's words by its verb id.
+    "interact.act.",
+    // `fauna` and `husbandry` species: name, field-guide entry and tip by id.
+    "species.",
+    // `inventory::material_name`: each block's name by its data id.
+    "block.",
+    // `fish::keys_for`: the fishing buttons' words.
+    "fishing.key.",
+    // `husbandry`: products, collections and life stages by their data names.
+    "husbandry.collect.",
+    "husbandry.collected.",
+    "husbandry.waiting.",
+    "husbandry.stage.",
+    // `farming::CROPS` and `station::STATIONS`: names by saved code.
+    "crop.",
+    "station.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
 ];
@@ -146,6 +166,7 @@ const DEV_SCOPES: &[(&str, &str)] = &[
     ("crates/pbd-core/src/audio.rs", "problem"),
     ("crates/pbd-core/src/audio.rs", "problems"),
     ("crates/pbd-core/src/sites.rs", "validate"),
+    ("crates/pbd-core/src/fauna/mod.rs", "validate"),
     ("crates/pbd-core/src/settlement/chart.rs", "refuse"),
     ("crates/pbd-core/src/settlement/record.rs", "Damaged"),
     (

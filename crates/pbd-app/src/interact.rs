@@ -14,6 +14,7 @@
 
 use crate::ui_kit::{Localized, tr};
 use bevy::prelude::*;
+use pbd_core::locale::{caps, tr_with};
 
 /// Who carries an act out: the system that reads F for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -66,24 +67,24 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
 pub const ACTS: [Row; 18] = [
-    row(Act::Collect, "Collect", Reader::Husbandry),
-    row(Act::SetEggs, "Set eggs under", Reader::Husbandry),
-    row(Act::Feed, "Feed", Reader::Husbandry),
-    row(Act::LetStay, "Let {} stay", Reader::Husbandry),
-    row(Act::Lead, "Lead", Reader::Husbandry),
-    row(Act::SetInIncubator, "Set eggs in", Reader::Husbandry),
-    row(Act::TakeIncubator, "Take", Reader::Husbandry),
-    row(Act::TakeUp, "Take up", Reader::Husbandry),
-    row(Act::PickFruit, "Pick", Reader::Fruit),
-    row(Act::Open, "Open", Reader::Farm),
-    row(Act::Harvest, "Harvest", Reader::Farm),
-    row(Act::Check, "Check", Reader::Farm),
-    row(Act::PickWild, "Pick wild", Reader::Farm),
-    row(Act::Gather, "Gather", Reader::Farm),
-    row(Act::OpenDoor, "Open", Reader::Doors),
-    row(Act::ShutDoor, "Shut", Reader::Doors),
-    row(Act::Till, "Till", Reader::Farm),
-    row(Act::Board, "Board", Reader::Boats),
+    row(Act::Collect, "collect", Reader::Husbandry),
+    row(Act::SetEggs, "set_eggs", Reader::Husbandry),
+    row(Act::Feed, "feed", Reader::Husbandry),
+    row(Act::LetStay, "let_stay", Reader::Husbandry),
+    row(Act::Lead, "lead", Reader::Husbandry),
+    row(Act::SetInIncubator, "set_in_incubator", Reader::Husbandry),
+    row(Act::TakeIncubator, "take_incubator", Reader::Husbandry),
+    row(Act::TakeUp, "take_up", Reader::Husbandry),
+    row(Act::PickFruit, "pick_fruit", Reader::Fruit),
+    row(Act::Open, "open", Reader::Farm),
+    row(Act::Harvest, "harvest", Reader::Farm),
+    row(Act::Check, "check", Reader::Farm),
+    row(Act::PickWild, "pick_wild", Reader::Farm),
+    row(Act::Gather, "gather", Reader::Farm),
+    row(Act::OpenDoor, "open_door", Reader::Doors),
+    row(Act::ShutDoor, "shut_door", Reader::Doors),
+    row(Act::Till, "till", Reader::Farm),
+    row(Act::Board, "board", Reader::Boats),
 ];
 
 impl Act {
@@ -106,28 +107,21 @@ impl Act {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Offer {
     pub act: Act,
-    /// What it is done to, lower case: "wheat", "hen", "workbench".
-    pub thing: String,
+    /// What it is done to: "wheat", "Yard hen", "workbench".
+    pub thing: Localized,
 }
 
 impl Offer {
-    pub fn new(act: Act, thing: impl Into<String>) -> Self {
-        Self {
-            act,
-            thing: thing.into(),
-        }
+    pub fn new(act: Act, thing: Localized) -> Self {
+        Self { act, thing }
     }
 
-    /// The prompt's words after the key: the verb and the thing.
-    pub fn words(&self) -> String {
-        let verb = self.act.row().verb;
-        if verb.contains("{}") {
-            verb.replace("{}", &self.thing)
-        } else if self.thing.is_empty() {
-            verb.to_string()
-        } else {
-            format!("{verb} {}", self.thing)
-        }
+    /// The prompt's words after the key: the verb and the thing,
+    /// `interact.act.<verb>` in the locale file.
+    pub fn words(&self) -> Localized {
+        let key = format!("interact.act.{}", self.act.row().verb);
+        let words = tr_with(&key, &[("thing", &self.thing)]);
+        Localized::verbatim(words.trim())
     }
 }
 
@@ -407,8 +401,13 @@ pub fn show_fish_keys(
         } else {
             FADED
         };
+        let line = if line.is_empty() {
+            Localized::empty()
+        } else {
+            tr(line)
+        };
         if text.text != line || text.colour != colour {
-            text.text = Localized::legacy(line);
+            text.text = line.clone();
             text.colour = colour;
         }
         if let Ok(mut row) = rows.get_mut(parent.parent()) {
@@ -471,7 +470,7 @@ pub fn show_prompt(
             let none = crate::controls::KeyBinds::default();
             (
                 crate::controls::key_label(key(binds.as_deref().unwrap_or(&none))),
-                offer.words().to_uppercase(),
+                caps(&offer.words()),
             )
         }
         None => return,
@@ -492,6 +491,16 @@ pub fn show_prompt(
 mod tests {
     use super::*;
 
+    /// Every act's words are in the locale file.
+    #[test]
+    fn every_act_has_its_words() {
+        let english = pbd_core::locale::Locale::english();
+        for row in &ACTS {
+            let key = format!("interact.act.{}", row.verb);
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
+
     #[test]
     fn every_act_has_one_row_and_a_verb() {
         for (k, r) in ACTS.iter().enumerate() {
@@ -505,15 +514,18 @@ mod tests {
     #[test]
     fn the_highest_offer_wins() {
         let mut i = Interact::default();
-        i.offer(Offer::new(Act::Board, "loon"));
-        i.offer(Offer::new(Act::Harvest, "wheat"));
-        i.offer(Offer::new(Act::Till, "grass"));
+        i.offer(Offer::new(Act::Board, Localized::verbatim("loon")));
+        i.offer(Offer::new(Act::Harvest, Localized::verbatim("wheat")));
+        i.offer(Offer::new(Act::Till, Localized::verbatim("grass")));
         i.settle(0.016, false);
-        assert_eq!(i.now, Some(Offer::new(Act::Harvest, "wheat")));
+        assert_eq!(
+            i.now,
+            Some(Offer::new(Act::Harvest, Localized::verbatim("wheat")))
+        );
         assert!(i.lets(Reader::Farm));
         assert!(!i.lets(Reader::Boats));
         assert_eq!(i.now.as_ref().unwrap().words(), "Harvest wheat");
-        i.offer(Offer::new(Act::Board, "loon"));
+        i.offer(Offer::new(Act::Board, Localized::verbatim("loon")));
         i.settle(0.016, false);
         assert!(i.lets(Reader::Boats), "nothing usable aimed: F boards");
     }
@@ -523,7 +535,7 @@ mod tests {
     #[test]
     fn the_prompt_holds_across_a_seam_and_goes_after() {
         let mut i = Interact::default();
-        i.offer(Offer::new(Act::Harvest, "wheat"));
+        i.offer(Offer::new(Act::Harvest, Localized::verbatim("wheat")));
         i.settle(0.016, false);
         for _ in 0..3 {
             i.settle(0.016, false);
@@ -533,7 +545,7 @@ mod tests {
             i.settle(0.016, false);
         }
         assert!(i.now.is_none(), "gone after the hold");
-        i.offer(Offer::new(Act::Open, "forge"));
+        i.offer(Offer::new(Act::Open, Localized::verbatim("forge")));
         i.settle(0.016, false);
         i.settle(0.016, true);
         assert!(i.now.is_none(), "a panel hides it at once");
@@ -544,7 +556,7 @@ mod tests {
         assert!(may(None, Reader::Farm));
         let mut i = Interact::default();
         assert!(may(Some(&i), Reader::Boats), "nothing named");
-        i.offer(Offer::new(Act::Open, "forge"));
+        i.offer(Offer::new(Act::Open, Localized::verbatim("forge")));
         i.settle(0.016, false);
         assert!(may(Some(&i), Reader::Farm));
         assert!(!may(Some(&i), Reader::Boats), "the forge, not the boat");

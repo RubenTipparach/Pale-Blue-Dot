@@ -71,7 +71,7 @@ def words_key(text: str) -> str:
 
 # ------------------------------------------------------------------ YAML insert
 
-KEY_LINE = re.compile(r"^( *)([A-Za-z0-9_]+):(.*)$")
+KEY_LINE = re.compile(r"^( *)([A-Za-z0-9_-]+):(.*)$")
 
 
 def block_end(lines: list[str], start: int, indent: int) -> int:

@@ -72,28 +72,6 @@ crates/pbd-app/src/desktop/digging.rs|No more wood
 crates/pbd-app/src/desktop/digging.rs|No room in the pack
 crates/pbd-app/src/desktop/digging.rs|Something is planted here
 crates/pbd-app/src/desktop/digging.rs|Too hard to dig by hand
-crates/pbd-app/src/desktop/equipment.rs|@legacy hand_tip(&Equipment::new_world())
-crates/pbd-app/src/desktop/equipment.rs|@legacy name.to_uppercase()
-crates/pbd-app/src/desktop/equipment.rs|@legacy tool.map_or(BARE,\|t\|t.name()).to_uppercase()
-crates/pbd-app/src/desktop/equipment.rs|@legacy want
-crates/pbd-app/src/desktop/equipment.rs|@legacy want
-crates/pbd-app/src/desktop/equipment.rs|Bare hands
-crates/pbd-app/src/desktop/equipment.rs|digs soft ground
-crates/pbd-app/src/desktop/equipment.rs|wheel to choose, let go of G
-crates/pbd-app/src/desktop/farm.rs|+{} {}, +{} seed
-crates/pbd-app/src/desktop/farm.rs|@legacy note.text.clone()
-crates/pbd-app/src/desktop/farm.rs|Can't till under a block
-crates/pbd-app/src/desktop/farm.rs|Cut down the tree first
-crates/pbd-app/src/desktop/farm.rs|No room in the pack
-crates/pbd-app/src/desktop/farm.rs|No room in the pack
-crates/pbd-app/src/desktop/farm.rs|No room in the pack for the harvest
-crates/pbd-app/src/desktop/farm.rs|Picked wild {}: +{seeds} seed
-crates/pbd-app/src/desktop/farm.rs|Planted {}
-crates/pbd-app/src/desktop/farm.rs|Seeds need tilled soil
-crates/pbd-app/src/desktop/farm.rs|Something is already growing here
-crates/pbd-app/src/desktop/farm.rs|Tilled
-crates/pbd-app/src/desktop/farm.rs|{} does not grow in a {} climate
-crates/pbd-app/src/desktop/farm.rs|{}: ripe in {:.0} game hours
 crates/pbd-app/src/desktop/forge.rs|@legacy recipe.name.clone()
 crates/pbd-app/src/desktop/forge.rs|@legacy super::craft::need_count(need,n)
 crates/pbd-app/src/desktop/forge.rs|@legacy text.clone()
@@ -103,17 +81,6 @@ crates/pbd-app/src/desktop/forge.rs|Not enough for {}
 crates/pbd-app/src/desktop/forge.rs|Opens with: {opens}
 crates/pbd-app/src/desktop/forge.rs|PICK A RECIPE
 crates/pbd-app/src/desktop/forge.rs|{}  +{waiting} WAITING
-crates/pbd-app/src/desktop/fruit.rs|No fruit. Grows back in {left:.0} days
-crates/pbd-app/src/desktop/fruit.rs|No ripe fruit
-crates/pbd-app/src/desktop/fruit.rs|No room in the pack
-crates/pbd-app/src/desktop/guide.rs|@legacy species.name.to_uppercase()
-crates/pbd-app/src/desktop/guide.rs|FIELD GUIDE
-crates/pbd-app/src/desktop/guide.rs|Nothing lives in the water here.
-crates/pbd-app/src/desktop/guide.rs|TIP  {}
-crates/pbd-app/src/desktop/guide.rs|caught {}, best {} cm
-crates/pbd-app/src/desktop/guide.rs|from Tenebris ({kind})
-crates/pbd-app/src/desktop/guide.rs|new to Pale Blue Dot
-crates/pbd-app/src/desktop/guide.rs|not caught in this world yet
 crates/pbd-app/src/desktop/kitchen.rs|@legacy line
 crates/pbd-app/src/desktop/kitchen.rs|@legacy recipe.name.clone()
 crates/pbd-app/src/desktop/kitchen.rs|@legacy super::craft::need_count(need,n)
@@ -221,70 +188,6 @@ crates/pbd-app/src/desktop/weather_ui.rs|SHOWERS
 crates/pbd-app/src/desktop/weather_ui.rs|STORM
 crates/pbd-app/src/desktop/weather_ui.rs|STORM
 crates/pbd-app/src/desktop/weather_ui.rs|WEATHER  {}  {:.0}%
-crates/pbd-app/src/fish.rs|Bite! Left click
-crates/pbd-app/src/fish.rs|Bite! Left click
-crates/pbd-app/src/fish.rs|CANCEL
-crates/pbd-app/src/fish.rs|CAST
-crates/pbd-app/src/fish.rs|DEPTH
-crates/pbd-app/src/fish.rs|FOUND
-crates/pbd-app/src/fish.rs|HOLD TO CAST
-crates/pbd-app/src/fish.rs|HOLD TO REEL
-crates/pbd-app/src/fish.rs|HOOK
-crates/pbd-app/src/fish.rs|HOOK
-crates/pbd-app/src/fish.rs|HOOK WINDOW
-crates/pbd-app/src/fish.rs|Hold to reel - ease off when it runs
-crates/pbd-app/src/fish.rs|LENGTH
-crates/pbd-app/src/fish.rs|LET GO TO CAST
-crates/pbd-app/src/fish.rs|Missed - the {} spat the hook
-crates/pbd-app/src/fish.rs|No room in the hotbar - the fish was let go
-crates/pbd-app/src/fish.rs|Nothing lives in this water
-crates/pbd-app/src/fish.rs|SPEED
-crates/pbd-app/src/fish.rs|STRENGTH
-crates/pbd-app/src/fish.rs|Something is nibbling - wait for the float to go under
-crates/pbd-app/src/fish.rs|TEMPERATURE
-crates/pbd-app/src/fish.rs|TENSION
-crates/pbd-app/src/fish.rs|The float came down on dry ground
-crates/pbd-app/src/fish.rs|The line snapped - the {} is gone
-crates/pbd-app/src/fish.rs|Too early - the {} bolted
-crates/pbd-app/src/fish.rs|WATER
-crates/pbd-app/src/fish.rs|Wound in - the {} got away
-crates/pbd-app/src/fish.rs|about {:.0} cm
-crates/pbd-app/src/fish.rs|on the bed, {:.0}-{:.0} m
-crates/pbd-app/src/fish.rs|schools of {}-{}
-crates/pbd-app/src/fish.rs|{:.0} to {:.0} C
-crates/pbd-app/src/fish.rs|{:.0}-{:.0} m down
-crates/pbd-app/src/fish.rs|{:.1}-{:.1} m/s
-crates/pbd-app/src/fish.rs|{:.2} s
-crates/pbd-app/src/fish.rs|{} - {length_cm} cm
-crates/pbd-app/src/husbandry.rs|, sitting
-crates/pbd-app/src/husbandry.rs|A pen of {} cells, with a gate
-crates/pbd-app/src/husbandry.rs|A piece already stands there
-crates/pbd-app/src/husbandry.rs|Fence set
-crates/pbd-app/src/husbandry.rs|Fence taken up
-crates/pbd-app/src/husbandry.rs|Gate set
-crates/pbd-app/src/husbandry.rs|Gate taken up
-crates/pbd-app/src/husbandry.rs|It
-crates/pbd-app/src/husbandry.rs|No room to carry it
-crates/pbd-app/src/husbandry.rs|Too far to set a fence
-crates/pbd-app/src/husbandry.rs|a fertile egg
-crates/pbd-app/src/husbandry.rs|a pail of milk
-crates/pbd-app/src/husbandry.rs|an egg
-crates/pbd-app/src/husbandry.rs|health {:.0}
-crates/pbd-app/src/husbandry.rs|strayed: feed it
-crates/pbd-app/src/husbandry.rs|{name} eats from your hand - trust {pct}%
-crates/pbd-app/src/husbandry.rs|{name} eats {}: hold some and stand still
-crates/pbd-app/src/husbandry.rs|{name} follows you (F to let it stay)
-crates/pbd-app/src/husbandry.rs|{name} is fed for {} days
-crates/pbd-app/src/husbandry.rs|{name} is penned
-crates/pbd-app/src/husbandry.rs|{name} stays here, loose
-crates/pbd-app/src/husbandry.rs|{name} trusts you and follows (F to let it stay)
-crates/pbd-app/src/husbandry.rs|{name}: collected {}
-crates/pbd-app/src/husbandry.rs|{n} eggs
-crates/pbd-app/src/husbandry.rs|{n} fertile eggs
-crates/pbd-app/src/husbandry.rs|{n} pails of milk
-crates/pbd-app/src/husbandry.rs|{} (wild) - {why}
-crates/pbd-app/src/husbandry.rs|{} (wild, {sex}) - trust {:.0}% - eats {}
-crates/pbd-app/src/husbandry.rs|{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting
 crates/pbd-app/src/husbandry/breed.rs|A young one was born
 crates/pbd-app/src/husbandry/breed.rs|Already paired
 crates/pbd-app/src/husbandry/breed.rs|An incubator already stands there
@@ -311,26 +214,7 @@ crates/pbd-app/src/husbandry/breed.rs|{born} born
 crates/pbd-app/src/husbandry/breed.rs|{n} eggs set in the incubator
 crates/pbd-app/src/husbandry/breed.rs|{young} young were born
 crates/pbd-app/src/interact.rs|@legacy label
-crates/pbd-app/src/interact.rs|@legacy line
 crates/pbd-app/src/interact.rs|@legacy line.clone()
-crates/pbd-app/src/interact.rs|Board
-crates/pbd-app/src/interact.rs|Check
-crates/pbd-app/src/interact.rs|Collect
-crates/pbd-app/src/interact.rs|Feed
-crates/pbd-app/src/interact.rs|Gather
-crates/pbd-app/src/interact.rs|Harvest
-crates/pbd-app/src/interact.rs|Lead
-crates/pbd-app/src/interact.rs|Let {} stay
-crates/pbd-app/src/interact.rs|Open
-crates/pbd-app/src/interact.rs|Open
-crates/pbd-app/src/interact.rs|Pick
-crates/pbd-app/src/interact.rs|Pick wild
-crates/pbd-app/src/interact.rs|Set eggs in
-crates/pbd-app/src/interact.rs|Set eggs under
-crates/pbd-app/src/interact.rs|Shut
-crates/pbd-app/src/interact.rs|Take
-crates/pbd-app/src/interact.rs|Take up
-crates/pbd-app/src/interact.rs|Till
 crates/pbd-app/src/loading.rs|BUILDING THE PLANET
 crates/pbd-app/src/loading.rs|COMPILING SHADERS
 crates/pbd-app/src/loading.rs|LAYING OUT TOWNS
@@ -363,114 +247,7 @@ crates/pbd-core/src/daylight.rs|southern autumn
 crates/pbd-core/src/daylight.rs|southern spring
 crates/pbd-core/src/daylight.rs|southern summer
 crates/pbd-core/src/daylight.rs|southern winter
-crates/pbd-core/src/farming.rs|frost kale
-crates/pbd-core/src/fauna/mod.rs|A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.
-crates/pbd-core/src/fauna/mod.rs|A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.
-crates/pbd-core/src/fauna/mod.rs|A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.
-crates/pbd-core/src/fauna/mod.rs|A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.
-crates/pbd-core/src/fauna/mod.rs|A flat grazer that lies on the sand and lifts off in slow wingbeats. Rays travel alone or in pairs along the bed of warm shallows and shelf, well out from the beach.
-crates/pbd-core/src/fauna/mod.rs|A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.
-crates/pbd-core/src/fauna/mod.rs|A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.
-crates/pbd-core/src/fauna/mod.rs|A slow, old swimmer of warm reefs and the shelf beyond them, alone and unhurried. Reef turtles are protected: none may be caught.
-crates/pbd-core/src/fauna/mod.rs|A small green-brown crab of every warm or cool shore, in rock pools, river mouths and the sand of the shallows. It walks sideways along the bed and scuttles off when a shadow comes near.
-crates/pbd-core/src/fauna/mod.rs|Banded perch
-crates/pbd-core/src/fauna/mod.rs|Cast anywhere near a warm shore. A school finds the lure in seconds.
-crates/pbd-core/src/fauna/mod.rs|Cast long, over sand. A ray never schools, so a bite is one fish, not one of many.
-crates/pbd-core/src/fauna/mod.rs|Cold water, near the ice or the kelp. Where seals are, the fish are.
-crates/pbd-core/src/fauna/mod.rs|Cool coasts, over kelp. Keep your distance and they stay.
-crates/pbd-core/src/fauna/mod.rs|Deepback
-crates/pbd-core/src/fauna/mod.rs|Den octopus
-crates/pbd-core/src/fauna/mod.rs|Ease off whenever it runs. More lines are lost to eels than to anything else.
-crates/pbd-core/src/fauna/mod.rs|Eel
 crates/pbd-core/src/fauna/mod.rs|Fish
-crates/pbd-core/src/fauna/mod.rs|Fish where the shelf drops close to the shore, where the water turns dark.
-crates/pbd-core/src/fauna/mod.rs|Giant clam
-crates/pbd-core/src/fauna/mod.rs|Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.
-crates/pbd-core/src/fauna/mod.rs|Ice seal
-crates/pbd-core/src/fauna/mod.rs|Let the splash settle before you expect a bite.
-crates/pbd-core/src/fauna/mod.rs|Long, dark and patient. Eels keep to the bed of rivers and shallows in ones and twos and fight in hard, twisting runs.
-crates/pbd-core/src/fauna/mod.rs|Look for the shells at its door, then keep back and wait.
-crates/pbd-core/src/fauna/mod.rs|Look in the shallows by the rocks. It does not take a lure.
-crates/pbd-core/src/fauna/mod.rs|Minnow
-crates/pbd-core/src/fauna/mod.rs|Nibbles come in threes. Wait for the float to go under.
-crates/pbd-core/src/fauna/mod.rs|On the bed of the shelf, under kelp or along a reef. It does not take a lure.
-crates/pbd-core/src/fauna/mod.rs|Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.
-crates/pbd-core/src/fauna/mod.rs|Plume worm
-crates/pbd-core/src/fauna/mod.rs|Pond diver
-crates/pbd-core/src/fauna/mod.rs|Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught.
-crates/pbd-core/src/fauna/mod.rs|Rare and solitary, found only past the drop-off in any deep sea that does not freeze. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.
-crates/pbd-core/src/fauna/mod.rs|Ray
-crates/pbd-core/src/fauna/mod.rs|Reed dabbler
-crates/pbd-core/src/fauna/mod.rs|Reef fish
-crates/pbd-core/src/fauna/mod.rs|Reef turtle
-crates/pbd-core/src/fauna/mod.rs|Sea otter
-crates/pbd-core/src/fauna/mod.rs|Sea serpent
-crates/pbd-core/src/fauna/mod.rs|Shore crab
-crates/pbd-core/src/fauna/mod.rs|Silverfin
-crates/pbd-core/src/fauna/mod.rs|Slow water near reeds. Come up quietly or they paddle off.
-crates/pbd-core/src/fauna/mod.rs|Spiny lobster
-crates/pbd-core/src/fauna/mod.rs|Striped, deep-bodied and curious. Perch hold the river channels in loose groups of a dozen, in any river that does not freeze, and one will follow a lure a long way before it commits.
-crates/pbd-core/src/fauna/mod.rs|Swim up slowly and it still shuts. Wait a while at a distance and it opens.
-crates/pbd-core/src/fauna/mod.rs|The common duck of rivers, marsh pools and quiet shallows. Dabblers float in small flocks, tip up to feed with their tails in the air, paddle off when you come close and sleep on the water at night. Ducks are protected; their eggs and feathers are gathered, not taken.
-crates/pbd-core/src/fauna/mod.rs|The first fish most anglers land. Minnows crowd the shallows and river mouths in schools of thirty or more and turn as one when a shadow crosses them. They bite quickly and give up easily.
-crates/pbd-core/src/fauna/mod.rs|The hook window is under half a second. Watch the float, not the fish.
-crates/pbd-core/src/fauna/mod.rs|The prize of warm water. Tall-finned and nervous, reef fish shoal in small groups over tropical shallows that never fall below 23 degrees, and give the shortest bite window of anything in the sea.
-crates/pbd-core/src/fauna/mod.rs|There is at most one in any water. Deep water, a long cast and patience.
-crates/pbd-core/src/fauna/mod.rs|Watch it go by. A line cast at one is refused.
-crates/pbd-core/src/fauna/mod.rs|Watch the water where it went under; it surfaces a few meters off.
-crates/pbd-core/src/fauna/mod.rs|White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.
-crates/pbd-core/src/fauna/mod.rs|it is not taken on a line
-crates/pbd-core/src/fauna/mod.rs|protected: it may not be caught
-crates/pbd-core/src/fauna/mod.rs|protected: it may not be caught
-crates/pbd-core/src/fauna/mod.rs|water limits
-crates/pbd-core/src/fauna/mod.rs|wild only: fish are kept in tanks, not pens
-crates/pbd-core/src/fauna/mod.rs|wild only: it cannot be tamed
-crates/pbd-core/src/goods.rs|bait worms
-crates/pbd-core/src/goods.rs|baobab fruit
-crates/pbd-core/src/goods.rs|bronze ingot
-crates/pbd-core/src/goods.rs|bucket of water
-crates/pbd-core/src/goods.rs|chili fish
-crates/pbd-core/src/goods.rs|chili seed
-crates/pbd-core/src/goods.rs|copper ingot
-crates/pbd-core/src/goods.rs|fertile egg
-crates/pbd-core/src/goods.rs|fried egg
-crates/pbd-core/src/goods.rs|frost kale
-crates/pbd-core/src/goods.rs|frost kale seed
-crates/pbd-core/src/goods.rs|grilled fish
-crates/pbd-core/src/goods.rs|inner tube
-crates/pbd-core/src/goods.rs|iron ingot
-crates/pbd-core/src/goods.rs|kale skewer
-crates/pbd-core/src/goods.rs|loose stone
-crates/pbd-core/src/goods.rs|pail of milk
-crates/pbd-core/src/goods.rs|pine cone
-crates/pbd-core/src/goods.rs|plant fiber
-crates/pbd-core/src/goods.rs|roast meat
-crates/pbd-core/src/goods.rs|roast turnip
-crates/pbd-core/src/goods.rs|tin ore
-crates/pbd-core/src/goods.rs|turnip seed
-crates/pbd-core/src/goods.rs|wheat seed
-crates/pbd-core/src/goods.rs|wooden bucket
-crates/pbd-core/src/husbandry/mod.rs| or 
-crates/pbd-core/src/husbandry/mod.rs|it is not kept
-crates/pbd-core/src/husbandry/mod.rs|turf (a grass block)
-crates/pbd-core/src/inventory.rs|Axe
-crates/pbd-core/src/inventory.rs|Bronze
-crates/pbd-core/src/inventory.rs|Fishing rod
-crates/pbd-core/src/inventory.rs|Iron
-crates/pbd-core/src/inventory.rs|Pickaxe
-crates/pbd-core/src/inventory.rs|Shovel
-crates/pbd-core/src/inventory.rs|Steel
-crates/pbd-core/src/inventory.rs|Stone
-crates/pbd-core/src/inventory.rs|breaks stone, rock, ore
-crates/pbd-core/src/inventory.rs|cast, hook, reel
-crates/pbd-core/src/inventory.rs|chops wood; fair on turf
-crates/pbd-core/src/inventory.rs|digs soil, sand, snow
-crates/pbd-core/src/inventory.rs|dry grass
-crates/pbd-core/src/inventory.rs|hanging lantern
-crates/pbd-core/src/inventory.rs|jungle grass
-crates/pbd-core/src/inventory.rs|street lantern
-crates/pbd-core/src/inventory.rs|tilled soil
-crates/pbd-core/src/inventory.rs|wall lantern
 crates/pbd-core/src/map.rs|W{}
 crates/pbd-core/src/records.rs|@c
 crates/pbd-core/src/records.rs|@p

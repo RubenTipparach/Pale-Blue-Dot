@@ -368,10 +368,10 @@ impl Catalog {
 /// An item's canonical name: the name `recipes.ron` gives it, so a chain
 /// and a recipe table name things alike. A fish is `fish`.
 pub fn item_code(item: crate::inventory::Item) -> String {
-    use crate::inventory::{Item, material_name};
+    use crate::inventory::Item;
     match item {
         Item::Good(good) => good.code().to_string(),
-        Item::Block(material) => format!("block:{}", material_name(material)),
+        Item::Block(material) => format!("block:{}", crate::inventory::material_id(material)),
         Item::Tool(tool) => format!("tool:{}", tool.code()),
         Item::Fish(_) => "fish".into(),
     }

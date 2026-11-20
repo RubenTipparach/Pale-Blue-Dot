@@ -97,8 +97,8 @@ fn main() {
         file.write_all(&(n as u32).to_le_bytes()).unwrap();
     }
     for overlay in Overlay::ALL {
-        file.write_all(&padded::<16>(overlay.name())).unwrap();
-        file.write_all(&padded::<8>(overlay.unit())).unwrap();
+        file.write_all(&padded::<16>(&overlay.name())).unwrap();
+        file.write_all(&padded::<8>(&overlay.unit())).unwrap();
         let (lo, hi) = overlay.range();
         file.write_all(&lo.to_le_bytes()).unwrap();
         file.write_all(&hi.to_le_bytes()).unwrap();

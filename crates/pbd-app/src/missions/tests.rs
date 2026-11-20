@@ -23,9 +23,25 @@ fn app(chain: Option<MissionFile>) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     if let Some(file) = chain {
-        let fish = fauna.0.bodies.values().flatten().map(|s| s.name.as_str());
-        let animals = land.0.land.values().flatten().map(|s| s.name.as_str());
-        let catalog = Catalog::new(&recipes.0, fish, animals);
+        let fish = fauna
+            .0
+            .bodies
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let animals = land
+            .0
+            .land
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let catalog = Catalog::new(
+            &recipes.0,
+            fish.iter().map(String::as_str),
+            animals.iter().map(String::as_str),
+        );
         app.insert_resource(MissionChain(file.resolve(&catalog).unwrap()));
     }
     app.insert_resource(recipes)

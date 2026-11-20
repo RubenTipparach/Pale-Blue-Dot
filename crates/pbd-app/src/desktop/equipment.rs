@@ -19,7 +19,8 @@ use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, Tooltip, UiKit};
-use pbd_core::inventory::{Equipment, Tool, tool_title};
+use pbd_core::inventory::{Equipment, Tool, tool_title, tool_title_caps};
+use pbd_core::locale::{tr, tr_with};
 
 /// The picker's highlight while G is held: a tool, or `None` for bare hands.
 /// Separate from the tool in hand, so wheeling past a tool does not put it in
@@ -87,7 +88,7 @@ pub fn tool_cell(kit: &UiKit, node: Node, extra: impl Bundle) -> impl Bundle {
         },
         kit.whole(Set::Stone, "slot-idle"),
         Interaction::default(),
-        Tooltip(Localized::legacy(hand_tip(&Equipment::new_world()))),
+        Tooltip(hand_tip(&Equipment::new_world())),
         ToolSlotCell,
         extra,
     )
@@ -179,7 +180,7 @@ pub fn spawn_pack_hand(parent: &mut ChildSpawnerCommands, kit: &UiKit, icons: &I
                     ));
                     row.spawn((
                         KitText::new(
-                            Localized::legacy(tool.map_or(BARE, |t| t.name()).to_uppercase()),
+                            tool.map_or_else(|| tr("equipment.bare_caps"), Tool::caps),
                             ui_kit::TITLE,
                         )
                         .shadow(ui_kit::INK),
@@ -296,8 +297,10 @@ pub fn spawn(
         .with_children(|column| {
             let entries = std::iter::once(None).chain(Tool::ALL.into_iter().map(Some));
             for tool in entries {
-                let (name, purpose) =
-                    tool.map_or((BARE, BARE_PURPOSE), |t| (t.name(), t.purpose()));
+                let (name, purpose) = tool.map_or_else(
+                    || (tr("equipment.bare_caps"), tr("equipment.bare_purpose")),
+                    |t| (t.caps(), t.purpose()),
+                );
                 column
                     .spawn((
                         Node {
@@ -329,8 +332,7 @@ pub fn spawn(
                         })
                         .with_children(|words| {
                             words.spawn((
-                                KitText::new(Localized::legacy(name.to_uppercase()), ui_kit::TITLE)
-                                    .shadow(ui_kit::INK),
+                                KitText::new(name, ui_kit::TITLE).shadow(ui_kit::INK),
                                 PickerName(tool),
                             ));
                             words.spawn((
@@ -345,7 +347,7 @@ pub fn spawn(
                     });
             }
             column.spawn((
-                Text::new("wheel to choose, let go of G"),
+                Text::new(tr("equipment.picker_hint")),
                 TextFont {
                     font_size: 9.0,
                     ..default()
@@ -382,26 +384,40 @@ pub fn pick(
 #[derive(Component)]
 pub struct ToolSlotCell;
 
-/// Bare hands, in the picker and the tool slot's tooltip.
-const BARE: &str = "Bare hands";
-/// What they do (`tool-crafting` decision 1).
-const BARE_PURPOSE: &str = "digs soft ground";
-
-/// A tool's name as the picker shows it: with its tier ("Iron pickaxe").
-pub fn tool_name(equipment: &Equipment, tool: Option<Tool>) -> String {
+/// A tool's name as the picker shows it: with its tier ("Iron pickaxe"),
+/// or bare hands (`tool-crafting` decision 1).
+pub fn tool_name(equipment: &Equipment, tool: Option<Tool>) -> Localized {
     match tool {
-        None => BARE.to_string(),
+        None => tr("equipment.bare"),
         Some(tool) => equipment
             .tier(tool)
-            .map_or_else(|| tool.name().to_string(), |tier| tool_title(tool, tier)),
+            .map_or_else(|| tool.name(), |tier| tool_title(tool, tier)),
+    }
+}
+
+/// [`tool_name`] in capitals, as the picker's name line shows it.
+pub fn tool_caps(equipment: &Equipment, tool: Option<Tool>) -> Localized {
+    match tool {
+        None => tr("equipment.bare_caps"),
+        Some(tool) => equipment
+            .tier(tool)
+            .map_or_else(|| tool.caps(), |tier| tool_title_caps(tool, tier)),
     }
 }
 
 /// What the tool slot's tooltip says: the tool in hand, with its tier, and
 /// what it is for.
-pub fn hand_tip(equipment: &Equipment) -> String {
-    let purpose = equipment.held().map_or(BARE_PURPOSE, Tool::purpose);
-    format!("{}: {purpose}", tool_name(equipment, equipment.held()))
+pub fn hand_tip(equipment: &Equipment) -> Localized {
+    let purpose = equipment
+        .held()
+        .map_or_else(|| tr("equipment.bare_purpose"), Tool::purpose);
+    tr_with(
+        "equipment.hand_tip",
+        &[
+            ("tool", &tool_name(equipment, equipment.held())),
+            ("purpose", &purpose),
+        ],
+    )
 }
 
 /// The name line of a picker row, renamed when its tool's tier changes.
@@ -428,7 +444,7 @@ pub fn paint(
     for mut tip in &mut tips {
         let want = hand_tip(&tools);
         if tip.0 != want {
-            tip.0 = Localized::legacy(want);
+            tip.0 = want;
         }
     }
     for mut image in &mut slot {
@@ -439,9 +455,9 @@ pub fn paint(
     }
     if tools.is_changed() {
         for (name, mut text) in &mut names {
-            let want = tool_name(&tools, name.0).to_uppercase();
+            let want = tool_caps(&tools, name.0);
             if text.text != want {
-                text.text = Localized::legacy(want);
+                text.text = want;
             }
         }
         for (row, mut image) in &mut picker_icons {

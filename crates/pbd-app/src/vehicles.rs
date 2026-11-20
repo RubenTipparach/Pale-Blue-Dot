@@ -651,7 +651,7 @@ fn offer_board(
     if let Some((_, vehicle)) = nearest_in_reach(vehicles.iter(), at) {
         interact.offer(crate::interact::Offer::new(
             crate::interact::Act::Board,
-            vehicle.craft.kind.name().as_str().to_lowercase(),
+            vehicle.craft.kind.name(),
         ));
     }
 }

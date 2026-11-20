@@ -389,6 +389,25 @@ fn missing(key: &str) -> String {
     }
 }
 
+/// `key`'s text in the built-in English, whatever the current language: for
+/// a name that data and saves use as an identifier ("block:dry grass" in a
+/// mission, a caught species' name in its progress), which must not change
+/// with the player's language. Never shown.
+pub fn english(key: &str) -> String {
+    let cur = current().read().unwrap_or_else(|e| e.into_inner());
+    cur.english
+        .format(key, &[])
+        .unwrap_or_else(|| key.to_owned())
+}
+
+/// A line in capitals, by the language's own rule, for text composed from
+/// data names that the file cannot hold in capitals (the interact prompt
+/// names any thing: "HARVEST WHEAT"). Text written whole is written in its
+/// case in the file; this is only for a composed line.
+pub fn caps(text: &Localized) -> Localized {
+    Localized(text.0.to_uppercase())
+}
+
 /// The text of `key` in the current locale.
 pub fn tr(key: &str) -> Localized {
     tr_with(key, &[])

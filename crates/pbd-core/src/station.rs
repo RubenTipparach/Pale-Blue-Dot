@@ -12,7 +12,7 @@
 //! the job is queued.
 
 use crate::goods::Good;
-use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool, material_name};
+use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 pub struct StationRow {
     /// Its saved name, in a station record and in `recipes.ron`.
     pub code: &'static str,
-    pub name: &'static str,
     /// The block it is; `None` for the hands, whose "station" is the pack
     /// itself (a recipe made by hand, `tool-crafting`).
     pub material: Option<Material>,
@@ -36,30 +35,33 @@ pub struct StationRow {
 /// recipe whose station is `hand` is queued and collected by the same rules,
 /// with its queue kept on the player rather than on a cell. Nothing in this
 /// change makes anything by hand yet.
+impl StationRow {
+    /// Its name: `station.<code>.name` in the locale file.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("station.{}.name", self.code))
+    }
+}
+
 pub const STATIONS: &[StationRow] = &[
     StationRow {
         code: "forge",
-        name: "forge",
         material: Some(Material::Forge),
         max_jobs: 4,
     },
     StationRow {
         code: "hand",
-        name: "hands",
         material: None,
         max_jobs: 1,
     },
     // `cooking` design S2: the kitchen's first station, also a light.
     StationRow {
         code: "campfire",
-        name: "campfire",
         material: Some(Material::Campfire),
         max_jobs: 4,
     },
     // tool-crafting: tools, the rod and a forge (decision 5).
     StationRow {
         code: "workbench",
-        name: "workbench",
         material: Some(Material::Workbench),
         max_jobs: 4,
     },
@@ -118,7 +120,7 @@ pub fn item_named(name: &str) -> Option<Item> {
     if let Some(block) = name.strip_prefix("block:") {
         return Material::ALL
             .into_iter()
-            .find(|m| material_name(*m) == block)
+            .find(|m| crate::inventory::material_id(*m) == block)
             .map(Item::Block);
     }
     Good::by_code(name).map(Item::Good)

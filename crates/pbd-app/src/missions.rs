@@ -76,9 +76,25 @@ pub fn load_chain(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig
             MissionFile::default()
         }
     };
-    let fish = fauna.0.bodies.values().flatten().map(|s| s.name.as_str());
-    let animals = land.0.land.values().flatten().map(|s| s.name.as_str());
-    let catalog = Catalog::new(&recipes.0, fish, animals);
+    let fish: Vec<String> = fauna
+        .0
+        .bodies
+        .values()
+        .flatten()
+        .map(|s| s.data_name())
+        .collect();
+    let animals: Vec<String> = land
+        .0
+        .land
+        .values()
+        .flatten()
+        .map(|s| s.data_name())
+        .collect();
+    let catalog = Catalog::new(
+        &recipes.0,
+        fish.iter().map(String::as_str),
+        animals.iter().map(String::as_str),
+    );
     let chain = file
         .resolve(&catalog)
         .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -148,7 +164,7 @@ fn happenings(c: &mut Counting) -> Vec<Happened> {
             .0
             .roster(&body)
             .get(species as usize)
-            .map_or("animal".to_string(), |s| s.name.to_lowercase())
+            .map_or("animal".to_string(), |s| s.data_name())
     };
     let mut out = Vec::new();
     for gained in c.gained.read() {

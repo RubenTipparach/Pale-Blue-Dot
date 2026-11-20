@@ -9,73 +9,120 @@
 #   (tools/locale/locale_coverage.py <code> lists what it lacks).
 # - Keys are grouped by the screen or module that shows them.
 
+block:
+  air:
+    name: air
+  brazier:
+    name: brazier
+  campfire:
+    name: campfire
+  candle:
+    name: candle
+  dirt:
+    name: dirt
+  dry_grass:
+    name: dry grass
+  flowing_water:
+    name: water
+  forge:
+    name: forge
+  grass:
+    name: grass
+  jungle_grass:
+    name: jungle grass
+  lantern_hanging:
+    name: hanging lantern
+  lantern_post:
+    name: street lantern
+  lantern_wall:
+    name: wall lantern
+  ore:
+    name: ore
+  rock:
+    name: rock
+  sand:
+    name: sand
+  snow:
+    name: snow
+  soil:
+    name: soil
+  stone:
+    name: stone
+  tilled:
+    name: tilled soil
+  torch:
+    name: torch
+  water:
+    name: water
+  workbench:
+    name: workbench
 controls:
   does:
-    anchor: "drop or raise the anchor"
-    bail: "bail"
-    brake: "brake"
-    breeding: "breeding"
-    camera: "change the camera"
-    cruise: "cruise"
-    dampeners: "dampeners"
-    flow_arrows: "flow arrows"
-    frame_graph: "frame graph, again for its GPU breakdown"
-    guide: "the field guide"
+    anchor: drop or raise the anchor
+    bail: bail
+    brake: brake
+    breeding: breeding
+    camera: change the camera
+    cruise: cruise
+    dampeners: dampeners
+    flow_arrows: flow arrows
+    frame_graph: frame graph, again for its GPU breakdown
+    guide: the field guide
     interact: "open, harvest, pick, feed, till; board or step off"
-    jump: "jump, and rise in water"
-    kick: "kick forward or back"
-    map: "the map"
-    menu: "menu"
-    missions: "the starter missions"
-    move: "move"
-    noon_midnight: "noon or midnight"
+    jump: jump, and rise in water
+    kick: kick forward or back
+    map: the map
+    menu: menu
+    missions: the starter missions
+    move: move
+    noon_midnight: noon or midnight
     pack: "the pack: thirty more slots"
-    paddle: "paddle forward or back"
-    paddle_steer: "steer with the paddle"
-    place: "place the held block, plant a seed, or wind the line in"
-    pole: "pole forward or back"
-    pole_steer: "steer with the pole"
-    pour_water: "pour water"
-    repro: "copy the location for a bug report"
+    paddle: paddle forward or back
+    paddle_steer: steer with the paddle
+    place: place the held block, plant a seed, or wind the line in
+    pole: pole forward or back
+    pole_steer: steer with the pole
+    pour_water: pour water
+    repro: copy the location for a bug report
     rod: "with the rod: hold to cast, press to strike, hold to reel"
-    roll: "roll"
-    screenshot: "screenshot"
-    select_slot: "select a slot"
-    spawn: "return to the spawn"
-    sprint: "sprint"
-    step_slots: "step through the slots"
+    roll: roll
+    screenshot: screenshot
+    select_slot: select a slot
+    spawn: return to the spawn
+    sprint: sprint
+    step_slots: step through the slots
     tool_wheel: "hold for the tools; the wheel picks one"
-    turn: "turn"
-    up_down: "up and down"
+    turn: turn
+    up_down: up and down
     use_tool: "use the tool in hand: dig, or cast, hook and reel"
-    walk_or_fly: "walk or fly"
-    weather: "cycle the weather"
-    wind_in: "wind the line in"
+    walk_or_fly: walk or fly
+    weather: cycle the weather
+    wind_in: wind the line in
   group:
-    fishing_afloat: "FISHING AFLOAT"
-    flying: "FLYING"
-    hands: "HANDS"
-    inner_tube: "INNER TUBE"
-    interact: "INTERACT"
-    loon: "LOON"
-    on_foot: "ON FOOT"
-    raft: "RAFT"
-    screen: "SCREEN"
-    vehicles: "VEHICLES"
-    world: "WORLD"
+    fishing_afloat: FISHING AFLOAT
+    flying: FLYING
+    hands: HANDS
+    inner_tube: INNER TUBE
+    interact: INTERACT
+    loon: LOON
+    on_foot: ON FOOT
+    raft: RAFT
+    screen: SCREEN
+    vehicles: VEHICLES
+    world: WORLD
   key:
-    alt_left: "ALT"
-    alt_right: "R ALT"
+    alt_left: ALT
+    alt_right: R ALT
     arrow_down: "↓"
     arrow_left: "←"
     arrow_right: "→"
     arrow_up: "↑"
-    backspace: "BACK"
-    caps_lock: "CAPS"
+    backspace: BACK
+    caps_lock: CAPS
     comma: ","
-    control_left: "CTRL"
-    control_right: "R CTRL"
-    delete: "DEL"
+    control_left: CTRL
+    control_right: R CTRL
+    delete: DEL
     digit_0: "0"
     digit_1: "1"
     digit_2: "2"
@@ -86,175 +133,466 @@ controls:
     digit_7: "7"
     digit_8: "8"
     digit_9: "9"
-    end: "END"
-    enter: "ENTER"
+    end: END
+    enter: ENTER
     equal: "="
-    escape: "ESC"
-    f1: "F1"
-    f10: "F10"
-    f11: "F11"
-    f12: "F12"
-    f2: "F2"
-    f3: "F3"
-    f4: "F4"
-    f5: "F5"
-    f6: "F6"
-    f7: "F7"
-    f8: "F8"
-    f9: "F9"
-    home: "HOME"
-    insert: "INS"
-    key_a: "A"
-    key_b: "B"
-    key_c: "C"
-    key_d: "D"
-    key_e: "E"
-    key_f: "F"
-    key_g: "G"
-    key_h: "H"
-    key_i: "I"
-    key_j: "J"
-    key_k: "K"
-    key_l: "L"
-    key_m: "M"
+    escape: ESC
+    f1: F1
+    f10: F10
+    f11: F11
+    f12: F12
+    f2: F2
+    f3: F3
+    f4: F4
+    f5: F5
+    f6: F6
+    f7: F7
+    f8: F8
+    f9: F9
+    home: HOME
+    insert: INS
+    key_a: A
+    key_b: B
+    key_c: C
+    key_d: D
+    key_e: E
+    key_f: F
+    key_g: G
+    key_h: H
+    key_i: I
+    key_j: J
+    key_k: K
+    key_l: L
+    key_m: M
     key_n: "N"
-    key_o: "O"
-    key_p: "P"
-    key_q: "Q"
-    key_r: "R"
-    key_s: "S"
-    key_t: "T"
-    key_u: "U"
-    key_v: "V"
-    key_w: "W"
-    key_x: "X"
+    key_o: O
+    key_p: P
+    key_q: Q
+    key_r: R
+    key_s: S
+    key_t: T
+    key_u: U
+    key_v: V
+    key_w: W
+    key_x: X
     key_y: "Y"
-    key_z: "Z"
-    left_click: "LEFT CLICK"
+    key_z: Z
+    left_click: LEFT CLICK
     minus: "-"
-    numpad_0: "NUM 0"
-    numpad_1: "NUM 1"
-    numpad_2: "NUM 2"
-    numpad_3: "NUM 3"
-    numpad_4: "NUM 4"
-    numpad_5: "NUM 5"
-    numpad_6: "NUM 6"
-    numpad_7: "NUM 7"
-    numpad_8: "NUM 8"
-    numpad_9: "NUM 9"
-    numpad_enter: "NUM ENTER"
-    page_down: "PG DN"
-    page_up: "PG UP"
+    numpad_0: NUM 0
+    numpad_1: NUM 1
+    numpad_2: NUM 2
+    numpad_3: NUM 3
+    numpad_4: NUM 4
+    numpad_5: NUM 5
+    numpad_6: NUM 6
+    numpad_7: NUM 7
+    numpad_8: NUM 8
+    numpad_9: NUM 9
+    numpad_enter: NUM ENTER
+    page_down: PG DN
+    page_up: PG UP
     period: "."
     quote: "'"
-    right_click: "RIGHT CLICK"
+    right_click: RIGHT CLICK
     semicolon: ";"
-    shift_left: "SHIFT"
-    shift_right: "R SHIFT"
+    shift_left: SHIFT
+    shift_right: R SHIFT
     slash: "/"
-    space: "SPACE"
-    tab: "TAB"
-    wheel: "WHEEL"
+    space: SPACE
+    tab: TAB
+    wheel: WHEEL
   tab:
-    flying: "FLYING"
-    hands: "HANDS"
-    menus: "MENUS"
-    on_foot: "ON FOOT"
-    vehicles: "VEHICLES"
+    flying: FLYING
+    hands: HANDS
+    menus: MENUS
+    on_foot: ON FOOT
+    vehicles: VEHICLES
 craft:
   craft: CRAFT
+crop:
+  chili:
+    name: chili
+  frost-kale:
+    name: frost kale
+  turnip:
+    name: turnip
+  wheat:
+    name: wheat
+equipment:
+  bare: Bare hands
+  bare_caps: BARE HANDS
+  bare_purpose: digs soft ground
+  hand_tip: "{tool}: {purpose}"
+  picker_hint: wheel to choose, let go of G
+farm:
+  already_growing: Something is already growing here
+  harvested: "+{produce} {crop}, +{seeds} seed"
+  no_room: No room in the pack
+  no_room_harvest: No room in the pack for the harvest
+  picked_wild: "Picked wild {crop}: +{seeds} seed"
+  planted: "Planted {crop}"
+  ripe_in: "{crop}: ripe in {hours} game hours"
+  seeds_need_tilled: Seeds need tilled soil
+  till_under_block: "Can't till under a block"
+  tilled: Tilled
+  tree_first: Cut down the tree first
+  wrong_climate: "{crop} does not grow in a {climate} climate"
+farming:
+  climate:
+    barren: barren
+    cold: cold
+    hot: hot
+    temperate: temperate
+fauna:
+  refusal:
+    fish_wild: "wild only: fish are kept in tanks, not pens"
+    no_line: it is not taken on a line
+    protected: "protected: it may not be caught"
+    wild: "wild only: it cannot be tamed"
+  water:
+    deep: deep
+    rivers: rivers
+    shallows: shallows
+    shelf: shelf
+fishing:
+  fact:
+    about_cm: "about {length} cm"
+    depth: DEPTH
+    down: "{from}-{to} m down"
+    found: FOUND
+    hook_window: HOOK WINDOW
+    length: LENGTH
+    on_bed: "on the bed, {from}-{to} m"
+    schools: "schools of {fewest}-{most}"
+    seconds: "{seconds} s"
+    speed: SPEED
+    speed_range: "{from}-{to} m/s"
+    strength: STRENGTH
+    temperature: TEMPERATURE
+    temperature_range: "{from} to {to} C"
+    water: WATER
+  key:
+    cancel: CANCEL
+    hold_to_cast: HOLD TO CAST
+    hold_to_reel: HOLD TO REEL
+    hook: HOOK
+    let_go_to_cast: LET GO TO CAST
+  refused: "{species}: {reason}"
+  status:
+    bite: "Bite! Left click"
+    caught: "{species} - {length} cm"
+    dry: The float came down on dry ground
+    hooked: Hold to reel - ease off when it runs
+    lost: "Wound in - the {species} got away"
+    missed: "Missed - the {species} spat the hook"
+    nibble: Something is nibbling - wait for the float to go under
+    no_room: No room in the hotbar - the fish was let go
+    nothing_lives: Nothing lives in this water
+    snapped: "The line snapped - the {species} is gone"
+    too_early: "Too early - the {species} bolted"
+fruit:
+  grows_back: "No fruit. Grows back in {days} days"
+  no_ripe: No ripe fruit
+  no_room: No room in the pack
+guide:
+  caught: "caught {count}, best {best} cm"
+  from_tenebris: "from Tenebris ({kind})"
+  new: "new to Pale Blue Dot"
+  not_caught: "not caught in this world yet"
+  nothing_lives: "Nothing lives in the water here."
+  tip: "TIP  {tip}"
+  title: "FIELD GUIDE"
+husbandry:
+  collect:
+    egg: eggs
+    milk: milk
+    wool: wool
+  collected:
+    egg:
+      one: an egg
+      other: "{count} eggs"
+    fertile_egg:
+      one: a fertile egg
+      other: "{count} fertile eggs"
+    milk:
+      one: a pail of milk
+      other: "{count} pails of milk"
+    wool:
+      one: "{count} wool"
+      other: "{count} wool"
+  collected_line: "{name}: collected {got}"
+  eats: "{name} eats {food}: hold some and stand still"
+  fed: "{name} is fed for {days} days"
+  fence_set: Fence set
+  fence_taken: Fence taken up
+  follows: "{name} follows you (F to let it stay)"
+  food:
+    or: "{first} or {second}"
+    turf: "turf (a grass block)"
+  gate_set: Gate set
+  gate_taken: Gate taken up
+  hand_fed: "{name} eats from your hand - trust {trust}%"
+  it: It
+  kept: "{name} ({state}) - {mood}"
+  kept_waiting: "{name} ({state}) - {mood} - {waiting} waiting"
+  loose: "{name} stays here, loose"
+  mood:
+    health: "health {health}"
+    sick: sick
+    strayed: "strayed: feed it"
+  no_room: No room to carry it
+  pen_closed: "A pen of {cells} cells, with a gate"
+  penned: "{name} is penned"
+  piece_there: A piece already stands there
+  refusal:
+    not_kept: it is not kept
+  refused: "{name}: {why}"
+  sex:
+    female: female
+    male: male
+  stage:
+    calf: calf
+    chick: chick
+    hogg: hogg
+    lamb: lamb
+    pullet: pullet
+    young: young
+  state:
+    loose: "{sex}, loose"
+    loose_sitting: "{sex}, loose, sitting"
+    penned: "{sex}, penned"
+    penned_sitting: "{sex}, penned, sitting"
+  tamed: "{name} trusts you and follows (F to let it stay)"
+  thing:
+    fence: fence
+    gate: gate
+    incubator: incubator
+  too_far: Too far to set a fence
+  waiting:
+    egg: "{count} egg"
+    milk: "{count} milk"
+    wool: "{count} wool"
+  wild: "{name} (wild, {sex}) - trust {trust}% - eats {food}"
+  wild_refused: "{name} (wild) - {why}"
+  young: "{name} {stage}"
 interact:
+  act:
+    board: "Board {thing}"
+    check: "Check {thing}"
+    collect: "Collect {thing}"
+    feed: "Feed {thing}"
+    gather: "Gather {thing}"
+    harvest: "Harvest {thing}"
+    lead: "Lead {thing}"
+    let_stay: "Let {thing} stay"
+    open: "Open {thing}"
+    open_door: "Open {thing}"
+    pick_fruit: "Pick {thing}"
+    pick_wild: "Pick wild {thing}"
+    set_eggs: "Set eggs under {thing}"
+    set_in_incubator: "Set eggs in {thing}"
+    shut_door: "Shut {thing}"
+    take_incubator: "Take {thing}"
+    take_up: "Take up {thing}"
+    till: "Till {thing}"
   key: F
+inventory:
+  fish: fish
+item:
+  apple:
+    many: apples
+    name: apple
+  bait:
+    name: bait worms
+  baobab:
+    many: baobab fruits
+    name: baobab fruit
+  bronze-ingot:
+    name: bronze ingot
+  bucket:
+    name: wooden bucket
+  cherry:
+    many: cherries
+    name: cherry
+  chili:
+    name: chili
+  chili-fish:
+    name: chili fish
+  chili-seed:
+    name: chili seed
+  coal:
+    name: coal
+  copper-ingot:
+    name: copper ingot
+  egg:
+    name: egg
+  fence:
+    name: fence
+  fertile-egg:
+    name: fertile egg
+  fibre:
+    name: plant fiber
+  flatbread:
+    name: flatbread
+  fried-egg:
+    name: fried egg
+  frost-kale:
+    name: frost kale
+  frost-kale-seed:
+    name: frost kale seed
+  gate:
+    name: gate
+  grilled-fish:
+    name: grilled fish
+  incubator:
+    name: incubator
+  inner-tube:
+    name: inner tube
+  iron-ingot:
+    name: iron ingot
+  kale-skewer:
+    name: kale skewer
+  log:
+    name: log
+  mango:
+    many: mangoes
+    name: mango
+  marula:
+    many: marulas
+    name: marula
+  milk:
+    name: pail of milk
+  papaya:
+    many: papayas
+    name: papaya
+  pear:
+    many: pears
+    name: pear
+  pine-cone:
+    many: pine cones
+    name: pine cone
+  planks:
+    name: planks
+  plum:
+    many: plums
+    name: plum
+  raft:
+    name: raft
+  roast-meat:
+    name: roast meat
+  roast-turnip:
+    name: roast turnip
+  rope:
+    name: rope
+  rowboat:
+    name: rowboat
+  stone:
+    name: loose stone
+  tin-ore:
+    name: tin ore
+  turnip:
+    name: turnip
+  turnip-seed:
+    name: turnip seed
+  water-bucket:
+    name: bucket of water
+  wheat:
+    name: wheat
+  wheat-seed:
+    name: wheat seed
+  wool:
+    name: wool
 kitchen:
   eat_hint: RIGHT CLICK A DISH IN HAND TO EAT IT
 menu:
-  antialiasing: "Antialiasing"
-  auto_step: "Auto step"
-  back: "BACK"
-  bloom: "Bloom"
-  cancel: "CANCEL"
-  click_key_then_press_new: "Click a key, then press the new one. Esc cancels."
-  continue: "CONTINUE"
+  antialiasing: Antialiasing
+  auto_step: Auto step
+  back: BACK
+  bloom: Bloom
+  cancel: CANCEL
+  click_key_then_press_new: Click a key, then press the new one. Esc cancels.
+  continue: CONTINUE
   could_not_delete: "could not delete {world}: {error}"
   could_not_make_world: "could not make a world: {error}"
-  delete: "DELETE"
-  delete_forever: "DELETE FOREVER"
+  delete: DELETE
+  delete_forever: DELETE FOREVER
   delete_world: "Delete '{world}'?"
-  everything_dug_built_carried_gone: "Everything dug, built and carried in it is gone for good."
-  flow_arrows: "Flow arrows"
-  frame_limit: "Frame limit"
+  everything_dug_built_carried_gone: Everything dug, built and carried in it is gone for good.
+  flow_arrows: Flow arrows
+  frame_limit: Frame limit
   frame_limit_value:
     fps120: "120 FPS"
     fps60: "60 FPS"
-    off: "OFF"
+    "off": "OFF"
   input:
     also: "also: {actions}"
-    press_a_key: "PRESS A KEY"
-  just_now: "just now"
-  load: "LOAD"
-  load_world: "LOAD WORLD"
+    press_a_key: PRESS A KEY
+  just_now: just now
+  load: LOAD
+  load_world: LOAD WORLD
   made_with: "{world} was made with {why}"
-  mission_line: "Mission line"
+  mission_line: Mission line
   name: NAME
-  new_world: "NEW WORLD"
-  no_worlds_yet: "no worlds yet"
+  new_world: NEW WORLD
+  no_worlds_yet: no worlds yet
   other_world: "{world} was made in another world (seed {seed})"
-  paused: "PAUSED"
+  paused: PAUSED
   quality:
-    high: "HIGH"
-    low: "LOW"
-    medium: "MEDIUM"
-    off: "OFF"
-    ultra: "ULTRA"
-  quit: "QUIT"
-  rain_shadow: "Rain shadow"
-  reflections: "Reflections"
-  render_scale: "Render scale"
-  reset_tab: "RESET TAB"
-  resume: "RESUME"
-  saves: "SAVES"
-  settings: "SETTINGS"
-  shadow_quality: "Shadow quality"
+    high: HIGH
+    low: LOW
+    medium: MEDIUM
+    "off": "OFF"
+    ultra: ULTRA
+  quit: QUIT
+  rain_shadow: Rain shadow
+  reflections: Reflections
+  render_scale: Render scale
+  reset_tab: RESET TAB
+  resume: RESUME
+  saves: SAVES
+  settings: SETTINGS
+  shadow_quality: Shadow quality
   since:
     days: "{count} days ago"
     hours: "{count} hours ago"
     minutes: "{count} min ago"
   sound:
-    ambience: "Ambience"
-    effects: "Effects"
-    master: "Master"
-    menus: "Menus"
-    music: "Music"
+    ambience: Ambience
+    effects: Effects
+    master: Master
+    menus: Menus
+    music: Music
   tab:
-    input: "INPUT"
-    movement: "MOVEMENT"
-    picture: "PICTURE"
-    sound: "SOUND"
-    weather: "WEATHER"
-    world: "WORLD"
+    input: INPUT
+    movement: MOVEMENT
+    picture: PICTURE
+    sound: SOUND
+    weather: WEATHER
+    world: WORLD
   that_world_open_load_another: "that world is open; load another first"
   world_name: "World {number}"
   world_open: "{world} (open)"
-  worlds: "WORLDS"
+  worlds: WORLDS
 mission_tree:
   close: X
 overlay:
   map_chooses: "M: THE MAP CHOOSES IT"
   name:
-    cloud: "CLOUD"
-    currents: "CURRENTS"
-    humidity: "HUMIDITY"
-    jet: "JET"
-    rain: "RAIN"
-    sunlight: "SUNLIGHT"
-    temperature: "TEMPERATURE"
-    wind: "WIND"
+    cloud: CLOUD
+    currents: CURRENTS
+    humidity: HUMIDITY
+    jet: JET
+    rain: RAIN
+    sunlight: SUNLIGHT
+    temperature: TEMPERATURE
+    wind: WIND
   title: GLOBE OVERLAY
   unit:
     percent: "%"
     power: "W/m2"
     speed: "m/s"
-    temperature: "C"
+    temperature: C
 pack:
   hotbar: HOTBAR
 saves:
@@ -262,27 +600,221 @@ saves:
     generator: "terrain generator version {version}, which this build does not have"
     keys: "cell key version {version}, where this build has {have}"
     topology: "topology version {version}, where this build has {have}"
+species:
+  deepback:
+    caps: "DEEPBACK"
+    entry: A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.
+    lower: deepback
+    name: Deepback
+    tip: Fish where the shelf drops close to the shore, where the water turns dark.
+  eel:
+    caps: "EEL"
+    entry: Long, dark and patient. Eels keep to the bed of rivers and shallows in ones and twos and fight in hard, twisting runs.
+    lower: eel
+    name: Eel
+    tip: Ease off whenever it runs. More lines are lost to eels than to anything else.
+  giant_clam:
+    caps: "GIANT CLAM"
+    entry: A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.
+    lower: giant clam
+    name: Giant clam
+    tip: Swim up slowly and it still shuts. Wait a while at a distance and it opens.
+  lobster:
+    caps: "SPINY LOBSTER"
+    entry: A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.
+    lower: spiny lobster
+    name: Spiny lobster
+    tip: On the bed of the shelf, under kelp or along a reef. It does not take a lure.
+  meadow-hen:
+    caps: "YARD HEN"
+    entry: A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.
+    lower: yard hen
+    name: Yard hen
+    tip: Stand still with wheat seed in hand and let her come to you. Three feeds and she follows.
+  minnow:
+    caps: "MINNOW"
+    entry: The first fish most anglers land. Minnows crowd the shallows and river mouths in schools of thirty or more and turn as one when a shadow crosses them. They bite quickly and give up easily.
+    lower: minnow
+    name: Minnow
+    tip: Cast anywhere near a warm shore. A school finds the lure in seconds.
+  octopus:
+    caps: "DEN OCTOPUS"
+    entry: A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.
+    lower: den octopus
+    name: Den octopus
+    tip: Look for the shells at its door, then keep back and wait.
+  perch:
+    caps: "BANDED PERCH"
+    entry: Striped, deep-bodied and curious. Perch hold the river channels in loose groups of a dozen, in any river that does not freeze, and one will follow a lure a long way before it commits.
+    lower: banded perch
+    name: Banded perch
+    tip: Nibbles come in threes. Wait for the float to go under.
+  plodder:
+    caps: "PLODDER"
+    entry: "The plodder is the great slow beast of the fields: two meters of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day."
+    lower: plodder
+    name: Plodder
+    tip: Five feeds of turnip or turf. It needs two cells of grass each in its pen.
+  pond_diver:
+    caps: "POND DIVER"
+    entry: A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.
+    lower: pond diver
+    name: Pond diver
+    tip: "Watch the water where it went under; it surfaces a few meters off."
+  ray:
+    caps: "RAY"
+    entry: A flat grazer that lies on the sand and lifts off in slow wingbeats. Rays travel alone or in pairs along the bed of warm shallows and shelf, well out from the beach.
+    lower: ray
+    name: Ray
+    tip: Cast long, over sand. A ray never schools, so a bite is one fish, not one of many.
+  reed_dabbler:
+    caps: "REED DABBLER"
+    entry: "The common duck of rivers, marsh pools and quiet shallows. Dabblers float in small flocks, tip up to feed with their tails in the air, paddle off when you come close and sleep on the water at night. Ducks are protected; their eggs and feathers are gathered, not taken."
+    lower: reed dabbler
+    name: Reed dabbler
+    tip: Slow water near reeds. Come up quietly or they paddle off.
+  reef:
+    caps: "REEF FISH"
+    entry: The prize of warm water. Tall-finned and nervous, reef fish shoal in small groups over tropical shallows that never fall below 23 degrees, and give the shortest bite window of anything in the sea.
+    lower: reef fish
+    name: Reef fish
+    tip: The hook window is under half a second. Watch the float, not the fish.
+  reef_turtle:
+    caps: "REEF TURTLE"
+    entry: "A slow, old swimmer of warm reefs and the shelf beyond them, alone and unhurried. Reef turtles are protected: none may be caught."
+    lower: reef turtle
+    name: Reef turtle
+    tip: Watch it go by. A line cast at one is refused.
+  sea_otter:
+    caps: "SEA OTTER"
+    entry: "Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught."
+    lower: sea otter
+    name: Sea otter
+    tip: Cool coasts, over kelp. Keep your distance and they stay.
+  seal:
+    caps: "ICE SEAL"
+    entry: "Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught."
+    lower: ice seal
+    name: Ice seal
+    tip: Cold water, near the ice or the kelp. Where seals are, the fish are.
+  serpent:
+    caps: "SEA SERPENT"
+    entry: Rare and solitary, found only past the drop-off in any deep sea that does not freeze. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.
+    lower: sea serpent
+    name: Sea serpent
+    tip: There is at most one in any water. Deep water, a long cast and patience.
+  shore_crab:
+    caps: "SHORE CRAB"
+    entry: A small green-brown crab of every warm or cool shore, in rock pools, river mouths and the sand of the shallows. It walks sideways along the bed and scuttles off when a shadow comes near.
+    lower: shore crab
+    name: Shore crab
+    tip: Look in the shallows by the rocks. It does not take a lure.
+  silverfin:
+    caps: "SILVERFIN"
+    entry: A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.
+    lower: silverfin
+    name: Silverfin
+    tip: Let the splash settle before you expect a bite.
+  tube_worm:
+    caps: "PLUME WORM"
+    entry: White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.
+    lower: plume worm
+    name: Plume worm
+    tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize."
+  woolback:
+    caps: "WOOLBACK"
+    entry: Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.
+    lower: woolback
+    name: Woolback
+    tip: Four feeds of wheat or turf, standing still. Pen them on grass and they feed themselves.
+station:
+  campfire:
+    name: campfire
+  forge:
+    name: forge
+  hand:
+    name: hands
+  workbench:
+    name: workbench
+tier:
+  bronze:
+    name: Bronze
+  iron:
+    name: Iron
+  steel:
+    name: Steel
+  stone:
+    name: Stone
 time:
   title: TIME
+tool:
+  axe:
+    caps: AXE
+    name: Axe
+    purpose: "chops wood; fair on turf"
+    tiered:
+      bronze: Bronze axe
+      iron: Iron axe
+      steel: Steel axe
+      stone: Stone axe
+    tiered_caps:
+      bronze: BRONZE AXE
+      iron: IRON AXE
+      steel: STEEL AXE
+      stone: STONE AXE
+  pickaxe:
+    caps: PICKAXE
+    name: Pickaxe
+    purpose: breaks stone, rock, ore
+    tiered:
+      bronze: Bronze pickaxe
+      iron: Iron pickaxe
+      steel: Steel pickaxe
+      stone: Stone pickaxe
+    tiered_caps:
+      bronze: BRONZE PICKAXE
+      iron: IRON PICKAXE
+      steel: STEEL PICKAXE
+      stone: STONE PICKAXE
+  rod:
+    caps: FISHING ROD
+    name: Fishing rod
+    purpose: cast, hook, reel
+  shovel:
+    caps: SHOVEL
+    name: Shovel
+    purpose: digs soil, sand, snow
+    tiered:
+      bronze: Bronze shovel
+      iron: Iron shovel
+      steel: Steel shovel
+      stone: Stone shovel
+    tiered_caps:
+      bronze: BRONZE SHOVEL
+      iron: IRON SHOVEL
+      steel: STEEL SHOVEL
+      stone: STONE SHOVEL
+towns:
+  door: door
 vehicle:
   loon:
-    name: "Loon"
-    title: "LOON"
+    name: Loon
+    title: LOON
   raft:
-    name: "Raft"
-    title: "RAFT"
+    name: Raft
+    title: RAFT
   tube:
-    name: "Inner tube"
-    title: "INNER TUBE"
+    name: Inner tube
+    title: INNER TUBE
 vehicles:
   hud:
     at_anchor: "{craft} - at anchor"
     bail: "Water aboard: bail"
-    camera: "camera"
-    cast_off: "cast off"
-    drop_anchor: "drop the anchor"
-    raise_anchor: "raise the anchor"
-    step_off: "step off"
+    camera: camera
+    cast_off: cast off
+    drop_anchor: drop the anchor
+    raise_anchor: raise the anchor
+    step_off: step off
     tied_up: "{craft} - tied up"
 weather:
   title: WEATHER

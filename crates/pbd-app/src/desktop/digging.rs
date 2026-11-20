@@ -747,7 +747,7 @@ pub fn dig_and_place(
         if let Some(row) = was.and_then(pbd_core::station::station_of)
             && super::farm::station_state(&edits, cell, layer as u16, row).busy()
         {
-            note.say(wall_s, format!("Empty the {} first", row.name));
+            note.say(wall_s, format!("Empty the {} first", row.name()));
             return;
         }
         // Dug grass turns up a seed, one cell in a few (decision 14).
@@ -816,7 +816,7 @@ pub fn dig_and_place(
                  fine set version {}",
                 match digger {
                     Some(Digger::Tool(tool, tier)) => pbd_core::inventory::tool_title(tool, tier),
-                    _ => "bare hands".to_string(),
+                    _ => pbd_core::locale::tr("equipment.bare"),
                 },
                 secs.unwrap_or(0.0),
                 fine.version

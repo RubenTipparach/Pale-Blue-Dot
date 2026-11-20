@@ -57,7 +57,6 @@
         "home": [
             (
                 id: "meadow-hen",
-                name: "Yard hen",
                 class: Bird,
                 status: Tameable,
                 plan: Bird,
@@ -93,14 +92,9 @@
                         birth: Eggs(incubation_days: 3.0, clutch_max: 8),
                     ),
                 )),
-                guide: (
-                    entry: "A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.",
-                    tip: "Stand still with wheat seed in hand and let her come to you. Three feeds and she follows.",
-                ),
             ),
             (
                 id: "woolback",
-                name: "Woolback",
                 class: Mammal,
                 status: Tameable,
                 plan: Quadruped,
@@ -135,14 +129,9 @@
                         birth: Live(gestation_days: 5.0, litter: (1, 2)),
                     ),
                 )),
-                guide: (
-                    entry: "Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.",
-                    tip: "Four feeds of wheat or turf, standing still. Pen them on grass and they feed themselves.",
-                ),
             ),
             (
                 id: "plodder",
-                name: "Plodder",
                 class: Mammal,
                 status: Tameable,
                 plan: Quadruped,
@@ -177,10 +166,6 @@
                         birth: Live(gestation_days: 8.0, litter: (1, 1)),
                     ),
                 )),
-                guide: (
-                    entry: "The plodder is the great slow beast of the fields: two meters of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day.",
-                    tip: "Five feeds of turnip or turf. It needs two cells of grass each in its pen.",
-                ),
             ),
         ],
     },

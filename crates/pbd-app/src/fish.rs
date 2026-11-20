@@ -27,6 +27,7 @@ use pbd_core::fauna::{self, HOME_BODY, School, Species, Water, WaterClass};
 use pbd_core::fishing::{Angler, Controls, Event, Line, Phase};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Equipment, Item, Tool};
+use pbd_core::locale::{Localized, tr, tr_with};
 use pbd_core::sea::LocalSea;
 use pbd_core::world_frame::SimOrigin;
 use std::collections::HashMap;
@@ -620,8 +621,8 @@ fn fish(
         }
     }
     status.meter = match fishery.line.phase {
-        Phase::Charging => Some(("CAST", fishery.line.power)),
-        Phase::Hooked => Some(("TENSION", fishery.line.tension)),
+        Phase::Charging => Some(("cast", fishery.line.power)),
+        Phase::Hooked => Some(("tension", fishery.line.tension)),
         _ => None,
     };
 
@@ -634,7 +635,13 @@ fn fish(
             let reason = species.catch_refusal()?;
             (species.status == fauna::Status::Protected
                 && school.centre().distance(float) <= species.sense_m.max(3.0))
-            .then(|| format!("{}: {reason}", species.name))
+            .then(|| {
+                tr_with(
+                    "fishing.refused",
+                    &[("species", &species.name()), ("reason", &reason)],
+                )
+                .into_string()
+            })
         });
         if let Some(text) = refused
             && !fishery.told_refusal
@@ -1145,7 +1152,7 @@ fn try_spawn(
     }
     debug!(
         "{} school of {} spawned in {} at {:.1} C, {:.0} m out",
-        roster[pick].name,
+        roster[pick].id,
         school.len(),
         class.name(),
         temperature,
@@ -1199,36 +1206,47 @@ fn report(
     let name = |species: u16| {
         roster
             .get(species as usize)
-            .map_or("fish", |sp| sp.name.as_str())
-            .to_string()
+            .map_or_else(|| tr("inventory.fish"), Species::name)
+    };
+    // The name mid-sentence ("the minnow").
+    let lower = |species: u16| {
+        roster
+            .get(species as usize)
+            .map_or_else(|| tr("inventory.fish"), Species::lower_name)
+    };
+    // The name missions and their saved progress count by.
+    let data_name = |species: u16| {
+        roster
+            .get(species as usize)
+            .map_or_else(|| "fish".to_string(), Species::data_name)
     };
     match event {
-        Event::Dry => status.say("The float came down on dry ground", 1.5),
-        Event::Bite { .. } => status.say("Bite! Left click", 0.3),
+        Event::Dry => status.say(tr("fishing.status.dry"), 1.5),
+        Event::Bite { .. } => status.say(tr("fishing.status.bite"), 0.3),
         Event::TooEarly { species } => status.say(
-            format!("Too early - the {} bolted", name(species).to_lowercase()),
+            tr_with("fishing.status.too_early", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Missed { species } => status.say(
-            format!(
-                "Missed - the {} spat the hook",
-                name(species).to_lowercase()
-            ),
+            tr_with("fishing.status.missed", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Lost { species } => status.say(
-            format!("Wound in - the {} got away", name(species).to_lowercase()),
+            tr_with("fishing.status.lost", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Snapped { species } => status.say(
-            format!(
-                "The line snapped - the {} is gone",
-                name(species).to_lowercase()
-            ),
+            tr_with("fishing.status.snapped", &[("species", &lower(species))]),
             2.5,
         ),
         Event::Caught { species, length_cm } => {
-            status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
+            status.say(
+                tr_with(
+                    "fishing.status.caught",
+                    &[("species", &name(species)), ("length", &length_cm)],
+                ),
+                3.0,
+            );
             // A baited line's catch uses one bait, taken in the catch's own
             // durable write (`starter-missions` G1); given back if the fish
             // is let go.
@@ -1237,7 +1255,7 @@ fn report(
             let used_bait = baited && hotbar.as_deref_mut().is_some_and(|h| h.take_item(bait, 1));
             if land(species, length_cm, hotbar.as_deref_mut(), save, status) {
                 use crate::missions::Did;
-                let kind = name(species).to_lowercase();
+                let kind = data_name(species);
                 let mut did = vec![Did::new(Kind::Catch, kind.clone(), 1)];
                 if used_bait {
                     did.push(Did::new(Kind::Baited, kind.clone(), 1));
@@ -1279,7 +1297,7 @@ pub fn land(
         return false;
     };
     if hotbar.give(Item::Fish(species), 1) > 0 {
-        status.say("No room in the hotbar - the fish was let go", 3.0);
+        status.say(tr("fishing.status.no_room"), 3.0);
         return false;
     }
     if let Some(save) = save
@@ -1302,13 +1320,13 @@ pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
         Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
     );
     let left = match phase {
-        Phase::Ready => ("HOLD TO CAST", true),
-        Phase::Charging => ("LET GO TO CAST", true),
-        Phase::Hooked => ("HOLD TO REEL", true),
-        Phase::Bite => ("HOOK", true),
-        Phase::Flying | Phase::Floating | Phase::Nibble => ("HOOK", false),
+        Phase::Ready => ("fishing.key.hold_to_cast", true),
+        Phase::Charging => ("fishing.key.let_go_to_cast", true),
+        Phase::Hooked => ("fishing.key.hold_to_reel", true),
+        Phase::Bite => ("fishing.key.hook", true),
+        Phase::Flying | Phase::Floating | Phase::Nibble => ("fishing.key.hook", false),
     };
-    [left, (if out { "CANCEL" } else { "" }, false)]
+    [left, (if out { "fishing.key.cancel" } else { "" }, false)]
 }
 
 /// The standing line under the crosshair while the rod is out.
@@ -1317,14 +1335,14 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         return String::new();
     }
     if roster.is_empty() {
-        return "Nothing lives in this water".into();
+        return tr("fishing.status.nothing_lives").into();
     }
     match line.phase {
         // The buttons in the corner say these (`keys_for`).
         Phase::Ready | Phase::Charging | Phase::Flying | Phase::Floating => String::new(),
-        Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
-        Phase::Bite => "Bite! Left click".into(),
-        Phase::Hooked => "Hold to reel - ease off when it runs".into(),
+        Phase::Nibble => tr("fishing.status.nibble").into(),
+        Phase::Bite => tr("fishing.status.bite").into(),
+        Phase::Hooked => tr("fishing.status.hooked").into(),
     }
 }
 
@@ -1352,46 +1370,74 @@ pub fn species_icon(species: &Species) -> String {
 pub fn guide_facts(
     species: &Species,
     fishing: &fauna::FishingSettings,
-) -> Vec<(&'static str, String)> {
+) -> Vec<(Localized, Localized)> {
     let water = species
         .water
         .iter()
-        .map(|class| class.name())
+        .map(|class| class.label().into_string())
         .collect::<Vec<_>>()
         .join(", ");
+    let (lo, hi) = (
+        format!("{:.0}", species.depth_m.0),
+        format!("{:.0}", species.depth_m.1),
+    );
     let depth = if species.bed {
-        format!(
-            "on the bed, {:.0}-{:.0} m",
-            species.depth_m.0, species.depth_m.1
-        )
+        tr_with("fishing.fact.on_bed", &[("from", &lo), ("to", &hi)])
     } else {
-        format!("{:.0}-{:.0} m down", species.depth_m.0, species.depth_m.1)
+        tr_with("fishing.fact.down", &[("from", &lo), ("to", &hi)])
     };
     let pips =
         "#".repeat(species.strength as usize) + &"-".repeat(5 - species.strength.min(5) as usize);
     vec![
-        ("WATER", water),
+        (tr("fishing.fact.water"), Localized::verbatim(water)),
         (
-            "TEMPERATURE",
-            format!("{:.0} to {:.0} C", species.temp_c.0, species.temp_c.1),
+            tr("fishing.fact.temperature"),
+            tr_with(
+                "fishing.fact.temperature_range",
+                &[
+                    ("from", &format!("{:.0}", species.temp_c.0)),
+                    ("to", &format!("{:.0}", species.temp_c.1)),
+                ],
+            ),
         ),
-        ("DEPTH", depth),
+        (tr("fishing.fact.depth"), depth),
         (
-            "FOUND",
-            format!("schools of {}-{}", species.school.0, species.school.1),
+            tr("fishing.fact.found"),
+            tr_with(
+                "fishing.fact.schools",
+                &[("fewest", &species.school.0), ("most", &species.school.1)],
+            ),
         ),
         (
-            "LENGTH",
-            format!("about {:.0} cm", species.length_m * 100.0),
-        ),
-        ("STRENGTH", format!("{pips} {}/5", species.strength)),
-        (
-            "HOOK WINDOW",
-            format!("{:.2} s", fishing.hook_window(species.strength)),
+            tr("fishing.fact.length"),
+            tr_with(
+                "fishing.fact.about_cm",
+                &[("length", &format!("{:.0}", species.length_m * 100.0))],
+            ),
         ),
         (
-            "SPEED",
-            format!("{:.1}-{:.1} m/s", species.speed_mps.0, species.speed_mps.1),
+            tr("fishing.fact.strength"),
+            Localized::verbatim(format!("{pips} {}/5", species.strength)),
+        ),
+        (
+            tr("fishing.fact.hook_window"),
+            tr_with(
+                "fishing.fact.seconds",
+                &[(
+                    "seconds",
+                    &format!("{:.2}", fishing.hook_window(species.strength)),
+                )],
+            ),
+        ),
+        (
+            tr("fishing.fact.speed"),
+            tr_with(
+                "fishing.fact.speed_range",
+                &[
+                    ("from", &format!("{:.1}", species.speed_mps.0)),
+                    ("to", &format!("{:.1}", species.speed_mps.1)),
+                ],
+            ),
         ),
     ]
 }
@@ -2126,7 +2172,7 @@ pub(crate) mod draw {
             let handle = meshes.add(mesh);
             commands
                 .spawn((
-                    Name::new(format!("{} school", species.name)),
+                    Name::new(format!("{} school", species.id)),
                     SchoolMesh {
                         index,
                         mesh: handle.clone(),
@@ -2681,9 +2727,9 @@ pub(crate) mod draw {
             for (mut node, mut colour) in &mut fill {
                 node.width = percent(value.clamp(0.0, 1.0) * 100.0);
                 colour.0 = match label {
-                    "TENSION" if value > 0.8 => Color::srgb(1.0, 0.42, 0.34),
-                    "TENSION" if value > 0.55 => Color::srgb(0.94, 0.71, 0.24),
-                    "TENSION" => Color::srgb(0.47, 0.88, 0.63),
+                    "tension" if value > 0.8 => Color::srgb(1.0, 0.42, 0.34),
+                    "tension" if value > 0.55 => Color::srgb(0.94, 0.71, 0.24),
+                    "tension" => Color::srgb(0.47, 0.88, 0.63),
                     _ => Color::srgb(0.94, 0.71, 0.24),
                 };
             }

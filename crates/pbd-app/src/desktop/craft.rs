@@ -208,7 +208,7 @@ pub fn queue(
                 if recipe.station.material.is_none() {
                     "Your hands are busy".to_string()
                 } else {
-                    format!("The {}'s queue is full", recipe.station.name)
+                    format!("The {}'s queue is full", recipe.station.name())
                 },
             );
             return false;
@@ -906,7 +906,7 @@ pub fn paint(
                 format!("{}: need {n}, have {}", item.name(), carried(item))
             }
             (_, Some((Item::Tool(tool), _, Some(tier)))) => {
-                pbd_core::inventory::tool_title(tool, tier)
+                pbd_core::inventory::tool_title(tool, tier).into_string()
             }
             (_, Some((item, _, _))) => item.name().to_string(),
         };

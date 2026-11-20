@@ -24,6 +24,23 @@ from ron_read import load  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FAUNA = os.path.join(ROOT, "assets", "config", "fauna.ron")
+# A species' name, entry and tip are in the locale file by its id
+# (`openspec/changes/localization`): `species.<id>.name`, `.entry`, `.tip`.
+LOCALE = os.path.join(ROOT, "assets", "locale", "locale_en.yaml")
+
+
+def with_words(fauna):
+    """The roster with each species' words from the English locale file."""
+    import yaml  # PyYAML
+
+    with open(LOCALE, encoding="utf-8") as f:
+        words = yaml.safe_load(f)["species"]
+    for roster in fauna["bodies"].values():
+        for sp in roster:
+            w = words[sp["id"]]
+            sp["name"] = w["name"]
+            sp["guide"] = {"entry": w["entry"], "tip": w["tip"]}
+    return fauna
 OUT = os.path.join(ROOT, "docs", "wiki", "fish.md")
 
 # Display names of the enums, as the game spells them.
@@ -159,7 +176,7 @@ def render(fauna):
 
 
 def main():
-    text = render(load(FAUNA))
+    text = render(with_words(load(FAUNA)))
     if "--check" in sys.argv[1:]:
         current = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else ""
         if current != text:
