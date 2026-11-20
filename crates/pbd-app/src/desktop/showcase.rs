@@ -21,6 +21,8 @@
 //! It prints `SHOWCASE_START <name>`, `SHOT <n> <caption>` at each shot,
 //! and `SHOWCASE_END <name>` when its goal is met, then quits. A shot that
 //! cannot finish fails the run: `SHOWCASE_STALL` and no `SHOWCASE_END`.
+//!
+//! locale: dev
 
 pub mod file;
 

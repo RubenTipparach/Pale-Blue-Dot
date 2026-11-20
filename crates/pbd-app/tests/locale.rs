@@ -126,6 +126,78 @@ const DEV_CALLS: &[&str] = &[
     "env::remove_var",
 ];
 
+/// Places in one file whose literals are diagnostics or labels, never shown:
+/// `(file, name)`, where the name is an enclosing function, or a function,
+/// method or macro the literal is an argument of. Each is a false positive of
+/// the general rules, fixed here rather than baselined.
+const DEV_SCOPES: &[(&str, &str)] = &[
+    // Config and data validators: why a file does not validate, for the log.
+    ("crates/pbd-app/src/config.rs", "positive"),
+    ("crates/pbd-app/src/config.rs", "non_negative"),
+    ("crates/pbd-core/src/vehicle/spec.rs", "positive"),
+    ("crates/pbd-app/src/vehicles/model/validate.rs", "require"),
+    ("crates/pbd-core/src/audio.rs", "problem"),
+    ("crates/pbd-core/src/audio.rs", "problems"),
+    ("crates/pbd-core/src/sites.rs", "validate"),
+    ("crates/pbd-core/src/settlement/chart.rs", "refuse"),
+    ("crates/pbd-core/src/settlement/record.rs", "Damaged"),
+    (
+        "crates/pbd-core/src/settlement/pieces/dressing.rs",
+        "shipyard",
+    ),
+    // Why a mission is not live yet: checked, logged, never shown.
+    ("crates/pbd-core/src/missions.rs", "resolve"),
+    // A town template's area names, matched as data.
+    (
+        "crates/pbd-core/src/settlement/pieces/steps.rs",
+        "path_cells",
+    ),
+    // What a save's writer and record keep for the log.
+    ("crates/pbd-app/src/saves/writer.rs", "send"),
+    ("crates/pbd-app/src/saves/writer.rs", "drain"),
+    ("crates/pbd-app/src/saves/writer.rs", "note"),
+    ("crates/pbd-app/src/towns.rs", "unsettled_record"),
+    ("crates/pbd-app/src/towns.rs", "stand"),
+    // Timing and missing-edit labels for the log (`lod::spent`).
+    ("crates/pbd-app/src/planet_lod.rs", "spent"),
+    ("crates/pbd-app/src/planet_lod.rs", "report_missing_edits"),
+    ("crates/pbd-app/src/planet.rs", "spent"),
+    ("crates/pbd-app/src/planet.rs", "report_missing_edits"),
+    ("crates/pbd-app/src/planet_tier_gpu.rs", "spent"),
+    ("crates/pbd-app/src/field_light.rs", "spent"),
+    // GPU objects' debug labels, made by a file's own helpers.
+    ("crates/pbd-app/src/planet.rs", "view_bind_group"),
+    ("crates/pbd-app/src/planet_shadow.rs", "list"),
+    ("crates/pbd-app/src/planet_shadow.rs", "draw_group"),
+    ("crates/pbd-app/src/planet_reflect.rs", "target"),
+    ("crates/pbd-app/src/planet_weather.rs", "cube"),
+    ("crates/pbd-app/src/planet_weather.rs", "pair"),
+    ("crates/pbd-app/src/bloom.rs", "pipeline"),
+    ("crates/pbd-app/src/planet_water.rs", "specialize"),
+    ("crates/pbd-app/src/planet_water.rs", "run"),
+    ("crates/pbd-app/src/loading.rs", "watch_pipelines"),
+    // Threads' and entities' debug names.
+    ("crates/pbd-app/src/river_fill.rs", "name"),
+    ("crates/pbd-app/src/planet_trees.rs", "name"),
+    ("crates/pbd-app/src/audio/mod.rs", "name"),
+    ("crates/pbd-app/src/fish/places.rs", "child"),
+    // The settings file's folder, from the environment.
+    ("crates/pbd-app/src/settings.rs", "var"),
+    // The `--audio-log` line.
+    ("crates/pbd-app/src/audio/mod.rs", "mix_frame"),
+    // The debug readout's lines (behind the debug key) and the log.
+    ("crates/pbd-app/src/planet_lod.rs", "line"),
+    ("crates/pbd-app/src/place.rs", "line"),
+    // Capture scripts' and the frame log's lines (`--capture`, `--frame-log`).
+    ("crates/pbd-app/src/desktop.rs", "switch_line"),
+    ("crates/pbd-app/src/desktop.rs", "river_walk_script"),
+    ("crates/pbd-app/src/desktop.rs", "fish_script"),
+    ("crates/pbd-app/src/desktop.rs", "open"),
+    ("crates/pbd-app/src/desktop.rs", "verify_route"),
+    ("crates/pbd-app/src/desktop.rs", "verify_flight"),
+    ("crates/pbd-app/src/vehicles.rs", "report_steps"),
+];
+
 const HINT: &str = "move it to assets/locale/locale_en.yaml and call tr(\"key\")";
 
 fn root() -> PathBuf {
@@ -180,11 +252,28 @@ fn allowed_text(s: &str) -> bool {
     if !s.chars().any(char::is_alphabetic) {
         return true;
     }
-    // An id or a key.
+    // An id or a key, or a list of them (a CSV header).
     if s.chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "_.:-".contains(c))
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "_.:-,".contains(c))
     {
         return true;
+    }
+    // A namespaced id (`interact:KeyF`), a constant's or a shader def's or an
+    // environment variable's name (`SUN_DISC`, `PBD_BOUNCE`), or a camelCase
+    // identifier (`PaleBlueDot`, `wingR`).
+    if s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_.:-,".contains(c))
+    {
+        let upper_snake = s.contains('_')
+            && s.chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+        let camel = s.chars().all(|c| c.is_ascii_alphanumeric())
+            && s.as_bytes()
+                .windows(2)
+                .any(|w| w[0].is_ascii_lowercase() && w[1].is_ascii_uppercase());
+        if s.contains(':') || upper_snake || camel {
+            return true;
+        }
     }
     // An asset path.
     if !s.chars().any(char::is_whitespace) {
@@ -192,6 +281,20 @@ fn allowed_text(s: &str) -> bool {
         if s.contains('/') || s.contains('\\') || EXTENSIONS.iter().any(|e| lower.ends_with(e)) {
             return true;
         }
+    }
+    // A path with a space in a folder's name (`Library/Application
+    // Support/PaleBlueDot`): segments joined by `/` with nothing round it.
+    let first = s.split('/').next().unwrap_or_default();
+    if s.split('/').count() > 2
+        && !first.is_empty()
+        && !first.contains(|c: char| c.is_whitespace() || c == '{')
+        && s.split('/').all(|seg| {
+            !seg.is_empty()
+                && !seg.starts_with(char::is_whitespace)
+                && !seg.ends_with(char::is_whitespace)
+        })
+    {
+        return true;
     }
     // A format string with every letter inside its `{}`, or an id or a
     // path built by one (`landing-{set}-f`, `{dir}/{name}.png`).
@@ -307,6 +410,13 @@ impl<'a> Linter<'a> {
             ctx: Vec::new(),
             dev: 0,
         }
+    }
+
+    /// Whether `name` is one of this file's `DEV_SCOPES`.
+    fn scoped(&self, name: &str) -> bool {
+        DEV_SCOPES
+            .iter()
+            .any(|(file, n)| self.file == *file && *n == name)
     }
 
     fn check_lit(&mut self, lit: &syn::LitStr) {
@@ -506,8 +616,33 @@ impl<'ast> Visit<'ast> for Linter<'_> {
 
     fn visit_impl_item_fn(&mut self, f: &'ast syn::ImplItemFn) {
         if !is_test_attr(&f.attrs) {
+            let dev = usize::from(self.scoped(&f.sig.ident.to_string()));
+            self.dev += dev;
             visit::visit_impl_item_fn(self, f);
+            self.dev -= dev;
         }
+    }
+
+    fn visit_item_fn(&mut self, f: &'ast syn::ItemFn) {
+        let dev = usize::from(self.scoped(&f.sig.ident.to_string()));
+        self.dev += dev;
+        visit::visit_item_fn(self, f);
+        self.dev -= dev;
+    }
+
+    fn visit_expr_assign(&mut self, assign: &'ast syn::ExprAssign) {
+        // A GPU object's debug label set after it is made:
+        // `descriptor.label = Some("…")`.
+        if let Expr::Field(f) = &*assign.left
+            && matches!(&f.member, syn::Member::Named(n) if n == "label")
+            && let Expr::Call(call) = &*assign.right
+            && let Expr::Path(p) = &*call.func
+            && p.path.is_ident("Some")
+        {
+            self.visit_expr(&assign.left);
+            return;
+        }
+        visit::visit_expr_assign(self, assign);
     }
 
     fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
@@ -556,9 +691,11 @@ impl<'ast> Visit<'ast> for Linter<'_> {
                         });
                     }
                 }
-                _ if DEV_CALLS
-                    .iter()
-                    .any(|d| path == *d || path.ends_with(&format!("::{d}"))) =>
+                Some(last)
+                    if DEV_CALLS
+                        .iter()
+                        .any(|d| path == *d || path.ends_with(&format!("::{d}")))
+                        || self.scoped(last) =>
                 {
                     self.dev += 1;
                     visit::visit_expr_call(self, call);
@@ -578,7 +715,8 @@ impl<'ast> Visit<'ast> for Linter<'_> {
     }
 
     fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
-        if DEV_METHODS.contains(&call.method.to_string().as_str()) {
+        let method = call.method.to_string();
+        if DEV_METHODS.contains(&method.as_str()) || self.scoped(&method) {
             self.visit_expr(&call.receiver);
             self.dev += 1;
             for arg in &call.args {
@@ -619,7 +757,7 @@ impl<'ast> Visit<'ast> for Linter<'_> {
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
-        let dev = DEV_MACROS.contains(&name.as_str());
+        let dev = DEV_MACROS.contains(&name.as_str()) || self.scoped(&name);
         self.dev += usize::from(dev);
         self.ctx.push(format!("{name}!"));
         self.visit_macro_body(mac, &name);
@@ -991,6 +1129,11 @@ fn the_rules_classify_text() {
         "pbd-app:bloom",
         "landing-{set}-f",
         "{dir}/{name}.png",
+        "interact:KeyF",
+        "PBD_RIVER_FILL",
+        "PaleBlueDot",
+        "Library/Application Support/PaleBlueDot",
+        "frame,dt_s,x",
     ] {
         assert!(allowed_text(ok), "{ok:?} should be allowed");
     }
@@ -1000,6 +1143,9 @@ fn the_rules_classify_text() {
         "No more wood",
         "X",
         "and / or",
+        "water {:>4.1} m/s  ground {:>4.1} m/s  slip {:>+4.1} m/s",
+        "OFF",
+        "NE",
     ] {
         assert!(!allowed_text(bad), "{bad:?} should be flagged");
     }

@@ -2,13 +2,6 @@
 # `path|literal`, sorted. It only shrinks; never add to it. When it is
 # empty, delete it. `python3 tools/locale/locale_lint.py --baseline` drops
 # entries that are gone.
-crates/pbd-app/src/audio/mod.rs| (paused)
-crates/pbd-app/src/audio/mod.rs| STOPPED
-crates/pbd-app/src/audio/mod.rs|sound bank
-crates/pbd-app/src/bloom.rs|lite bloom: down
-crates/pbd-app/src/bloom.rs|lite bloom: first down
-crates/pbd-app/src/bloom.rs|lite bloom: onto the image
-crates/pbd-app/src/bloom.rs|lite bloom: up
 crates/pbd-app/src/compass.rs|E
 crates/pbd-app/src/compass.rs|N
 crates/pbd-app/src/compass.rs|NE
@@ -26,22 +19,7 @@ crates/pbd-app/src/config.rs|LOW
 crates/pbd-app/src/config.rs|MEDIUM
 crates/pbd-app/src/config.rs|MEDIUM
 crates/pbd-app/src/config.rs|OFF
-crates/pbd-app/src/config.rs|PBD_BOUNCE
-crates/pbd-app/src/config.rs|PBD_LAMP_BAKE
-crates/pbd-app/src/config.rs|PBD_SOFT_SHADOWS
 crates/pbd-app/src/config.rs|ULTRA
-crates/pbd-app/src/config.rs|cloud light
-crates/pbd-app/src/config.rs|cloud_puff_spacing_m, cloud_puff_soft_m, cloud_puff_near_m, cloud_puff_optical_depth
-crates/pbd-app/src/config.rs|clutter distances
-crates/pbd-app/src/config.rs|clutter sizes
-crates/pbd-app/src/config.rs|falls lengths
-crates/pbd-app/src/config.rs|flora sizes
-crates/pbd-app/src/config.rs|lens taus
-crates/pbd-app/src/config.rs|overlay streaks
-crates/pbd-app/src/config.rs|snow fall and size
-crates/pbd-app/src/config.rs|under water
-crates/pbd-app/src/config.rs|water scalars
-crates/pbd-app/src/config.rs|weather scalars
 crates/pbd-app/src/controls.rs|A
 crates/pbd-app/src/controls.rs|ALT
 crates/pbd-app/src/controls.rs|B
@@ -134,10 +112,8 @@ crates/pbd-app/src/controls.rs|cycle the weather
 crates/pbd-app/src/controls.rs|drop or raise the anchor
 crates/pbd-app/src/controls.rs|flow arrows
 crates/pbd-app/src/controls.rs|frame graph, again for its GPU breakdown
-crates/pbd-app/src/controls.rs|hands:KeyE
 crates/pbd-app/src/controls.rs|hold for the tools; the wheel picks one
 crates/pbd-app/src/controls.rs|hold for the tools; the wheel picks one
-crates/pbd-app/src/controls.rs|interact:KeyF
 crates/pbd-app/src/controls.rs|jump, and rise in water
 crates/pbd-app/src/controls.rs|kick forward or back
 crates/pbd-app/src/controls.rs|noon or midnight
@@ -157,28 +133,10 @@ crates/pbd-app/src/controls.rs|the pack: thirty more slots
 crates/pbd-app/src/controls.rs|the starter missions
 crates/pbd-app/src/controls.rs|up and down
 crates/pbd-app/src/controls.rs|use the tool in hand: dig, or cast, hook and reel
-crates/pbd-app/src/controls.rs|vehicles:KeyF
 crates/pbd-app/src/controls.rs|walk or fly
 crates/pbd-app/src/controls.rs|wind the line in
 crates/pbd-app/src/controls.rs|with the rod: hold to cast, press to strike, hold to reel
-crates/pbd-app/src/desktop.rs|,gpu_{name}_ms
-crates/pbd-app/src/desktop.rs|A
-crates/pbd-app/src/desktop.rs|CIRCUMNAVIGATION completed={} degrees={:.3} seconds={:.3} min_clearance_m={:.3} max_speed_m_s={:.3} max_command_acceleration_m_s2={:.3} max_angular_speed_rad_s={:.3} max_angular_acceleration_rad_s2={:.3} protection_events={}\n
-crates/pbd-app/src/desktop.rs|D
 crates/pbd-app/src/desktop.rs|Pale Blue Dot \| Planet Explorer
-crates/pbd-app/src/desktop.rs|ROUTE {} completed={} seconds={:.1} destination_deg={:.2} touchdown_error_m={:.1} peak_height_m={:.0} min_airborne_clearance_m={:.1} at_m={:.0} max_speed_m_s={:.1} max_camera_rate_rad_s={:.3} protection_events={}\n
-crates/pbd-app/src/desktop.rs|S
-crates/pbd-app/src/desktop.rs|W
-crates/pbd-app/src/desktop.rs|a hop forward
-crates/pbd-app/src/desktop.rs|a new route round it
-crates/pbd-app/src/desktop.rs|backing out, then a new route
-crates/pbd-app/src/desktop.rs|cell {} of {} at {:.1} m, rise {:.1} m, its ground {:.1} m, here {:.1} m
-crates/pbd-app/src/desktop.rs|frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot,main_between_ms,submit_ms,present_ms
-crates/pbd-app/src/desktop.rs|no route
-crates/pbd-app/src/desktop.rs|world {slot} seed {} generator {} edits {} saved_pose {saved}
-crates/pbd-app/src/desktop.rs|{:.1},{:.1},{:.1} (lat {:.4} lon {:.4})
-crates/pbd-app/src/desktop.rs|{head} walker {walker} spawn_dir {spawn} clock_s {clock:.0}
-crates/pbd-app/src/desktop.rs|{name} x{}
 crates/pbd-app/src/desktop/arrival.rs|A NEW WORLD
 crates/pbd-app/src/desktop/arrival.rs|WELCOME BACK
 crates/pbd-app/src/desktop/breeding.rs|, ended
@@ -246,8 +204,6 @@ crates/pbd-app/src/desktop/equipment.rs|@legacy want
 crates/pbd-app/src/desktop/equipment.rs|Bare hands
 crates/pbd-app/src/desktop/equipment.rs|digs soft ground
 crates/pbd-app/src/desktop/equipment.rs|wheel to choose, let go of G
-crates/pbd-app/src/desktop/eye_path.rs|no water  eye:{state}  f{frame}
-crates/pbd-app/src/desktop/eye_path.rs|{rel:+.2} m to water  eye:{state}  f{frame}
 crates/pbd-app/src/desktop/farm.rs|+{} {}, +{} seed
 crates/pbd-app/src/desktop/farm.rs|@legacy note.text.clone()
 crates/pbd-app/src/desktop/farm.rs|Can't till under a block
@@ -441,8 +397,6 @@ crates/pbd-app/src/desktop/repro.rs|Location copied
 crates/pbd-app/src/desktop/repro.rs|Location not saved
 crates/pbd-app/src/desktop/repro.rs|Location not saved
 crates/pbd-app/src/desktop/repro.rs|{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02} UTC
-crates/pbd-app/src/desktop/showcase.rs|@legacy text.to_string()
-crates/pbd-app/src/desktop/showcase.rs|{} at {:?} of {:?}
 crates/pbd-app/src/desktop/slots.rs|@legacy label
 crates/pbd-app/src/desktop/slots.rs|@legacy want
 crates/pbd-app/src/desktop/slots.rs|{name} x {}
@@ -461,9 +415,6 @@ crates/pbd-app/src/desktop/weather_ui.rs|SHOWERS
 crates/pbd-app/src/desktop/weather_ui.rs|STORM
 crates/pbd-app/src/desktop/weather_ui.rs|STORM
 crates/pbd-app/src/desktop/weather_ui.rs|WEATHER  {}  {:.0}%
-crates/pbd-app/src/field_light.rs|PREPASS_PIPELINE
-crates/pbd-app/src/field_light.rs|field corners: {seen} meshes, {rewritten} rows rewritten
-crates/pbd-app/src/field_light.rs|town bake: {baked_vertices} vertices
 crates/pbd-app/src/fish.rs|Bite! Left click
 crates/pbd-app/src/fish.rs|Bite! Left click
 crates/pbd-app/src/fish.rs|CANCEL
@@ -499,18 +450,6 @@ crates/pbd-app/src/fish.rs|{:.0}-{:.0} m down
 crates/pbd-app/src/fish.rs|{:.1}-{:.1} m/s
 crates/pbd-app/src/fish.rs|{:.2} s
 crates/pbd-app/src/fish.rs|{} - {length_cm} cm
-crates/pbd-app/src/fish/bodies.rs|footR
-crates/pbd-app/src/fish/bodies.rs|wingR
-crates/pbd-app/src/fish/bodies/creatures.rs|footL
-crates/pbd-app/src/fish/bodies/creatures.rs|footR
-crates/pbd-app/src/fish/bodies/creatures.rs|wingL
-crates/pbd-app/src/fish/bodies/creatures.rs|wingR
-crates/pbd-app/src/fish/places.rs|Ice floes
-crates/pbd-app/src/fish/places.rs|Sea life (ambient)
-crates/pbd-app/src/fish/places.rs|Sea pieces
-crates/pbd-app/src/fish/places.rs|Sea pieces (swaying)
-crates/pbd-app/src/fish/places.rs|Vent glow
-crates/pbd-app/src/fish/places.rs|Vent smoke
 crates/pbd-app/src/husbandry.rs|, sitting
 crates/pbd-app/src/husbandry.rs|A pen of {} cells, with a gate
 crates/pbd-app/src/husbandry.rs|A piece already stands there
@@ -524,7 +463,6 @@ crates/pbd-app/src/husbandry.rs|Too far to set a fence
 crates/pbd-app/src/husbandry.rs|a fertile egg
 crates/pbd-app/src/husbandry.rs|a pail of milk
 crates/pbd-app/src/husbandry.rs|an egg
-crates/pbd-app/src/husbandry.rs|frame,animal,mode,dt_s,ask_x,ask_y,ask_z,before_x,before_y,before_z,after_x,after_y,after_z,origin_x,origin_y,origin_z
 crates/pbd-app/src/husbandry.rs|health {:.0}
 crates/pbd-app/src/husbandry.rs|strayed: feed it
 crates/pbd-app/src/husbandry.rs|{name} eats from your hand - trust {pct}%
@@ -596,113 +534,12 @@ crates/pbd-app/src/loading.rs|STANDING THE TOWNS
 crates/pbd-app/src/loading.rs|SURVEYING SITES
 crates/pbd-app/src/loading.rs|THE TOWNS' GROUND
 crates/pbd-app/src/loading.rs|TUNING THE AIR
-crates/pbd-app/src/loading.rs|vertex [{}] defs [{}] samples {}
-crates/pbd-app/src/motion_trace.rs|frame,wall_s,dt_s,steps,overstep,cam_x,cam_y,cam_z,cam_qx,cam_qy,cam_qz,cam_qw,body_x,body_y,body_z,float_x,float_y,float_z,float_shown,fish_x,fish_y,fish_z,fish_held,phase,hand_vx,hand_vy,hand_vz,hand_lx,hand_ly,hand_lz,float_vx,float_vy,float_vz,fish_vx,fish_vy,fish_vz,hand_rx,hand_ry,hand_rz,origin_x,origin_y,origin_z,line_vx,line_vy,line_vz,tip_vx,tip_vy,tip_vz,fish_key,fish_fx,fish_fy,fish_fz,fish_ux,fish_uy,fish_uz,fish_lx,fish_ly,fish_lz,mouth_x,mouth_y,mouth_z,lure_x,lure_y,lure_z,mouth_lure_m,dip,timer,run,targeted
-crates/pbd-app/src/place.rs|at {:.3} {:.3} (map {:.3}{ns} {:.3}{ew}) \| {:.1} m elevation \| {:.1} m above ground
-crates/pbd-app/src/planet.rs|TERRAIN_OFF_{}
-crates/pbd-app/src/planet.rs|building the planet's first fine set
-crates/pbd-app/src/planet.rs|planet clutter view
-crates/pbd-app/src/planet.rs|planet column view
-crates/pbd-app/src/planet.rs|planet foliage view
-crates/pbd-app/src/planet.rs|planet near trees view
-crates/pbd-app/src/planet.rs|planet surface view
-crates/pbd-app/src/planet.rs|render: fine-set upload
-crates/pbd-app/src/planet_lod.rs| \| rebuilding {s:.1} s
-crates/pbd-app/src/planet_lod.rs|L7 base
-crates/pbd-app/src/planet_lod.rs|L{level}
-crates/pbd-app/src/planet_lod.rs|NO COLUMN
-crates/pbd-app/src/planet_lod.rs|dusk lamps: re-baking the field
-crates/pbd-app/src/planet_lod.rs|landing a rebuilt fine set
-crates/pbd-app/src/planet_lod.rs|landing: checking the edits
-crates/pbd-app/src/planet_lod.rs|landing: contact tier
-crates/pbd-app/src/planet_lod.rs|request: cloning the edits
-crates/pbd-app/src/planet_lod.rs|underfoot {level}, {column} \| {:.0} m from anchor \| {} columns{rebuild}
-crates/pbd-app/src/planet_reflect.rs|reflect hit
-crates/pbd-app/src/planet_reflect.rs|reflect ray
-crates/pbd-app/src/planet_reflect.rs|reflect replaced
-crates/pbd-app/src/planet_reflect.rs|reflect replaced (MSAA)
-crates/pbd-app/src/planet_reflect.rs|reflect request
-crates/pbd-app/src/planet_shadow.rs|SHADOW_CASTER
-crates/pbd-app/src/planet_shadow.rs|SHADOW_CASTER
-crates/pbd-app/src/planet_shadow.rs|sun cascade (no clutter)
-crates/pbd-app/src/planet_shadow.rs|sun cascade (no sea)
-crates/pbd-app/src/planet_shadow.rs|sun cascade column IDs
-crates/pbd-app/src/planet_shadow.rs|sun cascade columns
-crates/pbd-app/src/planet_shadow.rs|sun cascade near tree IDs
-crates/pbd-app/src/planet_shadow.rs|sun cascade near trees
-crates/pbd-app/src/planet_shadow.rs|sun cascade terrain
-crates/pbd-app/src/planet_shadow.rs|sun cascade terrain IDs
-crates/pbd-app/src/planet_shadow.rs|sun cascade tree IDs
-crates/pbd-app/src/planet_shadow.rs|sun cascade trees
-crates/pbd-app/src/planet_shadow.rs|sun cascades
-crates/pbd-app/src/planet_tier_gpu.rs|tier image
-crates/pbd-app/src/planet_trees.rs|tree kit
-crates/pbd-app/src/planet_water.rs|Bubbles under a fall's foot
-crates/pbd-app/src/planet_water.rs|Cloud history resolve: reprojected, tested, clipped, blended
-crates/pbd-app/src/planet_water.rs|Cloud march at the clouds' resolution, into the history
-crates/pbd-app/src/planet_water.rs|Cloud puffs into the history, far to near
-crates/pbd-app/src/planet_water.rs|Clouds
-crates/pbd-app/src/planet_water.rs|Clouds
-crates/pbd-app/src/planet_water.rs|Clouds over the whole scene, against its depth
-crates/pbd-app/src/planet_water.rs|Fall splash over the water, against its depth
-crates/pbd-app/src/planet_water.rs|Flowing water by the sea's own fragment
-crates/pbd-app/src/planet_water.rs|Flowing water's depth, before its shading
-crates/pbd-app/src/planet_water.rs|Lens mist probe: the cloud at the eye, one pixel
-crates/pbd-app/src/planet_water.rs|Rain volume
-crates/pbd-app/src/planet_water.rs|Rain volume
-crates/pbd-app/src/planet_water.rs|Rain volume laid over the scene, weighed by depth
-crates/pbd-app/src/planet_water.rs|Rain volume over the composed scene
-crates/pbd-app/src/planet_water.rs|Rain volume's shells, gathered small
-crates/pbd-app/src/planet_water.rs|Water cap over the composed scene
-crates/pbd-app/src/planet_water.rs|Water compose: underwater fog, distortion, blur
-crates/pbd-app/src/planet_water.rs|Water lens
-crates/pbd-app/src/planet_water.rs|Water lens
-crates/pbd-app/src/planet_water.rs|Water lens: droplets, emerge drips and mist
-crates/pbd-app/src/planet_water.rs|Weather overlay
-crates/pbd-app/src/planet_water.rs|Weather overlay over the planet
-crates/pbd-app/src/planet_weather.rs|weather map: cloud
-crates/pbd-app/src/planet_weather.rs|weather map: cloud, from
-crates/pbd-app/src/planet_weather.rs|weather map: cloud, to
-crates/pbd-app/src/planet_weather.rs|weather map: overlay
-crates/pbd-app/src/planet_weather.rs|weather map: wind
-crates/pbd-app/src/planet_weather.rs|weather map: wind, from
-crates/pbd-app/src/planet_weather.rs|weather map: wind, to
-crates/pbd-app/src/river_fill.rs|PBD_RIVER_FILL
-crates/pbd-app/src/river_fill.rs|PBD_RIVER_SAVE
-crates/pbd-app/src/river_fill.rs|river cache save
-crates/pbd-app/src/river_fill.rs|river fill
-crates/pbd-app/src/saves/format.rs|b{},{count}
 crates/pbd-app/src/saves/format.rs|cell key version {}, where this build has {KEY_VERSION}
-crates/pbd-app/src/saves/format.rs|d{}:{}:{:.3}:{:.3},{:.3},{:.3}
-crates/pbd-app/src/saves/format.rs|f{species},{count}
-crates/pbd-app/src/saves/format.rs|g{},{count}
 crates/pbd-app/src/saves/format.rs|terrain generator version {}, which this build does not have
 crates/pbd-app/src/saves/format.rs|topology version {}, where this build has {TOPOLOGY_VERSION}
-crates/pbd-app/src/saves/format.rs|t{},{count}
-crates/pbd-app/src/saves/writer.rs|opening the log
-crates/pbd-app/src/saves/writer.rs|syncing the log
-crates/pbd-app/src/saves/writer.rs|the save thread stopped
-crates/pbd-app/src/saves/writer.rs|the save timed out; the last write may be stale
-crates/pbd-app/src/saves/writer.rs|writing the log
-crates/pbd-app/src/saves/writer.rs|writing the snapshot
 crates/pbd-app/src/settings.rs|120 FPS
 crates/pbd-app/src/settings.rs|60 FPS
-crates/pbd-app/src/settings.rs|APPDATA
-crates/pbd-app/src/settings.rs|HOME
-crates/pbd-app/src/settings.rs|HOME
-crates/pbd-app/src/settings.rs|Library/Application Support/PaleBlueDot
 crates/pbd-app/src/settings.rs|OFF
-crates/pbd-app/src/settings.rs|PaleBlueDot
-crates/pbd-app/src/settings.rs|XDG_CONFIG_HOME
-crates/pbd-app/src/sim_origin.rs|PBD_HOLD_ORIGIN
-crates/pbd-app/src/sim_origin.rs|PBD_HOLD_SIM_ORIGIN
-crates/pbd-app/src/sky.rs|SUN_DISC
-crates/pbd-app/src/sky.rs|SUN_DISC
-crates/pbd-app/src/step_trace.rs|tick,dt_s,x,y,z,vx,vy,vz,origin_x,origin_y,origin_z,world_x,world_y,world_z
-crates/pbd-app/src/towns.rs|, {n} dressing things
-crates/pbd-app/src/towns.rs|, {n} dressing things ({off} off its chart)
-crates/pbd-app/src/towns.rs|the player had changed its ground
-crates/pbd-app/src/vehicles.rs|{kind} {:.3} ms a step, {:.1} a tick
 crates/pbd-app/src/vehicles/hud.rs| - at anchor
 crates/pbd-app/src/vehicles/hud.rs| - tied up
 crates/pbd-app/src/vehicles/hud.rs|({} view)
@@ -724,8 +561,6 @@ crates/pbd-app/src/vehicles/hud.rs|raise the anchor
 crates/pbd-app/src/vehicles/hud.rs|step off
 crates/pbd-app/src/vehicles/hud.rs|stern rudder
 crates/pbd-app/src/vehicles/hud.rs|strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg
-crates/pbd-app/src/vehicles/hud.rs|vehicles:KeyT
-crates/pbd-app/src/vehicles/hud.rs|vehicles:KeyV
 crates/pbd-app/src/vehicles/hud.rs|water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s
 crates/pbd-app/src/vehicles/hud.rs|{phase} - alternate strokes to make way; rudder steers while moving.
 crates/pbd-app/src/vehicles/launch.rs|Empty the hold first
@@ -735,33 +570,9 @@ crates/pbd-app/src/vehicles/launch.rs|The save did not take the launch
 crates/pbd-app/src/vehicles/launch.rs|The {} goes on water: {why}
 crates/pbd-app/src/vehicles/launch.rs|{} launched
 crates/pbd-app/src/vehicles/launch.rs|{} taken up
-crates/pbd-app/src/vehicles/model/validate.rs|attribute count mismatch
-crates/pbd-app/src/vehicles/model/validate.rs|degenerate triangle in {}
-crates/pbd-app/src/vehicles/model/validate.rs|duplicate part {}
-crates/pbd-app/src/vehicles/model/validate.rs|index out of range
-crates/pbd-app/src/vehicles/model/validate.rs|invalid material index
-crates/pbd-app/src/vehicles/model/validate.rs|invalid or multiply parented model hierarchy
-crates/pbd-app/src/vehicles/model/validate.rs|invalid triangle count
-crates/pbd-app/src/vehicles/model/validate.rs|nonfinite or invalid mesh attributes
-crates/pbd-app/src/vehicles/model/validate.rs|unreachable model parts
 crates/pbd-app/src/world_map.rs|coral reef
 crates/pbd-app/src/world_map.rs|kelp forest
 crates/pbd-app/src/world_map.rs|polar sea
-crates/pbd-core/src/audio.rs|air_top_m is not above air_full_m
-crates/pbd-core/src/audio.rs|audible_m {} is not past full_within_m {}
-crates/pbd-core/src/audio.rs|behind_factor is not 0..1
-crates/pbd-core/src/audio.rs|cap is 0
-crates/pbd-core/src/audio.rs|cave_full_m is not below cave_from_m
-crates/pbd-core/src/audio.rs|fall_hold_db {} is negative
-crates/pbd-core/src/audio.rs|fall_roar_from_m is not above fall_medium_from_m
-crates/pbd-core/src/audio.rs|fall_voices is 0
-crates/pbd-core/src/audio.rs|full_within_m {} is not positive
-crates/pbd-core/src/audio.rs|max_voices is 0
-crates/pbd-core/src/audio.rs|no takes
-crates/pbd-core/src/audio.rs|pitch range {:?} is not rising and positive
-crates/pbd-core/src/audio.rs|volume_db is not finite
-crates/pbd-core/src/audio.rs|{name} {value} is negative
-crates/pbd-core/src/audio.rs|{name} {value} is not positive
 crates/pbd-core/src/cooking.rs|CAMPFIRE
 crates/pbd-core/src/cooking.rs|CHILI FISH
 crates/pbd-core/src/cooking.rs|FLATBREAD
@@ -797,14 +608,11 @@ crates/pbd-core/src/fauna/mod.rs|Ease off whenever it runs. More lines are lost 
 crates/pbd-core/src/fauna/mod.rs|Eel
 crates/pbd-core/src/fauna/mod.rs|Fish
 crates/pbd-core/src/fauna/mod.rs|Fish where the shelf drops close to the shore, where the water turns dark.
-crates/pbd-core/src/fauna/mod.rs|FlatFish
 crates/pbd-core/src/fauna/mod.rs|Giant clam
 crates/pbd-core/src/fauna/mod.rs|Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.
 crates/pbd-core/src/fauna/mod.rs|Ice seal
-crates/pbd-core/src/fauna/mod.rs|LargeFish
 crates/pbd-core/src/fauna/mod.rs|Let the splash settle before you expect a bite.
 crates/pbd-core/src/fauna/mod.rs|Long, dark and patient. Eels keep to the bed of rivers and shallows in ones and twos and fight in hard, twisting runs.
-crates/pbd-core/src/fauna/mod.rs|LongFish
 crates/pbd-core/src/fauna/mod.rs|Look for the shells at its door, then keep back and wait.
 crates/pbd-core/src/fauna/mod.rs|Look in the shallows by the rocks. It does not take a lure.
 crates/pbd-core/src/fauna/mod.rs|Minnow
@@ -821,7 +629,6 @@ crates/pbd-core/src/fauna/mod.rs|Reef fish
 crates/pbd-core/src/fauna/mod.rs|Reef turtle
 crates/pbd-core/src/fauna/mod.rs|Sea otter
 crates/pbd-core/src/fauna/mod.rs|Sea serpent
-crates/pbd-core/src/fauna/mod.rs|SerpentFish
 crates/pbd-core/src/fauna/mod.rs|Shore crab
 crates/pbd-core/src/fauna/mod.rs|Silverfin
 crates/pbd-core/src/fauna/mod.rs|Slow water near reeds. Come up quietly or they paddle off.
@@ -889,8 +696,6 @@ crates/pbd-core/src/inventory.rs|street lantern
 crates/pbd-core/src/inventory.rs|tilled soil
 crates/pbd-core/src/inventory.rs|wall lantern
 crates/pbd-core/src/map.rs|W{}
-crates/pbd-core/src/missions.rs|a recipe for {name}
-crates/pbd-core/src/missions.rs|{:?} in the game
 crates/pbd-core/src/overlay.rs|C
 crates/pbd-core/src/overlay.rs|CLOUD
 crates/pbd-core/src/overlay.rs|CURRENTS
@@ -905,26 +710,11 @@ crates/pbd-core/src/records.rs|@p
 crates/pbd-core/src/records.rs|@p{n}
 crates/pbd-core/src/scatter.rs|pick up stone
 crates/pbd-core/src/scatter.rs|pull fibre
-crates/pbd-core/src/settlement/chart.rs|cell {there} does not list {} back
-crates/pbd-core/src/settlement/chart.rs|layout cell ({c}, {r}) is on a pentagon
-crates/pbd-core/src/settlement/chart.rs|layout cell {next:?} is off the patch
-crates/pbd-core/src/settlement/chart.rs|the chart does not close at {next:?}
-crates/pbd-core/src/settlement/chart.rs|{next:?} and {other:?} land on one cell
-crates/pbd-core/src/settlement/pieces/dressing.rs|the shipyard is off the chart
-crates/pbd-core/src/settlement/pieces/steps.rs|, steps
-crates/pbd-core/src/settlement/record.rs|settlement {site} does not read
-crates/pbd-core/src/settlement/record.rs|settlement {site} is schema {}, and this build reads {RECORD_SCHEMA}, {TERRACED_SCHEMA} and {SEA_SCHEMA}
-crates/pbd-core/src/settlement/record.rs|settlement {site}: building {id} does not read
-crates/pbd-core/src/settlement/record.rs|settlement {site}: building {id} is missing
-crates/pbd-core/src/settlement/record.rs|settlement {site}: building {id} is schema {}
-crates/pbd-core/src/settlement/record.rs|settlement {site}: {} cells over the sea in schema {}
-crates/pbd-core/src/settlement/record.rs|settlement {site}: {} levels for {} cells in schema {}
 crates/pbd-core/src/sites.rs|Site {}
 crates/pbd-core/src/sites.rs|cave town
 crates/pbd-core/src/sites.rs|cliff village
 crates/pbd-core/src/sites.rs|desert town
 crates/pbd-core/src/sites.rs|jungle village
-crates/pbd-core/src/sites.rs|kinds[{i}] ({:?})
 crates/pbd-core/src/sites.rs|swamp village
 crates/pbd-core/src/sites.rs|tundra camp
 crates/pbd-core/src/sites.rs|walled town
@@ -954,4 +744,3 @@ crates/pbd-core/src/station.rs|WORKBENCH
 crates/pbd-core/src/vehicle/mod.rs|Inner tube
 crates/pbd-core/src/vehicle/mod.rs|Loon
 crates/pbd-core/src/vehicle/mod.rs|Raft
-crates/pbd-core/src/vehicle/spec.rs|loon sizes
