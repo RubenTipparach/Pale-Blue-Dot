@@ -2328,3 +2328,54 @@ species as Bevy entities (a root with child pivots), the poses blended by
 the same curves, the gait read from the distance moved, `LitByField` and
 `LitLikeTerrain` on the root; the beaver joins `fauna.ron` as task 8.4
 has it.
+
+**Version 3: one skin, fur and its texture (owner, 2026-11-20).** On version
+2's beaver mid-gnaw, seen on a phone: "Some weird geometry poking out from
+middle of them. Also need textures for both. Some fur tuffs would be nice
+too", then "See mining mike how we did that for the wolf". Version 2 built
+each animal of separate low-poly pieces parented to its pivots (a lathe per
+body segment, a cylinder per leg bone, a box per foot and paddle); in a
+reared or rolled pose the leg roots and foot slabs stood out of the flank
+and back, and nothing joined a leg to the body. Version 3 follows Mining
+Mike's Ice Wolf (`organic-creature` and `painted-bake`, godot-sandbox at
+`1739e89`), in `tools/art/critter_sculpt.py` with the copied kit in
+`tools/art/sdf_kit.py`:
+
+- **One skin.** Bone, muscle and fur are one signed distance field round
+  the rig's own joints: round cones along the leg bones, ellipsoids for the
+  haunches, shoulders, cheeks and head, the paws and webbed feet, the ears,
+  the beaver's incisors and its paddle, all joined with wide smooth unions;
+  the coat a thin volume over it, clumped along the way the fur lies. It is
+  meshed with surface nets and cut to 2,000 to 2,400 triangles. No visible
+  form is a raw primitive, so a leg grows out of the body and nothing can
+  stand out of it or float beside it.
+- **Skinned to the same rig.** The pivots are bones now (the same joints,
+  the same poses, gaits and actions); every vertex has four bone weights,
+  a leg's bones pulling only their leg and the skin round its top. The page
+  checks the mesh's rest joints against its own rig and logs any difference.
+- **A painted bake in pixel art.** The mesh is unwrapped at one density
+  (150 texels a metre, square texels, no chart stretched past 1.22 times),
+  and every texel is painted at the sculpt's surface from the animal's fur
+  groups in Sweaft-64 tones: a darker back and lighter flanks and belly,
+  fur strokes along the flow, a step of painted light, darker in creases.
+  The beaver's paddle is bare and scaled in a cross-hatch; the river
+  otter's throat and muzzle are pale; the sea otter's head and throat are
+  pale, ragged where they meet the coat. Nearest sampled, no outline, lit
+  by the page's one lighting model like the ground.
+- **Fur tufts.** 150 to 230 low-poly tufts an animal (Mining Mike's
+  `fur_locks`: a cupped row of three, a second row, the point; six
+  triangles), where the fur is long: the nape, the cheeks, the back and the
+  base of the tail (none on the beaver's paddle). Each takes its root's
+  colour and bones. A damped spring on the back and one on the head lag
+  behind the body, and their lag swings the tufts' tips, so they trail a
+  move, overshoot and settle (overlapping action). While the coat is wet
+  (in the water, and after it until the shake or until it dries) the tufts
+  blend to a wet shape: narrow, clumped and spiked.
+- **The valley.** The aspens wear a pale bark with small dark eyes, the
+  felled ones too (`tex-aspen.png`, 64 texels a metre). Dusk is a warm low
+  sun (the Dusk button sits at 17:30, with the sun and the sky's light kept
+  up while the sun is low); night is unchanged, lit by its lamps.
+
+Today's motion keeps today's models. Screenshots `v3-*.jpg` and
+`contact-sheet-v3.jpg` in `docs/screenshots/beaver-otter-mockup/`, rendered
+on SwiftShader with no GPU.

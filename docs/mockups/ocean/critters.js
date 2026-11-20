@@ -108,7 +108,7 @@ function sceneCritters(stage) {
     for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 4).translate(0, 2, 0), kelpMat); m.position.y = i * 4; m.rotation.y = j * Math.PI / 2 + hsh(q, r) * 3; g.add(m); }
     g.scale.y = (L + 0.1) / (n * 4); const can = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 3.4).rotateX(-Math.PI / 2), kelpMat); can.position.set(x + 1.2, -0.04, z); can.rotation.y = hsh(q + 1, r) * 6; W.scene.add(can); fronds.push({g, ph: hsh(q, r) * 6}); }
   // trees: aspens on the south meadow (three the beaver fells), willows by the water, firs on the ridge
-  const aspenBark = W.std({color: 0xd6d0bd, roughness: 0.9}), aspenLeaf = W.std({map: tex("game/leaves", 2), color: 0xe3ecaa});
+  const aspenBark = W.std({map: tex("tex-aspen", 0.5), roughness: 0.9}), aspenLeaf = W.std({map: tex("game/leaves", 2), color: 0xe3ecaa});
   const treeMats = {bark: M.bark, leaves: M.leaves};
   for (const [k, c] of cells) { if (c.m || c.pond || c.stream || c.sea || c.inflow) continue; const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r), p = hsh(q * 5, r * 3);
     if (x > -30 && x < -2 && z > 15 && p < 0.28) aspen(x, c.h, z, 0.85 + p);
@@ -155,57 +155,73 @@ function sceneCritters(stage) {
 
   // ======================= the rigs =======================
   // A rig is a root on the ground (turned to the heading), a body pivot (hips' height, pitch, roll) with a hind and a
-  // chest segment that bend at the spine, a neck and head, four two-bone legs and a three-part tail. Flat shaded, a
-  // colour per face from the animal's sprite (beaver.png, riverotter.png, otter.png), no outline, lit by W.lit.
+  // chest segment that bend at the spine, a neck and head, four two-bone legs with feet and a three-part tail: bones.
+  // Version 3 (the owner, 2026-11-20: "Some weird geometry poking out from middle of them. Also need textures for
+  // both. Some fur tuffs would be nice too", then "See mining mike how we did that for the wolf"): each animal is
+  // one skin sculpted as a signed distance field round these joints (tools/art/critter_sculpt.py, after Mining Mike's
+  // Ice Wolf), meshed, decimated and skinned to the bones, so a leg grows out of the body and nothing pokes out of it
+  // or floats beside it; painted as pixel-art fur on its own UVs (ocean/fur-*.png, nearest, square texels, Sweaft-64
+  // tones); with fur tufts on the nape, cheeks, back and the base of the tail that ride their bones, lag and settle
+  // (overlapping action) and clump into wet spikes while the coat is wet. Lit by W.lit like the ground; no outline.
+  // The joints below are the sculpt's (critter_sculpt.py SPECS): buildRig checks the mesh's rest joints against them.
   const SPEC = {
-    beaver: {H: 0.17, float: 0.13, legLen: 0.17, col: {back: 0x7d4636, belly: 0x522b2f, head: 0x7d4636, snout: 0x522b2f, muzzle: 0x41322c, leg: 0x522b2f, foot: 0x2f1525, tail: 0x2f1525, tail2: 0x3e3551, tailC: 0x522b2f, eye: 0x161612, nose: 0x161612, teeth: 0xfb902f},
-      hind: [[0, 0.155, 0.155], [-0.12, 0.17, 0.175], [-0.24, 0.135, 0.145], [-0.32, 0.05, 0.06]], chest: [[0, 0.155, 0.155], [0.12, 0.135, 0.135], [0.22, 0.1, 0.1], [0.28, 0.075, 0.08]], bellyY: -0.07,
-      neck: [0.27, 0.035], head: [[-0.03, 0.07, 0.075], [0.04, 0.08, 0.085], [0.11, 0.062, 0.066], [0.165, 0.035, 0.042]], snoutX: 0.1, jaw: [0.16, -0.045, 0],
+    beaver: {mesh: "beaver", H: 0.17, float: 0.13, legLen: 0.17,
+      neck: [0.27, 0.035], jaw: [0.16, -0.045, 0],
       legs: [{at: [0.16, -0.08, 0.085], a: 0.07, b: 0.07, rt: 0.03, front: true, foot: [0.05, 0.04]}, {at: [0.16, -0.08, -0.085], a: 0.07, b: 0.07, rt: 0.03, front: true, foot: [0.05, 0.04]},
         {at: [-0.2, -0.07, 0.1], a: 0.09, b: 0.085, rt: 0.045, foot: [0.11, 0.075]}, {at: [-0.2, -0.07, -0.1], a: 0.09, b: 0.085, rt: 0.045, foot: [0.11, 0.075]}],
       tailAt: [-0.31, -0.01], tail: [{L: 0.07, r: 0.05}, {L: 0.06, r: 0.045}, {L: 0.27, paddle: [0.14, 0.026]}],
-      extras(K, c) { for (const s of [1, -1]) { K.add(C3.bx(0.026, 0.026, 0.02), c.eye, {p: [0.07, 0.05, s * 0.06]}); K.add(C3.bx(0.03, 0.035, 0.022), c.back, {p: [0.01, 0.075, s * 0.055]}); } K.add(C3.bx(0.03, 0.025, 0.04), c.nose, {p: [0.163, 0.02, 0]}); K.add(C3.bx(0.014, 0.038, 0.03), c.teeth, {p: [0.158, -0.03, 0]}); },
       gait: "walk"},
-    otter: {H: 0.14, float: 0.07, legLen: 0.13, col: {back: 0x725244, belly: 0x7d4636, throat: 0xcfaa81, head: 0x725244, snout: 0x725244, muzzle: 0xcfaa81, leg: 0x41322c, foot: 0x2e0d06, tailC: 0x725244, eye: 0x161612, nose: 0x161612},
-      hind: [[0, 0.08, 0.085], [-0.12, 0.085, 0.09], [-0.24, 0.07, 0.075], [-0.31, 0.04, 0.045]], chest: [[0, 0.08, 0.085], [0.12, 0.075, 0.075], [0.2, 0.06, 0.062], [0.25, 0.046, 0.05]], bellyY: -0.03,
-      neck: [0.245, 0.02], head: [[-0.03, 0.046, 0.05], [0.03, 0.056, 0.066], [0.08, 0.046, 0.056], [0.125, 0.024, 0.034]], snoutX: 0.07, jaw: [0.12, -0.03, 0],
+    otter: {mesh: "otter", H: 0.14, float: 0.07, legLen: 0.13,
+      neck: [0.245, 0.02], jaw: [0.12, -0.03, 0],
       legs: [{at: [0.17, -0.045, 0.055], a: 0.055, b: 0.05, rt: 0.022, front: true, foot: [0.045, 0.035]}, {at: [0.17, -0.045, -0.055], a: 0.055, b: 0.05, rt: 0.022, front: true, foot: [0.045, 0.035]},
         {at: [-0.22, -0.04, 0.062], a: 0.065, b: 0.06, rt: 0.028, foot: [0.07, 0.045]}, {at: [-0.22, -0.04, -0.062], a: 0.065, b: 0.06, rt: 0.028, foot: [0.07, 0.045]}],
       tailAt: [-0.3, 0.0], tail: [{L: 0.13, r: 0.042}, {L: 0.12, r: 0.03}, {L: 0.11, r: 0.018}],
-      extras(K, c) { for (const s of [1, -1]) { K.add(C3.bx(0.018, 0.018, 0.014), c.eye, {p: [0.07, 0.035, s * 0.045]}); K.add(C3.bx(0.018, 0.022, 0.015), c.back, {p: [0.0, 0.05, s * 0.042]}); K.add(C3.bx(0.006, 0.006, 0.05), 0xcfaa81, {p: [0.11, 0.0, s * 0.03]}); } K.add(C3.bx(0.022, 0.018, 0.03), c.nose, {p: [0.124, 0.012, 0]}); },
       gait: "bound"},
-    sea: {H: 0.0, float: 0.0, legLen: 0.12, col: {back: 0x725244, belly: 0x522b2f, throat: 0xcfaa81, head: 0xcfaa81, snout: 0xcfaa81, muzzle: 0xeab798, leg: 0x41322c, foot: 0x41322c, tailC: 0x725244, eye: 0x161612, nose: 0x161612},
-      hind: [[0, 0.12, 0.13], [-0.15, 0.125, 0.135], [-0.3, 0.095, 0.1], [-0.38, 0.045, 0.05]], chest: [[0, 0.12, 0.13], [0.14, 0.11, 0.115], [0.24, 0.085, 0.09], [0.3, 0.062, 0.066]], bellyY: -0.05,
-      neck: [0.29, 0.0], head: [[-0.03, 0.07, 0.075], [0.04, 0.08, 0.086], [0.1, 0.066, 0.07], [0.15, 0.035, 0.045]], snoutX: 0.11, jaw: [0.14, -0.04, 0],
+    sea: {mesh: "sea", H: 0.0, float: 0.0, legLen: 0.12,
+      neck: [0.29, 0.0], jaw: [0.14, -0.04, 0],
       legs: [{at: [0.2, -0.06, 0.085], a: 0.065, b: 0.06, rt: 0.026, front: true, foot: [0.045, 0.04]}, {at: [0.2, -0.06, -0.085], a: 0.065, b: 0.06, rt: 0.026, front: true, foot: [0.045, 0.04]},
         {at: [-0.3, -0.05, 0.08], a: 0.07, b: 0.06, rt: 0.032, foot: [0.13, 0.085]}, {at: [-0.3, -0.05, -0.08], a: 0.07, b: 0.06, rt: 0.032, foot: [0.13, 0.085]}],
       tailAt: [-0.37, 0.0], tail: [{L: 0.09, paddle: [0.075, 0.03]}, {L: 0.09, paddle: [0.07, 0.026]}, {L: 0.09, paddle: [0.055, 0.022]}],
-      extras(K, c) { for (const s of [1, -1]) { K.add(C3.bx(0.022, 0.022, 0.016), c.eye, {p: [0.08, 0.05, s * 0.06]}); K.add(C3.bx(0.02, 0.022, 0.018), 0xab8465, {p: [0.0, 0.07, s * 0.06]}); K.add(C3.bx(0.006, 0.006, 0.07), 0xfffefe, {p: [0.14, -0.005, s * 0.04]}); } K.add(C3.bx(0.026, 0.022, 0.036), c.nose, {p: [0.15, 0.014, 0]}); },
       gait: "walk"},
   };
+  const b64 = (s, T) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new T(u.buffer); };
+  function skinGeo(B, extra) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(b64(B.pos, Float32Array), 3)); g.setAttribute("normal", new THREE.BufferAttribute(b64(B.nrm, Float32Array), 3));
+    g.setAttribute("uv", new THREE.BufferAttribute(b64(B.uv, Float32Array), 2)); g.setIndex(new THREE.BufferAttribute(b64(B.idx, Uint16Array), 1));
+    g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(Array.from(b64(B.si, Uint8Array)), 4)); g.setAttribute("skinWeight", new THREE.Float32BufferAttribute(Array.from(b64(B.sw, Uint8Array), v => v / 255), 4));
+    if (extra) { g.setAttribute("wpos", new THREE.BufferAttribute(b64(B.wpos, Float32Array), 3)); g.setAttribute("lk", new THREE.BufferAttribute(b64(B.lk, Float32Array), 4)); }
+    return g;
+  }
   function buildRig(sp) {
-    const mat = W.lit(new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, side: THREE.DoubleSide, roughness: 0.85, metalness: 0}), false);
-    const mesh = (K, parent) => { const m = new THREE.Mesh(K.build(), mat); parent.add(m); return m; }, c = sp.col;
+    const D = window.CRITTER_MESH[sp.mesh], map = tex(D.tex, 1); map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.repeat.set(1, 1);
+    const mat = W.lit(new THREE.MeshStandardMaterial({map, skinning: true, roughness: 0.88, metalness: 0}), false);
+    // the tufts: the same map, both faces, the tip a little lighter than the root (it catches the light), blended to
+    // their wet shape (uWet) and swung by the body's and the head's lag (uLag, uLagH: springs, so they overshoot and
+    // settle), in the root's frame, after skinning, more toward the tip
+    const TU = {uWet: {value: 0}, uLag: {value: V3()}, uLagH: {value: V3()}};
+    const tmat = W.lit(new THREE.MeshStandardMaterial({map, skinning: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, flatShading: true}), false);
+    const lit = tmat.onBeforeCompile;
+    tmat.onBeforeCompile = sh => { lit(sh); Object.assign(sh.uniforms, TU);
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 wpos; attribute vec4 lk; uniform float uWet; uniform vec3 uLag; uniform vec3 uLagH; varying float vTip;")
+        .replace("#include <morphtarget_vertex>", "transformed = mix(transformed, wpos, uWet); vTip = lk.x;\n#include <morphtarget_vertex>")
+        .replace("#include <skinning_vertex>", "#include <skinning_vertex>\ntransformed += mix(uLag, uLagH, lk.w) * lk.x * lk.x * (1.0 - 0.6 * uWet);");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vTip;").replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb *= 0.8 + 0.38 * vTip;"); };
+    tmat.customProgramCacheKey = () => "pbd-tuft";
     const root = new THREE.Group(); W.scene.add(root);
-    const body = new THREE.Group(); body.rotation.order = "ZYX"; root.add(body);
-    const hind = new THREE.Group(), chest = new THREE.Group(); body.add(hind); body.add(chest);
-    mesh(C3.Kit().add(C3.lathe(sp.hind, 7), (x, y) => y < sp.bellyY ? c.belly : c.back), hind);
-    mesh(C3.Kit().add(C3.lathe(sp.chest, 7), (x, y) => y < sp.bellyY ? (c.throat && x > 0.12 ? c.throat : c.belly) : c.back), chest);
-    mesh(C3.Kit().add(C3.ell(sp.chest[0][2] * 0.98, sp.chest[0][1] * 0.98, sp.chest[0][2] * 0.98, 8, 5), (x, y) => y < sp.bellyY ? c.belly : c.back), body);
-    const neck = new THREE.Group(); neck.position.set(sp.neck[0], sp.neck[1], 0); neck.rotation.order = "YZX"; chest.add(neck);
-    const HK = C3.Kit().add(C3.lathe(sp.head, 7), (x, y) => x > sp.snoutX ? (y < -0.01 ? c.muzzle : c.snout) : (y < -0.03 && c.throat ? c.throat : c.head)); sp.extras(HK, c); mesh(HK, neck);
-    const jaw = new THREE.Group(); jaw.position.set(...sp.jaw); neck.add(jaw);
-    const legs = sp.legs.map(L => { const seg = L.front ? chest : hind, hip = new THREE.Group(); hip.position.set(...L.at); seg.add(hip);
-      mesh(C3.Kit().add(C3.cyl(L.rt, L.rt * 0.8, L.a, 5).translate(0, -L.a / 2, 0), c.leg), hip);
-      const knee = new THREE.Group(); knee.position.y = -L.a; hip.add(knee); mesh(C3.Kit().add(C3.cyl(L.rt * 0.8, L.rt * 0.6, L.b, 5).translate(0, -L.b / 2, 0), c.leg), knee);
-      const foot = new THREE.Group(); foot.position.y = -L.b; knee.add(foot); mesh(C3.Kit().add(C3.bx(L.foot[0], 0.018, L.foot[1]).translate(L.foot[0] * 0.3, -0.006, 0), c.foot), foot);
-      return {L, hip, knee, foot, front: !!L.front}; });
-    let parent = hind, at = sp.tailAt;
-    const tail = sp.tail.map(T => { const g = new THREE.Group(); g.position.set(at[0], at[1], 0); g.rotation.order = "YZX"; parent.add(g);
-      if (T.paddle) mesh(C3.Kit().add(C3.bx(T.L, T.paddle[1], T.paddle[0]).translate(-T.L / 2, 0, 0), (x, y, z, n) => c.tail ? (n % 2 ? c.tail : c.tail2) : c.tailC), g);
-      else mesh(C3.Kit().add(C3.cyl(T.r * 0.7, T.r, T.L, 6).rotateZ(Math.PI / 2).translate(-T.L / 2, 0, 0), c.tailC), g);
-      parent = g; at = [-T.L, 0]; return g; });
-    return {sp, mat, root, body, hind, chest, neck, jaw, legs, tail};
+    const B = {}, bone = (name, parent, p, order) => { const b = new THREE.Bone(); b.name = name; if (p) b.position.set(...p); if (order) b.rotation.order = order; (parent || root).add(b); B[name] = b; return b; };
+    const body = bone("body", null, [0, sp.H, 0], "ZYX"), hind = bone("hind", body), chest = bone("chest", body);
+    const neck = bone("neck", chest, [sp.neck[0], sp.neck[1], 0], "YZX"), jaw = bone("jaw", neck, sp.jaw);
+    const legs = sp.legs.map((L, i) => { const hip = bone("hip" + i, L.front ? chest : hind, L.at), knee = bone("knee" + i, hip, [0, -L.a, 0]), foot = bone("foot" + i, knee, [0, -L.b, 0]); return {L, hip, knee, foot, front: !!L.front}; });
+    let parent = hind, at = [sp.tailAt[0], sp.tailAt[1], 0];
+    const tail = sp.tail.map((T, i) => { const g = bone("tail" + i, parent, at, "YZX"); parent = g; at = [-T.L, 0, 0]; return g; });
+    root.updateMatrixWorld(true);
+    // the sculpt was skinned round these joints: a joint that moved since is a bug in one of the two copies
+    for (const n of D.bones) { const w = B[n].getWorldPosition(V3()), r = D.rest[n]; if (w.distanceTo(V3(...r)) > 0.001) console.error(`critters: ${sp.mesh} joint ${n} is at ${w.toArray()} on the page, ${r} in critters_mesh.js`); }
+    const skel = new THREE.Skeleton(D.bones.map(n => B[n]));
+    const skin = new THREE.SkinnedMesh(skinGeo(D.body), mat), tufts = new THREE.SkinnedMesh(skinGeo(D.tufts, true), tmat);
+    for (const m of [skin, tufts]) { m.frustumCulled = false; root.add(m); m.bind(skel, new THREE.Matrix4()); }
+    return {sp, mat, tmat, TU, root, body, hind, chest, neck, jaw, legs, tail, skin, tufts};
   }
   // ---- poses: plain numbers, blended between actions so a change never pops
   const PK = ["y", "pitch", "roll", "A", "hp", "hy", "hr"];
@@ -262,13 +278,28 @@ function sceneCritters(stage) {
       A.rig.root.position.copy(A.pos); A.rig.root.rotation.set(0, A.yaw, 0);
       // a wet coat: darker and shinier while it drips, drying on land
       const inW = levelAt(A.pos.x, A.pos.z) > A.pos.y + (A.cur.y || 0) - 0.05; if (inW) A.wet = 1; else A.wet = Math.max(0, A.wet - dt / (A.id === "beaver" ? tn("beaver.shake.dry_s") : 14));
-      A.rig.mat.roughness = lerp(0.88, 0.3, A.wet); A.rig.mat.color.setScalar(lerp(1, 0.68, A.wet));
+      for (const m of [A.rig.mat, A.rig.tmat]) { m.roughness = lerp(0.88, 0.5, A.wet); m.color.setScalar(lerp(1, 0.68, A.wet)); }
+      // wet fur clumps into spikes until the shake (which leaves the coat at 0.45) or until it dries
+      A.rig.TU.uWet.value = smooth(c01((A.wet - 0.5) / 0.35));
+      furLag(A, dt);
       if (done && !SHOWPOSES) A.next();
     };
     return A;
   }
   // the world position of a rig part's point (after the pose has been applied)
   const worldOf = (obj, x = 0, y = 0, z = 0) => { obj.updateWorldMatrix(true, false); return V3(x, y, z).applyMatrix4(obj.matrixWorld); };
+  // the tufts' overlapping action: a damped spring (about 2.4 Hz, a third of critical damping) follows a point on the
+  // back and one on the head; the spring's lag behind the point, turned into the root's frame, swings the tufts' tips,
+  // so they trail a move, overshoot when it stops and settle (the shake flings them)
+  function furLag(A, dt) {
+    const R = A.rig, pts = [worldOf(R.body, -0.05, 0.12, 0), worldOf(R.neck, 0.0, 0.06, 0)], outs = [R.TU.uLag.value, R.TU.uLagH.value];
+    if (!R.spr) R.spr = pts.map(p => ({p: p.clone(), v: V3()}));
+    pts.forEach((p, i) => { const s = R.spr[i];
+      if (dt > 0) { const n = Math.max(1, Math.ceil(dt / 0.01)), h = dt / n; for (let k = 0; k < n; k++) { const a = p.clone().sub(s.p).multiplyScalar(220).addScaledVector(s.v, -9); s.v.addScaledVector(a, h); s.p.addScaledVector(s.v, h); } }
+      if (s.p.distanceTo(p) > 0.5) { s.p.copy(p); s.v.set(0, 0, 0); }
+      const lag = s.p.clone().sub(p); if (lag.length() > 0.03) lag.setLength(0.03);
+      const c = Math.cos(A.yaw), sn = Math.sin(A.yaw); outs[i].set(lag.x * c - lag.z * sn, lag.y, lag.x * sn + lag.z * c); });
+  }
 
   // ---- shared poses
   // a gait: feet in stance stay put (their target moves back under the body at the body's speed), in swing they lift on
@@ -643,13 +674,13 @@ function sceneCritters(stage) {
   printRon();
   // the time of day: the sun's height sets the sky, the light and the lamps; at night the lamps light what is near them
   const hourEl = stage.querySelector("#crHour"), hourV = stage.querySelector("#crHourV");
-  const tsel = stage.querySelector(".tsel"); tsel.innerHTML = [["Day", 13], ["Dusk", 18.0], ["Night", 22.5]].map(([n, h]) => `<button data-h="${h}" aria-pressed="false">${n}</button>`).join("");
+  const tsel = stage.querySelector(".tsel"); tsel.innerHTML = [["Day", 13], ["Dusk", 17.5], ["Night", 22.5]].map(([n, h]) => `<button data-h="${h}" aria-pressed="false">${n}</button>`).join("");
   tsel.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { hourEl.value = b.dataset.h; applyHour(); }));
   const C = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
   function applyHour() {
     const h = +hourEl.value; hourV.textContent = `${String(Math.floor(h) % 24).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
-    const ang = (h - 6) / 12 * Math.PI, e = Math.sin(ang), day = sstep(-0.2, 0.25, e), warm = sstep(0.45, 0.05, Math.abs(e)) * sstep(-0.22, 0.02, e);
-    const T = {sky: C(C(0x05080e, 0x8fbfe0, day), 0xc0907a, warm * 0.7), haze: C(C(0x070a10, 0xa9c6d6, day), 0xd0a088, warm * 0.6), hemi: lerp(0.012, 0.62, day), sun: Math.max(0, sstep(-0.02, 0.35, e)), sunCol: C(0xfff1dc, 0xffa060, warm),
+    const ang = (h - 6) / 12 * Math.PI, e = Math.sin(ang), day = sstep(-0.15, 0.4, e), warm = sstep(0.45, 0.05, Math.abs(e)) * sstep(-0.22, 0.02, e);
+    const T = {sky: C(C(0x05080e, 0x8fbfe0, day), 0xc0907a, warm * 0.7), haze: C(C(0x070a10, 0xa9c6d6, day), 0xd0a088, warm * 0.6), hemi: lerp(0.012, 0.62, day), sun: Math.max(0, sstep(-0.05, 0.18, e)), sunCol: C(0xfff1dc, 0xffa060, warm),
       sunPos: [-Math.cos(ang) * 150, Math.max(0.06, e) * 150 + 8, 50], moon: 0.02 * (1 - day), lamps: 1 - sstep(-0.04, 0.22, e), stars: 0.9 * (1 - sstep(-0.15, 0.15, e)), day};
     W.T = T; W.hemi.intensity = T.hemi; W.sun.intensity = T.sun; W.sun.color.setHex(T.sunCol); W.sun.position.set(...T.sunPos); W.moon.intensity = T.moon; W.stars.material.opacity = T.stars; W.moonDisc.visible = T.stars > 0.1;
     W.U.uHaze.value.setHex(T.haze).convertSRGBToLinear(); W.U.uDay.value = T.day; W.skyCol = new THREE.Color(T.sky);

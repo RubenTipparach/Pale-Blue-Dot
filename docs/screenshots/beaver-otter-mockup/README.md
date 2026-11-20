@@ -1,4 +1,4 @@
-# Beavers and otters (M25 version 2, `ocean.html#critters`)
+# Beavers and otters (M25 versions 2 and 3, `ocean.html#critters`)
 
 Screenshots of the "Beavers and otters" tab of Seas, Rivers and Marshes
 (https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1), the mockup for
@@ -9,6 +9,26 @@ SwiftShader, 1280 x 800 (the UI shots 1440 x 1000 and 390 x 844). They show
 poses and the look, never how smoothly anything moves. Each frame opens the
 page afresh with the default seed (7), holds the clock still, and steps the
 scene in fixed 1/30 s steps to the named moment, so the frames repeat.
+
+## Version 3 (`v3-*.jpg`, `contact-sheet-v3.jpg`)
+
+The owner's notes on version 2: "Some weird geometry poking out from middle of them. Also need textures for
+both. Some fur tuffs would be nice too", and "See mining mike how we did that for the wolf". Each animal is one
+sculpted, skinned skin with painted pixel-art fur and fur tufts (`tools/art/critter_sculpt.py`, design B28
+version 3). Same tool and `shots.json` (every name now has the `v3-` prefix; the unprefixed files are version 2).
+Rendered the same way: headless Chromium on SwiftShader, no GPU.
+
+| Frame | What it shows |
+| --- | --- |
+| `v3-beaver-close-side.jpg`, `v3-beaver-close-above.jpg` | The beaver walking, close, from the side and from above: one skin, the legs grown out of it, the fur texture, the tufts on the back and nape. |
+| `v3-beaver-gnaw-owner.jpg`, `v3-beaver-gnaw-back.jpg` | The gnaw from the owner's angle (where version 2's slabs stood out of the flank) and from behind. |
+| `v3-otter-close-side.jpg`, `v3-otter-close-above.jpg` | The river otter bounding, close. |
+| `v3-otter-wet-close.jpg` | The river otter wet on its rock after the catch: the tufts clumped into spikes. |
+| `v3-beaver-shake.jpg` | Wet spikes the moment before the shake flattens them. |
+| `v3-sea-otter-close-side.jpg`, `v3-sea-otter-close-above.jpg` | The sea otter on its back, the pale head and throat. |
+| `v3-dusk-beaver.jpg`, `v3-dusk-valley.jpg` | Dusk at 17:30: a warm low sun. |
+| `v3-night-*.jpg` | Night, lit by the lantern, the camp, the boat's lamp and fireflies. |
+| the other `v3-*.jpg` | The version 2 frames retaken with the new bodies and the aspens' bark. |
 
 Made with `tools/mockup_critters_shots.js` from `shots.json` here:
 
