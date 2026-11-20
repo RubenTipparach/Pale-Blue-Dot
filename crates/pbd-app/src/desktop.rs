@@ -3165,13 +3165,17 @@ fn window_size() -> (u32, u32) {
         .unwrap_or((1440, 900))
 }
 
-/// The camera's samples: 4, or `PBD_MSAA=<1|2|4>`, a measurement switch
-/// (`frame-budget` 5c) that prices the multisampling.
+/// The camera's samples: none, or `PBD_MSAA=<1|2|4>`, a measurement switch
+/// (`frame-budget` 5c). Off by default (owner, 2026-11-20: "AA should be a
+/// final composite thing, but I didnt even ask for AA to be implemented"):
+/// the water's passes run after the resolve on blended edge pixels, which
+/// put a pale line round everything seen under the water
+/// (`ocean-environments` B24), and the pixel look wants hard edges.
 fn msaa_samples() -> Msaa {
     match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
-        Some("1") => Msaa::Off,
         Some("2") => Msaa::Sample2,
-        _ => Msaa::Sample4,
+        Some("4") => Msaa::Sample4,
+        _ => Msaa::Off,
     }
 }
 

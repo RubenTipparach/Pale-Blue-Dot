@@ -1260,6 +1260,121 @@ onto a floe needs the floes in the water the schools read, and is not done
 here. The `--life` approach ends at 5 m at the polar shore: no water nearer
 is deep enough for a seal.
 
+### B24. Bright outlines round everything seen under water (owner, 2026-11-19)
+
+The owner, under the sea, with the fishing rod held: "there seems to be
+outlining issues when under water", and a close-up of the rod edged in a
+jagged pale line. The tops of the hex columns ahead carried the same thin
+bright teal line.
+
+**Cause** (read in `water.wgsl`, `compose`): under the water the composite
+wobbles the picture. It samples the scene at `uv + wobble` (`fx.x`, 0.0015
+of the screen, so 2 to 4 pixels at 1080p), but fogs that sample with the
+distance of the pixel at `uv`. At a silhouette the two are different
+things. A pixel on the rod's edge takes its colour from the background
+beside it, which is the seabed or the far wall before any murk (bright
+teal), and fogs it with the rod's few centimetres of water. So the far
+ground's unfogged colour shows as a rim round everything near. The same
+happens at every step of the hex columns, where a near top edge stands
+against far water.
+
+**Fix (proposed):** keep the wobble only where it moves within one surface.
+The composite reads the depth at the wobbled point. If that point is sky
+while the pixel is not, or the reverse, or if its distance differs from
+the pixel's by more than a sliver (15% of the distance plus 0.3 m), it
+takes the unwobbled colour. Then colour and fog always come from the
+same surface. The wobble still runs across a surface. At an edge it
+stands still for the 2 to 4 pixels the shift would have crossed, which
+is not visible at that size. No other shader term changes, and nothing
+changes above the water.
+
+**A second, smaller cause, seen in the first after-capture (2026-11-20):**
+single bright blue pixels were left on the rod's edge. The scene is drawn
+with 4x multisampling. An edge pixel's colour is the resolve of rod and
+unfogged background, but the composite reads only sample 0's depth. When
+that sample is the rod, the background's share of the colour is fogged
+for the rod's few centimetres and stays bright. The fix: with the eye
+under the water, the composite's transmittance is the mean of each
+sample's own `exp(-extinction * distance)`, sky samples counting as none.
+An edge pixel is then fogged by the share of it that is far, and an
+interior pixel, all four samples alike, is unchanged.
+
+That mean still left a dim purple-blue line in the next capture. One
+transmittance applied to a blended colour keeps part of the far share's
+brightness. So instead the edge pixel is split:
+- `f` is the share of its samples that are far;
+- the far part's colour is read from a neighbouring pixel whose depth is
+  far, or the murk where there is none;
+- the near part is the resolved colour with the far part taken out.
+Each part is fogged by its own distance and the two are mixed back by
+`f`. Only pixels whose samples span a real depth step (15% plus 0.3 m,
+as above) are split.
+
+**The mask that matches (the owner, 2026-11-20: "THE REAL FIX IS A MASK
+CHANEL THAT MATCHES"; and "that thing is the sky", "its where water
+rendering outline doesnt match the object").** Unmixing guessed at the
+object's colour and either overshot into specks or, where it was skipped,
+let the sky leak. The scene's alpha is already taken: it carries the
+terrain's dry-hole mask, and the sky's opacity. But the depth samples are
+a mask that matches the colour exactly. Each sample keeps its own colour
+and depth, and the resolve averages the colours, so `1 - f`, the near
+samples' share, is exactly the share of the resolved colour that is the
+near surface. The edge pixel becomes
+`T_near * (raw - f * far) + deep * (1 - f) * (1 - T_near) + f * fog_far`,
+using `(1 - f) * object = raw - f * far`. Nothing divides, and the
+pixel's own colour carries the object's detail. Only the far colour (the
+sky's or the far ground's raw colour) is read from a neighbour that is all
+far, and any error in it is scaled by `f * T_near`.
+
+**Where the line really was: the water cap (2026-11-20).** The mask fix in
+the composite left the dull line almost unchanged, because most of it is
+drawn after the composite. The water cap, the sheet seen from under the
+surface with the sky through Snell's window, is drawn over the composed
+scene. It hid itself by sample 0's depth alone (`water_hidden`). An edge
+pixel whose sample 0 was behind the sheet got the sheet's whole colour,
+over the held tool's share of the pixel too. Now `water_cover` counts the
+share of the pixel's samples the sheet is in front of, the same mask the
+colour was resolved with:
+- the sheet is hidden only where that share is nought;
+- elsewhere the cap and the flowing water are alpha-blended over by it.
+A pixel the sheet fully covers draws exactly as before.
+
+**The fundamental mismatch (2026-11-20).** Two measurements showed what
+was left:
+- the cap fix moved nothing;
+- with multisampling off (`PBD_MSAA=1`) the specks went, but a pale
+  bluish stripe stayed, one pixel wide, between brown rod pixels on both
+  sides.
+The wobble read the scene's colour through the linear sampler at a
+fractional offset, and its same-surface check read depth at the nearest
+pixel. So at a silhouette the colour was a filtered blend of the near
+surface and the unfogged sky beside it, while the depth said near, and
+the blend took the near surface's thin fog. That is the stripe inside
+every edge, and most of the original rim. The wobble now reads colour
+with `textureLoad` at the same whole pixel as the depth, so colour and
+depth always describe the same surface. The wobble moves in whole pixels,
+in keeping with the nearest-sampled look.
+
+**Antialiasing off by default (the owner, 2026-11-20).** The owner: "is it
+the oreder of when water shading runs? why cant it do proper depth testing
+before AA? AA should be a final composite thing, but I didnt even ask for
+AA to be implemented". It was the order. The scene was drawn with 4x
+multisampling (Bevy's default, kept by `msaa_samples`), and resolved
+before the water's passes ran. Every pass after that read one blended
+colour per edge pixel against per-sample depths, and no test can split a
+blend back apart.
+
+A capture of the raw scene, with the compose passing it straight through,
+showed the bright blue edge pixels already there, blended from rod and
+sky, before any water shading. With multisampling off, each pixel is one
+surface and every depth test is exact.
+
+So the camera has no multisampling by default; `PBD_MSAA=2|4` keeps it
+for comparison. Hard edges also suit the nearest-sampled pixel look. The
+compose's edge-splitting and the cap's sample cover stay: they are exact
+when there is one sample, and correct the 2x and 4x builds. Frame cost
+not measured here (no GPU); it can only fall.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
