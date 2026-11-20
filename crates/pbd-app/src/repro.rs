@@ -7,6 +7,8 @@
 //! the desktop's (`desktop/repro.rs`); what a record holds, how it reads the
 //! world and the command line it writes are here, so a test can hold the
 //! command line to the game's own argument parser.
+//!
+//! locale: dev
 
 pub mod blocks;
 

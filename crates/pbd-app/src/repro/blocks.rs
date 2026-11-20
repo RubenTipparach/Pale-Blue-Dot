@@ -13,6 +13,8 @@
 //! out, and so on. Everything is read from resident data, the fine set's
 //! records and columns and the save's edits and records, never generated: a
 //! cell whose column is not resident says so and lists no layers.
+//!
+//! locale: dev
 
 use bevy::prelude::*;
 use pbd_core::column;

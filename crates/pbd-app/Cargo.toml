@@ -42,6 +42,11 @@ kira = { version = "=0.12.6", default-features = false, features = ["cpal", "ogg
 # that would fail in the pipeline cache fails the suite first. The same naga
 # wgpu already carries; a test-only dependency.
 naga = { version = "27", features = ["wgsl-in"] }
+# The locale lint (`tests/locale.rs`, `localization` design 4) parses every
+# source file and needs each literal's line.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 # The sea's WGSL is RUN on a GPU adapter in a test and compared with the Rust it
 # transcribes (lavapipe in a container). The same wgpu Bevy already carries.
 wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }
