@@ -1472,7 +1472,13 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 }
             }
             let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
-            let near_c = clamp((raw-f*far_c)/max(1.0-f,1e-3),vec3(0.0),vec3(4.0));
+            // Unmixing divides by the near share: where that share is small,
+            // or the neighbour's colour is not quite this pixel's far colour,
+            // it overshoots into dark or red specks. A mostly-far pixel, or one
+            // that unmixes to a negative channel, keeps its colour as it is.
+            let unmixed = (raw-f*far_c)/max(1.0-f,1e-3);
+            let valid = f < 0.7 && all(unmixed > vec3(-0.02));
+            let near_c = select(raw, clamp(unmixed, vec3(0.0), vec3(1.5)), valid);
             let near_fog = mix(deep,near_c,exp(-extinction*dmin));
             let far_fog = mix(deep,far_c,exp(-extinction*dmax));
             fogged = mix(near_fog,far_fog,f);
