@@ -309,7 +309,7 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
   <a role="tab" href="#glow" data-page="glow">Glow and carried light</a>
   <a role="tab" href="#sand" data-page="sand">Sand</a>
   <a role="tab" href="#mountains" data-page="mountains">Mountains</a>
-  <span class="pagever">v5</span>
+  <span class="pagever">v6</span>
 </nav>
 
 <section id="glowTab" aria-label="Glow and carried light" hidden>
@@ -490,7 +490,7 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
   <section class="panel notes" id="mtNotes" hidden aria-label="About the mountains tab">
     <button class="btn close" id="mtClose" aria-label="Close">&#x2715;</button>
     <h2>Mountains</h2>
-    <p><b>Changes.</b> v5 (2026-11-19): this tab, first drawn.</p>
+    <p><b>Changes.</b> v6 (2026-11-20): the streaked, flickering scree is fixed (a tile number read a hair under a whole number took its texels from the next sheet, pixel by pixel; lichen hashed a per-pixel position the same way), and every snow patch, lichen blot and moss texel now sits on its own tile's texel grid. The plants are the playground's own kit (tufts from the turf's colours, its flowers, bushes, pine, rocks and dead shrub); krummholz is the kit's pine, stunted and swept downwind. v5 (2026-11-19): this tab, first drawn.</p>
     <p>The owner, 2026-11-19: "nice, can you add more stuff to the mountain biomes? add stuff to foliage detail playground". The write-up is <code>openspec/changes/mountain-ground</code>, design 5 to 14, beside the ground it already plans (generator version 13: grass or snow on the flats, rock varied by altitude). Nothing on this tab is in the game yet.</p>
 
     <h3>Controls</h3>
@@ -528,8 +528,10 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--muted);border-
     <h3>Art</h3>
     <ul>
       <li>The ground is the game's atlas, texel for texel: the mountains sheet's rocks, scree, alpine soil, snow-dusted rock and frozen fissure, and the tundra sheet's snow and bark. The firs wear the game's needles.</li>
-      <li>The <b>alpine turf</b> is a candidate tile (the mountains sheet has no grass), proposed for its unused worn-path slot. It and the plants are drawn in code by <code>foliage/mountain_art.py</code>: no outline, lit from the top left, stems and leaves in the turf's own greens, blooms in low-saturation colours.</li>
-      <li>Every plant is lit as the ground is: the sun with its shadow, the sky fill and the lamps.</li>
+      <li>The <b>alpine turf</b> is a candidate tile (the mountains sheet has no grass), proposed for its unused worn-path slot, drawn in code by <code>foliage/alpine_turf.py</code>: no outline, lit from the top left.</li>
+      <li>The plants are the Playground tab's kit, not new art: its pixel tufts coloured from the turf (sedge from the alpine soil), its flower stems and heads (gentian blue, edelweiss white, avens and buttercup yellow, campion red), its bush as juniper (needles, flattened), heather (tundra leaves) and moss campion (a flattened cushion with heads), its blueberry plant as bilberry, its pine as the firs, its rocks as scree, pebbles and the cairn, and its dead shrub on the snow. Krummholz is the pine's own trunk, whorls and needle sprays, stunted and swept downwind; a flag tree keeps branches on the lee side only.</li>
+      <li>Snow patches, lichen and moss are whole texels of the face's own tile, so they sit in the ground rather than on it. Stones take their tile square on, so their texels are never stretched.</li>
+      <li>Every plant is lit as the ground is: the sun with its shadow, the sky fill and the lamps. Only the light is this tab's; the shapes, textures and card masks are the kit's.</li>
     </ul>
 
     <h3>Proposed, not in this build</h3>
@@ -1406,10 +1408,10 @@ const groundIdx = B => B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);
 // thirds, each third giving its commonest colour. They are the tile's own palette colours, so a
 // tuft sits in the ground's palette (and is lit by the same light) rather than on top of it.
 const RAMPS_OF = {};
-function groundRamp(img, slot, idx) {
-  const key = slot + ":" + idx;
+function groundRamp(img, slot, idx, rect) {
+  const key = rect ? img.src + "|" + rect.join(",") : slot + ":" + idx;
   if (RAMPS_OF[key]) return RAMPS_OF[key];
-  const d = imagePixels(img, ...tileRect(img, slot, idx)), px = [];
+  const d = imagePixels(img, ...(rect || tileRect(img, slot, idx))), px = [];
   for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2], 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]]);
   px.sort((a, b) => a[3] - b[3]);
   const ramp = [0, 1, 2].map(t => {
@@ -1423,17 +1425,21 @@ function groundRamp(img, slot, idx) {
 const TUFT_RAMP_FALLBACK = new Set(Object.values(TUFT_RAMP));   // the fallback ramps are already in the biome's palette
 const TUFT_Q = [];   // tufts waiting for the atlas to load; drawn by resolveMeans
 const tuftHash = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+// A ground the tufts and keyed leaves take their colours from: a biome by name, or (the Mountains tab) an object
+// { key, sheet, ground: texture name, rect: its tile's pixel rectangle } for a tile that is not in the atlas.
+const groundOf = biome => typeof biome === "string" ? { name: biome, B: BIOMES[biome], src: "game/atlas", rect: null }
+  : { name: biome.key, B: biome, src: biome.ground || "game/atlas", rect: biome.rect || null };
 function tuftTex(biome, v) {
-  const key = "tuft:" + biome + ":" + v;
+  const GD = groundOf(biome), key = "tuft:" + GD.name + ":" + v;
   if (TEX[key]) return key;
-  const B = BIOMES[biome], atlas = tex("game/atlas");
+  const B = GD.B, atlas = tex(GD.src);
   const cv = document.createElement("canvas"); cv.width = cv.height = 16; const g = cv.getContext("2d");
   const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
   const draw = () => {
     const img = atlas.image;
     if (!img || !img.complete || !img.naturalWidth) return false;
     let ramp;
-    try { ramp = groundRamp(img, B.sheet, groundIdx(B)); } catch (e) { ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate; }
+    try { ramp = groundRamp(img, B.sheet, groundIdx(B), GD.rect); } catch (e) { ramp = B.tuftRamp || TUFT_RAMP[GD.name] || TUFT_RAMP.temperate; }
     const gr = rp("terrain:" + B.sheet + ":" + groundIdx(B), B).ramp;   // a ground worn in the biome's palette: the tufts too
     if (gr && !TUFT_RAMP_FALLBACK.has(ramp)) ramp = ramp.map(c => "rgb(" + rampRGB(c.match(/\d+/g).map(Number), gr).join(",") + ")");
     g.clearRect(0, 0, 16, 16);
@@ -1472,9 +1478,9 @@ const FORAGE_SIZE = { blueberry: 0.9, raspberry: 1.2, blackberry: 1.2, elderberr
 // in three KEY colours, swapped here for groundRamp's dark, mid and light (as the tufts are coloured).
 const KEY_RGB = [[5, 88, 45], [85, 150, 66], [155, 182, 117]];
 function keyedTex(name, biome) {
-  const key = "keyed:" + name + ":" + biome;
+  const GD = groundOf(biome), key = "keyed:" + name + ":" + GD.name;
   if (TEX[key]) return key;
-  const B = BIOMES[biome], src = tex(name), atlas = tex("game/atlas");
+  const B = GD.B, src = tex(name), atlas = tex(GD.src);
   const cv = document.createElement("canvas"); const g = cv.getContext("2d", CTX2D);
   const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
   const draw = () => {
@@ -1484,7 +1490,7 @@ function keyedTex(name, biome) {
     try {
       if (!canvasReadable()) throw new Error("canvas read-back is not trustworthy here");
       const gr = rp("terrain:" + B.sheet + ":" + groundIdx(B), B).ramp;
-      const ramp = groundRamp(at, B.sheet, groundIdx(B)).map(c => c.match(/\d+/g).map(Number)).map(c => gr ? rampRGB(c, gr) : c);
+      const ramp = groundRamp(at, B.sheet, groundIdx(B), GD.rect).map(c => c.match(/\d+/g).map(Number)).map(c => gr ? rampRGB(c, gr) : c);
       const d = g.getImageData(0, 0, cv.width, cv.height);   // matched with a tolerance: a browser may jitter read-back
       for (let i = 0; i < d.data.length; i += 4) for (let k = 0; k < 3; k++)
         if (d.data[i + 3] >= 128 && Math.abs(d.data[i] - KEY_RGB[k][0]) <= 6 && Math.abs(d.data[i + 1] - KEY_RGB[k][1]) <= 6 && Math.abs(d.data[i + 2] - KEY_RGB[k][2]) <= 6) { d.data[i] = ramp[k][0]; d.data[i + 1] = ramp[k][1]; d.data[i + 2] = ramp[k][2]; }
@@ -3975,7 +3981,7 @@ S.api = { setNight, setView, sync: syncButtons, drawTiles, orbit: S.orbit };
 "use strict";
 const GW = 2.833, GR = GW / Math.sqrt(3), S3 = Math.sqrt(3);
 const TILE_UV = 1.5 * GW;
-const ART_V = 1;
+const ART_V = 2;
 const $m = id => document.getElementById(id);
 const M = { started: false, running: false, night: false, look: "new", compare: "off", view: "overview", snow: 172,
   layers: { trees: true, krumm: true, tufts: true, flowers: true, shrubs: true, scree: true, lichen: true, snowp: true, tarn: true },
@@ -4003,10 +4009,6 @@ const T = {
   snow: id(TU, 2, 2), snowSide: id(TU, 1, 0), bark: id(TU, 2, 1), turf: 300,
 };
 const ROCKS = [T.slate, T.granite, T.shale, T.fract];
-// Sprites in mountain/mountain_art.png (mountain_art.py's SPRITES): [x px, y px, size px].
-const SP = { tuft0: [32, 0, 16], tuft1: [48, 0, 16], tuft2: [64, 0, 16], gentian: [80, 0, 16], edelweiss: [96, 0, 16], avens: [112, 0, 16],
-  campion: [32, 16, 16], buttercup: [48, 16, 16], sedge: [64, 16, 16], cushion_pink: [80, 16, 16], cushion_white: [96, 16, 16], deadshrub: [112, 16, 16],
-  juniper: [0, 32, 32], heather: [32, 32, 32], bilberry: [64, 32, 32] };
 const WIND = [1, 0];        // the prevailing wind, west to east: krummholz leans east
 
 // ---------- the mountainside: terraced benches and cliffs rising away from the camera ----------
@@ -4101,9 +4103,10 @@ function rockAt(a, x, z, S) {
 }
 
 // ---------- geometry ----------
-class GB {
-  constructor() { this.p = []; this.n = []; this.uv = []; this.t = []; this.c = []; this.f = []; }
-  v(p, n, uv, t, c, f) { this.p.push(...p); this.n.push(...n); this.uv.push(...uv); this.t.push(...t); this.c.push(...c); this.f.push(...f); }
+// (MGB, not GB: the plants below are built with the playground's own kit, whose builder is GB)
+class MGB {
+  constructor() { this.p = []; this.n = []; this.uv = []; this.t = []; this.c = []; this.f = []; this.s = []; this.sd = 0; }
+  v(p, n, uv, t, c, f) { this.p.push(...p); this.n.push(...n); this.uv.push(...uv); this.t.push(...t); this.c.push(...c); this.f.push(...f); this.s.push(this.sd); }
   tri(a, b, c, n, uvs, t, col, fx = Z4) { this.v(a, n, uvs[0], t, col, fx); this.v(b, n, uvs[1], t, col, fx); this.v(c, n, uvs[2], t, col, fx); }
   quad(a, b, c, d, n, uvs, t, col, fx = Z4) { this.tri(a, b, c, n, [uvs[0], uvs[1], uvs[2]], t, col, fx); this.tri(a, c, d, n, [uvs[0], uvs[2], uvs[3]], t, col, fx); }
   geo() {
@@ -4114,13 +4117,14 @@ class GB {
     g.setAttribute("tile", new THREE.Float32BufferAttribute(this.t, 3));
     g.setAttribute("col", new THREE.Float32BufferAttribute(this.c, 3));
     g.setAttribute("fx", new THREE.Float32BufferAttribute(this.f, 4));
+    g.setAttribute("seed", new THREE.Float32BufferAttribute(this.s, 1));
     return g;
   }
 }
 const Z4 = [0, 0, 0, 0], WHITE = [1, 1, 1], UP = [0, 1, 0];
 const SUN_DAY = new THREE.Vector3(0.38, 0.62, 0.68).normalize();
 function buildTerrain(mode) {
-  const g = new GB(), BOTTOM = -8, S = M.snow, today = mode === "today", lay = M.layers;
+  const g = new MGB(), BOTTOM = -8, S = M.snow, today = mode === "today", lay = M.layers;
   const HT = o => today ? o.h0 : o.h;     // today has no tarn basin
   for (const c0 of CELLS.values()) {
     const c = today ? Object.assign(Object.create(c0), { h: c0.h0 }) : c0;
@@ -4135,6 +4139,7 @@ function buildTerrain(mode) {
       fx = [rocky && lay.lichen && c.A < c.Sl + 10 ? 0.55 : 0, c.patch, 0, 0];
       over = c.patch > 0 ? T.snow : 0;
     }
+    g.sd = Math.floor(hh(c.q, c.r, 5) * 4096);   // a face's own seed (a whole number), for the lichen and moss in its texels
     for (let i = 0; i < 6; i++) {
       const a = corner(i), b = corner((i + 1) % 6);
       g.tri([c.x, c.h, c.z], [c.x + b[0], c.h, c.z + b[1]], [c.x + a[0], c.h, c.z + a[1]], UP,
@@ -4150,6 +4155,7 @@ function buildTerrain(mode) {
       const away = 1 - Math.max(0, n[0] * SUN_DAY.x + n[2] * SUN_DAY.z);
       for (let y = c.h; y > low; y--) {
         const y0 = Math.max(y - 1, low), depth = c.h - y, v1 = y - y0;
+        g.sd = Math.floor(hh(c.q * 7 + i, c.r * 7 + y, 6) * 4096);
         let base, ov = 0, wfx = Z4;
         const rock = rockAt(ALT(y - 0.5), c.x, c.z, c.Sl);
         if (today) base = c.today === "snow" ? (depth === 0 ? T.snowSide : T.slate) : T.slate;
@@ -4172,90 +4178,155 @@ function buildTerrain(mode) {
   }
   return g.geo();
 }
-// A crossed pair of cut-out cards, lit with the ground's up normal as the game's clutter is.
-function cards(g, x, y, z, w, h, rot, sp, tint = WHITE) {
-  for (const a of [rot, rot + Math.PI / 2]) {
-    const dx = Math.cos(a) * w / 2, dz = Math.sin(a) * w / 2;
-    g.quad([x - dx, y, z - dz], [x + dx, y, z + dz], [x + dx, y + h, z + dz], [x - dx, y + h, z - dz], UP,
-      [[0, 1], [1, 1], [1, 0], [0, 0]], [sp[0], sp[1], 3], tint, [0, 0, 0, sp[2]]);
+// ---------- the playground's foliage kit (owner, 2026-11-19: "you should use the foliage kit instead of making new plants") ----------
+// Every plant here is built by the Playground's own functions (TREE_BUILD.pine, bushGeo, grassTuft's tufts via tuftTex,
+// flowerStem / flowerHead, deadShrub, rockGeo, the fruit plants via keyedTex) from its own textures, and cut by its own
+// card masks (maskOf, atlasTile: the FRAG's GLSL). Only the light is this tab's, so a plant is lit as the ground under it.
+// The alpine turf's colours stand in for a biome's ground: the tufts, stems and keyed leaves take their ramp from it.
+const TURF_G = { key: "mountain-turf", sheet: MT, ground: "mountain/alpine_turf", rect: [0, 0, 32, 32] };
+const SOIL_G = { key: "mountain-soil", sheet: MT, topIdx: 14 };       // the mountains sheet's alpine soil (2,3)
+const ROCK_V = 4, rockKit = [], twigKit = [];
+// A kit geometry (its GB) copied into this tab's builder: drawn by the terrain shader in one of the atlas's tiles,
+// so a stone or a bare twig is lit, shadowed and sampled exactly as the ground is. With `proj` each face takes its
+// tile square on, projected along its own normal at one tile to 1.42 m, so a stone's texels are square at any size
+// (the kit's rock UVs run its tile up the sides in long streaks).
+function addKit(g, kg, x, y, z, yaw, sc, tile, proj) {
+  const cs = Math.cos(yaw), sn = Math.sin(yaw), [sx, sy, sz] = typeof sc === "number" ? [sc, sc, sc] : sc;
+  const P = i => { const px = kg.p[i] * sx, pz = kg.p[i + 2] * sz; return [x + px * cs - pz * sn, y + kg.p[i + 1] * sy, z + px * sn + pz * cs]; };
+  const N = i => { const nx = kg.n[i] / sx, ny = kg.n[i + 1] / sy, nz = kg.n[i + 2] / sz, l = Math.hypot(nx, ny, nz) || 1; return [(nx * cs - nz * sn) / l, ny / l, (nx * sn + nz * cs) / l]; };
+  for (let t = 0; t < kg.p.length / 9; t++) {
+    let ax = 1;
+    if (proj) { const i = t * 9, e1 = [0, 1, 2].map(k => (kg.p[i + 3 + k] - kg.p[i + k]) * [sx, sy, sz][k]), e2 = [0, 1, 2].map(k => (kg.p[i + 6 + k] - kg.p[i + k]) * [sx, sy, sz][k]);
+      const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]].map(Math.abs); ax = fn[0] > fn[1] && fn[0] > fn[2] ? 0 : fn[1] > fn[2] ? 1 : 2; }
+    for (let k = 0; k < 3; k++) {
+      const i = t * 9 + k * 3, j = t * 6 + k * 2, l = [kg.p[i] * sx, kg.p[i + 1] * sy, kg.p[i + 2] * sz];
+      const uv = !proj ? [kg.uv[j], kg.uv[j + 1]] : ax === 0 ? [l[2] / 1.42, -l[1] / 1.42] : ax === 1 ? [l[0] / 1.42, l[2] / 1.42] : [l[0] / 1.42, -l[1] / 1.42];
+      g.v(P(i), N(i), uv, [tile, 0, 0], WHITE, Z4);
+    }
   }
 }
-// A low dome (a cushion plant), its top tiled with a 16 px cushion sprite.
-function dome(g, x, y, z, r, h, sp) {
-  const ring = [];
-  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ring.push([Math.cos(a), Math.sin(a)]); }
-  const lv = [[1, 0], [0.75, 0.6], [0, 1]];
-  for (let k = 0; k < 2; k++) for (let i = 0; i < 8; i++) {
-    const j = (i + 1) % 8, [r0, y0] = lv[k], [r1, y1] = lv[k + 1];
-    const P = (rr, yy, e) => [x + ring[e][0] * r * rr, y + h * yy, z + ring[e][1] * r * rr];
-    const U = (rr, e) => [(ring[e][0] * r * rr + x) * 4, (ring[e][1] * r * rr + z) * 4];
-    const nrm = [ring[i][0] * 0.5, 1, ring[i][1] * 0.5];
-    g.quad(P(r0, y0, i), P(r0, y0, j), P(r1, y1, j), P(r1, y1, i), nrm, [U(r0, i), U(r0, j), U(r1, j), U(r1, i)], [sp[0], sp[1], 6], [0.92, 0.92, 0.92], [0, 0, 0, sp[2]]);
+function kitRock(g, v, x, y, z, yaw, s, tile) {
+  if (!rockKit.length) for (let k = 0; k < ROCK_V; k++) rockKit.push(rockGeo(rngOf(100 + k)));   // the playground's rocks, the same seeds
+  addKit(g, rockKit[((v % ROCK_V) + ROCK_V) % ROCK_V], x, y, z, yaw, s, tile, true);
+}
+function kitTwig(g, v, x, y, z, yaw, s) {
+  if (!twigKit.length) for (let k = 0; k < 3; k++) twigKit.push(deadShrub(rngOf(500 + k)));      // the taiga's dead shrub, in the tundra sheet's wood
+  addKit(g, twigKit[((v % 3) + 3) % 3], x, y, z, yaw, s, T.bark);
+}
+// Krummholz, from TREE_BUILD.pine's own parts: its tapered hex trunk, its whorls of branches and the needle sprays
+// rooted along each branch, but stunted and swept downwind. A mat (the usual krummholz) is a low cushion of whorls
+// whose branches reach far to the lee and barely to windward; a flag tree stands up out of its mat with branches
+// on the lee side only.
+function krummholz(rnd, flag) {
+  const b = new GB(), l = new GB(), Wd = [WIND[0], 0, WIND[1]];
+  const H = flag ? 2.0 + rnd() * 0.7 : 0.55 + rnd() * 0.3, lean = flag ? 0.3 : 0.45;
+  const top = [Wd[0] * lean, H, Wd[2] * lean];
+  b.tube([0, 0, 0], top, flag ? 0.13 : 0.1, 0.03, 6, 1.2);
+  const whorl = (y, L, leeOnly) => {
+    const t = y / H, base = [top[0] * t, y, top[2] * t], n = 6;
+    for (let k = 0; k < n; k++) {
+      const az = k / n * 6.28 + y * 1.7 + (rnd() - 0.5) * 0.4, d0 = [Math.cos(az), 0, Math.sin(az)];
+      const lee = d0[0] * Wd[0] + d0[2] * Wd[2];                     // -1 into the wind .. 1 downwind
+      if (leeOnly && lee < -0.15) continue;                          // the windward side is scoured bare
+      const len = L * (0.3 + 0.7 * (lee * 0.5 + 0.5));
+      const d = norm([d0[0] + Wd[0] * 0.55, -0.12, d0[2] + Wd[2] * 0.55]), e = add(base, scl(d, len));
+      b.tube(base, e, 0.045, 0.015, 4);
+      const cid = 0.1 + rnd() * 0.9, side = norm(cross(d, [0, 1, 0])), n2 = Math.max(2, Math.round(len / 0.3));
+      for (let c = 0; c < n2; c++) {
+        const tr = (c + 0.3) / n2, root = add(base, scl(d, len * tr)), s2 = c % 2 ? 1 : -1;
+        leafCard(l, root, norm(add(add(d, scl(side, s2 * 0.55)), [0, -0.25, 0])), Math.min(0.65, len * (1 - tr) + 0.3), 0.55, rnd, cid, norm(add([0, 1, 0], scl(side, s2 * 1.1))));
+      }
+      leafCard(l, add(base, scl(d, len * 0.92)), norm(add(d, [0, -0.2, 0])), 0.4, 0.36, rnd, cid, norm(add([0, 1, 0], scl(side, 0.8))));
+    }
+  };
+  for (let y = 0.1; y < (flag ? 0.5 : H); y += 0.15 + rnd() * 0.06) whorl(y, 1.35 - y * 0.6, false);   // the mat
+  if (flag) for (let y = 0.85; y < H - 0.15; y += 0.36 + rnd() * 0.1) whorl(y, 0.85 * (1 - 0.45 * y / H), true);
+  for (let k = 0; k < 2; k++) { const a = k * 2.1; leafCard(l, add(top, [0, -0.25, 0]), norm([Math.cos(a) * 0.3 + Wd[0] * 0.4, 1, Math.sin(a) * 0.3]), 0.5, 0.35, rnd, 0.5, [Math.cos(a + 1.57), 0, Math.sin(a + 1.57)]); }
+  return [b, l];
+}
+// A plant material: the kit's texture and card mask (as the playground's mat() takes them), in this tab's light.
+const PMATS = {}, MEANQ = [];
+function pmat(key, o) {
+  if (PMATS[key]) return PMATS[key];
+  const tname = o.at ? "game/atlas" : o.tex, t = TEX[tname] || tex(tname);
+  const at = o.at ? new THREE.Vector3(o.at[0], o.at[1] % 4, Math.floor(o.at[1] / 4)) : new THREE.Vector3();
+  const u = Object.assign({}, U, {
+    map: { value: t }, uUseAt: { value: o.at ? 1 : 0 }, uAt: { value: at }, uMask: { value: o.mask || 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
+    uMean: { value: new THREE.Vector3(0.5, 0.5, 0.5) }, uDetail: { value: 1 }, uCardLit: { value: o.card ? 1 : 0 }, uUpN: { value: o.upN || 0 },
+  });
+  const m = new THREE.ShaderMaterial({ vertexShader: PVS, fragmentShader: PFS, uniforms: u, side: THREE.DoubleSide });
+  // the kit's one-art-style rule: a plant keeps its texture's palette, its contrast pulled toward the texture's mean
+  const detail = o.detail ?? (o.alpha ? 1 : o.mask ? 0.45 : 0.7);
+  if (detail < 1) MEANQ.push({ m, detail, tname, at: o.at });
+  return (PMATS[key] = m);
+}
+function resolvePlantMeans() {
+  resolveMeans();                                  // the kit's own queue: tufts and keyed leaves waiting for their ground
+  for (let i = MEANQ.length - 1; i >= 0; i--) {
+    const q = MEANQ[i], img = TEX[q.tname] && TEX[q.tname].image;
+    if (!img || !img.complete || !img.naturalWidth) continue;
+    MEANQ.splice(i, 1);
+    try { const mn = meanOf(img, q.at ? tileRect(img, q.at[0], q.at[1]) : [0, 0, img.naturalWidth, img.naturalHeight]); if (mn) { q.m.uniforms.uMean.value.set(...mn); q.m.uniforms.uDetail.value = q.detail; } } catch (e) { /* an unreadable image keeps its full detail */ }
   }
 }
-// A boulder: a squashed, jittered octahedron, flat faced, in a rock tile.
-function boulder(g, x, y, z, r, seed, tile) {
-  const v = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.5, 0.7], [-0.7, 0.4, -0.6], [0.6, 0.45, -0.7], [-0.6, 0.5, 0.7]]
-    .map((p, i) => { const j = 0.75 + 0.5 * hh(seed, i, 61); return [p[0] * r * j * 1.15, p[1] * r * j * 0.75, p[2] * r * j]; });
-  const F = [[2, 6, 0], [2, 4, 6], [6, 4, 0], [2, 9, 4], [9, 1, 4], [2, 1, 9], [2, 7, 1], [7, 5, 1], [2, 5, 7], [2, 8, 5], [8, 0, 5], [2, 0, 8],
-    [3, 0, 4], [3, 4, 1], [3, 1, 5], [3, 5, 0]];
-  const rot = hh(seed, 9, 62) * 6.28, cs = Math.cos(rot), sn = Math.sin(rot);
-  const W = p => [x + p[0] * cs - p[2] * sn, y + p[1] + r * 0.35, z + p[0] * sn + p[2] * cs];
-  for (const [a, b, c] of F) {
-    const A = W(v[a]), B = W(v[b]), C = W(v[c]);
-    const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
-    let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]; const l = Math.hypot(...n) || 1; n = n.map(q => q / l);
-    if (n[1] < -0.2) { n = n.map(q => -q); }
-    const uv = P => Math.abs(n[1]) > 0.6 ? [P[0] * 0.7, P[2] * 0.7] : [(P[0] + P[2]) * 0.7, -P[1] * 0.7];
-    g.tri(A, B, C, n, [uv(A), uv(B), uv(C)], [tile, 0, 0], [0.95, 0.95, 0.95]);
+// The plant parts, built once: each a list of [kit geometry, material] drawn together at one transform.
+let PK = null;
+function plantKit() {
+  if (PK) return PK;
+  const part = (kg, m) => { const g = kg.geo ? kg.geo() : kg; return [g, m]; };
+  const bark = pmat("bark", { at: [SHEET.redwood_forest, 6] });                 // SPECIES.pine: bark A:10:6, needles mask 2
+  const needles = pmat("needles", { tex: "game/needles", card: true, mask: 2 });
+  const leaves = pmat("tleaves", { at: [SHEET.tundra, 8], card: true, mask: 1 }); // the tundra sheet's cool leaves (0,2)
+  const stem = pmat("stem", { tex: TURF_G.ground, card: true, upN: 1 });
+  const head = c => pmat("flower:" + c, { tex: "flower_" + c, card: true, alpha: true, upN: 0.6 });
+  PK = { fir: [], krumm: [], flag: [], tuft: [], sedge: [], flower: {}, cushion: [], juniper: [], heather: [], bilberry: [] };
+  for (let v = 0; v < 4; v++) { const [b, l] = TREE_BUILD.pine(rngOf(9000 + v * 31 + 4 * 7)); PK.fir.push([part(b, bark), part(l, needles)]); }
+  for (let v = 0; v < 4; v++) { const [b, l] = krummholz(rngOf(7100 + v * 13), false); PK.krumm.push([part(b, bark), part(l, needles)]); }
+  for (let v = 0; v < 2; v++) { const [b, l] = krummholz(rngOf(7300 + v * 17), true); PK.flag.push([part(b, bark), part(l, needles)]); }
+  for (let v = 0; v < 3; v++) {
+    PK.tuft.push([part(crossedCards(0.8, 0.6, 2), pmat("tuft:" + v, { tex: tuftTex(TURF_G, v), card: true, alpha: true, upN: 1 }))]);
+    PK.sedge.push([part(crossedCards(0.8, 0.6, 2), pmat("sedge:" + v, { tex: tuftTex(SOIL_G, v), card: true, alpha: true, upN: 1 }))]);
   }
+  for (const c of ["blue", "white", "yellow", "red"]) PK.flower[c] = [0, 1].map(v => { const st = flowerStem(rngOf(800 + v)); return [part(st.g, stem), part(flowerHead(st.H, 0.17), head(c))]; });
+  // moss campion: a cushion is a low bush of the tundra leaves, flattened, with the kit's flower heads on top
+  for (let v = 0; v < 2; v++) {
+    const r = rngOf(420 + v), cush = bushGeo(r, 0.32), heads = new GB();
+    for (let k = 0; k < 5; k++) { const a = k * 1.26 + r(), d = 0.06 + r() * 0.1, hd = flowerHead(0.17 + r() * 0.04, 0.1); for (let i = 0; i < hd.p.length; i += 3) { hd.p[i] += Math.cos(a) * d; hd.p[i + 2] += Math.sin(a) * d; } heads.p.push(...hd.p); heads.n.push(...hd.n); heads.uv.push(...hd.uv); heads.cd.push(...hd.cd); heads.ao.push(...hd.ao); }
+    PK.cushion.push([part(cush, leaves), part(heads, head(v ? "white" : "red"))]);
+  }
+  // the shrubs: the taiga's needle bush flattened into a creeping juniper, the tundra-leaf bush as heather, the
+  // fruit kit's blueberry as bilberry (its leaves keyed to the turf's greens)
+  for (let v = 0; v < 3; v++) PK.juniper.push([part(bushGeo(rngOf(400 + v), 0.75), pmat("juniper", { tex: "game/needles", card: true, mask: 2 }))]);
+  for (let v = 0; v < 3; v++) { const r = rngOf(430 + v), hb = bushGeo(r, 0.45), bells = new GB();
+    for (let k = 0; k < 6; k++) { const a = r() * 6.28, d = r() * 0.18, hd = flowerHead(0.3 + r() * 0.12, 0.08); for (let i = 0; i < hd.p.length; i += 3) { hd.p[i] += Math.cos(a) * d; hd.p[i + 2] += Math.sin(a) * d; } bells.p.push(...hd.p); bells.n.push(...hd.n); bells.uv.push(...hd.uv); bells.cd.push(...hd.cd); bells.ao.push(...hd.ao); }
+    PK.heather.push([part(hb, leaves), part(bells, head("red"))]); }
+  const bsz = FORAGE_SIZE.blueberry;
+  PK.bilberry.push([part(crossedCards(bsz, bsz, 2), pmat("bilberry", { tex: keyedTex("fruit/plant_blueberry", TURF_G), card: true, alpha: true, upN: 0.8 }))]);
+  return PK;
 }
-// A conifer: a hex trunk and stacked hexagonal skirts, needles on top and bark below.
-function skirt(g, cx, y0, cz, rad, hgt, lean, tint, seed) {
-  const ap = [cx + lean[0], y0 + hgt, cz + lean[1]];
-  const rot = hh(seed, 3, 71) * 1.05;
-  const ring = []; for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; const j = 0.85 + 0.3 * hh(seed, i, 72); ring.push([cx + Math.cos(a) * rad * j, y0 - 0.08 * rad * hh(seed, i, 73), cz + Math.sin(a) * rad * j]); }
-  for (let i = 0; i < 6; i++) {
-    const A = ring[i], B = ring[(i + 1) % 6];
-    const mx = (A[0] + B[0]) / 2 - cx, mz = (A[2] + B[2]) / 2 - cz, ml = Math.hypot(mx, mz) || 1;
-    const n = [mx / ml * hgt, rad, mz / ml * hgt]; const l = Math.hypot(...n); const nn = n.map(q => q / l);
-    const uvs = [[(A[0] + A[2]) * 0.9, A[1] * 0.9], [(B[0] + B[2]) * 0.9, B[1] * 0.9], [((A[0] + B[0]) / 2 + (A[2] + B[2]) / 2) * 0.9, ap[1] * 0.9]];
-    g.v(A, nn, uvs[0], [0, 0, 4], tint.map(q => q * 0.62), Z4); g.v(B, nn, uvs[1], [0, 0, 4], tint.map(q => q * 0.62), Z4); g.v(ap, nn, uvs[2], [0, 0, 4], tint.map(q => q * 1.25), Z4);
-    g.tri(B, A, [cx, y0 + hgt * 0.12, cz], [0, -1, 0], [[A[0], A[2]], [B[0], B[2]], [cx, cz]], [0, 0, 4], tint.map(q => q * 0.55));
+// Instances gathered per (layer, part) and drawn as one InstancedMesh each.
+class Plants {
+  constructor() { this.b = new Map(); }
+  add(layer, parts, x, y, z, yaw, s, tint = 1) {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), typeof s === "number" ? new THREE.Vector3(s, s, s) : new THREE.Vector3(...s));
+    for (const [g, mat] of parts) {
+      const k = layer + "|" + g.uuid + "|" + mat.uuid;
+      if (!this.b.has(k)) this.b.set(k, { layer, g, mat, ms: [], ts: [] });
+      const b = this.b.get(k); b.ms.push(m); b.ts.push(tint);
+    }
   }
-}
-function trunk(g, x, y, z, r, h, lean) {
-  for (let i = 0; i < 6; i++) {
-    const a0 = i * Math.PI / 3, a1 = a0 + Math.PI / 3;
-    const p = (a, yy, k) => [x + Math.cos(a) * r * (1 - 0.4 * k) + lean[0] * k, yy, z + Math.sin(a) * r * (1 - 0.4 * k) + lean[1] * k];
-    const n = [Math.cos(a0 + Math.PI / 6), 0, Math.sin(a0 + Math.PI / 6)];
-    g.quad(p(a0, y, 0), p(a1, y, 0), p(a1, y + h, 1), p(a0, y + h, 1), n, [[0, h], [0.3, h], [0.3, 0], [0, 0]], [T.bark, 0, 0], WHITE);
-  }
-}
-function fir(g, x, y, z, H, seed) {
-  trunk(g, x, y - 0.2, z, 0.06 * H / 2.4 + 0.05, H * 0.5, [0, 0]);
-  const n = 5 + Math.floor(hh(seed, 1, 74) * 2), tint = [0.82 + 0.1 * hh(seed, 2, 75), 0.95, 1.02];
-  for (let i = 0; i < n; i++) {
-    const f = i / n;
-    skirt(g, x, y + H * (0.16 + 0.74 * f), z, H * 0.2 * (1 - f * 0.82) + 0.12, H * 0.24, [0, 0], tint, seed * 7 + i);
-  }
-}
-function krumm(g, x, y, z, seed, flag) {
-  const tint = [0.78, 0.9, 0.92];
-  if (flag) {     // a flag tree: a leaning trunk, its few branches on the lee side only
-    const H = 1.6 + 0.6 * hh(seed, 1, 76), lean = [WIND[0] * 0.35, WIND[1] * 0.35];
-    trunk(g, x, y - 0.1, z, 0.07, H, lean);
-    for (let i = 0; i < 4; i++) { const f = (i + 0.5) / 4; skirt(g, x + WIND[0] * (0.3 + 0.35 * f), y + H * (0.25 + 0.7 * f), z + WIND[1] * (0.3 + 0.35 * f), 0.62 - 0.1 * i, 0.3, [WIND[0] * 0.35, WIND[1] * 0.35], tint, seed * 5 + i); }
-    return;
-  }
-  // a low mat of lumps, swept downwind: tallest on the windward end, trailing off to the lee
-  const n = 4 + Math.floor(hh(seed, 2, 77) * 3);
-  trunk(g, x, y - 0.05, z, 0.05, 0.35, [WIND[0] * 0.3, WIND[1] * 0.3]);
-  for (let i = 0; i < n; i++) {
-    const f = i / (n - 1), side = (hh(seed, i, 79) - 0.5) * 0.7;
-    const px = x + WIND[0] * (f * 1.4) - WIND[1] * side, pz = z + WIND[1] * (f * 1.4) + WIND[0] * side;
-    const rad = 0.3 + 0.22 * hh(seed, i, 78) + 0.12 * (1 - f), hgt = 0.28 + 0.4 * (1 - f) * hh(seed, i, 80);
-    skirt(g, px, y + 0.04 + 0.12 * (1 - f) * hh(seed, i, 81), pz, rad, hgt, [WIND[0] * 0.18, WIND[1] * 0.18], tint.map(q => q * (0.9 + 0.2 * hh(seed, i, 82))), seed * 3 + i);
+  groups() {
+    const out = {};
+    for (const b of this.b.values()) {
+      const g = new THREE.BufferGeometry(), n = b.ms.length;
+      for (const k of Object.keys(b.g.attributes)) g.setAttribute(k, b.g.attributes[k]);
+      const tint = new Float32Array(n * 3); b.ts.forEach((t, i) => tint.fill(t, i * 3, i * 3 + 3));
+      g.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 3));
+      const mesh = new THREE.InstancedMesh(g, b.mat, n); mesh.frustumCulled = false; mesh.userData.own = g;
+      b.ms.forEach((m, i) => mesh.setMatrixAt(i, m));
+      (out[b.layer] = out[b.layer] || new THREE.Group()).add(mesh);
+    }
+    return out;
   }
 }
 function seat(c, salt, spread = 0.62) {
@@ -4288,10 +4359,10 @@ function flame(g, x, y, z, w, h, col) {
     g.quad([x - dx, y, z - dz], [x + dx, y, z + dz], [x + dx * 0.2, y + h, z + dz * 0.2], [x - dx * 0.2, y + h, z - dz * 0.2], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]], [0, 0, 2], col); }
 }
 function buildLamps() {
-  const g = new GB();
+  const g = new MGB();
   for (const L of LAMPS) {
     if (L.kind === "fire") {
-      for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; boulder(g, L.x + Math.cos(a) * 0.55, L.base - 0.05, L.z + Math.sin(a) * 0.55, 0.14, 900 + i, T.granite); }
+      for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; kitRock(g, i, L.x + Math.cos(a) * 0.55, L.base - 0.04, L.z + Math.sin(a) * 0.55, a, 0.16, T.granite); }
       for (let i = 0; i < 3; i++) { const a = i / 3 * 6.283 + 0.3; box(g, L.x + Math.cos(a) * 0.12, L.base + 0.08, L.z + Math.sin(a) * 0.12, 0.5 * Math.abs(Math.cos(a)) + 0.1, 0.1, 0.5 * Math.abs(Math.sin(a)) + 0.1, [0.3, 0.2, 0.12], 1); }
       flame(g, L.x, L.base + 0.1, L.z, 0.16, 0.42, [0.95, 0.42, 0.12]);
       flame(g, L.x + 0.06, L.base + 0.1, L.z - 0.05, 0.09, 0.3, [1.0, 0.7, 0.3]);
@@ -4310,72 +4381,78 @@ function buildLamps() {
   }
   return g.geo();
 }
-// ---------- the plants and stones ----------
+// ---------- the plants and stones, all from the kit ----------
 function buildToday() {
-  const g = new GB();
+  const g = new MGB();
   for (const c of CELLS.values()) {
-    if (c.today === "rock" && hh(c.q, c.r, 31) < 0.22) { const [x, z] = seat(c, 32); boulder(g, x, c.h0, z, 0.09 + 0.05 * hh(c.q, c.r, 33), c.q * 99 + c.r, T.slate); }
-    if (c.today === "snow" && hh(c.q, c.r, 34) < 0.16) { const [x, z] = seat(c, 35); cards(g, x, c.h0, z, 0.55, 0.55, hh(c.q, c.r, 36) * 3, SP.deadshrub); }
+    if (c.today === "rock" && hh(c.q, c.r, 31) < 0.22) { const [x, z] = seat(c, 32); kitRock(g, c.q + c.r, x, c.h0 - 0.02, z, hh(c.q, c.r, 37) * 6.28, 0.08 + 0.12 * hh(c.q, c.r, 33), T.slate); }
+    if (c.today === "snow" && hh(c.q, c.r, 34) < 0.16) { const [x, z] = seat(c, 35); kitTwig(g, c.q * 3 + c.r, x, c.h0, z, hh(c.q, c.r, 36) * 6.28, 0.9 + 0.4 * hh(c.q, c.r, 38)); }
   }
   return g.geo();
 }
 function buildNew() {
-  const L = M.layers, out = {};
-  const gT = new GB(), gK = new GB(), gG = new GB(), gF = new GB(), gS = new GB(), gB = new GB(), gX = new GB();
+  const L = M.layers, out = {}, K = plantKit(), P = new Plants();
+  const gB = new MGB(), gX = new MGB(), gD = new MGB();
+  const tint = (q, r, s) => 0.9 + 0.2 * hh(q, r, s);
   for (const c of CELLS.values()) {
     const { q, r, A, Sl } = c, green = c.top === "turf" || c.top === "soil";
-    // trees: firs thinning to the line at 150 m, krummholz 142-160 m (TreeTable::V13)
+    // trees: firs thinning to the line at 150 m, krummholz 142-160 m (TreeTable::V13); the kit's pine is 8.5-10 m
     if (green && !c.tarn) {
       const pFir = 0.23 * (1 - smooth(135, 150, A));
       const pK = 0.24 * smooth(140, 146, A) * (1 - smooth(154, 160, A));
       const roll = hh(q, r, 41);
-      if (roll < pFir) { const [x, z] = seat(c, 42, 0.45); fir(gT, x, c.h, z, (5.4 + 2.6 * hh(q, r, 43)) * (1 - 0.35 * smooth(128, 150, A)), q * 131 + r); }
-      else if (roll < pFir + pK) { const [x, z] = seat(c, 44, 0.45); krumm(gK, x, c.h, z, q * 17 + r, hh(q, r, 45) < 0.3); }
+      if (roll < pFir) { const [x, z] = seat(c, 42, 0.45), H = (5.4 + 2.6 * hh(q, r, 43)) * (1 - 0.35 * smooth(128, 150, A));
+        P.add("trees", K.fir[(hh(q, r, 46) * 4) | 0], x, c.h, z, hh(q, r, 47) * 6.28, H / 9.2, tint(q, r, 48)); }
+      else if (roll < pFir + pK) { const [x, z] = seat(c, 44, 0.45), flag = hh(q, r, 45) < 0.3;
+        // the wind's side is fixed (WIND), so a krummholz turns only a little about it
+        P.add("krumm", flag ? K.flag[(hh(q, r, 49) * 2) | 0] : K.krumm[(hh(q, r, 49) * 4) | 0], x, c.h, z, (hh(q, r, 50) - 0.5) * 0.5, 0.85 + 0.3 * hh(q, r, 51), tint(q, r, 52)); }
     }
-    // tufts on the turf, every turf cell
-    if (c.top === "turf" && !c.tarn) {
-      const n = 6 + Math.floor(hh(q, r, 50) * 4);
-      for (let i = 0; i < n; i++) { const [x, z] = seat(c, 100 + i * 3, 0.85); const s = 0.32 + 0.16 * hh(q, r, 101 + i * 3);
-        cards(gG, x, c.h, z, s, s, hh(q, r, 102 + i * 3) * 3.1, i % 5 === 4 ? SP.tuft2 : i & 1 ? SP.tuft1 : SP.tuft0); }
+    // tufts on the turf, coloured from the turf (the kit's pixel tufts); sedge on bare soil, from the soil
+    if (green && !c.tarn) {
+      const turf = c.top === "turf", n = turf ? 5 + Math.floor(hh(q, r, 53) * 3) : 3;
+      for (let i = 0; i < n; i++) { if (!turf && hh(q, r, 52 + i) > 0.6) continue;
+        const [x, z] = seat(c, 100 + i * 3, 0.85), s = 0.6 + 0.35 * hh(q, r, 101 + i * 3);
+        P.add("tufts", (turf ? K.tuft : K.sedge)[(hh(q, r, 103 + i * 3) * 3) | 0], x, c.h, z, hh(q, r, 102 + i * 3) * 6.28, s); }
     }
-    if (c.top === "soil" && !c.tarn) {
-      for (let i = 0; i < 3; i++) if (hh(q, r, 52 + i) < 0.6) { const [x, z] = seat(c, 160 + i * 3, 0.8); cards(gS, x, c.h, z, 0.42, 0.42, hh(q, r, 161 + i) * 3, SP.sedge); }
-    }
-    // the meadow: flowers in small clumps, cushions
+    // the meadow: the kit's flowers in small clumps (gentian blue, edelweiss white, avens and buttercup yellow,
+    // campion red), and moss campion cushions
     if (green && !c.tarn && A > 138 && A < Sl + 3) {
       const nearSnow = A > Sl - 6;
-      const kinds = nearSnow ? ["buttercup", "gentian", "buttercup"] : A > 156 ? ["gentian", "edelweiss", "campion", "gentian"] : ["avens", "campion", "gentian", "avens"];
+      const kinds = nearSnow ? ["yellow", "blue", "yellow"] : A > 156 ? ["blue", "white", "red", "blue"] : ["yellow", "red", "blue", "yellow"];
       for (let k = 0; k < 2; k++) if (hh(q, r, 60 + k * 50) < (nearSnow ? 0.3 : 0.75 - 0.25 * k)) {
         const kind = kinds[Math.floor(hh(q, r, 61 + k * 50) * kinds.length)], [cx, cz] = seat(c, 62 + k * 50, 0.6), m = 3 + Math.floor(hh(q, r, 63 + k * 50) * 4);
         for (let i = 0; i < m; i++) { const a = hh(q, r, 64 + i + k * 50) * 6.28, d = 0.1 + 0.4 * hh(q, r, 70 + i + k * 50);
-          cards(gF, cx + Math.cos(a) * d, c.h, cz + Math.sin(a) * d, 0.3, 0.3, hh(q, r, 80 + i + k * 50) * 3, SP[kind]); }
+          P.add("flowers", K.flower[kind][i & 1], cx + Math.cos(a) * d, c.h, cz + Math.sin(a) * d, hh(q, r, 80 + i + k * 50) * 6.28, 0.6 + 0.3 * hh(q, r, 90 + i + k * 50)); }
       }
-      if (A > 142 && hh(q, r, 65) < 0.4) { const [x, z] = seat(c, 66, 0.6); dome(gF, x, c.h, z, 0.22 + 0.18 * hh(q, r, 67), 0.11, hh(q, r, 68) < 0.6 ? SP.cushion_pink : SP.cushion_white); }
+      if (A > 142 && hh(q, r, 65) < 0.4) { const [x, z] = seat(c, 66, 0.6), s = 0.8 + 0.6 * hh(q, r, 67);
+        P.add("flowers", K.cushion[hh(q, r, 68) < 0.6 ? 0 : 1], x, c.h, z, hh(q, r, 69) * 6.28, [s, s * 0.5, s]); }
     }
-    // shrubs: juniper low, heather high, bilberry on soil
+    // shrubs: juniper low, heather high, bilberry on soil and under the firs
     if (green && !c.tarn && A < Sl) {
       let kind = null;
       if (c.top === "soil" && hh(q, r, 90) < 0.5) kind = "bilberry";
       else if (A > 128 && A < 156 && hh(q, r, 91) < 0.3) kind = A < 140 && hh(q, r, 92) < 0.4 ? "bilberry" : "juniper";
       else if (A >= 150 && hh(q, r, 93) < 0.3) kind = "heather";
-      if (kind) { const [x, z] = seat(c, 94, 0.6); const w = kind === "juniper" ? 1.4 + 0.5 * hh(q, r, 95) : 1.0 + 0.3 * hh(q, r, 95);
-        cards(gS, x, c.h - 0.02, z, w, w, hh(q, r, 96) * 3, SP[kind]); }
+      if (kind) { const [x, z] = seat(c, 94, 0.6), w = 0.8 + 0.4 * hh(q, r, 95), yaw = hh(q, r, 96) * 6.28, v = (hh(q, r, 97) * 3) | 0;
+        if (kind === "juniper") P.add("shrubs", K.juniper[v], x, c.h, z, yaw, [w * 1.5, w * 0.55, w * 1.5], tint(q, r, 98));
+        else if (kind === "heather") P.add("shrubs", K.heather[v], x, c.h, z, yaw, w, tint(q, r, 98));
+        else P.add("shrubs", K.bilberry[0], x, c.h, z, yaw, w); }
     }
-    // scree's boulders; pebbles on the other rock
-    if (c.top === "scree") { const m = 1 + Math.floor(hh(q, r, 110) * 3); for (let i = 0; i < m; i++) { const [x, z] = seat(c, 111 + i * 2, 0.75); boulder(gB, x, c.h, z, 0.28 + 0.3 * hh(q, r, 112 + i), q * 31 + r * 7 + i, rockAt(A, c.x, c.z, Sl)); } }
-    else if ((c.top === "rock" || c.top === "dusted") && hh(q, r, 31) < 0.2) { const [x, z] = seat(c, 32); boulder(gB, x, c.h, z, 0.09 + 0.05 * hh(q, r, 33), q * 99 + r, rockAt(A, c.x, c.z, Sl)); }
-    if ((c.top === "snow" || c.top === "ice") && hh(q, r, 34) < 0.12) { const [x, z] = seat(c, 35); cards(gS, x, c.h, z, 0.55, 0.55, hh(q, r, 36) * 3, SP.deadshrub); }
+    // scree's boulders (the kit's rocks, in the cliff's own stone); pebbles on the other rock
+    if (c.top === "scree") { const m = 1 + Math.floor(hh(q, r, 110) * 3); for (let i = 0; i < m; i++) { const [x, z] = seat(c, 111 + i * 2, 0.75); kitRock(gB, q * 31 + r * 7 + i, x, c.h - 0.08, z, hh(q, r, 113 + i) * 6.28, 0.3 + 0.3 * hh(q, r, 112 + i), rockAt(A, c.x, c.z, Sl)); } }
+    else if ((c.top === "rock" || c.top === "dusted") && hh(q, r, 31) < 0.2) { const [x, z] = seat(c, 32); kitRock(gB, q * 99 + r, x, c.h - 0.02, z, hh(q, r, 37) * 6.28, 0.08 + 0.12 * hh(q, r, 33), rockAt(A, c.x, c.z, Sl)); }
+    if ((c.top === "snow" || c.top === "ice") && hh(q, r, 34) < 0.12) { const [x, z] = seat(c, 35); kitTwig(gD, q * 3 + r, x, c.h, z, hh(q, r, 36) * 6.28, 0.9 + 0.4 * hh(q, r, 38)); }
   }
-  // the cairn: five stones on the highest crest (proposed, design 13)
+  // the cairn: five of the kit's rocks stacked on the highest crest (proposed, design 13)
   if (L.tarn) {
     let top = null; for (const c of CELLS.values()) if (c.ridge && (!top || c.h > top.h) && Math.abs(c.x) < 36 && c.z > -70) top = c;
-    if (top) { let y = top.h; for (let i = 0; i < 5; i++) { const r = 0.42 - i * 0.07; boulder(gX, top.x + 0.04 * i, y - r * 0.1, top.z, r, 500 + i, T.granite); y += r * 0.95; } out.cairn = top; }
+    if (top) { let y = top.h; for (let i = 0; i < 5; i++) { const s = 0.42 - i * 0.07; kitRock(gX, i, top.x + 0.04 * i, y, top.z, i * 1.3, [s, s * 1.2, s], T.granite); y += s * 0.68; } out.cairn = top; }
   }
-  out.trees = gT.geo(); out.krumm = gK.geo(); out.tufts = gG.geo(); out.flowers = gF.geo(); out.shrubs = gS.geo(); out.scree = gB.geo(); out.cairnG = gX.geo();
+  out.plants = P.groups(); out.scree = gB.geo(); out.cairnG = gX.geo(); out.dead = gD.geo();
   return out;
 }
 function buildWater() {
-  const g = new GB();
+  const g = new MGB();
   if (TARN && M.layers.tarn) for (const c of TARN.cells) {
     for (let i = 0; i < 6; i++) { const a = corner(i), b = corner((i + 1) % 6);
       g.tri([c.x, TARN.level, c.z], [c.x + b[0] * 1.002, TARN.level, c.z + b[1] * 1.002], [c.x + a[0] * 1.002, TARN.level, c.z + a[1] * 1.002], UP, [[0, 0], [0, 0], [0, 0]], [0, 0, 0], [TARN.level - c.h, 0, 0]); }
@@ -4391,16 +4468,22 @@ function heightTexture() {
 
 // ---------- shading: the sun with a column-walk shadow, the fill, and every lamp ----------
 const VS = `
-attribute vec3 tile; attribute vec3 col; attribute vec4 fx;
-varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx;
+attribute vec3 tile; attribute vec3 col; attribute vec4 fx; attribute float seed;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx; varying float vS;
 void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vP = wp.xyz; vN = normalize(mat3(modelMatrix)*normal);
-  vUv = uv; vT = tile; vCol = col; vFx = fx; gl_Position = projectionMatrix*viewMatrix*wp; }`;
+  vUv = uv; vT = tile; vCol = col; vFx = fx; vS = seed; gl_Position = projectionMatrix*viewMatrix*wp; }`;
+// The kit's plants: an instanced kit geometry (GB: card, ao), a per-plant tint. Same varyings as VS, so COMMON serves both.
+const PVS = `
+attribute float card; attribute float ao; attribute vec3 aTint;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx; varying float vS;
+void main(){ vec4 wp = modelMatrix*instanceMatrix*vec4(position,1.0); vP = wp.xyz; vN = normalize(mat3(modelMatrix)*mat3(instanceMatrix)*normal);
+  vUv = uv; vT = vec3(0.0); vCol = aTint; vFx = vec4(card, ao, 0.0, 0.0); vS = 0.0; gl_Position = projectionMatrix*viewMatrix*wp; }`;
 const COMMON = `
 precision highp float;
-uniform sampler2D atlas; uniform sampler2D art; uniform sampler2D needles; uniform sampler2D hmap;
+uniform sampler2D atlas; uniform sampler2D art; uniform sampler2D hmap;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uFill; uniform float uExpo; uniform float uNight;
 uniform vec4 uLamps[6]; uniform vec3 uFog; uniform float uFogK; uniform vec3 uCam; uniform float uTime;
-varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx;
+varying vec3 vP; varying vec3 vN; varying vec2 vUv; varying vec3 vT; varying vec3 vCol; varying vec4 vFx; varying float vS;
 const float GW = 2.833;
 float hAt(vec2 xz){
   float r = xz.y/(GW*0.8660254); float q = xz.x/GW - r*0.5; float s = -q - r;
@@ -4435,11 +4518,16 @@ const FS = COMMON + `
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h2(i), h2(i+vec2(1.0,0.0)), f.x), mix(h2(i+vec2(0.0,1.0)), h2(i+vec2(1.0,1.0)), f.x), f.y); }
+// A tile id is sheet*16 + row*4 + column, or 300 for the turf candidate. It arrives interpolated, so it is rounded
+// before any arithmetic: v5 floored and took mod of the raw value, and wherever interpolation landed a hair under a
+// whole number (127.99997 for the scree, tile 128) mod(-0.00003, 4.0) gave column 3.99997 and the texel came from the
+// next sheet over, pixel by pixel: the pale streaks across the scree (owner, 2026-11-19).
 vec3 tileTex(float id, vec2 uv){
+  float n = floor(id + 0.5);
   vec2 f = floor(fract(uv)*32.0) + 0.5;
-  if (id > 299.5) return pow(texture2D(art, f/128.0).rgb, vec3(2.2));
-  float sheet = floor(id/16.0 + 0.001); float t = id - sheet*16.0; float tx = mod(t, 4.0); float ty = floor(t/4.0 + 0.001);
-  vec2 px = vec2(mod(sheet, 4.0)*128.0 + tx*32.0, floor(sheet/4.0 + 0.001)*128.0 + ty*32.0) + f;
+  if (n > 299.5) return pow(texture2D(art, f/32.0).rgb, vec3(2.2));
+  float sheet = floor(n/16.0); float t = n - sheet*16.0; float tx = mod(t, 4.0); float ty = floor(t/4.0);
+  vec2 px = vec2(mod(sheet, 4.0)*128.0 + tx*32.0, floor(sheet/4.0)*128.0 + ty*32.0) + f;
   return pow(texture2D(atlas, px/512.0).rgb, vec3(2.2));
 }
 void main(){
@@ -4448,16 +4536,20 @@ void main(){
   if (kind > 1.5 && kind < 2.5) { gl_FragColor = vec4(finish(vCol*(mix(0.75, 2.2, uNight) + 0.25*sin(uTime*21.0 + vP.x*13.0))), 1.0); return; }
   vec3 alb;
   if (kind < 0.5) {
+    // Everything here is decided per texel of the face's own tile (tc), never per pixel or by a world grid laid
+    // over it, so a snow patch, a lichen blot or moss is whole texels of the tile it sits in: one layer, one grid.
+    // (vS too is rounded: an interpolated seed is a hair off per pixel, and a hash of it is noise per pixel)
     alb = tileTex(vT.x, vUv);
     vec2 tc = floor(fract(vUv)*32.0);
-    if (vFx.w > 0.0 && fract(vUv.y) < vFx.w) alb = tileTex(vT.y, vUv);          // a riser's top band: turf or snow over its earth
-    if (vFx.y > 0.0) {                                                            // a snow patch lingering on a shaded flat
-      vec2 wt = floor(vP.xz*32.0/4.2495);
-      float s = 0.7*vn(wt/7.0) + 0.3*h2(wt);
+    float fs = floor(vS + 0.5);
+    if (vFx.w > 0.0 && tc.y < floor(vFx.w*32.0 + 0.5)) alb = tileTex(vT.y, vUv);   // a riser's top rows: turf or snow over its earth
+    if (vFx.y > 0.0) {                                                             // a snow patch lingering on a shaded flat
+      vec2 wc = vP.xz + ((floor(vUv*32.0) + 0.5)/32.0 - vUv)*${TILE_UV.toFixed(4)};  // the texel's centre, in the world
+      float s = 0.7*vn(wc*32.0/${TILE_UV.toFixed(4)}/7.0) + 0.3*h2(tc + vec2(fs, fs*0.37));
       if (s < vFx.y) alb = tileTex(vT.y, vUv);
     }
-    if (vFx.x > 0.0) {                                                            // lichen in the rock's own texels
-      vec2 seed = floor(tc/3.0) + vec2(floor(vP.y + 0.001)*17.0 + floor(vP.x*0.37)*5.0, floor(vP.z*0.37)*11.0);
+    if (vFx.x > 0.0) {                                                             // lichen in the rock's own texels
+      vec2 seed = floor(tc/3.0) + vec2(fs, fs*0.61);
       if (h2(seed) < vFx.x*0.26 && h2(tc*1.37 + seed) > 0.28) {
         float k = h2(seed + 3.1);
         vec3 tone = k < 0.4 ? vec3(0.43, 0.16, 0.042) : k < 0.75 ? vec3(0.32, 0.36, 0.11) : vec3(0.32, 0.34, 0.31);
@@ -4465,22 +4557,32 @@ void main(){
         alb = mix(alb, tone*clamp(0.35 + l*5.0, 0.45, 1.3), 0.8);
       }
     }
-    if (vFx.z > 0.0 && fract(vUv.y) > 0.45) {                                     // moss in a seep, the face's lowest texels
-      vec2 seed = tc + floor(vP.xz*2.0)*7.0;
-      if (h2(seed) < 0.55*vFx.z + (fract(vUv.y) - 0.45)) alb = mix(alb, vec3(0.035, 0.06, 0.028), 0.85);
+    if (vFx.z > 0.0 && tc.y > 14.5) {                                              // moss in a seep, the face's lowest texels
+      vec2 seed = tc + vec2(fs*0.73, fs);
+      if (h2(seed) < 0.55*vFx.z + (tc.y + 0.5)/32.0 - 0.45) alb = mix(alb, vec3(0.035, 0.06, 0.028), 0.85);
     }
-  } else if (kind < 1.5) alb = pow(vCol, vec3(2.2));
-  else if (kind < 3.5 || kind > 5.5) {                                            // a cut-out sprite: a card (3) or a tiled cushion top (6)
-    vec2 u = kind < 3.5 ? clamp(vUv, 0.0, 0.999) : fract(vUv);
-    vec4 s = texture2D(art, (vT.xy + floor(u*vFx.w) + 0.5)/128.0);
-    if (s.a < 0.5) discard;
-    alb = pow(s.rgb, vec3(2.2))*vCol;
-  } else {                                                                        // needles
-    alb = pow(texture2D(needles, (floor(fract(vUv)*32.0) + 0.5)/32.0).rgb, vec3(2.2))*vCol;
-  }
+  } else alb = pow(vCol, vec3(2.2));                                               // a lamp's post, iron or logs
   float sl = max(dot(n, uSunDir), 0.0);
   float sv = sl > 0.0 ? walk(vP + n*0.08 + vec3(0.0, 0.04, 0.0), vP + uSunDir*36.0) : 1.0;
   vec3 lit = uSunCol*sl*sv + uFill*(0.6 + 0.4*n.y) + lamps(vP + n*0.02, n);
+  gl_FragColor = vec4(finish(alb*lit), 1.0);
+}`;
+// The kit's GLSL, taken from the playground's FRAG so a plant is cut and sampled exactly as it is there.
+function kitGlsl(from, to) { const a = FRAG.indexOf(from), b = FRAG.indexOf(to, a); if (a < 0 || b < 0) throw new Error("kit GLSL missing: " + from); return FRAG.slice(a, b); }
+const PFS = COMMON + `
+uniform sampler2D map; uniform float uUseAt, uMask, uAlphaTest, uDetail, uCardLit, uUpN; uniform vec3 uAt, uMean;
+` + kitGlsl("float h12(", "// A material's palette") + kitGlsl("vec4 atlasTile(", "// The shape of a card") + kitGlsl("float maskOf(", "void main(){") + `
+void main(){
+  if (uMask > 0.5 && maskOf(vUv, uMask, vFx.x) < 0.5) discard;
+  vec4 tx = uUseAt > 0.5 ? atlasTile(vUv, uAt) : texture2D(map, vUv);
+  if (tx.a < uAlphaTest) discard;
+  vec3 alb = mix(uMean, pow(tx.rgb, vec3(2.2)), uDetail)*vCol;
+  vec3 n = normalize(mix(normalize(vN), vec3(0.0, 1.0, 0.0), uUpN));
+  float nd = max(dot(n, uSunDir), 0.0);
+  float sl = mix(nd, 0.35 + 0.65*nd, uCardLit);                                     // the kit's card light
+  float sv = sl > 0.0 ? walk(vP + vec3(0.0, 0.1, 0.0), vP + uSunDir*36.0) : 1.0;   // the ground's own shadow walk
+  float ao = mix(0.45, 1.0, vFx.y);
+  vec3 lit = (uSunCol*sl*sv + uFill*(0.6 + 0.4*n.y))*ao + lamps(vP + n*0.02, n);
   gl_FragColor = vec4(finish(alb*lit), 1.0);
 }`;
 const WFS = COMMON + `
@@ -4501,7 +4603,8 @@ let renderer, scene, camera, U, gToday, gNew, gShared, water, stars, moon, mats;
 function texture(src) { const t = new THREE.TextureLoader().load(src); t.flipY = false; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; }
 function rebuild() {
   classify();
-  for (const g of [gToday, gNew, gShared]) for (const o of [...g.children]) { g.remove(o); o.geometry.dispose(); }
+  const drop = o => { for (const k of [...o.children]) drop(k); if (o.geometry) (o.userData.own || o.geometry).dispose(); };
+  for (const g of [gToday, gNew, gShared]) for (const o of [...g.children]) { g.remove(o); drop(o); }
   if (water) { scene.remove(water); water.geometry.dispose(); }
   U.hmap.value = heightTexture();
   placeLamps();
@@ -4509,9 +4612,10 @@ function rebuild() {
   gToday.add(new THREE.Mesh(buildToday(), mats.solid));
   gNew.add(new THREE.Mesh(buildTerrain("new"), mats.solid));
   const N = buildNew(), L = M.layers;
-  for (const [k, on] of [["trees", L.trees], ["krumm", L.krumm], ["tufts", L.tufts], ["flowers", L.flowers], ["shrubs", L.shrubs], ["scree", L.scree], ["cairnG", L.tarn]]) {
-    const m = new THREE.Mesh(N[k], mats.solid); m.visible = on; gNew.add(m);
+  for (const [k, on] of [["trees", L.trees], ["krumm", L.krumm], ["tufts", L.tufts], ["flowers", L.flowers], ["shrubs", L.shrubs]]) {
+    const grp = N.plants[k] || new THREE.Group(); grp.visible = on; gNew.add(grp);
   }
+  for (const [k, on] of [["scree", L.scree], ["cairnG", L.tarn], ["dead", true]]) { const m = new THREE.Mesh(N[k], mats.solid); m.visible = on; gNew.add(m); }
   gShared.add(new THREE.Mesh(buildLamps(), mats.solid));
   water = new THREE.Mesh(buildWater(), mats.water); scene.add(water);
   M.cairn = N.cairn;
@@ -4525,8 +4629,7 @@ function start() {
   camera = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
   const lamps = []; for (let i = 0; i < 6; i++) lamps.push(new THREE.Vector4());
   U = {
-    atlas: { value: texture("foliage/game/atlas.png") }, art: { value: texture("foliage/mountain/mountain_art.png?v=" + ART_V) },
-    needles: { value: texture("foliage/game/needles.png") }, hmap: { value: null },
+    atlas: { value: texture("foliage/game/atlas.png") }, art: { value: texture("foliage/mountain/alpine_turf.png?v=" + ART_V) }, hmap: { value: null },
     uSunDir: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Vector3() }, uFill: { value: new THREE.Vector3() },
     uExpo: { value: 1 }, uNight: { value: 0 }, uLamps: { value: lamps }, uFog: { value: new THREE.Vector3() }, uFogK: { value: 0.004 },
     uCam: { value: new THREE.Vector3() }, uTime: { value: 0 },
@@ -4603,7 +4706,7 @@ let last = 0;
 function frame(now) {
   if (PAGE_TAB !== "mountains" || M.frozen) { M.running = false; return; }
   const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
-  U.uTime.value += dt; draw();
+  U.uTime.value += dt; resolvePlantMeans(); draw();
   requestAnimationFrame(frame);
 }
 function draw() {
@@ -4647,7 +4750,7 @@ addEventListener("pointerdown", e => { const n = $m("mtNotes"); if (!n.hidden &&
 addEventListener("keydown", e => { if (e.key === "Escape") $m("mtNotes").hidden = true; });
 window.mountainsOpen = () => { start(); resize(); syncButtons(); if (!M.running) { M.running = true; last = 0; requestAnimationFrame(frame); } };
 // For the screenshot instrument.
-M.api = { setNight, setView, sync: syncButtons, rebuild, draw: () => { resize(); draw(); }, orbit: M.orbit, lamps: LAMPS, tarn: TARN, cells: CELLS };
+M.api = { setNight, setView, sync: syncButtons, rebuild, draw: () => { resize(); draw(); }, orbit: M.orbit, lamps: LAMPS, tarn: TARN, cells: CELLS, groups: () => ({ gToday, gNew, gShared, water }) };
 })();
 
 showPage();

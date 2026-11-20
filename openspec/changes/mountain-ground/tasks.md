@@ -34,6 +34,17 @@
       lanterns, layer toggles and a snow-line slider; the turf and plant art
       drawn by `docs/mockups/foliage/mountain_art.py`; screenshots in
       `docs/screenshots/mountain-flora/` (SwiftShader, no GPU).
+- [x] 5.2a Version 6, on the owner's "idk what this texture is supposed to be
+      but its overlapping, also you should use the foliage kit instead of
+      making new plants": the scree's streaks fixed (the tile id was not
+      rounded before its sheet and column were taken, so texels came from the
+      next sheet pixel by pixel; the lichen hashed a per-pixel position), snow
+      patches, lichen and moss on their tile's own texel grid, stones
+      projected square; the plants are the Playground's kit (tufts, flowers,
+      bushes, the pine, rocks, the dead shrub, the blueberry plant) and
+      krummholz the pine's builder stunted and swept; the turf alone is drawn
+      by `docs/mockups/foliage/alpine_turf.py`; shots
+      `docs/screenshots/mountain-flora/v6-*.png`.
 - [ ] 5.3 The owner's look at the Mountains tab.
 
 ## 6. Mountain flora in the game (after approval and a request)

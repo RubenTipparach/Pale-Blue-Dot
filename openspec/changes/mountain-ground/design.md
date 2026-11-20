@@ -66,7 +66,7 @@
 
 The owner, 2026-11-19: "nice, can you add more stuff to the mountain biomes?
 add stuff to foliage detail playground". Shown on M13's Mountains tab
-(`docs/mockups/foliage.html#mountains`, version 5), Today against New.
+(`docs/mockups/foliage.html#mountains`, version 6), Today against New.
 
 ### 5. Measured: what a mountain grows today
 
@@ -144,6 +144,16 @@ step.
   `FLOWER_PINK`, and `BIOME_FLORA` row 6 becomes violet, white, yellow and
   pink at fern 0.6 and mushroom 1.4. Each is kept to low saturation: the
   colour is the bloom's, the leaves and stems take the turf ramp.
+- **The pieces are the foliage kit's, not new art** (owner, 2026-11-19, on
+  version 5's sprites: "you should use the foliage kit instead of making new
+  plants"). The tufts are the kit's pixel tufts coloured from the turf, the
+  flowers its stem and head with the existing blue, white, yellow and red
+  heads, juniper and heather its bush (needles, and the tundra sheet's
+  leaves), a cushion its bush flattened with heads on top, bilberry its
+  blueberry plant, the boulder its rock. Version 6 of the tab draws them so.
+  The two new flower bits above wait on the owner's look at the kit's own
+  colours; until then the kit's blue stands for gentian and its red for
+  campion.
 - **Every piece is lit as the terrain is** and has no outline (CLAUDE.md):
   stems and leaves from the turf's ramp, juniper and heather a step darker
   than the turf, the boulder from the cell's own rock tile.
@@ -159,8 +169,8 @@ step.
 
 The sheet's alpine soil is gravel, so a meadow needs a grass tile. A
 candidate, **alpine turf**, is drawn in code
-(`docs/mockups/foliage/mountain_art.py`, written to
-`docs/mockups/foliage/mountain/mountain_art.png`): short cool sedge green with
+(`docs/mockups/foliage/alpine_turf.py`, written to
+`docs/mockups/foliage/mountain/alpine_turf.png`): short cool sedge green with
 straw tips, soil and slate grit between the blades, 32 texels, seamless, no
 outline. It takes the sheet's unused "worn stone path" (3,2), which no code
 reads. Decision 2 changes: a Mountains cell's grass draws the turf, its dirt
@@ -203,11 +213,15 @@ test prints the new row.
   read altitude today, so V13 adds a tree line per biome (the start and end
   of the thinning, optional, none for the other biomes), read by the CPU's
   `grows` and the visibility pass alike (one function; a test holds them).
-- **Species**: two new near draws in `tree_kit`. **Fir**: a narrow spire of
-  short layered skirts in blue-green needles, below the line. **Krummholz**:
-  0.6 to 1.6 m, two or three flattened skirts swept downwind, the trunk
-  leaning, some flagged (branches on the lee side only), from 142 to 160 m.
-  Each has its four variants and impostor bake. The tundra keeps its pine.
+- **Species**: the kit's own (owner, 2026-11-19: "use the foliage kit").
+  **Fir**: the taiga pine `tree_kit` already draws, scaled 5 to 8 m, below
+  the line; no new species. **Krummholz**: one new near draw built by the
+  pine's own builder with parameters, not new art: its tapered trunk leaning
+  downwind, whorls of branches with needle sprays rooted along them, stunted
+  to a 0.6 to 0.9 m mat whose branches reach far to the lee and barely to
+  windward; a flag tree (about one in three) stands 2 to 2.7 m out of its mat
+  with branches on the lee side only; from 142 to 160 m. Four variants and
+  its impostor bake.
 - **Cones**: firs carry the pine cone (`flora-v2` design 10) in its season.
 
 ### 13. Proposed, not built in this change
