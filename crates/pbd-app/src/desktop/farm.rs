@@ -498,7 +498,7 @@ impl FarmAct {
                 match material {
                     Material::Grass | Material::DryGrass | Material::JungleGrass => "grass",
                     Material::Dirt => "dirt",
-                    Material::Sand => "sand",
+                    Material::Sand | Material::DesertSand => "sand",
                     _ => "soil",
                 },
             ),

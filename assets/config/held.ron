@@ -29,6 +29,14 @@
 // ambient + wrap * (0.5 + 0.5 n.l)^2 + fill * max(n.f, 0), the light and the
 // fill fixed in eye space.
 //
+// `light` is a light held in hand (openspec/changes/glowing-mushrooms,
+// design 14; the M13 v3 mockup's HOLD block): the nearest the carried light
+// is taken to the hand, m (carried_hand_min_m); the torch's flicker, a
+// share of its strength (a lantern a third of it); the flame sheet's frames
+// a second and the flame's height, m; each hold's grip, eye space m, and the
+// way the thing held runs from it; and the hold's sway (m a step, m, m, rad,
+// m and 1/s).
+//
 // The code defaults written out; a test holds the two together.
 (
     sway_m: (0.006, 0.005),
@@ -112,5 +120,22 @@
         ambient: 0.45,
         wrap: 0.55,
         fill: 0.12,
+    ),
+    light: (
+        hand_min_m: 0.5,
+        torch_flicker: 0.15,
+        flame_fps: 11.0,
+        flame_m: 0.19,
+        torch: (grip: (0.24, -0.33, -0.52), up: (-0.12, 1.0, -0.35)),
+        lantern: (grip: (0.25, -0.07, -0.62), up: (1.0, -0.05, 0.25)),
+        mushroom: (grip: (0.22, -0.31, -0.46), up: (-0.15, 1.0, -0.5)),
+        sway: (
+            step_m: 0.75,
+            side_m: 0.01,
+            bob_m: 0.008,
+            roll_rad: 0.02,
+            breathe_m: 0.003,
+            ease_hz: 6.0,
+        ),
     ),
 )

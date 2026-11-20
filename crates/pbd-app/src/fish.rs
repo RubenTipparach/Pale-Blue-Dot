@@ -885,6 +885,16 @@ pub struct LifeScript {
     pub placed: bool,
 }
 
+/// `PBD_SCHOOL_DEPTH=sea`: a capture instrument (`ocean-environments`
+/// task 18.2) that reads a school's depth off the sea's mean sphere, the
+/// rule before design B23, so the before frame of a school in a lake can be
+/// taken beside the after. Unset, a school's depth is read from the surface
+/// of the water it is in. It changes nothing a player meets.
+fn school_depth_from_sea() -> bool {
+    static FROM_SEA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FROM_SEA.get_or_init(|| std::env::var("PBD_SCHOOL_DEPTH").is_ok_and(|v| v == "sea"))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn life_script(
     mut script: ResMut<LifeScript>,
@@ -955,10 +965,19 @@ fn life_script(
     for step in 0..=22 {
         let metres = first + step as f32 * 0.5;
         let direction = (eye + ahead * metres).normalize_or(up);
-        if !species.fits(sea.depth_at(direction)) {
+        // Fresh water over the sea's level (a lake, a river, a pond) is
+        // asked as the spawner asks it (task 18.2); the sea otherwise.
+        let contact = world.contact.as_deref();
+        let floor =
+            crate::vehicles::ground_under(contact, direction.as_dvec3() * f64::from(sea.radius))
+                as f32;
+        let fresh = contact.and_then(|c| fresh_top(c, direction, floor));
+        let depth = fresh.map_or_else(|| sea.depth_at(direction), |top| top - floor);
+        if !species.fits(depth) {
             continue;
         }
-        let anchor = direction * sea.radius;
+        let top = fresh.unwrap_or(sea.radius);
+        let anchor = direction * top;
         let water = PlanetWater::at(
             sea,
             world.air.as_deref(),
@@ -968,12 +987,13 @@ fn life_script(
             seconds,
         );
         let o = crate::sim_origin::from_render_frame(&world.frame);
-        let local = o.at(direction.as_dvec3(), f64::from(sea.radius));
+        let local = o.at(direction.as_dvec3(), f64::from(top));
         let school = School::spawn(&o, index as u16, species, local, 0x11fe, &water);
         info!(
-            "life script: {} x{} put {metres} m ahead",
+            "life script: {} x{} put {metres} m ahead in {} water {depth:.1} m deep",
             species.id,
-            school.len()
+            school.len(),
+            if fresh.is_some() { "fresh" } else { "sea" }
         );
         fishery.schools.push(school);
         script.placed = true;
@@ -2145,7 +2165,15 @@ pub(crate) mod draw {
                     anchor,
                     seconds,
                 );
-                (water.surface(anchor), under)
+                // `PBD_SCHOOL_DEPTH=sea`, a capture instrument (task 18.2):
+                // the depth read off the sea's mean sphere, as before B23, so
+                // a before frame can be taken beside the after.
+                let surface = if school_depth_from_sea() {
+                    sea.radius
+                } else {
+                    water.surface(anchor)
+                };
+                (surface, under)
             })
         };
         headings.begin();

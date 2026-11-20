@@ -229,6 +229,9 @@ pub(super) struct WaterView {
     /// fade.
     feet: [Vec4; crate::water_flow::FALL_FEET_MAX],
     feet_more: [Vec4; crate::water_flow::FALL_FEET_MAX],
+    /// The lights players carry (`glowing-mushrooms` design 9), two vec4s a
+    /// light (`carried_light::CarriedLights::packed`).
+    carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// `weather-rain` 7: the height fog's lane. Only with the rain volume off,
@@ -1556,6 +1559,8 @@ pub(super) struct WaterSky<'w> {
     fall_feet: Option<Res<'w, crate::water_flow::FallFeetGpu>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
     columns: Option<Res<'w, crate::config::ColumnSettings>>,
+    /// The lights players carry (`glowing-mushrooms`).
+    carried: Option<Res<'w, crate::carried_light::CarriedLights>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1612,6 +1617,7 @@ fn prepare_water_views(
         splash,
         fall_feet,
         columns,
+        carried,
     } = sky;
     // The fall splash's quads, within the buffer's room.
     let splash_lanes: &[[f32; 4]] = splash.as_deref().map_or(&[], |q| {
@@ -2023,6 +2029,10 @@ fn prepare_water_views(
             ),
             feet: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.feet),
             feet_more: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.more),
+            carried: carried.as_deref().map_or(
+                [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+                crate::carried_light::CarriedLights::packed,
+            ),
             height_fog: height_fog_lane(
                 !rain_shadows
                     && state <= 0.75
@@ -2474,13 +2484,15 @@ impl ViewNode for WaterCompositeNode {
         &'static ViewDepthTexture,
         &'static PlanetViewGpu,
         &'static WaterViewGpu,
+        // The rain splashes, drawn here after the water (`water-flow` 6.3).
+        Option<&'static super::splash::SplashDraw>,
     );
 
     fn run<'w>(
         &self,
         _: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
-        (target, depth, planet_view, water): QueryItem<'w, '_, Self::ViewQuery>,
+        (target, depth, planet_view, water, rain_splash): QueryItem<'w, '_, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
         let pipelines = world.resource::<WaterPipelines>();
@@ -2547,6 +2559,7 @@ impl ViewNode for WaterCompositeNode {
         // and the bubbles (6.6): in their own pass, reading the water's depth.
         let splash_on = water.splash_count > 0 && !*SPLASH_OFF;
         let bubbles_on = water.bubble_feet > 0 && !*SPLASH_OFF;
+        let rain_splash = rain_splash.filter(|draw| draw.drawing());
         let splash_group = device.create_bind_group(
             Some("water: the fall splash"),
             &cache.get_bind_group_layout(&pipelines.splash_layout),
@@ -2583,7 +2596,12 @@ impl ViewNode for WaterCompositeNode {
                         // the clouds' composite and the rain, which tell the
                         // sea's horizon gap from the sheet by it
                         // (`horizon-haze` 4).
-                        store: if splash_on || bubbles_on || clouds_on || water.rain_needed {
+                        store: if splash_on
+                            || bubbles_on
+                            || rain_splash.is_some()
+                            || clouds_on
+                            || water.rain_needed
+                        {
                             StoreOp::Store
                         } else {
                             StoreOp::Discard
@@ -2619,6 +2637,22 @@ impl ViewNode for WaterCompositeNode {
             }
             span.end(&mut pass);
             drop(pass);
+            // The rain splashes (`water-flow` 6.3), on the ground and on the
+            // water alike, after the water so a crown on a river and a
+            // droplet in front of one both show; before the clouds, the rain
+            // volume and the lens, which lie over them; and before the fall's
+            // mist, a soft volume a droplet behind it must not paint over.
+            if let Some(draw) = rain_splash {
+                super::splash::draw_after_water(
+                    ctx,
+                    world,
+                    draw,
+                    planet_view,
+                    post.destination,
+                    depth.view(),
+                    &water.depth,
+                );
+            }
             // The fall splash last (`water-flow` 6.1, 6.6), in its own pass:
             // over the water it stands in front of and behind the terrain,
             // both tested in `splash_fragment` against the depths it reads,

@@ -2359,6 +2359,7 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
                     | Material::Dirt
                     | Material::Soil
                     | Material::Sand
+                    | Material::DesertSand
             ),
         });
     if aimed && on && breakable {

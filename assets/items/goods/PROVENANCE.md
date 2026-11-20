@@ -79,3 +79,10 @@ the 1 px outline.
 
 `leather` is drawn by `tools/gen_item_icons.py` from its own pixel grid: a
 tanned hide stretched out, in the fence's browns with a lighter grain.
+
+## glowing-mushrooms design 3: the glowing mushroom
+
+`glowing-mushroom` is drawn by `tools/gen_item_icons.py` (`GLOW`): the glowing
+plant's low cap in the cyan its head burns with at night
+(`pbd_core::flora::GLOW_HEAD_RGB`) over the plant's pale green stalk, with the
+1 px outline of an inventory icon.

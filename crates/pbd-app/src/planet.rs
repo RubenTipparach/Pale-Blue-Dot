@@ -51,8 +51,8 @@ pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, generator_version,
-    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
-    terrain_config, terrain_epoch, terrain_radius, tileset_slot,
+    nearest_ground_near, river_channel, sheet_index, snow_slot, surface_code, surface_height,
+    switch_generator, terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{
     EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
@@ -138,10 +138,12 @@ pub(crate) fn clutter_first_vertex() -> u32 {
 /// "shader global binding 3 is not available", which names the binding and not
 /// the draw that outgrew it.
 ///
-/// Then eight more, the near trees, one per species (`flora-v2` design
+/// Then nine more, the near trees, one per species (`flora-v2` design
 /// 10.5), whose vertex counts and first vertices the CPU writes once when
 /// the buffer is made (`near_args`) and the cull only counts instances into.
-pub(crate) const INDIRECT_BYTES: u64 = 13 * 16;
+pub(crate) const INDIRECT_BYTES: u64 = (5 + NEAR_SPECIES) * 16;
+/// The near draws: one per species, krummholz the ninth (`mountain-ground`).
+pub(crate) const NEAR_SPECIES: u64 = pbd_core::tree_kit::SPECIES.len() as u64;
 /// Where the near draws' arguments start in the indirect buffer.
 pub(crate) const NEAR_ARGS_OFFSET: u64 = 5 * 16;
 
@@ -156,7 +158,7 @@ pub(crate) fn near_args() -> Vec<u32> {
         .collect()
 }
 /// Bytes of the near-tree list: a region of `NEAR_CAP` entries per species.
-pub(crate) const NEAR_LIST_BYTES: u64 = 8 * trees::NEAR_CAP as u64 * 4;
+pub(crate) const NEAR_LIST_BYTES: u64 = NEAR_SPECIES * trees::NEAR_CAP as u64 * 4;
 
 /// Vertices per column instance: a cave ceiling fan and a cave floor fan per
 /// run, then one flank quad per side per run per stretch of the NEIGHBOUR's
@@ -879,6 +881,9 @@ struct PlanetParams {
     // `tree-punch-shake`: x the worked tree's id, y its last hit's time as
     // bits, z one once a tree is hit, w spare (`tree_shake::TreeShake`).
     shake: UVec4,
+    // `glowing-mushrooms` design 8: the lights players carry, two vec4s a
+    // light (`carried_light::CarriedLights::packed`).
+    carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1865,6 +1870,8 @@ pub(crate) struct Tunables<'w> {
     clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
     /// The tree being chopped or punched (`tree-punch-shake`).
     shake: Option<Res<'w, crate::tree_shake::TreeShake>>,
+    /// The lights players carry (`glowing-mushrooms`).
+    carried: Option<Res<'w, crate::carried_light::CarriedLights>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2210,6 +2217,10 @@ fn prepare_views(
                 .shake
                 .as_deref()
                 .map_or(UVec4::ZERO, crate::tree_shake::TreeShake::lane),
+            carried: tunables.carried.as_deref().map_or(
+                [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+                crate::carried_light::CarriedLights::packed,
+            ),
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`
@@ -2433,7 +2444,7 @@ fn draw_terrain<'w>(
     // The near trees, one draw per species (`flora-v2` design 10.5).
     if !skip.contains("near") {
         pass.set_bind_group(0, &view.near_bind_group, &[]);
-        for s in 0..8 {
+        for s in 0..NEAR_SPECIES {
             pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
         }
     }

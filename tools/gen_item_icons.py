@@ -251,6 +251,25 @@ ICONS.update({
 })
 
 
+# The glowing mushroom (`glowing-mushrooms` design 3): the glowing plant the
+# meadows grow, its low cap in the cyan its head burns with at night
+# (`flora::GLOW_HEAD_RGB`), on the plant's pale green stalk, with the 1 px
+# outline of an inventory icon.
+GLOW = {
+    "k": "#16302c", "c": "#2e8a7a", "C": "#5fd9c0", "L": "#a8ffe8", "W": "#e6fff8",
+    "s": "#9bb675", "S": "#c1f1d8", "d": "#559642",
+}
+
+ICONS.update({
+    "goods/glowing-mushroom": ([
+        "................", "................", "......kkkk......", "....kkLWWLkk....",
+        "...kCLLWWLLCk...", "..kCCLLLLLLCCk..", ".kcCCCLLLLCCCck.", ".kccCCCCCCCCcck.",
+        "..kkccccccccck..", "....kkkkkkkk....", "......kSsk......", "......kSdk......",
+        "......kSdk......", ".....kSssdk.....", ".....kkkkkk.....", "................",
+    ], GLOW),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

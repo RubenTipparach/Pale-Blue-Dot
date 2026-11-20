@@ -176,7 +176,11 @@ pub fn placed_sheet(column: &Column, layer: usize) -> u32 {
     if !column.placed(layer) {
         return 0;
     }
-    column::home_biome(column.material(layer)).map_or(0, |home| tileset_slot(home) + 1)
+    let material = column.material(layer);
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
+    }
+    column::home_biome(material).map_or(0, |home| tileset_slot(home) + 1)
 }
 // Every sheet, plus one, fits its nibble, and so the record's four bits.
 const _: () = assert!(super::terrain::TILESETS.len() < 16);
@@ -189,8 +193,14 @@ const _: () = assert!(super::terrain::TILESETS.len() < 16);
 ///
 /// [`ORE_SHEET`]: super::terrain::ORE_SHEET
 pub fn drawn_sheet_mark(column: &Column, layer: usize) -> u32 {
-    if column.material(layer) == Material::Ore {
+    let material = column.material(layer);
+    if material == Material::Ore {
         return super::terrain::ORE_SHEET;
+    }
+    // A sea cell is drawn from its own sheet, generated or placed
+    // (`ocean-environments` B24).
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
     }
     placed_sheet(column, layer)
 }
@@ -910,6 +920,22 @@ impl ColumnTier {
     /// drawn side changes when this column does even though its own stack did
     /// not. Everything else in the tier is left alone, which is the whole
     /// reason an edit is not a rebuild.
+    /// Whether the cell of finest record `record` grows a burning glowing
+    /// mushroom now (`glowing-mushrooms` design 4: a pick puts it out), its
+    /// record repacked. `true` when the tier's answer changed, and the field
+    /// wants relighting.
+    pub fn set_glow(&mut self, record: usize, glowing: bool) -> bool {
+        let Some(&slot) = self.slots.get(record) else {
+            return false;
+        };
+        match self.glow.get_mut(slot) {
+            Some(was) if *was != glowing => *was = glowing,
+            _ => return false,
+        }
+        self.repack(record);
+        true
+    }
+
     pub fn repack(&mut self, record: usize) {
         let Some(&slot) = self.slots.get(record) else {
             return;
@@ -1559,6 +1585,12 @@ const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
 /// chosen once from the cell's exact key (`pbd_core::flora::glows`).
 pub const GLOW_FLOWER_BIT: u32 = 1;
 
+/// Set in a finest record's `spare[2]` where its cell's glowing mushroom is
+/// picked (`glowing-mushrooms` design 4): the flower slot draws nothing
+/// there, so no ordinary flower grows where the mushroom was. Bit 3, the
+/// next free one (1 and 2 are the sea's).
+pub const GLOW_PICKED_BIT: u32 = 8;
+
 /// Set in a finest record's `spare[2]` where its cell's ground is under the
 /// high water and yet no sea sheet lies over it: a pit or a hollow the sea's
 /// water does not reach (`volumetric-water` phase 2, `ocean-environments`
@@ -1578,6 +1610,10 @@ pub const SEA_REACH_BIT: u32 = 4;
 /// under a roof, as the mesher's water there was.
 pub const SHEET_SHADE_SHIFT: u32 = 8;
 const SHEET_SHADE_MASK: u32 = 0xf << SHEET_SHADE_SHIFT;
+// Each of `spare[2]`'s flags has its own bit.
+const _: () = assert!(
+    GLOW_PICKED_BIT & (GLOW_FLOWER_BIT | DRY_SHEET_BIT | SEA_REACH_BIT | SHEET_SHADE_MASK) == 0
+);
 
 /// Whether the sea's sheet is drawn over a finest record: the visibility
 /// pass's listing (`planet_visibility.wgsl`), for the readers on the CPU that
@@ -1787,6 +1823,29 @@ fn glows(cell: &GpuCell) -> bool {
     cell.spare[2] & GLOW_FLOWER_BIT != 0
 }
 
+/// A finest record's `spare[2]` with its glowing-flower bits for the cell
+/// `key`, built `from_camera_m` metres from the camera: [`GLOW_FLOWER_BIT`]
+/// where it grows one and no pick stands, [`GLOW_PICKED_BIT`] where a pick
+/// stands (`glowing-mushrooms` design 4). Every other bit is kept.
+pub fn glow_bits(
+    spare: u32,
+    key: u32,
+    chance: f32,
+    picks: &pbd_core::edits::GlowPicks,
+    from_camera_m: f32,
+) -> u32 {
+    let grows = key != crate::planet::NO_KEY && flora::glows(key, chance);
+    let picked = grows && picks.stands_picked(key, from_camera_m);
+    let bits = if picked {
+        GLOW_PICKED_BIT
+    } else if grows {
+        GLOW_FLOWER_BIT
+    } else {
+        0
+    };
+    (spare & !(GLOW_FLOWER_BIT | GLOW_PICKED_BIT)) | bits
+}
+
 /// The render codes the shader grows flowers on: its `grassy`. A test reads
 /// the shader's function and holds the two to one list.
 pub const GRASSY_CODES: [u32; 3] = [2, 3, 7];
@@ -1882,12 +1941,18 @@ pub fn build_with(
     for (index, cell) in finest.iter_mut().enumerate() {
         // Whether the cell grows a glowing flower, decided here once from its
         // key, for every finest cell: the shader grows the flower wherever
-        // the bit is, and the bake lights the ones in the tier.
+        // the bit is, and the bake lights the ones in the tier. A picked one
+        // (`glowing-mushrooms` design 4) is neither drawn nor lit, and its
+        // cell grows no other flower in its place while the pick stands.
         let key = cell.key();
-        let glowing =
-            key != crate::planet::NO_KEY && flora::glows(key, settings.glow_flower_chance);
-        cell.spare[2] = (cell.spare[2] & !GLOW_FLOWER_BIT) | glowing as u32;
         let direction = Vec3::from_slice(&cell.direction_height[..3]);
+        cell.spare[2] = glow_bits(
+            cell.spare[2],
+            key,
+            settings.glow_flower_chance,
+            &edits.glow,
+            direction.normalize_or(Vec3::Y).angle_between(anchor) * PLANET_RADIUS,
+        );
         if !(members_of.select)(index, direction) || members.len() >= members_of.capacity {
             cell.metadata[2] &= SKYLIGHT_MASK;
             continue;
@@ -1987,7 +2052,12 @@ pub fn build_with(
         // put out does not grow back through it and whatever stands on it
         // (`edit-pipeline`, the owner's vanished lamp, 2026-11-16).
         let edited = !edits.for_cell(finest[index].key()).is_empty();
-        if top_m >= finest[index].direction_height[3] && !edited {
+        // A floe of sea ice (generator version 14, `ocean-environments` B24)
+        // is the one generated top that stands over the record: it floats
+        // on the sea, which the height field's record is the bed under. The
+        // record takes its top, so its cap is drawn and the walls follow.
+        let floe = column.material(top) == pbd_core::terrain::Material::SeaIce;
+        if top_m >= finest[index].direction_height[3] && !edited && !floe {
             continue;
         }
         reconcile_surface(finest, neighbors, index, column);
@@ -3356,6 +3426,88 @@ mod tests {
     /// same box lifted into the open air reads the sky, and a point off the
     /// tier reads the open sky.
     #[test]
+    fn a_picked_glowing_mushroom_is_neither_drawn_nor_lit() {
+        // `glowing-mushrooms` 2.3: a pick, saved and read back, makes the
+        // build mark its cell picked (no plant, no other flower) and adds no
+        // emitter there at night; the resident set takes a pick at once.
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let mut set = lod::generate_fine(anchor, &settings, &Edits::new());
+        set.columns.set_dusk(true);
+        let lit_slot = |set: &lod::FineSet, slot: usize| {
+            set.columns
+                .emitters()
+                .iter()
+                .any(|e| e.level == flora::GLOW_FLOWER_LEVEL && e.column == slot as u32)
+        };
+        let (index, slot) = (0..set.finest_records().len())
+            .filter(|&i| glows(&set.finest_records()[i]) && set.columns.slots[i] != usize::MAX)
+            .map(|i| (i, set.columns.slots[i]))
+            .find(|&(_, slot)| lit_slot(&set, slot))
+            .expect("a burning glowing mushroom in the tier");
+        let key = set.finest_records()[index].key();
+        // Saved, and read back from the disk.
+        let root = std::env::temp_dir().join(format!("pbd-glow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot_file = crate::saves::create(&root, "Glow", 31).unwrap();
+        {
+            let mut save = crate::saves::WorldSave::open(root.clone(), slot_file);
+            let mut slots = pbd_core::inventory::Slots::new();
+            slots.give(
+                pbd_core::inventory::Item::Good(pbd_core::goods::Good::GLOWING_MUSHROOM),
+                1,
+            );
+            let line = pbd_core::records::Record::of(
+                flora::GLOW_PLANT_RECORD,
+                u64::from(key),
+                flora::GLOW_PLANT_SCHEMA,
+                &flora::GlowPicked { day: 3.0 },
+            );
+            assert!(save.store_with_hands(line, flora::GLOW_PLANT_SCHEMA, &slots));
+            assert_eq!(save.edits.glow.picked_on(key), Some(3.0));
+            save.drain();
+        }
+        let listed = crate::saves::list(&root);
+        let reopened = crate::saves::WorldSave::open(root.clone(), listed[0].clone());
+        let _ = std::fs::remove_dir_all(&root);
+        let mut edits = reopened.edits.clone();
+        assert_eq!(
+            edits.glow.picked_on(key),
+            Some(3.0),
+            "the pick survives a reload"
+        );
+        edits.glow.day = 4.0;
+        edits.glow.far_m = 120.0;
+        // Built with the pick.
+        let mut picked = lod::generate_fine(anchor, &settings, &edits);
+        picked.columns.set_dusk(true);
+        let cell = &picked.finest_records()[index];
+        assert_eq!(cell.key(), key);
+        assert_eq!(cell.spare[2] & GLOW_FLOWER_BIT, 0, "no plant");
+        assert_ne!(
+            cell.spare[2] & GLOW_PICKED_BIT,
+            0,
+            "and no flower in its place"
+        );
+        assert!(!lit_slot(&picked, picked.columns.slots[index]), "no light");
+        // The resident set, built before the pick, takes it at once.
+        let changed = set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 0.0);
+        assert_eq!(changed, 1);
+        assert!(!lit_slot(&set, slot));
+        // Due and in front of the player, it stays picked; out of sight it grows.
+        edits.glow.day = 3.0 + flora::GLOW_PLANT_REGROW_DAYS;
+        assert_eq!(
+            set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 20.0),
+            0
+        );
+        assert_eq!(
+            set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 500.0),
+            1
+        );
+        assert!(lit_slot(&set, slot), "grown back out of sight");
+    }
+
+    #[test]
     fn a_sealed_cave_gives_eight_dark_corners_and_the_open_air_the_sky() {
         let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
         let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
@@ -4534,8 +4686,11 @@ mod placed_block_tests {
                 assert_eq!(built.material(layer), m, "{what}: stored");
                 assert!(built.placed(layer), "{what}: placed");
                 // Ore carries the ore mark, not its home sheet (design 12.12).
+                // A sea cell, its own sheet (`ocean-environments` B24).
                 let sheet = if m == Material::Ore {
                     super::super::terrain::ORE_SHEET
+                } else if let Some(own) = column::own_sheet(m) {
+                    super::super::terrain::sheet_index(own) + 1
                 } else {
                     tileset_slot(column::home_biome(m).unwrap()) + 1
                 };
