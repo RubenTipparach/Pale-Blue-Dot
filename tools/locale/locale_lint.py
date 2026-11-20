@@ -10,9 +10,10 @@ file.
     python3 tools/locale/locale_lint.py --baseline   # drop stale baseline entries
     python3 tools/locale/locale_lint.py --fast       # regex approximation, no build
 
-`--baseline` only ever removes entries: a literal not in the baseline is a
-violation to fix, never one to add. `--init-baseline` writes the baseline from
-the current tree, and refuses when one already exists.
+`--baseline` only ever removes entries, and deletes the file when none is
+left: a literal not in the baseline is a violation to fix, never one to add.
+The baseline was emptied and deleted with `localization` phase 3, so the lint
+has no exceptions; a missing file is read as none.
 """
 
 from __future__ import annotations
@@ -141,7 +142,6 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--all", action="store_true", help="also list baselined literals")
     ap.add_argument("--baseline", action="store_true", help="drop stale entries from the baseline")
-    ap.add_argument("--init-baseline", action="store_true", help="write a first baseline (refuses if one exists)")
     ap.add_argument("--fast", action="store_true", help="regex approximation without building")
     ap.add_argument("--file", help="only report this file (a path under crates/)")
     args = ap.parse_args()
@@ -157,19 +157,16 @@ def main() -> int:
 
     report = run_report()
     violations = report["violations"]
-    if args.init_baseline:
-        if BASELINE.exists():
-            sys.exit("locale_lint: a baseline exists; it may only shrink (use --baseline)")
-        write_baseline([v["baseline"] for v in violations])
-        print(f"wrote {BASELINE.relative_to(ROOT)}: {len(violations)} entries")
-        return 0
-
     baseline = read_baseline()
     new, old, stale = split(violations, baseline)
     if args.baseline:
         if stale:
             left = collections.Counter(baseline) - collections.Counter(stale)
-            write_baseline(list(left.elements()))
+            if left:
+                write_baseline(list(left.elements()))
+            else:
+                # Empty: the file goes, and the lint has no exceptions left.
+                BASELINE.unlink()
         print(f"baseline: dropped {len(stale)} stale entr(y/ies), {len(baseline) - len(stale)} left")
         baseline = read_baseline()
         new, old, stale = split(violations, baseline)

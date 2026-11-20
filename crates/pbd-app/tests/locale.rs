@@ -13,9 +13,10 @@
 //! - a key used in code that is not in the file, a key in the file used
 //!   nowhere, and a key whose placeholders differ from the names passed.
 //!
-//! Text from before the rule is listed in `tools/locale/baseline.txt`
-//! (`path|literal`, sorted). The lint fails on a violation not in it and on
-//! an entry no longer found, so the list only shrinks.
+//! Text from before the rule was listed in `tools/locale/baseline.txt`
+//! (`path|literal`, sorted) until it was all moved and the file deleted
+//! (`localization` phase 3). A missing baseline is read as no exceptions; a
+//! baseline, were one ever to come back, could only shrink.
 //!
 //! `PBD_LOCALE_REPORT=<file.json>` writes every violation (baselined or not)
 //! and every key use as JSON, for `tools/locale/`.
@@ -73,6 +74,8 @@ const DATA_PREFIXES: &[&str] = &[
     "world_map.place.",
     "world_map.biome.",
     "map.layer.",
+    // `missions.ron`: each mission's title, help and objective labels by id.
+    "mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
 ];

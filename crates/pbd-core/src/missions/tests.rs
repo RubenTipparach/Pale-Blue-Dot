@@ -51,15 +51,15 @@ fn objective(kind: Kind, what: &str, count: u32) -> ObjectiveEntry {
         kind,
         what: what.into(),
         count,
-        label: what.into(),
+        label: Some(what.into()),
     }
 }
 
 fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> MissionEntry {
     MissionEntry {
         id: id.into(),
-        title: id.into(),
-        help: String::new(),
+        title: Some(id.into()),
+        help: None,
         needs: needs.iter().map(|n| n.to_string()).collect(),
         objectives,
         unlocks: Vec::new(),

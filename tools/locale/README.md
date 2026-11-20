@@ -9,23 +9,28 @@ The rule is the test `cargo test -p pbd-app --test locale`. These tools wrap it.
 
 | Tool | What it does |
 | --- | --- |
-| `locale_lint.py` | Runs the test and reports by file. `--all` lists baselined text too, `--file <x.rs>` narrows it, `--baseline` drops entries that are gone (it never adds), `--fast` is a regex approximation without a build. |
-| `locale_extract.py <file.rs>` | Moves a file's flagged literals into the YAML under `<module>.<words>` keys and replaces them with `tr("key")` (or `tr_with` for a `format!` of inline `{names}`). `--dry-run` only proposes. Never touches log or panic text. Review the diff. |
+| `locale_lint.py` | Runs the test (on the `fast` profile) and reports by file. `--file <x.rs>` narrows it, `--fast` is a regex approximation without a build. |
+| `locale_extract.py <file.rs>...` | Moves a file's flagged literals into the YAML under `<module>.<words>` keys and replaces them with `tr("key")` (or `tr_with` for a `format!` of inline `{names}`). `--dry-run` only proposes. Never touches log or panic text. Review the diff. |
 | `locale_coverage.py <code>` | For a translator: keys `locale_<code>.yaml` is missing, keys it has that English does not, and placeholder mismatches. |
 
-`baseline.txt` is the text from before the rule, `path|literal`, sorted. It
-only shrinks: a new literal is moved to the locale file, never added here, and
-a false positive (a log or developer label the lint flags) is fixed in the
-lint's rules in `crates/pbd-app/tests/locale.rs`. When the list is empty,
-delete it. `Localized::legacy(..)` calls are listed the same way, as
-`path|@legacy <expression>`: they are text not yet moved.
+There is no baseline: the text from before the rule (`baseline.txt`, once 953
+entries) was moved to the locale file and the file deleted
+(`openspec/changes/localization` phase 3), so the lint has no exceptions and
+a missing baseline reads as none. A false positive (a log or developer label
+the lint flags) is fixed in the lint's rules in
+`crates/pbd-app/tests/locale.rs`: its text patterns, `DEV_CALLS`,
+`DEV_METHODS`, `DEV_MACROS` and the per-file `DEV_SCOPES`.
+
+Data keeps its ids and builds its keys from them (`species.<id>.name`,
+`item.<code>.name`, `recipe.<code>.name`, ...). Each such prefix is in the
+lint's `DATA_PREFIXES`, so its keys count as used, and the table that builds
+them has a test that every id has its keys.
 
 A typical migration of one screen:
 
 ```sh
 python3 tools/locale/locale_extract.py crates/pbd-app/src/desktop/time_ui.rs
 cargo build --profile fast -p pbd-app        # fix any types
-python3 tools/locale/locale_lint.py --baseline
 cargo test -p pbd-app --test locale
 ```
 

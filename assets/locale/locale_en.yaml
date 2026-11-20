@@ -764,6 +764,242 @@ menu:
   world_name: "World {number}"
   world_open: "{world} (open)"
   worlds: WORLDS
+mission:
+  axe:
+    help: "Punch a tree for logs, then make a stone axe in the pack's Craft row (I)."
+    objective:
+      "0": axe
+    title: Craft an axe
+  bait:
+    help: "Dig dirt by a river or the sea for bait worms; cast with them in your pack and they go on the hook."
+    objective:
+      "0": dig bait
+      "1": catch with bait
+    title: Dig for bait
+  boat:
+    help: "Board a boat at a town's quay (F) and head out."
+    objective:
+      "0": board
+      "1": meters
+    title: Take a boat
+  bread:
+    help: At the campfire, bake flatbread from wheat you grew.
+    objective:
+      "0": flatbread
+    title: Bake bread
+  bronze-tool:
+    help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone."
+    objective:
+      "0": pickaxe
+      "1": stone
+    title: Bronze tools
+  build:
+    help: "Hold planks, stone or soil and place blocks with the right button: walls and a roof."
+    objective:
+      "0": blocks
+    title: Build a shelter
+  collect:
+    help: "A kept animal in a pen gives an egg, wool or milk once a day: F on it collects."
+    objective:
+      "0": eggs
+    title: Collect from the herd
+  cook-fish:
+    help: Open the campfire with F and grill the fish you caught.
+    objective:
+      "0": fish
+    title: Cook fish
+  crafting-table:
+    help: Make a workbench from six planks in the Craft row, then place it on the ground.
+    objective:
+      "0": make
+      "1": place
+    title: Build a crafting bench
+  dig-deep:
+    help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time."
+    objective:
+      "0": stone
+    title: Dig into the hill
+  eat:
+    help: "Put a dish on the hotbar and use it; its effect shows by the hotbar."
+    objective:
+      "0": eat
+    title: Eat well
+  farm-meal:
+    help: At the campfire, cook a dish from your field.
+    objective:
+      "0": dish
+    title: A farm meal
+  feast:
+    help: "Eat three dishes: one from the sea, one from the field and one from the coop."
+    objective:
+      "0": from the sea
+      "1": from the field
+      "2": from the coop
+    title: A feast
+  fence:
+    help: At the workbench, make fences and a gate from planks and rope.
+    objective:
+      "0": fences
+      "1": gate
+    title: Make fences
+  find-seeds:
+    help: "Seeds turn up when you dig grass, and wild plants give them when picked (F)."
+    objective:
+      "0": seeds
+    title: Find seeds
+  fire:
+    help: Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.
+    objective:
+      "0": make
+      "1": place
+    title: Make a fire
+  flock:
+    help: "Woolbacks and plodders graze in open country; tame one as you did the hen."
+    objective:
+      "0": tame
+      "1": wool or milk
+    title: A mixed herd
+  forge:
+    help: Make a forge at the workbench and place it on the ground.
+    objective:
+      "0": make
+      "1": place
+    title: Build a forge
+  fried-egg:
+    help: At the campfire, fry an egg from your own hens.
+    objective:
+      "0": egg
+    title: Breakfast
+  gather:
+    help: Pick up loose stones and pull fiber from shrubs and ferns with F, and dig soft ground with bare hands for soil.
+    objective:
+      "0": fiber
+      "1": stone
+      "2": soil
+    title: Gather by hand
+  go-fishing:
+    help: "Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel."
+    objective:
+      "0": cast
+      "1": fish
+    title: Go fishing
+  harvest:
+    help: "A crop is ripe when it is full grown: F on it harvests produce and seed."
+    objective:
+      "0": wheat
+    title: Harvest
+  iron:
+    help: "Iron ore smelts hotter: feed the forge more coal."
+    objective:
+      "0": iron
+      "1": pickaxe
+    title: The iron age
+  map:
+    help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there."
+    objective:
+      "0": open the map
+      "1": reach the mark
+    title: Read the map
+  ore:
+    help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams."
+    objective:
+      "0": ore
+      "1": coal
+    title: Find ore
+  pen:
+    help: Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.
+    objective:
+      "0": build
+      "1": keep an animal
+    title: Build a pen
+  planks-rope:
+    help: "In the pack (I), the Craft row makes planks from a log and rope from three fiber."
+    objective:
+      "0": planks
+      "1": rope
+    title: Planks and rope
+  plant:
+    help: Plant wheat seed on tilled soil with the right button.
+    objective:
+      "0": plant
+    title: Plant a field
+  reef:
+    help: Swim down where the sea is warm and shallow.
+    objective:
+      "0": reef
+    title: See a reef
+  rod:
+    help: Make a rod at the workbench from planks, rope and fiber.
+    objective:
+      "0": rod
+    title: Make a fishing rod
+  sea-fishing:
+    help: Cast from the shore into the sea, then from a river bank or a lake.
+    objective:
+      "0": the sea
+      "1": fresh water
+    title: Off the shore
+  smelt:
+    help: "Put ore and coal in the forge (F) and smelt bronze."
+    objective:
+      "0": bronze
+    title: Smelt bronze
+  stone-tools:
+    help: "At the workbench (F), make a stone pickaxe and a stone shovel."
+    objective:
+      "0": pickaxe
+      "1": shovel
+    title: Stone tools
+  swim:
+    help: Walk into deep water and swim.
+    objective:
+      "0": meters
+    title: Into the water
+  tame:
+    help: Stand still with its food in hand and let a wild animal come to you, then feed it.
+    objective:
+      "0": tame
+    title: Tame an animal
+  three-crops:
+    help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold."
+    objective:
+      "0": turnip
+      "1": chili
+      "2": frost kale
+    title: A mixed field
+  three-kinds:
+    help: "Fish in other water and at other hours; the field guide (J) fills in each new kind."
+    objective:
+      "0": species
+    title: Three kinds of fish
+  till:
+    help: Hold G and pick the shovel with the wheel, then F tills soil.
+    objective:
+      "0": till
+    title: Break ground
+  torch:
+    help: Set torches round your shelter and stay by them as night falls.
+    objective:
+      "0": make
+      "1": place
+      "2": nightfall
+    title: Light the night
+  town:
+    help: "Towns show on the map; follow the compass to one."
+    objective:
+      "0": town
+    title: Find a town
+  water-field:
+    help: "Fill the bucket at water (right click), then pour it beside the field."
+    objective:
+      "0": pour
+    title: Water the field
+  wood:
+    help: Hold G and pick the axe with the wheel, then strike a trunk until the tree falls.
+    objective:
+      "0": trees
+      "1": logs
+    title: Gather wood
 mission_tree:
   after: "after {missions}"
   branch:

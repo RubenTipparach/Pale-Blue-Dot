@@ -1,4 +1,0 @@
-# Text from before the locale rule (`openspec/changes/localization`):
-# `path|literal`, sorted. It only shrinks; never add to it. When it is
-# empty, delete it. `python3 tools/locale/locale_lint.py --baseline` drops
-# entries that are gone.
