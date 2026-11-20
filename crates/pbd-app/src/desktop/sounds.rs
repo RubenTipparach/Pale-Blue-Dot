@@ -14,7 +14,11 @@ use pbd_core::missions::Kind;
 use pbd_core::terrain::Material;
 
 pub fn register(app: &mut App) {
-    app.add_systems(Update, (digging, screens));
+    // `digging` reads the tool strokes' impacts, which `HeldPlugin` registers
+    // only when there is a walker; a flight with no walker (`--tour`,
+    // `--route`) has none, and the reader would fail validation at start.
+    app.add_message::<pbd_app::held::StrokeImpact>()
+        .add_systems(Update, (digging, screens));
 }
 
 /// The material a `block:<name>` code names.
