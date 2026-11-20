@@ -10,8 +10,8 @@
 # - Keys are grouped by the screen or module that shows them.
 
 arrival:
-  new_world: "A NEW WORLD"
-  welcome_back: "WELCOME BACK"
+  new_world: A NEW WORLD
+  welcome_back: WELCOME BACK
 block:
   air:
     name: air
@@ -59,16 +59,66 @@ block:
     name: water
   workbench:
     name: workbench
+breed:
+  already_paired: Already paired
+  born: "{born} born"
+  broody: "She goes broody on {n} eggs: they hatch in {days} days"
+  eggs_set_incubator: "{n} eggs set in the incubator"
+  incubator_already_stands_there: An incubator already stands there
+  incubator_eggs: "Incubator - {n} eggs"
+  incubator_eggs_lamp_out: "Incubator - {n} eggs - the lamp is out"
+  incubator_hatching: "Incubator - {n} eggs - hatching in {days} days"
+  incubator_holds_eggs: "The incubator holds {holds} eggs"
+  incubator_needs_lamp_beside: Incubator - needs a lamp beside it
+  incubator_set_beside_lamp: Incubator set beside a lamp
+  incubator_set_fertile_eggs: Incubator - set fertile eggs in it
+  incubator_set_needs_lamp_beside: "Incubator set: it needs a lamp beside it"
+  incubator_taken_up: Incubator taken up
+  needs_lamp_beside: It needs a lamp beside it
+  no_room_carry: No room to carry it
+  no_such_dam: No such dam
+  only_hen_sits_eggs: Only a hen sits on eggs
+  paired_they_will_mate_next: "Paired: they will mate at the next morning check"
+  save_refused: The save refused it
+  she_already_sitting: She is already sitting
+  she_too_young_sit: She is too young to sit
+  too_far_set: Too far to set it
+  young_one_was_born: A young one was born
+  young_were_born: "{young} young were born"
+breeding:
+  animal: "{adult} {id}"
+  breeding: BREEDING
+  close_kin: "F {f}  close kin: hardiness -{hardiness}%, litters -{litters}%"
+  coat: "COAT  {odds}"
+  ended: ", ended"
+  generation: "gen {generation}"
+  hardy: HARDY
+  herd: THE HERD
+  inbreeding: "F {f}"
+  looks: "{coat}, {pattern}"
+  looks_morph: "{morph} {coat}, {pattern}"
+  more: "and {count} more"
+  no_kept_animals: No kept animals
+  pair: PAIR
+  paired: Paired
+  pattern: "PATTERN  {odds}"
+  pedigree: "PEDIGREE  {adult} {id}  F {f}"
+  pick_a: "pick a {adult}"
+  pick_sire_dam: Pick a sire and a dam
+  size: SIZE
+  temper: TEMPER
+  wild_caught_founder: wild-caught founder
+  yield: YIELD
 compass:
   dir:
-    e: "E"
-    n: "N"
-    ne: "NE"
-    nw: "NW"
-    s: "S"
-    se: "SE"
-    sw: "SW"
-    w: "W"
+    e: E
+    "n": "N"
+    ne: NE
+    nw: NW
+    s: S
+    se: SE
+    sw: SW
+    w: W
   kilometres: "{distance} km"
   metres: "{distance} m"
   name_line: "{name} {distance}"
@@ -226,29 +276,29 @@ controls:
     vehicles: VEHICLES
 cooking:
   effect:
-    keen: "keen"
-    steady: "steady hands"
-    stride: "stride"
+    keen: keen
+    steady: steady hands
+    stride: stride
   effect_caps:
-    keen: "KEEN"
-    steady: "STEADY HANDS"
-    stride: "STRIDE"
+    keen: KEEN
+    steady: STEADY HANDS
+    stride: STRIDE
 craft:
   count: "X{count}"
   craft: CRAFT
   done: "{recipe} done"
-  hands_busy: "Your hands are busy"
-  have_tool: "You already have this tool"
-  locked: "LOCKED"
+  hands_busy: Your hands are busy
+  have_tool: You already have this tool
+  locked: LOCKED
   made: "{thing} made"
   need_have: "{item}: need {need}, have {have}"
   not_enough: "Not enough for {recipe}"
   opens_with: "Opens with: {mission}"
-  pick: "PICK A RECIPE"
+  pick: PICK A RECIPE
   queue_full: "The {station}'s queue is full"
-  title: "CRAFT"
+  title: CRAFT
   waiting: "{recipe}  +{waiting} WAITING"
-  workbench: "WORKBENCH"
+  workbench: WORKBENCH
 crop:
   chili:
     name: chili
@@ -260,21 +310,21 @@ crop:
     name: wheat
 daylight:
   season:
-    autumn: "southern autumn"
-    spring: "southern spring"
-    summer: "southern summer"
-    winter: "southern winter"
+    autumn: southern autumn
+    spring: southern spring
+    summer: southern summer
+    winter: southern winter
   season_caps:
-    autumn: "SOUTHERN AUTUMN"
-    spring: "SOUTHERN SPRING"
-    summer: "SOUTHERN SUMMER"
-    winter: "SOUTHERN WINTER"
+    autumn: SOUTHERN AUTUMN
+    spring: SOUTHERN SPRING
+    summer: SOUTHERN SUMMER
+    winter: SOUTHERN WINTER
 digging:
-  by_hand: "Too hard to dig by hand"
+  by_hand: Too hard to dig by hand
   empty_first: "Empty the {station} first"
   needs_pickaxe: "Needs a {tier} pickaxe"
-  no_wood: "No more wood"
-  planted: "Something is planted here"
+  no_wood: No more wood
+  planted: Something is planted here
 equipment:
   bare: Bare hands
   bare_caps: BARE HANDS
@@ -348,8 +398,8 @@ fishing:
     snapped: "The line snapped - the {species} is gone"
     too_early: "Too early - the {species} bolted"
 forge:
-  queue_full: "Forge queue is full"
-  title: "FORGE"
+  queue_full: Forge queue is full
+  title: FORGE
 fruit:
   grows_back: "No fruit. Grows back in {days} days"
   no_ripe: No ripe fruit
@@ -357,12 +407,27 @@ fruit:
 guide:
   caught: "caught {count}, best {best} cm"
   from_tenebris: "from Tenebris ({kind})"
-  new: "new to Pale Blue Dot"
-  not_caught: "not caught in this world yet"
-  nothing_lives: "Nothing lives in the water here."
+  new: new to Pale Blue Dot
+  not_caught: not caught in this world yet
+  nothing_lives: Nothing lives in the water here.
   tip: "TIP  {tip}"
-  title: "FIELD GUIDE"
+  title: FIELD GUIDE
 husbandry:
+  adult:
+    bull: bull
+    cockerel: cockerel
+    cow: cow
+    ewe: ewe
+    hen: hen
+    ram: ram
+  coat:
+    black: black
+    brown: brown
+    cream: cream
+    dun: dun
+    grey: grey
+    red: red
+    russet: russet
   collect:
     egg: eggs
     milk: milk
@@ -400,7 +465,16 @@ husbandry:
     health: "health {health}"
     sick: sick
     strayed: "strayed: feed it"
+  morph:
+    albino: albino
+    golden: golden
+    melanic: melanic
   no_room: No room to carry it
+  pattern:
+    belted: belted
+    piebald: piebald
+    plain: plain
+    speckled: speckled
   pen_closed: "A pen of {cells} cells, with a gate"
   penned: "{name} is penned"
   piece_there: A piece already stands there
@@ -567,60 +641,60 @@ kitchen:
   cooking: "COOKING {recipe}"
   cooking_waiting: "COOKING {recipe}  +{waiting} WAITING"
   eat_hint: RIGHT CLICK A DISH IN HAND TO EAT IT
-  fire_full: "The fire is full"
+  fire_full: The fire is full
   no_fish: "No fish for {recipe}"
-  pick: "PICK A DISH"
+  pick: PICK A DISH
   ready: "{recipe} is ready"
   timer: "{effect} {minutes}:{seconds}"
-  title: "CAMPFIRE"
+  title: CAMPFIRE
 launch:
-  empty_hold: "Empty the hold first"
+  empty_hold: Empty the hold first
   goes_on_water: "The {craft} goes on water: {why}"
   launched: "{craft} launched"
-  save_refused: "The save did not take it"
-  save_refused_launch: "The save did not take the launch"
+  save_refused: The save did not take it
+  save_refused_launch: The save did not take the launch
   taken_up: "{craft} taken up"
 loading:
   ground: "THE TOWNS' GROUND"
-  laying: "LAYING OUT TOWNS"
-  planet: "BUILDING THE PLANET"
-  reading: "READING THE WORLD"
-  shaders: "COMPILING SHADERS"
-  sounds: "TUNING THE AIR"
-  standing: "STANDING THE TOWNS"
-  surveying: "SURVEYING SITES"
+  laying: LAYING OUT TOWNS
+  planet: BUILDING THE PLANET
+  reading: READING THE WORLD
+  shaders: COMPILING SHADERS
+  sounds: TUNING THE AIR
+  standing: STANDING THE TOWNS
+  surveying: SURVEYING SITES
 map:
-  clouds_and_rain: "Clouds and rain"
-  east: "E"
-  help: "M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me"
+  clouds_and_rain: Clouds and rain
+  east: E
+  help: M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me
   lat_lon: "{lat}{ns} {lon}{ew}"
   layer:
-    biomes: "Biomes"
+    biomes: Biomes
     biomes_note: "Each place's biome over the grayed base (survey M3)."
-    places: "Sea places"
-    places_note: "Reefs, kelp forests, polar sea, vents and trenches."
-  night_side: "Night side"
+    places: Sea places
+    places_note: Reefs, kelp forests, polar sea, vents and trenches.
+  night_side: Night side
   north: "N"
-  on_the_map: "ON THE MAP"
-  overlay: "OVERLAY"
+  on_the_map: ON THE MAP
+  overlay: OVERLAY
   scale: "{metres} m a pixel"
-  show_on_globe: "Show on globe"
+  show_on_globe: Show on globe
   snow: "{value} snow"
-  south: "S"
-  the_planet: "The planet"
+  south: S
+  the_planet: The planet
   the_planet_note: "The planet as it looks: each place its ground's top block, shaded by relief, the sea by its depth."
-  title: "MAP"
+  title: MAP
   under: "{place}   {scale}"
   waypoint: "W{number}"
-  weather_at_hour: "WEATHER AT THE HOUR"
+  weather_at_hour: WEATHER AT THE HOUR
   weather_note: "{overlay} now, {low} to {high} {unit}, over the grayed base."
-  west: "W"
+  west: W
   you: "you {place}   {scale}"
 map_sites:
   count: "{count} settlements on the map."
   standing: "{count} settlements on the map: {built} built, {to_come} still to come."
   standing_unsettled: "{count} settlements on the map: {built} built, {to_come} still to come, {unsettled} unsettled."
-  surveying: "Surveying the settlements..."
+  surveying: Surveying the settlements...
 menu:
   antialiasing: Antialiasing
   auto_step: Auto step
@@ -691,15 +765,37 @@ menu:
   world_open: "{world} (open)"
   worlds: WORLDS
 mission_tree:
+  after: "after {missions}"
+  branch:
+    cooking: COOKING
+    farming: FARMING
+    fishing: FISHING
+    getting_about: GETTING ABOUT
+    hands_tools: HANDS TO TOOLS
+    herding: HERDING
+    light_building: "LIGHT & BUILDING"
+    mining_smelting: "MINING & SMELTING"
+  branch_label: "{number} · {name}"
   close: X
+  done: DONE
+  help: HELP
+  needs: NEEDS
+  not_yet: NOT YET
+  now: NOW
+  objectives: OBJECTIVES
+  open: OPEN
+  opens_next: OPENS NEXT
+  unlocks: UNLOCKS
+  unlocks_list: "UNLOCKS {recipes}"
+  x: "[x]"
 missions:
   done: "DONE: {title}"
   tab:
-    guide: "GUIDE  J"
-    map: "MAP  M"
-    menu: "MENU  ESC"
-    missions: "MISSIONS  O"
-    pack: "PACK  I"
+    guide: GUIDE  J
+    map: MAP  M
+    menu: MENU  ESC
+    missions: MISSIONS  O
+    pack: PACK  I
 overlay:
   date: "DAY {day} - {season}"
   end: "{value} {unit}"
@@ -713,7 +809,7 @@ overlay:
     sunlight: SUNLIGHT
     temperature: TEMPERATURE
     wind: WIND
-  off: "OFF"
+  "off": "OFF"
   rain_end: "{value} {unit} RAIN"
   snow_end: "{value} {unit} SNOW"
   title: GLOBE OVERLAY
@@ -723,220 +819,220 @@ overlay:
     speed: "m/s"
     temperature: C
 pack:
-  hold: "HOLD"
+  hold: HOLD
   hotbar: HOTBAR
-  pack: "PACK"
+  pack: PACK
 recipe:
   bronze:
-    name: "BRONZE"
+    name: BRONZE
   bronze-axe:
-    name: "BRONZE AXE"
+    name: BRONZE AXE
   bronze-pickaxe:
-    name: "BRONZE PICK"
+    name: BRONZE PICK
   bronze-shovel:
-    name: "BRONZE SHOVEL"
+    name: BRONZE SHOVEL
   bucket:
-    name: "BUCKET"
+    name: BUCKET
   campfire:
-    name: "CAMPFIRE"
+    name: CAMPFIRE
   chili-fish:
-    name: "CHILI FISH"
+    name: CHILI FISH
   fence:
-    name: "FENCE X2"
+    name: FENCE X2
   flatbread:
-    name: "FLATBREAD"
+    name: FLATBREAD
   forge:
-    name: "FORGE"
+    name: FORGE
   fried-egg:
-    name: "FRIED EGG"
+    name: FRIED EGG
   fried-fertile-egg:
-    name: "FRIED EGG"
+    name: FRIED EGG
   gate:
-    name: "GATE"
+    name: GATE
   grilled-fish:
-    name: "GRILL FISH"
+    name: GRILL FISH
   incubator:
-    name: "INCUBATOR"
+    name: INCUBATOR
   inner-tube:
-    name: "INNER TUBE"
+    name: INNER TUBE
   iron-axe:
-    name: "IRON AXE"
+    name: IRON AXE
   iron-pickaxe:
-    name: "IRON PICK"
+    name: IRON PICK
   iron-shovel:
-    name: "IRON SHOVEL"
+    name: IRON SHOVEL
   kale-skewer:
-    name: "KALE SKEWER"
+    name: KALE SKEWER
   mixed-ore:
-    name: "SMELT ORE"
+    name: SMELT ORE
   planks:
-    name: "PLANKS"
+    name: PLANKS
   raft:
-    name: "RAFT"
+    name: RAFT
   roast-meat:
-    name: "ROAST MEAT"
+    name: ROAST MEAT
   roast-turnip:
-    name: "ROAST TURNIP"
+    name: ROAST TURNIP
   rod:
-    name: "ROD"
+    name: ROD
   rope:
-    name: "ROPE"
+    name: ROPE
   stone-axe:
-    name: "STONE AXE"
+    name: STONE AXE
   stone-pickaxe:
-    name: "STONE PICK"
+    name: STONE PICK
   stone-shovel:
-    name: "STONE SHOVEL"
+    name: STONE SHOVEL
   torch:
-    name: "TORCH X2"
+    name: TORCH X2
   workbench:
-    name: "WORKBENCH"
+    name: WORKBENCH
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"
     keys: "cell key version {version}, where this build has {have}"
     topology: "topology version {version}, where this build has {have}"
 scatter:
-  pick_up_stone: "pick up stone"
-  pull_fibre: "pull fibre"
+  pick_up_stone: pick up stone
+  pull_fibre: pull fibre
 sites:
   fallback_name: "Site {id}"
   kind:
-    cave: "cave town"
-    cliff: "cliff village"
-    desert: "desert town"
-    harbour: "harbour"
-    jungle: "jungle village"
-    swamp: "swamp village"
-    tundra: "tundra camp"
-    village: "village"
-    walled: "walled town"
+    cave: cave town
+    cliff: cliff village
+    desert: desert town
+    harbour: harbour
+    jungle: jungle village
+    swamp: swamp village
+    tundra: tundra camp
+    village: village
+    walled: walled town
 slots:
   many: "{name} x {count}"
   tool_tip: "{tool}: {purpose}"
 species:
   deepback:
-    caps: "DEEPBACK"
+    caps: DEEPBACK
     entry: A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.
     lower: deepback
     name: Deepback
     tip: Fish where the shelf drops close to the shore, where the water turns dark.
   eel:
-    caps: "EEL"
+    caps: EEL
     entry: Long, dark and patient. Eels keep to the bed of rivers and shallows in ones and twos and fight in hard, twisting runs.
     lower: eel
     name: Eel
     tip: Ease off whenever it runs. More lines are lost to eels than to anything else.
   giant_clam:
-    caps: "GIANT CLAM"
+    caps: GIANT CLAM
     entry: A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.
     lower: giant clam
     name: Giant clam
     tip: Swim up slowly and it still shuts. Wait a while at a distance and it opens.
   lobster:
-    caps: "SPINY LOBSTER"
+    caps: SPINY LOBSTER
     entry: A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.
     lower: spiny lobster
     name: Spiny lobster
     tip: On the bed of the shelf, under kelp or along a reef. It does not take a lure.
   meadow-hen:
-    caps: "YARD HEN"
+    caps: YARD HEN
     entry: A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.
     lower: yard hen
     name: Yard hen
     tip: Stand still with wheat seed in hand and let her come to you. Three feeds and she follows.
   minnow:
-    caps: "MINNOW"
+    caps: MINNOW
     entry: The first fish most anglers land. Minnows crowd the shallows and river mouths in schools of thirty or more and turn as one when a shadow crosses them. They bite quickly and give up easily.
     lower: minnow
     name: Minnow
     tip: Cast anywhere near a warm shore. A school finds the lure in seconds.
   octopus:
-    caps: "DEN OCTOPUS"
+    caps: DEN OCTOPUS
     entry: A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.
     lower: den octopus
     name: Den octopus
     tip: Look for the shells at its door, then keep back and wait.
   perch:
-    caps: "BANDED PERCH"
+    caps: BANDED PERCH
     entry: Striped, deep-bodied and curious. Perch hold the river channels in loose groups of a dozen, in any river that does not freeze, and one will follow a lure a long way before it commits.
     lower: banded perch
     name: Banded perch
     tip: Nibbles come in threes. Wait for the float to go under.
   plodder:
-    caps: "PLODDER"
+    caps: PLODDER
     entry: "The plodder is the great slow beast of the fields: two meters of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day."
     lower: plodder
     name: Plodder
     tip: Five feeds of turnip or turf. It needs two cells of grass each in its pen.
   pond_diver:
-    caps: "POND DIVER"
+    caps: POND DIVER
     entry: A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.
     lower: pond diver
     name: Pond diver
     tip: "Watch the water where it went under; it surfaces a few meters off."
   ray:
-    caps: "RAY"
+    caps: RAY
     entry: A flat grazer that lies on the sand and lifts off in slow wingbeats. Rays travel alone or in pairs along the bed of warm shallows and shelf, well out from the beach.
     lower: ray
     name: Ray
     tip: Cast long, over sand. A ray never schools, so a bite is one fish, not one of many.
   reed_dabbler:
-    caps: "REED DABBLER"
+    caps: REED DABBLER
     entry: "The common duck of rivers, marsh pools and quiet shallows. Dabblers float in small flocks, tip up to feed with their tails in the air, paddle off when you come close and sleep on the water at night. Ducks are protected; their eggs and feathers are gathered, not taken."
     lower: reed dabbler
     name: Reed dabbler
     tip: Slow water near reeds. Come up quietly or they paddle off.
   reef:
-    caps: "REEF FISH"
+    caps: REEF FISH
     entry: The prize of warm water. Tall-finned and nervous, reef fish shoal in small groups over tropical shallows that never fall below 23 degrees, and give the shortest bite window of anything in the sea.
     lower: reef fish
     name: Reef fish
     tip: The hook window is under half a second. Watch the float, not the fish.
   reef_turtle:
-    caps: "REEF TURTLE"
+    caps: REEF TURTLE
     entry: "A slow, old swimmer of warm reefs and the shelf beyond them, alone and unhurried. Reef turtles are protected: none may be caught."
     lower: reef turtle
     name: Reef turtle
     tip: Watch it go by. A line cast at one is refused.
   sea_otter:
-    caps: "SEA OTTER"
+    caps: SEA OTTER
     entry: "Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught."
     lower: sea otter
     name: Sea otter
     tip: Cool coasts, over kelp. Keep your distance and they stay.
   seal:
-    caps: "ICE SEAL"
+    caps: ICE SEAL
     entry: "Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught."
     lower: ice seal
     name: Ice seal
     tip: Cold water, near the ice or the kelp. Where seals are, the fish are.
   serpent:
-    caps: "SEA SERPENT"
+    caps: SEA SERPENT
     entry: Rare and solitary, found only past the drop-off in any deep sea that does not freeze. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.
     lower: sea serpent
     name: Sea serpent
     tip: There is at most one in any water. Deep water, a long cast and patience.
   shore_crab:
-    caps: "SHORE CRAB"
+    caps: SHORE CRAB
     entry: A small green-brown crab of every warm or cool shore, in rock pools, river mouths and the sand of the shallows. It walks sideways along the bed and scuttles off when a shadow comes near.
     lower: shore crab
     name: Shore crab
     tip: Look in the shallows by the rocks. It does not take a lure.
   silverfin:
-    caps: "SILVERFIN"
+    caps: SILVERFIN
     entry: A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.
     lower: silverfin
     name: Silverfin
     tip: Let the splash settle before you expect a bite.
   tube_worm:
-    caps: "PLUME WORM"
+    caps: PLUME WORM
     entry: White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.
     lower: plume worm
     name: Plume worm
     tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize."
   woolback:
-    caps: "WOOLBACK"
+    caps: WOOLBACK
     entry: Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.
     lower: woolback
     name: Woolback
@@ -960,9 +1056,9 @@ tier:
   stone:
     name: Stone
 time:
-  day: "DAY"
+  day: DAY
   line: "TIME  {hours}:{minutes}"
-  night: "NIGHT"
+  night: NIGHT
   title: TIME
 toasts:
   words: "{item} x{count}"
@@ -1017,15 +1113,15 @@ towns:
   door: door
 vehicle:
   loon:
-    lower: "loon"
+    lower: loon
     name: Loon
     title: LOON
   raft:
-    lower: "raft"
+    lower: raft
     name: Raft
     title: RAFT
   tube:
-    lower: "inner tube"
+    lower: inner tube
     name: Inner tube
     title: INNER TUBE
 vehicles:
@@ -1040,25 +1136,25 @@ vehicles:
     tied_up: "{craft} - tied up"
 weather:
   line: "WEATHER  {forcing}  {percent}%"
-  natural: "NATURAL"
-  rain: "RAIN"
-  showers: "SHOWERS"
-  storm: "STORM"
+  natural: NATURAL
+  rain: RAIN
+  showers: SHOWERS
+  storm: STORM
   title: WEATHER
 window:
   title: "Pale Blue Dot | Planet Explorer"
 world_map:
   biome:
-    beach: "beach"
-    desert: "desert"
-    fields: "fields"
-    jungle: "jungle"
-    mountains: "mountains"
-    swamp: "swamp"
-    tundra: "tundra"
+    beach: beach
+    desert: desert
+    fields: fields
+    jungle: jungle
+    mountains: mountains
+    swamp: swamp
+    tundra: tundra
   place:
-    coral_reef: "coral reef"
-    kelp_forest: "kelp forest"
-    polar_sea: "polar sea"
-    trench: "trench"
-    vents: "vents"
+    coral_reef: coral reef
+    kelp_forest: kelp forest
+    polar_sea: polar sea
+    trench: trench
+    vents: vents

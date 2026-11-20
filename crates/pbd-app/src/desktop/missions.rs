@@ -390,12 +390,16 @@ mod tests {
     #[test]
     fn every_tab_and_place_has_its_words() {
         let english = pbd_core::locale::Locale::english();
-        let keys = TABS.iter().map(|(key, _)| key.to_string()).chain(
-            pbd_app::world_map::PLACE_KEY
-                .iter()
-                .chain(pbd_app::world_map::BIOME_KEY)
-                .map(|(key, _)| key.to_string()),
-        );
+        let keys = super::super::mission_tree::BRANCHES
+            .iter()
+            .map(|(_, key)| key.to_string())
+            .chain(TABS.iter().map(|(key, _)| key.to_string()))
+            .chain(
+                pbd_app::world_map::PLACE_KEY
+                    .iter()
+                    .chain(pbd_app::world_map::BIOME_KEY)
+                    .map(|(key, _)| key.to_string()),
+            );
         let layers = [
             super::super::map_screen::biomes_layer(),
             super::super::map_screen::places_layer(),

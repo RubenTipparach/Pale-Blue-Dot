@@ -43,13 +43,6 @@ impl Localized {
         Self(text.into())
     }
 
-    /// TRANSITIONAL (`localization` phase 2): text from before the rule that
-    /// has not yet moved to the locale file. The lint lists every call in its
-    /// baseline, exactly as it lists a raw literal, so each must go.
-    pub fn legacy(text: impl Into<String>) -> Self {
-        Self(text.into())
-    }
-
     /// No text.
     pub fn empty() -> Self {
         Self(String::new())

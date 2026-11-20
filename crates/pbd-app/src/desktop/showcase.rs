@@ -916,7 +916,7 @@ pub fn drive(
                        text: &str| {
         for mut t in captions.iter_mut() {
             if t.text != text {
-                t.text = Localized::legacy(text.to_string());
+                t.text = Localized::verbatim(text.to_string());
             }
         }
     };

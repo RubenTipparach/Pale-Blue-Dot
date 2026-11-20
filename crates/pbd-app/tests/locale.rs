@@ -55,11 +55,17 @@ const DATA_PREFIXES: &[&str] = &[
     "husbandry.collected.",
     "husbandry.waiting.",
     "husbandry.stage.",
+    "husbandry.coat.",
+    "husbandry.pattern.",
+    "husbandry.morph.",
+    "husbandry.adult.",
     // `farming::CROPS` and `station::STATIONS`: names by saved code.
     "crop.",
     "station.",
     // `station` and `cooking` recipes: each plaque's words by recipe code.
     "recipe.",
+    // `desktop::mission_tree::BRANCHES`: the branches' names, by key.
+    "mission_tree.branch.",
     // `desktop::missions::TABS`: the strip's tabs, by key.
     "missions.tab.",
     // `world_map::PLACE_KEY`, `BIOME_KEY` and the map's layers: legend words

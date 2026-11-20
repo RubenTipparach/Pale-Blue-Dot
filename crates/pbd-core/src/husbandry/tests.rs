@@ -843,5 +843,14 @@ fn every_keeping_word_is_in_the_locale_file() {
         for stage in &keep.young.stages {
             has(format!("husbandry.stage.{}", stage.name));
         }
+        for coat in &keep.coats {
+            has(format!("husbandry.coat.{coat}"));
+        }
+        for pattern in &keep.patterns {
+            has(format!("husbandry.pattern.{pattern}"));
+        }
+        has(format!("husbandry.morph.{}", keep.morph));
+        has(format!("husbandry.adult.{}", keep.young.adult.0));
+        has(format!("husbandry.adult.{}", keep.young.adult.1));
     }
 }
