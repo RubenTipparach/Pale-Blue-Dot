@@ -2173,3 +2173,158 @@ the write-up needs and change nothing a player meets. No default moves.
   colony; task 8.4). The colony works unseen until then.
 - **Frame cost** of all of it was not measured: the cloud container has no
   GPU (lavapipe). The owner runs the perf suite.
+
+### B28. Beaver and otter motion (owner, 2026-11-20)
+
+The owner, 2026-11-20: "can you improve on beaver and otter animations?",
+then "make me a mockup with those two animls running around interacting with
+env". This is the motion of three animals, the beaver, the river otter and
+the sea otter, written up by the `animation` skill: four stages to every
+action, limbs on arcs about joints, gaits that never slide a foot, and the
+tail and head as overlapping action. It is a mockup and a write-up only; the
+game waits for the owner's approval of the mockup and a request (CLAUDE.md,
+"Write it up before touching code"; the skill's order of work, step 3).
+
+**Today's motion, measured** (`docs/mockups/ocean/creatures3d.js` and the
+tabs that move them, at `dfcfe932`):
+
+| Animal | Model | How it moves today |
+| --- | --- | --- |
+| Beaver (`beaverGeo`) | One rigid mesh, no parts: four fixed leg boxes (0.06 x 0.10 x 0.05 of its length), a tail plank fixed at 0.12 rad, a stick glued to the jaw in `beaver_branch`. | Dam tab: three carriers shuttle on k = (sin 0.12t + 1)/2 between two points 16.4 m apart, a 52 s round trip peaking at 0.98 m/s with the feet still (every step slides); they ride the water's or ground's level minus 0.1 m, so on land they sink to the shins; the carrying and empty models swap in one frame when cos 0.12t changes sign. The gnawer bobs abs(sin 6t) x 0.03 m in place and nothing else moves: the head never bites, no chip flies, and a tree vanishes in one frame as the day slider passes it. |
+| River otter (`riverotter`) | The sea otter's lathe right way up, four fixed leg boxes. | The fish shader's sway on a mammal: sin(7t + phase - 6x) x 0.075 of its length at the tail (1.1 Hz), on a 3.5 x 1.8 m ellipse at 0.3 rad/s (21 s a lap), sinking up to 1.8 m on sin 0.5t. It never leaves the pool, bounds, slides or eats. |
+| Sea otter (`otter`) | Rigid on its back, paws fixed on an urchin. | Drifts 1.5 m either way at 0.05 rad/s and rides the sea's height. It never cracks the urchin, rolls, dives, grooms or sleeps. |
+
+**The rig.** Each animal is a set of pivots in a hierarchy, each a low-poly
+piece in M25's manner (flat shaded, a colour per face from its sprite, no
+outline, lit as the ground under it by the page's one lighting model):
+
+- a root on the ground at the animal's middle, turned to its heading;
+- a body pivot (the hips' rise and fall, pitch and roll), carrying a hind
+  segment and a chest segment joined at the spine, so the back can arch;
+- a neck and head (the beaver's incisors, the otters' whiskers), and a jaw
+  the held thing hangs from (a branch, a fish, an urchin);
+- four legs of two bones each (thigh and shin) and a foot, posed by two-bone
+  inverse kinematics to a foot target, the hind knee forward and the front
+  elbow back;
+- a tail of three segments (the beaver's last one the flat paddle).
+
+**Gaits on arcs, never sliding.** A gait is a phase that advances by the
+distance the root travels divided by the stride (`stride_m`), not by the
+clock, so however the speed changes the feet keep pace. Each foot has an
+offset in the cycle and a stance fraction (`stance`): in stance its target
+moves backwards under the body at exactly the body's speed (it stays where
+it was put down), in swing it lifts on an arc (`foot_lift_m`) and lands a
+half step ahead. The ground under each foot is sampled, so a foot on the mud
+bank stands on the bank. The contact, down, passing and up poses are the
+keyed poses "Show poses" freezes on.
+
+- **Beaver, the waddle**: a lateral walk (left hind 0, left fore 0.25,
+  right hind 0.5, right fore 0.75), stance 0.62. The body rolls toward the
+  standing side (`waddle_roll_rad`), the hips rise twice a cycle
+  (`hip_bob_m`), the head counters the roll a beat late (`head_lag_s`) and
+  the tail swings after the hips (`tail_lag_s`), dragging.
+- **River otter, the bound**: the hind pair together, the fore pair half a
+  cycle later (0, 0.06, 0.5, 0.56), stance 0.38, so there is a moment with
+  no foot down. The spine flexes on the cycle (`arch_rad`): rounded when the
+  hind feet land under the chest, stretched as they push off; the body
+  lifts in the air (`lift_m`).
+
+**The actions and their stages.** Every strike is windup, anticipation
+(a held, coiled beat), hit (ease in, t cubed, fastest at contact, the event
+on contact) and recoil (a kick back past rest, then ease out). The times and
+sizes are the tunables below.
+
+- **Beaver gnaws and fells a tree.** It rears on its hind legs and tail
+  (a tripod), forepaws on the trunk. Each bite: the head draws back and
+  tilts (windup), holds (anticipation), snaps in (hit: chips fly from the
+  notch, the notch deepens), and bounces back (recoil); one steady beat
+  (`gnaw.beat_s`). After `bites_to_fell` bites the tree creaks: it leans a
+  little back over the cut (`lean_back_rad`, the anticipation) while the
+  beaver drops to all fours and scrambles clear; then it falls, slow at
+  first and faster all the way (an angle that grows as t squared, a rod
+  tipping under gravity), hits the ground, bounces (`bounce_rad`), and
+  settles; the crown shakes on the hit. The stump stays.
+- **Beaver fetches a branch.** It waddles to the fallen crown, gnaws a
+  branch free (three bites), takes it in its teeth and walks to the water
+  with the branch dragging (it hangs from the jaw, its far end on the
+  ground), slides in down the bank, swims with only its head, ears and the
+  branch above water (the tail sculls side to side, each segment a beat
+  behind the last, `scull_hz`, `scull_rad`; the hind feet paddle), and at
+  the dam rears against it and pushes the branch onto the crest, where it
+  stays.
+- **Beaver tail slap and dive.** The tail lifts (windup), holds high
+  (anticipation), comes down flat (hit: a splash and rings on the water)
+  and bounces (recoil) while the head goes under; the body pitches nose
+  down and the tail disappears last. It surfaces by the bank.
+- **Beaver climbs out and shakes off.** Forepaws on the bank, a push from
+  the hind legs, then the shake: the body rolls on a fast decaying wave
+  (`shake.hz`, `shake.roll_rad`, `shake.time_s`), the head a beat late,
+  the tail last; drops fly off. The coat is wet (darker and shinier) while
+  it drips, and dries over `dry_s`.
+- **River otter.** Bounds along the bank; at the top of the mud slide it
+  crouches (anticipation), pushes off and slides on its belly, legs swept
+  back, faster down the slope (`slide.accel_mps2`), into the pond with a
+  splash; porpoises (arcs out of the water, `porpoise.arc_m`, the body's
+  pitch along the arc and the tail a beat behind); chases a fish under
+  water and takes it; climbs onto a rock and eats it held in its forepaws,
+  a bite on each beat (`eat.beat_s`, the fish shorter each bite); rolls on
+  its back and grooms (forepaws circling the face); stands up on its hind
+  legs to look round, the head turning and holding (`look.hold_s`).
+- **Sea otter.** Rafts on its back in the kelp. It cracks an urchin on a
+  stone on its chest: both forepaws lift the urchin (windup), hold
+  (anticipation), bring it down on the stone (hit: shell bits and a little
+  splash) and bounce (recoil), `cracks` times, then eats. It rolls over
+  belly down (`roll_s`) with a flick of the tail and dives (`dive_s`),
+  coming up with a new urchin and rolling onto its back; grooms rolling
+  side to side and rubbing its fur; and to sleep wraps a kelp frond round
+  itself (`kelp_wrap_s`), paws over its eyes, bobbing on the swell.
+
+Each animal runs a small state machine: when one action ends it picks the
+next with a seeded random draw from the actions open to it where it is (a
+beaver on land can fell, fetch or sit up; in the water it slaps and climbs
+out), so the scene plays on its own and two runs of one seed are the same.
+Buttons start any action at once.
+
+**Tunables** (proposed for a validated `assets/config/creature_motion.ron`,
+one source of defaults, units in the names; the mockup's sliders print the
+block):
+
+| Block | Values (default) |
+| --- | --- |
+| `beaver.walk` | `stride_m` 0.36, `stance` 0.62, `speed_mps` 0.45, `foot_lift_m` 0.05, `waddle_roll_rad` 0.10, `hip_bob_m` 0.02, `head_lag_s` 0.10, `tail_lag_s` 0.18 |
+| `beaver.gnaw` | `beat_s` 0.42 (windup 0.30, anticipation 0.20, hit 0.12, recoil 0.38 of it), `pull_rad` 0.35, `chips_per_bite` 4, `bites_to_fell` 12 |
+| `beaver.fell` | `creak_s` 1.0, `lean_back_rad` 0.05, `fall_s` 1.7, `bounce_rad` 0.10, `settle_s` 0.9 |
+| `beaver.swim` | `speed_mps` 0.6, `scull_hz` 1.3, `scull_rad` 0.35, `head_above_m` 0.07 |
+| `beaver.slap` | `windup_s` 0.30, `anticipate_s` 0.22, `strike_s` 0.08, `recoil_s` 0.35, `raise_rad` 1.15 |
+| `beaver.shake` | `hz` 7.0, `time_s` 1.0, `roll_rad` 0.45, `dry_s` 20 |
+| `river_otter.bound` | `stride_m` 0.85, `stance` 0.38, `speed_mps` 1.5, `arch_rad` 0.42, `lift_m` 0.07 |
+| `river_otter.slide` | `accel_mps2` 3.0, `max_mps` 4.5 |
+| `river_otter` other | `porpoise.arc_m` 0.45, `eat.beat_s` 0.36, `look.hold_s` 0.9 |
+| `sea_otter.crack` | `windup_s` 0.32, `anticipate_s` 0.16, `strike_s` 0.07, `recoil_s` 0.26, `raise_m` 0.16, `cracks` 4 |
+| `sea_otter` other | `roll_s` 0.7, `dive_s` 5.0, `kelp_wrap_s` 2.4 |
+| all | `exaggerate` 1.0: scales every raise, roll, arch and recoil together |
+
+**Drawn only.** The motion never feeds a rule. In the game the colony's
+fell, dam and lodge entries (B25) stay where they are and when they are; a
+beaver seen felling a tree is drawn felling the tree the process felled,
+the fall's hit drawn when the stump's entry is written. A creature's
+position is its spawn's (task 8.4), the gait reading the distance it moved.
+
+**The mockup.** A tab "Beavers and otters" (`#critters`) on M25, one 3D
+view (the page's one renderer): a valley stream with a beaver pond, the
+dam, the lodge, a muddy bank and an otter slide, aspens and willows, a
+riffle with trout, and the stream's mouth onto a kelp-edged sea where the
+sea otter rafts. Today and Proposed in the same view, Slow x0.25, Show
+poses, a Follow switch (off by default: the camera never moves on its own),
+every tunable a slider with the RON block printed, the time of day as a
+slider (at night a lantern on the bank, a lamp at the fishing camp at the
+mouth and fireflies light what is near them; the moon stays dim). The code
+is `docs/mockups/ocean/critters.js`; the screenshots are in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU, so they show poses and never smoothness.
+
+**For the game** (after approval and a request): the rig is built once per
+species as Bevy entities (a root with child pivots), the poses blended by
+the same curves, the gait read from the distance moved, `LitByField` and
+`LitLikeTerrain` on the root; the beaver joins `fauna.ron` as task 8.4
+has it.
