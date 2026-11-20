@@ -20,8 +20,11 @@ Writes, in this folder:
                    "Today" is copied texel for texel out of assets/tilesets/atlas.png.
   sheet.png        a contact sheet: each tile tiled 4 x 4, at 3x, today above new.
 
-Nothing here writes into assets/: the game's art changes only after the owner
-approves the look. Run: python docs/mockups/sand/sand_tiles.py
+Nothing here writes into assets/. The owner approved the look on 2026-11-20
+and the new rows of the committed `sand_tiles.png` were written into the
+sheets with `tools/paint_sheet_tile.py`; since then "today" in the atlas is
+the new tile, so that PNG, not a rerun, is the record of the candidates.
+Run: python docs/mockups/sand/sand_tiles.py
 """
 
 from pathlib import Path

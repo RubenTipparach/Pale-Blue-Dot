@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-11-19
+# Its two requirements moved to openspec/specs/planet/rendering and
+# openspec/specs/world/editing when they were built (2026-11-20).
+skip_specs: true

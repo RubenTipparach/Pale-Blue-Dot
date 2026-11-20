@@ -119,6 +119,10 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 /// Bit [`pbd_core::flora::BEACH_BACK_BIT`] is set on the dry ground just
 /// behind a warm beach (`planet_gen::beach_back`, `flora-v2` 12.13): its
 /// trees are the beach's acacias.
+///
+/// Bits 17 to 23 are the mountains' (`mountain-ground`): the tree line's
+/// thinning and krummholz (version 15, `pbd_core::flora::TREE_LINE_SHIFT`),
+/// and the draw-time scree and flat bits (every world).
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let cfg = terrain_config();
@@ -129,7 +133,15 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     // draws it near (`ocean-environments` B24).
     let own = pbd_core::column::own_sheet(planet_gen::top_material(cfg, d, height.floor()))
         .map_or(0, |name| sheet_index(name) + 1);
+    // `mountain-ground`: the tree line (version 15) and the draw-time
+    // relief (every world), on a Mountains cell only.
+    let (thin, krummholz) = pbd_core::mountain::tree_line(cfg, height, biome);
+    let relief = pbd_core::mountain::draw_relief(cfg, d, height, biome);
     material_index(d, height, biome)
+        | thin << pbd_core::flora::TREE_LINE_SHIFT
+        | u32::from(krummholz) << pbd_core::flora::KRUMMHOLZ_BIT
+        | u32::from(relief.scree) << pbd_core::flora::SCREE_BIT
+        | u32::from(relief.flat) << pbd_core::flora::FLAT_BIT
         | own << PLACED_SHEET_SHIFT
         | (biome as u32) << 8
         | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
@@ -190,7 +202,9 @@ pub fn bed_code(drowned: Material) -> u32 {
 /// level, which a face underground has neither of.
 pub fn render_code(material: Material) -> u32 {
     match material {
-        Material::Sand => 1,
+        // Desert sand is sand's code, drawn from the desert sheet as a placed
+        // block (`sand-tiles` design 5).
+        Material::Sand | Material::DesertSand => 1,
         Material::Stone | Material::Rock | Material::Ore => 5,
         Material::Snow => 6,
         Material::JungleGrass => 3,
@@ -894,7 +908,13 @@ mod tests {
         for (i, biome) in biomes.into_iter().enumerate() {
             assert_eq!(biome as usize, i, "the tables are in `Biome` order");
             let slot = tileset_slot(biome);
-            ramps[i] = ramp(tile(slot, 0, 0));
+            // The mountains' tufts stand on the alpine turf (3,2)
+            // (`mountain-ground` design 9), not its scree.
+            ramps[i] = if biome == Biome::Mountains {
+                ramp(tile(slot, 3, 2))
+            } else {
+                ramp(tile(slot, 0, 0))
+            };
             means[i] = [
                 mean(tile(slot, 0, 2)),
                 mean(tile(slot, 2, 1)),
@@ -908,6 +928,97 @@ mod tests {
         assert_eq!(
             means, PLANT_MEANS,
             "PLANT_MEANS should be {means:#08x?}, off the atlas"
+        );
+    }
+
+    /// `mountain-ground` design 10, 11: a Mountains cell's record carries
+    /// its relief, scree at a cliff's foot and a flat, decided from its
+    /// neighbours at the draw, on every world (version 14's as well as 15's);
+    /// its material code is its top's, so a dig takes the cell's own block.
+    #[test]
+    fn mountain_relief_is_drawn_and_moves_no_cell() {
+        use pbd_core::flora::{FLAT_BIT, SCREE_BIT};
+        let cfg = terrain_config();
+        let golden = std::f32::consts::PI * (3. - 5_f32.sqrt());
+        let (mut scree, mut flat) = (0, 0);
+        for i in 0..400_000 {
+            let y = 1. - 2. * (i as f32 + 0.5) / 400_000.;
+            let r = (1. - y * y).sqrt();
+            let d = Vec3::new(
+                r * (golden * i as f32).cos(),
+                y,
+                r * (golden * i as f32).sin(),
+            )
+            .normalize();
+            let height = surface_height(d);
+            if planet_gen::biome_at(cfg, d, height) != Biome::Mountains
+                || pbd_core::settlement::ground::top(cfg, d).is_some()
+            {
+                continue;
+            }
+            let word = surface_code(d, height);
+            let relief = pbd_core::mountain::relief(cfg, d, height);
+            assert_eq!((word >> SCREE_BIT) & 1 == 1, relief.scree, "{d}");
+            assert_eq!((word >> FLAT_BIT) & 1 == 1, relief.flat, "{d}");
+            // The same relief on a version 14 world: a draw-time look.
+            let v14 = TerrainConfig::TENEBRIS_V14;
+            assert_eq!(
+                pbd_core::mountain::draw_relief(&v14, d, height, Biome::Mountains),
+                relief
+            );
+            // The relief rides bits of its own: the code byte is the top's,
+            // as the column holds it.
+            let top = planet_gen::top_material(cfg, d, height.floor());
+            assert_eq!(
+                word & 0xff,
+                material_index(d.normalize_or(Vec3::Y), height, Biome::Mountains),
+                "{d}: the record is its top"
+            );
+            if relief.scree && top == Material::Stone {
+                scree += 1;
+            }
+            if relief.flat {
+                flat += 1;
+            }
+        }
+        assert!(scree > 0 && flat > 0, "{scree} scree, {flat} flat");
+    }
+
+    /// `sand-tiles`: the beach's sand tiles the game samples hold no blue or
+    /// teal texel, and the desert's top is another sand: its mean linear red
+    /// over blue at least twice the beach top's.
+    #[test]
+    fn beach_sand_and_desert_sand_are_drawn_apart() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/tilesets/atlas.png");
+        let atlas = image::open(path).expect("the atlas decodes").to_rgb8();
+        let tile = |biome: Biome, tx: u32| -> Vec<[u8; 3]> {
+            let slot = tileset_slot(biome);
+            let (x0, y0) = ((slot % 4) * 128 + tx * 32, (slot / 4) * 128);
+            (0..32)
+                .flat_map(|y| (0..32).map(move |x| (x, y)))
+                .map(|(x, y)| atlas.get_pixel(x0 + x, y0 + y).0)
+                .collect()
+        };
+        for tx in 0..3 {
+            for c in tile(Biome::Beach, tx) {
+                assert!(
+                    c[2] <= c[0] && c[1] <= c[0],
+                    "beach ({tx},0) has a blue or teal texel {c:?}"
+                );
+            }
+        }
+        let red_over_blue = |texels: Vec<[u8; 3]>| {
+            let lin = |v: u8| ((v as f64 / 255.0 + 0.055) / 1.055).powf(2.4);
+            let r: f64 = texels.iter().map(|c| lin(c[0])).sum();
+            let b: f64 = texels.iter().map(|c| lin(c[2])).sum();
+            r / b
+        };
+        let beach = red_over_blue(tile(Biome::Beach, 0));
+        let desert = red_over_blue(tile(Biome::Desert, 0));
+        assert!(
+            desert >= 2.0 * beach,
+            "desert red/blue {desert:.2} against the beach's {beach:.2}"
         );
     }
 

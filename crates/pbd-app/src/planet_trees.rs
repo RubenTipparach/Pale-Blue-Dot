@@ -85,7 +85,7 @@ pub fn kit() -> &'static Kit {
 
 /// The near draws' vertex counts, one per species: its largest variant and
 /// the fruit.
-pub fn near_vertices() -> [u32; 8] {
+pub fn near_vertices() -> [u32; tree_kit::SPECIES.len()] {
     kit().vertex_max.map(|n| n + FRUIT_VERTICES)
 }
 

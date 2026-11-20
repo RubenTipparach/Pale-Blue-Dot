@@ -35,6 +35,7 @@ pub mod light;
 pub mod liquid;
 pub mod map;
 pub mod missions;
+pub mod mountain;
 pub mod night_lights;
 pub mod ocean;
 pub mod orbit;

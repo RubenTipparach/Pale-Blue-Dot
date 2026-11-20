@@ -440,6 +440,8 @@ pub fn home_biome(material: Material) -> Option<Biome> {
         | Material::Sticks => Biome::Fields,
         Material::JungleGrass => Biome::Jungle,
         Material::Sand => Biome::Beach,
+        // Desert sand (`sand-tiles` design 5): the desert sheet's top.
+        Material::DesertSand => Biome::Desert,
         Material::Rock | Material::Forge => Biome::Mountains,
         Material::Snow => Biome::Tundra,
         Material::Water | crate::flowing_water!() => Biome::Ocean,
@@ -449,6 +451,23 @@ pub fn home_biome(material: Material) -> Option<Biome> {
             Biome::Ocean
         }
     })
+}
+
+/// What a dug sand layer yields (`sand-tiles` design 5 (c)): generated sand
+/// in a cell whose biome is the desert is desert sand; generated sand
+/// anywhere else, and every placed sand, is sand. Generation is untouched:
+/// a desert's column still holds [`Material::Sand`], and the difference is
+/// made here, at the dig. Placed desert sand yields itself without asking.
+pub fn dug_sand(terrain: &TerrainConfig, direction: Vec3, placed: bool) -> Material {
+    if placed {
+        return Material::Sand;
+    }
+    let surface = surface_m(terrain, direction);
+    if planet_gen::biome_at(terrain, direction, surface) == Biome::Desert {
+        Material::DesertSand
+    } else {
+        Material::Sand
+    }
 }
 
 /// The tileset a block is ALWAYS drawn from, generated or placed, when it is

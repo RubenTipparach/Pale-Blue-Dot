@@ -135,6 +135,11 @@ pub struct TerrainConfig {
     /// versions 4 to 12, whose sea floor is sand and stone and whose floes
     /// are pieces; version 14's from it.
     pub sea_cells: Option<crate::ocean::cells::SeaCells>,
+    /// The mountain ground (`mountain-ground`, [`crate::mountain`]): flats
+    /// grassed or snowed under a ragged, lowered snow line, crests scoured
+    /// bare, and a tree line. `None` for versions 4 to 14, whose mountains
+    /// are stone under a snowcap; version 15's from it.
+    pub mountains: Option<crate::mountain::MountainGround>,
 }
 
 /// The beach's back (generator version 12, `flora-v2` design 12.13, survey
@@ -225,7 +230,19 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V14;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V15;
+
+    /// Generator version 15 (`mountain-ground`, approved 2026-11-20): version
+    /// 14 with the mountain ground. Every height and biome is version 14's;
+    /// a Mountains cell that is flat takes alpine turf or soil under a
+    /// ragged snow line lowered to about 170 m and snow over it, a crest
+    /// over the line is scoured to stone, and the range stands firs and
+    /// krummholz to a tree line (`TreeTable::V15`). 13 was never shipped.
+    pub const TENEBRIS_V15: Self = Self {
+        mountains: Some(crate::mountain::MountainGround::V15),
+        trees: crate::flora::TreeTable::V15,
+        ..Self::TENEBRIS_V14
+    };
 
     /// Generator version 14 (`ocean-environments` design B24): version 12
     /// with the sea's cells. Every height, biome and land top is version
@@ -395,6 +412,7 @@ impl TerrainConfig {
         swamps: None,
         beach_back: None,
         sea_cells: None,
+        mountains: None,
     };
 }
 
@@ -414,6 +432,7 @@ impl TerrainConfig {
             11 => Some(Self::TENEBRIS_V11),
             12 => Some(Self::TENEBRIS_V12),
             14 => Some(Self::TENEBRIS_V14),
+            15 => Some(Self::TENEBRIS_V15),
             _ => None,
         }
     }
@@ -434,6 +453,9 @@ impl TerrainConfig {
             swamps: None,
             beach_back: None,
             sea_cells: None,
+            // Version 15's mountain tops are not surveyed: its sites are
+            // version 14's.
+            mountains: None,
             ..*self
         }
     }
@@ -447,6 +469,8 @@ impl TerrainConfig {
             beach_back: None,
             // Version 14's sea cells are drawn and dug, not weather.
             sea_cells: None,
+            // Nor version 15's mountain tops: its climate is version 14's.
+            mountains: None,
             ..*self
         }
     }
@@ -955,6 +979,12 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
         };
     }
     let biome = biome_at(cfg, direction, surface_m);
+    // Version 15's mountain ground (`mountain-ground` decision 1).
+    if biome == Biome::Mountains
+        && let Some(mountains) = cfg.mountains.as_ref()
+    {
+        return mountains.top(cfg, direction, surface_m);
+    }
     if biome == Biome::Mountains {
         return if surface_m > cfg.mountain_snowcap_elev_m {
             Material::Snow
@@ -1302,10 +1332,10 @@ mod tests {
         assert_eq!(
             TerrainConfig {
                 sea_cells: None,
-                ..TerrainConfig::TENEBRIS
+                ..TerrainConfig::TENEBRIS_V14
             },
             v12,
-            "a new world is made on 14, which is 12 with the sea's cells"
+            "version 14 is 12 with the sea's cells"
         );
         let v11 = TerrainConfig::TENEBRIS_V11;
         assert_eq!(v12.climate_ground(), v11);
@@ -1454,7 +1484,7 @@ mod tests {
     fn version_14_is_version_12_s_ground_with_the_sea_s_cells() {
         let v14 = TerrainConfig::for_version(14).expect("version 14 is carried");
         assert_eq!(v14, TerrainConfig::TENEBRIS_V14);
-        assert_eq!(TerrainConfig::TENEBRIS, v14, "a new world is made on 14");
+        assert_eq!(TerrainConfig::for_version(13), None, "13 was never shipped");
         assert_eq!(TerrainConfig::for_version(13), None, "13 was never shipped");
         let v12 = TerrainConfig::TENEBRIS_V12;
         assert_eq!(
@@ -1479,6 +1509,116 @@ mod tests {
             }
         }
         assert!(cells > 0, "no sea cell in the sample");
+    }
+
+    /// Version 14's top blocks, as every world made on it was: taken before
+    /// version 15 landed (CLAUDE.md, "Saved games survive every change";
+    /// `mountain-ground`). Its ground is version 12's, pinned above.
+    #[test]
+    fn version_14_keeps_its_top_blocks() {
+        let v14 = TerrainConfig::for_version(14).expect("version 14 is carried");
+        assert_eq!(v14, TerrainConfig::TENEBRIS_V14);
+        assert_eq!(top_digest(&v14, 10_000), VERSION_14_TOP_DIGEST);
+    }
+
+    const VERSION_14_TOP_DIGEST: u64 = 7_410_970_454_387_630_886;
+
+    /// Mountain cells over the shipped body, as (direction, floored surface).
+    fn mountain_cells(cfg: &TerrainConfig, n: usize) -> Vec<(Vec3, f32)> {
+        sphere(n)
+            .filter_map(|d| {
+                let f = surface_altitude(cfg, d).floor();
+                (biome_at(cfg, d, f) == Biome::Mountains).then_some((d, f))
+            })
+            .collect()
+    }
+
+    /// Version 15 (`mountain-ground`) is version 14's ground with the
+    /// mountain ground: every altitude and biome is version 14's, a top
+    /// differs only on a Mountains cell, and only `mountains` and `trees`
+    /// differ in the config. A new world is made on 15.
+    #[test]
+    fn version_15_is_version_14_s_ground_with_the_mountain_ground() {
+        let v15 = TerrainConfig::for_version(15).expect("version 15 is carried");
+        assert_eq!(v15, TerrainConfig::TENEBRIS_V15);
+        assert_eq!(TerrainConfig::TENEBRIS, v15, "a new world is made on 15");
+        let v14 = TerrainConfig::TENEBRIS_V14;
+        assert_eq!(
+            TerrainConfig {
+                mountains: None,
+                trees: crate::flora::TreeTable::V10,
+                ..v15
+            },
+            v14
+        );
+        // The climate and the city survey read the ground, not the trees:
+        // version 15's are version 14's.
+        let no_trees = |c: TerrainConfig| TerrainConfig {
+            trees: crate::flora::TreeTable::V10,
+            ..c
+        };
+        assert_eq!(no_trees(v15.climate_ground()), v14.climate_ground());
+        assert_eq!(no_trees(v15.site_ground()), v14.site_ground());
+        assert_eq!(digest(&v15, 10_000), digest(&v14, 10_000));
+        for d in sphere(20_000) {
+            let f = surface_altitude(&v15, d).floor();
+            if biome_at(&v15, d, f) != Biome::Mountains {
+                assert_eq!(top_material(&v15, d, f), top_material(&v14, d, f), "{d}");
+            }
+        }
+    }
+
+    /// Mountain flats are grassed or snowed in version 15, steep cells are
+    /// stone, and crests over the snow line are scoured bare; version 14's
+    /// mountains are stone and snow as they were.
+    #[test]
+    fn version_15_grasses_the_flats_and_scours_the_crests() {
+        let v15 = TerrainConfig::TENEBRIS_V15;
+        let m = v15.mountains.expect("version 15 has mountain ground");
+        let (mut meadow, mut snowed, mut steep, mut crests) = (0, 0, 0, 0);
+        for (d, f) in mountain_cells(&v15, 400_000) {
+            let r = crate::mountain::relief(&v15, d, f);
+            let top = top_material(&v15, d, f);
+            let line = m.snow_line(&v15, d);
+            if f > line && r.crest {
+                assert_eq!(top, Material::Stone, "a crest at {d}");
+                crests += 1;
+            } else if r.flat && f <= line {
+                assert!(
+                    matches!(top, Material::Grass | Material::Dirt),
+                    "{d}: {top:?}"
+                );
+                meadow += 1;
+            } else if r.flat {
+                assert_eq!(top, Material::Snow, "{d}");
+                snowed += 1;
+            } else if f <= line {
+                assert_eq!(top, Material::Stone, "{d}");
+                steep += 1;
+            }
+            let old = top_material(&TerrainConfig::TENEBRIS_V14, d, f);
+            assert!(matches!(old, Material::Stone | Material::Snow));
+            // The column tier's top is the same rule's (both tiers call
+            // `top_material`), with soil under turf.
+            if (meadow + snowed + steep) % 97 == 1 {
+                let column = crate::column::generate_solid(&v15, d);
+                let at = column.surface().expect("a mountain has ground");
+                let got = column.material(at);
+                // A vein can reach the top of a stone face (`ore`).
+                assert!(
+                    got == top || (top == Material::Stone && got == Material::Ore),
+                    "{d}"
+                );
+                if top == Material::Grass {
+                    assert_eq!(column.material(at - 1), Material::Soil, "{d}");
+                }
+            }
+        }
+        assert!(meadow > 0 && steep > 0, "{meadow} meadow, {steep} steep");
+        assert!(
+            snowed + crests > 0,
+            "{snowed} snowed flats, {crests} crests"
+        );
     }
 
     /// Version 12's beach back (`flora-v2` 12.13): dry, warm ground of the

@@ -113,6 +113,7 @@ impl GatherSettings {
                 | Material::Dirt
                 | Material::Soil
                 | Material::Sand
+                | Material::DesertSand
         );
         if placed || !by_water || !earth {
             return None;
@@ -190,7 +191,7 @@ impl GatherSettings {
             Material::Grass | Material::DryGrass | Material::JungleGrass => {
                 (Good::FIBRE, self.fibre_one_in, 0xf1b3_e000_u64)
             }
-            Material::Dirt | Material::Soil | Material::Sand => {
+            Material::Dirt | Material::Soil | Material::Sand | Material::DesertSand => {
                 (Good::LOOSE_STONE, self.stone_one_in, 0x5701_e000_u64)
             }
             _ => return None,
