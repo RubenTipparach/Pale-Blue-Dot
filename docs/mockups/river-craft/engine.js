@@ -541,7 +541,11 @@ RC.Stage = function (canvas, def) {
   function lamps() {
     const L = [];
     for (const p of posts) { p.userData.lantern.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, 1, p.userData.lantern]); }
-    for (const l of def.lanterns ? def.lanterns() : []) { if (!l.visible && l.parent) continue; l.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, l.userData.warm, l]); }
+    for (const l of def.lanterns ? def.lanterns() : []) {
+      if (!l.visible && l.parent) continue;
+      // a lantern put out in the boat's menu: dark glass, no glow, lights nothing
+      if (l.userData.out) { l.userData.glass.color.set(0x3a3226); l.userData.glow.visible = false; continue; }
+      l.getWorldPosition(_v); L.push([_v.x, _v.y, _v.z, l.userData.warm, l]); }
     for (let i = 0; i < RC.LAMPS; i++) {
       const e = L[i];
       if (e && S.night) { U.uLampPos.value[i].set(e[0], e[1], e[2]); const w = e[3]; U.uLampCol.value[i].set(LAMP_RGB[0] * 2.4, (LAMP_RGB[1] + 0.3 * (1 - w)) * 2.4, (LAMP_RGB[2] + 0.55 * (1 - w)) * 2.4); }
@@ -552,6 +556,7 @@ RC.Stage = function (canvas, def) {
   // ---- the camera: orbit about a target; drag to turn, wheel or pinch to come closer. Never turns on its own.
   const V = Object.assign({tx: 0, ty: 0, tz: 0, yaw: 0, pitch: -0.5, dist: 20}, def.home);
   function place() {
+    if (def.camera && def.camera(camera, V)) return;   // a scene's own camera (the Rowing tab's first person)
     if (S.follow && def.follow) { const f = def.follow(); V.tx = f[0]; V.ty = f[1]; V.tz = f[2]; }
     const cp = Math.cos(V.pitch);
     camera.position.set(V.tx - cp * Math.cos(V.yaw) * V.dist, V.ty - Math.sin(V.pitch) * V.dist, V.tz - cp * Math.sin(V.yaw) * V.dist);
@@ -561,7 +566,8 @@ RC.Stage = function (canvas, def) {
   canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = clamp(V.pitch - (e.clientY - py) * 0.006, -1.45, -0.08); }
+    if (ptrs.size === 1 && def.look && def.look(e.clientX - px, e.clientY - py)) { /* the scene turned its own view */ }
+    else if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = clamp(V.pitch - (e.clientY - py) * 0.006, -1.45, -0.08); }
     else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) V.dist = clamp(V.dist * pinch0 / d, 4, 90); pinch0 = d; }
     place(); dirty = true;
   });

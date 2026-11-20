@@ -107,3 +107,62 @@ SHALL be treated as a regression, whatever the continent frequency is set to.
 #### Scenario: A later tuning raises the land
 - **WHEN** a change moves the land fraction above the configured band
 - **THEN** a test fails, naming the land fraction and the largest mass's share
+
+### Requirement: Mountain flats are grassed or snowed in version 15
+
+In generator version 15 (`mountain-ground`, 2026-11-20), a Mountains cell
+whose six neighbours stand within one metre of it SHALL take snow above the
+ragged snow line (about 170 m, give or take 15 m) and alpine turf or bare soil
+below it, with soil under turf, and a steeper Mountains cell SHALL take stone
+below the line (and snow over the old 200 m snowcap). Every height and biome
+SHALL be version 14's, and worlds made on an earlier version SHALL keep their
+ground. Version 13 was never shipped.
+
+#### Scenario: A flat bench on a range
+- **WHEN** a version 15 world is generated and a Mountains cell below the
+  snow line has every neighbour within one metre of its height
+- **THEN** its top is grass or dirt, with soil under grass, and the column
+  tier's top is the same rule's
+  (`planet_gen::tests::version_15_grasses_the_flats_and_scours_the_crests`)
+
+#### Scenario: Version 15 is version 14's ground
+- **WHEN** version 15 and version 14 are generated over the sphere
+- **THEN** every altitude and biome is the same, and a top differs only on a
+  Mountains cell
+  (`planet_gen::tests::version_15_is_version_14_s_ground_with_the_mountain_ground`)
+
+#### Scenario: An old world
+- **WHEN** a world made on version 14 is opened
+- **THEN** its top blocks are the same, cell for cell, as before
+  (`planet_gen::tests::version_14_keeps_its_top_blocks`)
+
+### Requirement: Mountains stand trees below a tree line in version 15
+
+In generator version 15, a Mountains cell of turf SHALL stand a tree by a
+density (60 in 256) that falls with altitude from 135 m to none at 160 m:
+firs (the taiga pine at 5 to 8 m) below and krummholz from 142 m. The
+thinning and the krummholz bit SHALL ride the cell record's material word, so
+the CPU's rule and the visibility pass read one answer. No Mountains cell
+SHALL stand a tree in a world of an earlier version.
+
+#### Scenario: Above the line
+- **WHEN** a version 15 Mountains cell stands at or above 160 m
+- **THEN** no tree stands on it, on the CPU or in the visibility pass
+  (`flora::tests::mountains_stand_trees_to_a_tree_line_in_version_15`,
+  `flora::tests::the_tree_rule_is_the_foliage_pass_s`)
+
+#### Scenario: An old range
+- **WHEN** a world made on version 14 is opened
+- **THEN** its mountains stand no trees, as before
+  (`flora::tests::mountains_stand_trees_to_a_tree_line_in_version_15`)
+
+### Requirement: Ridges above the snow line are scoured bare in version 15
+
+In generator version 15, a Mountains cell above the snow line that stands
+above at least five of its six neighbours SHALL take stone, not snow.
+
+#### Scenario: A crest
+- **WHEN** a version 15 cell above the snow line is higher than five
+  neighbours
+- **THEN** its top is stone
+  (`planet_gen::tests::version_15_grasses_the_flats_and_scours_the_crests`)

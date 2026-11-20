@@ -10,6 +10,15 @@
 - [ ] 2.6 The owner's look in the game.
 - [x] 2.7 The shoulder stays low (decision 9, Tools in Hand version 12): `fist_drop_m` 0.16, `arm_follow` 0.7 in `held.ron` and the defaults; the keys and `shovelAt` were already the mockup's; a test on the keyed poses; a capture (`docs/screenshots/held-swing/shovel-low-*.jpg`).
 
+Punch and a swing on every click (design 10 to 12; owner, 2026-11-19: "do tools always play animations when left clicking? can you mock up hand punching stuff"):
+- [x] 3.1 Mockup: the Punch tab of Tools in Hand version 14 (`tool-motion.html#punch`): bare hands punching a tree (the game's shake on each punch), dirt, the air and a refused stone; Hands, Pickaxe and Axe at the air; Today (no hand; no swing but on a breaking block) against Proposed; the `punch` and `swing` blocks as sliders with their RON. Screenshots in `docs/screenshots/hand-punch/` (SwiftShader, no GPU).
+- [x] 3.1a Version 15: the fist re-posed to the owner's photo (design 10, "The fist, matched to the owner's photo"; refs in `ref/`): the forearm long from the lower right, aimed from a virtual elbow; the wrist straight; the back of the hand to the eye, the fingers' column upright on the leading edge, the thumb tucked; the hit at the crosshair's left. Screenshots `docs/screenshots/hand-punch/punch-v15-*.jpg` and `fist-reference-vs-v15.jpg` (SwiftShader, no GPU).
+- [ ] 3.2 The owner's look at the mockup (decision 11 is a recommendation taken, ask only with screenshots; the tab shows each case).
+- [ ] 3.3 (after approval) `held.ron` `punch` and `swing` blocks, validated, one source of defaults; `DigBeat` carries what the click meets and the press; `StrokeClock` runs the free beat at the air and a refused block; bare hands draw the fist (the plug, `punch_pose`); tests on the schedule (design, "In the game, once approved").
+- [ ] 3.4 (after approval) The tree shakes on the stroke's impacts (`StrokeImpact` on a tree) and `HOLD_HIT_S` goes; `tree_shake` tests follow.
+- [ ] 3.5 (after approval) A whoosh at the air and a knock on a thud, from the stroke's schedule (`sound-effects`).
+- [ ] 3.6 (after approval) Captures before and after in the game (`docs/screenshots/hand-punch/`).
+
 Follow-ups, not built:
 - A camera kick on the impact (`camera_kick_rad`, approved at 0): the walking camera's look is the player's raw mouse, so a kick needs its own decision; `held.ron` refuses any value but 0 until then.
 - The mockup's chips flying off each impact and the hit marker (secondary action, decision 8): the game shows the block's cracks and plays the dig sound; chips would be a small particle system of their own.

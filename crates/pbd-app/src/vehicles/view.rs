@@ -16,6 +16,10 @@ pub struct VehicleCamera;
 
 /// How far the look turns, rad.
 const PITCH_LIMIT: f32 = 1.45;
+/// Where a rower's look starts in the seat, rad: down along the oars, the
+/// hands in view (`river-craft` design 9.6; M34's Rowing tab starts at
+/// -0.72).
+pub const ROWER_PITCH: f32 = -0.55;
 /// The chase camera's stand-off, m, per craft, and its range.
 const CHASE_M: [f32; 3] = [8.0, 5.0, 9.0];
 const CHASE_RANGE_M: [f32; 2] = [4.0, 80.0];

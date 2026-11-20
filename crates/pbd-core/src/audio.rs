@@ -460,13 +460,20 @@ impl Family {
 /// lamp, a fire).
 pub fn surface_family(material: Material) -> Option<Family> {
     Some(match material {
-        Material::Stone | Material::Rock | Material::Ore | Material::Forge => Family::Stone,
+        Material::Stone
+        | Material::Rock
+        | Material::Ore
+        | Material::Forge
+        | Material::ReefRock
+        | Material::Basalt
+        | Material::MusselBed => Family::Stone,
+        Material::SeaIce => Family::Snow,
         Material::Soil | Material::Dirt | Material::Tilled => Family::Dirt,
         Material::Grass | Material::JungleGrass => Family::Grass,
         Material::DryGrass => Family::Dry,
-        Material::Sand => Family::Sand,
+        Material::Sand | Material::DesertSand => Family::Sand,
         Material::Snow => Family::Snow,
-        Material::Workbench => Family::Wood,
+        Material::Workbench | Material::Sticks => Family::Wood,
         Material::Water | crate::flowing_water!() => Family::Shallow,
         Material::Air
         | Material::Torch

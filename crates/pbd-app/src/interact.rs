@@ -19,6 +19,8 @@ use bevy::prelude::*;
 pub enum Reader {
     Husbandry,
     Fruit,
+    /// The glowing mushrooms (`glowing-mushrooms` design 3).
+    Glow,
     Farm,
     Doors,
     Boats,
@@ -36,6 +38,8 @@ pub enum Act {
     TakeIncubator,
     TakeUp,
     PickFruit,
+    /// Pick a glowing mushroom (`glowing-mushrooms` design 3).
+    PickGlow,
     Open,
     Harvest,
     Check,
@@ -64,7 +68,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 18] = [
+pub const ACTS: [Row; 19] = [
     row(Act::Collect, "Collect", Reader::Husbandry),
     row(Act::SetEggs, "Set eggs under", Reader::Husbandry),
     row(Act::Feed, "Feed", Reader::Husbandry),
@@ -74,6 +78,7 @@ pub const ACTS: [Row; 18] = [
     row(Act::TakeIncubator, "Take", Reader::Husbandry),
     row(Act::TakeUp, "Take up", Reader::Husbandry),
     row(Act::PickFruit, "Pick", Reader::Fruit),
+    row(Act::PickGlow, "Pick", Reader::Glow),
     row(Act::Open, "Open", Reader::Farm),
     row(Act::Harvest, "Harvest", Reader::Farm),
     row(Act::Check, "Check", Reader::Farm),

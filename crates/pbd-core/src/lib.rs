@@ -4,6 +4,7 @@
 pub mod aim;
 pub mod atmosphere;
 pub mod audio;
+pub mod beaver;
 pub mod bounce;
 pub mod cell_key;
 pub mod cloud_puffs;
@@ -34,6 +35,7 @@ pub mod light;
 pub mod liquid;
 pub mod map;
 pub mod missions;
+pub mod mountain;
 pub mod night_lights;
 pub mod ocean;
 pub mod orbit;

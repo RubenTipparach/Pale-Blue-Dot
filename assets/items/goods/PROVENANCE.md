@@ -74,3 +74,10 @@ logs with rope across, and the rowboat a planked hull from above with its
 thwart and oars. The palette is the fence's two browns and ink (`FARM`),
 with the fibre's straw and the rope's tan. Each is an inventory icon with
 the 1 px outline.
+
+## glowing-mushrooms design 3: the glowing mushroom
+
+`glowing-mushroom` is drawn by `tools/gen_item_icons.py` (`GLOW`): the glowing
+plant's low cap in the cyan its head burns with at night
+(`pbd_core::flora::GLOW_HEAD_RGB`) over the plant's pale green stalk, with the
+1 px outline of an inventory icon.

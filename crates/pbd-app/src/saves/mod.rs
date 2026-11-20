@@ -302,6 +302,17 @@ pub struct WorldSave {
     serial: u64,
 }
 
+/// A `glow-plant` record (`glowing-mushrooms` design 4) into the picks the
+/// column build reads; any other record is left alone.
+fn fold_glow_pick(edits: &mut Edits, record: &StoredRecord) {
+    if record.kind != pbd_core::flora::GLOW_PLANT_RECORD {
+        return;
+    }
+    if let Some(picked) = record.read::<pbd_core::flora::GlowPicked>() {
+        edits.glow.pick(record.id as u32, picked.day);
+    }
+}
+
 /// The next [`WorldSave::serial`].
 fn next_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -371,6 +382,12 @@ impl WorldSave {
         } = replay(&text);
         if damaged > 0 {
             warn!("{damaged} damaged lines skipped in {}", slot.id);
+        }
+        // The glowing mushrooms picked, which the column build reads beside
+        // the edits (`glowing-mushrooms` design 4).
+        let mut edits = edits;
+        for record in records.of_kind(pbd_core::flora::GLOW_PLANT_RECORD) {
+            fold_glow_pick(&mut edits, record);
         }
         info!(
             "world '{}' loaded: {} edits across {} cells",
@@ -602,6 +619,7 @@ impl WorldSave {
         let mut last = 0;
         for record in records {
             let line = record.line(author);
+            fold_glow_pick(&mut self.edits, &record);
             let before = self.records.put(record.clone());
             if author.is_player() {
                 self.yields.touch_record(before.as_ref(), &record);
@@ -626,6 +644,7 @@ impl WorldSave {
             return false;
         }
         let kind = record.kind.clone();
+        fold_glow_pick(&mut self.edits, &record);
         let before = self.records.put(record.clone());
         self.yields.touch_record(before.as_ref(), &record);
         self.carried = Some(carried.clone());

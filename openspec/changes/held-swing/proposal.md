@@ -24,3 +24,13 @@ Shown first in the Dig and Chop tabs of the Tools in Hand mockup (M36,
 mockup for all the tools stuff for digging, choppin and fishing"), as the
 STRIKE stroke beside today's chop, running the same curve the game would. The
 game changes only after the owner approves it.
+
+## Added 2026-11-19: bare hands punch, and every click swings
+
+The owner, 2026-11-19: "do tools always play animations when left clicking?
+can you mock up hand punching stuff". Today a tool moves only while a block
+breaks, and bare hands draw nothing. Proposed (design 10 to 12): the approved
+hand punches as a fist on the same steady dig beat, the tree shaking on each
+punch; and every left click swings, a whiff that carries through at the air
+and a thud that stops and kicks back at a refused block. Shown in the Punch
+tab of Tools in Hand (version 14) before the game changes.

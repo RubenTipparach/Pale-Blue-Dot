@@ -122,7 +122,7 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read_write> visible: array<u32>;
-@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,13>;
+@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,14>;
 @group(0) @binding(4) var<storage,read_write> foliage: array<u32>;
 @group(0) @binding(5) var<storage,read_write> water: array<u32>;
 @group(0) @binding(6) var<storage,read_write> clutter: array<u32>;
@@ -173,7 +173,7 @@ fn clear_indirect() {
     args[4].first_vertex = 654u;
     args[4].first_instance = 0u;
     // The near trees: only their instances are counted here.
-    for (var s = 5u; s < 13u; s++) {
+    for (var s = 5u; s < 14u; s++) {
         atomicStore(&args[s].instance_count, 0u);
     }
 }
@@ -313,7 +313,7 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
     // so an old world keeps its trees and version 10 grows M13's forests.
     let entry = params.plant_means[min(biome, 7u)].w;
-    let density = (entry >> 16u) & 0xffu;
+    let density = tree_line_density((entry >> 16u) & 0xffu, cell.metadata.y);
     let grass = material==2u || material==3u || material==7u;
     let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));
     let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
@@ -335,15 +335,28 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
 const SALT_SPECIES: u32 = 0x59u;
 const SALT_CACTUS: u32 = 0x5du;
 const CACTUS_DENSITY: u32 = 8u;
-fn tree_species(id: u32, biome: u32) -> u32 {
+fn tree_species(id: u32, word: u32) -> u32 {
+    // `mountain-ground` design 12: krummholz at a version 15 tree line
+    // (`pbd_core::flora::KRUMMHOLZ_BIT`), the ninth near draw.
+    if ((word >> KRUMMHOLZ_BIT) & 1u) == 1u { return 8u; }
+    let biome = tree_biome(word);
     let r = roll(id, SALT_SPECIES);
     if biome == 1u { return 4u; }
     if biome == 2u { return select(1u, 0u, r < 0.6); }
     if biome == 3u { return 7u; }
     if biome == 4u { return select(3u, 2u, r < 0.55); }
     if biome == 5u { return select(1u, 6u, r < 0.75); }
+    if biome == 6u { return 5u; }
     if biome == 7u { return select(1u, 5u, r < 0.85); }
     return 0u;
+}
+// `mountain-ground` design 12: the record's tree-line thinning and the
+// krummholz bit (`pbd_core::flora::TREE_LINE_SHIFT`, `KRUMMHOLZ_BIT`),
+// nought on every world before version 15.
+const TREE_LINE_SHIFT: u32 = 17u;
+const KRUMMHOLZ_BIT: u32 = 21u;
+fn tree_line_density(density: u32, word: u32) -> u32 {
+    return density*(15u - min((word >> TREE_LINE_SHIFT) & 0xfu, 15u))/15u;
 }
 
 // Whether this cell has a voxel column to draw the inside of. The CPU decides
@@ -647,7 +660,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
         // Inside the near ring, the near model as well (design 10.4): it
         // cross-fades with the mid cards across the ring's last 0.3.
         let close = distance(params.camera.xyz, center) < params.flora_more.z;
-        let species = tree_species(cell.spare.x, tree_biome(cell.metadata.y));
+        let species = tree_species(cell.spare.x, cell.metadata.y);
         for (var e = 0u; e < 2u; e++) {
             if entries[e] != 0xffffffffu {
                 let slot = atomicAdd(&args[1].instance_count,1u);

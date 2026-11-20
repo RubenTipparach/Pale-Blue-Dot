@@ -187,6 +187,16 @@ code changes only after the owner approves the mockup. Until then the game
 keeps the fall look the owner pointed to on 2026-11-15 ("go back to these
 shaders"): the blotched froth of `water.wgsl` at `dc0c5cb`.
 
+## Update the existing artifact (owner, 2026-11-19)
+
+**Standing instruction from the user:** "update existing artifacts where
+applicable". New work on something an artifact already covers goes into that
+artifact as a new tab, section or version, republished to its same link.
+- A new mockup page is only for a subject no existing page covers.
+- Find the page on the tracker first; its link and version go in
+  `docs/mockups/mockup-work.md` and the tracker's row.
+- The same goes for guides, gate pages, benchmark pages and the survey.
+
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
 **Standing instruction from the user:** "make sure to apply the "tabs"

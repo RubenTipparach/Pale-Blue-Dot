@@ -1479,3 +1479,105 @@ unchanged; the jungle cascade's deep pool, its rings unchanged.
 **Not changed:** the approved look of any fall of 4 m or more, the reach and
 its fade, the wall blend, saves (nothing here is stored). The frame cost can
 only fall (fewer quads and bubbles, one multiply in the rings); not measured.
+
+## Rain splashes on the water (6.3; owner, 2026-11-19: "Build rest of phase 2")
+
+The plan above (item 3) says the rain splashes of `weather-rain` 6.4 land on
+water too, as the M32 crown on the water's surface. This is how. It is not a
+falling-water look: no froth, lip, fall foot, splash or mist term of a fall
+is touched, and nothing is drawn on a vertical face (E12). The tide is gone
+(`no-tides`): the sea's mean level is one number.
+
+**Measured (read off the code, 2026-11-19, `claude/phase-2-1` at
+`30e9c3a`).**
+- **No splash on any water.** `planet_splash.rs` builds the near column list
+  from each column's topmost solid layer and drops the column where water
+  stands on it (`top_of`: `column.material(top + 1).is_water()`), and a cell
+  off the column tier whose ground is under sea level (`height < 0`). So a
+  river, a pond, a poured pool and the sea get no droplets; they get only the
+  rings the water's fragment draws (`rain_rings`, faded by footprint, 7.1).
+- **A ground splash in front of water is erased.** The splash draw runs
+  between the terrain and `Node3d::MainTransparentPass`, before
+  `WaterCompositeLabel`. It writes no depth, and the water composite paints
+  over every pixel whose main-pass depth is behind the water's surface. A
+  droplet on a bank seen against the river behind it is painted over, as the
+  fall spray was before 6.1. This is the open item "Water splash FX weak +
+  hidden in front of water; rain ground splash missing" (see "The old item"
+  below).
+
+**The look.** The approved M32 crown, on the water:
+- every impact on water is a crown (six droplets thrown out in a ring, the
+  late central jet, a lower droplet), at the crown's approved sizes and
+  speeds (`splash_size_m.x`, `.w`, `splash_up_mps`, `splash_out_mps`) and
+  its full share (`splash_keep.x`), since all of it is standing water;
+- coloured as the water it came from: the water's deep colour
+  (`water_deep`) mixed toward the sky it mirrors, under the same sky, sun and
+  lamps as the ground's droplets, so it is dark at night but by the lamps,
+  and lit like the terrain;
+- on a river, a pond or a poured pool the impact stands on the drawn top
+  (`water_flow::drawn_top_m`: the corner levels the mesher draws, so a
+  sloped or part-full top is met where it is drawn); on the sea, on the
+  waved sheet: the shader evaluates `pbd::sea`'s `sea_surface` at the impact
+  with the same table, depth and band filter the sheet's vertices use, so a
+  crown rides the swell instead of floating over a trough or sinking under a
+  crest;
+- the rings the water already draws are the crown's footprint, as the
+  puddle's rings are on the ground;
+- out to the same reach as the rings and the ground's droplets
+  (`rain_detail_reach_m`, 20 m, faded over the last 4 m).
+
+**Drawn after the water.** The whole splash draw (ground and water) moves
+from before the transparent pass to the water's own pass, after the water
+and before the fall splash (6.1), whose soft mist must not be painted over by a droplet behind it, the clouds, the rain volume and the lens, so the
+rain fog and the drops on the lens still lie over it. Its pipeline keeps its
+own shader and group layout (`planet_splash.rs`); it has no depth
+attachment and tests in its fragment, as the fall splash does: a droplet
+behind the main pass's depth (terrain in front) or behind the water's own
+depth (a surface in front of it, or the eye under a pool) is discarded. So
+a crown over a river shows, a ground splash in front of the river shows, and
+from under a pool the surface overhead hides the crowns on it. The water's
+depth is kept for this pass (`StoreOp::Store`) whenever splashes draw.
+
+**Gates, unchanged.** Rain, liquid, the altitude gate, not from under the
+sea, tops only, none under a roof, the reach. A water column's top is open to
+the sky by construction, as a ground top is.
+
+**What the player's settings turn off.** None, as for the ground's
+splashes: there is no splash setting. RAIN SHADOW is the rain volume and its
+fog (CLAUDE.md, "What the owner means by rain shadow"); these droplets are
+not part of it and stay when it is off. `PBD_PASS_OFF=splash` (the existing
+instrument) still skips them, and with them the fall splash;
+`PBD_PASS_OFF=rain_splash` skips the rain splashes alone.
+
+**Cost (an estimate; not measurable in a cloud session).**
+- The instance count is still `columns x 48 slots x 8 droplets`, capped by
+  `MAX_COLUMNS` (512). Water columns were dropped from the list and now
+  count: over a river or the sea the list holds about the same ~220 columns
+  as over land, so the ceiling does not move, and over land nothing changes.
+- More of the lanes are alive over water (every impact a crown, 8 droplets,
+  keep 1.0, against the ground's mix of 4 to 8 at 0.5 to 1.0): about 1.5 to 2
+  times the live droplets of a meadow, still the 0.2 to 0.3 M blended pixels
+  the M32 estimate allowed.
+- A sea impact runs `sea_surface` once per droplet vertex (four per droplet,
+  only for lanes that fire): 72 wave components at most, the same loop the
+  sheet runs per vertex.
+- Two depth loads per droplet fragment, in place of the hardware depth test.
+- The list is still rebuilt only on a cell crossing or a fine-set change; the
+  sea's waves cost no upload (the table is the water pass's, uploaded per
+  frame already). The `weather-rain` 6.5 A/B (`storm`, `rain-stroll`, 0.25 ms
+  p50 budget) covers this draw; a sea scenario in rain would price the crowns
+  on the swell. Neither can be run here (lavapipe, no GPU).
+
+### The old item: "Water splash FX weak + hidden in front of water; rain ground splash missing"
+
+Checked against this branch (2026-11-19):
+- **Rain ground splash missing:** no longer true. `weather-rain` 6.4 is in
+  this branch (`planet_splash.rs`, `rain_splash.wgsl`); its 6.5 perf A/B is
+  still owed on the owner's machines.
+- **Hidden in front of water:** still true for the rain splashes (above);
+  fixed here by drawing them after the water. The fall spray and mist were
+  fixed by 6.1. The near shower's streaks (`weather.rs`, a CPU mesh in the
+  transparent pass) are still painted over where water is behind them; they
+  are rain, not a splash, and stay as they are here.
+- **Weak:** the fall foot's splash is M31's (6.4, the Splash tab; the
+  waterfall rule) and is not touched.

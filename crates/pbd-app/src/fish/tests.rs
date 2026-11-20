@@ -784,3 +784,49 @@ fn the_cast_line_follows_the_float_from_the_tip() {
     trail.rebase(Vec3::X);
     assert_eq!(trail.points, vec![tip - Vec3::X]);
 }
+
+/// `ocean-environments` 18.2 (design B23, cause 4): a school in a river over
+/// the sea's level reads its depth from the RIVER's surface, which is what
+/// `draw::schools` dims it by. Its anchor's surface is the river's top, not
+/// the sea's sphere (from which the depth was negative and the school never
+/// dimmed), and a fish half a metre under the river's top is half a metre
+/// deep.
+#[test]
+fn a_school_in_a_river_reads_its_depth_from_the_river() {
+    use crate::planet::terrain;
+    let river = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: 28.25_f32.to_radians(),
+        lon: 0.75_f32.to_radians(),
+    });
+    assert!(pbd_core::rivers::floods(terrain::terrain_config(), river));
+    let set = crate::planet::lod::generate_fine(
+        river,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
+    let mut contact = crate::planet::PlanetContact::test_planet(5);
+    contact.set_fine(&std::sync::Arc::new(set));
+    let water = crate::config::WaterSettings::default();
+    let sea = Sea::new(&water);
+    let beds = Mutex::new(HashMap::new());
+    let r = terrain::PLANET_RADIUS;
+    let bed = r + terrain::surface_height(river);
+    let top = contact
+        .column_water(river * (bed + 0.5))
+        .flatten()
+        .map(|top| r + top)
+        .expect("the river's water on its bed");
+    assert!(top > sea.radius + 1.0, "the river stands over the sea");
+    // The anchor as the spawner puts it: at the fresh water's top.
+    let anchor = river * top;
+    let here = PlanetWater::at(&sea, None, Some(&contact), &beds, anchor, 0.0);
+    let surface = here.surface(anchor);
+    assert!(
+        (surface - top).abs() < 1e-3,
+        "the school's surface is the river's: {surface} against {top}"
+    );
+    let fish = river * (top - 0.5);
+    let depth = surface - fish.length();
+    assert!((depth - 0.5).abs() < 1e-2, "half a metre down: {depth}");
+    assert!(sea.radius - fish.length() < 0.0, "the sea's rule gave none");
+}

@@ -38,26 +38,6 @@ fast again within reach.
 - **THEN** the line comes taut, the barge follows, and easing off lets the
   line go slack again
 
-### Requirement: An anchor drags until it holds, by bed
-
-An anchor on the bed SHALL hold up to the bed's holding force times how far
-it has set times the lift of its rode, and SHALL drag toward its craft while
-the rode's pull exceeds that. Mud SHALL set within about a metre of dragging,
-sand SHALL never fully set, and rock SHALL hold once a fluke catches. A rode
-hauled short SHALL break the anchor out so it can be weighed.
-
-#### Scenario: Sand against mud
-
-- **WHEN** the same skiff anchors in the same current on sand and on mud
-- **THEN** on sand the anchor keeps dragging slowly, and on mud it bites and
-  the skiff lies still to its rode
-
-#### Scenario: Weighing anchor
-
-- **WHEN** the rode of a holding anchor is hauled in
-- **THEN** the craft is pulled up toward the anchor, the anchor breaks out
-  and comes aboard
-
 ### Requirement: Logs drive, jam and are caught by a boom
 
 A log in water SHALL float and drift as a hull. Logs SHALL collide with

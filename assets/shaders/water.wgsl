@@ -170,6 +170,8 @@ struct WaterView {
     // ripples' share by that depth (none over shallow water, faded in).
     feet: array<vec4<f32>, 8>,
     feet_more: array<vec4<f32>, 8>,
+    // `glowing-mushrooms`: the carried lights, two a light (`carried_light`).
+    carried: array<vec4<f32>, 8>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -793,6 +795,29 @@ fn fall_foot_offset(i: u32, p: vec3<f32>, radial: vec3<f32>) -> vec4<f32> {
     return vec4<f32>(rel - radial*up, fade);
 }
 
+// `glowing-mushrooms` design 8: the lights players carry (`carried_light.rs`),
+// at most CARRIED_LIGHTS, two vec4s each: where (planet frame, w its reach,
+// zero ending the list), then its colour times strength. Each is a lamp's
+// windowed inverse square and N.L (`lamp_bake::falloff`) from its exact
+// position, with no shadow, times a torch's gain; the same in every shader
+// that takes it, which a test holds.
+const CARRIED_LIGHTS: u32 = 4u;
+const CARRIED_GAIN: f32 = 3.0;
+fn carried_light(lights: array<vec4<f32>, 8>, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    var sum = vec3<f32>(0.0);
+    for (var i = 0u; i < CARRIED_LIGHTS; i++) {
+        let at = lights[2u*i];
+        if at.w <= 0.0 { break; }
+        let to = at.xyz - p;
+        let d = max(length(to), 1e-3);
+        let nl = dot(n, to/d);
+        if d > at.w || nl <= 0.0 { continue; }
+        let w = max(1.0 - pow(d/at.w, 4.0), 0.0);
+        sum += lights[2u*i + 1u].rgb*(nl*w*w/(1.0 + (d/2.2)*(d/2.2))*CARRIED_GAIN);
+    }
+    return sum;
+}
+
 // The lamps near the eye on a point (`lampLight` with a wrap of one), as the
 // mist and the bubbles take them.
 fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
@@ -1216,6 +1241,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         let sky_up = water_sky_radiance(water_sky_frame(radial, radial, sun_direction));
         color = mix(color, mix(view.foam_color.rgb, sky_up, 0.4)*water_lit*1.15,
             clamp(e*e*0.6*view.fall_more.y, 0.0, 1.0));
+    }
+    // The lights players carry (`glowing-mushrooms` design 9), on the water
+    // and its foam as on the ground: no shadow, as much as a lamp shows here.
+    if (view.carried[0].w > 0.0 && !below) {
+        let day = smoothstep(-0.13, 0.20, dot(radial, sun_direction));
+        let share = 1.0 - day*clamp(in.sky_light, 0.0, 1.0);
+        color += mix(albedo, view.foam_color.rgb, foam)
+            *carried_light(view.carried, in.body_position, normal)*share;
     }
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
