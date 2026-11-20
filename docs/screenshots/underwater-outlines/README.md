@@ -27,9 +27,18 @@ Bright blue pixels within the rod's area (blue over green by 25, blue over
 | 2. Edge fogged by the samples' mean transmittance | 60 | 0 |
 | 3. Edge split into near and far, each fogged by its own distance | 33 | 28 |
 | 4. Step 3 with the unmix guarded | 33 | 20 |
+| 5. The composite's sample mask (no unmixing) | 34 | 42 |
+| 6. The water cap covered by its sample share | 34 | 42 |
+| 7. The wobble reads colour at the same whole pixel as depth | 33 | 42 |
+| **8. No multisampling by default** | **0** | **0** |
 
-The 33 left are mostly the edge's own blend of rod and water, which is the
-antialiased edge, now at the water's colour and not the unfogged far one. A
-handful of dark specks remain where the unmix still overshoots. Not shot:
+Steps 5 to 7 moved nothing because the cause was upstream of every water
+pass. A capture of the raw scene (the compose passing it straight through)
+showed the bright edge pixels already in it: the 4x multisample resolve
+had blended rod and sky into one colour before any water shading ran, and
+no later depth test can split a blend. With multisampling off by default
+(step 8; `PBD_MSAA=2|4` brings it back) every pixel is one surface and the
+edge is clean: `rod-edge-zoom-final.png` (before, step 7, step 8) and
+`rod-edge-before-after.png`. Not shot:
 the owner's darker scene (at dusk or night), and the hex steps against far
 water at night.

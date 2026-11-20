@@ -121,4 +121,4 @@ against what it would cost.
 
 ## 19. Bright outlines round everything seen under water (owner, 2026-11-19; design B24)
 
-- [x] 19.1 (Built 2026-11-20; `docs/screenshots/underwater-outlines/`; a few dark specks remain at the edge, and the night shot is owed.) The underwater wobble takes a sample only from the same surface as the pixel (depth checked at the wobbled point), so colour and fog never come from two surfaces. Verify: before and after stills under the sea with the rod held and hex steps against far water, in `docs/screenshots/underwater-outlines/`.
+- [x] 19.1 (Built 2026-11-20; `docs/screenshots/underwater-outlines/`: the edge clean with multisampling off by default; the night shot is owed.) The underwater wobble takes a sample only from the same surface as the pixel (depth checked at the wobbled point), so colour and fog never come from two surfaces. Verify: before and after stills under the sea with the rod held and hex steps against far water, in `docs/screenshots/underwater-outlines/`.
