@@ -653,3 +653,174 @@ Made from what the game has (it has no rubber or hide), proposed for the
 port: **pine pitch** (3 pine cones on the campfire) and an **inner tube**
 (6 wool, 2 rope, 2 pine pitch at the workbench), a pack item placed on water
 like a boat. A tube left on water drifts; one on the bank stays.
+
+## 11. The port, part one (owner, 2026-11-20: "approve sand and mountains, and rivers")
+
+The owner approved M34 for the game on 2026-11-19 (version 6) and asked for
+it to be built on 2026-11-20. The order taken is the owner's most recent
+asks first: rowing with two oars (9), the one anchor (4), the boat's menu
+(10), the raft's lantern (9.8); then the tube rider's pose; the tug, the log
+drive and the nets after those. Each is built with its tests and captures
+and pushed before the next.
+
+### 11.1 Rowing (design 9) in the game
+
+- `pbd_core::vehicle::oars`: `RowingSpec` (`oars`, `stroke`, `rower`, the
+  tunables of 9.7), `oar_pose` (the schedule, one function read by the force
+  and the drawing), `oar_geom`, the elbow solve, and `RowingState` (the one
+  stroke clock, each oar's rest and pose, the catch and release counts the
+  drawing reads). `LoonSpec` gains `rowing: Option<RowingSpec>`, `Some` only
+  for the raft; a kind with it is rowed and never takes the Loon's stroke.
+  The Loon's and the tube's stroke are untouched.
+- **The frame.** 9.7 wrote the RON in the mockup's frame (+x the bow). The
+  game's spec files are all in the craft's own frame (+x right, -z the bow),
+  so `vehicles.ron` writes the same numbers there: the pin `(1.0, 0.62,
+  0.0)`, the seat `(0.0, 0.62, 0.52)`. Recommendation taken (ask only with
+  screenshots): one frame for every number in the file.
+- **The water at the pin.** The mockup's raft floats with its waterline at
+  y 0. The game's bobs and heels, so the blade's depth and clearance are
+  taken from the water's height at each pin in the raft's frame each
+  substep (`Context::above_sea`), not from y 0: the blade buries
+  `blade_depth_m` under the water it is in.
+- **The force** is the mockup's: the blade's drag through the water
+  (`-1/2 rho Cd A s |v| v`, horizontal), `s` its share under the water
+  times its share over the bed, the blade's own velocity from the schedule.
+  Measured in the core test sea: W for 30 s makes 25.6 m and 1.03 m/s (the
+  pole made 6+ m in the same test); one oar alone turns the raft 107
+  degrees in 8 s; on a 0.16 m bed the blades rest on it and the pull falls
+  from 583 N to 243 N and the raft makes 0.1 m in 10 s against 5.9 m in
+  deep water. The mockup's 0.5 m/s was on its own simpler hull drag; the
+  game's raft keeps its hull and resistance as they were, so it rows faster
+  through the water. Not judged yet in real time (no GPU here).
+- **The seat.** The rower sits on the frame's bench amidships, so the
+  raft's `paddler` mass moves to `(0.0, 0.85, 0.52)` and its seat eye to
+  `(0.0, 1.36, 0.42)`; the seat camera rides the body's lean
+  (`Craft::eye`, `head_follow`, 9.6), never the mouse look.
+- **The drawing** (`vehicles/draw.rs`, `rowing_frame`): the beam, two posts
+  with swivel oarlocks, the bench, the two oars (loom, handle, grip, a
+  feathering blade), the rower facing the bow (cap peak and nose ahead,
+  hair at the back, feet braced on the beam) leaning from the hip, his arms
+  two blocks a side from the shoulders to the grips through the solved
+  elbow, a block hand round each handle. The first-person hands
+  (`vehicles/oar_hand.rs`) are M36's approved hand built from the axe's
+  grip as M34's are, closed on each handle and turned toward the elbow,
+  hung on the raft rather than the camera so they are lit as the raft is
+  (`LitByField`, `LitLikeTerrain`). Each part is in one view only: the
+  rower's body and arms in the chase view, the hands in the seat view.
+- **The tool in hand.** While the oars row, both hands are on the handles,
+  so the held tool (`held.rs`) is put down in the seat view; with the oars
+  at rest a tool in hand is shown as before (fishing from the raft,
+  `small-boats` design 6) and the oar hands are hidden. Recommendation taken
+  (ask only with screenshots).
+- **Keys** (`controls.rs`, `RAFT`): W/S "row forward or back", A/D "turn",
+  Q/E "row the left or right oar". The panel says "Oar on the bed" while a
+  blade rests on a shallow bed (9.2).
+- **Not built yet:** the splash, wash, drips and swirls (9.5). They are
+  drawn only and nothing reads them; the catch and release counts they
+  would key on are in `OarState`.
+- **Saves:** nothing new. The stroke is derived; the frame and oars are
+  part of the raft.
+
+### 11.2 The anchor (design 4) in the game
+
+- `pbd_core::vehicle::anchor`: `AnchorSpec` (`vehicles.ron`, `anchor:` on
+  the Loon and the raft; the tube has none, 10.4) and `Anchor`, its work:
+  dropping at `drop_mps`, the rode paying out only to the bed (`None` rope)
+  or veered to the boat's rope setting, setting in `set_s`, sliding toward
+  the boat under a pull over `slide_n` until set, holding once set, hauled
+  in at `haul_mps` on Weigh and lifted aboard. One anchor per boat.
+- **The bed.** The game does not yet tell the anchor what the bed is made
+  of; every bed sets in 1.3 s (the mockup's rock) and slides over 900 N.
+  Recommendation taken (ask only with screenshots): the bed's three rates
+  wait until the bed's material is read at the anchor.
+- **The rode is the mooring line.** While the anchor is on the bed,
+  `Craft::mooring` is the line to it (the existing pull, `Craft::moor`), so
+  a save keeps exactly what it kept before: the point, the rode, anchored.
+  Falling and coming aboard are not lines. The anchor's work is not saved:
+  a save taken while it falls keeps the boat unanchored until it lands, and
+  the landing is written at once (`Fleet.dirty` on every change of phase).
+- **Old saves.** An anchored record reads back as an anchor set and holding
+  on the rode it was saved with (design 4: "a rode already saved keeps its
+  length"). A harbour boat placed at anchor (`place.rs`, `rode`) is the
+  same. `place::rode` (3 x depth + 2 m) is kept for those berths only; a
+  new drop stops at the bed.
+- **T** drops it where the water is at most 35 m deep (as before), or weighs
+  it when it is out (and stops hauling if pressed again while weighing); a
+  boat tied to a bollard is cast off as before. The panel reads "at anchor",
+  or the anchor's state ("dropping", "setting", "weighing"), and "T  weigh
+  the anchor" or "T  drop the anchor".
+- **Drawn:** the anchor (M34's shank, stock, crown and flukes) on the bed
+  or falling, and its rode as a straight line from the bow; stowed on the
+  raft's deck by the bow. The sagging, current-dragged rope of design 3 is
+  not built.
+
+### 11.3 The boat's menu (design 10) in the game
+
+- **C opens the pack with the boat's panel beside its HOLD**
+  (`desktop/boat.rs`), aboard a boat with an anchor or on foot within its
+  boarding reach. The HOLD is the pack's own panel and clicks, so the hold
+  has one rule and one view; the boat's panel adds the name and condition,
+  the anchor and the lantern. C or Esc closes it, as I or Esc close the
+  pack. Recommendation taken (ask only with screenshots): the pack screen
+  with a panel added, not a second screen with a second copy of the hold.
+  On foot, C finds the nearest boat in reach rather than the aimed one.
+- **The panel:** the kind's name and "Dry" or "Water aboard"; Anchor: its
+  state and Drop / Weigh / Stop; Rope: `-`, the setting ("To the bed" or
+  metres), `+`, and To the bed, with "Out" the rode out now; Lantern: a
+  check, On or Out, on a boat with a lantern. Plain labels only.
+- **Saved** (`VehicleRecord`): `rope_m: Option<f64>` and `lantern_out:
+  bool`, each written only when set (the `berth` and `made` pattern), so
+  every record before them reads and writes as it was, and opens with its
+  rope "to the bed" and its lantern on. A change in the menu sets
+  `Fleet.dirty`, so it is on the durable path the update it happens.
+- The C row is in the bindings table (`vehicles`, "the boat") and on the
+  craft's panel.
+
+### 11.4 The raft's lantern (design 9.8) in the game
+
+- `LoonSpec` gains `lamp: Option<CraftLampSpec>` (`at`, the bow post's
+  lantern), `Some` for the raft only. Its light is not a second set of
+  numbers: it is the placed post lantern's, from the one table
+  (`pbd_core::light::carried_light(Material::LanternPost)`), its level,
+  tint and dusk switch. Recommendation taken (ask only with screenshots):
+  the `range_m`, `colour` and `intensity` tunables of 9.8 are not added,
+  so the raft's lamp cannot drift from the town lantern's.
+- **How it joins the field:** the carried-light list (`carried_light`,
+  `glowing-mushrooms` part B) is the "short list of moving lamps uploaded
+  each frame and summed into the same lamp term" 9.8 asked for: the
+  terrain, the water and every field-lit mesh already add it per pixel
+  with the bake's falloff. `vehicles::lamps::gather` lists every lit craft
+  lantern; `carried_light::gather` puts the player's own light first and
+  then the craft lanterns nearest the eye, up to the list's four. No baked
+  shadow or bounce (stated limitation, as for a carried torch).
+- The drawn flame and the light both go out with the lantern check.
+
+### 11.5 The tube rider (the inner tube, version 4) in the game
+
+The game's tube rider lay back and kicked (2026-11-16). M34's version 4,
+approved with the page: no lantern, the rider sits back in the ring with
+the legs over its front and the feet in the water, and paddles with the
+hands. The tube's physics stays the Loon's stroke (a stroke on one side at
+a time; W alternates); the drawing reads it: the hand on the stroke's side
+goes in at the front, pulls back through the water through the power
+phase and comes back low over the rim through the recovery (backing the
+other way round), the other hand resting on the rim; the body sits up 20
+degrees from its 40 to reach while a hand paddles; each arm is two bones
+through an elbow solved out and down, up while the hand is in the water.
+The feet no longer kick.
+
+### 11.6 The rower's look
+
+In the seat the hands are on the handles, half a metre under the eye and
+in front of the chest, so a level look does not see them. Boarding a raft
+in the seat starts the look 0.55 rad (31 degrees) down along the oars to
+the bow (M34's Rowing tab starts at 0.72); the mouse turns it anywhere as
+before. Recommendation taken (ask only with screenshots).
+
+### 11.7 Open after this part
+
+- The splash, wash, drips and swirls (9.5).
+- The bed's material deciding how fast an anchor sets (4).
+- The current derived from the cells (1, 2), lines between craft (3), the
+  tug and barges, logs, booms and bundles (5), nets (6).
+- The frame cost: not measured (no GPU in this session).

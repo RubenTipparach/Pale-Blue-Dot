@@ -111,6 +111,7 @@ pub fn gather(
     dusk: Option<Res<crate::planet::lod::DuskLamps>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    crafts: Option<Res<crate::vehicles::lamps::CraftLamps>>,
     mut lights: ResMut<CarriedLights>,
 ) {
     let mut next = Vec::new();
@@ -140,6 +141,17 @@ pub fn gather(
             sources.push((eye_at - up * CHEST_BELOW_EYE_M, colour));
         }
         next.extend(merge(&sources));
+        // Then the craft lanterns burning, nearest the eye first
+        // (`river-craft` design 9.8), as many as the list holds.
+        if let Some(crafts) = crafts.as_deref() {
+            let mut near: Vec<Carried> = crafts.0.clone();
+            near.sort_by(|a, b| {
+                a.at.distance_squared(eye_at)
+                    .total_cmp(&b.at.distance_squared(eye_at))
+            });
+            next.extend(near);
+            next.truncate(MAX_CARRIED_LIGHTS);
+        }
     }
     if *lights.0 != next {
         lights.0 = next;

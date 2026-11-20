@@ -1277,7 +1277,7 @@ fn hand_colours(
         .collect()
 }
 
-fn hand_mesh(built: &hand::HandMesh, colours: Vec<[f32; 4]>) -> Mesh {
+pub(crate) fn hand_mesh(built: &hand::HandMesh, colours: Vec<[f32; 4]>) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
@@ -1304,7 +1304,7 @@ fn hand_png(texture: Texture) -> &'static [u8] {
 }
 
 /// A hand texture as drawn: sRGB, nearest-sampled and tiled.
-fn hand_image(texture: Texture) -> Image {
+pub(crate) fn hand_image(texture: Texture) -> Image {
     let pixels = image::load_from_memory(hand_png(texture))
         .expect("assets/textures/hand/*.png: tools/gen_held_tools.py writes them")
         .to_rgba8();
@@ -1558,8 +1558,16 @@ fn hold(
     let events = std::mem::take(&mut cue.events);
     rod.shoulder = s.stroke.shoulder.into();
     rod.step(&s.rod, &cue, &events, dt);
+    // While a raft's oars row, both hands are on their handles
+    // (`river-craft` design 9.6): the tool in hand is put down.
+    let rowing = aboard
+        .as_deref()
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok())
+        .and_then(|v| v.craft.rowing())
+        .is_some_and(|(_, r)| r.running);
     let on_foot = walking.is_some_and(|w| w.active)
-        || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
+        || (seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles) && !rowing);
     // The stroke reads the dig's beat; bare hands keep it for the sounds.
     let in_hand = tools.held();
     let (kind, posed_from) = stroke_tool(in_hand);
