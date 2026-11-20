@@ -1326,6 +1326,19 @@ pixel's own colour carries the object's detail. Only the far colour (the
 sky's or the far ground's raw colour) is read from a neighbour that is all
 far, and any error in it is scaled by `f * T_near`.
 
+**Where the line really was: the water cap (2026-11-20).** The mask fix in
+the composite left the dull line almost unchanged, because most of it is
+drawn after the composite. The water cap, the sheet seen from under the
+surface with the sky through Snell's window, is drawn over the composed
+scene. It hid itself by sample 0's depth alone (`water_hidden`). An edge
+pixel whose sample 0 was behind the sheet got the sheet's whole colour,
+over the held tool's share of the pixel too. Now `water_cover` counts the
+share of the pixel's samples the sheet is in front of, the same mask the
+colour was resolved with:
+- the sheet is hidden only where that share is nought;
+- elsewhere the cap and the flowing water are alpha-blended over by it.
+A pixel the sheet fully covers draws exactly as before.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

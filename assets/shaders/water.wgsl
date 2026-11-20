@@ -814,6 +814,29 @@ fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
 // shading, first, so a fragment hidden behind the scene or dithered away
 // costs none of the waves, and the same test for the flowing water's depth
 // pre-pass, which leaves the shading one fragment a pixel.
+// The share of the pixel's samples the sheet is in front of (reversed Z,
+// larger nearer). The scene's colour is the resolve of those samples, so
+// this is the mask that matches it. Deciding by sample 0 alone drew the
+// sheet over the whole of an edge pixel whose sample 0 was behind it, the
+// sky through the surface laid over the held tool's share of the pixel: a
+// bright line round everything seen from under the water (owner,
+// 2026-11-20: "its where water rendering outline doesnt match the object",
+// "THE REAL FIX IS A MASK CHANEL THAT MATCHES"; `ocean-environments` B24).
+fn water_cover(in: VertexOut) -> f32 {
+    let size = textureDimensions(scene_depth);
+    let coord = clamp(vec2<i32>(in.clip.xy),vec2<i32>(0),vec2<i32>(size)-1);
+#ifdef MULTISAMPLED
+    let n = i32(textureNumSamples(scene_depth));
+    var front = 0;
+    for (var k = 0; k < n; k++) {
+        if (textureLoad(scene_depth,coord,k) <= in.clip.z + 1e-6) { front += 1; }
+    }
+    return f32(front)/f32(max(n,1));
+#else
+    return select(0.0, 1.0, textureLoad(scene_depth,coord,0) <= in.clip.z + 1e-6);
+#endif
+}
+
 fn water_hidden(in: VertexOut) -> bool {
     let radial = safe_normal(in.body_position);
     // The same partition the terrain applies, in the same pixel's dither
@@ -842,9 +865,11 @@ fn water_hidden(in: VertexOut) -> bool {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
         if (owner_t <= m) { return true; }
     }
-    // Behind the scene (the main pass's depth; reversed Z, larger nearer).
-    let uv = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
-    if (load_depth(uv) > in.clip.z + 1e-6) { return true; }
+    // Behind the scene (the main pass's depth; reversed Z, larger nearer):
+    // hidden only where the sheet is in front of none of the pixel's samples.
+    // Where it covers some, `fragment` lays it over by that share
+    // (`ocean-environments` B24).
+    if (water_cover(in) <= 0.0) { return true; }
     // The back of the game's water seen from dry air: the face toward the
     // eye draws it (as `fragment` decides `below` for it).
     if (in.kind != 0u && view.fx.y < 0.25
@@ -1107,7 +1132,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         // composite draws them in front of the seabed (`ocean-environments`
         // B5): the sheet is drawn over the composite, so it carries its own.
         seen += under_water_light(view.camera_time.xyz, -look, camera_distance);
-        return vec4<f32>(seen,1.);
+        return vec4<f32>(seen,water_cover(in));
     }
     var reflected_ray = reflect(-look,normal);
     // A wall of the game's water (a fall, a sheet's edge) mirrors the sky as
@@ -1225,7 +1250,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let fogged = mix(color,fog.rgb,fog.a*clamp(in.sky_light,0.,1.));
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
-    return vec4<f32>(fogged,1.);
+    return vec4<f32>(fogged,water_cover(in));
 }
 
 // ---- The sea's screen trace (`lighting-model` L8, 10.3) ----------------------

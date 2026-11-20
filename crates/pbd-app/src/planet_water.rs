@@ -1358,6 +1358,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                             write_mask: ColorWrites::ALL,
                         }),
                     ]
+                } else if matches!(key.pass, Pass::Cap | Pass::Flowing) {
+                    // The sheet laid over by the share of the pixel's samples
+                    // it is in front of (its alpha, `water_cover`), so its
+                    // edge against a nearer object matches that object's
+                    // resolved edge (`ocean-environments` B24).
+                    vec![Some(ColorTargetState {
+                        format: key.format,
+                        blend: Some(BlendState::ALPHA_BLENDING),
+                        write_mask: ColorWrites::ALL,
+                    })]
                 } else if matches!(key.pass, Pass::Splash | Pass::Bubbles) {
                     // Straight alpha "over", as the splash's `AlphaMode::Blend`
                     // material blended in the main pass.
