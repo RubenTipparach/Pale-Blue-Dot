@@ -89,6 +89,53 @@ To measure:
   once one exists. A cloud session cannot measure frame time
   (CLAUDE.md), and says so.
 
+## 2a. What the terrain LOD allows (read from the code, 2026-11-20)
+
+How the ground is drawn today:
+- **Column tier:** real 1 m-layer columns within 90 m (`column.ron`).
+- **Fine heightfield bands:** levels 8 to 11 out to 2,400, 1,200, 600 and
+  300 m (`BAND_M`, `planet_lod.rs:42`), rebuilt on the CPU around an
+  anchor every 40 m.
+- **Base:** one level-7 tier covering the whole globe, uploaded once:
+  163,842 cells about 45 m wide (`planet_lod.rs:33`). It is also what is
+  seen from orbit. The shader assumes the finest level is the base's plus
+  4 (`planet_surface.wgsl:100`).
+- **One body:** `PLANET_RADIUS` is a single constant
+  (`planet_terrain.rs:13`).
+
+What scales with the radius, rung by rung, holding the cell at 2.833 m:
+
+| Body | Finest | Base (finest - 4) | Base cells, whole globe | Fine bands |
+| --- | --- | --- | ---: | --- |
+| 300 m | L7 | L3 | 642 | wider than the planet (1.9 km round): clamp to it |
+| 600 m | L8 | L4 | 2,562 | as above |
+| 1,200 m | L9 | L5 | 10,242 | as above at the outer bands |
+| 2,400 m | L10 | L6 | 40,962 | as today |
+| **4,800 m** | **L11** | **L7** | **163,842** | **today** |
+| 9,600 m | L12 | L8 | 655,362 | as today |
+| 19,200 m | L13 | L9 | 2,621,442 | as today |
+| 38,400 m | L14 | L10 | 10,485,762 | as today |
+
+- **Near the player, nothing scales.** The column tier and the bands are
+  fixed in metres and in cells, so the ground you walk on costs the same
+  on every body.
+- **The whole-globe base is what scales:** four times the records per
+  rung, uploaded at load, and walked by the visibility pass every frame.
+- **Small bodies are easy:** the base is tiny, and the bands are only
+  clamped to the planet.
+
+**Limit, as built (recommendation taken, ask only with screenshots; not
+measured: no GPU here):**
+- **9,600 m** (655k base cells, 4 times today) is the largest body the
+  LOD should carry unchanged. It is still to be measured on the desktop.
+- **19,200 m and up** need a coarser far tier, not more of the same: a
+  base at finest - 5 or - 6 with one more band, so the whole-globe tier
+  stays near today's 164k. Nothing in the design stops that, so the real
+  ceiling is then the cell key (`region-cell-keys`, levels to 17, 307 km)
+  and `f64` positions.
+- **Making the radius per body** (one `PLANET_RADIUS` today) comes first
+  for any second body, whatever its size. That is `per-body-rendering`.
+
 ## 3. The planet viewer
 
 The owner suggested "a seperate build system in some javacript electron
