@@ -128,13 +128,63 @@ What scales with the radius, rung by rung, holding the cell at 2.833 m:
 measured: no GPU here):**
 - **9,600 m** (655k base cells, 4 times today) is the largest body the
   LOD should carry unchanged. It is still to be measured on the desktop.
-- **19,200 m and up** need a coarser far tier, not more of the same: a
-  base at finest - 5 or - 6 with one more band, so the whole-globe tier
-  stays near today's 164k. Nothing in the design stops that, so the real
-  ceiling is then the cell key (`region-cell-keys`, levels to 17, 307 km)
-  and `f64` positions.
+- **19,200 m and up** need a different far layer, not more of the same
+  (2b).
 - **Making the radius per body** (one `PLANET_RADIUS` today) comes first
   for any second body, whatever its size. That is `per-body-rendering`.
+
+## 2b. The farthest layer: a cube-sphere with textures and normal maps (owner, 2026-11-20)
+
+The owner: "the farthest layer here would be a traditional cube->sphere
+system with textures and normal maps".
+
+So the whole-globe hex base stops being the farthest thing drawn:
+- **Far planet:** a cube-sphere, a cube's six faces subdivided and pushed
+  out to the sphere. It is a few thousand vertices whatever the radius,
+  drawn with:
+  - an albedo texture (biome and top-material colour);
+  - a normal map (the relief);
+  - a height channel for its silhouette at the limb.
+- **Where its maps come from:** the game's own generator, `pbd-core`'s
+  `surface_altitude`, `biome` and `top_material`, sampled per texel. They
+  are not authored by hand, so they always match the ground.
+  - They are derived data, not saved (CLAUDE.md: what the seed decides is
+    never saved).
+  - They may be cached on disk keyed by world seed and generator version,
+    and rebuilt when either changes.
+  - Player edits are too small to see at that distance, so they never
+    touch the maps.
+- **Resolution:** a fixed texel budget per body, for example six
+  1,024-pixel faces, about 40 m a texel on the home world. Larger bodies
+  get coarser texels, or a face quadtree that refines only the faces near
+  the camera. Either way the cost is set by the texture size, not the
+  cell count, so it stays flat as the radius grows.
+- **The hand-over:**
+  - the hex tiers (column, the fine bands, and a hex base kept only out
+    to a fixed distance) draw near the player;
+  - the cube-sphere draws beyond that;
+  - the same dither cross-fade the bands use joins them.
+  - From orbit only the cube-sphere draws. Planet-wide hex records then
+    drop out of the frame entirely, so the base's four-fold growth per
+    rung (2a) no longer matters.
+- **Same light, same frame:** the cube-sphere is lit and fogged like the
+  terrain: the terrain's sun, the atmosphere, and night lights from the
+  night-lights clusters. It sits in the same body-local frame as water and
+  air (CLAUDE.md invariants). The sea is drawn over it as today's far sea
+  is.
+- **The pixel look:** at the distances it draws, one hex is a pixel or
+  less. So the maps sample colour per cell centre, nearest-filtered,
+  which keeps the blocky palette look rather than a smooth satellite
+  photo. This is to be judged in a mockup with screenshots before it goes
+  into the game.
+- **Every body uses it:** moons, other planets and, without the hex tiers
+  at all, gas giants (bands from their own colour rules). So
+  `per-body-rendering`'s far bodies come from one renderer.
+
+**What it changes in the limit (2a):** with the far planet drawn this way,
+the LOD has no size ceiling of its own. What limits size is the cell key
+(`region-cell-keys`, to L17, a 307 km radius) and how big a world is fun
+to cross.
 
 ## 3. The planet viewer
 
