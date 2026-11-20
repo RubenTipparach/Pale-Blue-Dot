@@ -25,7 +25,7 @@ fn the_shipped_file_parses_and_validates() {
     let s = settings();
     s.validate().unwrap();
     // A partial file inherits the rest.
-    let partial: HusbandrySettings = ron::from_str("(taming: (fear_moving_m: 9.0, fear_still_m: 4.5, reach_m: 2.5, spook_cost: 0.5, decay_per_hour: 5.0, follow_s: 60.0))").unwrap();
+    let partial: HusbandrySettings = ron::from_str("(taming: (fear_moving_m: 9.0, fear_still_m: 4.5, reach_m: 2.5, spook_cost: 0.5, decay_per_hour: 5.0, follow_s: 60.0, wild_follow_s: 20.0))").unwrap();
     assert_eq!(partial.taming.spook_cost, 0.5);
     assert_eq!(partial.land, s.land);
     assert!(ron::from_str::<HusbandrySettings>("(tamng: ())").is_err());

@@ -206,6 +206,9 @@ pub struct TamingSettings {
     pub decay_per_hour: f32,
     /// Seconds a newly tamed animal follows.
     pub follow_s: f32,
+    /// Seconds a wild animal follows after eating from the hand
+    /// (`taming-hearts`).
+    pub wild_follow_s: f32,
 }
 
 /// Needs, mood and health (decision 6; S8, S9).
@@ -324,6 +327,7 @@ impl HusbandrySettings {
                 t.spook_cost,
                 t.decay_per_hour,
                 t.follow_s,
+                t.wild_follow_s,
             ],
         )?;
         if t.fear_still_m > t.fear_moving_m {

@@ -34,3 +34,7 @@ pixel.
 To change a piece, change `tools/art/ui_panels_blend.py`, re-render into
 `docs/mockups/ui/rendered/`, and copy it here again with this table's
 commit updated.
+
+`heart.png` (11 x 10, `taming-hearts`) is drawn by hand as a pixel grid, not
+copied from the mockup: the hearts that rise over an animal fed from the hand,
+an emote with the 1 px outline of an inventory icon.
