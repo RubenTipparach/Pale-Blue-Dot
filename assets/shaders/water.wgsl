@@ -1426,7 +1426,27 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
-    color = mix(color, mix(deep,color,exp(-extinction*travel)), wet);
+    var transmit = exp(-extinction*travel);
+#ifdef MULTISAMPLED
+    // An edge pixel's colour is the resolve of near and far samples, so fog
+    // it by their mean transmittance, not sample 0's alone: a near sample 0
+    // left the far share of the colour unfogged, a bright rim round the
+    // held tool (`ocean-environments` B24, the second cause).
+    if (under && !sky) {
+        let size = textureDimensions(scene_depth);
+        let coord = clamp(vec2<i32>(uv*vec2<f32>(size)),vec2<i32>(0),vec2<i32>(size)-1);
+        let n = i32(textureNumSamples(scene_depth));
+        var sum = transmit*0.0;
+        for (var k = 0; k < n; k++) {
+            let d = textureLoad(scene_depth,coord,k);
+            if (d > 1e-7) {
+                sum += exp(-extinction*length(reconstruct_local(uv,d)-ray.origin));
+            }
+        }
+        transmit = sum/f32(max(n,1));
+    }
+#endif
+    color = mix(color, mix(deep,color,transmit), wet);
     // The sheet the near plane clips, for an eye under the surface (B19):
     // a ray that crosses the surface nearer than `NEAR_SHEET_M` saw the sky
     // nearly clear and the bank above as a silhouette through the hole,

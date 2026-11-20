@@ -1288,6 +1288,17 @@ stands still for the 2 to 4 pixels the shift would have crossed, which
 is not visible at that size. No other shader term changes, and nothing
 changes above the water.
 
+**A second, smaller cause, seen in the first after-capture (2026-11-20):**
+single bright blue pixels were left on the rod's edge. The scene is drawn
+with 4x multisampling. An edge pixel's colour is the resolve of rod and
+unfogged background, but the composite reads only sample 0's depth. When
+that sample is the rod, the background's share of the colour is fogged
+for the rod's few centimetres and stays bright. The fix: with the eye
+under the water, the composite's transmittance is the mean of each
+sample's own `exp(-extinction * distance)`, sky samples counting as none.
+An edge pixel is then fogged by the share of it that is far, and an
+interior pixel, all four samples alike, is unchanged.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
