@@ -131,6 +131,8 @@ pub const DEV_MACROS: &[&str] = &[
     "error_once",
     "debug_once",
     "trace_once",
+    // Inline assembly: an instruction template, never text.
+    "asm",
 ];
 
 /// Methods whose string arguments are diagnostics or labels, never shown:
@@ -256,6 +258,12 @@ pub const DEV_SCOPES: &[(&str, &str)] = &[
     ("crates/pbd-app/src/desktop.rs", "verify_route"),
     ("crates/pbd-app/src/desktop.rs", "verify_flight"),
     ("crates/pbd-app/src/vehicles.rs", "report_steps"),
+    // The allocation table's file header (`alloc-trace`, a measurement).
+    ("crates/pbd-app/src/alloc_trace.rs", "start"),
+    // The bot's control socket's JSON replies (`bot-control`, `--showcase`).
+    ("crates/pbd-app/src/desktop/showcase/control.rs", "open"),
+    // Why a beaver passed a reach over, for the log.
+    ("crates/pbd-app/src/beaver.rs", "passed_over"),
 ];
 
 pub const HINT: &str = "move it to assets/locale/locale_en.yaml and call tr(\"key\")";
@@ -686,6 +694,9 @@ impl<'ast> Visit<'ast> for Linter<'_> {
     fn visit_attribute(&mut self, _: &'ast syn::Attribute) {}
 
     fn visit_pat(&mut self, _: &'ast syn::Pat) {}
+
+    /// An `extern "C"` ABI name is a calling convention, never text.
+    fn visit_abi(&mut self, _: &'ast syn::Abi) {}
 
     fn visit_item(&mut self, item: &'ast syn::Item) {
         let attrs: &[syn::Attribute] = match item {

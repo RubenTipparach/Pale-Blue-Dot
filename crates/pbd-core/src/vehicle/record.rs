@@ -56,6 +56,15 @@ pub struct VehicleRecord {
     /// only for one, so every other craft's record is as it was.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub made: bool,
+    /// The anchor's rope setting, m (`river-craft` design 10.5); absent is
+    /// "to the bed". Written only where set, so every older record reads
+    /// and writes as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rope_m: Option<f64>,
+    /// The lantern put out in the boat's menu (design 10.5). Written only
+    /// when out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lantern_out: bool,
 }
 
 /// Every craft in a world, as the save file holds them.
@@ -91,6 +100,8 @@ impl Craft {
             berth: self.berth,
             yard: None,
             made: self.made,
+            rope_m: self.rope_m,
+            lantern_out: self.lantern_out,
         }
     }
 
@@ -148,6 +159,15 @@ impl Craft {
             length,
             anchored,
         });
+        craft.rope_m = record.rope_m.filter(|r| r.is_finite() && *r > 0.0);
+        craft.lantern_out = record.lantern_out;
+        // A saved anchor is on the bed, set and holding, on the rode it was
+        // saved with.
+        if craft.has_anchor()
+            && let Some(m) = craft.mooring.filter(|m| m.anchored)
+        {
+            craft.anchor = Some(super::anchor::Anchor::holding(m.at, m.length));
+        }
         Ok(craft)
     }
 }

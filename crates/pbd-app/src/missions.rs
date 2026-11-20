@@ -50,6 +50,8 @@ pub struct Missions {
     /// Which opening of a world has joined the chain (design 4):
     /// [`WorldSave::serial`].
     joined: Option<u64>,
+    /// The focus was picked on the tree and is to be stored.
+    pub refocused: bool,
 }
 
 /// How long a finished mission's "Done" line stays up, seconds.
@@ -61,6 +63,10 @@ pub fn progress_of(save: &WorldSave) -> Progress {
     save.records
         .get(MISSIONS_KIND, MISSIONS_ID)
         .and_then(|r| r.read::<Progress>())
+        .map(|mut p| {
+            p.migrate();
+            p
+        })
         .unwrap_or_default()
 }
 
@@ -222,7 +228,7 @@ pub fn count(mut c: Counting) {
         return;
     };
     let joining = c.missions.joined != Some(save.serial());
-    if happened.is_empty() && !joining {
+    if happened.is_empty() && !joining && !c.missions.refocused {
         return;
     }
     let slots = c.hotbar.as_deref().map(|h| h.0.clone()).unwrap_or_default();
@@ -238,7 +244,7 @@ pub fn count(mut c: Counting) {
     let chain = &c.chain.0;
     let missions = &mut *c.missions;
     let mut done = Vec::new();
-    let mut changed = false;
+    let mut changed = std::mem::take(&mut missions.refocused);
     // A world just opened (every load replaces the save): read its record
     // and join the chain, closing what the world already holds.
     if joining {
@@ -257,6 +263,7 @@ pub fn count(mut c: Counting) {
         done.extend(step.done);
     }
     for id in &done {
+        missions.progress.focus_past(chain, id);
         let title = chain.get(id).map_or(id.as_str(), |m| m.title.as_str());
         info!("mission done: {id} ({title})");
         missions.notice = Some((title.to_string(), NOTICE_S));

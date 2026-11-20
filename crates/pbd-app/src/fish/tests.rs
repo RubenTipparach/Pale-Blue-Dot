@@ -784,3 +784,179 @@ fn the_cast_line_follows_the_float_from_the_tip() {
     trail.rebase(Vec3::X);
     assert_eq!(trail.points, vec![tip - Vec3::X]);
 }
+
+/// A school laid every frame lays into the buffers its mesh already holds
+/// (`memory-leak`): once it has reached its size a frame moves no attribute's
+/// buffer, so nothing is allocated for it, and what it lays is what laying
+/// it into a new mesh would.
+mod laid_in_place {
+    use super::*;
+    use bevy::mesh::{MeshVertexAttribute, VertexAttributeValues};
+
+    struct Deep;
+    impl Water for Deep {
+        fn surface(&self, point: Vec3) -> f32 {
+            let _ = point;
+            1000.0
+        }
+        fn bed(&self, point: Vec3) -> f32 {
+            let _ = point;
+            990.0
+        }
+    }
+
+    const ATTRIBUTES: [MeshVertexAttribute; 7] = [
+        Mesh::ATTRIBUTE_POSITION,
+        Mesh::ATTRIBUTE_COLOR,
+        Mesh::ATTRIBUTE_UV_0,
+        Mesh::ATTRIBUTE_NORMAL,
+        bodies::ATTRIBUTE_SWIM_AXES,
+        bodies::ATTRIBUTE_SWIM_WAVE,
+        bodies::ATTRIBUTE_SWIM_UP,
+    ];
+
+    fn school() -> (School, Species) {
+        let roster = FaunaConfig::default().0.roster(HOME_BODY).to_vec();
+        let species = roster[0].clone();
+        let school = School::spawn(&PLANET, 0, &species, Vec3::Y * 995.0, 11, &Deep);
+        assert!(!school.is_empty(), "a school with fish in it");
+        (school, species)
+    }
+
+    fn lay(
+        mesh: &mut Mesh,
+        school: &School,
+        species: &Species,
+        headings: &mut draw::DrawnHeadings,
+    ) {
+        let swim = draw::DrawnSwim::default();
+        draw::build(
+            &PLANET,
+            mesh,
+            school,
+            species,
+            None,
+            None,
+            0.5,
+            Vec3::ZERO,
+            (headings, &swim, 1.0 / 60.0),
+        );
+    }
+
+    fn new_mesh() -> Mesh {
+        Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+    }
+
+    /// Each attribute's buffer: where it is and how long.
+    fn buffers(mesh: &Mesh) -> Vec<(usize, usize)> {
+        ATTRIBUTES
+            .iter()
+            .map(|a| match mesh.attribute(a.id).expect("laid") {
+                VertexAttributeValues::Float32x2(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x3(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x4(v) => (v.as_ptr() as usize, v.len()),
+                _ => panic!("an attribute of another type"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_school_is_laid_into_the_buffers_it_holds() {
+        let (school, species) = school();
+        let mut headings = draw::DrawnHeadings::default();
+        let mut mesh = new_mesh();
+        lay(&mut mesh, &school, &species, &mut headings);
+        let first = buffers(&mesh);
+        for frame in 0..30 {
+            lay(&mut mesh, &school, &species, &mut headings);
+            assert_eq!(buffers(&mesh), first, "frame {frame} moved a buffer");
+        }
+    }
+
+    #[test]
+    fn a_school_relaid_is_the_school_laid_fresh() {
+        let (school, species) = school();
+        // The same history of eased headings for both, so only the mesh
+        // each is laid into differs.
+        let (mut a, mut b) = (
+            draw::DrawnHeadings::default(),
+            draw::DrawnHeadings::default(),
+        );
+        let mut relaid = new_mesh();
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut new_mesh(), &school, &species, &mut b);
+        let mut fresh = new_mesh();
+        lay(&mut fresh, &school, &species, &mut b);
+        for a in ATTRIBUTES {
+            let (x, y) = (relaid.attribute(a.id), fresh.attribute(a.id));
+            assert_eq!(
+                x.map(VertexAttributeValues::get_bytes),
+                y.map(VertexAttributeValues::get_bytes),
+                "{} differs",
+                a.name
+            );
+        }
+        // And the normals are what `compute_flat_normals` makes of the
+        // positions.
+        let mut bevy_normals = fresh.clone();
+        bevy_normals.compute_flat_normals();
+        assert_eq!(
+            bevy_normals
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes),
+            fresh
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes)
+        );
+    }
+}
+
+/// `ocean-environments` 18.2 (design B23, cause 4): a school in a river over
+/// the sea's level reads its depth from the RIVER's surface, which is what
+/// `draw::schools` dims it by. Its anchor's surface is the river's top, not
+/// the sea's sphere (from which the depth was negative and the school never
+/// dimmed), and a fish half a metre under the river's top is half a metre
+/// deep.
+#[test]
+fn a_school_in_a_river_reads_its_depth_from_the_river() {
+    use crate::planet::terrain;
+    let river = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: 28.25_f32.to_radians(),
+        lon: 0.75_f32.to_radians(),
+    });
+    assert!(pbd_core::rivers::floods(terrain::terrain_config(), river));
+    let set = crate::planet::lod::generate_fine(
+        river,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
+    let mut contact = crate::planet::PlanetContact::test_planet(5);
+    contact.set_fine(&std::sync::Arc::new(set));
+    let water = crate::config::WaterSettings::default();
+    let sea = Sea::new(&water);
+    let beds = Mutex::new(HashMap::new());
+    let r = terrain::PLANET_RADIUS;
+    let bed = r + terrain::surface_height(river);
+    let top = contact
+        .column_water(river * (bed + 0.5))
+        .flatten()
+        .map(|top| r + top)
+        .expect("the river's water on its bed");
+    assert!(top > sea.radius + 1.0, "the river stands over the sea");
+    // The anchor as the spawner puts it: at the fresh water's top.
+    let anchor = river * top;
+    let here = PlanetWater::at(&sea, None, Some(&contact), &beds, anchor, 0.0);
+    let surface = here.surface(anchor);
+    assert!(
+        (surface - top).abs() < 1e-3,
+        "the school's surface is the river's: {surface} against {top}"
+    );
+    let fish = river * (top - 0.5);
+    let depth = surface - fish.length();
+    assert!((depth - 0.5).abs() < 1e-2, "half a metre down: {depth}");
+    assert!(sea.radius - fish.length() < 0.0, "the sea's rule gave none");
+}

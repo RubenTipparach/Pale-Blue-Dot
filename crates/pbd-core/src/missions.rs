@@ -582,6 +582,11 @@ pub struct Progress {
     /// it, and dropped with the mission's counts.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seen: BTreeMap<String, BTreeSet<String>>,
+    /// The one mission the player is on (`mission-playthrough` 3.5): picked
+    /// on the mission tree, carried on to the next of its branch when it is
+    /// done. Absent from a record written before it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus: Option<String>,
 }
 
 impl Progress {
@@ -615,9 +620,61 @@ impl Progress {
             .filter(move |m| self.standing(chain, m) == Standing::Open)
     }
 
-    /// The mission the HUD shows: the first open one.
+    /// Bring a record written by an older tree up to this one's objectives
+    /// (`mission-playthrough` 3.9): "Go fishing" dropped its first
+    /// objective, the cast, so a record still holding two counts for it
+    /// keeps the second, the fish caught.
+    pub fn migrate(&mut self) {
+        if let Some(counts) = self.counts.get_mut("go-fishing")
+            && counts.len() == 2
+        {
+            counts.remove(0);
+        }
+    }
+
+    /// The first open mission, in the tree's order.
     pub fn current<'a>(&'a self, chain: &'a Chain) -> Option<&'a Mission> {
         self.open(chain).next()
+    }
+
+    /// The one mission the HUD shows: the focus while it is open, else the
+    /// first open one.
+    pub fn focused<'a>(&'a self, chain: &'a Chain) -> Option<&'a Mission> {
+        self.focus
+            .as_deref()
+            .and_then(|id| chain.missions.iter().find(|m| m.id == id))
+            .filter(|m| self.standing(chain, m) == Standing::Open)
+            .or_else(|| self.current(chain))
+    }
+
+    /// Make `id` the focus, when it is open. Whether it changed.
+    pub fn focus_on(&mut self, chain: &Chain, id: &str) -> bool {
+        let open = chain
+            .missions
+            .iter()
+            .any(|m| m.id == id && self.standing(chain, m) == Standing::Open);
+        if !open || self.focus.as_deref() == Some(id) {
+            return false;
+        }
+        self.focus = Some(id.to_string());
+        true
+    }
+
+    /// A mission was finished: when it was the focus, the focus goes on to
+    /// the first open mission that needs it (the next of its branch), or to
+    /// none, and the HUD falls back to the first open one.
+    pub fn focus_past(&mut self, chain: &Chain, done: &str) {
+        if self.focus.as_deref() != Some(done) {
+            return;
+        }
+        self.focus = chain
+            .missions
+            .iter()
+            .find(|m| {
+                (m.needs.iter().any(|n| n == done) || m.after.iter().any(|n| n == done))
+                    && self.standing(chain, m) == Standing::Open
+            })
+            .map(|m| m.id.clone());
     }
 
     /// The count so far of each of `mission`'s objectives.
@@ -765,21 +822,25 @@ impl Progress {
     /// first unmet objective's label for a mission of several. `None` once
     /// the chain is done.
     pub fn line(&self, chain: &Chain) -> Option<String> {
-        let mission = self.current(chain)?;
+        self.line_of(self.focused(chain)?)
+    }
+
+    /// The HUD's words for one mission: its title and every objective with
+    /// its count (`mission-playthrough` 3.5).
+    pub fn line_of(&self, mission: &Mission) -> Option<String> {
         let counts = self.counts(mission);
-        let (objective, count) = mission
-            .objectives
-            .iter()
-            .zip(&counts)
-            .find(|(o, c)| **c < o.count)
-            .or_else(|| mission.objectives.iter().zip(&counts).next())?;
+        let first = mission.objectives.first()?;
         Some(if mission.objectives.len() == 1 {
-            format!("{} {count}/{}", mission.title, objective.count)
+            format!("{} {}/{}", mission.title, counts[0], first.count)
         } else {
-            format!(
-                "{}: {} {count}/{}",
-                mission.title, objective.label, objective.count
-            )
+            // Every objective and how much it needs, so nothing is hidden.
+            let parts: Vec<String> = mission
+                .objectives
+                .iter()
+                .zip(&counts)
+                .map(|(o, c)| format!("{} {c}/{}", o.label, o.count))
+                .collect();
+            format!("{}: {}", mission.title, parts.join(", "))
         })
     }
 }

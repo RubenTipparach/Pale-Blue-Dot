@@ -1,0 +1,293 @@
+[
+{
+"name": "v3-beaver-gnaw-anticipation",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: anticipation' && c.FELL[0].bites>5); c.run(0.05); c.cam(c.beaver, -0.45, 0.12, 1.5, 0.3);}"
+},
+{
+"name": "v3-beaver-gnaw-hit",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: hit' && c.FELL[0].bites>5); c.run(0.04); c.cam(c.beaver, -0.45, 0.12, 1.5, 0.3);}"
+},
+{
+"name": "v3-beaver-felling-creak",
+"js": "{const c=__critters; c.until(c=>c.FELL[0].state==='falling' && c.FELL[0].ft>0.8); c.W.cam.set([-14.1,3.6,11.6], 1.25, 0.18, 4.2);}"
+},
+{
+"name": "v3-beaver-felling-fall",
+"js": "{const c=__critters; c.until(c=>c.FELL[0].state==='falling' && c.FELL[0].ft>2.15); c.W.cam.set([-14.2,4.0,10.6], 1.3, 0.12, 8);}"
+},
+{
+"name": "v3-beaver-felling-hit",
+"js": "{const c=__critters; c.until(c=>c.FELL[0].state==='falling' && c.FELL[0].ft>2.78); c.W.cam.set([-14.2,4.0,10.6], 1.3, 0.12, 8);}"
+},
+{
+"name": "v3-beaver-drag",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='drag the branch', 200); c.run(2.2); c.cam(c.beaver, 0.25, 0.3, 2.4, 0.2);}"
+},
+{
+"name": "v3-beaver-swim-branch",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='swim to the dam', 200); c.run(3); c.cam(c.beaver, 0.5, 0.3, 2.2, 0.1);}"
+},
+{
+"name": "v3-beaver-dam-push",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='push: recoil', 220); c.run(0.02); c.cam(c.beaver, -0.75, 0.3, 2.2, 0.25);}"
+},
+{
+"name": "v3-beaver-tail-slap-raise",
+"js": "{const c=__critters; c.beaver.pos.set(-9.5,2.55,0.5); c.go('beaver','slap'); c.until(c=>c.beaver.stage==='tail slap: anticipation'); c.run(0.15); c.cam(c.beaver, 0.15, 0.25, 2.2, 0.15);}"
+},
+{
+"name": "v3-beaver-tail-slap-hit",
+"js": "{const c=__critters; c.beaver.pos.set(-9.5,2.55,0.5); c.go('beaver','slap'); c.until(c=>c.beaver.stage==='tail slap: hit'); c.run(0.07); c.cam(c.beaver, 0.15, 0.25, 2.2, 0.15);}"
+},
+{
+"name": "v3-beaver-shake",
+"js": "{const c=__critters; c.beaver.pos.set(-11.5,3,11.5); c.beaver.wet=1; c.go('beaver','shake'); c.until(c=>c.beaver.stage==='shake off' && c.beaver.step.t>0.45); c.cam(c.beaver, 1.2, 0.18, 1.5, 0.15);}"
+},
+{
+"name": "v3-otter-bound",
+"run": 1.6,
+"js": "{const c=__critters; c.cam(c.otter, 0.0, 0.15, 1.6, 0.1);}"
+},
+{
+"name": "v3-otter-slide",
+"js": "{const c=__critters; c.until(c=>c.otter.step && c.otter.step.name==='slide' && c.otter.step.t>0.95); c.cam(c.otter, 0.35, 0.3, 2.0, 0.05);}"
+},
+{
+"name": "v3-otter-splash",
+"js": "{const c=__critters; c.until(c=>c.otter.step && c.otter.step.name==='slide' && c.otter.waterAt()>0.5); c.run(0.12); c.W.cam.set([-13.5,2.8,-5.6], 0.7, 0.3, 3.5);}"
+},
+{
+"name": "v3-otter-porpoise",
+"js": "{const c=__critters; c.until(c=>c.otter.stage==='porpoise' && c.otter.pos.y>2.72); c.cam(c.otter, 3.14, 0.3, 2.4, 0.2);}",
+"log": "[__critters.otter.pos.toArray(), __critters.otter.stage]"
+},
+{
+"name": "v3-otter-eat",
+"js": "{const c=__critters; c.until(c=>c.otter.stage==='eat: hit', 200); c.run(0.03); c.cam(c.otter, 0.9, 0.2, 1.4, 0.2);}"
+},
+{
+"name": "v3-otter-groom",
+"js": "{const c=__critters; c.otter.pos.set(-6.6,2.91,-4); c.go('otter','groom'); c.run(1.6); c.cam(c.otter, 0.3, 0.45, 1.3, 0.1);}"
+},
+{
+"name": "v3-otter-look",
+"js": "{const c=__critters; c.otter.pos.set(-6.6,2.91,-4); c.go('otter','look'); c.run(1.05); c.cam(c.otter, 0.9, 0.12, 1.6, 0.25);}"
+},
+{
+"name": "v3-sea-otter-crack-windup",
+"js": "{const c=__critters; c.until(c=>c.sea.stage==='crack: anticipation'); c.run(0.08); c.cam(c.sea, 1.0, 0.45, 1.5, 0.1);}"
+},
+{
+"name": "v3-sea-otter-crack-hit",
+"js": "{const c=__critters; c.run(1); c.until(c=>c.sea.stage==='crack: hit'); c.run(0.06); c.cam(c.sea, 1.0, 0.45, 1.5, 0.1);}"
+},
+{
+"name": "v3-sea-otter-dive",
+"js": "{const c=__critters; c.go('sea','dive'); c.until(c=>c.sea.stage==='roll over'); c.run(0.3); c.cam(c.sea, -0.2, 0.3, 1.6, 0.0);}"
+},
+{
+"name": "v3-sea-otter-sleep-kelp",
+"js": "{const c=__critters; c.go('sea','sleep'); c.until(c=>c.sea.stage==='asleep'); c.cam(c.sea, 1.2, 0.5, 1.5, 0.05);}"
+},
+{
+"name": "v3-night-pond",
+"q": "?shot&hour=22.5",
+"run": 3,
+"js": "__critters.W.view('Pond')"
+},
+{
+"name": "v3-night-beaver-lantern",
+"q": "?shot&hour=22.5",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='drag the branch', 200); c.run(4.5); c.cam(c.beaver, 0.6, 0.35, 2.8, 0.2);}"
+},
+{
+"name": "v3-night-sea-otter-boat",
+"q": "?shot&hour=22.5",
+"js": "{const c=__critters; c.until(c=>c.sea.stage==='crack: hit'); c.cam(c.sea, 0.6, 0.4, 3.2, 0.1);}"
+},
+{
+"name": "v3-dusk-valley",
+"q": "?shot&hour=17.5",
+"run": 3,
+"js": "__critters.W.view('Valley')"
+},
+{
+"name": "v3-today-pond",
+"q": "?shot&mode=today",
+"run": 4,
+"js": "__critters.W.view('Pond')"
+},
+{
+"name": "v3-ui-desktop",
+"q": "?hour=13",
+"w": 1440,
+"h": 1000,
+"run": 9.3,
+"js": "{document.querySelector('#critSide details').open = true; __critters.W.view('Felling');}"
+},
+{
+"name": "v3-ui-phone",
+"q": "?hour=13",
+"w": 390,
+"h": 844,
+"run": 2
+},
+{
+"name": "v3-beaver-close-side",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(0.2); c.go('beaver','fell'); c.run(1.2); c.cam(c.beaver, 0.0, 0.12, 1.05, 0.15);}"
+},
+{
+"name": "v3-beaver-close-above",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(0.2); c.go('beaver','fell'); c.run(1.2); c.cam(c.beaver, 0.6, 1.05, 1.15, 0.1);}"
+},
+{
+"name": "v3-beaver-gnaw-owner",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: anticipation' && c.FELL[0].bites>5); c.run(0.05); c.cam(c.beaver, -0.45, 0.12, 1.0, 0.3);}"
+},
+{
+"name": "v3-beaver-gnaw-back",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: anticipation' && c.FELL[0].bites>5); c.run(0.05); c.cam(c.beaver, 2.6, 0.35, 1.0, 0.3);}"
+},
+{
+"name": "v3-otter-close-side",
+"js": "{const c=__critters; c.run(1.6); c.cam(c.otter, 0.0, 0.12, 0.9, 0.12);}"
+},
+{
+"name": "v3-otter-close-above",
+"js": "{const c=__critters; c.run(1.6); c.cam(c.otter, 0.5, 1.05, 0.95, 0.08);}"
+},
+{
+"name": "v3-otter-wet-close",
+"js": "{const c=__critters; c.until(c=>c.otter.stage==='eat: hit', 200); c.run(0.03); c.cam(c.otter, 0.7, 0.25, 0.75, 0.25);}"
+},
+{
+"name": "v3-sea-otter-close-side",
+"js": "{const c=__critters; c.until(c=>c.sea.stage==='crack: anticipation'); c.run(0.08); c.cam(c.sea, 0.0, 0.25, 0.95, 0.05);}"
+},
+{
+"name": "v3-sea-otter-close-above",
+"js": "{const c=__critters; c.until(c=>c.sea.stage==='crack: anticipation'); c.run(0.08); c.cam(c.sea, 0.4, 1.1, 1.0, 0.0);}"
+},
+{
+"name": "v3-dusk-beaver",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(0.2); c.go('beaver','fell'); c.run(1.2); c.cam(c.beaver, 0.9, 0.2, 1.6, 0.2);}",
+"q": "?shot&hour=17.5"
+},
+{
+"name": "v4-beaver-walk-contact",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','fell'); c.run(0.6); c.until(c=>c.beaver.stage==='walk' && (c.beaver.phi%1)>0.25 && (c.beaver.phi%1)<0.29); c.cam(c.beaver, 0.0, 0.12, 1.0, 0.12);}"
+},
+{
+"name": "v4-beaver-walk-passing",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','fell'); c.run(0.6); c.until(c=>c.beaver.stage==='walk' && (c.beaver.phi%1)>0.05 && (c.beaver.phi%1)<0.09); c.cam(c.beaver, 0.0, 0.12, 1.0, 0.12);}"
+},
+{
+"name": "v4-beaver-gnaw-anticipation",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: anticipation (crouch)'); c.run(0.14); c.cam(c.beaver, -0.45, 0.12, 1.4, 0.25);}"
+},
+{
+"name": "v4-beaver-gnaw-rear-up",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: rear up'); c.run(0.2); c.cam(c.beaver, -0.45, 0.12, 1.4, 0.25);}"
+},
+{
+"name": "v4-beaver-gnaw-paws-on-trunk",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: hit' && c.FELL[0].bites>2); c.run(0.04); c.cam(c.beaver, -0.45, 0.12, 1.4, 0.25);}"
+},
+{
+"name": "v4-beaver-drop-to-all-fours",
+"js": "{const c=__critters; c.until(c=>c.beaver.step && c.beaver.step.name.startsWith('the tree creaks') && c.beaver.step.t>0.3); c.cam(c.beaver, -0.9, 0.12, 1.4, 0.2);}"
+},
+{
+"name": "v4-beaver-sit-groom",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(1.7); c.cam(c.beaver, 0.5, 0.1, 1.2, 0.25);}"
+},
+{
+"name": "v4-beaver-sit-down",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(3.3); c.cam(c.beaver, 0.5, 0.1, 1.2, 0.2);}"
+},
+{
+"name": "v4-beaver-swim",
+"js": "{const c=__critters; c.beaver.pos.set(-9.5,2.55,0.5); c.go('beaver','slap'); c.run(0.9); c.cam(c.beaver, 0.15, 0.3, 1.4, 0.0);}"
+},
+{
+"name": "v4-otter-bound",
+"run": 1.6,
+"js": "{const c=__critters; c.cam(c.otter, 0.0, 0.12, 0.9, 0.12);}"
+},
+{
+"name": "v4-otter-look-up",
+"js": "{const c=__critters; c.otter.pos.set(-6.6,2.91,-4); c.go('otter','look'); c.run(1.0); c.cam(c.otter, 0.9, 0.12, 1.3, 0.25);}"
+},
+{
+"name": "v4-otter-tread-water",
+"js": "{const c=__critters; c.otter.pos.set(-9.5,2.55,-1.0); c.go('otter','look'); c.run(1.1); c.cam(c.otter, 0.9, 0.25, 1.3, 0.1);}"
+},
+{
+"name": "v4-otter-eat",
+"js": "{const c=__critters; c.go('otter','fish'); c.until(c=>c.otter.stage==='eat: hit', 200); c.run(0.04); c.cam(c.otter, 0.9, 0.2, 1.2, 0.2);}"
+},
+{
+"name": "v4-sea-otter-crack",
+"js": "{const c=__critters; c.run(1); c.until(c=>c.sea.stage==='crack: hit'); c.run(0.06); c.cam(c.sea, 1.0, 0.45, 1.3, 0.1);}"
+},
+{
+"name": "v4-sea-otter-groom-empty",
+"js": "{const c=__critters; c.sea.urchin=null; c.go('sea','groom'); c.run(1.6); c.cam(c.sea, 1.0, 0.5, 1.3, 0.05);}"
+},
+{
+"name": "v4-sea-otter-sleep-empty",
+"js": "{const c=__critters; c.sea.urchin=null; c.go('sea','sleep'); c.until(c=>c.sea.stage==='asleep'); c.run(1.6); c.cam(c.sea, 1.2, 0.5, 1.4, 0.05);}"
+},
+{
+"name": "v5-beaver-gnaw-front-left",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: hit' && c.FELL[0].bites>2); c.run(0.04); c.cam(c.beaver, 0.75, 0.12, 1.5, 0.3);}"
+},
+{
+"name": "v5-beaver-gnaw-rear-up",
+"js": "{const c=__critters; c.until(c=>c.beaver.stage==='gnaw: rear up'); c.run(0.25); c.cam(c.beaver, 0.75, 0.12, 1.5, 0.3);}"
+},
+{
+"name": "v5-beaver-sit-groom",
+"js": "{const c=__critters; c.beaver.pos.set(-12.5,3,13.5); c.go('beaver','sit'); c.run(1.7); c.cam(c.beaver, 0.75, 0.1, 1.4, 0.25);}"
+},
+{
+"name": "v5-beaver-swim-under",
+"js": "{const c=__critters; c.beaver.pos.set(-9.5,2.55,0.5); c.go('beaver','slap'); c.until(c=>c.beaver.stage==='under water'); c.run(1.2); c.cam(c.beaver, 0.0, 0.0, 1.4, 0.0);}"
+},
+{
+"name": "v5-otter-look-up",
+"js": "{const c=__critters; c.otter.pos.set(-6.6,2.91,-4); c.go('otter','look'); c.run(1.4); c.cam(c.otter, 0.75, 0.12, 1.2, 0.25);}"
+},
+{
+"name": "v5-otter-swim-surface",
+"js": "{const c=__critters; c.otter.pos.set(-9.5,2.55,-1.0); c.go('otter','porpoise'); c.until(c=>c.otter.stage==='swim out'); c.run(0.5); c.cam(c.otter, 0.0, 0.0, 1.1, -0.12);}"
+},
+{
+"name": "v5-otter-swim-under",
+"js": "{const c=__critters; c.go('otter','fish'); c.until(c=>c.otter.stage==='dive for a fish', 200); c.run(0.8); c.cam(c.otter, 0.0, 0.0, 1.2, 0.0);}"
+},
+{
+"name": "v5-otter-groom-back",
+"js": "{const c=__critters; c.otter.pos.set(-6.6,2.91,-4); c.go('otter','groom'); c.run(1.6); c.cam(c.otter, 0.0, 0.35, 1.1, 0.05);}"
+},
+{
+"name": "v5-sea-otter-raft",
+"js": "{const c=__critters; c.sea.urchin=null; c.go('sea','sleep'); c.run(0.3); c.cam(c.sea, 0.0, 0.35, 1.2, 0.05);}"
+},
+{
+"name": "v5-sea-otter-groom",
+"js": "{const c=__critters; c.sea.urchin=null; c.go('sea','groom'); c.run(1.6); c.cam(c.sea, 1.0, 0.5, 1.3, 0.05);}"
+},
+{
+"name": "v5-limits-beaver",
+"js": "{const c=__critters; c.debug.axes(true); c.beaver.pos.set(-12.5,3,13.5); c.debug.flex('beaver',0,80,-150,1); c.run(0.1); c.cam(c.beaver, 0.0, 0.1, 1.0, 0.25);}"
+},
+{
+"name": "v5-limits-otter",
+"js": "{const c=__critters; c.debug.axes(true); c.otter.pos.set(-6.6,2.91,-4); c.debug.flex('otter',0,100,-160,1); c.run(0.1); c.cam(c.otter, 0.0, 0.1, 0.8, 0.22);}"
+},
+{
+"name": "v5-limits-sea-otter",
+"js": "{const c=__critters; c.debug.axes(true); c.debug.flex('sea',0,85,-160,0); c.run(0.1); c.cam(c.sea, 0.0, 0.0, 0.9, -0.18);}"
+}
+]

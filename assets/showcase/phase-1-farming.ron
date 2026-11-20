@@ -12,26 +12,26 @@
 (
     goal: "Goal: farming, from seeds to a harvest",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
             caption: "Farming. Find seeds: wild plants give them when picked",
             until: ["find-seeds"],
             repeat: true,
             max_s: 150.0,
-            acts: [Hand("hand"), Pick(1)],
+            acts: [Focus("find-seeds"), Hand("hand"), Pick(1)],
         ),
         (
             caption: "Break ground with the shovel, and sow wheat",
             until: ["till", "plant"],
             max_s: 300.0,
-            acts: [Shore, Look(180.0, -10.0, 1.0), Walk(4.0), Hand("shovel"), Dig(Have("wheat-seed", 4), 1), Till(6), Plant(4), Look(0.0, -35.0, 1.0), Still],
+            acts: [Focus("till"), Shore, Look(180.0, -10.0, 1.0), Walk(4.0), Hand("shovel"), Dig(Have("wheat-seed", 6), 1), Till(8), Plant(6), Look(0.0, -35.0, 1.0), Still],
         ),
         (
             caption: "Water the field: a bucket filled at the sea, and poured",
             until: ["water-field"],
             max_s: 300.0,
-            acts: [Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("bucket", 1), Hand("hand"), Select("bucket"), Shore, Walk(0.8), Look(0.0, -35.0, 1.0), Wait(0.6), Use, Look(180.0, -45.0, 1.5), Wait(0.6), Use, Still],
+            acts: [Focus("water-field"), Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("bucket", 1), Hand("hand"), Select("bucket"), Shore, Walk(0.8), Look(0.0, -35.0, 1.0), Wait(0.6), Use, Select("water-bucket"), Look(180.0, -10.0, 1.2), Walk(2.5), Look(0.0, -50.0, 1.0), Wait(0.6), Use, Still],
         ),
         (
             caption: "Six days later: the wheat is ripe",
@@ -43,7 +43,7 @@
             caption: "Harvest the wheat",
             until: ["harvest"],
             max_s: 120.0,
-            acts: [Hand("hand"), Harvest(4), Still],
+            acts: [Focus("harvest"), Hand("hand"), Harvest(6), Still],
         ),
         (
             caption: "Farming done",

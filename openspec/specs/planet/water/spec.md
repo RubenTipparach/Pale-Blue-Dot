@@ -68,3 +68,20 @@ and the total wave height SHALL NOT exceed 0.6 times the local depth.
 #### Scenario: A storm sea at the beach
 - **WHEN** a 2 m sea meets water 1 m deep
 - **THEN** the local wave height is at most 0.6 m
+
+### Requirement: Rain splashes on the water
+Rain that falls on the top of standing or flowing water, or on the sea,
+SHALL throw the same crown of droplets the rain throws from a puddle, within
+the same reach, standing on the water's drawn surface (the sea's on its
+waves), coloured and lit as the water, and drawn after the water so that a
+splash in front of water shows and one behind a surface does not. No splash
+SHALL be drawn on a vertical water face.
+
+#### Scenario: A river in rain
+- **WHEN** it rains on a river within 20 m of the eye
+- **THEN** crowns of droplets rise from the river's surface over its rings
+
+#### Scenario: From under a pool
+- **WHEN** the eye is under a pool's surface in rain
+- **THEN** no splash on that surface is drawn in front of it
+

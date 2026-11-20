@@ -150,6 +150,9 @@
                     grazing_cells: 2.0,
                     products: [
                         (good: "milk", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                        // Its hide, tanned (small-boats design 2e; the owner:
+                        // "cows and horses should" give leather).
+                        (good: "leather", amount: 1.0, period_days: 6.0, sex: None),
                     ],
                     coats: ["brown", "red", "dun"],
                     patterns: ["plain", "belted"],

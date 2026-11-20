@@ -282,6 +282,7 @@ pub fn tillable(material: Material) -> bool {
             | Material::Dirt
             | Material::Soil
             | Material::Sand
+            | Material::DesertSand
     )
 }
 

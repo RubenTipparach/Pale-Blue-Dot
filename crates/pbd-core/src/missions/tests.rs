@@ -182,7 +182,7 @@ fn a_state_met_mission_completes_on_open() {
     assert!(progress.settle(&chain, &pick).done.is_empty());
     assert_eq!(
         progress.line(&chain).as_deref(),
-        Some("mining-tools: tool:shovel 0/1")
+        Some("mining-tools: tool:pickaxe 1/1, tool:shovel 0/1")
     );
 
     // The shipped tree and an old world (before tool crafting) that owns
@@ -212,10 +212,7 @@ fn a_state_met_mission_completes_on_open() {
     ] {
         assert!(progress.is_done(id), "{id} in {:?}", step.done);
     }
-    assert_eq!(
-        progress.line(&chain).as_deref(),
-        Some("Go fishing: cast 0/1")
-    );
+    assert_eq!(progress.line(&chain).as_deref(), Some("Go fishing 0/3"));
 }
 
 /// A name the build lacks that the file awaits makes its mission pending,
@@ -310,7 +307,10 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     assert!(read.done.contains("a-later-mission"));
     // On the tree, the old line's done ids stay done; the trunk's new step
     // after the axe is next.
-    assert_eq!(read.line(&chain).as_deref(), Some("Gather wood: trees 0/2"));
+    assert_eq!(
+        read.line(&chain).as_deref(),
+        Some("Gather wood: trees 0/2, logs 0/10")
+    );
 }
 
 /// The shipped tree (`starter-missions` TS.1, M33 version 3): every `what`
@@ -681,4 +681,65 @@ fn a_kind_of_fish_counts_once_a_mission() {
     let old: Progress = ron::from_str(r#"(done: ["gather"], counts: {"kinds": [1]})"#).unwrap();
     assert!(old.seen.is_empty());
     assert_eq!(old.counts["kinds"], [1]);
+}
+
+/// `mission-playthrough` 3.5: one mission at a time. A mission picked on the
+/// tree is the one the HUD shows; when it is done the focus goes on to the
+/// next of its branch, not back to the tree's first open mission.
+#[test]
+fn the_focus_is_the_one_mission_shown_and_goes_on_down_its_branch() {
+    let chain = shipped_file()
+        .resolve(&shipped_catalog(&shipped_book()))
+        .unwrap();
+    let none = |_: &Objective| 0;
+    let mut progress = Progress::default();
+    for id in [
+        "gather",
+        "axe",
+        "wood",
+        "planks-rope",
+        "crafting-table",
+        "stone-tools",
+        "fire",
+    ] {
+        progress.done.insert(id.to_string());
+    }
+    progress.settle(&chain, &none);
+    // Unfocused: the tree's first open mission.
+    let first = progress.current(&chain).unwrap().id.clone();
+    assert_eq!(progress.focused(&chain).unwrap().id, first);
+    // A locked mission cannot be picked; an open one can.
+    assert!(!progress.focus_on(&chain, "smelt"));
+    assert!(progress.focus_on(&chain, "dig-deep"));
+    assert_eq!(progress.focused(&chain).unwrap().id, "dig-deep");
+    assert_eq!(
+        progress.line(&chain).as_deref(),
+        Some("Dig into the hill 0/10")
+    );
+    // Done: on to the next of the mining branch.
+    progress.record(
+        &chain,
+        &Happened::new(Kind::Gather, "block:stone", 10),
+        &none,
+    );
+    assert!(progress.is_done("dig-deep"));
+    progress.focus_past(&chain, "dig-deep");
+    assert_eq!(progress.focused(&chain).unwrap().id, "ore");
+    assert_eq!(
+        progress.line(&chain).as_deref(),
+        Some("Find ore: ore 0/4, coal 0/3")
+    );
+}
+
+/// `mission-playthrough` 3.9: a record from before "Go fishing" lost its
+/// cast keeps its fish.
+#[test]
+fn a_record_from_before_the_cast_was_dropped_keeps_its_fish() {
+    let mut progress = Progress::default();
+    progress.counts.insert("go-fishing".into(), vec![1, 2]);
+    progress.migrate();
+    assert_eq!(progress.counts["go-fishing"], vec![2]);
+    // Read again: nothing more moves.
+    progress.migrate();
+    assert_eq!(progress.counts["go-fishing"], vec![2]);
 }

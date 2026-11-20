@@ -19,6 +19,7 @@ fn app(save: crate::saves::WorldSave) -> App {
         .init_asset::<Mesh>()
         .init_asset::<StandardMaterial>()
         .init_asset::<Image>()
+        .insert_resource(super::place::StarterLoon)
         .insert_resource(PlanetContact::test_planet(5))
         .insert_resource(Sea::new(&water))
         .insert_resource(water)
@@ -47,6 +48,39 @@ fn app(save: crate::saves::WorldSave) -> App {
 }
 
 /// A tap: down for one update and up on the next.
+/// T weighs the anchor (`river-craft` design 4): the rode is hauled in to
+/// straight up and down and the anchor lifted aboard, some seconds of
+/// updates; then the boat is free.
+fn weigh(app: &mut App, entity: Entity) {
+    tap(app, KeyCode::KeyT);
+    for _ in 0..3600 {
+        let free = app
+            .world()
+            .get::<Vehicle>(entity)
+            .is_some_and(|v| v.craft.anchor.is_none() && v.craft.mooring.is_none());
+        if free {
+            return;
+        }
+        app.update();
+    }
+    panic!("the anchor never came aboard");
+}
+
+/// The anchor let go falls to the bed and sets: a couple of seconds.
+fn settle_anchor(app: &mut App, entity: Entity) {
+    for _ in 0..1200 {
+        if app
+            .world()
+            .get::<Vehicle>(entity)
+            .is_some_and(|v| v.craft.anchored())
+        {
+            return;
+        }
+        app.update();
+    }
+    panic!("the anchor never set");
+}
+
 fn tap(app: &mut App, key: KeyCode) {
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -191,7 +225,7 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
     );
     // Weigh anchor and get under way: two metres a second along the bow,
     // for a couple of seconds.
-    tap(&mut app, KeyCode::KeyT);
+    weigh(&mut app, entity);
     {
         let mut vehicle = app.world_mut().get_mut::<Vehicle>(entity).unwrap();
         let craft = &mut vehicle.craft;
@@ -484,12 +518,13 @@ fn anchoring_and_casting_off_are_saved_at_once() {
             .expect("the Loon is in the save")
     };
     assert!(saved(&app).mooring.is_some(), "it was placed at anchor");
-    tap(&mut app, KeyCode::KeyT);
+    weigh(&mut app, entity);
     assert!(
         saved(&app).mooring.is_none(),
-        "cast off, and saved in the same update"
+        "weighed, and saved in the same update"
     );
     tap(&mut app, KeyCode::KeyT);
+    settle_anchor(&mut app, entity);
     let anchor = saved(&app).mooring.expect("anchored again, and saved");
     assert!(anchor.2, "an anchor, not a line to a bollard");
 }
@@ -627,7 +662,7 @@ fn a_harbour_boat_is_paddled_away_and_kept_where_it_was_left() {
         Some(entity),
         "F boards it"
     );
-    tap(&mut app, KeyCode::KeyT);
+    weigh(&mut app, entity);
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::KeyW);

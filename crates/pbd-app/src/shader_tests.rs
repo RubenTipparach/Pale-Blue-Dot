@@ -460,7 +460,16 @@ fn the_clouds_and_the_rain_tell_the_horizon_gap_from_the_sea() {
     let rust = include_str!("planet_water.rs");
     assert_eq!(rust.matches("(20, texture_depth_2d())").count(), 4);
     assert_eq!(rust.matches("(20, &water.depth)").count(), 4);
-    assert!(rust.contains("store: if splash_on || bubbles_on || clouds_on || water.rain_needed {"));
+    // The sheet's depth is stored whenever the clouds or the rain will read
+    // it (other readers, such as the rain splashes on the water, may join
+    // the condition, which rustfmt then splits over lines).
+    let store = rust
+        .find("store: if splash_on")
+        .map(|at| &rust[at..])
+        .and_then(|s| s.find('{').map(|end| s[..end].to_string()))
+        .expect("the sheet's depth store condition");
+    assert!(store.contains("clouds_on"), "{store}");
+    assert!(store.contains("water.rain_needed"), "{store}");
 }
 
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,

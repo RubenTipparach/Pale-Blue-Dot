@@ -591,6 +591,50 @@ impl FineSet {
         true
     }
 
+    /// Bring the glowing mushrooms' bits round to the picks as they stand
+    /// (`glowing-mushrooms` design 4), each cell built `from_camera_m(dir)`
+    /// metres from the camera: a pick taken since the set was built goes
+    /// out, never one in sight comes back. Only the cells the picks name are
+    /// looked at. Relights once if any burning plant went out or came back.
+    /// Returns how many records changed.
+    pub fn apply_glow_picks(
+        &mut self,
+        picks: &pbd_core::edits::GlowPicks,
+        chance: f32,
+        from_camera_m: impl Fn(Vec3) -> f32,
+    ) -> usize {
+        let wanted: std::collections::HashSet<u32> = picks.cells().into_iter().collect();
+        if wanted.is_empty() {
+            return 0;
+        }
+        let (mut changed, mut relight) = (0, false);
+        for record in 0..self.levels[3].len() {
+            let cell = &self.levels[3][record];
+            let key = cell.key();
+            if !wanted.contains(&key) {
+                continue;
+            }
+            let direction = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
+            let was = cell.spare[2];
+            // A due pick reads as grown only out of sight (`stands_picked`),
+            // so nothing comes back in front of the player.
+            let now = column::glow_bits(was, key, chance, picks, from_camera_m(direction));
+            if now == was {
+                continue;
+            }
+            self.levels[3][record].spare[2] = now;
+            relight |= self
+                .columns
+                .set_glow(record, now & column::GLOW_FLOWER_BIT != 0);
+            changed += 1;
+        }
+        if relight {
+            self.columns.relight();
+            self.mark_sea();
+        }
+        changed
+    }
+
     /// Bring a set built from the edits `built` round to the edits as they
     /// stand `now` (`edit-pipeline` 1b): a set is built off the frame from the
     /// edits as they were when it was REQUESTED, and anything accepted while it

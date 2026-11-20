@@ -182,6 +182,7 @@ impl Palette {
             Material::Stone | Material::Rock | Material::Ore => self.stone[b],
             Material::Sand if texel.biome == Biome::Desert => self.ground[Biome::Desert as usize],
             Material::Sand => self.ground[Biome::Beach as usize],
+            Material::DesertSand => self.ground[Biome::Desert as usize],
             Material::Snow => self.ground[Biome::Tundra as usize],
             Material::Water => [70.0, 110.0, 120.0],
             _ => self.ground[b],

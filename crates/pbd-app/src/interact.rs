@@ -21,6 +21,8 @@ use pbd_core::locale::{caps, tr_with};
 pub enum Reader {
     Husbandry,
     Fruit,
+    /// The glowing mushrooms (`glowing-mushrooms` design 3).
+    Glow,
     Farm,
     Doors,
     Boats,
@@ -38,6 +40,8 @@ pub enum Act {
     TakeIncubator,
     TakeUp,
     PickFruit,
+    /// Pick a glowing mushroom (`glowing-mushrooms` design 3).
+    PickGlow,
     Open,
     Harvest,
     Check,
@@ -66,7 +70,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 18] = [
+pub const ACTS: [Row; 19] = [
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
@@ -76,6 +80,7 @@ pub const ACTS: [Row; 18] = [
     row(Act::TakeIncubator, "take_incubator", Reader::Husbandry),
     row(Act::TakeUp, "take_up", Reader::Husbandry),
     row(Act::PickFruit, "pick_fruit", Reader::Fruit),
+    row(Act::PickGlow, "pick_glow", Reader::Glow),
     row(Act::Open, "open", Reader::Farm),
     row(Act::Harvest, "harvest", Reader::Farm),
     row(Act::Check, "check", Reader::Farm),

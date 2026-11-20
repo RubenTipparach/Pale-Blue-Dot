@@ -96,6 +96,7 @@ pub const CRAFT_COLUMN: f32 = 180.0;
 /// A recipe row's height: the stone plaque's own (`button-idle`, 22 px).
 pub const ROW: f32 = 22.0;
 /// The rows shown before the list scrolls.
+#[allow(dead_code)]
 pub const ROWS_SHOWN: usize = 6;
 /// The CRAFT plaque's width, wide enough for its longest word (LOCKED), so
 /// it never grows past the row.
@@ -106,6 +107,10 @@ pub const CRAFT_PLAQUE: f32 = 56.0;
 pub struct BenchLine;
 #[derive(Component)]
 pub struct BenchFill;
+/// The bar under the pack's craft row: the hands' running job
+/// (`mission-playthrough` 4.4; the pack had only the plaque's number).
+#[derive(Component)]
+pub struct HandFill;
 
 /// A station's queue record id: a cell's station, or the hands'.
 pub fn station_id(at: Option<(u32, u16)>) -> u64 {
@@ -431,13 +436,16 @@ pub fn spawn_pack_craft(
             width: px(CRAFT_COLUMN),
             flex_shrink: 0.0,
             flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::SpaceBetween,
+            row_gap: px(4),
             ..default()
         })
         .with_children(|column| {
             column
                 .spawn(Node {
                     flex_direction: FlexDirection::Column,
+                    // Never shorter than its list: a scroll box may shrink to
+                    // nothing, and the craft row then slid up over the rows.
+                    flex_shrink: 0.0,
                     ..default()
                 })
                 .with_children(|top| {
@@ -449,7 +457,11 @@ pub fn spawn_pack_craft(
                             row_gap: px(1),
                             // A scroll box has no height of its own: it is
                             // set to the rows it shows.
+                            // Every recipe shows (`mission-playthrough` 4.4: its
+                            // own panel, as tall as its list). The rows are
+                            // placed in it, so it is given its height.
                             height: px(list_height(hand.len())),
+                            min_height: px(list_height(hand.len())),
                             flex_shrink: 0.0,
                             overflow: Overflow::scroll_y(),
                             ..default()
@@ -463,7 +475,44 @@ pub fn spawn_pack_craft(
                         }
                     });
                 });
-            craft_row(column, kit, atlas, "hand", needs);
+            // The chosen recipe's row and the hands' bar, placed under the
+            // list at its own height (`mission-playthrough` 4.4): left to
+            // the column's flow, the row was drawn over the recipes.
+            column
+                .spawn(Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(5.0 + list_height(hand.len()) + 6.0),
+                    width: percent(100),
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                })
+                .with_children(|foot| {
+                    craft_row(foot, kit, atlas, "hand", needs);
+                    // The hands' running job, as the workbench shows its own.
+                    foot.spawn((
+                        kit.nine(Set::Stone, "bar"),
+                        Node {
+                            width: percent(100),
+                            height: px(10),
+                            flex_shrink: 0.0,
+                            margin: UiRect::top(px(4)),
+                            padding: UiRect::new(px(5), px(5), px(3), px(4)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|bar| {
+                        bar.spawn((
+                            kit.whole(Set::Stone, "fill-progress"),
+                            Node {
+                                width: percent(0),
+                                height: percent(100),
+                                ..default()
+                            },
+                            HandFill,
+                        ));
+                    });
+                });
         });
 }
 
@@ -827,7 +876,8 @@ pub fn paint(
     ),
     mut bench_line: (
         Query<&mut KitText, (With<BenchLine>, Without<WellCount>, Without<CraftLabel>)>,
-        Query<&mut Node, With<BenchFill>>,
+        Query<&mut Node, (With<BenchFill>, Without<HandFill>)>,
+        Query<&mut Node, (With<HandFill>, Without<BenchFill>)>,
     ),
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
@@ -959,9 +1009,13 @@ pub fn paint(
     for (label, mut text) in &mut labels {
         let want = match of(label.0) {
             Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => tr("craft.locked"),
+            // The bar under the row shows how far; the word says what a press
+            // does now: queue another, with how many already wait.
             Some((_, state, _)) if label.0 == "hand" && state.busy() => {
-                let p = state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
-                Localized::verbatim(format!("{:.0}%", (p * 100.0).min(99.0)))
+                match state.jobs.len() - 1 {
+                    0 => tr("craft.queue"),
+                    n => tr_with("craft.queue_more", &[("count", &n)]),
+                }
             }
             _ => tr("craft.craft"),
         };
@@ -1004,7 +1058,16 @@ pub fn paint(
             }
         }
     }
-    let (line, fill) = &mut bench_line;
+    let (line, fill, hand_fill) = &mut bench_line;
+    // The hands' bar: the head job's share done, empty when idle.
+    let hand_state = state_of(&save, HAND_RECORD_ID, pbd_core::station::hand());
+    let done = hand_state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
+    let want = percent(if hand_state.busy() { done * 100.0 } else { 0.0 });
+    for mut node in hand_fill.iter_mut() {
+        if node.width != want {
+            node.width = want;
+        }
+    }
     if let Some((_, state, _)) = &bench {
         let shut = picked(&recipes, &pick, "workbench").and_then(|r| locks.locked(&r.code));
         let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
@@ -1253,14 +1316,11 @@ mod tests {
         let mut app = App::new();
         ui_kit::install_bare(&mut app);
         let kit = app.world().resource::<UiKit>();
-        let (_, (_, h)) = kit.rock("pack-wide");
         let recipes = book();
         let hand = recipes.0.at("hand").count();
+        // Its own panel now, as tall as it needs (`mission-playthrough`
+        // 4.4): every recipe shows without scrolling.
         assert!(hand <= ROWS_SHOWN, "{hand} hand recipes: the list scrolls");
-        // The lintel's flow (16 tall, pulled up 15, 4 under), the list, the
-        // craft row's margin and its wells.
-        let column = 1.0 + 4.0 + list_height(hand) + 3.0 + slots::SLOT;
-        assert!(column <= h as f32 - 28.0, "{column} px in {h}");
         let needs = recipes.0.at("hand").map(|r| r.inputs.len()).max().unwrap() as f32;
         let arrow = kit.font.width("→") as f32;
         let row = needs * slots::SLOT + arrow + slots::SLOT + CRAFT_PLAQUE + 3.0 * (needs + 2.0);

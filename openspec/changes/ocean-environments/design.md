@@ -2065,3 +2065,645 @@ red of a bed 2.4 m down and 5 m off. Tinting them further than the water
 over them would be a look of its own, for the owner to decide with the
 frames, and is not built here. The `--life lineup` instrument is tinted by
 its depth too, so a body can be read on the bed beside the sand.
+
+### B24. Reef rock, sea ice, basalt and mussel beds as cells (6.2; 2026-11-19)
+
+The owner, 2026-11-19: "Build rest of phase 2". B10 left these four cells
+waiting for the column's material word to widen, and wrote the widening up
+as "the next step" without laying it out. Measured first, on
+`claude/phase-2-1`:
+
+- **The per-layer word is four bits, but five of its sixteen values are
+  never a cell's.** `render_code` gives a cell 0, 1, 2, 3, 5, 6, 8, 10, 13,
+  14 or 15. Codes 4 (a desert dune) and 7 (a swamp sward) are given only
+  to a far record's cap by the biome, 11 and 12 are faces, and 9 (the
+  plant's leaf tile) to pieces. No column layer and no cap of a column cell
+  carries 9.
+- **The per-layer sheet field already draws a cell from a sheet that is not
+  its biome's.** A placed block keeps its home sheet
+  (`placed-blocks-keep-material`), and ore is drawn as the stone code with a
+  mark in that field (`flora-v2` 12.12). The field is four bits, 0 for the
+  biome's sheet, 1 to 14 for a sheet plus one, 15 for ore.
+- **The four tiles exist.** `ocean.png` (3,0) is "reef limestone" and
+  (3,1) "shell bed"; `basalt_wastes.png` (3,0) is "basalt";
+  `frozen_wastes.png` (2,1) is "layered glacial ice" (`biomes.json`).
+
+So the word does NOT widen. Each new cell is drawn as an existing code from
+its own sheet, the way ore is:
+
+| Cell | Code | Its sheet, always (generated or placed) | Tile |
+| --- | --- | --- | --- |
+| Reef rock | 5, stone | `ocean` | (3,0) reef limestone |
+| Basalt | 5, stone | `basalt_wastes` | (3,0) basalt |
+| Sea ice | 8, wood | `frozen_wastes` | (2,1) layered glacial ice |
+| Mussel bed | 9, the shell code | `ocean` | (3,1) shell bed |
+
+The one shader change is code 9 on a ground face (a cap, a heightfield wall
+or a column face): the sheet's (3,1). Nothing else moves in
+`planet_surface.wgsl`, no buffer changes size, and the save's edit line is
+unchanged: an edit names its material by number, the four take numbers
+24 to 27 (20 and 21 are taken, 22 and 23 are held for the kitchen), and an
+old save never names them. Their names in the save's material table are
+appended, so an old save opens as it did and a new one written by this
+build names the four by their numbers.
+
+**Where they are: generator version 14** (`TENEBRIS_V14`, version 12 with
+`sea_cells: Some(SeaCells::V14)`). 13 was planned for `mountain-ground`,
+which is not built; this takes the next free number, 14, and that change
+notes it: built later, it takes the next number on version 14's config so a
+new world has both. Version 12's ground and top blocks are pinned
+by digest before 14 lands. On a version 14 world, by
+`ocean::places::environment_at` at the floored surface:
+
+- **Reef**: the top is reef rock where a 7 m patch noise is over its median,
+  sand elsewhere; reef rock runs under it to the soil's depth, then stone.
+- **Vent**: the top is basalt, with mussel beds in patches (a quarter of
+  the vent ground); basalt runs under both to the soil's depth.
+- **Polar**: sea ice, one cell standing on the sea (its bottom at the sea's
+  level, the layer 0 to 1 m) where a 9 m floe noise is high, over water at
+  least 2 m deep, so a floe is never on a beach (B18) and comes one to four
+  cells together. The floe PIECES are not drawn on a version 14 world: its
+  floes are the cells, which do not bob. The seal hauled out on a floe (B13,
+  B18) is a decoration of the piece and so is not on a version 14 floe; the
+  `seal` species still hauls out on the water. Recommendation taken (ask
+  only with screenshots).
+
+Off the column tier the far record draws the top as the column does: its
+code, and its own sheet in the record's sheet bits, so a basalt vent field
+far off is basalt and not the ocean sheet's limestone.
+
+**Items, digging and icons.** Each is a block item (`Item::Block`), named
+"reef rock", "basalt", "sea ice" and "mussel bed". Digging: reef rock and
+basalt are stone (a pickaxe), sea ice is stone too (it is hard; ice takes a
+pick), and the mussel bed is dirt (a shovel), each giving itself. The pack's
+icon is the same tile from the same sheet (`slots::block_art`), the 1 px
+outline the inventory gives every block. Placed anywhere, each keeps its
+sheet.
+
+**The pieces' dither fade (B12)** is already built: B13 put every sea-places
+tile under the terrain's screen-door fade (`detail-fade`). 6.2's note that
+the pieces "have no dither fade yet" predates B13 and is struck.
+
+**Validation**: a digest test of version 12 taken before 14; a test that
+version 14 is version 12 everywhere but under the sea's reef, vent and polar
+places; a test that each cell is drawn from its own sheet's tile; the dig
+and item tests; an old save opening on its own version
+(`tests/generator_switch.rs` style); captures of each on a version 14 world.
+
+### B25. Beavers and their dams in the game (section 8, 8.2; 2026-11-19)
+
+Decision 8 gives the colony record, the `beaver` process and its three
+proposals (fell, dam, lodge), and the yield rule. What it leaves open, and
+what is taken here (recommendation taken, ask only with screenshots):
+
+- **Where a colony is.** A *beaver site* is a river cell (`pbd_core::rivers`,
+  version 8 and up) that is a still reach, not a riffle or a fall, on
+  Fields ground between 40 and 60 degrees of latitude, with a tree of the
+  generator's own (`flora`) within 20 m. Sites are derived: a pure function
+  of the seed and the version, never saved.
+- **When a colony is made.** The first time the player comes within 120 m
+  of a site, a colony record is created by the world's creation
+  (`Author::Creation`), as a site's is: `rec colony-<n> colony {site,
+  sites, members, built, last_h, state}`, where `sites` is the next two
+  sites up the same river (where it moves on), `built` the cells its dam and
+  lodge are made of so far, `last_h` the world hour it last acted, `state`
+  `felling`, `damming`, `lodged` or `gone`. A world made before beavers (any
+  version under 8, which has no rivers) has no sites and no colony.
+- **The process.** `beaver`, a period of one in-game hour, runs only while
+  the world is played (world time passes only while played). It catches up
+  every hour since `last_h`, bounded at 40 days, in one call, so a colony
+  the player left on day 3 and comes back to on day 40 is where hourly
+  steps would have put it (the catch-up test). Each hour it proposes at
+  most one thing, through `WorldSave::propose`, authored
+  `@wbeaver:colony/<n>`:
+  - *fell*: every sixth hour while fewer than six trees are down, the
+    nearest standing tree within 20 m becomes a stump (the tree record the
+    player's axe would write, `trees_taken`);
+  - *dam*: once three trees are down, one **sticks** cell an hour, across
+    the reach's downstream lip (the cell the river leaves the site by and
+    its two neighbours across the stream), bottom layer first, up to the
+    bank's top and never more than four layers;
+  - *lodge*: once the dam is whole, three sticks cells in the reach beside
+    the bank, then the colony is `lodged` and builds no more.
+- **Sticks** is a cell (`Material::Sticks`, 28), drawn as the wood code
+  from the fields sheet (its bark, (2,1)), dug as wood is (the axe),
+  giving "sticks". It is solid and opaque, so the flowing-water rule
+  treats a dam as any wall.
+- **What a dam does to the water.** Under `pbd_core::liquid` (Luanti's
+  rule) water never rises over its sources: a dam cannot lift a pond above
+  the reach. What it does do is hold the water back: the reach behind it
+  keeps its sources, and the flowing water the lip fed downstream loses its
+  feed and drains away tick by tick, so the stream below a whole dam runs
+  dry to the next reach. Break the dam and the lip's water flows again.
+  Nothing about the water is saved; the dam is.
+- **The yield rule.** Every proposal is checked whole against the cells
+  the player has touched. A refused *dam* (the player built on the lip
+  first, or broke the dam, which makes those cells theirs) moves the colony:
+  its record's `site` becomes the next of `sites` (authored by the process),
+  `built` is cleared, and it starts felling there. With no site left it is
+  `gone`. A broken dam is never rebuilt on the player's cells.
+- **Beavers seen.** `beaver` is appended to `fauna.ron` as a protected
+  river floater (the otter's mover: it swims the surface and dives), `env`
+  riffle, and spawns only in the river cells within 40 m of a colony that is
+  not `gone`; it is never caught. Its body is a low-poly body in M25's
+  manner, with no outline, under the water life's material with
+  `LitByField` and `LitLikeTerrain`, so it is lit as the terrain is.
+- **The journal.** The colony's entries are the save's own lines with
+  their author, which the save already writes; no new screen. Game text,
+  if any is shown, stays plain ("A beaver dam").
+
+**Saves.** A colony and its sticks are records and edits with an author,
+taken through the durable path; an old save has no colony and opens as it
+did. No generator version moves: sites are derived from version 8's rivers.
+
+**Validation**: core tests of the site rule, of the process to day 40 in
+hourly steps and in one catch-up (equal), of a broken dam not rebuilt on
+the player's cells and the colony moving to its next site, of the lip
+draining under the liquid rule behind a whole dam; an app test that the
+proposals go through the save with the process's author; a capture of a
+colony's dam on a river.
+
+### B26. Two capture instruments: a school in a lake, and a gale (18.2, 4.3; 2026-11-19)
+
+Both are measurement instruments in CLAUDE.md's sense: they make a frame
+the write-up needs and change nothing a player meets. No default moves.
+
+- **18.2, a school under a lake's surface.** B23's code already reads a
+  school's depth from `PlanetWater::surface` at its anchor, which is the
+  column's fresh water top where water stands over the sea's cells and the
+  sea's otherwise; the spawner already puts a fresh-water school at that
+  top. What could not show it was the `--life` instrument, which only ever
+  put a group in the sea (it asked the height field's sea depth, nought
+  over a lake). It now asks the water the spawner asks, so `--life perch`
+  puts the school in a lake or a river. The before frame needs B23's old
+  rule, the depth off the sea's mean sphere: `PBD_SCHOOL_DEPTH=sea` gives
+  it, for the capture only. A test pins the rule: a school in the river by
+  the spawn reads the river's top as its surface.
+- **4.3, the gale.** B11 found no gale over the sea in the first day of a
+  new world, and no way to hold the eye on the surface over deep water.
+  `--gale <m/s>` holds the wind the sea has caught up with at that speed
+  over every direction, blowing along the atmosphere's own wind (east where
+  calm): the waves (the table's state) and the spray's wind (`SeaNow`) both
+  read it. The eye is held on the surface by boarding the raft
+  (`--aboard raft`), which floats on the same table. The storm capture is
+  taken beside `sea-storm-day.jpg` at 28 m/s, where the spray and streaks
+  are at their full strength (from 17 m/s to 34).
+
+### B27. What was built of B24 to B26 (2026-11-19, `claude/phase-2-1`)
+
+- **6.2, the sea's cells** (B24), built as written. Measured on 400,000
+  directions of version 14: reef rock on 277 of 549 reef samples, mussel
+  beds on 222 of 773 vent samples (the rest basalt), sea ice on 418 of 2,928
+  polar samples. The beach's band (2 m either side of the sea's level)
+  stays sand: a reef there is the beach's. `examples/sea_cells.rs` (an
+  instrument) lists where each lies, with the day and hour its sun stands
+  highest, for captures.
+- **What reef rock looks like.** The sea floor deeper than 4 m was already
+  stone, and the ocean sheet's stone tile IS its reef limestone, so a reef
+  rock cell there looks as version 12's stone did: what changes is what it
+  is (dug, it gives reef rock, and placed on land it stays limestone, where
+  stone takes the land's own). Where version 12 had sand (the reef's top 4
+  m), a reef rock patch is new to the eye, and that is where the capture is
+  taken (`reef-rock-before-after.jpg`).
+- **A floe's cap.** The tier took a column's top into its record only
+  downward (a carve), so a floe, the one generated top standing over its
+  record, drew its sides and no top (`sea-ice-no-cap.jpg`); its top is now
+  taken into the record as an edit's is.
+- **The pieces' fade** (B12, B13) was a place: a tile 34 to 46 m off stood
+  half dithered for as long as the eye stood still. It is now a moment in
+  time (CLAUDE.md, priority 1): a tile fades out over 0.8 s once its middle
+  passes 42 m and back in once it is within 38 m, so a still eye sees every
+  tile whole or gone.
+- **Section 8** (B25): the colony record, the process with its catch-up,
+  sticks, founding and the tier's edits are built. A site needs a lip no
+  deeper than the dam's four layers: the first site found (44.74 S,
+  100.26 W) had its bed nine layers under the water and is passed over.
+  A dam stands from the bed to the water's top (the lip's water no more
+  than the dam's four layers), not over it. The process's hour is a
+  twenty-fourth of the world's day (`DAY_S`, 2,880 s), not a wall-clock
+  hour. `PBD_BEAVER_AGE_DAYS=<days>` is a capture instrument that founds a colony
+  that many days ago, so one capture shows what forty days made;
+  `examples/beaver_sites.rs` lists lips on beaver ground. **Not built: the
+  beavers themselves** (the `beaver` species, its body and its spawning by a
+  colony; task 8.4). The colony works unseen until then.
+- **Frame cost** of all of it was not measured: the cloud container has no
+  GPU (lavapipe). The owner runs the perf suite.
+
+### B28. Beaver and otter motion (owner, 2026-11-20)
+
+The owner, 2026-11-20: "can you improve on beaver and otter animations?",
+then "make me a mockup with those two animls running around interacting with
+env". This is the motion of three animals, the beaver, the river otter and
+the sea otter, written up by the `animation` skill: four stages to every
+action, limbs on arcs about joints, gaits that never slide a foot, and the
+tail and head as overlapping action. It is a mockup and a write-up only; the
+game waits for the owner's approval of the mockup and a request (CLAUDE.md,
+"Write it up before touching code"; the skill's order of work, step 3).
+
+**Today's motion, measured** (`docs/mockups/ocean/creatures3d.js` and the
+tabs that move them, at `dfcfe932`):
+
+| Animal | Model | How it moves today |
+| --- | --- | --- |
+| Beaver (`beaverGeo`) | One rigid mesh, no parts: four fixed leg boxes (0.06 x 0.10 x 0.05 of its length), a tail plank fixed at 0.12 rad, a stick glued to the jaw in `beaver_branch`. | Dam tab: three carriers shuttle on k = (sin 0.12t + 1)/2 between two points 16.4 m apart, a 52 s round trip peaking at 0.98 m/s with the feet still (every step slides); they ride the water's or ground's level minus 0.1 m, so on land they sink to the shins; the carrying and empty models swap in one frame when cos 0.12t changes sign. The gnawer bobs abs(sin 6t) x 0.03 m in place and nothing else moves: the head never bites, no chip flies, and a tree vanishes in one frame as the day slider passes it. |
+| River otter (`riverotter`) | The sea otter's lathe right way up, four fixed leg boxes. | The fish shader's sway on a mammal: sin(7t + phase - 6x) x 0.075 of its length at the tail (1.1 Hz), on a 3.5 x 1.8 m ellipse at 0.3 rad/s (21 s a lap), sinking up to 1.8 m on sin 0.5t. It never leaves the pool, bounds, slides or eats. |
+| Sea otter (`otter`) | Rigid on its back, paws fixed on an urchin. | Drifts 1.5 m either way at 0.05 rad/s and rides the sea's height. It never cracks the urchin, rolls, dives, grooms or sleeps. |
+
+**The rig.** Each animal is a set of pivots in a hierarchy, each a low-poly
+piece in M25's manner (flat shaded, a colour per face from its sprite, no
+outline, lit as the ground under it by the page's one lighting model):
+
+- a root on the ground at the animal's middle, turned to its heading;
+- a body pivot (the hips' rise and fall, pitch and roll), carrying a hind
+  segment and a chest segment joined at the spine, so the back can arch;
+- a neck and head (the beaver's incisors, the otters' whiskers), and a jaw
+  the held thing hangs from (a branch, a fish, an urchin);
+- four legs of two bones each (thigh and shin) and a foot, posed by two-bone
+  inverse kinematics to a foot target, the hind knee forward and the front
+  elbow back;
+- a tail of three segments (the beaver's last one the flat paddle).
+
+**Gaits on arcs, never sliding.** A gait is a phase that advances by the
+distance the root travels divided by the stride (`stride_m`), not by the
+clock, so however the speed changes the feet keep pace. Each foot has an
+offset in the cycle and a stance fraction (`stance`): in stance its target
+moves backwards under the body at exactly the body's speed (it stays where
+it was put down), in swing it lifts on an arc (`foot_lift_m`) and lands a
+half step ahead. The ground under each foot is sampled, so a foot on the mud
+bank stands on the bank. The contact, down, passing and up poses are the
+keyed poses "Show poses" freezes on.
+
+- **Beaver, the waddle**: a lateral walk (left hind 0, left fore 0.25,
+  right hind 0.5, right fore 0.75), stance 0.62. The body rolls toward the
+  standing side (`waddle_roll_rad`), the hips rise twice a cycle
+  (`hip_bob_m`), the head counters the roll a beat late (`head_lag_s`) and
+  the tail swings after the hips (`tail_lag_s`), dragging.
+- **River otter, the bound**: the hind pair together, the fore pair half a
+  cycle later (0, 0.06, 0.5, 0.56), stance 0.38, so there is a moment with
+  no foot down. The spine flexes on the cycle (`arch_rad`): rounded when the
+  hind feet land under the chest, stretched as they push off; the body
+  lifts in the air (`lift_m`).
+
+**The actions and their stages.** Every strike is windup, anticipation
+(a held, coiled beat), hit (ease in, t cubed, fastest at contact, the event
+on contact) and recoil (a kick back past rest, then ease out). The times and
+sizes are the tunables below.
+
+- **Beaver gnaws and fells a tree.** It rears on its hind legs and tail
+  (a tripod), forepaws on the trunk. Each bite: the head draws back and
+  tilts (windup), holds (anticipation), snaps in (hit: chips fly from the
+  notch, the notch deepens), and bounces back (recoil); one steady beat
+  (`gnaw.beat_s`). After `bites_to_fell` bites the tree creaks: it leans a
+  little back over the cut (`lean_back_rad`, the anticipation) while the
+  beaver drops to all fours and scrambles clear; then it falls, slow at
+  first and faster all the way (an angle that grows as t squared, a rod
+  tipping under gravity), hits the ground, bounces (`bounce_rad`), and
+  settles; the crown shakes on the hit. The stump stays.
+- **Beaver fetches a branch.** It waddles to the fallen crown, gnaws a
+  branch free (three bites), takes it in its teeth and walks to the water
+  with the branch dragging (it hangs from the jaw, its far end on the
+  ground), slides in down the bank, swims with only its head, ears and the
+  branch above water (the tail sculls side to side, each segment a beat
+  behind the last, `scull_hz`, `scull_rad`; the hind feet paddle), and at
+  the dam rears against it and pushes the branch onto the crest, where it
+  stays.
+- **Beaver tail slap and dive.** The tail lifts (windup), holds high
+  (anticipation), comes down flat (hit: a splash and rings on the water)
+  and bounces (recoil) while the head goes under; the body pitches nose
+  down and the tail disappears last. It surfaces by the bank.
+- **Beaver climbs out and shakes off.** Forepaws on the bank, a push from
+  the hind legs, then the shake: the body rolls on a fast decaying wave
+  (`shake.hz`, `shake.roll_rad`, `shake.time_s`), the head a beat late,
+  the tail last; drops fly off. The coat is wet (darker and shinier) while
+  it drips, and dries over `dry_s`.
+- **River otter.** Bounds along the bank; at the top of the mud slide it
+  crouches (anticipation), pushes off and slides on its belly, legs swept
+  back, faster down the slope (`slide.accel_mps2`), into the pond with a
+  splash; porpoises (arcs out of the water, `porpoise.arc_m`, the body's
+  pitch along the arc and the tail a beat behind); chases a fish under
+  water and takes it; climbs onto a rock and eats it held in its forepaws,
+  a bite on each beat (`eat.beat_s`, the fish shorter each bite); rolls on
+  its back and grooms (forepaws circling the face); stands up on its hind
+  legs to look round, the head turning and holding (`look.hold_s`).
+- **Sea otter.** Rafts on its back in the kelp. It cracks an urchin on a
+  stone on its chest: both forepaws lift the urchin (windup), hold
+  (anticipation), bring it down on the stone (hit: shell bits and a little
+  splash) and bounce (recoil), `cracks` times, then eats. It rolls over
+  belly down (`roll_s`) with a flick of the tail and dives (`dive_s`),
+  coming up with a new urchin and rolling onto its back; grooms rolling
+  side to side and rubbing its fur; and to sleep wraps a kelp frond round
+  itself (`kelp_wrap_s`), paws over its eyes, bobbing on the swell.
+
+Each animal runs a small state machine: when one action ends it picks the
+next with a seeded random draw from the actions open to it where it is (a
+beaver on land can fell, fetch or sit up; in the water it slaps and climbs
+out), so the scene plays on its own and two runs of one seed are the same.
+Buttons start any action at once.
+
+**Tunables** (proposed for a validated `assets/config/creature_motion.ron`,
+one source of defaults, units in the names; the mockup's sliders print the
+block):
+
+| Block | Values (default) |
+| --- | --- |
+| `beaver.walk` | `stride_m` 0.36, `stance` 0.62, `speed_mps` 0.5, `foot_lift_m` 0.05, `waddle_roll_rad` 0.10, `hip_bob_m` 0.02, `head_lag_s` 0.10, `tail_lag_s` 0.18 |
+| `beaver.gnaw` | `beat_s` 0.42 (windup 0.30, anticipation 0.20, hit 0.12, recoil 0.38 of it), `pull_rad` 0.35, `chips_per_bite` 4, `bites_to_fell` 12 |
+| `beaver.fell` | `creak_s` 1.0, `lean_back_rad` 0.05, `fall_s` 1.7, `bounce_rad` 0.10, `settle_s` 0.9 |
+| `beaver.swim` | `speed_mps` 0.75, `scull_hz` 1.3, `scull_rad` 0.35, `head_above_m` 0.07 |
+| `beaver.slap` | `windup_s` 0.30, `anticipate_s` 0.22, `strike_s` 0.08, `recoil_s` 0.35, `raise_rad` 1.15 |
+| `beaver.shake` | `hz` 7.0, `time_s` 1.0, `roll_rad` 0.45, `dry_s` 20 |
+| `river_otter.bound` | `stride_m` 0.85, `stance` 0.38, `speed_mps` 1.5, `arch_rad` 0.42, `lift_m` 0.07 |
+| `river_otter.slide` | `accel_mps2` 3.0, `max_mps` 4.5 |
+| `river_otter` other | `porpoise.arc_m` 0.45, `eat.beat_s` 0.36, `look.hold_s` 0.9 |
+| `sea_otter.crack` | `windup_s` 0.32, `anticipate_s` 0.16, `strike_s` 0.07, `recoil_s` 0.26, `raise_m` 0.16, `cracks` 4 |
+| `sea_otter` other | `roll_s` 0.7, `dive_s` 5.0, `kelp_wrap_s` 2.4 |
+| all | `exaggerate` 1.0: scales every raise, roll, arch and recoil together |
+
+**Drawn only.** The motion never feeds a rule. In the game the colony's
+fell, dam and lodge entries (B25) stay where they are and when they are; a
+beaver seen felling a tree is drawn felling the tree the process felled,
+the fall's hit drawn when the stump's entry is written. A creature's
+position is its spawn's (task 8.4), the gait reading the distance it moved.
+
+**The mockup.** A tab "Beavers and otters" (`#critters`) on M25, one 3D
+view (the page's one renderer): a valley stream with a beaver pond, the
+dam, the lodge, a muddy bank and an otter slide, aspens and willows, a
+riffle with trout, and the stream's mouth onto a kelp-edged sea where the
+sea otter rafts. Today and Proposed in the same view, Slow x0.25, Show
+poses, a Follow switch (off by default: the camera never moves on its own),
+every tunable a slider with the RON block printed, the time of day as a
+slider (at night a lantern on the bank, a lamp at the fishing camp at the
+mouth and fireflies light what is near them; the moon stays dim). The code
+is `docs/mockups/ocean/critters.js`; the screenshots are in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU, so they show poses and never smoothness.
+
+**For the game** (after approval and a request): the rig is built once per
+species as Bevy entities (a root with child pivots), the poses blended by
+the same curves, the gait read from the distance moved, `LitByField` and
+`LitLikeTerrain` on the root; the beaver joins `fauna.ron` as task 8.4
+has it.
+
+**Version 3: one skin, fur and its texture (owner, 2026-11-20).** On version
+2's beaver mid-gnaw, seen on a phone: "Some weird geometry poking out from
+middle of them. Also need textures for both. Some fur tuffs would be nice
+too", then "See mining mike how we did that for the wolf". Version 2 built
+each animal of separate low-poly pieces parented to its pivots (a lathe per
+body segment, a cylinder per leg bone, a box per foot and paddle); in a
+reared or rolled pose the leg roots and foot slabs stood out of the flank
+and back, and nothing joined a leg to the body. Version 3 follows Mining
+Mike's Ice Wolf (`organic-creature` and `painted-bake`, godot-sandbox at
+`1739e89`), in `tools/art/critter_sculpt.py` with the copied kit in
+`tools/art/sdf_kit.py`:
+
+- **One skin.** Bone, muscle and fur are one signed distance field round
+  the rig's own joints: round cones along the leg bones, ellipsoids for the
+  haunches, shoulders, cheeks and head, the paws and webbed feet, the ears,
+  the beaver's incisors and its paddle, all joined with wide smooth unions;
+  the coat a thin volume over it, clumped along the way the fur lies. It is
+  meshed with surface nets and cut to 2,000 to 2,400 triangles. No visible
+  form is a raw primitive, so a leg grows out of the body and nothing can
+  stand out of it or float beside it.
+- **Skinned to the same rig.** The pivots are bones now (the same joints,
+  the same poses, gaits and actions); every vertex has four bone weights,
+  a leg's bones pulling only their leg and the skin round its top. The page
+  checks the mesh's rest joints against its own rig and logs any difference.
+- **A painted bake in pixel art.** The mesh is unwrapped at one density
+  (150 texels a metre, square texels, no chart stretched past 1.22 times),
+  and every texel is painted at the sculpt's surface from the animal's fur
+  groups in Sweaft-64 tones: a darker back and lighter flanks and belly,
+  fur strokes along the flow, a step of painted light, darker in creases.
+  The beaver's paddle is bare and scaled in a cross-hatch; the river
+  otter's throat and muzzle are pale; the sea otter's head and throat are
+  pale, ragged where they meet the coat. Nearest sampled, no outline, lit
+  by the page's one lighting model like the ground.
+- **Fur tufts.** 150 to 230 low-poly tufts an animal (Mining Mike's
+  `fur_locks`: a cupped row of three, a second row, the point; six
+  triangles), where the fur is long: the nape, the cheeks, the back and the
+  base of the tail (none on the beaver's paddle). Each takes its root's
+  colour and bones. A damped spring on the back and one on the head lag
+  behind the body, and their lag swings the tufts' tips, so they trail a
+  move, overshoot and settle (overlapping action). While the coat is wet
+  (in the water, and after it until the shake or until it dries) the tufts
+  blend to a wet shape: narrow, clumped and spiked.
+- **The valley.** The aspens wear a pale bark with small dark eyes, the
+  felled ones too (`tex-aspen.png`, 64 texels a metre). Dusk is a warm low
+  sun (the Dusk button sits at 17:30, with the sun and the sky's light kept
+  up while the sun is low); night is unchanged, lit by its lamps.
+
+Today's motion keeps today's models. Screenshots `v3-*.jpg` and
+`contact-sheet-v3.jpg` in `docs/screenshots/beaver-otter-mockup/`, rendered
+on SwiftShader with no GPU.
+
+**Version 4: arms that move, calmer fur, empty paws (owner, 2026-11-20).**
+On version 3: "the arms on beaver and otter should animate when they move
+or stand up", and "the fur shaking is cool, but a little over the top, I
+would want more subtle". Then, on the sea otter: "do sea otters always need
+to have the urchin in hand when grooming AND sleeping?"
+
+What was wrong, measured:
+
+- **The forelegs were barely skinned to their bones.** Along a foreleg the
+  forearm's skin took about 0.45 of its weight from the elbow bone, 0.3
+  from the shoulder and 0.2 from the paw, and the paw only 0.47 from its
+  own bone (the beaver's left foreleg; the otters alike). The inverse
+  fourth power with a 1 cm floor cannot tell bones 7 cm long apart, and
+  four rounds of half-strength smoothing over the low-poly mesh evened what
+  was left, so a bent elbow moved the paw about half as far as the bone
+  and the arm read as a stiff stub.
+- **The poses switched the arms, then held them.** A rear-up (the beaver
+  sitting up, the otter looking round) kept the forepaws on the ground
+  until the body was half way up and then moved them to the chest in one
+  frame; the gnaw blended straight to paws on the trunk with no rise at
+  all; swimming held both forelegs in one tucked angle; on its back the sea
+  otter's paws were still between strokes.
+- **The tufts' spring was loose.** 2.4 Hz at a third of critical damping,
+  its whole lag (up to 3 cm) on the tips, a full clump to the wet shape:
+  every step left the coat ringing.
+- **The sea otter's paws were never empty.** The urchin was drawn between
+  its paws whenever it had one, and the stone on its chest whenever it lay
+  on its back: grooming, rolling and asleep in the kelp.
+
+Version 4:
+
+- **Skin weights** (`critter_sculpt.py`, `skin_weights`): a leg's bones
+  fall off at the seventh power with a 3 mm floor, and a vertex the leg
+  owns keeps most of its weight through the smoothing, so each segment owns
+  its own skin and blends only round its joint. Now the forearm is 0.64 to
+  0.79 its own bone, the paw 0.65 to 0.77, the upper arm 0.55 to 0.9; the
+  shoulder still blends into the chest. Only the weights changed; the
+  sculpt, its painting and the tufts are as in version 3.
+- **One schedule for rearing and sitting down** (`rear`): the anticipation
+  (the body sinks, the head dips, the paws press), the rise, with the
+  forepaws leaving the ground a beat after the body, wrists hanging, then
+  catching up on an arc that bulges up and forward, carrying past their
+  mark and settling (overlapping action, `overshoot`); going down the
+  paws lead, reaching for the ground with the wrists open before the body
+  arrives, and the elbows give as the weight lands. The beaver uses it to
+  rear up to its aspen (the paws land on the trunk, then grip and pull in
+  on each bite) and to drop to all fours as the tree creaks, to sit up and
+  groom (the paws come to its face, rub in circles, then reach down) and
+  to watch the tree fall; the river otter to look round (paws drawn up to
+  its chest) and to sit up on its rock to eat (the paws bring the trout to
+  its mouth on each bite, then it sits back down).
+- **Walking and bounding**: each forepaw's wrist flexes as it peels off the
+  ground and opens to reach for the next contact (`swing_curl_rad`), the
+  elbow folding on the arc the leg is solved to, the contacts planted as
+  before. Gnawing a branch on the ground, the forepaws hold it and press on
+  each bite.
+- **Swimming as each animal does**: a beaver swims on its hind feet alone,
+  its forepaws held loosely to its chest, nodding with each kick; a river
+  otter dog-paddles with its forelegs while it swims slowly or treads water
+  (alternate strokes, the elbow folding on the recovery, `paddle_rad`) and
+  lays them back along its body when it swims fast or dives; a sea otter
+  belly down tucks them like the beaver.
+- **The sea otter's paws**: at rest on its back they rise and fall with
+  its breathing; grooming, they work along its belly and chest, rubbing in
+  circles and squeezing the fur between them, blended in and out rather
+  than switched.
+- **Empty paws except while it forages and eats.** The urchin is in its
+  paws only from the moment it comes up with it in the dive, through the
+  cracking and the eating; then it lets go and the shell bits drift off its
+  chest. The stone is on its chest only while it cracks; between uses it is
+  tucked in the loose skin under its foreleg, as a real sea otter keeps its
+  favourite stone, and nothing is drawn. An urchin brought up is cracked
+  before anything else, so it grooms, rolls, dives and sleeps with empty
+  paws; asleep in the kelp its paws rest on its chest, then come up toward
+  its face as its head curls down onto them.
+- **Subtler fur** (`shared.fur`, the new defaults; the sliders still reach
+  version 3's values): a 3.6 Hz spring at 0.75 of critical damping (one
+  small overshoot, settled in about a third of a second), 0.4 of its lag on
+  the tips and at most 1.2 cm, the wet spike 0.4 of the clumped shape, and
+  0.45 of that again during the shake-off.
+
+The new tunables join the RON block under `shared`: `forelegs`
+(`anticipate_s`, `rise_s`, `lower_s`, `overshoot`, `swing_curl_rad`,
+`paddle_rad`) and `fur` (`spring_hz`, `damping`, `sway`, `max_m`,
+`wet_spike`, `shake`). Today's motion keeps today's models. Screenshots
+`v4-*.jpg` and `contact-sheet-v4.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.
+
+**Version 5: forelimbs within a real animal's range, and paddling (owner,
+2026-11-20).** On version 4, from a phone screenshot of the beaver reared
+at an aspen, seen from the front-left, a forearm folded flat back against
+the upper arm and the paw tucked up by the shoulder: "bevers cant curl their
+arms back up like that". Then, of the river otter on its back: "otter arms
+also cannot curl back like that"; "it happens when they stand upright"; "the
+arms are curling backwards". On swimming, from a screenshot of the beaver
+under water with its forelegs held still under its chest: "swiming
+animation: arms needs to work like the feet, they should be paddling
+around", and of the otters: "their arms needs to paddle, they look too much
+like they are stuck in the walk pose when they swim". The paddling
+overrides version 4's real-beaver tuck on purpose: the owner's call.
+
+What was wrong, checked and measured:
+
+- **The joints were right.** A debug view (`__critters.debug`: each
+  forelimb bone's axes drawn, an animal held at given joint angles) shows
+  every forelimb joint turning about its bone's z, the body's lateral
+  axis, with the same sign on both sides and no twist about the bone: +30
+  degrees on the elbow swings the forearm forward and up (the elbow points
+  back), -30 on the wrist curls the paw down and under. The bind pose
+  (bones unrotated, the sculpt skinned round them) and `critters_mesh.js`
+  agree with the page (`buildRig` checks the rest joints), so nothing in
+  `critter_sculpt.py` changed.
+- **The poses folded them.** The upright poses sent the hands to points
+  at or behind the shoulder in the chest's own frame (the beaver grooming
+  at 6 cm forward and 2 cm toward the back from it, the otter looking
+  round at 3.5 cm, eating at 4.5 cm, watching the tree fall at 6 cm), and
+  the two-bone solver bent the elbow as far as it had to: 120 to 180
+  degrees, the forearm folded onto the upper arm. With the spine upright,
+  "forward along the spine" is up and "toward the back" is behind, so the
+  paws ended at the chin and past it.
+- **The wrist held the paw level.** A forepaw's wrist was solved to keep
+  the paw level with the ground, right for a paw on the ground, but on a
+  reared body with the forearm hanging or reaching forward it bent the paw
+  back over the hand or folded it right round. On their backs the otters'
+  wrists were set bent back (+0.3 to +0.8 rad from a paw at right angles to
+  the forearm).
+- **Swimming kept a fixed or walk-like arm.** The beaver held its forelegs
+  in one tucked angle; the river otter laid them back whenever it swam fast
+  or dived; idling in the water (`Hold`) and turning (`Face`) switched from
+  the standing pose to the swimming one at half depth in one frame.
+
+Measured by an instrument in the page (`__critters.LIMB`: the largest
+elbow and wrist angles each action reaches as the joints are set; the elbow
+wrapped to plus or minus 180 degrees, the wrist as the paw's angle from in
+line with the forearm, so a flat paw under an upright forearm is 90 degrees
+of dorsiflexion), over every action twice and then 600 seconds of the
+seeded brains (seed 7), version 4 against version 5:
+
+| Animal | Elbow flex, max | Elbow past straight, max | Wrist palmar flexion, max | Wrist dorsiflexion, max |
+| --- | ---: | ---: | ---: | ---: |
+| Beaver, version 4 | 178 | 108 | 176 | 173 |
+| Beaver, version 5 | 80 | 0 | 60 | 100 |
+| River otter, version 4 | 176 | 23 | 179 | 176 |
+| River otter, version 5 | 100 | 0 | 70 | 100 |
+| Sea otter, version 4 | 126 | 64 | 150 | 155 |
+| Sea otter, version 5 | 85 | 0 | 70 | 90 |
+
+Version 4's worst were the sit-up groom (elbow 163), the walk and the
+climbs (elbow up to 178, wrist folded round), the otter's look-round (129)
+and its bound (176), and the sea otter's crack (its elbow 64 degrees past
+straight, wrists folded back). Version 5's maxima sit on the limits, where
+the clamp holds them; nothing passes one.
+
+Version 5:
+
+- **Joint limits** per animal, in degrees, as sliders (`beaver.forelimb`,
+  `river_otter.forelimb`, `sea_otter.forelimb`): the elbow's flex from
+  straight, `elbow_max_deg` 80, 100 and 85 (a beaver's forelegs are short;
+  a river otter's bend more but not flat; a sea otter's are short), never
+  more than 5 past straight; the wrist from in line with the forearm,
+  `wrist_flex_deg` (curled down and under) 60, 70 and 70 and
+  `wrist_ext_deg` (bent back) 100, 100 and 95 (a flat paw under an upright
+  forearm is 90); `hands_in_deg` 16, 14 and 12, the shoulder rolled to
+  bring the hands toward each other. The solver holds a foreleg's target
+  out on its line from the shoulder so the elbow cannot pass its limit,
+  and every pose, blend, overshoot, lag and slider is clamped to the
+  limits last, as the joints are set (`applyPose`); the slider ranges stop
+  short of a folded joint (elbow at most 110 or 120).
+- **Upright arms hang with gravity** (`hangAt`, `shared.upright`): from the
+  shoulder as the body is pitched, 0.86 of the arm's length out and down at
+  62 degrees in front of the belly, in the root's level frame, the elbow
+  partly bent and the forearm forward and down from it; the paw curled 25
+  degrees past in line (`curl_deg`), blended in as it leaves the ground;
+  the hands drawn in toward each other. The beaver watching its tree fall,
+  the beaver sitting up and the river otter looking round and sitting to
+  eat all hang their hands so; grooming, the beaver combs down its belly
+  and brings each hand up toward its chin in turn as its head bows to meet
+  it; eating, the otter raises the trout a little toward its mouth and
+  bows to bite. Gnawing, the beaver's paws rest on the bark below its
+  mouth, the hands in line with the forearms and the fingers curled over
+  it. The rear-up's schedule and its overshoot are unchanged and clamped.
+- **On their backs** the river otter's and the sea otter's forepaws rest
+  on the chest toward the chin, the elbows partly bent and the paws curled
+  toward the chest, rafting, grooming, eating and asleep (the crack still
+  lifts the urchin at arm's length).
+- **Swimming is a pose and a cycle of its own** (`shared.paddle`): at the
+  surface and under water, every swimmer (the beaver, the river otter, the
+  sea otter belly down in its dive) strokes with its forepaws like its
+  feet: reach forward, pull down and back with the elbow nearly straight
+  and the palm pushing, recover tucked under the chest with the elbow bent
+  (`paddle_tuck`, 0.85 of its limit) and the paw curled; left and right in
+  turn, phased against the hind kick (`paddle_phase_rad`, a quarter
+  stroke). The reach (`shared.forelegs.paddle_rad`) and the stroke rate
+  follow the swim speed: at rest `paddle_idle` (0.35) of the reach and
+  `rate_idle` (0.45) of the rate, a gentle tread. The hind feet kick swept
+  further back along the body. Nothing of the walk drives a leg in the
+  water: a move blends the walk and the swim by the depth under the animal
+  (as before), and idling and turning now blend the same way instead of
+  switching at half depth, so the bank blends rather than snaps.
+- The hop no longer straightens the elbow past straight, and the otter's
+  belly slide lays its paws back in line with its forearms instead of bent
+  back.
+
+The skin was checked bent to the limits (the beaver at 80 degrees, the
+river otter at 100, the sea otter at 85, the wrists curled to theirs): no
+inversion; a slight fold on the inside of the elbow, as skin does. The new
+tunables join the RON block: `beaver.forelimb`, `river_otter.forelimb`,
+`sea_otter.forelimb`, `shared.upright`, `shared.paddle`. Today's motion
+keeps today's models. Screenshots `v5-*.jpg` and `contact-sheet-v5.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.

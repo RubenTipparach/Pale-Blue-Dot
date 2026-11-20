@@ -602,7 +602,8 @@ fn spawn_card(
             position_type: PositionType::Absolute,
             flex_direction: FlexDirection::Column,
             row_gap: px(2),
-            border: UiRect::all(px(1)),
+            // Wide enough to see zoomed out (`mission-playthrough` 3.5).
+            border: UiRect::all(px(2)),
             overflow: Overflow::clip(),
             ..default()
         },
@@ -862,7 +863,7 @@ pub fn paint(
     }
     let chain = &chain.0;
     let progress = &missions.progress;
-    let current = progress.current(chain).map(|m| m.id.clone());
+    let current = progress.focused(chain).map(|m| m.id.clone());
     let standing = |i: usize| {
         let m = &chain.missions[i];
         (
@@ -873,10 +874,12 @@ pub fn paint(
     let title_of = |id: &str| chain.get(id).map_or(id.to_string(), |m| m.title.clone());
     for (card, mut border) in &mut cards {
         let (s, now) = standing(card.0);
-        let c = if view.selected == Some(card.0) {
+        // The one mission the player is on glows; the one open in the side
+        // panel, if another, is framed white.
+        let c = if now {
+            ui_kit::RUNE
+        } else if view.selected == Some(card.0) {
             ui_kit::LABEL
-        } else if now {
-            ui_kit::TITLE
         } else {
             Color::NONE
         };
@@ -1107,7 +1110,7 @@ fn centred(lv: &Level, at: (usize, usize), size: Vec2) -> Vec2 {
 #[allow(clippy::too_many_arguments)]
 pub fn steer(
     screen: Res<Screen>,
-    missions: Res<Missions>,
+    mut missions: ResMut<Missions>,
     chain: Res<MissionChain>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut wheel: MessageReader<MouseWheel>,
@@ -1216,6 +1219,16 @@ pub fn steer(
         && !moved
     {
         next.selected = card;
+        // Picking an open mission makes it the one the player is on
+        // (`mission-playthrough` 3.5).
+        if let Some(i) = card {
+            let id = chain.0.missions[i].id.clone();
+            let open = missions.progress.standing(&chain.0, &chain.0.missions[i])
+                == pbd_core::missions::Standing::Open;
+            if open && missions.progress.focus_on(&chain.0, &id) {
+                missions.refocused = true;
+            }
+        }
     }
     // F fits the whole tree to the screen.
     if keys.just_pressed(KeyCode::KeyF) {

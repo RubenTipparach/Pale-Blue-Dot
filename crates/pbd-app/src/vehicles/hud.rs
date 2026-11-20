@@ -221,10 +221,18 @@ const BAIL_KG: f64 = 20.0;
 fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     let craft = &vehicle.craft;
     let craft_title = craft.kind.title();
-    let title = match craft.mooring {
-        Some(m) if m.anchored => tr_with("vehicles.hud.at_anchor", &[("craft", &craft_title)]),
-        Some(_) => tr_with("vehicles.hud.tied_up", &[("craft", &craft_title)]),
-        None => craft_title,
+    let title = if craft.anchored() {
+        tr_with("vehicles.hud.at_anchor", &[("craft", &craft_title)])
+    } else if craft.anchor.is_some() {
+        let state = pbd_core::vehicle::anchor::word_lower(craft.anchor.as_ref());
+        tr_with(
+            "vehicles.hud.anchor_state",
+            &[("craft", &craft_title), ("state", &state)],
+        )
+    } else if craft.mooring.is_some() {
+        tr_with("vehicles.hud.tied_up", &[("craft", &craft_title)])
+    } else {
+        craft_title
     };
     let mut lines = Lines { title, ..default() };
     let bail = craft.bilge_kg > BAIL_KG;
@@ -248,14 +256,29 @@ fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
         }
         lines.rows.push((keys, what));
     }
-    let anchor = match craft.mooring {
-        Some(m) if m.anchored => tr("vehicles.hud.raise_anchor"),
-        Some(_) => tr("vehicles.hud.cast_off"),
-        None => tr("vehicles.hud.drop_anchor"),
+    // One anchor per boat (`river-craft` design 4); the tube has none.
+    let out = craft.anchor.is_some() || craft.mooring.is_some_and(|m| m.anchored);
+    let anchor = if craft.has_anchor() && out {
+        Some(tr("vehicles.hud.weigh_anchor"))
+    } else if craft.mooring.is_some() {
+        Some(tr("vehicles.hud.cast_off"))
+    } else if craft.has_anchor() {
+        Some(tr("vehicles.hud.drop_anchor"))
+    } else {
+        None
     };
-    lines
-        .rows
-        .push((vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)], anchor));
+    if let Some(anchor) = anchor {
+        lines
+            .rows
+            .push((vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)], anchor));
+    }
+    // The boat's menu (design 10.2): its hold, anchor and lantern.
+    if craft.has_anchor() {
+        lines.rows.push((
+            vec![bound("vehicles:KeyC", KeyCode::KeyC, binds)],
+            tr("vehicles.hud.boat"),
+        ));
+    }
     lines.rows.push((
         vec![crate::controls::key_label(crate::interact::key(binds))],
         tr("vehicles.hud.step_off"),
@@ -266,6 +289,8 @@ fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     ));
     if bail {
         lines.warning = Some(tr("vehicles.hud.bail"));
+    } else if craft.rowing().is_some_and(|(_, r)| r.on_bed) {
+        lines.warning = Some(tr("vehicles.hud.oar_on_bed"));
     }
     lines
 }
@@ -341,7 +366,7 @@ mod tests {
         let text = panel(&v, &Default::default()).text();
         for want in [
             "RAFT",
-            "Q/E  steer with the pole",
+            "Q/E  row the left or right oar",
             "drop the anchor",
             "step off",
             "camera",
@@ -359,7 +384,9 @@ mod tests {
         });
         let text = panel(&v, &Default::default()).text();
         assert!(
-            text.contains("at anchor") && text.contains("raise the anchor"),
+            text.contains("at anchor")
+                && text.contains("weigh the anchor")
+                && text.contains("C  the boat"),
             "{text}"
         );
         let mut loon = vehicle(Kind::Loon);

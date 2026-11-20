@@ -517,7 +517,7 @@ impl FarmAct {
                         tr("block.grass.name")
                     }
                     Material::Dirt => tr("block.dirt.name"),
-                    Material::Sand => tr("block.sand.name"),
+                    Material::Sand | Material::DesertSand => tr("block.sand.name"),
                     _ => tr("block.soil.name"),
                 },
             ),

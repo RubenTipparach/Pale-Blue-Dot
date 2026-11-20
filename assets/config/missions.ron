@@ -130,7 +130,6 @@
             icon: "fish/perch",
             needs: ["rod"],
             objectives: [
-                (kind: cast, what: "water", count: 1),
                 (kind: catch, what: "fish", count: 3),
             ],
             unlocks: ["bucket"],

@@ -800,8 +800,10 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
             }
         }
     }
-    // Floes on polar water: hex slabs of one to four cells.
-    if any(Environment::UnderIce) {
+    // Floes on polar water: hex slabs of one to four cells. Not on a world
+    // whose floes are cells of sea ice (generator version 14,
+    // `ocean-environments` B24): the cells are its floes.
+    if any(Environment::UnderIce) && cfg.sea_cells.is_none() {
         let n = (TILE_M / 2.833) as i32;
         for i in 0..n {
             for j in 0..n {
@@ -1526,11 +1528,15 @@ fn frame_tangents(up: Vec3) -> (Vec3, Vec3) {
 // ---- the plugin --------------------------------------------------------------
 
 /// The tile's fade (`detail-fade`'s screen-door mask, through the field's
-/// `Faded`): out from `FADE_FROM_M` to `FADE_TO_M` of its middle from the eye,
-/// and in over `LAND_S` when it lands. A tile is dropped only once it is
-/// wholly faded, so nothing appears or vanishes in one frame.
-const FADE_FROM_M: f32 = 34.0;
-const FADE_TO_M: f32 = 46.0;
+/// `Faded`). A fade is a moment in time, never a place (CLAUDE.md, priority
+/// 1, owner 2026-11-16; `ocean-environments` B24): a tile fades in over
+/// `LAND_S` when it lands, starts fading out over `LAND_S` when its middle
+/// passes `FADE_OUT_M` from the eye, and back in when it comes within
+/// `FADE_IN_M` again, so a still eye sees no tile half faded once `LAND_S`
+/// has passed. A tile is dropped only once it is wholly faded, so nothing
+/// appears or vanishes in one frame.
+const FADE_IN_M: f32 = 38.0;
+const FADE_OUT_M: f32 = 42.0;
 const WANT_M: f32 = 52.0;
 const LAND_S: f32 = 0.8;
 /// Within this of the eye a tile sways, m; the sway eases out over the
@@ -1539,25 +1545,39 @@ const LAND_S: f32 = 0.8;
 const NEAR_M: f32 = 30.0;
 const SWAY_EASE_M: f32 = 4.0;
 
-/// How far a tile has faded out, 0 whole to 1 gone: `metres` its middle from
-/// the eye, `since_s` since it landed.
-fn tile_fade(metres: f32, since_s: f32) -> f32 {
-    let by_distance = ((metres - FADE_FROM_M) / (FADE_TO_M - FADE_FROM_M)).clamp(0.0, 1.0);
-    let by_landing = 1.0 - (since_s / LAND_S).clamp(0.0, 1.0);
-    by_distance.max(by_landing)
+/// Where a tile's fade goes from where it is, 0 whole to 1 gone: `metres`
+/// its middle from the eye, `wanted` whether it is in reach, `fade` now, and
+/// `dt` seconds on. It runs at one rate toward whole or gone, each a timed
+/// fade over `LAND_S`; the distance only says which way, with a margin
+/// (`FADE_IN_M` to `FADE_OUT_M`) in which it keeps the way it was going.
+fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
+    let out = if !wanted || metres > FADE_OUT_M {
+        true
+    } else if metres < FADE_IN_M {
+        false
+    } else {
+        // In the margin: on to the end it was nearer.
+        fade >= 0.5
+    };
+    let step = dt.max(0.0) / LAND_S;
+    if out {
+        (fade + step).min(1.0)
+    } else {
+        (fade - step).max(0.0)
+    }
 }
 
 /// Bend a swaying mesh in the surge, `bend` 0 at rest to 1 full: its
 /// positions only. Returns the vertices written.
 fn bend_mesh(mesh: &mut Mesh, still: &Sway, seconds: f32, bend: f32) -> usize {
-    let positions: Vec<[f32; 3]> = (0..still.rest.len())
-        .map(|i| {
-            let h = still.height[i];
-            let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
-            let reach = (0.07 * h).min(0.7) * bend;
-            (still.rest[i] + still.axis[i] * wave * reach).to_array()
-        })
-        .collect();
+    // Into the positions the mesh holds (`memory-leak`): bent every frame.
+    let mut positions = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+    positions.extend((0..still.rest.len()).map(|i| {
+        let h = still.height[i];
+        let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
+        let reach = (0.07 * h).min(0.7) * bend;
+        (still.rest[i] + still.axis[i] * wave * reach).to_array()
+    }));
     let n = positions.len();
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     n
@@ -1570,7 +1590,8 @@ struct Drawn {
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
     anchor: Vec3,
-    landed_s: f32,
+    /// Its fade, 0 whole to 1 gone ([`tile_fade`]); it lands at 1.
+    fade: f32,
     still: Sway,
     ambient: Vec<Ambient>,
     swayed: bool,
@@ -1768,6 +1789,7 @@ fn tiles(
         return;
     }
     let now = time.elapsed_secs();
+    let dt = time.delta_secs().min(0.1);
     let under = UnderWater::of(water.as_deref());
     let radius = cfg.radius_m;
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
@@ -1803,7 +1825,8 @@ fn tiles(
     let mut swayed_verts = 0usize;
     for (key, drawn) in state.drawn.iter_mut() {
         let m = metres(*key);
-        let fade = tile_fade(m, now - drawn.landed_s);
+        let fade = tile_fade(drawn.fade, m, wanted.contains(key), dt);
+        drawn.fade = fade;
         if !wanted.contains(key) && fade >= 1.0 {
             gone.push(*key);
             continue;
@@ -2096,7 +2119,7 @@ fn tiles(
             life: (life_id, life_handle),
             smoke,
             anchor,
-            landed_s: now,
+            fade: 1.0,
             still: built.sway,
             ambient: built.ambient,
             swayed: false,
@@ -2320,35 +2343,46 @@ mod tests {
     }
 
     /// A tile never appears or vanishes in one frame (CLAUDE.md, "No
-    /// pop-in"): it lands wholly faded and comes in over `LAND_S`; it fades
-    /// out with distance before it is out of reach, and is dropped only once
-    /// wholly faded (`tiles`); and the frame-to-frame change is small.
+    /// pop-in"), and a fade is a moment in time, never a place (owner,
+    /// 2026-11-16): it lands wholly faded and comes in over `LAND_S`; past
+    /// `FADE_OUT_M` it fades out over `LAND_S`, before it is out of reach,
+    /// and is dropped only once wholly faded (`tiles`); a still eye at any
+    /// distance sees it whole or gone once `LAND_S` has passed; and the
+    /// frame-to-frame change is small.
     #[test]
     fn a_tile_fades_in_when_it_lands_and_out_before_it_is_dropped() {
-        assert_eq!(tile_fade(10.0, 0.0), 1.0, "lands faded");
-        assert_eq!(tile_fade(10.0, LAND_S), 0.0, "whole once landed");
+        let dt = 1.0 / 60.0;
+        let run = |mut fade: f32, metres: f32, wanted: bool, seconds: f32| {
+            for _ in 0..(seconds / dt).round() as usize {
+                let next = tile_fade(fade, metres, wanted, dt);
+                assert!((next - fade).abs() <= dt / LAND_S + 1e-5);
+                fade = next;
+            }
+            fade
+        };
         assert_eq!(
-            tile_fade(WANT_M, 100.0),
-            1.0,
-            "gone before it is out of reach"
+            run(1.0, 10.0, true, LAND_S + 0.05),
+            0.0,
+            "whole once landed"
         );
-        const { assert!(FADE_TO_M < WANT_M) };
-        let mut last = tile_fade(10.0, 0.0);
-        for frame in 1..=120 {
-            let f = tile_fade(10.0, frame as f32 / 60.0);
-            assert!(
-                (f - last).abs() <= 1.0 / (LAND_S * 60.0) + 1e-5,
-                "a step of {}",
-                f - last
-            );
-            last = f;
+        assert_eq!(
+            run(0.0, 45.0, true, LAND_S + 0.05),
+            1.0,
+            "gone past the edge"
+        );
+        assert_eq!(run(0.0, 10.0, false, LAND_S + 0.05), 1.0, "out of reach");
+        const { assert!(FADE_OUT_M < WANT_M && FADE_IN_M < FADE_OUT_M) };
+        // A still eye, every distance in reach: whole or gone, never half.
+        for cm in (0..=(WANT_M as i32 * 100)).step_by(37) {
+            let m = cm as f32 / 100.0;
+            for start in [0.0, 0.3, 0.7, 1.0] {
+                let f = run(start, m, true, LAND_S + 0.05);
+                assert!(f == 0.0 || f == 1.0, "{f} at {m} m from {start}");
+            }
         }
-        let mut last = tile_fade(0.0, 10.0);
-        for cm in 0..=(WANT_M as i32 * 100) {
-            let f = tile_fade(cm as f32 / 100.0, 10.0);
-            assert!(f >= last && f - last < 0.01);
-            last = f;
-        }
+        // In the margin it holds the way it was going.
+        assert_eq!(run(0.0, 40.0, true, 5.0), 0.0);
+        assert_eq!(run(1.0, 40.0, true, 5.0), 1.0);
     }
 
     /// No pieces on a world made before the sea's places.

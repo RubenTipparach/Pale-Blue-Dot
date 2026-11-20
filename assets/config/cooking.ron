@@ -18,6 +18,12 @@
 // and the fish's tiring (times), keen on break speed. At most `max_effects`
 // run at once.
 //
+// A glowing mushroom is eaten raw (`glowing-mushrooms` design 6): its Glow
+// is a light on the player, not a multiplier. `glow` is that light: its
+// level on the field's 0..15 scale (strength level / 14, as a placed
+// lamp's), its colour (linear RGB, the cap's), the seconds it takes to come
+// up after eating and the seconds at the end of the effect it fades out over.
+//
 // The code defaults written out; a test holds the two together.
 (
     strengths: (
@@ -34,7 +40,14 @@
         (good: "kale-skewer", effect: Keen, minutes: 6.0),
         (good: "fried-egg", effect: Keen, minutes: 5.0),
         (good: "roast-meat", effect: Stride, minutes: 8.0),
+        (good: "glowing-mushroom", effect: Glow, minutes: 3.0),
     ],
+    glow: (
+        level: 10,
+        tint: (0.62, 1.0, 0.88),
+        rise_s: 0.6,
+        fade_s: 20.0,
+    ),
     awaited: ["egg", "milk", "raw-meat"],
     recipes: [
         (

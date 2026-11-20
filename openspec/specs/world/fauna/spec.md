@@ -144,3 +144,42 @@ with the reason.
 - **WHEN** the float lands by a reef turtle
 - **THEN** no turtle takes the lure, and the reason is "protected: it may
   not be caught"
+
+### Requirement: A school is laid each frame into the buffers it holds
+A school's mesh, laid again every frame, SHALL be laid into the attribute
+buffers it already holds, so that once a school has reached its size a frame
+allocates no new buffer for it; and what it lays SHALL be what laying it
+into a new mesh would, flat normals included (`memory-leak`).
+
+#### Scenario: Thirty frames of one school
+- **WHEN** a school is laid into its mesh thirty frames in a row
+- **THEN** no attribute's buffer moves or changes length after the first
+  (`fish::tests::laid_in_place::a_school_is_laid_into_the_buffers_it_holds`)
+
+#### Scenario: Relaid against fresh
+- **WHEN** the same school with the same history is laid once into a mesh
+  that already held it and once into a new mesh
+- **THEN** every attribute is the same, byte for byte, and the normals are
+  what `Mesh::compute_flat_normals` makes of the positions
+  (`fish::tests::laid_in_place::a_school_relaid_is_the_school_laid_fresh`)
+
+### Requirement: Water life is seen through the water it is in
+Every creature and sea place under water SHALL be lit and tinted as the
+seabed beside it is: by the terrain's light (its fill, its sun, the sun's
+shadow and the lamps), dimmed by the daylight left at its depth under the
+surface of the water it is in, and taking the same share of the water's
+deep colour as the seabed at that depth. Seen from under the water it SHALL
+take the murk by distance, and from above the water's transmission, as the
+seabed does. Its atlas and palette SHALL be kept, with no outline.
+
+#### Scenario: A fish near the surface is not a sticker
+
+- **WHEN** the eye is 2 m under a shallow sea by day, looking at a school 3 m off
+- **THEN** the fish are dimmed and tinted toward the water as the reef
+  beside them is, not drawn in the atlas's full colours
+
+#### Scenario: Fresh water dims too
+
+- **WHEN** a school of perch swims 1 m under a lake's surface that stands
+  over sea level
+- **THEN** its depth is read from the lake's surface and it is dimmed by it

@@ -40,7 +40,7 @@ impl Default for GatherSettings {
             fibre_one_in: 3,
             stone_one_in: 3,
             axe_logs: 4,
-            bait_one_in: 3,
+            bait_one_in: 5,
             bait_reach_cells: 3,
             bait_water_m: (-3.0, 2.0),
         }
@@ -105,6 +105,9 @@ impl GatherSettings {
         placed: bool,
         by_water: bool,
     ) -> Option<Good> {
+        // Every dirt there is: the three grasses, dirt, soil, a field's
+        // tilled soil and sand (owner, 2026-11-19: "theres multiple dirt
+        // types, so make sure to cover all dirt").
         let earth = matches!(
             material,
             Material::Grass
@@ -112,7 +115,9 @@ impl GatherSettings {
                 | Material::JungleGrass
                 | Material::Dirt
                 | Material::Soil
+                | Material::Tilled
                 | Material::Sand
+                | Material::DesertSand
         );
         if placed || !by_water || !earth {
             return None;
@@ -190,7 +195,7 @@ impl GatherSettings {
             Material::Grass | Material::DryGrass | Material::JungleGrass => {
                 (Good::FIBRE, self.fibre_one_in, 0xf1b3_e000_u64)
             }
-            Material::Dirt | Material::Soil | Material::Sand => {
+            Material::Dirt | Material::Soil | Material::Sand | Material::DesertSand => {
                 (Good::LOOSE_STONE, self.stone_one_in, 0x5701_e000_u64)
             }
             _ => return None,
@@ -271,9 +276,10 @@ mod tests {
         }
     }
 
-    /// Bait turns up in a third of earth cells by the water, the same cells
-    /// every time, and never away from it, from rock or a placed block
-    /// (`starter-missions` G1, `dig-fixes` 2).
+    /// Bait turns up in one earth cell by the water in `bait_one_in` (one in
+    /// five since `mission-playthrough`), the same cells every time, and never
+    /// away from it, from rock or a placed block (`starter-missions` G1,
+    /// `dig-fixes` 2).
     #[test]
     fn earth_by_the_water_gives_bait_in_a_share_of_cells() {
         let g = GatherSettings::default();
@@ -286,7 +292,11 @@ mod tests {
             let share = (0..30_000u32)
                 .filter(|&c| g.bait(earth, c, 145, false, true) == Some(Good::BAIT))
                 .count();
-            assert!((9_000..11_000).contains(&share), "{earth:?}: {share}");
+            let want = 30_000 / g.bait_one_in as usize;
+            assert!(
+                share.abs_diff(want) < want / 10,
+                "{earth:?}: {share} of 30000, want about {want}"
+            );
         }
         for c in 0..2_000 {
             assert_eq!(

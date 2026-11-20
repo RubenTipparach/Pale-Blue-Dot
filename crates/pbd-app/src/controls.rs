@@ -503,9 +503,10 @@ const W_S: [Key; 2] = [Key::Board(KeyCode::KeyW), Key::Board(KeyCode::KeyS)];
 const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
 const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
 
-const VEHICLES: [Binding; 2] = [
+const VEHICLES: [Binding; 3] = [
     row(&[Key::Board(KeyCode::KeyV)], " ", "camera"),
     row(&[Key::Board(KeyCode::KeyT)], " ", "anchor"),
+    row(&[Key::Board(KeyCode::KeyC)], " ", "boat"),
 ];
 
 const LOON: [Binding; 4] = [
@@ -518,9 +519,9 @@ const LOON: [Binding; 4] = [
 const TUBE: [Binding; 2] = [row(&W_S, "/", "kick"), row(&A_D, "/", "turn")];
 
 const RAFT: [Binding; 3] = [
-    row(&W_S, "/", "pole"),
+    row(&W_S, "/", "row"),
     row(&A_D, "/", "turn"),
-    row(&Q_E, "/", "pole_steer"),
+    row(&Q_E, "/", "row_oar"),
 ];
 
 /// The rod from a paddled boat's seat (`small-boats` design 6).

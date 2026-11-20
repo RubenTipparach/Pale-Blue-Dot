@@ -16,6 +16,10 @@ pub struct VehicleCamera;
 
 /// How far the look turns, rad.
 const PITCH_LIMIT: f32 = 1.45;
+/// Where a rower's look starts in the seat, rad: down along the oars, the
+/// hands in view (`river-craft` design 9.6; M34's Rowing tab starts at
+/// -0.72).
+pub const ROWER_PITCH: f32 = -0.7;
 /// The chase camera's stand-off, m, per craft, and its range.
 const CHASE_M: [f32; 3] = [8.0, 5.0, 9.0];
 const CHASE_RANGE_M: [f32; 2] = [4.0, 80.0];
@@ -105,8 +109,11 @@ pub fn look(
         if !window.focused && !view.scripted {
             view.captured = false;
         }
-        cursor.visible = !view.captured;
-        cursor.grab_mode = if view.captured {
+        // A scripted run (a bot, a capture) turns the look by injected
+        // motion, not the mouse: the owner's pointer stays free, so the
+        // machine can be used while it plays.
+        cursor.visible = !view.captured || view.scripted;
+        cursor.grab_mode = if view.captured && !view.scripted {
             CursorGrabMode::Locked
         } else {
             CursorGrabMode::None

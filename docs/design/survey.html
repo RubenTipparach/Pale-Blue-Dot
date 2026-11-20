@@ -175,6 +175,35 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 // The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
 // pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
 const SECTIONS = [
+  { tag: 'G', name: 'Glowing mushrooms and carried light',
+    lead: 'From glowing-mushrooms (2026-11-19): you asked to pick up the glowing mushrooms the game already grows, eat them to glow, and have any held light light the area around you. Everything else in the write-up is taken as recommended. Mockup shots are drawn in software (no GPU).',
+    qs: [
+      { id: 'A3', q: 'The glowing mushroom is drawn today as a 0.32 m stalk under a square cap 14 cm across and 3 cm high. Keep that cap, or redraw it as a rounder dome?',
+        options: ['Keep today\'s square cap', 'A rounder dome cap'], rec: 0,
+        why: 'Today\'s cap already reads as a mushroom from the side and matches the hex style; a dome is a look change only, nothing else depends on it.',
+        change: 'glowing-mushrooms', asked: '2026-11-19',
+        link: { url: 'https://claude.ai/artifact/W9ZYCsxz7d8FCp2gCrmmvs#glow', label: 'Foliage Detail Playground, the Glow tab: the Today / Proposed cap switch' },
+        images: [
+          { src: 'img/a3-cap-compare.jpg', alt: 'Today\'s square glowing cap beside a rounder dome cap, at night', caption: 'Today\'s cap (left) and the dome (right).' },
+          { src: 'img/a3-game-today.png', alt: 'The glowing plant in the game today, a cyan cap on a thin stalk', caption: 'The plant in the game today.' },
+        ] },
+      { id: 'G5', q: 'A held glowing mushroom lights about 1 m round your hand, because it gives the same light as the planted one (level 3; a torch is 14). Brighter would mean the planted ones light a wider pool on the ground too, since both read one value.',
+        options: ['Keep it faint: a mushroom is a small light', 'Brighter, for both held and planted (level 6, about 2 m)', 'Brighter when held only (two values)'], rec: 0,
+        why: 'One value keeps held and planted the same thing; the body glow from eating one is the bright mushroom light (level 10).',
+        change: 'glowing-mushrooms (carried light)', asked: '2026-11-19',
+        link: { url: 'https://claude.ai/artifact/W9ZYCsxz7d8FCp2gCrmmvs#glow', label: 'Foliage Detail Playground, the Glow tab: hold a torch, a lantern or a mushroom' },
+        images: [
+          { src: 'img/g5-held-compare.jpg', alt: 'Four night views: nothing held, a torch, a lantern and a glowing mushroom', caption: 'Nothing, a torch, a lantern and a mushroom held at night.' },
+          { src: 'img/g5-held-mushroom.jpg', alt: 'A held glowing mushroom lighting a small patch of ground at night', caption: 'The mushroom held: about a metre of light.' },
+        ] },
+      { id: 'A4', q: 'The glowing mushroom\'s cap is cyan, but the light it casts on the ground (and from your hand) is warm orange, because the light grid has one colour for every lamp. Give it a cool light of its own?',
+        options: ['Keep the warm light for now', 'A cool cyan light (a colour per light in the grid; a look change for lamps too)'], rec: 0,
+        why: 'A colour per light touches the whole lighting of the towns; it is worth its own change later rather than riding on the mushrooms.',
+        change: 'glowing-mushrooms', asked: '2026-11-19',
+        images: [
+          { src: 'img/a4-patch-night.jpg', alt: 'A patch of glowing mushrooms at night, cyan caps over warm pools of light', caption: 'Cyan caps over warm pools.' },
+        ] },
+    ] },
   { tag: 'G', name: 'Ships and flight',
     lead: 'From ship-tiers (2026-11-12), the mockup "Rockets and Landers" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
     qs: [

@@ -51,7 +51,7 @@ pub const STATIONS: &[StationRow] = &[
     StationRow {
         code: "hand",
         material: None,
-        max_jobs: 1,
+        max_jobs: 4,
     },
     // `cooking` design S2: the kitchen's first station, also a light.
     StationRow {
@@ -284,7 +284,8 @@ impl Default for RecipeFile {
                 "inner-tube",
                 "workbench",
                 4.0,
-                &[("wool", 4), ("rope", 2)],
+                // Leather alone (small-boats design 2e).
+                &[("leather", 3)],
                 &[("inner-tube", 1)],
             ),
             recipe(

@@ -387,6 +387,7 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         picked: [UVec4::ZERO; crate::trees_taken::PICKED / 4],
         clutter_taken: [UVec4::ZERO; crate::clutter::TAKEN_CELLS / 2],
         shake: UVec4::ZERO,
+        carried: [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
     }
 }
 

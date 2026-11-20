@@ -49,7 +49,10 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
     // (`placed-blocks-keep-material`), so the slot and the block put down are
     // one picture wherever it lands. The tiles are each sheet's layout: #0 its
     // ground, #1 that ground over the earth, #2 the earth, #3 the stone.
-    let sheet = tileset_slot(pbd_core::column::home_biome(material)?);
+    let home = pbd_core::column::home_biome(material)?;
+    // The sea's cells are drawn from a sheet of their own (B24).
+    let sheet = pbd_core::column::own_sheet(material)
+        .map_or_else(|| tileset_slot(home), pbd_app::planet::sheet_index);
     let one = |x: f32, y: f32| BlockArt {
         sheet,
         top: Vec2::new(x, y),
@@ -66,7 +69,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // Grass and dry grass are one render code: the ground draws them alike.
         Material::Grass | Material::DryGrass | Material::JungleGrass => grassy,
         Material::Soil | Material::Dirt => one(2., 0.),
-        Material::Sand | Material::Snow => one(0., 0.),
+        Material::Sand | Material::DesertSand | Material::Snow => one(0., 0.),
         Material::Stone | Material::Rock => one(3., 0.),
         Material::Ore => one(0., 1.),
         Material::Water | pbd_core::flowing_water!() => one(2., 2.),
@@ -83,6 +86,13 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
         Material::Workbench => one(1., 3.),
+        // The sea's cells (`ocean-environments` B24), each its sheet's tile
+        // all round, as the ground draws it.
+        Material::ReefRock | Material::Basalt => one(3., 0.),
+        Material::SeaIce => one(2., 1.),
+        Material::MusselBed => one(3., 1.),
+        // A beaver's sticks (B25): the meadow sheet's bark.
+        Material::Sticks => one(2., 1.),
         Material::Air
         | Material::Torch
         | Material::LanternPost

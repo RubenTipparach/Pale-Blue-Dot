@@ -15,12 +15,16 @@ arrival:
 block:
   air:
     name: air
+  basalt:
+    name: "basalt"
   brazier:
     name: brazier
   campfire:
     name: campfire
   candle:
     name: candle
+  desert_sand:
+    name: "desert sand"
   dirt:
     name: dirt
   dry_grass:
@@ -39,16 +43,24 @@ block:
     name: street lantern
   lantern_wall:
     name: wall lantern
+  mussel_bed:
+    name: "mussel bed"
   ore:
     name: ore
+  reef_rock:
+    name: "reef rock"
   rock:
     name: rock
   sand:
     name: sand
+  sea_ice:
+    name: "sea ice"
   snow:
     name: snow
   soil:
     name: soil
+  sticks:
+    name: "sticks"
   stone:
     name: stone
   tilled:
@@ -59,6 +71,21 @@ block:
     name: water
   workbench:
     name: workbench
+boat:
+  anchor: "Anchor"
+  boat: "BOAT"
+  drop: "Drop"
+  dry: "Dry"
+  lantern: "Lantern"
+  lantern_on: "On"
+  lantern_out: "Out"
+  out_m: "Out {metres} m"
+  rope: "Rope"
+  rope_m: "{metres} m"
+  stop: "Stop"
+  to_the_bed: "To the bed"
+  water_aboard: "Water aboard"
+  weigh: "Weigh"
 breed:
   already_paired: Already paired
   born: "{born} born"
@@ -124,8 +151,9 @@ compass:
   name_line: "{name} {distance}"
 controls:
   does:
-    anchor: drop or raise the anchor
+    anchor: drop or weigh the anchor
     bail: bail
+    boat: "the boat"
     brake: brake
     breeding: breeding
     camera: change the camera
@@ -146,12 +174,12 @@ controls:
     paddle: paddle forward or back
     paddle_steer: steer with the paddle
     place: place the held block, plant a seed, or wind the line in
-    pole: pole forward or back
-    pole_steer: steer with the pole
     pour_water: pour water
     repro: copy the location for a bug report
     rod: "with the rod: hold to cast, press to strike, hold to reel"
     roll: roll
+    row: "row forward or back"
+    row_oar: "row the left or right oar"
     screenshot: screenshot
     select_slot: select a slot
     spawn: return to the spawn
@@ -276,10 +304,12 @@ controls:
     vehicles: VEHICLES
 cooking:
   effect:
+    glow: "glow"
     keen: keen
     steady: steady hands
     stride: stride
   effect_caps:
+    glow: "GLOW"
     keen: KEEN
     steady: STEADY HANDS
     stride: STRIDE
@@ -295,7 +325,9 @@ craft:
   not_enough: "Not enough for {recipe}"
   opens_with: "Opens with: {mission}"
   pick: PICK A RECIPE
+  queue: "QUEUE"
   queue_full: "The {station}'s queue is full"
+  queue_more: "QUEUE +{count}"
   title: CRAFT
   waiting: "{recipe}  +{waiting} WAITING"
   workbench: WORKBENCH
@@ -384,6 +416,8 @@ fishing:
     hold_to_reel: HOLD TO REEL
     hook: HOOK
     let_go_to_cast: LET GO TO CAST
+    need_bait: "NEED BAIT"
+    underwater: "UNDERWATER"
   refused: "{species}: {reason}"
   status:
     bite: "Bite! Left click"
@@ -392,6 +426,7 @@ fishing:
     hooked: Hold to reel - ease off when it runs
     lost: "Wound in - the {species} got away"
     missed: "Missed - the {species} spat the hook"
+    needs_bait: "Needs bait"
     nibble: Something is nibbling - wait for the float to go under
     no_room: No room in the hotbar - the fish was let go
     nothing_lives: Nothing lives in this water
@@ -430,6 +465,7 @@ husbandry:
     russet: russet
   collect:
     egg: eggs
+    leather: "leather"
     milk: milk
     wool: wool
   collected:
@@ -439,6 +475,9 @@ husbandry:
     fertile_egg:
       one: a fertile egg
       other: "{count} fertile eggs"
+    leather:
+      one: "{count} leather"
+      other: "{count} leather"
     milk:
       one: a pail of milk
       other: "{count} pails of milk"
@@ -504,6 +543,7 @@ husbandry:
   too_far: Too far to set a fence
   waiting:
     egg: "{count} egg"
+    leather: "{count} leather"
     milk: "{count} milk"
     wool: "{count} wool"
   wild: "{name} (wild, {sex}) - trust {trust}% - eats {food}"
@@ -522,6 +562,7 @@ interact:
     open: "Open {thing}"
     open_door: "Open {thing}"
     pick_fruit: "Pick {thing}"
+    pick_glow: "Pick {thing}"
     pick_wild: "Pick wild {thing}"
     set_eggs: "Set eggs under {thing}"
     set_in_incubator: "Set eggs in {thing}"
@@ -576,6 +617,8 @@ item:
     name: frost kale seed
   gate:
     name: gate
+  glowing-mushroom:
+    name: "glowing mushroom"
   grilled-fish:
     name: grilled fish
   incubator:
@@ -586,6 +629,8 @@ item:
     name: iron ingot
   kale-skewer:
     name: kale skewer
+  leather:
+    name: "leather"
   log:
     name: log
   mango:
@@ -771,7 +816,7 @@ mission:
       "0": axe
     title: Craft an axe
   bait:
-    help: "Dig dirt by a river or the sea for bait worms; cast with them in your pack and they go on the hook."
+    help: "Dig dirt for bait worms; cast with them in your pack and they go on the hook."
     objective:
       "0": dig bait
       "1": catch with bait
@@ -790,7 +835,7 @@ mission:
   bronze-tool:
     help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone."
     objective:
-      "0": pickaxe
+      "0": bronze pickaxe
       "1": stone
     title: Bronze tools
   build:
@@ -878,10 +923,9 @@ mission:
       "2": soil
     title: Gather by hand
   go-fishing:
-    help: "Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel."
+    help: "Dig dirt for bait worms first: a cast needs one. Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel."
     objective:
-      "0": cast
-      "1": fish
+      "0": catch fish
     title: Go fishing
   harvest:
     help: "A crop is ripe when it is full grown: F on it harvests produce and seed."
@@ -889,10 +933,10 @@ mission:
       "0": wheat
     title: Harvest
   iron:
-    help: "Iron ore smelts hotter: feed the forge more coal."
+    help: "Smelting mixed ore gives iron as well as copper and tin."
     objective:
       "0": iron
-      "1": pickaxe
+      "1": iron pickaxe
     title: The iron age
   map:
     help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there."
@@ -961,7 +1005,7 @@ mission:
       "0": tame
     title: Tame an animal
   three-crops:
-    help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold."
+    help: "Wild plants give turnip, chili and frost kale seed. Chili grows where it is hot, frost kale where it is cool."
     objective:
       "0": turnip
       "1": chili
@@ -1348,10 +1392,34 @@ tool:
 towns:
   door: door
 vehicle:
+  anchor:
+    coming_aboard: "Coming aboard"
+    dropping: "Dropping"
+    hauling_in: "Hauling in"
+    holding: "Holding"
+    paying_out: "Paying out"
+    setting: "Setting"
+    stowed: "Stowed"
+    weighing: "Weighing"
+  anchor_lower:
+    coming_aboard: "coming aboard"
+    dropping: "dropping"
+    hauling_in: "hauling in"
+    holding: "holding"
+    paying_out: "paying out"
+    setting: "setting"
+    stowed: "stowed"
+    weighing: "weighing"
   loon:
     lower: loon
     name: Loon
     title: LOON
+  oar_stage:
+    catch: "Catch"
+    drive: "Drive"
+    reach: "Reach"
+    recovery: "Recovery"
+    release: "Release"
   raft:
     lower: raft
     name: Raft
@@ -1362,14 +1430,17 @@ vehicle:
     title: INNER TUBE
 vehicles:
   hud:
+    anchor_state: "{craft} - {state}"
     at_anchor: "{craft} - at anchor"
     bail: "Water aboard: bail"
+    boat: "the boat"
     camera: camera
     cast_off: cast off
     drop_anchor: drop the anchor
-    raise_anchor: raise the anchor
+    oar_on_bed: "Oar on the bed"
     step_off: step off
     tied_up: "{craft} - tied up"
+    weigh_anchor: "weigh the anchor"
 weather:
   line: "WEATHER  {forcing}  {percent}%"
   natural: NATURAL

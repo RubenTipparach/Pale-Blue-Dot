@@ -154,6 +154,16 @@ ICONS.update({
 })
 
 
+# Leather (`small-boats` design 2e): a tanned hide, stretched out, in the fence's
+# browns with a lighter grain, from a kept plodder.
+ICONS["goods/leather"] = ([
+    "................", "..kk........kk..", ".khLk......kLhk.", "..kLLkkkkkkLLk..",
+    "...kLhhLLhhLk...", "..kLLhLLLLLhLk..", "..kLhLLLLlLLLk..", "..kLLLLlLLLLhk..",
+    "..kLhLLLLLLLLk..", "..kLLLLLLhLLLk..", "..kLLhLLLLLlLk..", "...kLLLLLLLLk...",
+    "..kLLkkkkkkLLk..", ".khLk......kLhk.", "..kk........kk..", "................",
+], {"k": "#3a2614", "L": "#9a6a3c", "l": "#7a5230", "h": "#b9844f"})
+
+
 # Design 13's two (`animal-husbandry` E3, E4): the fertile egg is the egg
 # with the warm brown speckle of a laid-under-a-cockerel egg, and the
 # incubator a small crate of the fence's wood with a glass lid.
@@ -238,6 +248,25 @@ ICONS.update({
         "....kWddddWk....", "....kWddddWk....", "k...kWddddWk...k", ".kk.kWddddWk.kk.",
         "....kWwddwWk....", "....kkWwwWkk....", "......kkkk......", "................",
     ], BOATS),
+})
+
+
+# The glowing mushroom (`glowing-mushrooms` design 3): the glowing plant the
+# meadows grow, its low cap in the cyan its head burns with at night
+# (`flora::GLOW_HEAD_RGB`), on the plant's pale green stalk, with the 1 px
+# outline of an inventory icon.
+GLOW = {
+    "k": "#16302c", "c": "#2e8a7a", "C": "#5fd9c0", "L": "#a8ffe8", "W": "#e6fff8",
+    "s": "#9bb675", "S": "#c1f1d8", "d": "#559642",
+}
+
+ICONS.update({
+    "goods/glowing-mushroom": ([
+        "................", "................", "......kkkk......", "....kkLWWLkk....",
+        "...kCLLWWLLCk...", "..kCCLLLLLLCCk..", ".kcCCCLLLLCCCck.", ".kccCCCCCCCCcck.",
+        "..kkccccccccck..", "....kkkkkkkk....", "......kSsk......", "......kSdk......",
+        "......kSdk......", ".....kSssdk.....", ".....kkkkkk.....", "................",
+    ], GLOW),
 })
 
 

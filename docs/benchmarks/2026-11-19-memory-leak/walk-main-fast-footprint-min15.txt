@@ -1,0 +1,50 @@
+======================================================================
+pbd-app [25585]: 64-bit    Footprint: 3116 MB (16384 bytes per page)
+======================================================================
+
+  Dirty      Clean  Reclaimable    Regions    Category
+    ---        ---          ---        ---    ---
+1930 MB        0 B      8384 KB       1541    IOAccelerator (graphics)
+ 514 MB        0 B          0 B       4140    Owned physical footprint (unmapped)
+ 181 MB        0 B          0 B         29    MALLOC_SMALL
+ 159 MB        0 B      1081 MB       1104    MALLOC_MEDIUM
+  96 MB        0 B      1236 MB        403    MALLOC_LARGE_REUSABLE
+  84 MB        0 B          0 B         13    MALLOC_LARGE
+  60 MB        0 B          0 B          6    IOSurface
+  32 MB        0 B          0 B         13    IOAccelerator
+  22 MB        0 B      1248 KB         46    MALLOC_TINY
+  17 MB        0 B        83 MB          1    MALLOC_NANO
+7056 KB        0 B          0 B        933    __DATA_CONST
+3381 KB        0 B          0 B          1    page table
+2480 KB        0 B        32 KB        218    stack
+2028 KB        0 B          0 B        904    __DATA
+1232 KB        0 B          0 B          8    CoreUI image data
+ 694 KB        0 B          0 B        335    __DATA_DIRTY
+ 656 KB        0 B          0 B        227    untagged (VM_ALLOCATE)
+ 579 KB        0 B          0 B        682    __AUTH
+ 528 KB        0 B          0 B         27    ColorSync
+ 464 KB        0 B          0 B         29    MALLOC metadata
+ 314 KB        0 B          0 B       1982    unused dyld shared cache area
+ 272 KB        0 B          0 B         22    CoreAnimation
+ 176 KB      18 MB          0 B         67    mapped file
+ 128 KB        0 B          0 B          1    Accelerate image backing stores
+  96 KB        0 B          0 B          5    CG image
+  96 KB        0 B          0 B        922    __AUTH_CONST
+  80 KB        0 B          0 B          2    __TPRO_CONST
+  64 KB        0 B          0 B          4    IOKit
+  48 KB        0 B          0 B          1    Activity Tracing
+  32 KB        0 B          0 B          2    CoreGraphics
+  16 KB        0 B          0 B          1    os_alloc_once
+  16 KB        0 B          0 B          1    Foundation
+    0 B      59 MB          0 B        953    __TEXT
+    0 B     256 KB          0 B          6    __LINKEDIT
+    0 B        0 B          0 B          1    __FONT_DATA
+    0 B        0 B          0 B          1    __INFO_FILTER
+    0 B        0 B          0 B          1    __CTF
+    ---        ---          ---        ---    ---
+3116 MB      77 MB      2409 MB      14634    TOTAL
+
+Auxiliary data:
+    phys_footprint: 3116 MB
+    phys_footprint_peak: 3683 MB
+
