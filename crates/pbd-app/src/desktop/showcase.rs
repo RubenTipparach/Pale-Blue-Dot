@@ -3348,7 +3348,20 @@ fn focus(bot: &mut Bot, id: &str, s: &Sight, out: &mut Intent) -> Status {
         }
         4 if bot.phase_s > 1.2 => {
             if !on(s) {
-                return Status::Fail(format!("clicking {id} did not make it the mission"));
+                // Twice missed: on without it. A mission counts whether or
+                // not it is the HUD's; the five-minute check flags the HUD.
+                if bot.tries >= 1 {
+                    warn!("showcase: clicking {id} did not make it the mission; going on");
+                    // The tree shut first: no walking with a menu up.
+                    if s.screen == Screen::Missions {
+                        out.taps.push(KeyCode::KeyO);
+                    }
+                    return Status::Done;
+                }
+                bot.tries += 1;
+                bot.phase = 0;
+                bot.phase_s = 0.0;
+                return Status::Running;
             }
             if bot.stilled.insert("focus") {
                 bot.want_still = true;
