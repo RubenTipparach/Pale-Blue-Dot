@@ -1389,7 +1389,21 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let time = view.camera_time.w;
         let wobble = vec2<f32>(sin(time*1.3+uv.y*32.0)+0.5*sin(time*0.7+uv.x*47.0),
             cos(time*0.9+uv.x*28.0)+0.5*cos(time*1.6+uv.y*41.0));
-        color = textureSampleLevel(scene_color,scene_sampler,clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.)),0.0).rgb;
+        let suv = clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.));
+        // Only from the same surface (`ocean-environments` B24): the fog
+        // below is this pixel's, so a sample taken across a silhouette put
+        // the far ground's unfogged colour round everything near as a bright
+        // rim (owner, 2026-11-19: "outlining issues when under water").
+        let sdepth = load_depth(suv);
+        let ssky = sdepth <= 1e-7;
+        var same = ssky == sky;
+        if (same && !sky) {
+            let sdist = length(reconstruct_local(suv,sdepth)-ray.origin);
+            same = abs(sdist-view_dist) < 0.15*view_dist+0.3;
+        }
+        if (same) {
+            color = textureSampleLevel(scene_color,scene_sampler,suv,0.0).rgb;
+        }
     }
     var travel: f32;
     if (under || straddle) {
