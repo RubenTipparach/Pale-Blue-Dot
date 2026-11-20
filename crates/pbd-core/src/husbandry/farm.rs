@@ -149,14 +149,12 @@ impl FarmState {
         };
         let h0 = self.health;
         self.health = (h0 + rate * dt).clamp(0.0, 100.0);
-        // Productive time: content, and not sick. Content means health is
-        // rising, so it is the span after it climbs past the sick line.
-        let productive = if content {
-            let wait = ((n.sick_below - h0) / n.health_per_day).max(0.0);
-            (dt - wait).max(0.0)
-        } else {
-            0.0
-        };
+        // Productive time: content and fed, and nothing else (`hen-laying`,
+        // owner 2026-11-20: "more deterministic based on feed + time"; the
+        // wait for health to climb past the sick line held a content hen's
+        // eggs back for days, unseen).
+        let _ = h0;
+        let productive = if content && food { dt } else { 0.0 };
         if productive > 0.0 && gives {
             for p in keep.products.iter().filter(|p| p.gives(sex)) {
                 let per_day = p.amount * yield_factor / p.period_days;
