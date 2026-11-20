@@ -1157,6 +1157,15 @@ impl Launch {
                             .expect("--reflections takes off, low, medium or high"),
                     );
                 }
+                "--antialiasing" => {
+                    i += 1;
+                    let state = args.get(i).expect("--antialiasing requires on or off");
+                    result.settings.antialiasing = Some(match state.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        _ => panic!("--antialiasing takes on or off"),
+                    });
+                }
                 "--shadows" => {
                     i += 1;
                     let level = args
@@ -3170,7 +3179,10 @@ fn window_size() -> (u32, u32) {
 /// final composite thing, but I didnt even ask for AA to be implemented"):
 /// the water's passes run after the resolve on blended edge pixels, which
 /// put a pale line round everything seen under the water
-/// (`ocean-environments` B24), and the pixel look wants hard edges.
+/// (`ocean-environments` B24), and the pixel look wants hard edges. The
+/// player's ANTIALIASING is SMAA on the finished frame instead
+/// (`settings::follow_antialiasing`), and is never added to a camera that
+/// multisamples.
 fn msaa_samples() -> Msaa {
     match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
         Some("2") => Msaa::Sample2,
