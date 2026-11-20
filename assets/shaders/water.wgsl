@@ -839,6 +839,29 @@ fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
 // shading, first, so a fragment hidden behind the scene or dithered away
 // costs none of the waves, and the same test for the flowing water's depth
 // pre-pass, which leaves the shading one fragment a pixel.
+// The share of the pixel's samples the sheet is in front of (reversed Z,
+// larger nearer). The scene's colour is the resolve of those samples, so
+// this is the mask that matches it. Deciding by sample 0 alone drew the
+// sheet over the whole of an edge pixel whose sample 0 was behind it, the
+// sky through the surface laid over the held tool's share of the pixel: a
+// bright line round everything seen from under the water (owner,
+// 2026-11-20: "its where water rendering outline doesnt match the object",
+// "THE REAL FIX IS A MASK CHANEL THAT MATCHES"; `ocean-environments` B24).
+fn water_cover(in: VertexOut) -> f32 {
+    let size = textureDimensions(scene_depth);
+    let coord = clamp(vec2<i32>(in.clip.xy),vec2<i32>(0),vec2<i32>(size)-1);
+#ifdef MULTISAMPLED
+    let n = i32(textureNumSamples(scene_depth));
+    var front = 0;
+    for (var k = 0; k < n; k++) {
+        if (textureLoad(scene_depth,coord,k) <= in.clip.z + 1e-6) { front += 1; }
+    }
+    return f32(front)/f32(max(n,1));
+#else
+    return select(0.0, 1.0, textureLoad(scene_depth,coord,0) <= in.clip.z + 1e-6);
+#endif
+}
+
 fn water_hidden(in: VertexOut) -> bool {
     let radial = safe_normal(in.body_position);
     // The same partition the terrain applies, in the same pixel's dither
@@ -867,9 +890,11 @@ fn water_hidden(in: VertexOut) -> bool {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
         if (owner_t <= m) { return true; }
     }
-    // Behind the scene (the main pass's depth; reversed Z, larger nearer).
-    let uv = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
-    if (load_depth(uv) > in.clip.z + 1e-6) { return true; }
+    // Behind the scene (the main pass's depth; reversed Z, larger nearer):
+    // hidden only where the sheet is in front of none of the pixel's samples.
+    // Where it covers some, `fragment` lays it over by that share
+    // (`ocean-environments` B24).
+    if (water_cover(in) <= 0.0) { return true; }
     // The back of the game's water seen from dry air: the face toward the
     // eye draws it (as `fragment` decides `below` for it).
     if (in.kind != 0u && view.fx.y < 0.25
@@ -1132,7 +1157,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         // composite draws them in front of the seabed (`ocean-environments`
         // B5): the sheet is drawn over the composite, so it carries its own.
         seen += under_water_light(view.camera_time.xyz, -look, camera_distance);
-        return vec4<f32>(seen,1.);
+        return vec4<f32>(seen,water_cover(in));
     }
     var reflected_ray = reflect(-look,normal);
     // A wall of the game's water (a fall, a sheet's edge) mirrors the sky as
@@ -1258,7 +1283,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let fogged = mix(color,fog.rgb,fog.a*clamp(in.sky_light,0.,1.));
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
-    return vec4<f32>(fogged,1.);
+    return vec4<f32>(fogged,water_cover(in));
 }
 
 // ---- The sea's screen trace (`lighting-model` L8, 10.3) ----------------------
@@ -1422,7 +1447,28 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let time = view.camera_time.w;
         let wobble = vec2<f32>(sin(time*1.3+uv.y*32.0)+0.5*sin(time*0.7+uv.x*47.0),
             cos(time*0.9+uv.x*28.0)+0.5*cos(time*1.6+uv.y*41.0));
-        color = textureSampleLevel(scene_color,scene_sampler,clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.)),0.0).rgb;
+        let suv = clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.));
+        // Only from the same surface (`ocean-environments` B24): the fog
+        // below is this pixel's, so a sample taken across a silhouette put
+        // the far ground's unfogged colour round everything near as a bright
+        // rim (owner, 2026-11-19: "outlining issues when under water").
+        // Read colour and depth at the same whole pixel: the colour was
+        // filtered between pixels at the fractional offset, so at a
+        // silhouette it blended the near surface with the unfogged sky
+        // beside it and the blend took the near surface's fog, a pale line
+        // inside every edge (`ocean-environments` B24).
+        let csize = vec2<i32>(textureDimensions(scene_color));
+        let spx = clamp(vec2<i32>(suv*vec2<f32>(csize)),vec2<i32>(0),csize-1);
+        let sdepth = load_depth(suv);
+        let ssky = sdepth <= 1e-7;
+        var same = ssky == sky;
+        if (same && !sky) {
+            let sdist = length(reconstruct_local(suv,sdepth)-ray.origin);
+            same = abs(sdist-view_dist) < 0.15*view_dist+0.3;
+        }
+        if (same) {
+            color = textureLoad(scene_color,spx,0).rgb;
+        }
     }
     var travel: f32;
     if (under || straddle) {
@@ -1445,7 +1491,69 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
-    color = mix(color, mix(deep,color,exp(-extinction*travel)), wet);
+    var fogged = mix(deep,color,exp(-extinction*travel));
+#ifdef MULTISAMPLED
+    // An edge pixel's colour is the resolve of near and far samples, but the
+    // fog above is sample 0's alone, so the far share of the colour kept its
+    // unfogged brightness: a rim round the held tool (`ocean-environments`
+    // B24, the second cause). With the eye under, split such a pixel into its
+    // near and far parts, the far part's colour taken from a neighbouring
+    // pixel that is all far, and fog each part by its own distance.
+    if (under) {
+        let size = textureDimensions(scene_depth);
+        let coord = clamp(vec2<i32>(uv*vec2<f32>(size)),vec2<i32>(0),vec2<i32>(size)-1);
+        let n = i32(textureNumSamples(scene_depth));
+        var dmin = 1.0e9;
+        var dmax = 0.0;
+        for (var k = 0; k < n; k++) {
+            let d = textureLoad(scene_depth,coord,k);
+            let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+            dmin = min(dmin,dist);
+            dmax = max(dmax,dist);
+        }
+        if (dmax-dmin > 0.15*dmin+0.3) {
+            let mid = 0.5*(dmin+dmax);
+            var far_n = 0;
+            for (var k = 0; k < n; k++) {
+                let d = textureLoad(scene_depth,coord,k);
+                let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+                if (dist > mid) { far_n += 1; }
+            }
+            let f = f32(far_n)/f32(max(n,1));
+            // The mask that matches the colour: the samples themselves. Each
+            // sample keeps its own colour and depth and the resolve averages
+            // the colours, so `1 - f` (the near samples' share) is exactly
+            // the share of this pixel's colour that is the near surface. Fog
+            // that share by the near distance and replace the far share with
+            // its own fog:
+            //   (1-f)*fog_near(obj) + f*fog_far(far)
+            //   = T_near*(raw - f*far_c) + deep*(1-f)*(1-T_near) + f*fog_far
+            // using (1-f)*obj = raw - f*far_c. Nothing divides, the pixel's
+            // own colour carries the object's detail, and only the far colour
+            // is read from a neighbour two pixels off that is all far (the
+            // sky's or the far ground's raw colour); any error in it is
+            // scaled by f*T_near.
+            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+            var far_c = raw;
+            var got_far = false;
+            let px = 2.0/vec2<f32>(size);
+            for (var o = 0; o < 8; o++) {
+                let ang = f32(o)*0.78539816;
+                let nuv = clamp(uv+vec2<f32>(round(cos(ang)),round(sin(ang)))*px,vec2(0.),vec2(1.));
+                let nd = load_depth(nuv);
+                let ndist = select(1.0e5, length(reconstruct_local(nuv,nd)-ray.origin), nd > 1e-7);
+                if (!got_far && ndist > mid) {
+                    far_c = textureSampleLevel(scene_color,scene_sampler,nuv,0.0).rgb;
+                    got_far = true;
+                }
+            }
+            let t_near = exp(-extinction*dmin);
+            let far_fog = mix(deep,far_c,exp(-extinction*dmax));
+            fogged = max(t_near*(raw-f*far_c),vec3(0.0)) + deep*(1.0-f)*(1.0-t_near) + f*far_fog;
+        }
+    }
+#endif
+    color = mix(color, fogged, wet);
     // The sheet the near plane clips, for an eye under the surface (B19):
     // a ray that crosses the surface nearer than `NEAR_SHEET_M` saw the sky
     // nearly clear and the bank above as a silhouette through the hole,

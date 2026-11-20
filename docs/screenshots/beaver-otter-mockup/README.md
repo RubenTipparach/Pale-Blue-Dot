@@ -2,7 +2,7 @@
 
 Screenshots of the "Beavers and otters" tab of Seas, Rivers and Marshes
 (https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1), the mockup for
-`openspec/changes/ocean-environments` design B28 and task group 19.
+`openspec/changes/ocean-environments` design B28 and task group 20.
 
 Rendered in a Claude Code cloud container with no GPU: headless Chromium on
 SwiftShader, 1280 x 800 (the UI shots 1440 x 1000 and 390 x 844). They show
