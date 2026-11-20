@@ -54,6 +54,7 @@ struct Params {
     picked: array<vec4<u32>,8>,   // and the trees picked bare
     clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
     shake: vec4<u32>,          // `tree-punch-shake`, unread here
+    carried: array<vec4<f32>,8>, // `glowing-mushrooms`, unread here
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }

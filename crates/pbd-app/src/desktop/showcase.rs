@@ -1471,7 +1471,8 @@ pub fn drive(
             let answer = match cmd.as_str() {
                 "status" => {
                     let shot = player.file.shots.get(bot.shot);
-                    let (lat, lon) = pbd_core::geo::lat_lon(sight.up).degrees();
+                    let pbd_app::place::Place { lat, lon, .. } =
+                        pbd_app::place::Place::of(sight.up);
                     let mission = sight.missions.progress.focused(sight.chain).map(|m| {
                         serde_json::json!({
                             "id": m.id,
@@ -1508,10 +1509,7 @@ pub fn drive(
                         "hour": sight.hour,
                     })
                 }
-                "do" => match command.body["act"]
-                    .as_str()
-                    .map(|text| ron::from_str::<file::Act>(text))
-                {
+                "do" => match command.body["act"].as_str().map(ron::from_str::<file::Act>) {
                     Some(Ok(act)) => {
                         info!("BOT_CONTROL do {act:?}");
                         bot.injected.push_back(act);
@@ -2535,9 +2533,7 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
             let on = bot.aimed_cell(s).is_some_and(|(k, l)| {
                 k == key && l >= floor && l <= feet_layer + 1 && solid(l).is_some()
             });
-            if aimed && on {
-                out.lmb = true;
-            } else if bot.lmb_down && on {
+            if (aimed || bot.lmb_down) && on {
                 out.lmb = true;
             } else if bot.lmb_down {
                 // Aimed elsewhere mid-break: a nearer block in the way.
@@ -3192,7 +3188,11 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                     None if bot.cast_turns < 8 => {
                         bot.cast_turns += 1;
                         let k = bot.cast_turns as f32;
-                        let side = if bot.cast_turns % 2 == 0 { 1.0 } else { -1.0 };
+                        let side = if bot.cast_turns.is_multiple_of(2) {
+                            1.0
+                        } else {
+                            -1.0
+                        };
                         let turned =
                             Quat::from_axis_angle(s.up, side * 0.35 * k.div_euclid(2.0).max(1.0))
                                 * (water - stand);
@@ -4161,6 +4161,7 @@ mod tests {
             .init_resource::<pbd_app::config::FarmConfig>()
             .init_resource::<pbd_app::config::GatherConfig>()
             .init_resource::<pbd_app::config::HusbandryConfig>()
+            .init_resource::<pbd_app::config::FaunaConfig>()
             .init_resource::<pbd_app::missions::Missions>()
             .init_resource::<pbd_app::missions::MissionChain>()
             .init_resource::<super::super::equipment::Picker>()
