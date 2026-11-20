@@ -37,34 +37,6 @@ crates/pbd-app/src/desktop/breeding.rs|pick a {}
 crates/pbd-app/src/desktop/breeding.rs|wild-caught founder
 crates/pbd-app/src/desktop/compass_bar.rs|@legacy *label
 crates/pbd-app/src/desktop/compass_bar.rs|@legacy line
-crates/pbd-app/src/desktop/craft.rs|@legacy count
-crates/pbd-app/src/desktop/craft.rs|@legacy name
-crates/pbd-app/src/desktop/craft.rs|@legacy number.clone()
-crates/pbd-app/src/desktop/craft.rs|@legacy text.clone()
-crates/pbd-app/src/desktop/craft.rs|@legacy want
-crates/pbd-app/src/desktop/craft.rs|@legacy words
-crates/pbd-app/src/desktop/craft.rs|@legacy words
-crates/pbd-app/src/desktop/craft.rs|@legacy words
-crates/pbd-app/src/desktop/craft.rs|CRAFT
-crates/pbd-app/src/desktop/craft.rs|CRAFT
-crates/pbd-app/src/desktop/craft.rs|LOCKED
-crates/pbd-app/src/desktop/craft.rs|Not enough for {}
-crates/pbd-app/src/desktop/craft.rs|OPENS WITH: {}
-crates/pbd-app/src/desktop/craft.rs|OPENS WITH: {}
-crates/pbd-app/src/desktop/craft.rs|Opens with: {m}
-crates/pbd-app/src/desktop/craft.rs|Opens with: {opens}
-crates/pbd-app/src/desktop/craft.rs|Opens with: {opens}
-crates/pbd-app/src/desktop/craft.rs|Opens with: {}
-crates/pbd-app/src/desktop/craft.rs|PICK A RECIPE
-crates/pbd-app/src/desktop/craft.rs|The {}'s queue is full
-crates/pbd-app/src/desktop/craft.rs|WORKBENCH
-crates/pbd-app/src/desktop/craft.rs|X{n}
-crates/pbd-app/src/desktop/craft.rs|You already have this tool
-crates/pbd-app/src/desktop/craft.rs|Your hands are busy
-crates/pbd-app/src/desktop/craft.rs|{}  +{waiting} WAITING
-crates/pbd-app/src/desktop/craft.rs|{} done
-crates/pbd-app/src/desktop/craft.rs|{} made
-crates/pbd-app/src/desktop/craft.rs|{}: need {n}, have {}
 crates/pbd-app/src/desktop/digging.rs|Cut down the tree first
 crates/pbd-app/src/desktop/digging.rs|Empty the {} first
 crates/pbd-app/src/desktop/digging.rs|Needs a {} pickaxe
@@ -72,30 +44,6 @@ crates/pbd-app/src/desktop/digging.rs|No more wood
 crates/pbd-app/src/desktop/digging.rs|No room in the pack
 crates/pbd-app/src/desktop/digging.rs|Something is planted here
 crates/pbd-app/src/desktop/digging.rs|Too hard to dig by hand
-crates/pbd-app/src/desktop/forge.rs|@legacy recipe.name.clone()
-crates/pbd-app/src/desktop/forge.rs|@legacy super::craft::need_count(need,n)
-crates/pbd-app/src/desktop/forge.rs|@legacy text.clone()
-crates/pbd-app/src/desktop/forge.rs|FORGE
-crates/pbd-app/src/desktop/forge.rs|Forge queue is full
-crates/pbd-app/src/desktop/forge.rs|Not enough for {}
-crates/pbd-app/src/desktop/forge.rs|Opens with: {opens}
-crates/pbd-app/src/desktop/forge.rs|PICK A RECIPE
-crates/pbd-app/src/desktop/forge.rs|{}  +{waiting} WAITING
-crates/pbd-app/src/desktop/kitchen.rs|@legacy line
-crates/pbd-app/src/desktop/kitchen.rs|@legacy recipe.name.clone()
-crates/pbd-app/src/desktop/kitchen.rs|@legacy super::craft::need_count(need,n)
-crates/pbd-app/src/desktop/kitchen.rs|@legacy text.clone()
-crates/pbd-app/src/desktop/kitchen.rs|Ate the {}: {} for {} min
-crates/pbd-app/src/desktop/kitchen.rs|Ate the {}: {} for {} min
-crates/pbd-app/src/desktop/kitchen.rs|CAMPFIRE
-crates/pbd-app/src/desktop/kitchen.rs|COOKING {}
-crates/pbd-app/src/desktop/kitchen.rs|COOKING {}  +{waiting} WAITING
-crates/pbd-app/src/desktop/kitchen.rs|No fish for {}
-crates/pbd-app/src/desktop/kitchen.rs|Not enough for {}
-crates/pbd-app/src/desktop/kitchen.rs|Opens with: {opens}
-crates/pbd-app/src/desktop/kitchen.rs|PICK A DISH
-crates/pbd-app/src/desktop/kitchen.rs|The fire is full
-crates/pbd-app/src/desktop/kitchen.rs|{} is ready
 crates/pbd-app/src/desktop/map_screen.rs|@legacy label
 crates/pbd-app/src/desktop/map_screen.rs|@legacy text
 crates/pbd-app/src/desktop/map_screen.rs|@legacy want
@@ -233,16 +181,6 @@ crates/pbd-app/src/vehicles/launch.rs|{} taken up
 crates/pbd-app/src/world_map.rs|coral reef
 crates/pbd-app/src/world_map.rs|kelp forest
 crates/pbd-app/src/world_map.rs|polar sea
-crates/pbd-core/src/cooking.rs|CAMPFIRE
-crates/pbd-core/src/cooking.rs|CHILI FISH
-crates/pbd-core/src/cooking.rs|FLATBREAD
-crates/pbd-core/src/cooking.rs|FRIED EGG
-crates/pbd-core/src/cooking.rs|FRIED EGG
-crates/pbd-core/src/cooking.rs|GRILL FISH
-crates/pbd-core/src/cooking.rs|KALE SKEWER
-crates/pbd-core/src/cooking.rs|ROAST MEAT
-crates/pbd-core/src/cooking.rs|ROAST TURNIP
-crates/pbd-core/src/cooking.rs|steady hands
 crates/pbd-core/src/daylight.rs|southern autumn
 crates/pbd-core/src/daylight.rs|southern spring
 crates/pbd-core/src/daylight.rs|southern summer
@@ -262,26 +200,3 @@ crates/pbd-core/src/sites.rs|jungle village
 crates/pbd-core/src/sites.rs|swamp village
 crates/pbd-core/src/sites.rs|tundra camp
 crates/pbd-core/src/sites.rs|walled town
-crates/pbd-core/src/station.rs|BRONZE
-crates/pbd-core/src/station.rs|BRONZE AXE
-crates/pbd-core/src/station.rs|BRONZE PICK
-crates/pbd-core/src/station.rs|BRONZE SHOVEL
-crates/pbd-core/src/station.rs|BUCKET
-crates/pbd-core/src/station.rs|FENCE X2
-crates/pbd-core/src/station.rs|FORGE
-crates/pbd-core/src/station.rs|GATE
-crates/pbd-core/src/station.rs|INCUBATOR
-crates/pbd-core/src/station.rs|INNER TUBE
-crates/pbd-core/src/station.rs|IRON AXE
-crates/pbd-core/src/station.rs|IRON PICK
-crates/pbd-core/src/station.rs|IRON SHOVEL
-crates/pbd-core/src/station.rs|PLANKS
-crates/pbd-core/src/station.rs|RAFT
-crates/pbd-core/src/station.rs|ROD
-crates/pbd-core/src/station.rs|ROPE
-crates/pbd-core/src/station.rs|SMELT ORE
-crates/pbd-core/src/station.rs|STONE AXE
-crates/pbd-core/src/station.rs|STONE PICK
-crates/pbd-core/src/station.rs|STONE SHOVEL
-crates/pbd-core/src/station.rs|TORCH X2
-crates/pbd-core/src/station.rs|WORKBENCH

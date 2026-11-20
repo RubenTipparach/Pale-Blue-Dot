@@ -58,6 +58,8 @@ const DATA_PREFIXES: &[&str] = &[
     // `farming::CROPS` and `station::STATIONS`: names by saved code.
     "crop.",
     "station.",
+    // `station` and `cooking` recipes: each plaque's words by recipe code.
+    "recipe.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
 ];

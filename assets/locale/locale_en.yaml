@@ -208,8 +208,31 @@ controls:
     menus: MENUS
     on_foot: ON FOOT
     vehicles: VEHICLES
+cooking:
+  effect:
+    keen: "keen"
+    steady: "steady hands"
+    stride: "stride"
+  effect_caps:
+    keen: "KEEN"
+    steady: "STEADY HANDS"
+    stride: "STRIDE"
 craft:
+  count: "X{count}"
   craft: CRAFT
+  done: "{recipe} done"
+  hands_busy: "Your hands are busy"
+  have_tool: "You already have this tool"
+  locked: "LOCKED"
+  made: "{thing} made"
+  need_have: "{item}: need {need}, have {have}"
+  not_enough: "Not enough for {recipe}"
+  opens_with: "Opens with: {mission}"
+  pick: "PICK A RECIPE"
+  queue_full: "The {station}'s queue is full"
+  title: "CRAFT"
+  waiting: "{recipe}  +{waiting} WAITING"
+  workbench: "WORKBENCH"
 crop:
   chili:
     name: chili
@@ -291,6 +314,9 @@ fishing:
     nothing_lives: Nothing lives in this water
     snapped: "The line snapped - the {species} is gone"
     too_early: "Too early - the {species} bolted"
+forge:
+  queue_full: "Forge queue is full"
+  title: "FORGE"
 fruit:
   grows_back: "No fruit. Grows back in {days} days"
   no_ripe: No ripe fruit
@@ -504,7 +530,16 @@ item:
   wool:
     name: wool
 kitchen:
+  ate: "Ate the {dish}: {effect} for {minutes} min"
+  cooking: "COOKING {recipe}"
+  cooking_waiting: "COOKING {recipe}  +{waiting} WAITING"
   eat_hint: RIGHT CLICK A DISH IN HAND TO EAT IT
+  fire_full: "The fire is full"
+  no_fish: "No fish for {recipe}"
+  pick: "PICK A DISH"
+  ready: "{recipe} is ready"
+  timer: "{effect} {minutes}:{seconds}"
+  title: "CAMPFIRE"
 menu:
   antialiasing: Antialiasing
   auto_step: Auto step
@@ -595,6 +630,71 @@ overlay:
     temperature: C
 pack:
   hotbar: HOTBAR
+recipe:
+  bronze:
+    name: "BRONZE"
+  bronze-axe:
+    name: "BRONZE AXE"
+  bronze-pickaxe:
+    name: "BRONZE PICK"
+  bronze-shovel:
+    name: "BRONZE SHOVEL"
+  bucket:
+    name: "BUCKET"
+  campfire:
+    name: "CAMPFIRE"
+  chili-fish:
+    name: "CHILI FISH"
+  fence:
+    name: "FENCE X2"
+  flatbread:
+    name: "FLATBREAD"
+  forge:
+    name: "FORGE"
+  fried-egg:
+    name: "FRIED EGG"
+  fried-fertile-egg:
+    name: "FRIED EGG"
+  gate:
+    name: "GATE"
+  grilled-fish:
+    name: "GRILL FISH"
+  incubator:
+    name: "INCUBATOR"
+  inner-tube:
+    name: "INNER TUBE"
+  iron-axe:
+    name: "IRON AXE"
+  iron-pickaxe:
+    name: "IRON PICK"
+  iron-shovel:
+    name: "IRON SHOVEL"
+  kale-skewer:
+    name: "KALE SKEWER"
+  mixed-ore:
+    name: "SMELT ORE"
+  planks:
+    name: "PLANKS"
+  raft:
+    name: "RAFT"
+  roast-meat:
+    name: "ROAST MEAT"
+  roast-turnip:
+    name: "ROAST TURNIP"
+  rod:
+    name: "ROD"
+  rope:
+    name: "ROPE"
+  stone-axe:
+    name: "STONE AXE"
+  stone-pickaxe:
+    name: "STONE PICK"
+  stone-shovel:
+    name: "STONE SHOVEL"
+  torch:
+    name: "TORCH X2"
+  workbench:
+    name: "WORKBENCH"
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"

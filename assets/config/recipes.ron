@@ -18,7 +18,6 @@
     recipes: [
         (
             code: "mixed-ore",
-            name: "SMELT ORE",
             station: "forge",
             secs: 8.0,
             inputs: [("block:ore", 4), ("coal", 2)],
@@ -26,7 +25,6 @@
         ),
         (
             code: "bronze",
-            name: "BRONZE",
             station: "forge",
             secs: 5.0,
             inputs: [("copper-ingot", 1), ("tin-ore", 1), ("coal", 1)],
@@ -35,7 +33,6 @@
         // ---- tool-crafting: by hand.
         (
             code: "planks",
-            name: "PLANKS",
             station: "hand",
             secs: 1.0,
             inputs: [("log", 1)],
@@ -43,7 +40,6 @@
         ),
         (
             code: "rope",
-            name: "ROPE",
             station: "hand",
             secs: 2.0,
             inputs: [("fibre", 3)],
@@ -51,7 +47,6 @@
         ),
         (
             code: "workbench",
-            name: "WORKBENCH",
             station: "hand",
             secs: 4.0,
             inputs: [("planks", 6)],
@@ -60,7 +55,6 @@
         // ---- tool-crafting: at the workbench.
         (
             code: "stone-pickaxe",
-            name: "STONE PICK",
             station: "workbench",
             secs: 3.0,
             inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
@@ -68,7 +62,6 @@
         ),
         (
             code: "stone-shovel",
-            name: "STONE SHOVEL",
             station: "workbench",
             secs: 3.0,
             inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
@@ -78,7 +71,6 @@
         // loose stone, fibre and a branch.
         (
             code: "stone-axe",
-            name: "STONE AXE",
             station: "hand",
             secs: 3.0,
             inputs: [("stone", 3), ("fibre", 2), ("log", 1)],
@@ -88,7 +80,6 @@
         // them.
         (
             code: "fence",
-            name: "FENCE X2",
             station: "workbench",
             secs: 2.0,
             inputs: [("planks", 1)],
@@ -96,7 +87,6 @@
         ),
         (
             code: "gate",
-            name: "GATE",
             station: "workbench",
             secs: 3.0,
             inputs: [("planks", 2), ("rope", 1)],
@@ -104,7 +94,6 @@
         ),
         (
             code: "torch",
-            name: "TORCH X2",
             station: "hand",
             secs: 1.0,
             inputs: [("planks", 1), ("fibre", 1)],
@@ -112,7 +101,6 @@
         ),
         (
             code: "rod",
-            name: "ROD",
             station: "workbench",
             secs: 3.0,
             inputs: [("planks", 2), ("rope", 2), ("fibre", 2)],
@@ -120,7 +108,6 @@
         ),
         (
             code: "forge",
-            name: "FORGE",
             station: "workbench",
             secs: 6.0,
             inputs: [("stone", 8), ("block:stone", 4)],
@@ -130,7 +117,6 @@
         // water source.
         (
             code: "bucket",
-            name: "BUCKET",
             station: "workbench",
             secs: 3.0,
             inputs: [("planks", 3), ("rope", 1)],
@@ -139,7 +125,6 @@
         // ---- animal-husbandry design 13 (E4): the incubator, set by a lamp.
         (
             code: "incubator",
-            name: "INCUBATOR",
             station: "workbench",
             secs: 4.0,
             inputs: [("planks", 4), ("rope", 2)],
@@ -147,7 +132,6 @@
         ),
         (
             code: "bronze-pickaxe",
-            name: "BRONZE PICK",
             station: "workbench",
             secs: 4.0,
             inputs: [("bronze-ingot", 3), ("planks", 2)],
@@ -155,7 +139,6 @@
         ),
         (
             code: "bronze-shovel",
-            name: "BRONZE SHOVEL",
             station: "workbench",
             secs: 4.0,
             inputs: [("bronze-ingot", 3), ("planks", 2)],
@@ -163,7 +146,6 @@
         ),
         (
             code: "bronze-axe",
-            name: "BRONZE AXE",
             station: "workbench",
             secs: 4.0,
             inputs: [("bronze-ingot", 3), ("planks", 2)],
@@ -171,7 +153,6 @@
         ),
         (
             code: "iron-pickaxe",
-            name: "IRON PICK",
             station: "workbench",
             secs: 4.0,
             inputs: [("iron-ingot", 3), ("planks", 2)],
@@ -179,7 +160,6 @@
         ),
         (
             code: "iron-shovel",
-            name: "IRON SHOVEL",
             station: "workbench",
             secs: 4.0,
             inputs: [("iron-ingot", 3), ("planks", 2)],
@@ -187,7 +167,6 @@
         ),
         (
             code: "iron-axe",
-            name: "IRON AXE",
             station: "workbench",
             secs: 4.0,
             inputs: [("iron-ingot", 3), ("planks", 2)],
@@ -198,7 +177,6 @@
         // `retire-rowboat-and-cog`.)
         (
             code: "inner-tube",
-            name: "INNER TUBE",
             station: "workbench",
             secs: 4.0,
             inputs: [("wool", 4), ("rope", 2)],
@@ -206,7 +184,6 @@
         ),
         (
             code: "raft",
-            name: "RAFT",
             station: "workbench",
             secs: 6.0,
             inputs: [("log", 6), ("rope", 4)],

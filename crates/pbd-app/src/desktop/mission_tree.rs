@@ -816,7 +816,7 @@ fn recipe_name(recipes: &pbd_app::config::Recipes, code: &str) -> String {
         .recipes
         .iter()
         .find(|r| r.code == code)
-        .map_or(code.to_string(), |r| r.name.clone())
+        .map_or(code.to_string(), |r| r.name().into_string())
 }
 
 fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {

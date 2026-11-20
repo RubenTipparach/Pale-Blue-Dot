@@ -20,6 +20,7 @@ use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::cooking::{self, ANY_FISH, MEAL_ID, MEAL_KIND, MEAL_SCHEMA};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Slots, Stack};
+use pbd_core::locale::tr_with;
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{self, STATION_KIND, STATION_SCHEMA, StationRow, StationState};
 
@@ -69,7 +70,7 @@ pub fn spawn(
             layer
                 .spawn(menu::framed(kit, Set::Stone, 372.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, Localized::legacy("CAMPFIRE"));
+                    menu::lintel(panel, kit, tr("kitchen.title"));
                     panel
                         .spawn(Node {
                             flex_wrap: FlexWrap::Wrap,
@@ -91,10 +92,7 @@ pub fn spawn(
                                         CookPlaque(recipe.code.clone()),
                                     ))
                                     .with_children(|p| {
-                                        p.spawn(ui_kit::plaque_label(
-                                            Set::Stone,
-                                            Localized::legacy(recipe.name.clone()),
-                                        ));
+                                        p.spawn(ui_kit::plaque_label(Set::Stone, recipe.name()));
                                     });
                                     for &input in &recipe.inputs {
                                         icon(row, &atlas, input, &recipe.code, true);
@@ -185,7 +183,7 @@ fn icon(
     .with_children(|icon| {
         icon.spawn((
             KitText::new(
-                Localized::legacy(super::craft::need_count(need, n)),
+                Localized::verbatim(super::craft::need_count(need, n)),
                 ui_kit::LABEL,
             )
             .outline(ui_kit::INK),
@@ -228,7 +226,10 @@ pub fn queue(
         return false;
     };
     let Some(real) = cooking::concrete(recipe, &hotbar.0) else {
-        note.say(wall_s, format!("No fish for {}", recipe.name));
+        note.say(
+            wall_s,
+            tr_with("kitchen.no_fish", &[("recipe", &recipe.name())]),
+        );
         return false;
     };
     let mut state = station_state(save, cell, layer, recipe.station);
@@ -236,11 +237,14 @@ pub fn queue(
     match state.queue(&mut moved, &real, now_s) {
         Ok(()) => {}
         Err(station::Refused::Short) => {
-            note.say(wall_s, format!("Not enough for {}", recipe.name));
+            note.say(
+                wall_s,
+                tr_with("craft.not_enough", &[("recipe", &recipe.name())]),
+            );
             return false;
         }
         Err(station::Refused::Full) => {
-            note.say(wall_s, "The fire is full");
+            note.say(wall_s, tr("kitchen.fire_full"));
             return false;
         }
         Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
@@ -303,7 +307,10 @@ pub fn collect(
                 fish: cooking::fish_in(recipe),
             });
         }
-        note.say(wall_s, format!("{} is ready", recipe.name));
+        note.say(
+            wall_s,
+            tr_with("kitchen.ready", &[("recipe", &recipe.name())]),
+        );
         info!("cooked {} at cell {cell} layer {layer}", recipe.code);
     }
     done
@@ -336,7 +343,7 @@ pub fn work(
     for (interaction, plaque) in &plaques {
         if *interaction == Interaction::Pressed {
             if let Some(opens) = locks.locked(&plaque.0) {
-                note.say(wall_s, format!("Opens with: {opens}"));
+                note.say(wall_s, tr_with("craft.opens_with", &[("mission", &opens)]));
                 continue;
             }
             queue(
@@ -371,16 +378,19 @@ pub fn work(
         Some(recipe) => {
             let waiting = state.jobs.len() - 1;
             if waiting > 0 {
-                format!("COOKING {}  +{waiting} WAITING", recipe.name)
+                tr_with(
+                    "kitchen.cooking_waiting",
+                    &[("recipe", &recipe.name()), ("waiting", &waiting)],
+                )
             } else {
-                format!("COOKING {}", recipe.name)
+                tr_with("kitchen.cooking", &[("recipe", &recipe.name())])
             }
         }
-        None => "PICK A DISH".into(),
+        None => tr("kitchen.pick"),
     };
     for mut words in &mut line {
         if words.text != text {
-            words.text = Localized::legacy(text.clone());
+            words.text = text.clone();
         }
     }
     let want = percent(progress.unwrap_or(0.0) * 100.0);
@@ -528,11 +538,13 @@ pub fn eat(
         ));
         note.say(
             time.elapsed_secs(),
-            format!(
-                "Ate the {}: {} for {} min",
-                dish.good.name(),
-                dish.effect.name(),
-                dish.minutes
+            tr_with(
+                "kitchen.ate",
+                &[
+                    ("dish", &dish.good.name()),
+                    ("effect", &dish.effect.name()),
+                    ("minutes", &dish.minutes),
+                ],
             ),
         );
     }
@@ -662,14 +674,16 @@ pub fn show_effects(
             continue;
         };
         let left = (meal.until_s - now_s).max(0.0);
-        let line = format!(
-            "{} {}:{:02}",
-            meal.effect.name().to_uppercase(),
-            (left / 60.0).floor() as u32,
-            (left % 60.0).floor() as u32
+        let line = tr_with(
+            "kitchen.timer",
+            &[
+                ("effect", &meal.effect.caps()),
+                ("minutes", &((left / 60.0).floor() as u32)),
+                ("seconds", &format!("{:02}", (left % 60.0).floor() as u32)),
+            ],
         );
         if words.text != line {
-            words.text = Localized::legacy(line);
+            words.text = line;
         }
     }
 }
@@ -820,11 +834,13 @@ pub fn scripted(
             });
             note.say(
                 wall_s,
-                format!(
-                    "Ate the {}: {} for {} min",
-                    dish.good.name(),
-                    dish.effect.name(),
-                    dish.minutes
+                tr_with(
+                    "kitchen.ate",
+                    &[
+                        ("dish", &dish.good.name()),
+                        ("effect", &dish.effect.name()),
+                        ("minutes", &dish.minutes),
+                    ],
                 ),
             );
         }

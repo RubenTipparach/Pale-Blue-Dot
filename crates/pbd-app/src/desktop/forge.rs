@@ -36,6 +36,7 @@ pub struct QueueFill;
 
 use pbd_app::hotbar::Gained;
 use pbd_app::ui_kit::Localized;
+use pbd_core::locale::{tr, tr_with};
 
 /// A station's own panel inside the station layer, by station code: the one
 /// whose station is open is shown (`tool-crafting` decision 9).
@@ -71,7 +72,7 @@ pub fn spawn(
                     StationPanel("forge"),
                 ))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, Localized::legacy("FORGE"));
+                    menu::lintel(panel, kit, tr("forge.title"));
                     for recipe in recipes.0.at("forge") {
                         panel
                             .spawn(Node {
@@ -86,10 +87,7 @@ pub fn spawn(
                                     RecipePlaque(recipe.code.clone()),
                                 ))
                                 .with_children(|p| {
-                                    p.spawn(ui_kit::plaque_label(
-                                        Set::Stone,
-                                        Localized::legacy(recipe.name.clone()),
-                                    ));
+                                    p.spawn(ui_kit::plaque_label(Set::Stone, recipe.name()));
                                 });
                                 let item = |row: &mut ChildSpawnerCommands,
                                             (it, n): (Item, u16),
@@ -112,7 +110,7 @@ pub fn spawn(
                                     .with_children(|icon| {
                                         icon.spawn((
                                             KitText::new(
-                                                Localized::legacy(super::craft::need_count(
+                                                Localized::verbatim(super::craft::need_count(
                                                     need, n,
                                                 )),
                                                 ui_kit::LABEL,
@@ -221,11 +219,14 @@ pub fn queue(
     match state.queue(&mut moved, recipe, now_s) {
         Ok(()) => {}
         Err(station::Refused::Short) => {
-            note.say(wall_s, format!("Not enough for {}", recipe.name));
+            note.say(
+                wall_s,
+                tr_with("craft.not_enough", &[("recipe", &recipe.name())]),
+            );
             return false;
         }
         Err(station::Refused::Full) => {
-            note.say(wall_s, "Forge queue is full");
+            note.say(wall_s, tr("forge.queue_full"));
             return false;
         }
         Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
@@ -302,7 +303,7 @@ pub fn work(
     for (interaction, plaque, _) in &mut plaques {
         if *interaction == Interaction::Pressed {
             if let Some(opens) = locks.locked(&plaque.0) {
-                note.say(wall_s, format!("Opens with: {opens}"));
+                note.say(wall_s, tr_with("craft.opens_with", &[("mission", &opens)]));
                 continue;
             }
             queue(
@@ -323,16 +324,19 @@ pub fn work(
         Some(recipe) => {
             let waiting = state.jobs.len() - 1;
             if waiting > 0 {
-                format!("{}  +{waiting} WAITING", recipe.name)
+                tr_with(
+                    "craft.waiting",
+                    &[("recipe", &recipe.name()), ("waiting", &waiting)],
+                )
             } else {
-                recipe.name.clone()
+                recipe.name()
             }
         }
-        None => "PICK A RECIPE".into(),
+        None => tr("craft.pick"),
     };
     for mut words in &mut line {
         if words.text != text {
-            words.text = Localized::legacy(text.clone());
+            words.text = text.clone();
         }
     }
     let want = percent(progress.unwrap_or(0.0) * 100.0);
