@@ -448,7 +448,8 @@ fn a_known_herds_output_matches_the_economy_tab() {
             }
         }
     }
-    assert_eq!(total["egg"], 12, "three hens, four days");
+    // An egg every 6 hours (`hen-laying`): four a day.
+    assert_eq!(total["egg"], 48, "three hens, four days");
     assert_eq!(total["wool"], 6, "two woolbacks, one shearing each");
     assert_eq!(total["milk"], 4, "one cow, four days");
     // Collecting keeps the fraction, and the wait is capped.
@@ -600,7 +601,7 @@ mod breeding_tests {
         let at_12 = farm.advance_from(d + 12.99, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
         assert_eq!(at_12.waiting("egg"), 0, "a pullet lays nothing");
         let at_15 = farm.advance_from(d + 15.0, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
-        assert_eq!(at_15.waiting("egg"), 2, "two days of a hen's laying");
+        assert_eq!(at_15.waiting("egg"), 8, "two days of a hen's laying, four a day");
         // Hatched once: the brood is done.
         apply(&mut records, &events);
         assert!(
@@ -819,4 +820,24 @@ mod breeding_tests {
         };
         assert_eq!(b.record(7).read::<BroodBody>(), Some(b));
     }
+}
+
+/// `hen-laying`: feeds add up to the cap, and a fed, content hen lays an egg
+/// every six in-game hours.
+#[test]
+fn a_fed_happy_hen_lays_four_eggs_a_day_and_feeds_add_up() {
+    let n = settings().needs;
+    let sp = species("meadow-hen");
+    let mut hen = FarmState::new(0.0);
+    hen.hand_feed(0.0, &n);
+    hen.hand_feed(0.0, &n);
+    assert_eq!(hen.fed_until, 4.0, "two feeds are four days of food");
+    hen.hand_feed(0.0, &n);
+    assert_eq!(hen.fed_until, f64::from(n.cap_days), "never past the cap");
+    let penned = Conditions {
+        space: true,
+        ..Conditions::default()
+    };
+    let day = advance_all(&hen, 1.0, penned, &sp, Sex::F);
+    assert_eq!(day.waiting("egg"), 4);
 }
