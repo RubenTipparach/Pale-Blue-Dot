@@ -977,9 +977,20 @@ fn life_script(
     let species = &roster[index];
     let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
     let first = script.metres.unwrap_or(3.0);
-    for step in 0..=22 {
+    // Straight ahead first; where no water ahead fits it, the bearings round
+    // the eye in turn (`ocean-environments` B29), the turn logged so a second
+    // capture can face it with `--yaw`.
+    let turns = (0..=18).map(|k| {
+        if k % 2 == 0 {
+            k / 2 * 20
+        } else {
+            -(k / 2 + 1) * 20
+        }
+    });
+    for (turn, step) in turns.flat_map(|t| (0..=22).map(move |s| (t, s))) {
         let metres = first + step as f32 * 0.5;
-        let direction = (eye + ahead * metres).normalize_or(up);
+        let along = Quat::from_axis_angle(up, -(turn as f32).to_radians()) * ahead;
+        let direction = (eye + along * metres).normalize_or(up);
         // Fresh water over the sea's level (a lake, a river, a pond) is
         // asked as the spawner asks it (task 18.2); the sea otherwise.
         let contact = world.contact.as_deref();
@@ -1005,7 +1016,7 @@ fn life_script(
         let local = o.at(direction.as_dvec3(), f64::from(top));
         let school = School::spawn(&o, index as u16, species, local, 0x11fe, &water);
         info!(
-            "life script: {} x{} put {metres} m ahead in {} water {depth:.1} m deep",
+            "life script: {} x{} put {metres} m ahead, turned {turn} degrees clockwise, in {} water {depth:.1} m deep",
             species.id,
             school.len(),
             if fresh.is_some() { "fresh" } else { "sea" }
