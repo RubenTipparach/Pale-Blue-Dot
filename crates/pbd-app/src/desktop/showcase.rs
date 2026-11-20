@@ -2546,6 +2546,10 @@ pub fn press_controls(
         if this {
             *interaction = Interaction::Pressed;
             hit = true;
+        } else if *interaction == Interaction::Pressed {
+            // The last click's press, left standing (no pointer comes to
+            // clear it): cleared, so this click is the only one pressed.
+            *interaction = Interaction::None;
         }
     }
     if !hit {

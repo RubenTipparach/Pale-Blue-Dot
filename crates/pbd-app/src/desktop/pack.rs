@@ -313,7 +313,9 @@ pub const PACK_COLUMN: f32 = 10.0 * slots::SLOT;
 /// The two panels, native px: the pack (its ten slots, three rows, the hand
 /// and the hotbar, in the rim) and the craft panel beside it (the lintel, the
 /// six recipes, the craft row and its bar, in the rim).
-pub const PACK_PANEL: (f32, f32) = (PACK_COLUMN + 2.0 * RIM, 204.0);
+// The pack's height fits its rows, with a small gap over the hotbar (owner,
+// 2026-11-20: "why so much empty space on inventory?").
+pub const PACK_PANEL: (f32, f32) = (PACK_COLUMN + 2.0 * RIM, 160.0);
 pub const CRAFT_PANEL: (f32, f32) = (super::craft::CRAFT_COLUMN + 2.0 * RIM, 214.0);
 /// The rock's rim, inside which everything stands.
 pub const RIM: f32 = 14.0;
