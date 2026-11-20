@@ -114,6 +114,8 @@ enum Click {
     Cook(String),
     Smelt(String),
     Cell(usize),
+    /// A mission tree card, by its mission index.
+    Card(usize),
 }
 
 /// One frame's inputs.
@@ -2571,13 +2573,14 @@ pub fn press_controls(
         Option<&super::kitchen::CookPlaque>,
         Option<&super::pack::PackCell>,
         Option<&super::forge::RecipePlaque>,
+        Option<&super::mission_tree::Card>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt) in &mut controls {
+    for (mut interaction, row, button, well, cook, cell, smelt, card) in &mut controls {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
             Click::CraftHand => button.is_some_and(|b| b.0 == "hand"),
@@ -2588,6 +2591,7 @@ pub fn press_controls(
             Click::Cook(code) => cook.is_some_and(|c| &c.0 == code),
             Click::Smelt(code) => smelt.is_some_and(|c| &c.0 == code),
             Click::Cell(k) => cell.is_some_and(|c| c.0 == *k),
+            Click::Card(k) => card.is_some_and(|c| c.0 == *k),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -3334,6 +3338,11 @@ fn focus(bot: &mut Bot, id: &str, s: &Sight, out: &mut Intent) -> Status {
             bot.next_phase();
         }
         3 if bot.phase_s > 0.4 => {
+            // The card itself pressed, as every other control is: a pointer
+            // the real mouse moves off made the click a pan.
+            if let Some(k) = s.chain.missions.iter().position(|m| m.id == id) {
+                out.click = Some(Click::Card(k));
+            }
             out.lmb_tap = true;
             bot.next_phase();
         }

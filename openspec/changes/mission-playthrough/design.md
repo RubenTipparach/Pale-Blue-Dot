@@ -191,3 +191,17 @@ water when it digs:
 - under water, it swims up and on.
 On `tree-run-6` a bait pit dug at the shore flooded and the bot ended 5 m
 under the sea.
+
+### 5.4 The mission tree's colours (owner, 2026-11-20)
+
+"Connections are other blue or not based on unlocks.. yellow is too
+confusing. Locked nodes should be faded. Selected node should be yellow..
+all other nodes should be regular." A line is blue (`RUNE_DIM`) when the
+mission it leads to is unlocked (its first need done), plain grey otherwise.
+There are no yellow or white lines. The selected card is framed yellow
+(`TITLE`); with none selected, the one the player is on is. Every other card
+is plain, and a locked card fades to 35% with its icon.
+
+The tree also takes a press on a card itself, as the pack does: the
+showcase bot's pointer was overrun by the real mouse and its click became
+a pan.
