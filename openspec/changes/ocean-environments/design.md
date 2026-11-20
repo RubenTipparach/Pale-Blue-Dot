@@ -1355,6 +1355,26 @@ with `textureLoad` at the same whole pixel as the depth, so colour and
 depth always describe the same surface. The wobble moves in whole pixels,
 in keeping with the nearest-sampled look.
 
+**Antialiasing off by default (the owner, 2026-11-20).** The owner: "is it
+the oreder of when water shading runs? why cant it do proper depth testing
+before AA? AA should be a final composite thing, but I didnt even ask for
+AA to be implemented". It was the order. The scene was drawn with 4x
+multisampling (Bevy's default, kept by `msaa_samples`), and resolved
+before the water's passes ran. Every pass after that read one blended
+colour per edge pixel against per-sample depths, and no test can split a
+blend back apart.
+
+A capture of the raw scene, with the compose passing it straight through,
+showed the bright blue edge pixels already there, blended from rod and
+sky, before any water shading. With multisampling off, each pixel is one
+surface and every depth test is exact.
+
+So the camera has no multisampling by default; `PBD_MSAA=2|4` keeps it
+for comparison. Hard edges also suit the nearest-sampled pixel look. The
+compose's edge-splitting and the cap's sample cover stay: they are exact
+when there is one sample, and correct the 2x and 4x builds. Frame cost
+not measured here (no GPU); it can only fall.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
