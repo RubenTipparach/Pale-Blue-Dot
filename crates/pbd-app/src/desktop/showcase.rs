@@ -3367,6 +3367,12 @@ fn focus(bot: &mut Bot, id: &str, s: &Sight, out: &mut Intent) -> Status {
 
 /// The pack's Craft panel: open the pack, click the recipe's row in the
 /// list, press CRAFT once per make and wait for the hands to finish, shut it.
+/// Whether a recipe input takes a carried item: the same item, or any fish
+/// for the cook's "fish" (`cooking::ANY_FISH`).
+fn input_takes(input: Item, carried: Item) -> bool {
+    input == carried || (input == pbd_core::cooking::ANY_FISH && matches!(carried, Item::Fish(_)))
+}
+
 /// What a recipe of `station` lacks from what is carried: the first input
 /// short, and how many it needs. `None` when it can be made.
 fn short_of(s: &Sight, station: &str, code: &str) -> Option<(Item, u16)> {
@@ -3374,7 +3380,7 @@ fn short_of(s: &Sight, station: &str, code: &str) -> Option<(Item, u16)> {
     recipe.inputs.iter().copied().find(|&(item, n)| {
         (0..CARRIED)
             .filter_map(|i| s.slots.get(i))
-            .filter(|st| st.item == item)
+            .filter(|st| input_takes(item, st.item))
             .map(|st| u32::from(st.count))
             .sum::<u32>()
             < u32::from(n)
@@ -3655,7 +3661,7 @@ fn station(
                     let held = |item: Item| -> u32 {
                         (0..CARRIED)
                             .filter_map(|i| s.slots.get(i))
-                            .filter(|st| st.item == item)
+                            .filter(|st| input_takes(item, st.item))
                             .map(|st| u32::from(st.count))
                             .sum()
                     };
