@@ -1239,10 +1239,20 @@ pub fn steer(
         && let Some((_, card, moved)) = press.take()
         && !moved
     {
-        next.selected = card;
+        // A done mission is not picked: nothing is left to do on it, so it
+        // cannot be the one the player is on (owner, 2026-11-20: "Selecting
+        // a completed mission node is not possible because it's already
+        // completed"). Its hover card still shows it.
+        let done = card.is_some_and(|i| {
+            missions.progress.standing(&chain.0, &chain.0.missions[i])
+                == pbd_core::missions::Standing::Done
+        });
+        if !done {
+            next.selected = card;
+        }
         // Picking an open mission makes it the one the player is on
         // (`mission-playthrough` 3.5).
-        if let Some(i) = card {
+        if let Some(i) = card.filter(|_| !done) {
             let id = chain.0.missions[i].id.clone();
             let open = missions.progress.standing(&chain.0, &chain.0.missions[i])
                 == pbd_core::missions::Standing::Open;

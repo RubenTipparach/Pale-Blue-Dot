@@ -205,3 +205,8 @@ is plain, and a locked card fades to 35% with its icon.
 The tree also takes a press on a card itself, as the pack does: the
 showcase bot's pointer was overrun by the real mouse and its click became
 a pan.
+
+A done mission's card is not picked: "Selecting a completed mission node is
+not possible because it's already completed..so focus on that mission isn't
+possible" (owner, 2026-11-20). A click on it changes nothing; its hover card
+still shows it.
