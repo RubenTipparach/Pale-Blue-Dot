@@ -1471,7 +1471,8 @@ pub fn drive(
             let answer = match cmd.as_str() {
                 "status" => {
                     let shot = player.file.shots.get(bot.shot);
-                    let (lat, lon) = pbd_core::geo::lat_lon(sight.up).degrees();
+                    let pbd_app::place::Place { lat, lon, .. } =
+                        pbd_app::place::Place::of(sight.up);
                     let mission = sight.missions.progress.focused(sight.chain).map(|m| {
                         serde_json::json!({
                             "id": m.id,
