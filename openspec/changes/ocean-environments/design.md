@@ -1299,6 +1299,17 @@ sample's own `exp(-extinction * distance)`, sky samples counting as none.
 An edge pixel is then fogged by the share of it that is far, and an
 interior pixel, all four samples alike, is unchanged.
 
+That mean still left a dim purple-blue line in the next capture. One
+transmittance applied to a blended colour keeps part of the far share's
+brightness. So instead the edge pixel is split:
+- `f` is the share of its samples that are far;
+- the far part's colour is read from a neighbouring pixel whose depth is
+  far, or the murk where there is none;
+- the near part is the resolved colour with the far part taken out.
+Each part is fogged by its own distance and the two are mixed back by
+`f`. Only pixels whose samples span a real depth step (15% plus 0.3 m,
+as above) are split.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

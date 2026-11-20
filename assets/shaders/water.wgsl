@@ -1426,27 +1426,60 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
-    var transmit = exp(-extinction*travel);
+    var fogged = mix(deep,color,exp(-extinction*travel));
 #ifdef MULTISAMPLED
-    // An edge pixel's colour is the resolve of near and far samples, so fog
-    // it by their mean transmittance, not sample 0's alone: a near sample 0
-    // left the far share of the colour unfogged, a bright rim round the
-    // held tool (`ocean-environments` B24, the second cause).
-    if (under && !sky) {
+    // An edge pixel's colour is the resolve of near and far samples, but the
+    // fog above is sample 0's alone, so the far share of the colour kept its
+    // unfogged brightness: a rim round the held tool (`ocean-environments`
+    // B24, the second cause). With the eye under, split such a pixel into its
+    // near and far parts, the far part's colour taken from a neighbouring
+    // pixel that is all far, and fog each part by its own distance.
+    if (under) {
         let size = textureDimensions(scene_depth);
         let coord = clamp(vec2<i32>(uv*vec2<f32>(size)),vec2<i32>(0),vec2<i32>(size)-1);
         let n = i32(textureNumSamples(scene_depth));
-        var sum = transmit*0.0;
+        var dmin = 1.0e9;
+        var dmax = 0.0;
         for (var k = 0; k < n; k++) {
             let d = textureLoad(scene_depth,coord,k);
-            if (d > 1e-7) {
-                sum += exp(-extinction*length(reconstruct_local(uv,d)-ray.origin));
-            }
+            let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+            dmin = min(dmin,dist);
+            dmax = max(dmax,dist);
         }
-        transmit = sum/f32(max(n,1));
+        if (dmax-dmin > 0.15*dmin+0.3) {
+            let mid = 0.5*(dmin+dmax);
+            var far_n = 0;
+            for (var k = 0; k < n; k++) {
+                let d = textureLoad(scene_depth,coord,k);
+                let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+                if (dist > mid) { far_n += 1; }
+            }
+            let f = f32(far_n)/f32(max(n,1));
+            // The far colour: the first of the four neighbours whose sample 0
+            // is far; with none, the far part is the murk itself.
+            var far_c = deep;
+            var found = false;
+            let px = 1.0/vec2<f32>(size);
+            for (var o = 0; o < 4; o++) {
+                let off = select(select(vec2<f32>(0.0,px.y),vec2<f32>(0.0,-px.y),o == 2),
+                    select(vec2<f32>(px.x,0.0),vec2<f32>(-px.x,0.0),o == 1), o < 2);
+                let nuv = clamp(uv+off,vec2(0.),vec2(1.));
+                let nd = load_depth(nuv);
+                let ndist = select(1.0e5, length(reconstruct_local(nuv,nd)-ray.origin), nd > 1e-7);
+                if (!found && ndist > mid) {
+                    far_c = textureSampleLevel(scene_color,scene_sampler,nuv,0.0).rgb;
+                    found = true;
+                }
+            }
+            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+            let near_c = clamp((raw-f*far_c)/max(1.0-f,1e-3),vec3(0.0),vec3(4.0));
+            let near_fog = mix(deep,near_c,exp(-extinction*dmin));
+            let far_fog = mix(deep,far_c,exp(-extinction*dmax));
+            fogged = mix(near_fog,far_fog,f);
+        }
     }
 #endif
-    color = mix(color, mix(deep,color,transmit), wet);
+    color = mix(color, fogged, wet);
     // The sheet the near plane clips, for an eye under the surface (B19):
     // a ray that crosses the surface nearer than `NEAR_SHEET_M` saw the sky
     // nearly clear and the bank above as a silhouette through the hole,
