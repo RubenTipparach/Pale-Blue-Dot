@@ -2213,6 +2213,7 @@ pub fn run(args: &[String]) {
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
+            pbd_app::beaver::BeaverPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
