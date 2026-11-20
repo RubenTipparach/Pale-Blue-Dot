@@ -153,7 +153,7 @@ struct Through {
 }
 
 /// A station farther than this is made again where the bot stands, m.
-const STATION_NEAR_M: f32 = 40.0;
+const STATION_NEAR_M: f32 = 25.0;
 
 /// A plan being walked (`bot-path-planner` design 3).
 struct PlanRun {
@@ -3520,27 +3520,30 @@ fn station(
     let Some((cell, layer, at)) = bot.stations(s, material) else {
         return Status::Fail(format!("no {material:?} placed"));
     };
-    // The nearest workbench far off (across water, past a hill): a new one
-    // here, as a player makes one rather than walk back (seen 2026-11-20:
-    // 92 m off, the way back through the sea).
+    // The nearest workbench or campfire far off (across water, past a
+    // hill): a new one here, as a player makes one rather than walk back
+    // (seen 2026-11-20: a bench 92 m off through the sea, a fire 57 m).
+    let (made, block) = match material {
+        Material::Workbench => ("workbench", "block:workbench"),
+        Material::Campfire => ("campfire", "block:campfire"),
+        _ => ("", ""),
+    };
     if bot.phase == 0
-        && material == Material::Workbench
+        && !made.is_empty()
         && at.distance(s.feet) > STATION_NEAR_M
         && bot.injected.is_empty()
     {
         info!(
-            "showcase: the workbench is {:.0} m off; making one here",
+            "showcase: the {made} is {:.0} m off; making one here",
             at.distance(s.feet)
         );
-        if carried(s.slots, "block:workbench") == 0 {
-            if carried(s.slots, "planks") < 6 {
+        if carried(s.slots, block) == 0 {
+            if material == Material::Workbench && carried(s.slots, "planks") < 6 {
                 bot.injected.push_back(file::Act::Craft("planks".into(), 2));
             }
-            bot.injected
-                .push_back(file::Act::Craft("workbench".into(), 1));
+            bot.injected.push_back(file::Act::Craft(made.into(), 1));
         }
-        bot.injected
-            .push_back(file::Act::Place("block:workbench".into()));
+        bot.injected.push_back(file::Act::Place(block.into()));
         return Status::Running;
     }
     let row = pbd_core::station::station_of(material).expect("a station");
