@@ -595,6 +595,12 @@ impl Bot {
         } else {
             self.stuck_s = 0.0;
         }
+        // Stuck under ground: up and out first, a block under the feet at a
+        // time (owner, 2026-11-20: "dig straight up and place dirt blocks
+        // below feet").
+        if (self.climbing_out || self.stuck_s > 6.0) && self.up_and_out(s, out) {
+            return Walked::Going;
+        }
         // Under water (a flooded hole, off a bank): up and on toward the
         // point, as a player swims out.
         if s.eye.length() - PLANET_RADIUS < -0.2 && surface_height(s.up) < 0.5 {
@@ -604,12 +610,6 @@ impl Bot {
             if (s.now % 3.0) < s.dt {
                 info!("showcase: under water; swimming up and on");
             }
-            return Walked::Going;
-        }
-        // Stuck under ground: up and out first, a block under the feet at a
-        // time (owner, 2026-11-20: "dig straight up and place dirt blocks
-        // below feet").
-        if (self.climbing_out || self.stuck_s > 6.0) && self.up_and_out(s, out) {
             return Walked::Going;
         }
         // The planned walk over cells and layers (`bot-path-planner`); the
