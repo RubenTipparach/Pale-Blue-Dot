@@ -3542,6 +3542,10 @@ fn station(
                 bot.injected.push_back(file::Act::Craft("planks".into(), 2));
             }
             bot.injected.push_back(file::Act::Craft(made.into(), 1));
+            // The craft is queued, not done: its seconds pass before the
+            // block is in the pack to place (seen 2026-11-20: placed at
+            // once, "not carried", and a second campfire queued).
+            bot.injected.push_back(file::Act::Wait(5.0));
         }
         bot.injected.push_back(file::Act::Place(block.into()));
         return Status::Running;
