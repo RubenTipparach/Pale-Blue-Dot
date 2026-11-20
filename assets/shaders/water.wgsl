@@ -1419,6 +1419,13 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // below is this pixel's, so a sample taken across a silhouette put
         // the far ground's unfogged colour round everything near as a bright
         // rim (owner, 2026-11-19: "outlining issues when under water").
+        // Read colour and depth at the same whole pixel: the colour was
+        // filtered between pixels at the fractional offset, so at a
+        // silhouette it blended the near surface with the unfogged sky
+        // beside it and the blend took the near surface's fog, a pale line
+        // inside every edge (`ocean-environments` B24).
+        let csize = vec2<i32>(textureDimensions(scene_color));
+        let spx = clamp(vec2<i32>(suv*vec2<f32>(csize)),vec2<i32>(0),csize-1);
         let sdepth = load_depth(suv);
         let ssky = sdepth <= 1e-7;
         var same = ssky == sky;
@@ -1427,7 +1434,7 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             same = abs(sdist-view_dist) < 0.15*view_dist+0.3;
         }
         if (same) {
-            color = textureSampleLevel(scene_color,scene_sampler,suv,0.0).rgb;
+            color = textureLoad(scene_color,spx,0).rgb;
         }
     }
     var travel: f32;

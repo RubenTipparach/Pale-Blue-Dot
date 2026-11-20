@@ -1339,6 +1339,22 @@ colour was resolved with:
 - elsewhere the cap and the flowing water are alpha-blended over by it.
 A pixel the sheet fully covers draws exactly as before.
 
+**The fundamental mismatch (2026-11-20).** Two measurements showed what
+was left:
+- the cap fix moved nothing;
+- with multisampling off (`PBD_MSAA=1`) the specks went, but a pale
+  bluish stripe stayed, one pixel wide, between brown rod pixels on both
+  sides.
+The wobble read the scene's colour through the linear sampler at a
+fractional offset, and its same-surface check read depth at the nearest
+pixel. So at a silhouette the colour was a filtered blend of the near
+surface and the unfogged sky beside it, while the depth said near, and
+the blend took the near surface's thin fog. That is the stripe inside
+every edge, and most of the original rim. The wobble now reads colour
+with `textureLoad` at the same whole pixel as the depth, so colour and
+depth always describe the same surface. The wobble moves in whole pixels,
+in keeping with the nearest-sampled look.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
