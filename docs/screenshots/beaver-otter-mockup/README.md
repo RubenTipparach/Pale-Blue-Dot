@@ -1,4 +1,4 @@
-# Beavers and otters (M25 versions 2 and 3, `ocean.html#critters`)
+# Beavers and otters (M25 versions 2 to 4, `ocean.html#critters`)
 
 Screenshots of the "Beavers and otters" tab of Seas, Rivers and Marshes
 (https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1), the mockup for
@@ -9,6 +9,26 @@ SwiftShader, 1280 x 800 (the UI shots 1440 x 1000 and 390 x 844). They show
 poses and the look, never how smoothly anything moves. Each frame opens the
 page afresh with the default seed (7), holds the clock still, and steps the
 scene in fixed 1/30 s steps to the named moment, so the frames repeat.
+
+## Version 4 (`v4-*.jpg`, `contact-sheet-v4.jpg`)
+
+The owner's notes on version 3: "the arms on beaver and otter should animate when they move or stand up", "the fur
+shaking is cool, but a little over the top, I would want more subtle", and "do sea otters always need to have the
+urchin in hand when grooming AND sleeping?" (design B28, version 4). A few stills to check the poses; the motion is
+judged on the page. Same tool and `shots.json`, rendered the same way: headless Chromium on SwiftShader, no GPU.
+
+| Frame | What it shows |
+| --- | --- |
+| `v4-beaver-walk-contact.jpg`, `v4-beaver-walk-passing.jpg` | The beaver's walk at a forepaw's contact and at its passing. |
+| `v4-beaver-gnaw-anticipation.jpg`, `v4-beaver-gnaw-rear-up.jpg`, `v4-beaver-gnaw-paws-on-trunk.jpg` | Rearing up to the aspen: the crouch, the rise with the paws trailing, the paws on the trunk at a bite. |
+| `v4-beaver-drop-to-all-fours.jpg` | As the tree creaks, back down onto its forepaws before it scrambles clear. |
+| `v4-beaver-sit-groom.jpg`, `v4-beaver-sit-down.jpg` | Sitting up with its paws at its face, and the paws reaching down as it sits back down. |
+| `v4-beaver-swim.jpg` | Swimming, forepaws held to its chest. |
+| `v4-otter-bound.jpg` | The river otter's bound. |
+| `v4-otter-look-up.jpg`, `v4-otter-tread-water.jpg` | Reared up to look round on its rock, paws at its chest; the same in the water, treading with its forepaws. |
+| `v4-otter-eat.jpg` | Sitting up on its rock, the paws bringing the trout to its mouth. |
+| `v4-sea-otter-crack.jpg` | The sea otter cracking an urchin on the stone on its chest. |
+| `v4-sea-otter-groom-empty.jpg`, `v4-sea-otter-sleep-empty.jpg` | Grooming and asleep in kelp with empty paws (the stone tucked away). |
 
 ## Version 3 (`v3-*.jpg`, `contact-sheet-v3.jpg`)
 
