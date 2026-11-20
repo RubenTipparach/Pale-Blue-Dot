@@ -174,6 +174,33 @@ Text the player reads in the game is short and plain, the way a game says it:
 - not riddles, inverted or literary phrasing, or colons that explain;
 - when a note adds nothing, show none.
 
+## No text in code: every word from the locale file (owner, 2026-11-20)
+
+**Standing instruction from the user:** "make it a hard lint rule or
+something to strictly prevent hard coded text in game. dictionary look ups
+and configs are fine, but I want all strings to be put in a locale_en.yaml
+file, so if we want to port the entire game to to other languages its easy
+to do". Every word the player reads comes from `assets/locale/locale_en.yaml`
+by key (`openspec/changes/localization`):
+- code shows text only through `tr("key")` or `tr_with("key", args)`; the UI
+  kit takes a `Localized`, so a string literal handed to it does not compile;
+- data files (missions, recipes, items, species) hold ids, and their names
+  and descriptions are keys in the locale file; numbers, tunables and paths
+  stay in their configs;
+- placeholders are named (`{count}`), plurals are `one`/`other` forms, and
+  case lives in the text (no `to_uppercase()` on shown text);
+- `cargo test -p pbd-app --test locale` is the hard lint: it fails on a
+  literal with words outside logs, panics, tests, paths, ids and keys, on a
+  key missing from or unused in the file, and on mismatched placeholders.
+  Its baseline of text from before the rule only shrinks, and goes when
+  empty. A false positive is fixed in the lint's rules, never baselined;
+- `tools/locale/` has the same check without a build (`locale_lint.py`),
+  key extraction (`locale_extract.py`) and a translator's coverage report
+  (`locale_coverage.py`).
+
+Developer overlays behind a key (the F3 graph, the debug readout) are marked
+`//! locale: dev` and are exempt; they are tools, not the game's text.
+
 ## Waterfalls are designed in a mockup first (owner, 2026-11-15)
 
 **Standing instruction from the user:** "make mockups from now on for how
