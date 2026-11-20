@@ -133,6 +133,9 @@ pub enum Act {
     Cook(String, u32),
     /// Walk to the sea's edge and face the water.
     Shore,
+    /// Walk to a river's or a lake's edge (water above the sea's level) and
+    /// face it; the `Fish` after it fishes there.
+    Fresh,
     /// Go to the sea's edge, cast, wait for the bite, reel, until.
     Fish(Until),
     /// Till this many cells of a field with the shovel.

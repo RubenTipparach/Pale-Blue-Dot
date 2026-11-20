@@ -149,3 +149,45 @@ jobs wait; the hands take four jobs (they took one).
   worms first. Each catch still takes one worm.
 - "theres multiple dirt types, so make sure to cover all dirt": bait comes
   from all seven: the three grasses, dirt, soil, tilled soil and sand.
+
+## 5. Found in play, 2026-11-20
+
+### 5.1 Missions confirmed playable
+
+- **Light** (`build`, `torch`) and **about** (`map`, `swim`) on `tree-run-5`,
+  after fixes to the bot (it carries soil, not a dirt block; the mark search
+  tries 32 bearings and allows a little water on the way).
+- **Flock** (`A mixed herd`): tame a woolback, pen it, collect wool. A loose
+  tamed woolback gave one wool and then none; penned, it gave two a collect.
+  The mission's help says "tame one as you did the hen", which implies the
+  pen. Recommendation taken (ask only with screenshots): leave the rule as it
+  is, and say "pen it" in the help text when the next text pass comes.
+- **Sea fishing** (`Off the shore`): three sea catches done. Fresh water not
+  yet, see 5.2.
+
+### 5.2 An invisible wall after digging (a game bug, not fixed)
+
+On `tree-run-6`, the bot held W facing an open, dug-out patch for minutes
+without moving. A plain scripted `Walk(3.0)` that way did not move it either.
+The same walk after turning round moved it about a metre. On `tree-run-5` the
+walker stood 2 m above where the fine set's columns put the ground. Both
+times it was among blocks the bot itself had dug and placed. The likely
+cause is the contact tier's collision lagging, or staying out of step with,
+the fine set after edits (`planet_contact.rs`, "answers even while the tier
+lags a newer set"). Not investigated further; written up for its own change.
+The bot works round it by planning round a cell it is held short of
+(`bot-path-planner`).
+
+### 5.3 Bait from every dirt block; the bot keeps off the water (owner, 2026-11-20)
+
+The owner: "all dirt blocks should have a chance to get bait, approv on other
+items". The game's rule stays as it is: one in five of any earth block gives
+a worm (`gather.bait_one_in: 5`, design 4.3). The bot keeps away from the
+water when it digs:
+- never a cell by the water (`digging::by_water`), nor one under 1.2 m above
+  the sea;
+- its planner reads open air under the sea's level as sea, since the sea is
+  not stored in the columns;
+- under water, it swims up and on.
+On `tree-run-6` a bait pit dug at the shore flooded and the bot ended 5 m
+under the sea.

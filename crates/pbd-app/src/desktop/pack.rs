@@ -534,9 +534,16 @@ pub fn press(
     } else {
         return;
     };
+    // The square pressed, before one merely hovered (a hover left on another
+    // square took the click: seen with the showcase bot, 2026-11-20).
     let Some(index) = cells
         .iter()
-        .find(|(interaction, _)| **interaction != Interaction::None)
+        .find(|(interaction, _)| **interaction == Interaction::Pressed)
+        .or_else(|| {
+            cells
+                .iter()
+                .find(|(interaction, _)| **interaction != Interaction::None)
+        })
         .map(|(_, cell)| cell.0)
     else {
         return;

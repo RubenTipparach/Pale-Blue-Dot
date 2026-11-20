@@ -24,6 +24,7 @@
 
 pub mod control;
 pub mod file;
+pub mod path;
 
 use super::digging::{self, Aim};
 use super::menu::Screen;
@@ -149,6 +150,130 @@ struct Through {
     block_s: f32,
 }
 
+/// A plan being walked (`bot-path-planner` design 3).
+struct PlanRun {
+    plan: path::Plan,
+    goal: Vec3,
+    made: f32,
+    step_since: f32,
+    dig_since: f32,
+    /// The tool in hand before the first dig, put back on arrival.
+    was: Option<Tool>,
+}
+
+/// The live ground as the planner reads it: finest cells by index, blocks
+/// by the fine set and the save's edits, a standing tree's trunk a block
+/// never dug, unloaded ground never entered.
+struct LiveGround<'a, 'b> {
+    s: &'a Sight<'b>,
+    axe_logs: u16,
+    cache: std::cell::RefCell<HashMap<(usize, usize), path::Block>>,
+    /// Cells the walker was held short of for this goal: never entered.
+    avoid: &'a [usize],
+}
+
+impl path::Ground for LiveGround<'_, '_> {
+    fn neighbours(&self, cell: usize) -> Vec<usize> {
+        let records = self.s.fine.set.finest_records();
+        let Some(r) = records.get(cell) else {
+            return Vec::new();
+        };
+        self.s.fine.set.finest_neighbors[cell][..r.degree()]
+            .iter()
+            .map(|&n| n as usize)
+            .collect()
+    }
+
+    fn centre(&self, cell: usize) -> Vec3 {
+        let r = &self.s.fine.set.finest_records()[cell];
+        Vec3::from_slice(&r.direction_height[..3]).normalize()
+    }
+
+    fn block(&self, cell: usize, layer: usize) -> path::Block {
+        if self.avoid.contains(&cell) {
+            return path::Block::Never;
+        }
+        if let Some(b) = self.cache.borrow().get(&(cell, layer)) {
+            return *b;
+        }
+        let key = self.s.fine.set.finest_records()[cell].key();
+        // The column by its record index (no search by key per block).
+        let _ = key;
+        let material = match self.s.fine.set.columns.column(cell) {
+            Some(column) => Some(column.material(layer)),
+            None => self
+                .s
+                .fine
+                .set
+                .adoptable(cell, &self.s.save.edits)
+                .map(|column| column.material(layer)),
+        };
+        let b = match material {
+            None => path::Block::Never,
+            // The sea is not in the columns: open air under its level is the
+            // sea, so nothing is dug or walked under it.
+            Some(Material::Air) if pbd_core::column::layer_altitude(layer) + 0.5 < 0.0 => {
+                path::Block::Water
+            }
+            Some(Material::Air) => {
+                // A standing tree's trunk over its ground block.
+                // Only the open block just over a cell's ground can hold a
+                // trunk; the tree test searches the set, so it is asked
+                // only there.
+                if layer > 0
+                    && path::Ground::block(self, cell, layer - 1).solid()
+                    && digging::under_standing_tree(
+                        self.s.fine,
+                        self.s.save,
+                        self.axe_logs,
+                        (key, layer - 1),
+                    )
+                {
+                    path::Block::Never
+                } else {
+                    path::Block::Open
+                }
+            }
+            Some(m) if m.is_water() => path::Block::Water,
+            Some(m) if m.is_lamp() || pbd_core::station::station_of(m).is_some() => {
+                path::Block::Never
+            }
+            // A standing tree's own ground is not dug until it is felled.
+            Some(_)
+                if digging::under_standing_tree(
+                    self.s.fine,
+                    self.s.save,
+                    self.axe_logs,
+                    (key, layer),
+                ) =>
+            {
+                path::Block::Never
+            }
+            Some(m) => path::Block::Dig(dig_cost(m)),
+        };
+        self.cache.borrow_mut().insert((cell, layer), b);
+        b
+    }
+}
+
+/// What digging a block costs the planner, metres of walking: earth is
+/// quick with the shovel, stone slow with the pickaxe.
+fn dig_cost(m: Material) -> f32 {
+    match m {
+        Material::Soil
+        | Material::Grass
+        | Material::Dirt
+        | Material::Sand
+        | Material::DryGrass
+        | Material::JungleGrass
+        | Material::Snow
+        | Material::Tilled
+        | Material::DesertSand => 2.0,
+        Material::Stone | Material::Rock | Material::Ore | Material::Basalt => 4.0,
+        _ => 3.0,
+    }
+}
+
 /// What a bot is walking to or working on.
 #[derive(Clone, Copy, Debug)]
 enum Goal {
@@ -209,6 +334,12 @@ struct Bot {
     index: Option<(u64, HashMap<u32, usize>)>,
     released: Vec<KeyCode>,
     lmb_down: bool,
+    /// The walk being followed (`bot-path-planner`).
+    plan: Option<PlanRun>,
+    /// Cells the walker could not get into on the way to `plan_avoid_for`
+    /// (an invisible wall: the collision and the blocks disagreeing).
+    plan_avoid: Vec<usize>,
+    plan_avoid_for: Option<Vec3>,
     rmb_down: bool,
     tap_lmb_down: bool,
     still: u32,
@@ -220,6 +351,9 @@ struct Bot {
     cast_turns: u32,
     /// `Dig` for bait: only earth the game calls by the water.
     want_wet: bool,
+    /// `Fresh`: the shore sought is a river's or a lake's, not the sea's,
+    /// for this act and the `Fish` after it, until a `Shore`.
+    fresh: bool,
     /// Live control (`bot-control`): paused, presses nothing; acts queued
     /// by `do`, run before the shot's own.
     paused: bool,
@@ -419,6 +553,22 @@ impl Bot {
         } else {
             self.stuck_s = 0.0;
         }
+        // Under water (a flooded hole, off a bank): up and on toward the
+        // point, as a player swims out.
+        if s.eye.length() - PLANET_RADIUS < -0.2 && surface_height(s.up) < 0.5 {
+            out.held.insert(KeyCode::Space);
+            out.held.insert(KeyCode::KeyW);
+            self.steer(s, out, to, 0.3);
+            if (s.now % 3.0) < s.dt {
+                info!("showcase: under water; swimming up and on");
+            }
+            return Walked::Going;
+        }
+        // The planned walk over cells and layers (`bot-path-planner`); the
+        // older heuristics below only when no plan is found.
+        if let Some(walked) = self.follow_plan(s, out, point) {
+            return walked;
+        }
         if (self.through.is_some() || self.stuck_s > 4.0) && self.dig_through(s, out, point) {
             return Walked::Going;
         }
@@ -507,6 +657,303 @@ impl Bot {
             }
         }
         Walked::Going
+    }
+
+    /// Follow a plan to `point` over cells and layers (`bot-path-planner`
+    /// design 3): each step's blocks dug with their own tool, then the step
+    /// walked into; planned again when the goal moves, a leg ends, a step is
+    /// not reached in 6 s or a block will not break in 8 s. `None` when no
+    /// plan is found, or the plan has arrived (the last metre is walked
+    /// straight at the point).
+    fn follow_plan(&mut self, s: &Sight, out: &mut Intent, point: Vec3) -> Option<Walked> {
+        // Cells by key: the contact tier holds its own (maybe older) set, so
+        // its indices are not the fine set's; a key is the same in both.
+        let records = s.fine.set.finest_records();
+        let index_of = |key: u32| records.iter().position(|r| r.key() == key);
+        let Some(here) = s.contact.finest_key(s.up).and_then(index_of) else {
+            if (s.now % 5.0) < s.dt {
+                info!("showcase: plan: the feet's cell is not in the fine set");
+            }
+            return None;
+        };
+        let Some(goal_cell) = s
+            .contact
+            .finest_key(point.normalize_or(s.up))
+            .and_then(index_of)
+        else {
+            if (s.now % 5.0) < s.dt {
+                info!("showcase: plan: the goal's cell is not loaded");
+            }
+            return None;
+        };
+        if self.plan_avoid_for.is_none_or(|g| g.distance(point) > 1.5) {
+            self.plan_avoid.clear();
+            self.plan_avoid_for = Some(point);
+        }
+        let avoid = std::mem::take(&mut self.plan_avoid);
+        let walked = self.follow_plan_with(s, out, point, here, goal_cell, &avoid);
+        if self.plan_avoid.is_empty() {
+            self.plan_avoid = avoid;
+        } else {
+            let mut more = avoid;
+            more.append(&mut self.plan_avoid);
+            self.plan_avoid = more;
+        }
+        walked
+    }
+
+    fn follow_plan_with(
+        &mut self,
+        s: &Sight,
+        out: &mut Intent,
+        point: Vec3,
+        here: usize,
+        goal_cell: usize,
+        avoid: &[usize],
+    ) -> Option<Walked> {
+        use path::Ground as _;
+        let altitude = s.feet.length() - PLANET_RADIUS;
+        let ground = LiveGround {
+            s,
+            axe_logs: s.gather.0.axe_logs,
+            cache: Default::default(),
+            avoid,
+        };
+        // The layer the feet stand in: the one over the first solid block
+        // under them (the walker's feet ride a little over the block's top,
+        // and the layer of the raw altitude can be air over air).
+        let mut feet = pbd_core::column::layer_at(altitude + 0.2)?;
+        // Standing on the rim of a cell beside its own (a narrow trench, a
+        // step's edge): the plan starts from the cell that bears the feet,
+        // the nearest neighbour with ground at the feet.
+        let mut here = here;
+        if feet > 0 && !ground.block(here, feet - 1).solid() {
+            let bearer = ground
+                .neighbours(here)
+                .into_iter()
+                .filter(|&n| ground.block(n, feet - 1).solid() && !ground.block(n, feet).solid())
+                .max_by(|&a, &b| {
+                    ground
+                        .centre(a)
+                        .dot(s.up)
+                        .total_cmp(&ground.centre(b).dot(s.up))
+                });
+            if let Some(n) = bearer {
+                here = n;
+            }
+        }
+        for _ in 0..3 {
+            if feet == 0 || ground.block(here, feet - 1).solid() {
+                break;
+            }
+            feet -= 1;
+        }
+        let stale = self.plan.as_ref().is_none_or(|run| {
+            run.goal.distance(point) > 1.5
+                || (run.plan.steps.is_empty() && !run.plan.arrives)
+                || s.now - run.step_since > 6.0
+                || run.dig_since > 8.0
+        });
+        if stale {
+            if self.plan.as_ref().is_some_and(|run| s.now - run.made < 0.5) {
+                return Some(Walked::Going);
+            }
+            let was = self
+                .plan
+                .as_ref()
+                .filter(|run| run.goal.distance(point) <= 1.5)
+                .map_or(s.tools.held(), |run| run.was);
+            let Some(plan) = path::plan(&ground, here, feet, goal_cell, PLANET_RADIUS) else {
+                info!("showcase: plan: no plan from {here}/{feet} to {goal_cell}");
+                self.plan = None;
+                return None;
+            };
+            info!(
+                "showcase: planned {} steps ({} digs){}",
+                plan.steps.len(),
+                plan.steps.iter().map(|st| st.digs.len()).sum::<usize>(),
+                if plan.arrives { "" } else { ", a leg" }
+            );
+            // Nowhere to go from here (every way round avoided): forget the
+            // avoided cells and let the plain walk try this frame.
+            if plan.steps.is_empty() && !plan.arrives {
+                self.plan_avoid.clear();
+                self.plan = None;
+                return None;
+            }
+            if let Some(first) = plan.steps.first() {
+                let d = ground.centre(first.cell);
+                info!(
+                    "showcase: plan: first step layer {} (feet {feet}, here {here}) {:.1} m off, digs {:?}; there {:?} / {:?} / {:?}; feet column here {:?} / {:?}",
+                    first.layer,
+                    tangent(
+                        d * PLANET_RADIUS - s.feet.normalize_or(s.up) * PLANET_RADIUS,
+                        s.up
+                    )
+                    .length(),
+                    first.digs,
+                    ground.block(first.cell, first.layer.saturating_sub(1)),
+                    ground.block(first.cell, first.layer),
+                    ground.block(first.cell, first.layer + 1),
+                    ground.block(here, feet.saturating_sub(1)),
+                    ground.block(here, feet),
+                );
+            }
+            self.plan = Some(PlanRun {
+                plan,
+                goal: point,
+                made: s.now,
+                step_since: s.now,
+                dig_since: 0.0,
+                was,
+            });
+        }
+        let mut run = self.plan.take()?;
+        // Steps already stood in, their digs done, are done.
+        while run.plan.steps.first().is_some_and(|st| {
+            // In its cell, or within 0.6 m of its middle (the feet on a
+            // cell's edge read as the neighbour's).
+            (st.cell == here
+                || tangent(
+                    ground.centre(st.cell) * PLANET_RADIUS
+                        - s.feet.normalize_or(s.up) * PLANET_RADIUS,
+                    s.up,
+                )
+                .length()
+                    < 0.6)
+                && st.layer.abs_diff(feet) <= 1
+                && st
+                    .digs
+                    .iter()
+                    .all(|&(c, l)| !matches!(ground.block(c, l), path::Block::Dig(_)))
+        }) {
+            run.plan.steps.remove(0);
+            run.step_since = s.now;
+        }
+        let Some(step) = run.plan.steps.first().cloned() else {
+            let arrived = run.plan.arrives;
+            // Arrived: the act's own tool back in hand, then the last metre
+            // straight at the point.
+            if arrived && s.tools.held() != run.was && self.fetch_tool(s, out, run.was) {
+                self.plan = Some(run);
+                return Some(Walked::Going);
+            }
+            self.plan = Some(run);
+            return if arrived { None } else { Some(Walked::Going) };
+        };
+        let records = s.fine.set.finest_records();
+        let centre = |c: usize| Vec3::from_slice(&records[c].direction_height[..3]).normalize();
+        let solid_dig = step
+            .digs
+            .iter()
+            .copied()
+            .find(|&(c, l)| matches!(ground.block(c, l), path::Block::Dig(_)));
+        // A block out of reach: walked toward first (a step behind, or the
+        // walker short of where the plan began).
+        let solid_dig = solid_dig.filter(|&(c, l)| {
+            let at = centre(c) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
+            if at.distance(s.eye) <= 3.5 {
+                return true;
+            }
+            let to = tangent(at - s.feet, s.up);
+            self.steer(s, out, to, -0.12);
+            out.held.insert(KeyCode::KeyW);
+            false
+        });
+        if solid_dig.is_none()
+            && step
+                .digs
+                .iter()
+                .any(|&(c, l)| matches!(ground.block(c, l), path::Block::Dig(_)))
+        {
+            self.plan = Some(run);
+            return Some(Walked::Going);
+        }
+        if let Some((cell, layer)) = solid_dig {
+            let key = records[cell].key();
+            let planned =
+                digging::material_of(s.fine, s.save, (key, layer)).unwrap_or(Material::Soil);
+            // A block in front of the planned one, met by the look for a
+            // second: it is in the way, and dug first with its own tool
+            // (seen 2026-11-20: stone in front of the planned stone).
+            let blocker = self
+                .aimed_cell(s)
+                .filter(|&c| c != (key, layer) && run.dig_since > 1.0)
+                .and_then(|c| digging::material_of(s.fine, s.save, c))
+                .filter(|m| {
+                    m != &Material::Air
+                        && !m.is_water()
+                        && !m.is_lamp()
+                        && pbd_core::station::station_of(*m).is_none()
+                });
+            let material = blocker.unwrap_or(planned);
+            let want = Self::tool_for(material);
+            if self.fetch_tool(s, out, want) {
+                self.plan = Some(run);
+                return Some(Walked::Going);
+            }
+            let at = centre(cell) * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 0.5);
+            let aimed = self.aim_at(s, out, at);
+            let on = self.aimed_cell(s) == Some((key, layer)) || blocker.is_some();
+            out.lmb = on && (aimed || self.lmb_down || blocker.is_some());
+            run.dig_since += s.dt;
+            run.step_since = s.now;
+            if (run.dig_since % 2.0) < s.dt {
+                info!("showcase: plan: digging {material:?} at {key}/{layer} (on {on})");
+            }
+            self.plan = Some(run);
+            return Some(Walked::Going);
+        }
+        run.dig_since = 0.0;
+        let target =
+            centre(step.cell) * (PLANET_RADIUS + pbd_core::column::layer_altitude(step.layer));
+        let to = tangent(target - s.feet, s.up);
+        // More than a cell off (the feet on the far side of their own cell):
+        // to the middle of the cell first, so the walk does not cut a corner
+        // of a taller neighbour.
+        let to_middle = tangent(
+            centre(here) * PLANET_RADIUS - s.feet.normalize_or(s.up) * PLANET_RADIUS,
+            s.up,
+        );
+        let to = if to.length() > 3.2 && to_middle.length() > 1.2 {
+            to_middle
+        } else {
+            to
+        };
+        let to = if to.length() < 0.2 { s.heading } else { to };
+        self.steer(s, out, to, -0.12);
+        let yaw = signed_angle(s.heading, to.normalize_or(s.heading), s.up);
+        if yaw.abs() < 0.7 {
+            out.held.insert(KeyCode::KeyW);
+        }
+        if step.layer > feet
+            && (to.length() < 3.0 || self.stuck_s > 0.5)
+            && (s.now % 0.6) < s.dt * 1.5
+        {
+            out.taps.push(KeyCode::Space);
+        }
+        if self.stuck_s > 3.0 && step.cell != goal_cell {
+            info!(
+                "showcase: plan: held short of {} for {:.1} s; planning round it",
+                step.cell, self.stuck_s
+            );
+            self.plan_avoid.push(step.cell);
+            self.stuck_s = 0.0;
+            self.plan = None;
+            return Some(Walked::Going);
+        }
+        if (s.now % 2.0) < s.dt {
+            info!(
+                "showcase: plan: walking to {}/{} {:.1} m off, yaw {yaw:.2}, feet {feet}, stuck {:.1} s, W {}",
+                step.cell,
+                step.layer,
+                to.length(),
+                self.stuck_s,
+                out.held.contains(&KeyCode::KeyW)
+            );
+        }
+        self.plan = Some(run);
+        Some(Walked::Going)
     }
 
     /// Walk the hex route to `point` (`mission-playthrough` 3.7): planned
@@ -739,8 +1186,65 @@ impl Bot {
             self.route = None;
             return false;
         }
+        // The planned cell clear but the walker held: the block the look
+        // meets at the feet or the head is what holds it (a corner of another
+        // cell); that is dug, with its own tool.
+        if block.is_none() && self.stuck_s > 1.0 {
+            let looked = self
+                .aimed_cell(s)
+                .filter(|(_, l)| (feet_layer..=feet_layer + 1).contains(&(*l as usize)))
+                .and_then(|c| digging::material_of(s.fine, s.save, c))
+                .filter(|m| {
+                    m != &Material::Air
+                        && !m.is_water()
+                        && !m.is_lamp()
+                        && pbd_core::station::station_of(*m).is_none()
+                });
+            if let Some(material) = looked {
+                let want = if matches!(material, Material::Stone | Material::Rock | Material::Ore) {
+                    Some(Tool::Pickaxe)
+                } else {
+                    Some(Tool::Shovel)
+                };
+                if want.is_some_and(|t| s.tools.tools().contains(&t)) && s.tools.held() != want {
+                    th.fetching = Some(want);
+                    th.fetch_s = 0.0;
+                } else {
+                    out.lmb = true;
+                    th.block_s += s.dt;
+                    if th.block_s > 10.0 {
+                        out.taps.push(KeyCode::Space);
+                        th.block_s = 0.0;
+                    }
+                }
+                if (s.now % 2.0) < s.dt {
+                    info!("showcase: through: the look meets {material:?}; digging it");
+                }
+                self.through = Some(th);
+                return true;
+            }
+        }
         match block {
             Some((layer, material)) => {
+                let at = centre_of(next)
+                    * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 0.5);
+                let aimed = self.aim_at(s, out, at);
+                // What the look actually meets at the feet or the head: dug
+                // with its own tool (seen 2026-11-20: the planned block was
+                // grass, the look met stone in front of it, and the bot stood
+                // with a shovel pressing nothing for minutes).
+                let hit = self
+                    .aimed_cell(s)
+                    .filter(|(_, l)| (feet_layer..=feet_layer + 2).contains(&(*l as usize)));
+                let hit_material = hit
+                    .and_then(|c| digging::material_of(s.fine, s.save, c))
+                    .filter(|m| {
+                        m != &Material::Air
+                            && !m.is_water()
+                            && !m.is_lamp()
+                            && pbd_core::station::station_of(*m).is_none()
+                    });
+                let material = hit_material.unwrap_or(material);
                 let want = if matches!(material, Material::Stone | Material::Rock | Material::Ore) {
                     Some(Tool::Pickaxe)
                 } else {
@@ -753,13 +1257,19 @@ impl Bot {
                     self.through = Some(th);
                     return true;
                 }
-                let at = centre_of(next)
-                    * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 0.5);
-                let aimed = self.aim_at(s, out, at);
-                let on = self
-                    .aimed_cell(s)
-                    .is_some_and(|(k, l)| k == key && l == layer);
-                out.lmb = on && (aimed || self.lmb_down);
+                // The look held on a block in front of the planned one for a
+                // second: that block is in the way, and is dug first.
+                let on = hit.is_some_and(|(k, l)| k == key && l as usize == layer)
+                    || (hit_material.is_some() && (aimed || th.block_s > 1.0));
+                if (th.block_s % 2.0) < s.dt {
+                    info!(
+                        "showcase: through: planned {key}/{layer} {:?}, feet {feet_layer}, aimed {aimed} at {:?} {hit_material:?}, want {want:?}, held {:?}, on {on}, climbing {climbing}",
+                        solid(layer),
+                        self.aimed_cell(s),
+                        s.tools.held()
+                    );
+                }
+                out.lmb = on && (aimed || self.lmb_down || th.block_s > 1.0);
                 th.block_s += s.dt;
                 if th.block_s > 10.0 {
                     // It will not break: jump and try again later.
@@ -900,7 +1410,23 @@ impl Bot {
     fn select(&mut self, s: &Sight, out: &mut Intent, pick: &dyn Fn(Item) -> bool) -> Status {
         let (phase, since) = &mut self.sel;
         *since += s.dt;
+        // A step that never finishes starts the move over (seen: the pack
+        // held open with a stack in it and the hotbar not taking it).
+        if *phase != 0 && *since > 5.0 {
+            warn!(
+                "showcase: select stuck at step {} (from {}, screen {:?}); starting over",
+                *phase, self.sel_from, s.screen
+            );
+            *phase = 0;
+            *since = 0.0;
+        }
         let in_hotbar = (0..SLOTS).find(|&k| s.slots.get(k).is_some_and(|st| pick(st.item)));
+        if *since == s.dt {
+            info!(
+                "showcase: select step {} (in hotbar {in_hotbar:?}, from {}, screen {:?})",
+                *phase, self.sel_from, s.screen
+            );
+        }
         match *phase {
             0 => {
                 if let Some(k) = in_hotbar {
@@ -1037,7 +1563,7 @@ impl Bot {
             // (bait worms come out of a beach's sand), down to just over
             // the water's edge.
             if !matches!(material, 2 | 3 | 6 | 7 | 8 | 11)
-                || r.direction_height[3] < 0.15
+                || r.direction_height[3] < 1.2
                 || pbd_core::flora::grows_tree(
                     &pbd_app::planet::terrain_config().trees,
                     r.spare[0],
@@ -1045,6 +1571,15 @@ impl Bot {
                 )
                 || self.used.contains(&key)
                 || !s.save.edits.for_cell(key).is_empty()
+            {
+                continue;
+            }
+            // Never a cell by the water: a hole there floods, and the bot
+            // ends under the sea (seen 2026-11-20). Every earth gives bait,
+            // so nothing is lost (owner, 2026-11-20: "all dirt blocks
+            // should have a chance to get bait").
+            if pbd_core::column::layer_at(r.direction_height[3] - 0.5)
+                .is_some_and(|layer| digging::by_water(s.fine, s.save, &s.gather.0, (key, layer)))
             {
                 continue;
             }
@@ -1791,6 +2326,7 @@ impl Bot {
         self.sel = (0, 0.0);
         self.mark = s.tally;
         self.walk_anchor = None;
+        self.plan = None;
         self.look_goal = None;
         self.mine_dir = None;
         self.mine_from = None;
@@ -2039,8 +2575,11 @@ fn run(
                 }
             }
         },
-        Act::Shore => match bot.phase {
-            0 => match shore(s) {
+        Act::Shore | Act::Fresh => match bot.phase {
+            0 => match {
+                bot.fresh = matches!(act, Act::Fresh);
+                shore(s, bot.fresh)
+            } {
                 Some((water, stand)) => {
                     bot.goal = Some(Goal::Point(water, stand));
                     bot.next_phase();
@@ -2884,6 +3423,24 @@ fn station(
                     bot.phase_s = 0.0;
                 }
             } else if !busy && bot.phase_s > 0.5 {
+                // A job the station cannot start is not one made: say what
+                // is short (a gate's rope, seen 2026-11-20).
+                if let Some(recipe) = s.recipes.0.at(row.code).find(|r| r.code == code) {
+                    let held = |item: Item| -> u32 {
+                        (0..CARRIED)
+                            .filter_map(|i| s.slots.get(i))
+                            .filter(|st| st.item == item)
+                            .map(|st| u32::from(st.count))
+                            .sum()
+                    };
+                    if let Some((item, n)) = recipe
+                        .inputs
+                        .iter()
+                        .find(|(item, n)| held(*item) < u32::from(*n))
+                    {
+                        return Status::Fail(format!("{code} needs {n} {item:?}"));
+                    }
+                }
                 out.click = Some(match material {
                     Material::Campfire => Click::Cook(code.to_string()),
                     Material::Forge => Click::Smelt(code.to_string()),
@@ -2987,15 +3544,23 @@ fn mark(bot: &mut Bot, metres: f32, s: &Sight, out: &mut Intent) -> Status {
 fn far_dry_ground(s: &Sight, metres: f32) -> Option<Vec3> {
     let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
     let north = s.up.cross(east);
-    (0..16)
+    // Dry at the end and mostly dry on the way: the route goes round or
+    // wades a creek, so a straight line need not be dry all the way (a
+    // pasture by the sea had no such line in 16 bearings).
+    (0..32)
         .filter_map(|k| {
-            let a = k as f32 / 16.0 * std::f32::consts::TAU;
+            let a = k as f32 / 32.0 * std::f32::consts::TAU;
             let along = east * a.cos() + north * a.sin();
             let at = |m: f32| {
                 let t = m / PLANET_RADIUS;
                 (s.up * t.cos() + along * t.sin()).normalize()
             };
-            let dry = (1..=20).all(|i| surface_height(at(metres * i as f32 / 20.0)) > 0.5);
+            let wet = (1..=20)
+                .filter(|&i| surface_height(at(metres * i as f32 / 20.0)) <= 0.5)
+                .count();
+            let dry = surface_height(at(metres)) > 0.5
+                && surface_height(at(metres * 0.95)) > 0.5
+                && wet <= 3;
             dry.then(|| (at(metres), signed_angle(s.heading, along, s.up).abs()))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -3026,10 +3591,13 @@ fn dry_ground(s: &Sight) -> Vec3 {
 
 /// The sea's edge nearest the feet: a point on the water and where to stand
 /// to cast at it.
-fn shore(s: &Sight) -> Option<(Vec3, Vec3)> {
+fn shore(s: &Sight, fresh: bool) -> Option<(Vec3, Vec3)> {
     let up = s.up;
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
+    if fresh {
+        return fresh_shore(s, east, north);
+    }
     for r in (4..900).step_by(3) {
         let r = r as f32;
         let mut best: Option<(Vec3, f32)> = None;
@@ -3062,6 +3630,50 @@ fn shore(s: &Sight) -> Option<(Vec3, Vec3)> {
             let ground = (up * PLANET_RADIUS + along * stand.max(0.0)).normalize();
             let ground = ground * (PLANET_RADIUS + surface_height(ground).max(0.0));
             info!("showcase: the sea is {r:.0} m off");
+            return Some((water, ground));
+        }
+    }
+    None
+}
+
+/// The nearest river or lake bank in the live ground: water standing at
+/// least 0.6 m above the sea (what a catch counts as fresh) and 1.2 m deep,
+/// the stand the dry cell before it on the same bearing.
+fn fresh_shore(s: &Sight, east: Vec3, north: Vec3) -> Option<(Vec3, Vec3)> {
+    let up = s.up;
+    let at = |along: Vec3, m: f32| (up * PLANET_RADIUS + along * m).normalize();
+    let heights = |d: Vec3| pbd_app::river_walk::cell_heights(Some(s.contact), d);
+    let open = |d: Vec3| {
+        let (ground, top) = heights(d);
+        top > 0.6 && top - ground > 1.2
+    };
+    for r in (4..400).step_by(2) {
+        let r = r as f32;
+        let mut best: Option<(Vec3, f32)> = None;
+        for a in 0..64 {
+            let a = a as f32 / 64.0 * std::f32::consts::TAU;
+            let along = east * a.cos() + north * a.sin();
+            if open(at(along, r)) && open(at(along, r + 2.0)) {
+                let turn = signed_angle(s.heading, along, up).abs();
+                if best.is_none_or(|b| turn < b.1) {
+                    best = Some((along, turn));
+                }
+            }
+        }
+        if let Some((along, _)) = best {
+            let mut stand = r - 2.0;
+            while stand > 0.0 {
+                let (ground, top) = heights(at(along, stand));
+                if top - ground < 0.05 {
+                    break;
+                }
+                stand -= 1.0;
+            }
+            let d = at(along, r + 1.0);
+            let water = d * (PLANET_RADIUS + heights(d).1);
+            let g = at(along, stand.max(0.0));
+            let ground = g * (PLANET_RADIUS + heights(g).0);
+            info!("showcase: fresh water {r:.0} m off");
             return Some((water, ground));
         }
     }
@@ -3133,8 +3745,18 @@ fn inland(stand: Vec3, water: Vec3, up: Vec3, metres: f32) -> Vec3 {
 /// bite, reel with the tension, again until.
 fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
     use pbd_core::fishing::Phase;
+    // No bait, no cast (the game says "Needs bait"): said at once, not
+    // after forty casts the game refused.
+    if carried(s.slots, "bait") == 0 && s.fishery.is_none_or(|f| f.line.phase == Phase::Ready) {
+        return Status::Fail("out of bait".into());
+    }
+    // The rod back in hand (a walk that dug its way put the shovel there).
     if s.tools.held() != Some(Tool::Rod) {
-        return Status::Fail("the rod is not in hand".into());
+        if !s.tools.tools().contains(&Tool::Rod) {
+            return Status::Fail("no rod".into());
+        }
+        bot.fetch_tool(s, out, Some(Tool::Rod));
+        return Status::Running;
     }
     let caught = s.tally.caught - bot.mark.caught;
     if caught > bot.count {
@@ -3146,8 +3768,8 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
     }
     match bot.phase {
         0 => {
-            let Some((water, stand)) = shore(s) else {
-                return Status::Fail("no sea within 900 m".into());
+            let Some((water, stand)) = shore(s, bot.fresh) else {
+                return Status::Fail("no shore found".into());
             };
             bot.goal = Some(Goal::Point(water, stand));
             bot.next_phase();
@@ -3189,9 +3811,9 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                         bot.cast_turns = 0;
                         bot.next_phase();
                     }
-                    None if bot.cast_turns < 8 => {
+                    None if bot.cast_turns % 100 < 8 => {
                         bot.cast_turns += 1;
-                        let k = bot.cast_turns as f32;
+                        let k = (bot.cast_turns % 100) as f32;
                         let side = if bot.cast_turns % 2 == 0 { 1.0 } else { -1.0 };
                         let turned =
                             Quat::from_axis_angle(s.up, side * 0.35 * k.div_euclid(2.0).max(1.0))
@@ -3200,6 +3822,22 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                             "showcase: no water where the float would land; turning along the shore"
                         );
                         bot.goal = Some(Goal::Point(stand + turned, stand));
+                        bot.phase_s = 0.0;
+                    }
+                    // Every bearing tried from here: fifteen metres along the
+                    // shore and try again (a pit of its own bait digging, a
+                    // bank in the way), four stands at most.
+                    None if bot.cast_turns / 100 < 4 => {
+                        let along =
+                            s.up.cross(tangent(water - stand, s.up)).normalize_or_zero() * 15.0;
+                        let moved = (stand + along).normalize();
+                        let next = moved * (PLANET_RADIUS + surface_height(moved).max(0.0));
+                        info!(
+                            "showcase: no water within a cast here; fifteen metres along the shore"
+                        );
+                        bot.cast_turns = (bot.cast_turns / 100 + 1) * 100;
+                        bot.goal = Some(Goal::Point(water + along, next));
+                        bot.phase = 1;
                         bot.phase_s = 0.0;
                     }
                     None => return Status::Fail("no water within a cast of this shore".into()),
@@ -3278,8 +3916,27 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
             if phase != Phase::Ready {
                 bot.line_was_out = true;
             }
-            if bot.tries > 40 {
-                return Status::Fail("forty casts and no catch".into());
+            // Twelve casts and nothing: the fish here are caught or shy;
+            // fifteen metres along the shore, as a player moves on (seen
+            // 2026-11-20: two caught, then forty casts and no bite).
+            if bot.tries > 0
+                && bot.tries % 12 == 0
+                && phase == Phase::Ready
+                && let Some(Goal::Point(water, stand)) = bot.goal
+            {
+                let along = s.up.cross(tangent(water - stand, s.up)).normalize_or_zero() * 15.0;
+                let moved = (stand + along).normalize();
+                let stand = moved * (PLANET_RADIUS + surface_height(moved).max(0.0));
+                info!("showcase: no bite in twelve casts; fifteen metres along the shore");
+                bot.goal = Some(Goal::Point(water + along, stand));
+                bot.fish_from = None;
+                bot.tries += 1;
+                bot.phase = 1;
+                bot.phase_s = 0.0;
+                return Status::Running;
+            }
+            if bot.tries > 60 {
+                return Status::Fail("sixty casts and no catch".into());
             }
         }
     }
@@ -3732,13 +4389,19 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             // Near, but outside the distance a moving player scares it at
             // (`taming.fear_moving_m`), then still; or a few steps in from
             // where it would not come.
+            // Inside the distance it comes to a still player with food
+            // (`taming.fear_moving_m`, 9 m) and outside the one food in
+            // hand still scares it at (`fear_still_m`, 4.5 m).
             let far = dist > 12.0;
             let stop = if far || bot.tries == 0 {
-                10.0
+                7.0
             } else {
                 (dist - 2.5).max(2.5)
             };
-            if bot.walk_to(s, out, animal.pos, stop) == Walked::There || (!far && bot.phase_s > 8.0)
+            // Waiting in water bobs (a moving player to it): only on dry feet.
+            if (bot.walk_to(s, out, animal.pos, stop) == Walked::There
+                || (!far && bot.phase_s > 8.0))
+                && !feet_wet(s)
             {
                 bot.next_phase();
             }

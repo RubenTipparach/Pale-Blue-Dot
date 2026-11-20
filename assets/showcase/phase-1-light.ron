@@ -19,7 +19,7 @@
             until: ["build"],
             repeat: true,
             max_s: 300.0,
-            acts: [Focus("build"), Hand("hand"), Place("block:dirt")],
+            acts: [Focus("build"), Hand("hand"), Place("block:soil")],
         ),
         (
             caption: "Make torches, and set them round it",
