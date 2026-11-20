@@ -1,4 +1,4 @@
-# Beavers and otters (M25 versions 2 to 4, `ocean.html#critters`)
+# Beavers and otters (M25 versions 2 to 5, `ocean.html#critters`)
 
 Screenshots of the "Beavers and otters" tab of Seas, Rivers and Marshes
 (https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1), the mockup for
@@ -9,6 +9,25 @@ SwiftShader, 1280 x 800 (the UI shots 1440 x 1000 and 390 x 844). They show
 poses and the look, never how smoothly anything moves. Each frame opens the
 page afresh with the default seed (7), holds the clock still, and steps the
 scene in fixed 1/30 s steps to the named moment, so the frames repeat.
+
+## Version 5 (`v5-*.jpg`, `contact-sheet-v5.jpg`)
+
+The owner's notes on version 4: "bevers cant curl their arms back up like that", "otter arms also cannot curl back
+like that", "it happens when they stand upright", "the arms are curling backwards", and on swimming "arms needs to work
+like the feet, they should be paddling around" (design B28, version 5). Stills to check the forelimbs; the motion is
+judged on the page. Same tool and `shots.json`, rendered the same way: headless Chromium on SwiftShader, no GPU.
+
+| Frame | What it shows |
+| --- | --- |
+| `v5-beaver-gnaw-front-left.jpg` | Reared at the aspen from the owner's front-left angle: the forearms forward from the elbows, the paws on the bark below the mouth. |
+| `v5-beaver-gnaw-rear-up.jpg` | Rising to the trunk: the arms hang from the shoulders, the paws curled down. |
+| `v5-beaver-sit-groom.jpg` | Sitting up to groom: the hands in front of the belly, the elbows partly bent. |
+| `v5-beaver-swim-under.jpg` | Under water, from the side: the forepaws stroking as the hind feet kick. |
+| `v5-otter-look-up.jpg` | The river otter reared on its rock from the front-left: the paws dangling in front of its belly. |
+| `v5-otter-swim-surface.jpg`, `v5-otter-swim-under.jpg` | The river otter swimming at the surface (seen from just under it) and under water, from the side: forepaws paddling, no walk pose. |
+| `v5-otter-groom-back.jpg` | On its back grooming, from the side and a little above: the forepaws on its chest toward the chin (the raised legs are the hind feet). |
+| `v5-sea-otter-raft.jpg`, `v5-sea-otter-groom.jpg` | The sea otter rafting and grooming: the paws resting on its chest, curled toward it. |
+| `v5-limits-beaver.jpg`, `v5-limits-otter.jpg`, `v5-limits-sea-otter.jpg` | The axis check: each animal held with its elbow at its limit and its wrist curled to its limit, each forelimb bone's axes drawn (every joint turns about its blue z): the forearm swings forward from the elbow and the paw curls down. |
 
 ## Version 4 (`v4-*.jpg`, `contact-sheet-v4.jpg`)
 

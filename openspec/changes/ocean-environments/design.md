@@ -2583,3 +2583,127 @@ The new tunables join the RON block under `shared`: `forelegs`
 `v4-*.jpg` and `contact-sheet-v4.jpg` in
 `docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
 GPU: poses only; the motion itself is for the owner to judge on the page.
+
+**Version 5: forelimbs within a real animal's range, and paddling (owner,
+2026-11-20).** On version 4, from a phone screenshot of the beaver reared
+at an aspen, seen from the front-left, a forearm folded flat back against
+the upper arm and the paw tucked up by the shoulder: "bevers cant curl their
+arms back up like that". Then, of the river otter on its back: "otter arms
+also cannot curl back like that"; "it happens when they stand upright"; "the
+arms are curling backwards". On swimming, from a screenshot of the beaver
+under water with its forelegs held still under its chest: "swiming
+animation: arms needs to work like the feet, they should be paddling
+around", and of the otters: "their arms needs to paddle, they look too much
+like they are stuck in the walk pose when they swim". The paddling
+overrides version 4's real-beaver tuck on purpose: the owner's call.
+
+What was wrong, checked and measured:
+
+- **The joints were right.** A debug view (`__critters.debug`: each
+  forelimb bone's axes drawn, an animal held at given joint angles) shows
+  every forelimb joint turning about its bone's z, the body's lateral
+  axis, with the same sign on both sides and no twist about the bone: +30
+  degrees on the elbow swings the forearm forward and up (the elbow points
+  back), -30 on the wrist curls the paw down and under. The bind pose
+  (bones unrotated, the sculpt skinned round them) and `critters_mesh.js`
+  agree with the page (`buildRig` checks the rest joints), so nothing in
+  `critter_sculpt.py` changed.
+- **The poses folded them.** The upright poses sent the hands to points
+  at or behind the shoulder in the chest's own frame (the beaver grooming
+  at 6 cm forward and 2 cm toward the back from it, the otter looking
+  round at 3.5 cm, eating at 4.5 cm, watching the tree fall at 6 cm), and
+  the two-bone solver bent the elbow as far as it had to: 120 to 180
+  degrees, the forearm folded onto the upper arm. With the spine upright,
+  "forward along the spine" is up and "toward the back" is behind, so the
+  paws ended at the chin and past it.
+- **The wrist held the paw level.** A forepaw's wrist was solved to keep
+  the paw level with the ground, right for a paw on the ground, but on a
+  reared body with the forearm hanging or reaching forward it bent the paw
+  back over the hand or folded it right round. On their backs the otters'
+  wrists were set bent back (+0.3 to +0.8 rad from a paw at right angles to
+  the forearm).
+- **Swimming kept a fixed or walk-like arm.** The beaver held its forelegs
+  in one tucked angle; the river otter laid them back whenever it swam fast
+  or dived; idling in the water (`Hold`) and turning (`Face`) switched from
+  the standing pose to the swimming one at half depth in one frame.
+
+Measured by an instrument in the page (`__critters.LIMB`: the largest
+elbow and wrist angles each action reaches as the joints are set; the elbow
+wrapped to plus or minus 180 degrees, the wrist as the paw's angle from in
+line with the forearm, so a flat paw under an upright forearm is 90 degrees
+of dorsiflexion), over every action twice and then 600 seconds of the
+seeded brains (seed 7), version 4 against version 5:
+
+| Animal | Elbow flex, max | Elbow past straight, max | Wrist palmar flexion, max | Wrist dorsiflexion, max |
+| --- | ---: | ---: | ---: | ---: |
+| Beaver, version 4 | 178 | 108 | 176 | 173 |
+| Beaver, version 5 | 80 | 0 | 60 | 100 |
+| River otter, version 4 | 176 | 23 | 179 | 176 |
+| River otter, version 5 | 100 | 0 | 70 | 100 |
+| Sea otter, version 4 | 126 | 64 | 150 | 155 |
+| Sea otter, version 5 | 85 | 0 | 70 | 90 |
+
+Version 4's worst were the sit-up groom (elbow 163), the walk and the
+climbs (elbow up to 178, wrist folded round), the otter's look-round (129)
+and its bound (176), and the sea otter's crack (its elbow 64 degrees past
+straight, wrists folded back). Version 5's maxima sit on the limits, where
+the clamp holds them; nothing passes one.
+
+Version 5:
+
+- **Joint limits** per animal, in degrees, as sliders (`beaver.forelimb`,
+  `river_otter.forelimb`, `sea_otter.forelimb`): the elbow's flex from
+  straight, `elbow_max_deg` 80, 100 and 85 (a beaver's forelegs are short;
+  a river otter's bend more but not flat; a sea otter's are short), never
+  more than 5 past straight; the wrist from in line with the forearm,
+  `wrist_flex_deg` (curled down and under) 60, 70 and 70 and
+  `wrist_ext_deg` (bent back) 100, 100 and 95 (a flat paw under an upright
+  forearm is 90); `hands_in_deg` 16, 14 and 12, the shoulder rolled to
+  bring the hands toward each other. The solver holds a foreleg's target
+  out on its line from the shoulder so the elbow cannot pass its limit,
+  and every pose, blend, overshoot, lag and slider is clamped to the
+  limits last, as the joints are set (`applyPose`); the slider ranges stop
+  short of a folded joint (elbow at most 110 or 120).
+- **Upright arms hang with gravity** (`hangAt`, `shared.upright`): from the
+  shoulder as the body is pitched, 0.86 of the arm's length out and down at
+  62 degrees in front of the belly, in the root's level frame, the elbow
+  partly bent and the forearm forward and down from it; the paw curled 25
+  degrees past in line (`curl_deg`), blended in as it leaves the ground;
+  the hands drawn in toward each other. The beaver watching its tree fall,
+  the beaver sitting up and the river otter looking round and sitting to
+  eat all hang their hands so; grooming, the beaver combs down its belly
+  and brings each hand up toward its chin in turn as its head bows to meet
+  it; eating, the otter raises the trout a little toward its mouth and
+  bows to bite. Gnawing, the beaver's paws rest on the bark below its
+  mouth, the hands in line with the forearms and the fingers curled over
+  it. The rear-up's schedule and its overshoot are unchanged and clamped.
+- **On their backs** the river otter's and the sea otter's forepaws rest
+  on the chest toward the chin, the elbows partly bent and the paws curled
+  toward the chest, rafting, grooming, eating and asleep (the crack still
+  lifts the urchin at arm's length).
+- **Swimming is a pose and a cycle of its own** (`shared.paddle`): at the
+  surface and under water, every swimmer (the beaver, the river otter, the
+  sea otter belly down in its dive) strokes with its forepaws like its
+  feet: reach forward, pull down and back with the elbow nearly straight
+  and the palm pushing, recover tucked under the chest with the elbow bent
+  (`paddle_tuck`, 0.85 of its limit) and the paw curled; left and right in
+  turn, phased against the hind kick (`paddle_phase_rad`, a quarter
+  stroke). The reach (`shared.forelegs.paddle_rad`) and the stroke rate
+  follow the swim speed: at rest `paddle_idle` (0.35) of the reach and
+  `rate_idle` (0.45) of the rate, a gentle tread. The hind feet kick swept
+  further back along the body. Nothing of the walk drives a leg in the
+  water: a move blends the walk and the swim by the depth under the animal
+  (as before), and idling and turning now blend the same way instead of
+  switching at half depth, so the bank blends rather than snaps.
+- The hop no longer straightens the elbow past straight, and the otter's
+  belly slide lays its paws back in line with its forearms instead of bent
+  back.
+
+The skin was checked bent to the limits (the beaver at 80 degrees, the
+river otter at 100, the sea otter at 85, the wrists curled to theirs): no
+inversion; a slight fold on the inside of the elbow, as skin does. The new
+tunables join the RON block: `beaver.forelimb`, `river_otter.forelimb`,
+`sea_otter.forelimb`, `shared.upright`, `shared.paddle`. Today's motion
+keeps today's models. Screenshots `v5-*.jpg` and `contact-sheet-v5.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.

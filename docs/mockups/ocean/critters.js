@@ -27,12 +27,38 @@ function sceneCritters(stage) {
     // the tufts "the fur shaking is cool, but a little over the top, I would want more subtle"
     ["shared.forelegs", "anticipate_s", 0.18, 0, 0.5, 0.01], ["shared.forelegs", "rise_s", 0.42, 0.15, 1.0, 0.01], ["shared.forelegs", "lower_s", 0.55, 0.2, 1.2, 0.01],
     ["shared.forelegs", "overshoot", 0.12, 0, 0.4, 0.01], ["shared.forelegs", "swing_curl_rad", 0.8, 0, 1.5, 0.05], ["shared.forelegs", "paddle_rad", 0.7, 0, 1.2, 0.05],
+    // version 5 (the owner, 2026-11-20, on the beaver reared at an aspen): "bevers cant curl their arms back up like that",
+    // then "otter arms also cannot curl back like that", "it happens when they stand upright", "the arms are curling
+    // backwards". The forelimb's joint limits, in degrees, per animal: the elbow's flex from straight; the wrist's palmar
+    // flexion (the paw curled down and under) and dorsiflexion (bent back) measured from the paw in line with the forearm
+    // (a paw flat on the ground under an upright forearm is 90 degrees of dorsiflexion); the hands drawn in toward each
+    // other. Every pose, blend, spring and slider is clamped to them, last, as the joints are set.
+    ["beaver.forelimb", "elbow_max_deg", 80, 40, 110, 1], ["beaver.forelimb", "wrist_flex_deg", 60, 0, 90, 1], ["beaver.forelimb", "wrist_ext_deg", 100, 60, 120, 1], ["beaver.forelimb", "hands_in_deg", 16, 0, 30, 1],
+    ["river_otter.forelimb", "elbow_max_deg", 100, 40, 120, 1], ["river_otter.forelimb", "wrist_flex_deg", 70, 0, 90, 1], ["river_otter.forelimb", "wrist_ext_deg", 100, 60, 120, 1], ["river_otter.forelimb", "hands_in_deg", 14, 0, 30, 1],
+    ["sea_otter.forelimb", "elbow_max_deg", 85, 40, 110, 1], ["sea_otter.forelimb", "wrist_flex_deg", 70, 0, 90, 1], ["sea_otter.forelimb", "wrist_ext_deg", 95, 60, 120, 1], ["sea_otter.forelimb", "hands_in_deg", 12, 0, 30, 1],
+    // the hands of an upright animal hang with gravity: reach (a share of the arm's length from shoulder to paw), drop
+    // (degrees below level, forward of the belly), the paw curled past in line with the forearm (curl_deg)
+    ["shared.upright", "reach", 0.86, 0.6, 0.99, 0.01], ["shared.upright", "drop_deg", 62, 20, 85, 1], ["shared.upright", "curl_deg", 25, 0, 60, 1],
+    // the owner, 2026-11-20, on the beaver under water: "swiming animation: arms needs to work like the feet, they should
+    // be paddling around", and on the otters: "their arms needs to paddle, they look too much like they are stuck in the
+    // walk pose when they swim". The forelegs' stroke: reach (paddle_rad, at full speed), at rest a share of it
+    // (paddle_idle), its phase against the hind kick (paddle_phase_rad), the elbow on the recovery as a share of its limit
+    // (paddle_tuck); the stroke's rate and the hind kick's follow the swim speed (rate_idle at rest)
+    ["shared.paddle", "paddle_idle", 0.35, 0, 1, 0.01], ["shared.paddle", "paddle_phase_rad", 1.57, 0, 6.28, 0.01], ["shared.paddle", "paddle_tuck", 0.85, 0.2, 1, 0.01], ["shared.paddle", "rate_idle", 0.45, 0.1, 1, 0.01],
     ["shared.fur", "spring_hz", 3.6, 1, 8, 0.1], ["shared.fur", "damping", 0.75, 0.1, 1.2, 0.01], ["shared.fur", "sway", 0.4, 0, 1.5, 0.05], ["shared.fur", "max_m", 0.012, 0.002, 0.04, 0.001],
     ["shared.fur", "wet_spike", 0.4, 0, 1, 0.05], ["shared.fur", "shake", 0.45, 0, 1.5, 0.05],
     ["all", "exaggerate", 1.0, 0.3, 2.0, 0.05],
   ];
   const TU = {}; for (const [b, k, v] of TUNE_SPEC) TU[b + "." + k] = v;
   const tn = key => TU[key], EX = () => TU["all.exaggerate"];
+  // the forelimb's limits (version 5) in the rig's own terms, radians: the elbow's knee rotation for a foreleg is its flex
+  // (0 straight, + the forearm swinging forward and up toward the chin about the elbow, which points back); the wrist's
+  // foot rotation is 0 with the paw at right angles to the forearm (flat under an upright forearm), -90 degrees in line
+  // with it, more negative curled down and under (palmar), more positive bent back (dorsal). Both forelegs turn about
+  // the same lateral axis with the same sign, so no side is mirrored.
+  const LIMB_KEY = {beaver: "beaver.forelimb", otter: "river_otter.forelimb", sea: "sea_otter.forelimb"};
+  const DEG = Math.PI / 180;
+  const LIM = mesh => { const k = LIMB_KEY[mesh]; return {eMax: tn(k + ".elbow_max_deg") * DEG, eMin: -5 * DEG, wLo: -(90 + tn(k + ".wrist_flex_deg")) * DEG, wHi: (tn(k + ".wrist_ext_deg") - 90) * DEG, add: tn(k + ".hands_in_deg") * DEG}; };
 
   // ======================= small helpers =======================
   const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -231,20 +257,27 @@ function sceneCritters(stage) {
   }
   // ---- poses: plain numbers, blended between actions so a change never pops
   const PK = ["y", "pitch", "roll", "A", "hp", "hy", "hr"];
-  const newPose = () => ({y: 0, pitch: 0, roll: 0, A: 0, hp: 0, hy: 0, hr: 0, la: [0, 0, 0, 0], lk: [0, 0, 0, 0], lf: [0, 0, 0, 0], lt: [null, null, null, null], ty: [0, 0, 0], tp: [0, 0, 0]});
-  function lerpPose(o, a, b, t) { for (const k of PK) o[k] = lerp(a[k], b[k], t); for (const k of ["la", "lk", "lf"]) for (let i = 0; i < 4; i++) o[k][i] = lerp(a[k][i], b[k][i], t); for (const k of ["ty", "tp"]) for (let i = 0; i < 3; i++) o[k][i] = lerp(a[k][i], b[k][i], t); return o; }
+  const newPose = () => ({y: 0, pitch: 0, roll: 0, A: 0, hp: 0, hy: 0, hr: 0, la: [0, 0, 0, 0], lk: [0, 0, 0, 0], lf: [0, 0, 0, 0], lx: [0, 0, 0, 0], lt: [null, null, null, null], ty: [0, 0, 0], tp: [0, 0, 0]});
+  function lerpPose(o, a, b, t) { for (const k of PK) o[k] = lerp(a[k], b[k], t); for (const k of ["la", "lk", "lf", "lx"]) for (let i = 0; i < 4; i++) o[k][i] = lerp(a[k][i], b[k][i], t); for (const k of ["ty", "tp"]) for (let i = 0; i < 3; i++) o[k][i] = lerp(a[k][i], b[k][i], t); return o; }
   // two-bone legs to a target: "root" (in the root's frame, the ground at y = 0) or "seg" (from the hip, in its segment)
   // A target may carry c, a curl of the paw (rad) added to the foot's angle: the wrist flexing as the paw lifts and
   // reaching forward as it lands.
   function solveLegs(rig, P) { for (let i = 0; i < 4; i++) solveLeg(rig, P, i); }
+  // Version 5: a foreleg's target is never nearer the shoulder than the elbow's limit lets the paw come (it is held out
+  // on the line to the shoulder, so the paw still points where it was sent), and its wrist is one of: the paw level in
+  // the root's frame (a paw on the ground), t.f set straight (a forearm-relative angle), or, blended in by t.wk, t.w
+  // (forearm-relative: a hand hanging or holding). Then the elbow and the wrist are clamped to the animal's limits.
   function solveLeg(rig, P, i) {
-    { const t = P.lt[i]; if (!t) return; const leg = rig.legs[i], L = leg.L, segP = leg.front ? -P.A : P.A;
+    { const t = P.lt[i]; if (!t) return; const leg = rig.legs[i], L = leg.L, segP = leg.front ? -P.A : P.A, lim = leg.front ? LIM(rig.sp.mesh) : null;
       let hx = 0, hy = 0, par = 0;
       if (t.m === "root") { const c1 = Math.cos(segP), s1 = Math.sin(segP), lx = L.at[0] * c1 - L.at[1] * s1, ly = L.at[0] * s1 + L.at[1] * c1, c2 = Math.cos(P.pitch), s2 = Math.sin(P.pitch); hx = lx * c2 - ly * s2; hy = lx * s2 + ly * c2 + P.y; par = P.pitch + segP; }
-      const dx = t.x - hx, dy = t.y - hy, a = L.a, b = L.b, d = clamp(Math.hypot(dx, dy), Math.abs(a - b) + 1e-3, (a + b) * 0.999);
+      const dmin = lim ? Math.sqrt(L.a * L.a + L.b * L.b + 2 * L.a * L.b * Math.cos(lim.eMax)) : 0;
+      const dx = t.x - hx, dy = t.y - hy, a = L.a, b = L.b, d = clamp(Math.hypot(dx, dy), Math.max(Math.abs(a - b) + 1e-3, dmin + 1e-4), (a + b) * 0.999);
       const base = Math.atan2(dx, -dy), cA = Math.acos(clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1)), g = Math.acos(clamp((a * a + b * b - d * d) / (2 * a * b), -1, 1)), s = leg.front ? -1 : 1;
       const aw = base + s * cA, k = -s * (Math.PI - g);
-      P.la[i] = aw - par; P.lk[i] = k; P.lf[i] = (t.m === "root" ? -(aw + k) : (t.f ?? -(aw + k) * 0.6)) + (t.c || 0); }
+      P.la[i] = aw - par; P.lk[i] = k; P.lf[i] = (t.m === "root" ? -(aw + k) : (t.f ?? -(aw + k) * 0.6)) + (t.c || 0);
+      if (t.w != null) P.lf[i] = lerp(P.lf[i], t.w + (t.c || 0), clamp(t.wk ?? 1, 0, 1));
+      if (lim) { P.lk[i] = clamp(P.lk[i], lim.eMin, lim.eMax); P.lf[i] = clamp(P.lf[i], lim.wLo, lim.wHi); } }
   }
   // ---- the forelegs (version 4). The owner, 2026-11-20: "the arms on beaver and otter should animate when they move or
   // stand up". Version 3 set the forepaws' targets per action and switched them in one frame half way up a rear-up, so
@@ -278,10 +311,22 @@ function sceneCritters(stage) {
   }
   // a forepaw from the ground under its shoulder (where the stand puts it) toward u, a point in the root's frame, k of
   // the way, on an arc that bulges up and forward (never a straight line); c: the curl
-  function armTo(A, P, i, u, k, c = 0, bulge = 0.04) {
+  // o.w: the wrist at the target, forearm-relative (blended in as the paw leaves the ground); o.add: the hands drawn in
+  function armTo(A, P, i, u, k, c = 0, bulge = 0.04, o = {}) {
     const L = A.rig.legs[i].L, gx = L.at[0] + 0.01, gy = A.groundRel(gx, L.at[2]), kk = clamp(k, -0.2, 1.3), b = Math.sin(Math.PI * c01(kk)) * bulge;
-    P.lt[i] = {m: "root", x: lerp(gx, u.x, kk) + b * 0.6, y: lerp(gy, u.y, kk) + b, c};
+    P.lt[i] = {m: "root", x: lerp(gx, u.x, kk) + b * 0.6, y: lerp(gy, u.y, kk) + b, c, w: o.w, wk: c01(kk)};
+    if (o.add != null) P.lx[i] = o.add * c01(kk);
   }
+  // version 5: where an upright animal's hands hang, in the root's frame (level, up is up): from the shoulder as the
+  // body is pitched now, out and down with gravity in front of the belly (shared.upright), plus (dx, dy) for a hand
+  // brought to food, a face or a trunk; and the paw curled past in line with the forearm. The elbow stays partly bent,
+  // the forearm forward and down from it, never folded up against the upper arm.
+  function hangAt(A, P, i, dx = 0, dy = 0) {
+    const L = A.rig.legs[i].L, sh = segToRoot(A, P, i, 0, 0), r = (L.a + L.b) * tn("shared.upright.reach"), dr = tn("shared.upright.drop_deg") * DEG;
+    return {x: sh.x + r * Math.cos(dr) + dx, y: sh.y - r * Math.sin(dr) + dy};
+  }
+  const HANG_W = () => -(90 + tn("shared.upright.curl_deg")) * DEG;
+  const HANDS_IN = A => LIM(A.rig.sp.mesh).add;
   // blend one leg from whatever P now asks of it toward target tg by g (both solved, the angles mixed: no pop between)
   function blendLeg(A, P, i, tg, g) {
     if (g <= 0) return; if (P.lt[i]) solveLeg(A.rig, P, i); const a = [P.la[i], P.lk[i], P.lf[i]];
@@ -290,7 +335,11 @@ function sceneCritters(stage) {
   function applyPose(rig, P) {
     rig.body.position.y = P.y; rig.body.rotation.set(P.roll, 0, P.pitch); rig.hind.rotation.z = P.A; rig.chest.rotation.z = -P.A;
     rig.neck.rotation.set(P.hr, P.hy, P.hp);
-    rig.legs.forEach((l, i) => { l.hip.rotation.z = P.la[i]; l.knee.rotation.z = P.lk[i]; l.foot.rotation.z = P.lf[i]; });
+    // the forelimb's limits hold last, after every blend, spring and lag (version 5); the hands drawn in roll the
+    // shoulder about the body's long axis, each toward the other
+    for (const i of [0, 1]) { const lim = LIM(rig.sp.mesh); P.lk[i] = clamp(P.lk[i], lim.eMin, lim.eMax); P.lf[i] = clamp(P.lf[i], lim.wLo, lim.wHi); P.lx[i] = clamp(P.lx[i] || 0, 0, lim.add); }
+    if (rig.log) rig.log(P);
+    rig.legs.forEach((l, i) => { l.hip.rotation.z = P.la[i]; l.hip.rotation.x = i === 0 ? P.lx[i] : i === 1 ? -P.lx[i] : 0; l.knee.rotation.z = P.lk[i]; l.foot.rotation.z = P.lf[i]; });
     rig.tail.forEach((g, i) => g.rotation.set(0, P.ty[i], -P.tp[i]));
   }
 
@@ -386,14 +435,18 @@ function sceneCritters(stage) {
     P.y = -A.sp.float; P.pitch = (beaver ? 0.07 : 0.04) + Math.atan2(A.vy, Math.max(0.25, A.v)) * 0.9;
     P.hp = deep ? -0.05 : (beaver ? 0.32 + tn("beaver.swim.head_above_m") * 2 : 0.38);
     for (let i = 0; i < 4; i++) { const fr = i < 2, side = i % 2 ? Math.PI : 0;
-      // the forelegs (version 4): a river otter dog-paddles with them while it swims slowly or treads water (alternate
-      // strokes: reach forward, the paw open, pull back, the elbow folding on the recovery) and lays them back along
-      // its body when it swims fast or dives; a beaver (and a sea otter belly down) swims on its hind feet alone, its
-      // forepaws held loosely to its chest, nodding with each kick
-      if (fr && A.id === "otter") { const pa = tn("shared.forelegs.paddle_rad") * ex, fast = deep ? 1 : c01((A.v - 0.5) / 0.8), q = ph + side;
-        P.la[i] = lerp(-0.3 + pa * Math.sin(q), -1.3, fast); P.lk[i] = lerp(0.5 + 0.8 * Math.max(0, Math.cos(q)), 1.15, fast); P.lf[i] = lerp(-0.15 + 0.55 * Math.cos(q), -0.45, fast); }
-      else if (fr) { const bob = 0.1 * ex * Math.sin(ph + 0.8 + i * 0.3); P.la[i] = -1.15 + bob; P.lk[i] = 1.3 - bob * 0.8; P.lf[i] = -0.3 - 0.25 * Math.sin(ph + 1.6); }
-      else { P.la[i] = -0.55 + 0.55 * Math.sin(ph * 1.0 + side); P.lk[i] = -0.6 - 0.45 * Math.sin(ph + side + 1.2); P.lf[i] = 0.4 + 0.5 * Math.sin(ph + side + 2.0); } }
+      // the forelegs (version 5; the owner: "arms needs to work like the feet, they should be paddling around", which
+      // overrides version 4's real-beaver tuck on purpose): every swimmer, at the surface and under water, strokes with
+      // its forepaws as it kicks with its hind feet, left and right alternate, phased against the kick: reach forward,
+      // pull down and back (the elbow nearly straight, the palm pushing), recover tucked under the chest (the elbow bent,
+      // the paw curled and feathered). Faster swimming, a bigger stroke; at rest a gentle tread. The swim pose is the
+      // whole pose in the water: no leg reaches for a ground contact.
+      if (fr) { const lim = LIM(A.rig.sp.mesh), sp = beaver ? tn("beaver.swim.speed_mps") : 1.1, spd = deep ? 1 : c01(A.v / sp);
+        const amp = tn("shared.forelegs.paddle_rad") * ex * lerp(tn("shared.paddle.paddle_idle"), 1, spd), q = ph + side + tn("shared.paddle.paddle_phase_rad");
+        const rec = Math.max(0, -Math.sin(q - Math.PI / 2)), e0 = 0.25;
+        P.la[i] = -0.4 + amp * Math.sin(q); P.lk[i] = e0 + (lim.eMax * tn("shared.paddle.paddle_tuck") - e0) * rec; P.lf[i] = lerp(-1.35, -2.05, rec); }
+      // the hind feet kick swept back along the body, drawn up under it on the recovery
+      else { P.la[i] = -0.85 + 0.5 * Math.sin(ph * 1.0 + side); P.lk[i] = -0.6 - 0.45 * Math.sin(ph + side + 1.2); P.lf[i] = 0.4 + 0.5 * Math.sin(ph + side + 2.0); } }
     const amp = (beaver ? tn("beaver.swim.scull_rad") : 0.28) * ex * c01(A.v / 0.3 + 0.25);
     for (let i = 0; i < 3; i++) { if (beaver) { P.ty[i] = amp * Math.sin(ph - i * 0.9) * (i === 2 ? 0.6 : 1); P.tp[i] = 0.02; } else { P.tp[i] = amp * 0.6 * Math.sin(ph - i * 0.9); P.ty[i] = 0.1 * Math.sin(ph * 0.5 - i); } }
     if (!beaver) P.A = 0.12 * ex * Math.sin(ph);
@@ -411,7 +464,7 @@ function sceneCritters(stage) {
         A.v += (vw - A.v) * c01(dt * 3);
         const stepL = Math.min(A.v * dt, dist); A.pos.addScaledVector(A.fwd(), stepL);
         const G = A.id === "beaver" ? GAIT.beaver() : GAIT.otter(); A.phi += stepL / G.stride * (1 - sw);
-        A.swimPh += dt * 2 * Math.PI * (A.id === "beaver" ? tn("beaver.swim.scull_hz") : 1.8) * (0.4 + 0.6 * sw);
+        A.swimPh += dt * 2 * Math.PI * (A.id === "beaver" ? tn("beaver.swim.scull_hz") : 1.8) * (0.4 + 0.6 * sw) * lerp(tn("shared.paddle.rate_idle"), 1, c01(A.v / swim));
         const g = groundAt(A.pos.x, A.pos.z), l = levelAt(A.pos.x, A.pos.z), yW = l - (o.depth || 0), yT = sw > 0 ? lerp(g, yW, sw) : g;
         const y0 = A.pos.y; A.pos.y = sw > 0.01 ? A.pos.y + (yT - A.pos.y) * c01(dt * (o.depth ? 2 : 5)) : yT; if (A.pos.y < g) A.pos.y = g; A.vy += ((A.pos.y - y0) / Math.max(dt, 1e-3) - A.vy) * c01(dt * 5);
         this.sw = sw; if (o.each) o.each(A, dt);
@@ -432,9 +485,10 @@ function sceneCritters(stage) {
       pose(A, P) { poseFn(A, P, Math.min(this.t, this.dur ?? 1e9), this); }, keys: o.keys ? (A => o.keys(A)) : null, stage(A) { return o.stage ? o.stage(A, this.t) : name; }};
   }
   // patch Idle into an Act (simpler: an Idle is an Act that holds a pose)
-  const Hold = (dur, name, poseFn) => Act(name, dur, (A, P, t) => { if (A.waterAt() > 0.5) { A.swimPh += 0.02; swimPose(A, P); } else standPose(A, P); if (poseFn) poseFn(A, P, t); });
+  // version 5: standing and swimming blend by the depth (as a move does), never switch at a threshold
+  const Hold = (dur, name, poseFn) => Act(name, dur, (A, P, t) => { const sw = A.waterAt(); if (sw > 0) { A.swimPh += 0.02 * tn("shared.paddle.rate_idle"); const a = newPose(), b = newPose(); if (sw < 1) { standPose(A, a); solveLegs(A.rig, a); } swimPose(A, b); lerpPose(P, a, b, sw); P.lt = [null, null, null, null]; } else standPose(A, P); if (poseFn) poseFn(A, P, t); });
   function Face(pt) { return {name: "turn", update(A, dt) { const want = Math.atan2(-(pt.z - A.pos.z), pt.x - A.pos.x), err = angWrap(want - A.yaw); const tr = 2.5 * dt; A.yaw += clamp(err, -tr, tr); A.phi += Math.abs(clamp(err, -tr, tr)) * 0.12 / 0.36; return Math.abs(err) < 0.04; },
-    pose(A, P) { if (A.waterAt() > 0.5) swimPose(A, P); else { const G = A.id === "beaver" ? GAIT.beaver() : GAIT.otter(); gaitPose(A, P, Object.assign(G, {lift: G.lift * 0.6})); } }, keys: () => WALK_KEYS, stage: () => "turn"}; }
+    pose(A, P) { const sw = A.waterAt(), a = newPose(), b = newPose(); if (sw < 1) { const G = A.id === "beaver" ? GAIT.beaver() : GAIT.otter(); gaitPose(A, a, Object.assign(G, {lift: G.lift * 0.6})); solveLegs(A.rig, a); } if (sw > 0) swimPose(A, b); lerpPose(P, a, b, sw); P.lt = [null, null, null, null]; }, keys: () => WALK_KEYS, stage: () => "turn"}; }
 
   // ======================= the beaver =======================
   // aspens it fells: a stump, a waist that narrows as it is gnawed, and the trunk on a pivot that tips toward the pond
@@ -493,7 +547,9 @@ function sceneCritters(stage) {
     if (!low) { r = r || rear(t, Infinity); const u = r.body, grip = 0.014 * c01(S.v / pull);
       P.pitch = lerp(P.pitch, 0.92, u) - 0.08 * r.crouch; P.y = A.sp.H + 0.06 * u - 0.02 * r.crouch - 0.012 * r.give; P.hp = lerp(-0.15, -1.02 + S.v, u) + 0.15 * r.crouch; P.hr = 0.35 * c01(S.v / pull) * u;
       const hx = lerp(-0.2, -0.06, u); P.lt[2] = {m: "root", x: hx, y: A.groundRel(hx, 0.1)}; P.lt[3] = {m: "root", x: hx, y: A.groundRel(hx, -0.1)};
-      armTo(A, P, 0, {x: 0.27 - grip, y: 0.36 + 0.015 * Math.sin(t * 3)}, r.arm, r.curl, 0.06); armTo(A, P, 1, {x: 0.27 - grip * 0.7, y: 0.33 - 0.006 * c01(S.v / pull)}, r.arm, r.curl, 0.06);
+      // version 5: the paws rest on the bark below the mouth, the hands in line with the forearms and the fingers curled
+      // over the bark (no longer held level, which bent them back once the body was up)
+      armTo(A, P, 0, {x: 0.3 - grip, y: 0.34 + 0.012 * Math.sin(t * 3)}, r.arm, r.curl, 0.06, {w: HANG_W()}); armTo(A, P, 1, {x: 0.3 - grip * 0.7, y: 0.31 - 0.006 * c01(S.v / pull)}, r.arm, r.curl, 0.06, {w: HANG_W()});
       for (let i = 0; i < 3; i++) P.tp[i] = lerp(TAIL_DRAG[i], GNAW_UP[i], u); }
     else { P.pitch = -0.12; P.y = A.sp.H - 0.02; P.hp = -0.55 + S.v * 0.8; P.hr = 0.3 * c01(S.v / pull);
       // gnawing a branch on the ground: the forepaws hold it, pressing on each bite
@@ -520,7 +576,7 @@ function sceneCritters(stage) {
           {init() { T.state = "falling"; T.ft = 0; T.hitDone = false; }, keys: () => [["paws reach down", tn("shared.forelegs.lower_s") * 0.4], ["down", tn("shared.forelegs.lower_s") + 0.05]]}),
         Move(back, {name: "scramble clear", speed: 2.0, tol: 0.15}),
         Hold(2.6, "watch it fall", (A2, P, t) => { const tp = T.p.clone().addScaledVector(T.dir, 2.5); const want = Math.atan2(-(tp.z - A2.pos.z), tp.x - A2.pos.x), r = rear(t, 2.6); P.hy = clamp(angWrap(want - A2.yaw), -0.9, 0.9) * c01(t * 2);
-          P.pitch = lerp(P.pitch, 0.35, r.body) - 0.05 * r.crouch; P.y = A2.sp.H + 0.03 * r.body - 0.015 * r.crouch - 0.01 * r.give; armTo(A2, P, 0, {x: 0.15, y: 0.13}, r.arm, r.curl); armTo(A2, P, 1, {x: 0.15, y: 0.11}, r.arm, r.curl); P.hp = -0.2 * r.body; }));
+          P.pitch = lerp(P.pitch, 0.35, r.body) - 0.05 * r.crouch; P.y = A2.sp.H + 0.03 * r.body - 0.015 * r.crouch - 0.01 * r.give; for (const i of [0, 1]) armTo(A2, P, i, hangAt(A2, P, i), r.arm, r.curl, 0.04, {w: HANG_W(), add: HANDS_IN(A2)}); P.hp = -0.2 * r.body; }));
       return steps; },
     fetch(A) { const T = FELL.find(T => T.state === "down" && T.branches.some(b => b.on === "tree")); if (!T) return null; const b = T.branches.find(b => b.on === "tree");
       let base = worldOf(b.g, 0.1, 0, 0), bd = 9; for (let x = 0.05; x < b.L * 0.7; x += 0.05) { const p = worldOf(b.g, x, 0, 0), e = Math.abs(p.y - groundAt(p.x, p.z) - 0.2); if (e < bd) { bd = e; base = p; } }
@@ -561,7 +617,10 @@ function sceneCritters(stage) {
   function sitAct() { const D = 3.6; return Act("sit up and groom", D, (A, P, t) => { standPose(A, P); const r = rear(t, D), up = r.body, g = smooth(c01((t - 0.95) / 0.3)) * (1 - smooth(r.d));
       P.pitch = lerp(P.pitch, 1.05, up) - 0.08 * r.crouch; P.y = A.sp.H + 0.07 * up - 0.02 * r.crouch - 0.012 * r.give; P.tp = [lerp(TAIL_DRAG[0], 0.95, up), lerp(TAIL_DRAG[1], 0.1, up), lerp(TAIL_DRAG[2], 0, up)]; P.hp = -0.8 * up + 0.15 * Math.sin(t * 5) * g + 0.15 * r.crouch;
       const hx = -0.08 * up - 0.2 * (1 - up); P.lt[2] = {m: "root", x: hx, y: A.groundRel(-0.1, 0.1)}; P.lt[3] = {m: "root", x: hx, y: A.groundRel(-0.1, -0.1)};
-      for (const i of [0, 1]) { const a = t * 7 + i * 3; armTo(A, P, i, segToRoot(A, P, i, 0.06 + 0.03 * Math.cos(a) * g, 0.02 + 0.03 * Math.sin(a) * g), r.arm, r.curl, 0.05); } },
+      // version 5: the hands comb down the belly and come up to the chin in turn (the head bows to meet them), from where
+      // they hang, the elbows only partly bent; the paws curled toward the body
+      for (const i of [0, 1]) { const a = t * 7 + i * Math.PI; armTo(A, P, i, hangAt(A, P, i, (0.012 + 0.012 * Math.cos(a)) * g, (0.045 + 0.045 * Math.sin(a)) * g), r.arm, r.curl, 0.05, {w: HANG_W() - 0.2 * g * (0.5 + 0.5 * Math.sin(a)), add: HANDS_IN(A)}); }
+      P.hp -= 0.25 * g; },
     {keys: () => { const a = tn("shared.forelegs.anticipate_s"), u = tn("shared.forelegs.rise_s"), l = tn("shared.forelegs.lower_s"); return [["anticipation", a], ["rear up: paws trail", a + u * 0.55], ["paws up", a + u * 1.3], ["groom", 1.6], ["groom", 1.8], ["paws reach down", D - l * 0.55], ["down", D]]; }, stage: (A, t) => t < tn("shared.forelegs.anticipate_s") ? "sit up: anticipation" : t > D - tn("shared.forelegs.lower_s") ? "sit back down" : t < 0.95 ? "sit up" : "groom"}); }
   beaver.drop = A => { if (A.held) { A.held.on = "ground"; A.held = null; } };
   beaver.brain = A => {
@@ -585,7 +644,7 @@ function sceneCritters(stage) {
       const crouch = 0.35;
       if (t < crouch) { standPose(A, P); const k = smooth(t / crouch); P.y = A.sp.H - 0.05 * k; P.pitch = 0.12 * k; P.A = 0.25 * k; P.hp = -0.2; return; }
       P.y = 0.075; P.pitch = Math.atan2(SLIDE.b.y - SLIDE.a.y, Math.hypot(SLIDE.b.x - SLIDE.a.x, SLIDE.b.z - SLIDE.a.z)) * (s.inW ? 0.2 : 1); P.A = -0.08; P.hp = 0.35;
-      P.la = [-1.45, -1.45, -1.55, -1.55]; P.lk = [0.15, 0.15, -0.1, -0.1]; P.lf = [0.3, 0.3, 1.2, 1.2]; P.lt = [null, null, null, null]; P.tp = [-0.05, 0, 0]; if (s.inW) { swimPose(A, P); P.hp = 0.3; } },
+      P.la = [-1.45, -1.45, -1.55, -1.55]; P.lk = [0.15, 0.15, -0.1, -0.1]; P.lf = [-1.3, -1.3, 1.2, 1.2]; P.lt = [null, null, null, null]; P.tp = [-0.05, 0, 0]; if (s.inW) { swimPose(A, P); P.hp = 0.3; } },
       {init(A, s) { s.d = 0; s.v = 0; s.inW = false; A.yaw = Math.atan2(-(SLIDE.b.z - SLIDE.a.z), SLIDE.b.x - SLIDE.a.x); },
         move(A, dt, t, s) { if (t < 0.35) return; const L = Math.hypot(SLIDE.b.x - SLIDE.a.x, SLIDE.b.z - SLIDE.a.z);
           if (!s.inW) { s.v = Math.min(tn("river_otter.slide.max_mps"), s.v + tn("river_otter.slide.accel_mps2") * dt + (t < 0.5 ? 2.2 * dt : 0)); s.d += s.v * dt; const k = c01(s.d / L);
@@ -597,7 +656,7 @@ function sceneCritters(stage) {
   }
   function hopAct(to, name) { return Act(name || "hop", 0.95, (A, P, t, s) => { const k = c01((t - 0.3) / 0.45);
       if (t < 0.3) { if (A.waterAt() > 0.5) swimPose(A, P); else standPose(A, P); P.y -= 0.04 * smooth(t / 0.3); P.pitch += 0.25 * smooth(t / 0.3); return; }
-      if (k < 1) { standPose(A, P); P.lt = [null, null, null, null]; P.la = [0.9, 0.9, -1.2, -1.2]; P.lk = [-0.4, -0.4, 0.3, 0.3]; P.lf = [0, 0, 0.8, 0.8]; P.pitch = 0.5 - k * 0.9; P.A = -0.2; return; }
+      if (k < 1) { standPose(A, P); P.lt = [null, null, null, null]; P.la = [0.9, 0.9, -1.2, -1.2]; P.lk = [0.25, 0.25, 0.3, 0.3]; P.lf = [0, 0, 0.8, 0.8]; P.pitch = 0.5 - k * 0.9; P.A = -0.2; return; }
       standPose(A, P); const l = c01((t - 0.75) / 0.2); P.y = A.sp.H - 0.05 * Math.sin(Math.PI * l); },
     {init(A, s) { s.from = A.pos.clone(); s.to = to.clone(); s.to.y = groundAt(to.x, to.z); if (levelAt(to.x, to.z) > s.to.y) s.to.y = levelAt(to.x, to.z); A.yaw = Math.atan2(-(to.z - A.pos.z), to.x - A.pos.x); },
       move(A, dt, t, s) { const k = c01((t - 0.3) / 0.45); if (t >= 0.3) { A.pos.lerpVectors(s.from, s.to, k); A.pos.y += 0.38 * Math.sin(Math.PI * k); if (k >= 1 && !s.splashed && levelAt(s.to.x, s.to.z) >= s.to.y - 0.01) { s.splashed = true; splash(s.to.clone(), 20, 0.9, 1.2); } } },
@@ -614,7 +673,7 @@ function sceneCritters(stage) {
       if (w !== "ridge") st.push(Move(RIDGE_W, {name: "up the path"}));
       st.push(...ridgeToSlide()); return st; },
     porpoise(A) { const st = toWater(A); st.push(Move(A2 => { const c = PORP.c, a = Math.atan2((A2.pos.z - c.z) / 0.75, A2.pos.x - c.x); return V3(c.x + Math.cos(a) * PORP.R, 0, c.z + Math.sin(a) * PORP.R * 0.75); }, {name: "swim out"}));
-      st.push(Act("porpoise", 14, (A2, P, t, s) => { swimPose(A2, P); const dy = s.dy || 0; P.pitch = Math.atan2(dy, 1.4) * 1.1; P.A = -0.18 * Math.sin(s.ph || 0); P.la[0] = P.la[1] = -1.4; P.hp = 0.1; },
+      st.push(Act("porpoise", 14, (A2, P, t, s) => { swimPose(A2, P); const dy = s.dy || 0; P.pitch = Math.atan2(dy, 1.4) * 1.1; P.A = -0.18 * Math.sin(s.ph || 0); P.hp = 0.1; },
         {init(A2, s) { s.c = PORP.c; s.a0 = Math.atan2((A2.pos.z - s.c.z) / 0.75, A2.pos.x - s.c.x); s.d = 0; s.lastAbove = true; },
           move(A2, dt, t, s) { const R = PORP.R, sp = 1.4; s.d += sp * dt; const a = s.a0 - s.d / R, len = 1.8; s.ph = 2 * Math.PI * s.d / len;
             const x = s.c.x + Math.cos(a) * R, z = s.c.z + Math.sin(a) * R * 0.75, y = P_LVL - 0.22 + tn("river_otter.porpoise.arc_m") * EX() * Math.sin(s.ph);
@@ -632,7 +691,7 @@ function sceneCritters(stage) {
         Move(ROCK_IN, {name: "carry it to the rock"}), hopAct(V3(ROCK.x, 0, ROCK.z), "onto the rock"),
         Act("eat the fish", () => EAT0() + tn("river_otter.eat.beat_s") * 6.5 + tn("shared.forelegs.lower_s"), (A2, P, t) => { const b = tn("river_otter.eat.beat_s"), D = EAT0() + b * 6.5 + tn("shared.forelegs.lower_s"), tb = t - EAT0(), d = [b * 0.3, b * 0.18, b * 0.12, b * 0.4];
             const S = tb > 0 && tb < b * 6.5 ? strike(tb % b, d, 0.35, 0.42, -0.55, 0.12) : {v: 0}, lift = c01(-S.v / 0.55), r = rear(t, D);
-            sitPose(A2, P, r, i => [0.045 + 0.012 * lift, -0.03 + 0.03 * lift - (i ? 0.006 : 0)]); P.hp = lerp(0, -0.75 + S.v, r.body) + 0.12 * r.crouch; },
+            sitPose(A2, P, r, i => [0.006 + 0.008 * lift, 0.022 + 0.02 * lift - (i ? 0.004 : 0)]); P.hp = lerp(0, -0.85 + S.v, r.body) + 0.12 * r.crouch; },
           {move(A2, dt, t0, s) { const b = tn("river_otter.eat.beat_s"), t = t0 - EAT0(), k = Math.floor((t - b * 0.6) / b); if (t < b * 6.5 && k > (s.k ?? -1) && t > b * 0.6) { s.k = k; f.bite = (f.bite || 0) + 1; const p = worldOf(A2.rig.jaw); for (let i = 0; i < 3; i++) BITS.spawn(p, V3((Math.random() - 0.5) * 0.8, 0.6 + Math.random(), (Math.random() - 0.5) * 0.8), i ? 0xdd576d : 0xbfcad7, 0.02, 5, {stick: true}); } },
             init(A2, s) { A2.where = "rock"; }, keys: () => { const b = tn("river_otter.eat.beat_s"); return [["sit up: paws trail", tn("shared.forelegs.anticipate_s") + 0.2], ...strikeKeys([b * 0.3, b * 0.18, b * 0.12, b * 0.4], EAT0())]; },
             stage: (A2, t) => { const b = tn("river_otter.eat.beat_s"), tb = t - EAT0(); return tb < 0 ? "sit up to eat" : tb > b * 6.5 ? "sit back down" : "eat: " + strike(tb % b, [b * 0.3, b * 0.18, b * 0.12, b * 0.4], 1, 1, 0, 0).st; }}),
@@ -643,7 +702,8 @@ function sceneCritters(stage) {
         // version 4: the paws come in to the belly as it rolls (blended from wherever they were, never switched), rub
         // and squeeze the fur in alternate circles, and go back out as it rolls back
         P.roll = r; const g = smooth(c01((t - 0.45) / 0.35)) * smooth(c01((3.15 - t) / 0.35));
-        if (g > 0) { const a = t * 8; blendLeg(A2, P, 0, {m: "seg", x: 0.06 + 0.025 * Math.cos(a), y: -0.03 + 0.025 * Math.sin(a), f: 0.3 * Math.sin(a)}, g); blendLeg(A2, P, 1, {m: "seg", x: 0.06 + 0.025 * Math.cos(a + 2.5), y: -0.03 + 0.025 * Math.sin(a + 2.5), f: 0.3 * Math.sin(a + 2.5)}, g);
+        // version 5: on the chest, the elbows partly bent and the paws curled toward it (they were bent back up)
+        if (g > 0) { const a = t * 8; for (const i of [0, 1]) { const b = a + i * 2.5; blendLeg(A2, P, i, {m: "seg", x: 0.072 + 0.012 * Math.cos(b), y: -0.03 + 0.01 * Math.sin(b), f: -1.85 + 0.25 * Math.sin(b)}, g); }
           for (const i of [2, 3]) { if (P.lt[i]) solveLeg(A2.rig, P, i); P.lt[i] = null; P.la[i] = lerp(P.la[i], 0.6 + 0.3 * Math.sin(t * 5), g); P.lk[i] = lerp(P.lk[i], -0.8, g); }
           P.hp = -0.35 * g; P.hy = 0.3 * Math.sin(t * 2.2) * g; P.y = lerp(P.y, inW ? 0 : A2.sp.H * 0.55, g); } },
       {keys: () => [["anticipation", 0.25], ["roll", 0.6], ["groom", 1.5], ["groom", 1.9], ["roll back", 3.2]], stage: (A2, t) => t < 0.25 ? "roll: anticipation" : t < 0.8 ? "roll" : t < 2.9 ? "groom" : "roll back"})]; },
@@ -651,9 +711,10 @@ function sceneCritters(stage) {
     // hanging, a small overshoot and settle, then reaching down ahead of the body); in the water it treads, the forepaws
     // paddling small circles in front of its chest
     look(A) { return [Act("look around", () => 1.3 + tn("river_otter.look.hold_s") * 3, (A2, P, t) => { const inW = A2.waterAt() > 0.5; const hold = tn("river_otter.look.hold_s"), D = 1.3 + hold * 3, r = rear(t, D, {up: 0.36}), up = r.body;
-        if (inW) { swimPose(A2, P); P.pitch = 1.25 * up; P.y = -A2.sp.float + 0.12 * up; for (const i of [0, 1]) { const a = t * 9 + i * 3; blendLeg(A2, P, i, {m: "seg", x: 0.045 + 0.02 * Math.cos(a), y: -0.05 + 0.02 * Math.sin(a), f: -0.3 + 0.3 * Math.sin(a)}, up); } }
+        if (inW) { swimPose(A2, P); P.pitch = 1.25 * up; P.y = -A2.sp.float + 0.12 * up; for (const i of [0, 1]) { const a = t * 9 + i * 3; blendLeg(A2, P, i, {m: "seg", x: 0.06 + 0.02 * Math.cos(a), y: -0.05 + 0.02 * Math.sin(a), f: -0.6 + 0.3 * Math.sin(a)}, up); } }
         else { standPose(A2, P); P.pitch = lerp(P.pitch, 1.22, up) - 0.08 * r.crouch; P.y = A2.sp.H + 0.1 * up - 0.02 * r.crouch - 0.01 * r.give; const hx = -0.08 * up - 0.22 * (1 - up); P.lt[2] = {m: "root", x: hx, y: A2.groundRel(-0.1, 0.06)}; P.lt[3] = {m: "root", x: hx, y: A2.groundRel(-0.1, -0.06)};
-          for (const i of [0, 1]) armTo(A2, P, i, segToRoot(A2, P, i, 0.035, -0.035 + 0.006 * Math.sin(t * 2.4 + i)), r.arm, r.curl - 0.7 * clamp(r.arm, 0, 1), 0.04); P.tp = [lerp(0.12, 0.9, up), lerp(0.07, 0.1, up), lerp(0.02, 0, up)]; }
+          // version 5: the forepaws dangle loosely in front of its belly, hanging from the shoulders as the body stands up
+          for (const i of [0, 1]) armTo(A2, P, i, hangAt(A2, P, i, 0, 0.004 * Math.sin(t * 2.4 + i)), r.arm, r.curl, 0.04, {w: HANG_W(), add: HANDS_IN(A2)}); P.tp = [lerp(0.12, 0.9, up), lerp(0.07, 0.1, up), lerp(0.02, 0, up)]; }
         P.hp = -1.15 * up + 0.12 * r.crouch; const segT = (t - 0.35 - tn("shared.forelegs.anticipate_s")) / hold; const yaws = [0, 0.8, 0.8, -0.8, -0.8, 0, 0]; const i = clamp(Math.floor(segT * 2), 0, 5); P.hy = lerp(yaws[i], yaws[i + 1], smooth(c01(segT * 2 - i))) * up; },
       {keys: () => { const h = tn("river_otter.look.hold_s"), a = tn("shared.forelegs.anticipate_s"), D = 1.3 + h * 3; return [["anticipation", a], ["rear up: paws trail", a + 0.2], ["paws to the chest", a + 0.5], ["look left", 0.35 + a + h * 0.75], ["look right", 0.35 + a + h * 1.75], ["paws reach down", D - tn("shared.forelegs.lower_s") * 0.55], ["down", D]]; },
         stage: (A2, t) => { const D = 1.3 + tn("river_otter.look.hold_s") * 3; return t < tn("shared.forelegs.anticipate_s") ? "look: anticipation" : t > D - tn("shared.forelegs.lower_s") ? "look: back down" : "look around"; }})]; },
@@ -664,7 +725,8 @@ function sceneCritters(stage) {
   function sitPose(A, P, r = {body: 1, arm: 1, crouch: 0, give: 0, curl: 0}, hand = null) { standPose(A, P); const u = r.body;
     P.pitch = lerp(P.pitch, 0.9, u) - 0.08 * r.crouch; P.y = A.sp.H + 0.03 * u - 0.02 * r.crouch - 0.01 * r.give; const hx = lerp(-0.22, -0.1, u);
     P.lt[2] = {m: "root", x: hx, y: A.groundRel(-0.1, 0.06)}; P.lt[3] = {m: "root", x: hx, y: A.groundRel(-0.1, -0.06)};
-    for (const i of [0, 1]) { const h = hand ? hand(i) : [0.04, i ? -0.03 : -0.02]; armTo(A, P, i, segToRoot(A, P, i, h[0], h[1]), r.arm, r.curl, 0.04); }
+    // version 5: the hands from where they hang, raised by hand(i) = [forward, up] in the root's frame toward the food
+    for (const i of [0, 1]) { const h = hand ? hand(i) : [0, 0]; armTo(A, P, i, hangAt(A, P, i, h[0], h[1]), r.arm, r.curl, 0.04, {w: HANG_W(), add: HANDS_IN(A)}); }
     P.tp = [lerp(0.12, 0.85, u), lerp(0.07, 0.15, u), lerp(0.02, 0.05, u)]; }
   otter.brain = A => { const r = A.rng(); A.where = whereOf(A);
     if (A.where === "rock") return r < 0.3 ? "groom" : r < 0.5 ? "look" : r < 0.75 ? "porpoise" : "slide";
@@ -686,16 +748,18 @@ function sceneCritters(stage) {
     g.computeVertexNormals(); const m = new THREE.Mesh(g, W.std({color: 0x8d6a26, side: THREE.DoubleSide, roughness: 0.6})); m.visible = false; seaRig.root.add(m); m.position.y = 0.0; return {m, g, N}; })();
   const crackD = () => [tn("sea_otter.crack.windup_s"), tn("sea_otter.crack.anticipate_s"), tn("sea_otter.crack.strike_s"), tn("sea_otter.crack.recoil_s")];
   // on its back: the body rolled over, the head up looking at its chest, the hind flippers up, the tail flat
+  // version 5: the forepaws rest on the chest toward the chin, the elbows partly bent and the paws curled toward the
+  // chest (version 4 held them up off it with the wrists bent back)
   function raftPose(A, P, t) { P.roll = Math.PI; P.pitch = 0.16; P.y = 0.02; P.hp = -0.55 + 0.05 * Math.sin(t * 0.7); P.A = -0.06;
     P.la[2] = P.la[3] = -1.1 + 0.08 * Math.sin(t * 1.3); P.lk[2] = P.lk[3] = 0.4; P.lf[2] = P.lf[3] = -2.1 + 0.2 * Math.sin(t * 1.3 + 1);
-    P.lt[0] = {m: "seg", x: -0.05, y: -0.08 - 0.006 * Math.sin(t * 1.4), f: 0.4}; P.lt[1] = {m: "seg", x: -0.05, y: -0.08 - 0.006 * Math.sin(t * 1.4 + 0.4), f: 0.4}; P.tp = [-0.12, 0.05, 0.05]; }
+    P.lt[0] = {m: "seg", x: 0.085, y: -0.045 - 0.004 * Math.sin(t * 1.4), f: -1.75}; P.lt[1] = {m: "seg", x: 0.085, y: -0.045 - 0.004 * Math.sin(t * 1.4 + 0.4), f: -1.75}; P.tp = [-0.12, 0.05, 0.05]; }
   const drift = (A, dt) => { const t = W.t; A.pos.x += (HOME.x + Math.sin(t * 0.05) * 1.2 - A.pos.x) * c01(dt * 0.3); A.pos.z += (HOME.z + Math.cos(t * 0.04) * 1.0 - A.pos.z) * c01(dt * 0.3); A.pos.y = sea.h(A.pos.x, A.pos.z, W.t, W.camera.position) - 0.02; A.yaw += Math.sin(t * 0.13) * 0.05 * dt; };
   seaO.plans = {
     crack(A) { if (A.urchin == null) return seaO.plans.dive(A); return [Act("crack an urchin", () => crackD().reduce((a, b) => a + b) * tn("sea_otter.crack.cracks") + 0.4, (A2, P, t) => { raftPose(A2, P, W.t); const d = crackD(), beat = d.reduce((a, b) => a + b), n = tn("sea_otter.crack.cracks");
-        if (t > beat * n) return; const r = tn("sea_otter.crack.raise_m") * EX(), S = strike(t % beat, d, r, r * 1.15, -0.035, 0.03); P.lt[0] = {m: "seg", x: -0.03, y: -0.22 - S.v, f: 0.5}; P.lt[1] = {m: "seg", x: -0.03, y: -0.22 - S.v, f: 0.5}; P.hp = -0.7 + S.v * 0.6; P.A = -0.06 - S.v * 0.4; },
+        if (t > beat * n) return; const r = tn("sea_otter.crack.raise_m") * EX(), S = strike(t % beat, d, r, r * 1.15, -0.035, 0.03); P.lt[0] = {m: "seg", x: -0.03, y: -0.22 - S.v, f: -1.55}; P.lt[1] = {m: "seg", x: -0.03, y: -0.22 - S.v, f: -1.55}; P.hp = -0.7 + S.v * 0.6; P.A = -0.06 - S.v * 0.4; },
       {move(A2, dt, t, s) { drift(A2, dt); const d = crackD(), beat = d.reduce((a, b) => a + b), k = Math.floor(t / beat); if (t % beat >= d[0] + d[1] + d[2] && k > (s.k ?? -1) && k < tn("sea_otter.crack.cracks")) { s.k = k; const p = stone.getWorldPosition(V3()); for (let i = 0; i < 6; i++) BITS.spawn(p.clone().add(V3(0, 0.05, 0)), V3((Math.random() - 0.5) * 1.6, 0.8 + Math.random() * 1.6, (Math.random() - 0.5) * 1.6), i % 2 ? 0x7d2dbd : 0x4f1d83, 0.02, 4); BITS.spawn(p, V3(0, 1.5, 0), DROP, 0.02, 1); RINGS.spawn(A2.pos.x, A2.pos.y + 0.02, A2.pos.z, 0.5, 1, 0.4); } },
         keys: () => strikeKeys(crackD()), stage: (A2, t) => { const d = crackD(), beat = d.reduce((a, b) => a + b); return "crack: " + strike(t % beat, d, 1, 1, 0, 0).st; }}),
-      Act("eat the urchin", 3.2, (A2, P, t) => { raftPose(A2, P, W.t); const S = strike(t % 0.8, [0.25, 0.1, 0.1, 0.35], 0.2, 0.25, -0.35, 0.08), lift = c01(-S.v / 0.35); P.lt[0] = P.lt[1] = {m: "seg", x: 0.02 + 0.035 * lift, y: -0.1 - 0.015 * lift, f: 0.5}; P.hp = -0.9 + S.v; },
+      Act("eat the urchin", 3.2, (A2, P, t) => { raftPose(A2, P, W.t); const S = strike(t % 0.8, [0.25, 0.1, 0.1, 0.35], 0.2, 0.25, -0.35, 0.08), lift = c01(-S.v / 0.35); P.lt[0] = P.lt[1] = {m: "seg", x: 0.02 + 0.035 * lift, y: -0.1 - 0.015 * lift, f: -1.7}; P.hp = -0.9 + S.v; },
         {move(A2, dt, t) { drift(A2, dt); A2.urchin = Math.max(0.05, 1 - t / 3.2); }, init(A2) {}, keys: () => strikeKeys([0.25, 0.1, 0.1, 0.35]), stage: () => "eat"}),
       // it lets go of the shell: the bits drift down off its chest, and the stone goes back under its foreleg
       Act("done", 0.1, (A2, P) => raftPose(A2, P, W.t), {init(A2) { A2.urchin = null; const p = urchinMesh.getWorldPosition(V3()); for (let i = 0; i < 7; i++) BITS.spawn(p, V3((Math.random() - 0.5) * 0.7, 0.2 + Math.random() * 0.4, (Math.random() - 0.5) * 0.7), i % 2 ? 0x7d2dbd : 0x4f1d83, 0.018, 3); }})]; },
@@ -721,13 +785,13 @@ function sceneCritters(stage) {
     // grooming with empty paws (version 4): they work along its belly and chest, rubbing in circles and squeezing the
     // fur between them, rolling it from side to side
     groom(A) { return [Act("groom", 4.2, (A2, P, t) => { raftPose(A2, P, W.t); P.roll = Math.PI + 0.55 * Math.sin(t * 2.3) * Math.sin(Math.PI * t / 4.2); const g = smooth(c01(t / 0.4)) * smooth(c01((4.2 - t) / 0.4)), a = t * 7, along = 0.05 * Math.sin(t * 1.3), sq = 0.02 * Math.max(0, Math.sin(t * 3.5));
-        for (const i of [0, 1]) blendLeg(A2, P, i, {m: "seg", x: -0.03 + along + 0.035 * Math.cos(a + i * 3), y: -0.1 + 0.025 * Math.sin(a + i * 3), f: 0.4 + 0.4 * Math.sin(a + i * 3)}, g);
+        for (const i of [0, 1]) blendLeg(A2, P, i, {m: "seg", x: 0.07 + along + 0.025 * Math.cos(a + i * 3), y: -0.055 + 0.015 * Math.sin(a + i * 3), f: -1.75 + 0.3 * Math.sin(a + i * 3)}, g);
         if (!P.lt[0]) { P.la[0] += sq * 3; P.la[1] -= sq * 3; } P.hy = 0.35 * Math.sin(t * 2.3); },
       {move(A2, dt) { drift(A2, dt); }, keys: () => [["roll left", 0.68], ["roll right", 2.05], ["rub", 3.0]], stage: () => "groom"})]; },
     // asleep with empty paws (version 4): they rest on its chest while it wraps, come up toward its face and its head curls down onto them once it is
     // asleep, and go back to its chest as it wakes
     sleep(A) { const w = () => tn("sea_otter.sleep.kelp_wrap_s"); return [Act("wrap in kelp and sleep", () => w() + 7 + 1.5, (A2, P, t) => { raftPose(A2, P, W.t); const W0 = w(), g = smooth(c01((t - W0 - 0.3) / 0.9)) * (1 - smooth(c01((t - W0 - 6.2) / 0.9)));
-        blendLeg(A2, P, 0, {m: "seg", x: 0.12, y: -0.13, f: 0.2}, g); blendLeg(A2, P, 1, {m: "seg", x: 0.12, y: -0.12, f: 0.2}, g); P.hp = -0.25 - 0.6 * g; P.y = 0.02 + 0.01 * Math.sin(t * 1.4); },
+        blendLeg(A2, P, 0, {m: "seg", x: 0.12, y: -0.13, f: -1.6}, g); blendLeg(A2, P, 1, {m: "seg", x: 0.12, y: -0.12, f: -1.6}, g); P.hp = -0.25 - 0.6 * g; P.y = 0.02 + 0.01 * Math.sin(t * 1.4); },
       {move(A2, dt, t) { drift(A2, dt); const W0 = w(), k = t < W0 ? smooth(t / W0) : t < W0 + 7 ? 1 : 1 - smooth(c01((t - W0 - 7) / 1.5)); ribbon.m.visible = k > 0.01; ribbon.g.setDrawRange(0, Math.floor(k * (ribbon.N - 1)) * 6); },
         keys: () => [["wrap", w() * 0.5], ["asleep", w() + 2]], stage: (A2, t) => t < w() ? "wrap in kelp" : t < w() + 7 ? "asleep" : "wake"})]; },
   };
@@ -844,7 +908,20 @@ function sceneCritters(stage) {
   W.setTime = () => applyHour();
   W.setViews({"Pond": [[-11, 2.6, 2], 0.45, 0.42, 24], "Felling": [[-14.4, 3.4, 11.5], 0.75, 0.2, 4.4], "Dam": [[-2.6, 2.9, 0.2], -1.25, 0.42, 7.5], "Slide": [[-14.2, 3.2, -8.2], 1.05, 0.3, 7.5], "Rock": [[-6.6, 3.0, -4.0], 0.9, 0.35, 4], "Riffle": [[19, 0.6, zc(19)], 0.35, 0.5, 11], "Sea otter": [[55, 0.15, 1.2], 0.6, 0.38, 4.5], "Valley": [[6, 1, 0], 0.5, 0.78, 92]});
   // a test and capture hook: run the scene in fixed steps without drawing, start an action, read the state
-  window.__critters = {W, beaver, otter, sea: seaO, FELL, go: (a, n) => ({beaver, otter, sea: seaO})[a].go(n, true), freeze(v) { FROZEN = v; }, run(s, step = 1 / 30) { const f = FROZEN; FROZEN = false; for (let i = 0; i < s / step; i++) { W.t += step; ANIM.t = W.t; ANIM.dt = step; W.update(W.t, step); } FROZEN = f; },
+  // the forelimb instrument (version 5): the largest elbow flex and wrist flexion and extension each action reaches, as
+  // applied, in degrees; the elbow wrapped to +-180 (flex +, past straight -); the wrist as the paw's angle from in line
+  // with the forearm, wrapped to +-180 (palmar flexion and dorsiflexion each reported as a positive maximum)
+  const LIMB = {};
+  for (const A of ACTORS) A.rig.log = P => { const k = A.id + " / " + (A.step ? A.step.name : "-"), r = LIMB[k] = LIMB[k] || {elbow: -999, hyper: -999, wristFlex: -999, wristExt: -999, n: 0}; r.n++;
+    for (const i of [0, 1]) { const e = angWrap(P.lk[i]) * 180 / Math.PI, w = angWrap(P.lf[i] + Math.PI / 2) * 180 / Math.PI; r.elbow = Math.max(r.elbow, e); r.hyper = Math.max(r.hyper, -e); r.wristFlex = Math.max(r.wristFlex, -w); r.wristExt = Math.max(r.wristExt, w); } };
+  // a debug view (version 5) for checking each forelimb joint's axis and sign: draws the hip, knee and foot bones' axes
+  // (x red, y green, z blue: every forelimb joint turns about its z) and holds an animal standing with its forelegs set
+  // straight to (shoulder, elbow, wrist) in degrees
+  const AXES = [];
+  const debug = {axes(on) { if (on && !AXES.length) for (const A of ACTORS) for (const i of [0, 1]) for (const n of ["hip", "knee", "foot"]) { const h = new THREE.AxesHelper(0.05); h.material.depthTest = false; h.renderOrder = 9; A.rig.legs[i][n].add(h); AXES.push(h); } AXES.forEach(h => h.visible = on); },
+    flex(id, sh, el, wr, up = 0) { const A = {beaver, otter, sea: seaO}[id]; A.queue = []; A.setStep(Act("flex test", 1e9, (A2, P) => { standPose(A2, P); if (up) { P.pitch = lerp(P.pitch, 1.1, up); P.y = A2.sp.H + 0.06 * up; P.lt[2] = {m: "root", x: -0.1, y: A2.groundRel(-0.1, 0.1)}; P.lt[3] = {m: "root", x: -0.1, y: A2.groundRel(-0.1, -0.1)}; P.tp = [0.9, 0.1, 0]; }
+      for (const i of [0, 1]) { P.lt[i] = null; P.la[i] = sh * DEG; P.lk[i] = el * DEG; P.lf[i] = wr * DEG; } })); A.bt = 1; }};
+  window.__critters = {LIMB, debug, W, beaver, otter, sea: seaO, FELL, go: (a, n) => ({beaver, otter, sea: seaO})[a].go(n, true), freeze(v) { FROZEN = v; }, run(s, step = 1 / 30) { const f = FROZEN; FROZEN = false; for (let i = 0; i < s / step; i++) { W.t += step; ANIM.t = W.t; ANIM.dt = step; W.update(W.t, step); } FROZEN = f; },
     until(f, max = 150) { for (let i = 0; i < max * 30; i++) { if (f(window.__critters)) return true; this.run(1 / 30); } return false; },
     cam(A, yo = 0, pitch = 0.25, dist = 1.6, dy = 0.15) { W.cam.set([A.pos.x, A.pos.y + dy, A.pos.z], A.yaw + yo, pitch, dist); },
     hour: h => { hourEl.value = h; applyHour(); }, mode: setMode, poses: v => { SHOWPOSES = v; POSE_CLOCK = 0; }, state: () => ACTORS.map(A => ({id: A.id, stage: A.stage, pos: A.pos.toArray().map(v => +v.toFixed(2)), goal: A.goal}))};
