@@ -2819,3 +2819,26 @@ hit on its beat; no foot moving in stance in the walk and the bound; the
 forelimb limits never passed over 600 s of each animal's seeded run; the
 mesh's rest joints are the rig's. Captures (lavapipe, no GPU) in
 `docs/screenshots/beavers-otters-game/`.
+
+**Two things the port found in version 5, fixed in the game** (drawn only;
+the page should take the same, and its next version will):
+
+- **The beaver's forepaws hovered.** At the elbow's limit of 80 degrees a
+  beaver's foreleg (two bones of 7 cm) cannot bring its paw nearer the
+  shoulder than 10.7 cm, and standing its shoulder is 9 cm over the ground:
+  the solver held the paw out on its line, 1.7 cm over the ground under the
+  shoulder and gliding through the middle of every stance. The body is now
+  lifted by the shortfall whenever a forepaw sent to the ground cannot reach
+  it (about 2 cm standing, less at the ends of a stride), so the paw stands
+  on the ground. The river otter's and sea otter's forelegs reach and are
+  not lifted.
+- **A waddling foot swayed.** The legs were solved in the body's own plane,
+  leaving out the waddle's roll, so a planted foot swung 1.4 mm a frame
+  sideways and up at 120 frames a second. The hip is now placed with the
+  roll, and a leg sent to the ground is tilted across by the angle that
+  keeps its foot under itself; a small roll (the waddle, the shake) is
+  taken back at the hips so the legs stand upright under a rolling body,
+  and a large one (on its back) is the body's alone.
+
+`no_foot_slides_in_stance` measures both: no foot down in its stance moves
+more than 1.5 mm in a frame in the walk or the bound.

@@ -75,6 +75,14 @@ pub struct Warming {
     immediate: bool,
 }
 
+impl Warming {
+    /// A `--capture`, which does not warm: nothing is shown behind the
+    /// screen for it.
+    pub fn immediate(&self) -> bool {
+        self.immediate
+    }
+}
+
 /// Whether the loading screen has lifted (or there never was one).
 pub fn ready(loading: Option<Res<WorldLoading>>, warming: Option<Res<Warming>>) -> bool {
     loading.is_none() && warming.is_none()

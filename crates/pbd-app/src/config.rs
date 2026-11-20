@@ -1658,6 +1658,14 @@ impl Validated for pbd_core::husbandry::HusbandrySettings {
     }
 }
 
+/// How the beavers and otters move (`crate::critters`), from
+/// `creature_motion.ron`.
+impl Validated for crate::critters::motion::CreatureMotion {
+    fn validate(&self) -> Result<(), String> {
+        crate::critters::motion::CreatureMotion::validate(self)
+    }
+}
+
 /// Every land species and how each is kept, loaded once.
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct HusbandryConfig(pub pbd_core::husbandry::HusbandrySettings);
@@ -2234,6 +2242,9 @@ impl Plugin for ConfigPlugin {
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
             .insert_resource(HusbandryConfig(load("husbandry")))
+            .insert_resource(crate::critters::CreatureMotionConfig(load(
+                "creature_motion",
+            )))
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(GatherConfig(load("gather")))

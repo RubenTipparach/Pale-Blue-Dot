@@ -34,6 +34,9 @@ aspen bark tile docs/mockups/ocean/tex-aspen.png.
     pip install numpy pillow fast_simplification
     python3 tools/art/critter_sculpt.py                # all three and the bark (a minute or two)
     python3 tools/art/critter_sculpt.py --sheet S      # also a contact sheet of the maps at S (keep it out of the repo)
+    python3 tools/art/critter_sculpt.py --game         # also the game's copy (design B29): assets/models/critters/*.bin
+                                                       # and assets/textures/critters/fur-*.png
+    python3 tools/art/critter_sculpt.py --game --from-js   # the game's copy from the committed critters_mesh.js alone
 """
 import base64
 import json
@@ -799,7 +802,60 @@ def aspen_bark():
     Image.fromarray(img.astype(np.uint8)).save(os.path.join(OUT, "tex-aspen.png"), optimize=True)
 
 
+# ---------------------------------------------------------------------------------------------------- the game's copy
+# ocean-environments design B29 (task 20.3): the same bodies for the game, one binary mesh an animal and its fur map.
+GAME_NAMES = {"beaver": "beaver", "otter": "river_otter", "sea": "sea_otter"}
+GAME_MESH = os.path.join(ROOT, "assets", "models", "critters")
+GAME_TEX = os.path.join(ROOT, "assets", "textures", "critters")
+
+
+def unb64(s, dtype):
+    return np.frombuffer(base64.b64decode(s), dtype=dtype)
+
+
+def game_mesh(d):
+    """PBDCRIT1, little endian: the magic; u32 version (1), bones (20), vertices, triangles; each bone's rest joint
+    (3 f32, mesh space, in BONES order); then positions (3 f32), normals (3 f32), UVs (2 f32), joint indices (4 u8) and
+    weights (4 u8, of 255) a vertex; then the triangles (3 u16). The body's vertices first, then the fur tufts' in their
+    dry shape, so one draw skins both."""
+    b, t = d["body"], d["tufts"]
+    nb, nt = b["n"], t["n"]
+    pos = np.concatenate([unb64(b["pos"], "<f4"), unb64(t["pos"], "<f4")])
+    nrm = np.concatenate([unb64(b["nrm"], "<f4"), unb64(t["nrm"], "<f4")])
+    uv = np.concatenate([unb64(b["uv"], "<f4"), unb64(t["uv"], "<f4")])
+    si = np.concatenate([unb64(b["si"], "u1"), unb64(t["si"], "u1")])
+    sw = np.concatenate([unb64(b["sw"], "u1"), unb64(t["sw"], "u1")])
+    idx = np.concatenate([unb64(b["idx"], "<u2").astype(np.uint32), unb64(t["idx"], "<u2").astype(np.uint32) + nb])
+    n, tri = nb + nt, len(idx) // 3
+    assert n < 65536 and len(pos) == 3 * n and len(uv) == 2 * n and len(si) == 4 * n and len(idx) % 3 == 0
+    rest = np.array([d["rest"][k] for k in BONES], "<f4")
+    head = b"PBDCRIT1" + np.array([1, len(BONES), n, tri], "<u4").tobytes()
+    return head + rest.tobytes() + pos.astype("<f4").tobytes() + nrm.astype("<f4").tobytes() + \
+        uv.astype("<f4").tobytes() + si.astype("u1").tobytes() + sw.astype("u1").tobytes() + idx.astype("<u2").tobytes()
+
+
+def write_game(data):
+    os.makedirs(GAME_MESH, exist_ok=True)
+    os.makedirs(GAME_TEX, exist_ok=True)
+    for name, d in data.items():
+        assert list(d["bones"]) == BONES, name
+        with open(os.path.join(GAME_MESH, GAME_NAMES[name] + ".bin"), "wb") as f:
+            f.write(game_mesh(d))
+        with open(os.path.join(OUT, d["tex"] + ".png"), "rb") as src, \
+                open(os.path.join(GAME_TEX, "fur-%s.png" % GAME_NAMES[name]), "wb") as dst:
+            dst.write(src.read())
+        print("game: %s.bin, %d vertices, fur-%s.png" % (GAME_NAMES[name], d["body"]["n"] + d["tufts"]["n"],
+                                                       GAME_NAMES[name]), flush=True)
+
+
 def main():
+    if "--game" in sys.argv and "--from-js" in sys.argv:
+        # the committed mockup's bodies, byte for byte, without sculpting them again
+        with open(os.path.join(OUT, "critters_mesh.js")) as f:
+            text = f.read()
+        data = json.loads(text[text.index("{"):text.rindex("}") + 1])
+        write_game(data)
+        return
     data = {}
     for name in ("beaver", "otter", "sea"):
         data[name] = build(name)
@@ -808,6 +864,8 @@ def main():
     with open(os.path.join(OUT, "critters_mesh.js"), "w") as f:
         f.write(head + "window.CRITTER_MESH = " + json.dumps(data, separators=(",", ":")) + ";\n")
     aspen_bark()
+    if "--game" in sys.argv:
+        write_game(data)
     if "--sheet" in sys.argv:
         out = sys.argv[sys.argv.index("--sheet") + 1]
         ims = [Image.open(os.path.join(OUT, "fur-%s.png" % n)).resize((512, 512), Image.NEAREST) for n in data]

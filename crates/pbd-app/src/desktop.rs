@@ -2263,6 +2263,8 @@ pub fn run(args: &[String]) {
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
             pbd_app::beaver::BeaverPlugin,
+            // The beavers' and otters' skinned bodies (`ocean-environments` B29).
+            pbd_app::critters::CrittersPlugin,
             // The light a player carries (`glowing-mushrooms` part B).
             pbd_app::carried_light::CarriedLightPlugin,
         ))

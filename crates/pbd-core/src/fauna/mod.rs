@@ -372,6 +372,11 @@ pub struct Species {
     pub behaviour: Behaviour,
     #[serde(default)]
     pub shy_m: f32,
+    /// Seen only within this of a beaver colony's site that is not gone, m
+    /// (`ocean-environments` B25, B29: the beaver); nought, anywhere its
+    /// water and places allow.
+    #[serde(default)]
+    pub near_colony_m: f32,
 }
 
 impl Species {
@@ -844,6 +849,9 @@ impl FaunaSettings {
                 if sp.school.0 == 0 || sp.school.1 < sp.school.0 || sp.max_schools == 0 {
                     return Err(format!("{at}: a school has at least one fish"));
                 }
+                if !(sp.near_colony_m.is_finite() && sp.near_colony_m >= 0.0) {
+                    return Err(format!("{at}: near_colony_m must not be negative"));
+                }
                 if !(1..=5).contains(&sp.strength) || !(0.0..=1.0).contains(&sp.bite) {
                     return Err(format!("{at}: strength is 1..5 and bite 0..1"));
                 }
@@ -925,6 +933,7 @@ fn home_roster() -> Vec<Species> {
             env: Vec::new(),
             behaviour: Behaviour::None,
             shy_m: 0.0,
+            near_colony_m: 0.0,
         }
     }
     use WaterClass::*;
@@ -1138,6 +1147,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Coast, Pool, Estuary, Mudflat],
             behaviour: Behaviour::None,
             shy_m: 2.5,
+            near_colony_m: 0.0,
         },
         Species {
             id: "lobster".into(),
@@ -1168,6 +1178,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Kelp, Reef],
             behaviour: Behaviour::None,
             shy_m: 3.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "giant_clam".into(),
@@ -1198,6 +1209,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Reef],
             behaviour: Behaviour::Shuts,
             shy_m: 4.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "reef_turtle".into(),
@@ -1228,6 +1240,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Reef, Coast],
             behaviour: Behaviour::None,
             shy_m: 0.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "sea_otter".into(),
@@ -1258,6 +1271,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Kelp, Coast],
             behaviour: Behaviour::None,
             shy_m: 8.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "reed_dabbler".into(),
@@ -1288,6 +1302,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Marsh, Pool, Estuary, Riffle],
             behaviour: Behaviour::Dabbles,
             shy_m: 9.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "pond_diver".into(),
@@ -1318,6 +1333,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Marsh, Pool],
             behaviour: Behaviour::Dives,
             shy_m: 9.0,
+            near_colony_m: 0.0,
         },
         // The octopus, the plume worm and the seal (B9), appended.
         Species {
@@ -1349,6 +1365,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Reef],
             behaviour: Behaviour::Hides,
             shy_m: 6.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "tube_worm".into(),
@@ -1379,6 +1396,7 @@ fn water_life() -> Vec<Species> {
             env: vec![Vent],
             behaviour: Behaviour::Shuts,
             shy_m: 5.0,
+            near_colony_m: 0.0,
         },
         Species {
             id: "seal".into(),
@@ -1409,6 +1427,71 @@ fn water_life() -> Vec<Species> {
             env: vec![UnderIce, Kelp],
             behaviour: Behaviour::HaulsOut,
             shy_m: 9.0,
+            near_colony_m: 0.0,
+        },
+        // The beaver and the river otter (`ocean-environments` B29),
+        // appended: the beaver only by a colony.
+        Species {
+            id: "beaver".into(),
+            name: "Beaver".into(),
+            from: Origin::New,
+            class: Class::Mammal,
+            status: Status::Protected,
+            water: vec![River],
+            temp_c: (0.0, 26.0),
+            length_m: 1.0,
+            speed_mps: (0.2, 0.75),
+            depth_m: (0.2, 4.0),
+            bed: false,
+            school: (1, 2),
+            max_schools: 1,
+            sense_m: 6.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 2,
+            colour: [0.42, 0.28, 0.16],
+            shape: [0.45, 0.35, 1.0],
+            icon: "water_life/beaver".into(),
+            guide: Guide {
+                entry: "A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught.".into(),
+                tip: "Look where a stream is dammed with sticks. Come close and it slaps its tail and dives.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![Pool, Riffle],
+            behaviour: Behaviour::None,
+            shy_m: 7.0,
+            near_colony_m: 40.0,
+        },
+        Species {
+            id: "river_otter".into(),
+            name: "River otter".into(),
+            from: Origin::New,
+            class: Class::Mammal,
+            status: Status::Protected,
+            water: vec![River],
+            temp_c: (1.0, 22.0),
+            length_m: 1.0,
+            speed_mps: (0.3, 1.1),
+            depth_m: (0.2, 6.0),
+            bed: false,
+            school: (1, 2),
+            max_schools: 1,
+            sense_m: 7.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 2,
+            colour: [0.33, 0.24, 0.17],
+            shape: [0.35, 0.3, 1.0],
+            icon: "water_life/river_otter".into(),
+            guide: Guide {
+                entry: "A long, quick swimmer of cool rivers and lakes. It climbs out on the bank to look around and groom. River otters are protected: none may be caught.".into(),
+                tip: "Quiet river banks. It swims off if you come close.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![Riffle, Pool, Estuary],
+            behaviour: Behaviour::None,
+            shy_m: 8.0,
+            near_colony_m: 0.0,
         },
     ]
 }

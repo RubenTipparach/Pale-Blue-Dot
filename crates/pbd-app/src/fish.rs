@@ -790,8 +790,23 @@ fn fish(
         fishery.spawn_s = 0.0;
         drop_far(fishery, feet, settings.spawn.despawn_m);
         if let Some(air) = air {
+            // The colonies a beaver may be seen by (`ocean-environments`
+            // B29), read only where a species asks for one.
+            let colonies: Vec<pbd_core::beaver::Colony> =
+                if roster.iter().any(|sp| sp.near_colony_m > 0.0) {
+                    save.as_deref()
+                        .map(|save| {
+                            save.records
+                                .of_kind(pbd_core::beaver::KIND)
+                                .filter_map(|r| r.read::<pbd_core::beaver::Colony>())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             try_spawn(
-                &o, fishery, feet, sea, air, contact, roster, settings, seconds,
+                &o, fishery, feet, sea, air, contact, roster, settings, seconds, &colonies,
             );
         }
     }
@@ -1144,6 +1159,7 @@ fn try_spawn(
     roster: &[Species],
     settings: &fauna::FaunaSettings,
     seconds: f64,
+    colonies: &[pbd_core::beaver::Colony],
 ) {
     // Fish and the rest of the water life have their own caps, so the life
     // never crowds out what a line is cast for (`ocean-environments` 7.1).
@@ -1209,6 +1225,7 @@ fn try_spawn(
             sp.lives_in(class, temperature, &settings.water)
                 && sp.fits(depth)
                 && sp.env_allows(here)
+                && colony_allows(sp, direction, colonies)
                 && if sp.can_bite() { fish_room } else { life_room }
                 && fishery
                     .schools
@@ -1251,6 +1268,24 @@ fn try_spawn(
         distance
     );
     fishery.schools.push(school);
+}
+
+/// Whether a species may spawn at this planet direction for the colonies
+/// there are (`ocean-environments` B25, B29): a species that asks for one
+/// (`near_colony_m`, the beaver) only within that of a colony's site, the
+/// colony not gone; any other anywhere.
+pub fn colony_allows(
+    species: &Species,
+    direction: Vec3,
+    colonies: &[pbd_core::beaver::Colony],
+) -> bool {
+    species.near_colony_m <= 0.0
+        || pbd_core::beaver::near_colony(
+            colonies,
+            direction,
+            species.near_colony_m,
+            crate::planet::PLANET_RADIUS,
+        )
 }
 
 /// How big a body of fresh water is, as the size its fish grow to, 0.35 to
@@ -2399,7 +2434,15 @@ pub(crate) mod draw {
         };
         let mut normals = kept::float3(mesh, Mesh::ATTRIBUTE_NORMAL);
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
-        for i in 0..school.len() {
+        // The beavers and otters are drawn with their own skinned bodies
+        // (`crate::critters`, `ocean-environments` B29), not in the school's
+        // mesh.
+        let laid = if crate::critters::rig::Animal::of_species(&species.id).is_some() {
+            0
+        } else {
+            school.len()
+        };
+        for i in 0..laid {
             let id = school.ids.get(i).copied().unwrap_or(0);
             // A swimmer's pose (`fish-behaviour`): turned, banked, its body
             // wave; else between the school's last two steps

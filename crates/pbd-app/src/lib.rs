@@ -21,6 +21,8 @@ pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
 #[cfg(feature = "desktop")]
+pub mod critters;
+#[cfg(feature = "desktop")]
 pub mod drops;
 pub mod field_light;
 #[cfg(feature = "desktop")]
