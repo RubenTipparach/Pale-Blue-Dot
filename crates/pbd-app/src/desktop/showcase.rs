@@ -3367,6 +3367,20 @@ fn focus(bot: &mut Bot, id: &str, s: &Sight, out: &mut Intent) -> Status {
 
 /// The pack's Craft panel: open the pack, click the recipe's row in the
 /// list, press CRAFT once per make and wait for the hands to finish, shut it.
+/// What a recipe of `station` lacks from what is carried: the first input
+/// short, and how many it needs. `None` when it can be made.
+fn short_of(s: &Sight, station: &str, code: &str) -> Option<(Item, u16)> {
+    let recipe = s.recipes.0.at(station).find(|r| r.code == code)?;
+    recipe.inputs.iter().copied().find(|&(item, n)| {
+        (0..CARRIED)
+            .filter_map(|i| s.slots.get(i))
+            .filter(|st| st.item == item)
+            .map(|st| u32::from(st.count))
+            .sum::<u32>()
+            < u32::from(n)
+    })
+}
+
 fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> Status {
     let Some(k) = s.recipes.0.at("hand").position(|r| r.code == code) else {
         return Status::Fail(format!("no hand recipe {code}"));
@@ -3394,6 +3408,9 @@ fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> 
             if bot.count >= times {
                 bot.phase = 5;
                 bot.phase_s = 0.0;
+            } else if let Some((item, n)) = short_of(s, "hand", code) {
+                // A click with an input short makes nothing: not counted.
+                return Status::Fail(format!("{code} needs {n} {item:?}"));
             } else if !busy {
                 out.click = Some(Click::CraftHand);
                 bot.count += 1;
@@ -3528,10 +3545,15 @@ fn station(
         Material::Campfire => ("campfire", "block:campfire"),
         _ => ("", ""),
     };
+    // Only when it can be made (or is carried): else the walk to the far one.
+    let affordable = carried(s.slots, block) > 0
+        || (short_of(s, "hand", made).is_none()
+            && (material != Material::Workbench || carried(s.slots, "planks") >= 6));
     if bot.phase == 0
         && !made.is_empty()
         && at.distance(s.feet) > STATION_NEAR_M
         && bot.injected.is_empty()
+        && affordable
     {
         info!(
             "showcase: the {made} is {:.0} m off; making one here",
