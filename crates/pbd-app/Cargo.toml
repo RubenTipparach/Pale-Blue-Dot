@@ -37,6 +37,14 @@ wgpu = { version = "27", default-features = false }
 # audio path. Bevy's own `bevy_audio` stays off.
 kira = { version = "=0.12.6", default-features = false, features = ["cpal", "ogg", "vorbis"], optional = true }
 
+[build-dependencies]
+# The locale lint runs in the build (`build.rs`, `locale_lint.rs`): every
+# `cargo build` fails on words written in code (`localization` design 4).
+pbd-core = { path = "../pbd-core" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
+
 [dev-dependencies]
 # The shipped WGSL is parsed and validated on the CPU in tests, so a shader
 # that would fail in the pipeline cache fails the suite first. The same naga

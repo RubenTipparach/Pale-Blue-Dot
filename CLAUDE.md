@@ -189,11 +189,13 @@ by key (`openspec/changes/localization`):
   stay in their configs;
 - placeholders are named (`{count}`), plurals are `one`/`other` forms, and
   case lives in the text (no `to_uppercase()` on shown text);
-- `cargo test -p pbd-app --test locale` is the hard lint: it fails on a
-  literal with words outside logs, panics, tests, paths, ids and keys, on a
-  key missing from or unused in the file, and on mismatched placeholders.
-  Its baseline of text from before the rule only shrinks, and goes when
-  empty. A false positive is fixed in the lint's rules, never baselined;
+- the lint is in the build ("it belongs in the build step"): `build.rs` runs
+  `crates/pbd-app/locale_lint.rs`, so every `cargo build` fails on a literal
+  with words outside logs, panics, tests, paths, ids and keys, on a key
+  missing from or unused in the file, and on mismatched placeholders
+  (`cargo test -p pbd-app --test locale` runs the same rules). Its baseline
+  of text from before the rule is gone: there are no exceptions. A false
+  positive is fixed in the lint's rules, never excepted;
 - `tools/locale/` has the same check without a build (`locale_lint.py`),
   key extraction (`locale_extract.py`) and a translator's coverage report
   (`locale_coverage.py`).

@@ -21,5 +21,8 @@ Recommendation taken (ask only with screenshots): a line composed from data name
 - [x] 3.2 Items and species. Done: `item.<code>.name` (and `.many` for fruit), `tool.<code>.*`, `block.<id>.name`, `crop.<code>.name`, `station.<code>.name`, `species.<id>.name/lower/caps/entry/tip` (`fauna.ron` and `husbandry.ron` lose their names and guide text), `husbandry.<coat|pattern|morph|adult|stage>.<id>`, `vehicle.<key>.*`. Each prefix is in the lint's `DATA_PREFIXES` and each table has a test that every id has its keys.
 - [x] 3.3 Settlement kinds, settings options, key names. Done: `sites.kind.*`, `menu.quality.*`, `controls.key.<bevy name>`, `controls.group.<id>`, `controls.does.<act>`.
 
+## 3b. In the build (owner, 2026-11-20: "it belongs in the build step")
+- [x] 3b.1 (Done 2026-11-20: a `format!("Obtain {} logs.", n)` added to `time_ui.rs` stopped `cargo build --profile fast -p pbd-app` with `cargo::error=  crates/pbd-app/src/desktop/time_ui.rs:182: "Obtain {} logs."`.) The rules in `crates/pbd-app/locale_lint.rs`, run by `build.rs` (a plain `cargo build` fails on text in code) and by `tests/locale.rs`; shown failing a build on a test literal.
+
 ## 4. Close
 - [ ] 4.1 (partly done) The baseline empty and deleted; `PBD_LOCALE=pseudo` stills of the main screens for width. Done 2026-11-20: 953 entries to none, `tools/locale/baseline.txt` deleted, a missing baseline read as no exceptions; 211 false positives fixed in the lint's rules (ids, constants, CSV headers, paths, labels set after a GPU object is made, and each file's validators, log labels, GPU-label helpers and debug lines in `DEV_SCOPES`). Still owed: the pseudo-locale stills.
