@@ -1310,6 +1310,22 @@ Each part is fogged by its own distance and the two are mixed back by
 `f`. Only pixels whose samples span a real depth step (15% plus 0.3 m,
 as above) are split.
 
+**The mask that matches (the owner, 2026-11-20: "THE REAL FIX IS A MASK
+CHANEL THAT MATCHES"; and "that thing is the sky", "its where water
+rendering outline doesnt match the object").** Unmixing guessed at the
+object's colour and either overshot into specks or, where it was skipped,
+let the sky leak. The scene's alpha is already taken: it carries the
+terrain's dry-hole mask, and the sky's opacity. But the depth samples are
+a mask that matches the colour exactly. Each sample keeps its own colour
+and depth, and the resolve averages the colours, so `1 - f`, the near
+samples' share, is exactly the share of the resolved colour that is the
+near surface. The edge pixel becomes
+`T_near * (raw - f * far) + deep * (1 - f) * (1 - T_near) + f * fog_far`,
+using `(1 - f) * object = raw - f * far`. Nothing divides, and the
+pixel's own colour carries the object's detail. Only the far colour (the
+sky's or the far ground's raw colour) is read from a neighbour that is all
+far, and any error in it is scaled by `f * T_near`.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

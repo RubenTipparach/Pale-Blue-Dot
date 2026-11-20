@@ -1455,33 +1455,36 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 if (dist > mid) { far_n += 1; }
             }
             let f = f32(far_n)/f32(max(n,1));
-            // The far colour: the first of the four neighbours whose sample 0
-            // is far; with none, the far part is the murk itself.
-            var far_c = deep;
-            var found = false;
-            let px = 1.0/vec2<f32>(size);
-            for (var o = 0; o < 4; o++) {
-                let off = select(select(vec2<f32>(0.0,px.y),vec2<f32>(0.0,-px.y),o == 2),
-                    select(vec2<f32>(px.x,0.0),vec2<f32>(-px.x,0.0),o == 1), o < 2);
-                let nuv = clamp(uv+off,vec2(0.),vec2(1.));
+            // The mask that matches the colour: the samples themselves. Each
+            // sample keeps its own colour and depth and the resolve averages
+            // the colours, so `1 - f` (the near samples' share) is exactly
+            // the share of this pixel's colour that is the near surface. Fog
+            // that share by the near distance and replace the far share with
+            // its own fog:
+            //   (1-f)*fog_near(obj) + f*fog_far(far)
+            //   = T_near*(raw - f*far_c) + deep*(1-f)*(1-T_near) + f*fog_far
+            // using (1-f)*obj = raw - f*far_c. Nothing divides, the pixel's
+            // own colour carries the object's detail, and only the far colour
+            // is read from a neighbour two pixels off that is all far (the
+            // sky's or the far ground's raw colour); any error in it is
+            // scaled by f*T_near.
+            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+            var far_c = raw;
+            var got_far = false;
+            let px = 2.0/vec2<f32>(size);
+            for (var o = 0; o < 8; o++) {
+                let ang = f32(o)*0.78539816;
+                let nuv = clamp(uv+vec2<f32>(round(cos(ang)),round(sin(ang)))*px,vec2(0.),vec2(1.));
                 let nd = load_depth(nuv);
                 let ndist = select(1.0e5, length(reconstruct_local(nuv,nd)-ray.origin), nd > 1e-7);
-                if (!found && ndist > mid) {
+                if (!got_far && ndist > mid) {
                     far_c = textureSampleLevel(scene_color,scene_sampler,nuv,0.0).rgb;
-                    found = true;
+                    got_far = true;
                 }
             }
-            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
-            // Unmixing divides by the near share: where that share is small,
-            // or the neighbour's colour is not quite this pixel's far colour,
-            // it overshoots into dark or red specks. A mostly-far pixel, or one
-            // that unmixes to a negative channel, keeps its colour as it is.
-            let unmixed = (raw-f*far_c)/max(1.0-f,1e-3);
-            let valid = f < 0.7 && all(unmixed > vec3(-0.02));
-            let near_c = select(raw, clamp(unmixed, vec3(0.0), vec3(1.5)), valid);
-            let near_fog = mix(deep,near_c,exp(-extinction*dmin));
+            let t_near = exp(-extinction*dmin);
             let far_fog = mix(deep,far_c,exp(-extinction*dmax));
-            fogged = mix(near_fog,far_fog,f);
+            fogged = max(t_near*(raw-f*far_c),vec3(0.0)) + deep*(1.0-f)*(1.0-t_near) + f*far_fog;
         }
     }
 #endif
