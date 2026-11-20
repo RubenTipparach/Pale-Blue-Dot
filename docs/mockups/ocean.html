@@ -146,6 +146,14 @@ tr:last-child td{border-bottom:0}
 .cards.small{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .btnrow{display:flex;flex-wrap:wrap;gap:8px}
 .btnrow .pbtn{padding:8px 12px}
+/* the beavers and otters tab: tunables and the RON they print */
+details.tune{display:grid;gap:6px}
+.tunes{display:grid;gap:3px;max-height:340px;overflow:auto;padding-right:4px}
+.tunes .tblock{font:600 11px var(--mono);color:var(--sky);margin-top:6px}
+.tunes label{display:grid;grid-template-columns:1fr auto;gap:0 8px;font:11px var(--mono);color:var(--muted)}
+.tunes label b{color:var(--amber);font-weight:600}
+.tunes input{grid-column:1/-1;width:100%;accent-color:var(--amber)}
+textarea.ron{width:100%;min-height:200px;resize:vertical;font:11px/1.45 var(--mono);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px}
 </style>
 
 <div class="wrap">
@@ -165,7 +173,7 @@ tr:last-child td{border-bottom:0}
 
 <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
   <div class="trow sea"><span class="lab">Sea</span><button role="tab" data-tab="sea">Open sea</button><button role="tab" data-tab="coast">Coast and tide</button><button role="tab" data-tab="reef">Coral reef</button><button role="tab" data-tab="kelp">Kelp forest</button><button role="tab" data-tab="polar">Polar sea</button><button role="tab" data-tab="deep">The deep and vents</button><button role="tab" data-tab="wrecks">Trench, caves, wrecks</button></div>
-  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="marsh">Marsh and estuary</button><button role="tab" data-tab="sim">Water sim</button></div>
+  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="critters">Beavers and otters</button><button role="tab" data-tab="marsh">Marsh and estuary</button><button role="tab" data-tab="sim">Water sim</button></div>
   <div class="trow"><span class="lab">Guide</span><button role="tab" data-tab="light">How underwater looks</button><button role="tab" data-tab="life">Water life</button><button role="tab" data-tab="chart">Where they occur</button><button role="tab" data-tab="engine">In the engine</button></div>
 </nav>
 
@@ -174,6 +182,26 @@ tr:last-child td{border-bottom:0}
 <div class="tabpanel" id="tab-sim" role="tabpanel" hidden>
   <h2>Water sim <button class="info" data-help="sim" aria-label="How the water sim works">i</button></h2>
   <div class="envgrid"><div class="stage" data-scene="sim"></div><div class="side" id="simSide" aria-label="Presets and settings"></div></div>
+</div>
+
+<div class="tabpanel" id="tab-critters" role="tabpanel" hidden>
+  <h2>Beavers and otters <button class="info" data-modal="crittersTpl" data-title="Beavers and otters" aria-label="About the beavers and otters: what they do, how they move, and what is today's">i</button></h2>
+  <template id="crittersTpl">
+  <blockquote>"can you improve on beaver and otter animations?" ... "make me a mockup with those two animls running around interacting with env" <span class="muted">(the owner, 2026-11-20)</span></blockquote>
+  <p>A valley stream with a beaver pond, its stick dam and lodge, a muddy bank with an otter slide, aspens and willows, a riffle where trout hold and leap, and the stream's mouth onto a kelp-edged sea. Three animals live in it and choose what to do next on their own, by a seeded draw from what they can do where they are (<code>?seed=</code> changes it): a beaver, a river otter and a sea otter. The buttons start any action at once. The camera never moves on its own: drag to look, wheel to zoom, the views jump to a spot, and <b>Follow</b> (off until pressed) keeps one animal in the middle.</p>
+  <h3>What they do</h3>
+  <dl>
+    <dt>Beaver</dt><dd>Waddles to an aspen, rears up on its hind legs and tail with its forepaws on the trunk and gnaws: every bite a windup (the head draws back and tilts), a held beat, the snap in (chips fly, the notch deepens) and a bounce back. The tree creaks and leans a little back over the cut while the beaver drops and scrambles clear, then falls, slow at first and fastest at the ground, bounces and settles; the stump stays. It gnaws a branch off the crown, drags it in its teeth to the bank (the leafy end trailing on the ground), slides in, swims with only its head and the branch above water (the tail sculling, each part a beat behind), and pushes the branch onto the dam. It slaps the water with its tail (lift, hold, slap: a splash and rings) and dives, comes up by the bank, climbs out and shakes off, the coat dark and shiny until it dries. It also sits up on its tail to groom.</dd>
+    <dt>River otter</dt><dd>Bounds along the ridge (the back arching and stretching, hind feet together, then fore), crouches at the top of the mud slide and slides down on its belly, faster all the way, into the pond. It porpoises in arcs, dives after a trout and takes it, hops onto its rock and eats it in its forepaws a bite a beat, rolls on its back to groom, and rears up to look round, the head turning and holding.</dd>
+    <dt>Sea otter</dt><dd>Rafts on its back in the kelp with a stone on its chest. It lifts the urchin in both forepaws, holds it, brings it down on the stone (shell bits fly) and bounces, four times, then eats. It rolls belly down with a flick of the tail and dives, comes up with a new urchin and rolls back; it grooms rolling side to side; and it sleeps wrapped in a kelp frond, paws over its eyes.</dd>
+  </dl>
+  <h3>How they move</h3>
+  <p>Each animal is a rig: a body with a hind and a chest part that bend at the spine, a neck and head, four legs of two bones each reaching their feet by inverse kinematics, and a tail of three parts. A gait's phase runs on the distance the animal has moved, not the clock, so a foot on the ground stays where it was put down at any speed: no sliding feet. Every strike (a bite, a slap, a crack, a push) is the animation skill's four stages: windup, anticipation (held), the hit (fastest at contact, the effect on contact) and recoil. The head and tail lag the body (overlapping action). A change of action blends from wherever the pose is, so nothing pops. All of them are flat-shaded low-poly pieces in the page's colours, no outlines, lit by the same sun, sky and lamps as the ground they stand on.</p>
+  <h3>The controls</h3>
+  <p><b>Today</b> shows the animals as the page moves them now (the dam and river tabs): a rigid beaver shuttling on a sine with its feet sliding and its model swapped when it turns, a gnawer bobbing in place, a river otter swaying like a fish on a circle, a sea otter drifting on its back. <b>Proposed</b> is this write-up. <b>Slow &times;0.25</b> slows everything to judge each stage. <b>Show poses</b> freezes each animal's current action on its keyed poses in turn (windup, anticipation, hit, recoil; contact, down, passing and up for a gait). <b>Tune</b> has a slider for every tunable, in its units, and prints the <code>creature_motion.ron</code> block they make. The time of day runs from midnight to midnight: at night a lantern on the beavers' bank, the fishing camp's lamp and fire at the mouth, a boat's lantern by the kelp and the fireflies light what is near them; the moon stays dim.</p>
+  <p class="honest"><b>Proposal, not built.</b> The write-up is <code>openspec/changes/ocean-environments</code> design B28 (today's motion measured, the stages, the tunables) and task group 19. The game's animals change only after the owner approves this tab. The screenshots in <code>docs/screenshots/beaver-otter-mockup/</code> were rendered in a cloud container with no GPU (Chromium on SwiftShader): they show poses, never how smoothly it runs.</p>
+  </template>
+  <div class="envgrid"><div class="stage" data-scene="critters"></div><div class="side" id="critSide" aria-label="Actions, modes and tunables"></div></div>
 </div>
 
 <div class="tabpanel" id="tab-light" role="tabpanel" hidden>
@@ -236,6 +264,7 @@ tr:last-child td{border-bottom:0}
 <script src="ocean/creatures3d.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
 <script src="water-flow/water-look.js?v=4"></script>
+<script src="ocean/critters.js?v=1"></script>
 <script>
 "use strict";
 // ======================= the places =======================
@@ -313,7 +342,7 @@ const ENV = [
     where: "The swamp biome (flat land within a few metres of the sea that the rain keeps wet, 1% of land today), widened to every flat wet lowland. Estuaries where a river meets the sea; mangroves where that sea is above 20 C.",
     today: "The swamp biome, its herons, bog toads, mire lurkers and fireflies (M7's design) exist or are drawn; the pools above sea level, peat cells, mangroves and estuary are new."},
 ];
-const SCENE_IDS = ENV.map(e => e.id).concat(["sim", "light"]);
+const SCENE_IDS = ENV.map(e => e.id).concat(["sim", "light", "critters"]);
 const TABS = SCENE_IDS.concat(["life", "chart", "engine"]);
 
 // ======================= shared: params, tabs =======================
@@ -2232,7 +2261,7 @@ function buildEngine() {
 }
 
 // ======================= start =======================
-const SCENES = {sim: sceneSim, sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
+const SCENES = {critters: sceneCritters, sim: sceneSim, sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
 function makeScene(id, stage) { const W = SCENES[id](stage); return W; }
 buildPanels(); buildLife(); buildChartUI(); buildEngine();
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));

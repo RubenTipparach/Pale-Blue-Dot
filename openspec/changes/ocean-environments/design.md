@@ -2291,10 +2291,10 @@ block):
 
 | Block | Values (default) |
 | --- | --- |
-| `beaver.walk` | `stride_m` 0.36, `stance` 0.62, `speed_mps` 0.45, `foot_lift_m` 0.05, `waddle_roll_rad` 0.10, `hip_bob_m` 0.02, `head_lag_s` 0.10, `tail_lag_s` 0.18 |
+| `beaver.walk` | `stride_m` 0.36, `stance` 0.62, `speed_mps` 0.5, `foot_lift_m` 0.05, `waddle_roll_rad` 0.10, `hip_bob_m` 0.02, `head_lag_s` 0.10, `tail_lag_s` 0.18 |
 | `beaver.gnaw` | `beat_s` 0.42 (windup 0.30, anticipation 0.20, hit 0.12, recoil 0.38 of it), `pull_rad` 0.35, `chips_per_bite` 4, `bites_to_fell` 12 |
 | `beaver.fell` | `creak_s` 1.0, `lean_back_rad` 0.05, `fall_s` 1.7, `bounce_rad` 0.10, `settle_s` 0.9 |
-| `beaver.swim` | `speed_mps` 0.6, `scull_hz` 1.3, `scull_rad` 0.35, `head_above_m` 0.07 |
+| `beaver.swim` | `speed_mps` 0.75, `scull_hz` 1.3, `scull_rad` 0.35, `head_above_m` 0.07 |
 | `beaver.slap` | `windup_s` 0.30, `anticipate_s` 0.22, `strike_s` 0.08, `recoil_s` 0.35, `raise_rad` 1.15 |
 | `beaver.shake` | `hz` 7.0, `time_s` 1.0, `roll_rad` 0.45, `dry_s` 20 |
 | `river_otter.bound` | `stride_m` 0.85, `stance` 0.38, `speed_mps` 1.5, `arch_rad` 0.42, `lift_m` 0.07 |
