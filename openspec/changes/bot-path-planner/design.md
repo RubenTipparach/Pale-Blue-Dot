@@ -24,8 +24,8 @@ Moves from `(a, la)` to a neighbour `b`:
 | stair down | `(b, la-1)` | the block under it solid | `la-1`, `la`, `la+1` in `b` |
 
 Cost: metres walked, plus 0.5 m a step up, plus for each block dug a cost
-by its material (soil, sand, grass, dirt 2 m; stone, rock, ore 4 m; others
-3 m). Stations, lamps and water are never dug. Leaves and plants are not
+by its material (soil, sand, grass, dirt 6 m; stone, rock, ore 10 m;
+others 7.5 m: at 2 and 4 the bot tunnelled after a hen, 2026-11-20). Stations, lamps and water are never dug. Leaves and plants are not
 blocks here and are walked through.
 
 ## 2. The plan

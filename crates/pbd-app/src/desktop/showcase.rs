@@ -150,6 +150,9 @@ struct Through {
     block_s: f32,
 }
 
+/// A station farther than this is made again where the bot stands, m.
+const STATION_NEAR_M: f32 = 40.0;
+
 /// A plan being walked (`bot-path-planner` design 3).
 struct PlanRun {
     plan: path::Plan,
@@ -212,7 +215,10 @@ impl path::Ground for LiveGround<'_, '_> {
             None => path::Block::Never,
             // The sea is not in the columns: open air under its level is the
             // sea, so nothing is dug or walked under it.
-            Some(Material::Air) if pbd_core::column::layer_altitude(layer) + 0.5 < 0.0 => {
+            Some(Material::Air)
+                if pbd_core::column::layer_altitude(layer) + 0.5 < 0.0
+                    && surface_height(path::Ground::centre(self, cell)) < 0.0 =>
+            {
                 path::Block::Water
             }
             Some(Material::Air) => {
@@ -257,9 +263,12 @@ impl path::Ground for LiveGround<'_, '_> {
 }
 
 /// What digging a block costs the planner, metres of walking: earth is
-/// quick with the shovel, stone slow with the pickaxe.
+/// quick with the shovel, stone slow with the pickaxe. Dear enough that a
+/// walk round beats a tunnel unless the way round is much longer (seen
+/// 2026-11-20: at 2 and 4 the bot tunnelled after a hen, 20 digs a plan,
+/// and never tamed her).
 fn dig_cost(m: Material) -> f32 {
-    match m {
+    3.0 * match m {
         Material::Soil
         | Material::Grass
         | Material::Dirt
@@ -269,8 +278,8 @@ fn dig_cost(m: Material) -> f32 {
         | Material::Snow
         | Material::Tilled
         | Material::DesertSand => 2.0,
-        Material::Stone | Material::Rock | Material::Ore | Material::Basalt => 4.0,
-        _ => 3.0,
+        Material::Stone | Material::Rock | Material::Ore | Material::Basalt => 3.3,
+        _ => 2.5,
     }
 }
 
@@ -306,6 +315,8 @@ struct Bot {
     sel: (u32, f32),
     sel_from: usize,
     walk_anchor: Option<(Vec3, f32)>,
+    /// The watchdog: the goal walked to, the nearest it came, and when.
+    nearest: Option<(Vec3, f32, f32)>,
     detour_s: f32,
     roam_to: Option<Vec3>,
     climb_s: f32,
@@ -342,6 +353,9 @@ struct Bot {
     /// Going up and out of a hole (`bot-path-planner` design 5.1): until the
     /// sky is open over the head.
     climbing_out: bool,
+    /// Up to this altitude, m, when the watchdog sends it up: the goal's
+    /// height, so a pit under a tree on its rim is climbed out of too.
+    climb_to: Option<f32>,
     climb_out_s: f32,
     plan_avoid_for: Option<Vec3>,
     rmb_down: bool,
@@ -545,7 +559,29 @@ impl Bot {
         if dist < within {
             self.walk_anchor = None;
             self.route = None;
+            self.nearest = None;
             return Walked::There;
+        }
+        // The watchdog: a minute and not three metres from where it was,
+        // whatever it walks to (the same thing tried over and over, a new
+        // tree each time, tools swapped back and forth): up and out, and
+        // every plan and avoided cell forgotten.
+        match self.nearest {
+            Some((anchor, _, since)) if tangent(s.feet - anchor, s.up).length() < 3.0 => {
+                if s.now - since > 60.0 && !self.climbing_out {
+                    warn!(
+                        "showcase: not three metres in a minute ({dist:.1} m from the goal); up and out, then plan again"
+                    );
+                    self.climbing_out = true;
+                    self.climb_to = Some(point.length() - PLANET_RADIUS);
+                    self.plan = None;
+                    self.plan_avoid.clear();
+                    self.through = None;
+                    self.route = None;
+                    self.nearest = Some((s.feet, dist, s.now));
+                }
+            }
+            _ => self.nearest = Some((s.feet, dist, s.now)),
         }
         // No headway for a while: face the way and dig through.
         self.trail.push((s.now, s.feet.normalize_or(s.up)));
@@ -696,11 +732,20 @@ impl Bot {
             return false;
         };
         let covered = (feet + 2..feet + 10).any(|l| ground.block(here, l).solid());
+        // An open pit: every neighbour solid at the chest, nowhere to step.
+        let walled = ground
+            .neighbours(here)
+            .into_iter()
+            .all(|n| ground.block(n, feet + 1).solid());
+        // Sent up by the watchdog: until the feet are at the goal's height.
+        let below = self.climb_to.is_some_and(|to| altitude < to - 0.5);
+        let covered = covered || walled || below;
         if !covered {
             if self.climbing_out {
                 info!("showcase: up and out: open sky over the head");
             }
             self.climbing_out = false;
+            self.climb_to = None;
             self.climb_out_s = 0.0;
             return false;
         }
@@ -713,6 +758,7 @@ impl Bot {
         if self.climb_out_s > 90.0 {
             warn!("showcase: up and out: gave up after 90 s");
             self.climbing_out = false;
+            self.climb_to = None;
             self.climb_out_s = 0.0;
             self.stuck_s = 0.0;
             return false;
@@ -3375,7 +3421,9 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
         && carried(s.slots, name) == 0
         && let Some(Item::Block(m)) = pbd_core::station::item_named(name)
         && pbd_core::station::station_of(m).is_some()
-        && bot.stations(s, m).is_some()
+        && bot
+            .stations(s, m)
+            .is_some_and(|(_, _, at)| at.distance(s.feet) < STATION_NEAR_M)
     {
         return Status::Done;
     }
@@ -3463,6 +3511,29 @@ fn station(
     let Some((cell, layer, at)) = bot.stations(s, material) else {
         return Status::Fail(format!("no {material:?} placed"));
     };
+    // The nearest workbench far off (across water, past a hill): a new one
+    // here, as a player makes one rather than walk back (seen 2026-11-20:
+    // 92 m off, the way back through the sea).
+    if bot.phase == 0
+        && material == Material::Workbench
+        && at.distance(s.feet) > STATION_NEAR_M
+        && bot.injected.is_empty()
+    {
+        info!(
+            "showcase: the workbench is {:.0} m off; making one here",
+            at.distance(s.feet)
+        );
+        if carried(s.slots, "block:workbench") == 0 {
+            if carried(s.slots, "planks") < 6 {
+                bot.injected.push_back(file::Act::Craft("planks".into(), 2));
+            }
+            bot.injected
+                .push_back(file::Act::Craft("workbench".into(), 1));
+        }
+        bot.injected
+            .push_back(file::Act::Place("block:workbench".into()));
+        return Status::Running;
+    }
     let row = pbd_core::station::station_of(material).expect("a station");
     let busy = !super::craft::state_of(
         s.save,
