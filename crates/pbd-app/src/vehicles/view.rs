@@ -109,8 +109,11 @@ pub fn look(
         if !window.focused && !view.scripted {
             view.captured = false;
         }
-        cursor.visible = !view.captured;
-        cursor.grab_mode = if view.captured {
+        // A scripted run (a bot, a capture) turns the look by injected
+        // motion, not the mouse: the owner's pointer stays free, so the
+        // machine can be used while it plays.
+        cursor.visible = !view.captured || view.scripted;
+        cursor.grab_mode = if view.captured && !view.scripted {
             CursorGrabMode::Locked
         } else {
             CursorGrabMode::None

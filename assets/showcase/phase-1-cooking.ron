@@ -12,31 +12,31 @@
 (
     goal: "Goal: cooking, from the catch, the field and the coop",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
             caption: "Cooking. Grill the catch",
             until: ["cook-fish"],
             max_s: 150.0,
-            acts: [Cook("grilled-fish", 2), Still],
+            acts: [Focus("cook-fish"), Cook("grilled-fish", 2), Still],
         ),
         (
             caption: "Eat well",
             until: ["eat"],
             max_s: 30.0,
-            acts: [Eat("grilled-fish"), Still],
+            acts: [Focus("eat"), Eat("grilled-fish"), Still],
         ),
         (
             caption: "Bake bread from the wheat",
             until: ["bread"],
             max_s: 150.0,
-            acts: [Cook("flatbread", 2)],
+            acts: [Focus("bread"), Cook("flatbread", 2)],
         ),
         (
             caption: "Breakfast: an egg from the hen",
             until: ["fried-egg"],
             max_s: 120.0,
-            acts: [Cook("fried-egg", 1), Still],
+            acts: [Focus("fried-egg"), Cook("fried-egg", 1), Still],
         ),
         (
             caption: "Cooking done",

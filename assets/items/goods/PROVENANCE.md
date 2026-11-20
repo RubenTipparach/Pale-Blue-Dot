@@ -75,6 +75,11 @@ thwart and oars. The palette is the fence's two browns and ink (`FARM`),
 with the fibre's straw and the rope's tan. Each is an inventory icon with
 the 1 px outline.
 
+## Leather (`small-boats` design 2e)
+
+`leather` is drawn by `tools/gen_item_icons.py` from its own pixel grid: a
+tanned hide stretched out, in the fence's browns with a lighter grain.
+
 ## glowing-mushrooms design 3: the glowing mushroom
 
 `glowing-mushroom` is drawn by `tools/gen_item_icons.py` (`GLOW`): the glowing

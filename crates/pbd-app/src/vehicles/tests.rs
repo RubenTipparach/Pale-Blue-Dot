@@ -18,6 +18,7 @@ fn app(save: crate::saves::WorldSave) -> App {
         .init_asset::<Mesh>()
         .init_asset::<StandardMaterial>()
         .init_asset::<Image>()
+        .insert_resource(super::place::StarterLoon)
         .insert_resource(PlanetContact::test_planet(5))
         .insert_resource(Sea::new(&water))
         .insert_resource(water)

@@ -155,6 +155,10 @@ pub const GOODS: &[GoodRow] = &[
         32,
         "items/goods/glowing-mushroom.png",
     ),
+    // ---- small-boats design 2e: a cow's hide, tanned; what an inner tube is
+    // made of (owner, 2026-11-18: "tubes: would probably need just leather",
+    // "cows and horses should").
+    row("leather", "leather", 32, "items/goods/leather.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the

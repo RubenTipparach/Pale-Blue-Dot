@@ -1,8 +1,14 @@
 #[cfg(feature = "desktop")]
 mod desktop;
 mod headless;
+// MEASUREMENT (`memory-leak`): the allocator that counts big allocations by
+// call stack, built only with `--features alloc-trace`.
+#[cfg(feature = "alloc-trace")]
+mod alloc_trace;
 
 fn main() {
+    #[cfg(feature = "alloc-trace")]
+    alloc_trace::start();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args
         .first()

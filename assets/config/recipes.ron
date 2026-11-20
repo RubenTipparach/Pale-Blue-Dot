@@ -201,7 +201,9 @@
             name: "INNER TUBE",
             station: "workbench",
             secs: 4.0,
-            inputs: [("wool", 4), ("rope", 2)],
+            // Leather alone (small-boats design 2e; the owner: "tubes: would
+            // probably need just leather").
+            inputs: [("leather", 3)],
             outputs: [("inner-tube", 1)],
         ),
         (

@@ -15,8 +15,13 @@ slot.
 
 #### Scenario: Making an inner tube
 
-- **WHEN** a player with four wool and two rope crafts INNER TUBE at a workbench
-- **THEN** the wool and rope are taken and an inner tube lands in the slots
+- **WHEN** a player with three leather crafts INNER TUBE at a workbench
+- **THEN** the leather is taken and an inner tube lands in the slots
+
+#### Scenario: A kept plodder gives leather
+
+- **WHEN** a kept plodder has been fed for six days
+- **THEN** one leather is there to collect from it
 
 ### Requirement: The tube and the raft float upright and paddle
 

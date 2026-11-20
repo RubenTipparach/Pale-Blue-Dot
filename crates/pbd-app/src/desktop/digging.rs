@@ -781,9 +781,19 @@ pub fn dig_and_place(
         // Bait worms out of earth by a river or the sea (`starter-missions`
         // G1, `dig-fixes` 2).
         let bait = was.filter(|_| !placed).and_then(|m| {
-            let wet = by_water(&fine, &edits, &gather.0, (cell, layer));
-            gather.0.bait(m, cell, layer as u16, placed, wet)
+            // Any earth, by the water or not (owner, 2026-11-19: "make bait
+            // show up in all dirt blocks", "1 in 5 dirt blocks have worm").
+            gather.0.bait(m, cell, layer as u16, placed, true)
         });
+        // What an ore cell gives when it is not a block (coal): counted as
+        // gathered at the cut, as a dug block is (`mission-playthrough` 3.1).
+        let ore_good = was
+            .filter(|m| *m == Material::Ore)
+            .map(|m| yield_of(&edits, m, cell, layer))
+            .and_then(|item| match item {
+                Item::Good(good) => Some(good),
+                _ => None,
+            });
         let hands = if seed.is_none() && find.is_none() && bait.is_none() {
             Hands::Take
         } else {
@@ -822,6 +832,13 @@ pub fn dig_and_place(
                 pbd_core::missions::Kind::Gather,
                 taken,
             ));
+            if let Some(good) = ore_good {
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Gather,
+                    good.code(),
+                    1,
+                ));
+            }
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",

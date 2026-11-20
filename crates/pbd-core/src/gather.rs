@@ -40,7 +40,7 @@ impl Default for GatherSettings {
             fibre_one_in: 3,
             stone_one_in: 3,
             axe_logs: 4,
-            bait_one_in: 3,
+            bait_one_in: 5,
             bait_reach_cells: 3,
             bait_water_m: (-3.0, 2.0),
         }
@@ -105,6 +105,9 @@ impl GatherSettings {
         placed: bool,
         by_water: bool,
     ) -> Option<Good> {
+        // Every dirt there is: the three grasses, dirt, soil, a field's
+        // tilled soil and sand (owner, 2026-11-19: "theres multiple dirt
+        // types, so make sure to cover all dirt").
         let earth = matches!(
             material,
             Material::Grass
@@ -112,6 +115,7 @@ impl GatherSettings {
                 | Material::JungleGrass
                 | Material::Dirt
                 | Material::Soil
+                | Material::Tilled
                 | Material::Sand
                 | Material::DesertSand
         );

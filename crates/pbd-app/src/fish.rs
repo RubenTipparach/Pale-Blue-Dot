@@ -326,10 +326,25 @@ pub fn fresh_top(contact: &PlanetContact, up: Vec3, floor: f32) -> Option<f32> {
     (top > sea_top + 0.25).then_some(crate::planet::PLANET_RADIUS + top)
 }
 
+/// How far over a sea-level flat the line counts the sea standing, m.
+const FLAT_WATER_M: f32 = 0.05;
+
 impl Water for PlanetWater<'_> {
     fn surface(&self, point: Vec3) -> f32 {
-        self.fresh(point)
-            .unwrap_or_else(|| self.sea.radius + self.local.height(point, self.sea.radius))
+        if let Some(fresh) = self.fresh(point) {
+            return fresh;
+        }
+        let sea = self.sea.radius + self.local.height(point, self.sea.radius);
+        // A flat at the sea's level is drawn under the sea, half a metre over
+        // the sheet's rest (the sheet sits low so a beach stands clear of the
+        // swell): a float coming down on it is on water, not dry ground
+        // (owner, 2026-11-19, a float on open water: "The float came down on
+        // dry ground"). Ground over the sea's level stays dry.
+        let bed = self.bed(point);
+        if bed <= crate::planet::PLANET_RADIUS + FLAT_WATER_M && bed > sea {
+            return bed + FLAT_WATER_M;
+        }
+        sea
     }
 
     fn bed(&self, point: Vec3) -> f32 {
@@ -382,6 +397,10 @@ struct Surroundings<'w, 's> {
     vehicle_cameras: Query<'w, 's, &'static GlobalTransform, With<crate::vehicles::VehicleCamera>>,
     /// Steady hands (`cooking` design S5).
     meals: Option<Res<'w, crate::kitchen::MealEffects>>,
+    /// Which side of the water the eye is on: no cast from under it
+    /// (`mission-playthrough` 3.6).
+    eye_water: Option<Res<'w, crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<'w, crate::config::WaterSettings>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -508,11 +527,34 @@ fn fish(
             )
         }),
     };
+    let mut under = false;
+    let has_bait = hotbar
+        .as_deref()
+        .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
     if let (Some((eye, look, right, cam_up)), true) = (camera, rod && walking) {
         let buttons = world.buttons.as_deref();
         let pressed = |b| listening && buttons.is_some_and(|i| i.just_pressed(b));
+        // A line is not cast from under the water (owner, 2026-11-19: "the
+        // line casting shouldnt work underwater").
+        let sheet = crate::planet::PLANET_RADIUS
+            - world
+                .water_settings
+                .as_deref()
+                .map_or(0.5, |w| w.depth_offset_m);
+        under = crate::audio::hooks::eye_under_water(
+            o.query_point(eye),
+            world.eye_water.as_deref(),
+            sheet,
+        );
+        // Said when a cast is tried with nothing to put on the hook.
+        if !has_bait && fishery.line.phase == Phase::Ready && pressed(MouseButton::Left) {
+            status.say("Needs bait", 2.0);
+        }
         let controls = Controls {
-            pressed: pressed(MouseButton::Left),
+            // And never without a worm to put on the hook (owner,
+            // 2026-11-19: "do not allow fishing without bait").
+            pressed: pressed(MouseButton::Left)
+                && !((under || !has_bait) && fishery.line.phase == Phase::Ready),
             held: listening && buttons.is_some_and(|i| i.pressed(MouseButton::Left)),
             released: buttons.is_some_and(|i| i.just_released(MouseButton::Left)),
             reel_in: pressed(MouseButton::Right),
@@ -586,6 +628,35 @@ fn fish(
             if let Some(cue) = cue.as_deref_mut() {
                 cue.events.push(event);
             }
+            if let Event::Dry = event {
+                // What the line read where it came down (`mission-playthrough`:
+                // a float on open water said dry ground).
+                let q = o.query_point(fishery.line.float);
+                let up = q.normalize_or(Vec3::Y);
+                info!(
+                    "FISH_DRY at r {:.2} (alt {:.2}): surface {:.2}, bed {:.2}, fresh {:?}, sea radius {:.2}, column water {:?}",
+                    q.length(),
+                    q.length() - crate::planet::PLANET_RADIUS,
+                    water.surface(q) - crate::planet::PLANET_RADIUS,
+                    water.bed(q) - crate::planet::PLANET_RADIUS,
+                    water.fresh(q).map(|f| f - crate::planet::PLANET_RADIUS),
+                    sea.radius - crate::planet::PLANET_RADIUS,
+                    contact
+                        .and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS + 50.0))),
+                );
+                info!(
+                    "FISH_DRY ground: generated {:.2}, stand from above {:?}, stand at the sheet {:?}, column water at the bed {:?}",
+                    crate::planet::surface_height(up),
+                    contact.map(|c| c
+                        .stand(up * (crate::planet::PLANET_RADIUS + 20.0))
+                        .floor_radius
+                        - crate::planet::PLANET_RADIUS),
+                    contact
+                        .map(|c| c.stand(up * sea.radius).floor_radius
+                            - crate::planet::PLANET_RADIUS),
+                    contact.and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS - 2.0))),
+                );
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -608,7 +679,15 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.keys = (rod && walking && !roster.is_empty()).then(|| keys_for(fishery.line.phase));
+    status.keys = (rod && walking && !roster.is_empty()).then(|| {
+        if under && fishery.line.phase == Phase::Ready {
+            [("UNDERWATER", false), ("", false)]
+        } else if !has_bait && fishery.line.phase == Phase::Ready {
+            [("NEED BAIT", false), ("", false)]
+        } else {
+            keys_for(fishery.line.phase)
+        }
+    });
     status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
     // The rod in hand moves with the line (`held.rs`, `rod-motion`).
     if let Some(cue) = cue.as_deref_mut() {
@@ -1434,6 +1513,58 @@ pub fn water_here(
 pub mod bodies;
 pub mod places;
 
+/// A mesh's attribute buffers taken back to be laid into again
+/// (`memory-leak`): emptied, their capacity kept, so a mesh rebuilt every
+/// frame stops allocating once it has reached its size.
+pub(crate) mod kept {
+    use bevy::mesh::{Mesh, MeshVertexAttribute, VertexAttributeValues, triangle_normal};
+
+    /// The attribute's buffer out of `mesh`, empty, or a new one if it has
+    /// none of that type.
+    pub fn float2(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 2]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x2(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], three floats a vertex.
+    pub fn float3(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 3]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x3(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], four floats a vertex.
+    pub fn float4(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 4]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x4(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The flat normals of an unindexed triangle list, into `out`: what
+    /// `Mesh::compute_flat_normals` works out, without a new buffer.
+    pub fn flat_normals(positions: &[[f32; 3]], out: &mut Vec<[f32; 3]>) {
+        out.clear();
+        out.reserve(positions.len());
+        for p in positions.chunks_exact(3) {
+            let normal = triangle_normal(p[0], p[1], p[2]);
+            out.extend([normal; 3]);
+        }
+    }
+}
+
 pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
@@ -2244,7 +2375,7 @@ pub(crate) mod draw {
     /// a diver under the water is not drawn and a hidden octopus is small in
     /// its den.
     #[allow(clippy::too_many_arguments)]
-    fn build(
+    pub(super) fn build(
         o: &SimOrigin,
         mesh: &mut Mesh,
         school: &School,
@@ -2255,10 +2386,18 @@ pub(crate) mod draw {
         held: Vec3,
         (headings, swim, dt): (&mut DrawnHeadings, &DrawnSwim, f32),
     ) {
-        let mut positions: Vec<[f32; 3]> = Vec::new();
-        let mut colours: Vec<[f32; 4]> = Vec::new();
-        let mut uvs: Vec<[f32; 2]> = Vec::new();
-        let mut waves = bodies::SwimAttributes::default();
+        // Laid into the buffers the mesh already holds (`memory-leak`): a
+        // school is laid every frame, and new buffers grown from empty each
+        // time were most of the game's large allocations.
+        let mut positions = kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+        let mut colours = kept::float4(mesh, Mesh::ATTRIBUTE_COLOR);
+        let mut uvs = kept::float2(mesh, Mesh::ATTRIBUTE_UV_0);
+        let mut waves = bodies::SwimAttributes {
+            axes: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_AXES),
+            wave: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_WAVE),
+            up: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_UP),
+        };
+        let mut normals = kept::float3(mesh, Mesh::ATTRIBUTE_NORMAL);
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for i in 0..school.len() {
             let id = school.ids.get(i).copied().unwrap_or(0);
@@ -2383,25 +2522,25 @@ pub(crate) mod draw {
         // triangle, so its mesh keeps the layout the loading screen warmed
         // and never asks for a pipeline of its own.
         if positions.is_empty() {
-            positions = vec![[0.0; 3]; 3];
-            colours = vec![[0.0; 4]; 3];
-            uvs = vec![bodies::white_uv(); 3];
-            waves = bodies::SwimAttributes {
-                axes: vec![[0.0; 4]; 3],
-                wave: vec![[0.0; 4]; 3],
-                up: vec![[0.0; 4]; 3],
-            };
+            positions.extend([[0.0; 3]; 3]);
+            colours.extend([[0.0; 4]; 3]);
+            uvs.extend([bodies::white_uv(); 3]);
+            waves.axes.extend([[0.0; 4]; 3]);
+            waves.wave.extend([[0.0; 4]; 3]);
+            waves.up.extend([[0.0; 4]; 3]);
         }
+        // Flat normals of the rigid body: the vertex stage turns them with
+        // the bend. `Mesh::compute_flat_normals`'s arithmetic, into the
+        // buffer the mesh held.
+        kept::flat_normals(&positions, &mut normals);
+        mesh.remove_indices();
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, waves.axes);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, waves.wave);
         mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, waves.up);
-        mesh.remove_indices();
-        // Flat normals of the rigid body: the vertex stage turns them with
-        // the bend.
-        mesh.compute_flat_normals();
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     }
 
     /// The float on the water and the line from the rod's tip to it, placed

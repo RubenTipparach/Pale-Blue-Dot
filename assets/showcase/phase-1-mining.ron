@@ -1,42 +1,61 @@
 // The phase-1 showcase, one file per branch of the mission tree
 // (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
 // through the player's own inputs, each shot ending when its missions are
-// done, or the run failing as stalled. Mining and smelting: into the hill, ore, a forge, bronze. It needs ore in the ground (generator version 10).
+// done, or the run failing as stalled. Mining and smelting: a stair cut down
+// into the ground, ore and coal, a forge, bronze, then iron. It needs ore in
+// the ground (generator version 10 and later).
 //
 // Each branch starts from the world the earlier ones left: run them in
 // order on one `--world` (trunk, fishing, farming, herding, cooking, then
 // mining, light and about). Nothing is set; every mission is played.
 //
+// One mission at a time (`mission-playthrough` 3.5): each shot picks its
+// mission on the tree first, and digs only the ore and coal that mission's
+// smelting takes. SMELT ORE takes 4 ore and 2 coal for 2 copper, 1 iron and
+// 1 tin; BRONZE takes 1 copper, 1 tin and 1 coal for 2 bronze.
+//
 // The start is a level pasture with the sea within thirty metres (measured
 // once: the only such place within 3 km of the fields spawn).
 (
-    goal: "Goal: mining and smelting, from stone to bronze",
+    goal: "Goal: mining and smelting, from stone to iron",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
-            caption: "Mining. Dig into the hill with the pickaxe",
+            caption: "Dig into the hill",
             until: ["dig-deep"],
-            max_s: 300.0,
-            acts: [Hand("pickaxe"), Dig(Mission("dig-deep"), 4), Still],
-        ),
-        (
-            caption: "Find ore and coal in the rock",
-            until: ["ore"],
             max_s: 400.0,
-            acts: [Hand("pickaxe"), Dig(Mission("ore"), 8), Still],
+            acts: [Focus("dig-deep"), Hand("pickaxe"), Mine(Mission("dig-deep"), 12), Still],
         ),
         (
-            caption: "Build a forge, and set it down",
+            caption: "Find ore",
+            until: ["ore"],
+            max_s: 900.0,
+            acts: [Focus("ore"), Hand("pickaxe"), Mine(Mission("ore"), 12), Still],
+        ),
+        (
+            caption: "Build a forge",
             until: ["forge"],
-            max_s: 200.0,
-            acts: [Bench("forge", 1), Place("block:forge")],
+            max_s: 400.0,
+            acts: [Focus("forge"), Hand("shovel"), Dig(Have("stone", 8), 1), Bench("forge", 1), Place("block:forge")],
         ),
         (
             caption: "Smelt bronze",
             until: ["smelt"],
             max_s: 300.0,
-            acts: [Smelt("mixed-ore", 2), Smelt("bronze", 2), Still],
+            acts: [Focus("smelt"), Smelt("mixed-ore", 1), Smelt("bronze", 1), Still],
+        ),
+        (
+            caption: "Bronze tools",
+            until: ["bronze-tool"],
+            max_s: 900.0,
+            acts: [Focus("bronze-tool"), Hand("pickaxe"), Mine(Have("coal", 3), 12), Mine(Have("block:ore", 4), 12), Place("block:forge"), Smelt("mixed-ore", 1), Smelt("bronze", 1), Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Bench("bronze-pickaxe", 1), Hand("pickaxe"), Mine(Mission("bronze-tool"), 14), Still],
+        ),
+        (
+            caption: "The iron age",
+            until: ["iron"],
+            max_s: 1800.0,
+            acts: [Focus("iron"), Hand("pickaxe"), Mine(Have("coal", 6), 12), Mine(Have("block:ore", 12), 12), Place("block:forge"), Smelt("mixed-ore", 3), Bench("iron-pickaxe", 1), Still],
         ),
         (
             caption: "Mining done",

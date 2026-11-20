@@ -32,6 +32,12 @@ const LEVEL_HALF_M: f32 = 5.5;
 /// A new world's start is a level plain: this many of the 120 samples in the
 /// ring 20 to 36 m round it are level spots (`level_plain`).
 const START_LEVEL_SPOTS: usize = 8;
+/// Moors the Loon at a new world's spawn, as worlds were given one before
+/// 2026-11-19. Only the vehicle tests insert it; the game never does.
+#[derive(Resource)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct StarterLoon;
+
 /// Water the Loon is put in, m under the sea surface.
 const LOON_DEPTH_M: f32 = 1.2;
 /// A new anchor's rode, per metre of depth, plus a margin, m.
@@ -212,6 +218,12 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                 }
             }
         }
+        // A new world moors no canoe at the spawn (owner, 2026-11-19, on the
+        // starter Loon at the shore: "this boat shoulve been removed"):
+        // boats are made now (the raft, the tube), and a town's quay moors
+        // its canoes. An old world keeps the one it was given. The vehicle
+        // tests still moor one, to board and sail (`StarterLoon`).
+        None if !world.contains_resource::<StarterLoon>() => {}
         None => {
             // The walker is a physics `Position`.
             let center = world
@@ -272,6 +284,7 @@ mod frame_tests {
     fn translated_walker_finds_the_same_body_local_berths() {
         let mut world = World::new();
         world.insert_resource(Fleet::new(Default::default()));
+        world.insert_resource(StarterLoon);
         world.insert_resource(PlanetContact::test_planet(5));
         world.insert_resource(Sea::new(&Default::default()));
         world.insert_resource(crate::saves::WorldSave::memory_only());
