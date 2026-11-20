@@ -17,11 +17,15 @@ use crate::hex::{Hex, Voxel};
 /// version 10 (`flora-v2` design 12) grows M13's forests on version 9's
 /// ground; version 11 (`river-downhill`) keeps every river's water from
 /// rising downstream; version 12 (`swamps`) puts swamps on the low wet land
-/// by the sea and the rivers, on version 11's heights. A new world is made
+/// by the sea and the rivers, on version 11's heights; version 14
+/// (`ocean-environments` B24) lays the sea's cells; version 15
+/// (`mountain-ground`) grasses and snows the mountains' flats, scours their
+/// crests and stands their trees to a tree line (13 was never shipped). A
+/// new world is made
 /// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 14;
+pub const GENERATOR_VERSION: u32 = 15;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the
@@ -112,6 +116,13 @@ pub enum Material {
     /// laid by the `beaver` world process; the local trees' bark, as the
     /// workbench is drawn. Solid, so flowing water treats a dam as a wall.
     Sticks = 28,
+    /// Desert sand (`sand-tiles` design 5 (c)): what generated sand dug in a
+    /// desert cell yields. Generation never writes it, so no generator
+    /// version moves; a desert's ground is still [`Material::Sand`], drawn
+    /// from the desert sheet. Placed, it is drawn from the desert sheet
+    /// wherever it lands, as render code 1 (sand). It acts as sand in every
+    /// other way ([`Material::is_sand`]).
+    DesertSand = 29,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -246,6 +257,13 @@ impl Material {
         }
     }
 
+    /// Whether this is sand of either kind, beach or desert (`sand-tiles`
+    /// design 5): the two dig, sound, bounce, till and turn up bait alike,
+    /// and differ only in the sheet they are drawn from.
+    pub fn is_sand(self) -> bool {
+        matches!(self, Material::Sand | Material::DesertSand)
+    }
+
     /// Whether this light burns only from dusk to dawn. A property of the
     /// kind of light, not of where it stands (`lamps-and-lanterns` decision
     /// 4): a street lantern the player places behaves like a city's.
@@ -256,7 +274,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 27] = [
+    pub const ALL: [Material; 28] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -284,6 +302,7 @@ impl Material {
         Material::Basalt,
         Material::MusselBed,
         Material::Sticks,
+        Material::DesertSand,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the

@@ -160,6 +160,14 @@ impl TreeTable {
         ],
     };
 
+    /// Version 15 (`mountain-ground` design 12): version 10's, and the
+    /// mountains' turf stands firs at 60 in 256 below the tree line, thinned
+    /// with altitude by the record's [`TREE_LINE_SHIFT`] field.
+    pub const V15: Self = Self {
+        density: [0, 15, 82, 0, 141, 67, 60, 77],
+        ..Self::V10
+    };
+
     /// Whether a finest cell stands a tree under this table: the foliage
     /// pass's rule, which reads the same numbers from the uniform
     /// ([`Self::packed`]).
@@ -182,6 +190,9 @@ impl TreeTable {
         } else {
             ground
         };
+        // The tree line (`mountain-ground` design 12): the record's thinning,
+        // nought on every world before version 15, where this is `density`.
+        let density = density * (15 - tree_line_thin(word)) / 15;
         material < 32 && (ground >> material) & 1 == 1 && shader_hash(tree_id) & 0xff < density
     }
 
@@ -212,6 +223,27 @@ pub const FLOODED_BIT: u32 = 25;
 /// [`tree_biome`] here and by the visibility and surface passes. Derived
 /// from the generator, never saved.
 pub const BEACH_BACK_BIT: u32 = 16;
+
+/// Where a record's material word carries the tree line's thinning
+/// (`mountain-ground` design 12, generator version 15), four bits: how many
+/// fifteenths of its biome's density is thinned away. Nought on every world
+/// before version 15 and off the mountains. Set by the app's
+/// `surface_code` from [`crate::mountain::tree_line`]; read by
+/// [`TreeTable::grows`] and the visibility pass.
+pub const TREE_LINE_SHIFT: u32 = 17;
+/// The bit that says the tree a cell stands is krummholz, not a fir
+/// (version 15, design 12).
+pub const KRUMMHOLZ_BIT: u32 = 21;
+/// Draw-time relief on a Mountains cell, every world (`mountain-ground`
+/// design 10, 11, [`crate::mountain::relief`]): a neighbour stands 3 m over
+/// it (scree), and no neighbour is more than a metre off (a flat).
+pub const SCREE_BIT: u32 = 22;
+pub const FLAT_BIT: u32 = 23;
+
+/// A record's tree-line thinning, 0..=15.
+pub fn tree_line_thin(word: u32) -> u32 {
+    ((word >> TREE_LINE_SHIFT) & 0xf).min(15)
+}
 
 /// The biome a cell's trees are of (`flora-v2` design 12.13): the record's
 /// biome byte, or the beach's (1) on a beach back ([`BEACH_BACK_BIT`]). The
@@ -316,11 +348,13 @@ pub const BIOME_FLORA: [BiomeFlora; 8] = [
         deciduous: true,
         red_caps: false,
     },
-    // Mountains: a little of each, alpine white and blue.
+    // Mountains: the alpine meadow (`mountain-ground` design 8): gentian
+    // (the kit's blue), edelweiss white, avens yellow and campion (the kit's
+    // red), sedge in the fern slot and cushions in the mushroom slot.
     BiomeFlora {
-        fern: 0.3,
-        mushroom: 0.5,
-        flowers: FLOWER_WHITE | FLOWER_BLUE,
+        fern: 0.6,
+        mushroom: 1.4,
+        flowers: FLOWER_WHITE | FLOWER_BLUE | FLOWER_YELLOW | FLOWER_RED,
         deciduous: false,
         red_caps: false,
     },
@@ -338,17 +372,18 @@ pub const BIOME_FLORA: [BiomeFlora; 8] = [
 /// `planet_gen::Biome` order (`flora-v2` design 1, 9.1). Read off the ground
 /// the tufts stand on, as the approved mockup does (`foliage.html`,
 /// `groundRamp`): the biome sheet's ground tile (0,0) in
-/// `assets/tilesets/atlas.png`, its texels sorted by luminance and cut in
+/// `assets/tilesets/atlas.png` (the mountains' alpine turf (3,2), where its
+/// grass is drawn, `mountain-ground` design 9), its texels sorted by luminance and cut in
 /// thirds, each third's commonest colour. `planet_terrain`'s atlas test
 /// recomputes this table off the committed file and fails on any difference.
 pub const TUFT_RAMPS: [[u32; 3]; 8] = [
     [0xb8cba8, 0xcbd6b0, 0xcfdab3], // ocean: seabed sand
-    [0xe0c996, 0xe2cb98, 0xe3cc98], // beach: dry shell sand
+    [0xd8bf8e, 0xe2cb98, 0xe2cb98], // beach: dry shell sand (`sand-tiles`)
     [0x617741, 0x5f7841, 0xb8c25f], // fields: pasture grass
-    [0xeac385, 0xebc586, 0xecc587], // desert: pale sand
+    [0xd39556, 0xdea464, 0xe6b373], // desert: pale sand (`sand-tiles`)
     [0x164a35, 0x194a35, 0x2f673a], // jungle: jungle grass
     [0x2b3831, 0x475230, 0x5e6634], // swamp: swamp moss
-    [0x374051, 0x374352, 0x808a94], // mountains: scree
+    [0x3a4632, 0x3a4632, 0x4b5a3b], // mountains: alpine turf (3,2) (`mountain-ground` 9)
     [0x536155, 0x637261, 0xe9eeec], // tundra: snowy moss
 ];
 
@@ -407,7 +442,7 @@ pub const BIOME_FRUIT: [u32; 8] = [
     0,               // desert: no trees
     1 << 4 | 1 << 5, // jungle: mango, papaya
     0,               // swamp
-    0,               // mountains: no trees
+    1 << 8,          // mountains: the firs' pine cones (`mountain-ground` design 12)
     1 << 8,          // tundra: pine cones
 ];
 
@@ -824,7 +859,8 @@ mod tests {
             "if ((word >> BEACH_BACK_BIT) & 1u) == 1u { return 1u; }",
             "return (word >> 8u) & 0xffu;",
             "let entry = params.plant_means[min(biome, 7u)].w;",
-            "let density = (entry >> 16u) & 0xffu;",
+            "let density = tree_line_density((entry >> 16u) & 0xffu, cell.metadata.y);",
+            "return density*(15u - min((word >> TREE_LINE_SHIFT) & 0xfu, 15u))/15u;",
             "let grass = material==2u || material==3u || material==7u;",
             "let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));",
             "let pine = ((entry >> 25u) & 1u) == 1u && material==6u;",
@@ -869,7 +905,8 @@ mod tests {
             let back = (word >> BEACH_BACK_BIT) & 1 == 1;
             let biome = if back { 1 } else { (word >> 8) & 0xff };
             let entry = means_w[biome.min(7) as usize];
-            let density = (entry >> 16) & 0xff;
+            let density =
+                ((entry >> 16) & 0xff) * (15 - ((word >> TREE_LINE_SHIFT) & 0xf).min(15)) / 15;
             let grass = material == 2 || material == 3 || material == 7;
             let sand = (entry >> 24) & 1 == 1 && (material == 1 || (back && material == 4));
             let pine = (entry >> 25) & 1 == 1 && material == 6;
@@ -878,7 +915,7 @@ mod tests {
         // The uniform's lanes as the app packs them (the fruit in the low
         // half), against the CPU rule, for every biome and material code and
         // 10,000 cell ids, on both tables.
-        for table in [TreeTable::V4, TreeTable::V10] {
+        for table in [TreeTable::V4, TreeTable::V10, TreeTable::V15] {
             let w: [u32; 8] = std::array::from_fn(|b| BIOME_FRUIT[b] | table.packed(b));
             for biome in 0..8u32 {
                 for material in 0..16u32 {
@@ -888,6 +925,8 @@ mod tests {
                         1 << FLOODED_BIT,
                         1 << BEACH_BACK_BIT,
                         1 << BEACH_BACK_BIT | 1 << FLOODED_BIT,
+                        7 << TREE_LINE_SHIFT,
+                        15 << TREE_LINE_SHIFT | 1 << KRUMMHOLZ_BIT,
                     ] {
                         let word = material | biome << 8 | cleared;
                         for id in 0..10_000u32 {
@@ -935,6 +974,40 @@ mod tests {
     /// and cleared bit over 10,000 cell ids. A cell's id and word are pinned
     /// by the ground digests and the cell keys, so this pins where a world's
     /// trees stand.
+    /// `mountain-ground` design 12: version 15's mountains stand trees on
+    /// their turf below the tree line and none above it, on the CPU's rule;
+    /// a version 14 range stands none, and krummholz is picked where the
+    /// record says.
+    #[test]
+    fn mountains_stand_trees_to_a_tree_line_in_version_15() {
+        let turf = 2 | 6 << 8;
+        let grows = |table: &TreeTable, word: u32| {
+            (0..20_000u32).filter(|&id| table.grows(id, word)).count()
+        };
+        assert_eq!(
+            grows(&TreeTable::V10, turf),
+            0,
+            "an old range stands no tree"
+        );
+        assert_eq!(grows(&TreeTable::V4, turf), 0);
+        let below = grows(&TreeTable::V15, turf);
+        assert!(below > 3_000, "{below}");
+        let m = crate::mountain::MountainGround::V15;
+        let word = |alt: f32| {
+            let (thin, k) = m.tree_line(alt);
+            turf | thin << TREE_LINE_SHIFT | u32::from(k) << KRUMMHOLZ_BIT
+        };
+        let at_line = grows(&TreeTable::V15, word(145.0));
+        assert!(at_line > 0 && at_line < below, "{at_line}");
+        assert_eq!(grows(&TreeTable::V15, word(160.0)), 0, "above the line");
+        assert_eq!(grows(&TreeTable::V15, word(200.0)), 0);
+        let k = crate::tree_kit::pick_word(7, word(150.0)).unwrap();
+        assert_eq!(k.species, crate::tree_kit::Species::Krummholz);
+        let fir = crate::tree_kit::pick_word(7, word(120.0)).unwrap();
+        assert_eq!(fir.species, crate::tree_kit::Species::Pine);
+        assert!((0.55..=0.85).contains(&fir.size));
+    }
+
     fn tree_digest(table: &TreeTable) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
         for biome in 0..8u32 {

@@ -362,6 +362,7 @@ pub fn material_name(material: Material) -> &'static str {
         Material::Basalt => "basalt",
         Material::MusselBed => "mussel bed",
         Material::Sticks => "sticks",
+        Material::DesertSand => "desert sand",
         crate::flowing_water!() => "water",
     }
 }

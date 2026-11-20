@@ -106,7 +106,7 @@
         "lichen stone",
         "snow dusted rock",
         "dark shale",
-        "worn stone path",
+        "alpine turf",
         "angular pebbles",
         "slate bricks",
         "alpine soil",
@@ -263,7 +263,7 @@
       "surface": "warm ivory shell sand",
       "soil": "damp ochre sand",
       "rock": "rounded coastal sandstone",
-      "accent": "pale turquoise sea glass",
+      "accent": "pink and white shell",
       "tiles": [
         "dry shell sand",
         "dry over wet sand side",

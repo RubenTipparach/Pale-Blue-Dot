@@ -72,6 +72,8 @@ pub fn albedo(material: Material) -> Vec3 {
         Material::JungleGrass => Vec3::new(0.085, 0.24, 0.060),
         Material::DryGrass => Vec3::new(0.32, 0.36, 0.22),
         Material::Sand => Vec3::new(0.61, 0.48, 0.25),
+        // The desert top's mean (`sand-tiles` design 3), linear.
+        Material::DesertSand => Vec3::new(0.72, 0.37, 0.13),
         Material::Stone | Material::Rock | Material::Ore => Vec3::new(0.31, 0.34, 0.33),
         Material::Snow => Vec3::new(0.80, 0.90, 0.91),
         Material::Dirt | Material::Soil => Vec3::new(0.466, 0.342, 0.255),

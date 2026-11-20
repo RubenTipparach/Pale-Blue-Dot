@@ -138,10 +138,12 @@ pub(crate) fn clutter_first_vertex() -> u32 {
 /// "shader global binding 3 is not available", which names the binding and not
 /// the draw that outgrew it.
 ///
-/// Then eight more, the near trees, one per species (`flora-v2` design
+/// Then nine more, the near trees, one per species (`flora-v2` design
 /// 10.5), whose vertex counts and first vertices the CPU writes once when
 /// the buffer is made (`near_args`) and the cull only counts instances into.
-pub(crate) const INDIRECT_BYTES: u64 = 13 * 16;
+pub(crate) const INDIRECT_BYTES: u64 = (5 + NEAR_SPECIES) * 16;
+/// The near draws: one per species, krummholz the ninth (`mountain-ground`).
+pub(crate) const NEAR_SPECIES: u64 = pbd_core::tree_kit::SPECIES.len() as u64;
 /// Where the near draws' arguments start in the indirect buffer.
 pub(crate) const NEAR_ARGS_OFFSET: u64 = 5 * 16;
 
@@ -156,7 +158,7 @@ pub(crate) fn near_args() -> Vec<u32> {
         .collect()
 }
 /// Bytes of the near-tree list: a region of `NEAR_CAP` entries per species.
-pub(crate) const NEAR_LIST_BYTES: u64 = 8 * trees::NEAR_CAP as u64 * 4;
+pub(crate) const NEAR_LIST_BYTES: u64 = NEAR_SPECIES * trees::NEAR_CAP as u64 * 4;
 
 /// Vertices per column instance: a cave ceiling fan and a cave floor fan per
 /// run, then one flank quad per side per run per stretch of the NEIGHBOUR's
@@ -2442,7 +2444,7 @@ fn draw_terrain<'w>(
     // The near trees, one draw per species (`flora-v2` design 10.5).
     if !skip.contains("near") {
         pass.set_bind_group(0, &view.near_bind_group, &[]);
-        for s in 0..8 {
+        for s in 0..NEAR_SPECIES {
             pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
         }
     }

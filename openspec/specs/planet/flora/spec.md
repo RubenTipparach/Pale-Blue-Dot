@@ -82,3 +82,31 @@ the hash SHALL be pinned by a digest over sample keys.
   unchanged, and the same cells grow glowing mushrooms as before
   (`flora::tests::which_cells_glow_is_pinned`,
   `config::tests::the_glowing_mushroom_chance_is_pinned`)
+
+### Requirement: Mountain rock carries lichen and scree, drawn
+
+A Mountains rock face below the snow line SHALL show lichen in its own
+texels, its rock picked per cell from the mountains sheet's rocks by tilted
+bands of altitude, and a rock cell whose neighbour stands at least 3 m above
+it SHALL draw scree on its top. Both SHALL be decided at the draw from the
+cell and its neighbours (`pbd_core::mountain::relief`, carried in the
+record's `SCREE_BIT`), so every world's mountains show them and no cell's
+material changes. Built by `mountain-ground` (2026-11-20).
+
+#### Scenario: The foot of a cliff
+- **WHEN** a Mountains stone cell has a neighbour 3 m or more above it
+- **THEN** its record carries the scree bit, on a version 14 world as on
+  15, and its material is still stone
+  (`planet_terrain::tests::mountain_relief_is_drawn_and_moves_no_cell`)
+
+### Requirement: Snow lingers on shaded flats below the line
+
+A flat Mountains cell within 14 m below the snow line SHALL draw ragged snow
+over its top, more of it nearer the line and in shade, without changing its
+material.
+
+#### Scenario: Dig a patch
+- **WHEN** the player digs a cell drawn with a snow patch
+- **THEN** the block taken is the cell's own material, grass or stone: the
+  record's code is its top's
+  (`planet_terrain::tests::mountain_relief_is_drawn_and_moves_no_cell`)

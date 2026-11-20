@@ -41,6 +41,16 @@ Measured in version 10 (`design.md`, "Measured"):
   every change"); new worlds are made on version 13.
 - Look changes go to the owner with before-and-after captures.
 
+## Approved (2026-11-20): built as generator version 15
+
+The owner, in chat: "approve sand and mountains, and rivers". The Mountains
+tab (M13 version 6) is approved for the game. Version 14 went to
+`ocean-environments`' sea cells, so this change is built as **generator
+version 15** on version 14's config (design decision 1's note): a new world
+has the sea cells and the mountain ground, 13 stays unused, and every world
+made on 4 to 14 keeps its ground. Where this file and the tasks say "version
+13", read 15.
+
 ## Mountain flora and features (added 2026-11-19)
 
 The owner, 2026-11-19, on M13: "nice, can you add more stuff to the mountain

@@ -44,6 +44,13 @@ The look (1, 2) is shown on M13's new Sand tab, Today against New, by day and
 at night, and waits for the owner's approval before anything goes into
 `assets/tilesets/`. Nothing in the game changes in this commit.
 
+## Approved (2026-11-20)
+
+The owner, in chat: "approve sand and mountains, and rivers". The Sand tab
+(M13 version 4) is approved for the game, with design 5's recommendation (c);
+built on `claude/phase-2-1`. Desert sand takes save code 29, the next free
+one after the sea's cells and sticks (24 to 28).
+
 ## Capabilities
 
 - `planet/rendering`: ADDED "Beach sand and desert sand are drawn apart".

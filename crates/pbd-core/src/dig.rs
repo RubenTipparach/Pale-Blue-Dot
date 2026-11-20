@@ -56,6 +56,7 @@ impl Class {
             | Material::Soil
             | Material::Dirt
             | Material::Sand
+            | Material::DesertSand
             | Material::Snow
             | Material::Tilled => Class::Dirt,
             // The sea's cells (`ocean-environments` B24): reef rock, basalt

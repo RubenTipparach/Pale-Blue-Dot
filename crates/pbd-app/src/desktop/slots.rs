@@ -68,7 +68,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // Grass and dry grass are one render code: the ground draws them alike.
         Material::Grass | Material::DryGrass | Material::JungleGrass => grassy,
         Material::Soil | Material::Dirt => one(2., 0.),
-        Material::Sand | Material::Snow => one(0., 0.),
+        Material::Sand | Material::DesertSand | Material::Snow => one(0., 0.),
         Material::Stone | Material::Rock => one(3., 0.),
         Material::Ore => one(0., 1.),
         Material::Water | pbd_core::flowing_water!() => one(2., 2.),

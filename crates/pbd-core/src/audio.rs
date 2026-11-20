@@ -471,7 +471,7 @@ pub fn surface_family(material: Material) -> Option<Family> {
         Material::Soil | Material::Dirt | Material::Tilled => Family::Dirt,
         Material::Grass | Material::JungleGrass => Family::Grass,
         Material::DryGrass => Family::Dry,
-        Material::Sand => Family::Sand,
+        Material::Sand | Material::DesertSand => Family::Sand,
         Material::Snow => Family::Snow,
         Material::Workbench | Material::Sticks => Family::Wood,
         Material::Water | crate::flowing_water!() => Family::Shallow,
