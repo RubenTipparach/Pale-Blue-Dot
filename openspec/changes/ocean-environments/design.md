@@ -1993,9 +1993,10 @@ appended, so an old save opens as it did and a new one written by this
 build names the four by their numbers.
 
 **Where they are: generator version 14** (`TENEBRIS_V14`, version 12 with
-`sea_cells: Some(SeaCells::V14)`). `mountain-ground` holds 13, planned and
-not built; whichever of the two lands second keeps its number and builds on
-whatever is the newest then. Version 12's ground and top blocks are pinned
+`sea_cells: Some(SeaCells::V14)`). 13 was planned for `mountain-ground`,
+which is not built; this takes the next free number, 14, and that change
+notes it: built later, it takes the next number on version 14's config so a
+new world has both. Version 12's ground and top blocks are pinned
 by digest before 14 lands. On a version 14 world, by
 `ocean::places::environment_at` at the floored surface:
 
@@ -2068,10 +2069,10 @@ what is taken here (recommendation taken, ask only with screenshots):
     its two neighbours across the stream), bottom layer first, up to the
     bank's top and never more than four layers;
   - *lodge*: once the dam is whole, three sticks cells in the reach beside
-    the bank, then the colony is `lodged` and only mends.
+    the bank, then the colony is `lodged` and builds no more.
 - **Sticks** is a cell (`Material::Sticks`, 28), drawn as the wood code
-  from the fields sheet (its bark, (2,1)), dug with the axe or by hand as
-  wood, giving "sticks". It is solid and opaque, so the flowing-water rule
+  from the fields sheet (its bark, (2,1)), dug as wood is (the axe),
+  giving "sticks". It is solid and opaque, so the flowing-water rule
   treats a dam as any wall.
 - **What a dam does to the water.** Under `pbd_core::liquid` (Luanti's
   rule) water never rises over its sources: a dam cannot lift a pond above
@@ -2132,3 +2133,43 @@ the write-up needs and change nothing a player meets. No default moves.
   (`--aboard raft`), which floats on the same table. The storm capture is
   taken beside `sea-storm-day.jpg` at 28 m/s, where the spray and streaks
   are at their full strength (from 17 m/s to 34).
+
+### B27. What was built of B24 to B26 (2026-11-19, `claude/phase-2-1`)
+
+- **6.2, the sea's cells** (B24), built as written. Measured on 400,000
+  directions of version 14: reef rock on 277 of 549 reef samples, mussel
+  beds on 222 of 773 vent samples (the rest basalt), sea ice on 418 of 2,928
+  polar samples. The beach's band (2 m either side of the sea's level)
+  stays sand: a reef there is the beach's. `examples/sea_cells.rs` (an
+  instrument) lists where each lies, with the day and hour its sun stands
+  highest, for captures.
+- **What reef rock looks like.** The sea floor deeper than 4 m was already
+  stone, and the ocean sheet's stone tile IS its reef limestone, so a reef
+  rock cell there looks as version 12's stone did: what changes is what it
+  is (dug, it gives reef rock, and placed on land it stays limestone, where
+  stone takes the land's own). Where version 12 had sand (the reef's top 4
+  m), a reef rock patch is new to the eye, and that is where the capture is
+  taken (`reef-rock-before-after.jpg`).
+- **A floe's cap.** The tier took a column's top into its record only
+  downward (a carve), so a floe, the one generated top standing over its
+  record, drew its sides and no top (`sea-ice-no-cap.jpg`); its top is now
+  taken into the record as an edit's is.
+- **The pieces' fade** (B12, B13) was a place: a tile 34 to 46 m off stood
+  half dithered for as long as the eye stood still. It is now a moment in
+  time (CLAUDE.md, priority 1): a tile fades out over 0.8 s once its middle
+  passes 42 m and back in once it is within 38 m, so a still eye sees every
+  tile whole or gone.
+- **Section 8** (B25): the colony record, the process with its catch-up,
+  sticks, founding and the tier's edits are built. A site needs a lip no
+  deeper than the dam's four layers: the first site found (44.74 S,
+  100.26 W) had its bed nine layers under the water and is passed over.
+  A dam stands from the bed to the water's top (the lip's water no more
+  than the dam's four layers), not over it. The process's hour is a
+  twenty-fourth of the world's day (`DAY_S`, 2,880 s), not a wall-clock
+  hour. `PBD_BEAVER_AGE_DAYS=<days>` is a capture instrument that founds a colony
+  that many days ago, so one capture shows what forty days made;
+  `examples/beaver_sites.rs` lists lips on beaver ground. **Not built: the
+  beavers themselves** (the `beaver` species, its body and its spawning by a
+  colony; task 8.4). The colony works unseen until then.
+- **Frame cost** of all of it was not measured: the cloud container has no
+  GPU (lavapipe). The owner runs the perf suite.
