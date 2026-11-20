@@ -39,6 +39,11 @@ pub struct HoldView {
 #[derive(Component)]
 pub struct HoldPanel;
 
+/// The row under the pack that holds the HOLD and, beside it, the boat's
+/// own panel (`boat`).
+#[derive(Component)]
+pub struct HoldRow;
+
 /// The stack picked up: which slot, and how many of it go on the next click
 /// (all of it, or the larger half for a right-click).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -400,22 +405,34 @@ pub fn spawn(
                     super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
                 });
             // A raft's hold, under the pack, while one is aboard or in reach
-            // (`small-boats` design 5).
+            // (`small-boats` design 5); the boat's menu puts its panel
+            // beside it (`river-craft` design 10).
             layer
                 .spawn((
-                    hold_rock,
                     Node {
-                        width: px(hold_w),
-                        padding: UiRect::all(px(RIM)),
-                        flex_direction: FlexDirection::Column,
-                        display: Display::None,
+                        column_gap: px(6),
+                        align_items: AlignItems::FlexStart,
                         ..default()
                     },
-                    HoldPanel,
+                    HoldRow,
                 ))
-                .with_children(|panel| {
-                    menu::lintel(panel, kit, "HOLD");
-                    slot_line(panel, kit, &atlas, CARRIED);
+                .with_children(|layer| {
+                    layer
+                        .spawn((
+                            hold_rock,
+                            Node {
+                                width: px(hold_w),
+                                padding: UiRect::all(px(RIM)),
+                                flex_direction: FlexDirection::Column,
+                                display: Display::None,
+                                ..default()
+                            },
+                            HoldPanel,
+                        ))
+                        .with_children(|panel| {
+                            menu::lintel(panel, kit, "HOLD");
+                            slot_line(panel, kit, &atlas, CARRIED);
+                        });
                 });
         });
     commands

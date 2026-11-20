@@ -1,4 +1,5 @@
 mod arrival;
+mod boat;
 mod breeding;
 mod compass_bar;
 mod cpu_times;
@@ -1752,6 +1753,7 @@ pub fn run(args: &[String]) {
     // husbandry plugin, and the screen's systems still run.
     .init_resource::<pbd_app::husbandry::BreedingPick>()
     .init_resource::<pack::PackHand>()
+    .init_resource::<boat::BoatMenu>()
     .init_resource::<pack::HoldView>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
@@ -1902,6 +1904,7 @@ pub fn run(args: &[String]) {
                     breeding::spawn,
                     mission_tree::spawn,
                 ),
+                boat::spawn,
             )
                 .chain(),
         ),
@@ -1917,6 +1920,7 @@ pub fn run(args: &[String]) {
             guide::open,
             breeding::open,
             pack::open,
+            boat::open,
             map_screen::open,
         )
             .chain()
@@ -1939,6 +1943,7 @@ pub fn run(args: &[String]) {
         (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
+    .add_systems(Update, (boat::press, boat::paint).chain())
     .add_systems(
         Update,
         (
@@ -2260,6 +2265,7 @@ pub fn run(args: &[String]) {
             seat: launch.seat,
             at: launch.at.map(|_| spawn_direction(&launch)),
             pole_run: launch.pole_run,
+            pitch: launch.pitch.map(f32::to_radians),
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);

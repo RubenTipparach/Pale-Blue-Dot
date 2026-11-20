@@ -159,6 +159,26 @@ pub struct LoonSpec {
     pub angular_damping: f32,
     pub bow: [f32; 3],
     pub seat: SeatSpec,
+    /// Two oars on a rowing frame (`river-craft` design 9): the raft's. A
+    /// kind with them is rowed, not paddled on the Loon's stroke.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rowing: Option<super::oars::RowingSpec>,
+    /// Its one anchor (`river-craft` design 4, 10.4): the Loon's and the
+    /// raft's; the tube has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<super::anchor::AnchorSpec>,
+    /// Its own lantern, lit at night (`river-craft` design 9.8): the
+    /// raft's. Its light is the placed post lantern's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lamp: Option<CraftLampSpec>,
+}
+
+/// A craft's own lantern (`river-craft` design 9.8).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CraftLampSpec {
+    /// Where it burns, the craft's frame, m.
+    pub at: [f32; 3],
 }
 
 impl Default for LoonSpec {
@@ -256,6 +276,9 @@ impl Default for LoonSpec {
                 reach_m: 3.5,
                 exit: [0.0, 0.3, 0.5],
             },
+            rowing: None,
+            anchor: Some(super::anchor::AnchorSpec::default()),
+            lamp: None,
         }
     }
 }
@@ -354,6 +377,9 @@ impl LoonSpec {
                 reach_m: 2.6,
                 exit: [0.0, 0.3, 0.0],
             },
+            rowing: None,
+            anchor: None,
+            lamp: None,
         }
     }
 
@@ -376,9 +402,10 @@ impl LoonSpec {
                 mass_kg: 1200.0,
                 size_m: [2.4, 0.5, 4.4],
             },
+            // Seated on the rowing frame's bench (`river-craft` design 9).
             paddler: Part {
                 mass_kg: 80.0,
-                at: [0.35, 0.9, 0.7],
+                at: [0.0, 0.85, 0.52],
             },
             hull: HullSpec {
                 length_m: 4.4,
@@ -422,7 +449,10 @@ impl LoonSpec {
                 blade_cd: 1.25,
                 rudder_at: [1.2, 2.0],
                 rudder_m2: 0.14,
-                pole: true,
+                // Not worked: the raft is rowed (`rowing`), and nothing
+                // pushes off the bed (the owner, 2026-11-19: "no pole just
+                // oar is best").
+                pole: false,
             },
             resistance: ResistanceSpec {
                 at: [0.0, -0.06, 0.0],
@@ -445,12 +475,20 @@ impl LoonSpec {
             heave_damping: 40_000.0,
             angular_damping: 8.0,
             bow: [0.0, 0.25, -2.2],
-            // The poler stands on the planks aft of the middle, as M34's.
+            // The rower sits on the rowing frame's bench amidships, facing
+            // the bow (`river-craft` design 9.10): the eye is the rowing
+            // spec's at rest.
             seat: SeatSpec {
-                eye: [0.35, 1.75, 0.7],
+                eye: [0.0, 1.36, 0.42],
                 reach_m: 3.8,
                 exit: [0.35, 0.35, 0.7],
             },
+            rowing: Some(super::oars::RowingSpec::default()),
+            anchor: Some(super::anchor::AnchorSpec::default()),
+            // The lantern on the bow post (`draw.rs`, `Builder::lantern`).
+            lamp: Some(CraftLampSpec {
+                at: [-0.95, 1.45, -1.95],
+            }),
         }
     }
 
@@ -468,6 +506,12 @@ impl LoonSpec {
             ],
         )?;
         self.hull.validate("loon")?;
+        if let Some(rowing) = &self.rowing {
+            rowing.validate("raft")?;
+        }
+        if let Some(anchor) = &self.anchor {
+            anchor.validate("loon")?;
+        }
         self.lateral.validate("loon.lateral")?;
         self.skeg.validate("loon.skeg")
     }

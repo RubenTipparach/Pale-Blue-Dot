@@ -133,3 +133,45 @@
 - [ ] The port of the boat's menu (design 10.2 to 10.5), only on a request.
 - [ ] The owner's look at the Rowing tab (the tracker, M34).
 - [ ] The port (design 9.9), only on a request after the owner's look.
+
+## The port, part one (owner, 2026-11-20: "approve sand and mountains, and rivers")
+
+Approved for the game 2026-11-19 at version 6; asked to be built
+2026-11-20. Design 11. On `claude/phase-2-1`.
+
+- [x] Recorded: the M34 row of `docs/mockups/mockup-work.md`, M34's entry in
+      `docs/mockups/tracker.html`, this change.
+- [x] 9.9 Rowing: `pbd_core::vehicle::oars` (the spec, `oar_pose`, the
+      stroke clock), the raft rowed by it in `loon.rs`; tests: the five
+      stages in order, the pose continuous, the catch on the catch's end,
+      an oar joining at the next reach and resting with no jump, the arms
+      reaching the handles through the stroke, the oars mirrored, a blade
+      resting on a shallow bed, the keys picking the oars; in the sea: the
+      raft rows ahead, one oar turns it away from that oar, a shallow bed
+      pulls far less and pushes nothing off it.
+- [x] 9.9 The drawing: the rowing frame, oars, oarlocks, the rower facing
+      the bow (third person only) and M36's hands on the handles (first
+      person only), lit as the raft is; the pole and the standing poler
+      removed; the held tool put down while the oars row.
+- [x] 3.4 The one anchor (design 4, 11.2): `pbd_core::vehicle::anchor`;
+      tests: the rode stops at the bed, a set anchor holds a rowing raft in
+      a current within its swing and never moves, the rope veered out and
+      hauled back, only weighing frees it; the app's anchoring tests rowed
+      through the haul.
+- [x] 10.2-10.5 The boat's menu (11.3): C, the boat's panel beside the
+      HOLD, the rope and the lantern; `rope_m` and `lantern_out` on the
+      craft's record, written only when set; tests: both survive a save and
+      an older record reads and writes unchanged, an anchored record comes
+      back holding.
+- [x] 9.8 The raft's lantern (11.4) as a moving lamp in the carried-light
+      list; test: lit only while the dusk lamps are and not put out, none on
+      the Loon or the tube.
+- [ ] Captures in `docs/screenshots/river-craft-game/` (rowing mid-stroke
+      in first and third person, anchored, the boat's menu, the lantern at
+      night), beside the mockup's shots.
+- [ ] The splash, wash, drips and swirls (9.5).
+- [ ] The bed's material deciding how fast an anchor sets.
+- [ ] The tube rider's pose (the inner tube, version 4).
+- [ ] 3.1-3.3, 3.5, 3.6: the current from the cells, lines between craft,
+      the tug and barges, logs and booms, nets.
+- [ ] The owner's look in the game; the step's video for the batch.

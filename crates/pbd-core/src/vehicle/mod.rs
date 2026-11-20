@@ -11,11 +11,13 @@
 //! places the Avian body where the craft ends up. The prototype this was held
 //! to is `docs/mockups/vehicles.html`.
 
+pub mod anchor;
 pub mod body;
 pub mod foil;
 pub mod hold;
 pub mod hull;
 mod loon;
+pub mod oars;
 pub mod record;
 pub mod spec;
 #[cfg(test)]
@@ -223,6 +225,15 @@ pub struct Craft {
     /// Made by the player and launched from a boat good (`small-boats`
     /// design 4): only such a craft is taken up again.
     pub made: bool,
+    /// The anchor while it is out of the boat (`river-craft` design 4):
+    /// falling, on the bed or coming aboard. Not saved: a saved anchored
+    /// `mooring` is an anchor set and holding.
+    pub anchor: Option<anchor::Anchor>,
+    /// The boat's rope setting (`river-craft` design 10.3, 10.5): `None`
+    /// is "to the bed", else metres. Saved.
+    pub rope_m: Option<f64>,
+    /// The lantern put out in the boat's menu (design 10.3). Saved.
+    pub lantern_out: bool,
     pub state: CraftState,
     pub telemetry: Telemetry,
     specs: Arc<VehicleSpecs>,
@@ -417,6 +428,9 @@ impl Craft {
             mooring: None,
             berth: None,
             made: false,
+            anchor: None,
+            rope_m: None,
+            lantern_out: false,
             state,
             telemetry: Telemetry::None,
             specs,
@@ -518,9 +532,25 @@ impl Craft {
         self.weigh();
     }
 
-    /// The seat's eye, planet frame.
+    /// The seat's eye, planet frame: a rower's rides the body's swing
+    /// (`river-craft` design 9.6).
     pub fn eye(&self) -> DVec3 {
-        self.reference_point(self.loon_spec().seat.eye)
+        self.body.point(self.eye_local() - self.com)
+    }
+
+    /// The seat's eye in the craft's reference frame.
+    pub fn eye_local(&self) -> DVec3 {
+        let s = self.loon_spec();
+        match (&s.rowing, &self.state) {
+            (Some(rowing), CraftState::Loon(st)) => rowing.eye(st.rowing.lean(rowing)),
+            _ => v3(s.seat.eye),
+        }
+    }
+
+    /// The oars' stroke, on a kind rowed with oars.
+    pub fn rowing(&self) -> Option<(&oars::RowingSpec, &oars::RowingState)> {
+        let CraftState::Loon(st) = &self.state;
+        self.loon_spec().rowing.as_ref().map(|s| (s, &st.rowing))
     }
 
     /// Where someone stepping off is put, planet frame.
@@ -563,7 +593,11 @@ impl Craft {
             };
             self.body.push_centre(env.gravity * self.body.mass);
             loon::forces(self, &input, &cx);
-            self.moor();
+            self.work_anchor(h, env);
+            let pull = self.moor();
+            if let Some(anchor) = &mut self.anchor {
+                anchor.pull += (pull - anchor.pull) * (1.5 * h).min(1.0);
+            }
             self.body.integrate(h);
         }
         self.reweigh += dt;
@@ -573,16 +607,91 @@ impl Craft {
         }
     }
 
-    /// The pull of a taut line.
-    fn moor(&mut self) {
-        let Some(line) = self.mooring else {
+    /// The anchor's work this substep (`river-craft` design 4): while it is
+    /// out of the boat its rode is the mooring line, on the bed only.
+    fn work_anchor(&mut self, h: f64, env: &Surroundings) {
+        let Some(mut anchor) = self.anchor else {
             return;
+        };
+        let spec = self.anchor_spec();
+        let aboard = anchor.step(&spec, h, self.bow(), env.ground, self.rope_m);
+        self.anchor = (!aboard).then_some(anchor);
+        self.mooring = self.anchor.and_then(|a| a.line());
+    }
+
+    /// How this kind's anchor works: its own, or the default for a kind
+    /// with none whose saved mooring is an anchor.
+    pub fn anchor_spec(&self) -> anchor::AnchorSpec {
+        self.loon_spec().anchor.unwrap_or_default()
+    }
+
+    /// Whether this kind carries an anchor (`river-craft` design 10.4): the
+    /// raft and the Loon; not the tube.
+    pub fn has_anchor(&self) -> bool {
+        self.loon_spec().anchor.is_some()
+    }
+
+    /// Let the anchor go from the bow. Nothing if it is already out.
+    pub fn drop_anchor(&mut self) {
+        if self.anchor.is_none() && !self.mooring.is_some_and(|m| m.anchored) {
+            self.anchor = Some(anchor::Anchor::drop_from(self.bow()));
+            self.mooring = None;
+        }
+    }
+
+    /// Weigh the anchor, or stop hauling: the only way it lets go. An
+    /// anchor read from a save or set by a harbour is taken up from its
+    /// mooring.
+    pub fn weigh_anchor(&mut self) {
+        if self.anchor.is_none()
+            && let Some(m) = self.mooring.filter(|m| m.anchored)
+        {
+            self.anchor = Some(anchor::Anchor::holding(m.at, m.length));
+        }
+        if let Some(a) = &mut self.anchor
+            && let anchor::Phase::Down { set, weighing } = a.phase
+        {
+            a.phase = anchor::Phase::Down {
+                set,
+                weighing: !weighing,
+            };
+        }
+    }
+
+    /// Set the rope (`None` "to the bed"), within the rode carried; an
+    /// anchor on the bed veers or hauls to it.
+    pub fn set_rope(&mut self, rope_m: Option<f64>) {
+        let max = self.anchor_spec().rode_max_m as f64;
+        self.rope_m = rope_m.map(|r| r.clamp(1.0, max));
+        let bow = self.bow();
+        if self.anchor.is_none()
+            && let Some(m) = self.mooring.filter(|m| m.anchored)
+        {
+            self.anchor = Some(anchor::Anchor::holding(m.at, m.length));
+        }
+        if let Some(a) = &mut self.anchor {
+            a.set_rope(self.rope_m, bow, max);
+        }
+    }
+
+    /// Set and holding (the panel's "Anchored").
+    pub fn anchored(&self) -> bool {
+        match &self.anchor {
+            Some(a) => a.holds(),
+            None => self.mooring.is_some_and(|m| m.anchored),
+        }
+    }
+
+    /// The pull of a taut line, N.
+    fn moor(&mut self) -> f64 {
+        let Some(line) = self.mooring else {
+            return 0.0;
         };
         let bow = self.bow();
         let reach = line.at - bow;
         let length = reach.length();
         if length <= line.length {
-            return;
+            return 0.0;
         }
         let k = (40.0 * self.body.mass).min(4000.0);
         let n = reach / length;
@@ -590,6 +699,7 @@ impl Craft {
         let pull =
             (k * (length - line.length) - 1.6 * (k * self.body.mass).sqrt() * closing).max(0.0);
         self.body.push(n * pull, bow);
+        pull
     }
 
     /// Guard: a craft whose state left its domain is put back where it was
