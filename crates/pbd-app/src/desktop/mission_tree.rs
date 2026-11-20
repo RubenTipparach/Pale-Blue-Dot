@@ -603,6 +603,9 @@ fn spawn_card(
             ..default()
         },
         BorderColor::all(Color::NONE),
+        // The selected card's ring, drawn outside the frame: a border sits
+        // under the stone frame's picture and showed only at its corners.
+        Outline::new(px(2), px(1), Color::NONE),
         Card(i),
     ));
     if tip {
@@ -844,8 +847,11 @@ pub fn paint(
     view: Res<TreeView>,
     recipes: Option<Res<pbd_app::config::Recipes>>,
     kit: Res<UiKit>,
-    mut cards: Query<(&Card, &mut BorderColor, Option<&mut ImageNode>)>,
-    mut card_icons: Query<(&CardIconOf, &mut ImageNode), Without<Card>>,
+    mut cards: Query<
+        (&Card, &mut Outline, Option<&mut ImageNode>),
+        (Without<CardCheck>, Without<CardIconOf>),
+    >,
+    mut card_icons: Query<(&CardIconOf, &mut ImageNode), (Without<Card>, Without<CardCheck>)>,
     mut texts: ParamSet<(
         Query<(&CardTitle, &mut Text, &mut TextColor)>,
         Query<(&CardSub, &mut Text, &mut TextColor)>,
@@ -854,7 +860,7 @@ pub fn paint(
         Query<(&SideText, &mut Text, &mut TextColor)>,
     )>,
     mut badges: Query<(&CardBadge, &mut KitText)>,
-    mut checks: Query<(&CardCheck, &mut ImageNode)>,
+    mut checks: Query<(&CardCheck, &mut ImageNode), (Without<Card>, Without<CardIconOf>)>,
     mut edges: Query<(&Edge, &mut BackgroundColor)>,
     mut side: Query<&mut Node, With<SidePanel>>,
 ) {
@@ -882,15 +888,15 @@ pub fn paint(
         .selected
         .or_else(|| (0..chain.missions.len()).find(|&i| standing(i).1));
     let faded = |s: Standing| if s == Standing::Locked { 0.35 } else { 1.0 };
-    for (card, mut border, image) in &mut cards {
+    for (card, mut outline, image) in &mut cards {
         let (s, _) = standing(card.0);
         let c = if marked == Some(card.0) {
             ui_kit::TITLE
         } else {
             Color::NONE
         };
-        if border.top != c {
-            *border = BorderColor::all(c);
+        if outline.color != c {
+            outline.color = c;
         }
         if let Some(mut image) = image {
             let want = image.color.with_alpha(faded(s));
