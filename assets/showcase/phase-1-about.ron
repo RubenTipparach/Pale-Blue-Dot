@@ -12,7 +12,7 @@
 (
     goal: "Goal: getting about, the map and a swim",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
             caption: "Getting about. Read the map, and mark a place",
@@ -23,14 +23,14 @@
             caption: "Walk to the mark",
             until: ["map"],
             max_s: 240.0,
-            acts: [ToMark],
+            acts: [Focus("map"), ToMark],
         ),
         (
             caption: "Into the water: swim",
             until: ["swim"],
             repeat: true,
             max_s: 200.0,
-            acts: [Shore, Walk(8.0), Still],
+            acts: [Focus("swim"), Shore, Walk(8.0), Still],
         ),
         (
             caption: "Getting about, as far as a swim",

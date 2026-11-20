@@ -32,6 +32,12 @@ const LEVEL_HALF_M: f32 = 5.5;
 /// A new world's start is a level plain: this many of the 120 samples in the
 /// ring 20 to 36 m round it are level spots (`level_plain`).
 const START_LEVEL_SPOTS: usize = 8;
+/// Moors the Loon at a new world's spawn, as worlds were given one before
+/// 2026-11-19. Only the vehicle tests insert it; the game never does.
+#[derive(Resource)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct StarterLoon;
+
 /// Water the Loon is put in, m under the sea surface.
 const LOON_DEPTH_M: f32 = 1.2;
 /// A new anchor's rode, per metre of depth, plus a margin, m.
@@ -212,6 +218,12 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                 }
             }
         }
+        // A new world moors no canoe at the spawn (owner, 2026-11-19, on the
+        // starter Loon at the shore: "this boat shoulve been removed"):
+        // boats are made now (the raft, the tube), and a town's quay moors
+        // its canoes. An old world keeps the one it was given. The vehicle
+        // tests still moor one, to board and sail (`StarterLoon`).
+        None if !world.contains_resource::<StarterLoon>() => {}
         None => {
             // The walker is a physics `Position`.
             let center = world
@@ -241,7 +253,6 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                         anchored: true,
                     });
                 }
-                on_the_tide(&mut craft, sea.tide);
                 crafts.push(craft);
             }
         }
@@ -273,6 +284,7 @@ mod frame_tests {
     fn translated_walker_finds_the_same_body_local_berths() {
         let mut world = World::new();
         world.insert_resource(Fleet::new(Default::default()));
+        world.insert_resource(StarterLoon);
         world.insert_resource(PlanetContact::test_planet(5));
         world.insert_resource(Sea::new(&Default::default()));
         world.insert_resource(crate::saves::WorldSave::memory_only());
@@ -473,19 +485,6 @@ fn level_on(direction: Vec3, ground: f32, floor: impl Fn(Vec3) -> f32) -> bool {
 /// The rode an anchor pays out in `depth` metres of water, m.
 pub fn rode(depth: f64) -> f64 {
     depth * RODE_PER_DEPTH + RODE_MARGIN_M
-}
-
-/// Put a new craft, made on the sea's mean surface, on the water as it
-/// stands now: the tide's height over the mean there (`small-boats`). A boat
-/// put on the mean under a high tide had the water over its gunwale before
-/// it could rise, and swamped. Only for a craft being made: one restored
-/// from a save is where it was left.
-pub(crate) fn on_the_tide(craft: &mut Craft, tide: Vec4) {
-    let at = craft.reference_position();
-    let up = at.normalize_or(DVec3::Y);
-    let tide = f64::from(pbd_core::sea::tide_m(up.as_vec3(), tide));
-    let orientation = craft.body.orientation;
-    craft.set_reference_pose(at + up * tide, orientation);
 }
 
 /// The pose standing on `up` with its bow (-z) along `forward`.

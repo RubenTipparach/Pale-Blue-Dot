@@ -25,6 +25,14 @@ use crate::{
 };
 
 pub const EYE_HEIGHT: f32 = 1.6;
+/// A grounded rise in one step this size, m, is a step climbed and is eased
+/// on the eye over [`STEP_EASE_S`] (`mission-playthrough` 4.7).
+const STEP_EASE_MIN_M: f32 = 0.12;
+const STEP_EASE_MAX_M: f32 = 1.6;
+/// A swimmer's head this far into a roof, m, is held under it.
+const SWIM_ROOF_HOLD_M: f64 = 0.6;
+/// How fast the eye catches up a step, s (the lag falls by e each).
+const STEP_EASE_S: f32 = 0.06;
 pub const HALF_HEIGHT: f32 = 0.9;
 const BODY_RADIUS: f32 = 0.3;
 pub(crate) const CONTACT_SKIN: f32 = 0.015;
@@ -309,7 +317,7 @@ impl Default for WalkingConfig {
             water_swim_force: 20.0,
             water_swim_max_rise: 14.0,
             water_submerged_jump_mult: 0.30,
-            // Two terrain layers of water, plus a skin for the tide and the
+            // Two terrain layers of water, plus a skin for the waves and the
             // sheet's offset.
             water_wade_depth: 2.0 * crate::planet::column::STEP_M + 0.1,
             water_climb_m: 2.0 * crate::planet::column::STEP_M + 0.6,
@@ -1086,8 +1094,11 @@ fn read_walking_input(
         if !window.focused && !state.scripted {
             state.captured = false;
         }
-        cursor.visible = !state.captured;
-        cursor.grab_mode = if state.captured {
+        // A scripted run (a bot, a capture) turns the look by injected
+        // motion, not the mouse: the owner's pointer stays free, so the
+        // machine can be used while it plays.
+        cursor.visible = !state.captured || state.scripted;
+        cursor.grab_mode = if state.captured && !state.scripted {
             CursorGrabMode::Locked
         } else {
             CursorGrabMode::None
@@ -1305,30 +1316,24 @@ impl WaterState {
 pub(crate) struct Sea<'w> {
     terrain: Res<'w, PlanetContact>,
     settings: Res<'w, crate::config::WaterSettings>,
-    /// The tide (`ocean-environments` 5.1), where the sea is set up.
-    sea: Option<Res<'w, crate::sea::Sea>>,
 }
 
 impl Sea<'_> {
-    /// The sheet the water pass draws over a direction: the mean sea, less
-    /// the sheet's offset, plus the tide there.
-    fn sheet_radius(&self, direction: Vec3) -> f32 {
-        let tide = self
-            .sea
-            .as_deref()
-            .map_or(0.0, |sea| sea.tide_at(direction));
-        PLANET_RADIUS - self.settings.depth_offset_m + tide
+    /// The sheet the water pass draws: the sea's level less the sheet's
+    /// offset. One level everywhere: the sea has no tide (`no-tides`).
+    fn sheet_radius(&self) -> f32 {
+        PLANET_RADIUS - self.settings.depth_offset_m
     }
 
     /// `point` is a planet point (`SimOrigin::query_point`).
     pub(crate) fn state(&self, config: &WalkingConfig, point: Vec3) -> WaterState {
         let direction = point.normalize_or(Vec3::Y);
         let feet = point.length() - HALF_HEIGHT;
-        let sheet = self.sheet_radius(direction);
+        let sheet = self.sheet_radius();
         let sea_level = PLANET_RADIUS + crate::planet::terrain_config().sea_level_m;
         // The column first (`water-flow` E1, task 2 of the second pass): the
         // water the body is in, a pool or a flowing cell at its own level,
-        // and the sea's own water at the drawn, tided sheet. Probed from the
+        // and the sea's own water at the drawn sheet. Probed from the
         // feet up to the eye, so a swimmer whose feet are over the bed still
         // finds the water they are in.
         let probe = |height: f32| {
@@ -1399,13 +1404,13 @@ pub fn walker_feet(world: &mut World) -> Option<Vec3> {
 /// The surface a body swims under, as a radius, or `None` where it is dry
 /// (`water-flow` E10). `on_tier`: the column answers here; `in_water`: the
 /// top of the water the column puts the body in (a pool, a flowing cell at
-/// its own level, the sea's water); `sheet`: the drawn sea's radius here, the
-/// tide on it; `ground`: the ground under the body (on the tier the feet,
-/// off it the height field's); `reached`: the sea's surface reaches this cell
-/// at some tide (`ocean-environments` B22). The sea's water in the column is
-/// swum to the tided sheet; a dry column the sea reaches to the sheet where
-/// the tide stands over its ground (a beach at high water, a pit or a cavern
-/// the tide overtops); off the tier, the height field's sea.
+/// its own level, the sea's water); `sheet`: the drawn sea's radius;
+/// `ground`: the ground under the body (on the tier the feet, off it the
+/// height field's); `reached`: the sea's surface reaches this cell
+/// (`ocean-environments` B22). The sea's water in the column is swum to the
+/// sheet; a dry column the sea reaches to the sheet where it stands over its
+/// ground (a pit or a cavern the sea's surface reaches); off the tier, the
+/// height field's sea.
 pub(crate) fn swim_surface(
     on_tier: bool,
     in_water: Option<f32>,
@@ -1416,7 +1421,7 @@ pub(crate) fn swim_surface(
 ) -> Option<f32> {
     if on_tier {
         match in_water {
-            // Water topping out at sea level is the sea's: the tided sheet.
+            // Water topping out at sea level is the sea's: the sheet.
             Some(top) if (top - sea_level).abs() < 0.01 => Some(sheet),
             Some(top) => Some(top),
             None => (reached && ground < sheet).then_some(sheet),
@@ -1827,7 +1832,13 @@ fn resolve_ground(
             let up = o.up_at(accepted);
             let head = o.radius_at(accepted) + HALF_HEIGHT as f64;
             if head > (ceiling - CONTACT_SKIN) as f64 {
-                if !wet.body {
+                // Under water too, a head that has just come up into the
+                // roof is held under it (owner, 2026-11-19: "looks like he
+                // can swim up cielings"): taking the rise off alone let the
+                // water's lift put it back each step, and the swimmer crept
+                // up through rock. One already deep in rock is not snapped.
+                let into = head - (ceiling - CONTACT_SKIN) as f64;
+                if !wet.body || into < SWIM_ROOF_HOLD_M {
                     accepted = o.with_radius(
                         accepted,
                         ceiling as f64 - (HALF_HEIGHT + CONTACT_SKIN) as f64,
@@ -2023,6 +2034,8 @@ pub(crate) fn follow_walker(
     >,
     mut cameras: Query<&mut Transform, With<WalkingCamera>>,
     space: crate::SimSpace,
+    time: Res<Time>,
+    mut step_ease: Local<(Option<f64>, f32)>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2043,13 +2056,31 @@ pub(crate) fn follow_walker(
     };
     let body = history.map_or(position.0, |mut h| h.drawn(position.0, alpha));
     let drawn_up = o.up_at(body);
+    // A step climbed is eased, not snapped (owner, 2026-11-19: "make sure
+    // autostep lerps instead of isntant snap"): the rise of a grounded step
+    // up is taken off the eye and given back over a tenth of a second. The
+    // body and the look are untouched; a jump or a fall is not a step.
+    let radius = o.radius_at(body);
+    let (last, lag) = &mut *step_ease;
+    if let Some(was) = *last {
+        let rise = (radius - was) as f32;
+        if ground.grounded && (STEP_EASE_MIN_M..STEP_EASE_MAX_M).contains(&rise) {
+            *lag += rise;
+        }
+    }
+    *last = Some(radius);
+    *lag *= (-time.delta_secs() / STEP_EASE_S).exp();
+    if *lag < 0.005 {
+        *lag = 0.0;
+    }
+    let lag = *lag;
     for mut camera in &mut cameras {
         // The body drawn between physics steps and the current mouse
         // orientation: no easing of the look, head bob, follow spring, or
         // dependence on the body's angular velocity.
         // Render space: the physics-space eye less the render origin, in
         // f64 before the cast (`movement-smoothness` design 6.3).
-        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT);
+        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag);
         camera.translation = frame.as_deref().map_or(eye, |frame| {
             crate::render_origin::render_from_physics(frame, eye)
         });
@@ -2143,43 +2174,41 @@ mod swim_tests {
     const R: f32 = 4800.0;
 
     #[test]
-    fn the_walker_swims_in_a_pool_a_flowing_cell_and_a_high_tide() {
+    fn the_walker_swims_in_a_pool_a_flowing_cell_and_the_sea() {
         let sea = R;
-        // Mean sheet half a metre under sea level; the tide adds 1.5 m.
-        let calm = R - 0.5;
-        let high = calm + 1.5;
+        // The sheet half a metre under sea level (`no-tides`: one level).
+        let sheet = R - 0.5;
         // A pool on a hill, water to 52 m: its own surface.
         assert_eq!(
-            swim_surface(true, Some(R + 52.0), calm, sea, R + 50.0, true),
+            swim_surface(true, Some(R + 52.0), sheet, sea, R + 50.0, true),
             Some(R + 52.0)
         );
         // A flowing cell at level 3 tops at 3.5/8 of its layer.
         let flowing = R + 30.0 + 3.5 / 8.0;
         assert_eq!(
-            swim_surface(true, Some(flowing), calm, sea, R + 29.0, true),
+            swim_surface(true, Some(flowing), sheet, sea, R + 29.0, true),
             Some(flowing)
         );
-        // The sea's own water in the column: the tided sheet, not the layer.
+        // The sea's own water in the column: the sheet, not the layer.
         assert_eq!(
-            swim_surface(true, Some(R), high, sea, R - 3.0, true),
-            Some(high)
+            swim_surface(true, Some(R), sheet, sea, R - 3.0, true),
+            Some(sheet)
         );
-        // A beach half a metre up, dry in its column, under a high tide
-        // (the sheet a metre up): swum to it.
+        // A beach half a metre up, dry in its column: dry.
+        assert_eq!(swim_surface(true, None, sheet, sea, R + 0.5, true), None);
+        // A cavern the sea reaches, its floor under the sheet: swum to it.
         assert_eq!(
-            swim_surface(true, None, high, sea, R + 0.5, true),
-            Some(high)
+            swim_surface(true, None, sheet, sea, R - 2.0, true),
+            Some(sheet)
         );
-        // The same beach at the mean tide: dry.
-        assert_eq!(swim_surface(true, None, calm, sea, R + 0.5, true), None);
         // A dry cave below sea level under rock: dry, whatever the sea.
-        assert_eq!(swim_surface(true, None, high, sea, R - 20.0, false), None);
-        // Off the tier: the height field's sea to the tided sheet.
+        assert_eq!(swim_surface(true, None, sheet, sea, R - 20.0, false), None);
+        // Off the tier: the height field's sea to the sheet.
         assert_eq!(
-            swim_surface(false, None, high, sea, R + 0.5, true),
-            Some(high)
+            swim_surface(false, None, sheet, sea, R - 1.0, true),
+            Some(sheet)
         );
-        assert_eq!(swim_surface(false, None, calm, sea, R + 0.5, true), None);
+        assert_eq!(swim_surface(false, None, sheet, sea, R + 0.5, true), None);
     }
 }
 

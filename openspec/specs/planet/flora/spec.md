@@ -20,3 +20,93 @@ save, and SHALL need no new generator version.
 
 - **WHEN** the player looks down at a river's bed in any world, old or new
 - **THEN** the bed is dirt, with no grass, flowers, mushrooms or trees on it
+
+### Requirement: A glowing mushroom can be picked and stays picked
+
+A player SHALL pick a glowing mushroom (the cell chosen by
+`pbd_core::flora::glows` on its exact key) with F while the eye ray passes
+within `glow_pick_radius_m` of the plant, as the plant is drawn, within reach.
+A pick SHALL give one `glowing-mushroom` good and write a `glow-plant` record
+keyed by the cell's exact key, in one durable write with the pack. The pick
+SHALL be acknowledged only after the save accepts it. A picked cell SHALL draw
+no plant in its flower slot and SHALL give no light until it grows back.
+
+#### Scenario: A pick survives a reload
+
+- **WHEN** a player picks a glowing mushroom, saves and opens the world again
+- **THEN** that cell draws no plant and adds no emitter to the light field
+  (`planet::column::tests::a_picked_glowing_mushroom_is_neither_drawn_nor_lit`)
+
+#### Scenario: Aim at the plant, not the cell
+
+- **WHEN** the eye ray meets the cell's ground a metre from the plant
+- **THEN** F offers nothing, and it offers `Pick` once the ray passes the
+  plant's stalk or cap
+  (`desktop::glow_plants::tests::the_ray_meets_the_plant_not_its_ground`,
+  `flora::tests::the_mushroom_to_pick_is_where_the_draw_stands_it`)
+
+#### Scenario: A picked cell grows no other flower in its place
+
+- **WHEN** a picked cell's own flower roll would have grown an ordinary flower
+- **THEN** its flower slot draws nothing while the pick lasts
+  (`planet::column::tests::a_picked_glowing_mushroom_is_neither_drawn_nor_lit`,
+  `planet::terrain::tests::the_shader_carries_the_reference_light_constants`)
+
+### Requirement: A picked glowing mushroom grows back out of sight
+
+A `glow-plant` record older than `glow_plant_regrow_days` world days SHALL
+read as no pick, but only when the tier builds the cell while it lies farther
+than `clutter_radius_m` from the camera. A cell that comes due within that
+distance SHALL stay picked until a later build finds it farther.
+
+#### Scenario: No plant appears in front of the player
+
+- **WHEN** a pick passes its regrowth time while the player stands 20 m from
+  the cell
+- **THEN** the cell draws no plant until it has been built farther than
+  `clutter_radius_m` away
+  (`edits::tests::a_pick_grows_back_only_out_of_sight`,
+  `planet::column::tests::a_picked_glowing_mushroom_is_neither_drawn_nor_lit`)
+
+### Requirement: Placing glowing mushrooms is not the generator's, and a world never picked from stores nothing
+
+Which cells grow a glowing mushroom SHALL depend only on the cell's exact key
+and `glow_flower_chance`. Picking SHALL add no generator version. A world with
+no pick SHALL save nothing it did not save before. `glow_flower_chance` and
+the hash SHALL be pinned by a digest over sample keys.
+
+#### Scenario: An old save opens unchanged
+
+- **WHEN** a world saved before this change is opened
+- **THEN** its generator version, ground and tree digests, and records are
+  unchanged, and the same cells grow glowing mushrooms as before
+  (`flora::tests::which_cells_glow_is_pinned`,
+  `config::tests::the_glowing_mushroom_chance_is_pinned`)
+
+### Requirement: Mountain rock carries lichen and scree, drawn
+
+A Mountains rock face below the snow line SHALL show lichen in its own
+texels, its rock picked per cell from the mountains sheet's rocks by tilted
+bands of altitude, and a rock cell whose neighbour stands at least 3 m above
+it SHALL draw scree on its top. Both SHALL be decided at the draw from the
+cell and its neighbours (`pbd_core::mountain::relief`, carried in the
+record's `SCREE_BIT`), so every world's mountains show them and no cell's
+material changes. Built by `mountain-ground` (2026-11-20).
+
+#### Scenario: The foot of a cliff
+- **WHEN** a Mountains stone cell has a neighbour 3 m or more above it
+- **THEN** its record carries the scree bit, on a version 14 world as on
+  15, and its material is still stone
+  (`planet_terrain::tests::mountain_relief_is_drawn_and_moves_no_cell`)
+
+### Requirement: Snow lingers on shaded flats below the line
+
+A flat Mountains cell within 14 m below the snow line SHALL draw ragged snow
+over its top, more of it nearer the line and in shade, without changing its
+material.
+
+#### Scenario: Dig a patch
+- **WHEN** the player digs a cell drawn with a snow patch
+- **THEN** the block taken is the cell's own material, grass or stone: the
+  record's code is its top's
+  (`planet_terrain::tests::mountain_relief_is_drawn_and_moves_no_cell`)

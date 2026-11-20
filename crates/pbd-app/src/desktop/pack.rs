@@ -39,6 +39,11 @@ pub struct HoldView {
 #[derive(Component)]
 pub struct HoldPanel;
 
+/// The row under the pack that holds the HOLD and, beside it, the boat's
+/// own panel (`boat`).
+#[derive(Component)]
+pub struct HoldRow;
+
 /// The stack picked up: which slot, and how many of it go on the next click
 /// (all of it, or the larger half for a right-click).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,11 +307,14 @@ pub fn open(
     }
 }
 
-/// The pack's columns, native px (`tool-crafting` decision 12): the ten
-/// slots on the left, the gap, and the Craft panel on the right. With the
-/// rock's rim on both sides they are the `pack-wide` rock's width exactly.
+/// The pack's column, native px (`tool-crafting` decision 12): the ten
+/// slots. The Craft panel stands beside it, a panel of its own.
 pub const PACK_COLUMN: f32 = 10.0 * slots::SLOT;
-pub const COLUMN_GAP: f32 = 16.0;
+/// The two panels, native px: the pack (its ten slots, three rows, the hand
+/// and the hotbar, in the rim) and the craft panel beside it (the lintel, the
+/// six recipes, the craft row and its bar, in the rim).
+pub const PACK_PANEL: (f32, f32) = (PACK_COLUMN + 2.0 * RIM, 204.0);
+pub const CRAFT_PANEL: (f32, f32) = (super::craft::CRAFT_COLUMN + 2.0 * RIM, 214.0);
 /// The rock's rim, inside which everything stands.
 pub const RIM: f32 = 14.0;
 
@@ -326,7 +334,10 @@ pub fn spawn(
 ) {
     let atlas = icons.atlas.clone();
     let kit = &*kit;
-    let (rock, (w, h)) = kit.rock("pack-wide");
+    // Two panels side by side (owner, 2026-11-19, with a sketch: "make
+    // crafting box sepereate", the pack on the left, a taller craft panel on
+    // the right), each on the kit's stone frame at the size it holds: no
+    // baked rock is the pack's own size alone.
     let (hold_rock, (hold_w, _)) = kit.rock("pack");
     commands
         .spawn((
@@ -340,82 +351,122 @@ pub fn spawn(
         ))
         .with_children(|layer| {
             layer
-                .spawn((
-                    rock,
-                    Node {
-                        width: px(w),
-                        height: px(h),
-                        padding: UiRect::all(px(RIM)),
-                        column_gap: px(COLUMN_GAP),
-                        ..default()
-                    },
-                ))
-                .with_children(|panel| {
-                    panel
-                        .spawn(Node {
-                            width: px(PACK_COLUMN),
+                .spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::FlexStart,
+                    column_gap: px(8),
+                    ..default()
+                })
+                .with_children(|pair| {
+                    pair.spawn((
+                        kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        // Sized here: a framed node is otherwise its picture's
+                        // size, not its contents'.
+                        Node {
+                            width: px(PACK_PANEL.0),
+                            height: px(PACK_PANEL.1),
                             flex_shrink: 0.0,
-                            flex_direction: FlexDirection::Column,
-                            justify_content: JustifyContent::SpaceBetween,
+                            padding: UiRect::all(px(RIM)),
                             ..default()
-                        })
-                        .with_children(|column| {
-                            column
-                                .spawn(Node {
-                                    flex_direction: FlexDirection::Column,
-                                    ..default()
-                                })
-                                .with_children(|top| {
-                                    menu::lintel(top, kit, "PACK");
-                                    for row in 0..PACK / SLOTS {
-                                        slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
-                                    }
-                                });
-                            column
-                                .spawn(Node {
-                                    flex_direction: FlexDirection::Column,
-                                    ..default()
-                                })
-                                .with_children(|foot| {
-                                    // The hand over the hotbar's first slot,
-                                    // as the HUD has it beside the hotbar
-                                    // (`pack-tool-slot` decision 3): the
-                                    // baked rock is the ten slots wide.
-                                    foot.spawn(Node {
-                                        align_items: AlignItems::End,
-                                        column_gap: px(4),
-                                        margin: UiRect::bottom(px(3)),
+                        },
+                    ))
+                    .with_children(|panel| {
+                        panel
+                            .spawn(Node {
+                                width: px(PACK_COLUMN),
+                                flex_shrink: 0.0,
+                                flex_direction: FlexDirection::Column,
+                                justify_content: JustifyContent::SpaceBetween,
+                                ..default()
+                            })
+                            .with_children(|column| {
+                                column
+                                    .spawn(Node {
+                                        flex_direction: FlexDirection::Column,
                                         ..default()
                                     })
-                                    .with_children(|line| {
-                                        super::equipment::spawn_pack_hand(line, kit, &icons);
-                                        line.spawn(
-                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                                .shadow(ui_kit::INK),
-                                        );
+                                    .with_children(|top| {
+                                        menu::lintel(top, kit, "PACK");
+                                        for row in 0..PACK / SLOTS {
+                                            slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
+                                        }
                                     });
-                                    slot_line(foot, kit, &atlas, 0);
-                                });
-                        });
-                    super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
+                                column
+                                    .spawn(Node {
+                                        flex_direction: FlexDirection::Column,
+                                        ..default()
+                                    })
+                                    .with_children(|foot| {
+                                        // The hand over the hotbar's first slot,
+                                        // as the HUD has it beside the hotbar
+                                        // (`pack-tool-slot` decision 3): the
+                                        // baked rock is the ten slots wide.
+                                        foot.spawn(Node {
+                                            align_items: AlignItems::End,
+                                            column_gap: px(4),
+                                            margin: UiRect::bottom(px(3)),
+                                            ..default()
+                                        })
+                                        .with_children(
+                                            |line| {
+                                                super::equipment::spawn_pack_hand(
+                                                    line, kit, &icons,
+                                                );
+                                                line.spawn(
+                                                    KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                                        .shadow(ui_kit::INK),
+                                                );
+                                            },
+                                        );
+                                        slot_line(foot, kit, &atlas, 0);
+                                    });
+                            });
+                    });
+                    pair.spawn((
+                        kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        // Sized here: a framed node is otherwise its picture's
+                        // size, not its contents'.
+                        Node {
+                            width: px(CRAFT_PANEL.0),
+                            height: px(CRAFT_PANEL.1),
+                            flex_shrink: 0.0,
+                            padding: UiRect::all(px(RIM)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|panel| {
+                        super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
+                    });
                 });
             // A raft's hold, under the pack, while one is aboard or in reach
-            // (`small-boats` design 5).
+            // (`small-boats` design 5); the boat's menu puts its panel
+            // beside it (`river-craft` design 10).
             layer
                 .spawn((
-                    hold_rock,
                     Node {
-                        width: px(hold_w),
-                        padding: UiRect::all(px(RIM)),
-                        flex_direction: FlexDirection::Column,
-                        display: Display::None,
+                        column_gap: px(6),
+                        align_items: AlignItems::FlexStart,
                         ..default()
                     },
-                    HoldPanel,
+                    HoldRow,
                 ))
-                .with_children(|panel| {
-                    menu::lintel(panel, kit, "HOLD");
-                    slot_line(panel, kit, &atlas, CARRIED);
+                .with_children(|layer| {
+                    layer
+                        .spawn((
+                            hold_rock,
+                            Node {
+                                width: px(hold_w),
+                                padding: UiRect::all(px(RIM)),
+                                flex_direction: FlexDirection::Column,
+                                display: Display::None,
+                                ..default()
+                            },
+                            HoldPanel,
+                        ))
+                        .with_children(|panel| {
+                            menu::lintel(panel, kit, "HOLD");
+                            slot_line(panel, kit, &atlas, CARRIED);
+                        });
                 });
         });
     commands
@@ -661,7 +712,7 @@ mod tests {
         let (rock, lintel, slots) = {
             let kit = world.resource::<UiKit>();
             (
-                kit.image("rock/pack-wide"),
+                kit.nine(pbd_app::ui_kit::Set::Stone, "frame").image,
                 kit.image("lintel"),
                 [kit.image("slot-idle"), kit.image("slot-selected")],
             )
@@ -671,21 +722,14 @@ mod tests {
             .iter(world)
             .find(|(p, _)| p.0 == Screen::Pack)
             .expect("the pack's panel");
-        let frame = children[0];
-        let image = world.get::<ImageNode>(frame).unwrap();
-        assert_eq!(image.image, rock);
-        assert!(
-            matches!(image.image_mode, NodeImageMode::Stretch),
-            "drawn whole"
-        );
-        let node = world.get::<Node>(frame).unwrap();
-        // The wide pack (`tool-crafting` decision 12): its rim and columns
-        // are the rock's width exactly, so nothing stands outside it.
-        assert_eq!((node.width, node.height), (px(464), px(200)));
-        assert_eq!(
-            RIM * 2.0 + PACK_COLUMN + COLUMN_GAP + super::super::craft::CRAFT_COLUMN,
-            464.0
-        );
+        // Two panels side by side (`mission-playthrough` 4.4): the pack and
+        // the craft column, each on the stone frame.
+        let pair = world.get::<Children>(children[0]).unwrap().to_vec();
+        assert_eq!(pair.len(), 2, "the pack and the craft panel");
+        for frame in pair {
+            let image = world.get::<ImageNode>(frame).unwrap();
+            assert_eq!(image.image, rock);
+        }
         let mut wells = world.query::<&super::super::craft::Well>();
         assert!(wells.iter(world).count() >= 2, "the needs and the result");
         let mut rows = world.query::<&super::super::craft::RecipeRow>();

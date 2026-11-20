@@ -26,12 +26,11 @@ pub struct Sea {
     /// The radius of the mean sea surface, m.
     pub radius: f32,
     pub depth_offset_m: f32,
-    /// The tide now (`pbd_core::sea::tide_m`): the moon's direction in the
-    /// planet's frame and the range, m; zero until a moon is placed. The
-    /// shader, every hull, the line and the walker read this one value.
-    pub tide: Vec4,
-    /// The tide's range from the settings, m.
-    pub tide_range_m: f32,
+    /// `--gale <m/s>`, a capture instrument (`ocean-environments` 4.3,
+    /// design B11): the wind the sea has caught up with, held at this over
+    /// every direction, blowing along the atmosphere's own wind there (east
+    /// where it is calm). `None` in play: the sea reads the atmosphere.
+    pub gale_mps: Option<f32>,
 }
 
 impl Sea {
@@ -40,25 +39,17 @@ impl Sea {
             table: Arc::new(SeaTable::new(water.sea, surface_gravity())),
             radius: PLANET_RADIUS - water.depth_offset_m,
             depth_offset_m: water.depth_offset_m,
-            tide: Vec4::ZERO,
-            tide_range_m: water.tide_range_m,
+            gale_mps: None,
         }
-    }
-
-    /// Set the tide from the moon's direction in the planet's frame.
-    pub fn set_moon(&mut self, moon: Vec3) {
-        self.tide = moon.normalize_or(Vec3::X).extend(self.tide_range_m);
-    }
-
-    /// The tide's offset of the surface over a direction, m.
-    pub fn tide_at(&self, direction: Vec3) -> f32 {
-        pbd_core::sea::tide_m(direction, self.tide)
     }
 
     /// The sea state over a body-local direction: the wind the waves have
     /// caught up with and which way the wind blows there. Calm, with only the
     /// swell, when there is no atmosphere.
     pub fn state_at(&self, air: Option<&Air>, direction: Vec3) -> SeaState {
+        if let Some(gale) = self.gale_mps {
+            return self.table.state(gale, gale_wind(air, direction, gale));
+        }
         match air {
             Some(air) => {
                 let sample = air.now.sample(direction);
@@ -75,6 +66,17 @@ impl Sea {
     }
 }
 
+/// The wind of a forced gale over `direction` (`--gale`, an instrument):
+/// `speed` along the atmosphere's wind there, or east where it is calm.
+fn gale_wind(air: Option<&Air>, direction: Vec3, speed: f32) -> Vec3 {
+    let along = air
+        .map(|air| air.now.sample(direction).wind)
+        .unwrap_or(Vec3::ZERO);
+    let along = along - direction * along.dot(direction);
+    let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
+    along.normalize_or(east) * speed
+}
+
 /// What the water pass reads this frame: the table at the camera's sea state,
 /// and how high the surface stands under the camera.
 #[derive(Resource, Clone, ExtractResource)]
@@ -88,8 +90,6 @@ pub struct SeaNow {
     /// The turbidity of the water at the camera, per metre, eased
     /// (`pbd_core::ocean::Turbidity`; design B3). Negative until set.
     pub turbidity: f32,
-    /// The tide under the camera, m (`ocean-environments` 5.1).
-    pub tide_here: f32,
 }
 
 impl Default for SeaNow {
@@ -99,7 +99,6 @@ impl Default for SeaNow {
             camera_height: 0.0,
             wind_mps: 0.0,
             turbidity: -1.0,
-            tide_here: 0.0,
         }
     }
 }
@@ -132,8 +131,15 @@ fn load_sea_module(mut commands: Commands, assets: Res<AssetServer>) {
     commands.insert_resource(SeaModule(assets.load("shaders/sea.wgsl")));
 }
 
-fn init_sea(mut commands: Commands, water: Res<WaterSettings>) {
-    commands.insert_resource(Sea::new(&water));
+/// `--gale <m/s>`: the capture instrument [`Sea::gale_mps`] is set from,
+/// inserted by the launcher before startup. Nothing in play inserts it.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct SeaGale(pub f32);
+
+fn init_sea(mut commands: Commands, water: Res<WaterSettings>, gale: Option<Res<SeaGale>>) {
+    let mut sea = Sea::new(&water);
+    sea.gale_mps = gale.map(|g| g.0);
+    commands.insert_resource(sea);
 }
 
 /// The sea state at the active camera, as the shader's table.
@@ -162,21 +168,20 @@ fn publish_sea(
     let state = sea.state_at(air.as_deref(), direction);
     let local = sea
         .table
-        .local(&state, direction, sea.depth_at(direction), seconds)
-        .with_tide(sea.tide);
+        .local(&state, direction, sea.depth_at(direction), seconds);
     now.gpu = sea.table.gpu(&state, seconds);
-    now.gpu.tide = sea.tide;
-    now.tide_here = sea.tide_at(direction);
     now.camera_height = local.height(camera, sea.radius);
     // The wind the sea has caught up with; from the shore, where the sea's
     // lane is zero, the surface wind blowing over it.
-    now.wind_mps = air.as_deref().map_or(0.0, |air| {
-        let here = air.now.sample(direction);
-        if here.sea > 0.0 {
-            here.sea
-        } else {
-            here.wind.length()
-        }
+    now.wind_mps = sea.gale_mps.unwrap_or_else(|| {
+        air.as_deref().map_or(0.0, |air| {
+            let here = air.now.sample(direction);
+            if here.sea > 0.0 {
+                here.sea
+            } else {
+                here.wind.length()
+            }
+        })
     });
     // The water's turbidity under the eye, by its class and depth, eased so
     // a swim out or into a river mouth never steps.

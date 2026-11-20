@@ -399,21 +399,16 @@ fn the_float_rides_the_sea_the_hulls_ride() {
     assert!(spread > 0.01, "the float rises and falls: {heights:?}");
 }
 
-/// The drawn line starts at the rod tip and ends at the drawn float, at low
-/// tide, in a wave trough and pulled under on a bite, and lies on the water
-/// between rather than through it (owner, 2026-11-16: "end of fishing rod
-/// rope is not connected to bobber"; `fishing-and-equipment` design 4). The
-/// line was held over the mean sea, so at low water its end hung over the
-/// float.
+/// The drawn line starts at the rod tip and ends at the drawn float, in a
+/// wave trough and pulled under on a bite, and lies on the water between
+/// rather than through it (owner, 2026-11-16: "end of fishing rod rope is
+/// not connected to bobber"; `fishing-and-equipment` design 4).
 #[test]
 fn the_line_runs_from_the_rod_tip_to_the_float() {
     let water = crate::config::WaterSettings::default();
-    let mut sea = Sea::new(&water);
+    let sea = Sea::new(&water);
     let beds = Mutex::new(HashMap::new());
     let direction = Vec3::new(0.3, 0.9, 0.2).normalize();
-    // Low water here: the moon a quarter turn round, the tide's full range.
-    sea.set_moon(direction.any_orthonormal_vector());
-    assert!(sea.tide_at(direction) < -0.9, "low water");
     let side = direction.any_orthonormal_vector();
     let feet = direction * (sea.radius + 1.5);
     let tip = feet + direction * 1.6 + side * 0.8;
@@ -423,10 +418,6 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         let surface = |p: Vec3| here.surface(p);
         // The float as `Line` places it: on the sea, less its dip.
         let float = out * (surface(out * sea.radius) - dip);
-        assert!(
-            float.length() < sea.radius - 0.5,
-            "the float rides under the mean"
-        );
         let tied = float + float.normalize() * draw::FLOAT_TOP_M;
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
         let centre =
@@ -460,15 +451,15 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
                 at.length() >= floor(at) + draw::LINE_CLEARANCE_M - 1e-3,
                 "a point of the line is not held clear of the water"
             );
-            // Clear of the drawn sea and of the composite's tided waterline,
-            // so nothing of it is drawn as under water.
+            // Clear of the drawn sea and of the composite's waterline, the
+            // sea's mean, so nothing of it is drawn as under water.
             assert!(
                 at.length() > draw::drawn_surface(&here, at),
                 "a point of the line is under the drawn sea"
             );
             assert!(
-                at.length() > sea.radius + sea.tide_at(at),
-                "a point of the line is under the tided waterline"
+                at.length() > sea.radius,
+                "a point of the line is under the waterline"
             );
         }
     }
@@ -922,4 +913,50 @@ mod laid_in_place {
                 .map(VertexAttributeValues::get_bytes)
         );
     }
+}
+
+/// `ocean-environments` 18.2 (design B23, cause 4): a school in a river over
+/// the sea's level reads its depth from the RIVER's surface, which is what
+/// `draw::schools` dims it by. Its anchor's surface is the river's top, not
+/// the sea's sphere (from which the depth was negative and the school never
+/// dimmed), and a fish half a metre under the river's top is half a metre
+/// deep.
+#[test]
+fn a_school_in_a_river_reads_its_depth_from_the_river() {
+    use crate::planet::terrain;
+    let river = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: 28.25_f32.to_radians(),
+        lon: 0.75_f32.to_radians(),
+    });
+    assert!(pbd_core::rivers::floods(terrain::terrain_config(), river));
+    let set = crate::planet::lod::generate_fine(
+        river,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
+    let mut contact = crate::planet::PlanetContact::test_planet(5);
+    contact.set_fine(&std::sync::Arc::new(set));
+    let water = crate::config::WaterSettings::default();
+    let sea = Sea::new(&water);
+    let beds = Mutex::new(HashMap::new());
+    let r = terrain::PLANET_RADIUS;
+    let bed = r + terrain::surface_height(river);
+    let top = contact
+        .column_water(river * (bed + 0.5))
+        .flatten()
+        .map(|top| r + top)
+        .expect("the river's water on its bed");
+    assert!(top > sea.radius + 1.0, "the river stands over the sea");
+    // The anchor as the spawner puts it: at the fresh water's top.
+    let anchor = river * top;
+    let here = PlanetWater::at(&sea, None, Some(&contact), &beds, anchor, 0.0);
+    let surface = here.surface(anchor);
+    assert!(
+        (surface - top).abs() < 1e-3,
+        "the school's surface is the river's: {surface} against {top}"
+    );
+    let fish = river * (top - 0.5);
+    let depth = surface - fish.length();
+    assert!((depth - 0.5).abs() < 1e-2, "half a metre down: {depth}");
+    assert!(sea.radius - fish.length() < 0.0, "the sea's rule gave none");
 }

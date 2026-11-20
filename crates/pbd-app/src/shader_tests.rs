@@ -397,7 +397,7 @@ fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
 
 /// `horizon-haze` 4, the sea's horizon line: from inside the shell, a ray
 /// that meets the solid sphere is one the sea should have covered, and where
-/// the tided sheet dips under that sphere it does not. The dome draws the
+/// the sheet's offset and its troughs dip under that sphere it does not. The dome draws the
 /// horizon's air there, the ray just over the sphere's tangent, instead of a
 /// sliver of air cut at the hit, which was a dark line along the horizon.
 /// From outside, the cut stays: the column over the ground needs it.
@@ -460,7 +460,16 @@ fn the_clouds_and_the_rain_tell_the_horizon_gap_from_the_sea() {
     let rust = include_str!("planet_water.rs");
     assert_eq!(rust.matches("(20, texture_depth_2d())").count(), 4);
     assert_eq!(rust.matches("(20, &water.depth)").count(), 4);
-    assert!(rust.contains("store: if splash_on || bubbles_on || clouds_on || water.rain_needed {"));
+    // The sheet's depth is stored whenever the clouds or the rain will read
+    // it (other readers, such as the rain splashes on the water, may join
+    // the condition, which rustfmt then splits over lines).
+    let store = rust
+        .find("store: if splash_on")
+        .map(|at| &rust[at..])
+        .and_then(|s| s.find('{').map(|end| s[..end].to_string()))
+        .expect("the sheet's depth store condition");
+    assert!(store.contains("clouds_on"), "{store}");
+    assert!(store.contains("water.rain_needed"), "{store}");
 }
 
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
@@ -783,6 +792,50 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
     assert!(
         gate.contains("&& state <= 0.75"),
         "the rain passes run under the sea"
+    );
+}
+
+/// `dry-holes` design 10 (owner, 2026-11-19: "It shouldn't shade dry holes
+/// at all"): a terrain face whose column holds no water over it writes
+/// nought to the scene's alpha, every other one writes one, and the water's
+/// compose takes a pixel for wet (the sea's murk and wobble) only as far as
+/// that alpha says, for an eye not under the water. A pit dug under the
+/// sea's level was taken for sea by the compose's sphere test alone. The
+/// half-size reflections' compose adds colour only, so the alpha survives it.
+#[test]
+fn a_dry_face_is_not_seen_through_the_sea() {
+    let surface = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    assert!(surface.contains("var<private> water_over: f32 = 1.0;"));
+    let terrain = wgsl_fn_body(&surface, "shade_terrain");
+    let decided = terrain
+        .find("if input.slot != 0u && water_depth <= 0. { water_over = 0.0; }")
+        .expect("the column's dry answer is not written");
+    let depth = terrain
+        .find("let water_depth = max(water_surface - length(input.position), 0.);")
+        .expect("the submerged branch's depth is gone");
+    assert!(depth < decided, "decided before the column's depth");
+    let finish = wgsl_fn_body(&surface, "finish");
+    assert!(finish.contains("return vec4(color, water_over);"));
+    assert!(finish.contains("return vec4(color,water_over);"));
+    assert!(
+        !finish.contains("return vec4(color,1.)") && !finish.contains("return vec4(color, 1.0)"),
+        "a terrain colour ignores the column"
+    );
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let compose = wgsl_fn_body(&water, "compose");
+    let masked = compose.find("wet *= mask;").unwrap();
+    let gated = compose
+        .find("if (!sky && !under) { wet *= scene.a; }")
+        .expect("the compose wets a dry face");
+    let used = compose.find("if (wet > 0.0 && view.fx.x > 0.0)").unwrap();
+    assert!(
+        masked < gated && gated < used,
+        "gated before the wobble and murk"
+    );
+    let reflect = include_str!("planet_reflect.rs");
+    assert!(
+        reflect.contains("write_mask: ColorWrites::COLOR,"),
+        "the reflections' compose writes the alpha"
     );
 }
 

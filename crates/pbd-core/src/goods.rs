@@ -147,6 +147,18 @@ pub const GOODS: &[GoodRow] = &[
     row("inner-tube", "inner tube", 1, "items/goods/inner-tube.png"),
     row("raft", "raft", 1, "items/goods/raft.png"),
     row("rowboat", "rowboat", 1, "items/goods/rowboat.png"),
+    // ---- glowing-mushrooms design 3: the glowing plant the meadows grow,
+    // picked with F and eaten for the body glow.
+    row(
+        "glowing-mushroom",
+        "glowing mushroom",
+        32,
+        "items/goods/glowing-mushroom.png",
+    ),
+    // ---- small-boats design 2e: a cow's hide, tanned; what an inner tube is
+    // made of (owner, 2026-11-18: "tubes: would probably need just leather",
+    // "cows and horses should").
+    row("leather", "leather", 32, "items/goods/leather.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -210,6 +222,8 @@ impl Good {
     pub const INNER_TUBE: Good = by_code_const("inner-tube");
     pub const RAFT: Good = by_code_const("raft");
     pub const ROWBOAT: Good = by_code_const("rowboat");
+    // glowing-mushrooms: the glowing plant, picked.
+    pub const GLOWING_MUSHROOM: Good = by_code_const("glowing-mushroom");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -297,6 +311,7 @@ mod tests {
             (Good::FERTILE_EGG, "fertile-egg"),
             (Good::INCUBATOR, "incubator"),
             (Good::BAIT, "bait"),
+            (Good::GLOWING_MUSHROOM, "glowing-mushroom"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

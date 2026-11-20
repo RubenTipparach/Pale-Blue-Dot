@@ -800,8 +800,10 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
             }
         }
     }
-    // Floes on polar water: hex slabs of one to four cells.
-    if any(Environment::UnderIce) {
+    // Floes on polar water: hex slabs of one to four cells. Not on a world
+    // whose floes are cells of sea ice (generator version 14,
+    // `ocean-environments` B24): the cells are its floes.
+    if any(Environment::UnderIce) && cfg.sea_cells.is_none() {
         let n = (TILE_M / 2.833) as i32;
         for i in 0..n {
             for j in 0..n {
@@ -1157,9 +1159,9 @@ struct Sway {
 #[derive(Default)]
 struct Built {
     pieces: Verts,
-    /// The floes, in a mesh of their own: they float, so they ride the tide
-    /// (a floe built at the mean sea was drowned by the flood and the water
-    /// sheet cut across its top in streaks; owner, 2026-11-15).
+    /// The floes, in a mesh of their own (a floe built into the pieces was
+    /// drowned by the flood and the water sheet cut across its top in
+    /// streaks; owner, 2026-11-15).
     floes: Verts,
     glow: Verts,
     sway: Sway,
@@ -1212,9 +1214,9 @@ fn lay_swaying(
 /// less what stands above).
 const FLOE_DRAFT_M: f32 = 0.6;
 
-/// Whether a floe at `dir` of radius `r` floats at low water: the ground
-/// under its middle and its six corners stands at least its draft under the
-/// sea at its lowest (`low_water_m` under the mean). A floe the environment
+/// Whether a floe at `dir` of radius `r` floats: the ground under its
+/// middle and its six corners stands at least its draft under the sea's
+/// mean (the sea has no tide, `no-tides`). A floe the environment
 /// function puts on a beach or a shore terrace is not laid at all, where it
 /// stood in the sand tipped and stacked (`ocean-environments` B18).
 fn floe_floats(
@@ -1223,9 +1225,8 @@ fn floe_floats(
     r: f32,
     bed: &impl Fn(Vec3) -> f32,
     sea_radius: f32,
-    low_water_m: f32,
 ) -> bool {
-    let lowest = sea_radius - low_water_m - FLOE_DRAFT_M;
+    let lowest = sea_radius - FLOE_DRAFT_M;
     let centre = dir * sea_radius;
     (0..7).all(|k| {
         let at = if k == 0 {
@@ -1243,7 +1244,6 @@ fn build_tile(
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
-    low_water_m: f32,
     water: UnderWater,
     seed: u32,
 ) -> Built {
@@ -1253,7 +1253,7 @@ fn build_tile(
     for (i, p) in pieces.iter().enumerate() {
         let axes = frame_at(p.dir, p.yaw);
         if p.floe {
-            if !floe_floats(p.dir, axes, p.reach, &bed, sea_radius, low_water_m) {
+            if !floe_floats(p.dir, axes, p.reach, &bed, sea_radius) {
                 continue;
             }
             let origin = p.dir * sea_radius - anchor;
@@ -1363,7 +1363,6 @@ fn ambient(
     list: &mut [Ambient],
     t: f32,
     clock: f32,
-    tide: f32,
     eye: Vec3,
     seen: &dyn Fn(Vec3) -> [f32; 3],
     lit: &mut Verts,
@@ -1462,8 +1461,7 @@ fn ambient(
                 tall,
                 ref mut state,
             } => {
-                // On its floe, which rides the tide.
-                let at = at + up * tide;
+                // On its floe.
                 let (e, n) = frame_tangents(up);
                 let forward = e * yaw.cos() + n * yaw.sin();
                 // It slides off and swims away once the eye is within its
@@ -1530,11 +1528,15 @@ fn frame_tangents(up: Vec3) -> (Vec3, Vec3) {
 // ---- the plugin --------------------------------------------------------------
 
 /// The tile's fade (`detail-fade`'s screen-door mask, through the field's
-/// `Faded`): out from `FADE_FROM_M` to `FADE_TO_M` of its middle from the eye,
-/// and in over `LAND_S` when it lands. A tile is dropped only once it is
-/// wholly faded, so nothing appears or vanishes in one frame.
-const FADE_FROM_M: f32 = 34.0;
-const FADE_TO_M: f32 = 46.0;
+/// `Faded`). A fade is a moment in time, never a place (CLAUDE.md, priority
+/// 1, owner 2026-11-16; `ocean-environments` B24): a tile fades in over
+/// `LAND_S` when it lands, starts fading out over `LAND_S` when its middle
+/// passes `FADE_OUT_M` from the eye, and back in when it comes within
+/// `FADE_IN_M` again, so a still eye sees no tile half faded once `LAND_S`
+/// has passed. A tile is dropped only once it is wholly faded, so nothing
+/// appears or vanishes in one frame.
+const FADE_IN_M: f32 = 38.0;
+const FADE_OUT_M: f32 = 42.0;
 const WANT_M: f32 = 52.0;
 const LAND_S: f32 = 0.8;
 /// Within this of the eye a tile sways, m; the sway eases out over the
@@ -1543,12 +1545,26 @@ const LAND_S: f32 = 0.8;
 const NEAR_M: f32 = 30.0;
 const SWAY_EASE_M: f32 = 4.0;
 
-/// How far a tile has faded out, 0 whole to 1 gone: `metres` its middle from
-/// the eye, `since_s` since it landed.
-fn tile_fade(metres: f32, since_s: f32) -> f32 {
-    let by_distance = ((metres - FADE_FROM_M) / (FADE_TO_M - FADE_FROM_M)).clamp(0.0, 1.0);
-    let by_landing = 1.0 - (since_s / LAND_S).clamp(0.0, 1.0);
-    by_distance.max(by_landing)
+/// Where a tile's fade goes from where it is, 0 whole to 1 gone: `metres`
+/// its middle from the eye, `wanted` whether it is in reach, `fade` now, and
+/// `dt` seconds on. It runs at one rate toward whole or gone, each a timed
+/// fade over `LAND_S`; the distance only says which way, with a margin
+/// (`FADE_IN_M` to `FADE_OUT_M`) in which it keeps the way it was going.
+fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
+    let out = if !wanted || metres > FADE_OUT_M {
+        true
+    } else if metres < FADE_IN_M {
+        false
+    } else {
+        // In the margin: on to the end it was nearer.
+        fade >= 0.5
+    };
+    let step = dt.max(0.0) / LAND_S;
+    if out {
+        (fade + step).min(1.0)
+    } else {
+        (fade - step).max(0.0)
+    }
 }
 
 /// Bend a swaying mesh in the surge, `bend` 0 at rest to 1 full: its
@@ -1573,10 +1589,9 @@ struct Drawn {
     sway: Option<(Entity, Handle<Mesh>)>,
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
-    /// The floes' mesh, lifted by the tide at the tile each frame.
-    floes: Option<Entity>,
     anchor: Vec3,
-    landed_s: f32,
+    /// Its fade, 0 whole to 1 gone ([`tile_fade`]); it lands at 1.
+    fade: f32,
     still: Sway,
     ambient: Vec<Ambient>,
     swayed: bool,
@@ -1752,7 +1767,6 @@ fn tiles(
     sun: Option<Res<crate::sky::Sun>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut roots: Query<(&mut Transform, &mut crate::field_light::Faded)>,
-    mut parts: Query<&mut Transform, Without<crate::field_light::Faded>>,
     mut shown: Query<&mut Visibility>,
 ) {
     let _timer = TilesTimer(std::time::Instant::now());
@@ -1775,6 +1789,7 @@ fn tiles(
         return;
     }
     let now = time.elapsed_secs();
+    let dt = time.delta_secs().min(0.1);
     let under = UnderWater::of(water.as_deref());
     let radius = cfg.radius_m;
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
@@ -1810,7 +1825,8 @@ fn tiles(
     let mut swayed_verts = 0usize;
     for (key, drawn) in state.drawn.iter_mut() {
         let m = metres(*key);
-        let fade = tile_fade(m, now - drawn.landed_s);
+        let fade = tile_fade(drawn.fade, m, wanted.contains(key), dt);
+        drawn.fade = fade;
         if !wanted.contains(key) && fade >= 1.0 {
             gone.push(*key);
             continue;
@@ -1819,17 +1835,6 @@ fn tiles(
             transform.translation = (frame.center + drawn.anchor.as_dvec3()).as_vec3();
             if faded.0 != fade {
                 faded.0 = fade;
-            }
-        }
-        // The floes float: they rise and fall with the tide over the tile.
-        let tile_up = drawn.anchor.normalize_or(Vec3::Y);
-        let tide = sea.tide_at(tile_up);
-        if let Some(floes) = drawn.floes
-            && let Ok(mut transform) = parts.get_mut(floes)
-        {
-            let lift = tile_up * tide;
-            if transform.translation != lift {
-                transform.translation = lift;
             }
         }
         // The unlit glow and smoke cannot take the mask: they go at half.
@@ -1871,15 +1876,14 @@ fn tiles(
         if !drawn.ambient.is_empty() {
             let (mut lit, mut smoke) = (Verts::default(), Verts::default());
             if fade < 1.0 {
-                // Depth under the sea's tided surface over the tile.
-                let surface = sea.radius + tide;
+                // Depth under the sea's surface over the tile.
+                let surface = sea.radius;
                 let anchor = drawn.anchor;
                 let seen = |at: Vec3| under.albedo([1.0; 3], surface - (at + anchor).length());
                 ambient(
                     &mut drawn.ambient,
                     seconds,
                     now,
-                    tide,
                     local_eye,
                     &seen,
                     &mut lit,
@@ -1963,9 +1967,7 @@ fn tiles(
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    // The tide's lowest under the mean: a third of its range.
-    let low_water_m = sea.tide_range_m / 3.0;
-    let built = build_tile(&pieces, anchor, bed, sea.radius, low_water_m, under, seed);
+    let built = build_tile(&pieces, anchor, bed, sea.radius, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -2026,14 +2028,14 @@ fn tiles(
             "Sea pieces",
         );
     }
-    let floes = (!built.floes.positions.is_empty()).then(|| {
+    if !built.floes.positions.is_empty() {
         child(
             &mut commands,
             meshes.add(mesh_of(built.floes, true)),
             life.0.clone(),
             "Ice floes",
-        )
-    });
+        );
+    }
     let glow_id = (!built.glow.positions.is_empty()).then(|| {
         child(
             &mut commands,
@@ -2116,9 +2118,8 @@ fn tiles(
             sway,
             life: (life_id, life_handle),
             smoke,
-            floes,
             anchor,
-            landed_s: now,
+            fade: 1.0,
             still: built.sway,
             ambient: built.ambient,
             swayed: false,
@@ -2182,8 +2183,8 @@ mod tests {
         assert_eq!(water.albedo([0.85, 0.63, 0.23], -2.0), [0.85, 0.63, 0.23]);
     }
 
-    /// Design B18: a floe is laid only where its ice clears the ground at
-    /// low water, so none stands on a beach or a terrace; and the floe seal
+    /// Design B18: a floe is laid only where its ice clears the ground, so
+    /// none stands on a beach or a terrace; and the floe seal
     /// is drawn on every frame of its slide off, its swim and its climb back,
     /// never moving further in a frame than it could swim.
     #[test]
@@ -2192,11 +2193,11 @@ mod tests {
         let dir = Vec3::Y;
         let axes = frame_at(dir, 0.3);
         let flat = |depth: f32| move |_: Vec3| radius - depth;
-        // 3 m of water clears 0.6 m of ice at a 1 m low water; 1.2 m does not.
-        assert!(floe_floats(dir, axes, 1.3, &flat(3.0), radius, 1.0));
-        assert!(!floe_floats(dir, axes, 1.3, &flat(1.2), radius, 1.0));
+        // 3 m of water clears 0.6 m of ice; 0.4 m does not.
+        assert!(floe_floats(dir, axes, 1.3, &flat(3.0), radius));
+        assert!(!floe_floats(dir, axes, 1.3, &flat(0.4), radius));
         // Dry sand above the sea: none.
-        assert!(!floe_floats(dir, axes, 1.3, &flat(-0.6), radius, 1.0));
+        assert!(!floe_floats(dir, axes, 1.3, &flat(-0.6), radius));
         // A terrace under one corner only (the bed takes a direction): none.
         let step = |p: Vec3| {
             if p.x > 0.001 {
@@ -2205,7 +2206,7 @@ mod tests {
                 radius - 3.0
             }
         };
-        assert!(!floe_floats(dir, axes, 1.3, &step, radius, 1.0));
+        assert!(!floe_floats(dir, axes, 1.3, &step, radius));
         let pieces = [Piece {
             dir,
             kind: None,
@@ -2222,7 +2223,6 @@ mod tests {
             dir * radius,
             flat(-0.6),
             radius,
-            1.0,
             UnderWater::of(None),
             1,
         );
@@ -2232,7 +2232,6 @@ mod tests {
             dir * radius,
             flat(4.0),
             radius,
-            1.0,
             UnderWater::of(None),
             1,
         );
@@ -2344,35 +2343,46 @@ mod tests {
     }
 
     /// A tile never appears or vanishes in one frame (CLAUDE.md, "No
-    /// pop-in"): it lands wholly faded and comes in over `LAND_S`; it fades
-    /// out with distance before it is out of reach, and is dropped only once
-    /// wholly faded (`tiles`); and the frame-to-frame change is small.
+    /// pop-in"), and a fade is a moment in time, never a place (owner,
+    /// 2026-11-16): it lands wholly faded and comes in over `LAND_S`; past
+    /// `FADE_OUT_M` it fades out over `LAND_S`, before it is out of reach,
+    /// and is dropped only once wholly faded (`tiles`); a still eye at any
+    /// distance sees it whole or gone once `LAND_S` has passed; and the
+    /// frame-to-frame change is small.
     #[test]
     fn a_tile_fades_in_when_it_lands_and_out_before_it_is_dropped() {
-        assert_eq!(tile_fade(10.0, 0.0), 1.0, "lands faded");
-        assert_eq!(tile_fade(10.0, LAND_S), 0.0, "whole once landed");
+        let dt = 1.0 / 60.0;
+        let run = |mut fade: f32, metres: f32, wanted: bool, seconds: f32| {
+            for _ in 0..(seconds / dt).round() as usize {
+                let next = tile_fade(fade, metres, wanted, dt);
+                assert!((next - fade).abs() <= dt / LAND_S + 1e-5);
+                fade = next;
+            }
+            fade
+        };
         assert_eq!(
-            tile_fade(WANT_M, 100.0),
-            1.0,
-            "gone before it is out of reach"
+            run(1.0, 10.0, true, LAND_S + 0.05),
+            0.0,
+            "whole once landed"
         );
-        const { assert!(FADE_TO_M < WANT_M) };
-        let mut last = tile_fade(10.0, 0.0);
-        for frame in 1..=120 {
-            let f = tile_fade(10.0, frame as f32 / 60.0);
-            assert!(
-                (f - last).abs() <= 1.0 / (LAND_S * 60.0) + 1e-5,
-                "a step of {}",
-                f - last
-            );
-            last = f;
+        assert_eq!(
+            run(0.0, 45.0, true, LAND_S + 0.05),
+            1.0,
+            "gone past the edge"
+        );
+        assert_eq!(run(0.0, 10.0, false, LAND_S + 0.05), 1.0, "out of reach");
+        const { assert!(FADE_OUT_M < WANT_M && FADE_IN_M < FADE_OUT_M) };
+        // A still eye, every distance in reach: whole or gone, never half.
+        for cm in (0..=(WANT_M as i32 * 100)).step_by(37) {
+            let m = cm as f32 / 100.0;
+            for start in [0.0, 0.3, 0.7, 1.0] {
+                let f = run(start, m, true, LAND_S + 0.05);
+                assert!(f == 0.0 || f == 1.0, "{f} at {m} m from {start}");
+            }
         }
-        let mut last = tile_fade(0.0, 10.0);
-        for cm in 0..=(WANT_M as i32 * 100) {
-            let f = tile_fade(cm as f32 / 100.0, 10.0);
-            assert!(f >= last && f - last < 0.01);
-            last = f;
-        }
+        // In the margin it holds the way it was going.
+        assert_eq!(run(0.0, 40.0, true, 5.0), 0.0);
+        assert_eq!(run(1.0, 40.0, true, 5.0), 1.0);
     }
 
     /// No pieces on a world made before the sea's places.

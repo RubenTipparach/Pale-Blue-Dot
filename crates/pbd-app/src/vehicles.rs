@@ -13,8 +13,10 @@ mod draw;
 pub(crate) mod harbour;
 pub mod hold;
 mod hud;
+pub mod lamps;
 pub mod launch;
 mod model;
+mod oar_hand;
 pub(crate) mod place;
 pub mod refund;
 pub(crate) mod view;
@@ -31,7 +33,7 @@ use bevy::prelude::*;
 use pbd_core::DVec3;
 use pbd_core::vehicle::record::{RECORD_VERSION, VehicleFile};
 use pbd_core::vehicle::spec::VehicleSpecs;
-use pbd_core::vehicle::{Craft, Hulls, Input, Kind, Mooring, Surroundings};
+use pbd_core::vehicle::{Craft, Hulls, Input, Kind, Surroundings};
 use pbd_core::wind::AirHere;
 use std::sync::Arc;
 
@@ -165,6 +167,8 @@ impl Plugin for VehiclePlugin {
         app.add_systems(PreStartup, init_fleet)
             .init_resource::<Aboard>()
             .init_resource::<VehicleControls>()
+            .init_resource::<AnchorOrder>()
+            .init_resource::<lamps::CraftLamps>()
             .init_resource::<VehicleClock>()
             .init_resource::<view::VehicleView>()
             .add_systems(Startup, (view::spawn_camera, hud::spawn))
@@ -182,15 +186,16 @@ impl Plugin for VehiclePlugin {
             )
             .add_systems(
                 RunFixedMainLoop,
-                (board_or_leave, read_controls)
+                (anchor_order, board_or_leave, read_controls)
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
             .add_systems(FixedUpdate, step_vehicles)
             .add_systems(
                 PostUpdate,
-                (draw::place, view::follow)
+                (draw::place, view::follow, lamps::gather)
                     .chain()
+                    .before(crate::carried_light::gather)
                     .after(crate::planet::update_planet_frame)
                     .before(bevy::transform::TransformSystems::Propagate)
                     .run_if(crate::world_open),
@@ -264,17 +269,12 @@ fn step_vehicles(
         let over_land = crate::planet::terrain::surface_height(direction) >= 0.0;
         let global = world.frame.physics_center() + craft.body.position + world.physics.0.origin;
         // A river or a lake over the sea's level floats the craft on its own
-        // surface (`small-boats` design 2b): no tide, its waves shoaled
-        // to nothing, and the surface's slope as the current.
+        // surface (`small-boats` design 2b): its waves shoaled to nothing,
+        // and the surface's slope as the current.
         let fresh = contact.and_then(|c| fresh_water(c, craft.body.position));
         let env = Surroundings {
             sea: &sea.table,
             sea_state: sea.state_at(world.air.as_deref(), direction),
-            tide: if fresh.is_some() {
-                Vec4::ZERO
-            } else {
-                sea.tide
-            },
             sea_radius: fresh.map_or(sea.radius as f64, |f| f.surface),
             depth: fresh.map_or(sea.depth_at(direction), |f| f.depth),
             air: AirHere {
@@ -372,6 +372,14 @@ fn report_steps(timing: &mut StepTiming, dt: f32) {
 /// One craft's tick: stepped, held back a tick where it left its domain,
 /// and its rest noted for the save.
 fn step_one(vehicle: &mut Vehicle, dt: f64, input: &Input, env: &Surroundings, fleet: &mut Fleet) {
+    // An anchor that comes to the bed, sets or comes aboard changes what
+    // the save keeps: its line.
+    let phase = |c: &Craft| {
+        c.anchor
+            .map(|a| std::mem::discriminant(&a.phase))
+            .map(|d| (d, c.anchored()))
+    };
+    let was = phase(&vehicle.craft);
     let before = vehicle.craft.clone();
     vehicle.craft.step(dt, SUBSTEPS, input, env);
     if !vehicle.craft.is_finite() {
@@ -381,6 +389,9 @@ fn step_one(vehicle: &mut Vehicle, dt: f64, input: &Input, env: &Surroundings, f
         vehicle.craft = before;
         vehicle.craft.body.velocity = DVec3::ZERO;
         vehicle.craft.body.angular_velocity = DVec3::ZERO;
+    }
+    if was != phase(&vehicle.craft) {
+        fleet.dirty = true;
     }
     // A rest is a place the save must keep.
     let still = vehicle.craft.body.velocity.length() < REST_SPEED
@@ -693,15 +704,21 @@ fn board(world: &mut World) {
 /// Hand the player to `entity`: its controls, its camera. The one path by
 /// which anything boards, the F key and a capture script alike.
 fn take_seat(world: &mut World, entity: Entity, captured: bool) {
-    let name = {
+    let (name, rowed) = {
         let mut vehicle = world
             .get_mut::<Vehicle>(entity)
             .expect("the craft just found");
         vehicle.craft.board();
-        vehicle.craft.kind.name()
+        (vehicle.craft.kind.name(), vehicle.craft.rowing().is_some())
     };
     world.resource_mut::<Aboard>().0 = Some(entity);
-    world.resource_mut::<view::VehicleView>().aboard(captured);
+    let mut look = world.resource_mut::<view::VehicleView>();
+    look.aboard(captured);
+    // A rower in the seat looks down along the oars to the bow, the hands
+    // on the handles in view (`river-craft` design 9.6).
+    if rowed && look.seat {
+        look.pitch = view::ROWER_PITCH;
+    }
     crate::walking::set_view(world, View::Vehicle);
     world.resource_mut::<Fleet>().dirty = true;
     info!("aboard the {name}");
@@ -722,6 +739,8 @@ pub struct VehicleScript {
     /// current, then back down with it, by the craft's own keys (the owner,
     /// 2026-11-18: "the raft guy pushing the raft up and down the river").
     pub pole_run: bool,
+    /// `--pitch` in the seat, rad: the look down from level.
+    pub pitch: Option<f32>,
 }
 
 /// The pole run's script (`--pole-run`, a recording instrument): settle five
@@ -931,9 +950,7 @@ fn scripted_board(world: &mut World) {
         // Clear of the Loon, in water deep enough to float free.
         let on = place::open_water_near(sea, loon.normalize().as_vec3(), 8.0, 1.5)?;
         let toward = (on - loon).normalize_or(on.normalize().any_orthonormal_vector());
-        let tide = world.resource::<Sea>().tide;
-        let mut craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
-        place::on_the_tide(&mut craft, tide);
+        let craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
         let entity = place::spawn_craft(world, craft);
         launch::write_fleet(world);
         info!("--aboard: launched a {} for the capture", kind.name());
@@ -946,6 +963,9 @@ fn scripted_board(world: &mut World) {
     };
     world.resource_mut::<view::VehicleView>().seat = script.seat;
     take_seat(world, entity, true);
+    if let Some(pitch) = script.pitch {
+        world.resource_mut::<view::VehicleView>().pitch = pitch;
+    }
 }
 
 /// Step off: the craft stays, unattended; the walker is put at its exit.
@@ -982,12 +1002,25 @@ pub fn leave(world: &mut World, entity: Entity) {
     info!("left the {name}; it stays where it is");
 }
 
-/// A boat: drop anchor where the water is shallow enough, or weigh it.
-fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
+/// A boat's one anchor (`river-craft` design 4): T or the boat's menu
+/// drops it where the water is shallow enough, and weighs it (or stops
+/// hauling) when it is out. A boat tied up is cast off; a kind with no
+/// anchor (the tube) is only ever cast off.
+pub fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     let Some(vehicle) = world.get::<Vehicle>(entity) else {
         return;
     };
-    if vehicle.craft.mooring.is_some() {
+    let craft = &vehicle.craft;
+    let anchor_out = craft.anchor.is_some() || craft.mooring.is_some_and(|m| m.anchored);
+    if anchor_out && craft.has_anchor() {
+        let mut vehicle = world.get_mut::<Vehicle>(entity).expect("checked");
+        vehicle.craft.weigh_anchor();
+        let word = pbd_core::vehicle::anchor::word(vehicle.craft.anchor.as_ref());
+        world.resource_mut::<Fleet>().dirty = true;
+        info!("anchor: {word}");
+        return;
+    }
+    if craft.mooring.is_some() {
         world
             .get_mut::<Vehicle>(entity)
             .expect("checked")
@@ -997,9 +1030,9 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
         info!("cast off");
         return;
     }
-    let Some(vehicle) = world.get::<Vehicle>(entity) else {
+    if !craft.has_anchor() {
         return;
-    };
+    }
     let bow = vehicle.craft.bow();
     let direction = bow.normalize();
     let floor = ground_under(
@@ -1017,17 +1050,30 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
         info!("too deep to anchor: {depth:.0} m");
         return;
     }
+    // Let go: it falls to the bed and the rode stops there (design 4).
     world
         .get_mut::<Vehicle>(entity)
         .expect("checked")
         .craft
-        .mooring = Some(Mooring {
-        at: direction * floor,
-        length: place::rode(depth),
-        anchored: true,
-    });
+        .drop_anchor();
     world.resource_mut::<Fleet>().dirty = true;
-    info!("anchored in {depth:.1} m");
+    info!("anchor dropped in {depth:.1} m");
+}
+
+/// What the boat's menu asks of a craft's anchor (`river-craft` design
+/// 10.3), done here where the water's depth is known: drop or weigh it.
+#[derive(Resource, Default, Debug)]
+pub struct AnchorOrder(pub Option<Entity>);
+
+/// Carry out the boat's menu's anchor order.
+fn anchor_order(world: &mut World) {
+    let Some(entity) = world
+        .get_resource_mut::<AnchorOrder>()
+        .and_then(|mut o| o.0.take())
+    else {
+        return;
+    };
+    make_fast_or_cast_off(world, entity);
 }
 
 /// Write the fleet whenever something a save must keep happened (a craft

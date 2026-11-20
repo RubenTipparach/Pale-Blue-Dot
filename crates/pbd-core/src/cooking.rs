@@ -32,7 +32,8 @@ pub const ANY_FISH: Item = Item::Fish(u16::MAX);
 pub const ANY_FISH_NAME: &str = "fish";
 
 /// An effect a dish gives (design S5). Only effects on systems that exist:
-/// glow waits for a light that follows the player, warmth for cold.
+/// warmth waits for cold. Glow is the light a glowing mushroom gives the
+/// body (`glowing-mushrooms` design 6), carried as any light in hand is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum Effect {
     /// Sprinting and swimming are faster.
@@ -41,16 +42,19 @@ pub enum Effect {
     Steady,
     /// Blocks break faster.
     Keen,
+    /// The body gives light (`glowing-mushrooms`).
+    Glow,
 }
 
 impl Effect {
-    pub const ALL: [Effect; 3] = [Effect::Stride, Effect::Steady, Effect::Keen];
+    pub const ALL: [Effect; 4] = [Effect::Stride, Effect::Steady, Effect::Keen, Effect::Glow];
 
     pub fn name(self) -> &'static str {
         match self {
             Effect::Stride => "stride",
             Effect::Steady => "steady hands",
             Effect::Keen => "keen",
+            Effect::Glow => "glow",
         }
     }
 }
@@ -73,6 +77,8 @@ impl Strengths {
             Effect::Stride => self.stride,
             Effect::Steady => self.steady,
             Effect::Keen => self.keen,
+            // Glow is a light, not a multiplier (`GlowSettings`).
+            Effect::Glow => 1.0,
         }
     }
 }
@@ -97,11 +103,94 @@ pub struct CookingFile {
     /// The most effects running at once.
     pub max_effects: usize,
     pub dishes: Vec<DishEntry>,
+    /// The body glow's light (`glowing-mushrooms` design 10, 11).
+    #[serde(default)]
+    pub glow: GlowSettings,
     /// Goods another branch is adding (husbandry's eggs, milk, meat): a
     /// recipe that names one of these and finds it missing is pending, not
     /// wrong. Any other missing name is an error.
     pub awaited: Vec<String>,
     pub recipes: Vec<RecipeEntry>,
+}
+
+/// The body glow's light while `Effect::Glow` runs (`glowing-mushrooms`
+/// design 10, 11).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GlowSettings {
+    /// Its level on the field's 0..15 scale; its strength is `level / 14`, as
+    /// a placed lamp's.
+    pub level: u8,
+    /// Its colour, linear RGB: the glowing mushroom's cap
+    /// (`flora::GLOW_HEAD_RGB`).
+    pub tint: [f32; 3],
+    /// Seconds of play over which it comes up after eating.
+    pub rise_s: f32,
+    /// Seconds of play at the end of the effect over which it goes out.
+    pub fade_s: f32,
+}
+
+impl Default for GlowSettings {
+    fn default() -> Self {
+        Self {
+            level: 10,
+            tint: crate::flora::GLOW_HEAD_RGB,
+            rise_s: 0.6,
+            fade_s: 20.0,
+        }
+    }
+}
+
+impl GlowSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        if !(1..=15).contains(&self.level) {
+            return Err("glow level must be 1..=15".into());
+        }
+        if !self
+            .tint
+            .iter()
+            .all(|c| c.is_finite() && (0.0..=1.0).contains(c))
+        {
+            return Err("glow tint must be 0..1 each".into());
+        }
+        if !(self.rise_s.is_finite() && (0.0..=5.0).contains(&self.rise_s)) {
+            return Err("glow rise_s must be 0..5".into());
+        }
+        if !(self.fade_s.is_finite() && self.fade_s >= 0.0) {
+            return Err("glow fade_s must be 0 or more".into());
+        }
+        Ok(())
+    }
+
+    /// Its strength, `level / 14`, as a placed lamp's.
+    pub fn level_strength(&self) -> f32 {
+        f32::from(self.level) / 14.0
+    }
+
+    /// How far the glow is up, 0..1, `since_s` seconds after it was eaten
+    /// with `left_s` seconds of it left: up over `rise_s`, then whole, then
+    /// down on a smoothstep over the last `fade_s`, reaching nought as the
+    /// effect ends, so it never cuts.
+    pub fn strength(&self, since_s: f64, left_s: f64) -> f32 {
+        let smooth = |t: f64| {
+            let t = t.clamp(0.0, 1.0);
+            (t * t * (3.0 - 2.0 * t)) as f32
+        };
+        if left_s <= 0.0 {
+            return 0.0;
+        }
+        let rise = if self.rise_s > 0.0 {
+            smooth(since_s / f64::from(self.rise_s))
+        } else {
+            1.0
+        };
+        let fade = if self.fade_s > 0.0 {
+            smooth(left_s / f64::from(self.fade_s))
+        } else {
+            1.0
+        };
+        rise.min(fade)
+    }
 }
 
 /// A dish, resolved.
@@ -125,6 +214,7 @@ pub struct Kitchen {
     pub strengths: Strengths,
     pub max_effects: usize,
     pub dishes: Vec<Dish>,
+    pub glow: GlowSettings,
     pub recipes: Vec<Recipe>,
     pub pending: Vec<(String, Vec<String>)>,
 }
@@ -181,7 +271,10 @@ impl Default for CookingFile {
                 dish("kale-skewer", Effect::Keen, 6.0),
                 dish("fried-egg", Effect::Keen, 5.0),
                 dish("roast-meat", Effect::Stride, 8.0),
+                // `glowing-mushrooms` design 6: eaten raw, no fire, no recipe.
+                dish("glowing-mushroom", Effect::Glow, 3.0),
             ],
+            glow: GlowSettings::default(),
             awaited: vec!["egg".into(), "milk".into(), "raw-meat".into()],
             recipes: vec![
                 recipe(
@@ -275,6 +368,7 @@ impl CookingFile {
         if self.max_effects == 0 {
             return Err("max_effects must be at least one".into());
         }
+        self.glow.validate()?;
         let mut dishes = Vec::new();
         for entry in &self.dishes {
             let good = Good::by_code(&entry.good)
@@ -352,6 +446,7 @@ impl CookingFile {
             strengths: self.strengths,
             max_effects: self.max_effects,
             dishes,
+            glow: self.glow,
             recipes,
             pending,
         })
@@ -674,5 +769,57 @@ mod tests {
         assert!((steady.stamina_drain - base.stamina_drain * 1.2).abs() < 1e-6);
         assert_eq!(steady.reel_mps, base.reel_mps);
         assert_eq!(steadied(&base, 1.0), base);
+    }
+
+    /// `player/glow`: a glowing mushroom is a dish whose Glow runs 3
+    /// minutes. A second one with a minute left sets it back to 3 minutes,
+    /// never more and never a second Glow; Glow counts as one of the three
+    /// effects; and its record round-trips with the glow in it.
+    #[test]
+    fn a_glowing_mushroom_refreshes_the_glow() {
+        let mushroom = dish("glowing-mushroom");
+        assert_eq!(mushroom.effect, Effect::Glow);
+        assert_eq!(mushroom.secs(), 180.0);
+        let mut meals = Meals::default();
+        meals.eat(&mushroom, 0.0, 3);
+        assert_eq!(meals.left_s(Effect::Glow, 120.0), Some(60.0));
+        meals.eat(&mushroom, 120.0, 3);
+        assert_eq!(meals.left_s(Effect::Glow, 120.0), Some(180.0));
+        assert_eq!(meals.running.len(), 1, "it never stacks");
+        meals.eat(&dish("flatbread"), 120.0, 3);
+        meals.eat(&dish("grilled-fish"), 120.0, 3);
+        meals.eat(&dish("roast-turnip"), 120.0, 3);
+        assert_eq!(meals.running.len(), 3, "glow is one of the three");
+        let back: Meals = ron::from_str(&ron::to_string(&meals).unwrap()).unwrap();
+        assert_eq!(back, meals);
+        // A Glow is no multiplier.
+        let s = kitchen().strengths;
+        assert_eq!(s.of(Effect::Glow), 1.0);
+    }
+
+    /// `player/glow`, "The last seconds": the glow comes up over `rise_s`,
+    /// is whole between, is at half with half `fade_s` left (the smoothstep's
+    /// middle) and out at the end; it never cuts.
+    #[test]
+    fn the_glow_rises_and_fades() {
+        let glow = GlowSettings::default();
+        assert_eq!(glow.fade_s, 20.0);
+        assert_eq!(glow.strength(0.0, 180.0), 0.0, "lit from nothing");
+        assert!((glow.strength(0.3, 179.7) - 0.5).abs() < 1e-6);
+        assert_eq!(glow.strength(60.0, 120.0), 1.0);
+        assert!((glow.strength(170.0, 10.0) - 0.5).abs() < 1e-6);
+        assert_eq!(glow.strength(180.0, 0.0), 0.0);
+        let mut last = 1.0;
+        for tenth in 0..200 {
+            let left = 20.0 - f64::from(tenth) * 0.1;
+            let now = glow.strength(160.0, left);
+            assert!(now <= last && last - now < 0.02, "no step: {last} to {now}");
+            last = now;
+        }
+        assert_eq!(glow.level_strength(), 10.0 / 14.0);
+        assert_eq!(glow.tint, crate::flora::GLOW_HEAD_RGB);
+        let mut bad = CookingFile::default();
+        bad.glow.level = 0;
+        assert!(bad.resolve().is_err());
     }
 }

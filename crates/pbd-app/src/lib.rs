@@ -6,7 +6,11 @@ pub mod atmosphere;
 #[cfg(feature = "desktop")]
 pub mod audio;
 #[cfg(feature = "desktop")]
+pub mod beaver;
+#[cfg(feature = "desktop")]
 pub mod bloom;
+#[cfg(feature = "desktop")]
+pub mod carried_light;
 pub mod clutter;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;

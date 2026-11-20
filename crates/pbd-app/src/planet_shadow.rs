@@ -804,7 +804,7 @@ pub(super) fn draw_cascades(
             pass.draw_indirect(&gpu.indirect, 16);
             // The detailed near trees (`flora-v2` design 10) are foliage too.
             pass.set_bind_group(0, &*gpu.near[i], &[]);
-            for s in 0..8 {
+            for s in 0..super::NEAR_SPECIES {
                 pass.draw_indirect(&gpu.indirect, super::NEAR_ARGS_OFFSET + 16 * s);
             }
         }

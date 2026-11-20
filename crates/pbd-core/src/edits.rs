@@ -43,6 +43,66 @@ pub struct Edits {
     /// Bumped by every [`Edits::set`]: what a thing derived from the edits
     /// (the player's far lights) compares to know it is stale.
     revision: u64,
+    /// The glowing mushrooms picked (`glowing-mushrooms` design 4), which the
+    /// column build reads beside the layers. Not a layer change: they bump
+    /// their own count, never [`Edits::revision`].
+    pub glow: GlowPicks,
+}
+
+/// The glowing mushrooms players have picked, by cell key, with the world
+/// day of each pick (the save's `glow-plant` records, folded in at load and
+/// on each pick), and the clock the build judges their regrowth by.
+///
+/// A keyed lookup only: nothing iterates the map to decide anything saved.
+#[derive(Clone, Debug, Default)]
+pub struct GlowPicks {
+    picked: HashMap<u32, f64>,
+    /// The world day now, as the build reads it.
+    pub day: f64,
+    /// How far from the camera a due pick's cell must be built to grow
+    /// back, m (`clutter_radius_m`): never in front of the player.
+    pub far_m: f32,
+    /// Bumped by every pick.
+    count: u64,
+}
+
+impl GlowPicks {
+    /// A pick of the cell `key` on world day `day`.
+    pub fn pick(&mut self, key: u32, day: f64) {
+        self.picked.insert(key, day);
+        self.count += 1;
+    }
+
+    /// The day `key` was last picked, if it was.
+    pub fn picked_on(&self, key: u32) -> Option<f64> {
+        self.picked.get(&key).copied()
+    }
+
+    /// How many picks there have been: different after every [`pick`].
+    ///
+    /// [`pick`]: GlowPicks::pick
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+
+    /// The picked cells, in key order.
+    pub fn cells(&self) -> Vec<u32> {
+        let mut keys: Vec<u32> = self.picked.keys().copied().collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    /// Whether a cell built now, `from_camera_m` metres from the camera,
+    /// stands picked: picked and not yet grown back, and a pick whose
+    /// regrowth has passed grows back only where the cell is built out of
+    /// sight, farther than [`GlowPicks::far_m`] (design 4).
+    pub fn stands_picked(&self, key: u32, from_camera_m: f32) -> bool {
+        let Some(day) = self.picked_on(key) else {
+            return false;
+        };
+        let due = self.day - day >= crate::flora::GLOW_PLANT_REGROW_DAYS;
+        !(due && from_camera_m > self.far_m)
+    }
 }
 
 impl Edits {
@@ -131,6 +191,31 @@ impl Edits {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `planet/flora`, "A picked glowing mushroom grows back out of sight":
+    /// a pick stands until its regrowth, and after it stands still where
+    /// the cell is built within `far_m` of the camera; only farther does it
+    /// grow back. A cell never picked is never picked, and picks are not
+    /// layer edits.
+    #[test]
+    fn a_pick_grows_back_only_out_of_sight() {
+        let mut edits = Edits::new();
+        edits.glow.far_m = 120.0;
+        edits.glow.pick(42, 10.0);
+        assert_eq!(edits.revision(), 0, "a pick is not a layer edit");
+        assert_eq!(edits.glow.count(), 1);
+        edits.glow.day = 12.0;
+        assert!(edits.glow.stands_picked(42, 20.0));
+        assert!(edits.glow.stands_picked(42, 500.0), "not yet due");
+        edits.glow.day = 10.0 + crate::flora::GLOW_PLANT_REGROW_DAYS;
+        assert!(
+            edits.glow.stands_picked(42, 20.0),
+            "due, but in front of the player"
+        );
+        assert!(!edits.glow.stands_picked(42, 121.0), "due and out of sight");
+        assert!(!edits.glow.stands_picked(7, 0.0));
+        assert_eq!(edits.glow.cells(), vec![42]);
+    }
 
     #[test]
     fn an_edit_to_the_same_layer_replaces_rather_than_grows() {

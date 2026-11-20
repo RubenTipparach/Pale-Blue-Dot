@@ -293,8 +293,7 @@ impl<'a> PlanetWater<'a> {
         let state = sea.state_at(air, direction);
         let local = sea
             .table
-            .local(&state, direction, sea.depth_at(direction), seconds)
-            .with_tide(sea.tide);
+            .local(&state, direction, sea.depth_at(direction), seconds);
         Self {
             sea,
             local,
@@ -327,10 +326,25 @@ pub fn fresh_top(contact: &PlanetContact, up: Vec3, floor: f32) -> Option<f32> {
     (top > sea_top + 0.25).then_some(crate::planet::PLANET_RADIUS + top)
 }
 
+/// How far over a sea-level flat the line counts the sea standing, m.
+const FLAT_WATER_M: f32 = 0.05;
+
 impl Water for PlanetWater<'_> {
     fn surface(&self, point: Vec3) -> f32 {
-        self.fresh(point)
-            .unwrap_or_else(|| self.sea.radius + self.local.height(point, self.sea.radius))
+        if let Some(fresh) = self.fresh(point) {
+            return fresh;
+        }
+        let sea = self.sea.radius + self.local.height(point, self.sea.radius);
+        // A flat at the sea's level is drawn under the sea, half a metre over
+        // the sheet's rest (the sheet sits low so a beach stands clear of the
+        // swell): a float coming down on it is on water, not dry ground
+        // (owner, 2026-11-19, a float on open water: "The float came down on
+        // dry ground"). Ground over the sea's level stays dry.
+        let bed = self.bed(point);
+        if bed <= crate::planet::PLANET_RADIUS + FLAT_WATER_M && bed > sea {
+            return bed + FLAT_WATER_M;
+        }
+        sea
     }
 
     fn bed(&self, point: Vec3) -> f32 {
@@ -383,6 +397,10 @@ struct Surroundings<'w, 's> {
     vehicle_cameras: Query<'w, 's, &'static GlobalTransform, With<crate::vehicles::VehicleCamera>>,
     /// Steady hands (`cooking` design S5).
     meals: Option<Res<'w, crate::kitchen::MealEffects>>,
+    /// Which side of the water the eye is on: no cast from under it
+    /// (`mission-playthrough` 3.6).
+    eye_water: Option<Res<'w, crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<'w, crate::config::WaterSettings>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -509,11 +527,34 @@ fn fish(
             )
         }),
     };
+    let mut under = false;
+    let has_bait = hotbar
+        .as_deref()
+        .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
     if let (Some((eye, look, right, cam_up)), true) = (camera, rod && walking) {
         let buttons = world.buttons.as_deref();
         let pressed = |b| listening && buttons.is_some_and(|i| i.just_pressed(b));
+        // A line is not cast from under the water (owner, 2026-11-19: "the
+        // line casting shouldnt work underwater").
+        let sheet = crate::planet::PLANET_RADIUS
+            - world
+                .water_settings
+                .as_deref()
+                .map_or(0.5, |w| w.depth_offset_m);
+        under = crate::audio::hooks::eye_under_water(
+            o.query_point(eye),
+            world.eye_water.as_deref(),
+            sheet,
+        );
+        // Said when a cast is tried with nothing to put on the hook.
+        if !has_bait && fishery.line.phase == Phase::Ready && pressed(MouseButton::Left) {
+            status.say("Needs bait", 2.0);
+        }
         let controls = Controls {
-            pressed: pressed(MouseButton::Left),
+            // And never without a worm to put on the hook (owner,
+            // 2026-11-19: "do not allow fishing without bait").
+            pressed: pressed(MouseButton::Left)
+                && !((under || !has_bait) && fishery.line.phase == Phase::Ready),
             held: listening && buttons.is_some_and(|i| i.pressed(MouseButton::Left)),
             released: buttons.is_some_and(|i| i.just_released(MouseButton::Left)),
             reel_in: pressed(MouseButton::Right),
@@ -587,6 +628,35 @@ fn fish(
             if let Some(cue) = cue.as_deref_mut() {
                 cue.events.push(event);
             }
+            if let Event::Dry = event {
+                // What the line read where it came down (`mission-playthrough`:
+                // a float on open water said dry ground).
+                let q = o.query_point(fishery.line.float);
+                let up = q.normalize_or(Vec3::Y);
+                info!(
+                    "FISH_DRY at r {:.2} (alt {:.2}): surface {:.2}, bed {:.2}, fresh {:?}, sea radius {:.2}, column water {:?}",
+                    q.length(),
+                    q.length() - crate::planet::PLANET_RADIUS,
+                    water.surface(q) - crate::planet::PLANET_RADIUS,
+                    water.bed(q) - crate::planet::PLANET_RADIUS,
+                    water.fresh(q).map(|f| f - crate::planet::PLANET_RADIUS),
+                    sea.radius - crate::planet::PLANET_RADIUS,
+                    contact
+                        .and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS + 50.0))),
+                );
+                info!(
+                    "FISH_DRY ground: generated {:.2}, stand from above {:?}, stand at the sheet {:?}, column water at the bed {:?}",
+                    crate::planet::surface_height(up),
+                    contact.map(|c| c
+                        .stand(up * (crate::planet::PLANET_RADIUS + 20.0))
+                        .floor_radius
+                        - crate::planet::PLANET_RADIUS),
+                    contact
+                        .map(|c| c.stand(up * sea.radius).floor_radius
+                            - crate::planet::PLANET_RADIUS),
+                    contact.and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS - 2.0))),
+                );
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -609,7 +679,15 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.keys = (rod && walking && !roster.is_empty()).then(|| keys_for(fishery.line.phase));
+    status.keys = (rod && walking && !roster.is_empty()).then(|| {
+        if under && fishery.line.phase == Phase::Ready {
+            [("UNDERWATER", false), ("", false)]
+        } else if !has_bait && fishery.line.phase == Phase::Ready {
+            [("NEED BAIT", false), ("", false)]
+        } else {
+            keys_for(fishery.line.phase)
+        }
+    });
     status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
     // The rod in hand moves with the line (`held.rs`, `rod-motion`).
     if let Some(cue) = cue.as_deref_mut() {
@@ -807,6 +885,16 @@ pub struct LifeScript {
     pub placed: bool,
 }
 
+/// `PBD_SCHOOL_DEPTH=sea`: a capture instrument (`ocean-environments`
+/// task 18.2) that reads a school's depth off the sea's mean sphere, the
+/// rule before design B23, so the before frame of a school in a lake can be
+/// taken beside the after. Unset, a school's depth is read from the surface
+/// of the water it is in. It changes nothing a player meets.
+fn school_depth_from_sea() -> bool {
+    static FROM_SEA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FROM_SEA.get_or_init(|| std::env::var("PBD_SCHOOL_DEPTH").is_ok_and(|v| v == "sea"))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn life_script(
     mut script: ResMut<LifeScript>,
@@ -877,10 +965,19 @@ fn life_script(
     for step in 0..=22 {
         let metres = first + step as f32 * 0.5;
         let direction = (eye + ahead * metres).normalize_or(up);
-        if !species.fits(sea.depth_at(direction)) {
+        // Fresh water over the sea's level (a lake, a river, a pond) is
+        // asked as the spawner asks it (task 18.2); the sea otherwise.
+        let contact = world.contact.as_deref();
+        let floor =
+            crate::vehicles::ground_under(contact, direction.as_dvec3() * f64::from(sea.radius))
+                as f32;
+        let fresh = contact.and_then(|c| fresh_top(c, direction, floor));
+        let depth = fresh.map_or_else(|| sea.depth_at(direction), |top| top - floor);
+        if !species.fits(depth) {
             continue;
         }
-        let anchor = direction * sea.radius;
+        let top = fresh.unwrap_or(sea.radius);
+        let anchor = direction * top;
         let water = PlanetWater::at(
             sea,
             world.air.as_deref(),
@@ -890,12 +987,13 @@ fn life_script(
             seconds,
         );
         let o = crate::sim_origin::from_render_frame(&world.frame);
-        let local = o.at(direction.as_dvec3(), f64::from(sea.radius));
+        let local = o.at(direction.as_dvec3(), f64::from(top));
         let school = School::spawn(&o, index as u16, species, local, 0x11fe, &water);
         info!(
-            "life script: {} x{} put {metres} m ahead",
+            "life script: {} x{} put {metres} m ahead in {} water {depth:.1} m deep",
             species.id,
-            school.len()
+            school.len(),
+            if fresh.is_some() { "fresh" } else { "sea" }
         );
         fishery.schools.push(school);
         script.placed = true;
@@ -2034,7 +2132,7 @@ pub(crate) mod draw {
         // What the water does to a creature's colour at its depth
         // (`ocean-environments` B12, B23): the depth under the surface of
         // the water its school swims in, a lake's or a river's own top, the
-        // sea's tided one otherwise, never the mean sea sphere.
+        // sea's otherwise.
         let under = super::places::UnderWater::of(water.as_deref());
         let seconds = now.map_or(0.0, |(seconds, _)| seconds);
         let o = crate::sim_origin::from_render_frame(&frame);
@@ -2119,7 +2217,15 @@ pub(crate) mod draw {
                     anchor,
                     seconds,
                 );
-                (water.surface(anchor), under)
+                // `PBD_SCHOOL_DEPTH=sea`, a capture instrument (task 18.2):
+                // the depth read off the sea's mean sphere, as before B23, so
+                // a before frame can be taken beside the after.
+                let surface = if school_depth_from_sea() {
+                    sea.radius
+                } else {
+                    water.surface(anchor)
+                };
+                (surface, under)
             })
         };
         headings.begin();
@@ -2574,8 +2680,7 @@ pub(crate) mod draw {
             };
             // A slack line is held just over the water rather than hanging
             // through it (the mockup's sag ran under the surface and looped
-            // back up): the water the float rides, with its waves and tide,
-            // not the mean sea, which stands a metre over it at low water.
+            // back up): the water the float rides, with its waves.
             // It ends on the top of the float, where it is tied.
             let end = float + o.up_at(float) * FLOAT_TOP_M;
             let end_point = o.query_point(end);
@@ -2650,9 +2755,9 @@ pub(crate) mod draw {
     ///
     /// - Never under the drawn sea ([`drawn_surface`]).
     /// - Never under the waterline the frame's composite tints
-    ///   (`water.wgsl` `compose`): the mean sea lifted by the tide, without
-    ///   the waves. A line under it is drawn as seen through water, dark.
-    /// - Over the crests: every wave at its crest, on the tide here. The eye
+    ///   (`water.wgsl` `compose`): the sea's mean surface, without the
+    ///   waves. A line under it is drawn as seen through water, dark.
+    /// - Over the crests: every wave at its crest. The eye
     ///   looks down on the line from the rod, so a line over every crest has
     ///   no wave between it and the eye. A line lying low on the water in
     ///   front of the float was seen through the crests nearer the eye, dark
@@ -2661,11 +2766,9 @@ pub(crate) mod draw {
     ///   down onto the float where it is tied.
     pub(crate) fn line_floor(water: &PlanetWater, end: Vec3, point: Vec3) -> f32 {
         let sea = water.sea;
-        let under = drawn_surface(water, point).max(sea.radius + sea.tide_at(point));
-        // Every wave at its crest: the table's reach less the tide's highest,
-        // which it adds; the tide here instead.
-        let waves = water.local.reach() - pbd_core::sea::tide_high_m(sea.tide.w.max(0.0));
-        let crests = sea.radius + waves.max(0.0) + sea.tide_at(point);
+        let under = drawn_surface(water, point).max(sea.radius);
+        // Every wave at its crest.
+        let crests = sea.radius + water.local.reach().max(0.0);
         let up = end.normalize_or(Vec3::Y);
         let rel = point - end;
         let across = (rel - up * rel.dot(up)).length();

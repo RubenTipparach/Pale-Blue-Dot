@@ -177,10 +177,11 @@ pub struct WaterSettings {
     pub emerge_dry_s: f32,
     /// Radial scroll speed of the wave field on vertical water faces.
     pub flow_uv_speed_falling: f32,
-    /// How far the tide rises and falls at one place over a day, m, from the
-    /// body's moon (`ocean-environments` design 10): 3 on Tenebris, nought
-    /// for no tide.
-    pub tide_range_m: f32,
+    /// Retired (`no-tides`): the sea's tide range, which an older
+    /// `water.ron` still names. Read and thrown away, so such a file still
+    /// loads; nothing reads it.
+    #[serde(rename = "tide_range_m")]
+    retired_tide_range_m: serde::de::IgnoredAny,
     /// How fast the wave normal and crest foam fade as the fbm's features fall
     /// under a pixel: the gradient is scaled by `1 / (1 + footprint * fade)`
     /// where footprint is the per-pixel change of the noise coordinate. Zero
@@ -434,7 +435,7 @@ impl Default for WaterSettings {
             partial_band_m: 0.8,
             emerge_dry_s: 2.6,
             flow_uv_speed_falling: 1.0,
-            tide_range_m: 3.0,
+            retired_tide_range_m: serde::de::IgnoredAny,
             detail_fade: 4.0,
             falls: FallLook::default(),
         }
@@ -468,7 +469,6 @@ impl Validated for WaterSettings {
                 s.partial_band_m,
                 s.emerge_dry_s,
                 s.flow_uv_speed_falling,
-                s.tide_range_m,
                 s.detail_fade,
             ],
         )?;
@@ -2225,11 +2225,7 @@ pub struct ConfigPlugin;
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
         let (recipes, kitchen) = recipe_book();
-        let water = load::<WaterSettings>("water");
-        // The high-water line every record reads (`flora-v2` 12.11), before
-        // any record is built.
-        crate::planet::terrain::set_high_water(&water);
-        app.insert_resource(water)
+        app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
@@ -2321,9 +2317,31 @@ mod tests {
     #[cfg(feature = "desktop")]
     const HELD_RON: &str = include_str!("../../../assets/config/held.ron");
 
+    /// `no-tides` design 4: a `water.ron` from before the tide was removed
+    /// still names `tide_range_m`; it loads, and the key is ignored.
+    #[test]
+    fn an_old_water_ron_with_a_tide_still_loads() {
+        let old = WATER_RON.replacen("detail_fade:", "tide_range_m: 3.0,\n    detail_fade:", 1);
+        assert!(old.contains("tide_range_m"));
+        let water: WaterSettings = ron::from_str(&old).unwrap();
+        water.validate().unwrap();
+        assert_eq!(water, WaterSettings::default());
+    }
+
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
     /// test that says which.
+    /// `glowing-mushrooms` design 5: the shipped chance of a glowing
+    /// mushroom is the one `pbd_core::flora`'s digest pins (0.01); moving it
+    /// is a generator version, not an edit to this file.
+    #[test]
+    fn the_glowing_mushroom_chance_is_pinned() {
+        let columns: ColumnSettings =
+            ron::from_str(include_str!("../../../assets/config/column.ron")).unwrap();
+        assert_eq!(columns.glow_flower_chance, 0.01);
+        assert_eq!(ColumnSettings::default().glow_flower_chance, 0.01);
+    }
+
     #[test]
     fn shipped_files_parse_validate_and_agree_with_the_defaults() {
         let water: WaterSettings = ron::from_str(WATER_RON).unwrap();

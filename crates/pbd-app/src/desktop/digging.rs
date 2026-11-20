@@ -288,17 +288,28 @@ pub enum Hands {
 
 /// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
 /// tilled soil gives dirt; a generated ore cell gives mixed ore or, in a coal
-/// seam, coal; a placed one gives ore; everything else gives itself.
+/// seam, coal; a placed one gives ore; generated sand in a desert cell gives
+/// desert sand (`sand-tiles` design 5); everything else gives itself.
 pub(super) fn yield_of(save: &WorldSave, was: Material, cell: u32, layer: usize) -> Item {
+    let placed = |material: Material| {
+        save.edits
+            .for_cell(cell)
+            .iter()
+            .any(|&(l, m)| usize::from(l) == layer && m == material)
+    };
     match was {
         Material::Tilled => Item::Block(Material::Dirt),
-        Material::Ore => {
-            let placed = save
-                .edits
-                .for_cell(cell)
-                .iter()
-                .any(|&(l, m)| usize::from(l) == layer && m == Material::Ore);
-            pbd_core::station::ore_yield(cell, layer as u16, placed)
+        Material::Ore => pbd_core::station::ore_yield(cell, layer as u16, placed(Material::Ore)),
+        Material::Sand => {
+            let placed = placed(Material::Sand);
+            match pbd_core::cell_key::key_direction(cell) {
+                Some(direction) => Item::Block(column::dug_sand(
+                    pbd_app::planet::terrain_config(),
+                    direction,
+                    placed,
+                )),
+                None => Item::Block(Material::Sand),
+            }
         }
         other => Item::Block(other),
     }
@@ -770,9 +781,19 @@ pub fn dig_and_place(
         // Bait worms out of earth by a river or the sea (`starter-missions`
         // G1, `dig-fixes` 2).
         let bait = was.filter(|_| !placed).and_then(|m| {
-            let wet = by_water(&fine, &edits, &gather.0, (cell, layer));
-            gather.0.bait(m, cell, layer as u16, placed, wet)
+            // Any earth, by the water or not (owner, 2026-11-19: "make bait
+            // show up in all dirt blocks", "1 in 5 dirt blocks have worm").
+            gather.0.bait(m, cell, layer as u16, placed, true)
         });
+        // What an ore cell gives when it is not a block (coal): counted as
+        // gathered at the cut, as a dug block is (`mission-playthrough` 3.1).
+        let ore_good = was
+            .filter(|m| *m == Material::Ore)
+            .map(|m| yield_of(&edits, m, cell, layer))
+            .and_then(|item| match item {
+                Item::Good(good) => Some(good),
+                _ => None,
+            });
         let hands = if seed.is_none() && find.is_none() && bait.is_none() {
             Hands::Take
         } else {
@@ -811,6 +832,13 @@ pub fn dig_and_place(
                 pbd_core::missions::Kind::Gather,
                 taken,
             ));
+            if let Some(good) = ore_good {
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Gather,
+                    good.code(),
+                    1,
+                ));
+            }
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
@@ -1568,6 +1596,115 @@ mod placed_tests {
             // And the sand under it is still the desert's sand.
             assert_eq!(built.material(under), Material::Sand);
         }
+    }
+}
+
+/// `sand-tiles` design 5 (c): sand dug in a desert is desert sand.
+#[cfg(test)]
+mod desert_sand_tests {
+    use super::*;
+    use pbd_app::planet::terrain_config;
+    use pbd_core::cell_key::{self, Address};
+    use pbd_core::edits::Edit;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::planet_gen::{self, Biome};
+
+    /// The first finest cell, on a sparse sweep of the lattice, whose
+    /// generated top is sand in `biome` above the sea: its key, direction and
+    /// top layer.
+    fn sand_cell(biome: Biome) -> (u32, Vec3, usize) {
+        let cfg = terrain_config();
+        let level = cell_key::LAST_LEVEL;
+        let side = 1u32 << level;
+        for face in 0..20u8 {
+            for i in (1..side).step_by(29) {
+                for j in (1..side - i).step_by(31) {
+                    let a = Address { face, level, i, j };
+                    let Some(key) = cell_key::key(a) else {
+                        continue;
+                    };
+                    let d = cell_key::direction(a);
+                    let surface = column::surface_m(cfg, d);
+                    if surface > cfg.sea_level_m + 1.0
+                        && planet_gen::biome_at(cfg, d, surface) == biome
+                        && planet_gen::top_material(cfg, d, surface) == Material::Sand
+                        && pbd_core::settlement::ground::top(cfg, d).is_none()
+                    {
+                        let top = column::generate_solid(cfg, d).surface().unwrap();
+                        return (key, d, top);
+                    }
+                }
+            }
+        }
+        panic!("the shipped world has {biome:?} sand");
+    }
+
+    /// Dug in the dunes, put back in the dunes: desert sand, drawn from the
+    /// desert sheet, and dug again, desert sand.
+    #[test]
+    fn sand_dug_in_the_dunes_is_desert_sand() {
+        let cfg = terrain_config();
+        let (cell, d, top) = sand_cell(Biome::Desert);
+        let mut save = WorldSave::memory_only();
+        let generated = column::generate_edited_solid(cfg, d, save.edits.for_cell(cell));
+        assert_eq!(
+            generated.material(top),
+            Material::Sand,
+            "generation is untouched"
+        );
+        assert_eq!(
+            yield_of(&save, Material::Sand, cell, top),
+            Item::Block(Material::DesertSand)
+        );
+        // Dug, then put back.
+        for material in [Material::Air, Material::DesertSand] {
+            assert!(save.accept(
+                Edit {
+                    cell,
+                    layer: top as u16,
+                    material,
+                },
+                None,
+                &Slots::new()
+            ));
+        }
+        let built = column::generate_edited_solid(cfg, d, save.edits.for_cell(cell));
+        assert_eq!(built.material(top), Material::DesertSand);
+        assert_eq!(
+            pbd_app::planet::column::placed_sheet(&built, top),
+            pbd_app::planet::tileset_slot(Biome::Desert) + 1,
+            "drawn from the desert sheet"
+        );
+        assert_eq!(
+            yield_of(&save, Material::DesertSand, cell, top),
+            Item::Block(Material::DesertSand)
+        );
+    }
+
+    /// Dug on the beach: sand. And sand PLACED in the dunes is still sand.
+    #[test]
+    fn beach_sand_and_placed_sand_dig_as_sand() {
+        let (beach, _, top) = sand_cell(Biome::Beach);
+        let save = WorldSave::memory_only();
+        assert_eq!(
+            yield_of(&save, Material::Sand, beach, top),
+            Item::Block(Material::Sand)
+        );
+        let (cell, _, top) = sand_cell(Biome::Desert);
+        let mut save = WorldSave::memory_only();
+        assert!(save.accept(
+            Edit {
+                cell,
+                layer: top as u16 + 1,
+                material: Material::Sand,
+            },
+            None,
+            &Slots::new()
+        ));
+        assert_eq!(
+            yield_of(&save, Material::Sand, cell, top + 1),
+            Item::Block(Material::Sand)
+        );
     }
 }
 
