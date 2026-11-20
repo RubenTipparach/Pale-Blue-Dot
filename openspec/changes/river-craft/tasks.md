@@ -166,12 +166,16 @@ Approved for the game 2026-11-19 at version 6; asked to be built
 - [x] 9.8 The raft's lantern (11.4) as a moving lamp in the carried-light
       list; test: lit only while the dusk lamps are and not put out, none on
       the Loon or the tube.
+- [x] The built requirements moved to `openspec/specs/world/river-craft/`
+      (rowing, the anchor, the boat's menu, its saved settings, the raft's
+      lantern), worded as built; the rest stay in this change's delta.
 - [ ] Captures in `docs/screenshots/river-craft-game/` (rowing mid-stroke
       in first and third person, anchored, the boat's menu, the lantern at
       night), beside the mockup's shots.
 - [ ] The splash, wash, drips and swirls (9.5).
 - [ ] The bed's material deciding how fast an anchor sets.
-- [ ] The tube rider's pose (the inner tube, version 4).
+- [x] The tube rider's pose (the inner tube, version 4; design 11.5): sits
+      back, sits up to paddle with the hands beside the ring, no lantern.
 - [ ] 3.1-3.3, 3.5, 3.6: the current from the cells, lines between craft,
       the tug and barges, logs and booms, nets.
 - [ ] The owner's look in the game; the step's video for the batch.

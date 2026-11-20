@@ -795,12 +795,32 @@ and pushed before the next.
   shadow or bounce (stated limitation, as for a carried torch).
 - The drawn flame and the light both go out with the lantern check.
 
-### 11.5 Open after this part
+### 11.5 The tube rider (the inner tube, version 4) in the game
+
+The game's tube rider lay back and kicked (2026-11-16). M34's version 4,
+approved with the page: no lantern, the rider sits back in the ring with
+the legs over its front and the feet in the water, and paddles with the
+hands. The tube's physics stays the Loon's stroke (a stroke on one side at
+a time; W alternates); the drawing reads it: the hand on the stroke's side
+goes in at the front, pulls back through the water through the power
+phase and comes back low over the rim through the recovery (backing the
+other way round), the other hand resting on the rim; the body sits up 20
+degrees from its 40 to reach while a hand paddles; each arm is two bones
+through an elbow solved out and down, up while the hand is in the water.
+The feet no longer kick.
+
+### 11.6 The rower's look
+
+In the seat the hands are on the handles, half a metre under the eye and
+in front of the chest, so a level look does not see them. Boarding a raft
+in the seat starts the look 0.55 rad (31 degrees) down along the oars to
+the bow (M34's Rowing tab starts at 0.72); the mouse turns it anywhere as
+before. Recommendation taken (ask only with screenshots).
+
+### 11.7 Open after this part
 
 - The splash, wash, drips and swirls (9.5).
 - The bed's material deciding how fast an anchor sets (4).
-- The tube rider's sitting pose and hand paddling (the inner tube section,
-  version 4): the game's rider still lies back and kicks.
 - The current derived from the cells (1, 2), lines between craft (3), the
   tug and barges, logs, booms and bundles (5), nets (6).
 - The frame cost: not measured (no GPU in this session).

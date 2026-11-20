@@ -3,6 +3,13 @@
 **Mockup:** M34 River Craft, https://claude.ai/artifact/GZTZJ4Vg1bSbg4SH2rYY97
 (`docs/mockups/river-craft.html`), published 2026-11-16; on the tracker.
 
+**Status (2026-11-20):** approved for the game (owner, 2026-11-19, at
+version 6) and asked to be built (owner, 2026-11-20, in chat: "approve sand
+and mountains, and rivers"). Part one is in the game (design 11): rowing
+with two oars, the one anchor, the boat's menu and the raft's lantern, and
+the tube rider's pose; their requirements are in
+`openspec/specs/world/river-craft/spec.md`. The rest waits (tasks).
+
 ## Why
 
 The owner, 2026-11-16, playing the new flowing rivers (`water-flow`):
