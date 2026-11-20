@@ -812,10 +812,24 @@ The feet no longer kick.
 ### 11.6 The rower's look
 
 In the seat the hands are on the handles, half a metre under the eye and
-in front of the chest, so a level look does not see them. Boarding a raft
-in the seat starts the look 0.55 rad (31 degrees) down along the oars to
-the bow (M34's Rowing tab starts at 0.72); the mouse turns it anywhere as
-before. Recommendation taken (ask only with screenshots).
+in front of the chest, so a level look does not see them (measured in the
+captures: at 31 degrees down with the game's 60-degree view the hands were
+out of the frame through most of the stroke). Boarding a raft in the seat
+starts the look 0.7 rad (40 degrees) down along the oars to the bow, near
+M34's Rowing tab (0.72 rad, with a 72-degree view); the mouse turns it
+anywhere as before. At the catch the hands are almost under the eye and
+leave the frame's foot; through the drive and the release they are in it.
+Recommendation taken (ask only with screenshots).
+
+**Measured after (2026-11-20, `PBD_ROW_TRACE` and the ignored
+`oars::instrument` test):** the grips are 0.25-0.33 m out to each side and
+only 0.3-0.45 m ahead of the eye, so they sit 25-60 degrees to the side of
+the look through the stroke; the game's view is 60 degrees high and about
+83 wide at 16:10, so the hands are at the frame's edges or out of it for
+most of the stroke (`docs/screenshots/river-craft-game/rowing-seat-*.png`).
+The mockup frames them with a 72-degree view. Widening the seat's view, or
+the eye set back from the handles, is a look change and goes to the owner
+with these screenshots; until then the default pitch stays at 40 degrees.
 
 ### 11.7 Open after this part
 
