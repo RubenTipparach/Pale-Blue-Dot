@@ -33,6 +33,65 @@ pub fn glows(key: u32, chance: f32) -> bool {
     ((h >> 8) as f32 / (1u32 << 24) as f32) < chance
 }
 
+/// The glowing mushroom's head at night, linear RGB: the cool light the cap
+/// burns with (`planet_surface.wgsl`'s `GLOW_HEAD_RGB`, generated from this),
+/// and the body glow's colour (`glowing-mushrooms` design 10).
+pub const GLOW_HEAD_RGB: [f32; 3] = [0.62, 1.0, 0.88];
+
+/// The flower slot's salt in the clutter draw (`planet_surface.wgsl`,
+/// `SALT_FLOWER`): where the glowing mushroom stands on its cell.
+pub const SALT_FLOWER: u32 = 0x52;
+
+/// A `glow-plant` record (`glowing-mushrooms` design 4): a glowing mushroom
+/// picked, by its cell's exact key. It grows back
+/// [`GLOW_PLANT_REGROW_DAYS`] after, out of sight.
+pub const GLOW_PLANT_RECORD: &str = "glow-plant";
+pub const GLOW_PLANT_SCHEMA: u32 = 1;
+pub const GLOW_PLANT_REGROW_DAYS: f64 = 8.0;
+
+/// A `glow-plant` record's body.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct GlowPicked {
+    /// The world day it was picked.
+    pub day: f64,
+}
+
+impl GlowPicked {
+    /// Whether its regrowth time has passed at `day`. A due pick still reads
+    /// as picked until its cell is built out of sight (design 4).
+    pub fn due_at(&self, day: f64) -> bool {
+        day - self.day >= GLOW_PLANT_REGROW_DAYS
+    }
+}
+
+/// Where a cell's glowing mushroom stands, as the clutter draw's flower slot
+/// places it (`planet_surface.wgsl`): its stalk's foot and the cap's top,
+/// body-local metres. `id` is the record's clutter id (`metadata.w`),
+/// `axis` the cell's unit direction, `corners` its corner rays (`degree` of
+/// them), `radius` the cap's (the body's plus the cell's height) and
+/// `height_m` the flower's (`clutter_more.x`, `scatter.ron`'s
+/// `flower_height_m`). What F is aimed at (`fruit-aim`).
+pub fn glow_plant_point(
+    id: u32,
+    axis: glam::Vec3,
+    corners: &[glam::Vec3],
+    radius: f32,
+    height_m: f32,
+) -> (glam::Vec3, glam::Vec3) {
+    use crate::scatter::roll;
+    let degree = corners.len().max(1) as u32;
+    let k = (roll(id, SALT_FLOWER + 1) * degree as f32) as u32;
+    let f0 = 0.15 + 0.60 * roll(id, SALT_FLOWER + 2);
+    let corner = corners
+        .get(k.min(degree - 1) as usize)
+        .copied()
+        .unwrap_or(axis);
+    let foot = (axis * (1.0 - f0) + corner * f0) * radius;
+    // The cap rises 3 cm over the stalk's top.
+    (foot, foot + axis * (height_m + 0.03))
+}
+
 /// The foliage pass's hash (`planet_visibility.wgsl`, `hash`): PCG's output
 /// step, which the tree roll reads the low byte of.
 pub fn shader_hash(x: u32) -> u32 {
@@ -670,6 +729,73 @@ mod tests {
             (share - 0.25).abs() < 0.02,
             "{share} of the old glowers stay"
         );
+    }
+
+    /// `glowing-mushrooms` design 5: once picks exist, which cells grow a
+    /// glowing mushroom is part of a world, so the hash, its salt and the
+    /// shipped chance (0.01, `column.ron`; `pbd-app`'s config test holds the
+    /// file to it) are pinned by a digest over 10,000 sample keys. A change
+    /// to any of them is made as `TreeTable` was: a per-version value in
+    /// `TerrainConfig`, the old one carried for old worlds.
+    #[test]
+    fn which_cells_glow_is_pinned() {
+        let mut digest: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut lit = 0;
+        for i in 0..10_000u32 {
+            let key = i.wrapping_mul(2_654_435_761).wrapping_add(0x1234_5678);
+            if glows(key, GLOW_CHANCE_SHIPPED) {
+                lit += 1;
+                for b in key.to_le_bytes() {
+                    digest = (digest ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+                }
+            }
+        }
+        assert_eq!(SALT, 0x6c6f_7766);
+        assert_eq!(
+            (lit, digest),
+            GLOW_DIGEST,
+            "which cells grow a glowing mushroom moved: a new generator version"
+        );
+    }
+
+    /// The shipped chance (`column.ron`'s `glow_flower_chance`).
+    const GLOW_CHANCE_SHIPPED: f32 = 0.01;
+    /// How many of the sample keys glow, and their digest.
+    const GLOW_DIGEST: (u32, u64) = (111, 2_013_441_873_274_815_809);
+
+    /// `glowing-mushrooms` design 3: what F is aimed at is where the flower
+    /// slot draws the plant. The lines `glow_plant_point` mirrors are the
+    /// shader's, and the point lies on the cap between the centre and the
+    /// chosen corner, the stalk standing along the axis.
+    #[test]
+    fn the_mushroom_to_pick_is_where_the_draw_stands_it() {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            "const SALT_FLOWER: u32 = 0x52u;",
+            "let k = u32(roll(id,SALT_FLOWER+1u)*f32(degree));",
+            "let f0 = 0.15+0.60*roll(id,SALT_FLOWER+2u);",
+            "let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;",
+            "let h = params.clutter_more.x*fade;",
+            "let top = tip+axis*0.03;",
+        ] {
+            assert!(
+                shader.contains(line),
+                "the flower slot no longer says `{line}`"
+            );
+        }
+        let axis = glam::Vec3::new(0.0, 1.0, 0.0);
+        let corners: Vec<glam::Vec3> = (0..6)
+            .map(|i| {
+                let a = i as f32 * std::f32::consts::TAU / 6.0;
+                glam::Vec3::new(a.cos() * 0.001, 1.0, a.sin() * 0.001).normalize()
+            })
+            .collect();
+        for id in [1u32, 77, 9_001, 123_456_789] {
+            let (foot, top) = glow_plant_point(id, axis, &corners, 2_400.0, 0.32);
+            assert!((foot.length() - 2_400.0).abs() < 0.01);
+            assert!(((top - foot) - axis * 0.35).length() < 1e-3);
+            assert!(foot.x.hypot(foot.z) < 2.4 * 0.76, "inside the cap");
+        }
     }
 
     /// Nothing glows at a chance of nought, everything at one, and a key

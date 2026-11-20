@@ -570,3 +570,62 @@ Held switch (Before is v2's boxes, Now is v3), and a Placed switch that
 stands the game's placed torch beside the matching one. Shots, rendered in
 software (Chromium on SwiftShader), are in
 `docs/screenshots/glowing-mushrooms/`, the v3 ones as `torch-v3-*.jpg`.
+
+## As built (2026-11-19)
+
+Built on the owner's request ("Approved. Build rest of phase 2"). Where the
+code departs from the plan above, and why:
+
+- **`GLOW_PICKED_BIT` is bit 3 of `spare[2]`, not bit 1.** Bits 1 and 2
+  were taken by the sea (`DRY_SHEET_BIT`, `SEA_REACH_BIT`) since this was
+  written. A compile-time check holds every flag of the word to its own bit.
+- **The picks ride beside the edits.** `pbd_core::edits::Edits` carries a
+  `GlowPicks` (cell key to the day picked, the clock and `far_m`), folded in
+  from the save's `glow-plant` records at load and on every store, so the
+  column build (`planet::column::glow_bits`) reads them with no new argument.
+  They bump their own count, never the layer edits' revision. A set that
+  landed from edits taken before a pick, and a pick on its own frame, are
+  brought round by `FineSet::apply_glow_picks` (`desktop/glow_plants.rs`'s
+  `follow`), which relights once, as a dig does.
+- **`glow_plant_regrow_days` and `glow_pick_radius_m` are constants**
+  (`flora::GLOW_PLANT_REGROW_DAYS`, `glow_plants::PICK_RADIUS_M`), as
+  fruit's `FRUIT_REGROW_DAYS` is; the far distance is the scatter's own
+  `clutter_radius_m`.
+- **The glow's tunables are `cooking.ron`'s `glow` block**: `level`, `tint`,
+  `rise_s`, `fade_s` (design 10, 11's `glow_level`, `glow_tint`,
+  `glow_rise_s`, `glow_fade_s`).
+- **`carried_max_lights` is a constant**, `carried_light::MAX_CARRIED_LIGHTS`
+  (4): it is the shaders' array size, and a test holds the three shaders to
+  it. There are no other players yet, so `carried_others_m` is not built;
+  the list has room for them.
+- **The hand and the held item take the carried light on the CPU.** They are
+  unlit materials lit from the field at the eye each frame (`light_held`,
+  `lamps-and-lanterns` decision 10), not `LitByField`, so the carried light
+  is added there, at no nearer than `hand_min_m` (`held.ron`'s `light`).
+- **The holds are `held.ron`'s `light` block**, not `held_tools.ron`, which
+  is generated from the Tools in Hand mockup. The hand is the tools' own (the
+  pickaxe's grip, which closes on a stick), turned so its handle runs each
+  hold's way and its fist sits at the hold's grip.
+- **Beside a tool, the light is in the left hand.** The tool slot and the
+  hotbar are separate: a player may hold a pickaxe and select a torch. With
+  bare hands the light is in the right hand as designed; with a tool in the
+  right hand the light's hand is mirrored into the left, so both are seen and
+  the left button still digs with what is drawn.
+- **A brazier, a candle and a campfire** light from the hand by the table
+  but have no held look; only the torch, the lanterns and the glowing
+  mushroom are drawn in hand.
+- **The held mushroom's light is level 3 and warm** (survey G5 and A4 open,
+  the recommendations built); its cap is today's four-sided one (A3 open).
+- **`PBD_CARRIED=0`** turns the carried light off for the owner's A/B
+  (design 13). The frame cost is not measured here (a cloud container on
+  lavapipe); `night-carry` is the owner's.
+- **The hand takes the carried light as the field lights a hand.** The
+  bake's falloff with its gain (2.4) blew the hand and the torch's head out
+  white on the first captures, even at `hand_min_m`. The hand and the held
+  item take the falloff's shape without the bake's gain
+  (`light::carried_on_hand`): a torch in hand lights them as standing in a
+  placed torch's own cell does (`lamp_light` at level 14), warm and not
+  blown out, which is design 9's intent. The ground, the water and the
+  field-lit things take the full term.
+- **The held flame is drawn at 0.75 of its texture**, under the tonemapper's
+  shoulder as the placed flame is, so it reads orange rather than white.

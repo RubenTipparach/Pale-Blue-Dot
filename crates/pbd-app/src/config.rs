@@ -2331,6 +2331,17 @@ mod tests {
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
     /// test that says which.
+    /// `glowing-mushrooms` design 5: the shipped chance of a glowing
+    /// mushroom is the one `pbd_core::flora`'s digest pins (0.01); moving it
+    /// is a generator version, not an edit to this file.
+    #[test]
+    fn the_glowing_mushroom_chance_is_pinned() {
+        let columns: ColumnSettings =
+            ron::from_str(include_str!("../../../assets/config/column.ron")).unwrap();
+        assert_eq!(columns.glow_flower_chance, 0.01);
+        assert_eq!(ColumnSettings::default().glow_flower_chance, 0.01);
+    }
+
     #[test]
     fn shipped_files_parse_validate_and_agree_with_the_defaults() {
         let water: WaterSettings = ron::from_str(WATER_RON).unwrap();

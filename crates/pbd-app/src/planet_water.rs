@@ -229,6 +229,9 @@ pub(super) struct WaterView {
     /// fade.
     feet: [Vec4; crate::water_flow::FALL_FEET_MAX],
     feet_more: [Vec4; crate::water_flow::FALL_FEET_MAX],
+    /// The lights players carry (`glowing-mushrooms` design 9), two vec4s a
+    /// light (`carried_light::CarriedLights::packed`).
+    carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// `weather-rain` 7: the height fog's lane. Only with the rain volume off,
@@ -1556,6 +1559,8 @@ pub(super) struct WaterSky<'w> {
     fall_feet: Option<Res<'w, crate::water_flow::FallFeetGpu>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
     columns: Option<Res<'w, crate::config::ColumnSettings>>,
+    /// The lights players carry (`glowing-mushrooms`).
+    carried: Option<Res<'w, crate::carried_light::CarriedLights>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1612,6 +1617,7 @@ fn prepare_water_views(
         splash,
         fall_feet,
         columns,
+        carried,
     } = sky;
     // The fall splash's quads, within the buffer's room.
     let splash_lanes: &[[f32; 4]] = splash.as_deref().map_or(&[], |q| {
@@ -2023,6 +2029,10 @@ fn prepare_water_views(
             ),
             feet: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.feet),
             feet_more: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.more),
+            carried: carried.as_deref().map_or(
+                [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+                crate::carried_light::CarriedLights::packed,
+            ),
             height_fog: height_fog_lane(
                 !rain_shadows
                     && state <= 0.75

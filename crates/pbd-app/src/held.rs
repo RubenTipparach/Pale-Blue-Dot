@@ -39,6 +39,7 @@ use pbd_core::inventory::{Tier, Tool};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
+pub mod light;
 pub mod stroke;
 use stroke::{DigBeat, Gear, ShovelSettings, StrokeClock, StrokeSettings, StrokeTool};
 
@@ -58,6 +59,9 @@ pub struct HeldSettings {
     pub rod: RodSettings,
     /// How the hand is lit (`hand-model`).
     pub hand_light: HandLight,
+    /// How a light in hand is held and burns (`glowing-mushrooms` design
+    /// 14).
+    pub light: light::LightHold,
 }
 
 /// The hand's wrapped light, in `held.hand_light`: a face's shade is
@@ -254,6 +258,7 @@ impl Default for HeldSettings {
             shovel: ShovelSettings::default(),
             rod: RodSettings::default(),
             hand_light: HandLight::default(),
+            light: light::LightHold::default(),
         }
     }
 }
@@ -274,6 +279,7 @@ impl HeldSettings {
         }
         self.stroke.validate()?;
         self.shovel.validate()?;
+        self.light.validate()?;
         self.rod.validate()
     }
 }
@@ -1088,8 +1094,10 @@ impl Plugin for HeldPlugin {
                 Update,
                 (
                     spawn,
+                    light::spawn_lights,
                     carry,
                     hold.in_set(HoldSet),
+                    light::hold_lights.in_set(HoldSet),
                     bend_rod,
                     shade_hands,
                     light_held,
@@ -1179,9 +1187,13 @@ struct HeldMaterials(Vec<Handle<StandardMaterial>>);
 /// face keeps the shade baked into it; their colour is the light the terrain
 /// would lay over a white surface where the eye is. At noon in the open
 /// that is white, which is exactly how it was drawn before; in a cave it is
-/// the cave's floor, and beside a torch it is warm.
+/// the cave's floor, and beside a torch it is warm. The player's own carried
+/// light is added as the terrain takes it, no nearer than `hand_min_m`
+/// (`glowing-mushrooms` design 9), so a torch in hand lights the hand warm.
 #[allow(clippy::too_many_arguments)]
 fn light_held(
+    settings: Res<HeldConfig>,
+    carried: Option<Res<crate::carried_light::CarriedLights>>,
     held_materials: Option<Res<HeldMaterials>>,
     fine: Option<Res<crate::planet::PlanetFine>>,
     contact: Option<Res<crate::planet::PlanetContact>>,
@@ -1204,7 +1216,13 @@ fn light_held(
     let point = eye.translation() - centre;
     let sample = crate::field_light::field_at(&fine, &contact, point);
     let daylight = sun.clock.daylight(point.normalize_or(Vec3::Y));
-    let light = crate::field_light::light_of(sample, daylight);
+    let mut light = crate::field_light::light_of(sample, daylight);
+    if let Some(own) = carried.as_deref().and_then(|c| c.own()) {
+        let share = pbd_core::light::lamp_share(sample.0, daylight);
+        let near = (own.at - point).length();
+        let add = pbd_core::light::carried_on_hand(own, near, settings.0.light.hand_min_m);
+        light += Vec3::from(add) * share;
+    }
     let colour = Color::linear_rgb(light.x, light.y, light.z);
     for handle in &held_materials.0 {
         // Only on a change the eye could see: a write re-uploads the
@@ -1530,7 +1548,7 @@ fn hold(
     mut tip_now: ResMut<RodTipNow>,
     mut clock: Local<StrokeClock>,
     mut impacts: MessageWriter<StrokeImpact>,
-    mut held_tools: Query<(&Held, &mut Transform, &mut Visibility)>,
+    mut held_tools: Query<(&Held, &mut Transform, &mut Visibility), Without<light::HeldLightView>>,
     mut parts: Query<(&mut Transform, &mut Visibility), Without<Held>>,
 ) {
     let s = &settings.0;
