@@ -201,8 +201,12 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         }
     }
     assert!(done(&app, "go-fishing"));
-    // Bait is a good now: digging it and landing fish on it is next (G1).
-    assert_eq!(line(&app).as_deref(), Some("Dig for bait: dig bait 0/3"));
+    // Bait is a good now: digging it and landing fish on it is next (G1);
+    // the line names every objective (`mission-playthrough` 3.5).
+    assert_eq!(
+        line(&app).as_deref(),
+        Some("Dig for bait: dig bait 0/3, catch with bait 0/3")
+    );
     app.world_mut().write_message(Gained {
         item: Item::Good(Good::BAIT),
         count: 3,

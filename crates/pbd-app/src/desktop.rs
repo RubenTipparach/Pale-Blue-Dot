@@ -2184,7 +2184,7 @@ pub fn run(args: &[String]) {
     // are its flags' alone. Read here, once the logger is up.
     // A bot playing climbs with auto step (owner, 2026-11-19: "when in bot
     // run also just turn on autostep").
-    let mut overrides = launch.settings.clone();
+    let mut overrides = launch.settings;
     if launch.showcase.is_some() {
         overrides.auto_step = Some(true);
     }
