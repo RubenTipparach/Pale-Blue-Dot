@@ -1608,7 +1608,7 @@ mod desert_sand_tests {
                     };
                     let d = cell_key::direction(a);
                     let surface = column::surface_m(cfg, d);
-                    if surface > cfg.sea_level_m + 1.0
+                    if surface >= cfg.sea_level_m
                         && planet_gen::biome_at(cfg, d, surface) == biome
                         && planet_gen::top_material(cfg, d, surface) == Material::Sand
                         && pbd_core::settlement::ground::top(cfg, d).is_none()

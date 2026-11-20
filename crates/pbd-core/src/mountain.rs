@@ -99,7 +99,7 @@ pub struct MountainGround {
 }
 
 /// The salt of the snow line's ragging and of the soil patches.
-const SNOW_LINE_SALT: u64 = 0x5_70E1_1AE;
+const SNOW_LINE_SALT: u64 = 0x570E_11AE;
 const SOIL_PATCH_SALT: u64 = 0x50_11A7;
 
 impl MountainGround {
