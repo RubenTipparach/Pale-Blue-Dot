@@ -3042,6 +3042,66 @@ pub(super) fn build(render_app: &mut SubApp) {
 mod tests {
     use super::*;
 
+    /// `smaa-option` 1.5: in the 3D graph as the game builds it, Bevy's SMAA
+    /// node runs after the water's node (compose, cap, lens, clouds, rain)
+    /// and after the tone grade, so it smooths the finished frame and nothing
+    /// that reads depth sees a smoothed edge. The graph is built by the same
+    /// plugins and calls the game makes, in a render sub-app with no GPU:
+    /// building a graph creates no pipeline.
+    #[test]
+    fn smaa_runs_after_the_water_and_the_grade() {
+        use bevy::core_pipeline::fullscreen_material::{
+            FullscreenMaterial, FullscreenMaterialPlugin,
+        };
+        use bevy::render::{
+            RenderApp,
+            render_graph::{InternedRenderLabel, RenderGraph},
+        };
+        let mut app = App::new();
+        app.add_plugins((
+            TaskPoolPlugin::default(),
+            bevy::asset::AssetPlugin::default(),
+            bevy::image::ImagePlugin::default(),
+        ));
+        let mut render = SubApp::new();
+        render.init_resource::<RenderGraph>();
+        app.insert_sub_app(RenderApp, render);
+        app.add_plugins((
+            bevy::core_pipeline::core_3d::Core3dPlugin,
+            bevy::anti_alias::smaa::SmaaPlugin,
+            FullscreenMaterialPlugin::<crate::tone::ToneGrade>::default(),
+        ));
+        build(app.sub_app_mut(RenderApp));
+        crate::tone::order_smaa(app.sub_app_mut(RenderApp));
+        let graph = app.sub_app(RenderApp).world().resource::<RenderGraph>();
+        let core = graph.get_sub_graph(Core3d).expect("the 3D graph");
+        // Whether `to` runs after `from`: a path of edges from one to the other.
+        let after = |from: InternedRenderLabel, to: InternedRenderLabel| {
+            let mut seen = vec![from];
+            let mut next = vec![from];
+            while let Some(at) = next.pop() {
+                for (_, node) in core.iter_node_outputs(at).expect("a node in the graph") {
+                    if node.label == to {
+                        return true;
+                    }
+                    if !seen.contains(&node.label) {
+                        seen.push(node.label);
+                        next.push(node.label);
+                    }
+                }
+            }
+            false
+        };
+        let smaa = Node3d::Smaa.intern();
+        let water = WaterCompositeLabel.intern();
+        let grade = crate::tone::ToneGrade::node_label().intern();
+        assert!(after(water, smaa), "SMAA after the water's node");
+        assert!(after(grade, smaa), "SMAA after the tone grade");
+        assert!(after(Node3d::Tonemapping.intern(), smaa));
+        assert!(after(smaa, Node3d::EndMainPassPostProcessing.intern()));
+        assert!(!after(smaa, water) && !after(smaa, grade));
+    }
+
     #[test]
     fn occupied_camera_water_state_uses_this_frames_translated_eye() {
         use std::sync::Arc;

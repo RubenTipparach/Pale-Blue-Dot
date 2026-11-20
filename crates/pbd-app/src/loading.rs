@@ -75,6 +75,15 @@ pub struct Warming {
     immediate: bool,
 }
 
+impl Warming {
+    /// Whether the world warms behind the screen long enough to make every
+    /// pipeline it may need: not in a `--capture`, which lifts the screen on
+    /// its first open frame.
+    pub fn prewarms(&self) -> bool {
+        !self.immediate
+    }
+}
+
 /// Whether the loading screen has lifted (or there never was one).
 pub fn ready(loading: Option<Res<WorldLoading>>, warming: Option<Res<Warming>>) -> bool {
     loading.is_none() && warming.is_none()

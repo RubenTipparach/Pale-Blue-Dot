@@ -126,6 +126,8 @@ pub enum MenuAction {
     Reflections,
     /// Set SHADOW QUALITY: low, medium, high, ultra (`shadow-quality`).
     Shadows,
+    /// Turn ANTIALIASING (SMAA) on or off (`smaa-option`).
+    Antialiasing,
     /// The starter mission's HUD line, on or off.
     MissionLine,
     /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
@@ -372,6 +374,7 @@ fn settings_checked(
     Some(match action {
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
+        MenuAction::Antialiasing => player.antialiasing,
         MenuAction::MissionLine => player.mission_line,
         MenuAction::FlowArrows => player.flow_arrows,
         MenuAction::AutoStep => player.auto_step,
@@ -400,6 +403,7 @@ pub fn press_graphics(
             }
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
+            MenuAction::Antialiasing => changed.antialiasing = !changed.antialiasing,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
             MenuAction::FlowArrows => changed.flow_arrows = !changed.flow_arrows,
             _ => {}
@@ -944,6 +948,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
                         slider_row(rows, kit, "Reflections", "", MenuAction::Reflections);
                         slider_row(rows, kit, "Shadow quality", "", MenuAction::Shadows);
+                        check_row(rows, kit, "Antialiasing", "", MenuAction::Antialiasing);
                         // On PICTURE beside Reflections (owner, 2026-11-16:
                         // "rain shadow should be under picture").
                         check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
@@ -1893,6 +1898,7 @@ pub fn press(
             | MenuAction::RainShadows
             | MenuAction::Reflections
             | MenuAction::Shadows
+            | MenuAction::Antialiasing
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
             | MenuAction::FlowArrows
