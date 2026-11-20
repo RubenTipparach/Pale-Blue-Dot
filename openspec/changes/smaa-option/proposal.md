@@ -20,7 +20,7 @@ everything that reads depth: the water, the fog, the clouds and the lens.
 
 1. **No antialiasing stays the default.** Hard pixel edges suit the
    nearest-sampled look, and the default costs nothing.
-2. **A new player setting, ANTIALIASING: OFF / SMAA.** SMAA is Bevy's
+2. **A new player setting, ANTIALIASING, a toggle (ON / OFF; the owner: "but have it be a toggle").** SMAA is Bevy's
    `Smaa` (high preset), and it runs on the finished frame after every
    water and cloud pass, so nothing can mismatch it.
 3. **No late pipelines.** The loading screen prewarms SMAA's pipelines

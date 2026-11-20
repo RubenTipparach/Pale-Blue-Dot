@@ -8,7 +8,7 @@ the water, fog, cloud and lens passes, and SHALL NOT multisample the main pass
 at the same time.
 
 #### Scenario: SMAA chosen
-- **WHEN** the player sets ANTIALIASING to SMAA
+- **WHEN** the player toggles ANTIALIASING on
 - **THEN** the frame is smoothed after the water's passes, and the held tool under water has no bright edge
 
 ### Requirement: No antialiasing by default
@@ -24,5 +24,5 @@ The loading screen SHALL compile the antialiasing pipelines, so that switching
 it on after READY compiles no pipeline.
 
 #### Scenario: Turned on mid-game
-- **WHEN** the player switches ANTIALIASING to SMAA after the loading screen
+- **WHEN** the player toggles ANTIALIASING on after the loading screen
 - **THEN** no `LATE_PIPELINE` is logged

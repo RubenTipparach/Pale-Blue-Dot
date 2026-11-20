@@ -16,11 +16,11 @@
 1. **SMAA, not FXAA.** SMAA finds edges by shape, and softens nearest-
    sampled texel boundaries far less than FXAA's luma blur. High preset;
    Ultra can come later if wanted.
-2. **A player setting, OFF by default.** It joins the settings screen
+2. **A player toggle, OFF by default** (the owner: "but have it be a toggle"). It joins the settings screen
    beside REFLECTIONS and SHADOWS. The settings file gains `antialiasing`,
    with a version bump, and an older file reads OFF. A capture or
    benchmark runs OFF (`PlayerSettings::ISOLATED`), with
-   `--antialiasing smaa` to ask for it.
+   `--antialiasing on` to ask for it.
 3. **Never with multisampling.** SMAA is the only antialiasing. If
    `PBD_MSAA` asks for samples, SMAA is not added, so the two are never
    stacked.
