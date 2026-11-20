@@ -73,6 +73,7 @@ struct Params {
     picked: array<vec4<u32>,8>,   // and the trees picked bare
     clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
     shake: vec4<u32>,          // `tree-punch-shake`: x the worked tree's id, y its last hit's time (f32 bits), z one once hit, w spare
+    carried: array<vec4<f32>,8>, // `glowing-mushrooms`: the carried lights, two a light (`carried_light`)
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(3) var atlas: texture_2d<f32>;
