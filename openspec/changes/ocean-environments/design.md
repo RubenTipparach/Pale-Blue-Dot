@@ -2494,3 +2494,216 @@ Mike's Ice Wolf (`organic-creature` and `painted-bake`, godot-sandbox at
 Today's motion keeps today's models. Screenshots `v3-*.jpg` and
 `contact-sheet-v3.jpg` in `docs/screenshots/beaver-otter-mockup/`, rendered
 on SwiftShader with no GPU.
+
+**Version 4: arms that move, calmer fur, empty paws (owner, 2026-11-20).**
+On version 3: "the arms on beaver and otter should animate when they move
+or stand up", and "the fur shaking is cool, but a little over the top, I
+would want more subtle". Then, on the sea otter: "do sea otters always need
+to have the urchin in hand when grooming AND sleeping?"
+
+What was wrong, measured:
+
+- **The forelegs were barely skinned to their bones.** Along a foreleg the
+  forearm's skin took about 0.45 of its weight from the elbow bone, 0.3
+  from the shoulder and 0.2 from the paw, and the paw only 0.47 from its
+  own bone (the beaver's left foreleg; the otters alike). The inverse
+  fourth power with a 1 cm floor cannot tell bones 7 cm long apart, and
+  four rounds of half-strength smoothing over the low-poly mesh evened what
+  was left, so a bent elbow moved the paw about half as far as the bone
+  and the arm read as a stiff stub.
+- **The poses switched the arms, then held them.** A rear-up (the beaver
+  sitting up, the otter looking round) kept the forepaws on the ground
+  until the body was half way up and then moved them to the chest in one
+  frame; the gnaw blended straight to paws on the trunk with no rise at
+  all; swimming held both forelegs in one tucked angle; on its back the sea
+  otter's paws were still between strokes.
+- **The tufts' spring was loose.** 2.4 Hz at a third of critical damping,
+  its whole lag (up to 3 cm) on the tips, a full clump to the wet shape:
+  every step left the coat ringing.
+- **The sea otter's paws were never empty.** The urchin was drawn between
+  its paws whenever it had one, and the stone on its chest whenever it lay
+  on its back: grooming, rolling and asleep in the kelp.
+
+Version 4:
+
+- **Skin weights** (`critter_sculpt.py`, `skin_weights`): a leg's bones
+  fall off at the seventh power with a 3 mm floor, and a vertex the leg
+  owns keeps most of its weight through the smoothing, so each segment owns
+  its own skin and blends only round its joint. Now the forearm is 0.64 to
+  0.79 its own bone, the paw 0.65 to 0.77, the upper arm 0.55 to 0.9; the
+  shoulder still blends into the chest. Only the weights changed; the
+  sculpt, its painting and the tufts are as in version 3.
+- **One schedule for rearing and sitting down** (`rear`): the anticipation
+  (the body sinks, the head dips, the paws press), the rise, with the
+  forepaws leaving the ground a beat after the body, wrists hanging, then
+  catching up on an arc that bulges up and forward, carrying past their
+  mark and settling (overlapping action, `overshoot`); going down the
+  paws lead, reaching for the ground with the wrists open before the body
+  arrives, and the elbows give as the weight lands. The beaver uses it to
+  rear up to its aspen (the paws land on the trunk, then grip and pull in
+  on each bite) and to drop to all fours as the tree creaks, to sit up and
+  groom (the paws come to its face, rub in circles, then reach down) and
+  to watch the tree fall; the river otter to look round (paws drawn up to
+  its chest) and to sit up on its rock to eat (the paws bring the trout to
+  its mouth on each bite, then it sits back down).
+- **Walking and bounding**: each forepaw's wrist flexes as it peels off the
+  ground and opens to reach for the next contact (`swing_curl_rad`), the
+  elbow folding on the arc the leg is solved to, the contacts planted as
+  before. Gnawing a branch on the ground, the forepaws hold it and press on
+  each bite.
+- **Swimming as each animal does**: a beaver swims on its hind feet alone,
+  its forepaws held loosely to its chest, nodding with each kick; a river
+  otter dog-paddles with its forelegs while it swims slowly or treads water
+  (alternate strokes, the elbow folding on the recovery, `paddle_rad`) and
+  lays them back along its body when it swims fast or dives; a sea otter
+  belly down tucks them like the beaver.
+- **The sea otter's paws**: at rest on its back they rise and fall with
+  its breathing; grooming, they work along its belly and chest, rubbing in
+  circles and squeezing the fur between them, blended in and out rather
+  than switched.
+- **Empty paws except while it forages and eats.** The urchin is in its
+  paws only from the moment it comes up with it in the dive, through the
+  cracking and the eating; then it lets go and the shell bits drift off its
+  chest. The stone is on its chest only while it cracks; between uses it is
+  tucked in the loose skin under its foreleg, as a real sea otter keeps its
+  favourite stone, and nothing is drawn. An urchin brought up is cracked
+  before anything else, so it grooms, rolls, dives and sleeps with empty
+  paws; asleep in the kelp its paws rest on its chest, then come up toward
+  its face as its head curls down onto them.
+- **Subtler fur** (`shared.fur`, the new defaults; the sliders still reach
+  version 3's values): a 3.6 Hz spring at 0.75 of critical damping (one
+  small overshoot, settled in about a third of a second), 0.4 of its lag on
+  the tips and at most 1.2 cm, the wet spike 0.4 of the clumped shape, and
+  0.45 of that again during the shake-off.
+
+The new tunables join the RON block under `shared`: `forelegs`
+(`anticipate_s`, `rise_s`, `lower_s`, `overshoot`, `swing_curl_rad`,
+`paddle_rad`) and `fur` (`spring_hz`, `damping`, `sway`, `max_m`,
+`wet_spike`, `shake`). Today's motion keeps today's models. Screenshots
+`v4-*.jpg` and `contact-sheet-v4.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.
+
+**Version 5: forelimbs within a real animal's range, and paddling (owner,
+2026-11-20).** On version 4, from a phone screenshot of the beaver reared
+at an aspen, seen from the front-left, a forearm folded flat back against
+the upper arm and the paw tucked up by the shoulder: "bevers cant curl their
+arms back up like that". Then, of the river otter on its back: "otter arms
+also cannot curl back like that"; "it happens when they stand upright"; "the
+arms are curling backwards". On swimming, from a screenshot of the beaver
+under water with its forelegs held still under its chest: "swiming
+animation: arms needs to work like the feet, they should be paddling
+around", and of the otters: "their arms needs to paddle, they look too much
+like they are stuck in the walk pose when they swim". The paddling
+overrides version 4's real-beaver tuck on purpose: the owner's call.
+
+What was wrong, checked and measured:
+
+- **The joints were right.** A debug view (`__critters.debug`: each
+  forelimb bone's axes drawn, an animal held at given joint angles) shows
+  every forelimb joint turning about its bone's z, the body's lateral
+  axis, with the same sign on both sides and no twist about the bone: +30
+  degrees on the elbow swings the forearm forward and up (the elbow points
+  back), -30 on the wrist curls the paw down and under. The bind pose
+  (bones unrotated, the sculpt skinned round them) and `critters_mesh.js`
+  agree with the page (`buildRig` checks the rest joints), so nothing in
+  `critter_sculpt.py` changed.
+- **The poses folded them.** The upright poses sent the hands to points
+  at or behind the shoulder in the chest's own frame (the beaver grooming
+  at 6 cm forward and 2 cm toward the back from it, the otter looking
+  round at 3.5 cm, eating at 4.5 cm, watching the tree fall at 6 cm), and
+  the two-bone solver bent the elbow as far as it had to: 120 to 180
+  degrees, the forearm folded onto the upper arm. With the spine upright,
+  "forward along the spine" is up and "toward the back" is behind, so the
+  paws ended at the chin and past it.
+- **The wrist held the paw level.** A forepaw's wrist was solved to keep
+  the paw level with the ground, right for a paw on the ground, but on a
+  reared body with the forearm hanging or reaching forward it bent the paw
+  back over the hand or folded it right round. On their backs the otters'
+  wrists were set bent back (+0.3 to +0.8 rad from a paw at right angles to
+  the forearm).
+- **Swimming kept a fixed or walk-like arm.** The beaver held its forelegs
+  in one tucked angle; the river otter laid them back whenever it swam fast
+  or dived; idling in the water (`Hold`) and turning (`Face`) switched from
+  the standing pose to the swimming one at half depth in one frame.
+
+Measured by an instrument in the page (`__critters.LIMB`: the largest
+elbow and wrist angles each action reaches as the joints are set; the elbow
+wrapped to plus or minus 180 degrees, the wrist as the paw's angle from in
+line with the forearm, so a flat paw under an upright forearm is 90 degrees
+of dorsiflexion), over every action twice and then 600 seconds of the
+seeded brains (seed 7), version 4 against version 5:
+
+| Animal | Elbow flex, max | Elbow past straight, max | Wrist palmar flexion, max | Wrist dorsiflexion, max |
+| --- | ---: | ---: | ---: | ---: |
+| Beaver, version 4 | 178 | 108 | 176 | 173 |
+| Beaver, version 5 | 80 | 0 | 60 | 100 |
+| River otter, version 4 | 176 | 23 | 179 | 176 |
+| River otter, version 5 | 100 | 0 | 70 | 100 |
+| Sea otter, version 4 | 126 | 64 | 150 | 155 |
+| Sea otter, version 5 | 85 | 0 | 70 | 90 |
+
+Version 4's worst were the sit-up groom (elbow 163), the walk and the
+climbs (elbow up to 178, wrist folded round), the otter's look-round (129)
+and its bound (176), and the sea otter's crack (its elbow 64 degrees past
+straight, wrists folded back). Version 5's maxima sit on the limits, where
+the clamp holds them; nothing passes one.
+
+Version 5:
+
+- **Joint limits** per animal, in degrees, as sliders (`beaver.forelimb`,
+  `river_otter.forelimb`, `sea_otter.forelimb`): the elbow's flex from
+  straight, `elbow_max_deg` 80, 100 and 85 (a beaver's forelegs are short;
+  a river otter's bend more but not flat; a sea otter's are short), never
+  more than 5 past straight; the wrist from in line with the forearm,
+  `wrist_flex_deg` (curled down and under) 60, 70 and 70 and
+  `wrist_ext_deg` (bent back) 100, 100 and 95 (a flat paw under an upright
+  forearm is 90); `hands_in_deg` 16, 14 and 12, the shoulder rolled to
+  bring the hands toward each other. The solver holds a foreleg's target
+  out on its line from the shoulder so the elbow cannot pass its limit,
+  and every pose, blend, overshoot, lag and slider is clamped to the
+  limits last, as the joints are set (`applyPose`); the slider ranges stop
+  short of a folded joint (elbow at most 110 or 120).
+- **Upright arms hang with gravity** (`hangAt`, `shared.upright`): from the
+  shoulder as the body is pitched, 0.86 of the arm's length out and down at
+  62 degrees in front of the belly, in the root's level frame, the elbow
+  partly bent and the forearm forward and down from it; the paw curled 25
+  degrees past in line (`curl_deg`), blended in as it leaves the ground;
+  the hands drawn in toward each other. The beaver watching its tree fall,
+  the beaver sitting up and the river otter looking round and sitting to
+  eat all hang their hands so; grooming, the beaver combs down its belly
+  and brings each hand up toward its chin in turn as its head bows to meet
+  it; eating, the otter raises the trout a little toward its mouth and
+  bows to bite. Gnawing, the beaver's paws rest on the bark below its
+  mouth, the hands in line with the forearms and the fingers curled over
+  it. The rear-up's schedule and its overshoot are unchanged and clamped.
+- **On their backs** the river otter's and the sea otter's forepaws rest
+  on the chest toward the chin, the elbows partly bent and the paws curled
+  toward the chest, rafting, grooming, eating and asleep (the crack still
+  lifts the urchin at arm's length).
+- **Swimming is a pose and a cycle of its own** (`shared.paddle`): at the
+  surface and under water, every swimmer (the beaver, the river otter, the
+  sea otter belly down in its dive) strokes with its forepaws like its
+  feet: reach forward, pull down and back with the elbow nearly straight
+  and the palm pushing, recover tucked under the chest with the elbow bent
+  (`paddle_tuck`, 0.85 of its limit) and the paw curled; left and right in
+  turn, phased against the hind kick (`paddle_phase_rad`, a quarter
+  stroke). The reach (`shared.forelegs.paddle_rad`) and the stroke rate
+  follow the swim speed: at rest `paddle_idle` (0.35) of the reach and
+  `rate_idle` (0.45) of the rate, a gentle tread. The hind feet kick swept
+  further back along the body. Nothing of the walk drives a leg in the
+  water: a move blends the walk and the swim by the depth under the animal
+  (as before), and idling and turning now blend the same way instead of
+  switching at half depth, so the bank blends rather than snaps.
+- The hop no longer straightens the elbow past straight, and the otter's
+  belly slide lays its paws back in line with its forearms instead of bent
+  back.
+
+The skin was checked bent to the limits (the beaver at 80 degrees, the
+river otter at 100, the sea otter at 85, the wrists curled to theirs): no
+inversion; a slight fold on the inside of the elbow, as skin does. The new
+tunables join the RON block: `beaver.forelimb`, `river_otter.forelimb`,
+`sea_otter.forelimb`, `shared.upright`, `shared.paddle`. Today's motion
+keeps today's models. Screenshots `v5-*.jpg` and `contact-sheet-v5.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.
