@@ -339,6 +339,10 @@ struct Bot {
     /// Cells the walker could not get into on the way to `plan_avoid_for`
     /// (an invisible wall: the collision and the blocks disagreeing).
     plan_avoid: Vec<usize>,
+    /// Going up and out of a hole (`bot-path-planner` design 5.1): until the
+    /// sky is open over the head.
+    climbing_out: bool,
+    climb_out_s: f32,
     plan_avoid_for: Option<Vec3>,
     rmb_down: bool,
     tap_lmb_down: bool,
@@ -564,6 +568,12 @@ impl Bot {
             }
             return Walked::Going;
         }
+        // Stuck under ground: up and out first, a block under the feet at a
+        // time (owner, 2026-11-20: "dig straight up and place dirt blocks
+        // below feet").
+        if (self.climbing_out || self.stuck_s > 6.0) && self.up_and_out(s, out) {
+            return Walked::Going;
+        }
         // The planned walk over cells and layers (`bot-path-planner`); the
         // older heuristics below only when no plan is found.
         if let Some(walked) = self.follow_plan(s, out, point) {
@@ -657,6 +667,109 @@ impl Bot {
             }
         }
         Walked::Going
+    }
+
+    /// Up and out of a hole (`bot-path-planner` design 5.1, `place-underfoot`):
+    /// the block over the head dug if solid, then a block placed under the
+    /// feet (the game lifts the player onto it), until no solid block stands
+    /// over the head within eight metres. Whether it is still at it.
+    fn up_and_out(&mut self, s: &Sight, out: &mut Intent) -> bool {
+        use path::Ground as _;
+        let records = s.fine.set.finest_records();
+        let Some(here) = s
+            .contact
+            .finest_key(s.up)
+            .and_then(|key| records.iter().position(|r| r.key() == key))
+        else {
+            self.climbing_out = false;
+            return false;
+        };
+        let ground = LiveGround {
+            s,
+            axe_logs: s.gather.0.axe_logs,
+            cache: Default::default(),
+            avoid: &[],
+        };
+        let altitude = s.feet.length() - PLANET_RADIUS;
+        let Some(feet) = pbd_core::column::layer_at(altitude + 0.2) else {
+            self.climbing_out = false;
+            return false;
+        };
+        let covered = (feet + 2..feet + 10).any(|l| ground.block(here, l).solid());
+        if !covered {
+            if self.climbing_out {
+                info!("showcase: up and out: open sky over the head");
+            }
+            self.climbing_out = false;
+            self.climb_out_s = 0.0;
+            return false;
+        }
+        if !self.climbing_out {
+            info!("showcase: up and out: stuck under ground; building up");
+            self.climbing_out = true;
+            self.climb_out_s = 0.0;
+        }
+        self.climb_out_s += s.dt;
+        if self.climb_out_s > 90.0 {
+            warn!("showcase: up and out: gave up after 90 s");
+            self.climbing_out = false;
+            self.climb_out_s = 0.0;
+            self.stuck_s = 0.0;
+            return false;
+        }
+        let centre = Vec3::from_slice(&records[here].direction_height[..3]).normalize();
+        let key = records[here].key();
+        // The head room first: the block over the head, dug.
+        let over = feet + 2;
+        if let path::Block::Dig(_) = ground.block(here, over) {
+            let material =
+                digging::material_of(s.fine, s.save, (key, over)).unwrap_or(Material::Soil);
+            if self.fetch_tool(s, out, Self::tool_for(material)) {
+                return true;
+            }
+            let at = centre * (PLANET_RADIUS + pbd_core::column::layer_altitude(over) + 0.5);
+            let aimed = self.aim_at(s, out, at);
+            out.lmb = aimed || self.lmb_down;
+            return true;
+        }
+        if ground.block(here, over) == path::Block::Never {
+            // A station or unloaded ground over the head: not this way.
+            self.climbing_out = false;
+            return false;
+        }
+        // Then a block under the feet: bare hands, a block in the slot,
+        // the look straight down.
+        if self.fetch_tool(s, out, None) {
+            return true;
+        }
+        let block = |item: Item| {
+            matches!(
+                item,
+                Item::Block(
+                    Material::Soil
+                        | Material::Dirt
+                        | Material::Grass
+                        | Material::Stone
+                        | Material::Sand
+                        | Material::DryGrass
+                )
+            )
+        };
+        match self.select(s, out, &block) {
+            Status::Running => return true,
+            Status::Fail(why) => {
+                warn!("showcase: up and out: no block to stand on ({why})");
+                self.climbing_out = false;
+                return false;
+            }
+            Status::Done => {}
+        }
+        let below = centre * (PLANET_RADIUS + pbd_core::column::layer_altitude(feet) - 0.05);
+        let aimed = self.aim_at(s, out, below);
+        if aimed && (s.now % 0.5) < s.dt * 1.5 {
+            out.rmb_tap = true;
+        }
+        true
     }
 
     /// Follow a plan to `point` over cells and layers (`bot-path-planner`
