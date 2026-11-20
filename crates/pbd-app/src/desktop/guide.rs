@@ -70,7 +70,7 @@ pub fn spawn(
                 // guide's size).
                 .spawn(menu::framed(&kit, Set::Stone, 420.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, &kit, "FIELD GUIDE");
+                    menu::lintel(panel, &kit, Localized::legacy("FIELD GUIDE"));
                     panel
                         .spawn(Node {
                             column_gap: px(9),

@@ -22,6 +22,7 @@ use pbd_app::walking::WalkingReadout;
 use pbd_core::husbandry::breeding::{self, Pedigree};
 use pbd_core::husbandry::record::{self, AnimalBody, Life};
 use pbd_core::husbandry::{Genome, Keeping, LandSpecies, Sex, genome};
+use pbd_core::locale::Localized;
 use std::collections::BTreeMap;
 
 /// The part of the panel rebuilt when the pick or the herd changes.
@@ -56,7 +57,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
             layer
                 .spawn(menu::framed(&kit, Set::Stone, 600.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, &kit, "BREEDING");
+                    menu::lintel(panel, &kit, Localized::legacy("BREEDING"));
                     panel.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,

@@ -31,9 +31,16 @@ use syn::visit::{self, Visit};
 use syn::{Expr, Lit, Token};
 
 /// Key prefixes built from data ids at run time (`tr(&format!("item.{id}.name"))`,
-/// `localization` phase 3). A key under one of these counts as used. Empty
-/// until the data moves.
-const DATA_PREFIXES: &[&str] = &[];
+/// `localization` phase 3). A key under one of these counts as used; each
+/// table that builds them has a test that every id has its keys.
+const DATA_PREFIXES: &[&str] = &[
+    // `controls`: key caps by Bevy's key name, group headings and actions by id.
+    "controls.key.",
+    "controls.group.",
+    "controls.does.",
+    // `vehicle::Kind`: each kind's name and title by its saved key.
+    "vehicle.",
+];
 
 /// Extensions that make a spaceless literal an asset path.
 const EXTENSIONS: &[&str] = &[
@@ -183,6 +190,8 @@ const DEV_SCOPES: &[(&str, &str)] = &[
     ("crates/pbd-app/src/fish/places.rs", "child"),
     // The settings file's folder, from the environment.
     ("crates/pbd-app/src/settings.rs", "var"),
+    // The boat panel's instruments, behind F3.
+    ("crates/pbd-app/src/vehicles/hud.rs", "instruments"),
     // The `--audio-log` line.
     ("crates/pbd-app/src/audio/mod.rs", "mix_frame"),
     // The debug readout's lines (behind the debug key) and the log.
@@ -340,6 +349,40 @@ fn format_args_of(s: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// The literal keys an expression picks between: the arms of a `match`, the
+/// branches of an `if`, a block's value. Empty when any choice is not a
+/// literal (a key built at run time, which a data prefix covers).
+fn chosen_keys<'a>(expr: &'a Expr, out: &mut Vec<&'a syn::LitStr>) {
+    fn walk<'a>(expr: &'a Expr, out: &mut Vec<&'a syn::LitStr>) -> bool {
+        match expr {
+            Expr::Lit(syn::ExprLit {
+                lit: Lit::Str(s), ..
+            }) => {
+                out.push(s);
+                true
+            }
+            Expr::Match(m) => m.arms.iter().all(|arm| walk(&arm.body, out)),
+            Expr::If(i) => {
+                let then = i.then_branch.stmts.last().is_some_and(|st| match st {
+                    syn::Stmt::Expr(e, None) => walk(e, out),
+                    _ => false,
+                });
+                then && i.else_branch.as_ref().is_some_and(|(_, e)| walk(e, out))
+            }
+            Expr::Block(b) => b.block.stmts.last().is_some_and(|st| match st {
+                syn::Stmt::Expr(e, None) => walk(e, out),
+                _ => false,
+            }),
+            Expr::Paren(p) => walk(&p.expr, out),
+            _ => false,
+        }
+    }
+    let mut found = Vec::new();
+    if walk(expr, &mut found) {
+        out.extend(found);
+    }
 }
 
 fn is_ident(s: &str) -> bool {
@@ -541,7 +584,22 @@ impl<'a> Linter<'a> {
                 key: k.value(),
                 names,
             }),
-            None => self.visit_expr(first),
+            None => {
+                // A key chosen in place: `tr(match x { A => "a.key", .. })`.
+                let mut chosen = Vec::new();
+                chosen_keys(first, &mut chosen);
+                if chosen.is_empty() {
+                    self.visit_expr(first);
+                }
+                for k in chosen {
+                    self.keys.push(KeyUse {
+                        file: self.file.to_owned(),
+                        line: k.span().start().line,
+                        key: k.value(),
+                        names: names.clone(),
+                    });
+                }
+            }
         }
     }
 

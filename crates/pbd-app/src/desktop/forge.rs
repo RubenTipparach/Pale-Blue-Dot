@@ -71,7 +71,7 @@ pub fn spawn(
                     StationPanel("forge"),
                 ))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, "FORGE");
+                    menu::lintel(panel, kit, Localized::legacy("FORGE"));
                     for recipe in recipes.0.at("forge") {
                         panel
                             .spawn(Node {

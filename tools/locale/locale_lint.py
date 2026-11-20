@@ -43,7 +43,9 @@ def run_report() -> dict:
         out = Path(tmp) / "report.json"
         env = dict(os.environ, PBD_LOCALE_REPORT=str(out))
         proc = subprocess.run(
-            ["cargo", "test", "-q", "-p", "pbd-app", "--test", "locale", "--", "no_words_in_code"],
+            # The everyday `fast` profile, so the lint shares its build with
+            # `cargo build --profile fast` rather than keeping a debug tree.
+            ["cargo", "test", "-q", "--profile", "fast", "-p", "pbd-app", "--test", "locale", "--", "no_words_in_code"],
             cwd=ROOT,
             env=env,
             capture_output=True,

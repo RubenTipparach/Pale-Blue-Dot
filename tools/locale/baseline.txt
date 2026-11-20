@@ -12,130 +12,6 @@ crates/pbd-app/src/compass.rs|SW
 crates/pbd-app/src/compass.rs|W
 crates/pbd-app/src/compass.rs|{:.0} m
 crates/pbd-app/src/compass.rs|{:.1} km
-crates/pbd-app/src/config.rs|HIGH
-crates/pbd-app/src/config.rs|HIGH
-crates/pbd-app/src/config.rs|LOW
-crates/pbd-app/src/config.rs|LOW
-crates/pbd-app/src/config.rs|MEDIUM
-crates/pbd-app/src/config.rs|MEDIUM
-crates/pbd-app/src/config.rs|OFF
-crates/pbd-app/src/config.rs|ULTRA
-crates/pbd-app/src/controls.rs|A
-crates/pbd-app/src/controls.rs|ALT
-crates/pbd-app/src/controls.rs|B
-crates/pbd-app/src/controls.rs|BACK
-crates/pbd-app/src/controls.rs|C
-crates/pbd-app/src/controls.rs|CAPS
-crates/pbd-app/src/controls.rs|CTRL
-crates/pbd-app/src/controls.rs|D
-crates/pbd-app/src/controls.rs|DEL
-crates/pbd-app/src/controls.rs|E
-crates/pbd-app/src/controls.rs|END
-crates/pbd-app/src/controls.rs|ENTER
-crates/pbd-app/src/controls.rs|ESC
-crates/pbd-app/src/controls.rs|F
-crates/pbd-app/src/controls.rs|F1
-crates/pbd-app/src/controls.rs|F10
-crates/pbd-app/src/controls.rs|F11
-crates/pbd-app/src/controls.rs|F12
-crates/pbd-app/src/controls.rs|F2
-crates/pbd-app/src/controls.rs|F3
-crates/pbd-app/src/controls.rs|F4
-crates/pbd-app/src/controls.rs|F5
-crates/pbd-app/src/controls.rs|F6
-crates/pbd-app/src/controls.rs|F7
-crates/pbd-app/src/controls.rs|F8
-crates/pbd-app/src/controls.rs|F9
-crates/pbd-app/src/controls.rs|FISHING AFLOAT
-crates/pbd-app/src/controls.rs|FLYING
-crates/pbd-app/src/controls.rs|FLYING
-crates/pbd-app/src/controls.rs|G
-crates/pbd-app/src/controls.rs|H
-crates/pbd-app/src/controls.rs|HANDS
-crates/pbd-app/src/controls.rs|HANDS
-crates/pbd-app/src/controls.rs|HOME
-crates/pbd-app/src/controls.rs|I
-crates/pbd-app/src/controls.rs|INNER TUBE
-crates/pbd-app/src/controls.rs|INS
-crates/pbd-app/src/controls.rs|INTERACT
-crates/pbd-app/src/controls.rs|J
-crates/pbd-app/src/controls.rs|K
-crates/pbd-app/src/controls.rs|L
-crates/pbd-app/src/controls.rs|LEFT CLICK
-crates/pbd-app/src/controls.rs|LOON
-crates/pbd-app/src/controls.rs|M
-crates/pbd-app/src/controls.rs|MENUS
-crates/pbd-app/src/controls.rs|N
-crates/pbd-app/src/controls.rs|NUM 0
-crates/pbd-app/src/controls.rs|NUM 1
-crates/pbd-app/src/controls.rs|NUM 2
-crates/pbd-app/src/controls.rs|NUM 3
-crates/pbd-app/src/controls.rs|NUM 4
-crates/pbd-app/src/controls.rs|NUM 5
-crates/pbd-app/src/controls.rs|NUM 6
-crates/pbd-app/src/controls.rs|NUM 7
-crates/pbd-app/src/controls.rs|NUM 8
-crates/pbd-app/src/controls.rs|NUM 9
-crates/pbd-app/src/controls.rs|NUM ENTER
-crates/pbd-app/src/controls.rs|O
-crates/pbd-app/src/controls.rs|ON FOOT
-crates/pbd-app/src/controls.rs|ON FOOT
-crates/pbd-app/src/controls.rs|P
-crates/pbd-app/src/controls.rs|PG DN
-crates/pbd-app/src/controls.rs|PG UP
-crates/pbd-app/src/controls.rs|Q
-crates/pbd-app/src/controls.rs|R
-crates/pbd-app/src/controls.rs|R ALT
-crates/pbd-app/src/controls.rs|R CTRL
-crates/pbd-app/src/controls.rs|R SHIFT
-crates/pbd-app/src/controls.rs|RAFT
-crates/pbd-app/src/controls.rs|RIGHT CLICK
-crates/pbd-app/src/controls.rs|S
-crates/pbd-app/src/controls.rs|SCREEN
-crates/pbd-app/src/controls.rs|SHIFT
-crates/pbd-app/src/controls.rs|SPACE
-crates/pbd-app/src/controls.rs|T
-crates/pbd-app/src/controls.rs|TAB
-crates/pbd-app/src/controls.rs|U
-crates/pbd-app/src/controls.rs|V
-crates/pbd-app/src/controls.rs|VEHICLES
-crates/pbd-app/src/controls.rs|VEHICLES
-crates/pbd-app/src/controls.rs|W
-crates/pbd-app/src/controls.rs|WHEEL
-crates/pbd-app/src/controls.rs|WORLD
-crates/pbd-app/src/controls.rs|X
-crates/pbd-app/src/controls.rs|Y
-crates/pbd-app/src/controls.rs|Z
-crates/pbd-app/src/controls.rs|change the camera
-crates/pbd-app/src/controls.rs|copy the location for a bug report
-crates/pbd-app/src/controls.rs|cycle the weather
-crates/pbd-app/src/controls.rs|drop or raise the anchor
-crates/pbd-app/src/controls.rs|flow arrows
-crates/pbd-app/src/controls.rs|frame graph, again for its GPU breakdown
-crates/pbd-app/src/controls.rs|hold for the tools; the wheel picks one
-crates/pbd-app/src/controls.rs|hold for the tools; the wheel picks one
-crates/pbd-app/src/controls.rs|jump, and rise in water
-crates/pbd-app/src/controls.rs|kick forward or back
-crates/pbd-app/src/controls.rs|noon or midnight
-crates/pbd-app/src/controls.rs|open, harvest, pick, feed, till; board or step off
-crates/pbd-app/src/controls.rs|paddle forward or back
-crates/pbd-app/src/controls.rs|place the held block, plant a seed, or wind the line in
-crates/pbd-app/src/controls.rs|pole forward or back
-crates/pbd-app/src/controls.rs|pour water
-crates/pbd-app/src/controls.rs|return to the spawn
-crates/pbd-app/src/controls.rs|select a slot
-crates/pbd-app/src/controls.rs|steer with the paddle
-crates/pbd-app/src/controls.rs|steer with the pole
-crates/pbd-app/src/controls.rs|step through the slots
-crates/pbd-app/src/controls.rs|the field guide
-crates/pbd-app/src/controls.rs|the map
-crates/pbd-app/src/controls.rs|the pack: thirty more slots
-crates/pbd-app/src/controls.rs|the starter missions
-crates/pbd-app/src/controls.rs|up and down
-crates/pbd-app/src/controls.rs|use the tool in hand: dig, or cast, hook and reel
-crates/pbd-app/src/controls.rs|walk or fly
-crates/pbd-app/src/controls.rs|wind the line in
-crates/pbd-app/src/controls.rs|with the rod: hold to cast, press to strike, hold to reel
 crates/pbd-app/src/desktop.rs|Pale Blue Dot \| Planet Explorer
 crates/pbd-app/src/desktop/arrival.rs|A NEW WORLD
 crates/pbd-app/src/desktop/arrival.rs|WELCOME BACK
@@ -282,76 +158,6 @@ crates/pbd-app/src/desktop/map_sites.rs|, {unsettled} unsettled
 crates/pbd-app/src/desktop/map_sites.rs|Surveying the settlements...
 crates/pbd-app/src/desktop/map_sites.rs|{n} settlements on the map.
 crates/pbd-app/src/desktop/map_sites.rs|{n} settlements on the map: {built} built, {} still to come
-crates/pbd-app/src/desktop/menu.rs|@legacy *name
-crates/pbd-app/src/desktop/menu.rs|@legacy key
-crates/pbd-app/src/desktop/menu.rs|@legacy label
-crates/pbd-app/src/desktop/menu.rs|@legacy label
-crates/pbd-app/src/desktop/menu.rs|@legacy label
-crates/pbd-app/src/desktop/menu.rs|@legacy label
-crates/pbd-app/src/desktop/menu.rs|@legacy shown
-crates/pbd-app/src/desktop/menu.rs|@legacy tab.label()
-crates/pbd-app/src/desktop/menu.rs|@legacy text
-crates/pbd-app/src/desktop/menu.rs|@legacy text
-crates/pbd-app/src/desktop/menu.rs|Ambience
-crates/pbd-app/src/desktop/menu.rs|Antialiasing
-crates/pbd-app/src/desktop/menu.rs|Auto step
-crates/pbd-app/src/desktop/menu.rs|BACK
-crates/pbd-app/src/desktop/menu.rs|BACK
-crates/pbd-app/src/desktop/menu.rs|Bloom
-crates/pbd-app/src/desktop/menu.rs|CANCEL
-crates/pbd-app/src/desktop/menu.rs|CONTINUE
-crates/pbd-app/src/desktop/menu.rs|CONTINUE
-crates/pbd-app/src/desktop/menu.rs|Click a key, then press the new one. Esc cancels.
-crates/pbd-app/src/desktop/menu.rs|DELETE
-crates/pbd-app/src/desktop/menu.rs|DELETE FOREVER
-crates/pbd-app/src/desktop/menu.rs|Delete '{}'?
-crates/pbd-app/src/desktop/menu.rs|Effects
-crates/pbd-app/src/desktop/menu.rs|Everything dug, built and carried in it is gone for good.
-crates/pbd-app/src/desktop/menu.rs|Flow arrows
-crates/pbd-app/src/desktop/menu.rs|Frame limit
-crates/pbd-app/src/desktop/menu.rs|INPUT
-crates/pbd-app/src/desktop/menu.rs|LOAD
-crates/pbd-app/src/desktop/menu.rs|LOAD WORLD
-crates/pbd-app/src/desktop/menu.rs|MOVEMENT
-crates/pbd-app/src/desktop/menu.rs|Master
-crates/pbd-app/src/desktop/menu.rs|Menus
-crates/pbd-app/src/desktop/menu.rs|Mission line
-crates/pbd-app/src/desktop/menu.rs|Music
-crates/pbd-app/src/desktop/menu.rs|NEW WORLD
-crates/pbd-app/src/desktop/menu.rs|NEW WORLD
-crates/pbd-app/src/desktop/menu.rs|PAUSED
-crates/pbd-app/src/desktop/menu.rs|PICTURE
-crates/pbd-app/src/desktop/menu.rs|PRESS A KEY
-crates/pbd-app/src/desktop/menu.rs|QUIT
-crates/pbd-app/src/desktop/menu.rs|QUIT
-crates/pbd-app/src/desktop/menu.rs|RESET TAB
-crates/pbd-app/src/desktop/menu.rs|RESUME
-crates/pbd-app/src/desktop/menu.rs|Rain shadow
-crates/pbd-app/src/desktop/menu.rs|Reflections
-crates/pbd-app/src/desktop/menu.rs|Render scale
-crates/pbd-app/src/desktop/menu.rs|SAVES
-crates/pbd-app/src/desktop/menu.rs|SETTINGS
-crates/pbd-app/src/desktop/menu.rs|SETTINGS
-crates/pbd-app/src/desktop/menu.rs|SETTINGS
-crates/pbd-app/src/desktop/menu.rs|SOUND
-crates/pbd-app/src/desktop/menu.rs|Shadow quality
-crates/pbd-app/src/desktop/menu.rs|WEATHER
-crates/pbd-app/src/desktop/menu.rs|WORLD
-crates/pbd-app/src/desktop/menu.rs|WORLDS
-crates/pbd-app/src/desktop/menu.rs|World {}
-crates/pbd-app/src/desktop/menu.rs|World {}
-crates/pbd-app/src/desktop/menu.rs|also: {}
-crates/pbd-app/src/desktop/menu.rs|could not delete {}: {error}
-crates/pbd-app/src/desktop/menu.rs|could not make a world: {error}
-crates/pbd-app/src/desktop/menu.rs|just now
-crates/pbd-app/src/desktop/menu.rs|no worlds yet
-crates/pbd-app/src/desktop/menu.rs|that world is open; load another first
-crates/pbd-app/src/desktop/menu.rs|{} (open)
-crates/pbd-app/src/desktop/menu.rs|{} days ago
-crates/pbd-app/src/desktop/menu.rs|{} hours ago
-crates/pbd-app/src/desktop/menu.rs|{} min ago
-crates/pbd-app/src/desktop/menu.rs|{} was made in another world (seed {})
-crates/pbd-app/src/desktop/menu.rs|{} was made with {why}
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy format!("{n}·{name}")
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy heading
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy word.to_string()
@@ -505,7 +311,6 @@ crates/pbd-app/src/husbandry/breed.rs|{born} born
 crates/pbd-app/src/husbandry/breed.rs|{n} eggs set in the incubator
 crates/pbd-app/src/husbandry/breed.rs|{young} young were born
 crates/pbd-app/src/interact.rs|@legacy label
-crates/pbd-app/src/interact.rs|@legacy label
 crates/pbd-app/src/interact.rs|@legacy line
 crates/pbd-app/src/interact.rs|@legacy line.clone()
 crates/pbd-app/src/interact.rs|Board
@@ -534,35 +339,6 @@ crates/pbd-app/src/loading.rs|STANDING THE TOWNS
 crates/pbd-app/src/loading.rs|SURVEYING SITES
 crates/pbd-app/src/loading.rs|THE TOWNS' GROUND
 crates/pbd-app/src/loading.rs|TUNING THE AIR
-crates/pbd-app/src/saves/format.rs|cell key version {}, where this build has {KEY_VERSION}
-crates/pbd-app/src/saves/format.rs|terrain generator version {}, which this build does not have
-crates/pbd-app/src/saves/format.rs|topology version {}, where this build has {TOPOLOGY_VERSION}
-crates/pbd-app/src/settings.rs|120 FPS
-crates/pbd-app/src/settings.rs|60 FPS
-crates/pbd-app/src/settings.rs|OFF
-crates/pbd-app/src/vehicles/hud.rs| - at anchor
-crates/pbd-app/src/vehicles/hud.rs| - tied up
-crates/pbd-app/src/vehicles/hud.rs|({} view)
-crates/pbd-app/src/vehicles/hud.rs|@legacy *key
-crates/pbd-app/src/vehicles/hud.rs|@legacy lines.title.clone()
-crates/pbd-app/src/vehicles/hud.rs|@legacy w.clone()
-crates/pbd-app/src/vehicles/hud.rs|@legacy what.clone()
-crates/pbd-app/src/vehicles/hud.rs|A
-crates/pbd-app/src/vehicles/hud.rs|D
-crates/pbd-app/src/vehicles/hud.rs|S
-crates/pbd-app/src/vehicles/hud.rs|W
-crates/pbd-app/src/vehicles/hud.rs|Water aboard: bail
-crates/pbd-app/src/vehicles/hud.rs|cast off
-crates/pbd-app/src/vehicles/hud.rs|drop the anchor
-crates/pbd-app/src/vehicles/hud.rs|hands resting
-crates/pbd-app/src/vehicles/hud.rs|paddle resting
-crates/pbd-app/src/vehicles/hud.rs|power stroke
-crates/pbd-app/src/vehicles/hud.rs|raise the anchor
-crates/pbd-app/src/vehicles/hud.rs|step off
-crates/pbd-app/src/vehicles/hud.rs|stern rudder
-crates/pbd-app/src/vehicles/hud.rs|strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg
-crates/pbd-app/src/vehicles/hud.rs|water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s
-crates/pbd-app/src/vehicles/hud.rs|{phase} - alternate strokes to make way; rudder steers while moving.
 crates/pbd-app/src/vehicles/launch.rs|Empty the hold first
 crates/pbd-app/src/vehicles/launch.rs|No room in the pack
 crates/pbd-app/src/vehicles/launch.rs|The save did not take it
@@ -696,15 +472,6 @@ crates/pbd-core/src/inventory.rs|street lantern
 crates/pbd-core/src/inventory.rs|tilled soil
 crates/pbd-core/src/inventory.rs|wall lantern
 crates/pbd-core/src/map.rs|W{}
-crates/pbd-core/src/overlay.rs|C
-crates/pbd-core/src/overlay.rs|CLOUD
-crates/pbd-core/src/overlay.rs|CURRENTS
-crates/pbd-core/src/overlay.rs|HUMIDITY
-crates/pbd-core/src/overlay.rs|JET
-crates/pbd-core/src/overlay.rs|RAIN
-crates/pbd-core/src/overlay.rs|SUNLIGHT
-crates/pbd-core/src/overlay.rs|TEMPERATURE
-crates/pbd-core/src/overlay.rs|WIND
 crates/pbd-core/src/records.rs|@c
 crates/pbd-core/src/records.rs|@p
 crates/pbd-core/src/records.rs|@p{n}
@@ -741,6 +508,3 @@ crates/pbd-core/src/station.rs|STONE PICK
 crates/pbd-core/src/station.rs|STONE SHOVEL
 crates/pbd-core/src/station.rs|TORCH X2
 crates/pbd-core/src/station.rs|WORKBENCH
-crates/pbd-core/src/vehicle/mod.rs|Inner tube
-crates/pbd-core/src/vehicle/mod.rs|Loon
-crates/pbd-core/src/vehicle/mod.rs|Raft

@@ -1002,7 +1002,7 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
         Interaction::default(),
     ))
     .with_children(|panel| {
-        menu::lintel(panel, kit, "MAP");
+        menu::lintel(panel, kit, Localized::legacy("MAP"));
         panel.spawn((
             Text::new("M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me"),
             TextFont {
@@ -1027,7 +1027,7 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
             for overlay in Overlay::ALL {
                 button(
                     row,
-                    overlay.name(),
+                    &overlay.name(),
                     MapButton::Overlay(MapOverlay::Weather(overlay)),
                 );
             }

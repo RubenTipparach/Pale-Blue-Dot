@@ -367,7 +367,7 @@ pub fn spawn(
                                     ..default()
                                 })
                                 .with_children(|top| {
-                                    menu::lintel(top, kit, "PACK");
+                                    menu::lintel(top, kit, Localized::legacy("PACK"));
                                     for row in 0..PACK / SLOTS {
                                         slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
                                     }
@@ -415,7 +415,7 @@ pub fn spawn(
                     HoldPanel,
                 ))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, "HOLD");
+                    menu::lintel(panel, kit, Localized::legacy("HOLD"));
                     slot_line(panel, kit, &atlas, CARRIED);
                 });
         });

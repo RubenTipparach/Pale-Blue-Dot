@@ -478,7 +478,7 @@ pub fn show_prompt(
     };
     for mut text in &mut key_text {
         if text.text != label {
-            text.text = Localized::legacy(label);
+            text.text = label.clone();
         }
     }
     for mut text in &mut words {

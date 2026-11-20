@@ -182,7 +182,10 @@ fn launch(world: &mut World) {
         Err(why) => {
             say(
                 world,
-                &format!("The {} goes on water: {why}", kind.name().to_lowercase()),
+                &format!(
+                    "The {} goes on water: {why}",
+                    kind.name().as_str().to_lowercase()
+                ),
             );
             return;
         }

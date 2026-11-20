@@ -59,9 +59,19 @@ pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
             ..default()
         })
         .with_children(|row| {
-            small(row, kit, "NATURAL", MenuAction::Weather(0));
-            small(row, kit, "RAIN", MenuAction::Weather(60));
-            small(row, kit, "STORM", MenuAction::Weather(100));
+            small(
+                row,
+                kit,
+                Localized::legacy("NATURAL"),
+                MenuAction::Weather(0),
+            );
+            small(row, kit, Localized::legacy("RAIN"), MenuAction::Weather(60));
+            small(
+                row,
+                kit,
+                Localized::legacy("STORM"),
+                MenuAction::Weather(100),
+            );
         });
 }
 

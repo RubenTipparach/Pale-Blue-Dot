@@ -77,8 +77,18 @@ pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
             ..default()
         })
         .with_children(|row| {
-            small(row, kit, "DAY", MenuAction::Time(NOON as u8));
-            small(row, kit, "NIGHT", MenuAction::Time(MIDNIGHT as u8));
+            small(
+                row,
+                kit,
+                Localized::legacy("DAY"),
+                MenuAction::Time(NOON as u8),
+            );
+            small(
+                row,
+                kit,
+                Localized::legacy("NIGHT"),
+                MenuAction::Time(MIDNIGHT as u8),
+            );
         });
 }
 

@@ -161,21 +161,30 @@ def add_import(text: str, names: set[str], core: bool) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("file", help="a .rs file under crates/")
+    ap.add_argument("files", nargs="+", help=".rs files under crates/ (one lint run for all)")
     ap.add_argument("--dry-run", action="store_true", help="propose keys, change nothing")
     args = ap.parse_args()
-
-    path = (Path.cwd() / args.file).resolve()
-    rel = path.relative_to(ROOT).as_posix()
     report = locale_lint.run_report()
+    for file in args.files:
+        extract(file, report, args.dry_run)
+    return 0
+
+
+def extract(file: str, report: dict, dry_run: bool) -> None:
+    path = (Path.cwd() / file).resolve()
+    rel = path.relative_to(ROOT).as_posix()
     found = [v for v in report["violations"] if v["file"] == rel and v["kind"] == "literal"]
     if not found:
         print(f"{rel}: nothing to extract")
-        return 0
+        return
 
     existing = flat_keys()
-    by_text = {t: k for k, t in existing.items() if isinstance(t, str)}
     module = module_of(rel)
+    # Reuse a key for the same text only within the module: the same word on
+    # two screens may translate differently.
+    by_text = {
+        t: k for k, t in existing.items() if isinstance(t, str) and k.startswith(module + ".")
+    }
     text = path.read_text(encoding="utf-8")
     starts = offsets(text)
     lines_of = text.split("\n")
@@ -215,9 +224,9 @@ def main() -> int:
         print(f"  {rel}:{line}: {json.dumps(value, ensure_ascii=False)} -> {call}")
     for v, why in manual:
         print(f"  {rel}:{v['line']}: {json.dumps(v['text'], ensure_ascii=False)}  MANUAL ({why})")
-    if args.dry_run:
+    if dry_run:
         print(f"{len(edits)} to extract, {len(manual)} manual (dry run: nothing changed)")
-        return 0
+        return
 
     # Rust: apply from the end so earlier offsets hold. Overlapping spans
     # (two literals in one format!) keep the outer one.
@@ -239,7 +248,6 @@ def main() -> int:
 
     print(f"{len(edits)} extracted ({len(entries)} new keys), {len(manual)} manual. "
           "Review the diff, build, then: python3 tools/locale/locale_lint.py --baseline")
-    return 0
 
 
 def locale_lint_names(fmt: str) -> list[str]:

@@ -151,7 +151,7 @@ pub(crate) fn spawn_craft(world: &mut World, craft: Craft) -> Entity {
     let at = (center + craft.reference_position()).as_vec3();
     let entity = world
         .spawn((
-            Name::new(craft.kind.name()),
+            Name::new(craft.kind.name().into_string()),
             Transform::from_translation(at),
             Visibility::default(),
         ))

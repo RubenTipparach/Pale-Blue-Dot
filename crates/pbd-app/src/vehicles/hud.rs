@@ -10,6 +10,7 @@
 use super::{Aboard, Vehicle, view::VehicleView};
 use crate::ui_kit::Localized;
 use bevy::prelude::*;
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::vehicle::{Kind, Telemetry};
 use std::fmt::Write;
 
@@ -50,17 +51,18 @@ pub fn spawn(mut commands: Commands) {
 /// what it does), and a warning when there is one.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Lines {
-    pub title: String,
-    pub rows: Vec<(Vec<&'static str>, String)>,
-    pub warning: Option<String>,
+    pub title: Localized,
+    pub rows: Vec<(Vec<Localized>, Localized)>,
+    pub warning: Option<Localized>,
 }
 
 impl Lines {
     /// As one string: what a test reads.
     #[cfg(test)]
     pub fn text(&self) -> String {
-        let mut s = self.title.clone();
+        let mut s = self.title.to_string();
         for (keys, what) in &self.rows {
+            let keys: Vec<&str> = keys.iter().map(Localized::as_str).collect();
             let _ = write!(s, "\n{}  {what}", keys.join("/"));
         }
         if let Some(w) = &self.warning {
@@ -168,7 +170,7 @@ fn spawn_panel(commands: &mut Commands) {
 fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lines) {
     use crate::ui_kit::{INK, KitText, LABEL, TITLE};
     body.spawn((
-        KitText::new(Localized::legacy(lines.title.clone()), TITLE).outline(INK),
+        KitText::new(lines.title.clone(), TITLE).outline(INK),
         Node {
             margin: UiRect::bottom(px(2)),
             ..default()
@@ -182,10 +184,10 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         })
         .with_children(|row| {
             for key in keys {
-                crate::ui_kit::key_cap(row, kit, Localized::legacy(*key), ());
+                crate::ui_kit::key_cap(row, kit, key.clone(), ());
             }
             row.spawn((
-                KitText::new(Localized::legacy(what.clone()), LABEL).outline(INK),
+                KitText::new(what.clone(), LABEL).outline(INK),
                 Node {
                     margin: UiRect::left(px(4)),
                     padding: UiRect::top(px(2)),
@@ -195,12 +197,12 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         });
     }
     if let Some(w) = &lines.warning {
-        body.spawn(KitText::new(Localized::legacy(w.clone()), TITLE).outline(INK));
+        body.spawn(KitText::new(w.clone(), TITLE).outline(INK));
     }
 }
 
 /// The key a player has on a slot (`"vehicles:KeyT"`), as its label.
-fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> &'static str {
+fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> Localized {
     let key = crate::controls::slots()
         .find(|s| s.name() == name)
         .map_or(default, |s| binds.key(&s));
@@ -218,48 +220,52 @@ const BAIL_KG: f64 = 20.0;
 /// ([`instruments`]).
 fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     let craft = &vehicle.craft;
-    let moored = match craft.mooring {
-        Some(m) if m.anchored => " - at anchor",
-        Some(_) => " - tied up",
-        None => "",
+    let craft_title = craft.kind.title();
+    let title = match craft.mooring {
+        Some(m) if m.anchored => tr_with("vehicles.hud.at_anchor", &[("craft", &craft_title)]),
+        Some(_) => tr_with("vehicles.hud.tied_up", &[("craft", &craft_title)]),
+        None => craft_title,
     };
-    let mut lines = Lines {
-        title: format!("{}{moored}", craft.kind.name().to_uppercase()),
-        ..default()
-    };
+    let mut lines = Lines { title, ..default() };
     let bail = craft.bilge_kg > BAIL_KG;
-    for (keys, what) in crate::controls::caps(&craft.kind.name().to_uppercase(), binds) {
+    let group = match craft.kind {
+        Kind::Loon => "loon",
+        Kind::Tube => "inner_tube",
+        Kind::Raft => "raft",
+    };
+    let wasd = [KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD]
+        .map(crate::controls::key_label);
+    for (keys, what) in crate::controls::caps(group, binds) {
         // The bail key only while there is water to bail.
-        if what == "bail" && !bail {
+        if what == tr("controls.does.bail") && !bail {
             continue;
         }
         // Moving on W, A, S and D goes without saying (owner, 2026-11-16:
         // "we probably dont need WASD, its obvious enough"); a row the
         // player has moved to other keys is shown.
-        if keys.iter().all(|k| ["W", "A", "S", "D"].contains(k)) {
+        if keys.iter().all(|k| wasd.contains(k)) {
             continue;
         }
-        lines.rows.push((keys, what.to_string()));
+        lines.rows.push((keys, what));
     }
     let anchor = match craft.mooring {
-        Some(m) if m.anchored => "raise the anchor",
-        Some(_) => "cast off",
-        None => "drop the anchor",
+        Some(m) if m.anchored => tr("vehicles.hud.raise_anchor"),
+        Some(_) => tr("vehicles.hud.cast_off"),
+        None => tr("vehicles.hud.drop_anchor"),
     };
-    lines.rows.push((
-        vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)],
-        anchor.into(),
-    ));
+    lines
+        .rows
+        .push((vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)], anchor));
     lines.rows.push((
         vec![crate::controls::key_label(crate::interact::key(binds))],
-        "step off".into(),
+        tr("vehicles.hud.step_off"),
     ));
     lines.rows.push((
         vec![bound("vehicles:KeyV", KeyCode::KeyV, binds)],
-        "camera".into(),
+        tr("vehicles.hud.camera"),
     ));
     if bail {
-        lines.warning = Some("Water aboard: bail".into());
+        lines.warning = Some(tr("vehicles.hud.bail"));
     }
     lines
 }

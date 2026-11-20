@@ -14,6 +14,7 @@ use pbd_app::overlay::{OverlayMode, ramp_colour};
 use pbd_app::sky::Sun;
 use pbd_app::ui_kit::tr;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
+use pbd_core::locale::Localized;
 use pbd_core::overlay::Overlay;
 
 /// The legend panel; shown only while an overlay is.
@@ -188,7 +189,7 @@ pub fn spawn_row(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
             ..default()
         })
         .with_children(|row| {
-            small(row, kit, "OFF", MenuAction::Overlay(0));
+            small(row, kit, Localized::legacy("OFF"), MenuAction::Overlay(0));
             for (i, overlay) in Overlay::ALL.iter().enumerate() {
                 small(row, kit, overlay.name(), MenuAction::Overlay(i as u8 + 1));
             }

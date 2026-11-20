@@ -435,7 +435,7 @@ pub fn spawn_pack_craft(
                     ..default()
                 })
                 .with_children(|top| {
-                    super::menu::lintel(top, kit, "CRAFT");
+                    super::menu::lintel(top, kit, Localized::legacy("CRAFT"));
                     // Six rows show; a longer list scrolls with the wheel.
                     top.spawn((
                         Node {
@@ -545,7 +545,7 @@ pub fn spawn_bench(
             super::forge::StationPanel("workbench"),
         ))
         .with_children(|panel| {
-            super::menu::lintel(panel, kit, "WORKBENCH");
+            super::menu::lintel(panel, kit, Localized::legacy("WORKBENCH"));
             panel
                 .spawn(Node {
                     flex_wrap: FlexWrap::Wrap,

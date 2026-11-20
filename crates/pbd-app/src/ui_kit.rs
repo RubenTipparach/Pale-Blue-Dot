@@ -1274,10 +1274,18 @@ mod tests {
         }
         // Every key cap the Input page can print, a rebind's and a fixed
         // one's, and its waiting cap.
+        use crate::controls::{Key, key_label};
         let caps = crate::controls::ASSIGNABLE
             .iter()
-            .map(|(_, label)| *label)
-            .chain(["ESC", "LEFT CLICK", "RIGHT CLICK", "WHEEL", "PRESS A KEY"])
+            .copied()
+            .chain([KeyCode::Escape])
+            .map(key_label)
+            .chain([
+                Key::Mouse(MouseButton::Left).label(),
+                Key::Mouse(MouseButton::Right).label(),
+                Key::Wheel.label(),
+                pbd_core::locale::tr("menu.input.press_a_key"),
+            ])
             .chain(crate::controls::Tab::ALL.map(|t| t.label()));
         for label in caps {
             for c in label.chars().filter(|c| *c != ' ') {

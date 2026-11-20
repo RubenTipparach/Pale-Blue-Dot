@@ -69,7 +69,7 @@ pub fn spawn(
             layer
                 .spawn(menu::framed(kit, Set::Stone, 372.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, "CAMPFIRE");
+                    menu::lintel(panel, kit, Localized::legacy("CAMPFIRE"));
                     panel
                         .spawn(Node {
                             flex_wrap: FlexWrap::Wrap,

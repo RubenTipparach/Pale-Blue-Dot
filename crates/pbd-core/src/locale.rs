@@ -74,6 +74,20 @@ impl fmt::Display for Localized {
     }
 }
 
+impl std::ops::Deref for Localized {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<Localized> for String {
+    fn from(text: Localized) -> Self {
+        text.0
+    }
+}
+
 impl AsRef<str> for Localized {
     fn as_ref(&self) -> &str {
         &self.0
