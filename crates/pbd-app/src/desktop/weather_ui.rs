@@ -8,6 +8,7 @@ use bevy::{prelude::*, ui::RelativeCursorPosition};
 use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::weather::StormForcing;
+use pbd_core::locale::tr_with;
 
 /// The bar a press or a drag sets the forcing from.
 #[derive(Component)]
@@ -29,13 +30,13 @@ pub struct WeatherKnob;
 const BAR_WIDTH: f32 = 172.0;
 
 /// What a forcing reads as, in words a player would use.
-pub fn describe(forcing: f32) -> &'static str {
-    match forcing {
-        f if f < 0.05 => "NATURAL",
-        f if f < 0.4 => "SHOWERS",
-        f if f < 0.8 => "RAIN",
-        _ => "STORM",
-    }
+pub fn describe(forcing: f32) -> Localized {
+    tr(match forcing {
+        f if f < 0.05 => "weather.natural",
+        f if f < 0.4 => "weather.showers",
+        f if f < 0.8 => "weather.rain",
+        _ => "weather.storm",
+    })
 }
 
 /// The control, laid into the pause panel above its buttons.
@@ -59,19 +60,9 @@ pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
             ..default()
         })
         .with_children(|row| {
-            small(
-                row,
-                kit,
-                Localized::legacy("NATURAL"),
-                MenuAction::Weather(0),
-            );
-            small(row, kit, Localized::legacy("RAIN"), MenuAction::Weather(60));
-            small(
-                row,
-                kit,
-                Localized::legacy("STORM"),
-                MenuAction::Weather(100),
-            );
+            small(row, kit, tr("weather.natural"), MenuAction::Weather(0));
+            small(row, kit, tr("weather.rain"), MenuAction::Weather(60));
+            small(row, kit, tr("weather.storm"), MenuAction::Weather(100));
         });
 }
 
@@ -113,11 +104,16 @@ pub fn show(
         node.left = at;
     }
     for mut text in &mut labels {
-        text.text = Localized::legacy(format!(
-            "WEATHER  {}  {:.0}%",
-            describe(forcing.0),
-            forcing.0.clamp(0.0, 1.0) * 100.0
-        ));
+        text.text = tr_with(
+            "weather.line",
+            &[
+                ("forcing", &describe(forcing.0)),
+                (
+                    "percent",
+                    &format!("{:.0}", forcing.0.clamp(0.0, 1.0) * 100.0),
+                ),
+            ],
+        );
     }
 }
 

@@ -153,7 +153,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                             inner.spawn((
                                 CompassMark(i),
                                 KitText::new(
-                                    Localized::legacy(*label),
+                                    compass::direction_label(i),
                                     if i == 0 { ui_kit::NORTH } else { ui_kit::CUT },
                                 ),
                                 Node {
@@ -320,8 +320,8 @@ pub fn update(
                 }
             }
             kind => {
-                let label = DIRECTIONS[mark.0];
-                node.left = x(m.offset, kit.font.width(label) as f32);
+                let label = compass::direction_label(mark.0);
+                node.left = x(m.offset, kit.font.width(&label) as f32);
                 let ink = if kind == MarkKind::Cardinal && mark.0 == 0 {
                     ui_kit::NORTH
                 } else {
@@ -380,10 +380,10 @@ pub fn update(
                 compass::name_line(&read.1[i].label(), waypoints[i].distance_m)
             }
             Some(Named::Place(i)) => compass::name_line(towns[i].0, towns[i].1.distance_m),
-            None => String::new(),
+            None => Localized::empty(),
         };
         if text.text != line {
-            text.text = Localized::legacy(line);
+            text.text = line;
         }
     }
 }

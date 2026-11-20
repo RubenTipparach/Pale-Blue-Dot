@@ -2,19 +2,6 @@
 # `path|literal`, sorted. It only shrinks; never add to it. When it is
 # empty, delete it. `python3 tools/locale/locale_lint.py --baseline` drops
 # entries that are gone.
-crates/pbd-app/src/compass.rs|E
-crates/pbd-app/src/compass.rs|N
-crates/pbd-app/src/compass.rs|NE
-crates/pbd-app/src/compass.rs|NW
-crates/pbd-app/src/compass.rs|S
-crates/pbd-app/src/compass.rs|SE
-crates/pbd-app/src/compass.rs|SW
-crates/pbd-app/src/compass.rs|W
-crates/pbd-app/src/compass.rs|{:.0} m
-crates/pbd-app/src/compass.rs|{:.1} km
-crates/pbd-app/src/desktop.rs|Pale Blue Dot \| Planet Explorer
-crates/pbd-app/src/desktop/arrival.rs|A NEW WORLD
-crates/pbd-app/src/desktop/arrival.rs|WELCOME BACK
 crates/pbd-app/src/desktop/breeding.rs|, ended
 crates/pbd-app/src/desktop/breeding.rs|BREEDING
 crates/pbd-app/src/desktop/breeding.rs|COAT  {}
@@ -35,44 +22,6 @@ crates/pbd-app/src/desktop/breeding.rs|and {} more
 crates/pbd-app/src/desktop/breeding.rs|gen {}
 crates/pbd-app/src/desktop/breeding.rs|pick a {}
 crates/pbd-app/src/desktop/breeding.rs|wild-caught founder
-crates/pbd-app/src/desktop/compass_bar.rs|@legacy *label
-crates/pbd-app/src/desktop/compass_bar.rs|@legacy line
-crates/pbd-app/src/desktop/digging.rs|Cut down the tree first
-crates/pbd-app/src/desktop/digging.rs|Empty the {} first
-crates/pbd-app/src/desktop/digging.rs|Needs a {} pickaxe
-crates/pbd-app/src/desktop/digging.rs|No more wood
-crates/pbd-app/src/desktop/digging.rs|No room in the pack
-crates/pbd-app/src/desktop/digging.rs|Something is planted here
-crates/pbd-app/src/desktop/digging.rs|Too hard to dig by hand
-crates/pbd-app/src/desktop/map_screen.rs|@legacy label
-crates/pbd-app/src/desktop/map_screen.rs|@legacy text
-crates/pbd-app/src/desktop/map_screen.rs|@legacy want
-crates/pbd-app/src/desktop/map_screen.rs|Biomes
-crates/pbd-app/src/desktop/map_screen.rs|Clouds and rain
-crates/pbd-app/src/desktop/map_screen.rs|E
-crates/pbd-app/src/desktop/map_screen.rs|Each place's biome over the grayed base (survey M3).
-crates/pbd-app/src/desktop/map_screen.rs|M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me
-crates/pbd-app/src/desktop/map_screen.rs|MAP
-crates/pbd-app/src/desktop/map_screen.rs|N
-crates/pbd-app/src/desktop/map_screen.rs|Night side
-crates/pbd-app/src/desktop/map_screen.rs|ON THE MAP
-crates/pbd-app/src/desktop/map_screen.rs|OVERLAY
-crates/pbd-app/src/desktop/map_screen.rs|Reefs, kelp forests, polar sea, vents and trenches.
-crates/pbd-app/src/desktop/map_screen.rs|S
-crates/pbd-app/src/desktop/map_screen.rs|Sea places
-crates/pbd-app/src/desktop/map_screen.rs|Show on globe
-crates/pbd-app/src/desktop/map_screen.rs|The planet
-crates/pbd-app/src/desktop/map_screen.rs|The planet as it looks: each place its ground's top block, shaded by relief, the sea by its depth.
-crates/pbd-app/src/desktop/map_screen.rs|W
-crates/pbd-app/src/desktop/map_screen.rs|WEATHER AT THE HOUR
-crates/pbd-app/src/desktop/map_screen.rs|you {}   {line}
-crates/pbd-app/src/desktop/map_screen.rs|{:.1} m a pixel
-crates/pbd-app/src/desktop/map_screen.rs|{} now, {} to {} {}, over the grayed base.
-crates/pbd-app/src/desktop/map_screen.rs|{} snow
-crates/pbd-app/src/desktop/map_sites.rs|, {unsettled} unsettled
-crates/pbd-app/src/desktop/map_sites.rs|Surveying the settlements...
-crates/pbd-app/src/desktop/map_sites.rs|{n} settlements on the map.
-crates/pbd-app/src/desktop/map_sites.rs|{n} settlements on the map: {built} built, {} still to come
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy format!("{n}·{name}")
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy heading
 crates/pbd-app/src/desktop/mission_tree.rs|@legacy word.to_string()
@@ -96,46 +45,6 @@ crates/pbd-app/src/desktop/mission_tree.rs|UNLOCKS
 crates/pbd-app/src/desktop/mission_tree.rs|UNLOCKS {}
 crates/pbd-app/src/desktop/mission_tree.rs|[x]
 crates/pbd-app/src/desktop/mission_tree.rs|after {}
-crates/pbd-app/src/desktop/missions.rs|@legacy label
-crates/pbd-app/src/desktop/missions.rs|@legacy text.clone()
-crates/pbd-app/src/desktop/missions.rs|DONE: {title}
-crates/pbd-app/src/desktop/missions.rs|GUIDE  J
-crates/pbd-app/src/desktop/missions.rs|MAP  M
-crates/pbd-app/src/desktop/missions.rs|MENU  ESC
-crates/pbd-app/src/desktop/missions.rs|MISSIONS  O
-crates/pbd-app/src/desktop/missions.rs|PACK  I
-crates/pbd-app/src/desktop/missions.rs|banded perch
-crates/pbd-app/src/desktop/overlay_ui.rs|DAY {} - {}
-crates/pbd-app/src/desktop/overlay_ui.rs|OFF
-crates/pbd-app/src/desktop/overlay_ui.rs|{value} {unit} RAIN
-crates/pbd-app/src/desktop/overlay_ui.rs|{} {unit} SNOW
-crates/pbd-app/src/desktop/pack.rs|@legacy label
-crates/pbd-app/src/desktop/pack.rs|@legacy label
-crates/pbd-app/src/desktop/pack.rs|@legacy want
-crates/pbd-app/src/desktop/pack.rs|HOLD
-crates/pbd-app/src/desktop/pack.rs|PACK
-crates/pbd-app/src/desktop/repro.rs|Location copied
-crates/pbd-app/src/desktop/repro.rs|Location not saved
-crates/pbd-app/src/desktop/repro.rs|Location not saved
-crates/pbd-app/src/desktop/repro.rs|{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02} UTC
-crates/pbd-app/src/desktop/slots.rs|@legacy label
-crates/pbd-app/src/desktop/slots.rs|@legacy want
-crates/pbd-app/src/desktop/slots.rs|{name} x {}
-crates/pbd-app/src/desktop/time_ui.rs|@legacy shown
-crates/pbd-app/src/desktop/time_ui.rs|DAY
-crates/pbd-app/src/desktop/time_ui.rs|NIGHT
-crates/pbd-app/src/desktop/time_ui.rs|TIME  {:02}:{:02}
-crates/pbd-app/src/desktop/toasts.rs|@legacy want
-crates/pbd-app/src/desktop/toasts.rs|{} x{}
-crates/pbd-app/src/desktop/weather_ui.rs|@legacy format!("WEATHER{}{:.0}%",describe(forcing.0),forcing.0.clamp(0.0,1.0)*100.0)
-crates/pbd-app/src/desktop/weather_ui.rs|NATURAL
-crates/pbd-app/src/desktop/weather_ui.rs|NATURAL
-crates/pbd-app/src/desktop/weather_ui.rs|RAIN
-crates/pbd-app/src/desktop/weather_ui.rs|RAIN
-crates/pbd-app/src/desktop/weather_ui.rs|SHOWERS
-crates/pbd-app/src/desktop/weather_ui.rs|STORM
-crates/pbd-app/src/desktop/weather_ui.rs|STORM
-crates/pbd-app/src/desktop/weather_ui.rs|WEATHER  {}  {:.0}%
 crates/pbd-app/src/husbandry/breed.rs|A young one was born
 crates/pbd-app/src/husbandry/breed.rs|Already paired
 crates/pbd-app/src/husbandry/breed.rs|An incubator already stands there
@@ -161,42 +70,3 @@ crates/pbd-app/src/husbandry/breed.rs|Too far to set it
 crates/pbd-app/src/husbandry/breed.rs|{born} born
 crates/pbd-app/src/husbandry/breed.rs|{n} eggs set in the incubator
 crates/pbd-app/src/husbandry/breed.rs|{young} young were born
-crates/pbd-app/src/interact.rs|@legacy label
-crates/pbd-app/src/interact.rs|@legacy line.clone()
-crates/pbd-app/src/loading.rs|BUILDING THE PLANET
-crates/pbd-app/src/loading.rs|COMPILING SHADERS
-crates/pbd-app/src/loading.rs|LAYING OUT TOWNS
-crates/pbd-app/src/loading.rs|READING THE WORLD
-crates/pbd-app/src/loading.rs|STANDING THE TOWNS
-crates/pbd-app/src/loading.rs|SURVEYING SITES
-crates/pbd-app/src/loading.rs|THE TOWNS' GROUND
-crates/pbd-app/src/loading.rs|TUNING THE AIR
-crates/pbd-app/src/vehicles/launch.rs|Empty the hold first
-crates/pbd-app/src/vehicles/launch.rs|No room in the pack
-crates/pbd-app/src/vehicles/launch.rs|The save did not take it
-crates/pbd-app/src/vehicles/launch.rs|The save did not take the launch
-crates/pbd-app/src/vehicles/launch.rs|The {} goes on water: {why}
-crates/pbd-app/src/vehicles/launch.rs|{} launched
-crates/pbd-app/src/vehicles/launch.rs|{} taken up
-crates/pbd-app/src/world_map.rs|coral reef
-crates/pbd-app/src/world_map.rs|kelp forest
-crates/pbd-app/src/world_map.rs|polar sea
-crates/pbd-core/src/daylight.rs|southern autumn
-crates/pbd-core/src/daylight.rs|southern spring
-crates/pbd-core/src/daylight.rs|southern summer
-crates/pbd-core/src/daylight.rs|southern winter
-crates/pbd-core/src/fauna/mod.rs|Fish
-crates/pbd-core/src/map.rs|W{}
-crates/pbd-core/src/records.rs|@c
-crates/pbd-core/src/records.rs|@p
-crates/pbd-core/src/records.rs|@p{n}
-crates/pbd-core/src/scatter.rs|pick up stone
-crates/pbd-core/src/scatter.rs|pull fibre
-crates/pbd-core/src/sites.rs|Site {}
-crates/pbd-core/src/sites.rs|cave town
-crates/pbd-core/src/sites.rs|cliff village
-crates/pbd-core/src/sites.rs|desert town
-crates/pbd-core/src/sites.rs|jungle village
-crates/pbd-core/src/sites.rs|swamp village
-crates/pbd-core/src/sites.rs|tundra camp
-crates/pbd-core/src/sites.rs|walled town

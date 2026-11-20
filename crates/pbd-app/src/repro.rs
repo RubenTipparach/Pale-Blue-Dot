@@ -66,7 +66,7 @@ pub struct Record {
     /// The clock.
     pub hour: f32,
     pub day: u64,
-    pub season: &'static str,
+    pub season: String,
     /// The weather here, as shown.
     pub rain: f32,
     pub snowing: bool,
@@ -377,7 +377,7 @@ impl Record {
             eyes_under: water.eyes,
             hour: clock.hour(),
             day: clock.day(),
-            season: clock.season(),
+            season: clock.season().into_string(),
             rain: weather.rain,
             snowing: weather.snowing,
             wetness: weather.wetness,
@@ -425,7 +425,7 @@ impl Record {
             eyes_under: false,
             hour: 14.5,
             day: 3,
-            season: "southern summer",
+            season: "southern summer".into(),
             rain: 0.42,
             snowing: false,
             wetness: 0.3,

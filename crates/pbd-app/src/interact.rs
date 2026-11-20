@@ -353,7 +353,7 @@ pub fn spawn_fish_keys(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 })
                 .with_children(|row| {
                     let label = crate::controls::Key::Mouse(button).label();
-                    crate::ui_kit::key_cap(row, &kit, Localized::legacy(label), FishKeyCap(k));
+                    crate::ui_kit::key_cap(row, &kit, label, FishKeyCap(k));
                     row.spawn((
                         Node {
                             padding: UiRect::top(px(2)),
@@ -482,7 +482,7 @@ pub fn show_prompt(
     }
     for mut text in &mut words {
         if text.text != line {
-            text.text = Localized::legacy(line.clone());
+            text.text = line.clone();
         }
     }
 }

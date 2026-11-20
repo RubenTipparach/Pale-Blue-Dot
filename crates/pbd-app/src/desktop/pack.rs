@@ -251,11 +251,11 @@ pub fn paint_hold(
             continue;
         }
         let label = match view.hold.get(count.0 - CARRIED) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
-            text.text = Localized::legacy(label);
+            text.text = label;
         }
     }
     for (cell, mut tip) in &mut tips {
@@ -264,7 +264,7 @@ pub fn paint_hold(
         }
         let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
         if tip.0 != want {
-            tip.0 = Localized::legacy(want);
+            tip.0 = want;
         }
     }
 }
@@ -367,7 +367,7 @@ pub fn spawn(
                                     ..default()
                                 })
                                 .with_children(|top| {
-                                    menu::lintel(top, kit, Localized::legacy("PACK"));
+                                    menu::lintel(top, kit, tr("pack.pack"));
                                     for row in 0..PACK / SLOTS {
                                         slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
                                     }
@@ -415,7 +415,7 @@ pub fn spawn(
                     HoldPanel,
                 ))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, Localized::legacy("HOLD"));
+                    menu::lintel(panel, kit, tr("pack.hold"));
                     slot_line(panel, kit, &atlas, CARRIED);
                 });
         });
@@ -573,11 +573,11 @@ pub fn paint(
     }
     for mut text in &mut count {
         let label = match stack {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
-            text.text = Localized::legacy(label);
+            text.text = label;
         }
     }
     if *screen != Screen::Pack {

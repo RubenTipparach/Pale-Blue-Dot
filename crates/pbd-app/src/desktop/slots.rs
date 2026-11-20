@@ -396,26 +396,27 @@ pub fn paint_icon(
 
 /// What a slot's tooltip says: nothing for an empty slot; a tool's name and
 /// what it is for; a fish's species; a block's name and how many.
-pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> String {
+pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> Localized {
     let Some(stack) = stack else {
-        return String::new();
+        return Localized::empty();
     };
     let name = match stack.item {
-        Item::Tool(tool) => return format!("{}: {}", tool.name(), tool.purpose()),
+        Item::Tool(tool) => {
+            return pbd_core::locale::tr_with(
+                "slots.tool_tip",
+                &[("tool", &tool.name()), ("purpose", &tool.purpose())],
+            );
+        }
         Item::Fish(species) => items
             .fish_names
             .get(species as usize)
-            .cloned()
-            .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) | Item::Good(_) => stack.item.name().into(),
+            .map(|name| Localized::verbatim(name.clone()))
+            .unwrap_or_else(|| stack.item.name()),
+        Item::Block(_) | Item::Good(_) => stack.item.name(),
     };
-    let mut letters = name.chars();
-    let name = letters
-        .next()
-        .map(|first| first.to_uppercase().chain(letters).collect::<String>())
-        .unwrap_or_default();
+    let name = pbd_core::locale::sentence(&name);
     if stack.count > 1 {
-        format!("{name} x {}", stack.count)
+        pbd_core::locale::tr_with("slots.many", &[("name", &name), ("count", &stack.count)])
     } else {
         name
     }
@@ -471,16 +472,16 @@ pub fn update(
     for (cell, mut tip) in &mut tips {
         let want = stack_tip(slots.get(cell.0), &items);
         if tip.0 != want {
-            tip.0 = Localized::legacy(want);
+            tip.0 = want;
         }
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
-            text.text = Localized::legacy(label);
+            text.text = label;
         }
     }
 }

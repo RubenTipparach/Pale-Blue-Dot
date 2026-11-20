@@ -82,6 +82,11 @@ impl Kind {
         tr(&format!("vehicle.{}.name", self.key()))
     }
 
+    /// Its name mid-sentence ("the inner tube"), `vehicle.<key>.lower`.
+    pub fn lower_name(self) -> Localized {
+        tr(&format!("vehicle.{}.lower", self.key()))
+    }
+
     /// Its name as a panel's title, `vehicle.<key>.title`.
     pub fn title(self) -> Localized {
         tr(&format!("vehicle.{}.title", self.key()))

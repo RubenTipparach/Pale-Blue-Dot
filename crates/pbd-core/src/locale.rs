@@ -408,6 +408,19 @@ pub fn caps(text: &Localized) -> Localized {
     Localized(text.0.to_uppercase())
 }
 
+/// A data name with its first letter in capitals, by the language's own
+/// rule, where it starts a line (a slot's tooltip: "Dirt x 3"). Like
+/// [`caps`], only for a composed line.
+pub fn sentence(text: &Localized) -> Localized {
+    let mut letters = text.0.chars();
+    Localized(
+        letters
+            .next()
+            .map(|first| first.to_uppercase().chain(letters).collect())
+            .unwrap_or_default(),
+    )
+}
+
 /// The text of `key` in the current locale.
 pub fn tr(key: &str) -> Localized {
     tr_with(key, &[])

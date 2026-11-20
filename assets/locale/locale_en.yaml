@@ -9,6 +9,9 @@
 #   (tools/locale/locale_coverage.py <code> lists what it lacks).
 # - Keys are grouped by the screen or module that shows them.
 
+arrival:
+  new_world: "A NEW WORLD"
+  welcome_back: "WELCOME BACK"
 block:
   air:
     name: air
@@ -56,6 +59,19 @@ block:
     name: water
   workbench:
     name: workbench
+compass:
+  dir:
+    e: "E"
+    n: "N"
+    ne: "NE"
+    nw: "NW"
+    s: "S"
+    se: "SE"
+    sw: "SW"
+    w: "W"
+  kilometres: "{distance} km"
+  metres: "{distance} m"
+  name_line: "{name} {distance}"
 controls:
   does:
     anchor: drop or raise the anchor
@@ -242,6 +258,23 @@ crop:
     name: turnip
   wheat:
     name: wheat
+daylight:
+  season:
+    autumn: "southern autumn"
+    spring: "southern spring"
+    summer: "southern summer"
+    winter: "southern winter"
+  season_caps:
+    autumn: "SOUTHERN AUTUMN"
+    spring: "SOUTHERN SPRING"
+    summer: "SOUTHERN SUMMER"
+    winter: "SOUTHERN WINTER"
+digging:
+  by_hand: "Too hard to dig by hand"
+  empty_first: "Empty the {station} first"
+  needs_pickaxe: "Needs a {tier} pickaxe"
+  no_wood: "No more wood"
+  planted: "Something is planted here"
 equipment:
   bare: Bare hands
   bare_caps: BARE HANDS
@@ -540,6 +573,54 @@ kitchen:
   ready: "{recipe} is ready"
   timer: "{effect} {minutes}:{seconds}"
   title: "CAMPFIRE"
+launch:
+  empty_hold: "Empty the hold first"
+  goes_on_water: "The {craft} goes on water: {why}"
+  launched: "{craft} launched"
+  save_refused: "The save did not take it"
+  save_refused_launch: "The save did not take the launch"
+  taken_up: "{craft} taken up"
+loading:
+  ground: "THE TOWNS' GROUND"
+  laying: "LAYING OUT TOWNS"
+  planet: "BUILDING THE PLANET"
+  reading: "READING THE WORLD"
+  shaders: "COMPILING SHADERS"
+  sounds: "TUNING THE AIR"
+  standing: "STANDING THE TOWNS"
+  surveying: "SURVEYING SITES"
+map:
+  clouds_and_rain: "Clouds and rain"
+  east: "E"
+  help: "M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me"
+  lat_lon: "{lat}{ns} {lon}{ew}"
+  layer:
+    biomes: "Biomes"
+    biomes_note: "Each place's biome over the grayed base (survey M3)."
+    places: "Sea places"
+    places_note: "Reefs, kelp forests, polar sea, vents and trenches."
+  night_side: "Night side"
+  north: "N"
+  on_the_map: "ON THE MAP"
+  overlay: "OVERLAY"
+  scale: "{metres} m a pixel"
+  show_on_globe: "Show on globe"
+  snow: "{value} snow"
+  south: "S"
+  the_planet: "The planet"
+  the_planet_note: "The planet as it looks: each place its ground's top block, shaded by relief, the sea by its depth."
+  title: "MAP"
+  under: "{place}   {scale}"
+  waypoint: "W{number}"
+  weather_at_hour: "WEATHER AT THE HOUR"
+  weather_note: "{overlay} now, {low} to {high} {unit}, over the grayed base."
+  west: "W"
+  you: "you {place}   {scale}"
+map_sites:
+  count: "{count} settlements on the map."
+  standing: "{count} settlements on the map: {built} built, {to_come} still to come."
+  standing_unsettled: "{count} settlements on the map: {built} built, {to_come} still to come, {unsettled} unsettled."
+  surveying: "Surveying the settlements..."
 menu:
   antialiasing: Antialiasing
   auto_step: Auto step
@@ -611,7 +692,17 @@ menu:
   worlds: WORLDS
 mission_tree:
   close: X
+missions:
+  done: "DONE: {title}"
+  tab:
+    guide: "GUIDE  J"
+    map: "MAP  M"
+    menu: "MENU  ESC"
+    missions: "MISSIONS  O"
+    pack: "PACK  I"
 overlay:
+  date: "DAY {day} - {season}"
+  end: "{value} {unit}"
   map_chooses: "M: THE MAP CHOOSES IT"
   name:
     cloud: CLOUD
@@ -622,6 +713,9 @@ overlay:
     sunlight: SUNLIGHT
     temperature: TEMPERATURE
     wind: WIND
+  off: "OFF"
+  rain_end: "{value} {unit} RAIN"
+  snow_end: "{value} {unit} SNOW"
   title: GLOBE OVERLAY
   unit:
     percent: "%"
@@ -629,7 +723,9 @@ overlay:
     speed: "m/s"
     temperature: C
 pack:
+  hold: "HOLD"
   hotbar: HOTBAR
+  pack: "PACK"
 recipe:
   bronze:
     name: "BRONZE"
@@ -700,6 +796,24 @@ saves:
     generator: "terrain generator version {version}, which this build does not have"
     keys: "cell key version {version}, where this build has {have}"
     topology: "topology version {version}, where this build has {have}"
+scatter:
+  pick_up_stone: "pick up stone"
+  pull_fibre: "pull fibre"
+sites:
+  fallback_name: "Site {id}"
+  kind:
+    cave: "cave town"
+    cliff: "cliff village"
+    desert: "desert town"
+    harbour: "harbour"
+    jungle: "jungle village"
+    swamp: "swamp village"
+    tundra: "tundra camp"
+    village: "village"
+    walled: "walled town"
+slots:
+  many: "{name} x {count}"
+  tool_tip: "{tool}: {purpose}"
 species:
   deepback:
     caps: "DEEPBACK"
@@ -846,7 +960,12 @@ tier:
   stone:
     name: Stone
 time:
+  day: "DAY"
+  line: "TIME  {hours}:{minutes}"
+  night: "NIGHT"
   title: TIME
+toasts:
+  words: "{item} x{count}"
 tool:
   axe:
     caps: AXE
@@ -898,12 +1017,15 @@ towns:
   door: door
 vehicle:
   loon:
+    lower: "loon"
     name: Loon
     title: LOON
   raft:
+    lower: "raft"
     name: Raft
     title: RAFT
   tube:
+    lower: "inner tube"
     name: Inner tube
     title: INNER TUBE
 vehicles:
@@ -917,4 +1039,26 @@ vehicles:
     step_off: step off
     tied_up: "{craft} - tied up"
 weather:
+  line: "WEATHER  {forcing}  {percent}%"
+  natural: "NATURAL"
+  rain: "RAIN"
+  showers: "SHOWERS"
+  storm: "STORM"
   title: WEATHER
+window:
+  title: "Pale Blue Dot | Planet Explorer"
+world_map:
+  biome:
+    beach: "beach"
+    desert: "desert"
+    fields: "fields"
+    jungle: "jungle"
+    mountains: "mountains"
+    swamp: "swamp"
+    tundra: "tundra"
+  place:
+    coral_reef: "coral reef"
+    kelp_forest: "kelp forest"
+    polar_sea: "polar sea"
+    trench: "trench"
+    vents: "vents"

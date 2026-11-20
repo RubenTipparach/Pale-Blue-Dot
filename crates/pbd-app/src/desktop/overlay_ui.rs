@@ -12,9 +12,8 @@ use bevy::{
 };
 use pbd_app::overlay::{OverlayMode, ramp_colour};
 use pbd_app::sky::Sun;
-use pbd_app::ui_kit::tr;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
-use pbd_core::locale::Localized;
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::overlay::Overlay;
 
 /// The legend panel; shown only while an overlay is.
@@ -123,9 +122,11 @@ pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>, kit: Res
 fn end_label(overlay: Overlay, value: f32) -> String {
     let unit = overlay.unit();
     match overlay {
-        Overlay::Rain if value < 0.0 => format!("{} {unit} SNOW", -value),
-        Overlay::Rain => format!("{value} {unit} RAIN"),
-        _ => format!("{value} {unit}"),
+        Overlay::Rain if value < 0.0 => {
+            tr_with("overlay.snow_end", &[("value", &-value), ("unit", &unit)]).into()
+        }
+        Overlay::Rain => tr_with("overlay.rain_end", &[("value", &value), ("unit", &unit)]).into(),
+        _ => tr_with("overlay.end", &[("value", &value), ("unit", &unit)]).into(),
     }
 }
 
@@ -168,11 +169,17 @@ pub fn show(
             LegendText::Title => overlay.name().to_string(),
             LegendText::Low => end_label(overlay, low),
             LegendText::High => end_label(overlay, high),
-            LegendText::Date => format!(
-                "DAY {} - {}",
-                sun.clock.day() % pbd_core::daylight::YEAR_DAYS as u64,
-                sun.clock.season().to_uppercase()
-            ),
+            LegendText::Date => tr_with(
+                "overlay.date",
+                &[
+                    (
+                        "day",
+                        &(sun.clock.day() % pbd_core::daylight::YEAR_DAYS as u64),
+                    ),
+                    ("season", &sun.clock.season_caps()),
+                ],
+            )
+            .into(),
         };
     }
 }
@@ -189,7 +196,7 @@ pub fn spawn_row(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
             ..default()
         })
         .with_children(|row| {
-            small(row, kit, Localized::legacy("OFF"), MenuAction::Overlay(0));
+            small(row, kit, tr("overlay.off"), MenuAction::Overlay(0));
             for (i, overlay) in Overlay::ALL.iter().enumerate() {
                 small(row, kit, overlay.name(), MenuAction::Overlay(i as u8 + 1));
             }

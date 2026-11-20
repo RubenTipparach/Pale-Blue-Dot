@@ -46,6 +46,7 @@ use pbd_app::world_map::{
     self as raster, BASE, LEVELS, MapLayers, Palette, RasterLayer, TILE, TileKey, TileLru,
 };
 use pbd_core::geo::{self, LatLon};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::map::Texel;
 use pbd_core::overlay::Overlay;
 use std::collections::HashMap;
@@ -690,8 +691,8 @@ pub fn cloud_bytes(maps: &WeatherMaps) -> Vec<u8> {
 /// registry like any other layer.
 pub fn biomes_layer() -> RasterLayer {
     RasterLayer {
-        name: "Biomes",
-        note: "Each place's biome over the grayed base (survey M3).",
+        name: "map.layer.biomes",
+        note: "map.layer.biomes_note",
         paint: raster::biome_colour,
         key: raster::BIOME_KEY,
         class: raster::biome_class,
@@ -703,8 +704,8 @@ pub fn biomes_layer() -> RasterLayer {
 /// read.
 pub fn places_layer() -> RasterLayer {
     RasterLayer {
-        name: "Sea places",
-        note: "Reefs, kelp forests, polar sea, vents and trenches.",
+        name: "map.layer.places",
+        note: "map.layer.places_note",
         paint: raster::place_colour,
         key: raster::PLACE_KEY,
         class: raster::place_class,
@@ -961,9 +962,9 @@ pub fn spawn(
 }
 
 fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
-    let heading = |panel: &mut ChildSpawnerCommands, text: &str| {
+    let heading = |panel: &mut ChildSpawnerCommands, text: Localized| {
         panel.spawn((
-            KitText::new(Localized::legacy(text), ui_kit::TITLE).shadow(ui_kit::INK),
+            KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
             Node {
                 margin: UiRect::top(px(3)),
                 ..default()
@@ -971,10 +972,10 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
         ));
     };
     // Stone plaques; a chosen one stays pressed (`paint_legend`).
-    let button = |row: &mut ChildSpawnerCommands, label: &str, what: MapButton| {
+    let button = |row: &mut ChildSpawnerCommands, label: Localized, what: MapButton| {
         row.spawn((plaque(kit, Set::Stone, 30.0), what))
             .with_children(|b| {
-                b.spawn(plaque_label(Set::Stone, Localized::legacy(label)));
+                b.spawn(plaque_label(Set::Stone, label));
             });
     };
     let wrap = Node {
@@ -1002,41 +1003,45 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
         Interaction::default(),
     ))
     .with_children(|panel| {
-        menu::lintel(panel, kit, Localized::legacy("MAP"));
+        menu::lintel(panel, kit, tr("map.title"));
         panel.spawn((
-            Text::new("M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me"),
+            Text::new(tr("map.help")),
             TextFont {
                 font_size: 9.0,
                 ..default()
             },
             TextColor(ui_kit::TEXT_DIM),
         ));
-        heading(panel, "OVERLAY");
+        heading(panel, tr("map.overlay"));
         panel.spawn(wrap.clone()).with_children(|row| {
-            button(row, "The planet", MapButton::Overlay(MapOverlay::None));
+            button(
+                row,
+                tr("map.the_planet"),
+                MapButton::Overlay(MapOverlay::None),
+            );
             for (index, layer) in layers.rasters.iter().enumerate() {
                 button(
                     row,
-                    layer.name,
+                    tr(layer.name),
                     MapButton::Overlay(MapOverlay::Layer(index)),
                 );
             }
         });
-        heading(panel, "WEATHER AT THE HOUR");
+        heading(panel, tr("map.weather_at_hour"));
         panel.spawn(wrap.clone()).with_children(|row| {
             for overlay in Overlay::ALL {
                 button(
                     row,
-                    &overlay.name(),
+                    overlay.name(),
                     MapButton::Overlay(MapOverlay::Weather(overlay)),
                 );
             }
-            button(row, "Show on globe", MapButton::OnGlobe);
+            button(row, tr("map.show_on_globe"), MapButton::OnGlobe);
         });
-        heading(panel, "ON THE MAP");
+        heading(panel, tr("map.on_the_map"));
         panel.spawn(wrap).with_children(|row| {
-            button(row, "Night side", MapButton::Night);
-            button(row, "Clouds and rain", MapButton::Clouds);
+            button(row, tr("map.night_side"), MapButton::Night);
+            button(row, tr("map.clouds_and_rain"), MapButton::Clouds);
         });
         panel.spawn((
             MapNote,
@@ -1090,7 +1095,7 @@ fn ramp_labels(overlay: Overlay) -> [String; 3] {
             format!("{}", v.round())
         };
         if overlay == Overlay::Rain && v < 0.0 {
-            format!("{} snow", text.trim_start_matches('-'))
+            tr_with("map.snow", &[("value", &text.trim_start_matches('-'))]).into()
         } else {
             text
         }
@@ -1161,7 +1166,7 @@ pub fn paint_key(
                             BackgroundColor(Color::srgb_u8(*r, *g, *b)),
                         ));
                         line.spawn((
-                            key_text(*name),
+                            key_text(tr(name)),
                             Node {
                                 width: px(90),
                                 ..default()
@@ -1279,24 +1284,23 @@ pub fn paint_legend(
     }
     for mut text in &mut notes {
         text.0 = match choice.overlay {
-            MapOverlay::None => {
-                "The planet as it looks: each place its ground's top block, shaded by \
-                 relief, the sea by its depth."
-                    .into()
-            }
+            MapOverlay::None => tr("map.the_planet_note").into(),
             MapOverlay::Layer(index) => layers
                 .rasters
                 .get(index)
-                .map_or(String::new(), |l| l.note.to_string()),
+                .map_or(String::new(), |l| tr(l.note).into()),
             MapOverlay::Weather(overlay) => {
                 let (low, high) = overlay.range();
-                format!(
-                    "{} now, {} to {} {}, over the grayed base.",
-                    overlay.name(),
-                    low,
-                    high,
-                    overlay.unit()
+                tr_with(
+                    "map.weather_note",
+                    &[
+                        ("overlay", &overlay.name()),
+                        ("low", &low),
+                        ("high", &high),
+                        ("unit", &overlay.unit()),
+                    ],
                 )
+                .into()
             }
         };
     }
@@ -1845,7 +1849,7 @@ pub fn markers(
             .map(|m| m.label())
             .unwrap_or_default();
         if text.text != want {
-            text.text = Localized::legacy(want);
+            text.text = want;
         }
     }
     let mut seen_crafts = Vec::new();
@@ -1931,19 +1935,40 @@ pub fn markers(
             .filter(|uv| (0.0..=1.0).contains(&uv.y))
             .map(|uv| geo::compass_lat_lon(geo::unproject(uv)).degrees());
         let place = |(lat, lon): (f32, f32)| {
-            format!(
-                "{:.2}{} {:.2}{}",
-                lat.abs(),
-                if lat >= 0.0 { "N" } else { "S" },
-                lon.abs(),
-                if lon >= 0.0 { "E" } else { "W" }
+            tr_with(
+                "map.lat_lon",
+                &[
+                    ("lat", &format!("{:.2}", lat.abs())),
+                    (
+                        "ns",
+                        &if lat >= 0.0 {
+                            tr("map.north")
+                        } else {
+                            tr("map.south")
+                        },
+                    ),
+                    ("lon", &format!("{:.2}", lon.abs())),
+                    (
+                        "ew",
+                        &if lon >= 0.0 {
+                            tr("map.east")
+                        } else {
+                            tr("map.west")
+                        },
+                    ),
+                ],
             )
         };
-        let mut line = format!("{:.1} m a pixel", view.metres_per_pixel());
+        let scale = tr_with(
+            "map.scale",
+            &[("metres", &format!("{:.1}", view.metres_per_pixel()))],
+        );
+        let mut line: String = scale.to_string();
         if let Some(at) = under {
-            line = format!("{}   {line}", place(at));
+            line = tr_with("map.under", &[("place", &place(at)), ("scale", &scale)]).into();
         } else if let Some(p) = player {
-            line = format!("you {}   {line}", place(geo::compass_lat_lon(p).degrees()));
+            let you = place(geo::compass_lat_lon(p).degrees());
+            line = tr_with("map.you", &[("place", &you), ("scale", &scale)]).into();
         }
         text.0 = line;
     }
@@ -2390,14 +2415,14 @@ mod tests {
     fn winds() -> [(&'static str, Vec2); 8] {
         let d = std::f32::consts::FRAC_1_SQRT_2;
         [
-            ("N", Vec2::new(0.0, -1.0)),
-            ("NE", Vec2::new(d, -d)),
-            ("E", Vec2::new(1.0, 0.0)),
-            ("SE", Vec2::new(d, d)),
-            ("S", Vec2::new(0.0, 1.0)),
-            ("SW", Vec2::new(-d, d)),
-            ("W", Vec2::new(-1.0, 0.0)),
-            ("NW", Vec2::new(-d, -d)),
+            ("n", Vec2::new(0.0, -1.0)),
+            ("ne", Vec2::new(d, -d)),
+            ("e", Vec2::new(1.0, 0.0)),
+            ("se", Vec2::new(d, d)),
+            ("s", Vec2::new(0.0, 1.0)),
+            ("sw", Vec2::new(-d, d)),
+            ("w", Vec2::new(-1.0, 0.0)),
+            ("nw", Vec2::new(-d, -d)),
         ]
     }
 
@@ -2740,7 +2765,7 @@ mod tests {
         app.update();
         let names: Vec<String> = raster::BIOME_KEY
             .iter()
-            .map(|(n, _)| n.to_string())
+            .map(|(n, _)| tr(n).into_string())
             .collect();
         assert_eq!(texts_under(&app, key), names, "a row per biome, in order");
         app.world_mut().resource_mut::<MapChoice>().overlay = MapOverlay::Weather(Overlay::Rain);

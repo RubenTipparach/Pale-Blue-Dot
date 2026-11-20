@@ -60,6 +60,13 @@ const DATA_PREFIXES: &[&str] = &[
     "station.",
     // `station` and `cooking` recipes: each plaque's words by recipe code.
     "recipe.",
+    // `desktop::missions::TABS`: the strip's tabs, by key.
+    "missions.tab.",
+    // `world_map::PLACE_KEY`, `BIOME_KEY` and the map's layers: legend words
+    // held as keys in the tables.
+    "world_map.place.",
+    "world_map.biome.",
+    "map.layer.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
 ];
@@ -215,6 +222,14 @@ const DEV_SCOPES: &[(&str, &str)] = &[
     ("crates/pbd-app/src/settings.rs", "var"),
     // The boat panel's instruments, behind F3.
     ("crates/pbd-app/src/vehicles/hud.rs", "instruments"),
+    // A record's author token in the save (`@p`, `@c`).
+    ("crates/pbd-core/src/records.rs", "token"),
+    // A Tenebris species' kind, an identifier from the reference roster.
+    ("crates/pbd-core/src/fauna/mod.rs", "tenebris"),
+    // The repro record's timestamp, for a bug report.
+    ("crates/pbd-app/src/desktop/repro.rs", "save"),
+    // The missions' scripted walk-through for a capture.
+    ("crates/pbd-app/src/desktop/missions.rs", "script"),
     // The `--audio-log` line.
     ("crates/pbd-app/src/audio/mod.rs", "mix_frame"),
     // The debug readout's lines (behind the debug key) and the log.

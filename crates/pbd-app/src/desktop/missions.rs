@@ -16,6 +16,7 @@ use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
 use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
+use pbd_core::locale::{tr, tr_with};
 
 /// The HUD line.
 #[derive(Component)]
@@ -32,11 +33,11 @@ pub struct TabTo(pub Screen);
 /// (`inventory-grid` decision 9; owner, 2026-11-15: "pack should buttons to
 /// other menus like the pause menu or the map").
 pub const TABS: [(&str, Screen); 5] = [
-    ("PACK  I", Screen::Pack),
-    ("MISSIONS  O", Screen::Missions),
-    ("MAP  M", Screen::Map),
-    ("GUIDE  J", Screen::Guide),
-    ("MENU  ESC", Screen::Pause),
+    ("missions.tab.pack", Screen::Pack),
+    ("missions.tab.missions", Screen::Missions),
+    ("missions.tab.map", Screen::Map),
+    ("missions.tab.guide", Screen::Guide),
+    ("missions.tab.menu", Screen::Pause),
 ];
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
@@ -74,7 +75,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                 strip
                     .spawn((ui_kit::plaque(kit, Set::Oak, 70.0), TabTo(to)))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Oak, Localized::legacy(label)));
+                        p.spawn(ui_kit::plaque_label(Set::Oak, tr(label)));
                     });
             }
         });
@@ -91,9 +92,9 @@ pub fn show_line(
     mut line: Query<(&mut KitText, &mut Visibility), With<MissionLine>>,
 ) {
     let (text, colour) = match &missions.notice {
-        Some((title, _)) => (format!("DONE: {title}"), ui_kit::RUNE),
+        Some((title, _)) => (tr_with("missions.done", &[("title", &title)]), ui_kit::RUNE),
         None => (
-            missions.progress.line(&chain.0).unwrap_or_default(),
+            Localized::verbatim(missions.progress.line(&chain.0).unwrap_or_default()),
             ui_kit::TEXT,
         ),
     };
@@ -111,7 +112,7 @@ pub fn show_line(
             *visibility = want;
         }
         if words.text != text || words.colour != colour {
-            words.text = Localized::legacy(text.clone());
+            words.text = text.clone();
             words.colour = colour;
         }
     }
@@ -383,6 +384,31 @@ pub fn night_watch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tab of the strip, and every sea place on the chart, has its
+    /// words in the locale file.
+    #[test]
+    fn every_tab_and_place_has_its_words() {
+        let english = pbd_core::locale::Locale::english();
+        let keys = TABS.iter().map(|(key, _)| key.to_string()).chain(
+            pbd_app::world_map::PLACE_KEY
+                .iter()
+                .chain(pbd_app::world_map::BIOME_KEY)
+                .map(|(key, _)| key.to_string()),
+        );
+        let layers = [
+            super::super::map_screen::biomes_layer(),
+            super::super::map_screen::places_layer(),
+        ];
+        let keys = keys.chain(
+            layers
+                .iter()
+                .flat_map(|l| [l.name.to_string(), l.note.to_string()]),
+        );
+        for key in keys {
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 
     /// The instrument's script walks the shipped chain to its end, through
     /// the same counting the game runs.

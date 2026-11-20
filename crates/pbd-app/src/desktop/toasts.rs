@@ -143,8 +143,11 @@ pub fn spawn(
 }
 
 /// The words on a toast: "Dirt x2".
-pub fn words(toast: &Toast) -> String {
-    format!("{} x{}", toast.item.name(), toast.count)
+pub fn words(toast: &Toast) -> Localized {
+    pbd_core::locale::tr_with(
+        "toasts.words",
+        &[("item", &toast.item.name()), ("count", &toast.count)],
+    )
 }
 
 /// Count this frame's gains into the toasts and let their time run.
@@ -215,7 +218,7 @@ pub fn paint(
         };
         let want = words(toast);
         if kit.text != want {
-            kit.text = Localized::legacy(want);
+            kit.text = want;
         }
         let colour = ui_kit::TEXT.with_alpha(toast.alpha());
         if kit.colour != colour {
