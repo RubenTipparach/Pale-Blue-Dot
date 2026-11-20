@@ -284,6 +284,9 @@ pub fn step_allowed(a: (f32, f32, bool), b: (f32, f32, bool)) -> bool {
     }
 }
 
+/// The deepest water a walker keeping to dry ground wades through, m.
+pub const WADE_M: f32 = 0.8;
+
 /// A cell's key: its centre's bits, the same whatever the anchor.
 pub fn cell_key(d: Vec3) -> [u32; 3] {
     d.to_array().map(f32::to_bits)
@@ -302,6 +305,22 @@ impl HexRoute {
         goal: Vec3,
         blocked: &[[u32; 3]],
         contact: Option<&crate::planet::PlanetContact>,
+    ) -> Option<Self> {
+        Self::plan_where(here, goal, contact, false, &|d: Vec3| {
+            blocked.contains(&cell_key(d))
+        })
+    }
+
+    /// [`Self::plan`] for a walker that keeps to dry ground (`dry`: water
+    /// costs six times land, and water too deep to wade is never entered),
+    /// round the cells `avoid` says (`mission-playthrough`: the showcase
+    /// bot's trees, pits and stations).
+    pub fn plan_where(
+        here: Vec3,
+        goal: Vec3,
+        contact: Option<&crate::planet::PlanetContact>,
+        dry: bool,
+        avoid: &dyn Fn(Vec3) -> bool,
     ) -> Option<Self> {
         use std::cmp::Reverse;
         use std::collections::BinaryHeap;
@@ -338,7 +357,12 @@ impl HexRoute {
         let (start, end) = (nearest(here), nearest(goal));
         let off: Vec<bool> = dirs
             .iter()
-            .map(|&d| blocked.contains(&cell_key(d)))
+            .enumerate()
+            .map(|(i, &d)| {
+                i != start
+                    && i != end
+                    && (avoid(d) || (dry && wet[i] && heights[i] - ground[i] > WADE_M))
+            })
             .collect();
         let metres = |a: usize, b: usize| dirs[a].angle_between(dirs[b]) * PLANET_RADIUS;
         let mut cost = vec![f32::INFINITY; dirs.len()];
@@ -363,8 +387,9 @@ impl HexRoute {
                     continue;
                 }
                 let step = metres(a, b);
+                let (wet_cost, dry_cost) = if dry { (6.0, 1.0) } else { (1.0, 1.6) };
                 let c = cost[a]
-                    + step * if wet[b] { 1.0 } else { 1.6 }
+                    + step * if wet[b] { wet_cost } else { dry_cost }
                     + if rise > 1.1 { 12.0 } else { 0.0 }
                     // Out of the river only where it has to: a climb out is
                     // where a swimmer is slowest to get going.

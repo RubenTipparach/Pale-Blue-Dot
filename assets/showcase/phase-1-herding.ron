@@ -12,13 +12,13 @@
 (
     goal: "Goal: herding, from fences to eggs",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
             caption: "Herding. Make fences and a gate at the bench",
             until: ["fence"],
             max_s: 300.0,
-            acts: [Hand("axe"), Chop(Have("log", 2)), Craft("planks", 2), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("fence", 6), Bench("gate", 1)],
+            acts: [Focus("fence"), Hand("axe"), Chop(Have("log", 2)), Craft("planks", 2), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("fence", 6), Bench("gate", 1)],
         ),
         // Animals come to food only by day.
         (
@@ -30,26 +30,27 @@
         (
             caption: "Tame a hen: stand still with seed in hand, and feed her",
             until: ["tame"],
-            max_s: 200.0,
-            acts: [Hand("hand"), Tame("meadow-hen"), Still],
+            max_s: 300.0,
+            acts: [Focus("tame"), Hand("hand"), Tame("meadow-hen"), Still],
         ),
         (
             caption: "Build a pen, and lead her in",
             until: ["pen"],
-            max_s: 200.0,
-            acts: [Walk(2.0), Pen, Select("fence"), Lead("meadow-hen"), Still],
+            max_s: 600.0,
+            acts: [Focus("pen"), Hand("axe"), Chop(Have("log", 3)), Craft("planks", 3), Bench("fence", 9), Bench("gate", 1), Hand("hand"), Walk(2.0), Pen, Select("fence"), Lead("meadow-hen"), Still],
         ),
         (
-            caption: "Two days later: eggs to collect",
+            caption: "Five days later: eggs to collect",
             rate: Some(300.0),
-            max_s: 30.0,
-            acts: [Wait(20.0)],
+            max_s: 70.0,
+            acts: [Wait(50.0)],
         ),
         (
             caption: "Collect the eggs",
             until: ["collect"],
-            max_s: 90.0,
-            acts: [Collect("meadow-hen"), Still],
+            repeat: true,
+            max_s: 240.0,
+            acts: [Focus("collect"), Collect("meadow-hen"), Still],
         ),
         (
             caption: "Herding done",

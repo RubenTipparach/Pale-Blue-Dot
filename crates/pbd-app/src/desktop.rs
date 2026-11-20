@@ -2122,12 +2122,20 @@ pub fn run(args: &[String]) {
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
     app.add_plugins(pbd_app::river_fill::RiverFillPlugin);
-    // The player's settings (`player-settings`): the file in a plain run;
+    // The player's settings (`player-settings`): the file in a plain run and
+    // in a bot playing the game (owner, 2026-11-19: "it shouldnt skip
+    // settings save", after a volume set in a showcase's window was lost);
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
+    // A bot playing climbs with auto step (owner, 2026-11-19: "when in bot
+    // run also just turn on autostep").
+    let mut overrides = launch.settings.clone();
+    if launch.showcase.is_some() {
+        overrides.auto_step = Some(true);
+    }
     let (player, mut keys, kept) = pbd_app::settings::for_launch(
-        launch.capture.is_some() || launch.frame_log.is_some() || launch.showcase.is_some(),
-        &launch.settings,
+        launch.capture.is_some() || launch.frame_log.is_some(),
+        &overrides,
     );
     info!(
         "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} pixel_grass={} file={}",
@@ -2335,6 +2343,10 @@ pub fn run(args: &[String]) {
         if let Some((name, file)) = launch.showcase.clone() {
             if let Some(dir) = &launch.showcase_stills {
                 std::fs::create_dir_all(dir).expect("stills directory");
+            }
+            // The live control channel (`bot-control`): local only.
+            if let Some(control) = showcase::control::open() {
+                app.insert_resource(control);
             }
             app.insert_resource(
                 showcase::Player::new(name, file, launch.showcase_stills.clone())
@@ -2870,6 +2882,19 @@ fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight:
     use pbd_core::daylight::{Clock, START_HOUR};
     let clock = match (launch.day, launch.time, saved_seconds) {
         (None, None, Some(seconds)) => Clock { seconds },
+        // A saved world asked for an hour: on to that hour, today or the next
+        // day, never back. The world's own days stand (`mission-playthrough`:
+        // a bot run started at 10:00 put the world back to day 0, so the wheat
+        // sown on a later day could never ripen).
+        (None, Some(hour), Some(seconds)) => {
+            let now = Clock { seconds };
+            let today = Clock::at(now.day() as u32, hour);
+            if today.seconds >= seconds {
+                today
+            } else {
+                Clock::at(now.day() as u32 + 1, hour)
+            }
+        }
         (day, hour, _) => Clock::at(day.unwrap_or(0), hour.unwrap_or(START_HOUR)),
     };
     if launch.day.is_some() {

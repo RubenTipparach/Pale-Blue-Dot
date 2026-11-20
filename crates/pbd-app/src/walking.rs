@@ -25,6 +25,14 @@ use crate::{
 };
 
 pub const EYE_HEIGHT: f32 = 1.6;
+/// A grounded rise in one step this size, m, is a step climbed and is eased
+/// on the eye over [`STEP_EASE_S`] (`mission-playthrough` 4.7).
+const STEP_EASE_MIN_M: f32 = 0.12;
+const STEP_EASE_MAX_M: f32 = 1.6;
+/// A swimmer's head this far into a roof, m, is held under it.
+const SWIM_ROOF_HOLD_M: f64 = 0.6;
+/// How fast the eye catches up a step, s (the lag falls by e each).
+const STEP_EASE_S: f32 = 0.06;
 pub const HALF_HEIGHT: f32 = 0.9;
 const BODY_RADIUS: f32 = 0.3;
 pub(crate) const CONTACT_SKIN: f32 = 0.015;
@@ -1086,8 +1094,11 @@ fn read_walking_input(
         if !window.focused && !state.scripted {
             state.captured = false;
         }
-        cursor.visible = !state.captured;
-        cursor.grab_mode = if state.captured {
+        // A scripted run (a bot, a capture) turns the look by injected
+        // motion, not the mouse: the owner's pointer stays free, so the
+        // machine can be used while it plays.
+        cursor.visible = !state.captured || state.scripted;
+        cursor.grab_mode = if state.captured && !state.scripted {
             CursorGrabMode::Locked
         } else {
             CursorGrabMode::None
@@ -1821,7 +1832,13 @@ fn resolve_ground(
             let up = o.up_at(accepted);
             let head = o.radius_at(accepted) + HALF_HEIGHT as f64;
             if head > (ceiling - CONTACT_SKIN) as f64 {
-                if !wet.body {
+                // Under water too, a head that has just come up into the
+                // roof is held under it (owner, 2026-11-19: "looks like he
+                // can swim up cielings"): taking the rise off alone let the
+                // water's lift put it back each step, and the swimmer crept
+                // up through rock. One already deep in rock is not snapped.
+                let into = head - (ceiling - CONTACT_SKIN) as f64;
+                if !wet.body || into < SWIM_ROOF_HOLD_M {
                     accepted = o.with_radius(
                         accepted,
                         ceiling as f64 - (HALF_HEIGHT + CONTACT_SKIN) as f64,
@@ -2017,6 +2034,8 @@ pub(crate) fn follow_walker(
     >,
     mut cameras: Query<&mut Transform, With<WalkingCamera>>,
     space: crate::SimSpace,
+    time: Res<Time>,
+    mut step_ease: Local<(Option<f64>, f32)>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2037,13 +2056,31 @@ pub(crate) fn follow_walker(
     };
     let body = history.map_or(position.0, |mut h| h.drawn(position.0, alpha));
     let drawn_up = o.up_at(body);
+    // A step climbed is eased, not snapped (owner, 2026-11-19: "make sure
+    // autostep lerps instead of isntant snap"): the rise of a grounded step
+    // up is taken off the eye and given back over a tenth of a second. The
+    // body and the look are untouched; a jump or a fall is not a step.
+    let radius = o.radius_at(body);
+    let (last, lag) = &mut *step_ease;
+    if let Some(was) = *last {
+        let rise = (radius - was) as f32;
+        if ground.grounded && (STEP_EASE_MIN_M..STEP_EASE_MAX_M).contains(&rise) {
+            *lag += rise;
+        }
+    }
+    *last = Some(radius);
+    *lag *= (-time.delta_secs() / STEP_EASE_S).exp();
+    if *lag < 0.005 {
+        *lag = 0.0;
+    }
+    let lag = *lag;
     for mut camera in &mut cameras {
         // The body drawn between physics steps and the current mouse
         // orientation: no easing of the look, head bob, follow spring, or
         // dependence on the body's angular velocity.
         // Render space: the physics-space eye less the render origin, in
         // f64 before the cast (`movement-smoothness` design 6.3).
-        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT);
+        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag);
         camera.translation = frame.as_deref().map_or(eye, |frame| {
             crate::render_origin::render_from_physics(frame, eye)
         });

@@ -47,7 +47,7 @@ pub const STATIONS: &[StationRow] = &[
         code: "hand",
         name: "hands",
         material: None,
-        max_jobs: 1,
+        max_jobs: 4,
     },
     // `cooking` design S2: the kitchen's first station, also a light.
     StationRow {

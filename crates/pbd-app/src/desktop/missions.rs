@@ -16,9 +16,31 @@ use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
 
-/// The HUD line.
+/// The HUD's mission tracker (`mission-playthrough` 3.5): the one mission
+/// the player is on, its icon and title, then each objective with its icon
+/// and count.
 #[derive(Component)]
 pub struct MissionLine;
+/// The tracker's title row's icon and words.
+#[derive(Component)]
+pub struct TrackerTitleIcon;
+#[derive(Component)]
+pub struct TrackerTitle;
+/// An objective's row, its icon and its words, by the objective's place.
+#[derive(Component)]
+pub struct TrackerRow(pub usize);
+#[derive(Component)]
+pub struct TrackerIcon(pub usize);
+/// An objective's tick box, as the tree's card has it.
+#[derive(Component)]
+pub struct TrackerCheck(pub usize);
+#[derive(Component)]
+pub struct TrackerText(pub usize);
+
+/// The most objectives a mission has (the shipped tree's most is three).
+const TRACKER_ROWS: usize = 4;
+/// An icon in the tracker, UI pixels.
+const TRACKER_ICON: f32 = 16.0;
 
 /// The strip of tabs over the pack and the missions, and what each opens.
 #[derive(Component)]
@@ -40,18 +62,78 @@ pub const TABS: [(&str, Screen); 5] = [
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
-    // The HUD line, under the compass strip at the right.
-    commands.spawn((
-        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
-        Node {
-            position_type: PositionType::Absolute,
-            right: px(6),
-            top: px(36),
-            ..default()
-        },
-        Visibility::Hidden,
-        MissionLine,
-    ));
+    // The tracker, under the compass strip at the right.
+    let row = || Node {
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        column_gap: px(4),
+        ..default()
+    };
+    let icon = || {
+        (
+            ImageNode::default(),
+            Node {
+                width: px(TRACKER_ICON),
+                height: px(TRACKER_ICON),
+                ..default()
+            },
+        )
+    };
+    commands
+        .spawn((
+            // On the kit's stone, so it reads over any sky or ground.
+            kit.nine(Set::Stone, "frame"),
+            Node {
+                position_type: PositionType::Absolute,
+                right: px(6),
+                top: px(36),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::FlexStart,
+                row_gap: px(3),
+                padding: UiRect::axes(px(10), px(8)),
+                min_width: px(150),
+                ..default()
+            },
+            Visibility::Hidden,
+            MissionLine,
+        ))
+        .with_children(|tracker| {
+            // The mission's title is the header: no icon, outlined lettering,
+            // a rule under it (owner, 2026-11-19: "if its a header, you
+            // should maybe not place an icon in front of it, and make the
+            // header bold and appera like a header").
+            tracker.spawn((
+                KitText::new("", ui_kit::TITLE).outline(ui_kit::INK),
+                TrackerTitle,
+            ));
+            tracker.spawn((
+                Node {
+                    width: percent(100),
+                    height: px(1),
+                    margin: UiRect::bottom(px(1)),
+                    ..default()
+                },
+                BackgroundColor(ui_kit::STONE_MID),
+            ));
+            for k in 0..TRACKER_ROWS {
+                tracker.spawn((row(), TrackerRow(k))).with_children(|r| {
+                    r.spawn((
+                        kit.whole(Set::Stone, "check-off"),
+                        Node {
+                            width: px(9),
+                            height: px(9),
+                            ..default()
+                        },
+                        TrackerCheck(k),
+                    ));
+                    r.spawn((icon(), TrackerIcon(k)));
+                    r.spawn((
+                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        TrackerText(k),
+                    ));
+                });
+            }
+        });
     // The tabs, over whichever of the two panels is open.
     commands
         .spawn((
@@ -81,26 +163,41 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
 
 /// The HUD line: the current mission, or the one just done, unless the
 /// player hid it or a menu is open.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn show_line(
     missions: Res<Missions>,
     chain: Res<MissionChain>,
     screen: Res<Screen>,
     settings: Res<PlayerSettings>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
-    mut line: Query<(&mut KitText, &mut Visibility), With<MissionLine>>,
+    (assets, items, images, kit, recipes): (
+        Res<AssetServer>,
+        Option<Res<super::slots::ItemIcons>>,
+        Res<Assets<Image>>,
+        Res<UiKit>,
+        Res<pbd_app::config::Recipes>,
+    ),
+    mut checks: Query<
+        (&TrackerCheck, &mut ImageNode),
+        (Without<TrackerIcon>, Without<TrackerTitleIcon>),
+    >,
+    mut tracker: Query<&mut Visibility, With<MissionLine>>,
+    mut title: Query<&mut KitText, (With<TrackerTitle>, Without<TrackerText>)>,
+    mut title_icon: Query<&mut ImageNode, (With<TrackerTitleIcon>, Without<TrackerIcon>)>,
+    mut rows: Query<(&TrackerRow, &mut Node), Without<TrackerIcon>>,
+    mut texts: Query<(&TrackerText, &mut KitText), Without<TrackerTitle>>,
+    mut icons: Query<
+        (&TrackerIcon, &mut ImageNode, &mut Node),
+        (Without<TrackerTitleIcon>, Without<TrackerRow>),
+    >,
+    mut mission_icon: Local<Option<(String, Handle<Image>)>>,
 ) {
-    let (text, colour) = match &missions.notice {
-        Some((title, _)) => (format!("DONE: {title}"), ui_kit::RUNE),
-        None => (
-            missions.progress.line(&chain.0).unwrap_or_default(),
-            ui_kit::TEXT,
-        ),
-    };
+    let mission = missions.progress.focused(&chain.0);
     let shown = settings.mission_line
         && *screen == Screen::Playing
         && walking.is_some_and(|w| w.active)
-        && !text.is_empty();
-    for (mut words, mut visibility) in &mut line {
+        && (mission.is_some() || missions.notice.is_some());
+    for mut visibility in &mut tracker {
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -109,9 +206,150 @@ pub fn show_line(
         if *visibility != want {
             *visibility = want;
         }
+    }
+    if !shown {
+        return;
+    }
+    let set = |words: &mut KitText, text: String, colour: Color| {
         if words.text != text || words.colour != colour {
-            words.text.clone_from(&text);
+            words.text = text;
             words.colour = colour;
+        }
+    };
+    // Just finished: its title alone, in the rune's colour, for a moment.
+    let (heading, colour, objectives) = match (&missions.notice, mission) {
+        (Some((done, _)), _) => (format!("DONE: {done}"), ui_kit::RUNE, None),
+        (None, Some(m)) => (m.title.clone(), ui_kit::TITLE, Some(m)),
+        (None, None) => return,
+    };
+    for mut words in &mut title {
+        set(&mut words, heading.clone(), colour);
+    }
+    // The mission's own icon, by the title and for objectives with no item.
+    let icon_path = mission.map(|m| m.icon.clone()).unwrap_or_default();
+    if mission_icon.as_ref().is_none_or(|(p, _)| *p != icon_path) {
+        *mission_icon = (!icon_path.is_empty()).then(|| {
+            (
+                icon_path.clone(),
+                assets.load(format!("items/{icon_path}.png")),
+            )
+        });
+    }
+    let own = mission_icon.as_ref().map(|(_, h)| h.clone());
+    for mut node in &mut title_icon {
+        match &own {
+            Some(h) => {
+                if node.image != *h {
+                    node.image = h.clone();
+                }
+                node.rect = None;
+                node.color = Color::WHITE;
+            }
+            None => node.color = Color::NONE,
+        }
+    }
+    let counts = objectives
+        .map(|m| missions.progress.counts(m))
+        .unwrap_or_default();
+    let objective = |k: usize| objectives.and_then(|m| m.objectives.get(k));
+    for (row, mut node) in &mut rows {
+        let display = if objective(row.0).is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    for (which, mut words) in &mut texts {
+        if let Some(o) = objective(which.0) {
+            let n = counts.get(which.0).copied().unwrap_or(0).min(o.count);
+            let c = if n >= o.count {
+                ui_kit::TEXT_DIM
+            } else {
+                ui_kit::TEXT
+            };
+            set(&mut words, format!("{} {n}/{}", o.label, o.count), c);
+        }
+    }
+    for (which, mut image) in &mut checks {
+        let Some(o) = objective(which.0) else {
+            continue;
+        };
+        let full = counts.get(which.0).copied().unwrap_or(0) >= o.count;
+        let want = kit.whole(Set::Stone, if full { "check-on" } else { "check-off" });
+        if image.image != want.image {
+            image.image = want.image;
+        }
+    }
+    for (which, mut node, mut layout) in &mut icons {
+        let Some(o) = objective(which.0) else {
+            continue;
+        };
+        // The objective's item, when it names one; the mission's icon else.
+        let item = match &o.want {
+            // An item by its name, or what a named recipe makes.
+            pbd_core::missions::Want::Names(names) => names.iter().find_map(|n| {
+                pbd_core::station::item_named(n).or_else(|| {
+                    n.strip_prefix("recipe:")
+                        .and_then(|code| recipes.0.get(code))
+                        .and_then(|r| r.outputs.first().map(|(item, _)| *item))
+                })
+            }),
+            _ => None,
+        };
+        // An act with no item is shown by the tool that does it: the rod
+        // for fishing, the axe for felling, the shovel for tilling.
+        use pbd_core::inventory::Tool;
+        use pbd_core::missions::Kind;
+        let item = item.or(match o.kind {
+            Kind::Cast | Kind::Catch | Kind::Baited | Kind::Species | Kind::Waters => {
+                Some(pbd_core::inventory::Item::Tool(Tool::Rod))
+            }
+            Kind::Fell => Some(pbd_core::inventory::Item::Tool(Tool::Axe)),
+            Kind::Till => Some(pbd_core::inventory::Item::Tool(Tool::Shovel)),
+            _ => None,
+        });
+        // Only an icon that says something the title's does not: the
+        // mission's own thing (a campfire to make and place) shows once, by
+        // the title (owner: "why does it say make twice").
+        let repeats = item.is_some_and(|i| {
+            let code = pbd_core::missions::item_code(i);
+            let tail = code.rsplit(':').next().unwrap_or(&code).to_string();
+            objectives.is_some_and(|m| m.icon.ends_with(&tail))
+        });
+        let display = if item.is_some() && !repeats {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if layout.display != display {
+            layout.display = display;
+        }
+        let done = counts.get(which.0).copied().unwrap_or(0) >= o.count;
+        match (item, items.as_deref()) {
+            (Some(item), Some(items)) => {
+                super::slots::paint_icon(
+                    &mut node,
+                    Some(pbd_core::inventory::Stack { item, count: 1 }),
+                    items,
+                    &images,
+                );
+            }
+            _ => match &own {
+                Some(h) => {
+                    if node.image != *h {
+                        node.image = h.clone();
+                    }
+                    node.rect = None;
+                    node.color = Color::WHITE;
+                }
+                None => node.color = Color::NONE,
+            },
+        }
+        if done {
+            node.color = node.color.with_alpha(0.45);
         }
     }
 }
@@ -514,16 +752,17 @@ pub fn about_watch(
             state.swum_m -= 1.0;
             did.write(Did::new(Kind::Swim, "water", 1));
         }
-        // A reef under the swimmer.
-        if !state.reef
-            && pbd_core::ocean::places::environment(pbd_app::planet::terrain_config(), up)
-                == Some(pbd_core::fauna::Environment::Reef)
-        {
-            state.reef = true;
+        // A reef under the swimmer, counted each time one is come onto
+        // (`mission-playthrough` 3.2), as a town is.
+        let on_reef = pbd_core::ocean::places::environment(pbd_app::planet::terrain_config(), up)
+            == Some(pbd_core::fauna::Environment::Reef);
+        if on_reef && !state.reef {
             did.write(Did::new(Kind::Reach, "reef", 1));
         }
+        state.reef = on_reef;
     } else {
         state.swam_from = None;
+        state.reef = false;
     }
     // A town reached.
     if let Some(towns) = towns {

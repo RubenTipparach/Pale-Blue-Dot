@@ -326,10 +326,25 @@ pub fn fresh_top(contact: &PlanetContact, up: Vec3, floor: f32) -> Option<f32> {
     (top > sea_top + 0.25).then_some(crate::planet::PLANET_RADIUS + top)
 }
 
+/// How far over a sea-level flat the line counts the sea standing, m.
+const FLAT_WATER_M: f32 = 0.05;
+
 impl Water for PlanetWater<'_> {
     fn surface(&self, point: Vec3) -> f32 {
-        self.fresh(point)
-            .unwrap_or_else(|| self.sea.radius + self.local.height(point, self.sea.radius))
+        if let Some(fresh) = self.fresh(point) {
+            return fresh;
+        }
+        let sea = self.sea.radius + self.local.height(point, self.sea.radius);
+        // A flat at the sea's level is drawn under the sea, half a metre over
+        // the sheet's rest (the sheet sits low so a beach stands clear of the
+        // swell): a float coming down on it is on water, not dry ground
+        // (owner, 2026-11-19, a float on open water: "The float came down on
+        // dry ground"). Ground over the sea's level stays dry.
+        let bed = self.bed(point);
+        if bed <= crate::planet::PLANET_RADIUS + FLAT_WATER_M && bed > sea {
+            return bed + FLAT_WATER_M;
+        }
+        sea
     }
 
     fn bed(&self, point: Vec3) -> f32 {
@@ -382,6 +397,10 @@ struct Surroundings<'w, 's> {
     vehicle_cameras: Query<'w, 's, &'static GlobalTransform, With<crate::vehicles::VehicleCamera>>,
     /// Steady hands (`cooking` design S5).
     meals: Option<Res<'w, crate::kitchen::MealEffects>>,
+    /// Which side of the water the eye is on: no cast from under it
+    /// (`mission-playthrough` 3.6).
+    eye_water: Option<Res<'w, crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<'w, crate::config::WaterSettings>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -508,11 +527,34 @@ fn fish(
             )
         }),
     };
+    let mut under = false;
+    let has_bait = hotbar
+        .as_deref()
+        .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
     if let (Some((eye, look, right, cam_up)), true) = (camera, rod && walking) {
         let buttons = world.buttons.as_deref();
         let pressed = |b| listening && buttons.is_some_and(|i| i.just_pressed(b));
+        // A line is not cast from under the water (owner, 2026-11-19: "the
+        // line casting shouldnt work underwater").
+        let sheet = crate::planet::PLANET_RADIUS
+            - world
+                .water_settings
+                .as_deref()
+                .map_or(0.5, |w| w.depth_offset_m);
+        under = crate::audio::hooks::eye_under_water(
+            o.query_point(eye),
+            world.eye_water.as_deref(),
+            sheet,
+        );
+        // Said when a cast is tried with nothing to put on the hook.
+        if !has_bait && fishery.line.phase == Phase::Ready && pressed(MouseButton::Left) {
+            status.say("Needs bait", 2.0);
+        }
         let controls = Controls {
-            pressed: pressed(MouseButton::Left),
+            // And never without a worm to put on the hook (owner,
+            // 2026-11-19: "do not allow fishing without bait").
+            pressed: pressed(MouseButton::Left)
+                && !((under || !has_bait) && fishery.line.phase == Phase::Ready),
             held: listening && buttons.is_some_and(|i| i.pressed(MouseButton::Left)),
             released: buttons.is_some_and(|i| i.just_released(MouseButton::Left)),
             reel_in: pressed(MouseButton::Right),
@@ -586,6 +628,35 @@ fn fish(
             if let Some(cue) = cue.as_deref_mut() {
                 cue.events.push(event);
             }
+            if let Event::Dry = event {
+                // What the line read where it came down (`mission-playthrough`:
+                // a float on open water said dry ground).
+                let q = o.query_point(fishery.line.float);
+                let up = q.normalize_or(Vec3::Y);
+                info!(
+                    "FISH_DRY at r {:.2} (alt {:.2}): surface {:.2}, bed {:.2}, fresh {:?}, sea radius {:.2}, column water {:?}",
+                    q.length(),
+                    q.length() - crate::planet::PLANET_RADIUS,
+                    water.surface(q) - crate::planet::PLANET_RADIUS,
+                    water.bed(q) - crate::planet::PLANET_RADIUS,
+                    water.fresh(q).map(|f| f - crate::planet::PLANET_RADIUS),
+                    sea.radius - crate::planet::PLANET_RADIUS,
+                    contact
+                        .and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS + 50.0))),
+                );
+                info!(
+                    "FISH_DRY ground: generated {:.2}, stand from above {:?}, stand at the sheet {:?}, column water at the bed {:?}",
+                    crate::planet::surface_height(up),
+                    contact.map(|c| c
+                        .stand(up * (crate::planet::PLANET_RADIUS + 20.0))
+                        .floor_radius
+                        - crate::planet::PLANET_RADIUS),
+                    contact
+                        .map(|c| c.stand(up * sea.radius).floor_radius
+                            - crate::planet::PLANET_RADIUS),
+                    contact.and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS - 2.0))),
+                );
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -608,7 +679,15 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.keys = (rod && walking && !roster.is_empty()).then(|| keys_for(fishery.line.phase));
+    status.keys = (rod && walking && !roster.is_empty()).then(|| {
+        if under && fishery.line.phase == Phase::Ready {
+            [("UNDERWATER", false), ("", false)]
+        } else if !has_bait && fishery.line.phase == Phase::Ready {
+            [("NEED BAIT", false), ("", false)]
+        } else {
+            keys_for(fishery.line.phase)
+        }
+    });
     status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
     // The rod in hand moves with the line (`held.rs`, `rod-motion`).
     if let Some(cue) = cue.as_deref_mut() {

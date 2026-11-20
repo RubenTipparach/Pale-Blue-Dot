@@ -105,6 +105,9 @@ impl GatherSettings {
         placed: bool,
         by_water: bool,
     ) -> Option<Good> {
+        // Every dirt there is: the three grasses, dirt, soil, a field's
+        // tilled soil and sand (owner, 2026-11-19: "theres multiple dirt
+        // types, so make sure to cover all dirt").
         let earth = matches!(
             material,
             Material::Grass
@@ -112,6 +115,7 @@ impl GatherSettings {
                 | Material::JungleGrass
                 | Material::Dirt
                 | Material::Soil
+                | Material::Tilled
                 | Material::Sand
         );
         if placed || !by_water || !earth {
