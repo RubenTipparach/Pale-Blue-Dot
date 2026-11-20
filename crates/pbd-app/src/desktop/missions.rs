@@ -14,6 +14,7 @@ use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
 
 /// The HUD line.
@@ -42,7 +43,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
     // The HUD line, under the compass strip at the right.
     commands.spawn((
-        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             right: px(6),
@@ -73,7 +74,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                 strip
                     .spawn((ui_kit::plaque(kit, Set::Oak, 70.0), TabTo(to)))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Oak, label));
+                        p.spawn(ui_kit::plaque_label(Set::Oak, Localized::legacy(label)));
                     });
             }
         });
@@ -110,7 +111,7 @@ pub fn show_line(
             *visibility = want;
         }
         if words.text != text || words.colour != colour {
-            words.text.clone_from(&text);
+            words.text = Localized::legacy(text.clone());
             words.colour = colour;
         }
     }

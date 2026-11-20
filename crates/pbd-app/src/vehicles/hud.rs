@@ -8,6 +8,7 @@
 //! player reads is.
 
 use super::{Aboard, Vehicle, view::VehicleView};
+use crate::ui_kit::Localized;
 use bevy::prelude::*;
 use pbd_core::vehicle::{Kind, Telemetry};
 use std::fmt::Write;
@@ -167,7 +168,7 @@ fn spawn_panel(commands: &mut Commands) {
 fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lines) {
     use crate::ui_kit::{INK, KitText, LABEL, TITLE};
     body.spawn((
-        KitText::new(lines.title.clone(), TITLE).outline(INK),
+        KitText::new(Localized::legacy(lines.title.clone()), TITLE).outline(INK),
         Node {
             margin: UiRect::bottom(px(2)),
             ..default()
@@ -181,10 +182,10 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         })
         .with_children(|row| {
             for key in keys {
-                crate::ui_kit::key_cap(row, kit, key, ());
+                crate::ui_kit::key_cap(row, kit, Localized::legacy(*key), ());
             }
             row.spawn((
-                KitText::new(what.clone(), LABEL).outline(INK),
+                KitText::new(Localized::legacy(what.clone()), LABEL).outline(INK),
                 Node {
                     margin: UiRect::left(px(4)),
                     padding: UiRect::top(px(2)),
@@ -194,7 +195,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         });
     }
     if let Some(w) = &lines.warning {
-        body.spawn(KitText::new(w.clone(), TITLE).outline(INK));
+        body.spawn(KitText::new(Localized::legacy(w.clone()), TITLE).outline(INK));
     }
 }
 

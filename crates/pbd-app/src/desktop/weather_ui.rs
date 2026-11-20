@@ -6,6 +6,7 @@
 use super::menu::{MenuAction, small};
 use bevy::{prelude::*, ui::RelativeCursorPosition};
 use pbd_app::ui_kit::{self, KitText, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::weather::StormForcing;
 
 /// The bar a press or a drag sets the forcing from.
@@ -41,7 +42,7 @@ pub fn describe(forcing: f32) -> &'static str {
 pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
     panel.spawn((
         WeatherLabel,
-        KitText::new("WEATHER", ui_kit::TITLE).shadow(ui_kit::INK),
+        KitText::new(tr("weather.title"), ui_kit::TITLE).shadow(ui_kit::INK),
     ));
     super::menu::slider(
         panel,
@@ -102,11 +103,11 @@ pub fn show(
         node.left = at;
     }
     for mut text in &mut labels {
-        text.text = format!(
+        text.text = Localized::legacy(format!(
             "WEATHER  {}  {:.0}%",
             describe(forcing.0),
             forcing.0.clamp(0.0, 1.0) * 100.0
-        );
+        ));
     }
 }
 

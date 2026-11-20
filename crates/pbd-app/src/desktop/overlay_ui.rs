@@ -12,6 +12,7 @@ use bevy::{
 };
 use pbd_app::overlay::{OverlayMode, ramp_colour};
 use pbd_app::sky::Sun;
+use pbd_app::ui_kit::tr;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
 use pbd_core::overlay::Overlay;
 
@@ -112,7 +113,7 @@ pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>, kit: Res
                     text(ends, LegendText::High, 9.0, ui_kit::TEXT);
                 });
             text(panel, LegendText::Date, 9.0, ui_kit::TEXT);
-            panel.spawn(KitText::new("M: THE MAP CHOOSES IT", ui_kit::TEXT_DIM));
+            panel.spawn(KitText::new(tr("overlay.map_chooses"), ui_kit::TEXT_DIM));
         });
 }
 
@@ -177,7 +178,7 @@ pub fn show(
 
 /// The pause panel's overlay row: off, then one button per overlay.
 pub fn spawn_row(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
-    panel.spawn(KitText::new("GLOBE OVERLAY", ui_kit::TITLE).shadow(ui_kit::INK));
+    panel.spawn(KitText::new(tr("overlay.title"), ui_kit::TITLE).shadow(ui_kit::INK));
     panel
         .spawn(Node {
             flex_wrap: FlexWrap::Wrap,

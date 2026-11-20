@@ -19,6 +19,7 @@ use pbd_app::compass::{self, CompassView, DIRECTIONS, MarkKind, Named, Place};
 use pbd_app::planet::PLANET_RADIUS;
 use pbd_app::saves::WorldSave;
 use pbd_app::sites::WorldSites;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
 use pbd_core::map::{MARK_ID, MARK_KIND, MARKS_MAX, Mark, read_marks};
 
@@ -152,7 +153,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                             inner.spawn((
                                 CompassMark(i),
                                 KitText::new(
-                                    *label,
+                                    Localized::legacy(*label),
                                     if i == 0 { ui_kit::NORTH } else { ui_kit::CUT },
                                 ),
                                 Node {
@@ -210,7 +211,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
             });
             root.spawn((
                 CompassName,
-                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::top(px(2)),
                     ..default()
@@ -382,7 +383,7 @@ pub fn update(
             None => String::new(),
         };
         if text.text != line {
-            text.text = line;
+            text.text = Localized::legacy(line);
         }
     }
 }

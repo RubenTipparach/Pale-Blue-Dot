@@ -11,6 +11,7 @@ use super::menu::{MenuAction, NameField, small};
 use bevy::{prelude::*, ui::RelativeCursorPosition};
 use pbd_app::sky::Sun;
 use pbd_app::ui_kit::{self, KitText, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::daylight::Clock;
 
 /// The bar a press or a drag sets the hour from.
@@ -59,7 +60,7 @@ pub fn flipped(clock: Clock) -> Clock {
 pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
     panel.spawn((
         TimeLabel,
-        KitText::new("TIME", ui_kit::TITLE).shadow(ui_kit::INK),
+        KitText::new(tr("time.title"), ui_kit::TITLE).shadow(ui_kit::INK),
     ));
     super::menu::slider(
         panel,
@@ -139,7 +140,7 @@ pub fn show(
         let minutes = (hour * 60.0).round() as u32 % (24 * 60);
         let shown = format!("TIME  {:02}:{:02}", minutes / 60, minutes % 60);
         if text.text != shown {
-            text.text = shown;
+            text.text = Localized::legacy(shown);
         }
     }
 }

@@ -33,6 +33,7 @@ use bevy::window::PrimaryWindow;
 use file::{Act, Showcase, Until};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, surface_height};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_core::inventory::{CARRIED, Item, SLOTS, Tool};
 use pbd_core::terrain::Material;
 use std::collections::{HashMap, HashSet};
@@ -913,7 +914,7 @@ pub fn drive(
                        text: &str| {
         for mut t in captions.iter_mut() {
             if t.text != text {
-                t.text = text.to_string();
+                t.text = Localized::legacy(text.to_string());
             }
         }
     };
@@ -2848,7 +2849,8 @@ fn eat(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
 /// lettering (`step-videos` 2.2). Showcase runs only.
 pub fn spawn_caption(mut commands: Commands) {
     commands.spawn((
-        pbd_app::ui_kit::KitText::new("", pbd_app::ui_kit::LABEL).outline(pbd_app::ui_kit::INK),
+        pbd_app::ui_kit::KitText::new(Localized::empty(), pbd_app::ui_kit::LABEL)
+            .outline(pbd_app::ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),

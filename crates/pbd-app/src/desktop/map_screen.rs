@@ -38,6 +38,7 @@ use pbd_app::overlay::{OverlayMode, RAMPS, overlay_rgba, overlay_texels};
 use pbd_app::planet::{PLANET_RADIUS, terrain_config};
 use pbd_app::saves::WorldSave;
 use pbd_app::sky::Sun;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
 use pbd_app::vehicles::Vehicle;
 use pbd_app::walking::{Walker, WalkingReadout};
@@ -890,7 +891,8 @@ pub fn spawn(
                                     // decision 5).
                                     pin.spawn((
                                         MapPinLabel(k),
-                                        KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                                        KitText::new(Localized::empty(), ui_kit::LABEL)
+                                            .outline(ui_kit::INK),
                                         Node {
                                             position_type: PositionType::Absolute,
                                             left: px(15),
@@ -961,7 +963,7 @@ pub fn spawn(
 fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
     let heading = |panel: &mut ChildSpawnerCommands, text: &str| {
         panel.spawn((
-            KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
+            KitText::new(Localized::legacy(text), ui_kit::TITLE).shadow(ui_kit::INK),
             Node {
                 margin: UiRect::top(px(3)),
                 ..default()
@@ -972,7 +974,7 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
     let button = |row: &mut ChildSpawnerCommands, label: &str, what: MapButton| {
         row.spawn((plaque(kit, Set::Stone, 30.0), what))
             .with_children(|b| {
-                b.spawn(plaque_label(Set::Stone, label));
+                b.spawn(plaque_label(Set::Stone, Localized::legacy(label)));
             });
     };
     let wrap = Node {
@@ -1843,7 +1845,7 @@ pub fn markers(
             .map(|m| m.label())
             .unwrap_or_default();
         if text.text != want {
-            text.text = want;
+            text.text = Localized::legacy(want);
         }
     }
     let mut seen_crafts = Vec::new();

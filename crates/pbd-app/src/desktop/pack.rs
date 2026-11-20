@@ -19,6 +19,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
 use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
@@ -254,7 +255,7 @@ pub fn paint_hold(
             _ => String::new(),
         };
         if text.text != label {
-            text.text = label;
+            text.text = Localized::legacy(label);
         }
     }
     for (cell, mut tip) in &mut tips {
@@ -263,7 +264,7 @@ pub fn paint_hold(
         }
         let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
         if tip.0 != want {
-            tip.0 = want;
+            tip.0 = Localized::legacy(want);
         }
     }
 }
@@ -390,7 +391,7 @@ pub fn spawn(
                                     .with_children(|line| {
                                         super::equipment::spawn_pack_hand(line, kit, &icons);
                                         line.spawn(
-                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                            KitText::new(tr("pack.hotbar"), ui_kit::TEXT_DIM)
                                                 .shadow(ui_kit::INK),
                                         );
                                     });
@@ -437,7 +438,7 @@ pub fn spawn(
         ))
         .with_children(|icon| {
             icon.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(-3),
@@ -576,7 +577,7 @@ pub fn paint(
             _ => String::new(),
         };
         if text.text != label {
-            text.text = label;
+            text.text = Localized::legacy(label);
         }
     }
     if *screen != Screen::Pack {

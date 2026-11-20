@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use pbd_app::controls::PickerKey;
 use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Equipment, Tool, tool_title};
 
@@ -86,7 +87,7 @@ pub fn tool_cell(kit: &UiKit, node: Node, extra: impl Bundle) -> impl Bundle {
         },
         kit.whole(Set::Stone, "slot-idle"),
         Interaction::default(),
-        Tooltip(hand_tip(&Equipment::new_world())),
+        Tooltip(Localized::legacy(hand_tip(&Equipment::new_world()))),
         ToolSlotCell,
         extra,
     )
@@ -178,7 +179,7 @@ pub fn spawn_pack_hand(parent: &mut ChildSpawnerCommands, kit: &UiKit, icons: &I
                     ));
                     row.spawn((
                         KitText::new(
-                            tool.map_or(BARE, |t| t.name()).to_uppercase(),
+                            Localized::legacy(tool.map_or(BARE, |t| t.name()).to_uppercase()),
                             ui_kit::TITLE,
                         )
                         .shadow(ui_kit::INK),
@@ -328,7 +329,7 @@ pub fn spawn(
                         })
                         .with_children(|words| {
                             words.spawn((
-                                KitText::new(name.to_uppercase(), ui_kit::TITLE)
+                                KitText::new(Localized::legacy(name.to_uppercase()), ui_kit::TITLE)
                                     .shadow(ui_kit::INK),
                                 PickerName(tool),
                             ));
@@ -427,7 +428,7 @@ pub fn paint(
     for mut tip in &mut tips {
         let want = hand_tip(&tools);
         if tip.0 != want {
-            tip.0 = want;
+            tip.0 = Localized::legacy(want);
         }
     }
     for mut image in &mut slot {
@@ -440,7 +441,7 @@ pub fn paint(
         for (name, mut text) in &mut names {
             let want = tool_name(&tools, name.0).to_uppercase();
             if text.text != want {
-                text.text = want;
+                text.text = Localized::legacy(want);
             }
         }
         for (row, mut image) in &mut picker_icons {

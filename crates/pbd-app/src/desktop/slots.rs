@@ -13,6 +13,7 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
@@ -321,7 +322,7 @@ pub fn cell(
         cell.spawn((
             // In the slot's bottom-right corner, over the rim rather than the
             // icon, outlined in ink so it reads on any tile.
-            KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+            KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(1),
@@ -467,7 +468,7 @@ pub fn update(
     for (cell, mut tip) in &mut tips {
         let want = stack_tip(slots.get(cell.0), &items);
         if tip.0 != want {
-            tip.0 = want;
+            tip.0 = Localized::legacy(want);
         }
     }
     for (count, mut text) in &mut counts {
@@ -476,7 +477,7 @@ pub fn update(
             _ => String::new(),
         };
         if text.text != label {
-            text.text = label;
+            text.text = Localized::legacy(label);
         }
     }
 }

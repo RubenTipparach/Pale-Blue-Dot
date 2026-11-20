@@ -12,6 +12,7 @@
 //! a reader that runs before the offers have been seen), each reader does
 //! what it always did, and the first to use the press takes it.
 
+use crate::ui_kit::{Localized, tr};
 use bevy::prelude::*;
 
 /// Who carries an act out: the system that reads F for it.
@@ -315,13 +316,14 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 ..default()
             })
             .with_children(|tip| {
-                crate::ui_kit::key_cap(tip, &kit, "F", PromptKey);
+                crate::ui_kit::key_cap(tip, &kit, tr("interact.key"), PromptKey);
                 tip.spawn((
                     Node {
                         padding: UiRect::top(px(2)),
                         ..default()
                     },
-                    KitText::new("", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
+                    KitText::new(Localized::empty(), crate::ui_kit::LABEL)
+                        .outline(crate::ui_kit::INK),
                     PromptWords,
                 ));
             });
@@ -357,13 +359,14 @@ pub fn spawn_fish_keys(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 })
                 .with_children(|row| {
                     let label = crate::controls::Key::Mouse(button).label();
-                    crate::ui_kit::key_cap(row, &kit, label, FishKeyCap(k));
+                    crate::ui_kit::key_cap(row, &kit, Localized::legacy(label), FishKeyCap(k));
                     row.spawn((
                         Node {
                             padding: UiRect::top(px(2)),
                             ..default()
                         },
-                        KitText::new("", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
+                        KitText::new(Localized::empty(), crate::ui_kit::LABEL)
+                            .outline(crate::ui_kit::INK),
                         FishKeyWords(k),
                     ));
                 });
@@ -405,7 +408,7 @@ pub fn show_fish_keys(
             FADED
         };
         if text.text != line || text.colour != colour {
-            text.text = line.to_string();
+            text.text = Localized::legacy(line);
             text.colour = colour;
         }
         if let Ok(mut row) = rows.get_mut(parent.parent()) {
@@ -475,12 +478,12 @@ pub fn show_prompt(
     };
     for mut text in &mut key_text {
         if text.text != label {
-            text.text = label.to_string();
+            text.text = Localized::legacy(label);
         }
     }
     for mut text in &mut words {
         if text.text != line {
-            text.text.clone_from(&line);
+            text.text = Localized::legacy(line.clone());
         }
     }
 }

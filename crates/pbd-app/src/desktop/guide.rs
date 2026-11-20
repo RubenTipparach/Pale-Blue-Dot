@@ -18,6 +18,7 @@ use pbd_app::config::FaunaConfig;
 use pbd_app::fish::{Body, guide_facts};
 use pbd_app::hotbar::Hotbar;
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Set, UiKit, plaque};
 use pbd_core::fauna::Origin;
 use pbd_core::inventory::Item;
@@ -243,9 +244,12 @@ pub fn paint(
                 })
                 .with_children(|words| {
                     words.spawn(
-                        KitText::new(species.name.to_uppercase(), ui_kit::TITLE)
-                            .shadow(ui_kit::INK)
-                            .size(2),
+                        KitText::new(
+                            Localized::legacy(species.name.to_uppercase()),
+                            ui_kit::TITLE,
+                        )
+                        .shadow(ui_kit::INK)
+                        .size(2),
                     );
                     let from = match &species.from {
                         Origin::Tenebris(kind) => format!("from Tenebris ({kind})"),

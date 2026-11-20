@@ -26,6 +26,7 @@ use pbd_app::hotbar::{Gained, How, Planted};
 use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_core::column;
 use pbd_core::farming::{
     self, Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Picked, Plot, Stage, WILD_KIND, WILD_SCHEMA,
@@ -928,7 +929,8 @@ fn harvest(
 /// The note under the crosshair.
 pub fn spawn_note(mut commands: Commands) {
     commands.spawn((
-        pbd_app::ui_kit::KitText::new("", pbd_app::ui_kit::LABEL).outline(pbd_app::ui_kit::INK),
+        pbd_app::ui_kit::KitText::new(Localized::empty(), pbd_app::ui_kit::LABEL)
+            .outline(pbd_app::ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),
@@ -952,7 +954,7 @@ pub fn show_note(
     }
     for mut words in &mut text {
         if words.text != note.text {
-            words.text.clone_from(&note.text);
+            words.text = Localized::legacy(note.text.clone());
         }
     }
 }

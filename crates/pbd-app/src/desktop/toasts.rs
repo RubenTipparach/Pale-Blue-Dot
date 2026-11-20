@@ -6,6 +6,7 @@ use super::menu::Screen;
 use super::slots::ItemIcons;
 use bevy::prelude::*;
 use pbd_app::hotbar::{Gained, PickedUp};
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText};
 use pbd_core::inventory::{Item, Stack};
 
@@ -133,7 +134,7 @@ pub fn spawn(
                             ToastIcon(n),
                         ));
                         row.spawn((
-                            KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                            KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                             ToastText(n),
                         ));
                     });
@@ -214,7 +215,7 @@ pub fn paint(
         };
         let want = words(toast);
         if kit.text != want {
-            kit.text = want;
+            kit.text = Localized::legacy(want);
         }
         let colour = ui_kit::TEXT.with_alpha(toast.alpha());
         if kit.colour != colour {

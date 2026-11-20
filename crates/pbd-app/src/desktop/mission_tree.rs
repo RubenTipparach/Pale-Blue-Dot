@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::ui_kit::{self, KitText, Set, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::missions::{Chain, Standing};
 
 /// One zoom level of the tree: a designed view, not a scale. The cards are
@@ -570,7 +571,10 @@ fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
                 BranchLabel(first),
             ))
             .with_children(|plaque| {
-                plaque.spawn(KitText::new(format!("{n} · {name}"), ui_kit::OAK_LABEL));
+                plaque.spawn(KitText::new(
+                    Localized::legacy(format!("{n} · {name}")),
+                    ui_kit::OAK_LABEL,
+                ));
             });
     }
 }
@@ -682,7 +686,7 @@ fn spawn_card(
                 part(&mut e);
             });
             let mut e = head.spawn((
-                KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::left(px(3)),
                     flex_shrink: 0.0,
@@ -770,7 +774,7 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
                 head.spawn((body("", 13.0, ui_kit::TITLE), SideText::Title));
                 head.spawn((ui_kit::plaque(kit, Set::Stone, 18.0), SideClose))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Stone, "X"));
+                        p.spawn(ui_kit::plaque_label(Set::Stone, tr("mission_tree.close")));
                     });
             });
             side.spawn((body("", 9.0, ui_kit::LABEL_DIM), SideText::Sub));
@@ -782,7 +786,7 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
                 ("OPENS NEXT", SideText::Next),
             ] {
                 side.spawn((
-                    KitText::new(heading, ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    KitText::new(Localized::legacy(heading), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                     Node {
                         margin: UiRect::top(px(4)),
                         ..default()
@@ -881,7 +885,7 @@ pub fn paint(
         let (s, now) = standing(b.0);
         let (word, colour) = badge(s, now);
         if text.text != word || text.colour != colour {
-            text.text = word.to_string();
+            text.text = Localized::legacy(word.to_string());
             text.colour = colour;
         }
     }

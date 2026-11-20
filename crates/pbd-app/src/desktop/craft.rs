@@ -27,6 +27,7 @@ use pbd_app::fish::ToolSlot;
 use pbd_app::hotbar::{Gained, How};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, Tooltip, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::inventory::{Item, Stack, Tier};
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{
@@ -340,7 +341,7 @@ fn well(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, w
                 WellIcon,
             ));
             cell.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(1),
@@ -381,7 +382,7 @@ fn craft_row(
                     },
                 );
             }
-            row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+            row.spawn(KitText::new(Localized::verbatim("→"), ui_kit::TEXT).shadow(ui_kit::INK));
             well(
                 row,
                 kit,
@@ -401,7 +402,7 @@ fn craft_row(
             ))
             .with_children(|p| {
                 p.spawn((
-                    ui_kit::plaque_label(Set::Stone, "CRAFT"),
+                    ui_kit::plaque_label(Set::Stone, tr("craft.craft")),
                     CraftLabel(station),
                 ));
             });
@@ -509,12 +510,12 @@ fn recipe_row(
             },
             RowIcon(k),
         ));
-        row.spawn(ui_kit::plaque_label(Set::Stone, &name));
+        row.spawn(ui_kit::plaque_label(Set::Stone, Localized::legacy(name)));
         row.spawn(Node {
             flex_grow: 1.0,
             ..default()
         });
-        row.spawn(ui_kit::plaque_label(Set::Stone, &count));
+        row.spawn(ui_kit::plaque_label(Set::Stone, Localized::legacy(count)));
     });
 }
 
@@ -567,7 +568,7 @@ pub fn spawn_bench(
                 });
             craft_row(panel, kit, atlas, "workbench", 3);
             panel.spawn((
-                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::new(px(0), px(0), px(4), px(3)),
                     ..default()
@@ -779,7 +780,7 @@ pub fn paint_locks(
         }
         let words = words.unwrap_or_default();
         if text.text != words {
-            text.text = words;
+            text.text = Localized::legacy(words);
         }
     }
 }
@@ -910,7 +911,7 @@ pub fn paint(
             (_, Some((item, _, _))) => item.name().to_string(),
         };
         if tip.0 != words {
-            tip.0 = words;
+            tip.0 = Localized::legacy(words);
         }
         let number = match item {
             Some((_, n, _)) => need_count(matches!(well.role, Role::Need(_)), n),
@@ -926,7 +927,7 @@ pub fn paint(
             if let Ok(mut text) = counts.get_mut(child)
                 && text.text != number
             {
-                text.text.clone_from(&number);
+                text.text = Localized::legacy(number.clone());
             }
         }
     }
@@ -947,7 +948,7 @@ pub fn paint(
             _ => "CRAFT".to_string(),
         };
         if text.text != want {
-            text.text = want;
+            text.text = Localized::legacy(want);
         }
     }
     // The pack's list: the chosen row ringed with the rune (the focus
@@ -965,7 +966,7 @@ pub fn paint(
         }
         let words = shut.map(|m| format!("Opens with: {m}")).unwrap_or_default();
         if tip.0 != words {
-            tip.0 = words;
+            tip.0 = Localized::legacy(words);
         }
     }
     for (row, mut image) in row_icons.iter_mut() {
@@ -1002,7 +1003,7 @@ pub fn paint(
         };
         for mut words in line.iter_mut() {
             if words.text != text {
-                words.text.clone_from(&text);
+                words.text = Localized::legacy(text.clone());
             }
         }
         let want = percent(state.head_progress(&recipes.0, now_s).unwrap_or(0.0) * 100.0);

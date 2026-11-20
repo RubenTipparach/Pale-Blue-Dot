@@ -35,6 +35,7 @@ pub struct QueueText;
 pub struct QueueFill;
 
 use pbd_app::hotbar::Gained;
+use pbd_app::ui_kit::Localized;
 
 /// A station's own panel inside the station layer, by station code: the one
 /// whose station is open is shown (`tool-crafting` decision 9).
@@ -85,7 +86,10 @@ pub fn spawn(
                                     RecipePlaque(recipe.code.clone()),
                                 ))
                                 .with_children(|p| {
-                                    p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
+                                    p.spawn(ui_kit::plaque_label(
+                                        Set::Stone,
+                                        Localized::legacy(recipe.name.clone()),
+                                    ));
                                 });
                                 let item = |row: &mut ChildSpawnerCommands,
                                             (it, n): (Item, u16),
@@ -108,7 +112,9 @@ pub fn spawn(
                                     .with_children(|icon| {
                                         icon.spawn((
                                             KitText::new(
-                                                super::craft::need_count(need, n),
+                                                Localized::legacy(super::craft::need_count(
+                                                    need, n,
+                                                )),
                                                 ui_kit::LABEL,
                                             )
                                             .outline(ui_kit::INK),
@@ -124,12 +130,16 @@ pub fn spawn(
                                 for &input in &recipe.inputs {
                                     item(row, input, true);
                                 }
-                                row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+                                row.spawn(
+                                    KitText::new(Localized::verbatim("→"), ui_kit::TEXT)
+                                        .shadow(ui_kit::INK),
+                                );
                                 for &output in &recipe.outputs {
                                     item(row, output, false);
                                 }
                                 row.spawn((
-                                    KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
+                                    KitText::new(Localized::empty(), ui_kit::LABEL_DIM)
+                                        .shadow(ui_kit::INK),
                                     Node {
                                         display: Display::None,
                                         ..default()
@@ -139,7 +149,7 @@ pub fn spawn(
                             });
                     }
                     panel.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         Node {
                             margin: UiRect::new(px(0), px(0), px(4), px(3)),
                             ..default()
@@ -322,7 +332,7 @@ pub fn work(
     };
     for mut words in &mut line {
         if words.text != text {
-            words.text.clone_from(&text);
+            words.text = Localized::legacy(text.clone());
         }
     }
     let want = percent(progress.unwrap_or(0.0) * 100.0);

@@ -25,6 +25,7 @@ use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
 use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
+use pbd_app::ui_kit::{Localized, tr};
 
 /// Which screen is open. One enum and not two flags, because two flags is how
 /// a settings page ends up open over a closed pause menu.
@@ -358,7 +359,7 @@ pub fn show_settings(
         if let Some(label) = settings_value(value.0, &player)
             && text.text != label
         {
-            text.text = label;
+            text.text = Localized::legacy(label);
         }
     }
 }
@@ -790,7 +791,7 @@ pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: &str)
                 },
             ))
             .with_children(|board| {
-                board.spawn(KitText::new(text, ui_kit::OAK_LABEL));
+                board.spawn(KitText::new(Localized::legacy(text), ui_kit::OAK_LABEL));
             });
         });
 }
@@ -798,7 +799,7 @@ pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: &str)
 /// A section label inside a panel, carved in the kit's font.
 pub(super) fn section(parent: &mut ChildSpawnerCommands, text: &str) {
     parent.spawn((
-        KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
+        KitText::new(Localized::legacy(text), ui_kit::TITLE).shadow(ui_kit::INK),
         Node {
             margin: UiRect::top(px(3)),
             ..default()
@@ -835,7 +836,7 @@ pub(super) fn button(
             ..plaque_node()
         })
         .with_children(|row| {
-            row.spawn(plaque_label(Set::Oak, label));
+            row.spawn(plaque_label(Set::Oak, Localized::legacy(label)));
         })
         .id()
 }
@@ -915,7 +916,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                                 ))
                                 .with_children(|tab| {
                                     tab.spawn(KitText::new(
-                                        *name,
+                                        Localized::legacy(*name),
                                         if open {
                                             ui_kit::OAK_LABEL
                                         } else {
@@ -1142,7 +1143,7 @@ fn slider_row(
                 SettingKnob(action),
             );
             control.spawn((
-                KitText::new("", ui_kit::LABEL).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).shadow(ui_kit::INK),
                 Node {
                     min_width: px(42),
                     ..default()
@@ -1199,7 +1200,7 @@ fn spawn_input_page(page: &mut ChildSpawnerCommands, kit: &UiKit) {
             ))
             .with_children(|cap| {
                 cap.spawn(KitText::new(
-                    tab.label(),
+                    Localized::legacy(tab.label()),
                     if open {
                         ui_kit::OAK_LABEL
                     } else {
@@ -1365,7 +1366,7 @@ fn rebind_cap(
             },
         ))
         .with_children(|cap| {
-            cap.spawn(plaque_label(Set::Oak, label));
+            cap.spawn(plaque_label(Set::Oak, Localized::legacy(label)));
         });
 }
 
@@ -1513,7 +1514,7 @@ fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, key: &str) {
             },
         ))
         .with_children(|cap| {
-            cap.spawn(KitText::new(key, ui_kit::TEXT));
+            cap.spawn(KitText::new(Localized::legacy(key), ui_kit::TEXT));
         });
 }
 
@@ -1646,7 +1647,10 @@ pub fn rebuild_saves(
                         } else {
                             slot.file.name.clone()
                         };
-                        words.spawn(KitText::new(shown, ui_kit::TITLE).shadow(ui_kit::INK));
+                        words.spawn(
+                            KitText::new(Localized::legacy(shown), ui_kit::TITLE)
+                                .shadow(ui_kit::INK),
+                        );
                         words.spawn(note(since(slot.file.played_unix_s), ui_kit::TEXT_DIM));
                     });
                     if here {
@@ -1671,7 +1675,7 @@ pub fn rebuild_saves(
                 ..default()
             })
             .with_children(|line| {
-                line.spawn(KitText::new("NAME", ui_kit::TITLE).shadow(ui_kit::INK));
+                line.spawn(KitText::new(tr("menu.name"), ui_kit::TITLE).shadow(ui_kit::INK));
                 line.spawn((
                     Button,
                     kit.nine(Set::Oak, "tooltip"),
@@ -1709,7 +1713,7 @@ pub(super) fn small(
     parent
         .spawn((plaque(kit, Set::Oak, 30.0), action))
         .with_children(|row| {
-            row.spawn(plaque_label(Set::Oak, label));
+            row.spawn(plaque_label(Set::Oak, Localized::legacy(label)));
         })
         .id()
 }
@@ -2252,7 +2256,7 @@ mod tests {
         let labels: Vec<String> = world
             .query::<&KitText>()
             .iter(world)
-            .map(|t| t.text.clone())
+            .map(|t| t.text.to_string())
             .collect();
         assert!(labels.contains(&"F".to_string()));
     }

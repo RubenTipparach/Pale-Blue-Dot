@@ -16,6 +16,7 @@ use pbd_app::hotbar::{Gained, How};
 use pbd_app::kitchen::{Ate, Cooked, meals};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::cooking::{self, ANY_FISH, MEAL_ID, MEAL_KIND, MEAL_SCHEMA};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Slots, Stack};
@@ -90,17 +91,24 @@ pub fn spawn(
                                         CookPlaque(recipe.code.clone()),
                                     ))
                                     .with_children(|p| {
-                                        p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
+                                        p.spawn(ui_kit::plaque_label(
+                                            Set::Stone,
+                                            Localized::legacy(recipe.name.clone()),
+                                        ));
                                     });
                                     for &input in &recipe.inputs {
                                         icon(row, &atlas, input, &recipe.code, true);
                                     }
-                                    row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+                                    row.spawn(
+                                        KitText::new(Localized::verbatim("→"), ui_kit::TEXT)
+                                            .shadow(ui_kit::INK),
+                                    );
                                     for &output in &recipe.outputs {
                                         icon(row, &atlas, output, &recipe.code, false);
                                     }
                                     row.spawn((
-                                        KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
+                                        KitText::new(Localized::empty(), ui_kit::LABEL_DIM)
+                                            .shadow(ui_kit::INK),
                                         Node {
                                             display: Display::None,
                                             ..default()
@@ -111,7 +119,7 @@ pub fn spawn(
                             }
                         });
                     panel.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         Node {
                             margin: UiRect::new(px(0), px(0), px(2), px(3)),
                             ..default()
@@ -141,8 +149,7 @@ pub fn spawn(
                             ));
                         });
                     panel.spawn((
-                        KitText::new("RIGHT CLICK A DISH IN HAND TO EAT IT", ui_kit::TEXT_DIM)
-                            .shadow(ui_kit::INK),
+                        KitText::new(tr("kitchen.eat_hint"), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                         Node {
                             margin: UiRect::top(px(4)),
                             ..default()
@@ -177,7 +184,11 @@ fn icon(
     ))
     .with_children(|icon| {
         icon.spawn((
-            KitText::new(super::craft::need_count(need, n), ui_kit::LABEL).outline(ui_kit::INK),
+            KitText::new(
+                Localized::legacy(super::craft::need_count(need, n)),
+                ui_kit::LABEL,
+            )
+            .outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(-3),
@@ -369,7 +380,7 @@ pub fn work(
     };
     for mut words in &mut line {
         if words.text != text {
-            words.text.clone_from(&text);
+            words.text = Localized::legacy(text.clone());
         }
     }
     let want = percent(progress.unwrap_or(0.0) * 100.0);
@@ -597,7 +608,7 @@ pub fn spawn_effects(
                             ));
                         });
                     entry.spawn((
-                        KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                         EffectText(index),
                     ));
                 });
@@ -658,7 +669,7 @@ pub fn show_effects(
             (left % 60.0).floor() as u32
         );
         if words.text != line {
-            words.text = line;
+            words.text = Localized::legacy(line);
         }
     }
 }
