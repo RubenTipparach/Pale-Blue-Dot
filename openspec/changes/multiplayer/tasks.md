@@ -11,7 +11,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 2. The rules run without a frame
 
-- [ ] 2.1 List every system in `pbd-app` that writes stored state (edits, records, inventory, drops, crops, animals, missions) and the core rule each calls, in this change's design as a table. Verify: the table names every writer `grep` finds.
+- [x] 2.1 (Written 2026-11-21, design 17, from a sweep of `WorldSave`'s callers.) List every system in `pbd-app` that writes stored state (edits, records, inventory, drops, crops, animals, missions) and the core rule each calls, in this change's design as a table. Verify: the table names every writer `grep` finds.
 - [ ] 2.2 Move each writer's ACCEPT half into `pbd-core` as a function of (world state, player, request) returning a change or a refusal, one rule per commit. Verify: each rule has a core test that runs it with no Bevy app, and single player plays the same (the phase-1 starter missions finish under `--capture`).
 
 ## 3. Protocol and digest in the core

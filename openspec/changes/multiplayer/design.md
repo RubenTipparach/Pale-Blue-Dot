@@ -379,6 +379,65 @@ of them visible in the game:
 The network, the screens and other players' bodies come after those, and
 the screens wait for their mockups (tasks 5.1, 5.2).
 
+### 17. Every writer of stored state today (task 2.1, 2026-11-21)
+
+Everything that reaches the save goes through `WorldSave`
+(`crates/pbd-app/src/saves/mod.rs`): `accept` (an edit, its drop and the
+slots), `record_pick`, `record_toss`, `record_pack`, `deal_kit`,
+`record_catch`, `record_hand`, `store`, `store_with_hands`, `accept_water`,
+`propose`, `note_record_kinds`, and the whole-file `snapshot`,
+`snapshot_weather` and `snapshot_vehicles`. Paths are under
+`crates/pbd-app/src/`. "Inline" means the app decides it, not a core rule.
+
+| Stored | App writer | Trigger | Core rule (or inline) |
+| --- | --- | --- | --- |
+| Dig (Air, its drop and finds) | `desktop/digging.rs` `dig_and_place` → `apply_edit` | left mouse held | `aim::march`, `dig::Breaking`, `farming::sprouts_seed`, `GatherSettings::find`, `station::ore_yield`; refusals inline in `apply_edit` |
+| Place a block, lamp or station | `dig_and_place` → `apply_edit(Spend)` | right mouse | `aim::march`; body overlap, head room, crop in the way, one lamp a column inline |
+| Bucket take or pour | `dig_and_place` → `apply_edit(Swap)` | right mouse | `liquid::bucket` |
+| Till, and a turned-up seed | `desktop/farm.rs` `use_key` → `farm_act` → `apply_edit(Till)` | F | `farming::tillable`, `seed_turned_up`; `farm_act` itself is inline |
+| Log taken from a tree | `digging.rs` `take_log` (`store_with_hands`) | left mouse on a trunk | `GatherSettings::tree_gives`, `flora::grows_tree`; trunk ray inline |
+| Crop sown, uprooted, harvested | `farm.rs` `plant`, `uproot`, `harvest` | right mouse, dig, F | `Crop::of_seed`, `grows_in`, `Plot`, `FarmConfig::stage` |
+| Wild plant, clutter, fruit, glow mushroom picked | `farm.rs` `pick`, `gather`; `desktop/fruit.rs` `pick`; `desktop/glow_plants.rs` `pick` | F | `FarmConfig::wild_crop`, `scatter::Kind::gives`, `flora::hanging_fruit`, `flora::glow_plant_point`; each ray inline |
+| Craft, forge and campfire jobs queued and collected | `desktop/craft.rs` `queue`, `collect_hands`; `desktop/forge.rs` `work`; `desktop/kitchen.rs` `work` | a click, a timer, the panel open | `StationState::queue_for`, `queue`, `collect_into`; `cooking::concrete` |
+| Meal eaten | `kitchen.rs` `eat_held` | right mouse with a dish | `cooking` `meals(..).eat` |
+| Pack move, split, trash | `desktop/pack.rs` `press` (`record_pack`) | clicks | `Slots::shift`, `send`, `take` |
+| Toss and pickup of drops | `drops.rs` `toss`, `gather` | Q, the magnet each frame | `drops::scattered`, `drops::step` |
+| Tool in hand | `desktop/equipment.rs` `pick`, `pack_hand` | G, a click | `Equipment::hold` |
+| Starting kit | `hotbar.rs` `Hotbar::restore` | world open | `Slots::give` (frame-free already) |
+| Fish caught | `fish.rs` `land` (`record_catch`) | reel | `fishing::Angler`, `Line` |
+| Boat launched and taken up, hold contents, refund | `vehicles/launch.rs`, `vehicles/hold.rs`, `vehicles/refund.rs` | right mouse, left held, pack clicks, a timer | `vehicle::hold::send`, `shift`; `station::retired_inputs` |
+| Animal fed, tamed, products, pens, fences, incubators, eggs, pairing | `husbandry.rs` `use_on`, `feed_wild`, `settle`, `place_piece`, `take_piece`; `husbandry/breed.rs` | F, right mouse, a click, a timer | `husbandry` `Trust`, `FarmState`, `FenceBody`, `breeding::*` |
+| Births and conceptions | `breed.rs` `realise` (`propose`, a world author) | every 0.5 s near | `breeding::farm_events` |
+| Map waypoints | `desktop/map_screen.rs` `store_marks` | a click | `map::Mark::set`, `add_mark` |
+| Town doors | `towns.rs` `use_doors` | F | `settlement::record::door_record` |
+| Missions progress | `missions.rs` `count` | the other systems' messages | `missions::Progress::record`, `settle` |
+| Water flow | `water_flow.rs` `run_ticks` (`accept_water`) | the water tick | `liquid` `tick` over the resident tier's columns |
+| Beaver colonies and dams | `beaver.rs` `found`, `run` | a timer, the world clock | `Colony::new`, `beaver::catch_up` |
+| Sites and towns | `sites.rs`, `towns.rs` | world open | `sites::generate`, `settlement::lay_on` (frame-free already) |
+| Pose and clock, weather, fleet | `desktop.rs` `autosave`, `save_weather`; `vehicles.rs` `save_vehicles` | a timer, a menu, exit | inline; whole-file replaces |
+
+**What has to move for a server to run them** (task 2.2):
+1. **Picking.** Nearly every player writer starts from a camera ray
+   (`aim::march`, `tree_on_ray`, `plant_on_ray`, `fruit_on_ray`,
+   `aimed_beast`, `edge_at`, `door_in_reach`). The client sends the target
+   it picked (a cell, a record id); the server checks the target is in reach
+   and valid, and does not repeat the ray.
+2. **`apply_edit`.** It reads a column's material from the resident render
+   tier. The server reads it from a column it generates from the seed and
+   the edits, which is the same pure function.
+3. **Rules inline in the app:** `farm_act`, `apply_edit`'s refusals, the
+   husbandry `use_on` flow, and missions counted from Bevy messages (a core
+   rule returns its happenings instead).
+4. **Slots changed before the save took the change**, which a server must
+   never do: `fish::land`, husbandry's collect, `take_piece`,
+   `use_incubator`, `place_piece`, `place_incubator`, `set_eggs`,
+   `feed_wild`, `farm::uproot`, and `equipment.rs`'s `record_hand`.
+5. **Two lines that are not one change:** a craft's collect (hand, then the
+   station), a boat's launch and its take-up (fleet, then the pack).
+6. **State outside the save:** a wild animal's trust, a door's leaf, and
+   the whole-file fleet, pose and weather, which need one owner each (the
+   server; pose per player, design 10).
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,
