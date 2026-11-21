@@ -543,6 +543,13 @@ fn spawn_figure(
         .id();
     if proxy {
         commands.entity(root).insert(crate::loading::PrewarmProxy);
+    } else {
+        // The interact key talks to them (`townsfolk` design 5 to 12).
+        commands.entity(root).insert(crate::economy::Talker {
+            site: person.id.site,
+            index: person.id.index,
+            role: person.role.clone(),
+        });
     }
     let mut part = |mesh: Handle<Mesh>, masked: bool| {
         commands

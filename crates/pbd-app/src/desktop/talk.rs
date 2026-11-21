@@ -17,7 +17,8 @@ use super::menu::{self, Panel, Screen};
 use super::slots::{self, Hotbar, ItemIcons};
 use bevy::prelude::*;
 use pbd_app::economy::{
-    Economy, EconomyConfig, Shop, Talker, TownInfo, Why, fish_ids, job_line, keepers, town_info,
+    Economy, EconomyConfig, Shop, Talker, TownInfo, Why, fish_ids, job_line, keepers, roster,
+    town_info,
 };
 use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::saves::WorldSave;
@@ -201,6 +202,37 @@ fn talker_in_reach<'a>(
         .map(|(_, t)| t.clone())
 }
 
+/// What a deal reads and writes: the rules, the purse, the save, the pack,
+/// the clock and what tells a fish from a fish.
+type ShopParams<'w> = (
+    Res<'w, EconomyConfig>,
+    ResMut<'w, Economy>,
+    Option<ResMut<'w, WorldSave>>,
+    ResMut<'w, Hotbar>,
+    Res<'w, pbd_app::sky::Sun>,
+    Res<'w, pbd_app::config::FaunaConfig>,
+    Res<'w, pbd_app::fish::Body>,
+);
+
+/// A talker, where it stands, and whether it is shown.
+type TalkerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Talker,
+        &'static GlobalTransform,
+        Option<&'static Visibility>,
+    ),
+>;
+
+/// The talkers on screen: a figure faded out and hidden is no one to talk to.
+fn shown<'a>(talkers: &'a TalkerQuery) -> impl Iterator<Item = (&'a Talker, &'a GlobalTransform)> {
+    talkers
+        .iter()
+        .filter(|(_, _, v)| v.is_none_or(|v| *v != Visibility::Hidden))
+        .map(|(t, g, _)| (t, g))
+}
+
 /// A role's name, as the prompt and the talk panel call the person.
 pub fn role_name(role: &str) -> Localized {
     tr(&format!("talk.role.{role}"))
@@ -209,13 +241,13 @@ pub fn role_name(role: &str) -> Localized {
 /// Offer the townsperson in reach to the interact key.
 pub fn offer_talk(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    talkers: Query<(&Talker, &GlobalTransform)>,
+    talkers: TalkerQuery,
     mut interact: ResMut<Interact>,
 ) {
     let Some((eye, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    if let Some(t) = talker_in_reach(eye, talkers.iter()) {
+    if let Some(t) = talker_in_reach(eye, shown(&talkers)) {
         interact.offer(Offer::new(Act::Talk, role_name(&t.role)));
     }
 }
@@ -268,18 +300,11 @@ pub fn use_talk(
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     interact: Option<Res<Interact>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    talkers: Query<(&Talker, &GlobalTransform)>,
+    talkers: TalkerQuery,
     towns: Res<Towns>,
-    (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): (
-        Res<EconomyConfig>,
-        ResMut<Economy>,
-        Option<ResMut<WorldSave>>,
-        ResMut<Hotbar>,
-        Res<pbd_app::sky::Sun>,
-        Res<pbd_app::config::FaunaConfig>,
-        Res<pbd_app::fish::Body>,
-    ),
+    (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): ShopParams,
     mut talking: ResMut<Talking>,
+    folk: Option<Res<pbd_app::townsfolk::Townsfolk>>,
 ) {
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
@@ -297,10 +322,12 @@ pub fn use_talk(
     let Some((eye, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let Some(talker) = talker_in_reach(eye, talkers.iter()) else {
+    let Some(talker) = talker_in_reach(eye, shown(&talkers)) else {
         return;
     };
-    let all: Vec<&Talker> = talkers.iter().map(|(t, _)| t).collect();
+    let drawn: Vec<&Talker> = talkers.iter().map(|(t, _, _)| t).collect();
+    let people = roster(folk.as_deref(), &drawn, talker.site);
+    let all: Vec<&Talker> = people.iter().collect();
     let ids = fish_ids(&fauna, &body.0);
     let mut shop = save.as_deref_mut().map(|save| Shop {
         save,
@@ -337,15 +364,7 @@ pub fn press(
     buttons: Query<(&Interaction, &TalkAction), Changed<Interaction>>,
     mut screen: ResMut<Screen>,
     mut talking: ResMut<Talking>,
-    (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): (
-        Res<EconomyConfig>,
-        ResMut<Economy>,
-        Option<ResMut<WorldSave>>,
-        ResMut<Hotbar>,
-        Res<pbd_app::sky::Sun>,
-        Res<pbd_app::config::FaunaConfig>,
-        Res<pbd_app::fish::Body>,
-    ),
+    (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): ShopParams,
 ) {
     for (interaction, action) in &buttons {
         if *interaction != Interaction::Pressed {

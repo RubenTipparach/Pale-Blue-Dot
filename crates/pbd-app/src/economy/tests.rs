@@ -254,3 +254,32 @@ fn every_job_kind_and_role_has_its_words() {
         }
     }
 }
+
+#[test]
+fn a_town_with_no_people_laid_keeps_trade_by_its_drawn_talkers() {
+    let cfg = config();
+    let t = |site, index, role: &str| Talker {
+        site,
+        index,
+        role: role.into(),
+    };
+    let drawn = [
+        t(7, 2, "smith"),
+        t(9, 0, "merchant"),
+        t(7, 0, "villager"),
+        t(7, 1, "trader"),
+    ];
+    let refs: Vec<&Talker> = drawn.iter().collect();
+    let people = roster(None, &refs, 7);
+    assert_eq!(people.len(), 3, "only the town's own talkers");
+    let all: Vec<&Talker> = people.iter().collect();
+    let k = keepers(&cfg.jobs, &all, 7).expect("a town with people has keepers");
+    assert_eq!(
+        (k.trader, k.giver),
+        (1, 2),
+        "the trader trades, the smith gives jobs"
+    );
+    // An empty laid roster is no roster: the drawn talkers stand in.
+    let folk = crate::townsfolk::Townsfolk::default();
+    assert_eq!(roster(Some(&folk), &refs, 7), people);
+}

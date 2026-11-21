@@ -34,8 +34,9 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 - [ ] 6.1 The trade panel in M5 brought up to the game's stone-and-wood UI, by day and at night; the owner approves it for the game. Verify: on the tracker.
 - [x] 6.2 Each town's trader, its prices from value times need, the 40% spread, stock and the day's drift (design 6, 7), in `pbd-core`. Verify: tests that a harbour sells fish below a mountain town, that selling back what you bought loses coins, that ten sales move the price, and that a day brings it back. Built 2026-11-21: `pbd_core::economy::trade` and `assets/config/trade.ron`; tests in `pbd_core::economy::tests`. In `openspec/specs/world/trade`.
-- [ ] 6.3 The trade panel in the game, opened by talking to the trader. Verify: a bot buys a loaf and sells three fish, and the purse and the pack agree.
+- [x] 6.3 The trade panel in the game, opened by talking to the trader. Verify: a bot buys a loaf and sells three fish, and the purse and the pack agree.
   - 2026-11-21: the panel is built (`desktop/talk.rs`, TRADE from the talk) and the bot test passes at the rules' level (`pbd_app::economy::tests::a_bot_takes_a_job_is_paid_buys_a_loaf_and_sells_three_fish`: purse, pack and save agree). Open until the townsfolk stand in the game to be talked to: a `Talker` on each of agent A's people opens it.
+  - 2026-11-21: hooked to the townspeople. Every drawn figure (`townsfolk::spawn_figure`, not the prewarm proxy) carries a `Talker` with its town, place and role; a faded-out figure is no one to talk to; a town's trader and job giver are picked from its whole laid roster (`economy::roster`), so they do not change with which figures are drawn near the eye. Not yet seen in a capture with a real townsperson: the frames in `docs/screenshots/townsfolk-economy/` were taken before the people stood.
 
 ## 7. Town missions
 

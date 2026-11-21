@@ -192,6 +192,36 @@ pub fn town_name(towns: &Towns, site: u32) -> String {
         .unwrap_or_default()
 }
 
+/// A town's talkers in its people's order: its whole roster when its people
+/// stand ([`crate::townsfolk::Townsfolk`]), so who keeps its trade does not
+/// hang on which figures are drawn near the eye; else the talkers `drawn`
+/// there (a town with no people laid).
+pub fn roster(
+    folk: Option<&crate::townsfolk::Townsfolk>,
+    drawn: &[&Talker],
+    site: u32,
+) -> Vec<Talker> {
+    let laid: Vec<Talker> = folk
+        .map(|f| {
+            f.people(site)
+                .map(|p| Talker {
+                    site,
+                    index: p.id.index,
+                    role: p.role.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if !laid.is_empty() {
+        return laid;
+    }
+    drawn
+        .iter()
+        .filter(|t| t.site == site)
+        .map(|t| (*t).clone())
+        .collect()
+}
+
 /// The keepers of a town's people, from the talkers standing there.
 pub fn keepers(cfg: &JobsConfig, talkers: &[&Talker], site: u32) -> Option<Keepers> {
     let mut here: Vec<&Talker> = talkers.iter().copied().filter(|t| t.site == site).collect();
