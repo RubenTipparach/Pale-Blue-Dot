@@ -1,0 +1,899 @@
+//! Roads (`townsfolk` design 10 and 11): road cells that slope instead of
+//! step, in dirt or gravel, and the network the world lays between towns.
+//!
+//! **A road cell is an ordinary cell with a road top.** Its ground is the
+//! generator's and is not edited: the road is a piece laid on it, as a
+//! town's floors and street steps are. Where the next cell of the road
+//! stands a layer higher, the top is a plane rising one layer from the
+//! middle of the edge the road comes in by to the middle of the edge it
+//! climbs out of ([`RoadCell::up`], [`RoadCell::from`]); straight through
+//! that is one layer over the cell's 2.833 m. Never more than a layer a
+//! cell, so a road has no step. A cell lower than both its neighbours in
+//! the road (a dip one cell wide) is raised a layer on a bed of packed
+//! earth, so it needs no two slopes.
+//!
+//! **The network is planned once** from the settlements and the seed
+//! ([`plan`]): each settlement to its nearest neighbours within
+//! [`RoadsConfig::link_m`], and every town of the largest kind to its
+//! nearest such town. Each link is routed over the finest cells by ground
+//! cost ([`route`]): a climb of more than a layer between cells is never
+//! taken, shallow water is forded, deep water is bridged in timber for at
+//! most [`RoadsConfig::max_bridge_cells`], the sea never. Cells the player
+//! has changed are not crossed, so a road goes round the player's work.
+//! The plan is stored as records the world authored ([`ROAD_RECORD`], one a
+//! road, and [`ROAD_NET_RECORD`] saying the plan was made), so a world gains
+//! its roads once, on the first open of a build that knows them, and keeps
+//! them. Roads are not generation: no generator version moves for them.
+//!
+//! The lattice here (`neighbours`, `nearest_key`) walks the finest cells
+//! by their exact keys ([`crate::cell_key`]), on whichever icosahedron face
+//! each address lies, so it needs no tier and no patch.
+
+use crate::cell_key::{self, Address};
+use crate::records::{Record, Records};
+use glam::Vec3;
+use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
+
+/// One road between two settlements, as the world laid it.
+pub const ROAD_RECORD: &str = "road";
+/// The plan's own record (id 0): that the network was planned, and by
+/// which version of the planner. Its presence is what stops a world being
+/// planned twice.
+pub const ROAD_NET_RECORD: &str = "road-net";
+/// A road cell the player built (`townsfolk` task 8.3), by its cell key.
+pub const ROAD_CELL_RECORD: &str = "road-cell";
+/// The schema of every road record kind.
+pub const RECORD_SCHEMA: u32 = 1;
+/// The planner's version, stored in the net record.
+pub const NET_VERSION: u32 = 1;
+/// The level the roads are laid on: the finest, the one the player edits.
+pub const LEVEL: u8 = cell_key::LAST_LEVEL;
+
+/// What a road is made of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Surface {
+    /// Packed earth: built with a shovel; the world's roads between villages.
+    Dirt,
+    /// Gravel: built with gravel; the world's roads between the large towns.
+    /// Walked faster ([`RoadsConfig::gravel_speed`]).
+    Gravel,
+}
+
+/// The roads' tunables (`assets/config/roads.ron`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RoadsConfig {
+    /// How far a settlement looks for the neighbours it is joined to, m.
+    pub link_m: f32,
+    /// How many of its nearest neighbours within `link_m` a settlement is
+    /// joined to.
+    pub neighbours: usize,
+    /// How far a town of the largest kind looks for its nearest such town, m.
+    pub large_link_m: f32,
+    /// Walking speed on a dirt road, times the ground's.
+    pub dirt_speed: f32,
+    /// Walking speed on a gravel road, times the ground's.
+    pub gravel_speed: f32,
+    /// The extra cost of a cell the road climbs or drops a layer into, as
+    /// metres of level road it is worth.
+    pub slope_cost_m: f32,
+    /// The cost of a bridged cell, times its length.
+    pub bridge_cost: f32,
+    /// The cost of a forded cell, times its length.
+    pub ford_cost: f32,
+    /// Water at most this deep over its bed is forded, m.
+    pub ford_depth_m: f32,
+    /// The longest bridge, in cells.
+    pub max_bridge_cells: u32,
+    /// How many cells one road's search may look at before it gives up.
+    pub max_expanded: usize,
+    /// How far the search trusts its estimate: 1 finds the cheapest road
+    /// and looks at the most cells; more finds a road a little dearer and
+    /// looks at far fewer (weighted A*).
+    pub search_weight: f32,
+}
+
+impl RoadsConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        let positive = |name: &str, v: f32| {
+            (v.is_finite() && v > 0.0)
+                .then_some(())
+                .ok_or(format!("{name} must be positive"))
+        };
+        positive("link_m", self.link_m)?;
+        positive("large_link_m", self.large_link_m)?;
+        positive("dirt_speed", self.dirt_speed)?;
+        positive("gravel_speed", self.gravel_speed)?;
+        positive("bridge_cost", self.bridge_cost)?;
+        positive("ford_cost", self.ford_cost)?;
+        if !(self.slope_cost_m.is_finite() && self.slope_cost_m >= 0.0) {
+            return Err("slope_cost_m must be zero or more".into());
+        }
+        if !(self.ford_depth_m.is_finite() && self.ford_depth_m >= 0.0) {
+            return Err("ford_depth_m must be zero or more".into());
+        }
+        if !(self.search_weight.is_finite() && self.search_weight >= 1.0) {
+            return Err("search_weight must be at least 1".into());
+        }
+        if self.neighbours == 0 || self.max_expanded == 0 {
+            return Err("neighbours and max_expanded must be at least one".into());
+        }
+        Ok(())
+    }
+
+    /// How much faster than the ground a road of `surface` is walked.
+    pub fn speed(&self, surface: Surface) -> f32 {
+        match surface {
+            Surface::Dirt => self.dirt_speed,
+            Surface::Gravel => self.gravel_speed,
+        }
+    }
+}
+
+impl Default for RoadsConfig {
+    /// The values `assets/config/roads.ron` ships, for tests.
+    fn default() -> Self {
+        Self {
+            link_m: 2_000.0,
+            neighbours: 2,
+            large_link_m: 6_000.0,
+            dirt_speed: 1.0,
+            gravel_speed: 1.15,
+            slope_cost_m: 2.0,
+            bridge_cost: 4.0,
+            ford_cost: 2.0,
+            ford_depth_m: 1.0,
+            max_bridge_cells: 10,
+            max_expanded: 100_000,
+            search_weight: 1.5,
+        }
+    }
+}
+
+// ---- The lattice -----------------------------------------------------------
+
+/// The six steps between lattice neighbours on a face, in `(i, j)`.
+const STEPS: [(i32, i32); 6] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)];
+
+/// The keys of the cells across a cell's sides, in key order: six, or five
+/// at the twelve pentagons. A point on a face's edge or corner is reached
+/// on every face it lies on, so the cells across a face's edge are found
+/// with the rest. Empty for a key no cell has.
+pub fn neighbours(key: u32) -> Vec<u32> {
+    let Some(a) = cell_key::unpack(key) else {
+        return Vec::new();
+    };
+    let mut out = BTreeSet::new();
+    for at in cell_key::addresses(a) {
+        let side = at.side() as i64;
+        for (di, dj) in STEPS {
+            let (i, j) = (at.i as i64 + di as i64, at.j as i64 + dj as i64);
+            if i < 0 || j < 0 || i + j > side {
+                continue;
+            }
+            let n = Address {
+                face: at.face,
+                level: at.level,
+                i: i as u32,
+                j: j as u32,
+            };
+            if let Some(k) = cell_key::key(n)
+                && k != key
+            {
+                out.insert(k);
+            }
+        }
+    }
+    out.into_iter().collect()
+}
+
+/// Where a cell lies: a unit vector. `None` for a key no cell has.
+pub fn centre(key: u32) -> Option<Vec3> {
+    cell_key::key_direction(key)
+}
+
+/// The finest cell whose centre is nearest `direction`: the face it falls
+/// on, the lattice point its gnomonic weights round to, then a walk to the
+/// neighbour nearer it until none is.
+pub fn nearest_key(direction: Vec3) -> Option<u32> {
+    let d = direction.try_normalize()?;
+    let (vertices, faces) = crate::topology::icosahedron();
+    let side = (1u32 << LEVEL) as f32;
+    let mut best: Option<(f32, Address)> = None;
+    for (f, tri) in faces.iter().enumerate() {
+        let (a, b, c) = (vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]);
+        let n = (b - a).cross(c - a);
+        let t = a.dot(n) / d.dot(n);
+        if !t.is_finite() || t <= 0.0 {
+            continue;
+        }
+        let p = d * t;
+        // Barycentric weights of p in the face.
+        let (v0, v1, v2) = (b - a, c - a, p - a);
+        let (d00, d01, d11, d20, d21) =
+            (v0.dot(v0), v0.dot(v1), v1.dot(v1), v2.dot(v0), v2.dot(v1));
+        let den = d00 * d11 - d01 * d01;
+        let wb = (d11 * d20 - d01 * d21) / den;
+        let wc = (d00 * d21 - d01 * d20) / den;
+        let wa = 1.0 - wb - wc;
+        let worst = wa.min(wb).min(wc);
+        if best.is_none_or(|(w, _)| worst > w) {
+            let i = (wb * side).round().clamp(0.0, side) as u32;
+            let j = ((wc * side).round().clamp(0.0, side) as u32).min(side as u32 - i);
+            best = Some((
+                worst,
+                Address {
+                    face: f as u8,
+                    level: LEVEL,
+                    i,
+                    j,
+                },
+            ));
+        }
+    }
+    let mut key = cell_key::key(best?.1)?;
+    // Compared in f64: neighbouring centres differ from a direction by a
+    // few ulps of an f32 dot.
+    let far = |k: u32| centre(k).map(|c| (c.as_dvec3() - d.as_dvec3()).length_squared());
+    let mut dist = far(key)?;
+    loop {
+        let next = neighbours(key)
+            .into_iter()
+            .filter_map(|n| Some((n, far(n)?)))
+            .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+        match next {
+            Some((n, nd)) if nd < dist => {
+                key = n;
+                dist = nd;
+            }
+            _ => return Some(key),
+        }
+    }
+}
+
+/// A cell's neighbours in turn round it, counter-clockwise seen from
+/// outside.
+pub fn ring(key: u32) -> Vec<u32> {
+    let Some(c) = centre(key) else {
+        return Vec::new();
+    };
+    let tangent = c.any_orthonormal_vector();
+    let bitangent = c.cross(tangent);
+    let mut ring: Vec<(f32, u32)> = neighbours(key)
+        .into_iter()
+        .filter_map(|n| {
+            let d = centre(n)?;
+            Some((d.dot(bitangent).atan2(d.dot(tangent)), n))
+        })
+        .collect();
+    ring.sort_by(|a, b| a.0.total_cmp(&b.0));
+    ring.into_iter().map(|(_, n)| n).collect()
+}
+
+/// A cell's corners, counter-clockwise about its centre seen from outside:
+/// each the normalised sum of the centre and two neighbours in turn, as
+/// the dual's corners are ([`crate::topology::dual_from_triangles`]). The
+/// side from corner `k` to corner `k + 1` is shared with `ring(key)[k + 1]`.
+pub fn corners(key: u32) -> Vec<Vec3> {
+    let Some(c) = centre(key) else {
+        return Vec::new();
+    };
+    let ring: Vec<Vec3> = ring(key).into_iter().filter_map(centre).collect();
+    let k = ring.len();
+    (0..k)
+        .map(|s| (c + ring[s] + ring[(s + 1) % k]).normalize())
+        .collect()
+}
+
+/// The middle of the side two neighbouring cells share: halfway between
+/// their centres, on the sphere.
+pub fn edge_middle(a: u32, b: u32) -> Option<Vec3> {
+    Some((centre(a)? + centre(b)?).normalize())
+}
+
+// ---- The ground a road is laid on ------------------------------------------
+
+/// The water over a cell, as a road meets it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Water {
+    Dry,
+    /// A river's water, `depth_m` over its bed, with its surface at
+    /// `surface_m` (metres over the sea radius).
+    River {
+        depth_m: i32,
+        surface_m: i32,
+    },
+    /// The sea, which no road crosses.
+    Sea,
+}
+
+/// What a road needs to know of one cell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ground {
+    /// The top of its ground, metres over the sea radius, on a layer.
+    pub top_m: i32,
+    pub water: Water,
+    /// In a town's footprint: crossed, never laid (the town's lanes are the
+    /// road there).
+    pub town: bool,
+    /// Changed by the player: never crossed (design 11).
+    pub player: bool,
+}
+
+/// What a road does on one of its cells.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Kind {
+    /// A road top on the cell's ground.
+    Ground,
+    /// A road top on a river's bed, under its water.
+    Ford,
+    /// A timber deck at `deck_m`, metres over the sea radius.
+    Bridge { deck_m: i32 },
+}
+
+/// One cell of a road, as laid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadCell {
+    pub key: u32,
+    /// The top of the cell's ground when the road was planned, metres over
+    /// the sea radius: where the road top stands (or a raised bed's foot).
+    pub base_m: i32,
+    pub kind: Kind,
+    /// Raised a layer on a bed of packed earth: the road top is `base_m + 1`.
+    pub raised: bool,
+    /// The neighbour the top rises a layer toward, where it slopes.
+    pub up: Option<u32>,
+    /// The neighbour whose side the slope starts from, at `low_m`; the side
+    /// opposite `up` where the road ends on this cell.
+    pub from: Option<u32>,
+}
+
+impl RoadCell {
+    /// The road top's low side, metres over the sea radius: the deck on a
+    /// bridge, the bed's top on a raised cell, the ground otherwise.
+    pub fn low_m(&self) -> i32 {
+        match self.kind {
+            Kind::Bridge { deck_m } => deck_m,
+            _ => self.base_m + i32::from(self.raised),
+        }
+    }
+
+    /// The slope's foot and head on the sphere: the middle of the side it
+    /// starts from and of the side it climbs out of. `None` where it is flat.
+    pub fn slope(&self) -> Option<(Vec3, Vec3)> {
+        let up = self.up?;
+        let head = edge_middle(self.key, up)?;
+        let foot = match self.from {
+            Some(from) => edge_middle(self.key, from)?,
+            // The side opposite `up`: the centre mirrored past the head.
+            None => (centre(self.key)? * 2.0 - head).normalize(),
+        };
+        Some((foot, head))
+    }
+
+    /// The road top's height at `direction` in the cell, metres over the
+    /// sea radius: on the plane from the foot (low) to the head (a layer
+    /// up), measured along the line between them and held level past each.
+    pub fn top_at(&self, direction: Vec3) -> f32 {
+        let low = self.low_m() as f32;
+        let Some((foot, head)) = self.slope() else {
+            return low;
+        };
+        let along = head - foot;
+        let t = (direction.normalize() - foot).dot(along) / along.length_squared().max(1e-20);
+        low + t.clamp(0.0, 1.0)
+    }
+}
+
+/// A road, as the world laid it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Road {
+    /// The settlements it joins, by site id, the lower first.
+    pub from_site: u32,
+    pub to_site: u32,
+    pub surface: Surface,
+    /// Its cells from `from_site` toward `to_site`, without the towns' own.
+    pub cells: Vec<RoadCell>,
+}
+
+/// A settlement as the planner sees it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Settlement {
+    pub site: u32,
+    pub direction: Vec3,
+    /// Of the largest kind (a walled town): joined to its nearest such town,
+    /// in gravel.
+    pub large: bool,
+}
+
+/// Which settlements are joined (design 11): each to its `neighbours`
+/// nearest within `link_m`, and each large town to its nearest large town
+/// within `large_link_m`. Pairs by site id, the lower first, in order.
+pub fn links(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Vec<(u32, u32)> {
+    let mut pairs = BTreeSet::new();
+    let arc =
+        |a: &Settlement, b: &Settlement| crate::sites::arc_m(a.direction, b.direction, radius_m);
+    let pair = |a: u32, b: u32| (a.min(b), a.max(b));
+    for a in settlements {
+        let mut near: Vec<(f32, u32)> = settlements
+            .iter()
+            .filter(|b| b.site != a.site)
+            .map(|b| (arc(a, b), b.site))
+            .filter(|(m, _)| *m <= cfg.link_m)
+            .collect();
+        near.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+        for (_, b) in near.into_iter().take(cfg.neighbours) {
+            pairs.insert(pair(a.site, b));
+        }
+        if a.large
+            && let Some((_, b)) = settlements
+                .iter()
+                .filter(|b| b.large && b.site != a.site)
+                .map(|b| (arc(a, b), b.site))
+                .filter(|(m, _)| *m <= cfg.large_link_m)
+                .min_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)))
+        {
+            pairs.insert(pair(a.site, b));
+        }
+    }
+    pairs.into_iter().collect()
+}
+
+/// The road's surface for a link (design 10, recommendation taken): gravel
+/// between two large towns, dirt otherwise.
+pub fn surface_of(a: &Settlement, b: &Settlement) -> Surface {
+    if a.large && b.large {
+        Surface::Gravel
+    } else {
+        Surface::Dirt
+    }
+}
+
+// ---- The route ---------------------------------------------------------------
+
+/// A search state: a cell, and on a bridge how long it has run and the
+/// deck it carries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct State {
+    key: u32,
+    run: u32,
+    deck: i32,
+}
+
+/// One step of a route: a cell and what the road does there, before
+/// profiling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub key: u32,
+    pub ground: Ground,
+    /// The deck, where this cell is bridged.
+    pub deck: Option<i32>,
+}
+
+/// What a road asks of the ground: a cell's [`Ground`] by key, from any
+/// thread ([`plan`] routes its links side by side).
+pub type GroundFn<'a> = dyn Fn(u32) -> Option<Ground> + Sync + 'a;
+
+/// The cheapest way for a road from cell `from` to cell `to` over the
+/// ground `ground` answers (memoised here: each cell is asked once, and its
+/// centre and neighbours found once), by A* with the great-circle distance
+/// as its estimate. `None` where there is none within the search's budget.
+pub fn route(
+    from: u32,
+    to: u32,
+    ground: &GroundFn,
+    cfg: &RoadsConfig,
+    radius_m: f32,
+) -> Option<Vec<Step>> {
+    let goal = centre(to)?;
+    let mut cache: HashMap<u32, Option<Ground>> = HashMap::new();
+    let ask = |key: u32, cache: &mut HashMap<u32, Option<Ground>>| -> Option<Ground> {
+        *cache.entry(key).or_insert_with(|| ground(key))
+    };
+    let mut centres: HashMap<u32, Option<Vec3>> = HashMap::new();
+    let mut centre = |key: u32| *centres.entry(key).or_insert_with(|| centre(key));
+    let mut rings: HashMap<u32, Vec<u32>> = HashMap::new();
+    let arc = |a: Vec3, b: Vec3| crate::sites::arc_m(a, b, radius_m);
+    // Costs in millimetres, whole, so the order is total and the same on
+    // every machine.
+    let mm = |m: f32| (m * 1000.0).round().max(0.0) as u64;
+    let start_ground = ask(from, &mut cache)?;
+    if start_ground.player || start_ground.water != Water::Dry {
+        return None;
+    }
+    let start = State {
+        key: from,
+        run: 0,
+        deck: 0,
+    };
+    let mut best: HashMap<State, u64> = HashMap::from([(start, 0)]);
+    let mut came: HashMap<State, State> = HashMap::new();
+    let mut open = BinaryHeap::new();
+    let estimate = |c: Vec3| mm(arc(c, goal) * cfg.search_weight);
+    open.push(Reverse((estimate(centre(from)?), 0u64, start)));
+    let mut expanded = 0usize;
+    while let Some(Reverse((_, g, at))) = open.pop() {
+        if best.get(&at).is_some_and(|&b| b < g) {
+            continue;
+        }
+        if at.key == to && at.run == 0 {
+            let mut path = vec![at];
+            let mut cur = at;
+            while let Some(&prev) = came.get(&cur) {
+                path.push(prev);
+                cur = prev;
+            }
+            path.reverse();
+            return Some(
+                path.into_iter()
+                    .map(|s| Step {
+                        key: s.key,
+                        ground: cache[&s.key].expect("a cell on the route was answered"),
+                        deck: (s.run > 0).then_some(s.deck),
+                    })
+                    .collect(),
+            );
+        }
+        expanded += 1;
+        if expanded > cfg.max_expanded {
+            return None;
+        }
+        let here = ask(at.key, &mut cache)?;
+        let here_c = centre(at.key)?;
+        // The height a road stands at here: a bridge's deck, else the ground.
+        let here_h = if at.run > 0 { at.deck } else { here.top_m };
+        let around = rings
+            .entry(at.key)
+            .or_insert_with(|| neighbours(at.key))
+            .clone();
+        for n in around {
+            let Some(there) = ask(n, &mut cache) else {
+                continue;
+            };
+            if there.player {
+                continue;
+            }
+            let Some(there_c) = centre(n) else { continue };
+            let len = arc(here_c, there_c);
+            let next = match there.water {
+                Water::Sea => continue,
+                Water::River { depth_m, surface_m }
+                    if depth_m as f32 > cfg.ford_depth_m || at.run > 0 =>
+                {
+                    // Bridged: the deck is the bank's height, carried on,
+                    // and must stand over the water.
+                    let deck = if at.run > 0 { at.deck } else { here.top_m };
+                    if deck < surface_m || at.run + 1 > cfg.max_bridge_cells {
+                        continue;
+                    }
+                    let s = State {
+                        key: n,
+                        run: at.run + 1,
+                        deck,
+                    };
+                    Some((s, mm(len * cfg.bridge_cost)))
+                }
+                Water::River { .. } | Water::Dry => {
+                    // On the ground (a ford's ground is its bed): at most a
+                    // layer from where the road stands now.
+                    let dh = (there.top_m - here_h).abs();
+                    if dh > 1 {
+                        continue;
+                    }
+                    let mut cost = len;
+                    if matches!(there.water, Water::River { .. }) {
+                        cost *= cfg.ford_cost;
+                    }
+                    if dh == 1 {
+                        cost += cfg.slope_cost_m;
+                    }
+                    let s = State {
+                        key: n,
+                        run: 0,
+                        deck: 0,
+                    };
+                    Some((s, mm(cost)))
+                }
+            };
+            let Some((s, step)) = next else { continue };
+            let g2 = g + step;
+            if best.get(&s).is_some_and(|&b| b <= g2) {
+                continue;
+            }
+            best.insert(s, g2);
+            came.insert(s, at);
+            open.push(Reverse((g2 + estimate(there_c), g2, s)));
+        }
+    }
+    None
+}
+
+/// A route made a road (design 10): each cell's road top, raised a layer
+/// where it is lower than both its neighbours in the road, sloped up toward
+/// the neighbour a layer higher. The towns' cells are left out. `None` if
+/// any two neighbours in the road stand more than a layer apart.
+pub fn profile(steps: &[Step]) -> Option<Vec<RoadCell>> {
+    let n = steps.len();
+    let mut h: Vec<i32> = steps
+        .iter()
+        .map(|s| s.deck.unwrap_or(s.ground.top_m))
+        .collect();
+    let fixed = |k: usize| steps[k].deck.is_some() || steps[k].ground.town;
+    let mut raised = vec![false; n];
+    // A dip one cell wide is raised to its neighbours, until there is none.
+    for _ in 0..4 {
+        let mut changed = false;
+        for k in 1..n.saturating_sub(1) {
+            if !fixed(k) && !raised[k] && h[k] < h[k - 1] && h[k] < h[k + 1] {
+                h[k] += 1;
+                raised[k] = true;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    if h.windows(2).any(|w| (w[0] - w[1]).abs() > 1) {
+        return None;
+    }
+    let mut out = Vec::new();
+    for (k, s) in steps.iter().enumerate() {
+        if s.ground.town {
+            continue;
+        }
+        let kind = match (s.deck, s.ground.water) {
+            (Some(deck_m), _) => Kind::Bridge { deck_m },
+            (None, Water::River { .. }) => Kind::Ford,
+            _ => Kind::Ground,
+        };
+        let (mut up, mut from) = (None, None);
+        if s.deck.is_none() {
+            for (j, o) in [(k + 1, k.wrapping_sub(1)), (k.wrapping_sub(1), k + 1)] {
+                if j < n && h[j] == h[k] + 1 {
+                    up = Some(steps[j].key);
+                    from = (o < n).then(|| steps[o].key);
+                    break;
+                }
+            }
+        }
+        out.push(RoadCell {
+            key: s.key,
+            base_m: s.ground.top_m,
+            kind,
+            raised: raised[k],
+            up,
+            from,
+        });
+    }
+    Some(out)
+}
+
+/// Plan the network (design 11): every link routed and profiled, side by
+/// side on up to `threads` threads, and the roads given back in link order
+/// whatever finished first. A settlement's road starts from the cell at its
+/// anchor. A link with no route is left out.
+pub fn plan(
+    settlements: &[Settlement],
+    ground: &GroundFn,
+    cfg: &RoadsConfig,
+    radius_m: f32,
+    threads: usize,
+) -> Vec<Road> {
+    let by_site: BTreeMap<u32, &Settlement> = settlements.iter().map(|s| (s.site, s)).collect();
+    let links = links(settlements, cfg, radius_m);
+    let one = |(a, b): (u32, u32)| -> Option<Road> {
+        let (sa, sb) = (by_site[&a], by_site[&b]);
+        let steps = route(
+            nearest_key(sa.direction)?,
+            nearest_key(sb.direction)?,
+            ground,
+            cfg,
+            radius_m,
+        )?;
+        Some(Road {
+            from_site: a,
+            to_site: b,
+            surface: surface_of(sa, sb),
+            cells: profile(&steps)?,
+        })
+    };
+    let threads = threads.clamp(1, links.len().max(1));
+    let mut done: Vec<(usize, Road)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|t| {
+                let links = &links;
+                let one = &one;
+                scope.spawn(move || {
+                    links
+                        .iter()
+                        .enumerate()
+                        .skip(t)
+                        .step_by(threads)
+                        .filter_map(|(k, &link)| one(link).map(|r| (k, r)))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| w.join().expect("a road's search does not panic"))
+            .collect()
+    });
+    done.sort_by_key(|(k, _)| *k);
+    done.into_iter().map(|(_, r)| r).collect()
+}
+
+// ---- Records -----------------------------------------------------------------
+
+/// A road record's body: the cells compact, `(key, base_m, kind, deck_m,
+/// raised, up, from)` with `kind` 0 ground, 1 ford, 2 bridge and 0 for no
+/// `up` or `from` (a finest cell's key carries its level in bits 24 and 25,
+/// so none is 0).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct RoadBody {
+    from: u32,
+    to: u32,
+    surface: Surface,
+    cells: Vec<(u32, i32, u8, i32, bool, u32, u32)>,
+}
+
+/// The net record's body.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NetBody {
+    pub version: u32,
+    pub roads: u32,
+}
+
+/// A road's id: its two sites, the lower in the high half.
+pub fn road_id(from_site: u32, to_site: u32) -> u64 {
+    (u64::from(from_site.min(to_site)) << 32) | u64::from(from_site.max(to_site))
+}
+
+/// A road as its record.
+pub fn to_record(road: &Road) -> Record {
+    let cells = road
+        .cells
+        .iter()
+        .map(|c| {
+            let (kind, deck) = match c.kind {
+                Kind::Ground => (0, 0),
+                Kind::Ford => (1, 0),
+                Kind::Bridge { deck_m } => (2, deck_m),
+            };
+            (
+                c.key,
+                c.base_m,
+                kind,
+                deck,
+                c.raised,
+                c.up.unwrap_or(0),
+                c.from.unwrap_or(0),
+            )
+        })
+        .collect();
+    Record::of(
+        ROAD_RECORD,
+        road_id(road.from_site, road.to_site),
+        RECORD_SCHEMA,
+        &RoadBody {
+            from: road.from_site,
+            to: road.to_site,
+            surface: road.surface,
+            cells,
+        },
+    )
+}
+
+/// A road from its record, or `None` for one this build cannot read.
+pub fn from_record(record: &Record) -> Option<Road> {
+    if record.kind != ROAD_RECORD || record.schema != RECORD_SCHEMA {
+        return None;
+    }
+    let body: RoadBody = record.read()?;
+    let cells = body
+        .cells
+        .into_iter()
+        .map(|(key, base_m, kind, deck, raised, up, from)| {
+            Some(RoadCell {
+                key,
+                base_m,
+                kind: match kind {
+                    0 => Kind::Ground,
+                    1 => Kind::Ford,
+                    2 => Kind::Bridge { deck_m: deck },
+                    _ => return None,
+                },
+                raised,
+                up: (up != 0).then_some(up),
+                from: (from != 0).then_some(from),
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(Road {
+        from_site: body.from,
+        to_site: body.to,
+        surface: body.surface,
+        cells,
+    })
+}
+
+/// The net record for a plan of `roads` roads.
+pub fn net_record(roads: usize) -> Record {
+    Record::of(
+        ROAD_NET_RECORD,
+        0,
+        RECORD_SCHEMA,
+        &NetBody {
+            version: NET_VERSION,
+            roads: roads as u32,
+        },
+    )
+}
+
+/// Whether the world's roads were planned already.
+pub fn planned(records: &Records) -> bool {
+    records.get(ROAD_NET_RECORD, 0).is_some()
+}
+
+/// Every road the records hold, by id.
+pub fn stored(records: &Records) -> Vec<Road> {
+    records
+        .of_kind(ROAD_RECORD)
+        .filter_map(from_record)
+        .collect()
+}
+
+/// A road cell the player built (`townsfolk` task 8.3): its surface, the
+/// neighbour it rises toward and the one it rises from, by key, at the
+/// ground's top `base_m` when it was built.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuiltCell {
+    pub surface: Surface,
+    pub base_m: i32,
+    pub up: Option<u32>,
+    pub from: Option<u32>,
+}
+
+/// A player's road cell as its record, by the cell's key.
+pub fn built_record(key: u32, cell: &BuiltCell) -> Record {
+    Record::of(ROAD_CELL_RECORD, u64::from(key), RECORD_SCHEMA, cell)
+}
+
+/// Every road cell the player built, by key.
+pub fn built(records: &Records) -> BTreeMap<u32, BuiltCell> {
+    records
+        .of_kind(ROAD_CELL_RECORD)
+        .filter(|r| r.schema == RECORD_SCHEMA)
+        .filter_map(|r| Some((u32::try_from(r.id).ok()?, r.read::<BuiltCell>()?)))
+        .collect()
+}
+
+/// The neighbour a player's road cell rises toward (design 10): the first,
+/// in `toward`'s order (the one faced first), whose ground or road stands
+/// exactly a layer over this cell's `base_m`; flat where none does. The
+/// slope starts from the side opposite.
+pub fn built_up(base_m: i32, toward: &[(u32, i32)]) -> Option<u32> {
+    toward
+        .iter()
+        .find(|(_, h)| *h == base_m + 1)
+        .map(|(k, _)| *k)
+}
+
+/// A built cell as a road cell, to draw and stand on as the world's are.
+pub fn built_cell(key: u32, cell: &BuiltCell) -> RoadCell {
+    RoadCell {
+        key,
+        base_m: cell.base_m,
+        kind: Kind::Ground,
+        raised: false,
+        up: cell.up,
+        from: cell.from,
+    }
+}
+
+pub mod piece;
+
+#[cfg(test)]
+mod tests;

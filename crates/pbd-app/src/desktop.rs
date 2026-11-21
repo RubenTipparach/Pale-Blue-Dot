@@ -1791,6 +1791,8 @@ pub fn run(args: &[String]) {
             )
             .before(build_mode::aim_and_build),
     )
+    // The roads between them (`townsfolk` design 10 and 11).
+    .add_plugins(pbd_app::roads::RoadsPlugin)
     // Their people (`townsfolk`).
     .add_plugins(pbd_app::townsfolk::TownsfolkPlugin)
     .insert_resource(launch.map.clone())

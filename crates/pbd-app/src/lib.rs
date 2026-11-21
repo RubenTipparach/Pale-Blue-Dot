@@ -69,6 +69,7 @@ pub mod repro;
 pub mod river_band;
 pub mod river_fill;
 pub mod river_walk;
+pub mod roads;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
