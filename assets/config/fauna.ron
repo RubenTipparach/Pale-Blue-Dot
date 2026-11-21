@@ -683,7 +683,6 @@
             // appended: the beaver is seen only within 40 m of a colony.
             (
                 id: "beaver",
-                name: "Beaver",
                 from: New,
                 class: Mammal,
                 status: Protected,
@@ -704,10 +703,6 @@
                 colour: (0.42, 0.28, 0.16),
                 shape: (0.45, 0.35, 1.0),
                 icon: "water_life/beaver",
-                guide: (
-                    entry: "A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught.",
-                    tip: "Look where a stream is dammed with sticks. Come close and it slaps its tail and dives.",
-                ),
                 mover: Floater,
                 env: [Pool, Riffle],
                 behaviour: None,
@@ -716,7 +711,6 @@
             ),
             (
                 id: "river_otter",
-                name: "River otter",
                 from: New,
                 class: Mammal,
                 status: Protected,
@@ -737,10 +731,6 @@
                 colour: (0.33, 0.24, 0.17),
                 shape: (0.35, 0.3, 1.0),
                 icon: "water_life/river_otter",
-                guide: (
-                    entry: "A long, quick swimmer of cool rivers and lakes. It climbs out on the bank to look around and groom. River otters are protected: none may be caught.",
-                    tip: "Quiet river banks. It swims off if you come close.",
-                ),
                 mover: Floater,
                 env: [Riffle, Pool, Estuary],
                 behaviour: None,
