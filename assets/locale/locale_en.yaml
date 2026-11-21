@@ -136,6 +136,50 @@ breeding:
   temper: TEMPER
   wild_caught_founder: wild-caught founder
   yield: YIELD
+build:
+  kit:
+    adobe: Adobe dome
+    ashlar: Ashlar
+    brick: Red brick
+    brickbuff: Buff brick
+    brickdark: Clinker brick
+    clay: Clay
+    driftwood: Driftwood
+    granite: Granite longhouse
+    halftimber: Half-timbered
+    ice: Ice
+    igloo: Igloo
+    junglehut: Kapok hut
+    keep: Keep
+    marble: Marble
+    mud: Mud hut
+    poles: Pole tower
+    sandstone: Sandstone
+    stone: Fieldstone
+    straw: Straw hut
+    timber: Timber
+    tower: Stair tower
+    whitewash: Whitewash
+  kits: KITS
+  needed_by: "Remove the {thing} first"
+  piece:
+    floor: floor
+    lantern: lantern
+    post: post
+    roof: roof
+    stair: stair
+    wall: wall
+  refused:
+    clear: "A stair is there"
+    held_up: "Nothing holds it up"
+    headroom: "No headroom over the stair"
+    landing: "A wall blocks the stair"
+    outside: "Too far to build"
+    pentagon: "Can't build on this cell"
+    room: "Walls must close round the room"
+    roof_overlap: "Another roof is in the way"
+    slot: "Something is already here"
+    stair_cut: "A wall would cut the stair"
 compass:
   dir:
     e: E
@@ -156,6 +200,10 @@ controls:
     boat: "the boat"
     brake: brake
     breeding: breeding
+    build_mode: "build mode: walls, floors, stairs, roofs"
+    build_place: "place the piece, or remove with the remove slot"
+    build_remove: "remove the aimed piece"
+    build_turn: "turn a stair or blueprint; with shift, the next blueprint"
     camera: change the camera
     cruise: cruise
     dampeners: dampeners
@@ -163,8 +211,10 @@ controls:
     frame_graph: frame graph, again for its GPU breakdown
     guide: the field guide
     interact: "open, harvest, pick, feed, till; board or step off"
+    kits: the kits
     jump: jump, and rise in water
     kick: kick forward or back
+    load_log: load a log from the water
     map: the map
     menu: menu
     missions: the starter missions
@@ -187,12 +237,14 @@ controls:
     step_slots: step through the slots
     tool_wheel: "hold for the tools; the wheel picks one"
     turn: turn
+    unload_log: put a log over the side
     up_down: up and down
     use_tool: "use the tool in hand: dig, or cast, hook and reel"
     walk_or_fly: walk or fly
     weather: cycle the weather
     wind_in: wind the line in
   group:
+    building: BUILDING
     fishing_afloat: FISHING AFLOAT
     flying: FLYING
     hands: HANDS
@@ -569,6 +621,7 @@ interact:
     set_in_incubator: "Set eggs in {thing}"
     shut_door: "Shut {thing}"
     take_incubator: "Take {thing}"
+    take_log: "Take {thing}"
     take_up: "Take up {thing}"
     till: "Till {thing}"
   key: F
