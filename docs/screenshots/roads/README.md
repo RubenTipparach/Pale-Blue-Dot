@@ -9,7 +9,7 @@ show the look only; nothing here is a frame time.
     THREE_JS=<three.min.js r128> NODE_PATH=$(npm root -g) \
       node tools/mockup_roads_shots.js $PWD/docs/mockups/towns.html docs/screenshots/roads
 
-Every spot by day (`-11h00`) and at night (`-22h30`), lit by the road's
+The shots are JPEGs. Every spot by day (`-11h00`) and at night (`-22h30`), lit by the road's
 own lanterns:
 
 | Shot | What it shows |
@@ -22,7 +22,7 @@ own lanterns:
 | `mockup-roads-bridge-*` | The gravel road over the deep river on a railed timber bridge at the banks' height. |
 | `mockup-roads-gravel-*` | The gravel road east. |
 | `mockup-roads-overview-*` | The whole scene from above. |
-| `mockup-roads-info-phone.png` | The info modal at a phone's width. |
+| `mockup-roads-info-phone.jpg` | The info modal at a phone's width. |
 
 The same script walks the mockup's walker up the hill road from its foot
 to the turning place and counts the eye's jumps (a rise of more than
