@@ -333,7 +333,7 @@ const NUMK_BLEND_S: f32 = 0.08;
 impl Face {
     pub fn new(seed: u32, expression: Expression) -> Self {
         let mut rng = Rng::new(seed ^ 0x5bd1_e995);
-        let next_blink = 1.0 + rng.next() * 3.0;
+        let next_blink = 1.0 + rng.roll() * 3.0;
         Self {
             rng,
             cur: expression.params(),
@@ -392,7 +392,7 @@ impl Face {
             self.next_blink -= dt;
             if self.next_blink <= 0.0 {
                 self.blink_t = 0.0;
-                self.double = self.rng.next() < 0.2;
+                self.double = self.rng.roll() < 0.2;
             }
         } else {
             self.blink_t += dt;
@@ -409,7 +409,7 @@ impl Face {
                 self.next_blink = if self.double {
                     0.12
                 } else {
-                    2.0 + self.rng.next() * 4.0
+                    2.0 + self.rng.roll() * 4.0
                 };
                 self.double = false;
             }
@@ -425,11 +425,11 @@ impl Face {
                 self.hold = 0.15;
             }
         } else if self.hold <= 0.0 {
-            self.hold = 0.5 + self.rng.next() * 1.5;
+            self.hold = 0.5 + self.rng.roll() * 1.5;
             self.brow_pop = 1.0;
             self.target = [
-                (self.rng.next() - 0.5) * 1.6,
-                (self.rng.next() - 0.55) * 0.5,
+                (self.rng.roll() - 0.5) * 1.6,
+                (self.rng.roll() - 0.55) * 0.5,
             ];
         }
         // The head follows the eyes late; the pupils do the rest.
@@ -456,7 +456,7 @@ impl Face {
         if talk {
             self.talk_t -= dt;
             if self.talk_t <= 0.0 {
-                self.talk_t = 0.08 + self.rng.next() * 0.09;
+                self.talk_t = 0.08 + self.rng.roll() * 0.09;
                 self.talk_cell = self.rng.pick(&[
                     Mouth::A,
                     Mouth::OpenO,
