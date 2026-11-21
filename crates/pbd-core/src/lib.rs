@@ -57,6 +57,7 @@ pub mod sky_light;
 pub mod station;
 pub mod terrain;
 pub mod topology;
+pub mod townsfolk;
 pub mod tree_bake;
 pub mod tree_kit;
 pub mod vehicle;

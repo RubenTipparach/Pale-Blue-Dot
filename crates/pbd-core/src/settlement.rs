@@ -141,6 +141,10 @@ pub struct Template {
     /// `NO_TREE`: built, though their area is wild.
     #[serde(default)]
     pub cleared: Vec<[i32; 2]>,
+    /// Its people (`townsfolk` design 19), as the mockup's `person()` calls
+    /// put them.
+    #[serde(default)]
+    pub people: Vec<crate::townsfolk::PersonDef>,
 }
 
 /// What a town's masonry is made of (slice 4g): its walls and merlons, and

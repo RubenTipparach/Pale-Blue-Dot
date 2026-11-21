@@ -1791,6 +1791,8 @@ pub fn run(args: &[String]) {
             )
             .before(build_mode::aim_and_build),
     )
+    // Their people (`townsfolk`).
+    .add_plugins(pbd_app::townsfolk::TownsfolkPlugin)
     .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(
