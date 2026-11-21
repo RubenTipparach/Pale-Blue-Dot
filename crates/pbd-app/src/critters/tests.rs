@@ -377,3 +377,76 @@ fn at_most_eight_are_drawn() {
     assert_eq!(MAX_DRAWN, 8);
     assert!(DRAW_M <= crate::config::FaunaConfig::default().0.spawn.despawn_m);
 }
+
+/// `loading-screen` decision 9: every animal's rig spawned as the live game
+/// spawns it (no `PrewarmProxy`), while the world warms, and the warm-up run
+/// over them. Bevy picks a skinned pipeline from the mesh's joints and the
+/// bind group from the entity's skin, so any entity drawing a jointed mesh
+/// without a `SkinnedMesh` is a fatal draw (the owner's crash, 2026-11-20).
+#[test]
+fn a_critter_spawned_while_the_world_warms_is_never_drawn_without_its_skin() {
+    use bevy::ecs::system::RunSystemOnce;
+    use bevy::mesh::skinning::SkinnedMesh;
+
+    let mut world = World::new();
+    world.init_resource::<Assets<Mesh>>();
+    world.init_resource::<Assets<Image>>();
+    world.init_resource::<Assets<StandardMaterial>>();
+    world.init_resource::<Assets<SkinnedMeshInverseBindposes>>();
+    world.insert_resource(crate::loading::Warming::for_test());
+    world.spawn((
+        Camera3d::default(),
+        Camera {
+            is_active: true,
+            ..default()
+        },
+        GlobalTransform::default(),
+    ));
+    world.run_system_once(setup).expect("the kit");
+    // Forced: every animal drawn now, as `draw` would beside a colony.
+    world
+        .run_system_once(
+            |mut commands: Commands,
+             kit: Res<Kit>,
+             mut materials: ResMut<Assets<StandardMaterial>>| {
+                for animal in Animal::ALL {
+                    spawn_rig(
+                        &mut commands,
+                        &kit,
+                        &mut materials,
+                        animal,
+                        Transform::default(),
+                        true,
+                        false,
+                    );
+                }
+            },
+        )
+        .expect("the rigs");
+    // The warm-up, twice, as two warm frames.
+    for _ in 0..2 {
+        world
+            .run_system_once(crate::loading::show_unseen::<StandardMaterial>)
+            .expect("the warm-up");
+    }
+    let mut query = world.query::<(Entity, &Mesh3d, Has<SkinnedMesh>)>();
+    let drawn: Vec<_> = query
+        .iter(&world)
+        .map(|(e, m, s)| (e, m.0.clone(), s))
+        .collect();
+    let meshes = world.resource::<Assets<Mesh>>();
+    let mut skinned = 0;
+    for (entity, mesh, has_skin) in drawn {
+        let jointed = meshes
+            .get(&mesh)
+            .is_some_and(|m| m.contains_attribute(Mesh::ATTRIBUTE_JOINT_INDEX));
+        if jointed {
+            skinned += 1;
+            assert!(has_skin, "{entity} draws a jointed mesh without its skin");
+        }
+    }
+    assert_eq!(skinned, Animal::ALL.len(), "one skin per animal, no copies");
+    // And `draw`, which spawns them in play, waits for the screen to lift.
+    let ready = world.run_system_once(crate::loading::ready).expect("ready");
+    assert!(!ready, "the animals are drawn while the world warms");
+}
