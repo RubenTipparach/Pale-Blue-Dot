@@ -281,7 +281,7 @@ fn a_walker_walks_its_path_back_and_forth() {
 fn the_generator_is_the_mockups() {
     let mut rn = Rng::new(7 * 9973 + 3 * 131 + 7);
     for want in [0.419_510_8, 0.594_311_9, 0.294_543_9] {
-        assert!((rn.next() - want).abs() < 1e-6);
+        assert!((rn.roll() - want).abs() < 1e-6);
     }
     let l = look::generate(look::FIELDS, 7, 3, 0xa04a3a);
     assert_eq!(l.build, Build::Pear);
