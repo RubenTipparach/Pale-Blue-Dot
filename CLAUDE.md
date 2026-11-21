@@ -552,7 +552,9 @@ which wait for a request.
   some towns", "doing missions and rtrading should get you money, so we need
   currency"): coins, a trader in every town, town missions from a board and
   its people, and sloped dirt and gravel roads, laid by the world between
-  neighbouring towns (`townsfolk`, design 5 to 12).
+  neighbouring towns (`townsfolk`, design 5 to 12). Started on the owner's
+  word (2026-11-21): "People approved. Build.phase 3. Do it in parallel if
+  you can".
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
