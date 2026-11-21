@@ -1005,6 +1005,7 @@ fn show_unseen<M: Material>(
             &MeshMaterial3d<M>,
             Has<bevy::light::NotShadowCaster>,
             Has<bevy::light::NotShadowReceiver>,
+            Has<bevy::mesh::skinning::SkinnedMesh>,
         ),
         Without<PrewarmProxy>,
     >,
@@ -1021,10 +1022,22 @@ fn show_unseen<M: Material>(
     else {
         return;
     };
-    for (mesh, material, no_cast, no_receive) in &entities {
+    for (mesh, material, no_cast, no_receive, skinned) in &entities {
+        // Never a skinned mesh (decision 9): its pipeline is chosen by its
+        // joint attributes and its bind group by its skin, so a proxy without
+        // the skin is a fatal draw. The critters warm their own, skin and all.
+        if skinned {
+            continue;
+        }
         let Some(data) = meshes.get(&mesh.0) else {
             continue;
         };
+        if data
+            .try_contains_attribute(Mesh::ATTRIBUTE_JOINT_INDEX)
+            .unwrap_or(false)
+        {
+            continue;
+        }
         let layout = match data.try_attributes() {
             Ok(attributes) => {
                 let mut ids: Vec<_> = attributes.map(|(a, _)| a.id).collect();

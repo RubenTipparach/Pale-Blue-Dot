@@ -296,3 +296,26 @@ first frame like the kit (`ui_kit::install`), so the first frame the window
 shows is still the full slab, never a blank one. It is a painted render, not
 pixel art: it is sampled linear, as the kit's baked rock is. The full logo
 (`assets/ui/logo.png`) is the main menu's (`title-screen`).
+
+## Decision 9: a skinned mesh is never warmed without its skin (2026-11-20)
+
+The owner's game closed on a wgpu validation error in play, near a river:
+`pbr_opaque_mesh_pipeline` (built with `skinned_mesh_layout`) drawn with the
+`model_only_mesh_bind_group`. Bevy 0.18 picks a mesh's pipeline from its
+vertex layout (joint attributes make it skinned, `bevy_pbr` `is_skinned`) but
+its bind group from whether the entity has a skin extracted
+(`skin_uniforms.skin_byte_offset`). An entity that draws the beaver's or the
+otter's mesh without a `SkinnedMesh` gets the one and not the other, and wgpu
+treats the mismatch as fatal.
+
+`show_unseen` (decision 6) makes exactly that entity: each warm frame it copies
+every unseen mesh and material into a proxy, `Mesh3d` and `MeshMaterial3d`
+only. The critters' own warm-up rigs carry `PrewarmProxy` and are skipped, but
+a beaver or otter drawn for real while the world warms (a launch or a load
+beside a colony) is not, and its proxy has no skin. Warming runs on every
+world load (`drive_loading`), not only at launch.
+
+The fix: `show_unseen` skips any mesh that is skinned, by its `SkinnedMesh` or
+by joint attributes in its layout. Skinned pipelines are warmed by the
+critters' own proxy rigs, which carry their skin. Not yet built or run: the
+owner is playing (2026-11-20, "no more launches until midnight").

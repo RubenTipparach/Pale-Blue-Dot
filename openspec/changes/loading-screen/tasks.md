@@ -58,3 +58,5 @@
         `LATE_PIPELINE`; `READY` before and after; a test that the map shows
         its proxies once.
 - [ ] 5.4 The step's video, for the owner's batch.
+- [ ] 5.5 Decision 9: `show_unseen` never proxies a skinned mesh (code
+  written 2026-11-20; build, then a load beside a beaver colony, still owed).
