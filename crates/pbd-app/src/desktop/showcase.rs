@@ -757,7 +757,9 @@ impl Bot {
             self.climb_out_s = 0.0;
         }
         self.climb_out_s += s.dt;
-        if self.climb_out_s > 90.0 {
+        // Ninety seconds, and five more for every metre still to climb.
+        let to_climb = self.climb_to.map_or(0.0, |to| (to - altitude).max(0.0));
+        if self.climb_out_s > 90.0 + 5.0 * to_climb {
             warn!("showcase: up and out: gave up after 90 s");
             self.climbing_out = false;
             self.climb_to = None;
@@ -3611,6 +3613,8 @@ fn station(
     let (made, block) = match material {
         Material::Workbench => ("workbench", "block:workbench"),
         Material::Campfire => ("campfire", "block:campfire"),
+        // A forge is made at the bench: only placed here when carried.
+        Material::Forge if carried(s.slots, "block:forge") > 0 => ("forge", "block:forge"),
         _ => ("", ""),
     };
     // Only when it can be made (or is carried): else the walk to the far one.
