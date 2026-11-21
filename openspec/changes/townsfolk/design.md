@@ -158,6 +158,67 @@ no new generator version.
 better prices (up to 10%) and more jobs on the board. Theft and damage lower
 it in the consequences change, not here.
 
+**10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
+3").** The look was built in the towns mockup first (M15's Roads tab,
+`towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
+climbing ten layers a layer a cell with one bend, a ford and a timber
+bridge, by day and lit at night by lanterns on posts; the mockup's walker
+climbs the hill road with no eye jump. The owner asked for the game to
+follow straight on ("Build phase 3"), so the game was built from the tab
+without waiting for its approval; the tab is on the tracker for it.
+- **A road is a piece on an ordinary cell, not a ground edit.** The cell's
+  column is the generator's, untouched; the road top is cut like a town's
+  street step: its own mesh 2 cm over the ground (`roads::piece::LIFT_M`),
+  its side faces down to the cell's ground, and a floor for the walker
+  (`settlement::pieces::Surface::Steps` for a slope, `Floor` for a flat or
+  raised cell or a deck) in a frame of its own, met through the same
+  `walking` floors a town is. So `planet/contact`'s "steps are reported as
+  steps" holds for the terrain, and a road's slope is a separate, explicit
+  shape (a new requirement in `world/roads`). No save format changes and no
+  generator version moves.
+- **The slope's plane** runs from the middle of the side the road comes in
+  by, at the cell's ground, to the middle of the side it climbs out of, a
+  layer up, held level past each: one layer over 2.83 m straight through
+  (19 degrees), over 2.45 m round a 60-degree bend (22 degrees). It goes on
+  the lower cell of each one-layer pair. A cell lower than both its
+  neighbours in the road (a dip one cell wide) would need two slopes, so it
+  is raised a layer on a bed of packed earth instead (`RoadCell::raised`).
+- **The route** is A* over the finest cells by their exact keys
+  (`roads::neighbours`, on every face a key's point lies on), costed in
+  millimetres so the order is total: a cell's length, plus
+  `slope_cost_m` for a layer up or down; never two layers; shallow river
+  water (`ford_depth_m`, 1 m) forded at `ford_cost` times the length on its
+  bed; deeper water bridged at the bank's height for at most
+  `max_bridge_cells`, at `bridge_cost`; never the sea; never a cell holding a
+  player's edit or road cell. A town's footprint is crossed and not laid
+  (its lanes are the road there). Tunables in `assets/config/roads.ron`.
+  The search is weighted A* (`search_weight` 1.5: a road at most half as
+  long again as the cheapest, for far fewer cells looked at), capped at
+  `max_expanded` cells a link, and the links are routed side by side on all
+  but one of the machine's threads, given back in link order. Measured on
+  the shipped seed in this container (4 cores, `--profile fast`,
+  `roads::tests::the_shipped_seed_network`): 53 settlements (the cave
+  towns left out: their anchor is under the mountain), 57 links, 27 routed,
+  11,730 cells, in 3.2 s; with the plain cheapest search and 600,000 cells a
+  link it was 35 routed in 59 s, too long for a loading screen. The links
+  not routed have no way that climbs at most a layer a cell, keeps off the
+  sea and bridges at most ten cells within the search's reach; a later
+  change may cut and fill (world edits through the yield check) to reach
+  them.
+- **Stored records**, authored by the world (`@wroads:road-net/0`) and
+  passed through the yield check: one `road` record a road (id: its two
+  sites, the cells compact), and `road-net` id 0 once the plan is made,
+  which is what keeps a world from being planned twice. Planned in the
+  loading thread after the towns' ground is installed, so an old save gains
+  its roads on its next open, in place, with no restart. A player's road
+  cell is a `road-cell` record of the player's, by its cell key.
+- **Laid only where no player edit stands, at every build**: a stored
+  road's cell that the player has since edited is not drawn or stood on,
+  so the road yields however late the edit came.
+- **Gravel is walked `gravel_speed` (1.15) times the ground's**, dirt
+  `dirt_speed` (1.0), read off the road piece under the walker's feet.
+- Frame cost not measured (cloud session, lavapipe; CLAUDE.md).
+
 **Order.** Coins first, then trade, then missions (they pay coins and use
 trade), then roads (the delivery, escort and clear jobs want them). Each is
 mocked up before code where it has a look: the road surfaces and slopes in a

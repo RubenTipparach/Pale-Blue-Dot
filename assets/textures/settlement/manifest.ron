@@ -74,6 +74,8 @@
     (name: "roofsnow", width: 32, height: 32, repeat_m: 2.0),
     (name: "caveceil", width: 32, height: 32, repeat_m: 2.0),
     (name: "rockface", width: 32, height: 32, repeat_m: 2.0),
+    (name: "roaddirt", width: 32, height: 32, repeat_m: 2.0),
+    (name: "gravel", width: 32, height: 32, repeat_m: 2.0),
     (name: "net", width: 32, height: 32, repeat_m: 1.0, cut: true),
   ],
 )
