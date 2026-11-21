@@ -40,9 +40,49 @@ place on the roadmap.
   the settlement record and the seed. When people gain state (the owner's
   "you can steal from people lol, but there will be consequences"), they
   become records in a later change.
-- **Out of scope:** schedules, talk, trade, reactions to theft or to a house
-  taken apart, and walking off their paths. Those are the consequences change
-  after the roadmap.
+- **Out of scope:** schedules, reactions to theft or to a house taken apart,
+  and walking off their paths outside a mission. Those are the consequences
+  change after the roadmap. Talk, trade, coins, town missions and roads came
+  in on 2026-11-21 (below).
+
+## Added 2026-11-21: coins, trade, town missions and roads
+
+**The owner (2026-11-21):** "Townsfolk: add reqs for trading, picking up
+custom missions, building roads (slope hexagon dirt + collision or gravel
+roads) and generate road segments between some towns." On the missions:
+"trade something, hunt or gather some resource for a town, help find a lost
+villager guide them back, deliver a package, cook some food, repair a
+building, do some fishing, mine some resources, idk whatever else you think
+is appropriate". And: "doing missions and rtrading should get you money, so
+we need currency".
+
+- **Coins.** One currency, coins, held in the player's purse (a counter, not a
+  pack slot), saved as a player record. Missions and selling pay coins;
+  buying spends them. The starter missions said "coins come with the
+  townsfolk phase" (`starter-missions` design); this is that.
+- **Trading.** Each town has a trader (the market stall, or the shop in a
+  village). You buy and sell goods for coins. A town's prices follow what it
+  makes and what it needs (its biome, its trades, its size), it buys for less
+  than it sells, its stock is limited and comes back each game day, and your
+  own sales move its price. The trade panel is M5's.
+- **Town missions.** Each town posts jobs on its board, and some townsfolk
+  offer one when you talk to them. You pick one up, do it, and come back for
+  coins and the town's goodwill. The kinds: trade, hunt or gather for the
+  town, find a lost villager and guide them home, deliver a package to another
+  town, cook a dish, repair a building, fish, mine, and (recommended here)
+  tend a herd, bring in a harvest, clear a rockfall off a road, escort a
+  trader along a road, and light the town's lamps at dusk. They count with the
+  starter missions' rule, so a mission is data and one counting function.
+- **Roads.** A road cell is a hex whose top slopes from one layer to the next
+  where the road climbs, so a road has no steps, and its slope is solid to the
+  walker. A road is dirt (packed, built with a shovel) or gravel (needs
+  gravel, faster underfoot). Towns are joined by generated road segments: not
+  every pair, a few, the way roads grow (each town to its nearest neighbours,
+  the large towns to each other). Roads are laid by the world as stored
+  records, so old saves gain them and nothing a player made is overwritten.
+- **Townsfolk with state.** The people stay derived, except where the player
+  has done something with one: a lost villager, a mission given, a town's
+  goodwill. Those are stored records (`world-persistence`).
 
 ## Capabilities
 
@@ -53,6 +93,13 @@ place on the roadmap.
   - how they look;
   - that they are solid and lit;
   - that they follow from the settlement and the seed.
+
+- `player/coins`: the purse, what pays coins and what spends them.
+- `world/trade`: a town's trader, its prices, its stock.
+- `world/town-missions`: jobs from a town's board and its people, taken,
+  done and paid.
+- `world/roads`: sloped road cells, dirt and gravel, and the roads laid
+  between towns.
 
 ### Modified Capabilities
 - None.
