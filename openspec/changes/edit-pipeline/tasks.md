@@ -71,7 +71,10 @@ the only code this change has produced so far.
 - [ ] Measure the bounded pass against the 9.3 ms full one, same instrument.
 
 ## 5. Accept, sequence, apply - the seam multiplayer needs
-- [ ] Split `apply_edit`: an ACCEPT that validates, spends the item and writes
+- [ ] (Begun 2026-11-21: the decision half is `pbd_core::accept::edit` with
+      `yield_of`, design "Accept as a core rule"; `apply_edit` calls it. The
+      sequence and the apply split are still to do.)
+      Split `apply_edit`: an ACCEPT that validates, spends the item and writes
       the log for a sequence, and an APPLY that takes a sequenced edit and
       mutates the derived state. The apply must not know where the edit came
       from.

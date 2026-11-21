@@ -163,6 +163,30 @@ it is acknowledged, and `SaveWriter` already answers that with a committed mark
 rather than a queued one. A remote edit is accepted by whoever owns the log; a
 client applying one has nothing to acknowledge.
 
+### Accept as a core rule (2026-11-21, `multiplayer` design 16)
+
+The first cut of the seam, for `multiplayer` task 2.2. The decision half of
+`apply_edit` moves into `pbd_core::accept::edit`, a function of what is
+there, what the player asked for and the hands, with no frame:
+
+- **In:** the cell, the layer, the material it is to become, the material
+  there now, whether the column already carries a lamp, the hands
+  (`Take`, `TakeFinds`, `Till`, `Spend`, `Swap`, `Empty`, moved from the app
+  unchanged), the player's slots, and what a dig yields.
+- **Out:** a refusal (bedrock or above the world, no change, a second lamp,
+  nothing in the slot), or the slots after the edit and the item that
+  floats out at the cell.
+- **What a dug block yields** (`yield_of`) moves with it, reading the edits
+  and the terrain config, both core.
+
+Where "the material there now" comes from stays the caller's: the client
+reads its resident tier as it does today, a server generates the column from
+the seed and the edits, which is the same pure function. So does the tier's
+own refusals (the cell not resident, the tier full), which are about the
+client's render tier and not the world. The journal write and the apply are
+unchanged in this step, and so is everything the player sees: the same
+refusals, in the same order, with the same log lines.
+
 ## An edit made while the tier is being rebuilt is undone when it lands (found 2026-09-28)
 
 **Found, not fixed.** `refresh_lod` clones the save's edits when it REQUESTS a
