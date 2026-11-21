@@ -6,7 +6,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 1. Prerequisites (other changes)
 
-- [ ] 1.1 `edit-pipeline` section 5: ACCEPT and APPLY split, a sequence on the log. Verify: that change's test that replaying a sequence from cold gives the same columns.
+- [x] 1.1 (Done 2026-11-21; `edit-pipeline` tasks 5.) `edit-pipeline` section 5: ACCEPT and APPLY split, a sequence on the log. Verify: that change's test that replaying a sequence from cold gives the same columns.
 - [ ] 1.2 `world-persistence` 4.1, 5.1 and 5.2: the world clock, regions with snapshots and their last sequence, the segmented journal. Verify: that change's tests.
 
 ## 2. The rules run without a frame

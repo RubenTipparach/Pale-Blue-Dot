@@ -12,6 +12,7 @@
 
 use bevy::prelude::*;
 use pbd_app::drops::Drops;
+use pbd_app::planet::Applied;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
@@ -421,20 +422,17 @@ pub fn apply_edit(
             .for_cell(cell)
             .iter()
             .any(|&(l, m)| usize::from(l) == layer && m == was);
-    if !save.accept(
-        Edit {
-            cell,
-            layer: layer as u16,
-            material,
-        },
-        dropped.as_ref(),
-        &moved,
-    ) {
+    let edit = Edit {
+        cell,
+        layer: layer as u16,
+        material,
+    };
+    let Some(sequenced) = save.accept_sequenced(edit, dropped.as_ref(), &moved) else {
         // The durable path refused it, so the world must not change either:
         // an edit that shows and does not save is the worse of the two.
         error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
         return None;
-    }
+    };
     if was_placed {
         info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
     }
@@ -443,28 +441,35 @@ pub fn apply_edit(
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
-    if let Some(column) = adopting {
-        // Checked before the save took the edit, so this cannot refuse.
-        let adopted = set.adopt(record, column);
-        debug_assert!(adopted, "adoption was checked before the save");
+    // APPLY (`edit-pipeline` 5): the same call a world process's or a
+    // server's edit takes, which does not know where the edit came from.
+    // The column, its record and its neighbours', the water and the surface
+    // (`FineSet::write_layer`, the one path a landing's replay takes too),
+    // adopting the cell first if it was past the tier's edge (checked to fit
+    // before the save took it). The surface matters as much as the runs:
+    // repacking the runs and leaving the record's cap alone is the bug the
+    // owner reported as broken geometry, "a meadow over the hole and a wall
+    // across it".
+    let applied = set.apply(sequenced.edit, &save.edits);
+    if applied != Applied::Written {
+        warn!("edit at cell {cell} layer {layer} applied as {applied:?}");
+    }
+    if adopting.is_some() {
         info!("adopted cell {cell} into the tier ahead of the streaming");
     }
-    // The column, its record and its neighbours', the water and the surface
-    // (`FineSet::write_layer`, the one path a landing's replay takes too).
-    // The surface matters as much as the runs: repacking the runs and leaving
-    // the record's cap alone is the bug the owner reported as broken geometry,
-    // "a meadow over the hole and a wall across it".
-    set.write_layer(record, layer, material, &save.edits);
+    debug!(
+        "edit {} of region {:#x} applied: {applied:?}",
+        sequenced.seq, sequenced.region
+    );
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
     // lights round a corner. The reference runs a bounded incremental pass
     // because a full one costs it a second; ours costs six milliseconds, so it
-    // buys the exactness instead.
+    // buys the exactness instead. Then the sea's sheet over the tier, its
+    // shade from the light just baked.
     let repacked = started.elapsed();
-    set.columns.relight();
-    // The sea's sheet over the tier, its shade from the light just baked.
-    set.mark_sea();
+    set.finish_edits();
     let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);

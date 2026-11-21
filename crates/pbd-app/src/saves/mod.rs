@@ -21,6 +21,7 @@ use format::{Identity, KEY_VERSION, Record, WorldFile};
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Equipment, Slots};
+use pbd_core::net::ledger::{Ledger, Sequenced};
 use pbd_core::records::{Author, Proposal, Record as StoredRecord, Records, Refusal, YieldSet};
 use pbd_core::vehicle::record::VehicleFile;
 use std::collections::BTreeMap;
@@ -293,6 +294,9 @@ pub struct WorldSave {
     pub yields: YieldSet,
     /// The id the next drop is given: one past the highest the log names.
     next_drop: u64,
+    /// Each region's last sequence and digest (`multiplayer` design 4):
+    /// every edit the writers below take is numbered in its region.
+    ledger: Ledger,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -323,6 +327,7 @@ impl Default for WorldSave {
     fn default() -> Self {
         Self {
             edits: Edits::new(),
+            ledger: Ledger::default(),
             carried: None,
             kit: 0,
             pose: None,
@@ -405,6 +410,7 @@ impl WorldSave {
         let weather = std::fs::read(directory.join(WEATHER)).ok();
         let vehicles = read_vehicles(&directory.join(VEHICLES));
         Self {
+            ledger: Ledger::of(&edits),
             edits,
             carried,
             kit,
@@ -467,17 +473,35 @@ impl WorldSave {
     /// A dig's line carries the drop it made (`inventory-grid` decision 4),
     /// so the hole and the block floating beside it reach the disk together.
     pub fn accept(&mut self, edit: Edit, drop: Option<&ItemDrop>, carried: &Slots) -> bool {
+        self.accept_sequenced(edit, drop, carried).is_some()
+    }
+
+    /// [`WorldSave::accept`], answering with the edit's place in its
+    /// region's order: what APPLY takes (`edit-pipeline` 5), and what a
+    /// server sends its subscribers.
+    pub fn accept_sequenced(
+        &mut self,
+        edit: Edit,
+        drop: Option<&ItemDrop>,
+        carried: &Slots,
+    ) -> Option<Sequenced> {
         if self.writer.failure().is_some() {
-            return false;
+            return None;
         }
         self.edits.set(edit);
+        let sequenced = Some(self.ledger.accept(edit, &self.edits));
         // The player's: no world process may change this cell again.
         self.yields.touch_cell(edit.cell);
         if let Some(drop) = drop {
             self.next_drop = self.next_drop.max(drop.id + 1);
         }
         self.writer.append(format::line_of(edit, drop, carried));
-        true
+        sequenced
+    }
+
+    /// Each region's last sequence and digest.
+    pub fn ledger(&self) -> &Ledger {
+        &self.ledger
     }
 
     /// The id for the next drop. Ids are never reused, so a pickup line names
@@ -678,6 +702,7 @@ impl WorldSave {
         let author = water_author();
         for &edit in edits {
             self.edits.set(edit);
+            self.ledger.accept(edit, &self.edits);
             self.writer
                 .append(format::authored(&author, format::world_edit_line(edit)));
         }
@@ -696,6 +721,7 @@ impl WorldSave {
         let mut last = 0;
         for edit in proposal.edits {
             self.edits.set(edit);
+            self.ledger.accept(edit, &self.edits);
             last = self
                 .writer
                 .append(format::authored(author, format::world_edit_line(edit)));

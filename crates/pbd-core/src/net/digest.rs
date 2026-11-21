@@ -69,6 +69,78 @@ pub fn encode(region: u32, cells: &[(u16, &[(u16, Material)])]) -> Vec<u8> {
     out
 }
 
+/// One edited cell of a region: its place, and its layers in order.
+pub type Cell = (u16, Vec<(u16, Material)>);
+
+/// A region's state read back from its canonical bytes: its address and
+/// each edited cell's place and layers, by place. `None` for bytes that are
+/// not one region's encoding of this version (a section this build does not
+/// know is refused, not skipped: a client that cannot read a region must
+/// not pretend to hold it).
+pub fn decode(bytes: &[u8]) -> Option<(u32, Vec<Cell>)> {
+    let mut at = 0usize;
+    let mut take = |n: usize| -> Option<&[u8]> {
+        let out = bytes.get(at..at + n)?;
+        at += n;
+        Some(out)
+    };
+    if take(1)? != [ENCODING_VERSION] {
+        return None;
+    }
+    let region = u32::from_le_bytes(take(4)?.try_into().ok()?);
+    let mut cells = Vec::new();
+    if let Some(tag) = take(1) {
+        if tag != [EDITS_TAG] {
+            return None;
+        }
+        let count = u32::from_le_bytes(take(4)?.try_into().ok()?) as usize;
+        let mut last: Option<u16> = None;
+        for _ in 0..count {
+            let place = u16::from_le_bytes(take(2)?.try_into().ok()?);
+            // Ascending and unique, as encoded: anything else is not ours.
+            if last.is_some_and(|l| l >= place) {
+                return None;
+            }
+            last = Some(place);
+            let n = u16::from_le_bytes(take(2)?.try_into().ok()?) as usize;
+            if n == 0 {
+                return None;
+            }
+            let mut layers = Vec::with_capacity(n.min(crate::column::LAYERS));
+            for _ in 0..n {
+                let layer = u16::from_le_bytes(take(2)?.try_into().ok()?);
+                let material = crate::terrain::material_of(take(1)?[0])?;
+                layers.push((layer, material));
+            }
+            cells.push((place, layers));
+        }
+        if take(1).is_some() {
+            return None;
+        }
+    }
+    Some((region, cells))
+}
+
+/// The edits a region's snapshot holds, as `Edit`s with their cell keys,
+/// in place order: what a client folds into its copy when it replaces the
+/// region (`multiplayer` design 2, 3).
+pub fn snapshot_edits(bytes: &[u8]) -> Option<(u32, Vec<crate::edits::Edit>)> {
+    let (r, cells) = decode(bytes)?;
+    let mut out = Vec::new();
+    for (place, layers) in cells {
+        let a = region::address(r, place)?;
+        let cell = crate::cell_key::key(a)?;
+        for (layer, material) in layers {
+            out.push(crate::edits::Edit {
+                cell,
+                layer,
+                material,
+            });
+        }
+    }
+    Some((r, out))
+}
+
 /// Every region's edited cells and its digest, kept as edits are made, so a
 /// digest check is a lookup (design 2).
 ///
@@ -278,6 +350,79 @@ mod tests {
             assert_eq!(rebuilt.encode(r, &edits), regions.encode(r, &edits));
         }
         assert!(regions.regions().len() >= 6);
+    }
+
+    /// `world-persistence` 5.1: a region's snapshot round-trips: decoded
+    /// and folded into an empty world, it encodes to the same bytes and
+    /// digests the same; a cut or extended one is refused.
+    #[test]
+    fn a_regions_snapshot_round_trips() {
+        let mut edits = Edits::new();
+        for (c, layer, m) in [
+            (cell(4, 70, 10), 200, Material::Air),
+            (cell(4, 70, 10), 199, Material::Air),
+            (cell(4, 65, 3), 201, Material::Torch),
+            (cell(4, 100, 20), 150, Material::flowing(2, false)),
+        ] {
+            edits.set(Edit {
+                cell: c,
+                layer,
+                material: m,
+            });
+        }
+        let regions = Regions::of(&edits);
+        let r = regions.regions()[0];
+        let bytes = regions.encode(r, &edits);
+        let (back, held) = snapshot_edits(&bytes).unwrap();
+        assert_eq!(back, r);
+        let mut copy = Edits::new();
+        for edit in held {
+            copy.set(edit);
+        }
+        let copied = Regions::of(&copy);
+        assert_eq!(copied.encode(r, &copy), bytes);
+        assert_eq!(copied.digest(r), regions.digest(r));
+        for n in 0..bytes.len() {
+            if n == 5 {
+                // The header alone is an empty region, which is a region.
+                assert_eq!(decode(&bytes[..n]).map(|d| d.1.len()), Some(0));
+                continue;
+            }
+            assert!(decode(&bytes[..n]).is_none(), "cut at {n}");
+        }
+        let mut longer = bytes.clone();
+        longer.push(0);
+        assert!(decode(&longer).is_none());
+        let empty = encode(r, &[]);
+        assert_eq!(decode(&empty), Some((r, Vec::new())));
+    }
+
+    /// `world-persistence` 5.1: every finest cell's region contains it: the
+    /// cell's key comes back from its region and place.
+    #[test]
+    fn every_cells_region_contains_it() {
+        for face in 0..20u8 {
+            for (i, j) in [
+                (0, 0),
+                (2048, 0),
+                (0, 2048),
+                (1024, 1024),
+                (63, 0),
+                (64, 0),
+                (100, 1947),
+            ] {
+                let a = Address {
+                    face,
+                    level: 11,
+                    i,
+                    j,
+                };
+                let Some(k) = key(a) else { continue };
+                let c = crate::cell_key::unpack(k).unwrap();
+                let (r, p) = (region::region(c).unwrap(), region::place(c).unwrap());
+                assert_eq!(region::address(r, p).and_then(key), Some(k));
+            }
+        }
     }
 
     /// One layer changed in one cell changes that region's digest and no
