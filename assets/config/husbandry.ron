@@ -17,6 +17,8 @@
         spook_cost: 10.0,
         decay_per_hour: 5.0,
         follow_s: 60.0,
+        // A wild animal fed from the hand follows this long (taming-hearts).
+        wild_follow_s: 20.0,
     ),
     needs: (
         mood_per_need: 25.0,
@@ -74,7 +76,9 @@
                     space_cells: 0.2,
                     grazing_cells: 0.2,
                     products: [
-                        (good: "egg", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                        // An egg every 6 in-game hours while content (hen-laying, owner
+                        // 2026-11-20).
+                        (good: "egg", amount: 1.0, period_days: 0.25, sex: Some(F)),
                     ],
                     coats: ["cream", "russet", "black"],
                     patterns: ["plain", "speckled"],

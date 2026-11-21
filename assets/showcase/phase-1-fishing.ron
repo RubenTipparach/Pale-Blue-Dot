@@ -30,13 +30,13 @@
             caption: "Dig for bait, and fish with it",
             until: ["bait"],
             max_s: 600.0,
-            acts: [Focus("bait"), Shore, Hand("shovel"), Dig(Have("bait", 8), 1), Hand("rod"), Fish(Mission("bait")), Still],
+            acts: [Focus("bait"), Shore, Hand("shovel"), Dig(Times(15), 1), Hand("rod"), Fish(Mission("bait")), Still],
         ),
         (
             caption: "Three kinds of fish",
             until: ["three-kinds"],
             max_s: 900.0,
-            acts: [Focus("three-kinds"), Hand("rod"), Fish(Mission("three-kinds")), Still],
+            acts: [Focus("three-kinds"), Shore, Hand("shovel"), Dig(Have("bait", 6), 1), Hand("rod"), Fish(Mission("three-kinds")), Still],
         ),
         (
             caption: "Fishing done",

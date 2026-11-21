@@ -17,7 +17,7 @@
         (
             caption: "Getting about. Read the map, and mark a place",
             max_s: 30.0,
-            acts: [Map(4.0), Mark(230.0), Still],
+            acts: [Focus("map"), Map(4.0), Mark(230.0), Still],
         ),
         (
             caption: "Walk to the mark",

@@ -497,6 +497,18 @@ impl WorldSave {
         true
     }
 
+    /// Record a stack the player dropped (`drop-and-trash`): the drop and the
+    /// slots after it, in one line.
+    pub fn record_toss(&mut self, drop: &ItemDrop, carried: &Slots) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.next_drop = self.next_drop.max(drop.id + 1);
+        self.carried = Some(carried.clone());
+        self.writer.append(format::toss_line_of(drop, carried));
+        true
+    }
+
     /// Record the slots after a move in the pack. The same durable path as an
     /// edit: a stack moved and not saved would be back where it was at the
     /// next load, or in two places.
@@ -835,6 +847,11 @@ fn replay(text: &str) -> Replayed {
                 out.carried = Some(slots);
             }
             Record::Pack { slots } => out.carried = Some(slots),
+            Record::Toss { drop, slots } => {
+                out.next_drop = out.next_drop.max(drop.id + 1);
+                out.drops.insert(drop.id, drop);
+                out.carried = Some(slots);
+            }
             Record::Kit { version, slots } => {
                 out.kit = out.kit.max(version);
                 out.carried = Some(slots);

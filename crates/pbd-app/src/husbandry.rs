@@ -215,6 +215,9 @@ pub struct Farmyard {
     /// What the player did this frame, announced as messages.
     deeds: Vec<Deed>,
     gained: Vec<(Item, u16)>,
+    /// Hearts to show over an animal this frame, for a feed
+    /// (`taming-hearts`): whose, and how many.
+    hearts: Vec<(Who, u8)>,
 }
 
 impl Default for Farmyard {
@@ -230,6 +233,7 @@ impl Default for Farmyard {
             pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
+            hearts: Vec::new(),
         }
     }
 }
@@ -303,6 +307,7 @@ impl Plugin for HusbandryPlugin {
                     draw,
                     draw_fences,
                     hud,
+                    hearts,
                 )
                     .chain()
                     .after(crate::fish::FishSet),
@@ -1203,6 +1208,8 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 now.hand_feed(world.day(), &s.needs);
                 body.set_farm(&now);
                 store_animal(save, &body, id, Some(hotbar));
+                let who = yard.beasts[k].who;
+                yard.hearts.push((who, 5));
                 yard.say(
                     tr_with(
                         "husbandry.fed",
@@ -1251,15 +1258,15 @@ fn feed_wild(
     let name = sp.name();
     let b = &mut yard.beasts[k];
     if !b.trust.feed(keep.trust_gain, factor) {
-        let pct = b.trust.value.round();
-        // A feed that does not tame changes only the hands.
+        // A feed that does not tame changes only the hands. The hearts say
+        // how far it trusts, and it follows a while (`taming-hearts`).
         save.record_pack(hotbar);
-        b.mode = Mode::Idle;
+        b.mode = Mode::Follow;
+        b.mode_s = s.taming.wild_follow_s;
         b.head_goal = 1.2;
-        yard.say(
-            tr_with("husbandry.hand_fed", &[("name", &name), ("trust", &pct)]),
-            2.0,
-        );
+        let shown = (b.who, pbd_core::husbandry::taming::hearts(b.trust.value));
+        yard.hearts.push(shown);
+        yard.say(tr_with("husbandry.eats_from_hand", &[("name", &name)]), 2.0);
         return;
     }
     // Tamed: the record, at once, as the player's (decision 10).
@@ -1288,6 +1295,8 @@ fn feed_wild(
     b.who = Who::Kept { id };
     b.mode = Mode::Follow;
     b.mode_s = s.taming.follow_s;
+    yard.hearts.push((Who::Kept { id }, 5));
+    let b = &mut yard.beasts[k];
     let species = b.species;
     yard.deeds.push(Deed::Tamed { species });
     yard.say(tr_with("husbandry.tamed", &[("name", &name)]), 3.0);
@@ -1580,7 +1589,10 @@ fn step(
                 .as_ref()
                 .is_some_and(|kp| held.is_some_and(|i| kp.eats(i)));
             let fear = taming::fear_radius(&s.taming, moving, food);
-            if d < fear && !night {
+            if b.mode == Mode::Follow {
+                // Fed from the hand: it follows a while, unafraid
+                // (`taming-hearts`).
+            } else if d < fear && !night {
                 if b.mode != Mode::Flee {
                     b.trust.spook(&s.taming);
                 }
@@ -2615,3 +2627,101 @@ fn place_piece_at(
 
 #[cfg(test)]
 mod tests;
+
+/// One row of hearts rising over an animal fed from the hand
+/// (`taming-hearts` design 2): a UI emote placed where the head projects.
+#[derive(Component)]
+struct HeartRow {
+    who: Who,
+    age: f32,
+    width: f32,
+}
+
+/// How long a row of hearts shows, s; how far it rises, m; one heart's
+/// size on screen, px (the 11 x 10 icon at twice its size).
+const HEARTS_S: f32 = 1.5;
+const HEARTS_RISE_M: f32 = 0.6;
+const HEART_PX: (f32, f32) = (22.0, 20.0);
+
+/// Spawn the rows a feed asked for, then move and fade every row.
+#[allow(clippy::type_complexity)]
+fn hearts(
+    mut commands: Commands,
+    world: World,
+    time: Res<Time>,
+    mut yard: ResMut<Farmyard>,
+    assets: Option<Res<AssetServer>>,
+    ui_scale: Option<Res<UiScale>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut rows: Query<(Entity, &mut HeartRow, &mut Node, &mut Visibility, &Children)>,
+    mut images: Query<&mut ImageNode>,
+) {
+    let fresh = std::mem::take(&mut yard.hearts);
+    if let Some(assets) = assets.as_deref() {
+        let heart: Handle<Image> = assets.load("ui/heart.png");
+        for (who, n) in fresh {
+            let width = HEART_PX.0 * f32::from(n) + 2.0 * f32::from(n.saturating_sub(1));
+            commands
+                .spawn((
+                    HeartRow {
+                        who,
+                        age: 0.0,
+                        width,
+                    },
+                    Node {
+                        position_type: PositionType::Absolute,
+                        column_gap: Val::Px(2.0),
+                        ..default()
+                    },
+                    Visibility::Hidden,
+                    GlobalZIndex(5),
+                ))
+                .with_children(|row| {
+                    for _ in 0..n {
+                        row.spawn((
+                            ImageNode::new(heart.clone()),
+                            Node {
+                                width: Val::Px(HEART_PX.0),
+                                height: Val::Px(HEART_PX.1),
+                                ..default()
+                            },
+                        ));
+                    }
+                });
+        }
+    }
+    let camera = cameras.iter().find(|(_, c)| c.is_active);
+    let scale = ui_scale.map_or(1.0, |s| s.0);
+    let roster = world.roster();
+    let o = world.origin();
+    let dt = time.delta_secs();
+    for (entity, mut row, mut node, mut shown, children) in &mut rows {
+        row.age += dt;
+        if row.age > HEARTS_S {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        let beast = yard.beasts.iter().find(|b| b.who == row.who);
+        let spot = beast.zip(camera).and_then(|(b, (at, camera))| {
+            let tall = roster.get(b.species as usize).map_or(0.8, |sp| sp.height_m);
+            let up = o.up_at(b.pos);
+            let head = b.pos + up * (tall + 0.25 + HEARTS_RISE_M * row.age / HEARTS_S);
+            let render = crate::render_origin::render_from_physics(&world.frame, head);
+            camera.world_to_viewport(at, render).ok()
+        });
+        let Some(px) = spot else {
+            *shown = Visibility::Hidden;
+            continue;
+        };
+        *shown = Visibility::Inherited;
+        node.left = Val::Px(px.x / scale - row.width / 2.0);
+        node.top = Val::Px(px.y / scale - HEART_PX.1);
+        // Fade over the last third.
+        let alpha = ((HEARTS_S - row.age) / (HEARTS_S / 3.0)).clamp(0.0, 1.0);
+        for child in children.iter() {
+            if let Ok(mut image) = images.get_mut(child) {
+                image.color = Color::srgba(1.0, 1.0, 1.0, alpha);
+            }
+        }
+    }
+}

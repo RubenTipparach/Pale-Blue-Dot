@@ -526,6 +526,7 @@ impl Plugin for WalkingPlugin {
         crate::sim_origin::add_rebase_hook(app, rebase_walker);
         app.init_resource::<WalkingConfig>()
             .init_resource::<WalkingReadout>()
+            .init_resource::<Lift>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
                 RunFixedMainLoop,
@@ -559,6 +560,12 @@ impl Plugin for WalkingPlugin {
             );
     }
 }
+
+/// Metres to raise the walker this step (`place-underfoot` design 2): a
+/// block placed under its own feet. Applied once in `resolve_ground` and
+/// cleared; the view eases up as on an auto step.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct Lift(pub f32);
 
 fn tangent_heading(forward: Vec3, up: Vec3) -> Vec3 {
     (forward - up * forward.dot(up)).normalize_or(Vec3::Y.cross(up).normalize_or(Vec3::X))
@@ -1700,12 +1707,24 @@ fn resolve_ground(
     time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
+    mut lift: ResMut<Lift>,
 ) {
     if !state.active {
         return;
     }
     let o = space.origin();
     let o = &o;
+    // A block set under the feet: up onto it, no speed from it.
+    if lift.0 > 0.0 {
+        for (mut position, mut velocity, mut ground) in &mut walkers {
+            let up = o.up_at(position.0);
+            position.0 += up * lift.0;
+            ground.previous = position.0;
+            let down = velocity.0.dot(up).min(0.0);
+            velocity.0 -= up * down;
+        }
+        lift.0 = 0.0;
+    }
     let meets = Meets {
         towns: structures.as_deref(),
         origin: *o,

@@ -419,6 +419,9 @@ pub struct TreeViewport;
 pub struct TreeWorld;
 #[derive(Component)]
 pub struct Card(pub usize);
+/// An icon on a mission's card, faded with it while the mission is locked.
+#[derive(Component)]
+pub struct CardIconOf(pub usize);
 #[derive(Component)]
 pub struct CardTitle(pub usize);
 #[derive(Component)]
@@ -608,6 +611,9 @@ fn spawn_card(
             ..default()
         },
         BorderColor::all(Color::NONE),
+        // The selected card's ring, drawn outside the frame: a border sits
+        // under the stone frame's picture and showed only at its corners.
+        Outline::new(px(2), px(1), Color::NONE),
         Card(i),
     ));
     if tip {
@@ -655,7 +661,12 @@ fn spawn_card(
             ))
             .with_children(|big| {
                 if let Some(icon) = icon.clone() {
-                    big.spawn((ImageNode::new(icon), Node::default(), CardBig));
+                    big.spawn((
+                        ImageNode::new(icon),
+                        Node::default(),
+                        CardBig,
+                        CardIconOf(i),
+                    ));
                 }
             });
         }
@@ -684,6 +695,7 @@ fn spawn_card(
                             ..default()
                         },
                         CardIcon,
+                        CardIconOf(i),
                     ));
                     part(&mut e);
                 }
@@ -843,7 +855,11 @@ pub fn paint(
     view: Res<TreeView>,
     recipes: Option<Res<pbd_app::config::Recipes>>,
     kit: Res<UiKit>,
-    mut cards: Query<(&Card, &mut BorderColor)>,
+    mut cards: Query<
+        (&Card, &mut Outline, Option<&mut ImageNode>),
+        (Without<CardCheck>, Without<CardIconOf>),
+    >,
+    mut card_icons: Query<(&CardIconOf, &mut ImageNode), (Without<Card>, Without<CardCheck>)>,
     mut texts: ParamSet<(
         Query<(&CardTitle, &mut Text, &mut TextColor)>,
         Query<(&CardSub, &mut Text, &mut TextColor)>,
@@ -852,7 +868,7 @@ pub fn paint(
         Query<(&SideText, &mut Text, &mut TextColor)>,
     )>,
     mut badges: Query<(&CardBadge, &mut KitText)>,
-    mut checks: Query<(&CardCheck, &mut ImageNode)>,
+    mut checks: Query<(&CardCheck, &mut ImageNode), (Without<Card>, Without<CardIconOf>)>,
     mut edges: Query<(&Edge, &mut BackgroundColor)>,
     mut side: Query<&mut Node, With<SidePanel>>,
 ) {
@@ -872,21 +888,37 @@ pub fn paint(
         )
     };
     let title_of = |id: &str| chain.get(id).map_or(id.to_string(), |m| m.title.clone());
-    for (card, mut border) in &mut cards {
-        let (s, now) = standing(card.0);
-        // The one mission the player is on glows; the one open in the side
-        // panel, if another, is framed white.
-        let c = if now {
-            ui_kit::RUNE
-        } else if view.selected == Some(card.0) {
-            ui_kit::LABEL
+    // The selected card is framed yellow, the one the player is on when none
+    // is selected; every other card plain, a locked one faded (owner,
+    // 2026-11-20: "Locked nodes should be faded. Selected node should be
+    // yellow.. all other nodes should be regular").
+    let marked = view
+        .selected
+        .or_else(|| (0..chain.missions.len()).find(|&i| standing(i).1));
+    let faded = |s: Standing| if s == Standing::Locked { 0.35 } else { 1.0 };
+    for (card, mut outline, image) in &mut cards {
+        let (s, _) = standing(card.0);
+        let c = if marked == Some(card.0) {
+            ui_kit::TITLE
         } else {
             Color::NONE
         };
-        if border.top != c {
-            *border = BorderColor::all(c);
+        if outline.color != c {
+            outline.color = c;
         }
-        let _ = s;
+        if let Some(mut image) = image {
+            let want = image.color.with_alpha(faded(s));
+            if image.color != want {
+                image.color = want;
+            }
+        }
+    }
+    for (of, mut image) in &mut card_icons {
+        let (s, _) = standing(of.0);
+        let want = image.color.with_alpha(faded(s));
+        if image.color != want {
+            image.color = want;
+        }
     }
     for (b, mut text) in &mut badges {
         let (s, now) = standing(b.0);
@@ -982,15 +1014,12 @@ pub fn paint(
         let m = &chain.missions[e.0];
         let parent_done = m.needs.first().is_some_and(|p| progress.is_done(p));
         let (s, _) = standing(e.0);
-        let lit = view
-            .selected
-            .is_some_and(|sel| sel == e.0 || m.needs.first().and_then(|p| index(p)) == Some(sel));
-        let c = if lit {
-            ui_kit::LABEL
-        } else if parent_done && s == Standing::Done {
+        // Blue where the mission it leads to is unlocked, plain where it is
+        // not; no yellow lines (owner, 2026-11-20: "Connections are other
+        // blue or not based on unlocks.. yellow is too confusing").
+        let _ = (index, s);
+        let c = if parent_done {
             ui_kit::RUNE_DIM
-        } else if parent_done {
-            ui_kit::TITLE
         } else {
             ui_kit::STONE_MID.with_alpha(0.6)
         };
@@ -1193,18 +1222,26 @@ pub fn steer(
             }
         }
     }
+    // The card pressed before one merely hovered, as the pack does.
     let on_card = cards
         .iter()
-        .find(|(_, i)| **i != Interaction::None)
+        .find(|(_, i)| **i == Interaction::Pressed)
+        .or_else(|| cards.iter().find(|(_, i)| **i != Interaction::None))
         .map(|(c, _)| c.0);
-    if mouse.just_pressed(MouseButton::Left)
-        && (over || on_card.is_some())
-        && let Some(at) = pointer
-    {
-        *press = Some((at, on_card, false));
+    // A press on a card counts with or without the pointer over the window
+    // (the showcase bot presses the card itself, as it does every other
+    // control; a pointer it set was taken over by the real mouse, and the
+    // click became a pan). Without a pointer, the press cannot become a pan.
+    if mouse.just_pressed(MouseButton::Left) && (over || on_card.is_some()) {
+        if let Some(at) = pointer {
+            *press = Some((at, on_card, false));
+        } else if on_card.is_some() {
+            *press = Some((Vec2::NAN, on_card, false));
+        }
     }
     if let (Some((from, _, moved)), Some(at)) = (press.as_mut(), pointer)
         && mouse.pressed(MouseButton::Left)
+        && !from.is_nan()
     {
         let d = at - *from;
         if *moved || d.length() > 3.0 {
@@ -1218,10 +1255,20 @@ pub fn steer(
         && let Some((_, card, moved)) = press.take()
         && !moved
     {
-        next.selected = card;
+        // A done mission is not picked: nothing is left to do on it, so it
+        // cannot be the one the player is on (owner, 2026-11-20: "Selecting
+        // a completed mission node is not possible because it's already
+        // completed"). Its hover card still shows it.
+        let done = card.is_some_and(|i| {
+            missions.progress.standing(&chain.0, &chain.0.missions[i])
+                == pbd_core::missions::Standing::Done
+        });
+        if !done {
+            next.selected = card;
+        }
         // Picking an open mission makes it the one the player is on
         // (`mission-playthrough` 3.5).
-        if let Some(i) = card {
+        if let Some(i) = card.filter(|_| !done) {
             let id = chain.0.missions[i].id.clone();
             let open = missions.progress.standing(&chain.0, &chain.0.missions[i])
                 == pbd_core::missions::Standing::Open;

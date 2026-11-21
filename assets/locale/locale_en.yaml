@@ -352,6 +352,7 @@ daylight:
     summer: SOUTHERN SUMMER
     winter: SOUTHERN WINTER
 digging:
+  no_room_above: No room above
   by_hand: Too hard to dig by hand
   empty_first: "Empty the {station} first"
   needs_pickaxe: "Needs a {tier} pickaxe"
@@ -495,7 +496,7 @@ husbandry:
     turf: "turf (a grass block)"
   gate_set: Gate set
   gate_taken: Gate taken up
-  hand_fed: "{name} eats from your hand - trust {trust}%"
+  eats_from_hand: "{name} eats from your hand"
   it: It
   kept: "{name} ({state}) - {mood}"
   kept_waiting: "{name} ({state}) - {mood} - {waiting} waiting"
@@ -1102,6 +1103,7 @@ pack:
   hold: HOLD
   hotbar: HOTBAR
   pack: PACK
+  trash: TRASH
 recipe:
   bronze:
     name: BRONZE

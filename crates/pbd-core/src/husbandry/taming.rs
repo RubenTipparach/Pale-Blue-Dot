@@ -39,6 +39,12 @@ impl Trust {
     }
 }
 
+/// Hearts shown over an animal fed at this trust (`taming-hearts`): one a
+/// fifth of full trust, at least one; 5 at full trust.
+pub fn hearts(trust: f32) -> u8 {
+    ((trust / (FULL / 5.0)).ceil() as i32).clamp(1, 5) as u8
+}
+
 /// How near the player may be before a wild animal bolts, standing still
 /// being the crouch the game does not have yet (S4). With its food in hand
 /// and still, nothing frightens it: it comes to the hand. With food and
@@ -49,5 +55,21 @@ pub fn fear_radius(settings: &TamingSettings, moving: bool, food_in_hand: bool) 
         (true, false) => 0.0,
         (true, true) | (false, false) => settings.fear_still_m,
         (false, true) => settings.fear_moving_m,
+    }
+}
+
+#[cfg(test)]
+mod heart_tests {
+    use super::*;
+
+    /// `taming-hearts`: more trust, more hearts; one at the least, five full.
+    #[test]
+    fn more_trust_shows_more_hearts() {
+        assert_eq!(hearts(0.0), 1);
+        assert_eq!(hearts(25.0), 2);
+        assert_eq!(hearts(50.0), 3);
+        assert_eq!(hearts(75.0), 4);
+        assert_eq!(hearts(FULL), 5);
+        assert_eq!(hearts(250.0), 5);
     }
 }

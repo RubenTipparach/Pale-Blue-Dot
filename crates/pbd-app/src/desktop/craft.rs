@@ -112,6 +112,12 @@ pub struct BenchFill;
 #[derive(Component)]
 pub struct HandFill;
 
+/// The hands' bar's track: shown only while the hands are making something
+/// (owner, 2026-11-20, on the empty track: "the hell is this bar underneath
+/// crafting area?").
+#[derive(Component)]
+pub struct HandBar;
+
 /// A station's queue record id: a cell's station, or the hands'.
 pub fn station_id(at: Option<(u32, u16)>) -> u64 {
     at.map_or(HAND_RECORD_ID, |(cell, layer)| {
@@ -491,6 +497,8 @@ pub fn spawn_pack_craft(
                     craft_row(foot, kit, atlas, "hand", needs);
                     // The hands' running job, as the workbench shows its own.
                     foot.spawn((
+                        HandBar,
+                        Visibility::Hidden,
                         kit.nine(Set::Stone, "bar"),
                         Node {
                             width: percent(100),
@@ -878,6 +886,7 @@ pub fn paint(
         Query<&mut KitText, (With<BenchLine>, Without<WellCount>, Without<CraftLabel>)>,
         Query<&mut Node, (With<BenchFill>, Without<HandFill>)>,
         Query<&mut Node, (With<HandFill>, Without<BenchFill>)>,
+        Query<&mut Visibility, With<HandBar>>,
     ),
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
@@ -1058,7 +1067,7 @@ pub fn paint(
             }
         }
     }
-    let (line, fill, hand_fill) = &mut bench_line;
+    let (line, fill, hand_fill, hand_bar) = &mut bench_line;
     // The hands' bar: the head job's share done, empty when idle.
     let hand_state = state_of(&save, HAND_RECORD_ID, pbd_core::station::hand());
     let done = hand_state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
@@ -1066,6 +1075,16 @@ pub fn paint(
     for mut node in hand_fill.iter_mut() {
         if node.width != want {
             node.width = want;
+        }
+    }
+    let shown = if hand_state.busy() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in hand_bar.iter_mut() {
+        if *visibility != shown {
+            *visibility = shown;
         }
     }
     if let Some((_, state, _)) = &bench {

@@ -43,7 +43,9 @@
             caption: "Smelt bronze",
             until: ["smelt"],
             max_s: 300.0,
-            acts: [Focus("smelt"), Smelt("mixed-ore", 1), Smelt("bronze", 1), Still],
+            // A mix gives 2 copper, 1 iron and 1 tin for 4 ore and 2 coal; a
+            // bronze takes a copper, a tin and a coal: two rounds for two.
+            acts: [Focus("smelt"), Mine(Have("coal", 4), 12), Mine(Have("block:ore", 4), 12), Smelt("mixed-ore", 1), Smelt("bronze", 1), Mine(Have("coal", 3), 12), Mine(Have("block:ore", 4), 12), Smelt("mixed-ore", 1), Smelt("bronze", 1), Still],
         ),
         (
             caption: "Bronze tools",

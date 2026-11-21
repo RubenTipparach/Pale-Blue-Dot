@@ -574,7 +574,7 @@ pub fn dig_and_place(
         // Absent in a still capture, which has no husbandry.
         Option<ResMut<pbd_app::husbandry::AimedGround>>,
     ),
-    (mut note, farm, mut gained, mut planted, gather, effects, mut did): (
+    (mut note, farm, mut gained, mut planted, gather, effects, mut did, mut lift): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
@@ -582,6 +582,7 @@ pub fn dig_and_place(
         Res<pbd_app::config::GatherConfig>,
         Option<Res<pbd_app::kitchen::MealEffects>>,
         MessageWriter<pbd_app::missions::Did>,
+        Option<ResMut<pbd_app::walking::Lift>>,
     ),
 ) {
     if let Some(ground) = ground.as_mut() {
@@ -980,7 +981,18 @@ pub fn dig_and_place(
         // A block may not be placed into the player. Sealing yourself into
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
-        if occupies(&fine, &contact, eye, place) {
+        // Under the player's own feet, with room over the head to rise
+        // into: placed, and the player lifted onto it (`place-underfoot`).
+        let underfoot = underfoot(&contact, eye, place);
+        if underfoot && !head_room(&fine, &edits, place) {
+            info!(
+                "PLACE refused: no room over the head to stand on {material:?} at cell {} layer {}",
+                place.cell, place.layer
+            );
+            note.say(wall_s, tr("digging.no_room_above"));
+            return;
+        }
+        if !underfoot && occupies(&fine, &contact, eye, place) {
             info!(
                 "PLACE refused: {material:?} into cell {} layer {} is where the player stands",
                 place.cell, place.layer
@@ -1004,9 +1016,19 @@ pub fn dig_and_place(
         .is_some()
         {
             info!(
-                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}",
-                place.cell, place.layer, fine.version
+                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}{}",
+                place.cell,
+                place.layer,
+                fine.version,
+                if underfoot {
+                    ", under the feet: lifted"
+                } else {
+                    ""
+                }
             );
+            if underfoot && let Some(lift) = lift.as_mut() {
+                lift.0 = 1.0;
+            }
             did.write(pbd_app::missions::Did::block(
                 pbd_core::missions::Kind::Place,
                 material,
@@ -1164,6 +1186,28 @@ fn take_log(
 /// player. Only those cells: the layer alone refused every block set on
 /// level ground beside the player, a workbench or a campfire included
 /// (`step-videos` 5.2, found by the showcase's bot).
+/// Whether `place` is the block the feet stand in, in the player's own
+/// cell (the cell under the eye): the one place a block may go into the
+/// player, who is then lifted onto it (`place-underfoot` design 1).
+fn underfoot(contact: &PlanetContact, eye: Vec3, place: Sample) -> bool {
+    let altitude = eye.length() - PLANET_RADIUS;
+    let Some(head) = column::layer_at(altitude) else {
+        return false;
+    };
+    let feet = head.saturating_sub(1);
+    place.layer == feet && contact.finest_key(eye.normalize_or(Vec3::Y)) == Some(place.cell)
+}
+
+/// Whether the two layers over a block set under the feet are open: the
+/// body's room once lifted onto it (owner, 2026-11-20: "there MUST BE
+/// HEADROOM ABOVE TO PLACE A BLOCK ON YOUR FEET").
+fn head_room(fine: &PlanetFine, save: &WorldSave, place: Sample) -> bool {
+    (place.layer + 1..=place.layer + 2).all(|layer| {
+        material_of(fine, save, (place.cell, layer))
+            .is_some_and(|m| m == Material::Air || m.is_water() || m.is_lamp())
+    })
+}
+
 fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample) -> bool {
     let altitude = eye.length() - PLANET_RADIUS;
     let Some(head) = column::layer_at(altitude) else {

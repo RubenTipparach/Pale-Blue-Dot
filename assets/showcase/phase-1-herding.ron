@@ -49,8 +49,10 @@
             caption: "Collect the eggs",
             until: ["collect"],
             repeat: true,
+            // A day between collects, sped up: she lays once a day or so.
+            rate: Some(300.0),
             max_s: 240.0,
-            acts: [Focus("collect"), Collect("meadow-hen"), Still],
+            acts: [Focus("collect"), Wait(20.0), Collect("meadow-hen"), Still],
         ),
         (
             caption: "Herding done",
