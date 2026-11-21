@@ -9,6 +9,7 @@ pub mod audio;
 pub mod beaver;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod builds;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
 pub mod clutter;
@@ -45,6 +46,7 @@ pub mod kitchen;
 pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod locale;
+pub mod logs;
 #[cfg(feature = "desktop")]
 pub mod memory_trace;
 #[cfg(feature = "desktop")]

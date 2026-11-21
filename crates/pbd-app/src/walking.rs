@@ -71,10 +71,19 @@ impl WalkingConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
     Town(usize),
+    /// A player's building, by its place in [`PlayerStructures`]
+    /// (`player-building`).
+    Build(usize),
     /// A road cell standing (`townsfolk` design 10a), by its place in
     /// [`crate::roads::RoadPieces`].
     Road(usize),
 }
+
+/// The player's buildings' solids (`player-building` design B4), one a
+/// plot, kept by `builds` apart from the towns' [`Structures`] so neither
+/// moves the other's indices.
+#[derive(Resource, Default, Clone)]
+pub struct PlayerStructures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 
 /// Everything the walker meets that is not terrain, asked together: the
 /// towns' pieces.
@@ -87,6 +96,7 @@ pub enum Piece {
 #[derive(Clone, Copy)]
 pub(crate) struct Meets<'a> {
     pub towns: Option<&'a Structures>,
+    pub builds: Option<&'a PlayerStructures>,
     /// The road cells standing: a road's slope is the walker's floor, as a
     /// street step's pitch line is.
     pub roads: Option<&'a crate::roads::RoadPieces>,
@@ -100,6 +110,7 @@ impl Default for Meets<'_> {
     fn default() -> Self {
         Self {
             towns: None,
+            builds: None,
             roads: None,
             people: None,
             origin: crate::sim_origin::SimFrame::default().0,
@@ -111,6 +122,7 @@ impl<'a> Meets<'a> {
     fn of(world: &'a World) -> Self {
         Self {
             towns: world.get_resource::<Structures>(),
+            builds: world.get_resource::<PlayerStructures>(),
             roads: world.get_resource::<crate::roads::RoadPieces>(),
             people: world.get_resource::<crate::townsfolk::TownsfolkSolids>(),
             origin: crate::sim_origin::origin_of(world),
@@ -126,13 +138,18 @@ impl<'a> Meets<'a> {
                 .enumerate()
                 .map(move |(n, b)| (Piece::Town(n), b, b.frame, false))
         });
+        let builds = self.builds.into_iter().flat_map(move |s| {
+            s.0.iter()
+                .enumerate()
+                .map(move |(n, b)| (Piece::Build(n), b, b.frame, false))
+        });
         let roads = self.roads.into_iter().flat_map(move |r| {
             r.solids
                 .iter()
                 .enumerate()
                 .map(move |(n, b)| (Piece::Road(n), b, b.frame, false))
         });
-        towns.chain(roads)
+        towns.chain(builds).chain(roads)
     }
 
     /// The planet point `point` in `frame`, asked in the frame's space.
@@ -1739,6 +1756,7 @@ fn resolve_ground(
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    builds: Option<Res<PlayerStructures>>,
     roads: Option<Res<crate::roads::RoadPieces>>,
     people: Option<Res<crate::townsfolk::TownsfolkSolids>>,
     time: Res<Time>,
@@ -1764,6 +1782,7 @@ fn resolve_ground(
     }
     let meets = Meets {
         towns: structures.as_deref(),
+        builds: builds.as_deref(),
         roads: roads.as_deref(),
         people: people.as_deref(),
         origin: *o,

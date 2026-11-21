@@ -1,6 +1,7 @@
 mod arrival;
 mod boat;
 mod breeding;
+mod build_mode;
 mod compass_bar;
 mod cpu_times;
 mod cracks;
@@ -1753,6 +1754,44 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::compass::CompassPlugin)
     // The towns standing at their sites (`cities-in-the-world`).
     .add_plugins(pbd_app::towns::TownsPlugin)
+    // The player's buildings and build mode (`player-building`).
+    .add_plugins(pbd_app::builds::BuildsPlugin)
+    // Logs on the water (`log-drives`).
+    .add_plugins(pbd_app::logs::LogsPlugin)
+    .init_resource::<build_mode::BuildMode>()
+    .init_resource::<build_mode::Blueprints>()
+    .add_systems(Startup, build_mode::spawn_ghost)
+    .add_systems(
+        PreUpdate,
+        build_mode::take_input
+            .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys),
+    )
+    .add_systems(
+        Update,
+        (
+            build_mode::load_blueprints,
+            build_mode::aim_and_build.run_if(
+                resource_exists::<pbd_app::planet::PlanetFine>
+                    .and(resource_exists::<pbd_app::planet::PlanetContact>),
+            ),
+            build_mode::draw_ghost,
+            build_mode::paint_ui,
+        )
+            .chain()
+            .before(pbd_app::builds::sync),
+    )
+    // `PBD_BUILD_SHOT`, a capture instrument (`player-building` captures).
+    .add_systems(
+        Update,
+        build_mode::scripted
+            .run_if(
+                resource_exists::<CaptureState>
+                    .and(resource_exists::<pbd_app::planet::PlanetFine>)
+                    .and(pbd_app::loading::ready),
+            )
+            .before(build_mode::aim_and_build),
+    )
     // The roads between them (`townsfolk` design 10 and 11).
     .add_plugins(pbd_app::roads::RoadsPlugin)
     // Their people (`townsfolk`).
@@ -1913,6 +1952,7 @@ pub fn run(args: &[String]) {
         PostStartup,
         (
             slots::spawn,
+            build_mode::spawn_ui,
             (
                 slots::load_icons,
                 (

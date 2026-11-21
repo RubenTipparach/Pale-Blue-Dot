@@ -86,6 +86,11 @@ pub const DATA_PREFIXES: &[&str] = &[
     // roles by the template's id (`desktop::talk::role_name`).
     "jobs.kind.",
     "talk.role.",
+    // `building::rules::Rule`, `building::Class` and the kits: build mode's
+    // reasons, pieces and kit names by id (`builds::tests`).
+    "build.refused.",
+    "build.piece.",
+    "build.kit.",
 ];
 
 /// Extensions that make a spaceless literal an asset path.

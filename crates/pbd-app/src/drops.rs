@@ -96,6 +96,11 @@ pub fn toss(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     space: crate::SimSpace,
+    // Logs thrown over water float (`log-drives`).
+    water: (
+        Option<Res<crate::planet::PlanetContact>>,
+        Option<ResMut<crate::logs::Logs>>,
+    ),
 ) {
     let Some((slot, count)) = asked.0.take() else {
         return;
@@ -118,6 +123,20 @@ pub fn toss(
         .map(|(at, _)| at.forward().as_vec3().as_dvec3())
         .unwrap_or(bevy::math::DVec3::X);
     let level = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
+    // A log over water goes in as a floating log, one a press.
+    if let (Some(contact), Some(mut logs)) = water
+        && crate::logs::throw_in(
+            &mut save,
+            &mut logs,
+            &mut hotbar,
+            &contact,
+            slot,
+            chest + level * TOSS_AHEAD_M,
+            up.cross(level),
+        )
+    {
+        return;
+    }
     let mut drop = Drops::make(
         &save,
         stack.item,

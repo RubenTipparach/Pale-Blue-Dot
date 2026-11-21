@@ -28,6 +28,8 @@ pub enum Reader {
     Boats,
     /// The townsfolk: talk, then trade and jobs (`townsfolk` design 5 to 9).
     Talk,
+    /// A log on the water (`log-drives`).
+    Logs,
 }
 
 /// A thing F can do.
@@ -53,6 +55,8 @@ pub enum Act {
     OpenDoor,
     ShutDoor,
     Till,
+    /// Take a log out of the water (`log-drives`).
+    TakeLog,
     Board,
     /// Talk to a townsperson.
     Talk,
@@ -94,6 +98,7 @@ pub const ACTS: [Row; 20] = [
     row(Act::OpenDoor, "open_door", Reader::Doors),
     row(Act::ShutDoor, "shut_door", Reader::Doors),
     row(Act::Till, "till", Reader::Farm),
+    row(Act::TakeLog, "take_log", Reader::Logs),
     row(Act::Board, "board", Reader::Boats),
 ];
 
