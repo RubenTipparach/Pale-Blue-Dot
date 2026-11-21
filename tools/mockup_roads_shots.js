@@ -37,7 +37,7 @@ const SPOTS = ["crossroads", "hillfoot", "climb", "hilltop", "ford", "bridge", "
   });
   console.log("walk up the hill road:", JSON.stringify(walk));
   const at = (h) => page.evaluate((h) => { document.getElementById("tod").value = h; setTime(h); assignLights(); for (const s of document.querySelectorAll(".panel")) s.style.display = "none"; }, h);
-  const shot = async (name, fn, arg) => { await page.evaluate(fn, arg); await page.waitForTimeout(900); await page.screenshot({ path: `${out}/${name}.png` }); };
+  const shot = async (name, fn, arg) => { await page.evaluate(fn, arg); await page.waitForTimeout(900); await page.screenshot({ path: `${out}/${name}.jpg`, type: "jpeg", quality: 85 }); };
   for (const [h, tag] of [[11, "11h00"], [22.5, "22h30"]]) {
     await at(h);
     for (const spot of SPOTS) await shot(`mockup-roads-${spot}-${tag}`, (s) => { teleport(GOTO[s]); setView("walk"); }, spot);
@@ -47,7 +47,7 @@ const SPOTS = ["crossroads", "hillfoot", "climb", "hilltop", "ford", "bridge", "
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => { for (const s of document.querySelectorAll(".panel")) s.style.display = ""; document.getElementById("infoOpen").click(); });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: `${out}/mockup-roads-info-phone.png` });
+  await page.screenshot({ path: `${out}/mockup-roads-info-phone.jpg`, type: "jpeg", quality: 85 });
   console.log("errors:", errors.length ? errors.join("; ") : "none");
   await browser.close();
 })();

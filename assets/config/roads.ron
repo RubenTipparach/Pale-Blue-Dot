@@ -1,0 +1,26 @@
+// Roads (`townsfolk` design 10 and 11), read by `pbd_core::roads`.
+(
+    // A settlement is joined to its `neighbours` nearest within `link_m`
+    // metres, and a walled town to its nearest walled town within
+    // `large_link_m` metres.
+    link_m: 2000.0,
+    neighbours: 2,
+    large_link_m: 6000.0,
+    // Walking speed on a road, times the ground's: gravel 15% faster.
+    dirt_speed: 1.0,
+    gravel_speed: 1.15,
+    // What the route search pays: metres of level road a climb of a layer
+    // is worth, and a bridged and a forded cell times its length.
+    slope_cost_m: 2.0,
+    bridge_cost: 4.0,
+    ford_cost: 2.0,
+    // Water at most this deep over its bed, metres, is forded; deeper is
+    // bridged, for at most `max_bridge_cells` cells.
+    ford_depth_m: 1.0,
+    max_bridge_cells: 10,
+    // How many cells one road's search may look at before it gives up, and
+    // how far it trusts its estimate (1 the cheapest road and the most
+    // cells looked at; more, a road a little dearer for far fewer).
+    max_expanded: 100000,
+    search_weight: 1.5,
+)
