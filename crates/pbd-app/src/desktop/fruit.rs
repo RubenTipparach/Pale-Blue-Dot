@@ -19,6 +19,7 @@ use pbd_core::flora::{
 use pbd_core::gather::{TREE_KIND, TreeTaken};
 use pbd_core::goods::Good;
 use pbd_core::inventory::Item;
+use pbd_core::locale::{Localized, tr, tr_with};
 use pbd_core::records::Record;
 
 /// The fruiting tree the eye is on, as it stands.
@@ -138,18 +139,10 @@ fn on_tree(
     })
 }
 
-/// A fruit's name as the prompt says it, many: "apples", "cherries".
-pub fn many(name: &str) -> String {
-    let name = name.to_lowercase();
-    if let Some(stem) = name.strip_suffix('y')
-        && !stem.ends_with(['a', 'e', 'i', 'o', 'u'])
-    {
-        return format!("{stem}ies");
-    }
-    if name.ends_with('o') {
-        return format!("{name}es");
-    }
-    format!("{name}s")
+/// A fruit's name as the prompt says it, many: "apples", "cherries"
+/// (`item.<code>.many` in the locale file).
+pub fn many(good: Good) -> Localized {
+    tr(&format!("item.{}.many", good.code()))
 }
 
 /// Offer the fruit on the tree aimed at to the interact key.
@@ -188,7 +181,7 @@ pub fn offer(
         *offered = on_tree(&fine, &save, &scatter, &gather, sun.as_deref(), eye, look)
             .filter(OnTree::has_fruit)
             .and_then(|tree| Good::by_code(FRUIT_GOODS[tree.kind]))
-            .map(|good| Offer::new(Act::PickFruit, many(good.row().name)));
+            .map(|good| Offer::new(Act::PickFruit, many(good)));
     }
     if let Some(offer) = offered.clone() {
         interact.offer(offer);
@@ -255,14 +248,17 @@ pub fn pick(
     let wall_s = time.elapsed_secs();
     let (cell, kind, hanging, day) = (tree.cell, tree.kind, tree.hanging, tree.day);
     if let Some(left) = tree.bare_for {
-        note.say(wall_s, format!("No fruit. Grows back in {left:.0} days"));
+        note.say(
+            wall_s,
+            tr_with("fruit.grows_back", &[("days", &format!("{left:.0}"))]),
+        );
         return;
     }
     let Some(good) = Good::by_code(FRUIT_GOODS[kind]) else {
         return;
     };
     if hanging == 0 {
-        note.say(wall_s, "No ripe fruit");
+        note.say(wall_s, tr("fruit.no_ripe"));
         return;
     }
     let item = Item::Good(good);
@@ -270,7 +266,7 @@ pub fn pick(
     let left = moved.give(item, hanging as u16);
     let took = hanging as u16 - left;
     if took == 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("fruit.no_room"));
         return;
     }
     let body = FruitPicked { day, took };

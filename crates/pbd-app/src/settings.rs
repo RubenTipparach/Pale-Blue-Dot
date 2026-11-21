@@ -141,12 +141,12 @@ impl FrameLimit {
         }
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
-            FrameLimit::Off => "OFF",
-            FrameLimit::Fps60 => "60 FPS",
-            FrameLimit::Fps120 => "120 FPS",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            FrameLimit::Off => "menu.frame_limit_value.off",
+            FrameLimit::Fps60 => "menu.frame_limit_value.fps60",
+            FrameLimit::Fps120 => "menu.frame_limit_value.fps120",
+        })
     }
 }
 

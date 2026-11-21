@@ -1631,7 +1631,7 @@ pub fn run(args: &[String]) {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Pale Blue Dot | Planet Explorer".into(),
+                    title: pbd_core::locale::tr("window.title").into(),
                     resolution: window_size().into(),
                     present_mode: if launch.capture.is_some()
                         || launch.no_vsync

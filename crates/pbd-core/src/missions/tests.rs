@@ -23,19 +23,23 @@ fn shipped_catalog(book: &RecipeBook) -> Catalog {
     let fauna: crate::fauna::FaunaSettings =
         ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap();
     let land = crate::husbandry::HusbandrySettings::default();
-    let fish: Vec<&str> = fauna
+    let fish: Vec<String> = fauna
         .bodies
         .values()
         .flatten()
-        .map(|s| s.name.as_str())
+        .map(|s| s.data_name())
         .collect();
-    let animals: Vec<&str> = land
+    let animals: Vec<String> = land
         .land
         .values()
         .flatten()
-        .map(|s| s.name.as_str())
+        .map(|s| s.data_name())
         .collect();
-    Catalog::new(book, fish, animals)
+    Catalog::new(
+        book,
+        fish.iter().map(String::as_str),
+        animals.iter().map(String::as_str),
+    )
 }
 
 fn shipped_file() -> MissionFile {
@@ -47,15 +51,15 @@ fn objective(kind: Kind, what: &str, count: u32) -> ObjectiveEntry {
         kind,
         what: what.into(),
         count,
-        label: what.into(),
+        label: Some(what.into()),
     }
 }
 
 fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> MissionEntry {
     MissionEntry {
         id: id.into(),
-        title: id.into(),
-        help: String::new(),
+        title: Some(id.into()),
+        help: None,
         needs: needs.iter().map(|n| n.to_string()).collect(),
         objectives,
         unlocks: Vec::new(),

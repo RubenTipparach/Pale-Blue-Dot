@@ -15,6 +15,7 @@
 //! what a save keeps. The anchor's work (falling, setting, hauling) is not
 //! saved: a mooring read back from a save is an anchor set and holding.
 
+use crate::locale::{Localized, tr};
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
 
@@ -97,19 +98,30 @@ pub struct Anchor {
     pub pull: f64,
 }
 
-/// The anchor's state in plain words, for the panel and the boat's menu.
-pub fn word(anchor: Option<&Anchor>) -> &'static str {
+/// The anchor's state in plain words, for the panel and the boat's menu:
+/// `vehicle.anchor.<state>` in the locale file ("Holding").
+pub fn word(anchor: Option<&Anchor>) -> Localized {
+    tr(&format!("vehicle.anchor.{}", state(anchor)))
+}
+
+/// The same mid-sentence, `vehicle.anchor_lower.<state>` ("holding").
+pub fn word_lower(anchor: Option<&Anchor>) -> Localized {
+    tr(&format!("vehicle.anchor_lower.{}", state(anchor)))
+}
+
+/// The anchor's state's id, the key of its words.
+pub fn state(anchor: Option<&Anchor>) -> &'static str {
     let Some(a) = anchor else {
-        return "Stowed";
+        return "stowed";
     };
     match a.phase {
-        Phase::Dropping { .. } => "Dropping",
-        Phase::Up => "Coming aboard",
-        Phase::Down { weighing: true, .. } => "Weighing",
-        Phase::Down { set, .. } if set < 1.0 => "Setting",
-        Phase::Down { .. } if a.rode < a.target - 0.05 => "Paying out",
-        Phase::Down { .. } if a.rode > a.target + 0.05 => "Hauling in",
-        Phase::Down { .. } => "Holding",
+        Phase::Dropping { .. } => "dropping",
+        Phase::Up => "coming_aboard",
+        Phase::Down { weighing: true, .. } => "weighing",
+        Phase::Down { set, .. } if set < 1.0 => "setting",
+        Phase::Down { .. } if a.rode < a.target - 0.05 => "paying_out",
+        Phase::Down { .. } if a.rode > a.target + 0.05 => "hauling_in",
+        Phase::Down { .. } => "holding",
     }
 }
 

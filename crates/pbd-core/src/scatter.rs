@@ -77,11 +77,11 @@ impl Kind {
     }
 
     /// What the hover prompt calls taking it.
-    pub fn verb(self) -> &'static str {
-        match self {
-            Kind::Pebble => "pick up stone",
-            Kind::Bush | Kind::Shrub | Kind::Fern => "pull fibre",
-        }
+    pub fn verb(self) -> crate::locale::Localized {
+        crate::locale::tr(match self {
+            Kind::Pebble => "scatter.pick_up_stone",
+            Kind::Bush | Kind::Shrub | Kind::Fern => "scatter.pull_fibre",
+        })
     }
 }
 

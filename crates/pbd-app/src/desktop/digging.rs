@@ -22,6 +22,7 @@ use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
 
@@ -722,7 +723,7 @@ pub fn dig_and_place(
     let block = (target.dig.cell, target.dig.layer);
     let rooted = under_standing_tree(&fine, &edits, gather.0.axe_logs, block);
     if rooted && buttons.just_pressed(MouseButton::Left) && digger.is_some() {
-        note.say(time.elapsed_secs(), "Cut down the tree first");
+        note.say(time.elapsed_secs(), tr("farm.tree_first"));
     }
     let held = buttons.pressed(MouseButton::Left) && digger.is_some() && !rooted;
     let secs = match digger {
@@ -739,10 +740,11 @@ pub fn dig_and_place(
     {
         let wall_s = time.elapsed_secs();
         match why {
-            Refusal::NotByHand => note.say(wall_s, "Too hard to dig by hand"),
-            Refusal::TierTooLow(tier) => {
-                note.say(wall_s, format!("Needs a {} pickaxe", tier.name()))
-            }
+            Refusal::NotByHand => note.say(wall_s, tr("digging.by_hand")),
+            Refusal::TierTooLow(tier) => note.say(
+                wall_s,
+                tr_with("digging.needs_pickaxe", &[("tier", &tier.name())]),
+            ),
             Refusal::NotADiggingTool | Refusal::NotABlock => {}
         }
     }
@@ -758,7 +760,10 @@ pub fn dig_and_place(
         if let Some(row) = was.and_then(pbd_core::station::station_of)
             && super::farm::station_state(&edits, cell, layer as u16, row).busy()
         {
-            note.say(wall_s, format!("Empty the {} first", row.name));
+            note.say(
+                wall_s,
+                tr_with("digging.empty_first", &[("station", &row.name())]),
+            );
             return;
         }
         // Dug grass turns up a seed, one cell in a few (decision 14).
@@ -844,7 +849,7 @@ pub fn dig_and_place(
                  fine set version {}",
                 match digger {
                     Some(Digger::Tool(tool, tier)) => pbd_core::inventory::tool_title(tool, tier),
-                    _ => "bare hands".to_string(),
+                    _ => pbd_core::locale::tr("equipment.bare"),
                 },
                 secs.unwrap_or(0.0),
                 fine.version
@@ -969,7 +974,7 @@ pub fn dig_and_place(
                 "PLACE refused: a crop grows in cell {} layer {}",
                 place.cell, place.layer
             );
-            note.say(wall_s, "Something is planted here");
+            note.say(wall_s, tr("digging.planted"));
             return;
         }
         // A block may not be placed into the player. Sealing yourself into
@@ -1108,7 +1113,7 @@ fn take_log(
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
         Err(TreeSpent::Felled) => {
-            note.say(wall_s, "No more wood");
+            note.say(wall_s, tr("digging.no_wood"));
             return;
         }
         Ok(()) => {}
@@ -1116,7 +1121,7 @@ fn take_log(
     let log = Item::Good(pbd_core::goods::Good::LOG);
     let mut moved = slots.0.clone();
     if moved.give(log, 1) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return;
     }
     let record = pbd_core::records::Record::of(

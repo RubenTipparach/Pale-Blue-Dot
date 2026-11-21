@@ -310,7 +310,7 @@ fn the_wiki_page_holds_to_the_roster() {
         let heading = format!(
             "![](../../assets/{}) {}\n",
             species_icon(species),
-            species.name
+            species.name()
         );
         assert!(
             section.starts_with(&heading),
@@ -318,12 +318,12 @@ fn the_wiki_page_holds_to_the_roster() {
             species.id
         );
         assert!(
-            section.contains(&species.guide.entry),
+            section.contains(species.entry().as_str()),
             "{}: entry",
             species.id
         );
         assert!(
-            section.contains(&format!("*Tip:* {}", species.guide.tip)),
+            section.contains(&format!("*Tip:* {}", species.tip())),
             "{}: tip",
             species.id
         );
@@ -545,13 +545,13 @@ fn smaller_water_makes_smaller_fish() {
 fn both_buttons_say_what_they_do_in_every_phase() {
     use pbd_core::fishing::Phase;
     let table = [
-        (Phase::Ready, ("HOLD TO CAST", true), false),
-        (Phase::Charging, ("LET GO TO CAST", true), false),
-        (Phase::Flying, ("HOOK", false), true),
-        (Phase::Floating, ("HOOK", false), true),
-        (Phase::Nibble, ("HOOK", false), true),
-        (Phase::Bite, ("HOOK", true), true),
-        (Phase::Hooked, ("HOLD TO REEL", true), false),
+        (Phase::Ready, ("fishing.key.hold_to_cast", true), false),
+        (Phase::Charging, ("fishing.key.let_go_to_cast", true), false),
+        (Phase::Flying, ("fishing.key.hook", false), true),
+        (Phase::Floating, ("fishing.key.hook", false), true),
+        (Phase::Nibble, ("fishing.key.hook", false), true),
+        (Phase::Bite, ("fishing.key.hook", true), true),
+        (Phase::Hooked, ("fishing.key.hold_to_reel", true), false),
     ];
     for (phase, left, _) in table {
         let [l, r] = super::keys_for(phase);
@@ -559,7 +559,7 @@ fn both_buttons_say_what_they_do_in_every_phase() {
         let cancel = if matches!(phase, Phase::Ready | Phase::Charging | Phase::Hooked) {
             ""
         } else {
-            "CANCEL"
+            "fishing.key.cancel"
         };
         assert_eq!(r, (cancel, false), "{phase:?}");
     }

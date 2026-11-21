@@ -40,6 +40,8 @@ pub mod kitchen;
 #[cfg(feature = "desktop")]
 pub mod loading;
 #[cfg(feature = "desktop")]
+pub mod locale;
+#[cfg(feature = "desktop")]
 pub mod memory_trace;
 #[cfg(feature = "desktop")]
 pub mod missions;

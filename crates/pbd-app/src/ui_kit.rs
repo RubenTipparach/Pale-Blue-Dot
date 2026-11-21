@@ -43,6 +43,7 @@ use bevy::text::Font;
 use bevy::ui::UiSystems;
 use bevy::window::PrimaryWindow;
 use image::{ImageBuffer, Rgba, RgbaImage};
+pub use pbd_core::locale::{Localized, tr, tr_with};
 
 /// The window height that buys one more step of UI scale.
 pub const SCALE_STEP_PX: u32 = 450;
@@ -679,7 +680,12 @@ pub struct KitPiece(pub String);
 /// ... to go with the controls prompt"): the kit's own stone button, 9-sliced
 /// to the key's name and with it carved in, as a stone plaque's label is.
 /// The interact prompt and a boat's panel draw every key this way.
-pub fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, label: &str, extra: impl Bundle) {
+pub fn key_cap(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: Localized,
+    extra: impl Bundle,
+) {
     parent
         .spawn((
             kit.nine(Set::Stone, "button-idle"),
@@ -707,10 +713,13 @@ pub const KEY_CAP: f32 = 19.0;
 /// labels, compass letters and key caps (spec delta, "Labels are drawn in the
 /// kit's pixel font"). Each glyph is an image node of whole texels at the UI
 /// scale, sampled nearest; `size` multiplies it (2 for a big title).
+///
+/// Its words are a [`Localized`] (`localization` design 2), made by `tr`,
+/// `tr_with` or `Localized::verbatim`, so a raw literal does not compile.
 #[derive(Component, Clone, Debug, PartialEq)]
 #[require(Node)]
 pub struct KitText {
-    pub text: String,
+    pub text: Localized,
     pub colour: Color,
     /// A one-pixel shadow under the letters, as carved.
     pub shadow: Option<Color>,
@@ -721,9 +730,9 @@ pub struct KitText {
 }
 
 impl KitText {
-    pub fn new(text: impl Into<String>, colour: Color) -> Self {
+    pub fn new(text: Localized, colour: Color) -> Self {
         Self {
-            text: text.into(),
+            text,
             colour,
             shadow: None,
             outline: false,
@@ -789,7 +798,7 @@ pub fn draw_kit_text(
     let font = &kit.font;
     for (entity, text, mut node, built, children) in &mut texts {
         let same = built.is_some_and(|b| {
-            b.text == text.text
+            b.text == text.text.as_str()
                 && b.shadow == text.shadow.is_some()
                 && b.outline == text.outline
                 && b.size == text.size
@@ -820,13 +829,13 @@ pub fn draw_kit_text(
         node.height = px(tall);
         commands.entity(entity).despawn_related::<Children>();
         commands.entity(entity).insert(KitTextBuilt {
-            text: text.text.clone(),
+            text: text.text.to_string(),
             shadow: text.shadow.is_some(),
             outline: text.outline,
             size: text.size,
         });
         commands.entity(entity).with_children(|row| {
-            for c in text.text.chars() {
+            for c in text.text.as_str().chars() {
                 if c == ' ' {
                     // A space is its own advance, less the gap either side.
                     let w = (font.space as f32 - font.spacing as f32).max(0.0) * s;
@@ -952,7 +961,7 @@ pub fn plaque(kit: &UiKit, set: Set, min_width: f32) -> impl Bundle {
 }
 
 /// A plaque's label: chalk inlaid in stone, cut dark in oak (design 4).
-pub fn plaque_label(set: Set, text: &str) -> impl Bundle {
+pub fn plaque_label(set: Set, text: Localized) -> impl Bundle {
     let words = match set {
         Set::Stone => KitText::new(text, LABEL).shadow(WELL),
         Set::Oak => KitText::new(text, OAK_LABEL),
@@ -1010,7 +1019,7 @@ pub fn paint_plaques(
 /// shows nothing. Shown only while a menu holds the pointer: in play there
 /// is no cursor to show it by.
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Tooltip(pub String);
+pub struct Tooltip(pub Localized);
 
 /// The one tooltip: a stone `tooltip` piece over every panel.
 #[derive(Component)]
@@ -1095,7 +1104,11 @@ pub fn show_tooltip(
             let k = node.inverse_scale_factor();
             let centre = at.translation * k;
             let half = node.size() * k / 2.0;
-            (tip.0.clone(), Rect::from_center_half_size(centre, half), k)
+            (
+                tip.0.to_string(),
+                Rect::from_center_half_size(centre, half),
+                k,
+            )
         });
     let window = windows.single().ok().map(|w| w.physical_size().as_vec2());
     let (Some((text, rect, k)), Some(window), true) = (over, window, free) else {
@@ -1124,6 +1137,9 @@ pub struct UiKitPlugin;
 
 impl Plugin for UiKitPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<crate::locale::LocalePlugin>() {
+            app.add_plugins(crate::locale::LocalePlugin);
+        }
         app.add_systems(Startup, spawn_tooltip.run_if(resource_exists::<UiKit>))
             .add_systems(
                 PostUpdate,
@@ -1258,10 +1274,18 @@ mod tests {
         }
         // Every key cap the Input page can print, a rebind's and a fixed
         // one's, and its waiting cap.
+        use crate::controls::{Key, key_label};
         let caps = crate::controls::ASSIGNABLE
             .iter()
-            .map(|(_, label)| *label)
-            .chain(["ESC", "LEFT CLICK", "RIGHT CLICK", "WHEEL", "PRESS A KEY"])
+            .copied()
+            .chain([KeyCode::Escape])
+            .map(key_label)
+            .chain([
+                Key::Mouse(MouseButton::Left).label(),
+                Key::Mouse(MouseButton::Right).label(),
+                Key::Wheel.label(),
+                pbd_core::locale::tr("menu.input.press_a_key"),
+            ])
             .chain(crate::controls::Tab::ALL.map(|t| t.label()));
         for label in caps {
             for c in label.chars().filter(|c| *c != ' ') {
@@ -1364,7 +1388,7 @@ mod tests {
             .spawn((
                 Node::default(),
                 Interaction::Hovered,
-                Tooltip("Stone x 12".into()),
+                Tooltip(Localized::verbatim("12")),
                 InheritedVisibility::VISIBLE,
                 ComputedNode {
                     size: Vec2::splat(48.0),
@@ -1394,7 +1418,7 @@ mod tests {
         // size before its first layout.
         assert_eq!(
             shown(&mut app),
-            (Display::Flex, px(112.0), "Stone x 12".to_string())
+            (Display::Flex, px(112.0), "12".to_string())
         );
         app.world_mut()
             .resource_mut::<crate::controls::MenuOpen>()

@@ -66,7 +66,7 @@ fn main() {
                 "  {}: {} ({}) at {lat:.2}, {lon:.2}, {:.0} m from the spawn",
                 if s.capital { "capital" } else { "home" },
                 s.name,
-                s.kind.name(),
+                s.kind.name().as_str(),
                 sites::arc_m(s.direction, spawn, terrain.radius_m)
             );
         }
@@ -81,7 +81,7 @@ fn main() {
             serde_json::json!({
                 "id": s.id,
                 "kind": format!("{:?}", s.kind),
-                "kind_name": s.kind.name(),
+                "kind_name": s.kind.name().as_str(),
                 "name": s.name,
                 "lat": lat,
                 "lon": lon,
@@ -102,7 +102,7 @@ fn main() {
         "kinds": SiteKind::ALL.iter().map(|&k| {
             let rule = cfg.rule(k);
             serde_json::json!({
-                "kind": format!("{k:?}"), "name": k.name(), "radius_m": rule.radius_m,
+                "kind": format!("{k:?}"), "name": k.name().as_str(), "radius_m": rule.radius_m,
                 "spacing_m": rule.spacing_m, "count": rule.count,
                 "candidates": found.iter().filter(|c| c.kind == k).count(),
             })

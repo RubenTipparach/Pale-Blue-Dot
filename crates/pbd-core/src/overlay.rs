@@ -7,6 +7,7 @@
 //! what the clouds and the rain are doing cannot disagree.
 
 use crate::atmosphere::Sample;
+use crate::locale::{Localized, tr};
 use glam::Vec3;
 
 /// One overlay. The order is the order M steps through them.
@@ -97,27 +98,27 @@ impl Overlay {
     }
 
     /// Its name, as the legend and the menu print it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Overlay::Wind => "WIND",
-            Overlay::Jet => "JET",
-            Overlay::Currents => "CURRENTS",
-            Overlay::Cloud => "CLOUD",
-            Overlay::Rain => "RAIN",
-            Overlay::Humidity => "HUMIDITY",
-            Overlay::Sunlight => "SUNLIGHT",
-            Overlay::Temperature => "TEMPERATURE",
-        }
+    pub fn name(self) -> Localized {
+        tr(match self {
+            Overlay::Wind => "overlay.name.wind",
+            Overlay::Jet => "overlay.name.jet",
+            Overlay::Currents => "overlay.name.currents",
+            Overlay::Cloud => "overlay.name.cloud",
+            Overlay::Rain => "overlay.name.rain",
+            Overlay::Humidity => "overlay.name.humidity",
+            Overlay::Sunlight => "overlay.name.sunlight",
+            Overlay::Temperature => "overlay.name.temperature",
+        })
     }
 
     /// The unit its scalar is in.
-    pub fn unit(self) -> &'static str {
-        match self {
-            Overlay::Wind | Overlay::Jet | Overlay::Currents => "m/s",
-            Overlay::Cloud | Overlay::Humidity | Overlay::Rain => "%",
-            Overlay::Sunlight => "W/m2",
-            Overlay::Temperature => "C",
-        }
+    pub fn unit(self) -> Localized {
+        tr(match self {
+            Overlay::Wind | Overlay::Jet | Overlay::Currents => "overlay.unit.speed",
+            Overlay::Cloud | Overlay::Humidity | Overlay::Rain => "overlay.unit.percent",
+            Overlay::Sunlight => "overlay.unit.power",
+            Overlay::Temperature => "overlay.unit.temperature",
+        })
     }
 
     /// The scalar values the ramp's two ends stand for. The rain's low end is

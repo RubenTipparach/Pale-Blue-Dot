@@ -17,6 +17,7 @@ use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::column::{GLOW_FLOWER_BIT, GLOW_PICKED_BIT};
 use pbd_app::planet::{GpuCell, PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::tr;
 use pbd_core::daylight::DAY_S;
 use pbd_core::flora::{GLOW_PLANT_RECORD, GLOW_PLANT_SCHEMA, GlowPicked, glow_plant_point};
 use pbd_core::goods::Good;
@@ -130,7 +131,7 @@ pub fn offer(
     let (recheck, offered) = &mut *last;
     if recheck.due(eye, look, fine.version, time.delta_secs()) {
         *offered = on_ray(&fine, scatter.flower_height_m, eye, look)
-            .map(|_| Offer::new(Act::PickGlow, "glowing mushroom"));
+            .map(|_| Offer::new(Act::PickGlow, tr("item.glowing-mushroom.name")));
     }
     if let Some(offer) = offered.clone() {
         interact.offer(offer);
@@ -190,7 +191,7 @@ pub fn pick(
     let item = Item::Good(Good::GLOWING_MUSHROOM);
     let mut moved = slots.0.clone();
     if moved.give(item, 1) != 0 {
-        note.say(time.elapsed_secs(), "No room in the pack");
+        note.say(time.elapsed_secs(), tr("farm.no_room"));
         return;
     }
     let day = day_of(sun.as_deref());

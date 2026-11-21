@@ -16,9 +16,11 @@ use pbd_app::hotbar::{Gained, How};
 use pbd_app::kitchen::{Ate, Cooked, meals};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::cooking::{self, ANY_FISH, MEAL_ID, MEAL_KIND, MEAL_SCHEMA};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Slots, Stack};
+use pbd_core::locale::tr_with;
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{self, STATION_KIND, STATION_SCHEMA, StationRow, StationState};
 
@@ -68,7 +70,7 @@ pub fn spawn(
             layer
                 .spawn(menu::framed(kit, Set::Stone, 372.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, "CAMPFIRE");
+                    menu::lintel(panel, kit, tr("kitchen.title"));
                     panel
                         .spawn(Node {
                             flex_wrap: FlexWrap::Wrap,
@@ -90,17 +92,21 @@ pub fn spawn(
                                         CookPlaque(recipe.code.clone()),
                                     ))
                                     .with_children(|p| {
-                                        p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
+                                        p.spawn(ui_kit::plaque_label(Set::Stone, recipe.name()));
                                     });
                                     for &input in &recipe.inputs {
                                         icon(row, &atlas, input, &recipe.code, true);
                                     }
-                                    row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+                                    row.spawn(
+                                        KitText::new(Localized::verbatim("→"), ui_kit::TEXT)
+                                            .shadow(ui_kit::INK),
+                                    );
                                     for &output in &recipe.outputs {
                                         icon(row, &atlas, output, &recipe.code, false);
                                     }
                                     row.spawn((
-                                        KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
+                                        KitText::new(Localized::empty(), ui_kit::LABEL_DIM)
+                                            .shadow(ui_kit::INK),
                                         Node {
                                             display: Display::None,
                                             ..default()
@@ -111,7 +117,7 @@ pub fn spawn(
                             }
                         });
                     panel.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         Node {
                             margin: UiRect::new(px(0), px(0), px(2), px(3)),
                             ..default()
@@ -141,8 +147,7 @@ pub fn spawn(
                             ));
                         });
                     panel.spawn((
-                        KitText::new("RIGHT CLICK A DISH IN HAND TO EAT IT", ui_kit::TEXT_DIM)
-                            .shadow(ui_kit::INK),
+                        KitText::new(tr("kitchen.eat_hint"), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                         Node {
                             margin: UiRect::top(px(4)),
                             ..default()
@@ -177,7 +182,11 @@ fn icon(
     ))
     .with_children(|icon| {
         icon.spawn((
-            KitText::new(super::craft::need_count(need, n), ui_kit::LABEL).outline(ui_kit::INK),
+            KitText::new(
+                Localized::verbatim(super::craft::need_count(need, n)),
+                ui_kit::LABEL,
+            )
+            .outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(-3),
@@ -217,7 +226,10 @@ pub fn queue(
         return false;
     };
     let Some(real) = cooking::concrete(recipe, &hotbar.0) else {
-        note.say(wall_s, format!("No fish for {}", recipe.name));
+        note.say(
+            wall_s,
+            tr_with("kitchen.no_fish", &[("recipe", &recipe.name())]),
+        );
         return false;
     };
     let mut state = station_state(save, cell, layer, recipe.station);
@@ -225,11 +237,14 @@ pub fn queue(
     match state.queue(&mut moved, &real, now_s) {
         Ok(()) => {}
         Err(station::Refused::Short) => {
-            note.say(wall_s, format!("Not enough for {}", recipe.name));
+            note.say(
+                wall_s,
+                tr_with("craft.not_enough", &[("recipe", &recipe.name())]),
+            );
             return false;
         }
         Err(station::Refused::Full) => {
-            note.say(wall_s, "The fire is full");
+            note.say(wall_s, tr("kitchen.fire_full"));
             return false;
         }
         Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
@@ -292,7 +307,10 @@ pub fn collect(
                 fish: cooking::fish_in(recipe),
             });
         }
-        note.say(wall_s, format!("{} is ready", recipe.name));
+        note.say(
+            wall_s,
+            tr_with("kitchen.ready", &[("recipe", &recipe.name())]),
+        );
         info!("cooked {} at cell {cell} layer {layer}", recipe.code);
     }
     done
@@ -325,7 +343,7 @@ pub fn work(
     for (interaction, plaque) in &plaques {
         if *interaction == Interaction::Pressed {
             if let Some(opens) = locks.locked(&plaque.0) {
-                note.say(wall_s, format!("Opens with: {opens}"));
+                note.say(wall_s, tr_with("craft.opens_with", &[("mission", &opens)]));
                 continue;
             }
             queue(
@@ -360,16 +378,19 @@ pub fn work(
         Some(recipe) => {
             let waiting = state.jobs.len() - 1;
             if waiting > 0 {
-                format!("COOKING {}  +{waiting} WAITING", recipe.name)
+                tr_with(
+                    "kitchen.cooking_waiting",
+                    &[("recipe", &recipe.name()), ("waiting", &waiting)],
+                )
             } else {
-                format!("COOKING {}", recipe.name)
+                tr_with("kitchen.cooking", &[("recipe", &recipe.name())])
             }
         }
-        None => "PICK A DISH".into(),
+        None => tr("kitchen.pick"),
     };
     for mut words in &mut line {
         if words.text != text {
-            words.text.clone_from(&text);
+            words.text = text.clone();
         }
     }
     let want = percent(progress.unwrap_or(0.0) * 100.0);
@@ -517,11 +538,13 @@ pub fn eat(
         ));
         note.say(
             time.elapsed_secs(),
-            format!(
-                "Ate the {}: {} for {} min",
-                dish.good.name(),
-                dish.effect.name(),
-                dish.minutes
+            tr_with(
+                "kitchen.ate",
+                &[
+                    ("dish", &dish.good.name()),
+                    ("effect", &dish.effect.name()),
+                    ("minutes", &dish.minutes),
+                ],
             ),
         );
     }
@@ -597,7 +620,7 @@ pub fn spawn_effects(
                             ));
                         });
                     entry.spawn((
-                        KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                         EffectText(index),
                     ));
                 });
@@ -651,11 +674,13 @@ pub fn show_effects(
             continue;
         };
         let left = (meal.until_s - now_s).max(0.0);
-        let line = format!(
-            "{} {}:{:02}",
-            meal.effect.name().to_uppercase(),
-            (left / 60.0).floor() as u32,
-            (left % 60.0).floor() as u32
+        let line = tr_with(
+            "kitchen.timer",
+            &[
+                ("effect", &meal.effect.caps()),
+                ("minutes", &((left / 60.0).floor() as u32)),
+                ("seconds", &format!("{:02}", (left % 60.0).floor() as u32)),
+            ],
         );
         if words.text != line {
             words.text = line;
@@ -809,11 +834,13 @@ pub fn scripted(
             });
             note.say(
                 wall_s,
-                format!(
-                    "Ate the {}: {} for {} min",
-                    dish.good.name(),
-                    dish.effect.name(),
-                    dish.minutes
+                tr_with(
+                    "kitchen.ate",
+                    &[
+                        ("dish", &dish.good.name()),
+                        ("effect", &dish.effect.name()),
+                        ("minutes", &dish.minutes),
+                    ],
                 ),
             );
         }

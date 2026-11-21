@@ -25,6 +25,7 @@ mod tests;
 
 pub use loon::{LoonState, LoonTelemetry, Stroke};
 
+use crate::locale::{Localized, tr};
 use crate::sea::{LocalSea, SeaState, SeaTable};
 use crate::wind::{AirHere, GustSettings, wind_at};
 use body::RigidBody;
@@ -78,12 +79,19 @@ impl Kind {
         Kind::ALL.into_iter().find(|k| k.good_code() == Some(code))
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Kind::Loon => "Loon",
-            Kind::Tube => "Inner tube",
-            Kind::Raft => "Raft",
-        }
+    /// Its name, `vehicle.<key>.name` in the locale file.
+    pub fn name(self) -> Localized {
+        tr(&format!("vehicle.{}.name", self.key()))
+    }
+
+    /// Its name mid-sentence ("the inner tube"), `vehicle.<key>.lower`.
+    pub fn lower_name(self) -> Localized {
+        tr(&format!("vehicle.{}.lower", self.key()))
+    }
+
+    /// Its name as a panel's title, `vehicle.<key>.title`.
+    pub fn title(self) -> Localized {
+        tr(&format!("vehicle.{}.title", self.key()))
     }
 
     /// The saved name.

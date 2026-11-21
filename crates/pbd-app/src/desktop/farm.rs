@@ -26,11 +26,13 @@ use pbd_app::hotbar::{Gained, How, Planted};
 use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_core::column;
 use pbd_core::farming::{
     self, Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Picked, Plot, Stage, WILD_KIND, WILD_SCHEMA,
 };
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{self, STATION_KIND, StationState};
 use pbd_core::terrain::Material;
@@ -120,21 +122,26 @@ pub fn plant(
     let ground = digging::material_of(world.fine, world.save, (cell, layer));
     let over = digging::material_of(world.fine, world.save, (cell, layer + 1));
     if ground != Some(Material::Tilled) || over != Some(Material::Air) {
-        note.say(wall_s, "Seeds need tilled soil");
+        note.say(wall_s, tr("farm.seeds_need_tilled"));
         return false;
     }
     if live_crop(world.fine, world.save, cell).is_some() {
-        note.say(wall_s, "Something is already growing here");
+        note.say(wall_s, tr("farm.already_growing"));
         return false;
     }
     let climate = climate_at(world.fine, cell, layer);
     if !crop.grows_in(climate) {
         note.say(
             wall_s,
-            format!(
-                "{} does not grow in a {} climate",
-                crop.row().name,
-                climate.map_or("barren", Climate::name)
+            tr_with(
+                "farm.wrong_climate",
+                &[
+                    ("crop", &crop.row().name()),
+                    (
+                        "climate",
+                        &climate.map_or_else(|| tr("farming.climate.barren"), Climate::name),
+                    ),
+                ],
             ),
         );
         return false;
@@ -153,7 +160,10 @@ pub fn plant(
     }
     world.slots.0 = moved;
     planted.write(Planted { crop });
-    note.say(wall_s, format!("Planted {}", crop.row().name));
+    note.say(
+        wall_s,
+        tr_with("farm.planted", &[("crop", &crop.row().name())]),
+    );
     true
 }
 
@@ -205,7 +215,7 @@ fn pick(
     let seeds = farm.0.wild_seeds;
     let mut moved = slots.0.clone();
     if moved.give(Item::Good(row.seed), seeds) + moved.give(Item::Good(row.produce), 1) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return;
     }
     let record = StoredRecord::of(
@@ -229,7 +239,13 @@ fn pick(
         count: 1,
         how: How::Picked,
     });
-    note.say(wall_s, format!("Picked wild {}: +{seeds} seed", row.name));
+    note.say(
+        wall_s,
+        tr_with(
+            "farm.picked_wild",
+            &[("crop", &row.name()), ("seeds", &seeds)],
+        ),
+    );
 }
 
 /// Take a piece of the ground clutter by hand (`gather-by-hand`): its goods
@@ -256,7 +272,7 @@ pub fn gather(
     }
     let mut moved = slots.0.clone();
     if moved.give(Item::Good(good), count) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return false;
     }
     let record = StoredRecord::of(CLUTTER_KIND, u64::from(key), CLUTTER_SCHEMA, &taken);
@@ -480,26 +496,29 @@ impl FarmAct {
     /// Its row of `interact::ACTS` and what it is done to.
     pub fn offer(&self) -> Offer {
         match *self {
-            FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name),
+            FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name()),
             FarmAct::Crop { crop, ripe, .. } => Offer::new(
                 if ripe { Act::Harvest } else { Act::Check },
-                crop.row().name.to_lowercase(),
+                crop.row().name(),
             ),
-            FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name.to_lowercase()),
+            FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name()),
             FarmAct::Gather { kind, .. } => {
                 let (code, _) = kind.gives();
                 Offer::new(
                     Act::Gather,
-                    pbd_core::goods::Good::by_code(code).map_or(code, |g| g.name()),
+                    pbd_core::goods::Good::by_code(code)
+                        .map_or_else(|| Localized::verbatim(code), |g| g.name()),
                 )
             }
             FarmAct::Till { material, .. } => Offer::new(
                 Act::Till,
                 match material {
-                    Material::Grass | Material::DryGrass | Material::JungleGrass => "grass",
-                    Material::Dirt => "dirt",
-                    Material::Sand | Material::DesertSand => "sand",
-                    _ => "soil",
+                    Material::Grass | Material::DryGrass | Material::JungleGrass => {
+                        tr("block.grass.name")
+                    }
+                    Material::Dirt => tr("block.dirt.name"),
+                    Material::Sand | Material::DesertSand => tr("block.sand.name"),
+                    _ => tr("block.soil.name"),
                 },
             ),
         }
@@ -770,9 +789,9 @@ pub fn use_key(
         {
             let block = (target.dig.cell, target.dig.layer);
             if digging::under_standing_tree(&fine, &save, axe_logs(gathering.as_deref()), block) {
-                note.say(wall_s, "Cut down the tree first");
+                note.say(wall_s, tr("farm.tree_first"));
             } else {
-                note.say(wall_s, "Can't till under a block");
+                note.say(wall_s, tr("farm.till_under_block"));
             }
         }
         return;
@@ -782,7 +801,7 @@ pub fn use_key(
             station_at.0 = Some((cell, layer as u16));
             // The kitchen's stations have their own panel (`cooking` design S4).
             *screen = super::kitchen::screen_for(row);
-            info!("opened the {} at cell {cell} layer {layer}", row.name);
+            info!("opened the {} at cell {cell} layer {layer}", row.name());
             return;
         }
         FarmAct::Crop {
@@ -866,7 +885,7 @@ pub fn use_key(
             });
         }
         // A seed turned up is the toast's to say (`item-toasts` decision 6).
-        note.say(wall_s, "Tilled");
+        note.say(wall_s, tr("farm.tilled"));
     }
 }
 
@@ -891,7 +910,13 @@ fn harvest(
             * 24.0;
         note.say(
             wall_s,
-            format!("{}: ripe in {:.0} game hours", row.name, left_h.ceil()),
+            tr_with(
+                "farm.ripe_in",
+                &[
+                    ("crop", &row.name()),
+                    ("hours", &format!("{:.0}", left_h.ceil())),
+                ],
+            ),
         );
         return;
     }
@@ -900,7 +925,7 @@ fn harvest(
     let left = moved.give(Item::Good(row.produce), tuning.produce)
         + moved.give(Item::Good(row.seed), tuning.seeds);
     if left > 0 {
-        note.say(wall_s, "No room in the pack for the harvest");
+        note.say(wall_s, tr("farm.no_room_harvest"));
         return;
     }
     let bare = Plot::bare(plot.layer);
@@ -921,14 +946,22 @@ fn harvest(
     });
     note.say(
         wall_s,
-        format!("+{} {}, +{} seed", tuning.produce, row.name, tuning.seeds),
+        tr_with(
+            "farm.harvested",
+            &[
+                ("produce", &tuning.produce),
+                ("crop", &row.name()),
+                ("seeds", &tuning.seeds),
+            ],
+        ),
     );
 }
 
 /// The note under the crosshair.
 pub fn spawn_note(mut commands: Commands) {
     commands.spawn((
-        pbd_app::ui_kit::KitText::new("", pbd_app::ui_kit::LABEL).outline(pbd_app::ui_kit::INK),
+        pbd_app::ui_kit::KitText::new(Localized::empty(), pbd_app::ui_kit::LABEL)
+            .outline(pbd_app::ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),
@@ -952,7 +985,7 @@ pub fn show_note(
     }
     for mut words in &mut text {
         if words.text != note.text {
-            words.text.clone_from(&note.text);
+            words.text = Localized::verbatim(note.text.clone());
         }
     }
 }
@@ -1645,7 +1678,7 @@ pub fn scripted(
                 }
                 info!(
                     "scripted farm: {} at cell {cell}, {:.0}% grown",
-                    crop.row().name,
+                    crop.row().name(),
                     share * 100.0
                 );
             }
@@ -1691,7 +1724,7 @@ pub fn scripted(
             if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
                 info!(
                     "scripted farm: a wild {} {d:.1} m away, {:.0} degrees right of the view",
-                    crop.row().name,
+                    crop.row().name(),
                     side.atan2(fwd).to_degrees()
                 );
             }
@@ -1736,7 +1769,7 @@ pub fn scripted(
                 Some((d, cell, crop)) => {
                     info!(
                         "scripted farm: picking the wild {} {d:.1} m away",
-                        crop.row().name
+                        crop.row().name()
                     );
                     pick(
                         &mut save,
@@ -2045,7 +2078,7 @@ mod tests {
         );
         assert_eq!(
             world.resource::<Interact>().now.as_ref().map(Offer::words),
-            Some("Harvest wheat".to_string())
+            Some(Localized::verbatim("Harvest wheat"))
         );
         press_f(&mut app);
         let save = app.world().resource::<WorldSave>();
@@ -2088,7 +2121,10 @@ mod tests {
                 .now
                 .as_ref()
                 .map(Offer::words),
-            Some(format!("Pick wild {}", crop.row().name.to_lowercase()))
+            Some(tr_with(
+                "interact.act.pick_wild",
+                &[("thing", &crop.row().name())]
+            ))
         );
         let seeds = carried(&app, crop.row().seed);
         press_f(&mut app);
@@ -2234,7 +2270,7 @@ mod tests {
                     .now
                     .as_ref()
                     .map(Offer::words),
-                Some(format!("Gather {name}")),
+                Some(tr_with("interact.act.gather", &[("thing", &name)])),
                 "{:?} at cell {key}",
                 piece.kind
             );

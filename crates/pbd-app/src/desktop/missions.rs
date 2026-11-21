@@ -14,7 +14,9 @@ use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
+use pbd_core::locale::{tr, tr_with};
 
 /// The HUD's mission tracker (`mission-playthrough` 3.5): the one mission
 /// the player is on, its icon and title, then each objective with its icon
@@ -53,11 +55,11 @@ pub struct TabTo(pub Screen);
 /// (`inventory-grid` decision 9; owner, 2026-11-15: "pack should buttons to
 /// other menus like the pause menu or the map").
 pub const TABS: [(&str, Screen); 5] = [
-    ("PACK  I", Screen::Pack),
-    ("MISSIONS  O", Screen::Missions),
-    ("MAP  M", Screen::Map),
-    ("GUIDE  J", Screen::Guide),
-    ("MENU  ESC", Screen::Pause),
+    ("missions.tab.pack", Screen::Pack),
+    ("missions.tab.missions", Screen::Missions),
+    ("missions.tab.map", Screen::Map),
+    ("missions.tab.guide", Screen::Guide),
+    ("missions.tab.menu", Screen::Pause),
 ];
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
@@ -103,7 +105,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
             // should maybe not place an icon in front of it, and make the
             // header bold and appera like a header").
             tracker.spawn((
-                KitText::new("", ui_kit::TITLE).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TITLE).outline(ui_kit::INK),
                 TrackerTitle,
             ));
             tracker.spawn((
@@ -128,7 +130,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     ));
                     r.spawn((icon(), TrackerIcon(k)));
                     r.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         TrackerText(k),
                     ));
                 });
@@ -155,7 +157,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                 strip
                     .spawn((ui_kit::plaque(kit, Set::Oak, 70.0), TabTo(to)))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Oak, label));
+                        p.spawn(ui_kit::plaque_label(Set::Oak, tr(label)));
                     });
             }
         });
@@ -210,7 +212,7 @@ pub fn show_line(
     if !shown {
         return;
     }
-    let set = |words: &mut KitText, text: String, colour: Color| {
+    let set = |words: &mut KitText, text: Localized, colour: Color| {
         if words.text != text || words.colour != colour {
             words.text = text;
             words.colour = colour;
@@ -218,8 +220,12 @@ pub fn show_line(
     };
     // Just finished: its title alone, in the rune's colour, for a moment.
     let (heading, colour, objectives) = match (&missions.notice, mission) {
-        (Some((done, _)), _) => (format!("DONE: {done}"), ui_kit::RUNE, None),
-        (None, Some(m)) => (m.title.clone(), ui_kit::TITLE, Some(m)),
+        (Some((done, _)), _) => (
+            tr_with("missions.done", &[("title", &done)]),
+            ui_kit::RUNE,
+            None,
+        ),
+        (None, Some(m)) => (Localized::verbatim(m.title.clone()), ui_kit::TITLE, Some(m)),
         (None, None) => return,
     };
     for mut words in &mut title {
@@ -270,7 +276,11 @@ pub fn show_line(
             } else {
                 ui_kit::TEXT
             };
-            set(&mut words, format!("{} {n}/{}", o.label, o.count), c);
+            set(
+                &mut words,
+                Localized::verbatim(format!("{} {n}/{}", o.label, o.count)),
+                c,
+            );
         }
     }
     for (which, mut image) in &mut checks {
@@ -620,6 +630,35 @@ pub fn night_watch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tab of the strip, and every sea place on the chart, has its
+    /// words in the locale file.
+    #[test]
+    fn every_tab_and_place_has_its_words() {
+        let english = pbd_core::locale::Locale::english();
+        let keys = super::super::mission_tree::BRANCHES
+            .iter()
+            .map(|(_, key)| key.to_string())
+            .chain(TABS.iter().map(|(key, _)| key.to_string()))
+            .chain(
+                pbd_app::world_map::PLACE_KEY
+                    .iter()
+                    .chain(pbd_app::world_map::BIOME_KEY)
+                    .map(|(key, _)| key.to_string()),
+            );
+        let layers = [
+            super::super::map_screen::biomes_layer(),
+            super::super::map_screen::places_layer(),
+        ];
+        let keys = keys.chain(
+            layers
+                .iter()
+                .flat_map(|l| [l.name.to_string(), l.note.to_string()]),
+        );
+        for key in keys {
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 
     /// The instrument's script walks the shipped chain to its end, through
     /// the same counting the game runs.

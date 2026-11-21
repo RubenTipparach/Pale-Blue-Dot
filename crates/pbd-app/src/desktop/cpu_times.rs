@@ -6,6 +6,8 @@
 //! Bevy renders pipelined, so the two worlds run side by side on different
 //! threads: the render world's numbers are handed over through atomics and
 //! read a frame late, like the GPU's.
+//!
+//! locale: dev
 
 use bevy::prelude::*;
 use bevy::render::{Render, RenderApp, RenderSystems};

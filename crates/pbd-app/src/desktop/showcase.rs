@@ -21,6 +21,8 @@
 //! It prints `SHOWCASE_START <name>`, `SHOT <n> <caption>` at each shot,
 //! and `SHOWCASE_END <name>` when its goal is met, then quits. A shot that
 //! cannot finish fails the run: `SHOWCASE_STALL` and no `SHOWCASE_END`.
+//!
+//! locale: dev
 
 pub mod control;
 pub mod file;
@@ -34,6 +36,7 @@ use bevy::window::PrimaryWindow;
 use file::{Act, Showcase, Until};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, surface_height};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_core::inventory::{CARRIED, Item, SLOTS, Tool};
 use pbd_core::terrain::Material;
 use std::collections::{HashMap, HashSet};
@@ -1374,7 +1377,7 @@ pub fn drive(
                        text: &str| {
         for mut t in captions.iter_mut() {
             if t.text != text {
-                t.text = text.to_string();
+                t.text = Localized::verbatim(text.to_string());
             }
         }
     };
@@ -1501,7 +1504,7 @@ pub fn drive(
                         "aim_material": sight.aim
                             .and_then(|t| digging::material_of(sight.fine, sight.save, (t.dig.cell, t.dig.layer)))
                             .map(|m| format!("{m:?}")),
-                        "f": w.interact.as_deref().and_then(|i| i.now.as_ref()).map(|o| o.words()),
+                        "f": w.interact.as_deref().and_then(|i| i.now.as_ref()).map(|o| String::from(o.words())),
                         "in_hand": format!("{:?}", sight.tools.held()),
                         "selected": sight.slots.held().map(|st| format!("{:?} x{}", st.item, st.count)),
                         "screen": format!("{:?}", sight.screen),
@@ -2818,7 +2821,7 @@ fn station(
     };
     let k = s.recipes.0.at(row.code).position(|r| r.code == code);
     let Some(k) = k else {
-        return Status::Fail(format!("the {} makes no {code}", row.name));
+        return Status::Fail(format!("the {} makes no {code}", row.name()));
     };
     match bot.phase {
         0 => {
@@ -2828,7 +2831,7 @@ fn station(
             if (bot.phase_s % 5.0) < s.dt {
                 info!(
                     "showcase: walking to the {}: {:.1} m off, {:.1} m up",
-                    row.name,
+                    row.name(),
                     tangent(at - s.feet, s.up).length(),
                     rise
                 );
@@ -2838,7 +2841,7 @@ fn station(
             } else if bot.walk_to(s, out, at, 2.0) == Walked::There {
                 info!(
                     "showcase: at the {} in cell {cell} layer {layer}, {:.1} m from the eye, {:.1} m over the feet",
-                    row.name,
+                    row.name(),
                     at.distance(s.eye),
                     (at - s.feet).dot(s.up)
                 );
@@ -2919,7 +2922,7 @@ fn station(
     }
     // The walk there counts too, and a station may be a long walk back.
     if bot.act_s > 600.0 + times as f32 * 40.0 {
-        return Status::Fail(format!("{code} at the {} never finished", row.name));
+        return Status::Fail(format!("{code} at the {} never finished", row.name()));
     }
     Status::Running
 }
@@ -3749,7 +3752,7 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             if (bot.phase_s % 4.0) < s.dt {
                 info!(
                     "showcase: waiting for the {} at {dist:.1} m, {:?} in hand, {} wild in sight",
-                    sp.name,
+                    sp.name(),
                     s.slots.held().map(|st| st.item),
                     animals(s, species).filter(|(a, _)| a.wild).count()
                 );
@@ -3766,7 +3769,7 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
         }
     }
     if bot.act_s > 240.0 {
-        return Status::Fail(format!("the {} never trusted", sp.name));
+        return Status::Fail(format!("the {} never trusted", sp.name()));
     }
     Status::Running
 }
@@ -3998,7 +4001,8 @@ fn eat(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
 /// lettering (`step-videos` 2.2). Showcase runs only.
 pub fn spawn_caption(mut commands: Commands) {
     commands.spawn((
-        pbd_app::ui_kit::KitText::new("", pbd_app::ui_kit::LABEL).outline(pbd_app::ui_kit::INK),
+        pbd_app::ui_kit::KitText::new(Localized::empty(), pbd_app::ui_kit::LABEL)
+            .outline(pbd_app::ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),

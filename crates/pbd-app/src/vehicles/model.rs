@@ -22,7 +22,7 @@ pub(super) type Result<T> = std::result::Result<T, String>;
 pub(super) fn folder(kind: Kind) -> PathBuf {
     crate::paths::assets_dir()
         .join("models/vehicles")
-        .join(kind.name().to_ascii_lowercase())
+        .join(kind.key())
 }
 
 struct Primitive {
@@ -49,7 +49,7 @@ struct Model {
 
 impl Model {
     fn read(kind: Kind) -> Result<Self> {
-        let path = folder(kind).join(format!("{}.glb", kind.name().to_ascii_lowercase()));
+        let path = folder(kind).join(format!("{}.glb", kind.key()));
         let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         Self::parse(&bytes)
     }

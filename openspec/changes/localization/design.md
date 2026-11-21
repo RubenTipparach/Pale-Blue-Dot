@@ -63,8 +63,10 @@ Engine-independent, so tests and tools can use it without Bevy.
 
 ## 4. The lint (hard)
 
-`crates/pbd-app/tests/locale.rs`, run by `cargo test`, so by CI and every
-push. It parses each `crates/*/src/**/*.rs` with `syn`. A string literal
+`crates/pbd-app/locale_lint.rs`, run by `pbd-app`'s `build.rs`, so every
+`cargo build` fails on it (the owner, 2026-11-20: "it belongs in the build
+step. the way merges work right now is fine"), and by
+`crates/pbd-app/tests/locale.rs` with the same rules. It parses each `crates/*/src/**/*.rs` with `syn`. A string literal
 is **player text** if it holds a letter, and it is allowed only:
 
 - inside `tr("…")` or `tr_with("…", …)` as the key, which must exist;
