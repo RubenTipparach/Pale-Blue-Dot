@@ -247,9 +247,19 @@ fn ground_top(
         cache.tops.clear();
     }
     *cache.tops.entry(cell).or_insert_with(|| {
-        let record = record_of(fine, cell)?;
+        // Off the fine set, the generated ground.
+        let Some(record) = record_of(fine, cell) else {
+            let d = pbd_core::cell_key::key_direction(cell)?;
+            let surface = pbd_app::planet::surface_height(d);
+            return column::layer_at(surface - 0.5).map(|l| (l + 1) as u16);
+        };
         let surface = fine.set.finest_records()[record].direction_height[3];
         let start = column::layer_at(surface + 12.0)?;
+        // A column the tier holds, or would adopt, answers with its edits;
+        // past it, the ground the heightfield draws.
+        if material_of(fine, save, (cell, start)).is_none() {
+            return column::layer_at(surface - 0.5).map(|l| (l + 1) as u16);
+        }
         (start.saturating_sub(40)..=start)
             .rev()
             .find(|&l| {
@@ -771,8 +781,8 @@ pub fn spawn_ui(
                 position_type: PositionType::Absolute,
                 top: px(24),
                 left: percent(50),
-                margin: UiRect::left(px(-210.0)),
-                width: px(420),
+                margin: UiRect::left(px(-250.0)),
+                width: px(500),
                 flex_wrap: FlexWrap::Wrap,
                 padding: UiRect::all(px(8)),
                 column_gap: px(4),
@@ -797,7 +807,7 @@ pub fn spawn_ui(
                 panel
                     .spawn((
                         Node {
-                            width: px(64),
+                            width: px(92),
                             flex_direction: FlexDirection::Column,
                             align_items: AlignItems::Center,
                             padding: UiRect::all(px(2)),
@@ -1021,7 +1031,11 @@ pub fn scripted(
             pbd_core::building::blueprint::base_over(&site, &footprint)
         });
     let Some(base) = base else {
-        warn!("PBD_BUILD_SHOT: no ground under the blueprint");
+        warn!(
+            "PBD_BUILD_SHOT: no ground under the blueprint ({} of {} cells known)",
+            tops.values().filter(|t| t.is_some()).count(),
+            tops.len()
+        );
         return;
     };
     let pieces = match blueprint(&patch, def, kit, index, mode.turn, base) {
@@ -1033,13 +1047,31 @@ pub fn scripted(
     };
     let near = builds.near(target, PATCH_REACH_M);
     let wanted: Vec<Piece> = pieces.into_iter().take(n).collect();
-    let placed = match placing_order(&site, &near, &wanted) {
-        Ok(placed) => placed,
-        Err(rule) => {
-            info!("PBD_BUILD_SHOT: refused: {}", rule.id());
-            return;
+    // Pass after pass, what can go goes: the first `n` pieces of a
+    // blueprint need not all stand on their own.
+    let mut so_far = near.clone();
+    let mut left = wanted;
+    let mut placed = Vec::new();
+    loop {
+        let before = left.len();
+        left.retain(|piece| {
+            if pbd_core::building::rules::can_place(&site, &so_far, piece).is_ok() {
+                so_far.push(piece.clone());
+                placed.push(piece.clone());
+                false
+            } else {
+                true
+            }
+        });
+        if left.is_empty() || left.len() == before {
+            break;
         }
-    };
+    }
+    for piece in &left {
+        if let Err(rule) = pbd_core::building::rules::can_place(&site, &so_far, piece) {
+            info!("PBD_BUILD_SHOT: {:?} refused: {}", piece.shape, rule.id());
+        }
+    }
     let count = placed.len();
     if builds.place(&mut save, placed) {
         info!(

@@ -500,3 +500,47 @@ impl Plugin for LogsPlugin {
             );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Task 2.2: a log written as it drifts comes back from the disk where
+    /// its last line left it, and a taken one does not come back.
+    #[test]
+    fn a_log_comes_back_where_it_was_and_a_taken_one_does_not() {
+        let root = std::env::temp_dir().join(format!("pbd-logs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = crate::saves::create(&root, "Logs", 32).unwrap();
+        let at = DVec3::new(0.0, f64::from(PLANET_RADIUS) + 3.0, 0.0);
+        let (kept, taken) = {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let logs = Logs::default();
+            let mut kept = logs.make(&save, at, DVec3::X);
+            assert!(save.store_with_hands(
+                log_drive::record(&kept),
+                LOG_SCHEMA,
+                &pbd_core::inventory::Slots::new()
+            ));
+            // It drifts and is written again, by the water.
+            kept.body.position[0] += 7.5;
+            save.store(
+                &crate::saves::water_author(),
+                vec![log_drive::record(&kept)],
+            );
+            let mut taken = Log::new(kept.id + 1, log_drive::made(at, DVec3::Z));
+            save.store(&Author::Player(0), vec![log_drive::record(&taken)]);
+            taken.body.state = LogState::Taken;
+            save.store(&Author::Player(0), vec![log_drive::record(&taken)]);
+            save.drain();
+            (kept, taken)
+        };
+        let reopened = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+        let back = log_drive::from_records(&reopened.records);
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].body, kept.body);
+        assert!(back.iter().all(|l| l.id != taken.id));
+        assert_eq!(log_drive::next_id(&reopened.records), taken.id + 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

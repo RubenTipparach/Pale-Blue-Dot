@@ -288,4 +288,47 @@ mod tests {
         assert!(from_records(&save.records).is_empty());
         assert!(builds.pieces.is_empty());
     }
+
+    /// Task 3.1: a room built in a world with an old log comes back from
+    /// the disk piece for piece, the old log's edit is untouched, and the
+    /// world's identity names the kind.
+    #[test]
+    fn a_built_room_survives_a_reload_and_an_old_log_reads_as_it_did() {
+        let root = std::env::temp_dir().join(format!("pbd-builds-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = crate::saves::create(&root, "Built", 31).unwrap();
+        std::fs::write(root.join(&slot.id).join("edits.v1.log"), "77 200 0\n").unwrap();
+        let room: Vec<Piece> = (0..6)
+            .map(|s| Piece::new("timber", Shape::wall(100, 200 + s, 150, Opening::None)))
+            .chain(std::iter::once(Piece::new(
+                "timber",
+                Shape::Floor {
+                    cell: 100,
+                    layer: 150,
+                },
+            )))
+            .collect();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let mut builds = Builds::default();
+            builds.follow_save(&save);
+            assert!(builds.place(&mut save, room.clone()));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+        let back = from_records(&reopened.records);
+        assert_eq!(back.len(), room.len());
+        for piece in &room {
+            assert_eq!(back.get(&piece.id()), Some(piece));
+        }
+        assert_eq!(
+            reopened.edits.for_cell(77),
+            &[(200, pbd_core::terrain::Material::Air)]
+        );
+        assert_eq!(
+            reopened.identity.records.get(PIECE_RECORD),
+            Some(&PIECE_SCHEMA)
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

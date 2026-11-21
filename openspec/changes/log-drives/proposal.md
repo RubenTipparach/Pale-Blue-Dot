@@ -22,8 +22,8 @@ flowing".
 
 ## Impact
 
-- Phase 3 of the roadmap (after environment v2). Not started: built when the
-  owner asks.
+- Phase 3 of the roadmap (after environment v2). Started 2026-11-21
+  (below).
 - Floating logs are world state: each is a stored record with its position,
   saved on the durable path; a log never vanishes.
 
