@@ -163,6 +163,107 @@ trade), then roads (the delivery, escort and clear jobs want them). Each is
 mocked up before code where it has a look: the road surfaces and slopes in a
 new tab of the towns mockup (M15) and the board and trade panel in M5.
 
+
+## Friendly faces (research, 2026-11-21)
+
+**The owner (2026-11-21):** "Let's start with npcs using existing NPC
+mockup. Design new and friendly looking NPCs. High frontier repo has some
+methods for drawing friendly faces. Ultimately I want you to do research on
+how we can generate and animate interesting looking cartoony low poly people
+withe expressive faces. Think of like kerbal space program".
+
+### What the references do
+
+- **Kerbal Space Program.** A kerbal is a skinned mesh with a head about a
+  third of its height, a short round body and short limbs. Its face reads
+  from a few large features: two big round eyes that move on their own, lids
+  for blinks, and a wide mouth whose shapes (grin, gritted panic, "wheee")
+  are blend shapes (shape keys) on the head; the community's Blender rigs add
+  eyelids and eye controllers for the same reason. Expression follows state
+  and trait: the same face panics under G load or grins, and KSP 2 makes eye
+  shape a character trait and adds hair and more expressions
+  ([forum, blend shapes](https://forum.kerbalspaceprogram.com/topic/173577-animated-meshes-blendshapes-shapekeys-keam-inside-look),
+  [KSP 2 dev insights 6](https://forum.kerbalspaceprogram.com/topic/200600-developer-insights-6-%E2%80%93-kerbals-the-first-new-look),
+  [space.com](https://www.space.com/kerbal-space-program-2-new-features-video)).
+- **Wind Waker.** Eyes, brows and pupils are separate flat meshes floating
+  just off the face, drawn after the head and hair so they always read, and
+  swapped or slid to change expression; the mouth is drawn normally
+  ([Link's expressions](https://medium.com/@gordonnl/links-expressions-eb7beae2c62c),
+  [Polycount](https://polycount.com/discussion/comment/1655607)).
+- **High Frontier fan game** (`character-kit` skill and its mascot, read
+  2026-11-21 at `6cbe5b3`): flat colour, two tones per material, no
+  outlines; a simple face of dot eyes with a white catch-light, short brow
+  strokes, a small mouth and optional blush; **expressions are swaps of
+  eyes, brows and mouth, never a deformation** ("happy" eyes are two upturned
+  arcs); hands and heads are swaps; round joints so no seam shows.
+- **Eye motion research.** Blinks every 2 to 6 s with an occasional double,
+  closing faster than they open; saccades as fast moves (about 50 ms) to a
+  new target, then a hold; lids drop a little when the eyes look down; blink,
+  gaze and mouth kept as separate layers so none overwrites another
+  ([Eyes Alive](https://www.cis.upenn.edu/~badler/papers/EyesAlive.pdf),
+  [CMU blinks](https://ri.cmu.edu/?p=121999),
+  [facial animation guide](https://abratabia.com/ai-talking-characters/facial-animation.php)).
+
+### Decisions (proposed; the mockup shows them)
+
+**13. A friendly townsperson: KSP's proportions in the game's hex style.**
+- **Body:** about 3 heads tall (a kerbal is close to that), a head 0.45 m
+  across on a short rounded body 1.35 to 1.6 m tall in all, stubby arms and
+  legs. Built from six-sided pieces (hex prisms and six-sided lathes, flat
+  shaded) so it keeps the owner's "hexagonal blocks that look like cubes"
+  (survey T2) while reading round at a distance. Low poly: about 600
+  triangles a person with the face.
+- **Lit like the terrain** (CLAUDE.md): `LitByField` and `LitLikeTerrain`,
+  no outlines, clothes in two tones from the town's palette.
+
+**14. The face is layered pieces on the head, swapped and slid (Wind
+Waker and High Frontier), not a deforming mesh.**
+- Eyes: a white six-sided disc per eye with a dark pupil disc and a white
+  catch-light, sitting just proud of the face. The pupil slides inside the
+  white to look; the whole eye scales for size (a trait, as in KSP 2).
+- Lids: a skin-coloured cap over each eye that slides down to blink and
+  rests lower when sleepy or looking down.
+- Brows: one short bar per eye, raised, lowered and tilted for mood.
+- Mouth: a small set of drawn shapes in one atlas (smile, grin, open "o",
+  flat, frown, wobble, talk A/O/M), picked per frame. Blush: two soft
+  ovals, on when happy or embarrassed.
+- Pieces are drawn in pixel art at the terrain's texel density, sampled
+  nearest. A swap is a UV change on one instanced quad, so a face costs a
+  handful of quads and no blend shapes; it works the same in the game and in
+  a three.js mockup.
+
+**15. Expressions are named sets of those layers, driven by state.**
+- `neutral`, `happy`, `delighted`, `surprised`, `worried`, `sad`, `cross`,
+  `sleepy`, `thinking`, `talking`; each is a choice of eye scale, pupil
+  size, lid height, brow lift and tilt, mouth shape and blush.
+- What drives them: meeting the player (surprised then happy), a fair trade
+  (happy), a job done (delighted), a lost villager (worried, then delighted
+  at home), night (sleepy), the smith at work (focused brows), rain (a
+  squint). Goodwill shifts a town's resting face.
+- Layers run separately so none overwrites another: blink (random 2 to 6 s,
+  sometimes double, close 60 ms, open 120 ms), gaze (saccades to the player
+  when near, else to points of interest, held 0.5 to 2 s; head follows the
+  eyes late), mouth (expression or talk), brows (expression plus a lift on
+  each saccade).
+
+**16. People are generated from a seed and the town.** Height, build (round,
+pear, tall, stout), head size, eye size and spacing, nose (none, button,
+long), ears, hair from a kit of hex-built styles (bun, crop, braid, bald,
+hat), beard, skin, and clothes in the people's palette; each picked from the
+settlement record and the person's index, so they are the same on every
+visit. A generator tab in the mockup shows the range.
+
+**17. Motion is procedural on a few bones.** A bouncy walk (body bob and
+squash on each step, arms swinging), idle sways and weight shifts, a hop
+when delighted, a shrug, a wave, a head tilt when thinking; keyed poses
+blended by curves with named tunables (the `animation` skill), and
+nothing read by a rule.
+
+**18. The look is decided in M5 first.** A Faces tab in `npcs.html` puts
+today's hex figure beside the proposed one, with the expression set, the
+live layers (blink, gaze at the cursor, talk), the generator, and a lit
+night square. The game waits for the owner's approval of that tab.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
@@ -176,6 +277,11 @@ new tab of the towns mockup (M15) and the board and trade panel in M5.
   stock and demand are limited; the values file is one place to tune.
 - [A road over a player's build] → A road cell is laid only on cells with no
   player edit; a road record that cannot route round one stops at it.
+- [Face pieces z-fighting or hidden by hair] → The face pieces sit 2 mm
+  proud of the head and are drawn after it; hair never covers the eyes
+  (Wind Waker's villagers show the same rule).
+- [Cute against the game's look] → The proposed figure is shown beside
+  today's hex figure in the same light; the owner picks.
 - [Sloped cells and the rest of the engine] → A slope is a top shape on an
   ordinary cell: the cell's material, light and saving are unchanged, and
   only the mesher, collision and the walker's ground height read the slope.

@@ -58,3 +58,10 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 - [ ] 9.1 Captures of trade, a board, each special job and a road between two towns, in `docs/screenshots/townsfolk/`; frame cost not measured in a cloud session. Verify: in the PR.
 - [ ] 9.2 A gameplay demo: a bot with the goal "earn 100 coins in town", playing jobs and trade through the player's own inputs (CLAUDE.md, Demos). Verify: the video, for the batch.
+
+## 10. Friendly faces (added 2026-11-21: "Design new and friendly looking NPCs ... Think of like kerbal space program")
+
+- [ ] 10.1 The research and the plan (design, "Friendly faces", decisions 13 to 18). Verify: in this change.
+- [ ] 10.2 M5's Faces tab: today's hex figure beside the proposed one; the expression set; blink, gaze and talk running; the generator; a night square lit by its lamps; text in modals; nothing turning on its own. Verify: screenshots in `docs/screenshots/npc-faces/`, the page republished to its link and the tracker updated.
+- [ ] 10.3 The owner approves the Faces tab for the game. Verify: on the tracker, recorded in `mockup-work.md`.
+- [ ] 10.4 The figure, face layers and generator in the game (after 10.3, on a request). Verify: captures by day and at night; a test that the same town gives the same faces.

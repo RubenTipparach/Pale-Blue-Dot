@@ -84,6 +84,18 @@ we need currency".
   has done something with one: a lost villager, a mission given, a town's
   goodwill. Those are stored records (`world-persistence`).
 
+## Added 2026-11-21: friendly faces
+
+**The owner (2026-11-21):** "Design new and friendly looking NPCs ... do
+research on how we can generate and animate interesting looking cartoony low
+poly people withe expressive faces. Think of like kerbal space program".
+The research and the plan are design 13 to 18: KSP's proportions (a big head
+on a short round body) built from six-sided pieces, a face of layered pieces
+that are swapped and slid rather than deformed (Wind Waker's eyes, High
+Frontier's swap rule), expressions driven by what happens to the person,
+blink and gaze running on their own layers, and people generated from the
+town and the seed. The look is decided in M5's new Faces tab first.
+
 ## Capabilities
 
 ### New Capabilities
