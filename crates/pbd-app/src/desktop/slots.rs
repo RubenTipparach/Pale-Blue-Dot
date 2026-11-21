@@ -225,6 +225,11 @@ pub fn load_icons(
     });
 }
 
+/// The hotbar row, which build mode hides while its palette stands in it
+/// (`player-building` design B5).
+#[derive(Component)]
+pub struct HotbarRow;
+
 /// Marks the slot at this index, so the update can find it without a lookup.
 #[derive(Component)]
 pub struct SlotCell(pub usize);
@@ -284,6 +289,7 @@ pub fn spawn(
                 ..default()
             },
             super::menu::InPlayHud,
+            HotbarRow,
         ))
         .with_children(|row| {
             for index in 0..SLOTS {

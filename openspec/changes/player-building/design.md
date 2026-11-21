@@ -162,3 +162,144 @@ piece.**
   read it.
 - **P3, "lets save this for after all the other work is done":** build mode is
   on B provisionally. The key is settled at the end.
+
+## As built in phase 3 (2026-11-21)
+
+What `cities-in-the-world` was expected to leave behind, and what reading
+the code found before anything was built:
+
+- **There is no `settlement::check`.** The towns' layout rules are held by
+  tests (`settlement::tests`: `no_two_roofs_cut_into_each_other`,
+  `every_stair_is_cut_and_nothing_floors_its_well`, ...) and by how the
+  cutter lays a template out, not by a function a placement could call. So
+  task 2.1 is not a split of an existing function: the rule set is written
+  once, in `pbd_core::building::rules`, and the town side reaches it by
+  turning a template's building into pieces (`building::blueprint`) and
+  checking them (`building::check_layout`). The test that every plain
+  template building is accepted whole and piece by piece is the proof the
+  two callers agree.
+- **Towns are cut whole, not as pieces.** A town's building is one
+  `BuildingDef`, cut into meshes and solids by `settlement::pieces`. A
+  player's building is a set of pieces, each its own record, and is cut by
+  `building::cut` into the same `BuildingSolids` and `Meshes` types, so the
+  walker and the field light read it as they read a town.
+
+### B1. Pieces sit on the planet's own cells
+
+A piece names real finest cells by their exact key (`cell_key`), never a
+chart's offset coordinates:
+
+- a **wall**, **door** or **window** on the edge between two cells, the
+  pair of keys sorted (shared edge ownership: one edge seen from either side
+  is one slot), standing one storey (3 layers) from its base layer; a door
+  is a wall with a doorway (no leaf yet), a window a wall with a window;
+- a **floor** in a cell, on a layer line;
+- a **stair** from a foot cell to the head cell across one of the foot's
+  sides, rising one storey;
+- a **post** at a corner, the three cells that meet there, sorted;
+- a **lantern** in a cell, on a layer line;
+- a **roof** over a set of cells, its eaves on a layer line.
+
+A layer is the column's own index (`column::layer_altitude`), counted from
+`column::BASE_M`, which never moves, as a cell edit's layer is. Pentagons
+are real: a cell with five sides has five neighbours, and the pentagon rule
+refuses it and its neighbours.
+
+### B2. The rules: one function each, the first to fail is the reason
+
+`building::rules`, in M6's order and with M6's reasons:
+
+| Rule | Refused when |
+| --- | --- |
+| `slot` | the slot already holds a piece of the same class |
+| `pentagon` | a cell of it, or a neighbour of one, is a pentagon |
+| `held_up` | an upper floor, wall, post, stair or lantern has nothing under it: a wall or post on its cell below, a floor beside it on its storey, or the ground storey |
+| `headroom` | a floor in a stair's well (its two cells, the storey above its foot), or a stair whose well holds a floor |
+| `stair_cut` | a wall would stand across a stair's flight |
+| `landing` | the stair's way off its head is walled at the top |
+| `room` | a roof's cells are not closed round by walls, or part of them has no floor |
+| `roof_overlap` | a roof would take another roof's cells, eaves included |
+| `opening` | a lantern on a stair |
+
+A refusal is a `Refusal { rule }`; the ghost shows the rule's locale
+string, `build.refused.<rule>`, in M6's plain words.
+
+**Removal** is refused with the dependant named (`building::dependant`):
+a lantern on a floor, a roof on a wall or a floor, a wall upstairs on a
+wall below, a stair on its floor.
+
+### B3. Records, not a new log line: the format question
+
+Each piece is a record of kind `piece` (schema 1). Its id is the hash of
+its slot and class (decision 4: "the same place and kind is the same id"),
+its body the piece and its kit, or `None` once removed. It enters the
+journal at once through `WorldSave::store`, as a `rec` line authored by
+the player, and the first piece notes the kind in the world's identity
+(`note_record_kinds`): that note is the version bump. **The edit log's line
+format is not changed.** That was chosen over a new line shape with the
+log's own format number bumped:
+
+- the `rec` line already exists, is versioned per kind, and is kept as
+  text by a build that does not know the kind, so an older build opening a
+  newer world loses nothing (it does not draw the houses and keeps their
+  lines);
+- an old save has no `piece` records and opens unchanged: nothing has to
+  migrate, and the format tests show an old log still reads;
+- three other phase-3 agents (townsfolk, trade, roads) edit the save in
+  parallel, and a contended format number buys nothing the record line
+  does not already give.
+
+Building is free (decision 7), so a piece line carries no slots.
+
+### B4. Cutting
+
+The pieces within `PLOT_M` (24 m) of a plot's anchor cell are cut in one
+frame, the tangent plane at that anchor, as a town building is, into
+`Meshes` in the kit's own textures (the wall's outside and inside, the
+floor, the roof material, the gable) and one `BuildingSolids`: walls as
+thin solids with their door and window gaps, floors as surfaces, stairs as
+flights, roofs as their plan. The anchor is the lowest cell key among a
+plot's pieces, so the same pieces always cut the same way.
+
+### B5. The game side
+
+- **N** on foot opens and closes build mode. The design named B, which
+  was free on foot when it was written; it is the breeding screen's key
+  now, so build mode takes N from the risk note's own list of free keys
+  (I, K, N, O, U, Y; recommendation taken, ask only with screenshots). The
+  hotbar row is hidden and the palette row shown in its place: wall, door,
+  window, floor, roof, stairs, post, lantern, blueprint, remove, with M6's
+  icons (copied into `assets/textures/ui/build/`, provenance in its
+  README). The player's slots are never touched and the selection is given
+  back on leaving, so the hotbar is as it was. While build mode is open its
+  clicks, the number row and K are taken from every other reader before
+  `Update`, so a click does not also dig, cast or eat.
+- The number row picks a palette slot; the wheel turns a stair, a blueprint
+  or the blueprint's choice. Left click places; right click removes the
+  aimed piece (the Remove slot does the same on a left click).
+- The ghost is the piece's own cut, drawn translucent green or red; a red
+  one carries its reason on the line under the crosshair. A ghost is a
+  preview, not a thing placed in the world, so it is not lit by the field.
+- **K** in build mode opens the kit picker: every kit side by side, with
+  its wall, floor and roof textures; the wheel steps the chosen kit, K
+  closes it (the walker keeps the pointer, so the picker needs no cursor).
+- The roof tool is the Roof slot: aimed at a room, it flood-fills the cells
+  bounded by walls on that storey and fits the kit's roof over them: a
+  cone over one cell, the kit's flat roof, or a gable along the room's
+  long axis.
+- A blueprint is any plain building of the templates (no newel, stilts,
+  raised floor, parapet or dome), charted onto the cells at the aim and
+  turned by the wheel in sixths (shift and the wheel steps which); one click fills it whole (free building,
+  decision 7). Each of its pieces is an ordinary piece record, so half a
+  blueprint removed is half a house.
+
+### B6. Not built in this pass
+
+- The build camera (task 4.5): orbit, pan, zoom, double-click to walk and
+  the cutaway. It is a camera of its own beside the walker's and is left
+  for a later pass.
+- Filling a blueprint piece by piece in the game (the core test does it;
+  the game fills it whole, as free building allows).
+- Building costs (decision 7: free only).
+- Frame cost: not measured in the cloud (lavapipe); `can_place` is timed in
+  a core test instead (task 5.1).
