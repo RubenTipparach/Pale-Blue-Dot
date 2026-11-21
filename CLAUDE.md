@@ -544,10 +544,15 @@ which wait for a request.
 - **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
   underwater overhaul (M25, `ocean-environments`).
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
-  house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20), and logging ("add logging system
+  house building (M6, M22, `player-building`), and logging ("add logging system
   to the game (in phase 3)": logs on a raft, or dropped in a river to float
   down it and stop where the water stops flowing; M34, `log-drives`).
+  With them (owner, 2026-11-21: "Townsfolk: add reqs for trading, picking up
+  custom missions, building roads ... and generate road segments between
+  some towns", "doing missions and rtrading should get you money, so we need
+  currency"): coins, a trader in every town, town missions from a board and
+  its people, and sloped dirt and gravel roads, laid by the world between
+  neighbouring towns (`townsfolk`, design 5 to 12).
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
@@ -566,11 +571,16 @@ which wait for a request.
   (`survival-mode`). No mockup yet.
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
-  M22), and the works between buildings (roads, bridges); no mockup yet for
-  the second.
+  M22), and the works between buildings (bridges and the like; roads come
+  with the townsfolk); no mockup yet for the second. With them, power
+  generation's first rungs, water and wind (M20; owner, 2026-11-21: "bump
+  power gen to phase 4").
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
-  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  navigation (M23, `steer-and-sail`), carts and horses, cars, and trains on
+  their tracks (owner, 2026-11-21: "add cars and cars and carts, and horses
+  and trains (and tracks) mockups to phase 5"; no mockups yet), hiring
+  workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get
   into age of flight and mass mining, oil, industrialization, advanced power
