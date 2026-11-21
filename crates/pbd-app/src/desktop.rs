@@ -1990,6 +1990,7 @@ pub fn run(args: &[String]) {
             (
                 pack::find_hold,
                 pack::press,
+                pack::drop_key,
                 slots::update,
                 pack::paint_hold,
                 pack::paint,

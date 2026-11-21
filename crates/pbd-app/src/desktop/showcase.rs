@@ -116,6 +116,8 @@ enum Click {
     Cell(usize),
     /// A mission tree card, by its mission index.
     Card(usize),
+    /// The pack's trash plaque.
+    Trash,
 }
 
 /// One frame's inputs.
@@ -315,6 +317,8 @@ struct Bot {
     pen_edges: Vec<(Vec3, Vec3)>,
     pieces: usize,
     sel: (u32, f32),
+    /// Making room (`drop-and-trash` design 4): the step and its clock.
+    room: (u32, f32),
     sel_from: usize,
     walk_anchor: Option<(Vec3, f32)>,
     /// The watchdog: the goal walked to, the nearest it came, and when.
@@ -1568,6 +1572,67 @@ impl Bot {
         }
     }
 
+    /// With fewer than two free slots carried, a junk stack (sand, soil,
+    /// dirt, grass) into the pack's trash, as a player clears a full pack
+    /// (`drop-and-trash` design 4). Whether it is still at it.
+    fn make_room(&mut self, s: &Sight, out: &mut Intent) -> bool {
+        let free = (0..CARRIED).filter(|&k| s.slots.get(k).is_none()).count();
+        let junk = (0..CARRIED).find(|&k| {
+            s.slots.get(k).is_some_and(|st| {
+                matches!(
+                    st.item,
+                    Item::Block(
+                        Material::Sand
+                            | Material::Soil
+                            | Material::Dirt
+                            | Material::Grass
+                            | Material::DryGrass
+                            | Material::JungleGrass
+                            | Material::DesertSand
+                    )
+                )
+            })
+        });
+        let (phase, since) = &mut self.room;
+        if *phase == 0 && (free >= 2 || junk.is_none()) {
+            return false;
+        }
+        *since += s.dt;
+        match *phase {
+            0 => {
+                info!("showcase: the pack is full; a stack of junk into the trash");
+                if s.screen != Screen::Pack {
+                    out.taps.push(KeyCode::KeyI);
+                }
+                *phase = 1;
+                *since = 0.0;
+            }
+            1 if *since > 0.6 => {
+                if let Some(k) = junk {
+                    out.click = Some(Click::Cell(k));
+                    out.lmb_tap = true;
+                }
+                *phase = 2;
+                *since = 0.0;
+            }
+            2 if *since > 0.5 => {
+                out.click = Some(Click::Trash);
+                out.lmb_tap = true;
+                *phase = 3;
+                *since = 0.0;
+            }
+            3 if *since > 0.5 => {
+                if s.screen == Screen::Pack {
+                    out.taps.push(KeyCode::KeyI);
+                }
+                *phase = 0;
+                *since = 0.0;
+            }
+            _ => {}
+        }
+        true
+    }
+
     /// Put an item in the selected slot: its number key, or the pack first
     /// when it is not in the hotbar. `Done` when it is in hand.
     fn select(&mut self, s: &Sight, out: &mut Intent, pick: &dyn Fn(Item) -> bool) -> Status {
@@ -2573,14 +2638,17 @@ pub fn press_controls(
         Option<&super::kitchen::CookPlaque>,
         Option<&super::pack::PackCell>,
         Option<&super::forge::RecipePlaque>,
-        Option<&super::mission_tree::Card>,
+        (
+            Option<&super::mission_tree::Card>,
+            Option<&super::pack::TrashCell>,
+        ),
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt, card) in &mut controls {
+    for (mut interaction, row, button, well, cook, cell, smelt, (card, trash)) in &mut controls {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
             Click::CraftHand => button.is_some_and(|b| b.0 == "hand"),
@@ -2592,6 +2660,7 @@ pub fn press_controls(
             Click::Smelt(code) => smelt.is_some_and(|c| &c.0 == code),
             Click::Cell(k) => cell.is_some_and(|c| c.0 == *k),
             Click::Card(k) => card.is_some_and(|c| c.0 == *k),
+            Click::Trash => trash.is_some(),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -2640,7 +2709,9 @@ fn run(
             | Act::Lead(_)
             | Act::Collect(_)
     );
+    // Not while making room in the pack (it opened it on purpose).
     if in_world
+        && bot.room.0 == 0
         && matches!(
             s.screen,
             Screen::Pack
@@ -2742,6 +2813,7 @@ fn run(
             bot.select(s, out, &|item| wanted(&name, item))
         }
         Act::Chop(until) => chop(bot, until, s, out),
+        Act::Dig(..) | Act::Mine(..) if bot.make_room(s, out) => Status::Running,
         Act::Dig(until, depth) => dig(bot, until, *depth, s, out),
         Act::Mine(until, depth) => mine(bot, until, *depth, s, out),
         Act::Focus(id) => focus(bot, id, s, out),

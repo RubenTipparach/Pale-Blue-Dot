@@ -60,6 +60,16 @@ pub struct PackHand(pub Option<Held>);
 #[derive(Component)]
 pub struct PackCell(pub usize);
 
+/// The pack's trash plaque: a stack put on it is destroyed
+/// (`drop-and-trash` design 3).
+#[derive(Component)]
+pub struct TrashCell;
+
+/// One of the pack screen's two panels: a click with a stack held that is
+/// on neither (the background) drops the stack (`drop-and-trash` design 3).
+#[derive(Component)]
+pub struct PackPanel;
+
 /// The stack drawn at the pointer.
 #[derive(Component)]
 pub struct HeldIcon;
@@ -362,6 +372,8 @@ pub fn spawn(
                 .with_children(|pair| {
                     pair.spawn((
                         kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        PackPanel,
+                        Interaction::default(),
                         // Sized here: a framed node is otherwise its picture's
                         // size, not its contents'.
                         Node {
@@ -418,6 +430,23 @@ pub fn spawn(
                                                     KitText::new("HOTBAR", ui_kit::TEXT_DIM)
                                                         .shadow(ui_kit::INK),
                                                 );
+                                                // The trash, at the line's far end.
+                                                line.spawn(Node {
+                                                    flex_grow: 1.0,
+                                                    ..default()
+                                                });
+                                                line.spawn((
+                                                    ui_kit::plaque(
+                                                        kit,
+                                                        pbd_app::ui_kit::Set::Stone,
+                                                        0.0,
+                                                    ),
+                                                    TrashCell,
+                                                ))
+                                                .with_child(ui_kit::plaque_label(
+                                                    pbd_app::ui_kit::Set::Stone,
+                                                    "TRASH",
+                                                ));
                                             },
                                         );
                                         slot_line(foot, kit, &atlas, 0);
@@ -426,6 +455,8 @@ pub fn spawn(
                     });
                     pair.spawn((
                         kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        PackPanel,
+                        Interaction::default(),
                         // Sized here: a framed node is otherwise its picture's
                         // size, not its contents'.
                         Node {
@@ -521,6 +552,11 @@ pub fn press(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     mut view: ResMut<HoldView>,
+    (trash, panels, mut toss): (
+        Query<&Interaction, With<TrashCell>>,
+        Query<&Interaction, With<PackPanel>>,
+        ResMut<pbd_app::drops::Toss>,
+    ),
 ) {
     if *screen != Screen::Pack {
         if hand.0.is_some() {
@@ -538,6 +574,33 @@ pub fn press(
     };
     // The square pressed, before one merely hovered (a hover left on another
     // square took the click: seen with the showcase bot, 2026-11-20).
+    // A stack held over the trash: destroyed, the slots recorded.
+    if button == Click::Left
+        && let Some(held) = hand.0
+        && held.from < CARRIED
+        && trash.iter().any(|i| *i != Interaction::None)
+    {
+        let mut slots = hotbar.0.clone();
+        let taken = slots.take(held.from, held.count);
+        if taken > 0 && save.record_pack(&slots) {
+            info!("TRASH {taken} from slot {}", held.from);
+            hotbar.0 = slots;
+        }
+        hand.0 = None;
+        return;
+    }
+    // A stack held and clicked on the background (no panel, slot or button
+    // under the pointer): dropped in front of the player.
+    if button == Click::Left
+        && let Some(held) = hand.0
+        && held.from < CARRIED
+        && panels.iter().all(|i| *i == Interaction::None)
+        && cells.iter().all(|(i, _)| *i == Interaction::None)
+    {
+        toss.0 = Some((held.from, held.count));
+        hand.0 = None;
+        return;
+    }
     let Some(index) = cells
         .iter()
         .find(|(interaction, _)| **interaction == Interaction::Pressed)
@@ -582,6 +645,27 @@ pub fn press(
         hotbar.0 = moved;
     }
     hand.0 = held;
+}
+
+/// Q on foot drops the held hotbar stack in front of the player
+/// (`drop-and-trash` design 2).
+pub fn drop_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    screen: Res<Screen>,
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    hotbar: Res<Hotbar>,
+    mut toss: ResMut<pbd_app::drops::Toss>,
+) {
+    if *screen != Screen::Playing
+        || !walking.is_some_and(|w| w.active && w.captured)
+        || !keys.just_pressed(KeyCode::KeyQ)
+    {
+        return;
+    }
+    let slot = hotbar.0.selected();
+    if let Some(stack) = hotbar.0.get(slot) {
+        toss.0 = Some((slot, stack.count));
+    }
 }
 
 /// Draw what is in hand at the pointer, and mark the square it came from.

@@ -38,8 +38,9 @@ pub struct DropsSet;
 impl Plugin for DropsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Drops>()
+            .init_resource::<Toss>()
             .add_message::<crate::hotbar::PickedUp>()
-            .add_systems(Update, (gather, draw).chain().in_set(DropsSet));
+            .add_systems(Update, (toss, gather, draw).chain().in_set(DropsSet));
     }
 }
 
@@ -71,6 +72,73 @@ impl Drops {
             made_s: now_s,
         }
     }
+}
+
+/// A stack to drop this frame (`drop-and-trash`): the slot and how many,
+/// asked by Q or by a stack dragged off the pack.
+#[derive(Resource, Default, Debug)]
+pub struct Toss(pub Option<(usize, u16)>);
+
+/// How far ahead a dropped stack lands, m: past the magnet
+/// ([`drops::MAGNET_M`]), so it is not pulled straight back.
+pub const TOSS_AHEAD_M: f64 = 3.2;
+
+/// Drop the stack [`Toss`] asks for: the drop made ahead of the chest along
+/// the look's level heading, written with the slots after it, then the
+/// slots and the live drops changed (the durable path first).
+#[allow(clippy::too_many_arguments)]
+pub fn toss(
+    sun: Res<Sun>,
+    mut asked: ResMut<Toss>,
+    walkers: Query<&Transform, With<Walker>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut drops: ResMut<Drops>,
+    mut hotbar: ResMut<Hotbar>,
+    mut save: ResMut<WorldSave>,
+    space: crate::SimSpace,
+) {
+    let Some((slot, count)) = asked.0.take() else {
+        return;
+    };
+    let Some(walker) = walkers.iter().next() else {
+        return;
+    };
+    let Some(stack) = hotbar.0.get(slot) else {
+        return;
+    };
+    let count = count.min(stack.count);
+    if count == 0 {
+        return;
+    }
+    let chest = chest(&space.origin(), walker.translation);
+    let up = chest.normalize_or(bevy::math::DVec3::Y);
+    let look = cameras
+        .iter()
+        .find(|(_, camera)| camera.is_active)
+        .map(|(at, _)| at.forward().as_vec3().as_dvec3())
+        .unwrap_or(bevy::math::DVec3::X);
+    let level = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
+    let mut drop = Drops::make(
+        &save,
+        stack.item,
+        chest + level * TOSS_AHEAD_M,
+        sun.clock.seconds,
+    );
+    drop.count = count;
+    let mut slots = hotbar.0.clone();
+    if slots.take(slot, count) != count {
+        return;
+    }
+    if !save.record_toss(&drop, &slots) {
+        error!(
+            "toss BLOCKED: the save did not accept the drop of {count} {:?}",
+            drop.item
+        );
+        return;
+    }
+    info!("TOSS {count} {:?} as drop {}", drop.item, drop.id);
+    hotbar.0 = slots;
+    drops.live.push(drop);
 }
 
 /// The walker's chest, from its local (physics) body centre: where a drop is

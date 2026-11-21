@@ -70,6 +70,9 @@ pub enum Record {
     /// Some of drop `id` was picked up, leaving `left` on it (none: it is
     /// gone), into the slots this line carries whole.
     Pick { id: u64, left: u16, slots: Slots },
+    /// A stack the player dropped (`drop-and-trash`): the drop, and the
+    /// slots after it.
+    Toss { drop: ItemDrop, slots: Slots },
     /// A record's new value, whole (`world-persistence` decision 11): a
     /// site, and later a settlement or a landmark. Held as text, so a kind
     /// this build does not know is kept as it came.
@@ -90,6 +93,8 @@ const HAND: &str = "hand";
 const PACK: &str = "pack";
 /// A pickup's.
 const PICK: &str = "pick";
+/// A stack the player dropped's (`drop-and-trash`).
+const TOSS: &str = "toss";
 /// A record with the hands': `with s0 .. s39 rec @p kind id schema body`.
 const WITH: &str = "with";
 
@@ -313,6 +318,14 @@ pub fn pack_line_of(slots: &Slots) -> String {
     line
 }
 
+/// `toss d<drop> s0 s1 .. s39`, one line: a stack the player dropped and
+/// the slots after it (`drop-and-trash` design 1).
+pub fn toss_line_of(drop: &ItemDrop, slots: &Slots) -> String {
+    let mut line = format!("{TOSS} {}", drop_text(drop));
+    push_slots(&mut line, slots);
+    line
+}
+
 /// `pick id left s0 s1 .. s39`, one line.
 pub fn pick_line_of(id: u64, left: u16, slots: &Slots) -> String {
     let mut line = format!("{PICK} {id} {left}");
@@ -487,6 +500,14 @@ pub fn parse_line(line: &str) -> Option<Record> {
     if head == PACK {
         let carried: Vec<&str> = parts.collect();
         return Some(Record::Pack {
+            slots: slots_of(&carried)?,
+        });
+    }
+    if head == TOSS {
+        let drop = drop_of(parts.next()?)?;
+        let carried: Vec<&str> = parts.collect();
+        return Some(Record::Toss {
+            drop,
             slots: slots_of(&carried)?,
         });
     }
@@ -897,6 +918,20 @@ mod tests {
                 edit,
                 drop: Some(drop),
                 slots: Some(full())
+            })
+        );
+        // A stack the player dropped (`drop-and-trash`).
+        let tossed = ItemDrop {
+            id: 42,
+            item: Item::Block(Material::Sand),
+            count: 99,
+            ..drop
+        };
+        assert_eq!(
+            parse_line(&toss_line_of(&tossed, &full())),
+            Some(Record::Toss {
+                drop: tossed,
+                slots: full()
             })
         );
         assert_eq!(
