@@ -330,6 +330,13 @@ template's order:
   desert the caravan folk's and the tundra the ice-camp folk's. Each
   person's shirt is the template's tunic, so the guards keep their grey and
   the smith his dark; trousers, skin, hair and the rest are rolled.
+- a path stops half a metre short of the first wall it would cross,
+  walking out from the person's post toward each end. The mockup's people
+  walk through what was built after their lanes: its village lane walker
+  goes from (25, 9) to (25, 27) straight through the village hall, which
+  stands on (25, 10) and (25, 11). In the game that villager turns back at
+  the hall's south wall. A path that crosses nothing is kept whole, and a
+  test holds every path to more than half its length.
 Nothing about a person is saved: it is derived, as the masonry is.
 
 **21. The figure is M5 version 9's `friend()`, ported.** The same pieces
@@ -360,8 +367,8 @@ with catch-lights (0.016), lids and lash lines, brows, the mouth (0.24 x
 `Mood`, which picks one from what happens:
 - the player comes within 5 m: surprised for 0.5 s, then happy for 6 s,
   then back to the resting face; met again once the player has been 8 m off;
-- night (21:00 to 05:00 by the planet's clock where the person stands):
-  sleepy, unless just met;
+- night (the sun's daylight under 0.12 where the person stands, as the
+  herd's night is): sleepy, unless just met;
 - the smith (any `hammer` worker) at work: the resting face with the brows
   drawn down ("focused"), not an eleventh expression;
 - otherwise the resting face, happy or neutral from the seed;
