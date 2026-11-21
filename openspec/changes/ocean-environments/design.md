@@ -596,7 +596,8 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
   are 3D in the world; a dropped catch is a 2D item sprite (decision 11). Mark
   it answered in the survey.
 - **Q3. The deep fitted to the column.** `light-40m.jpg`, `light-90m.jpg`,
-  `light-140m.jpg`, `deep-day.jpg`. Recommend fitting.
+  `light-140m.jpg`, `deep-day.jpg`. Recommend fitting. In the survey as W21
+  (2026-11-21); the game builds the fitted zones provisionally until answered.
 
 ## Building it (2026-11-15)
 

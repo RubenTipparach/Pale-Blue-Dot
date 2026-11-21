@@ -114,8 +114,12 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .st.building { color: var(--done); background: var(--done-soft); }
 .st.planned { color: var(--accent); }
 .st.later { color: var(--muted); }
+.st.optional { color: var(--accent); border-style: dashed; }
 .miss { display: grid; gap: 4px; }
 .miss-h { font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--warn); }
+.warn { display: grid; gap: 4px; border-left: 2px solid var(--accent); padding-left: 8px; }
+.warn-h { font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.warn ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
 .miss ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 12.5px; color: var(--ink); }
 </style>
 
@@ -179,8 +183,8 @@ const MOCKUPS = [
     url: 'https://claude.ai/artifact/2BvFnY8FrTMSpaVhTy7mYi', published: '2026-11-12',
     summary: 'Ships built from modules on a grid; mass, thrust and turn rate follow from the parts and fly by the game\'s own limits.' },
   { id: 'M5', batch: 'new', title: 'Townsfolk and Peoples', change: 'townsfolk (extends it)', page: 'docs/mockups/npcs.html',
-    url: 'https://claude.ai/artifact/E2U5akkQgd5cdzPAXjrEyx', published: '2026-11-13',
-    summary: 'Who lives in the towns, their day on world time, and how you talk, trade and fall out with them.' },
+    url: 'https://claude.ai/artifact/E2U5akkQgd5cdzPAXjrEyx', published: '2026-11-21', version: 8,
+    summary: 'Who lives in the towns, their day on world time, and how you talk, trade and fall out with them. Version 8 (2026-11-21, drafted): a Faces tab for the owner\'s "Design new and friendly looking NPCs ... Think of like kerbal space program": today\'s hex figure beside a proposed friendly townsperson (about 3 heads tall, six-sided pieces), a layered face with ten expressions, blink, gaze and talk running, a seeded crowd and a night patch lit by its lamps (townsfolk design 13 to 18); the game waits for your approval.' },
   { id: 'M6', batch: 'new', title: 'Hex House Builder', change: 'player-building', page: 'docs/mockups/building.html',
     url: 'https://claude.ai/artifact/6kd3oRFMMtZ1d4FCjMiAYt', published: '2026-11-12',
     summary: 'Walls on cell edges, floors in cells, a storey every three layers; a ghost that says why a piece will not fit.' },
@@ -242,7 +246,7 @@ const MOCKUPS = [
   { id: 'M24', batch: 'new', title: 'Hangar and Chibi Aircraft', change: 'vehicle-yards', page: 'docs/mockups/hangar.html',
     url: 'https://claude.ai/artifact/Jcb3oo89Vb8puHfaBUBWAm', published: '2026-11-13', version: 9,
     summary: 'Chibi planes, helicopters, VTOLs and airships on a painted 1 m grid, then fly them easily over kilometres of hex hills, towns and sea, crashing into what is solid.' },
-  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2. Version 2 (2026-11-20, drafted, the game waits): the Beavers and otters tab, on your "improve on beaver and otter animations". Version 3 (2026-11-20, drafted): on your notes on it, each animal one sculpted skin (Mining Mike\'s wolf method), pixel-art fur, fur tufts that spike when wet, aspen bark and a warm dusk. Version 4 (2026-11-20, drafted): on your notes on it, the forelegs move in every action (rear-ups with anticipation and a settle, paws reaching down to sit, strides, paddling), calmer fur tufts by default, and the sea otter\'s paws empty except while it forages and eats. Version 5 (2026-11-20, drafted): on your notes on it, the forelimbs kept within a real animal\'s range (joint limits per animal, upright hands hanging in front of the belly, paws on the chest on the back), and every swimmer paddles with its forepaws. Version 5 approved for the game (2026-11-20, in chat): "its good enough, send it"; built in the game on claude/phase-2-1 (ocean-environments 20.3 with 8.4, design B29): the beaver by its colony\'s pond, the river otter and the sea otter in their sculpted, skinned, furred bodies with the tab\'s motion. Captures in docs/screenshots/beavers-otters-game/ (software-rendered).', page: 'docs/mockups/ocean.html',
+  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2. Version 2 (2026-11-20, drafted, the game waits): the Beavers and otters tab, on your "improve on beaver and otter animations". Version 3 (2026-11-20, drafted): on your notes on it, each animal one sculpted skin (Mining Mike\'s wolf method), pixel-art fur, fur tufts that spike when wet, aspen bark and a warm dusk. Version 4 (2026-11-20, drafted): on your notes on it, the forelegs move in every action (rear-ups with anticipation and a settle, paws reaching down to sit, strides, paddling), calmer fur tufts by default, and the sea otter\'s paws empty except while it forages and eats. Version 5 (2026-11-20, drafted): on your notes on it, the forelimbs kept within a real animal\'s range (joint limits per animal, upright hands hanging in front of the belly, paws on the chest on the back), and every swimmer paddles with its forepaws. Version 5 approved for the game (2026-11-20, in chat): "its good enough, send it"; built in the game and merged to main (PR 141; ocean-environments 20.3 with 8.4, design B29): the beaver by its colony\'s pond, the river otter and the sea otter in their sculpted, skinned, furred bodies with the tab\'s motion. Captures in docs/screenshots/beavers-otters-game/ (software-rendered).', page: 'docs/mockups/ocean.html',
     url: 'https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1', published: '2026-11-20', version: 5,
     summary: 'Reefs, kelp, ice, vents and wrecks; a river, a beaver dam and a marsh; 61 water species; the Water sim; and a Beavers and otters tab where a furred beaver and two otters live on their own.' },
   { id: 'M26', batch: 'new', title: 'Pens, Nests and Pedigrees', change: 'animal-husbandry', page: 'docs/mockups/husbandry.html',
@@ -502,26 +506,27 @@ const ROADMAP = [
     { title: 'Cooking', status: 'built', change: 'cooking', refs: ['M27'], text: 'A campfire that cooks fish, crops and eggs into dishes that give effects. On the phase-1 branch; oven and pot later.' },
     { title: 'Starter missions', status: 'built', change: 'starter-missions', refs: [], text: 'Nineteen missions through the loop, from gathering by hand to a farm meal, with a HUD line and a Missions tab (O). On the phase-1 branch.' },
   ] },
-  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
-    { title: 'Advanced foliage and flora', status: 'built', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
+  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul: built and merged to main (M13, M25 and M28 approved 2026-11-15). Your checks and later extras are warnings, not requirements.', steps: [
+    { title: 'Advanced foliage and flora', status: 'built', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.',
+      warn: ['Far tree impostors, the fungal forest, the desert palm, alien species'] },
     { title: 'Glowing mushrooms and carried light', status: 'built', change: 'glowing-mushrooms', refs: ['M13'], text: 'Pick the glowing mushrooms the game already grows (F), eat one to glow for 3 minutes, and hold a torch, lantern or mushroom to light the ground round you, every frame, with no shadow.',
-      missing: ['Your play of it on the GPU: the held flame reads pinkish at its heart and the body glow faint on the software renderer', 'Frame cost on your machine (PBD_CARRIED=0 against the new build)', 'The cap (survey A3)', 'Whether the placed torch should match the new held one (a separate look change)'] },
-    { title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with pink and white shells and no blue; a warmer rippled desert sand. Sand dug in a desert is desert sand and keeps its look where it is placed.',
-      missing: ['Your look on the GPU (captures are software-rendered)'] },
+      warn: ['The placed torch matching the new held one (a look change, mockup first)'] },
+    { title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with pink and white shells and no blue; a warmer rippled desert sand. Sand dug in a desert is desert sand and keeps its look where it is placed.' },
     { title: 'Mountain flora', status: 'built', change: 'mountain-ground', refs: ['M13'], text: 'Firs to a tree line with krummholz, alpine turf and meadow plants, scree, lichen and moss on varied rock, snow patches and ice. The ground and trees are generator version 15, for new worlds; the rock, lichen, scree and plants are drawn on every world.',
-      missing: ['Bilberry bushes, the snow-edge flower and the gentian and campion colours (the kit\'s blue and red stand in)', 'The grass riser reads bright lime beside the dark turf: a turf-side tile', 'Proposals: tarns, cairns, bilberry as food, boulders taken only by pickaxe', 'Frame cost on your hardware: a mountain walk, A/B'] },
-    { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.',
-      missing: ['Your look on the GPU at the beavers and otters in the game (built; the captures are software-rendered)', 'Next for them: the fur tufts\' spring and wet spike, splashes and chips, felling a standing tree, the otter\'s slide and fish, the kelp wrap', 'Frame cost on your machine', 'Your M25 questions (Q1 to Q3) not yet in the survey'] },
-    { title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; smoothing between ticks, filling and drying; the fall\'s mist, bubbles and churn (M35); rain splashes on rivers and the sea; tides.',
-      missing: ['Your look: water drying away smoothly (the videos)', 'Your listen: the waterfall sounds on the Sounds page', 'Your call: froth only on faces that fall a layer or more (M31), and the texture panning along the flow on still water too (water-flow 3.5)'] },
-    { title: 'Checks', status: 'planned', change: '', refs: [], text: 'What the whole phase still owes before it is done.',
-      missing: ['Frame cost on your hardware: the flow, its smoothing, the fall\'s mist and churn, the light under water', 'Videos of every phase 2 feature (the batch)', 'Your playtest of environment v2'] },
+      warn: ['Bilberry bushes and the snow-edge flower (the kit\'s blue and red stand in)', 'Tarns, cairns, bilberry as food, boulders taken only by pickaxe (proposals)'] },
+    { title: 'Underwater overhaul', status: 'built', change: 'ocean-environments', refs: ['M25', 'M9'], text: 'Light that fades with depth (sunlit, twilight, midnight) with caustics, shafts and marine snow; spray and foam in a gale; reefs, kelp forests, vents, a trench and floes placed by the sea\'s own climate; rivers that run to the sea, marsh pools and beaver dams; 3D water life in M9\'s skins (crabs, lobsters, clams, turtles, octopus, tube worms, seals, ducks); beavers by their colonies, river otters and sea otters with M25\'s motion.',
+      warn: ['28 more water creatures from the mockup (12 are in)', 'Beavers and otters: splashes and chips, felling a standing tree, the otter\'s mud slide and catching fish, the sea otter\'s kelp wrap'] },
+    { title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; smoothing between ticks, filling and drying; the fall\'s mist, bubbles and churn (M35); rain splashes on rivers and the sea.',
+      warn: ['The M31 splash tab (fall foot, entry, cast, wake), mockup first'] },
+    { title: 'Your checks', status: 'optional', change: '', refs: [], text: 'Everything is built. These are for you when you have time, and nothing waits on them.',
+      warn: ['Survey: the deep zones (W21), the mushroom cap (A3), held mushroom light (G5) and its colour (A4)', 'M31: froth only on faces that fall a layer or more, and the texture panning on still water too', 'Listen: the waterfall sounds on the Sounds page (M30)', 'Look on your GPU: sand, mountains, the held light, the beavers and otters (every capture is software-rendered)', 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters', 'Videos of phase 2 (the batch), then your playtest'] },
   ] },
-  { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
-    { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
-    { title: 'Missions', status: 'later', change: '', refs: ['M11'], text: 'Jobs and contracts from the townsfolk.' },
+  { title: 'Townsfolk', when: 'later', note: 'After environment v2. Written up (townsfolk), not started.', steps: [
+    { title: 'NPCs', status: 'planned', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, and talking to them.' },
+    { title: 'Coins and trade', status: 'planned', change: 'townsfolk', refs: ['M5'], text: 'One currency, coins, in your purse. Every town has a trader: prices follow what the town makes and needs, stock is limited, and your sales move the price.' },
+    { title: 'Town missions', status: 'planned', change: 'townsfolk', refs: ['M5'], text: 'Jobs from a town\'s board and its people, paid in coins: trade, gather or hunt for the town, find a lost villager and guide them home, deliver a parcel, cook, repair a building, fish, mine, tend a herd, harvest, clear a road, escort a trader, light the lamps.' },
+    { title: 'Roads', status: 'planned', change: 'townsfolk', refs: ['M15'], text: 'Road cells that slope instead of step, solid underfoot, in dirt or gravel, built by you; and roads laid by the world between neighbouring towns, never over your work.' },
     { title: 'Carpentry and house building', status: 'later', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid; cranes and scaffold.' },
-    { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
     { title: 'Logging', status: 'planned', change: 'log-drives', refs: ['M34'], text: 'Logs loaded on a raft, or dropped in a river to float downstream; they stop where the water stops flowing.' },
   ] },
   { title: 'Multiplayer', num: '3b', when: 'later', note: 'After the townsfolk, before town building. Written up, not started.', steps: [
@@ -540,11 +545,15 @@ const ROADMAP = [
   ] },
   { title: 'Town building and civil engineering', when: 'later', note: 'After survival. Not started.', steps: [
     { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },
-    { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: roads, bridges and the like. No mockup yet.' },
+    { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: bridges, cuttings, walls and the like (roads come in phase 3). No mockup yet.' },
+    { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
   ] },
   { title: 'Mass transportation', when: 'later', note: 'After civil engineering. Not started.', steps: [
     { title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
     { title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS that coaches the helm.' },
+    { title: 'Carts and horses', status: 'later', change: '', refs: [], text: 'Horses to ride and to pull carts and wagons on the roads. Mockup to make.' },
+    { title: 'Cars', status: 'later', change: '', refs: [], text: 'Cars and trucks on the roads. Mockup to make.' },
+    { title: 'Trains and tracks', status: 'later', change: '', refs: [], text: 'Track laid on the hex grid, stations, and trains between towns. Mockup to make.' },
     { title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods between places for you.' },
     { title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Basic belts, water carried in channels, and track for carts.' },
   ] },
@@ -580,7 +589,7 @@ const ROADMAP = [
     { title: 'Interstellar travel', status: 'later', change: 'star-systems', refs: ['M1', 'M2'], text: 'Leaving the home system for other stars, by star lanes rather than a warp drive.' },
   ] },
 ];
-const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };
+const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started', optional: 'Optional' };
 function roadmap() {
   const root = document.getElementById('roadmap');
   let n = 0, pn = 0;
@@ -595,7 +604,7 @@ function roadmap() {
         const m = MOCKUPS.find((x) => x.id === id);
         if (m) refs.append(m.url ? el('a', { href: m.url, target: '_blank', rel: 'noopener', title: m.title, text: id }) : el('span', { text: id }));
       }
-      if (!st.refs.length && !st.missing) refs.append(el('span', { text: 'no mockup yet' }));
+      if (!st.refs.length && !st.missing && !st.warn) refs.append(el('span', { text: 'no mockup yet' }));
       if (st.change) refs.append(el('span', { text: st.change }));
       list.append(el('li', { class: 'step' },
         el('div', { class: 'top', 'data-n': `${p}.${i}` }, el('b', { text: st.title })),
@@ -603,6 +612,8 @@ function roadmap() {
         el('p', { text: st.text }),
         st.missing ? el('div', { class: 'miss' }, el('span', { class: 'miss-h', text: 'Missing' }),
           el('ul', {}, st.missing.map((t) => el('li', { text: t })))) : null,
+        st.warn ? el('div', { class: 'warn' }, el('span', { class: 'warn-h', text: '\u26a0 Warning (not required)' }),
+          el('ul', {}, st.warn.map((t) => el('li', { text: t })))) : null,
         refs));
     });
     root.append(el('div', { class: 'phase', id: `phase-${p}` },

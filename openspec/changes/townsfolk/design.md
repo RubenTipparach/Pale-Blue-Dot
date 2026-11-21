@@ -32,8 +32,9 @@ See `proposal.md` for the owner's words. What the design has to work with
 - The owner's look: hexagonal blocks that read as cubes.
 
 **Non-Goals:**
-- **Behaviour beyond the mockup:** schedules, sleeping at night, following
-  the player, talking, trading.
+- **Behaviour beyond the mockup:** schedules and sleeping at night. Talking,
+  trading, missions and roads came in on 2026-11-21 (decisions 5 to 12);
+  following the player is only for a lost villager on a mission.
 - **Consequences:** stealing, a house taken apart, reputation. That is a
   later change, after the roadmap (the owner, T5 and P2).
 - **Crowds.** The counts are the mockup's, per settlement.
@@ -65,6 +66,204 @@ it with no special case.
 corners of their bounds, like the player's body, so no second lighting path
 exists.
 
+**5. Coins are a counter in the purse, one rule in `pbd-core`.** The purse
+is a player record (`purse`, schema 1): a whole number of coins, never
+negative. It is not a pack slot and has no stack limit, so it can never be
+dropped by a full pack. Every change to it goes through one function that
+takes a reason (`sold`, `bought`, `mission`, `wage`) and refuses a spend the
+purse cannot cover, so single player and a future server pay the same way. A
+coin has no weight. The pack shows the count beside the hotbar with a coin
+icon (the UI's 1 px outline is allowed there).
+
+**6. A good's value is one number; a town's price is that number times its
+need.** Every good, block, fish and dish gets a base value in coins, in data
+(`assets/config/values.ron`, append-only like the goods table). A town's
+buying price is `value x need x 0.6` and its selling price
+`value x need x 1.0`, where `need` runs 0.5 (it makes this) to 2.0 (it lacks
+it), from the town's biome and its trades (a harbour sells fish cheap, a
+mountain town pays well for it). Recommendation taken (ask only with
+screenshots): a 40% spread, so buying and selling back loses coins.
+
+**7. Stock is limited and comes back with the day.** A town holds a stock of
+each good it sells, sized by the town, and wants a quantity of each good it
+buys. Each sale moves the price 2% toward the far end of its range, and the
+town's stock and prices drift back to rest over a game day. Stock and drift
+are a stored record per town (`town_market`), written only when you trade, so
+an unvisited town costs nothing.
+
+**8. A town mission is a mission row, made from the town's needs.**
+- A mission has the starter missions' shape: objectives a kind, what it
+  counts and how many, counted from the same `Happened` events. New kinds
+  join `Kind`: `Deliver` (a parcel item to a named townsperson in another
+  town), `Escort` (a townsperson walked to a place), `Repair` (a broken
+  piece fixed), `Sell` and `Buy` (at a trader), `Light` (lamps lit), `Clear`
+  (a road cell dug clear). Hunting waits for survival's predators; until then
+  "hunt" asks for a herd animal's goods (meat, hides, wool).
+- A town's board shows three to five jobs, made from its needs, its trades
+  and the seed of the game day: a harbour asks for fish, a mining town for
+  ore, a town short of food for a dish. A job not taken is replaced after
+  three game days.
+- Taking a job writes it into the missions record as an open mission with
+  its town and its reward; it never fails or expires once taken (Explorer is
+  calm; Survival may add time limits later). Coming back to the giver pays.
+- Pay is the sum of the objectives' values times 1.5, rounded to whole coins,
+  plus goodwill with the town (decision 11).
+
+**9. The special jobs.**
+- **Lost villager:** a townsperson becomes a record, standing somewhere out
+  of town within 300 m (a clearing, a cave mouth, a far shore), with a marker
+  on the map. Talk to them and they follow you at your pace, stopping when you
+  stop; they never swim, and wait at deep water. Bring them within the town's
+  wall and the job is done.
+- **Deliver:** the giver hands you a parcel (a good, `parcel`, one per job,
+  carried in the pack). Hand it to the named townsperson in the other town.
+- **Repair:** a town building has a broken piece (a stored, world-made
+  change: a missing wall cell, a broken fence). Place the material back (the
+  same block, or planks), and the job counts it. The world never breaks a
+  piece the player placed.
+- **Escort a trader:** a trader walks the road to the next town and you walk
+  with them; they wait if you fall behind.
+
+**10. Roads: a sloped cell, dirt or gravel.**
+- A road cell is a hex whose top is a plane tilted from one edge's layer to
+  the opposite edge's, never more than one layer (1 m) over a cell (about 19
+  degrees). Where a road climbs more than a layer between cells it zig-zags
+  or cuts the hill, never steps. A flat road cell is an ordinary cell with a
+  road top.
+- Its collision is that plane, solid to the walker and to drops, so walking
+  up it is smooth and needs no step-up. Carts, later, roll on it.
+- Two surfaces: **dirt track** (packed earth, built with a shovel on any
+  cell) and **gravel road** (gravel, from a gravel pit or crushed stone,
+  walked 15% faster). Recommendation taken (ask only with screenshots):
+  generated roads are dirt between villages and gravel between the large
+  towns; the look goes into a mockup first.
+- The player builds a road by placing road cells, which are edits like any
+  other.
+
+**11. Roads between towns are laid by the world.** On opening a world at a
+build that knows roads, the road network is planned once from the sites and
+the seed and saved as stored road records, authored by the world:
+- each settlement joins its two nearest neighbours within 2 km, and every
+  town of the largest size joins its nearest such town;
+- the route follows the ground's cost (slope, water, cliffs), crossing a
+  river at a ford where it is shallow, otherwise a timber bridge (a piece);
+- a cell is laid as road only where no player edit stands; where one does
+  the road goes round it. Nothing the player made is overwritten.
+Saves made before roads gain them on next open, in place, without a restart,
+as the town-crust fix did (survey T14). Roads are not a generator change, so
+no new generator version.
+
+**12. Goodwill per town.** Each town keeps a goodwill number for the player
+(a stored record), raised by jobs done and fair trade. Higher goodwill gives
+better prices (up to 10%) and more jobs on the board. Theft and damage lower
+it in the consequences change, not here.
+
+**Order.** Coins first, then trade, then missions (they pay coins and use
+trade), then roads (the delivery, escort and clear jobs want them). Each is
+mocked up before code where it has a look: the road surfaces and slopes in a
+new tab of the towns mockup (M15) and the board and trade panel in M5.
+
+
+## Friendly faces (research, 2026-11-21)
+
+**The owner (2026-11-21):** "Let's start with npcs using existing NPC
+mockup. Design new and friendly looking NPCs. High frontier repo has some
+methods for drawing friendly faces. Ultimately I want you to do research on
+how we can generate and animate interesting looking cartoony low poly people
+withe expressive faces. Think of like kerbal space program".
+
+### What the references do
+
+- **Kerbal Space Program.** A kerbal is a skinned mesh with a head about a
+  third of its height, a short round body and short limbs. Its face reads
+  from a few large features: two big round eyes that move on their own, lids
+  for blinks, and a wide mouth whose shapes (grin, gritted panic, "wheee")
+  are blend shapes (shape keys) on the head; the community's Blender rigs add
+  eyelids and eye controllers for the same reason. Expression follows state
+  and trait: the same face panics under G load or grins, and KSP 2 makes eye
+  shape a character trait and adds hair and more expressions
+  ([forum, blend shapes](https://forum.kerbalspaceprogram.com/topic/173577-animated-meshes-blendshapes-shapekeys-keam-inside-look),
+  [KSP 2 dev insights 6](https://forum.kerbalspaceprogram.com/topic/200600-developer-insights-6-%E2%80%93-kerbals-the-first-new-look),
+  [space.com](https://www.space.com/kerbal-space-program-2-new-features-video)).
+- **Wind Waker.** Eyes, brows and pupils are separate flat meshes floating
+  just off the face, drawn after the head and hair so they always read, and
+  swapped or slid to change expression; the mouth is drawn normally
+  ([Link's expressions](https://medium.com/@gordonnl/links-expressions-eb7beae2c62c),
+  [Polycount](https://polycount.com/discussion/comment/1655607)).
+- **High Frontier fan game** (`character-kit` skill and its mascot, read
+  2026-11-21 at `6cbe5b3`): flat colour, two tones per material, no
+  outlines; a simple face of dot eyes with a white catch-light, short brow
+  strokes, a small mouth and optional blush; **expressions are swaps of
+  eyes, brows and mouth, never a deformation** ("happy" eyes are two upturned
+  arcs); hands and heads are swaps; round joints so no seam shows.
+- **Eye motion research.** Blinks every 2 to 6 s with an occasional double,
+  closing faster than they open; saccades as fast moves (about 50 ms) to a
+  new target, then a hold; lids drop a little when the eyes look down; blink,
+  gaze and mouth kept as separate layers so none overwrites another
+  ([Eyes Alive](https://www.cis.upenn.edu/~badler/papers/EyesAlive.pdf),
+  [CMU blinks](https://ri.cmu.edu/?p=121999),
+  [facial animation guide](https://abratabia.com/ai-talking-characters/facial-animation.php)).
+
+### Decisions (proposed; the mockup shows them)
+
+**13. A friendly townsperson: KSP's proportions in the game's hex style.**
+- **Body:** about 3 heads tall (a kerbal is close to that), a head 0.45 m
+  across on a short rounded body 1.35 to 1.6 m tall in all, stubby arms and
+  legs. Built from six-sided pieces (hex prisms and six-sided lathes, flat
+  shaded) so it keeps the owner's "hexagonal blocks that look like cubes"
+  (survey T2) while reading round at a distance. Low poly: about 600
+  triangles a person with the face.
+- **Lit like the terrain** (CLAUDE.md): `LitByField` and `LitLikeTerrain`,
+  no outlines, clothes in two tones from the town's palette.
+
+**14. The face is layered pieces on the head, swapped and slid (Wind
+Waker and High Frontier), not a deforming mesh.**
+- Eyes: a white six-sided disc per eye with a dark pupil disc and a white
+  catch-light, sitting just proud of the face. The pupil slides inside the
+  white to look; the whole eye scales for size (a trait, as in KSP 2).
+- Lids: a skin-coloured cap over each eye that slides down to blink and
+  rests lower when sleepy or looking down.
+- Brows: one short bar per eye, raised, lowered and tilted for mood.
+- Mouth: a small set of drawn shapes in one atlas (smile, grin, open "o",
+  flat, frown, wobble, talk A/O/M), picked per frame. Blush: two soft
+  ovals, on when happy or embarrassed.
+- Pieces are drawn in pixel art at the terrain's texel density, sampled
+  nearest. A swap is a UV change on one instanced quad, so a face costs a
+  handful of quads and no blend shapes; it works the same in the game and in
+  a three.js mockup.
+
+**15. Expressions are named sets of those layers, driven by state.**
+- `neutral`, `happy`, `delighted`, `surprised`, `worried`, `sad`, `cross`,
+  `sleepy`, `thinking`, `talking`; each is a choice of eye scale, pupil
+  size, lid height, brow lift and tilt, mouth shape and blush.
+- What drives them: meeting the player (surprised then happy), a fair trade
+  (happy), a job done (delighted), a lost villager (worried, then delighted
+  at home), night (sleepy), the smith at work (focused brows), rain (a
+  squint). Goodwill shifts a town's resting face.
+- Layers run separately so none overwrites another: blink (random 2 to 6 s,
+  sometimes double, close 60 ms, open 120 ms), gaze (saccades to the player
+  when near, else to points of interest, held 0.5 to 2 s; head follows the
+  eyes late), mouth (expression or talk), brows (expression plus a lift on
+  each saccade).
+
+**16. People are generated from a seed and the town.** Height, build (round,
+pear, tall, stout), head size, eye size and spacing, nose (none, button,
+long), ears, hair from a kit of hex-built styles (bun, crop, braid, bald,
+hat), beard, skin, and clothes in the people's palette; each picked from the
+settlement record and the person's index, so they are the same on every
+visit. A generator tab in the mockup shows the range.
+
+**17. Motion is procedural on a few bones.** A bouncy walk (body bob and
+squash on each step, arms swinging), idle sways and weight shifts, a hop
+when delighted, a shrug, a wave, a head tilt when thinking; keyed poses
+blended by curves with named tunables (the `animation` skill), and
+nothing read by a rule.
+
+**18. The look is decided in M5 first.** A Faces tab in `npcs.html` puts
+today's hex figure beside the proposed one, with the expression set, the
+live layers (blink, gaze at the cursor, talk), the generator, and a lit
+night square. The game waits for the owner's approval of that tab.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
@@ -74,6 +273,18 @@ exists.
   pieces (`cities-in-the-world`, decision 6).
 - [Frame cost] → Not measured in the cloud (CLAUDE.md). The town scenario in
   `perf_suite.py` covers it.
+- [Coins inflate] → Every source of coins is a job or a sale to a town whose
+  stock and demand are limited; the values file is one place to tune.
+- [A road over a player's build] → A road cell is laid only on cells with no
+  player edit; a road record that cannot route round one stops at it.
+- [Face pieces z-fighting or hidden by hair] → The face pieces sit 2 mm
+  proud of the head and are drawn after it; hair never covers the eyes
+  (Wind Waker's villagers show the same rule).
+- [Cute against the game's look] → The proposed figure is shown beside
+  today's hex figure in the same light; the owner picks.
+- [Sloped cells and the rest of the engine] → A slope is a top shape on an
+  ordinary cell: the cell's material, light and saving are unchanged, and
+  only the mesher, collision and the walker's ground height read the slope.
 
 ## Migration Plan
 
