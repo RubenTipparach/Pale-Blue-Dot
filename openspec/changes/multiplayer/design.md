@@ -340,6 +340,45 @@ drifted silently. The region digest (decision 2) is the safety net Luanti
 lacks, so it stays. It can run at a slow rate, because resend-on-refuse
 (item 3) catches the common case first.
 
+### 16. Started early, and the order it is built in (2026-11-21)
+
+The owner, 2026-11-21: "check out the multiplayer specs for phase 3, lets
+get to work on that". So 3b starts now, ahead of phase 3's townsfolk, which
+were to come first (decision 13). Nothing in this design rested on the
+townsfolk being built; decision 13 only asks that they be written to run on
+the server when they come, and they still will be.
+
+**The region is `region-cell-keys`' region.** That change, written after
+this one, defines a region as a triangle 64 cells on a side on every body.
+On the home world (level 11) that is exactly the level-5 triangle of
+decision 1, so nothing here changes; on other bodies it keeps the checksum
+unit the same size in metres, which is the reason it was written. The
+region's id is `region-cell-keys`' 32-bit region address, and a cell in it
+is its 12-bit place. This change uses that change's address functions
+(its task 2.1) and does not wait for its save migration (2.2 to 2.4): today's
+`Edits` stay keyed by the 32-bit cell key, and a region's edits are found by
+mapping each key to its region.
+
+**The digest's sections are tagged.** Decision 2's three parts (edits,
+liquids, records) are written as tagged sections, and an empty section is
+left out. The edits section is built first; liquids join when the server
+runs the water (task 8.4) and records when they are replicated (8.2). A
+region with no liquids or records digests the same before and after those
+sections exist, so the pinned test only moves when a section with content
+is added to its fixture.
+
+**Order of work.** Pure core pieces first, each with its own tests and none
+of them visible in the game:
+1. a cell key's region and place (`region-cell-keys` 2.1);
+2. the region's canonical encoding and digest (task 3.1);
+3. the protocol's messages and their byte encoding (task 3.2);
+4. the edit's ACCEPT as a core rule (`edit-pipeline` 5; task 2.2's first
+   rule), with the table of every other writer (task 2.1);
+5. the in-process server (task 4.1) and single player talking to it (4.2).
+
+The network, the screens and other players' bodies come after those, and
+the screens wait for their mockups (tasks 5.1, 5.2).
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

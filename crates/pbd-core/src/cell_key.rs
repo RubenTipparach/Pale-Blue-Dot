@@ -23,6 +23,8 @@
 //! the ground looks exactly as it did. Only what an edit is saved and found
 //! by changes.
 
+pub mod region;
+
 use crate::topology::{ICOSAHEDRON_FACES, icosahedron, midpoint};
 use glam::Vec3;
 

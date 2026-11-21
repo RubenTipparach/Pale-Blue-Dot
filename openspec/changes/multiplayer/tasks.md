@@ -1,7 +1,8 @@
 # Tasks
 
-Phase 3b. Nothing here starts until the owner asks, after phase 3 (the
-townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
+Phase 3b. Started 2026-11-21 at the owner's ask ("lets get to work on
+that"), ahead of phase 3's townsfolk; the order of work is design 16.
+Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 1. Prerequisites (other changes)
 
