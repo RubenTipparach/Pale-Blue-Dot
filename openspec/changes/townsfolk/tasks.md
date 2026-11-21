@@ -6,12 +6,12 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 ## 1. Who and where
 
-- [ ] 1.1 Roles, posts and paths in each settlement template, ported from the mockup's `person()` calls. Verify: a test that the walled town has 16 people, with a smith and a gate guard among them.
+- [ ] 1.1 Roles, posts and paths in each settlement template, ported from the mockup's `person()` calls. Verify: a test that the walled town has 16 people, with a smith and a gate guard among them. (It holds 19: the mockup's four stallholders came after the count; design 19.)
 - [ ] 1.2 `pbd_core::townsfolk` derives each settlement's people from its record and the seed. Verify: tests that the same record gives the same people twice, and that no post or path crosses a wall.
 
 ## 2. How they look and move
 
-- [ ] 2.1 The hexagonal-prism figure in the terrain's pixel style (the owner, T2), instanced. Verify: a `--capture` a metre from a person showing six-sided parts, in `docs/screenshots/townsfolk/`.
+- [ ] 2.1 The figure of M5 version 9's Faces tab (design 13a, 21; it replaces the hexagonal-prism figure of T2), one material for every person. Verify: a `--capture` a metre from a person showing the block head and the face, in `docs/screenshots/townsfolk/`.
 - [ ] 2.2 The walk swing, the work loops (hammer, wipe) and the idle look, as the mockup animates them. Verify: a capture sequence of each.
 
 ## 3. Solid and lit
