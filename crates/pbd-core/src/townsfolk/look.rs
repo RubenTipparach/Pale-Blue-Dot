@@ -15,7 +15,7 @@ impl Rng {
         Self(if seed == 0 { 1 } else { seed })
     }
 
-    pub fn next(&mut self) -> f32 {
+    pub fn roll(&mut self) -> f32 {
         let mut s = self.0;
         s ^= s << 13;
         s ^= s >> 17;
@@ -27,7 +27,7 @@ impl Rng {
     /// The mockup's `pick`.
     pub fn pick<T: Copy>(&mut self, of: &[T]) -> T {
         let n = of.len();
-        of[((self.next() * n as f32) as usize) % n]
+        of[((self.roll() * n as f32) as usize) % n]
     }
 }
 
@@ -204,14 +204,14 @@ pub fn generate(people: People, seed: u32, index: u32, tunic: u32) -> Look {
     );
     let build = rn.pick(&Build::ALL);
     let height_m = match build {
-        Build::Tall => 1.6 + rn.next() * 0.1,
-        Build::Stout => 1.45 + rn.next() * 0.08,
-        _ => 1.48 + rn.next() * 0.16,
+        Build::Tall => 1.6 + rn.roll() * 0.1,
+        Build::Stout => 1.45 + rn.roll() * 0.08,
+        _ => 1.48 + rn.roll() * 0.16,
     };
-    let eye = 0.88 + rn.next() * 0.2;
+    let eye = 0.88 + rn.roll() * 0.2;
     let lo = WR * eye + 0.008;
     let hi = HW / 2.0 - HC - 0.008 - WR * eye * 1.15;
-    let gap = (0.093 + rn.next() * 0.014).max(lo).min(hi.max(lo));
+    let gap = (0.093 + rn.roll() * 0.014).max(lo).min(hi.max(lo));
     let hair = rn.pick(&[
         Hair::Bun,
         Hair::Crop,
@@ -223,10 +223,10 @@ pub fn generate(people: People, seed: u32, index: u32, tunic: u32) -> Look {
     // The mockup rolls a shirt here; the template's tunic is worn instead,
     // and the roll is kept so the rest of the sequence is the mockup's.
     let _rolled_shirt = rn.pick(people.cloth);
-    let head = 0.9 + rn.next() * 0.12;
+    let head = 0.9 + rn.roll() * 0.12;
     let nose = rn.pick(&[Nose::None, Nose::Button, Nose::Button, Nose::Long]);
-    let beard = !matches!(hair, Hair::Bun | Hair::Braid) && rn.next() < 0.35;
-    let ears = rn.next() < 0.6;
+    let beard = !matches!(hair, Hair::Bun | Hair::Braid) && rn.roll() < 0.35;
+    let ears = rn.roll() < 0.6;
     let skin = rn.pick(people.skin);
     let hair_colour = rn.pick(people.hair);
     let shirt = tunic;

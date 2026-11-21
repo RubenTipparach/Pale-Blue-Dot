@@ -22,7 +22,7 @@ fn every_swatch_is_its_colour() {
     for c in colours {
         let [u, v] = swatch[&c];
         let (x, y) = ((u * ATLAS_W as f32) as usize, (v * ATLAS_H as f32) as usize);
-        assert!(y >= SWATCH_Y && y < ATLAS_H, "{c:06x} at row {y}");
+        assert!((SWATCH_Y..ATLAS_H).contains(&y), "{c:06x} at row {y}");
         let at = (y * ATLAS_W + x) * 4;
         assert_eq!(
             [px[at], px[at + 1], px[at + 2], px[at + 3]],

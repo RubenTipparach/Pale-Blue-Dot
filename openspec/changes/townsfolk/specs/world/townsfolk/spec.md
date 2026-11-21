@@ -8,29 +8,6 @@ derived from the settlement record and the seed.
 
 ## ADDED Requirements
 
-### Requirement: Every settlement has its people, as the mockup has them
-
-Each settlement SHALL have people in the roles the approved mockup gives it:
-- walkers going back and forth between two points;
-- workers working in place (the smith hammering, the innkeeper wiping);
-- idlers looking about;
-- a guard at each gate.
-
-Who they are, where they stand, and their path or post SHALL be derived from
-the settlement record and the seed, and SHALL be the same each time the town
-is built.
-
-#### Scenario: The walled town
-
-- **WHEN** the walled town is built
-- **THEN** it has 19 people, among them a smith hammering at the forge and a
-  guard at the gate
-
-#### Scenario: Built twice
-
-- **WHEN** the same settlement is built twice from the same record
-- **THEN** every person has the same role, path, clothes and starting point
-
 ### Requirement: People look as M5's Faces tab has them
 
 A person SHALL be the figure the owner approved in M5 version 9's Faces tab
@@ -68,16 +45,11 @@ what happens to them, and SHALL blink, look and talk on layers of its own:
 - **WHEN** the player walks up to within 5 m of a townsperson
 - **THEN** they look surprised, then happy, and look at the player
 
-### Requirement: People are solid and lit
+### Requirement: People are lit like the terrain
 
-A person SHALL be a solid circle of 0.28 m, from the feet to 1.9 m, that the
-walker slides round and never passes through. A person SHALL be lit by the
-light field as the terrain is (`LitByField`, `LitLikeTerrain`).
-
-#### Scenario: Walking into the smith
-
-- **WHEN** the walker walks straight into a working smith
-- **THEN** the walker slides round them, and at no tick overlaps them
+A person SHALL be lit by the light field as the terrain is (`LitByField`,
+`LitLikeTerrain`): by the sun with its shadows and by the cell light field's
+sky and lamps.
 
 #### Scenario: The forge at night
 
