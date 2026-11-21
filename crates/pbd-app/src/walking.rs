@@ -84,6 +84,9 @@ pub enum Piece {
 #[derive(Clone, Copy)]
 pub(crate) struct Meets<'a> {
     pub towns: Option<&'a Structures>,
+    /// The townspeople's circles (`townsfolk` decision 25), asked after the
+    /// towns' pieces.
+    pub people: Option<&'a crate::townsfolk::TownsfolkSolids>,
     pub origin: SimOrigin,
 }
 
@@ -91,6 +94,7 @@ impl Default for Meets<'_> {
     fn default() -> Self {
         Self {
             towns: None,
+            people: None,
             origin: crate::sim_origin::SimFrame::default().0,
         }
     }
@@ -100,6 +104,7 @@ impl<'a> Meets<'a> {
     fn of(world: &'a World) -> Self {
         Self {
             towns: world.get_resource::<Structures>(),
+            people: world.get_resource::<crate::townsfolk::TownsfolkSolids>(),
             origin: crate::sim_origin::origin_of(world),
         }
     }
@@ -156,13 +161,18 @@ impl<'a> Meets<'a> {
     /// The way out of the solid that holds a body at `centre`, along the
     /// ground: the face a refused move slides along.
     fn push_normal(&self, centre: DVec3) -> Option<Vec3> {
-        self.pieces().find_map(|(_, b, frame, local)| {
-            b.push_normal_in(
-                self.in_frame(&frame, local, centre),
-                HALF_HEIGHT,
-                BODY_RADIUS,
-            )
-        })
+        self.pieces()
+            .find_map(|(_, b, frame, local)| {
+                b.push_normal_in(
+                    self.in_frame(&frame, local, centre),
+                    HALF_HEIGHT,
+                    BODY_RADIUS,
+                )
+            })
+            .or_else(|| {
+                self.people
+                    .and_then(|p| p.push_normal(centre, HALF_HEIGHT, BODY_RADIUS))
+            })
     }
 
     /// Whether the body centred at `centre` is in a solid.
@@ -173,7 +183,9 @@ impl<'a> Meets<'a> {
                 HALF_HEIGHT,
                 BODY_RADIUS,
             )
-        })
+        }) || self
+            .people
+            .is_some_and(|p| p.holds(centre, HALF_HEIGHT, BODY_RADIUS))
     }
 
     /// The lowest solid underside over the body, a radius.
@@ -1704,6 +1716,7 @@ fn resolve_ground(
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    people: Option<Res<crate::townsfolk::TownsfolkSolids>>,
     time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
@@ -1727,6 +1740,7 @@ fn resolve_ground(
     }
     let meets = Meets {
         towns: structures.as_deref(),
+        people: people.as_deref(),
         origin: *o,
     };
     for (mut position, mut velocity, mut ground) in &mut walkers {
@@ -4283,6 +4297,58 @@ mod tests {
         );
         let open = walk_house(&mut app, &house, move |_| -out, |l| inward(l) > 1.5, 90);
         assert!(inward(open.end) > 1.5, "went in: {} m", inward(open.end));
+    }
+
+    /// `townsfolk` task 3.1: walking straight at a working smith (his
+    /// circle 0.28 m round, a hand's breadth off the walker's line) the
+    /// walker slides round him, and at no tick overlaps him.
+    #[test]
+    fn walking_into_a_working_smith_slides_round_him() {
+        use crate::townsfolk::TownsfolkSolids;
+        use pbd_core::townsfolk::SOLID_RADIUS_M;
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let mut app = app_with_terrain_at(terrain, flat);
+        for _ in 0..30 {
+            app.update();
+        }
+        let body = app.world().resource::<WalkingState>().body;
+        let o = crate::sim_origin::origin_of(app.world());
+        let start = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+        let up = start.normalize();
+        let ahead = (DVec3::Y - up * DVec3::Y.dot(up)).normalize();
+        let side = up.cross(ahead);
+        let feet = start - up * f64::from(HALF_HEIGHT) + ahead * 3.0 + side * 0.08;
+        app.insert_resource(TownsfolkSolids(vec![feet]));
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let flat_of = |p: DVec3| {
+            let d = p - feet;
+            d - up * d.dot(up)
+        };
+        let mut closest = f64::MAX;
+        for _ in 0..120 {
+            app.world_mut()
+                .resource_mut::<WalkingState>()
+                .face(up.as_vec3(), ahead.as_vec3());
+            app.update();
+            let o = crate::sim_origin::origin_of(app.world());
+            let p = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+            closest = closest.min(flat_of(p).length());
+        }
+        let o = crate::sim_origin::origin_of(app.world());
+        let end = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+        let reach = f64::from(SOLID_RADIUS_M + BODY_RADIUS);
+        assert!(
+            closest > reach - 0.01,
+            "into the smith to {closest} (reach {reach})"
+        );
+        assert!(
+            (end - start).dot(ahead) > 4.0,
+            "slid past him: {} m along",
+            (end - start).dot(ahead)
+        );
     }
 }
 

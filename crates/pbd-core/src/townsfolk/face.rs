@@ -270,7 +270,7 @@ impl Mood {
         };
         Chosen {
             expression,
-            focus: seen.hammering && expression == self.resting,
+            focus: seen.hammering && self.met.is_none() && expression == self.resting,
         }
     }
 }

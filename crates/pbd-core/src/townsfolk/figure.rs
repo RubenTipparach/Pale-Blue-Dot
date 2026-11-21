@@ -34,7 +34,11 @@ pub const WHITE: u32 = 0xf6f3ea;
 pub const PUPIL: u32 = 0x23203a;
 pub const GLINT: u32 = 0xffffff;
 pub const LASH: u32 = 0x3a2a26;
-pub const FACE_COLOURS: [u32; 4] = [WHITE, PUPIL, GLINT, LASH];
+/// A guard's spear shaft: the towns mockup's timber.
+pub const SPEAR: u32 = 0x6b4a2e;
+/// The colours every figure may wear whatever its look: the face's and the
+/// spear's.
+pub const FACE_COLOURS: [u32; 5] = [WHITE, PUPIL, GLINT, LASH, SPEAR];
 
 /// Triangles with a colour each corner, and flat normals.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -270,6 +274,8 @@ pub struct Figure {
     pub leg_at: [Vec3; 2],
     pub arms: [Part; 2],
     pub arm_at: [Vec3; 2],
+    /// Shoulder to wrist, m.
+    pub arm_len: f32,
     /// The head's pivot in the body's space, and its scale.
     pub head_at: Vec3,
     pub head_scale: f32,
@@ -541,6 +547,7 @@ impl Figure {
             leg_at: [-1.0f32, 1.0].map(|s| Vec3::new(s * 0.085 * w, 0.03, 0.0)),
             arms: [arm(), arm()],
             arm_at: [-1.0f32, 1.0].map(|s| Vec3::new(s * sh_x, sh_y, 0.0)),
+            arm_len: arm_l,
             head_at: Vec3::new(0.0, torso_h - 0.035, 0.0),
             head_scale: hs,
             head,
@@ -548,6 +555,17 @@ impl Figure {
             brow: shade(hair, 0.62),
             blush: super::look::BLUSH_LEVELS.map(|b| super::look::blush(look.skin, b)),
         }
+    }
+
+    /// A guard's spear (the towns mockup's 2.3 m shaft) through the right
+    /// hand, its foot just off the ground.
+    pub fn with_spear(&mut self) {
+        let hand = -self.arm_len - 0.05;
+        self.arms[1].extend(lathe(
+            &[[hand - 0.5, 0.024], [hand + 1.8, 0.024]],
+            LatheOpts::default(),
+            SPEAR,
+        ));
     }
 
     /// Feet to the top of the head at rest, m.
