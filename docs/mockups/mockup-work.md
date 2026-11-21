@@ -56,6 +56,7 @@ https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (`docs/mockups/tracker.html`, 
 | 23 (2026-11-18 account) | 2026-11-20 | M25 version 4: the beavers' and otters' arms move, calmer fur, the sea otter's paws empty but to eat (built on the live version 22). |
 | 24 (2026-11-18 account) | 2026-11-20 | M25 version 5: the beavers' and otters' forelimbs within a real animal's range, and paddling when they swim (built on the live version 23). |
 | 25 (2026-11-18 account) | 2026-11-21 | M25 version 5 approved for the game ("its good enough, send it") and built in the game; the roadmap's underwater step's beavers item replaced by what is owed (built on the live version 24). |
+| 26 (2026-11-18 account) | 2026-11-21 | On the owner's "Underwater overhaul - update this in mockup tracker": the roadmap's underwater step marked built (on main, PR 141) with what it holds and what is still owed; M25's note says merged to main; its deep-zones question now in the survey as W21 (built on the live version 25). |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29
