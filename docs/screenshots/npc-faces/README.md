@@ -22,3 +22,27 @@ three.js r128 was served from a local copy of the same file the page loads from 
 
 Checked on these: no console errors in the Faces tab or after switching Square, Character sheets, Faces
 and back to Square (the square's own lamps are restored when the Faces tab closes).
+
+## Version 9 (2026-11-21, drafted): block heads, bigger faces, first person (townsfolk design 13a)
+
+The `v9-` shots, made the same way (Chromium headless through Playwright, SwiftShader software
+rendering, 1280 x 1000 and the phone at 390 x 844): they show the look, not the speed. First person
+was set through `window.__faces.setFP(true, { x, z, yaw, pitch })`, the same state the First person
+button, WASD and drag change.
+
+| File | Shows |
+| --- | --- |
+| `v9-today-vs-proposed-day.jpg` | Today's hex figure (1.9 m) beside the proposed townsperson with the block head (0.5 x 0.6 x 0.45 m, 1.55 m in all, 678 triangles with the face), happy, 12:30 |
+| `v9-expressions-contact-sheet.jpg` | The ten expressions on the bigger face, close, blink, gaze and head follow off so each is held |
+| `v9-generator-crowd-seed7.jpg` | The seed 7 crowd with block heads, block hair caps, buns, hats and beards |
+| `v9-night-square-compare.jpg`, `v9-night-square-crowd.jpg` | 22:30, lit only by the lamp posts, the window and the brazier |
+| `v9-fp-day-meet-1.5m.jpg` | First person, 1.5 m in front of the proposed townsperson by day, looking level from the game's 1.6 m eye with its 60 degree vertical field of view: the head sits below eye level and looks up |
+| `v9-fp-day-crowd-4m.jpg` | First person, meeting the crowd from about 4 m; today's 1.9 m figure on the right stands above the eye |
+| `v9-fp-night-by-lamp.jpg` | First person at night beside a lamp post, the crowd turned to look at you |
+| `v9-fp-walked.jpg` | After holding W (the game's 8 m/s walk), stopped short of the townsperson |
+| `v9-back-to-orbit.jpg` | First person off: the orbit camera where it was |
+| `v9-phone-first-person.jpg` | First person at phone width with the on-screen arrows and the crosshair |
+
+Checked on these: no console errors in the Faces tab, in first person, or after switching Square,
+Character sheets, Faces and back to Square (the only failed requests are the web fonts, blocked
+in the container).

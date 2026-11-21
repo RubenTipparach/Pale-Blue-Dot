@@ -185,6 +185,13 @@ details.about[open]{display:grid;gap:10px}
 .fc-tri{position:absolute;left:10px;bottom:10px;font:500 11.5px var(--mono);color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:2px 7px;pointer-events:none}
 .fc-labels{position:absolute;inset:0;pointer-events:none}
 .fc-labels span{position:absolute;transform:translate(-50%,0);font:600 13px var(--display);letter-spacing:.06em;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:1px 7px;white-space:nowrap}
+.fc-cross{position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);pointer-events:none}
+.fc-cross::before,.fc-cross::after{content:"";position:absolute;background:rgba(240,236,224,.85);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.fc-cross::before{left:6px;top:0;width:2px;height:14px}.fc-cross::after{top:6px;left:0;height:2px;width:14px}
+.fc-pad{position:absolute;right:10px;bottom:10px;display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px);gap:4px;touch-action:none;user-select:none}
+.fc-pad .btn{padding:0;font-size:16px;touch-action:none;background:var(--panel-solid);opacity:.92}
+@media (max-width:560px){.fc-stage.fp .fc-tri{display:none}}
+.fc-pad [data-fpad=f]{grid-column:2;grid-row:1}.fc-pad [data-fpad=l]{grid-column:1;grid-row:2}.fc-pad [data-fpad=b]{grid-column:2;grid-row:2}.fc-pad [data-fpad=r]{grid-column:3;grid-row:2}
 .fc-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);padding:10px 12px}
 .fc-grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0}
 .fc-grp #fcExpr{display:contents}
@@ -361,9 +368,11 @@ details.about[open]{display:grid;gap:10px}
       <canvas id="fc" tabindex="0" aria-label="Today's hex townsperson beside the proposed friendly one, with a crowd of generated townsfolk, on a hex ground patch with lamp posts and a lit window."></canvas>
       <div class="fc-tri" id="fcTri">-</div>
       <div class="fc-labels" id="fcLabels"><span id="fcLToday">Today</span><span id="fcLNew">Proposed</span></div>
+      <div class="fc-cross" id="fcCross" hidden aria-hidden="true"></div>
+      <div class="fc-pad" id="fcPad" hidden><button class="btn" data-fpad="f" aria-label="Walk forward">&#9650;</button><button class="btn" data-fpad="l" aria-label="Step left">&#9664;</button><button class="btn" data-fpad="b" aria-label="Walk back">&#9660;</button><button class="btn" data-fpad="r" aria-label="Step right">&#9654;</button></div>
     </div>
     <div class="fc-ctl">
-      <div class="fc-grp"><span class="fc-k">View</span><button class="btn" data-fview="compare" aria-pressed="true">Compare</button><button class="btn" data-fview="face" aria-pressed="false">Face</button><button class="btn" data-fview="crowd" aria-pressed="false">Crowd</button></div>
+      <div class="fc-grp"><span class="fc-k">View</span><button class="btn" data-fview="compare" aria-pressed="true">Compare</button><button class="btn" data-fview="face" aria-pressed="false">Face</button><button class="btn" data-fview="crowd" aria-pressed="false">Crowd</button><button class="btn" id="fcFP" aria-pressed="false" title="WASD or the arrows to walk, drag to look">First person</button></div>
       <div class="fc-grp"><span class="fc-k">Face</span><span id="fcExpr"></span></div>
       <div class="fc-grp"><span class="fc-k">Live</span><button class="btn" data-flayer="blink" aria-pressed="true">Blink</button><button class="btn" data-flayer="gaze" aria-pressed="true">Gaze</button><button class="btn" data-flayer="head" aria-pressed="true">Head follows</button><button class="btn" data-flayer="talk" aria-pressed="false">Talk</button></div>
       <div class="fc-grp"><span class="fc-k">Move</span><button class="btn" id="fcPlay" aria-pressed="false">Play walk</button><button class="btn" data-fact="wave">Wave</button><button class="btn" data-fact="hop">Hop</button><button class="btn" data-fact="shrug">Shrug</button><button class="btn" data-fact="tilt">Tilt</button></div>
@@ -379,11 +388,19 @@ details.about[open]{display:grid;gap:10px}
   <div class="fc-card">
     <button class="fc-x" id="fcX" aria-label="Close">&#x2715;</button>
     <h3 id="fcModalH">Friendly faces: what this tab shows</h3>
-    <p><b>Today</b> (left) is the figure the rest of this mockup uses: hexagonal prisms with a face tile, 1.9 m tall (<span class="src">townsfolk</span> design 2). <b>Proposed</b> (right, and the crowd) is design 13 to 18 of the same change: a friendly townsperson with Kerbal-like proportions, still built from six-sided pieces. Proposal only; the game waits for the owner's approval of this tab.</p>
+    <p><b>Today</b> (left) is the figure the rest of this mockup uses: hexagonal prisms with a face tile, 1.9 m tall (<span class="src">townsfolk</span> design 2). <b>Proposed</b> (right, and the crowd) is design 13 to 18 of the same change, with 13a: a friendly townsperson with Kerbal-like proportions. Proposal only; the game waits for the owner's approval of this tab.</p>
+    <h4>What changed in version 9</h4>
+    <ul>
+      <li>From the owner's notes on version 8: "Faces are kinda small. Id like blocky heads maybe taller head as well. Characters looking great. Try rendering fps to give me a feel for height" (design 13a).</li>
+      <li><b>A block head.</b> The six-sided lathe head is now a box with a small bevel, 0.5 m wide, 0.6 m tall and 0.45 m deep, taller than it is wide. The proposed figure is 1.55 m; the crowd runs about 1.45 to 1.7 m. Body, limbs, clothes and colours are version 8's.</li>
+      <li><b>Hair, hats, ears and beards are blocks</b> sized to the head: a cap whose front edge stops above the highest a brow ever goes, a slab down the back, short sideburns, a bun, a braid, a brimmed hat, a beard that stops under the mouth. Noses are version 8's six-sided pieces, a little larger.</li>
+      <li><b>A bigger face</b> that fills the block's front: eyes, pupils and brows about 1.6 times version 8's, set wider and lower, the mouth twice as wide, the blush larger. Still layers 2 mm proud of the face, drawn after the head; every expression, blink, gaze, lid and talk works as before.</li>
+      <li><b>First person.</b> The First person button puts the one camera at the game's walker: the eye 1.6 m above the ground (<span class="src">walking.rs</span> EYE_HEIGHT) and a 60 degree vertical field of view as the game's camera (<span class="src">desktop.rs</span>), walked at the game's 8 m/s. WASD or the arrow keys walk, the on-screen arrows walk on a phone, and dragging looks. You cannot walk into a person, a lamp post or the brazier. A townsperson within 5 m looks at you, so their eyes and head turn up to your eye. Choosing Compare, Face or Crowd, or the button again, goes back to the orbit camera where it was. The camera moves only when you move it.</li>
+    </ul>
     <h4>The proposed figure</h4>
     <ul>
-      <li>About 3 heads tall: a head about 0.45 m across on a short rounded body, 1.35 to 1.6 m in all, stubby arms and legs.</li>
-      <li>Every piece is six-sided: hex prisms and six-sided lathes, flat shaded, with the flat side forward, so it keeps "hexagonal blocks that look like cubes" (survey T2) and reads round at a distance.</li>
+      <li>About 2.6 heads tall: a 0.6 m block head on a short rounded body, stubby arms and legs.</li>
+      <li>The body and limbs are six-sided: hex prisms and six-sided lathes, flat shaded, with the flat side forward, so it keeps "hexagonal blocks that look like cubes" (survey T2); the head is the block the owner asked for.</li>
       <li>Two tones a material (a base and one shade for hems, cuffs and the nose), no outlines, lit as the ground is: the sun with its shadows and the lamps' light per pixel (<span class="src">scene-kit.js</span>, the game's <span class="src">LitByField</span> and <span class="src">LitLikeTerrain</span>).</li>
       <li id="fcTriNote">Triangles: see the label on the view.</li>
     </ul>
@@ -394,14 +411,14 @@ details.about[open]{display:grid;gap:10px}
       <li>Brows are short bars, raised, lowered and tilted. Blush is two soft six-sided ovals.</li>
       <li>The mouth, and the "happy" eye arcs, are cells of one small pixel-art atlas drawn in a canvas (smile, grin, open o, flat, frown, wobble, talk A, O and M), sampled nearest; a swap is a UV change on one quad.</li>
       <li>Each piece sits 2 mm proud of the head's flat front and is drawn after it (a polygon offset per layer), so nothing z-fights; hair and hat brims stop above the brows, so eyes are never hidden.</li>
-      <li>The atlas is drawn finer than the terrain's texels (about 5 mm a pixel): at the terrain's density a mouth would be two pixels. That is a deviation from design 14 for the owner to judge.</li>
+      <li>The atlas is drawn finer than the terrain's texels (about 10 mm a pixel at version 9's size): at the terrain's density a mouth would be two pixels. That is a deviation from design 14 for the owner to judge.</li>
     </ul>
     <h4>Expressions and live layers</h4>
     <p>An expression is a named set of layer values: eye scale, pupil size, lid height, brow lift and tilt, mouth cell and blush (design 15). Separate layers run on their own, because they are the person, not the camera: blinks every 2 to 6 s, sometimes double, closing in about 60 ms and opening in about 120 ms; gaze saccades of about 50 ms held 0.5 to 2 s, to the cursor when it is near a face, otherwise to points around or to you; the head follows the eyes late; lids drop when the eyes look down; Talk cycles the mouth cells. Each toggle turns its layer off.</p>
     <h4>Motion and the generator</h4>
     <p>Play walk sends the proposed figure on a bouncy walk round the patch (a bob and squash a step, arms swinging), off by default; it walks home when stopped. Wave, Hop, Shrug and Tilt are keyed poses blended by curves (design 17); Delighted hops. The crowd is generated from the seed (design 16): height, build (round, pear, tall, stout), head size, eye size and spacing, nose (none, button, long), hair (bun, crop, braid, bald, hat), beard, skin and clothes from the fields people's palette. The same seed gives the same people.</p>
     <h4>Night</h4>
-    <p>At night the patch is lit only by its two lamp posts, a lit window and a brazier, each lighting what is near it wherever the camera is, with the towns mockup's falloff (1 - (d/R)^2)^2; the moon is held at 0.035 so the lamps read. Nothing turns on its own: the camera stays where you leave it (drag to orbit, wheel or pinch to zoom, right drag to pan).</p>
+    <p>At night the patch is lit only by its two lamp posts, a lit window and a brazier, each lighting what is near it wherever the camera is, with the towns mockup's falloff (1 - (d/R)^2)^2; the moon is held at 0.035 so the lamps read. Nothing turns on its own: the camera stays where you leave it (drag to orbit, wheel or pinch to zoom, right drag to pan; in first person, drag to look and WASD to walk).</p>
     <h4>What the references taught</h4>
     <ul>
       <li><b>Kerbal Space Program</b>: a head about a third of the height, big eyes that move on their own, lids, a wide expressive mouth, expression following state and trait (<a href="https://forum.kerbalspaceprogram.com/topic/173577-animated-meshes-blendshapes-shapekeys-keam-inside-look" target="_blank" rel="noopener">blend shapes</a>, <a href="https://forum.kerbalspaceprogram.com/topic/200600-developer-insights-6-%E2%80%93-kerbals-the-first-new-look" target="_blank" rel="noopener">KSP 2 dev insights 6</a>, <a href="https://www.space.com/kerbal-space-program-2-new-features-video" target="_blank" rel="noopener">space.com</a>).</li>
@@ -889,12 +906,34 @@ function lathe(profile, o = {}) {
   return g.build(1);
 }
 const disc = r => new THREE.CircleGeometry(r, 6);
+// a block (version 9, design 13a): a w x h x d box standing on y0, its four upright edges cut by c and its
+// top and bottom edges by cTop and cBot (a small bevel), flat normals; o: { x, z, cTop, cBot }
+function block(w, h, d, c, y0 = 0, o = {}) {
+  const g = new PBD.Geo(), cx = o.x || 0, cz = o.z || 0, ct = o.cTop ?? c, cb = o.cBot ?? c;
+  const ring = (y, i) => {
+    const a = w / 2 - i, b = d / 2 - i, k = Math.min(c, a * 0.9, b * 0.9);
+    const p = k > 1e-6 ? [[a, b - k], [a - k, b], [-a + k, b], [-a, b - k], [-a, -b + k], [-a + k, -b], [a - k, -b], [a, -b + k]] : [[a, b], [-a, b], [-a, -b], [a, -b]];
+    return p.map(([x, z]) => [x + cx, y, z + cz]);
+  };
+  const prof = [];
+  if (cb > 0) prof.push([y0, cb]); prof.push([y0 + cb, 0], [y0 + h - ct, 0]); if (ct > 0) prof.push([y0 + h, ct]);
+  const R = prof.map(([y, i]) => ring(y, i));
+  for (let i = 0; i + 1 < R.length; i++) {
+    const A = R[i], B = R[i + 1], n = A.length;
+    for (let k = 0; k < n; k++) { const a0 = A[k], a1 = A[(k + 1) % n], b0 = B[k], b1 = B[(k + 1) % n]; g.face([a0, a1, b1, b0], [(a0[0] + a1[0]) / 2 - cx, 0, (a0[2] + a1[2]) / 2 - cz]); }
+  }
+  g.face(R[0], [0, -1, 0]); g.face(R[R.length - 1], [0, 1, 0]);
+  return g.build(1);
+}
 
 // ---- the proposed townsperson -----------------------------------------------------------------------
-// About 3 heads tall: a head about 0.45 m across (flat to flat) on a short rounded body.
-const HEADP = [[0, 0.10], [0.05, 0.20], [0.11, 0.277], [0.35, 0.277], [0.415, 0.215], [0.465, 0.12], [0.48, 0]];
-const HA = 0.277 * Math.cos(Math.PI / 6);   // the head's front facet: the face sits on it
-const EYE_Y = 0.245, MOUTH_Y = 0.142, BROW_Y = 0.3;
+// Version 9 (design 13a): a block head, 0.5 m wide, 0.6 m tall and 0.45 m deep with a small bevel, on the
+// short rounded body version 8 approved; the face fills the block's flat front.
+const HW = 0.5, HH = 0.6, HD = 0.45, HC = 0.035;
+const HA = HD / 2;   // the head's flat front: the face sits on it
+const EYE_Y = 0.285, MOUTH_Y = 0.108, BROW_Y = 0.38, HAIR_Y = 0.48;   // HAIR_Y: no hair or hat comes below it at the front
+// face pieces about 1.55 times version 8's (white r 0.052), the mouth twice as wide (0.12 m)
+const WR = 0.08, PR = 0.048, GR = 0.016, FSC = 1.6;
 const BUILDS = {
   round: { w: 1.0, legs: 0.40, prof: [[0, .17], [.12, .21], [.45, .25], [.78, .22], [.95, .15], [1, .10]] },
   pear:  { w: 1.0, legs: 0.39, prof: [[0, .21], [.15, .25], [.45, .24], [.75, .18], [.95, .13], [1, .09]] },
@@ -922,7 +961,7 @@ const EXPR_KEYS = Object.keys(EXPR);
 const NUMK = ["eye", "pup", "lid", "by", "bt", "blush", "asym", "mx"];
 
 function friend(spec) {
-  const B = BUILDS[spec.build], hs = spec.head, headH = 0.48 * hs, rest = spec.h - headH + 0.03;
+  const B = BUILDS[spec.build], hs = spec.head, headH = HH * hs, rest = spec.h - headH + 0.03;
   const legLen = rest * B.legs, torsoH = rest - legLen, w = B.w;
   const skin = spec.skin, skinS = shade(skin, 0.84), shirtS = shade(spec.shirt, 0.74), pantsS = shade(spec.pants, 0.72);
   const browC = shade(spec.hairC, 0.62), cast = [];
@@ -951,36 +990,44 @@ function friend(spec) {
   });
   // the head, and the face on its flat front
   const head = new THREE.Group(); head.position.set(0, torsoH - 0.035, 0); head.scale.setScalar(hs); body.add(head);
-  mesh(lathe(HEADP), mat(skin), head);
-  if (spec.ears) for (const s of [-1, 1]) mesh(lathe([[0.19, 0], [0.205, 0.04], [0.27, 0.04], [0.285, 0]], { sx: 0.55 }), mat(skinS), head, s * 0.262, 0, 0);
-  if (spec.nose === "button") mesh(lathe([[0.166, 0], [0.176, 0.023], [0.204, 0.023], [0.214, 0]], { cz: HA + 0.008 }), mat(skinS), head, 0, 0, 0, false);
-  if (spec.nose === "long") mesh(lathe([[0.17, 0], [0.18, 0.02], [0.212, 0.02], [0.222, 0]], { sz: 2.6, cz: HA + 0.032 }), mat(skinS), head, 0, 0, 0, false);
+  mesh(block(HW, HH, HD, HC, 0), mat(skin), head);
+  if (spec.ears) for (const s of [-1, 1]) mesh(block(0.05, 0.14, 0.1, 0, 0.2, { x: s * (HW / 2 + 0.02) }), mat(skinS), head);
+  if (spec.nose === "button") mesh(lathe([[0.14, 0], [0.152, 0.032], [0.188, 0.032], [0.2, 0]], { cz: HA + 0.012 }), mat(skinS), head, 0, 0, 0, false);
+  if (spec.nose === "long") mesh(lathe([[0.138, 0], [0.152, 0.028], [0.192, 0.028], [0.206, 0]], { sz: 2.6, cz: HA + 0.046 }), mat(skinS), head, 0, 0, 0, false);
   const hair = mat(spec.hairC), hairS = mat(shade(spec.hairC, 0.78));
-  const crop = () => { mesh(lathe([[0.35, 0.285], [0.415, 0.228], [0.468, 0.136], [0.5, 0]], { open0: true }), hair, head); mesh(lathe([[0.1, 0.12], [0.355, 0.12]], { sx: 2.18, cz: -0.19 }), hair, head); };
+  // hair is blocks sized to the head block: a cap whose front edge stops at HAIR_Y (above the highest brow),
+  // a slab down the back, and short sideburns above the ears
+  const back = () => mesh(block(HW + 0.03, 0.4, 0.07, 0.02, 0.12, { z: -HD / 2 - 0.012 }), hair, head);
+  const crop = () => { mesh(block(HW + 0.03, HH + 0.04 - HAIR_Y, HD + 0.03, 0.04, HAIR_Y, { cBot: 0 }), hair, head); back(); for (const s of [-1, 1]) mesh(block(0.025, 0.16, 0.2, 0, 0.34, { x: s * (HW / 2 + 0.01), z: -0.08 }), hair, head); };
   if (spec.hair === "crop") crop();
-  if (spec.hair === "bun") { crop(); mesh(lathe([[0.45, 0], [0.47, 0.085], [0.55, 0.085], [0.59, 0]], { cz: -0.1 }), hairS, head); }
-  if (spec.hair === "braid") { crop(); for (let i = 0; i < 3; i++) mesh(lathe([[0.02 - i * 0.1, 0], [0.04 - i * 0.1, 0.05], [0.09 - i * 0.1, 0.05], [0.11 - i * 0.1, 0]], { cz: -0.26 - i * 0.012 }), i % 2 ? hairS : hair, head); }
-  if (spec.hair === "bald") for (const s of [-1, 1]) mesh(lathe([[0.2, 0.05], [0.33, 0.05]], { sz: 1.6 }), hair, head, s * 0.24, 0, -0.06);
-  if (spec.hair === "hat") { const hc = mat(spec.hatC), hcs = mat(shade(spec.hatC, 0.74)); mesh(lathe([[0.395, 0.345], [0.42, 0.345]]), hcs, head); mesh(lathe([[0.42, 0.238], [0.56, 0.22]]), hc, head); mesh(lathe([[0.2, 0.12], [0.37, 0.12]], { sx: 2.1, cz: -0.19 }), hair, head); }
-  if (spec.beard) mesh(lathe([[-0.02, 0.15], [0.04, 0.255], [0.122, 0.292]], { open1: true }), hair, head);
+  if (spec.hair === "bun") { crop(); mesh(block(0.18, 0.13, 0.16, 0.035, HH + 0.02, { z: -0.07 }), hairS, head); }
+  if (spec.hair === "braid") { crop(); for (let i = 0; i < 3; i++) mesh(block(0.085, 0.1, 0.075, 0.02, 0.1 - i * 0.1, { z: -HD / 2 - 0.04 - i * 0.008 }), i % 2 ? hairS : hair, head); }
+  if (spec.hair === "bald") for (const s of [-1, 1]) mesh(block(0.03, 0.12, 0.17, 0.01, 0.35, { x: s * (HW / 2 + 0.01), z: -0.1 }), hair, head);
+  if (spec.hair === "hat") {
+    const hc = mat(spec.hatC), hcs = mat(shade(spec.hatC, 0.74));
+    mesh(block(HW + 0.24, 0.03, HD + 0.24, 0.08, HAIR_Y + 0.03, { cTop: 0, cBot: 0 }), hcs, head);
+    mesh(block(HW + 0.05, 0.045, HD + 0.05, 0.05, HAIR_Y + 0.06, { cTop: 0, cBot: 0 }), hcs, head);
+    mesh(block(HW + 0.03, 0.2, HD + 0.03, 0.05, HAIR_Y + 0.06, { cBot: 0 }), hc, head); back();
+  }
+  if (spec.beard) mesh(block(HW + 0.02, 0.125, HD + 0.02, HC, -0.07, { cTop: 0 }), hair, head);
   const face = new THREE.Group(); face.position.z = HA; head.add(face);
   const eyes = [-1, 1].map(s => {
     const e = new THREE.Group(); e.position.set(s * spec.gap, EYE_Y, 0); face.add(e);
-    const white = mesh(disc(0.052), mat(0xf6f3ea, 1), e, 0, 0, 0.002, false);
+    const white = mesh(disc(WR), mat(0xf6f3ea, 1), e, 0, 0, 0.002, false);
     const pg = new THREE.Group(); pg.position.z = 0.003; e.add(pg);
-    const pupil = mesh(disc(0.031), mat(0x23203a, 2), pg, 0, 0, 0, false);
-    const glint = mesh(disc(0.0105), mat(0xffffff, 3), pg, -0.011, 0.012, 0.001, false);
-    const lg = new THREE.PlaneGeometry(0.114, 1); lg.translate(0, -0.5, 0);
-    const lid = mesh(lg, mat(skin, 4), e, 0, 0.0475, 0.005, false);
-    const lash = mesh(new THREE.PlaneGeometry(0.106, 0.0065), mat(0x3a2a26, 5), e, 0, 0.044, 0.006, false);
-    const ag = cellQuad(0.104, 0.052); setCell(ag, "happy");
-    const arc = mesh(ag, aMat(3), e, 0, 0.004, 0.003, false); arc.visible = false;
-    const brow = mesh(new THREE.PlaneGeometry(0.062, 0.016), mat(browC, 2), face, s * (spec.gap + 0.006), BROW_Y, 0.003, false);
+    const pupil = mesh(disc(PR), mat(0x23203a, 2), pg, 0, 0, 0, false);
+    const glint = mesh(disc(GR), mat(0xffffff, 3), pg, -0.017, 0.018, 0.001, false);
+    const lg = new THREE.PlaneGeometry(2.19 * WR, 1); lg.translate(0, -0.5, 0);
+    const lid = mesh(lg, mat(skin, 4), e, 0, 0.913 * WR, 0.005, false);
+    const lash = mesh(new THREE.PlaneGeometry(2.04 * WR, 0.01), mat(0x3a2a26, 5), e, 0, 0.846 * WR, 0.006, false);
+    const ag = cellQuad(2 * WR, WR); setCell(ag, "happy");
+    const arc = mesh(ag, aMat(3), e, 0, 0.077 * WR, 0.003, false); arc.visible = false;
+    const brow = mesh(new THREE.PlaneGeometry(0.1, 0.026), mat(browC, 2), face, s * (spec.gap + 0.01), BROW_Y, 0.003, false);
     const blushM = PBD.litMaterial(null, lin(skin), { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
-    const blush = mesh(disc(1), blushM, face, s * 0.1, 0.178, 0.0015, false); blush.scale.set(0.03, 0.017, 1);
+    const blush = mesh(disc(1), blushM, face, s * 0.155, 0.178, 0.0015, false); blush.scale.set(0.052, 0.029, 1);
     return { s, e, white, pg, pupil, glint, lid, lash, arc, brow, blush, blushM };
   });
-  const mg = cellQuad(0.12, 0.06); setCell(mg, "smile");
+  const mg = cellQuad(0.24, 0.12); setCell(mg, "smile");
   const mouth = mesh(mg, aMat(1), face, 0, MOUTH_Y, 0.002, false);
   const F = { spec, g, body, head, face, legs, arms, eyes, mouth, mg, legLen, torsoH, hs, ph: Math.random() * 6,
     cur: {}, tgt: null, exprName: "neutral", mouthCell: "smile", arcs: false,
@@ -999,13 +1046,13 @@ function setExprOn(F, name, snap) {
 function triCount(o) { let n = 0; o.traverse(m => { if (!m.isMesh) return; let v = m; while (v) { if (!v.visible) return; v = v.parent; } const g = m.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; }); return Math.round(n); }
 
 // ---- the people: one hero, today's figure beside it, and a crowd from the seed ----------------------
-const HERO_SPEC = { build: "round", h: 1.47, head: 0.98, eye: 1.08, gap: 0.064, nose: "button", hair: "crop", beard: false, ears: true,
+const HERO_SPEC = { build: "round", h: 1.55, head: 0.98, eye: 1.08, gap: 0.1, nose: "button", hair: "crop", beard: false, ears: true,
   skin: 0xe2ac80, hairC: 0x8a5a2a, shirt: 0x5c9a46, pants: 0x7a5a3a, shoe: 0x4a3428, hatC: 0xb0884a };
 function genSpec(seed, i) {
   const rn = rng(seed * 9973 + i * 131 + 7), pick = a => a[Math.floor(rn() * a.length) % a.length], P = PEOPLES.fields;
   const build = pick(["round", "pear", "tall", "stout"]);
-  const h = build === "tall" ? 1.5 + rn() * 0.1 : build === "stout" ? 1.35 + rn() * 0.08 : 1.38 + rn() * 0.16;
-  const eye = 0.88 + rn() * 0.2, gap = clamp(0.056 + rn() * 0.014, 0.052 * eye + 0.006, 0.1365 - 0.052 * eye * 1.15);
+  const h = build === "tall" ? 1.6 + rn() * 0.1 : build === "stout" ? 1.45 + rn() * 0.08 : 1.48 + rn() * 0.16;   // version 9: the 0.1 m taller head on the same bodies
+  const eye = 0.88 + rn() * 0.2, gap = clamp(0.093 + rn() * 0.014, WR * eye + 0.008, HW / 2 - HC - 0.008 - WR * eye * 1.15);
   const hairS = pick(["bun", "crop", "braid", "bald", "hat", "crop"]), shirt = pick(P.cloth);
   return { build, h, head: 0.9 + rn() * 0.12, eye, gap, nose: pick(["none", "button", "button", "long"]), hair: hairS,
     beard: hairS !== "bun" && hairS !== "braid" && rn() < 0.35, ears: rn() < 0.6, skin: pick(P.skin), hairC: pick(P.hair),
@@ -1075,11 +1122,15 @@ function setHourF(h) {
 // ---- camera: the viewer's orbit, never one of its own --------------------------------------------
 const VIEWS = {
   compare: { tx: -0.15, ty: 0.95, tz: 0.6, dist: 3.7, yaw: 0.12, pitch: 0.12 },
-  face:    { tx: 0.45, ty: 1.2, tz: 0.6, dist: 1.3, yaw: 0, pitch: 0.05 },
+  face:    { tx: 0.45, ty: 1.25, tz: 0.6, dist: 1.5, yaw: 0, pitch: 0.05 },
   crowd:   { tx: 0, ty: 0.85, tz: -1.6, dist: 7.6, yaw: 0, pitch: 0.2 },
 };
 const FO = Object.assign({}, VIEWS.compare);
-function placeFCam() { const cp = Math.cos(FO.pitch); fcam.position.set(FO.tx + Math.sin(FO.yaw) * cp * FO.dist, FO.ty + Math.sin(FO.pitch) * FO.dist, FO.tz + Math.cos(FO.yaw) * cp * FO.dist); fcam.lookAt(FO.tx, FO.ty, FO.tz); }
+// first person (design 13a): the game's walker, eye 1.6 m above the ground (walking.rs EYE_HEIGHT), a 60 degree
+// vertical field of view (desktop.rs), walked at the game's 8 m/s (WalkConfig walk_speed); it moves only on input
+const FP = { on: false, x: 0.45, z: 2.1, yaw: 0, pitch: 0, keys: new Set() };
+const FP_EYE = 1.6, FP_FOV = 60, FP_WALK = 8.0, ORBIT_FOV = 38;
+function placeFCam() { if (FP.on) { fcam.position.set(FP.x, FP_EYE, FP.z); fcam.rotation.set(FP.pitch, FP.yaw, 0, "YXZ"); return; } const cp = Math.cos(FO.pitch); fcam.position.set(FO.tx + Math.sin(FO.yaw) * cp * FO.dist, FO.ty + Math.sin(FO.pitch) * FO.dist, FO.tz + Math.cos(FO.yaw) * cp * FO.dist); fcam.lookAt(FO.tx, FO.ty, FO.tz); }
 const MOUSE = { on: false, x: 0, y: 0 };
 (function orbit(el) {
   const pts = new Map(); let pinch = 0;
@@ -1088,6 +1139,7 @@ const MOUSE = { on: false, x: 0, y: 0 };
     const r = el.getBoundingClientRect(); MOUSE.on = true; MOUSE.x = e.clientX - r.left; MOUSE.y = e.clientY - r.top;
     const p = pts.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p[0], dy = e.clientY - p[1];
+    if (FP.on) { if (pts.size === 1) { FP.yaw -= dx * 0.0045; FP.pitch = clamp(FP.pitch - dy * 0.0045, -1.35, 1.35); } p[0] = e.clientX; p[1] = e.clientY; return; }
     if (pts.size === 2) { p[0] = e.clientX; p[1] = e.clientY; const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) FO.dist = clamp(FO.dist * pinch / d, 0.5, 20); pinch = d; return; }
     if (p[2] === 2 || p[3]) { const s = FO.dist * 0.0016; FO.tx -= Math.cos(FO.yaw) * dx * s; FO.tz += Math.sin(FO.yaw) * dx * s; FO.ty = clamp(FO.ty + dy * s, 0.1, 4); }
     else { FO.yaw -= dx * 0.006; FO.pitch = clamp(FO.pitch + dy * 0.005, -0.15, 1.45); }
@@ -1097,13 +1149,47 @@ const MOUSE = { on: false, x: 0, y: 0 };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
   el.addEventListener("pointerleave", () => { MOUSE.on = false; });
   el.addEventListener("contextmenu", e => e.preventDefault());
-  el.addEventListener("wheel", e => { e.preventDefault(); FO.dist = clamp(FO.dist * Math.exp(e.deltaY * 0.0012), 0.5, 20); }, { passive: false });
+  el.addEventListener("wheel", e => { e.preventDefault(); if (FP.on) return; FO.dist = clamp(FO.dist * Math.exp(e.deltaY * 0.0012), 0.5, 20); }, { passive: false });
 })(fcCanvas);
 function setView(v) {
-  FC.view = v; Object.assign(FO, VIEWS[v]);
-  if (v === "face" && hero) { const p = new THREE.Vector3(); hero.head.getWorldPosition(p); FO.tx = p.x; FO.ty = p.y + (EYE_Y - 0.03) * hero.hs; FO.tz = p.z; }
+  setFP(false); FC.view = v; Object.assign(FO, VIEWS[v]);
+  if (v === "face" && hero) { const p = new THREE.Vector3(); hero.head.getWorldPosition(p); FO.tx = p.x; FO.ty = p.y + (EYE_Y - 0.04) * hero.hs; FO.tz = p.z; }
   document.querySelectorAll("[data-fview]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fview === v));
 }
+
+function setFP(on, at) {
+  FP.on = on; FP.keys.clear();
+  if (on && at) Object.assign(FP, at);
+  fcam.fov = on ? FP_FOV : ORBIT_FOV; fcam.updateProjectionMatrix();
+  $("fcFP").setAttribute("aria-pressed", on); $("fcCross").hidden = !on; $("fcPad").hidden = !on; $("fcStage").classList.toggle("fp", on);
+  document.querySelectorAll("[data-fview]").forEach(b => b.setAttribute("aria-pressed", !on && b.dataset.fview === FC.view));
+}
+// what the walker cannot walk into: the people, the lamp posts and the brazier (circles), the house front and the patch's edge
+function fpSolids() {
+  const out = [[today.g.position.x, today.g.position.z, 0.45], [2.05, -0.15, 0.25], [-2.85, -1.05, 0.25], [1.45, 1.75, 0.45]];
+  for (const F of [hero, ...crowd]) out.push([F.g.position.x, F.g.position.z, 0.45]);
+  return out;
+}
+function stepFP(dt) {
+  const K = FP.keys, f = (K.has("f") ? 1 : 0) - (K.has("b") ? 1 : 0), r = (K.has("r") ? 1 : 0) - (K.has("l") ? 1 : 0);
+  if (f || r) { const n = Math.hypot(f, r), sy = Math.sin(FP.yaw), cy = Math.cos(FP.yaw), s = FP_WALK * dt / n; FP.x += (-sy * f + cy * r) * s; FP.z += (-cy * f - sy * r) * s; }
+  // pushed out of anything solid every frame, so a person walking into the walker does not end up around the camera
+  for (const [x, z, rad] of fpSolids()) { const dx = FP.x - x, dz = FP.z - z, d = Math.hypot(dx, dz); if (d < rad) { if (d > 1e-4) { FP.x = x + dx * rad / d; FP.z = z + dz * rad / d; } else FP.z = z + rad; } }
+  const d0 = Math.hypot(FP.x, FP.z); if (d0 > 6.5) { FP.x *= 6.5 / d0; FP.z *= 6.5 / d0; }
+  FP.z = Math.max(FP.z, -3.45);
+}
+const FP_KEY = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
+addEventListener("keydown", e => {
+  if (!FP.on || TAB !== "faces" || !FP_KEY[e.code] || (e.target.closest && e.target.closest("input,textarea,select"))) return;
+  e.preventDefault(); FP.keys.add(FP_KEY[e.code]);
+});
+addEventListener("keyup", e => { if (FP_KEY[e.code]) FP.keys.delete(FP_KEY[e.code]); });
+addEventListener("blur", () => FP.keys.clear());
+document.querySelectorAll("[data-fpad]").forEach(b => {
+  const k = b.dataset.fpad, off = () => FP.keys.delete(k);
+  b.addEventListener("pointerdown", e => { e.preventDefault(); b.setPointerCapture(e.pointerId); FP.keys.add(k); });
+  b.addEventListener("pointerup", off); b.addEventListener("pointercancel", off); b.addEventListener("lostpointercapture", off);
+});
 
 // ---- the live layers -------------------------------------------------------------------------------
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
@@ -1115,7 +1201,7 @@ function cursorWorld(out) {
   if (!MOUSE.on || !fr) return null;
   const w = fcCanvas.clientWidth, h = fcCanvas.clientHeight;
   V3.set(MOUSE.x / w * 2 - 1, -(MOUSE.y / h) * 2 + 1, 0.5).unproject(fcam).sub(fcam.position).normalize();
-  return out.copy(fcam.position).addScaledVector(V3, FO.dist * 0.8);
+  return out.copy(fcam.position).addScaledVector(V3, FP.on ? 2 : FO.dist * 0.8);
 }
 function nearCursor(F) {
   if (!MOUSE.on) return false;
@@ -1140,7 +1226,9 @@ function stepFriend(F, dt, T) {
   // gaze: saccades to a held target (the cursor when it is near, else a point around or the viewer)
   if (L.gaze !== F.gz) { F.gz = L.gaze; F.gazeHold = 0; }
   F.gazeHold -= dt;
-  const curs = L.gaze && nearCursor(F) ? cursorWorld(CW) : null;
+  // near the first-person walker, a person looks at you (up, since the walker's eye is above theirs)
+  const meet = L.gaze && FP.on && Math.hypot(F.g.position.x - FP.x, F.g.position.z - FP.z) < 5;
+  const curs = meet ? CW.copy(fcam.position) : L.gaze && nearCursor(F) ? cursorWorld(CW) : null;
   if (curs) { if (F.gazeW.distanceTo(curs) > 0.25 || F.gazeHold <= 0) { F.gazeW.copy(curs); F.gazeHold = 0.15; } }
   else if (F.gazeHold <= 0) {
     F.gazeHold = L.gaze ? 0.5 + Math.random() * 1.5 : 0.2; if (L.gaze) F.bp = 1;
@@ -1164,7 +1252,7 @@ function stepFriend(F, dt, T) {
   if (talking) { F.talkT -= dt; if (F.talkT <= 0) { F.talkT = 0.08 + Math.random() * 0.09; const c = ["A", "O", "M", "A", "smile", "O", "M"]; F.talkCell = c[Math.floor(Math.random() * c.length)]; } }
   const cell = talking ? F.talkCell : F.mouthBase;
   if (cell !== F.mouthCell) { setCell(F.mg, cell); F.mouthCell = cell; }
-  F.mouth.position.x = F.cur.mx;
+  F.mouth.position.x = F.cur.mx * FSC;
   // actions: keyed poses blended by curves
   const A = F.act; let wave = 0, hopY = 0, squash = 0, shrug = 0, tilt = 0, armsUp = 0;
   if (A) {
@@ -1207,11 +1295,11 @@ function stepFriend(F, dt, T) {
   const lidGaze = Math.max(0, -F.pupil[1]) * 0.3, lid = Math.min(1, Math.max(blink, F.cur.lid + lidGaze));
   for (const e of F.eyes) {
     const es = F.cur.eye * F.spec.eye; e.e.scale.set(es, es, 1);
-    e.pupil.scale.setScalar(F.cur.pup); e.pg.position.set(F.pupil[0] * (0.051 - 0.031 * F.cur.pup), F.pupil[1] * (0.044 - 0.027 * F.cur.pup), 0.003);
-    const lh = 0.095 * lid; e.lid.scale.y = Math.max(lh, 1e-4); e.lid.visible = !F.arcs && lh > 0.002;
-    const ly = 0.0475 - lh + 0.0005; e.lash.position.y = ly; e.lash.scale.x = Math.max(0.05, (2 * (0.052 - Math.abs(ly) / 1.732) + 0.006) / 0.106);
-    const by = F.cur.by + 0.006 * F.bp + (e.s > 0 ? F.cur.asym : 0) + (talking ? 0.004 * Math.sin(T * 9 + e.s) : 0) + 0.02 * shrug;
-    e.brow.position.y = BROW_Y + by + (es - 1) * 0.04; e.brow.rotation.z = -e.s * F.cur.bt + e.s * 0.06;
+    e.pupil.scale.setScalar(F.cur.pup); e.pg.position.set(F.pupil[0] * (0.98 * WR - PR * F.cur.pup), F.pupil[1] * (0.846 * WR - 0.87 * PR * F.cur.pup), 0.003);
+    const lh = 1.83 * WR * lid; e.lid.scale.y = Math.max(lh, 1e-4); e.lid.visible = !F.arcs && lh > 0.003;
+    const ly = 0.913 * WR - lh + 0.0008; e.lash.position.y = ly; e.lash.scale.x = Math.max(0.05, (2 * (WR - Math.abs(ly) / 1.732) + 0.01) / (2.04 * WR));
+    const by = FSC * (F.cur.by + 0.006 * F.bp + (e.s > 0 ? F.cur.asym : 0) + (talking ? 0.004 * Math.sin(T * 9 + e.s) : 0) + 0.02 * shrug);
+    e.brow.position.y = BROW_Y + by + (es - 1) * 0.065; e.brow.rotation.z = -e.s * F.cur.bt + e.s * 0.06;
     const b = F.cur.blush; e.blush.visible = b > 0.04; if (e.blush.visible) e.blushM.color.copy(lin(mixHex(F.spec.skin, 0xf27a7a, 0.55 * b)));
   }
 }
@@ -1234,6 +1322,7 @@ document.querySelectorAll("[data-fact]").forEach(b => b.addEventListener("click"
 $("fcPlay").addEventListener("click", () => { const on = !hero.walk.on; hero.walk.on = on; if (on) hero.walk.going = true; $("fcPlay").setAttribute("aria-pressed", on); $("fcPlay").textContent = on ? "Stop walk" : "Play walk"; });
 $("fcNew").addEventListener("click", () => { $("fcSeed").value = (+$("fcSeed").value || 1) + 1; buildCrowd(+$("fcSeed").value); });
 $("fcSeed").addEventListener("change", () => buildCrowd(Math.max(1, Math.round(+$("fcSeed").value) || 1)));
+$("fcFP").addEventListener("click", () => setFP(!FP.on));
 $("fcHour").addEventListener("input", e => setHourF(+e.target.value));
 $("fcDay").addEventListener("click", () => setHourF(12.5));
 $("fcNight").addEventListener("click", () => setHourF(22.5));
@@ -1248,7 +1337,7 @@ addEventListener("keydown", e => { if (e.key === "Escape" && !modal.hidden) moda
 function fResize() { const w = fcCanvas.clientWidth, h = fcCanvas.clientHeight; if (!fr || !w) return; fr.setSize(w, h, false); fcam.aspect = w / h; fcam.updateProjectionMatrix(); }
 addEventListener("resize", fResize);
 function label(el, obj, y) {
-  if (FC.view !== "compare") { el.hidden = true; return; }
+  if (FC.view !== "compare" || FP.on) { el.hidden = true; return; }
   obj.localToWorld(V1.set(0, y, 0)); V1.project(fcam); el.hidden = V1.z > 1;
   el.style.left = ((V1.x + 1) / 2 * fcCanvas.clientWidth) + "px"; el.style.top = ((1 - V1.y) / 2 * fcCanvas.clientHeight) + "px";
 }
@@ -1256,6 +1345,7 @@ let fLast = 0, fT = 0, fRun = false, fRaf = 0;
 function fFrame(now) {
   if (!fRun) return;
   const dt = clamp((now - fLast) / 1000, 0, 0.05); fLast = now; fT += dt;
+  if (FP.on) stepFP(dt);
   stepFriend(hero, dt, fT); for (const F of crowd) stepFriend(F, dt, fT);
   flame.scale.set(1, 0.8 + 0.3 * Math.sin(fT * 9) * Math.sin(fT * 5.3 + 1), 1); flame.visible = FC.night > 0.3;
   placeFCam(); fr.render(fs, fcam);
@@ -1268,15 +1358,16 @@ TAB_HOOKS.faces = {
     PBD.setLights(FL); setHourF(FC.hour); fResize();
     if (!fRun) { fRun = true; fLast = performance.now(); fRaf = requestAnimationFrame(fFrame); }
   },
-  hide() { fRun = false; cancelAnimationFrame(fRaf); PBD.setLights(LIGHTS); setHour(STATE.hour); },
+  hide() { fRun = false; FP.keys.clear(); cancelAnimationFrame(fRaf); PBD.setLights(LIGHTS); setHour(STATE.hour); },
 };
 placeHero(); buildCrowd(+$("fcSeed").value || 7);
-const tri = triCount(hero.g); $("fcTri").textContent = `Proposed figure: ${tri} triangles`; $("fcTriNote").textContent = `Triangles: the proposed figure here is ${tri}, face included (design 13 asks about 600).`;
+const tri = triCount(hero.g); $("fcTri").textContent = `Proposed figure: ${tri} triangles`; $("fcTriNote").textContent = `Triangles: the proposed figure here is ${tri}, face included (version 8 was 634; design 13 asks about 600).`;
 const FQ = new URLSearchParams(location.search);
 if (FQ.has("fhour")) FC.hour = +FQ.get("fhour");
 if (FQ.has("fexpr")) setExpr(FQ.get("fexpr"));
 if (FQ.has("fview")) setView(FQ.get("fview"));
-window.__faces = { FC, setExpr, setView, setHourF, setLayer, hero: () => hero, crowd: () => crowd, buildCrowd, play, FO, triCount };
+if (FQ.has("ffp")) setFP(true);
+window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, hero: () => hero, crowd: () => crowd, buildCrowd, play, FO, triCount };
 if (TAB === "faces") TAB_HOOKS.faces.show();
 })();
 </script>
