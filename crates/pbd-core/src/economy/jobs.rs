@@ -361,7 +361,8 @@ impl Board<'_> {
             }
             JobKind::Fish => (entry(Kind::Catch, "any".into(), count), String::new(), None),
             JobKind::Mine => {
-                let ore = matches!(town.kind, SiteKind::Cliff | SiteKind::Cave) || roll % 3 == 0;
+                let ore =
+                    matches!(town.kind, SiteKind::Cliff | SiteKind::Cave) || roll.is_multiple_of(3);
                 let list = if ore {
                     &self.jobs.ore
                 } else {
