@@ -2707,3 +2707,138 @@ tunables join the RON block: `beaver.forelimb`, `river_otter.forelimb`,
 keeps today's models. Screenshots `v5-*.jpg` and `contact-sheet-v5.jpg` in
 `docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
 GPU: poses only; the motion itself is for the owner to judge on the page.
+
+**Approved for the game (owner, 2026-11-20).** On version 5's Beavers and
+otters tab (`#critters`), in chat: "its good enough, send it". In this
+project "send it" approves a mockup for the game and asks for it to be
+built (as with the waterfall mist, "alright, I'm happy with this, send
+it yo"). Task 20.2 is ticked on these words; task 20.3, with task 8.4, is
+the build, written up in B29 before any game code.
+
+### B29. The beavers and otters in the game (20.3 with 8.4; 2026-11-20)
+
+What the game takes from version 5, and how, before the code. The motion is
+the mockup's, ported curve for curve; the world it lives in is the game's,
+so what the mockup scripts by hand (an aspen at a fixed spot, a ramp, a mud
+slide, a trout on a circle) is replaced by what the game has.
+
+**The bodies.** `tools/art/critter_sculpt.py` gains `--game`: from the
+same data it writes `critters_mesh.js` from, it writes one binary mesh per
+animal, `assets/models/critters/{beaver,river_otter,sea_otter}.bin`
+(`PBDCRIT1`: the twenty rest joints, then positions, normals, UVs, four
+joint indices and four weights a vertex, and the triangles), and copies the
+fur maps to `assets/textures/critters/fur-*.png`. `--game --from-js` takes
+the arrays from the committed `critters_mesh.js` instead of sculpting again,
+so the game's mesh is the approved mesh byte for byte. The body and the fur
+tufts are one mesh (the tufts in their dry shape), skinned to the same
+twenty bones with the same weights, nearest sampled, no outline. Provenance:
+the method is Mining Mike's Ice Wolf (`organic-creature`, `painted-bake`,
+godot-sandbox at `1739e89`), adapted here; written in
+`assets/models/critters/PROVENANCE.md`.
+
+**The rig in Bevy.** Each drawn animal is a root (`LitByField`,
+`LitLikeTerrain`, `Faded`) with the twenty bones as child entities in the
+mockup's hierarchy and a `SkinnedMesh` under it: Bevy skins on the GPU, so
+a frame writes twenty bone transforms an animal and nothing else. The bind
+pose is the sculpt's (every bone unrotated at its rest point), and a test
+holds the mesh's rest joints to the rig's, as the page does. The material
+is a `StandardMaterial` per drawn animal with the fur map, turned into the
+field-lit material by `field_light` like every other creature; its colour
+carries the water's dimming under the surface (the schools' rule, B23) and
+the wet coat (darker while wet, drying on land), changed only when it moves
+by a step. A skinned field-lit mesh is a new pipeline: a hidden template of
+each animal is spawned at `Startup` (as the farmyard's is), so
+`loading::show_unseen` builds it behind the loading screen.
+
+**The motion.** `crates/pbd-app/src/critters/` ports `critters.js`'s
+pose model: the `strike` of four stages, the `rear` schedule, the
+two-bone solve with the forelimb limits held last, `hangAt`, `armTo`,
+`blendLeg`, the walk and the bound on the distance moved, the swim with
+the forepaws paddling, the blend between steps, and the head's and tail's
+lag. The tunables are `assets/config/creature_motion.ron`, the block the
+page prints (pasted in unchanged), validated, with `Default` the one source
+of the defaults; a test holds the file to them. The actions each animal does
+in the game:
+
+| Animal | In the water | On the bank |
+| --- | --- | --- |
+| Beaver | swims (follows its place in the water), hauls a stick in its teeth, the tail slap and dive (also when startled) | climbs out, walks, gnaws a stick on the ground, sits up and grooms, shakes off, climbs back in |
+| River otter | swims, porpoises, rolls on its back and grooms, treads water to look round | bounds out, looks round, grooms, bounds back in |
+| Sea otter | rafts on its back, dives and comes up with an urchin, cracks it on a stone on its chest and eats, grooms, sleeps with its paws on its chest | (none) |
+
+Each animal picks its next action by the mockup's seeded draw
+(`mulberry32`), seeded from the creature's id.
+
+**Drawn only.** The creatures are the fauna's: spawned by the spawner,
+moved by the floater mover, capped and dropped by its rules. The drawing
+reads where a creature is and whether it is startled; nothing reads the
+drawing. On the bank the drawn animal leaves its place in the water for a
+bank point a few metres off and comes back to it; the creature itself stays
+in the water. A colony's fell, dam and lodge entries stay the process's
+(B25); no animal writes a cell.
+
+**Where they live.**
+
+- `beaver` is appended to `fauna.ron`: a protected mammal of river water, a
+  floater, `env` riffle and pool, and a new field `near_colony_m: 40.0`, so
+  the spawner offers it only at a spawn point within 40 m of the site of a
+  colony that is not gone (`pbd_core::beaver::near_colony`).
+- `river_otter` is appended after it: a protected river floater, 1 to 22
+  degrees C (the temperate rivers and lakes, so the latitudes follow), `env`
+  riffle, pool and estuary.
+- The sea otter keeps its row; it is drawn with the new body.
+
+The roster stays append-only (its test grows by the two ids). Icons are the
+mockup's sprites copied with provenance.
+
+**Cost.** At most `MAX_DRAWN` (8) animals are drawn, the nearest first
+within `DRAW_M` (70 m), each fading in and out by `Faded` over 0.8 s (a
+moment, never a place). One system poses every drawn animal: the pose is
+plain numbers on the stack, the ground under a foot is one column lookup,
+and the bones are written in place, so a frame allocates nothing. The frame
+cost is not measured: the cloud container has no GPU (lavapipe).
+
+**Not ported now, the next steps** (each is drawn only and can follow
+without touching the rest):
+
+- the tufts' spring and the wet spike (`shared.fur`): the tufts ride their
+  bones in their dry shape; the values are read and validated;
+- chips, drops, splashes and rings on the water;
+- the felling of a standing tree with its creak, fall and bounce
+  (`beaver.fell`): the game's trees are the colony's to fell, and the stump
+  appears when the process writes it; the beaver gnaws sticks instead;
+- the otter's mud slide (`river_otter.slide`) and catching a fish
+  (`river_otter.eat`), which need a slide and a fish the scene does not
+  have;
+- the kelp the sea otter wraps itself in to sleep.
+
+**Validation.** Tests: the append-only roster; a beaver offered by a colony
+and not away from one or by a gone one; the creature motion file parses,
+validates and equals the defaults, and a bad value is refused; the gnaw's
+hit on its beat; no foot moving in stance in the walk and the bound; the
+forelimb limits never passed over 600 s of each animal's seeded run; the
+mesh's rest joints are the rig's. Captures (lavapipe, no GPU) in
+`docs/screenshots/beavers-otters-game/`.
+
+**Two things the port found in version 5, fixed in the game** (drawn only;
+the page should take the same, and its next version will):
+
+- **The beaver's forepaws hovered.** At the elbow's limit of 80 degrees a
+  beaver's foreleg (two bones of 7 cm) cannot bring its paw nearer the
+  shoulder than 10.7 cm, and standing its shoulder is 9 cm over the ground:
+  the solver held the paw out on its line, 1.7 cm over the ground under the
+  shoulder and gliding through the middle of every stance. The body is now
+  lifted by the shortfall whenever a forepaw sent to the ground cannot reach
+  it (about 2 cm standing, less at the ends of a stride), so the paw stands
+  on the ground. The river otter's and sea otter's forelegs reach and are
+  not lifted.
+- **A waddling foot swayed.** The legs were solved in the body's own plane,
+  leaving out the waddle's roll, so a planted foot swung 1.4 mm a frame
+  sideways and up at 120 frames a second. The hip is now placed with the
+  roll, and a leg sent to the ground is tilted across by the angle that
+  keeps its foot under itself; a small roll (the waddle, the shake) is
+  taken back at the hips so the legs stand upright under a rolling body,
+  and a large one (on its back) is the body's alone.
+
+`no_foot_slides_in_stance` measures both: no foot down in its stance moves
+more than 1.5 mm in a frame in the walk or the bound.

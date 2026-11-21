@@ -370,9 +370,50 @@ fn settled(colony: &Colony, hour: u64, rules: &Rules) -> Option<Colony> {
     None
 }
 
+/// Whether the unit direction `dir` is within `metres` (along the ground,
+/// on a body of `radius`) of the site a colony is at, the colony not gone:
+/// where beavers are seen (`ocean-environments` B25, "Beavers seen"; B29).
+pub fn near_colony<'a>(
+    colonies: impl IntoIterator<Item = &'a Colony>,
+    dir: glam::Vec3,
+    metres: f32,
+    radius: f32,
+) -> bool {
+    let reach = metres / radius.max(1.0);
+    colonies.into_iter().any(|c| {
+        c.state != State::Gone
+            && c.here()
+                .is_some_and(|s| glam::Vec3::from(s.at).angle_between(dir) <= reach)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Beavers are seen only by a colony that is not gone (B29).
+    #[test]
+    fn beavers_are_seen_only_within_reach_of_a_colony_not_gone() {
+        let r = 4_800.0_f32;
+        let at = glam::Vec3::new(0.6, 0.8, 0.0);
+        let mut s = site(10);
+        s.at = at.to_array();
+        let mut colony = Colony::new(vec![s.clone(), site(20)], 4, 0);
+        let step = |m: f32| {
+            let side = at.cross(glam::Vec3::Z).normalize();
+            (at + side * (m / r)).normalize()
+        };
+        assert!(near_colony([&colony], at, 40.0, r), "at the site");
+        assert!(near_colony([&colony], step(35.0), 40.0, r), "35 m off");
+        assert!(!near_colony([&colony], step(60.0), 40.0, r), "60 m off");
+        assert!(!near_colony([], at, 40.0, r), "no colony at all");
+        // moved on to its next site: the old one is no longer where it is
+        colony.site = 1;
+        assert!(!near_colony([&colony], at, 40.0, r), "moved away");
+        colony.site = 0;
+        colony.state = State::Gone;
+        assert!(!near_colony([&colony], at, 40.0, r), "a gone colony");
+    }
 
     fn site(base: u32) -> Site {
         Site {

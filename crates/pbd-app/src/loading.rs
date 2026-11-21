@@ -76,6 +76,12 @@ pub struct Warming {
 }
 
 impl Warming {
+    /// A `--capture`, which does not warm: nothing is shown behind the
+    /// screen for it.
+    pub fn immediate(&self) -> bool {
+        self.immediate
+    }
+
     /// Whether the world warms behind the screen long enough to make every
     /// pipeline it may need: not in a `--capture`, which lifts the screen on
     /// its first open frame.

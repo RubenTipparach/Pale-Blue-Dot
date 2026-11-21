@@ -66,7 +66,10 @@ fn the_defaults_validate_and_carry_the_eight_fish_then_the_water_life() {
             // The octopus, the plume worm and the seal (B9), appended.
             "octopus",
             "tube_worm",
-            "seal"
+            "seal",
+            // The beaver and the river otter (B29), appended.
+            "beaver",
+            "river_otter"
         ],
         "the roster is append-only: a saved fish is its index"
     );

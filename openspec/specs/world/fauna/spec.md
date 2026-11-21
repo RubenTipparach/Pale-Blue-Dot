@@ -183,3 +183,52 @@ seabed does. Its atlas and palette SHALL be kept, with no outline.
 - **WHEN** a school of perch swims 1 m under a lake's surface that stands
   over sea level
 - **THEN** its depth is read from the lake's surface and it is dimmed by it
+
+### Requirement: Beavers are seen only by a colony
+A beaver SHALL spawn only within 40 m of the site of a beaver colony that is
+not gone (`near_colony_m` in `fauna.ron`). Like every species it is appended
+to the roster, never inserted, and like the otters it is protected.
+
+#### Scenario: By a colony and away from one
+- **WHEN** a spawn point lies 35 m from a living colony's site, 60 m from it,
+  by a colony that has moved to its next site, or by a gone colony
+- **THEN** a beaver is offered only at the first
+  (`beaver::tests::beavers_are_seen_only_within_reach_of_a_colony_not_gone`,
+  `fish::tests::a_beaver_is_offered_only_by_a_colony`)
+
+#### Scenario: The roster grows at its end
+- **WHEN** the home roster is read
+- **THEN** the beaver and the river otter follow the seal, every earlier
+  species at its old index
+  (`fauna::tests::the_defaults_validate_and_carry_the_eight_fish_then_the_water_life`)
+
+### Requirement: The beavers and otters move as their approved mockup does
+The beaver, the river otter and the sea otter SHALL be drawn with M25
+version 5's sculpted, skinned bodies and its motion: every action in four
+stages on one beat, gaits whose phase runs on the distance moved, the
+forelimbs held within each animal's joint limits, and the tunables read
+from `creature_motion.ron`, validated, with one source of defaults. The
+motion SHALL be drawn only: nothing in the game reads it back.
+
+#### Scenario: The gnaw keeps its beat
+- **WHEN** a beaver gnaws a stick for six bites
+- **THEN** the k-th bite lands at k beats plus the windup, anticipation and
+  hit, within a frame (`critters::tests::the_gnaws_hit_is_on_its_beat`)
+
+#### Scenario: A planted foot stays planted
+- **WHEN** a beaver walks and a river otter bounds across flat ground
+- **THEN** no foot down in its stance moves more than 1.5 mm in a frame
+  (`critters::tests::no_foot_slides_in_stance`)
+
+#### Scenario: The forelimbs within their limits
+- **WHEN** each animal is left to its seeded choices for 600 s by a pond,
+  startled now and then
+- **THEN** its elbow and wrist never pass its limits
+  (`critters::tests::the_forelimbs_never_pass_their_limits_over_a_seeded_run`)
+
+#### Scenario: The tunables
+- **WHEN** `creature_motion.ron` is read
+- **THEN** it validates and equals the defaults, a block tuned on the
+  mockup pastes in, and a value off the mockup's sliders is refused
+  (`critters::tests::the_shipped_motion_is_the_defaults_and_validates`,
+  `critters::tests::a_block_tuned_on_the_page_pastes_in_and_a_bad_one_is_refused`)

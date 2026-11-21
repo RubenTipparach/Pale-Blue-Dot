@@ -1191,6 +1191,12 @@ slots:
   many: "{name} x {count}"
   tool_tip: "{tool}: {purpose}"
 species:
+  beaver:
+    caps: BEAVER
+    entry: "A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught."
+    lower: beaver
+    name: Beaver
+    tip: Look where a stream is dammed with sticks. Come close and it slaps its tail and dives.
   deepback:
     caps: DEEPBACK
     entry: A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.
@@ -1275,6 +1281,12 @@ species:
     lower: reef turtle
     name: Reef turtle
     tip: Watch it go by. A line cast at one is refused.
+  river_otter:
+    caps: RIVER OTTER
+    entry: "A long, quick swimmer of cool rivers and lakes. It climbs out on the bank to look around and groom. River otters are protected: none may be caught."
+    lower: river otter
+    name: River otter
+    tip: Quiet river banks. It swims off if you come close.
   sea_otter:
     caps: SEA OTTER
     entry: "Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught."
