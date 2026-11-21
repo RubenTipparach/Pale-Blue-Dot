@@ -212,6 +212,11 @@ without waiting for its approval; the tab is on the tracker for it.
   loading thread after the towns' ground is installed, so an old save gains
   its roads on its next open, in place, with no restart. A player's road
   cell is a `road-cell` record of the player's, by its cell key.
+- **No tree grows on a road**: the road cells are installed beside the
+  towns' ground before the planet is built (`roads::Cleared`), and the
+  foliage pass's cleared bit is set on them as on a town's footprint. The
+  first in-game capture had trees standing in the track. Grass tufts are
+  still drawn on a road (not yet cleared).
 - **Laid only where no player edit stands, at every build**: a stored
   road's cell that the player has since edited is not drawn or stood on,
   so the road yields however late the edit came.

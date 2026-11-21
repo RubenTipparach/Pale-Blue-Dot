@@ -347,6 +347,11 @@ pub fn prepare(
     let stored = roads::stored(&save.records);
     let built = roads::built(&save.records);
     let net = RoadNet::of(&stored, &built, save.serial());
+    // No tree grows on a road: installed before the planet is built.
+    roads::install_cleared(Some(roads::Cleared::new(
+        net.cells.iter().map(|l| l.cell.key),
+        config.radius_m,
+    )));
     info!(
         "{} roads read, {} cells to lay in {} chunks",
         stored.len(),

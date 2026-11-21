@@ -111,7 +111,8 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 
 ///
 /// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
-/// decision 3): the foliage pass grows no tree there.
+/// decision 3) and on a road cell (`townsfolk` design 10a): the foliage
+/// pass grows no tree there.
 ///
 /// Bit [`FLOODED_BIT`] is set where the top is under the high-water line
 /// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
@@ -127,7 +128,8 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let cfg = terrain_config();
     let biome = planet_gen::biome_at(cfg, d, height);
-    let cleared = pbd_core::settlement::ground::cleared(cfg, d);
+    // A town's footprint, or a road (`townsfolk` design 10a): no tree.
+    let cleared = pbd_core::settlement::ground::cleared(cfg, d) || pbd_core::roads::cleared(d);
     let back = planet_gen::beach_back(cfg, d, height, biome);
     // A sea cell's top far off is drawn from its own sheet, as the column
     // draws it near (`ocean-environments` B24).
