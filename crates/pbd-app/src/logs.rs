@@ -247,6 +247,7 @@ fn nearest(logs: &Logs, at: DVec3, reach: f64) -> Option<usize> {
 /// Aboard a raft: Y loads the nearest log in reach into its hold, U puts one
 /// from the hold over the side. The hold's line goes first: a crash between
 /// the two lines leaves a log too many, never one lost (design, Risks).
+#[allow(clippy::too_many_arguments)]
 pub fn raft(
     keys: Res<ButtonInput<KeyCode>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
@@ -327,6 +328,9 @@ pub fn raft(
     }
 }
 
+/// A triangle soup: positions, normals and texture coordinates.
+type Soup = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>);
+
 /// The log's shape: a bark cylinder with cut timber ends, along X.
 fn log_meshes() -> (Mesh, Mesh) {
     let (r, half) = (log_drive::RADIUS_M, log_drive::LENGTH_M * 0.5);
@@ -381,7 +385,7 @@ fn log_meshes() -> (Mesh, Mesh) {
             ends.2.extend([uv(Vec3::X * x), uv(b), uv(c)]);
         }
     }
-    let mesh = |(p, n, u): (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>)| {
+    let mesh = |(p, n, u): Soup| {
         Mesh::new(
             bevy::mesh::PrimitiveTopology::TriangleList,
             bevy::asset::RenderAssetUsages::default(),

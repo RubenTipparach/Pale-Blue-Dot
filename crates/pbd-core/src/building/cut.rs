@@ -232,6 +232,7 @@ impl Cutter<'_> {
     }
 
     /// A box along `a` to `b` in plan, `half` either side, from `y0` to `y1`.
+    #[allow(clippy::too_many_arguments)]
     fn slab(&mut self, a: Vec2, b: Vec2, half: f32, y0: f32, y1: f32, side: &str, cap: &str) {
         let along = (b - a).normalize_or_zero();
         let across = Vec2::new(-along.y, along.x) * half;

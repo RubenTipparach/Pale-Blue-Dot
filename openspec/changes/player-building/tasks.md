@@ -25,11 +25,11 @@ has built them into the engine.
 
 - [ ] 4.1 (Built on N, not B: B is the breeding screen on foot now, design B5. The player's slots are never touched and the selection is given back on leaving; the app test of it is still owed.) B on foot opens and closes build mode, the hotbar becomes the kit's palette, and leaving restores it. B is added to `BINDINGS` for on foot. Verify: app tests that the hotbar and selection come back unchanged, and that B in a ship still brakes.
 - [x] 4.2 (`docs/screenshots/player-building/green-ghost.png`, `red-ghost.png`; lavapipe.) The aim-snapped ghost, its colour and its reason text. The wheel steps openings and stair rotations. Verify: `--capture` shots of a green and a red ghost with its reason, in `docs/screenshots/player-building/`.
-- [x] 4.3 (`building::tests::the_roof_tool_roofs_a_two_by_four_house`; `house-4-roofed.png`.) The roof tool's flood fill and fit. Verify: a test roofing a two-by-four house, and a capture.
+- [x] 4.3 (`building::tests::the_roof_tool_roofs_a_two_by_four_house`; `two-storey-house-night.jpg`.) The roof tool's flood fill and fit. Verify: a test roofing a two-by-four house, and a capture.
 - [ ] 4.4 (Built: the Blueprint slot charts any plain template building at the aim, the wheel turns it, shift and the wheel picks which, one click fills it whole; `house-*.png`. The app test that walks in through its door is still owed.) The blueprint picker and fill, both at once and piece by piece. Verify: an app test places a cottage blueprint, fills it, and walks in through its door.
 
 - [ ] 4.5 (Not built in this pass, design B6.) The build camera, from the towns mockup's overview: orbit by drag, pan along its heading (right-drag, WASD), zoom by the wheel, double-click to walk there, and a cutaway height that hides everything above a chosen layer. Verify: an app test for each, and a capture with the cutaway through a two-storey house.
-- [x] 4.6 (`kit-picker.png`: all 22 kits the game ships, not 19; the wheel steps the kit.) The palette's kit picker shows every kit side by side, as the mockup's Kits tab does. Verify: a capture of the picker with all 19 kits.
+- [x] 4.6 (`kit-picker.jpg`: all 22 kits the game ships, not 19; the wheel steps the kit.) The palette's kit picker shows every kit side by side, as the mockup's Kits tab does. Verify: a capture of the picker with all 19 kits.
 
 ## 5. The owner's check
 
