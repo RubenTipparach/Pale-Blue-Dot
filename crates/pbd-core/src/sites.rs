@@ -106,18 +106,18 @@ impl SiteKind {
     }
 
     /// A lower-case name for readouts: "walled town", "cave town".
-    pub fn name(self) -> &'static str {
-        match self {
-            SiteKind::Walled => "walled town",
-            SiteKind::Village => "village",
-            SiteKind::Desert => "desert town",
-            SiteKind::Tundra => "tundra camp",
-            SiteKind::Jungle => "jungle village",
-            SiteKind::Swamp => "swamp village",
-            SiteKind::Harbour => "harbour",
-            SiteKind::Cliff => "cliff village",
-            SiteKind::Cave => "cave town",
-        }
+    pub fn name(self) -> crate::locale::Localized {
+        crate::locale::tr(match self {
+            SiteKind::Walled => "sites.kind.walled",
+            SiteKind::Village => "sites.kind.village",
+            SiteKind::Desert => "sites.kind.desert",
+            SiteKind::Tundra => "sites.kind.tundra",
+            SiteKind::Jungle => "sites.kind.jungle",
+            SiteKind::Swamp => "sites.kind.swamp",
+            SiteKind::Harbour => "sites.kind.harbour",
+            SiteKind::Cliff => "sites.kind.cliff",
+            SiteKind::Cave => "sites.kind.cave",
+        })
     }
 }
 
@@ -1043,7 +1043,8 @@ fn name_for(sites: &SitesConfig, seed: u64, site: &Site, taken: &mut BTreeSet<St
             return name;
         }
     }
-    let fallback = format!("Site {}", site.id);
+    let fallback: String =
+        crate::locale::tr_with("sites.fallback_name", &[("id", &site.id)]).into();
     taken.insert(fallback.clone());
     fallback
 }

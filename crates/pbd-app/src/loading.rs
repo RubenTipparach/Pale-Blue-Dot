@@ -81,6 +81,13 @@ impl Warming {
     pub fn immediate(&self) -> bool {
         self.immediate
     }
+
+    /// Whether the world warms behind the screen long enough to make every
+    /// pipeline it may need: not in a `--capture`, which lifts the screen on
+    /// its first open frame.
+    pub fn prewarms(&self) -> bool {
+        !self.immediate
+    }
 }
 
 /// Whether the loading screen has lifted (or there never was one).
@@ -117,17 +124,17 @@ impl Step {
         }
     }
 
-    fn label(self) -> &'static str {
-        match self {
-            Self::Reading => "READING THE WORLD",
-            Self::Surveying => "SURVEYING SITES",
-            Self::Laying => "LAYING OUT TOWNS",
-            Self::Ground => "THE TOWNS' GROUND",
-            Self::Planet => "BUILDING THE PLANET",
-            Self::Shaders => "COMPILING SHADERS",
-            Self::Sounds => "TUNING THE AIR",
-            Self::Standing => "STANDING THE TOWNS",
-        }
+    fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Reading => "loading.reading",
+            Self::Surveying => "loading.surveying",
+            Self::Laying => "loading.laying",
+            Self::Ground => "loading.ground",
+            Self::Planet => "loading.planet",
+            Self::Shaders => "loading.shaders",
+            Self::Sounds => "loading.sounds",
+            Self::Standing => "loading.standing",
+        })
     }
 
     /// Where the step starts on the bar, and how much of it the step fills.
@@ -601,7 +608,7 @@ fn paint(world: &mut World, step: Step, fraction: f32, detail: String) {
     let filled = filled(step, fraction);
     let mut steps = world.query_filtered::<&mut Text, With<StepText>>();
     for mut text in steps.iter_mut(world) {
-        if text.0 != step.label() {
+        if text.0.as_str() != step.label().as_str() {
             text.0 = step.label().into();
         }
     }

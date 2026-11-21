@@ -23,8 +23,12 @@ use bevy::{
     post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter},
     prelude::*,
     render::{
+        RenderApp,
         extract_component::ExtractComponent,
-        render_graph::{InternedRenderLabel, InternedRenderSubGraph, RenderLabel, RenderSubGraph},
+        render_graph::{
+            InternedRenderLabel, InternedRenderSubGraph, RenderGraph, RenderGraphError,
+            RenderLabel, RenderSubGraph,
+        },
         render_resource::ShaderType,
     },
     shader::ShaderRef,
@@ -164,6 +168,37 @@ impl Plugin for TonePlugin {
                 Update,
                 (dress_cameras, follow_bloom, meter_and_grade).chain(),
             );
+    }
+
+    fn finish(&self, app: &mut App) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            order_smaa(render_app);
+        }
+    }
+}
+
+/// SMAA after the grade (`smaa-option`). Bevy puts its node after
+/// tonemapping, as the grade's is, with no order between the two; SMAA
+/// finds its edges in the display image, so it runs on the graded frame,
+/// the last step before the end of post-processing. Called once both nodes
+/// are in the 3D graph (the plugins' `finish`); a graph without either is
+/// left as it is.
+pub fn order_smaa(render_app: &mut SubApp) {
+    let Some(mut graph) = render_app.world_mut().get_resource_mut::<RenderGraph>() else {
+        return;
+    };
+    let Some(core) = graph.get_sub_graph_mut(Core3d) else {
+        return;
+    };
+    let grade = ToneGrade::node_label().intern();
+    let smaa = Node3d::Smaa.intern();
+    if core.get_node_state(grade).is_err() || core.get_node_state(smaa).is_err() {
+        warn!("smaa-option: the tone grade or SMAA is not in the 3D graph; left unordered");
+        return;
+    }
+    match core.try_add_node_edge(grade, smaa) {
+        Ok(()) | Err(RenderGraphError::EdgeAlreadyExists(_)) => {}
+        Err(error) => panic!("SMAA after the grade: {error:?}"),
     }
 }
 

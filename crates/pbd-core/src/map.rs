@@ -146,8 +146,8 @@ impl Mark {
     }
 
     /// What the map and the compass call it: "W1", "W2" ...
-    pub fn label(&self) -> String {
-        format!("W{}", self.number)
+    pub fn label(&self) -> crate::locale::Localized {
+        crate::locale::tr_with("map.waypoint", &[("number", &self.number)])
     }
 
     pub fn direction(&self) -> Vec3 {

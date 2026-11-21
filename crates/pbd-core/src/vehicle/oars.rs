@@ -247,13 +247,19 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub fn name(self) -> &'static str {
+    /// Its name, `vehicle.oar_stage.<id>` in the locale file.
+    pub fn name(self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("vehicle.oar_stage.{}", self.id()))
+    }
+
+    /// Its id: the key of its name.
+    pub fn id(self) -> &'static str {
         match self {
-            Stage::Reach => "Reach",
-            Stage::Catch => "Catch",
-            Stage::Drive => "Drive",
-            Stage::Release => "Release",
-            Stage::Recovery => "Recovery",
+            Stage::Reach => "reach",
+            Stage::Catch => "catch",
+            Stage::Drive => "drive",
+            Stage::Release => "release",
+            Stage::Recovery => "recovery",
         }
     }
 }

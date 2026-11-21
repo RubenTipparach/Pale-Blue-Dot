@@ -6,6 +6,7 @@ use super::menu::Screen;
 use super::slots::ItemIcons;
 use bevy::prelude::*;
 use pbd_app::hotbar::{Gained, PickedUp};
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText};
 use pbd_core::inventory::{Item, Stack};
 
@@ -133,7 +134,7 @@ pub fn spawn(
                             ToastIcon(n),
                         ));
                         row.spawn((
-                            KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                            KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                             ToastText(n),
                         ));
                     });
@@ -142,8 +143,11 @@ pub fn spawn(
 }
 
 /// The words on a toast: "Dirt x2".
-pub fn words(toast: &Toast) -> String {
-    format!("{} x{}", toast.item.name(), toast.count)
+pub fn words(toast: &Toast) -> Localized {
+    pbd_core::locale::tr_with(
+        "toasts.words",
+        &[("item", &toast.item.name()), ("count", &toast.count)],
+    )
 }
 
 /// Count this frame's gains into the toasts and let their time run.

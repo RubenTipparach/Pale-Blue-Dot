@@ -22,7 +22,7 @@ pub mod record;
 pub mod taming;
 pub mod young;
 
-use crate::fauna::{Class, Guide, Status};
+use crate::fauna::{Class, Status};
 use crate::goods::Good;
 use crate::inventory::Item;
 use crate::terrain::Material;
@@ -81,7 +81,7 @@ impl Food {
 
     pub fn name(&self) -> String {
         match self {
-            Food::Turf => "turf (a grass block)".into(),
+            Food::Turf => crate::locale::tr("husbandry.food.turf").into(),
             Food::Good(code) => {
                 Good::by_code(code).map_or_else(|| code.clone(), |g| g.name().into())
             }
@@ -122,8 +122,12 @@ impl Keeping {
 
     /// What it eats, for the HUD: "wheat seed or wheat".
     pub fn food_name(&self) -> String {
-        let names: Vec<String> = self.foods.iter().map(Food::name).collect();
-        names.join(" or ")
+        let mut names = self.foods.iter().map(Food::name);
+        let first = names.next().unwrap_or_default();
+        names.fold(first, |all, next| {
+            crate::locale::tr_with("husbandry.food.or", &[("first", &all), ("second", &next)])
+                .into()
+        })
     }
 }
 
@@ -158,8 +162,8 @@ pub struct Keeping {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LandSpecies {
+    /// Its id; its name is `species.<id>.name` in the locale file.
     pub id: String,
-    pub name: String,
     pub class: Class,
     pub status: Status,
     pub plan: Plan,
@@ -178,15 +182,42 @@ pub struct LandSpecies {
     /// How it is kept; `None` for a species that is not.
     #[serde(default)]
     pub keep: Option<Keeping>,
-    pub guide: Guide,
 }
 
 impl LandSpecies {
+    /// Its name: "Yard hen".
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("species.{}.name", self.id))
+    }
+
+    /// Its name mid-sentence ("the yard hen"): `species.<id>.lower`.
+    pub fn lower_name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("species.{}.lower", self.id))
+    }
+
+    /// Its name as missions and their saved progress name it: the English
+    /// name in lower case, whatever the player's language ("yard hen").
+    pub fn data_name(&self) -> String {
+        crate::locale::english(&format!("species.{}.name", self.id)).to_lowercase()
+    }
+
+    /// Its field-guide entry.
+    pub fn entry(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("species.{}.entry", self.id))
+    }
+
+    /// Its field-guide tip.
+    pub fn tip(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("species.{}.tip", self.id))
+    }
+
     /// Why it cannot be tamed, or `None` where it can.
-    pub fn refusal(&self) -> Option<&'static str> {
-        self.status
-            .refusal(self.class)
-            .or_else(|| self.keep.is_none().then_some("it is not kept"))
+    pub fn refusal(&self) -> Option<crate::locale::Localized> {
+        self.status.refusal(self.class).or_else(|| {
+            self.keep
+                .is_none()
+                .then(|| crate::locale::tr("husbandry.refusal.not_kept"))
+        })
     }
 }
 
@@ -386,9 +417,6 @@ impl HusbandrySettings {
                 )?;
                 if sp.herd.0 == 0 || sp.herd.1 < sp.herd.0 {
                     return Err(format!("{at}: a herd has at least one animal"));
-                }
-                if sp.guide.entry.is_empty() {
-                    return Err(format!("{at}: no field-guide entry"));
                 }
                 if sp
                     .colours

@@ -194,28 +194,29 @@ impl Step {
         }
     }
 
-    /// Its name, as the page's HUD shows it.
+    /// Its id, for tests and logs (the mockup's HUD names); never shown in
+    /// the game.
     pub fn name(&self) -> &'static str {
         match self.kind {
-            Kind::Follow { depth, .. } if depth > 0.0 => "under water",
+            Kind::Follow { depth, .. } if depth > 0.0 => "under_water",
             Kind::Follow { .. } => "swim",
             Kind::Move { .. } => "move",
             Kind::Hold { .. } => "rest",
             Kind::Face { .. } => "turn",
             Kind::Hop { .. } => "hop",
-            Kind::GnawLow { .. } => "gnaw a stick",
-            Kind::TakeStick => "take the stick",
-            Kind::DropStick => "let the stick go",
-            Kind::BeaverSit => "sit up and groom",
-            Kind::Shake => "shake off",
-            Kind::Slap => "tail slap",
+            Kind::GnawLow { .. } => "gnaw_a_stick",
+            Kind::TakeStick => "take_the_stick",
+            Kind::DropStick => "let_the_stick_go",
+            Kind::BeaverSit => "sit_up_and_groom",
+            Kind::Shake => "shake_off",
+            Kind::Slap => "tail_slap",
             Kind::Porpoise { .. } => "porpoise",
-            Kind::OtterGroom => "roll and groom",
-            Kind::Look => "look around",
-            Kind::Crack { .. } => "crack an urchin",
-            Kind::EatUrchin => "eat the urchin",
+            Kind::OtterGroom => "roll_and_groom",
+            Kind::Look => "look_around",
+            Kind::Crack { .. } => "crack_an_urchin",
+            Kind::EatUrchin => "eat_the_urchin",
             Kind::UrchinDone => "done",
-            Kind::SeaDive { .. } => "roll over and dive",
+            Kind::SeaDive { .. } => "roll_over_and_dive",
             Kind::SeaGroom => "groom",
             Kind::Sleep => "sleep",
         }

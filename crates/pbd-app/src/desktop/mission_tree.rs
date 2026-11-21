@@ -14,6 +14,8 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::ui_kit::{self, KitText, Set, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
+use pbd_core::locale::tr_with;
 use pbd_core::missions::{Chain, Standing};
 
 /// One zoom level of the tree: a designed view, not a scale. The cards are
@@ -313,16 +315,16 @@ pub fn rezoom(pan: Vec2, at: Vec2, from: &Level, to: &Level) -> Vec2 {
     at - to.origin() - u * to.pitch()
 }
 
-/// The branches in M33's order, with the names drawn over them.
+/// The branches in M33's order, with the keys of the names drawn over them.
 pub const BRANCHES: [(&str, &str); 8] = [
-    ("trunk", "HANDS TO TOOLS"),
-    ("fishing", "FISHING"),
-    ("farming", "FARMING"),
-    ("herding", "HERDING"),
-    ("mining", "MINING & SMELTING"),
-    ("cooking", "COOKING"),
-    ("light", "LIGHT & BUILDING"),
-    ("about", "GETTING ABOUT"),
+    ("trunk", "mission_tree.branch.hands_tools"),
+    ("fishing", "mission_tree.branch.fishing"),
+    ("farming", "mission_tree.branch.farming"),
+    ("herding", "mission_tree.branch.herding"),
+    ("mining", "mission_tree.branch.mining_smelting"),
+    ("cooking", "mission_tree.branch.cooking"),
+    ("light", "mission_tree.branch.light_building"),
+    ("about", "mission_tree.branch.getting_about"),
 ];
 
 fn branch_rank(key: &str) -> usize {
@@ -332,11 +334,11 @@ fn branch_rank(key: &str) -> usize {
         .unwrap_or(BRANCHES.len())
 }
 
-fn branch_name(key: &str) -> &'static str {
+fn branch_name(key: &str) -> Localized {
     BRANCHES
         .iter()
         .find(|(k, _)| *k == key)
-        .map_or("", |(_, n)| n)
+        .map_or_else(Localized::empty, |(_, n)| tr(n))
 }
 
 /// Each mission's column and row, by its place in the chain.
@@ -570,7 +572,13 @@ fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
                 BranchLabel(first),
             ))
             .with_children(|plaque| {
-                plaque.spawn(KitText::new(format!("{n} · {name}"), ui_kit::OAK_LABEL));
+                plaque.spawn(KitText::new(
+                    tr_with(
+                        "mission_tree.branch_label",
+                        &[("number", &n), ("name", &tr(name))],
+                    ),
+                    ui_kit::OAK_LABEL,
+                ));
             });
     }
 }
@@ -683,7 +691,7 @@ fn spawn_card(
                 part(&mut e);
             });
             let mut e = head.spawn((
-                KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::left(px(3)),
                     flex_shrink: 0.0,
@@ -771,16 +779,16 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
                 head.spawn((body("", 13.0, ui_kit::TITLE), SideText::Title));
                 head.spawn((ui_kit::plaque(kit, Set::Stone, 18.0), SideClose))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Stone, "X"));
+                        p.spawn(ui_kit::plaque_label(Set::Stone, tr("mission_tree.close")));
                     });
             });
             side.spawn((body("", 9.0, ui_kit::LABEL_DIM), SideText::Sub));
             for (heading, text) in [
-                ("OBJECTIVES", SideText::Objectives),
-                ("HELP", SideText::Help),
-                ("UNLOCKS", SideText::Unlocks),
-                ("NEEDS", SideText::Needs),
-                ("OPENS NEXT", SideText::Next),
+                (tr("mission_tree.objectives"), SideText::Objectives),
+                (tr("mission_tree.help"), SideText::Help),
+                (tr("mission_tree.unlocks"), SideText::Unlocks),
+                (tr("mission_tree.needs"), SideText::Needs),
+                (tr("mission_tree.opens_next"), SideText::Next),
             ] {
                 side.spawn((
                     KitText::new(heading, ui_kit::TEXT_DIM).shadow(ui_kit::INK),
@@ -796,13 +804,13 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
 
 /// What a card's badge says, and its colour. A locked card has none: its dim
 /// silhouettes say so (owner, 2026-11-16: "we dont need locked, its obvious").
-fn badge(standing: Standing, now: bool) -> (&'static str, Color) {
+fn badge(standing: Standing, now: bool) -> (Localized, Color) {
     match standing {
-        Standing::Done => ("DONE", ui_kit::RUNE),
-        Standing::Open if now => ("NOW", ui_kit::TITLE),
-        Standing::Open => ("OPEN", ui_kit::TEXT),
-        Standing::Locked => ("", ui_kit::LABEL_DIM),
-        Standing::Pending => ("NOT YET", ui_kit::LABEL_DIM),
+        Standing::Done => (tr("mission_tree.done"), ui_kit::RUNE),
+        Standing::Open if now => (tr("mission_tree.now"), ui_kit::TITLE),
+        Standing::Open => (tr("mission_tree.open"), ui_kit::TEXT),
+        Standing::Locked => (Localized::empty(), ui_kit::LABEL_DIM),
+        Standing::Pending => (tr("mission_tree.not_yet"), ui_kit::LABEL_DIM),
     }
 }
 
@@ -813,7 +821,7 @@ fn recipe_name(recipes: &pbd_app::config::Recipes, code: &str) -> String {
         .recipes
         .iter()
         .find(|r| r.code == code)
-        .map_or(code.to_string(), |r| r.name.clone())
+        .map_or(code.to_string(), |r| r.name().into_string())
 }
 
 fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {
@@ -884,7 +892,7 @@ pub fn paint(
         let (s, now) = standing(b.0);
         let (word, colour) = badge(s, now);
         if text.text != word || text.colour != colour {
-            text.text = word.to_string();
+            text.text = word;
             text.colour = colour;
         }
     }
@@ -904,9 +912,9 @@ pub fn paint(
         let words = if s == Standing::Locked {
             let mut gates: Vec<String> = m.needs.iter().map(|id| title_of(id)).collect();
             gates.extend(m.after.iter().map(|id| title_of(id)));
-            format!("after {}", gates.join(" + "))
+            tr_with("mission_tree.after", &[("missions", &gates.join(" + "))]).into()
         } else {
-            branch_name(&m.branch).to_string()
+            branch_name(&m.branch).into_string()
         };
         set_text(&mut text, &mut colour, words, ui_kit::LABEL_DIM);
     }
@@ -945,7 +953,11 @@ pub fn paint(
                         .map_or(code.clone(), |r| recipe_name(r, code))
                 })
                 .collect();
-            format!("UNLOCKS {}", names.join(", "))
+            tr_with(
+                "mission_tree.unlocks_list",
+                &[("recipes", &names.join(", "))],
+            )
+            .into()
         };
         let (s, _) = standing(u.0);
         let c = if s == Standing::Done {
@@ -1008,7 +1020,7 @@ pub fn paint(
             SideText::Title => (m.title.clone(), ui_kit::TITLE),
             SideText::Sub => (
                 match badge(s, now).0 {
-                    "" => branch_name(&m.branch).to_string(),
+                    word if word.is_empty() => branch_name(&m.branch).into_string(),
                     word => format!("{} · {}", branch_name(&m.branch), word),
                 },
                 ui_kit::LABEL_DIM,
@@ -1023,7 +1035,11 @@ pub fn paint(
                         } else {
                             counts.get(k).copied().unwrap_or(0)
                         };
-                        let tick = if n >= o.count { "[x]" } else { "[ ]" };
+                        let tick = if n >= o.count {
+                            tr("mission_tree.x")
+                        } else {
+                            Localized::verbatim("[ ]")
+                        };
                         format!("{tick} {} {n}/{}", o.label, o.count)
                     })
                     .collect::<Vec<_>>()

@@ -31,12 +31,12 @@ impl Climate {
         })
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Climate::Temperate => "temperate",
-            Climate::Hot => "hot",
-            Climate::Cold => "cold",
-        }
+    pub fn name(self) -> crate::locale::Localized {
+        crate::locale::tr(match self {
+            Climate::Temperate => "farming.climate.temperate",
+            Climate::Hot => "farming.climate.hot",
+            Climate::Cold => "farming.climate.cold",
+        })
     }
 }
 
@@ -45,7 +45,6 @@ impl Climate {
 pub struct CropRow {
     /// Its saved name, in a plot record.
     pub code: &'static str,
-    pub name: &'static str,
     pub climates: &'static [Climate],
     pub seed: Good,
     pub produce: Good,
@@ -53,31 +52,34 @@ pub struct CropRow {
 
 /// The roster: M8's base set. **Append only**; a plot names its crop by
 /// code, so the order is memory and never a save.
+impl CropRow {
+    /// Its name: `crop.<code>.name` in the locale file.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("crop.{}.name", self.code))
+    }
+}
+
 pub const CROPS: &[CropRow] = &[
     CropRow {
         code: "wheat",
-        name: "wheat",
         climates: &[Climate::Temperate],
         seed: Good::WHEAT_SEED,
         produce: Good::WHEAT,
     },
     CropRow {
         code: "turnip",
-        name: "turnip",
         climates: &[Climate::Temperate, Climate::Cold],
         seed: Good::TURNIP_SEED,
         produce: Good::TURNIP,
     },
     CropRow {
         code: "frost-kale",
-        name: "frost kale",
         climates: &[Climate::Cold, Climate::Temperate],
         seed: Good::FROST_KALE_SEED,
         produce: Good::FROST_KALE,
     },
     CropRow {
         code: "chili",
-        name: "chili",
         climates: &[Climate::Hot],
         seed: Good::CHILI_SEED,
         produce: Good::CHILI,

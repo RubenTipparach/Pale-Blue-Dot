@@ -14,6 +14,8 @@
 //! the GPU was busy. It reads Bevy's render-diagnostic spans, the same ones
 //! `--frame-log` writes per pass (`lighting-perf` 1.2). A third press hides
 //! both.
+//!
+//! locale: dev
 
 use bevy::prelude::*;
 

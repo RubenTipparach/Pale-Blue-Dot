@@ -295,6 +295,7 @@ mod tests {
             assert_eq!(launch.settings.render_scale, Some(record.render_scale));
             assert_eq!(launch.settings.reflections, Some(record.reflections));
             assert_eq!(launch.settings.rain_shadows, Some(record.rain_shadows));
+            assert_eq!(launch.settings.antialiasing, Some(record.antialiasing));
             assert_eq!(
                 launch.capture.as_deref(),
                 Some(Path::new("repro/x-again.png"))

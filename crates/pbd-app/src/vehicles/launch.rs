@@ -18,6 +18,7 @@ use crate::sea::Sea;
 use crate::walking::{WalkingCamera, WalkingState};
 use bevy::prelude::*;
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::vehicle::{Craft, Kind};
 use pbd_core::{DQuat, DVec3};
 
@@ -182,7 +183,10 @@ fn launch(world: &mut World) {
         Err(why) => {
             say(
                 world,
-                &format!("The {} goes on water: {why}", kind.name().to_lowercase()),
+                &tr_with(
+                    "launch.goes_on_water",
+                    &[("craft", &kind.lower_name()), ("why", &why)],
+                ),
             );
             return;
         }
@@ -192,7 +196,7 @@ fn launch(world: &mut World) {
     // The fleet first, with the new craft: a crash after it keeps the boat.
     if !write_fleet(world) {
         world.entity_mut(entity).despawn();
-        say(world, "The save did not take the launch");
+        say(world, &tr("launch.save_refused_launch"));
         return;
     }
     let good = kind.good_code().and_then(pbd_core::goods::Good::by_code);
@@ -207,7 +211,10 @@ fn launch(world: &mut World) {
     }
     world.resource_mut::<Hotbar>().0 = slots;
     world.resource_mut::<Fleet>().dirty = true;
-    say(world, &format!("{} launched", kind.name()));
+    say(
+        world,
+        &tr_with("launch.launched", &[("craft", &kind.name())]),
+    );
 }
 
 /// The made craft the look is on, nobody aboard, in reach.
@@ -256,7 +263,7 @@ fn take_up(world: &mut World, dt: f32) {
         .get_resource::<WorldSave>()
         .is_some_and(|save| !super::hold::read(save, id).is_empty());
     if full {
-        say(world, "Empty the hold first");
+        say(world, &tr("launch.empty_hold"));
         return;
     }
     let Some(good) = kind.good_code().and_then(pbd_core::goods::Good::by_code) else {
@@ -264,14 +271,14 @@ fn take_up(world: &mut World, dt: f32) {
     };
     let mut slots = world.resource::<Hotbar>().0.clone();
     if slots.give(Item::Good(good), 1) > 0 {
-        say(world, "No room in the pack");
+        say(world, &tr("farm.no_room"));
         return;
     }
     // The slots first, with the good: a crash after it keeps the boat.
     if let Some(mut save) = world.get_resource_mut::<WorldSave>()
         && !save.record_pack(&slots)
     {
-        say(world, "The save did not take it");
+        say(world, &tr("launch.save_refused"));
         return;
     }
     world.resource_mut::<Hotbar>().0 = slots;
@@ -279,7 +286,10 @@ fn take_up(world: &mut World, dt: f32) {
     if !write_fleet(world) {
         world.resource_mut::<Fleet>().dirty = true;
     }
-    say(world, &format!("{} taken up", kind.name()));
+    say(
+        world,
+        &tr_with("launch.taken_up", &[("craft", &kind.name())]),
+    );
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
 use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
@@ -255,8 +256,8 @@ pub fn paint_hold(
             continue;
         }
         let label = match view.hold.get(count.0 - CARRIED) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;
@@ -386,7 +387,7 @@ pub fn spawn(
                                         ..default()
                                     })
                                     .with_children(|top| {
-                                        menu::lintel(top, kit, "PACK");
+                                        menu::lintel(top, kit, tr("pack.pack"));
                                         for row in 0..PACK / SLOTS {
                                             slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
                                         }
@@ -413,8 +414,11 @@ pub fn spawn(
                                                     line, kit, &icons,
                                                 );
                                                 line.spawn(
-                                                    KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                                        .shadow(ui_kit::INK),
+                                                    KitText::new(
+                                                        tr("pack.hotbar"),
+                                                        ui_kit::TEXT_DIM,
+                                                    )
+                                                    .shadow(ui_kit::INK),
                                                 );
                                             },
                                         );
@@ -464,7 +468,7 @@ pub fn spawn(
                             HoldPanel,
                         ))
                         .with_children(|panel| {
-                            menu::lintel(panel, kit, "HOLD");
+                            menu::lintel(panel, kit, tr("pack.hold"));
                             slot_line(panel, kit, &atlas, CARRIED);
                         });
                 });
@@ -488,7 +492,7 @@ pub fn spawn(
         ))
         .with_children(|icon| {
             icon.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(-3),
@@ -623,8 +627,8 @@ pub fn paint(
     }
     for mut text in &mut count {
         let label = match stack {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;

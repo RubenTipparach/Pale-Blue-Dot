@@ -91,9 +91,6 @@ fn a_species_on_two_bodies_or_without_an_entry_is_refused() {
         "a species leaked to a second body"
     );
     let mut fauna = FaunaSettings::default();
-    fauna.bodies.get_mut(HOME_BODY).unwrap()[2].guide.entry = " ".into();
-    assert!(fauna.validate().is_err(), "a species with no entry");
-    let mut fauna = FaunaSettings::default();
     fauna.bodies.get_mut(HOME_BODY).unwrap()[5].icon.clear();
     assert!(fauna.validate().is_err(), "a species with no icon");
     let mut fauna = FaunaSettings::default();
@@ -539,7 +536,7 @@ fn only_fish_bite_and_protected_creatures_refuse_the_catch() {
         let sp = &roster[index_of(id)];
         assert_eq!(sp.status, Status::Protected, "{id}");
         assert_eq!(
-            sp.catch_refusal(),
+            sp.catch_refusal().as_deref(),
             Some("protected: it may not be caught"),
             "{id}"
         );
@@ -547,12 +544,12 @@ fn only_fish_bite_and_protected_creatures_refuse_the_catch() {
     }
     for id in ["shore_crab", "lobster", "giant_clam"] {
         assert_eq!(
-            roster[index_of(id)].catch_refusal(),
+            roster[index_of(id)].catch_refusal().as_deref(),
             Some("it is not taken on a line"),
             "{id}"
         );
     }
-    assert_eq!(roster[index_of("minnow")].catch_refusal(), None);
+    assert_eq!(roster[index_of("minnow")].catch_refusal().as_deref(), None);
 }
 
 /// A sea with a wave on it, for the floaters.
@@ -763,7 +760,10 @@ fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
     let r = roster();
     let i = index_of("seal");
     let sp = &r[i];
-    assert_eq!(sp.catch_refusal(), Some("protected: it may not be caught"));
+    assert_eq!(
+        sp.catch_refusal().as_deref(),
+        Some("protected: it may not be caught")
+    );
     let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
     let seal = school.positions[0];
     let up = seal.normalize();
@@ -923,4 +923,25 @@ fn a_school_is_drawn_between_its_steps_and_a_held_fish_at_the_lure() {
     assert_eq!(school.drawn(0, 0.3), lure);
     school.remove(0);
     assert_eq!(school.before.len(), school.positions.len());
+}
+
+/// Every species, fish and land, has its name, entry and tip in the locale
+/// file, by its id.
+#[test]
+fn every_species_has_its_words() {
+    let english = crate::locale::Locale::english();
+    let fish = FaunaSettings::default();
+    let land = crate::husbandry::HusbandrySettings::default();
+    let ids = fish
+        .bodies
+        .values()
+        .flatten()
+        .map(|s| s.id.clone())
+        .chain(land.land.values().flatten().map(|s| s.id.clone()));
+    for id in ids {
+        for part in ["name", "lower", "caps", "entry", "tip"] {
+            let key = format!("species.{id}.{part}");
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 }

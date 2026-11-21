@@ -10,25 +10,27 @@
 //! order, and no save written by one is misread by the other. A code, once
 //! shipped, never changes and never names anything else.
 
+use crate::locale::{Localized, tr};
+
 /// One row of the table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GoodRow {
     /// The saved name: lower-case letters, digits and hyphens.
     pub code: &'static str,
-    /// What a tooltip says.
-    pub name: &'static str,
     /// How many one slot holds.
     pub stack: u16,
     /// The 16 x 16 icon, under `assets/`.
     pub icon: &'static str,
 }
 
-const fn row(code: &'static str, name: &'static str, stack: u16, icon: &'static str) -> GoodRow {
-    GoodRow {
-        code,
-        name,
-        stack,
-        icon,
+const fn row(code: &'static str, stack: u16, icon: &'static str) -> GoodRow {
+    GoodRow { code, stack, icon }
+}
+
+impl GoodRow {
+    /// What a tooltip says: `item.<code>.name` in the locale file.
+    pub fn name(&self) -> Localized {
+        tr(&format!("item.{}.name", self.code))
     }
 }
 
@@ -38,127 +40,77 @@ const fn row(code: &'static str, name: &'static str, stack: u16, icon: &'static 
 /// test holds them together.
 pub const GOODS: &[GoodRow] = &[
     // ---- farming-and-smelting: crops (M8). Seeds and produce.
-    row("wheat-seed", "wheat seed", 99, "items/goods/wheat-seed.png"),
-    row("wheat", "wheat", 99, "items/goods/wheat.png"),
-    row(
-        "turnip-seed",
-        "turnip seed",
-        99,
-        "items/goods/turnip-seed.png",
-    ),
-    row("turnip", "turnip", 99, "items/goods/turnip.png"),
-    row(
-        "frost-kale-seed",
-        "frost kale seed",
-        99,
-        "items/goods/frost-kale-seed.png",
-    ),
-    row("frost-kale", "frost kale", 99, "items/goods/frost-kale.png"),
-    row("chili-seed", "chili seed", 99, "items/goods/chili-seed.png"),
-    row("chili", "chili", 99, "items/goods/chili.png"),
+    row("wheat-seed", 99, "items/goods/wheat-seed.png"),
+    row("wheat", 99, "items/goods/wheat.png"),
+    row("turnip-seed", 99, "items/goods/turnip-seed.png"),
+    row("turnip", 99, "items/goods/turnip.png"),
+    row("frost-kale-seed", 99, "items/goods/frost-kale-seed.png"),
+    row("frost-kale", 99, "items/goods/frost-kale.png"),
+    row("chili-seed", 99, "items/goods/chili-seed.png"),
+    row("chili", 99, "items/goods/chili.png"),
     // ---- farming-and-smelting: smelting (M3's first tier).
-    row("coal", "coal", 99, "items/goods/coal.png"),
-    row("tin-ore", "tin ore", 99, "items/goods/tin-ore.png"),
-    row(
-        "copper-ingot",
-        "copper ingot",
-        99,
-        "items/goods/copper-ingot.png",
-    ),
-    row("iron-ingot", "iron ingot", 99, "items/goods/iron-ingot.png"),
-    row(
-        "bronze-ingot",
-        "bronze ingot",
-        99,
-        "items/goods/bronze-ingot.png",
-    ),
+    row("coal", 99, "items/goods/coal.png"),
+    row("tin-ore", 99, "items/goods/tin-ore.png"),
+    row("copper-ingot", 99, "items/goods/copper-ingot.png"),
+    row("iron-ingot", 99, "items/goods/iron-ingot.png"),
+    row("bronze-ingot", 99, "items/goods/bronze-ingot.png"),
     // ---- animal-husbandry: a pen's pieces (fences and gates stand on hex
     // edges as `fence` records, not as blocks) and what kept animals give.
-    row("fence", "fence", 64, "items/goods/fence.png"),
-    row("gate", "gate", 64, "items/goods/gate.png"),
-    row("egg", "egg", 32, "items/goods/egg.png"),
-    row("wool", "wool", 32, "items/goods/wool.png"),
-    row("milk", "pail of milk", 16, "items/goods/milk.png"),
+    row("fence", 64, "items/goods/fence.png"),
+    row("gate", 64, "items/goods/gate.png"),
+    row("egg", 32, "items/goods/egg.png"),
+    row("wool", 32, "items/goods/wool.png"),
+    row("milk", 16, "items/goods/milk.png"),
     // ---- tool-crafting: tier 0 by hand (M3 section 2) and what the hands
     // work it into. Named by code, never by index (`Good::FIBRE` and the
     // rest are found by code at compile time), so other branches' rows can
     // land above or below these in either order.
-    row("fibre", "plant fiber", 99, "items/goods/fibre.png"),
-    row("stone", "loose stone", 99, "items/goods/stone.png"),
-    row("log", "log", 99, "items/goods/log.png"),
-    row("planks", "planks", 99, "items/goods/planks.png"),
-    row("rope", "rope", 99, "items/goods/rope.png"),
+    row("fibre", 99, "items/goods/fibre.png"),
+    row("stone", 99, "items/goods/stone.png"),
+    row("log", 99, "items/goods/log.png"),
+    row("planks", 99, "items/goods/planks.png"),
+    row("rope", 99, "items/goods/rope.png"),
     // ---- Append new goods here (food, feed ...).
     // cooking (`cooking` design S1): the campfire's dishes. Saved by code.
-    row(
-        "grilled-fish",
-        "grilled fish",
-        16,
-        "items/goods/grilled-fish.png",
-    ),
-    row("chili-fish", "chili fish", 16, "items/goods/chili-fish.png"),
-    row("flatbread", "flatbread", 32, "items/goods/flatbread.png"),
-    row(
-        "roast-turnip",
-        "roast turnip",
-        32,
-        "items/goods/roast-turnip.png",
-    ),
-    row(
-        "kale-skewer",
-        "kale skewer",
-        16,
-        "items/goods/kale-skewer.png",
-    ),
-    row("fried-egg", "fried egg", 16, "items/goods/fried-egg.png"),
-    row("roast-meat", "roast meat", 16, "items/goods/roast-meat.png"),
+    row("grilled-fish", 16, "items/goods/grilled-fish.png"),
+    row("chili-fish", 16, "items/goods/chili-fish.png"),
+    row("flatbread", 32, "items/goods/flatbread.png"),
+    row("roast-turnip", 32, "items/goods/roast-turnip.png"),
+    row("kale-skewer", 16, "items/goods/kale-skewer.png"),
+    row("fried-egg", 16, "items/goods/fried-egg.png"),
+    row("roast-meat", 16, "items/goods/roast-meat.png"),
     // ---- water-flow E11: the wooden bucket, empty and full.
-    row("bucket", "wooden bucket", 4, "items/goods/bucket.png"),
-    row(
-        "water-bucket",
-        "bucket of water",
-        1,
-        "items/goods/water-bucket.png",
-    ),
+    row("bucket", 4, "items/goods/bucket.png"),
+    row("water-bucket", 1, "items/goods/water-bucket.png"),
     // ---- animal-husbandry design 13: a hen's egg with a cockerel in her
     // pen (its parentage rides in a `brood` record), and the incubator piece.
-    row(
-        "fertile-egg",
-        "fertile egg",
-        32,
-        "items/goods/fertile-egg.png",
-    ),
-    row("incubator", "incubator", 8, "items/goods/incubator.png"),
+    row("fertile-egg", 32, "items/goods/fertile-egg.png"),
+    row("incubator", 8, "items/goods/incubator.png"),
     // ---- flora-v2 design 12.5: the trees' fruit, picked by hand, in
     // `pbd_core::flora::FRUIT_KINDS` order.
-    row("apple", "apple", 32, "items/goods/apple.png"),
-    row("pear", "pear", 32, "items/goods/pear.png"),
-    row("plum", "plum", 32, "items/goods/plum.png"),
-    row("cherry", "cherry", 32, "items/goods/cherry.png"),
-    row("mango", "mango", 32, "items/goods/mango.png"),
-    row("papaya", "papaya", 32, "items/goods/papaya.png"),
-    row("marula", "marula", 32, "items/goods/marula.png"),
-    row("baobab", "baobab fruit", 32, "items/goods/baobab.png"),
-    row("pine-cone", "pine cone", 32, "items/goods/pine-cone.png"),
+    row("apple", 32, "items/goods/apple.png"),
+    row("pear", 32, "items/goods/pear.png"),
+    row("plum", 32, "items/goods/plum.png"),
+    row("cherry", 32, "items/goods/cherry.png"),
+    row("mango", 32, "items/goods/mango.png"),
+    row("papaya", 32, "items/goods/papaya.png"),
+    row("marula", 32, "items/goods/marula.png"),
+    row("baobab", 32, "items/goods/baobab.png"),
+    row("pine-cone", 32, "items/goods/pine-cone.png"),
     // ---- starter-missions G1: worms dug from wet ground at the shore, put
     // on the hook when a cast is made with them in the pack.
-    row("bait", "bait worms", 99, "items/goods/bait.png"),
+    row("bait", 99, "items/goods/bait.png"),
     // ---- small-boats design 3: a made boat, carried until it is launched.
-    row("inner-tube", "inner tube", 1, "items/goods/inner-tube.png"),
-    row("raft", "raft", 1, "items/goods/raft.png"),
-    row("rowboat", "rowboat", 1, "items/goods/rowboat.png"),
+    row("inner-tube", 1, "items/goods/inner-tube.png"),
+    row("raft", 1, "items/goods/raft.png"),
+    row("rowboat", 1, "items/goods/rowboat.png"),
     // ---- glowing-mushrooms design 3: the glowing plant the meadows grow,
     // picked with F and eaten for the body glow.
-    row(
-        "glowing-mushroom",
-        "glowing mushroom",
-        32,
-        "items/goods/glowing-mushroom.png",
-    ),
+    row("glowing-mushroom", 32, "items/goods/glowing-mushroom.png"),
     // ---- small-boats design 2e: a cow's hide, tanned; what an inner tube is
     // made of (owner, 2026-11-18: "tubes: would probably need just leather",
     // "cows and horses should").
-    row("leather", "leather", 32, "items/goods/leather.png"),
+    row("leather", 32, "items/goods/leather.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -246,8 +198,8 @@ impl Good {
         self.row().code
     }
 
-    pub fn name(self) -> &'static str {
-        self.row().name
+    pub fn name(self) -> Localized {
+        self.row().name()
     }
 
     pub fn stack_limit(self) -> u16 {
@@ -266,6 +218,34 @@ impl Good {
 
 #[cfg(test)]
 mod tests {
+    /// Every good, crop and station has its name in the locale file, by
+    /// its code.
+    #[test]
+    fn every_good_crop_and_station_has_its_name() {
+        let english = crate::locale::Locale::english();
+        let keys = super::GOODS
+            .iter()
+            .map(|r| format!("item.{}.name", r.code))
+            .chain(
+                crate::farming::CROPS
+                    .iter()
+                    .map(|r| format!("crop.{}.name", r.code)),
+            )
+            .chain(
+                crate::station::STATIONS
+                    .iter()
+                    .map(|r| format!("station.{}.name", r.code)),
+            )
+            .chain(
+                crate::flora::FRUIT_GOODS
+                    .iter()
+                    .map(|c| format!("item.{c}.many")),
+            );
+        for key in keys {
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
+
     use super::*;
 
     /// Every code is a word the save line can carry (no comma, no space), and

@@ -52,7 +52,6 @@
     recipes: [
         (
             code: "grilled-fish",
-            name: "GRILL FISH",
             station: "campfire",
             secs: 20.0,
             inputs: [("fish", 1)],
@@ -60,7 +59,6 @@
         ),
         (
             code: "chili-fish",
-            name: "CHILI FISH",
             station: "campfire",
             secs: 25.0,
             inputs: [("fish", 1), ("chili", 1)],
@@ -68,7 +66,6 @@
         ),
         (
             code: "flatbread",
-            name: "FLATBREAD",
             station: "campfire",
             secs: 30.0,
             inputs: [("wheat", 3)],
@@ -76,7 +73,6 @@
         ),
         (
             code: "roast-turnip",
-            name: "ROAST TURNIP",
             station: "campfire",
             secs: 20.0,
             inputs: [("turnip", 2)],
@@ -84,7 +80,6 @@
         ),
         (
             code: "kale-skewer",
-            name: "KALE SKEWER",
             station: "campfire",
             secs: 25.0,
             inputs: [("frost-kale", 2), ("turnip", 1)],
@@ -93,7 +88,6 @@
         // The hen's egg (`animal-husbandry`).
         (
             code: "fried-egg",
-            name: "FRIED EGG",
             station: "campfire",
             secs: 15.0,
             inputs: [("egg", 1)],
@@ -102,7 +96,6 @@
         // A fertile egg cooks like an egg (`animal-husbandry` design 13, E3).
         (
             code: "fried-fertile-egg",
-            name: "FRIED EGG",
             station: "campfire",
             secs: 15.0,
             inputs: [("fertile-egg", 1)],
@@ -111,7 +104,6 @@
         // Pending until `animal-husbandry` adds raw meat.
         (
             code: "roast-meat",
-            name: "ROAST MEAT",
             station: "campfire",
             secs: 30.0,
             inputs: [("raw-meat", 1)],
@@ -121,7 +113,6 @@
         // loose stone and logs (`tool-crafting` decision 10).
         (
             code: "campfire",
-            name: "CAMPFIRE",
             station: "hand",
             secs: 3.0,
             inputs: [("stone", 5), ("log", 2)],

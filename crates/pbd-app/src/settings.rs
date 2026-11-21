@@ -14,6 +14,7 @@
 use crate::config::Reflections;
 use crate::controls::KeyBinds;
 use bevy::{
+    anti_alias::smaa::{Smaa, SmaaPreset},
     camera::{ImageRenderTarget, RenderTarget},
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     image::ImageSampler,
@@ -42,8 +43,10 @@ use std::time::{Duration, Instant};
 /// (`controls::KeyBinds::from_names`); version 9 added `reflections`
 /// (`reflection-quality`), which an older file reads as HIGH, the look it
 /// had; version 10 added `shadows` (`shadow-quality`), which an older file
-/// reads as the new default, LOW (owner, 2026-11-17: "reduce to 2? 1024").
-pub const VERSION: u32 = 10;
+/// reads as the new default, LOW (owner, 2026-11-17: "reduce to 2? 1024");
+/// version 11 added `antialiasing` (`smaa-option`), which an older file
+/// reads as off, the look it had.
+pub const VERSION: u32 = 11;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -138,12 +141,12 @@ impl FrameLimit {
         }
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
-            FrameLimit::Off => "OFF",
-            FrameLimit::Fps60 => "60 FPS",
-            FrameLimit::Fps120 => "120 FPS",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            FrameLimit::Off => "menu.frame_limit_value.off",
+            FrameLimit::Fps60 => "menu.frame_limit_value.fps60",
+            FrameLimit::Fps120 => "menu.frame_limit_value.fps120",
+        })
     }
 }
 
@@ -193,6 +196,10 @@ pub struct PlayerSettings {
     /// SHADOW QUALITY (`shadow-quality`): ULTRA is the sun's shadows as
     /// they were before the setting.
     pub shadows: crate::config::ShadowQuality,
+    /// ANTIALIASING (`smaa-option`): SMAA on the finished frame, after the
+    /// water's passes. Off by default (owner, 2026-11-20: "but have it be a
+    /// toggle").
+    pub antialiasing: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -211,6 +218,7 @@ impl Default for PlayerSettings {
             flow_arrows: false,
             reflections: Reflections::High,
             shadows: crate::config::ShadowQuality::Low,
+            antialiasing: false,
         }
     }
 }
@@ -238,6 +246,7 @@ impl PlayerSettings {
         flow_arrows: false,
         reflections: Reflections::High,
         shadows: crate::config::ShadowQuality::Ultra,
+        antialiasing: false,
     };
 }
 
@@ -258,6 +267,7 @@ struct File {
     flow_arrows: bool,
     reflections: Reflections,
     shadows: crate::config::ShadowQuality,
+    antialiasing: bool,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -277,6 +287,7 @@ impl Default for File {
             flow_arrows: base.flow_arrows,
             reflections: base.reflections,
             shadows: base.shadows,
+            antialiasing: base.antialiasing,
             keys: BTreeMap::new(),
         }
     }
@@ -321,6 +332,7 @@ impl PlayerSettings {
             flow_arrows: file.flow_arrows,
             reflections: file.reflections,
             shadows: file.shadows,
+            antialiasing: file.antialiasing,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -344,6 +356,7 @@ impl PlayerSettings {
                 flow_arrows: self.flow_arrows,
                 reflections: self.reflections,
                 shadows: self.shadows,
+                antialiasing: self.antialiasing,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -391,13 +404,15 @@ impl PlayerSettings {
             flow_arrows: self.flow_arrows,
             reflections: overrides.reflections.unwrap_or(self.reflections),
             shadows: overrides.shadows.unwrap_or(self.shadows),
+            antialiasing: overrides.antialiasing.unwrap_or(self.antialiasing),
         }
     }
 }
 
 /// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`,
 /// `--rain-shadows on|off`, `--grass tufts|blades`,
-/// `--reflections off|low|medium|high`.
+/// `--reflections off|low|medium|high`, `--shadows low|medium|high|ultra`,
+/// `--antialiasing on|off`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub frame_limit: Option<FrameLimit>,
@@ -407,6 +422,7 @@ pub struct Overrides {
     pub pixel_grass: Option<bool>,
     pub reflections: Option<Reflections>,
     pub shadows: Option<crate::config::ShadowQuality>,
+    pub antialiasing: Option<bool>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -756,6 +772,40 @@ pub fn follow_shadows(
     }
 }
 
+/// A 3D camera as ANTIALIASING handles it: its samples and whether it has
+/// SMAA.
+type SmaaCamera = (Entity, Option<&'static Msaa>, Has<Smaa>);
+
+/// ANTIALIASING follows the setting (`smaa-option`): Bevy's SMAA, high
+/// preset, on every 3D view camera. It runs on the finished frame, after the
+/// water's node and the tone grade (`tone::order_smaa`), so nothing that
+/// reads depth sees a smoothed edge. Never on a camera that multisamples
+/// (`PBD_MSAA`): the two are not stacked (design 3).
+///
+/// While the loading screen warms the world it is on whatever the setting,
+/// so its pipelines are made behind the screen and switching it on in play
+/// compiles nothing (design 4); at `READY` it comes off again if the player
+/// has it off. A `--capture` does not warm, and runs as the setting says.
+pub fn follow_antialiasing(
+    mut commands: Commands,
+    settings: Res<PlayerSettings>,
+    warming: Option<Res<crate::loading::Warming>>,
+    cameras: Query<SmaaCamera, With<Camera3d>>,
+) {
+    let prewarm = warming.is_some_and(|w| w.prewarms());
+    for (entity, msaa, has) in &cameras {
+        let single = msaa.is_none_or(|m| *m == Msaa::Off);
+        let want = (settings.antialiasing || prewarm) && single;
+        if want && !has {
+            commands.entity(entity).insert(Smaa {
+                preset: SmaaPreset::High,
+            });
+        } else if !want && has {
+            commands.entity(entity).remove::<Smaa>();
+        }
+    }
+}
+
 /// The flow arrows follow the setting (`water-flow` task 3.4); F5 lays its
 /// own switch over it for the session.
 pub fn follow_flow_arrows(
@@ -794,6 +844,7 @@ impl Plugin for PlayerSettingsPlugin {
                     follow_rain_shadows,
                     follow_reflections,
                     follow_shadows,
+                    follow_antialiasing,
                     follow_flow_arrows,
                 ),
             );
@@ -803,6 +854,9 @@ impl Plugin for PlayerSettingsPlugin {
         }
         if CYCLE_REFLECTIONS.is_some() {
             app.add_systems(Update, cycle_reflections.run_if(crate::loading::ready));
+        }
+        if CYCLE_ANTIALIASING.is_some() {
+            app.add_systems(Update, cycle_antialiasing.run_if(crate::loading::ready));
         }
     }
 }
@@ -832,6 +886,32 @@ fn cycle_reflections(mut settings: ResMut<PlayerSettings>, mut frames: Local<u32
             .unwrap_or(0);
         settings.reflections = all[(at + 1) % all.len()];
         info!("REFLECTIONS_SWITCHED {}", settings.reflections.label());
+    }
+}
+
+/// `PBD_CYCLE_ANTIALIASING=<frames>`: a check, not a setting (`smaa-option`
+/// 1.4), as `PBD_CYCLE_REFLECTIONS` is. Once the loading screen has lifted,
+/// ANTIALIASING flips every that many frames, through the player's setting
+/// as a press on its row does, so a run's log shows whether switching it on
+/// in play compiles a pipeline late (`LATE_PIPELINE`).
+static CYCLE_ANTIALIASING: std::sync::LazyLock<Option<u32>> = std::sync::LazyLock::new(|| {
+    std::env::var("PBD_CYCLE_ANTIALIASING")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|n| *n > 0)
+});
+
+fn cycle_antialiasing(mut settings: ResMut<PlayerSettings>, mut frames: Local<u32>) {
+    let Some(every) = *CYCLE_ANTIALIASING else {
+        return;
+    };
+    *frames += 1;
+    if (*frames).is_multiple_of(every) {
+        settings.antialiasing = !settings.antialiasing;
+        info!(
+            "ANTIALIASING_SWITCHED {}",
+            if settings.antialiasing { "on" } else { "off" }
+        );
     }
 }
 
@@ -890,6 +970,8 @@ mod tests {
                 // Version 9's: HIGH, the look it had.
                 reflections: Reflections::High,
                 shadows: crate::config::ShadowQuality::Low,
+                // Version 11's: off, the look it had.
+                antialiasing: false,
             }
         );
         assert!(
@@ -969,6 +1051,53 @@ mod tests {
         assert_eq!(PlayerSettings::ISOLATED.reflections, Reflections::High);
     }
 
+    /// `smaa-option`: a version-10 file (the last before ANTIALIASING)
+    /// reads it off, the look it had, and keeps every field it has; it takes
+    /// the field on its next write, at version 11. Both states round-trip,
+    /// and `--antialiasing` lays over the file.
+    #[test]
+    fn a_file_from_before_antialiasing_reads_it_off_and_keeps_the_rest() {
+        use crate::config::ShadowQuality;
+        let old = "(version: 10, frame_limit: Fps120, render_scale: 67, auto_step: true, \
+                   rain_shadows: true, mission_line: false, volumes: (master: 40), \
+                   pixel_grass: false, flow_arrows: true, reflections: Medium, \
+                   shadows: High)";
+        let (read, _, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 10);
+        assert!(!read.antialiasing);
+        assert_eq!(
+            (read.frame_limit, read.render_scale, read.volumes.master),
+            (FrameLimit::Fps120, 67, 40)
+        );
+        assert!(read.auto_step && read.rain_shadows && !read.mission_line);
+        assert!(!read.pixel_grass && read.flow_arrows);
+        assert_eq!(
+            (read.reflections, read.shadows),
+            (Reflections::Medium, ShadowQuality::High)
+        );
+        assert!(Loaded::Read(10).writable());
+        let text = read.to_text(&KeyBinds::default());
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
+        assert!(text.contains("antialiasing: false"), "{text}");
+        for on in [false, true] {
+            let chosen = PlayerSettings {
+                antialiasing: on,
+                ..read
+            };
+            let (back, _, _) =
+                PlayerSettings::parse(&chosen.to_text(&KeyBinds::default())).unwrap();
+            assert_eq!(back, chosen);
+        }
+        let flagged = read.with(&Overrides {
+            antialiasing: Some(true),
+            ..default()
+        });
+        assert!(flagged.antialiasing);
+        assert!(!PlayerSettings::default().antialiasing);
+        let isolated = PlayerSettings::ISOLATED;
+        assert!(!isolated.antialiasing);
+    }
+
     #[test]
     fn settings_round_trip_through_the_file() {
         let path = scratch("round-trip");
@@ -986,6 +1115,7 @@ mod tests {
             flow_arrows: true,
             reflections: Reflections::Medium,
             shadows: crate::config::ShadowQuality::Low,
+            antialiasing: true,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -1270,6 +1400,7 @@ mod tests {
             flow_arrows: false,
             reflections: Reflections::High,
             shadows: crate::config::ShadowQuality::Low,
+            antialiasing: false,
         };
         let flags = Overrides {
             render_scale: Some(100),
@@ -1307,6 +1438,34 @@ mod tests {
         }
         // Over two seconds, 120 frames: the mean is the cap.
         assert_eq!(end - t0, p * 120);
+    }
+
+    /// `smaa-option` 1.2: the 3D cameras take SMAA (high) when the setting
+    /// is on and give it up when it is off; a camera that multisamples never
+    /// takes it, so the two are not stacked.
+    #[test]
+    fn the_cameras_follow_antialiasing_and_never_stack_it_with_msaa() {
+        let mut app = App::new();
+        app.insert_resource(PlayerSettings {
+            antialiasing: true,
+            ..PlayerSettings::ISOLATED
+        })
+        .add_systems(Update, follow_antialiasing);
+        let single = app.world_mut().spawn((Camera3d::default(), Msaa::Off)).id();
+        let sampled = app
+            .world_mut()
+            .spawn((Camera3d::default(), Msaa::Sample4))
+            .id();
+        let smaa = |app: &App, entity| app.world().get::<Smaa>(entity).map(|s| s.preset);
+        app.update();
+        assert!(smaa(&app, single) == Some(SmaaPreset::High));
+        assert!(smaa(&app, sampled).is_none(), "never with multisampling");
+        app.world_mut()
+            .resource_mut::<PlayerSettings>()
+            .antialiasing = false;
+        app.update();
+        assert!(smaa(&app, single).is_none());
+        assert!(smaa(&app, sampled).is_none());
     }
 
     #[test]

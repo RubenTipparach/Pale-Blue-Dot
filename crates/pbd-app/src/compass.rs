@@ -9,6 +9,7 @@
 
 use bevy::prelude::*;
 use pbd_core::geo;
+use pbd_core::locale::{Localized, tr, tr_with};
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 /// How far either side of the heading the bar reaches, radians: half the
@@ -35,10 +36,26 @@ pub const FADE_TO_M: f32 = 3000.0;
 
 /// The 24 marks round the horizon, 15 degrees apart from north: the letters
 /// where there is one, a tick where there is not.
+/// Each is an id; a letter's words are `compass.dir.<id>` ([`direction_label`]).
 pub const DIRECTIONS: [&str; 24] = [
-    "N", "", "", "NE", "", "", "E", "", "", "SE", "", "", "S", "", "", "SW", "", "", "W", "", "",
-    "NW", "", "",
+    "n", "", "", "ne", "", "", "e", "", "", "se", "", "", "s", "", "", "sw", "", "", "w", "", "",
+    "nw", "", "",
 ];
+
+/// What the mark at `DIRECTIONS[i]` prints: its letters, or nothing for a tick.
+pub fn direction_label(i: usize) -> Localized {
+    match DIRECTIONS[i] {
+        "" => Localized::empty(),
+        "n" => tr("compass.dir.n"),
+        "ne" => tr("compass.dir.ne"),
+        "e" => tr("compass.dir.e"),
+        "se" => tr("compass.dir.se"),
+        "s" => tr("compass.dir.s"),
+        "sw" => tr("compass.dir.sw"),
+        "w" => tr("compass.dir.w"),
+        _ => tr("compass.dir.nw"),
+    }
+}
 
 /// What a mark is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -223,8 +240,11 @@ pub fn named_ahead(heading: f32, waypoints: &[Place], places: &[Place]) -> Optio
 }
 
 /// The line naming something on the bar: its name and how far it is.
-pub fn name_line(name: &str, distance_m: f32) -> String {
-    format!("{name} {}", distance_text(distance_m))
+pub fn name_line(name: &str, distance_m: f32) -> Localized {
+    tr_with(
+        "compass.name_line",
+        &[("name", &name), ("distance", &distance_text(distance_m))],
+    )
 }
 
 /// What the bar reads off the view each frame: where the active camera is
@@ -280,11 +300,13 @@ pub fn altitude_fade(height_m: f32) -> f32 {
 }
 
 /// A distance as the name line says it: metres near, kilometres far.
-pub fn distance_text(metres: f32) -> String {
+pub fn distance_text(metres: f32) -> Localized {
     if metres < 1000.0 {
-        format!("{:.0} m", (metres / 10.0).round() * 10.0)
+        let m = format!("{:.0}", (metres / 10.0).round() * 10.0);
+        tr_with("compass.metres", &[("distance", &m)])
     } else {
-        format!("{:.1} km", metres / 1000.0)
+        let km = format!("{:.1}", metres / 1000.0);
+        tr_with("compass.kilometres", &[("distance", &km)])
     }
 }
 
@@ -325,7 +347,7 @@ mod tests {
             let heading = view_heading(up, forward, up).expect("a view");
             seen.push(middle(heading));
         }
-        assert_eq!(seen, ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"]);
+        assert_eq!(seen, ["n", "ne", "e", "se", "s", "sw", "w", "nw", "n"]);
     }
 
     /// Pitching from level to straight down or up without turning keeps the
@@ -447,9 +469,9 @@ mod tests {
     #[test]
     fn the_ends_and_the_heights_fade() {
         let all = marks(0.0, &[]);
-        let north = all.iter().find(|m| m.label == "N").expect("N");
+        let north = all.iter().find(|m| m.label == "n").expect("N");
         assert_eq!((north.offset, north.fade), (0.0, 1.0));
-        let east = all.iter().find(|m| m.label == "E").expect("E at the end");
+        let east = all.iter().find(|m| m.label == "e").expect("E at the end");
         assert!((east.offset - 1.0).abs() < 1e-5 && east.fade < 1e-3);
         assert!(all.iter().all(|m| m.label != "S"), "S is behind");
         assert_eq!(altitude_fade(500.0), 1.0);

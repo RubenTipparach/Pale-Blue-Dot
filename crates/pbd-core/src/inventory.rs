@@ -7,6 +7,7 @@
 //! the app's business; deciding what is in it is not.
 
 use crate::goods::Good;
+use crate::locale::{Localized, tr};
 use crate::terrain::Material;
 
 /// How many hotbar slots the player carries. Ten, selected with the number
@@ -65,13 +66,18 @@ impl Tool {
             .expect("every tool is in ALL")
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Tool::Rod => "Fishing rod",
-            Tool::Shovel => "Shovel",
-            Tool::Pickaxe => "Pickaxe",
-            Tool::Axe => "Axe",
-        }
+    pub fn name(self) -> Localized {
+        tr(match self {
+            Tool::Rod => "tool.rod.name",
+            Tool::Shovel => "tool.shovel.name",
+            Tool::Pickaxe => "tool.pickaxe.name",
+            Tool::Axe => "tool.axe.name",
+        })
+    }
+
+    /// Its name in capitals: `tool.<code>.caps`.
+    pub fn caps(self) -> Localized {
+        tr(&format!("tool.{}.caps", self.code()))
     }
 
     /// Its code in a recipe's `tool:<tier>-<code>` (`tool-crafting`).
@@ -85,13 +91,13 @@ impl Tool {
     }
 
     /// What it is for, in the picker's second line.
-    pub fn purpose(self) -> &'static str {
-        match self {
-            Tool::Rod => "cast, hook, reel",
-            Tool::Shovel => "digs soil, sand, snow",
-            Tool::Pickaxe => "breaks stone, rock, ore",
-            Tool::Axe => "chops wood; fair on turf",
-        }
+    pub fn purpose(self) -> Localized {
+        tr(match self {
+            Tool::Rod => "tool.rod.purpose",
+            Tool::Shovel => "tool.shovel.purpose",
+            Tool::Pickaxe => "tool.pickaxe.purpose",
+            Tool::Axe => "tool.axe.purpose",
+        })
     }
 
     /// Whether the tool breaks blocks at all. A rod does not: a player
@@ -125,13 +131,13 @@ impl Tier {
     }
 
     /// The word in front of a tool's name: "Stone", "Iron".
-    pub fn name(self) -> &'static str {
-        match self {
-            Tier::Stone => "Stone",
-            Tier::Bronze => "Bronze",
-            Tier::Iron => "Iron",
-            Tier::Steel => "Steel",
-        }
+    pub fn name(self) -> Localized {
+        tr(match self {
+            Tier::Stone => "tier.stone.name",
+            Tier::Bronze => "tier.bronze.name",
+            Tier::Iron => "tier.iron.name",
+            Tier::Steel => "tier.steel.name",
+        })
     }
 
     /// Its code in a recipe's `tool:<tier>-<tool>`.
@@ -153,10 +159,18 @@ impl Tier {
 
 /// A tool as the player holds it: its name, with its tier in front for
 /// everything but the rod ("Stone" is never said of a rod).
-pub fn tool_title(tool: Tool, tier: Tier) -> String {
+pub fn tool_title(tool: Tool, tier: Tier) -> Localized {
     match tool {
-        Tool::Rod => tool.name().to_string(),
-        _ => format!("{} {}", tier.name(), tool.name().to_lowercase()),
+        Tool::Rod => tool.name(),
+        _ => tr(&format!("tool.{}.tiered.{}", tool.code(), tier.code())),
+    }
+}
+
+/// [`tool_title`] in capitals, as a picker's name line shows it.
+pub fn tool_title_caps(tool: Tool, tier: Tier) -> Localized {
+    match tool {
+        Tool::Rod => tool.caps(),
+        _ => tr(&format!("tool.{}.tiered_caps.{}", tool.code(), tier.code())),
     }
 }
 
@@ -321,49 +335,60 @@ impl Item {
     /// A short name, for a tooltip or a log. NOT for the slot itself: a slot
     /// draws the item's thumbnail, because an inventory drawn as a list of
     /// names is the failure the UI rule exists to prevent.
-    pub fn name(self) -> &'static str {
+    pub fn name(self) -> Localized {
         match self {
             Item::Block(material) => material_name(material),
             Item::Tool(tool) => tool.name(),
             // The species' own name is the roster's; the item alone only
             // knows it is a fish.
-            Item::Fish(_) => "fish",
+            Item::Fish(_) => tr("inventory.fish"),
             Item::Good(good) => good.name(),
         }
     }
 }
 
-pub fn material_name(material: Material) -> &'static str {
+pub fn material_name(material: Material) -> Localized {
+    tr(material_key(material))
+}
+
+/// A block's stable name in data (`block:<name>` in missions and recipes):
+/// its English name, whatever the player's language ("dry grass").
+pub fn material_id(material: Material) -> String {
+    crate::locale::english(material_key(material))
+}
+
+/// A block's name's key in the locale file: `block.<id>.name`.
+fn material_key(material: Material) -> &'static str {
     match material {
-        Material::Air => "air",
-        Material::Stone => "stone",
-        Material::Soil => "soil",
-        Material::Grass => "grass",
-        Material::Water => "water",
-        Material::Ore => "ore",
-        Material::Sand => "sand",
-        Material::DryGrass => "dry grass",
-        Material::JungleGrass => "jungle grass",
-        Material::Snow => "snow",
-        Material::Rock => "rock",
-        Material::Dirt => "dirt",
-        Material::Torch => "torch",
-        Material::LanternPost => "street lantern",
-        Material::LanternWall => "wall lantern",
-        Material::LanternHanging => "hanging lantern",
-        Material::Brazier => "brazier",
-        Material::Candle => "candle",
-        Material::Tilled => "tilled soil",
-        Material::Forge => "forge",
-        Material::Workbench => "workbench",
-        Material::Campfire => "campfire",
-        Material::ReefRock => "reef rock",
-        Material::SeaIce => "sea ice",
-        Material::Basalt => "basalt",
-        Material::MusselBed => "mussel bed",
-        Material::Sticks => "sticks",
-        Material::DesertSand => "desert sand",
-        crate::flowing_water!() => "water",
+        Material::Air => "block.air.name",
+        Material::Stone => "block.stone.name",
+        Material::Soil => "block.soil.name",
+        Material::Grass => "block.grass.name",
+        Material::Water => "block.water.name",
+        Material::Ore => "block.ore.name",
+        Material::Sand => "block.sand.name",
+        Material::DryGrass => "block.dry_grass.name",
+        Material::JungleGrass => "block.jungle_grass.name",
+        Material::Snow => "block.snow.name",
+        Material::Rock => "block.rock.name",
+        Material::Dirt => "block.dirt.name",
+        Material::Torch => "block.torch.name",
+        Material::LanternPost => "block.lantern_post.name",
+        Material::LanternWall => "block.lantern_wall.name",
+        Material::LanternHanging => "block.lantern_hanging.name",
+        Material::Brazier => "block.brazier.name",
+        Material::Candle => "block.candle.name",
+        Material::Tilled => "block.tilled.name",
+        Material::Forge => "block.forge.name",
+        Material::Workbench => "block.workbench.name",
+        Material::Campfire => "block.campfire.name",
+        Material::ReefRock => "block.reef_rock.name",
+        Material::SeaIce => "block.sea_ice.name",
+        Material::Basalt => "block.basalt.name",
+        Material::MusselBed => "block.mussel_bed.name",
+        Material::Sticks => "block.sticks.name",
+        Material::DesertSand => "block.desert_sand.name",
+        crate::flowing_water!() => "block.flowing_water.name",
     }
 }
 
@@ -667,6 +692,25 @@ impl Slots {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tool's names, and every tiered one's, are in the locale file.
+    #[test]
+    fn every_tool_has_its_names() {
+        let english = crate::locale::Locale::english();
+        for tool in Tool::ALL {
+            let key = format!("tool.{}.caps", tool.code());
+            assert!(english.get(&key).is_some(), "{key}");
+            if tool == Tool::Rod {
+                continue;
+            }
+            for tier in Tier::ALL {
+                for kind in ["tiered", "tiered_caps"] {
+                    let key = format!("tool.{}.{kind}.{}", tool.code(), tier.code());
+                    assert!(english.get(&key).is_some(), "{key}");
+                }
+            }
+        }
+    }
 
     /// A restore puts a stack back exactly, which is the one thing `give`
     /// deliberately cannot do: it merges and spills, because that is what
