@@ -230,7 +230,10 @@ fn log_road(road: &Road) {
                 along = -along;
             }
             let (north, east) = pbd_core::geo::north_east(c);
-            let yaw = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
+            // `--yaw` turns from the walker's default heading, which faces the
+            // other way from this bearing (measured on the capture: 0 faced west).
+            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
+            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
             let (lat, lon) = pbd_core::geo::lat_lon(c).degrees();
             Some([lat, lon, yaw])
         };
