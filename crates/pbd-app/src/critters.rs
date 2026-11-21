@@ -564,7 +564,13 @@ fn draw(
         Option<Res<crate::config::WaterSettings>>,
     ),
     time: Res<Time>,
-    cameras: Query<&GlobalTransform, With<Camera3d>>,
+    cameras: Query<
+        (&Camera, &GlobalTransform),
+        Or<(
+            With<crate::walking::WalkingCamera>,
+            With<crate::vehicles::VehicleCamera>,
+        )>,
+    >,
     mut transforms: Query<&mut Transform>,
     mut visibility: Query<&mut Visibility>,
     mut faded: Query<&mut Faded>,
@@ -586,7 +592,13 @@ fn draw(
     let dt = time.delta_secs().min(0.1);
     let roster = fauna.0.roster(&body.0);
     let o = crate::sim_origin::from_render_frame(&frame);
-    let Some(eye) = cameras.iter().next() else {
+    // Nearness is the eye's: the walking camera, or a craft's when it is the
+    // one drawing (never a reflection's or the map's).
+    let Some((_, eye)) = cameras
+        .iter()
+        .filter(|(c, _)| c.is_active)
+        .max_by_key(|(c, _)| c.order)
+    else {
         return;
     };
     let eye = o
