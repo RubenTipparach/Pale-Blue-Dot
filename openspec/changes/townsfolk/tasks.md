@@ -26,25 +26,29 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 ## 5. Coins (added 2026-11-21: "doing missions and rtrading should get you money, so we need currency")
 
-- [ ] 5.1 The purse record (`purse`, schema 1) and the one function that changes it, with its reason, refusing a spend it cannot cover (design 5). Verify: `pbd-core` tests that a spend past the purse is refused, that the count survives a save and load, and that every reason is logged.
+- [x] 5.1 The purse record (`purse`, schema 1) and the one function that changes it, with its reason, refusing a spend it cannot cover (design 5). Verify: `pbd-core` tests that a spend past the purse is refused, that the count survives a save and load, and that every reason is logged. Built 2026-11-21: `pbd_core::economy::coins` (`Purse::change`), stored by `pbd_app::economy`; tests in `pbd_core::economy::tests` (refusal, save and load, every reason logged, a full pack). In `openspec/specs/player/coins`.
 - [ ] 5.2 The coin count beside the hotbar, its icon and its words from `locale_en.yaml`. Verify: a capture with coins in the purse.
-- [ ] 5.3 Values for every good, block, fish and dish in `assets/config/values.ron`, append-only (design 6). Verify: a test that every item the game knows has a value, and that the file only grows.
+- [x] 5.3 Values for every good, block, fish and dish in `assets/config/values.ron`, append-only (design 6). Verify: a test that every item the game knows has a value, and that the file only grows. Built 2026-11-21: `assets/config/values.ron` (`(code, coins, group)`, 101 rows), `pbd_core::economy::values`; tests that every good, block, tool and fish has a row and that every shipped row stays in order.
 
 ## 6. Trade
 
 - [ ] 6.1 The trade panel in M5 brought up to the game's stone-and-wood UI, by day and at night; the owner approves it for the game. Verify: on the tracker.
-- [ ] 6.2 Each town's trader, its prices from value times need, the 40% spread, stock and the day's drift (design 6, 7), in `pbd-core`. Verify: tests that a harbour sells fish below a mountain town, that selling back what you bought loses coins, that ten sales move the price, and that a day brings it back.
+- [x] 6.2 Each town's trader, its prices from value times need, the 40% spread, stock and the day's drift (design 6, 7), in `pbd-core`. Verify: tests that a harbour sells fish below a mountain town, that selling back what you bought loses coins, that ten sales move the price, and that a day brings it back. Built 2026-11-21: `pbd_core::economy::trade` and `assets/config/trade.ron`; tests in `pbd_core::economy::tests`. In `openspec/specs/world/trade`.
 - [ ] 6.3 The trade panel in the game, opened by talking to the trader. Verify: a bot buys a loaf and sells three fish, and the purse and the pack agree.
+  - 2026-11-21: the panel is built (`desktop/talk.rs`, TRADE from the talk) and the bot test passes at the rules' level (`pbd_app::economy::tests::a_bot_takes_a_job_is_paid_buys_a_loaf_and_sells_three_fish`: purse, pack and save agree). Open until the townsfolk stand in the game to be talked to: a `Talker` on each of agent A's people opens it.
 
 ## 7. Town missions
 
 - [ ] 7.1 M5's job board and talk panel up to date with the job kinds below; the owner approves them for the game. Verify: on the tracker.
-- [ ] 7.2 The new objective kinds (`Deliver`, `Escort`, `Repair`, `Sell`, `Buy`, `Light`, `Clear`) counted by the starter missions' function (design 8). Verify: a test per kind from its `Happened` event.
-- [ ] 7.3 A town's board made from its needs, its trades and the day's seed, three to five jobs, replaced after three days (design 8). Verify: tests that a harbour's board asks for fish, that the same day gives the same board, and that a taken job never expires.
+- [x] 7.2 The new objective kinds (`Deliver`, `Escort`, `Repair`, `Sell`, `Buy`, `Light`, `Clear`) counted by the starter missions' function (design 8). Verify: a test per kind from its `Happened` event. Built 2026-11-21: the kinds in `missions::Kind` (all but `Clear` live; `Clear` waits for roads), each counted from its `Happened` by `Progress::record` (`each_new_objective_kind_counts_from_its_event`).
+- [x] 7.3 A town's board made from its needs, its trades and the day's seed, three to five jobs, replaced after three days (design 8). Verify: tests that a harbour's board asks for fish, that the same day gives the same board, and that a taken job never expires. Built 2026-11-21: `pbd_core::economy::jobs::Board`; tests that a harbour's board asks for fish, the same day gives the same board, three to five jobs, a place replaced within three days, a taken job never expires. In `openspec/specs/world/town-missions`.
 - [ ] 7.4 The jobs: trade, gather or hunt for the town (herd goods until predators), deliver a parcel, cook a dish, fish, mine, tend a herd, bring in a harvest, light the lamps at dusk. Verify: a bot takes and finishes one of each and is paid.
+  - 2026-11-21: every kind is made and counted by the rules (`every_job_kind_is_made_and_finished`); trade, gather, hunt, deliver (with the parcel good), cook, fish, mine, herd and harvest are posted and played in the app test. Lamps, the lost villager and repairs are not posted yet (`jobs.ron`'s `posted`): they wait for the game to raise their events.
 - [ ] 7.5 The lost villager: a record out of town, a map marker, following at your pace, home within the wall (design 9). Verify: an app test that the villager follows, waits at deep water, and counts at the wall.
+  - 2026-11-21: the rule only: `pbd_core::economy::follow` (follows at your pace, stops, waits at deep water, home within the wall), tested. The record and the figure wait for the townsfolk in the game.
 - [ ] 7.6 Repair: world-made broken pieces in town buildings, never on a player's piece, mended by placing the material (design 9). Verify: tests that a player's piece is never broken and that placing the block counts.
-- [ ] 7.7 Goodwill per town: raised by jobs and trade, better prices and more jobs (design 12). Verify: tests of the price at each goodwill step.
+  - 2026-11-21: not built. The world's proposal path (`WorldSave::propose`) already refuses any cell the player touched, which is what keeps a repair off the player's pieces.
+- [x] 7.7 Goodwill per town: raised by jobs and trade, better prices and more jobs (design 12). Verify: tests of the price at each goodwill step. Built 2026-11-21: `pbd_core::economy::goodwill` (2% a step of 20, 10% at most, a fourth and fifth job at steps 2 and 4); `the_price_at_each_goodwill_step`.
 
 ## 8. Roads
 

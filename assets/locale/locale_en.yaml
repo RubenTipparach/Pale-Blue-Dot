@@ -570,6 +570,7 @@ interact:
     shut_door: "Shut {thing}"
     take_incubator: "Take {thing}"
     take_up: "Take up {thing}"
+    talk: "Talk to {thing}"
     till: "Till {thing}"
   key: F
 inventory:
@@ -645,6 +646,8 @@ item:
   papaya:
     many: papayas
     name: papaya
+  parcel:
+    name: parcel
   pear:
     many: pears
     name: pear
@@ -682,6 +685,34 @@ item:
     name: wheat seed
   wool:
     name: wool
+jobs:
+  done_notice: Job done
+  hand_in: HAND IN
+  kind:
+    cook: "Cook {count} {thing}  {have}/{count}"
+    deliver: "Take a parcel to {town}  {have}/{count}"
+    fish: "Catch {count} fish  {have}/{count}"
+    gather: "Bring {count} {thing}  {have}/{count}"
+    harvest: "Harvest {count} {thing}  {have}/{count}"
+    herd: "Collect {count} {thing}  {have}/{count}"
+    hunt: "Bring {count} {thing}  {have}/{count}"
+    lamps: "Light {count} lamps at dusk  {have}/{count}"
+    lost: "Bring a lost villager home  {have}/{count}"
+    mine: "Dig {count} {thing}  {have}/{count}"
+    repair: "Mend a broken wall  {have}/{count}"
+    trade: "Sell {count} goods here  {have}/{count}"
+  no_parcel: No parcel for this town
+  none: No work today
+  not_done: Not done yet
+  not_taken: Not taken
+  paid: "Paid {coins} coins"
+  posted: ON THE BOARD
+  take: TAKE
+  taken: Already taken
+  taken_line: Job taken
+  title: JOBS
+  wrong_town: Hand it in where you took it
+  yours: YOUR JOBS
 kitchen:
   ate: "Ate the {dish}: {effect} for {minutes} min"
   cooking: "COOKING {recipe}"
@@ -1340,6 +1371,48 @@ station:
     name: hands
   workbench:
     name: workbench
+talk:
+  back: BACK
+  bye: BYE
+  line:
+    giver: Looking for work?
+    hello: Hello.
+    ready: You're back. Here for your pay?
+    trader: Want to trade?
+  parcel_thanks: Thanks for the parcel.
+  role:
+    boatman: boatman
+    boatwright: boatwright
+    caravan_master: caravan master
+    carter: carter
+    drinker: drinker
+    farmer: farmer
+    fisher: fisher
+    fishwife: fishwife
+    forager: forager
+    guard: guard
+    hunter: hunter
+    innkeeper: innkeeper
+    keeper: keeper
+    lookout: lookout
+    merchant: merchant
+    net_mender: net mender
+    peasant: peasant
+    porter: porter
+    reeve: reeve
+    sailor: sailor
+    smith: smith
+    stallholder: stallholder
+    townsman: townsman
+    townswoman: townswoman
+    trader: trader
+    tree_dweller: tree dweller
+    villager: villager
+    wall_guard: wall guard
+    watcher: watcher
+    water_carrier: water carrier
+  trade: TRADE
+  work: WORK
 tier:
   bronze:
     name: Bronze
@@ -1405,6 +1478,25 @@ tool:
       stone: STONE SHOVEL
 towns:
   door: door
+trade:
+  bought: "Bought for {coins}"
+  buy: BUY
+  buy_one: BUY
+  count: "x{count}"
+  coins: "{coins}"
+  not_held: You have none
+  not_sold: Not for sale
+  not_wanted: Not buying that
+  nothing_to_sell: Nothing they want
+  pack_full: No room in the pack
+  purse: PURSE
+  sell: SELL
+  sell_one: SELL
+  short: Not enough coins
+  sold: "Sold for {coins}"
+  sold_out: Sold out
+  title: TRADE
+  unsaved: Could not save
 vehicle:
   anchor:
     coming_aboard: "Coming aboard"

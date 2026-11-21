@@ -164,6 +164,53 @@ mocked up before code where it has a look: the road surfaces and slopes in a
 new tab of the towns mockup (M15) and the board and trade panel in M5.
 
 
+**12a. As built (2026-11-21, on the owner's "People approved. Build.phase 3").**
+The decisions above, made concrete where they left a choice; each is a
+recommendation taken (ask only with screenshots):
+- **One authority.** `pbd_core::economy` holds every rule: `coins` (the
+  purse and `Purse::change`, the one function, with its reason), `values`
+  (`assets/config/values.ron`, `(code, coins, group)` rows in shipped
+  order), `trade` (`assets/config/trade.ron`: the need table by town kind
+  and group, the 0.6 share, the 2% step within 0.5 to 2.0 of rest, a day to
+  rest), `goodwill` (in `trade.ron`: +1 a trade, +10 a job, 100 at most,
+  steps of 20, 2% a step, a fourth and fifth job at steps 2 and 4), `jobs`
+  (`assets/config/jobs.ron`: the board and the taken jobs) and `follow` (the
+  lost villager's step). `pbd-app` only feeds them and stores the records.
+- **Item codes.** A good by its code, `block:<name>`, `tool:<code>`, and a
+  fish as `fish:<species id>` (a fish in the pack is its roster index).
+  Coins are whole: a trader's asking price rounds up, its paying price down,
+  and the paying price is always at least a coin under the asking one, so
+  buying and selling back always loses. A town sells the groups it makes
+  (need 0.8 or less) and bread everywhere; it buys every valued good but a
+  delivery's parcel, wanting twelve of each at size 1 (a walled town is
+  size 2, a harbour 1.5), and stocks eight of what it sells.
+- **The town jobs' things are scoped.** A job's objective names
+  `<site>:<thing>` where only that town's counts (a sale to its trader, a
+  parcel handed to its people); `Want::Prefix` (`<site>:*`) lets "sell six
+  goods here" count anything sold there. The new kinds join
+  `missions::Kind` and are counted by `Progress::record`, the starter
+  missions' own function: the taken jobs are a chain of their own and keep
+  their counts in a `Progress` inside the `town_jobs` record.
+- **The board.** Each place on it keeps its job for three days, the places
+  changing on staggered days; the first place is the town's own trade (a
+  harbour fishes, a mountain town mines, a village harvests). A job's id is
+  a hash of the world's seed, the town, the place and the period.
+- **Talking is the interact key (F)**, the key every door and station uses
+  in the game today (`interact.rs`), not M5's E, which predates it. Talking
+  to anyone in a town hands over a parcel owed there. A town's trader and job
+  giver are its people's roles, first match in `jobs.ron`'s
+  `trader_roles` and `giver_roles`; a town with none of them trades and
+  gives jobs through its first person, so every town has both.
+- **The lines a deal writes.** A trade writes the market and goodwill, then
+  the purse with the slots in one `with` line; handing in writes the purse,
+  the goodwill and the jobs, in that order. A torn write costs only the last
+  line (`saves::format`): a price moved with nothing bought, or a job to hand
+  in again, never coins or goods lost.
+- **Lamps, lost villagers and repairs** are made and counted by the rules
+  (`JobKind`, `follow`) and tested there; a board posts them only once the
+  game raises their events (`jobs.ron`'s `posted`), since the lamp's F, the
+  villager's figure and the world's broken piece are not in the game yet.
+
 ## Friendly faces (research, 2026-11-21)
 
 **The owner (2026-11-21):** "Let's start with npcs using existing NPC

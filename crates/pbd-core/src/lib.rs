@@ -13,6 +13,7 @@ pub mod cooking;
 pub mod daylight;
 pub mod dig;
 pub mod drops;
+pub mod economy;
 pub mod edits;
 pub mod farming;
 pub mod fauna;
