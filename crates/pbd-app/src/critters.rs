@@ -58,6 +58,19 @@ fn forced_plan() -> Option<&'static str> {
         .as_deref()
 }
 
+/// `PBD_FORCE_CRITTERS=1`, a test instrument (`loading-screen` 5.7): one
+/// of each animal kept drawn a few metres ahead of the eye, wherever it is,
+/// so a playtest can open and leave worlds with live rigs about. Unset, it
+/// changes nothing a player meets.
+fn force_critters() -> bool {
+    static FORCE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FORCE.get_or_init(|| std::env::var("PBD_FORCE_CRITTERS").is_ok_and(|v| v == "1"))
+}
+
+/// Ahead of the eye where the forced animals stand, m, and their spacing.
+const FORCED_AHEAD_M: f32 = 5.0;
+const FORCED_APART_M: f32 = 2.0;
+
 /// The motion's tunables, from `creature_motion.ron`.
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct CreatureMotionConfig(pub motion::CreatureMotion);
@@ -400,6 +413,8 @@ struct Slot {
     tint: [f32; 4],
     /// A plan to begin with, on its first frame (`PBD_CRITTER_PLAN`).
     plan: Option<&'static str>,
+    /// Kept by `PBD_FORCE_CRITTERS`, with no creature of a school.
+    forced: bool,
 }
 
 /// The drawn animals, and the candidates a frame looks at (kept, so a frame
@@ -604,6 +619,59 @@ fn draw(
     else {
         return;
     };
+    if force_critters() {
+        for (k, animal) in Animal::ALL.into_iter().enumerate() {
+            let ahead = eye.translation()
+                + eye.forward() * FORCED_AHEAD_M
+                + eye.right() * (k as f32 - 1.0) * FORCED_APART_M;
+            let planet = o
+                .to_world(crate::sim_origin::local_from_render(&frame, ahead))
+                .pos;
+            let here = Tangent::at(planet);
+            match drawn
+                .slots
+                .iter_mut()
+                .find(|slot| slot.forced && slot.animal == animal)
+            {
+                // Kept within reach: moved ahead again when left behind.
+                Some(slot) => {
+                    let at = slot.frame.to_planet(slot.actor.pos);
+                    if at.distance(planet) > 25.0 {
+                        slot.frame = here;
+                        slot.actor = Actor::new(animal, Vec3::ZERO, 0.0, k as u32);
+                    }
+                }
+                None => {
+                    let (root, bones, skin, props) = spawn_rig(
+                        &mut commands,
+                        &kit,
+                        &mut materials,
+                        animal,
+                        Transform::default(),
+                        false,
+                        false,
+                    );
+                    info!("critters: a {} forced ahead of the eye", animal.name());
+                    drawn.slots.push(Slot {
+                        animal,
+                        root,
+                        bones,
+                        skin,
+                        stick: props[0],
+                        urchin: props[1],
+                        stone: props[2],
+                        who: None,
+                        actor: Actor::new(animal, Vec3::ZERO, 0.0, k as u32),
+                        frame: here,
+                        shown: 0.0,
+                        tint: [1.0; 4],
+                        plan: None,
+                        forced: true,
+                    });
+                }
+            }
+        }
+    }
     let eye = o
         .to_world(crate::sim_origin::local_from_render(
             &frame,
@@ -663,10 +731,9 @@ fn draw(
         };
         let planet = o.to_world(school.drawn(i, alpha)).pos;
         let frame_here = Tangent::at(planet);
-        let free = drawn
-            .slots
-            .iter()
-            .position(|slot| slot.who.is_none() && slot.animal == animal && slot.shown <= 0.0);
+        let free = drawn.slots.iter().position(|slot| {
+            !slot.forced && slot.who.is_none() && slot.animal == animal && slot.shown <= 0.0
+        });
         let slot = match free {
             Some(f) => f,
             None if drawn.slots.len() < MAX_DRAWN => {
@@ -693,6 +760,7 @@ fn draw(
                     shown: 0.0,
                     tint: [1.0; 4],
                     plan: None,
+                    forced: false,
                 });
                 drawn.slots.len() - 1
             }
@@ -718,13 +786,17 @@ fn draw(
             let i = school.ids.iter().position(|x| *x == id)?;
             Some((school, i))
         });
-        let fade_to = if creature.is_some() { 1.0 } else { 0.0 };
+        let fade_to = if creature.is_some() || slot.forced {
+            1.0
+        } else {
+            0.0
+        };
         slot.shown = if fade_to > slot.shown {
             (slot.shown + dt / FADE_S).min(1.0)
         } else {
             (slot.shown - dt / FADE_S).max(0.0)
         };
-        if slot.shown <= 0.0 && creature.is_none() {
+        if slot.shown <= 0.0 && creature.is_none() && !slot.forced {
             if let Ok(mut v) = visibility.get_mut(slot.root)
                 && *v != Visibility::Hidden
             {
