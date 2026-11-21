@@ -47,6 +47,7 @@ pub mod planet_gen;
 pub mod records;
 pub mod river_cache;
 pub mod rivers;
+pub mod roads;
 pub mod scatter;
 pub mod sea;
 pub mod settlement;
