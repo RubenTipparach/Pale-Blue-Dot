@@ -1,6 +1,6 @@
 # Tasks (phase 3; not started)
 
-- [ ] 1.1 The owner asks for it to start.
+- [x] 1.1 (2026-11-21: "Build.phase 3. Do it in parallel if you can".) The owner asks for it to start.
 - [ ] 2.1 Floating log bodies moved by the flow; resting in still or shallow water; tests.
 - [ ] 2.2 Logs as stored records, saved durably; a reload finds them.
 - [ ] 2.3 Loading and unloading logs on a raft.
