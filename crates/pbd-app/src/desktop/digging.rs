@@ -1864,7 +1864,9 @@ mod bait_tests {
         let dir = |r: usize| Vec3::from_slice(&records[r].direction_height[..3]).normalize();
         let water_top = |r: usize| {
             let column = fine.set.columns.column(r)?;
-            (0..column::LAYERS).rev().find(|&l| column.material(l).is_water())
+            (0..column::LAYERS)
+                .rev()
+                .find(|&l| column.material(l).is_water())
         };
         let wet: Vec<(usize, usize)> = (0..records.len())
             .filter_map(|r| water_top(r).map(|top| (r, top)))

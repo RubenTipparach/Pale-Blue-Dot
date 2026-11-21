@@ -933,6 +933,7 @@ mod tests {
             .insert_resource(PackHand(Some(Held { from: 0, count: 64 })))
             .insert_resource(WorldSave::memory_only())
             .init_resource::<HoldView>()
+            .init_resource::<pbd_app::drops::Toss>()
             .add_systems(Update, (open, press).chain());
         let tap_i = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
