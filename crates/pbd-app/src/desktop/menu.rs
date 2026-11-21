@@ -92,6 +92,8 @@ pub enum MenuAction {
     NewWorld,
     Settings,
     Saves,
+    /// The pause menu's MAIN MENU: the title, as the front door again.
+    MainMenu,
     Quit,
     Back,
     /// Open the slot at this row.
@@ -684,9 +686,36 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
         let aspect = img.width() as f32 / img.height().max(1) as f32;
         (images.add(img), aspect)
     };
+    // The splash: deep space under the logo, opaque, so the title never
+    // shows the world behind it (`title-screen`, "The splash").
+    let splash = {
+        let path = pbd_app::paths::assets_dir().join("ui/splash-space.png");
+        let pixels = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut img = Image::from_dynamic(pixels, true, bevy::asset::RenderAssetUsages::default());
+        img.sampler = bevy::image::ImageSampler::linear();
+        images.add(img)
+    };
     let logo_w = 300.0;
+    // Under every front-door page (the title, its saves page and settings),
+    // over the world and the HUD: `show_splash` shows it.
+    commands.spawn((
+        SplashBackdrop,
+        ImageNode::new(splash),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(0),
+            width: percent(100.0),
+            height: percent(100.0),
+            ..default()
+        },
+        BackgroundColor(Color::BLACK),
+        GlobalZIndex(9),
+        Visibility::Hidden,
+    ));
     commands
         .spawn(timber_layer(Screen::Title))
+        .insert(BackgroundColor(Color::NONE))
         .with_children(|layer| {
             layer
                 // The logo near the top of the screen, the way in centred in
@@ -741,9 +770,41 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
 #[derive(Component)]
 pub struct InPlayHud;
 
-/// Hide the in-play HUD while the title screen is up.
-pub fn hide_hud_on_title(screen: Res<Screen>, mut hud: Query<&mut Visibility, With<InPlayHud>>) {
-    let want = if *screen == Screen::Title {
+/// The splash behind the front door's pages (`title-screen`, "The splash").
+#[derive(Component)]
+pub struct SplashBackdrop;
+
+/// Whether the screen is one of the front door's: the title, or its saves
+/// page or settings while the title is the front door.
+fn on_front_door(screen: Screen, front: FrontDoor) -> bool {
+    screen == Screen::Title || (front.0 && matches!(screen, Screen::Saves | Screen::Settings))
+}
+
+/// Show the splash on the front door's pages and nowhere else.
+pub fn show_splash(
+    screen: Res<Screen>,
+    front: Res<FrontDoor>,
+    mut splash: Query<&mut Visibility, With<SplashBackdrop>>,
+) {
+    let want = if on_front_door(*screen, *front) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in &mut splash {
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+}
+
+/// Hide the in-play HUD while the front door is up.
+pub fn hide_hud_on_title(
+    screen: Res<Screen>,
+    front: Res<FrontDoor>,
+    mut hud: Query<&mut Visibility, With<InPlayHud>>,
+) {
+    let want = if on_front_door(*screen, *front) {
         Visibility::Hidden
     } else {
         Visibility::Inherited
@@ -892,6 +953,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     });
                     button(panel, kit, tr("menu.saves"), MenuAction::Saves);
                     button(panel, kit, tr("menu.settings"), MenuAction::Settings);
+                    button(panel, kit, tr("menu.main_menu"), MenuAction::MainMenu);
                     button(panel, kit, tr("menu.quit"), MenuAction::Quit);
                 });
         });
@@ -1849,6 +1911,12 @@ pub fn press(
             // first run - and is this project's own lesson about two paths to
             // one job, where the one nobody presses is the one that is wrong.
             MenuAction::Saves => *screen = Screen::Saves,
+            // Back to the title as the front door (`title-screen`, "The
+            // splash"). Every change is already saved as it is made.
+            MenuAction::MainMenu => {
+                front.0 = true;
+                *screen = Screen::Title;
+            }
             MenuAction::Back => {
                 let has_world = save.as_ref().is_some_and(|s| s.slot().is_some());
                 *screen = screen.back(front.0, has_world);

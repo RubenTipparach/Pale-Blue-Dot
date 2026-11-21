@@ -175,6 +175,21 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 // The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
 // pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
 const SECTIONS = [
+  { tag: 'W', name: 'Under water',
+    lead: 'From ocean-environments (M25, Seas, Rivers and Marshes, linked below). Two of its three questions are settled (under Already decided); this is the one left. The game already builds the recommendation, provisionally. Shots are the mockup\'s How underwater looks tab, drawn in software (no GPU).',
+    qs: [
+      { id: 'W21', q: 'The sea\'s floor is at most 145 m down, and the world cannot go deeper without breaking saved edits. A real ocean is still sunlit at 145 m. So should the deep zones be fitted to our column (sunlit to 40 m, twilight to 90 m, midnight below, so the floor of a deep trench is dark), or kept at real depths (the whole sea sunlit or twilight, never fully dark)?',
+        options: ['Fit the zones to the column: dark below 90 m', 'Real-ocean depths: never dark, any depth', 'Today\'s old look: one blue tint to the floor'], rec: 0,
+        why: 'It gives the sea a sunlit shelf, a twilight slope and a dark deep you need a lamp for, inside the depth we have; it is two numbers in water.ron if you want it brighter.',
+        change: 'ocean-environments (design 3)', asked: '2026-11-21',
+        link: { url: 'https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1', label: 'Seas, Rivers and Marshes: the How underwater looks tab, drag the depth slider' },
+        images: [
+          { src: 'img/w21-40m.jpg', alt: 'Under water at 40 m, sunlit blue with a reef ledge below', caption: '40 m, fitted: the end of the sunlit zone.' },
+          { src: 'img/w21-90m.jpg', alt: 'Under water at 90 m, nearly dark', caption: '90 m, fitted: twilight turning to midnight.' },
+          { src: 'img/w21-140m.jpg', alt: 'Under water at 140 m, black but for drifting specks', caption: '140 m, fitted: midnight, a lamp needed.' },
+          { src: 'img/w21-140m-today.jpg', alt: 'Under water at 140 m in the old look, an even blue with the floor visible', caption: '140 m in the old look: still blue at the floor.' },
+        ] },
+    ] },
   { tag: 'G', name: 'Glowing mushrooms and carried light',
     lead: 'From glowing-mushrooms (2026-11-19): you asked to pick up the glowing mushrooms the game already grows, eat them to glow, and have any held light light the area around you. Everything else in the write-up is taken as recommended. Mockup shots are drawn in software (no GPU).',
     qs: [
@@ -286,6 +301,8 @@ const SECTIONS = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-21", "id": "M25 Q2", "text": "Animals under and on the water are 3D in the world, not pixel cards; a caught or dropped one is a 2D item picture (answered in chat, 2026-11-15). Built: fish, crabs, turtles, the beavers and otters.", "where": "ocean-environments design 11"},
+  {"date": "2026-11-21", "id": "M25 Q1", "text": "Tides: \"Remove literal tide feature\" (2026-11-19). The 3 m moon tide that was built is taken out; the sea stands at one level and keeps its waves.", "where": "no-tides; ocean-environments task 5.1"},
   {"date": "2026-11-18", "id": "F1", "text": "\"On the dry ground just behind the beach (grass and sand above the high water), in version 11\": beach acacias move off the tide line onto the dry cells behind the beach, in generator version 11 with the swamps; version 10 worlds keep theirs.", "where": "flora-v2 12.13, task 12.13"},
   {"date": "2026-11-14", "id": "G1, W20", "text": "G1 answered in the survey on 2026-11-12: \"Make it a stone stair of 2 to 4 steps\"; then, on 2026-11-14, \"where theres a step on a path there should be staris\", which answers W20 too: every town path that steps up a riser gets a stair: stone street steps and flights in the walled towns and harbours (the north gate's 1 m riser among them), and a timber stair at each end of Marenstrand's sand bank on its pier. Built from the stored town each time it stands, so saved towns gain only their stairs; a riser you have dug or built on is left as it is.", "where": "path-stairs (proposal, design); town-gates task 3.1; pier-landfall task 1.6"},
   {"date": "2026-11-12", "id": "", "taken": true, "text": "Vehicle yards (ask only with screenshots): past the fabricator, an assembly bay hands large items over as crates in the world; a hex printer prints a building from the town's pieces one 1 m layer a pass, each layer saved as an edit by the printer; a tower crane lifts by its load chart (120 t m, 8 t hook) and refuses past it; ocean ships are hex cells in the ship's own flat frame, at least two cells in the beam, floated as seven sub-cells a cell, and a design floats out only when the helm can be walked to; aircraft are built at a hangar on a 1 m grid, mirrored, with a livery of your own (no real insignia); ships and aircraft are stored records that never change shape on their own.", "where": "vehicle-yards design, decisions 2 to 5"},
