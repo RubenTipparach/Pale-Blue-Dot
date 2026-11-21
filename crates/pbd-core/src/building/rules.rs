@@ -421,3 +421,31 @@ fn roof_clear<'a>(
 pub fn of_class(pieces: &[Piece], class: Class) -> impl Iterator<Item = &Piece> {
     pieces.iter().filter(move |p| p.shape.class() == class)
 }
+
+/// `pieces` in an order each can be placed in, among `built` and the ones
+/// before it: pass after pass, each placing what it can, so a floor held up
+/// only by its neighbour goes after that neighbour (a blueprint on uneven
+/// ground). Refused with the rule the first piece left breaks, once a pass
+/// places nothing.
+pub fn placing_order(site: &Site, built: &[Piece], pieces: &[Piece]) -> Result<Vec<Piece>, Rule> {
+    let mut so_far = built.to_vec();
+    let mut left: Vec<Piece> = pieces.to_vec();
+    let mut out = Vec::new();
+    while !left.is_empty() {
+        let before = left.len();
+        let mut still = Vec::new();
+        for piece in left {
+            if can_place(site, &so_far, &piece).is_ok() {
+                so_far.push(piece.clone());
+                out.push(piece);
+            } else {
+                still.push(piece);
+            }
+        }
+        if still.len() == before {
+            return Err(can_place(site, &so_far, &still[0]).expect_err("refused"));
+        }
+        left = still;
+    }
+    Ok(out)
+}

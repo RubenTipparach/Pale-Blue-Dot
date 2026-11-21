@@ -192,7 +192,7 @@ chart's offset coordinates:
 - a **wall**, **door** or **window** on the edge between two cells, the
   pair of keys sorted (shared edge ownership: one edge seen from either side
   is one slot), standing one storey (3 layers) from its base layer; a door
-  is a wall with a doorway and its leaf, a window a wall with a window;
+  is a wall with a doorway (no leaf yet), a window a wall with a window;
 - a **floor** in a cell, on a layer line;
 - a **stair** from a foot cell to the head cell across one of the foot's
   sides, rising one storey;
@@ -263,13 +263,17 @@ plot's pieces, so the same pieces always cut the same way.
 
 ### B5. The game side
 
-- **B** on foot opens and closes build mode (B is still the brake in
-  flight and the bail in the Loon). The hotbar row is hidden and the
-  palette row shown in its place: wall, door, window, floor, roof, stairs,
-  post, lantern, blueprint, remove, with M6's icons (copied into
-  `assets/textures/ui/build/`, provenance in its README). The player's
-  slots and selection are never touched, so leaving shows them as they
-  were.
+- **N** on foot opens and closes build mode. The design named B, which
+  was free on foot when it was written; it is the breeding screen's key
+  now, so build mode takes N from the risk note's own list of free keys
+  (I, K, N, O, U, Y; recommendation taken, ask only with screenshots). The
+  hotbar row is hidden and the palette row shown in its place: wall, door,
+  window, floor, roof, stairs, post, lantern, blueprint, remove, with M6's
+  icons (copied into `assets/textures/ui/build/`, provenance in its
+  README). The player's slots are never touched and the selection is given
+  back on leaving, so the hotbar is as it was. While build mode is open its
+  clicks, the number row and K are taken from every other reader before
+  `Update`, so a click does not also dig, cast or eat.
 - The number row picks a palette slot; the wheel turns a stair, a blueprint
   or the blueprint's choice. Left click places; right click removes the
   aimed piece (the Remove slot does the same on a left click).
@@ -277,14 +281,15 @@ plot's pieces, so the same pieces always cut the same way.
   one carries its reason on the line under the crosshair. A ghost is a
   preview, not a thing placed in the world, so it is not lit by the field.
 - **K** in build mode opens the kit picker: every kit side by side, with
-  its wall, floor and roof textures; a click picks the kit.
+  its wall, floor and roof textures; the wheel steps the chosen kit, K
+  closes it (the walker keeps the pointer, so the picker needs no cursor).
 - The roof tool is the Roof slot: aimed at a room, it flood-fills the cells
   bounded by walls on that storey and fits the kit's roof over them: a
   cone over one cell, the kit's flat roof, or a gable along the room's
   long axis.
 - A blueprint is any plain building of the templates (no newel, stilts,
   raised floor, parapet or dome), charted onto the cells at the aim and
-  turned by the wheel in sixths; one click fills it whole (free building,
+  turned by the wheel in sixths (shift and the wheel steps which); one click fills it whole (free building,
   decision 7). Each of its pieces is an ordinary piece record, so half a
   blueprint removed is half a house.
 

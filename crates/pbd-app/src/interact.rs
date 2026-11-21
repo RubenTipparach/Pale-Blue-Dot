@@ -26,6 +26,8 @@ pub enum Reader {
     Farm,
     Doors,
     Boats,
+    /// A log on the water (`log-drives`).
+    Logs,
 }
 
 /// A thing F can do.
@@ -51,6 +53,8 @@ pub enum Act {
     OpenDoor,
     ShutDoor,
     Till,
+    /// Take a log out of the water (`log-drives`).
+    TakeLog,
     Board,
 }
 
@@ -70,7 +74,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 19] = [
+pub const ACTS: [Row; 20] = [
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
@@ -89,6 +93,7 @@ pub const ACTS: [Row; 19] = [
     row(Act::OpenDoor, "open_door", Reader::Doors),
     row(Act::ShutDoor, "shut_door", Reader::Doors),
     row(Act::Till, "till", Reader::Farm),
+    row(Act::TakeLog, "take_log", Reader::Logs),
     row(Act::Board, "board", Reader::Boats),
 ];
 

@@ -71,7 +71,16 @@ impl WalkingConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
     Town(usize),
+    /// A player's building, by its place in [`PlayerStructures`]
+    /// (`player-building`).
+    Build(usize),
 }
+
+/// The player's buildings' solids (`player-building` design B4), one a
+/// plot, kept by `builds` apart from the towns' [`Structures`] so neither
+/// moves the other's indices.
+#[derive(Resource, Default, Clone)]
+pub struct PlayerStructures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 
 /// Everything the walker meets that is not terrain, asked together: the
 /// towns' pieces.
@@ -84,6 +93,7 @@ pub enum Piece {
 #[derive(Clone, Copy)]
 pub(crate) struct Meets<'a> {
     pub towns: Option<&'a Structures>,
+    pub builds: Option<&'a PlayerStructures>,
     pub origin: SimOrigin,
 }
 
@@ -91,6 +101,7 @@ impl Default for Meets<'_> {
     fn default() -> Self {
         Self {
             towns: None,
+            builds: None,
             origin: crate::sim_origin::SimFrame::default().0,
         }
     }
@@ -100,6 +111,7 @@ impl<'a> Meets<'a> {
     fn of(world: &'a World) -> Self {
         Self {
             towns: world.get_resource::<Structures>(),
+            builds: world.get_resource::<PlayerStructures>(),
             origin: crate::sim_origin::origin_of(world),
         }
     }
@@ -108,11 +120,18 @@ impl<'a> Meets<'a> {
     /// local one (none is, since the decks went: kept for a piece that
     /// moves again).
     fn pieces(&self) -> impl Iterator<Item = (Piece, &'a BuildingSolids, Frame, bool)> + use<'a> {
-        self.towns.into_iter().flat_map(move |s| {
-            s.0.iter()
-                .enumerate()
-                .map(move |(n, b)| (Piece::Town(n), b, b.frame, false))
-        })
+        self.towns
+            .into_iter()
+            .flat_map(move |s| {
+                s.0.iter()
+                    .enumerate()
+                    .map(move |(n, b)| (Piece::Town(n), b, b.frame, false))
+            })
+            .chain(self.builds.into_iter().flat_map(move |s| {
+                s.0.iter()
+                    .enumerate()
+                    .map(move |(n, b)| (Piece::Build(n), b, b.frame, false))
+            }))
     }
 
     /// The planet point `point` in `frame`, asked in the frame's space.
@@ -1704,6 +1723,7 @@ fn resolve_ground(
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    builds: Option<Res<PlayerStructures>>,
     time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
@@ -1727,6 +1747,7 @@ fn resolve_ground(
     }
     let meets = Meets {
         towns: structures.as_deref(),
+        builds: builds.as_deref(),
         origin: *o,
     };
     for (mut position, mut velocity, mut ground) in &mut walkers {

@@ -1315,7 +1315,7 @@ pub fn door_states(
 }
 
 /// A triangle soup as a Bevy mesh.
-fn to_mesh(buf: &MeshBuf) -> Mesh {
+pub(crate) fn to_mesh(buf: &MeshBuf) -> Mesh {
     let count = buf.positions.len() as u32;
     Mesh::new(
         PrimitiveTopology::TriangleList,

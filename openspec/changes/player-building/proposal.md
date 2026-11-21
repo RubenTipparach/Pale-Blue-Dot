@@ -114,6 +114,7 @@ group 1 asks for, and it was **drafted, not separately approved** (tracker:
 "Drafted (2026-11-12)"). Nobody recorded an approval of its feel. The gate
 in task 1.3 is recorded as passed on the owner's "Build phase 3" alone, and
 nothing more is read into it. The open questions the gate was to settle
-(the key, the palette's layout, aim-snap or grid cursor) take M6's answers:
-B, M6's palette order, aim-snap (recommendation taken, ask only with
-screenshots).
+(the key, the palette's layout, aim-snap or grid cursor) take M6's answers
+where they still fit: M6's palette order and aim-snap. The key is N, not
+B: B opens the breeding screen on foot now (design B5). Recommendations
+taken, ask only with screenshots.

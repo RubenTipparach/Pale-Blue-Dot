@@ -82,6 +82,11 @@ pub const DATA_PREFIXES: &[&str] = &[
     "mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
+    // `building::rules::Rule`, `building::Class` and the kits: build mode's
+    // reasons, pieces and kit names by id (`builds::tests`).
+    "build.refused.",
+    "build.piece.",
+    "build.kit.",
 ];
 
 /// Extensions that make a spaceless literal an asset path.
