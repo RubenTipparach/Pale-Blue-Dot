@@ -438,6 +438,55 @@ slots), `record_pick`, `record_toss`, `record_pack`, `deal_kit`,
    the whole-file fleet, pose and weather, which need one owner each (the
    server; pose per player, design 10).
 
+### 18. Single player through the server, edits first (task 4.2, 2026-11-21)
+
+The server crate exists (task 4.1) and decides a dig or a place with the
+same core rule a client predicts with. Task 4.2 puts single player behind
+it. The order below keeps every save byte for byte what it is today at each
+step, which is that task's own check.
+
+**Who writes the journal.** Today `WorldSave` is both the world and its
+journal: `accept` sets the edit, numbers it and queues the line. With a
+server, the server owns the world and the journal; the client holds a copy.
+So `WorldSave` splits along that line, in this order:
+1. **`SaveJournal`**: `pbd_server::Journal` implemented over the save's
+   writer, writing exactly the line `accept` writes today (`line_of`, with
+   the drop and the slots). The server's journal is then the save's file.
+2. **`LocalServer`**, a Bevy resource holding `Server<SaveJournal>`, made
+   when a world opens, from the save's edits, clock and slots. Single player
+   is player 0 (design 10), joined with the save's install key.
+3. **The edit path moves**: `apply_edit` predicts as now (core ACCEPT on the
+   client's copy, then `FineSet::apply`), and sends the request to the
+   `LocalServer` instead of calling `save.accept`. The server decides,
+   journals, and answers in the same frame, because it is in process; the
+   client applies the server's `Change` to `save.edits` (its copy) and
+   confirms. A refusal returns the region from the snapshot and the slots
+   from the server's copy.
+4. **Every other writer** (design 17) follows the same way, one at a time,
+   as its ACCEPT reaches the core (task 2.2). Until a writer has moved it
+   keeps writing through `WorldSave` as today, on the same writer thread, so
+   lines from both paths interleave in one file in the order they happen.
+
+**What a request carries that the server cannot see.** A dig's finds (seed,
+fibre, bait) and a till's seed are rolled by the app from config the core
+does not hold yet (`GatherSettings`, `FarmConfig`). Until they move, the
+client sends the hands it settled (`Request::Edit` with the hands), and
+the in-process server takes them as asked; only a remote client is held to
+the server's own roll (task 8.7). This is the one place single player trusts
+the client, and it is the client that is the server.
+
+**The column a server reads.** The client's tier makes its rim and the
+river band solid (`planet_column.rs`), the server's columns are always
+carved. Where a cave meets a rim cell the two could read a different
+material, the server refuses, and the client's prediction is undone by the
+snapshot. It cannot lose an edit; it can refuse one that looked valid. Each
+one is logged as `SERVER_DISAGREES` with the cell, so a playtest shows
+whether it happens.
+
+**Checks for 4.2:** the same inputs make byte-identical saves before and
+after (a scripted dig run, both builds, the logs compared); the starter
+missions finish under `--capture`; an old save opens with its player as 0.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,
