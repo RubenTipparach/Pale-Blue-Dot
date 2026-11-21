@@ -43,7 +43,7 @@
             caption: "Smelt bronze",
             until: ["smelt"],
             max_s: 300.0,
-            acts: [Focus("smelt"), Smelt("mixed-ore", 1), Smelt("bronze", 1), Still],
+            acts: [Focus("smelt"), Mine(Have("coal", 2), 12), Mine(Have("block:ore", 4), 12), Smelt("mixed-ore", 1), Smelt("bronze", 1), Still],
         ),
         (
             caption: "Bronze tools",

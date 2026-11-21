@@ -2616,6 +2616,47 @@ fn run(
     commands: &mut Commands,
     stills: Option<&PathBuf>,
 ) -> Status {
+    // An act out in the world with a panel left open (a failed smelt left
+    // the forge's up, and the mining after it stood still ten minutes):
+    // Escape first, one step back to the world.
+    let in_world = matches!(
+        act,
+        Act::Walk(_)
+            | Act::Away(_)
+            | Act::ToMark
+            | Act::Shore
+            | Act::Fresh
+            | Act::Fish(_)
+            | Act::Chop(_)
+            | Act::Dig(..)
+            | Act::Mine(..)
+            | Act::Till(_)
+            | Act::Plant(_)
+            | Act::Pick(_)
+            | Act::PickUp(_)
+            | Act::Harvest(_)
+            | Act::Tame(_)
+            | Act::Pen
+            | Act::Lead(_)
+            | Act::Collect(_)
+    );
+    if in_world
+        && matches!(
+            s.screen,
+            Screen::Pack
+                | Screen::Forge
+                | Screen::Kitchen
+                | Screen::Missions
+                | Screen::Map
+                | Screen::Guide
+                | Screen::Breeding
+        )
+    {
+        if (bot.act_s % 0.6) < s.dt * 1.5 {
+            out.taps.push(KeyCode::Escape);
+        }
+        return Status::Running;
+    }
     match act {
         Act::Wait(secs) => {
             if bot.act_s >= *secs {
