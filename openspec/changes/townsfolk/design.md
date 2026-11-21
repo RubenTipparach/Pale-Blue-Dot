@@ -253,6 +253,21 @@ hat), beard, skin, and clothes in the people's palette; each picked from the
 settlement record and the person's index, so they are the same on every
 visit. A generator tab in the mockup shows the range.
 
+**13a. Version 2 of the figure (owner, 2026-11-21, on M5 version 8):** "Faces
+are kinda small. Id like blocky heads maybe taller head as well. Characters
+looking great. Try rendering fps to give me a feel for height".
+- The head is a block: a box with a small bevel (hex-flat sides kept only
+  where they read as a block), taller than it is wide (about 0.5 m wide,
+  0.6 m tall, 0.45 m deep), so the figure is about 1.55 m with the body kept
+  as approved.
+- The face fills the front of the block: eyes, brows and mouth about 1.5 to
+  1.8 times their version 8 size, the eyes set wider and lower, the mouth
+  wider, so the face reads from across a street.
+- A first-person view in the tab at the game's own eye (1.6 m,
+  `walking::EYE_HEIGHT`; a 60 degree vertical field of view as the game's
+  camera), walked with WASD and mouse look, so the townsfolk's height is
+  felt as the player meets them.
+
 **17. Motion is procedural on a few bones.** A bouncy walk (body bob and
 squash on each step, arms swinging), idle sways and weight shifts, a hop
 when delighted, a shrug, a wave, a head tilt when thinking; keyed poses
