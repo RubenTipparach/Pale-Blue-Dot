@@ -1580,20 +1580,24 @@ impl Bot {
     /// (`drop-and-trash` design 4). Whether it is still at it.
     fn make_room(&mut self, s: &Sight, out: &mut Intent) -> bool {
         let free = (0..CARRIED).filter(|&k| s.slots.get(k).is_none()).count();
+        // Only a full stack of junk: a handful is the slot being filled by
+        // the dig (owner, 2026-11-20: "you cant be trashing stuff at 2, you
+        // should way at least till 64 or 99 whatever full stacks are").
         let junk = (0..CARRIED).find(|&k| {
             s.slots.get(k).is_some_and(|st| {
-                matches!(
-                    st.item,
-                    Item::Block(
-                        Material::Sand
-                            | Material::Soil
-                            | Material::Dirt
-                            | Material::Grass
-                            | Material::DryGrass
-                            | Material::JungleGrass
-                            | Material::DesertSand
+                st.count >= st.item.stack_limit()
+                    && matches!(
+                        st.item,
+                        Item::Block(
+                            Material::Sand
+                                | Material::Soil
+                                | Material::Dirt
+                                | Material::Grass
+                                | Material::DryGrass
+                                | Material::JungleGrass
+                                | Material::DesertSand
+                        )
                     )
-                )
             })
         });
         let (phase, since) = &mut self.room;

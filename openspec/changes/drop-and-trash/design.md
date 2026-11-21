@@ -24,4 +24,7 @@ level heading times 3.2 m, recorded, and added to the live drops.
 
 Before a Dig or Mine act works, with fewer than 2 free slots carried: open
 the pack, pick up a junk stack (sand, soil, dirt, grass of any kind), click
-the trash, close. Stone is kept: recipes take it.
+the trash, close. Stone is kept: recipes take it. Only a full stack (its
+item's stack limit, 99) is trashed, never a handful: the owner, "you cant be
+trashing stuff at 2, you should way at least till 64 or 99 whatever full
+stacks are" (2026-11-20), after the bot trashed each freshly dug block.
