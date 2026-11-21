@@ -26,6 +26,8 @@ pub enum Reader {
     Farm,
     Doors,
     Boats,
+    /// The townsfolk: talk, then trade and jobs (`townsfolk` design 5 to 9).
+    Talk,
 }
 
 /// A thing F can do.
@@ -52,6 +54,8 @@ pub enum Act {
     ShutDoor,
     Till,
     Board,
+    /// Talk to a townsperson.
+    Talk,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -70,7 +74,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 19] = [
+pub const ACTS: [Row; 20] = [
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
@@ -86,6 +90,7 @@ pub const ACTS: [Row; 19] = [
     row(Act::Check, "check", Reader::Farm),
     row(Act::PickWild, "pick_wild", Reader::Farm),
     row(Act::Gather, "gather", Reader::Farm),
+    row(Act::Talk, "talk", Reader::Talk),
     row(Act::OpenDoor, "open_door", Reader::Doors),
     row(Act::ShutDoor, "shut_door", Reader::Doors),
     row(Act::Till, "till", Reader::Farm),

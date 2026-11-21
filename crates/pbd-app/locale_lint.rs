@@ -82,6 +82,10 @@ pub const DATA_PREFIXES: &[&str] = &[
     "mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
+    // `economy::jobs::JobKind`: each job's line by its code; the townsfolk's
+    // roles by the template's id (`desktop::talk::role_name`).
+    "jobs.kind.",
+    "talk.role.",
 ];
 
 /// Extensions that make a spaceless literal an asset path.

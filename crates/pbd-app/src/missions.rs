@@ -141,6 +141,11 @@ pub fn held(
     }
 }
 
+/// This frame's happenings, as the counting read them: what the town jobs
+/// (`economy`) count with the same rule, after [`count`].
+#[derive(Resource, Clone, Debug, Default)]
+pub struct Happenings(pub Vec<Happened>);
+
 /// Everything the counting reads and writes, in one parameter.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct Counting<'w, 's> {
@@ -157,6 +162,7 @@ pub struct Counting<'w, 's> {
     deeds: MessageReader<'w, 's, Deed>,
     cooked: MessageReader<'w, 's, Cooked>,
     did: MessageReader<'w, 's, Did>,
+    heard: ResMut<'w, Happenings>,
 }
 
 /// What the messages of this frame mean to the chain.
@@ -224,6 +230,9 @@ pub fn count(mut c: Counting) {
         }
     }
     let happened = happenings(&mut c);
+    if !(happened.is_empty() && c.heard.0.is_empty()) {
+        c.heard.0.clone_from(&happened);
+    }
     let Some(mut save) = c.save else {
         return;
     };
@@ -389,6 +398,7 @@ impl Plugin for MissionsPlugin {
             .add_message::<Deed>()
             .add_message::<Cooked>()
             .init_resource::<Missions>()
+            .init_resource::<Happenings>()
             .init_resource::<RecipeLocks>()
             .add_systems(PreStartup, start)
             .add_systems(
