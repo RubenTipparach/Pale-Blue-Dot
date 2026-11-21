@@ -17,7 +17,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 ## 3. Protocol and digest in the core
 
 - [x] 3.1 (Built 2026-11-21: `pbd_core::net::digest`, with `encode`, `fnv1a64`, `Regions` keeping each region's digest as edits are noted, and `recompute`; the edits section only, design 16. `a_fixed_regions_digest_is_pinned`, `the_kept_digest_equals_a_full_recompute`, `a_change_moves_only_its_own_regions_digest`. The save's material codes moved into `pbd_core::terrain` for it.) The region's canonical encoding and its FNV-1a 64 digest (design 2), kept incrementally. Verify: a pinned digest for a fixed region; the incremental digest equals a full recompute after a random sequence of changes.
-- [ ] 3.2 The message types (join, request, accepted, refused, region change, snapshot, digest, presence, transaction, chat) and their versioned byte encoding. Verify: a round-trip test per message, and a test that an unknown newer message is refused cleanly.
+- [x] 3.2 (Built 2026-11-21: `pbd_core::net::protocol`, `ToServer` and `ToClient` with hand-written little-endian encoding, `Decode::Unknown` for a newer tag, finite and length guards, and `agree` for the join (design 9, 15.9). `every_message_round_trips_and_a_cut_one_is_refused`, `an_unknown_newer_message_is_refused_cleanly`, `a_value_no_message_has_is_refused`, `a_join_agrees_on_a_protocol_range_and_the_exact_world`.) The message types (join, request, accepted, refused, region change, snapshot, digest, presence, transaction, chat) and their versioned byte encoding. Verify: a round-trip test per message, and a test that an unknown newer message is refused cleanly.
 
 ## 4. The server, in process
 

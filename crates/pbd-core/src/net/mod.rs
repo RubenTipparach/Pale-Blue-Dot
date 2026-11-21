@@ -4,3 +4,4 @@
 //! the client and the tests all call the same code.
 
 pub mod digest;
+pub mod protocol;
