@@ -12,16 +12,17 @@ EXE=${2:-target/fast/pbd-app}
 mkdir -p "$D"
 SMITH_FRONT="--walk --at 29.884943 1.485554 --yaw 17.1 --pitch -14"
 SMITH_SIDE="--walk --at 29.860050 1.502882 --yaw -39.2 --pitch -8"
-MARKET="--walk --at 41.152229 108.949181 --yaw 5.2 --pitch -6"
-GUARD="--walk --at 40.839832 107.927841 --yaw -108.3 --pitch -8"
+MARKET="--walk --at 29.702875 9.150705 --yaw 24.2 --pitch -6"
+GUARD="--walk --at 29.112494 8.325739 --yaw -92.3 --pitch -8"
 shot() {
   name=$1; expr=$2; shift 2
   PBD_TOWNSFOLK_EXPRESSION=$expr timeout 1500 xvfb-run -a -s "-screen 0 960x600x24" $EXE "$@" \
     --rain 0 --weather-at 7200 --capture "$D/$name.png" --frames 150 > "$D/$name.log" 2>&1
   echo "$name exit $?"
 }
-shot smith-face "" $SMITH_FRONT --time 11
-shot smith-forge-2230 "" $SMITH_SIDE --time 22.5
+ONLY=${ONLY:-all}
+[ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
+[ "$ONLY" = all ] && shot smith-forge-2230 "" $SMITH_SIDE --time 22.5
 shot market-day "" $MARKET --time 11
 shot gate-guard "" $GUARD --time 11
 for e in surprised sleepy delighted worried cross thinking; do
