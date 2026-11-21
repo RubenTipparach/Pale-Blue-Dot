@@ -3473,6 +3473,12 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
         return Status::Done;
     }
     if bot.phase == 0 {
+        // How many were carried, one over (0 is unset): placed means one
+        // fewer of this block, not any block placed (an up-and-out on the
+        // way set dry grass, and the forge was taken as placed).
+        if bot.count == 0 {
+            bot.count = carried(s.slots, name) + 1;
+        }
         let name = name.to_string();
         match bot.select(s, out, &|item| wanted(&name, item)) {
             Status::Done => bot.next_phase(),
@@ -3481,10 +3487,12 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
         }
         return Status::Running;
     }
-    if s.tally.placed > bot.mark.placed {
+    if s.tally.placed > bot.mark.placed
+        && (bot.count == 0 || carried(s.slots, name) + 1 < bot.count)
+    {
         return Status::Done;
     }
-    if bot.act_s > 45.0 {
+    if bot.act_s > 90.0 {
         return Status::Fail(format!("{name} was never placed"));
     }
     let Some(Goal::Cell(key)) = bot.goal else {
