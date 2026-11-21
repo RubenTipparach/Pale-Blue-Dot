@@ -26,3 +26,12 @@ flowing".
   owner asks.
 - Floating logs are world state: each is a stored record with its position,
   saved on the durable path; a log never vanishes.
+
+## Started (owner, 2026-11-21)
+
+**The owner, 2026-11-21: "People approved. Build.phase 3. Do it in parallel
+if you can".** Logging is a step of phase 3 (CLAUDE.md, "The first game
+loop"), so that is taken as the start this change waited for (task 1.1).
+M34 River Craft (`docs/mockups/river-craft.html`) is approved for the game
+(owner, 2026-11-19, "Approved. Build rest of phase 2"); its Log drive tab is
+the reference.
