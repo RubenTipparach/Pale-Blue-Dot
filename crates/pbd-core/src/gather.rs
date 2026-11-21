@@ -276,9 +276,10 @@ mod tests {
         }
     }
 
-    /// Bait turns up in a third of earth cells by the water, the same cells
-    /// every time, and never away from it, from rock or a placed block
-    /// (`starter-missions` G1, `dig-fixes` 2).
+    /// Bait turns up in one earth cell by the water in `bait_one_in` (one in
+    /// five since `mission-playthrough`), the same cells every time, and never
+    /// away from it, from rock or a placed block (`starter-missions` G1,
+    /// `dig-fixes` 2).
     #[test]
     fn earth_by_the_water_gives_bait_in_a_share_of_cells() {
         let g = GatherSettings::default();
@@ -291,7 +292,11 @@ mod tests {
             let share = (0..30_000u32)
                 .filter(|&c| g.bait(earth, c, 145, false, true) == Some(Good::BAIT))
                 .count();
-            assert!((9_000..11_000).contains(&share), "{earth:?}: {share}");
+            let want = 30_000 / g.bait_one_in as usize;
+            assert!(
+                share.abs_diff(want) < want / 10,
+                "{earth:?}: {share} of 30000, want about {want}"
+            );
         }
         for c in 0..2_000 {
             assert_eq!(

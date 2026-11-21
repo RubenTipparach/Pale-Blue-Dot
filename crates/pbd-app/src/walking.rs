@@ -2037,6 +2037,7 @@ fn record_step(mut walkers: Query<(&Position, &mut StepHistory), With<Walker>>) 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn follow_walker(
     mut state: ResMut<WalkingState>,
     mut readout: ResMut<WalkingReadout>,

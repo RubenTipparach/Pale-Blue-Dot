@@ -601,7 +601,11 @@ mod breeding_tests {
         let at_12 = farm.advance_from(d + 12.99, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
         assert_eq!(at_12.waiting("egg"), 0, "a pullet lays nothing");
         let at_15 = farm.advance_from(d + 15.0, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
-        assert_eq!(at_15.waiting("egg"), 8, "two days of a hen's laying, four a day");
+        assert_eq!(
+            at_15.waiting("egg"),
+            8,
+            "two days of a hen's laying, four a day"
+        );
         // Hatched once: the brood is done.
         apply(&mut records, &events);
         assert!(

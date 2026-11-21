@@ -1157,6 +1157,15 @@ impl Launch {
                             .expect("--reflections takes off, low, medium or high"),
                     );
                 }
+                "--antialiasing" => {
+                    i += 1;
+                    let state = args.get(i).expect("--antialiasing requires on or off");
+                    result.settings.antialiasing = Some(match state.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        _ => panic!("--antialiasing takes on or off"),
+                    });
+                }
                 "--shadows" => {
                     i += 1;
                     let level = args
@@ -2184,7 +2193,7 @@ pub fn run(args: &[String]) {
     // are its flags' alone. Read here, once the logger is up.
     // A bot playing climbs with auto step (owner, 2026-11-19: "when in bot
     // run also just turn on autostep").
-    let mut overrides = launch.settings.clone();
+    let mut overrides = launch.settings;
     if launch.showcase.is_some() {
         overrides.auto_step = Some(true);
     }
@@ -3165,13 +3174,20 @@ fn window_size() -> (u32, u32) {
         .unwrap_or((1440, 900))
 }
 
-/// The camera's samples: 4, or `PBD_MSAA=<1|2|4>`, a measurement switch
-/// (`frame-budget` 5c) that prices the multisampling.
+/// The camera's samples: none, or `PBD_MSAA=<1|2|4>`, a measurement switch
+/// (`frame-budget` 5c). Off by default (owner, 2026-11-20: "AA should be a
+/// final composite thing, but I didnt even ask for AA to be implemented"):
+/// the water's passes run after the resolve on blended edge pixels, which
+/// put a pale line round everything seen under the water
+/// (`ocean-environments` B24), and the pixel look wants hard edges. The
+/// player's ANTIALIASING is SMAA on the finished frame instead
+/// (`settings::follow_antialiasing`), and is never added to a camera that
+/// multisamples.
 fn msaa_samples() -> Msaa {
     match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
-        Some("1") => Msaa::Off,
         Some("2") => Msaa::Sample2,
-        _ => Msaa::Sample4,
+        Some("4") => Msaa::Sample4,
+        _ => Msaa::Off,
     }
 }
 

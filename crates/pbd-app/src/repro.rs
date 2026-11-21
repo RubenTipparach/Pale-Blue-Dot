@@ -78,6 +78,7 @@ pub struct Record {
     pub render_scale: u32,
     pub reflections: Reflections,
     pub rain_shadows: bool,
+    pub antialiasing: bool,
     /// The build's source revision, or "unknown".
     pub commit: &'static str,
     /// The blocks round the player, where the fine set is resident there.
@@ -162,6 +163,8 @@ impl Record {
             self.reflections.label().to_lowercase(),
             "--rain-shadows".into(),
             if self.rain_shadows { "on" } else { "off" }.into(),
+            "--antialiasing".into(),
+            if self.antialiasing { "on" } else { "off" }.into(),
             "--capture".into(),
             capture.into(),
         ]);
@@ -260,10 +263,11 @@ impl Record {
             (
                 "settings",
                 format!(
-                    "render scale {}, reflections {}, rain shadow {}",
+                    "render scale {}, reflections {}, rain shadow {}, antialiasing {}",
                     self.render_scale,
                     self.reflections.label().to_lowercase(),
-                    if self.rain_shadows { "on" } else { "off" }
+                    if self.rain_shadows { "on" } else { "off" },
+                    if self.antialiasing { "on" } else { "off" }
                 ),
             ),
             ("commit", self.commit.to_string()),
@@ -388,6 +392,7 @@ impl Record {
             render_scale: settings.render_scale,
             reflections: settings.reflections,
             rain_shadows: settings.rain_shadows,
+            antialiasing: settings.antialiasing,
             commit: COMMIT,
             blocks,
         })
@@ -429,6 +434,7 @@ impl Record {
             render_scale: 85,
             reflections: Reflections::Medium,
             rain_shadows: false,
+            antialiasing: true,
             commit: "abc123",
             blocks: None,
         }
@@ -578,7 +584,7 @@ pub(crate) mod tests {
             "clock: hour 14.5000, day 3, southern summer",
             "weather: rain 0.42, wetness 0.30, cover 0.80, wind 6.2 m/s toward 135 deg",
             "weather_flag: --rain 0.42",
-            "settings: render scale 85, reflections medium, rain shadow off",
+            "settings: render scale 85, reflections medium, rain shadow off, antialiasing on",
             "commit: abc123",
             "blocks:",
         ] {
@@ -597,6 +603,7 @@ pub(crate) mod tests {
             "--render-scale 85",
             "--reflections medium",
             "--rain-shadows off",
+            "--antialiasing on",
             "--capture repro/a-again.png",
         ] {
             assert!(command.contains(flag), "no '{flag}' in {command}");

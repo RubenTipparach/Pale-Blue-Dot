@@ -1260,6 +1260,121 @@ onto a floe needs the floes in the water the schools read, and is not done
 here. The `--life` approach ends at 5 m at the polar shore: no water nearer
 is deep enough for a seal.
 
+### B24. Bright outlines round everything seen under water (owner, 2026-11-19)
+
+The owner, under the sea, with the fishing rod held: "there seems to be
+outlining issues when under water", and a close-up of the rod edged in a
+jagged pale line. The tops of the hex columns ahead carried the same thin
+bright teal line.
+
+**Cause** (read in `water.wgsl`, `compose`): under the water the composite
+wobbles the picture. It samples the scene at `uv + wobble` (`fx.x`, 0.0015
+of the screen, so 2 to 4 pixels at 1080p), but fogs that sample with the
+distance of the pixel at `uv`. At a silhouette the two are different
+things. A pixel on the rod's edge takes its colour from the background
+beside it, which is the seabed or the far wall before any murk (bright
+teal), and fogs it with the rod's few centimetres of water. So the far
+ground's unfogged colour shows as a rim round everything near. The same
+happens at every step of the hex columns, where a near top edge stands
+against far water.
+
+**Fix (proposed):** keep the wobble only where it moves within one surface.
+The composite reads the depth at the wobbled point. If that point is sky
+while the pixel is not, or the reverse, or if its distance differs from
+the pixel's by more than a sliver (15% of the distance plus 0.3 m), it
+takes the unwobbled colour. Then colour and fog always come from the
+same surface. The wobble still runs across a surface. At an edge it
+stands still for the 2 to 4 pixels the shift would have crossed, which
+is not visible at that size. No other shader term changes, and nothing
+changes above the water.
+
+**A second, smaller cause, seen in the first after-capture (2026-11-20):**
+single bright blue pixels were left on the rod's edge. The scene is drawn
+with 4x multisampling. An edge pixel's colour is the resolve of rod and
+unfogged background, but the composite reads only sample 0's depth. When
+that sample is the rod, the background's share of the colour is fogged
+for the rod's few centimetres and stays bright. The fix: with the eye
+under the water, the composite's transmittance is the mean of each
+sample's own `exp(-extinction * distance)`, sky samples counting as none.
+An edge pixel is then fogged by the share of it that is far, and an
+interior pixel, all four samples alike, is unchanged.
+
+That mean still left a dim purple-blue line in the next capture. One
+transmittance applied to a blended colour keeps part of the far share's
+brightness. So instead the edge pixel is split:
+- `f` is the share of its samples that are far;
+- the far part's colour is read from a neighbouring pixel whose depth is
+  far, or the murk where there is none;
+- the near part is the resolved colour with the far part taken out.
+Each part is fogged by its own distance and the two are mixed back by
+`f`. Only pixels whose samples span a real depth step (15% plus 0.3 m,
+as above) are split.
+
+**The mask that matches (the owner, 2026-11-20: "THE REAL FIX IS A MASK
+CHANEL THAT MATCHES"; and "that thing is the sky", "its where water
+rendering outline doesnt match the object").** Unmixing guessed at the
+object's colour and either overshot into specks or, where it was skipped,
+let the sky leak. The scene's alpha is already taken: it carries the
+terrain's dry-hole mask, and the sky's opacity. But the depth samples are
+a mask that matches the colour exactly. Each sample keeps its own colour
+and depth, and the resolve averages the colours, so `1 - f`, the near
+samples' share, is exactly the share of the resolved colour that is the
+near surface. The edge pixel becomes
+`T_near * (raw - f * far) + deep * (1 - f) * (1 - T_near) + f * fog_far`,
+using `(1 - f) * object = raw - f * far`. Nothing divides, and the
+pixel's own colour carries the object's detail. Only the far colour (the
+sky's or the far ground's raw colour) is read from a neighbour that is all
+far, and any error in it is scaled by `f * T_near`.
+
+**Where the line really was: the water cap (2026-11-20).** The mask fix in
+the composite left the dull line almost unchanged, because most of it is
+drawn after the composite. The water cap, the sheet seen from under the
+surface with the sky through Snell's window, is drawn over the composed
+scene. It hid itself by sample 0's depth alone (`water_hidden`). An edge
+pixel whose sample 0 was behind the sheet got the sheet's whole colour,
+over the held tool's share of the pixel too. Now `water_cover` counts the
+share of the pixel's samples the sheet is in front of, the same mask the
+colour was resolved with:
+- the sheet is hidden only where that share is nought;
+- elsewhere the cap and the flowing water are alpha-blended over by it.
+A pixel the sheet fully covers draws exactly as before.
+
+**The fundamental mismatch (2026-11-20).** Two measurements showed what
+was left:
+- the cap fix moved nothing;
+- with multisampling off (`PBD_MSAA=1`) the specks went, but a pale
+  bluish stripe stayed, one pixel wide, between brown rod pixels on both
+  sides.
+The wobble read the scene's colour through the linear sampler at a
+fractional offset, and its same-surface check read depth at the nearest
+pixel. So at a silhouette the colour was a filtered blend of the near
+surface and the unfogged sky beside it, while the depth said near, and
+the blend took the near surface's thin fog. That is the stripe inside
+every edge, and most of the original rim. The wobble now reads colour
+with `textureLoad` at the same whole pixel as the depth, so colour and
+depth always describe the same surface. The wobble moves in whole pixels,
+in keeping with the nearest-sampled look.
+
+**Antialiasing off by default (the owner, 2026-11-20).** The owner: "is it
+the oreder of when water shading runs? why cant it do proper depth testing
+before AA? AA should be a final composite thing, but I didnt even ask for
+AA to be implemented". It was the order. The scene was drawn with 4x
+multisampling (Bevy's default, kept by `msaa_samples`), and resolved
+before the water's passes ran. Every pass after that read one blended
+colour per edge pixel against per-sample depths, and no test can split a
+blend back apart.
+
+A capture of the raw scene, with the compose passing it straight through,
+showed the bright blue edge pixels already there, blended from rod and
+sky, before any water shading. With multisampling off, each pixel is one
+surface and every depth test is exact.
+
+So the camera has no multisampling by default; `PBD_MSAA=2|4` keeps it
+for comparison. Hard edges also suit the nearest-sampled pixel look. The
+compose's edge-splitting and the cap's sample cover stay: they are exact
+when there is one sample, and correct the 2x and 4x builds. Frame cost
+not measured here (no GPU); it can only fall.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
@@ -2173,3 +2288,422 @@ the write-up needs and change nothing a player meets. No default moves.
   colony; task 8.4). The colony works unseen until then.
 - **Frame cost** of all of it was not measured: the cloud container has no
   GPU (lavapipe). The owner runs the perf suite.
+
+### B28. Beaver and otter motion (owner, 2026-11-20)
+
+The owner, 2026-11-20: "can you improve on beaver and otter animations?",
+then "make me a mockup with those two animls running around interacting with
+env". This is the motion of three animals, the beaver, the river otter and
+the sea otter, written up by the `animation` skill: four stages to every
+action, limbs on arcs about joints, gaits that never slide a foot, and the
+tail and head as overlapping action. It is a mockup and a write-up only; the
+game waits for the owner's approval of the mockup and a request (CLAUDE.md,
+"Write it up before touching code"; the skill's order of work, step 3).
+
+**Today's motion, measured** (`docs/mockups/ocean/creatures3d.js` and the
+tabs that move them, at `dfcfe932`):
+
+| Animal | Model | How it moves today |
+| --- | --- | --- |
+| Beaver (`beaverGeo`) | One rigid mesh, no parts: four fixed leg boxes (0.06 x 0.10 x 0.05 of its length), a tail plank fixed at 0.12 rad, a stick glued to the jaw in `beaver_branch`. | Dam tab: three carriers shuttle on k = (sin 0.12t + 1)/2 between two points 16.4 m apart, a 52 s round trip peaking at 0.98 m/s with the feet still (every step slides); they ride the water's or ground's level minus 0.1 m, so on land they sink to the shins; the carrying and empty models swap in one frame when cos 0.12t changes sign. The gnawer bobs abs(sin 6t) x 0.03 m in place and nothing else moves: the head never bites, no chip flies, and a tree vanishes in one frame as the day slider passes it. |
+| River otter (`riverotter`) | The sea otter's lathe right way up, four fixed leg boxes. | The fish shader's sway on a mammal: sin(7t + phase - 6x) x 0.075 of its length at the tail (1.1 Hz), on a 3.5 x 1.8 m ellipse at 0.3 rad/s (21 s a lap), sinking up to 1.8 m on sin 0.5t. It never leaves the pool, bounds, slides or eats. |
+| Sea otter (`otter`) | Rigid on its back, paws fixed on an urchin. | Drifts 1.5 m either way at 0.05 rad/s and rides the sea's height. It never cracks the urchin, rolls, dives, grooms or sleeps. |
+
+**The rig.** Each animal is a set of pivots in a hierarchy, each a low-poly
+piece in M25's manner (flat shaded, a colour per face from its sprite, no
+outline, lit as the ground under it by the page's one lighting model):
+
+- a root on the ground at the animal's middle, turned to its heading;
+- a body pivot (the hips' rise and fall, pitch and roll), carrying a hind
+  segment and a chest segment joined at the spine, so the back can arch;
+- a neck and head (the beaver's incisors, the otters' whiskers), and a jaw
+  the held thing hangs from (a branch, a fish, an urchin);
+- four legs of two bones each (thigh and shin) and a foot, posed by two-bone
+  inverse kinematics to a foot target, the hind knee forward and the front
+  elbow back;
+- a tail of three segments (the beaver's last one the flat paddle).
+
+**Gaits on arcs, never sliding.** A gait is a phase that advances by the
+distance the root travels divided by the stride (`stride_m`), not by the
+clock, so however the speed changes the feet keep pace. Each foot has an
+offset in the cycle and a stance fraction (`stance`): in stance its target
+moves backwards under the body at exactly the body's speed (it stays where
+it was put down), in swing it lifts on an arc (`foot_lift_m`) and lands a
+half step ahead. The ground under each foot is sampled, so a foot on the mud
+bank stands on the bank. The contact, down, passing and up poses are the
+keyed poses "Show poses" freezes on.
+
+- **Beaver, the waddle**: a lateral walk (left hind 0, left fore 0.25,
+  right hind 0.5, right fore 0.75), stance 0.62. The body rolls toward the
+  standing side (`waddle_roll_rad`), the hips rise twice a cycle
+  (`hip_bob_m`), the head counters the roll a beat late (`head_lag_s`) and
+  the tail swings after the hips (`tail_lag_s`), dragging.
+- **River otter, the bound**: the hind pair together, the fore pair half a
+  cycle later (0, 0.06, 0.5, 0.56), stance 0.38, so there is a moment with
+  no foot down. The spine flexes on the cycle (`arch_rad`): rounded when the
+  hind feet land under the chest, stretched as they push off; the body
+  lifts in the air (`lift_m`).
+
+**The actions and their stages.** Every strike is windup, anticipation
+(a held, coiled beat), hit (ease in, t cubed, fastest at contact, the event
+on contact) and recoil (a kick back past rest, then ease out). The times and
+sizes are the tunables below.
+
+- **Beaver gnaws and fells a tree.** It rears on its hind legs and tail
+  (a tripod), forepaws on the trunk. Each bite: the head draws back and
+  tilts (windup), holds (anticipation), snaps in (hit: chips fly from the
+  notch, the notch deepens), and bounces back (recoil); one steady beat
+  (`gnaw.beat_s`). After `bites_to_fell` bites the tree creaks: it leans a
+  little back over the cut (`lean_back_rad`, the anticipation) while the
+  beaver drops to all fours and scrambles clear; then it falls, slow at
+  first and faster all the way (an angle that grows as t squared, a rod
+  tipping under gravity), hits the ground, bounces (`bounce_rad`), and
+  settles; the crown shakes on the hit. The stump stays.
+- **Beaver fetches a branch.** It waddles to the fallen crown, gnaws a
+  branch free (three bites), takes it in its teeth and walks to the water
+  with the branch dragging (it hangs from the jaw, its far end on the
+  ground), slides in down the bank, swims with only its head, ears and the
+  branch above water (the tail sculls side to side, each segment a beat
+  behind the last, `scull_hz`, `scull_rad`; the hind feet paddle), and at
+  the dam rears against it and pushes the branch onto the crest, where it
+  stays.
+- **Beaver tail slap and dive.** The tail lifts (windup), holds high
+  (anticipation), comes down flat (hit: a splash and rings on the water)
+  and bounces (recoil) while the head goes under; the body pitches nose
+  down and the tail disappears last. It surfaces by the bank.
+- **Beaver climbs out and shakes off.** Forepaws on the bank, a push from
+  the hind legs, then the shake: the body rolls on a fast decaying wave
+  (`shake.hz`, `shake.roll_rad`, `shake.time_s`), the head a beat late,
+  the tail last; drops fly off. The coat is wet (darker and shinier) while
+  it drips, and dries over `dry_s`.
+- **River otter.** Bounds along the bank; at the top of the mud slide it
+  crouches (anticipation), pushes off and slides on its belly, legs swept
+  back, faster down the slope (`slide.accel_mps2`), into the pond with a
+  splash; porpoises (arcs out of the water, `porpoise.arc_m`, the body's
+  pitch along the arc and the tail a beat behind); chases a fish under
+  water and takes it; climbs onto a rock and eats it held in its forepaws,
+  a bite on each beat (`eat.beat_s`, the fish shorter each bite); rolls on
+  its back and grooms (forepaws circling the face); stands up on its hind
+  legs to look round, the head turning and holding (`look.hold_s`).
+- **Sea otter.** Rafts on its back in the kelp. It cracks an urchin on a
+  stone on its chest: both forepaws lift the urchin (windup), hold
+  (anticipation), bring it down on the stone (hit: shell bits and a little
+  splash) and bounce (recoil), `cracks` times, then eats. It rolls over
+  belly down (`roll_s`) with a flick of the tail and dives (`dive_s`),
+  coming up with a new urchin and rolling onto its back; grooms rolling
+  side to side and rubbing its fur; and to sleep wraps a kelp frond round
+  itself (`kelp_wrap_s`), paws over its eyes, bobbing on the swell.
+
+Each animal runs a small state machine: when one action ends it picks the
+next with a seeded random draw from the actions open to it where it is (a
+beaver on land can fell, fetch or sit up; in the water it slaps and climbs
+out), so the scene plays on its own and two runs of one seed are the same.
+Buttons start any action at once.
+
+**Tunables** (proposed for a validated `assets/config/creature_motion.ron`,
+one source of defaults, units in the names; the mockup's sliders print the
+block):
+
+| Block | Values (default) |
+| --- | --- |
+| `beaver.walk` | `stride_m` 0.36, `stance` 0.62, `speed_mps` 0.5, `foot_lift_m` 0.05, `waddle_roll_rad` 0.10, `hip_bob_m` 0.02, `head_lag_s` 0.10, `tail_lag_s` 0.18 |
+| `beaver.gnaw` | `beat_s` 0.42 (windup 0.30, anticipation 0.20, hit 0.12, recoil 0.38 of it), `pull_rad` 0.35, `chips_per_bite` 4, `bites_to_fell` 12 |
+| `beaver.fell` | `creak_s` 1.0, `lean_back_rad` 0.05, `fall_s` 1.7, `bounce_rad` 0.10, `settle_s` 0.9 |
+| `beaver.swim` | `speed_mps` 0.75, `scull_hz` 1.3, `scull_rad` 0.35, `head_above_m` 0.07 |
+| `beaver.slap` | `windup_s` 0.30, `anticipate_s` 0.22, `strike_s` 0.08, `recoil_s` 0.35, `raise_rad` 1.15 |
+| `beaver.shake` | `hz` 7.0, `time_s` 1.0, `roll_rad` 0.45, `dry_s` 20 |
+| `river_otter.bound` | `stride_m` 0.85, `stance` 0.38, `speed_mps` 1.5, `arch_rad` 0.42, `lift_m` 0.07 |
+| `river_otter.slide` | `accel_mps2` 3.0, `max_mps` 4.5 |
+| `river_otter` other | `porpoise.arc_m` 0.45, `eat.beat_s` 0.36, `look.hold_s` 0.9 |
+| `sea_otter.crack` | `windup_s` 0.32, `anticipate_s` 0.16, `strike_s` 0.07, `recoil_s` 0.26, `raise_m` 0.16, `cracks` 4 |
+| `sea_otter` other | `roll_s` 0.7, `dive_s` 5.0, `kelp_wrap_s` 2.4 |
+| all | `exaggerate` 1.0: scales every raise, roll, arch and recoil together |
+
+**Drawn only.** The motion never feeds a rule. In the game the colony's
+fell, dam and lodge entries (B25) stay where they are and when they are; a
+beaver seen felling a tree is drawn felling the tree the process felled,
+the fall's hit drawn when the stump's entry is written. A creature's
+position is its spawn's (task 8.4), the gait reading the distance it moved.
+
+**The mockup.** A tab "Beavers and otters" (`#critters`) on M25, one 3D
+view (the page's one renderer): a valley stream with a beaver pond, the
+dam, the lodge, a muddy bank and an otter slide, aspens and willows, a
+riffle with trout, and the stream's mouth onto a kelp-edged sea where the
+sea otter rafts. Today and Proposed in the same view, Slow x0.25, Show
+poses, a Follow switch (off by default: the camera never moves on its own),
+every tunable a slider with the RON block printed, the time of day as a
+slider (at night a lantern on the bank, a lamp at the fishing camp at the
+mouth and fireflies light what is near them; the moon stays dim). The code
+is `docs/mockups/ocean/critters.js`; the screenshots are in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU, so they show poses and never smoothness.
+
+**For the game** (after approval and a request): the rig is built once per
+species as Bevy entities (a root with child pivots), the poses blended by
+the same curves, the gait read from the distance moved, `LitByField` and
+`LitLikeTerrain` on the root; the beaver joins `fauna.ron` as task 8.4
+has it.
+
+**Version 3: one skin, fur and its texture (owner, 2026-11-20).** On version
+2's beaver mid-gnaw, seen on a phone: "Some weird geometry poking out from
+middle of them. Also need textures for both. Some fur tuffs would be nice
+too", then "See mining mike how we did that for the wolf". Version 2 built
+each animal of separate low-poly pieces parented to its pivots (a lathe per
+body segment, a cylinder per leg bone, a box per foot and paddle); in a
+reared or rolled pose the leg roots and foot slabs stood out of the flank
+and back, and nothing joined a leg to the body. Version 3 follows Mining
+Mike's Ice Wolf (`organic-creature` and `painted-bake`, godot-sandbox at
+`1739e89`), in `tools/art/critter_sculpt.py` with the copied kit in
+`tools/art/sdf_kit.py`:
+
+- **One skin.** Bone, muscle and fur are one signed distance field round
+  the rig's own joints: round cones along the leg bones, ellipsoids for the
+  haunches, shoulders, cheeks and head, the paws and webbed feet, the ears,
+  the beaver's incisors and its paddle, all joined with wide smooth unions;
+  the coat a thin volume over it, clumped along the way the fur lies. It is
+  meshed with surface nets and cut to 2,000 to 2,400 triangles. No visible
+  form is a raw primitive, so a leg grows out of the body and nothing can
+  stand out of it or float beside it.
+- **Skinned to the same rig.** The pivots are bones now (the same joints,
+  the same poses, gaits and actions); every vertex has four bone weights,
+  a leg's bones pulling only their leg and the skin round its top. The page
+  checks the mesh's rest joints against its own rig and logs any difference.
+- **A painted bake in pixel art.** The mesh is unwrapped at one density
+  (150 texels a metre, square texels, no chart stretched past 1.22 times),
+  and every texel is painted at the sculpt's surface from the animal's fur
+  groups in Sweaft-64 tones: a darker back and lighter flanks and belly,
+  fur strokes along the flow, a step of painted light, darker in creases.
+  The beaver's paddle is bare and scaled in a cross-hatch; the river
+  otter's throat and muzzle are pale; the sea otter's head and throat are
+  pale, ragged where they meet the coat. Nearest sampled, no outline, lit
+  by the page's one lighting model like the ground.
+- **Fur tufts.** 150 to 230 low-poly tufts an animal (Mining Mike's
+  `fur_locks`: a cupped row of three, a second row, the point; six
+  triangles), where the fur is long: the nape, the cheeks, the back and the
+  base of the tail (none on the beaver's paddle). Each takes its root's
+  colour and bones. A damped spring on the back and one on the head lag
+  behind the body, and their lag swings the tufts' tips, so they trail a
+  move, overshoot and settle (overlapping action). While the coat is wet
+  (in the water, and after it until the shake or until it dries) the tufts
+  blend to a wet shape: narrow, clumped and spiked.
+- **The valley.** The aspens wear a pale bark with small dark eyes, the
+  felled ones too (`tex-aspen.png`, 64 texels a metre). Dusk is a warm low
+  sun (the Dusk button sits at 17:30, with the sun and the sky's light kept
+  up while the sun is low); night is unchanged, lit by its lamps.
+
+Today's motion keeps today's models. Screenshots `v3-*.jpg` and
+`contact-sheet-v3.jpg` in `docs/screenshots/beaver-otter-mockup/`, rendered
+on SwiftShader with no GPU.
+
+**Version 4: arms that move, calmer fur, empty paws (owner, 2026-11-20).**
+On version 3: "the arms on beaver and otter should animate when they move
+or stand up", and "the fur shaking is cool, but a little over the top, I
+would want more subtle". Then, on the sea otter: "do sea otters always need
+to have the urchin in hand when grooming AND sleeping?"
+
+What was wrong, measured:
+
+- **The forelegs were barely skinned to their bones.** Along a foreleg the
+  forearm's skin took about 0.45 of its weight from the elbow bone, 0.3
+  from the shoulder and 0.2 from the paw, and the paw only 0.47 from its
+  own bone (the beaver's left foreleg; the otters alike). The inverse
+  fourth power with a 1 cm floor cannot tell bones 7 cm long apart, and
+  four rounds of half-strength smoothing over the low-poly mesh evened what
+  was left, so a bent elbow moved the paw about half as far as the bone
+  and the arm read as a stiff stub.
+- **The poses switched the arms, then held them.** A rear-up (the beaver
+  sitting up, the otter looking round) kept the forepaws on the ground
+  until the body was half way up and then moved them to the chest in one
+  frame; the gnaw blended straight to paws on the trunk with no rise at
+  all; swimming held both forelegs in one tucked angle; on its back the sea
+  otter's paws were still between strokes.
+- **The tufts' spring was loose.** 2.4 Hz at a third of critical damping,
+  its whole lag (up to 3 cm) on the tips, a full clump to the wet shape:
+  every step left the coat ringing.
+- **The sea otter's paws were never empty.** The urchin was drawn between
+  its paws whenever it had one, and the stone on its chest whenever it lay
+  on its back: grooming, rolling and asleep in the kelp.
+
+Version 4:
+
+- **Skin weights** (`critter_sculpt.py`, `skin_weights`): a leg's bones
+  fall off at the seventh power with a 3 mm floor, and a vertex the leg
+  owns keeps most of its weight through the smoothing, so each segment owns
+  its own skin and blends only round its joint. Now the forearm is 0.64 to
+  0.79 its own bone, the paw 0.65 to 0.77, the upper arm 0.55 to 0.9; the
+  shoulder still blends into the chest. Only the weights changed; the
+  sculpt, its painting and the tufts are as in version 3.
+- **One schedule for rearing and sitting down** (`rear`): the anticipation
+  (the body sinks, the head dips, the paws press), the rise, with the
+  forepaws leaving the ground a beat after the body, wrists hanging, then
+  catching up on an arc that bulges up and forward, carrying past their
+  mark and settling (overlapping action, `overshoot`); going down the
+  paws lead, reaching for the ground with the wrists open before the body
+  arrives, and the elbows give as the weight lands. The beaver uses it to
+  rear up to its aspen (the paws land on the trunk, then grip and pull in
+  on each bite) and to drop to all fours as the tree creaks, to sit up and
+  groom (the paws come to its face, rub in circles, then reach down) and
+  to watch the tree fall; the river otter to look round (paws drawn up to
+  its chest) and to sit up on its rock to eat (the paws bring the trout to
+  its mouth on each bite, then it sits back down).
+- **Walking and bounding**: each forepaw's wrist flexes as it peels off the
+  ground and opens to reach for the next contact (`swing_curl_rad`), the
+  elbow folding on the arc the leg is solved to, the contacts planted as
+  before. Gnawing a branch on the ground, the forepaws hold it and press on
+  each bite.
+- **Swimming as each animal does**: a beaver swims on its hind feet alone,
+  its forepaws held loosely to its chest, nodding with each kick; a river
+  otter dog-paddles with its forelegs while it swims slowly or treads water
+  (alternate strokes, the elbow folding on the recovery, `paddle_rad`) and
+  lays them back along its body when it swims fast or dives; a sea otter
+  belly down tucks them like the beaver.
+- **The sea otter's paws**: at rest on its back they rise and fall with
+  its breathing; grooming, they work along its belly and chest, rubbing in
+  circles and squeezing the fur between them, blended in and out rather
+  than switched.
+- **Empty paws except while it forages and eats.** The urchin is in its
+  paws only from the moment it comes up with it in the dive, through the
+  cracking and the eating; then it lets go and the shell bits drift off its
+  chest. The stone is on its chest only while it cracks; between uses it is
+  tucked in the loose skin under its foreleg, as a real sea otter keeps its
+  favourite stone, and nothing is drawn. An urchin brought up is cracked
+  before anything else, so it grooms, rolls, dives and sleeps with empty
+  paws; asleep in the kelp its paws rest on its chest, then come up toward
+  its face as its head curls down onto them.
+- **Subtler fur** (`shared.fur`, the new defaults; the sliders still reach
+  version 3's values): a 3.6 Hz spring at 0.75 of critical damping (one
+  small overshoot, settled in about a third of a second), 0.4 of its lag on
+  the tips and at most 1.2 cm, the wet spike 0.4 of the clumped shape, and
+  0.45 of that again during the shake-off.
+
+The new tunables join the RON block under `shared`: `forelegs`
+(`anticipate_s`, `rise_s`, `lower_s`, `overshoot`, `swing_curl_rad`,
+`paddle_rad`) and `fur` (`spring_hz`, `damping`, `sway`, `max_m`,
+`wet_spike`, `shake`). Today's motion keeps today's models. Screenshots
+`v4-*.jpg` and `contact-sheet-v4.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.
+
+**Version 5: forelimbs within a real animal's range, and paddling (owner,
+2026-11-20).** On version 4, from a phone screenshot of the beaver reared
+at an aspen, seen from the front-left, a forearm folded flat back against
+the upper arm and the paw tucked up by the shoulder: "bevers cant curl their
+arms back up like that". Then, of the river otter on its back: "otter arms
+also cannot curl back like that"; "it happens when they stand upright"; "the
+arms are curling backwards". On swimming, from a screenshot of the beaver
+under water with its forelegs held still under its chest: "swiming
+animation: arms needs to work like the feet, they should be paddling
+around", and of the otters: "their arms needs to paddle, they look too much
+like they are stuck in the walk pose when they swim". The paddling
+overrides version 4's real-beaver tuck on purpose: the owner's call.
+
+What was wrong, checked and measured:
+
+- **The joints were right.** A debug view (`__critters.debug`: each
+  forelimb bone's axes drawn, an animal held at given joint angles) shows
+  every forelimb joint turning about its bone's z, the body's lateral
+  axis, with the same sign on both sides and no twist about the bone: +30
+  degrees on the elbow swings the forearm forward and up (the elbow points
+  back), -30 on the wrist curls the paw down and under. The bind pose
+  (bones unrotated, the sculpt skinned round them) and `critters_mesh.js`
+  agree with the page (`buildRig` checks the rest joints), so nothing in
+  `critter_sculpt.py` changed.
+- **The poses folded them.** The upright poses sent the hands to points
+  at or behind the shoulder in the chest's own frame (the beaver grooming
+  at 6 cm forward and 2 cm toward the back from it, the otter looking
+  round at 3.5 cm, eating at 4.5 cm, watching the tree fall at 6 cm), and
+  the two-bone solver bent the elbow as far as it had to: 120 to 180
+  degrees, the forearm folded onto the upper arm. With the spine upright,
+  "forward along the spine" is up and "toward the back" is behind, so the
+  paws ended at the chin and past it.
+- **The wrist held the paw level.** A forepaw's wrist was solved to keep
+  the paw level with the ground, right for a paw on the ground, but on a
+  reared body with the forearm hanging or reaching forward it bent the paw
+  back over the hand or folded it right round. On their backs the otters'
+  wrists were set bent back (+0.3 to +0.8 rad from a paw at right angles to
+  the forearm).
+- **Swimming kept a fixed or walk-like arm.** The beaver held its forelegs
+  in one tucked angle; the river otter laid them back whenever it swam fast
+  or dived; idling in the water (`Hold`) and turning (`Face`) switched from
+  the standing pose to the swimming one at half depth in one frame.
+
+Measured by an instrument in the page (`__critters.LIMB`: the largest
+elbow and wrist angles each action reaches as the joints are set; the elbow
+wrapped to plus or minus 180 degrees, the wrist as the paw's angle from in
+line with the forearm, so a flat paw under an upright forearm is 90 degrees
+of dorsiflexion), over every action twice and then 600 seconds of the
+seeded brains (seed 7), version 4 against version 5:
+
+| Animal | Elbow flex, max | Elbow past straight, max | Wrist palmar flexion, max | Wrist dorsiflexion, max |
+| --- | ---: | ---: | ---: | ---: |
+| Beaver, version 4 | 178 | 108 | 176 | 173 |
+| Beaver, version 5 | 80 | 0 | 60 | 100 |
+| River otter, version 4 | 176 | 23 | 179 | 176 |
+| River otter, version 5 | 100 | 0 | 70 | 100 |
+| Sea otter, version 4 | 126 | 64 | 150 | 155 |
+| Sea otter, version 5 | 85 | 0 | 70 | 90 |
+
+Version 4's worst were the sit-up groom (elbow 163), the walk and the
+climbs (elbow up to 178, wrist folded round), the otter's look-round (129)
+and its bound (176), and the sea otter's crack (its elbow 64 degrees past
+straight, wrists folded back). Version 5's maxima sit on the limits, where
+the clamp holds them; nothing passes one.
+
+Version 5:
+
+- **Joint limits** per animal, in degrees, as sliders (`beaver.forelimb`,
+  `river_otter.forelimb`, `sea_otter.forelimb`): the elbow's flex from
+  straight, `elbow_max_deg` 80, 100 and 85 (a beaver's forelegs are short;
+  a river otter's bend more but not flat; a sea otter's are short), never
+  more than 5 past straight; the wrist from in line with the forearm,
+  `wrist_flex_deg` (curled down and under) 60, 70 and 70 and
+  `wrist_ext_deg` (bent back) 100, 100 and 95 (a flat paw under an upright
+  forearm is 90); `hands_in_deg` 16, 14 and 12, the shoulder rolled to
+  bring the hands toward each other. The solver holds a foreleg's target
+  out on its line from the shoulder so the elbow cannot pass its limit,
+  and every pose, blend, overshoot, lag and slider is clamped to the
+  limits last, as the joints are set (`applyPose`); the slider ranges stop
+  short of a folded joint (elbow at most 110 or 120).
+- **Upright arms hang with gravity** (`hangAt`, `shared.upright`): from the
+  shoulder as the body is pitched, 0.86 of the arm's length out and down at
+  62 degrees in front of the belly, in the root's level frame, the elbow
+  partly bent and the forearm forward and down from it; the paw curled 25
+  degrees past in line (`curl_deg`), blended in as it leaves the ground;
+  the hands drawn in toward each other. The beaver watching its tree fall,
+  the beaver sitting up and the river otter looking round and sitting to
+  eat all hang their hands so; grooming, the beaver combs down its belly
+  and brings each hand up toward its chin in turn as its head bows to meet
+  it; eating, the otter raises the trout a little toward its mouth and
+  bows to bite. Gnawing, the beaver's paws rest on the bark below its
+  mouth, the hands in line with the forearms and the fingers curled over
+  it. The rear-up's schedule and its overshoot are unchanged and clamped.
+- **On their backs** the river otter's and the sea otter's forepaws rest
+  on the chest toward the chin, the elbows partly bent and the paws curled
+  toward the chest, rafting, grooming, eating and asleep (the crack still
+  lifts the urchin at arm's length).
+- **Swimming is a pose and a cycle of its own** (`shared.paddle`): at the
+  surface and under water, every swimmer (the beaver, the river otter, the
+  sea otter belly down in its dive) strokes with its forepaws like its
+  feet: reach forward, pull down and back with the elbow nearly straight
+  and the palm pushing, recover tucked under the chest with the elbow bent
+  (`paddle_tuck`, 0.85 of its limit) and the paw curled; left and right in
+  turn, phased against the hind kick (`paddle_phase_rad`, a quarter
+  stroke). The reach (`shared.forelegs.paddle_rad`) and the stroke rate
+  follow the swim speed: at rest `paddle_idle` (0.35) of the reach and
+  `rate_idle` (0.45) of the rate, a gentle tread. The hind feet kick swept
+  further back along the body. Nothing of the walk drives a leg in the
+  water: a move blends the walk and the swim by the depth under the animal
+  (as before), and idling and turning now blend the same way instead of
+  switching at half depth, so the bank blends rather than snaps.
+- The hop no longer straightens the elbow past straight, and the otter's
+  belly slide lays its paws back in line with its forearms instead of bent
+  back.
+
+The skin was checked bent to the limits (the beaver at 80 degrees, the
+river otter at 100, the sea otter at 85, the wrists curled to theirs): no
+inversion; a slight fold on the inside of the elbow, as skin does. The new
+tunables join the RON block: `beaver.forelimb`, `river_otter.forelimb`,
+`sea_otter.forelimb`, `shared.upright`, `shared.paddle`. Today's motion
+keeps today's models. Screenshots `v5-*.jpg` and `contact-sheet-v5.jpg` in
+`docs/screenshots/beaver-otter-mockup/`, rendered on SwiftShader with no
+GPU: poses only; the motion itself is for the owner to judge on the page.
