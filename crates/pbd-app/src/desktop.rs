@@ -1987,6 +1987,7 @@ pub fn run(args: &[String]) {
                 equipment::pack_hand,
                 equipment::paint,
                 menu::hide_hud_on_title,
+                menu::show_splash,
                 toasts::gather,
                 toasts::paint,
             )
@@ -2509,6 +2510,11 @@ pub fn run(args: &[String]) {
         launched,
         capture: launch.capture.is_some() && !launch.real_time,
     });
+    // A launch onto the title loads on the splash (`title-screen`, "The
+    // splash"): no world is seen before the menu.
+    if app.world().get_resource::<menu::Screen>() == Some(&menu::Screen::Title) {
+        app.insert_resource(pbd_app::loading::SplashLaunch);
+    }
     if launch.capture_loading
         && let Some(path) = &launch.capture
     {

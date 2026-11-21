@@ -72,7 +72,10 @@ impl Plugin for CrittersPlugin {
                 Update,
                 (
                     prewarm.run_if(resource_exists::<crate::loading::Warming>),
-                    draw.after(crate::fish::FishSet),
+                    // Not while the world loads or warms (`loading-screen`
+                    // decision 9): no live rig meets the warm-up.
+                    draw.after(crate::fish::FishSet)
+                        .run_if(crate::loading::ready),
                 ),
             );
     }

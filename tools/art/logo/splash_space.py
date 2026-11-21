@@ -3,7 +3,7 @@
 The field, nebula and stars are logo_cover.py's, the same seed, drawn at this size. The game
 draws the logo and the menu over it (`title-screen` design, "The splash").
 
-    <venv with numpy, pillow, scipy>/bin/python tools/art/logo/splash_space.py assets/ui/splash-space.jpg
+    <venv with numpy, pillow, scipy>/bin/python tools/art/logo/splash_space.py assets/ui/splash-space.png
 """
 import sys
 
@@ -58,5 +58,5 @@ for _ in range(9):
     img[cy - L:cy + L, cx - L:cx + L] += ((ray * 0.6 + core) * s)[..., None] * np.array([0.9, 0.95, 1.0])
 
 
-Image.fromarray((np.clip(img, 0, 1) ** (1 / 1.1) * 255).astype(np.uint8)).save(out, quality=90)
+Image.fromarray((np.clip(img, 0, 1) ** (1 / 1.1) * 255).astype(np.uint8)).save(out, optimize=True)
 print("splash", W, H)

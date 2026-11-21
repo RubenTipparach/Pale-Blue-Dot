@@ -88,6 +88,18 @@ impl Warming {
     pub fn prewarms(&self) -> bool {
         !self.immediate
     }
+
+    /// A world warming, for a test.
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Self {
+        Warming {
+            started: Instant::now(),
+            frames: 0,
+            quiet: 0,
+            clock_ran: None,
+            immediate: false,
+        }
+    }
 }
 
 /// Whether the loading screen has lifted (or there never was one).
@@ -359,6 +371,14 @@ struct DetailText;
 #[derive(Component)]
 struct Block;
 
+/// A plain launch that opens on the title (`title-screen`, "The splash"):
+/// its loading screen is the splash, deep space with the full logo, and the
+/// title's menu takes the bar's place when the world is ready. Inserted by
+/// the desktop before the first frame; a world opened later from the menu
+/// loads on the plain slab.
+#[derive(Resource)]
+pub struct SplashLaunch;
+
 /// The loading screen.
 pub struct LoadingPlugin {
     pub launched: Instant,
@@ -479,7 +499,7 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
 /// decision 8), the step in the body face and the bar as the stone band
 /// with its progress fill. The kit is decoded before the first frame
 /// (`ui_kit::install`), so the first frame the window shows is this one.
-fn spawn_screen(world: &mut World) {
+fn spawn_screen(world: &mut World, splash: bool) {
     ui_kit::install(world);
     let camera = world
         .spawn((
@@ -495,14 +515,22 @@ fn spawn_screen(world: &mut World) {
     // The logo's emblem, the crystal ball in its ring (`loading-screen` decision
     // 8), decoded now so the first frame shows it: a painted render, sampled
     // linear. The full logo is the main menu's.
-    let logo = {
-        let pixels = image::open(crate::paths::assets_dir().join("ui/logo-emblem.png"))
-            .unwrap_or_else(|e| panic!("assets/ui/logo-emblem.png: {e}"));
+    let decode = |world: &mut World, name: &str| {
+        let pixels = image::open(crate::paths::assets_dir().join(name))
+            .unwrap_or_else(|e| panic!("assets/{name}: {e}"));
         let mut img = Image::from_dynamic(pixels, true, RenderAssetUsages::default());
         img.sampler = bevy::image::ImageSampler::linear();
         let aspect = img.width() as f32 / img.height().max(1) as f32;
         (world.resource_mut::<Assets<Image>>().add(img), aspect)
     };
+    let logo = decode(world, "ui/logo-emblem.png");
+    // The splash: the space and the full logo where the title draws them.
+    let splash = splash.then(|| {
+        (
+            decode(world, "ui/splash-space.png").0,
+            decode(world, "ui/logo.png"),
+        )
+    });
     let kit = world.resource::<UiKit>();
     let (slab, (w, h)) = kit.rock("loading");
     let bar = kit.nine(Set::Stone, "bar");
@@ -524,29 +552,71 @@ fn spawn_screen(world: &mut World) {
             LoadingRoot,
         ))
         .with_children(|root| {
-            root.spawn((
-                slab,
-                Node {
-                    width: px(w),
-                    height: px(h),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(px(14)),
-                    ..default()
-                },
-            ))
-            .with_children(|panel| {
-                let logo_w = 96.0;
-                panel.spawn((
-                    ImageNode::new(logo.0.clone()),
+            if let Some((space, full)) = &splash {
+                root.spawn((
+                    ImageNode::new(space.clone()),
                     Node {
-                        width: px(logo_w),
-                        height: px(logo_w / logo.1),
-                        flex_shrink: 0.0,
-                        margin: UiRect::bottom(px(3)),
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        top: px(0),
+                        width: percent(100),
+                        height: percent(100),
                         ..default()
                     },
                 ));
+                // As the title lays it out (`menu::spawn_title`): the logo
+                // 300 wide, 10 from the top, the bar under it.
+                let logo_w = 300.0;
+                root.spawn((
+                    ImageNode::new(full.0.clone()),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(10),
+                        width: px(logo_w),
+                        height: px(logo_w / full.1),
+                        ..default()
+                    },
+                ));
+            }
+            // On the splash the step and bar stand bare under the logo, where
+            // the title's menu will be; otherwise on the slab.
+            let mut panel = match &splash {
+                Some((_, full)) => root.spawn(Node {
+                    position_type: PositionType::Absolute,
+                    top: px(10.0 + 300.0 / full.1 + 16.0),
+                    width: px(w),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    ..default()
+                }),
+                None => root.spawn((
+                    slab,
+                    Node {
+                        width: px(w),
+                        height: px(h),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::all(px(14)),
+                        ..default()
+                    },
+                )),
+            };
+            panel.with_children(|panel| {
+                let logo_w = 96.0;
+                if splash.is_some() {
+                    // The full logo is above; the slab keeps only its step and bar.
+                } else {
+                    panel.spawn((
+                        ImageNode::new(logo.0.clone()),
+                        Node {
+                            width: px(logo_w),
+                            height: px(logo_w / logo.1),
+                            flex_shrink: 0.0,
+                            margin: UiRect::bottom(px(3)),
+                            ..default()
+                        },
+                    ));
+                }
                 panel.spawn((
                     Text::new(Step::Reading.label()),
                     TextFont {
@@ -654,7 +724,7 @@ pub fn begin_switch(
     slot: crate::saves::Slot,
     new_world: Vec3,
 ) {
-    spawn_screen(world);
+    spawn_screen(world, false);
     let near = slot
         .file
         .position
@@ -696,7 +766,8 @@ pub fn begin_switch(
 /// and when it is done put what it made in place for `Startup`.
 fn drive_loading(world: &mut World) {
     if !world.contains_resource::<Preparing>() {
-        spawn_screen(world);
+        let splash = world.contains_resource::<SplashLaunch>();
+        spawn_screen(world, splash);
         let save = world
             .remove_resource::<WorldSave>()
             .unwrap_or_else(WorldSave::memory_only);
@@ -978,7 +1049,7 @@ pub fn warm(world: &mut World) {
 /// tell: its material, and its vertex layout (or, for a mesh whose vertices
 /// live only on the GPU, the mesh itself).
 #[derive(Clone, PartialEq, Eq, Hash)]
-enum Layout {
+pub(crate) enum Layout {
     Attributes(
         Vec<bevy::mesh::MeshVertexAttributeId>,
         bevy::mesh::PrimitiveTopology,
@@ -994,7 +1065,7 @@ enum Layout {
 /// material, tiny and unculled in front of the active camera, behind the
 /// opaque screen. The proxies go at `READY`.
 #[allow(clippy::type_complexity)]
-fn show_unseen<M: Material>(
+pub(crate) fn show_unseen<M: Material>(
     mut commands: Commands,
     warming: Res<Warming>,
     mut shown: Local<std::collections::HashSet<(AssetId<M>, Layout)>>,

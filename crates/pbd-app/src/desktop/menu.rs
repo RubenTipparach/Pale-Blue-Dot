@@ -689,28 +689,34 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
     // The splash: deep space under the logo, opaque, so the title never
     // shows the world behind it (`title-screen`, "The splash").
     let splash = {
-        let path = pbd_app::paths::assets_dir().join("ui/splash-space.jpg");
+        let path = pbd_app::paths::assets_dir().join("ui/splash-space.png");
         let pixels = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let mut img = Image::from_dynamic(pixels, true, bevy::asset::RenderAssetUsages::default());
         img.sampler = bevy::image::ImageSampler::linear();
         images.add(img)
     };
     let logo_w = 300.0;
+    // Under every front-door page (the title, its saves page and settings),
+    // over the world and the HUD: `show_splash` shows it.
+    commands.spawn((
+        SplashBackdrop,
+        ImageNode::new(splash),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(0),
+            width: percent(100.0),
+            height: percent(100.0),
+            ..default()
+        },
+        BackgroundColor(Color::BLACK),
+        GlobalZIndex(9),
+        Visibility::Hidden,
+    ));
     commands
         .spawn(timber_layer(Screen::Title))
-        .insert(BackgroundColor(Color::BLACK))
+        .insert(BackgroundColor(Color::NONE))
         .with_children(|layer| {
-            layer.spawn((
-                ImageNode::new(splash),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    top: px(0),
-                    width: percent(100.0),
-                    height: percent(100.0),
-                    ..default()
-                },
-            ));
             layer
                 // The logo near the top of the screen, the way in centred in
                 // the space under it (owner, 2026-11-17: "this logo should be
@@ -764,9 +770,41 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
 #[derive(Component)]
 pub struct InPlayHud;
 
-/// Hide the in-play HUD while the title screen is up.
-pub fn hide_hud_on_title(screen: Res<Screen>, mut hud: Query<&mut Visibility, With<InPlayHud>>) {
-    let want = if *screen == Screen::Title {
+/// The splash behind the front door's pages (`title-screen`, "The splash").
+#[derive(Component)]
+pub struct SplashBackdrop;
+
+/// Whether the screen is one of the front door's: the title, or its saves
+/// page or settings while the title is the front door.
+fn on_front_door(screen: Screen, front: FrontDoor) -> bool {
+    screen == Screen::Title || (front.0 && matches!(screen, Screen::Saves | Screen::Settings))
+}
+
+/// Show the splash on the front door's pages and nowhere else.
+pub fn show_splash(
+    screen: Res<Screen>,
+    front: Res<FrontDoor>,
+    mut splash: Query<&mut Visibility, With<SplashBackdrop>>,
+) {
+    let want = if on_front_door(*screen, *front) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in &mut splash {
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+}
+
+/// Hide the in-play HUD while the front door is up.
+pub fn hide_hud_on_title(
+    screen: Res<Screen>,
+    front: Res<FrontDoor>,
+    mut hud: Query<&mut Visibility, With<InPlayHud>>,
+) {
+    let want = if on_front_door(*screen, *front) {
         Visibility::Hidden
     } else {
         Visibility::Inherited

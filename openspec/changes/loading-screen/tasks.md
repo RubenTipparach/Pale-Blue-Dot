@@ -60,3 +60,5 @@
 - [ ] 5.4 The step's video, for the owner's batch.
 - [ ] 5.5 Decision 9: `show_unseen` never proxies a skinned mesh (code
   written 2026-11-20; build, then a load beside a beaver colony, still owed).
+- [x] 5.6 The critters draw only after `READY`; a test forces their rigs into
+  the warm-up and pins that no skinned mesh is drawn without its skin.

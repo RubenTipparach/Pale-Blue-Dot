@@ -6,7 +6,7 @@
 
 ## The splash and MAIN MENU (2026-11-20)
 
-- [x] 2.1 `assets/ui/splash-space.jpg` and `tools/art/logo/splash_space.py`.
+- [x] 2.1 `assets/ui/splash-space.png` and `tools/art/logo/splash_space.py`.
 - [x] 2.2 The title layer draws the splash, opaque, under the logo and panel.
 - [x] 2.3 MAIN MENU on the pause menu (`menu.main_menu`): the title as the front door.
 - [ ] 2.4 Built and seen in the game (waits for the owner's play session to end).

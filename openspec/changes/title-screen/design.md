@@ -39,7 +39,7 @@ need some cool splash screen for menu instead of loading into a world", and
 
 - **The splash.** The title no longer stands over the open world. It stands
   on deep space: the store cover's field, nebula and stars without the logo,
-  at 1920 x 1080 (`assets/ui/splash-space.jpg`, made by
+  at 1920 x 1080 (`assets/ui/splash-space.png`, made by
   `tools/art/logo/splash_space.py` from `logo_cover.py`'s own field and seed),
   stretched to the window, opaque. The logo and the oak panel sit on it as
   before. The HUD is already hidden on the title.

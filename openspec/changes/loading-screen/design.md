@@ -319,3 +319,14 @@ The fix: `show_unseen` skips any mesh that is skinned, by its `SkinnedMesh` or
 by joint attributes in its layout. Skinned pipelines are warmed by the
 critters' own proxy rigs, which carry their skin. Not yet built or run: the
 owner is playing (2026-11-20, "no more launches until midnight").
+
+**And the animals wait for the world (owner, 2026-11-21).** "Can we delay
+loading animals till after game loads?", then "Fix it.. and make a test that
+forces spawn critters". The critters' `draw` runs only once the screen has
+lifted (`loading::ready`): no beaver or otter is spawned while the world loads
+or warms, so the warm-up never meets a live rig. Their own warm-up rigs
+(`critters::prewarm`, skin and all) still make their pipelines behind the
+screen, so drawing the first one in play compiles nothing late. A test
+(`critters::tests`) spawns every animal's rig as the live game does while the
+world warms, runs the warm-up over them, and fails if any entity draws a
+skinned mesh without its skin; it fails on the code before decision 9.
