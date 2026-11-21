@@ -310,7 +310,7 @@ fn the_wiki_page_holds_to_the_roster() {
         let heading = format!(
             "![](../../assets/{}) {}\n",
             species_icon(species),
-            species.name
+            species.name()
         );
         assert!(
             section.starts_with(&heading),
@@ -318,12 +318,12 @@ fn the_wiki_page_holds_to_the_roster() {
             species.id
         );
         assert!(
-            section.contains(&species.guide.entry),
+            section.contains(species.entry().as_str()),
             "{}: entry",
             species.id
         );
         assert!(
-            section.contains(&format!("*Tip:* {}", species.guide.tip)),
+            section.contains(&format!("*Tip:* {}", species.tip())),
             "{}: tip",
             species.id
         );
@@ -545,13 +545,13 @@ fn smaller_water_makes_smaller_fish() {
 fn both_buttons_say_what_they_do_in_every_phase() {
     use pbd_core::fishing::Phase;
     let table = [
-        (Phase::Ready, ("HOLD TO CAST", true), false),
-        (Phase::Charging, ("LET GO TO CAST", true), false),
-        (Phase::Flying, ("HOOK", false), true),
-        (Phase::Floating, ("HOOK", false), true),
-        (Phase::Nibble, ("HOOK", false), true),
-        (Phase::Bite, ("HOOK", true), true),
-        (Phase::Hooked, ("HOLD TO REEL", true), false),
+        (Phase::Ready, ("fishing.key.hold_to_cast", true), false),
+        (Phase::Charging, ("fishing.key.let_go_to_cast", true), false),
+        (Phase::Flying, ("fishing.key.hook", false), true),
+        (Phase::Floating, ("fishing.key.hook", false), true),
+        (Phase::Nibble, ("fishing.key.hook", false), true),
+        (Phase::Bite, ("fishing.key.hook", true), true),
+        (Phase::Hooked, ("fishing.key.hold_to_reel", true), false),
     ];
     for (phase, left, _) in table {
         let [l, r] = super::keys_for(phase);
@@ -559,7 +559,7 @@ fn both_buttons_say_what_they_do_in_every_phase() {
         let cancel = if matches!(phase, Phase::Ready | Phase::Charging | Phase::Hooked) {
             ""
         } else {
-            "CANCEL"
+            "fishing.key.cancel"
         };
         assert_eq!(r, (cancel, false), "{phase:?}");
     }
@@ -959,4 +959,39 @@ fn a_school_in_a_river_reads_its_depth_from_the_river() {
     let depth = surface - fish.length();
     assert!((depth - 0.5).abs() < 1e-2, "half a metre down: {depth}");
     assert!(sea.radius - fish.length() < 0.0, "the sea's rule gave none");
+}
+
+/// The beaver is offered by the spawner only within 40 m of a colony that
+/// is not gone (`ocean-environments` B29, task 8.4); the river otter, which
+/// asks for none, anywhere its water allows.
+#[test]
+fn a_beaver_is_offered_only_by_a_colony() {
+    use pbd_core::beaver::{Colony, Site, State};
+    let fauna = crate::config::FaunaConfig::default();
+    let roster = fauna.0.roster(HOME_BODY);
+    let beaver = roster.iter().find(|s| s.id == "beaver").unwrap();
+    let otter = roster.iter().find(|s| s.id == "river_otter").unwrap();
+    assert_eq!(beaver.near_colony_m, 40.0);
+    let at = Vec3::new(0.3, 0.9, 0.3).normalize();
+    let site = Site {
+        at: at.to_array(),
+        lip: vec![1, 2, 3],
+        pond: vec![4],
+        bed: 10,
+        bank: 12,
+        trees: Vec::new(),
+    };
+    let mut colony = Colony::new(vec![site], 4, 0);
+    let r = crate::planet::PLANET_RADIUS;
+    let off = |m: f32| (at + at.any_orthonormal_vector() * (m / r)).normalize();
+    let colonies = [colony.clone()];
+    assert!(colony_allows(beaver, off(20.0), &colonies), "20 m from it");
+    assert!(!colony_allows(beaver, off(55.0), &colonies), "55 m from it");
+    assert!(!colony_allows(beaver, at, &[]), "no colony");
+    assert!(
+        colony_allows(otter, off(500.0), &[]),
+        "the otter needs none"
+    );
+    colony.state = State::Gone;
+    assert!(!colony_allows(beaver, at, &[colony]), "a gone colony");
 }

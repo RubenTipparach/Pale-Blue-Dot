@@ -22,6 +22,8 @@ use pbd_app::walking::WalkingReadout;
 use pbd_core::husbandry::breeding::{self, Pedigree};
 use pbd_core::husbandry::record::{self, AnimalBody, Life};
 use pbd_core::husbandry::{Genome, Keeping, LandSpecies, Sex, genome};
+use pbd_core::locale::Localized;
+use pbd_core::locale::{tr, tr_with};
 use std::collections::BTreeMap;
 
 /// The part of the panel rebuilt when the pick or the herd changes.
@@ -56,7 +58,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
             layer
                 .spawn(menu::framed(&kit, Set::Stone, 600.0))
                 .with_children(|panel| {
-                    menu::lintel(panel, &kit, "BREEDING");
+                    menu::lintel(panel, &kit, tr("breeding.breeding"));
                     panel.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
@@ -125,7 +127,7 @@ pub fn press(
                 let (Some(sire), Some(dam), Some(save)) =
                     (pick.sire, pick.dam, save.as_deref_mut())
                 else {
-                    pick.said = "Pick a sire and a dam".into();
+                    pick.said = tr("breeding.pick_sire_dam").into();
                     continue;
                 };
                 pick.said = pbd_app::husbandry::breed::pair(save, dam, sire);
@@ -159,20 +161,34 @@ fn generation(id: u64, all: &BTreeMap<u64, AnimalBody>, depth: u32) -> u32 {
 
 /// The coat and pattern a genome shows, by the species' names.
 fn looks(keep: &Keeping, g: &Genome) -> String {
-    let coat = keep.coats.get(g.coat()).map_or("?", String::as_str);
-    let pattern = keep.patterns.get(g.pattern()).map_or("?", String::as_str);
+    let coat = word("coat", keep.coats.get(g.coat()));
+    let pattern = word("pattern", keep.patterns.get(g.pattern()));
     if g.morph() {
-        format!("{} {}, {}", keep.morph, coat, pattern)
+        let morph = word("morph", Some(&keep.morph));
+        tr_with(
+            "breeding.looks_morph",
+            &[("morph", &morph), ("coat", &coat), ("pattern", &pattern)],
+        )
+        .into()
     } else {
-        format!("{coat}, {pattern}")
+        tr_with("breeding.looks", &[("coat", &coat), ("pattern", &pattern)]).into()
     }
 }
 
+/// A keeping word from the data (a coat, a pattern, a morph, an adult's
+/// name), by its id: `husbandry.<what>.<id>`; `?` for none.
+fn word(what: &str, id: Option<&String>) -> Localized {
+    id.map_or_else(
+        || Localized::verbatim("?"),
+        |id| tr(&format!("husbandry.{what}.{id}")),
+    )
+}
+
 /// The adult name for a sex: hen or cockerel, ewe or ram.
-fn sex_name(keep: &Keeping, sex: Sex) -> &str {
+fn sex_name(keep: &Keeping, sex: Sex) -> Localized {
     match sex {
-        Sex::F => &keep.young.adult.0,
-        Sex::M => &keep.young.adult.1,
+        Sex::F => word("adult", Some(&keep.young.adult.0)),
+        Sex::M => word("adult", Some(&keep.young.adult.1)),
     }
 }
 
@@ -254,7 +270,7 @@ pub fn paint(
             for (i, s) in &kept_species {
                 tabs.spawn((plaque(&kit, Set::Stone, 60.0), MenuAction::BreedSpecies(*i)))
                     .with_children(|p| {
-                        let name = s.name.to_uppercase();
+                        let name = s.name().to_uppercase();
                         p.spawn(text(name, 10.0, ui_kit::LABEL));
                     });
             }
@@ -274,15 +290,19 @@ pub fn paint(
                     ..default()
                 })
                 .with_children(|list| {
-                    list.spawn(text("THE HERD", 11.0, AMBER));
+                    list.spawn(text(tr("breeding.herd"), 11.0, AMBER));
                     if herd.is_empty() {
-                        list.spawn(text("No kept animals", 10.0, DIM));
+                        list.spawn(text(tr("breeding.no_kept_animals"), 10.0, DIM));
                     }
                     for k in herd.iter().take(12) {
                         herd_row(list, &kit, keep, k, &pick);
                     }
                     if herd.len() > 12 {
-                        list.spawn(text(format!("and {} more", herd.len() - 12), 9.0, DIM));
+                        list.spawn(text(
+                            tr_with("breeding.more", &[("count", &(herd.len() - 12))]),
+                            9.0,
+                            DIM,
+                        ));
                     }
                 });
             // Right: the pair.
@@ -347,7 +367,11 @@ fn herd_row(
             .clone()
             .unwrap_or_else(|| format!("{} {}", sex_name(keep, k.body.sex), k.id));
         row.spawn(text(name, 10.0, ui_kit::LABEL));
-        row.spawn(text(format!("gen {}", k.generation), 9.0, ui_kit::TAB_DIM));
+        row.spawn(text(
+            tr_with("breeding.generation", &[("generation", &k.generation)]),
+            9.0,
+            ui_kit::TAB_DIM,
+        ));
         row.spawn(text(looks(keep, &k.genome), 9.0, DIM));
     });
 }
@@ -365,8 +389,14 @@ fn pair_panel(
 ) {
     let name = |id: Option<u64>, sex: Sex| -> String {
         id.map_or_else(
-            || format!("pick a {}", sex_name(keep, sex)),
-            |id| format!("{} {id}", sex_name(keep, sex)),
+            || tr_with("breeding.pick_a", &[("adult", &sex_name(keep, sex))]).into(),
+            |id| {
+                tr_with(
+                    "breeding.animal",
+                    &[("adult", &sex_name(keep, sex)), ("id", &id)],
+                )
+                .into()
+            },
         )
     };
     right
@@ -391,40 +421,52 @@ fn pair_panel(
     let close = f > s.warn_f + 1e-6;
     right.spawn(text(
         if close {
-            format!(
-                "F {f:.3}  close kin: hardiness -{:.0}%, litters -{:.0}%",
-                s.hardiness_per_f * f * 100.0,
-                f * 100.0
+            tr_with(
+                "breeding.close_kin",
+                &[
+                    ("f", &format!("{f:.3}")),
+                    (
+                        "hardiness",
+                        &format!("{:.0}", s.hardiness_per_f * f * 100.0),
+                    ),
+                    ("litters", &format!("{:.0}", f * 100.0)),
+                ],
             )
         } else {
-            format!("F {f:.3}")
+            tr_with("breeding.inbreeding", &[("f", &format!("{f:.3}"))])
         },
         10.0,
         if close { WARN } else { INK },
     ));
     for (label, gene) in [
-        ("SIZE", genome::SIZE),
-        ("YIELD", genome::YIELD),
-        ("TEMPER", genome::TEMPERAMENT),
-        ("HARDY", genome::HARDINESS),
+        (tr("breeding.size"), genome::SIZE),
+        (tr("breeding.yield"), genome::YIELD),
+        (tr("breeding.temper"), genome::TEMPERAMENT),
+        (tr("breeding.hardy"), genome::HARDINESS),
     ] {
-        gene_bar(right, label, &sg, &dg, gene);
+        gene_bar(right, &label, &sg, &dg, gene);
     }
     // Coat, pattern and morph odds, in quarters.
-    let odds = |gene: usize, names: &[String]| -> String {
+    let odds = |gene: usize, what: &str, names: &[String]| -> String {
         breeding::discrete_odds(&sg, &dg, gene)
             .into_iter()
-            .map(|(i, q)| format!("{} {}%", names.get(i).map_or("?", String::as_str), q * 25))
+            .map(|(i, q)| format!("{} {}%", word(what, names.get(i)), q * 25))
             .collect::<Vec<_>>()
             .join("  ")
     };
     right.spawn(text(
-        format!("COAT  {}", odds(genome::COAT, &keep.coats)),
+        tr_with(
+            "breeding.coat",
+            &[("odds", &odds(genome::COAT, "coat", &keep.coats))],
+        ),
         10.0,
         INK,
     ));
     right.spawn(text(
-        format!("PATTERN  {}", odds(genome::PATTERN, &keep.patterns)),
+        tr_with(
+            "breeding.pattern",
+            &[("odds", &odds(genome::PATTERN, "pattern", &keep.patterns))],
+        ),
         10.0,
         INK,
     ));
@@ -446,11 +488,11 @@ fn pair_panel(
         .with_children(|row| {
             row.spawn((plaque(kit, Set::Stone, 60.0), MenuAction::BreedPair))
                 .with_children(|p| {
-                    p.spawn(text("PAIR", 10.0, ui_kit::LABEL));
+                    p.spawn(text(tr("breeding.pair"), 10.0, ui_kit::LABEL));
                 });
             let paired = dam.mate.is_some() && dam.mate == pick.sire;
             let said = if pick.said.is_empty() && paired {
-                "Paired".to_string()
+                tr("breeding.paired").to_string()
             } else {
                 pick.said.clone()
             };
@@ -563,9 +605,9 @@ fn pedigree_panel(
         let line = match who.and_then(|w| all.get(&w).map(|b| (w, b))) {
             Some((w, b)) => {
                 let ended = if b.state == Life::Ended {
-                    ", ended"
+                    tr("breeding.ended")
                 } else {
-                    ""
+                    Localized::empty()
                 };
                 format!(
                     "{} {w}{ended}  {}",
@@ -573,7 +615,7 @@ fn pedigree_panel(
                     looks(keep, &b.genome())
                 )
             }
-            None => "wild-caught founder".to_string(),
+            None => tr("breeding.wild_caught_founder").to_string(),
         };
         let colour = match who.and_then(|w| all.get(&w)).map(|b| b.sex) {
             Some(Sex::M) => SIRE,
@@ -598,10 +640,17 @@ fn pedigree_panel(
             .map_or((None, None), |b| (b.sire, b.dam))
     };
     root.spawn(text(
-        format!(
-            "PEDIGREE  {} {id}  F {:.3}",
-            all.get(&id).map_or("", |b| sex_name(keep, b.sex)),
-            pedigree.f(id, generations)
+        tr_with(
+            "breeding.pedigree",
+            &[
+                (
+                    "adult",
+                    &all.get(&id)
+                        .map_or_else(Localized::empty, |b| sex_name(keep, b.sex)),
+                ),
+                ("id", &id),
+                ("f", &format!("{:.3}", pedigree.f(id, generations))),
+            ],
         ),
         10.0,
         AMBER,

@@ -9,7 +9,7 @@ fn objective(kind: Kind, what: &str, count: u32) -> ObjectiveEntry {
         kind,
         what: what.into(),
         count,
-        label: what.into(),
+        label: Some(what.into()),
     }
 }
 
@@ -23,9 +23,25 @@ fn app(chain: Option<MissionFile>) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     if let Some(file) = chain {
-        let fish = fauna.0.bodies.values().flatten().map(|s| s.name.as_str());
-        let animals = land.0.land.values().flatten().map(|s| s.name.as_str());
-        let catalog = Catalog::new(&recipes.0, fish, animals);
+        let fish = fauna
+            .0
+            .bodies
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let animals = land
+            .0
+            .land
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let catalog = Catalog::new(
+            &recipes.0,
+            fish.iter().map(String::as_str),
+            animals.iter().map(String::as_str),
+        );
         app.insert_resource(MissionChain(file.resolve(&catalog).unwrap()));
     }
     app.insert_resource(recipes)
@@ -72,8 +88,8 @@ fn every_kind_counts_from_its_message() {
             .iter()
             .map(|(id, o)| MissionEntry {
                 id: id.to_string(),
-                title: id.to_string(),
-                help: String::new(),
+                title: Some(id.to_string()),
+                help: None,
                 needs: vec![],
                 objectives: vec![o.clone()],
                 unlocks: vec![],
@@ -273,4 +289,23 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
             .as_deref(),
         Some("Go fishing 0/3")
     );
+}
+
+/// Every mission in `missions.ron` has its title, help and objective labels
+/// in the locale file, by its id.
+#[test]
+fn every_mission_has_its_words() {
+    let file: pbd_core::missions::MissionFile =
+        ron::from_str(include_str!("../../../../assets/config/missions.ron")).unwrap();
+    let english = pbd_core::locale::Locale::english();
+    for m in &file.missions {
+        let mut keys = vec![
+            format!("mission.{}.title", m.id),
+            format!("mission.{}.help", m.id),
+        ];
+        keys.extend((0..m.objectives.len()).map(|i| format!("mission.{}.objective.{i}", m.id)));
+        for key in keys {
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 }

@@ -37,6 +37,7 @@ use pbd_core::husbandry::{
     Edge, Genome, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
 };
 use pbd_core::inventory::{Item, Slots};
+use pbd_core::locale::{Localized, tr, tr_with};
 use pbd_core::records::Author;
 use pbd_core::terrain::Material;
 use pbd_core::world_frame::SimOrigin;
@@ -894,35 +895,34 @@ fn offer(
         let (who, species) = (yard.beasts[k].who, yard.beasts[k].species);
         let following = yard.beasts[k].mode == Mode::Follow;
         let sp = world.roster().get(species as usize)?.clone();
-        let name = sp.name.to_lowercase();
+        let name = sp.name();
         let keep = sp.keep.as_ref();
         return match who {
-            Who::Wild { .. } => {
-                (sp.refusal().is_none() && keep.is_some()).then(|| Offer::new(Act::Feed, name))
-            }
+            Who::Wild { .. } => (sp.refusal().is_none() && keep.is_some())
+                .then(|| Offer::new(Act::Feed, name.clone())),
             Who::Kept { id } => {
                 let body = save.records.get(record::ANIMAL, id)?.read::<AnimalBody>()?;
                 let keep = keep?;
                 if held == Some(Item::Good(Good::FERTILE_EGG))
                     && matches!(keep.young.birth, pbd_core::husbandry::Birth::Eggs { .. })
                 {
-                    return Some(Offer::new(Act::SetEggs, name));
+                    return Some(Offer::new(Act::SetEggs, name.clone()));
                 }
                 let now = farm_now(world, yard, save, id, &body);
-                let waiting: Vec<&str> = keep
+                let waiting: Vec<String> = keep
                     .products
                     .iter()
                     .filter(|p| now.waiting(&p.good) > 0 && p.good().is_some())
-                    .map(|p| match p.good.as_str() {
-                        "egg" => "eggs",
-                        good => good,
-                    })
+                    .map(|p| tr(&format!("husbandry.collect.{}", p.good)).into_string())
                     .collect();
                 if !waiting.is_empty() {
-                    return Some(Offer::new(Act::Collect, waiting.join(", ")));
+                    return Some(Offer::new(
+                        Act::Collect,
+                        Localized::verbatim(waiting.join(", ")),
+                    ));
                 }
                 if held.is_some_and(|i| keep.eats(i)) {
-                    return Some(Offer::new(Act::Feed, name));
+                    return Some(Offer::new(Act::Feed, name.clone()));
                 }
                 Some(Offer::new(
                     if following { Act::LetStay } else { Act::Lead },
@@ -938,10 +938,16 @@ fn offer(
             pbd_core::husbandry::breeding::Place::Incubator(cell),
         );
         if held == Some(Item::Good(Good::FERTILE_EGG)) {
-            return Some(Offer::new(Act::SetInIncubator, "incubator"));
+            return Some(Offer::new(
+                Act::SetInIncubator,
+                tr("husbandry.thing.incubator"),
+            ));
         }
         if holds == 0 && held.is_none() {
-            return Some(Offer::new(Act::TakeIncubator, "incubator"));
+            return Some(Offer::new(
+                Act::TakeIncubator,
+                tr("husbandry.thing.incubator"),
+            ));
         }
         if holds > 0 {
             return None;
@@ -949,7 +955,14 @@ fn offer(
     }
     let (edge, _, _) = edge_at(world, point)?;
     let gate = *record::pieces(&save.records).get(&edge)?;
-    Some(Offer::new(Act::TakeUp, if gate { "gate" } else { "fence" }))
+    Some(Offer::new(
+        Act::TakeUp,
+        if gate {
+            tr("husbandry.thing.gate")
+        } else {
+            tr("husbandry.thing.fence")
+        },
+    ))
 }
 
 /// Offer the husbandry hands' act to the interact key.
@@ -1105,20 +1118,23 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
     let Some(sp) = roster.get(species as usize) else {
         return;
     };
-    let name = sp.name.clone();
+    let name = sp.name();
     let held = hotbar.held().map(|st| st.item);
     match who {
         Who::Wild { .. } => {
             if let Some(why) = sp.refusal() {
-                yard.say(format!("{name}: {why}"), 2.5);
+                yard.say(
+                    tr_with("husbandry.refused", &[("name", &name), ("why", &why)]),
+                    2.5,
+                );
                 return;
             }
             let keep = sp.keep.as_ref().expect("tameable");
             if !held.is_some_and(|i| keep.eats(i)) {
                 yard.say(
-                    format!(
-                        "{name} eats {}: hold some and stand still",
-                        keep.food_name()
+                    tr_with(
+                        "husbandry.eats",
+                        &[("name", &name), ("food", &keep.food_name())],
                     ),
                     2.5,
                 );
@@ -1162,21 +1178,27 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 }
                 if took > 0 {
                     yard.gained.push((Item::Good(good), took as u16));
-                    got.push(match (p.good.as_str(), took) {
-                        ("egg", 1) if good == Good::FERTILE_EGG => "a fertile egg".to_string(),
-                        ("egg", n) if good == Good::FERTILE_EGG => format!("{n} fertile eggs"),
-                        ("egg", 1) => "an egg".to_string(),
-                        ("egg", n) => format!("{n} eggs"),
-                        ("milk", 1) => "a pail of milk".to_string(),
-                        ("milk", n) => format!("{n} pails of milk"),
-                        (good, n) => format!("{n} {good}"),
-                    });
+                    let what = if good == Good::FERTILE_EGG {
+                        "fertile_egg"
+                    } else {
+                        p.good.as_str()
+                    };
+                    got.push(
+                        tr_with(&format!("husbandry.collected.{what}"), &[("count", &took)])
+                            .into_string(),
+                    );
                 }
             }
             if !got.is_empty() {
                 body.set_farm(&now);
                 store_animal(save, &body, id, Some(hotbar));
-                yard.say(format!("{name}: collected {}", got.join(", ")), 2.5);
+                yard.say(
+                    tr_with(
+                        "husbandry.collected_line",
+                        &[("name", &name), ("got", &got.join(", "))],
+                    ),
+                    2.5,
+                );
                 return;
             }
             if held.is_some_and(|i| sp.keep.as_ref().is_some_and(|k| k.eats(i))) {
@@ -1189,7 +1211,10 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 let who = yard.beasts[k].who;
                 yard.hearts.push((who, 5));
                 yard.say(
-                    format!("{name} is fed for {} days", s.needs.hand_feed_days),
+                    tr_with(
+                        "husbandry.fed",
+                        &[("name", &name), ("days", &s.needs.hand_feed_days)],
+                    ),
                     2.5,
                 );
                 return;
@@ -1200,7 +1225,7 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
             } else {
                 b.mode = Mode::Follow;
                 b.mode_s = s.taming.follow_s;
-                yard.say(format!("{name} follows you (F to let it stay)"), 2.5);
+                yard.say(tr_with("husbandry.follows", &[("name", &name)]), 2.5);
             }
         }
     }
@@ -1230,7 +1255,7 @@ fn feed_wild(
         return;
     }
     let factor = b.genome.trust_factor();
-    let name = sp.name.clone();
+    let name = sp.name();
     let b = &mut yard.beasts[k];
     if !b.trust.feed(keep.trust_gain, factor) {
         // A feed that does not tame changes only the hands. The hearts say
@@ -1241,7 +1266,7 @@ fn feed_wild(
         b.head_goal = 1.2;
         let shown = (b.who, pbd_core::husbandry::taming::hearts(b.trust.value));
         yard.hearts.push(shown);
-        yard.say(format!("{name} eats from your hand"), 2.0);
+        yard.say(tr_with("husbandry.eats_from_hand", &[("name", &name)]), 2.0);
         return;
     }
     // Tamed: the record, at once, as the player's (decision 10).
@@ -1274,10 +1299,7 @@ fn feed_wild(
     let b = &mut yard.beasts[k];
     let species = b.species;
     yard.deeds.push(Deed::Tamed { species });
-    yard.say(
-        format!("{name} trusts you and follows (F to let it stay)"),
-        3.0,
-    );
+    yard.say(tr_with("husbandry.tamed", &[("name", &name)]), 3.0);
 }
 
 /// A follower let go: it lives where it stands, in the pen there if any.
@@ -1296,7 +1318,7 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     let name = world
         .roster()
         .get(body.sp as usize)
-        .map_or("It".to_string(), |s| s.name.clone());
+        .map_or_else(|| tr("husbandry.it"), |s| s.name());
     // The farm state up to now under the old home, then the new home.
     let now = farm_now(world, yard, save, id, &body);
     body.set_farm(&now);
@@ -1332,11 +1354,11 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     match pen.as_ref().and_then(|p| pen_range(world, p)) {
         Some(range) => {
             b.range = range;
-            yard.say(format!("{name} is penned"), 2.5);
+            yard.say(tr_with("husbandry.penned", &[("name", &name)]), 2.5);
         }
         None => {
             b.range = Range::Around(world.origin().up_at(b.pos), 6.0);
-            yard.say(format!("{name} stays here, loose"), 2.5);
+            yard.say(tr_with("husbandry.loose", &[("name", &name)]), 2.5);
         }
     }
 }
@@ -1391,14 +1413,14 @@ fn place_piece(
         return false;
     };
     if point.distance(feet) > world.settings().taming.reach_m * 2.5 {
-        yard.say("Too far to set a fence", 1.5);
+        yard.say(tr("husbandry.too_far"), 1.5);
         return false;
     }
     let Some((edge, _, _)) = edge_at(world, point) else {
         return false;
     };
     if record::pieces(&save.records).contains_key(&edge) {
-        yard.say("A piece already stands there", 1.5);
+        yard.say(tr("husbandry.piece_there"), 1.5);
         return false;
     }
     note_kinds(save);
@@ -1411,7 +1433,14 @@ fn place_piece(
     {
         return false;
     }
-    yard.say(if gate { "Gate set" } else { "Fence set" }, 1.0);
+    yard.say(
+        if gate {
+            tr("husbandry.gate_set")
+        } else {
+            tr("husbandry.fence_set")
+        },
+        1.0,
+    );
     closed_pen(world, yard, save, edge);
     true
 }
@@ -1432,7 +1461,7 @@ fn take_piece(
     };
     let good = if gate { Good::GATE } else { Good::FENCE };
     if hotbar.give(Item::Good(good), 1) > 0 {
-        yard.say("No room to carry it", 1.5);
+        yard.say(tr("husbandry.no_room"), 1.5);
         return true;
     }
     let piece = FenceBody {
@@ -1442,9 +1471,9 @@ fn take_piece(
     save.store_with_hands(piece.record(edge), record::FENCE_SCHEMA, hotbar);
     yard.say(
         if gate {
-            "Gate taken up"
+            tr("husbandry.gate_taken")
         } else {
-            "Fence taken up"
+            tr("husbandry.fence_taken")
         },
         1.0,
     );
@@ -1462,7 +1491,7 @@ fn closed_pen(world: &World, yard: &mut Farmyard, save: &WorldSave, edge: Edge) 
                 cells: pen.cells.len(),
             });
             yard.say(
-                format!("A pen of {} cells, with a gate", pen.cells.len()),
+                tr_with("husbandry.pen_closed", &[("cells", &pen.cells.len())]),
                 2.0,
             );
             return;
@@ -1898,7 +1927,7 @@ fn draw(
                 let handle = meshes.add(mesh);
                 let e = commands
                     .spawn((
-                        Name::new(sp.name.clone()),
+                        Name::new(sp.id.clone()),
                         LitByField,
                         Faded(1.0 - b.shown),
                         place,
@@ -2125,25 +2154,41 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
     let k = aimed_beast(world, yard)?;
     let b = &yard.beasts[k];
     let sp = world.roster().get(b.species as usize)?.clone();
-    let sex = if b.sex == Sex::M { "male" } else { "female" };
+    let sex = if b.sex == Sex::M {
+        tr("husbandry.sex.male")
+    } else {
+        tr("husbandry.sex.female")
+    };
     // A young one is named by its stage: a chick, a lamb (design 13, E1).
     let young = b
         .born
         .and_then(|born| breed::stage_now(world, b.species, b.sex, born))
         .filter(|(_, size)| *size < 1.0)
-        .map(|(name, _)| format!(" {name}"))
+        .map(|(name, _)| tr(&format!("husbandry.stage.{name}")).into_string())
         .unwrap_or_default();
-    let sitting = if b.sitting { ", sitting" } else { "" };
+    let sitting = b.sitting;
+    let name = sp.name();
+    let named = if young.is_empty() {
+        name.clone()
+    } else {
+        tr_with("husbandry.young", &[("name", &name), ("stage", &young)])
+    };
     match b.who {
         Who::Wild { .. } => Some(match (sp.refusal(), sp.keep.as_ref()) {
-            (Some(why), _) => format!("{} (wild) - {why}", sp.name),
-            (None, Some(k)) => format!(
-                "{} (wild, {sex}) - trust {:.0}% - eats {}",
-                sp.name,
-                b.trust.value,
-                k.food_name()
-            ),
-            _ => sp.name.clone(),
+            (Some(why), _) => {
+                tr_with("husbandry.wild_refused", &[("name", &name), ("why", &why)]).into_string()
+            }
+            (None, Some(k)) => tr_with(
+                "husbandry.wild",
+                &[
+                    ("name", &name),
+                    ("sex", &sex),
+                    ("trust", &format!("{:.0}", b.trust.value)),
+                    ("food", &k.food_name()),
+                ],
+            )
+            .into_string(),
+            _ => name.into_string(),
         }),
         Who::Kept { id } => {
             let save = save?;
@@ -2157,29 +2202,45 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
                 .filter(|p| p.gives(body.sex))
                 .filter_map(|p| {
                     let w = now.waiting(&p.good);
-                    (w > 0).then(|| format!("{w} {}", p.good))
+                    (w > 0).then(|| {
+                        tr_with(&format!("husbandry.waiting.{}", p.good), &[("count", &w)])
+                            .into_string()
+                    })
                 })
                 .collect();
             let c_mood = if now.sick(n) {
-                "sick".to_string()
+                tr("husbandry.mood.sick")
             } else if now.strayed(n) {
-                "strayed: feed it".to_string()
+                tr("husbandry.mood.strayed")
             } else {
-                format!("health {:.0}", now.health)
+                tr_with(
+                    "husbandry.mood.health",
+                    &[("health", &format!("{:.0}", now.health))],
+                )
             };
-            let pen = if body.pen.is_some() {
-                "penned"
-            } else {
-                "loose"
+            let state = match (body.pen.is_some(), sitting) {
+                (true, false) => tr_with("husbandry.state.penned", &[("sex", &sex)]),
+                (false, false) => tr_with("husbandry.state.loose", &[("sex", &sex)]),
+                (true, true) => tr_with("husbandry.state.penned_sitting", &[("sex", &sex)]),
+                (false, true) => tr_with("husbandry.state.loose_sitting", &[("sex", &sex)]),
             };
             Some(if waiting.is_empty() {
-                format!("{}{young} ({sex}, {pen}{sitting}) - {c_mood}", sp.name)
-            } else {
-                format!(
-                    "{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting",
-                    sp.name,
-                    waiting.join(", ")
+                tr_with(
+                    "husbandry.kept",
+                    &[("name", &named), ("state", &state), ("mood", &c_mood)],
                 )
+                .into_string()
+            } else {
+                tr_with(
+                    "husbandry.kept_waiting",
+                    &[
+                        ("name", &named),
+                        ("state", &state),
+                        ("mood", &c_mood),
+                        ("waiting", &waiting.join(", ")),
+                    ],
+                )
+                .into_string()
             })
         }
     }

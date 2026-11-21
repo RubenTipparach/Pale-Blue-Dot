@@ -1426,7 +1426,7 @@ pub fn offer_doors(
     use crate::interact::{Act, Offer};
     interact.offer(Offer::new(
         if open { Act::ShutDoor } else { Act::OpenDoor },
-        "door",
+        pbd_core::locale::tr("towns.door"),
     ));
 }
 

@@ -7,6 +7,8 @@
 //! corner (and an `EYE_PATH` log line), so a frame sequence can be stepped and
 //! every artifact read against its height. Nothing of it exists without the
 //! variable: no text, no system doing anything, never in the game.
+//!
+//! locale: dev
 
 use bevy::prelude::*;
 use pbd_app::planet::{EyeWater, PLANET_RADIUS, PlanetContact, PlanetFine};

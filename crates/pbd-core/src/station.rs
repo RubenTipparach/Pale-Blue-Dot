@@ -12,7 +12,7 @@
 //! the job is queued.
 
 use crate::goods::Good;
-use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool, material_name};
+use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 pub struct StationRow {
     /// Its saved name, in a station record and in `recipes.ron`.
     pub code: &'static str,
-    pub name: &'static str,
     /// The block it is; `None` for the hands, whose "station" is the pack
     /// itself (a recipe made by hand, `tool-crafting`).
     pub material: Option<Material>,
@@ -36,30 +35,33 @@ pub struct StationRow {
 /// recipe whose station is `hand` is queued and collected by the same rules,
 /// with its queue kept on the player rather than on a cell. Nothing in this
 /// change makes anything by hand yet.
+impl StationRow {
+    /// Its name: `station.<code>.name` in the locale file.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("station.{}.name", self.code))
+    }
+}
+
 pub const STATIONS: &[StationRow] = &[
     StationRow {
         code: "forge",
-        name: "forge",
         material: Some(Material::Forge),
         max_jobs: 4,
     },
     StationRow {
         code: "hand",
-        name: "hands",
         material: None,
         max_jobs: 4,
     },
     // `cooking` design S2: the kitchen's first station, also a light.
     StationRow {
         code: "campfire",
-        name: "campfire",
         material: Some(Material::Campfire),
         max_jobs: 4,
     },
     // tool-crafting: tools, the rod and a forge (decision 5).
     StationRow {
         code: "workbench",
-        name: "workbench",
         material: Some(Material::Workbench),
         max_jobs: 4,
     },
@@ -118,7 +120,7 @@ pub fn item_named(name: &str) -> Option<Item> {
     if let Some(block) = name.strip_prefix("block:") {
         return Material::ALL
             .into_iter()
-            .find(|m| material_name(*m) == block)
+            .find(|m| crate::inventory::material_id(*m) == block)
             .map(Item::Block);
     }
     Good::by_code(name).map(Item::Good)
@@ -130,8 +132,6 @@ pub fn item_named(name: &str) -> Option<Item> {
 pub struct RecipeEntry {
     /// Its saved name, in a station's queue. Never renamed once shipped.
     pub code: String,
-    /// What the panel's plaque says.
-    pub name: String,
     /// The station code it is made at.
     pub station: String,
     /// World seconds from start to done.
@@ -155,32 +155,28 @@ impl Default for RecipeFile {
     fn default() -> Self {
         let pair = |name: &str, n| (name.to_string(), n);
         let recipe = |code: &str,
-                      name: &str,
                       station: &str,
                       secs: f32,
                       inputs: &[(&str, u16)],
                       outputs: &[(&str, u16)]| RecipeEntry {
             code: code.into(),
-            name: name.into(),
             station: station.into(),
             secs,
             inputs: inputs.iter().map(|&(n, k)| pair(n, k)).collect(),
             outputs: outputs.iter().map(|&(n, k)| pair(n, k)).collect(),
         };
-        let stone_tool = |tool: &str, name: &str| {
+        let stone_tool = |tool: &str| {
             recipe(
                 &format!("stone-{tool}"),
-                name,
                 "workbench",
                 3.0,
                 &[("stone", 3), ("planks", 2), ("rope", 1)],
                 &[(&format!("tool:stone-{tool}"), 1)],
             )
         };
-        let metal_tool = |tier: &str, tool: &str, name: &str| {
+        let metal_tool = |tier: &str, tool: &str| {
             recipe(
                 &format!("{tier}-{tool}"),
-                name,
                 "workbench",
                 4.0,
                 &[(&format!("{tier}-ingot"), 3), ("planks", 2)],
@@ -191,7 +187,6 @@ impl Default for RecipeFile {
             recipes: vec![
                 RecipeEntry {
                     code: "mixed-ore".into(),
-                    name: "SMELT ORE".into(),
                     station: "forge".into(),
                     secs: 8.0,
                     inputs: vec![pair("block:ore", 4), pair("coal", 2)],
@@ -203,7 +198,6 @@ impl Default for RecipeFile {
                 },
                 RecipeEntry {
                     code: "bronze".into(),
-                    name: "BRONZE".into(),
                     station: "forge".into(),
                     secs: 5.0,
                     inputs: vec![pair("copper-ingot", 1), pair("tin-ore", 1), pair("coal", 1)],
@@ -213,30 +207,21 @@ impl Default for RecipeFile {
         };
         // ---- tool-crafting: by hand, then at the workbench (M3 section 4).
         file.recipes.extend([
-            recipe(
-                "planks",
-                "PLANKS",
-                "hand",
-                1.0,
-                &[("log", 1)],
-                &[("planks", 4)],
-            ),
-            recipe("rope", "ROPE", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
+            recipe("planks", "hand", 1.0, &[("log", 1)], &[("planks", 4)]),
+            recipe("rope", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
             recipe(
                 "workbench",
-                "WORKBENCH",
                 "hand",
                 4.0,
                 &[("planks", 6)],
                 &[("block:workbench", 1)],
             ),
-            stone_tool("pickaxe", "STONE PICK"),
-            stone_tool("shovel", "STONE SHOVEL"),
+            stone_tool("pickaxe"),
+            stone_tool("shovel"),
             // The first tool, by hand (`starter-missions` T.2, the tree's
             // trunk): loose stone, fibre and a branch.
             recipe(
                 "stone-axe",
-                "STONE AXE",
                 "hand",
                 3.0,
                 &[("stone", 3), ("fibre", 2), ("log", 1)],
@@ -244,17 +229,9 @@ impl Default for RecipeFile {
             ),
             // A pen's pieces and a torch (T.2): made, where the kit used to
             // deal them.
-            recipe(
-                "fence",
-                "FENCE X2",
-                "workbench",
-                2.0,
-                &[("planks", 1)],
-                &[("fence", 2)],
-            ),
+            recipe("fence", "workbench", 2.0, &[("planks", 1)], &[("fence", 2)]),
             recipe(
                 "gate",
-                "GATE",
                 "workbench",
                 3.0,
                 &[("planks", 2), ("rope", 1)],
@@ -262,7 +239,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "torch",
-                "TORCH X2",
                 "hand",
                 1.0,
                 &[("planks", 1), ("fibre", 1)],
@@ -270,7 +246,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "rod",
-                "ROD",
                 "workbench",
                 3.0,
                 &[("planks", 2), ("rope", 2), ("fibre", 2)],
@@ -278,7 +253,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "forge",
-                "FORGE",
                 "workbench",
                 6.0,
                 &[("stone", 8), ("block:stone", 4)],
@@ -286,7 +260,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "bucket",
-                "BUCKET",
                 "workbench",
                 3.0,
                 &[("planks", 3), ("rope", 1)],
@@ -294,23 +267,21 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "incubator",
-                "INCUBATOR",
                 "workbench",
                 4.0,
                 &[("planks", 4), ("rope", 2)],
                 &[("incubator", 1)],
             ),
-            metal_tool("bronze", "pickaxe", "BRONZE PICK"),
-            metal_tool("bronze", "shovel", "BRONZE SHOVEL"),
-            metal_tool("bronze", "axe", "BRONZE AXE"),
-            metal_tool("iron", "pickaxe", "IRON PICK"),
-            metal_tool("iron", "shovel", "IRON SHOVEL"),
-            metal_tool("iron", "axe", "IRON AXE"),
+            metal_tool("bronze", "pickaxe"),
+            metal_tool("bronze", "shovel"),
+            metal_tool("bronze", "axe"),
+            metal_tool("iron", "pickaxe"),
+            metal_tool("iron", "shovel"),
+            metal_tool("iron", "axe"),
             // small-boats design 3: the boats. (The rowboat was here until
             // `retire-rowboat-and-cog`: `RETIRED_RECIPES`.)
             recipe(
                 "inner-tube",
-                "INNER TUBE",
                 "workbench",
                 4.0,
                 // Leather alone (small-boats design 2e).
@@ -319,7 +290,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "raft",
-                "RAFT",
                 "workbench",
                 6.0,
                 &[("log", 6), ("rope", 4)],
@@ -361,8 +331,8 @@ pub fn give_all(slots: &mut Slots, items: &[(Item, u16)]) -> bool {
 /// A recipe with its items resolved.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recipe {
+    /// Its saved name; its plaque's words are `recipe.<code>.name`.
     pub code: String,
-    pub name: String,
     pub station: &'static StationRow,
     pub secs: f32,
     pub inputs: Vec<(Item, u16)>,
@@ -374,6 +344,11 @@ pub struct Recipe {
 }
 
 impl Recipe {
+    /// What the panel's plaque says.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("recipe.{}.name", self.code))
+    }
+
     /// Everything it gives, tools as items, for a panel to draw.
     pub fn shown_outputs(&self) -> Vec<(Item, u16)> {
         let mut all = self.outputs.clone();
@@ -440,7 +415,6 @@ impl RecipeFile {
             };
             recipes.push(Recipe {
                 code: entry.code.clone(),
-                name: entry.name.clone(),
                 station,
                 secs: entry.secs,
                 inputs: items(&entry.inputs)?,
@@ -683,6 +657,22 @@ pub fn ore_yield(cell: u32, layer: u16, placed: bool) -> Item {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every recipe, the stations' and the campfire's, has its plaque's
+    /// words in the locale file, by its code.
+    #[test]
+    fn every_recipe_has_its_name() {
+        let english = crate::locale::Locale::english();
+        let codes = RecipeFile::default()
+            .recipes
+            .into_iter()
+            .chain(crate::cooking::CookingFile::default().recipes)
+            .map(|r| r.code);
+        for code in codes {
+            let key = format!("recipe.{code}.name");
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 
     fn book() -> RecipeBook {
         RecipeFile::default().resolve().unwrap()

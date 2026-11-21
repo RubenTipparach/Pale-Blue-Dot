@@ -153,8 +153,11 @@ pub struct ObjectiveEntry {
     /// `ingot`, `fish`).
     pub what: String,
     pub count: u32,
-    /// What the HUD line calls it when a mission has several objectives.
-    pub label: String,
+    /// What the HUD line calls it when a mission has several objectives:
+    /// `mission.<id>.objective.<index>` in the locale file. Set here only by
+    /// a test's own missions; the shipped file names none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 /// One mission as the file writes it.
@@ -163,8 +166,13 @@ pub struct ObjectiveEntry {
 pub struct MissionEntry {
     /// Saved in the record: append-only, never renamed once shipped.
     pub id: String,
-    pub title: String,
-    pub help: String,
+    /// Its title and help: `mission.<id>.title` and `.help` in the locale
+    /// file. Set here only by a test's own missions; the shipped file names
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub help: Option<String>,
     #[serde(default)]
     pub needs: Vec<String>,
     pub objectives: Vec<ObjectiveEntry>,
@@ -368,10 +376,10 @@ impl Catalog {
 /// An item's canonical name: the name `recipes.ron` gives it, so a chain
 /// and a recipe table name things alike. A fish is `fish`.
 pub fn item_code(item: crate::inventory::Item) -> String {
-    use crate::inventory::{Item, material_name};
+    use crate::inventory::Item;
     match item {
         Item::Good(good) => good.code().to_string(),
-        Item::Block(material) => format!("block:{}", material_name(material)),
+        Item::Block(material) => format!("block:{}", crate::inventory::material_id(material)),
         Item::Tool(tool) => format!("tool:{}", tool.code()),
         Item::Fish(_) => "fish".into(),
     }
@@ -410,7 +418,7 @@ impl MissionFile {
             }
             let mut missing = Vec::new();
             let mut objectives = Vec::new();
-            for objective in &entry.objectives {
+            for (index, objective) in entry.objectives.iter().enumerate() {
                 if objective.count == 0 {
                     return Err(format!("{at}: a count of nought"));
                 }
@@ -452,7 +460,9 @@ impl MissionFile {
                     kind: objective.kind,
                     want,
                     count: objective.count,
-                    label: objective.label.clone(),
+                    label: objective.label.clone().unwrap_or_else(|| {
+                        crate::locale::tr(&format!("mission.{at}.objective.{index}")).into()
+                    }),
                 });
             }
             for code in &entry.unlocks {
@@ -462,8 +472,14 @@ impl MissionFile {
             }
             missions.push(Mission {
                 id: at.clone(),
-                title: entry.title.clone(),
-                help: entry.help.clone(),
+                title: entry
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| crate::locale::tr(&format!("mission.{at}.title")).into()),
+                help: entry
+                    .help
+                    .clone()
+                    .unwrap_or_else(|| crate::locale::tr(&format!("mission.{at}.help")).into()),
                 needs: entry.needs.clone(),
                 objectives,
                 pending: (!missing.is_empty()).then_some(missing),

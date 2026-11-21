@@ -1658,6 +1658,14 @@ impl Validated for pbd_core::husbandry::HusbandrySettings {
     }
 }
 
+/// How the beavers and otters move (`crate::critters`), from
+/// `creature_motion.ron`.
+impl Validated for crate::critters::motion::CreatureMotion {
+    fn validate(&self) -> Result<(), String> {
+        crate::critters::motion::CreatureMotion::validate(self)
+    }
+}
+
 /// Every land species and how each is kept, loaded once.
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct HusbandryConfig(pub pbd_core::husbandry::HusbandrySettings);
@@ -2015,13 +2023,13 @@ impl Reflections {
     /// Low to high: the slider's steps.
     pub const ALL: [Self; 4] = [Self::Off, Self::Low, Self::Medium, Self::High];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Off => "OFF",
-            Self::Low => "LOW",
-            Self::Medium => "MEDIUM",
-            Self::High => "HIGH",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Off => "menu.quality.off",
+            Self::Low => "menu.quality.low",
+            Self::Medium => "menu.quality.medium",
+            Self::High => "menu.quality.high",
+        })
     }
 
     /// From a flag's word.
@@ -2055,13 +2063,13 @@ impl ShadowQuality {
     /// Low to high: the slider's steps.
     pub const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::Ultra];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Low => "LOW",
-            Self::Medium => "MEDIUM",
-            Self::High => "HIGH",
-            Self::Ultra => "ULTRA",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Low => "menu.quality.low",
+            Self::Medium => "menu.quality.medium",
+            Self::High => "menu.quality.high",
+            Self::Ultra => "menu.quality.ultra",
+        })
     }
 
     /// From a flag's word.
@@ -2234,6 +2242,9 @@ impl Plugin for ConfigPlugin {
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
             .insert_resource(HusbandryConfig(load("husbandry")))
+            .insert_resource(crate::critters::CreatureMotionConfig(load(
+                "creature_motion",
+            )))
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(GatherConfig(load("gather")))

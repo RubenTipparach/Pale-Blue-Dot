@@ -11,7 +11,7 @@
 
 use super::menu::Screen;
 use bevy::prelude::*;
-use pbd_app::ui_kit::{self, KitText, Set, UiKit};
+use pbd_app::ui_kit::{self, KitText, Localized, Set, UiKit, tr, tr_with};
 use pbd_app::vehicles::{AnchorOrder, Fleet, Vehicle};
 use pbd_core::vehicle::anchor;
 
@@ -128,7 +128,7 @@ pub fn open(
 /// A row: a label and what follows it.
 fn row(
     parent: &mut ChildSpawnerCommands,
-    label: &str,
+    label: Localized,
     rest: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
     parent
@@ -150,7 +150,13 @@ fn row(
         });
 }
 
-fn button(line: &mut ChildSpawnerCommands, kit: &UiKit, act: BoatAct, label: &str, width: f32) {
+fn button(
+    line: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    act: BoatAct,
+    label: Localized,
+    width: f32,
+) {
     line.spawn((ui_kit::plaque(kit, Set::Stone, width), act))
         .with_children(|b| {
             b.spawn(ui_kit::plaque_label(Set::Stone, label));
@@ -181,7 +187,7 @@ pub fn spawn(
             BoatPanel,
         ))
         .with_children(|panel| {
-            super::menu::lintel(panel, kit, "BOAT");
+            super::menu::lintel(panel, kit, tr("boat.boat"));
             panel
                 .spawn(Node {
                     justify_content: JustifyContent::Center,
@@ -190,11 +196,11 @@ pub fn spawn(
                 })
                 .with_children(|line| {
                     line.spawn((
-                        KitText::new("", ui_kit::TITLE).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TITLE).shadow(ui_kit::INK),
                         BoatText::Name,
                     ));
                     line.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         BoatText::Condition,
                         Node {
                             margin: UiRect::left(px(8)),
@@ -202,21 +208,21 @@ pub fn spawn(
                         },
                     ));
                 });
-            row(panel, "Anchor", |line| {
+            row(panel, tr("boat.anchor"), |line| {
                 line.spawn((
-                    KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                    KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                     BoatText::Anchor,
                     Node {
                         width: px(84),
                         ..default()
                     },
                 ));
-                button(line, kit, BoatAct::Anchor, "Drop", 64.0);
+                button(line, kit, BoatAct::Anchor, tr("boat.drop"), 64.0);
             });
-            row(panel, "Rope", |line| {
-                button(line, kit, BoatAct::Shorter, "-", 24.0);
+            row(panel, tr("boat.rope"), |line| {
+                button(line, kit, BoatAct::Shorter, Localized::verbatim("-"), 24.0);
                 line.spawn((
-                    KitText::new("", ui_kit::LABEL).shadow(ui_kit::INK),
+                    KitText::new(Localized::empty(), ui_kit::LABEL).shadow(ui_kit::INK),
                     BoatText::Rope,
                     Node {
                         min_width: px(66),
@@ -224,12 +230,12 @@ pub fn spawn(
                         ..default()
                     },
                 ));
-                button(line, kit, BoatAct::Longer, "+", 24.0);
+                button(line, kit, BoatAct::Longer, Localized::verbatim("+"), 24.0);
             });
-            row(panel, "", |line| {
-                button(line, kit, BoatAct::ToTheBed, "To the bed", 90.0);
+            row(panel, Localized::empty(), |line| {
+                button(line, kit, BoatAct::ToTheBed, tr("boat.to_the_bed"), 90.0);
                 line.spawn((
-                    KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                     BoatText::Out,
                 ));
             });
@@ -245,7 +251,7 @@ pub fn spawn(
                 ))
                 .with_children(|line| {
                     line.spawn((
-                        KitText::new("Lantern", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                        KitText::new(tr("boat.lantern"), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                         Node {
                             width: px(52),
                             ..default()
@@ -263,7 +269,7 @@ pub fn spawn(
                         },
                     ));
                     line.spawn((
-                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         BoatText::Lantern,
                     ));
                 });
@@ -323,26 +329,31 @@ pub fn paint(
         .or_else(|| craft.mooring.filter(|m| m.anchored).map(|m| m.length));
     for (what, mut text) in &mut texts {
         let words = match what {
-            BoatText::Name => craft.kind.name().to_uppercase(),
-            BoatText::Condition => if craft.bilge_kg > WET_KG {
-                "Water aboard"
+            BoatText::Name => craft.kind.title(),
+            BoatText::Condition => tr(if craft.bilge_kg > WET_KG {
+                "boat.water_aboard"
             } else {
-                "Dry"
-            }
-            .into(),
+                "boat.dry"
+            }),
             BoatText::Anchor => {
                 if craft.anchor.is_none() && out {
-                    "Holding".into()
+                    tr("vehicle.anchor.holding")
                 } else {
-                    anchor::word(craft.anchor.as_ref()).into()
+                    anchor::word(craft.anchor.as_ref())
                 }
             }
             BoatText::Rope => match craft.rope_m {
-                None => "To the bed".into(),
-                Some(m) => format!("{m:.0} m"),
+                None => tr("boat.to_the_bed"),
+                Some(m) => tr_with("boat.rope_m", &[("metres", &format!("{m:.0}"))]),
             },
-            BoatText::Out => rode.map_or_else(String::new, |r| format!("Out {r:.1} m")),
-            BoatText::Lantern => if craft.lantern_out { "Out" } else { "On" }.into(),
+            BoatText::Out => rode.map_or_else(Localized::empty, |r| {
+                tr_with("boat.out_m", &[("metres", &format!("{r:.1}"))])
+            }),
+            BoatText::Lantern => tr(if craft.lantern_out {
+                "boat.lantern_out"
+            } else {
+                "boat.lantern_on"
+            }),
         };
         if text.text != words {
             text.text = words;
@@ -360,13 +371,13 @@ pub fn paint(
                     craft.anchor.map(|a| a.phase),
                     Some(anchor::Phase::Dropping { .. } | anchor::Phase::Up)
                 );
-                let label = if weighing {
-                    "Stop"
+                let label = tr(if weighing {
+                    "boat.stop"
                 } else if out {
-                    "Weigh"
+                    "boat.weigh"
                 } else {
-                    "Drop"
-                };
+                    "boat.drop"
+                });
                 (Some(label), busy)
             }
             BoatAct::Shorter => (None, craft.rope_m.is_none()),
@@ -382,7 +393,7 @@ pub fn paint(
                 if let Ok(mut text) = labels.get_mut(child)
                     && text.text != label
                 {
-                    text.text = label.into();
+                    text.text = label.clone();
                 }
             }
         }

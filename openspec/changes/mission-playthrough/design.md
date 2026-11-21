@@ -210,3 +210,11 @@ A done mission's card is not picked: "Selecting a completed mission node is
 not possible because it's already completed..so focus on that mission isn't
 possible" (owner, 2026-11-20). A click on it changes nothing; its hover card
 still shows it.
+
+### 5.5 The F3 graph froze after half an hour (fixed)
+
+`measure_frames` stopped recording at 100 000 frames, so after about 28
+minutes at 60 fps the F3 graph and its fps line showed the same frames for
+the rest of the session. The owner, on the bot's three-hour run: "why did
+the frame graph not tick forward?". Past 100 000 the oldest half is now
+dropped; the frame log numbers frames by a counter of its own.

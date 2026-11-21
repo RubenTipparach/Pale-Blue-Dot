@@ -13,6 +13,7 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
@@ -187,7 +188,10 @@ pub fn load_icons(
         .iter()
         .map(|species| assets.load(pbd_app::fish::species_icon(species)))
         .collect();
-    let fish_names = roster.iter().map(|species| species.name.clone()).collect();
+    let fish_names = roster
+        .iter()
+        .map(|species| species.name().into_string())
+        .collect();
     let tools = pbd_core::inventory::Tool::ALL
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
@@ -331,7 +335,7 @@ pub fn cell(
         cell.spawn((
             // In the slot's bottom-right corner, over the rim rather than the
             // icon, outlined in ink so it reads on any tile.
-            KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+            KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(1),
@@ -402,26 +406,27 @@ pub fn paint_icon(
 
 /// What a slot's tooltip says: nothing for an empty slot; a tool's name and
 /// what it is for; a fish's species; a block's name and how many.
-pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> String {
+pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> Localized {
     let Some(stack) = stack else {
-        return String::new();
+        return Localized::empty();
     };
     let name = match stack.item {
-        Item::Tool(tool) => return format!("{}: {}", tool.name(), tool.purpose()),
+        Item::Tool(tool) => {
+            return pbd_core::locale::tr_with(
+                "slots.tool_tip",
+                &[("tool", &tool.name()), ("purpose", &tool.purpose())],
+            );
+        }
         Item::Fish(species) => items
             .fish_names
             .get(species as usize)
-            .cloned()
-            .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) | Item::Good(_) => stack.item.name().into(),
+            .map(|name| Localized::verbatim(name.clone()))
+            .unwrap_or_else(|| stack.item.name()),
+        Item::Block(_) | Item::Good(_) => stack.item.name(),
     };
-    let mut letters = name.chars();
-    let name = letters
-        .next()
-        .map(|first| first.to_uppercase().chain(letters).collect::<String>())
-        .unwrap_or_default();
+    let name = pbd_core::locale::sentence(&name);
     if stack.count > 1 {
-        format!("{name} x {}", stack.count)
+        pbd_core::locale::tr_with("slots.many", &[("name", &name), ("count", &stack.count)])
     } else {
         name
     }
@@ -482,8 +487,8 @@ pub fn update(
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;

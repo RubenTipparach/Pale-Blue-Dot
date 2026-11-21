@@ -29,6 +29,8 @@ drawn in the [Fish Range Atlas](fish-ranges/index.html).
 | ![](../../assets/items/water_life/octopus.png) | [Den octopus](#octopus) | mollusc or soft-bodied | shallows, shelf | 6 to 32 C |
 | ![](../../assets/items/water_life/tube_worm.png) | [Plume worm](#tube-worm) | mollusc or soft-bodied | deep | -2 to 32 C |
 | ![](../../assets/items/water_life/seal.png) | [Ice seal](#seal) | mammal | shallows, shelf | -2 to 14 C |
+| ![](../../assets/items/water_life/beaver.png) | [Beaver](#beaver) | mammal | rivers | 0 to 26 C |
+| ![](../../assets/items/water_life/river_otter.png) | [River otter](#river-otter) | mammal | rivers | 1 to 22 C |
 
 <a id="minnow"></a>
 
@@ -417,3 +419,47 @@ Gray seals of the cold seas and the kelp. They lie out on the floes and slide in
 | PLACES | under the ice, kelp |
 
 *Tip:* Cold water, near the ice or the kelp. Where seals are, the fish are.
+
+<a id="beaver"></a>
+
+### ![](../../assets/items/water_life/beaver.png) Beaver
+
+new · mammal · protected: it may not be caught
+
+A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught.
+
+| | |
+| --- | --- |
+| WATER | rivers |
+| TEMPERATURE | 0 to 26 C |
+| DEPTH | 0-4 m down |
+| FOUND | schools of 1-2 |
+| LENGTH | about 100 cm |
+| STRENGTH | ##--- 2/5 |
+| HOOK WINDOW | 0.78 s |
+| SPEED | 0.2-0.8 m/s |
+| PLACES | rock pools, riffles |
+
+*Tip:* Look where a stream is dammed with sticks. Come close and it slaps its tail and dives.
+
+<a id="river-otter"></a>
+
+### ![](../../assets/items/water_life/river_otter.png) River otter
+
+new · mammal · protected: it may not be caught
+
+A long, quick swimmer of cool rivers and lakes. It climbs out on the bank to look around and groom. River otters are protected: none may be caught.
+
+| | |
+| --- | --- |
+| WATER | rivers |
+| TEMPERATURE | 1 to 22 C |
+| DEPTH | 0-6 m down |
+| FOUND | schools of 1-2 |
+| LENGTH | about 100 cm |
+| STRENGTH | ##--- 2/5 |
+| HOOK WINDOW | 0.78 s |
+| SPEED | 0.3-1.1 m/s |
+| PLACES | riffles, rock pools, estuaries |
+
+*Tip:* Quiet river banks. It swims off if you come close.

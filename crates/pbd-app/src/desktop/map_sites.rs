@@ -27,6 +27,7 @@ use pbd_app::sites::{SitesRules, WorldSites};
 use pbd_app::sky::Sun;
 use pbd_app::towns::Towns;
 use pbd_core::geo;
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::sites::{Site, SiteKind};
 
 /// Where the sites are drawn: over the planet and its layers, under the
@@ -94,7 +95,7 @@ const BUILT_RING: Color = Color::srgb(0.47, 0.88, 0.58);
 pub fn note(sites: &[Site], towns: Option<&Towns>) -> String {
     let n = sites.len();
     let Some(towns) = towns else {
-        return format!("{n} settlements on the map.");
+        return tr_with("map_sites.count", &[("count", &n)]).into();
     };
     let count = |want: Standing| {
         sites
@@ -103,15 +104,25 @@ pub fn note(sites: &[Site], towns: Option<&Towns>) -> String {
             .count()
     };
     let (built, unsettled) = (count(Standing::Built), count(Standing::Unsettled));
-    let mut line = format!(
-        "{n} settlements on the map: {built} built, {} still to come",
-        n - built - unsettled
-    );
+    let to_come = n - built - unsettled;
     if unsettled > 0 {
-        line.push_str(&format!(", {unsettled} unsettled"));
+        tr_with(
+            "map_sites.standing_unsettled",
+            &[
+                ("count", &n),
+                ("built", &built),
+                ("to_come", &to_come),
+                ("unsettled", &unsettled),
+            ],
+        )
+        .into()
+    } else {
+        tr_with(
+            "map_sites.standing",
+            &[("count", &n), ("built", &built), ("to_come", &to_come)],
+        )
+        .into()
     }
-    line.push('.');
-    line
 }
 
 /// Which list the layer's nodes were made for.
@@ -310,7 +321,7 @@ pub fn draw_sites(
     for mut text in &mut notes {
         text.0 = match (sites, world_sites.as_ref().is_some_and(|w| w.surveying())) {
             (Some(list), _) => note(list, towns),
-            (None, true) => "Surveying the settlements...".into(),
+            (None, true) => tr("map_sites.surveying").into(),
             (None, false) => String::new(),
         };
     }

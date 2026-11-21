@@ -49,13 +49,23 @@ pub enum Effect {
 impl Effect {
     pub const ALL: [Effect; 4] = [Effect::Stride, Effect::Steady, Effect::Keen, Effect::Glow];
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Effect::Stride => "stride",
-            Effect::Steady => "steady hands",
-            Effect::Keen => "keen",
-            Effect::Glow => "glow",
-        }
+    pub fn name(self) -> crate::locale::Localized {
+        crate::locale::tr(match self {
+            Effect::Stride => "cooking.effect.stride",
+            Effect::Steady => "cooking.effect.steady",
+            Effect::Keen => "cooking.effect.keen",
+            Effect::Glow => "cooking.effect.glow",
+        })
+    }
+
+    /// Its name in capitals, as the meal's timer shows it.
+    pub fn caps(self) -> crate::locale::Localized {
+        crate::locale::tr(match self {
+            Effect::Stride => "cooking.effect_caps.stride",
+            Effect::Steady => "cooking.effect_caps.steady",
+            Effect::Keen => "cooking.effect_caps.keen",
+            Effect::Glow => "cooking.effect_caps.glow",
+        })
     }
 }
 
@@ -239,13 +249,11 @@ impl Default for CookingFile {
     fn default() -> Self {
         let pair = |name: &str, n| (name.to_string(), n);
         let recipe = |code: &str,
-                      name: &str,
                       station: &str,
                       secs: f32,
                       inputs: Vec<(String, u16)>,
                       outputs: Vec<(String, u16)>| RecipeEntry {
             code: code.into(),
-            name: name.into(),
             station: station.into(),
             secs,
             inputs,
@@ -279,7 +287,6 @@ impl Default for CookingFile {
             recipes: vec![
                 recipe(
                     "grilled-fish",
-                    "GRILL FISH",
                     "campfire",
                     20.0,
                     vec![pair("fish", 1)],
@@ -287,7 +294,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "chili-fish",
-                    "CHILI FISH",
                     "campfire",
                     25.0,
                     vec![pair("fish", 1), pair("chili", 1)],
@@ -295,7 +301,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "flatbread",
-                    "FLATBREAD",
                     "campfire",
                     30.0,
                     vec![pair("wheat", 3)],
@@ -303,7 +308,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "roast-turnip",
-                    "ROAST TURNIP",
                     "campfire",
                     20.0,
                     vec![pair("turnip", 2)],
@@ -311,7 +315,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "kale-skewer",
-                    "KALE SKEWER",
                     "campfire",
                     25.0,
                     vec![pair("frost-kale", 2), pair("turnip", 1)],
@@ -319,7 +322,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "fried-egg",
-                    "FRIED EGG",
                     "campfire",
                     15.0,
                     vec![pair("egg", 1)],
@@ -328,7 +330,6 @@ impl Default for CookingFile {
                 // A fertile egg cooks like an egg (`animal-husbandry` E3).
                 recipe(
                     "fried-fertile-egg",
-                    "FRIED EGG",
                     "campfire",
                     15.0,
                     vec![pair("fertile-egg", 1)],
@@ -336,7 +337,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "roast-meat",
-                    "ROAST MEAT",
                     "campfire",
                     30.0,
                     vec![pair("raw-meat", 1)],
@@ -344,7 +344,6 @@ impl Default for CookingFile {
                 ),
                 recipe(
                     "campfire",
-                    "CAMPFIRE",
                     "hand",
                     3.0,
                     vec![pair("stone", 5), pair("log", 2)],
@@ -434,7 +433,6 @@ impl CookingFile {
             }
             recipes.push(Recipe {
                 code: at.clone(),
-                name: entry.name.clone(),
                 station,
                 secs: entry.secs,
                 inputs,

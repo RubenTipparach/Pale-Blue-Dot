@@ -27,7 +27,9 @@ use pbd_app::fish::ToolSlot;
 use pbd_app::hotbar::{Gained, How};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, Tooltip, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::inventory::{Item, Stack, Tier};
+use pbd_core::locale::{caps, tr_with};
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{
     self, HAND_RECORD_ID, Recipe, STATION_KIND, STATION_SCHEMA, StationRow, StationState,
@@ -166,18 +168,17 @@ fn shown(recipe: &Recipe) -> Option<(Item, u16, Option<Tier>)> {
 /// What a recipe's row says: its name, and the count it makes ("X4") at the
 /// row's end. A name that already ends in its count ("TORCH X2") gives it
 /// to the count rather than saying it twice.
-fn row_words(recipe: &Recipe) -> (String, String) {
+fn row_words(recipe: &Recipe) -> (Localized, Localized) {
     match shown(recipe) {
         Some((_, n, _)) if n > 1 => {
-            let count = format!("X{n}");
-            let name = recipe
-                .name
+            let count = tr_with("craft.count", &[("count", &n)]);
+            let full = recipe.name();
+            let name = full
                 .strip_suffix(&format!(" {count}"))
-                .unwrap_or(&recipe.name)
-                .to_string();
+                .map_or_else(|| full.clone(), Localized::verbatim);
             (name, count)
         }
-        _ => (recipe.name.clone(), String::new()),
+        _ => (recipe.name(), Localized::empty()),
     }
 }
 
@@ -209,22 +210,25 @@ pub fn queue(
     ) {
         Ok(()) => {}
         Err(station::Refused::Short) => {
-            note.say(wall_s, format!("Not enough for {}", recipe.name));
+            note.say(
+                wall_s,
+                tr_with("craft.not_enough", &[("recipe", &recipe.name())]),
+            );
             return false;
         }
         Err(station::Refused::Full) => {
             note.say(
                 wall_s,
                 if recipe.station.material.is_none() {
-                    "Your hands are busy".to_string()
+                    tr("craft.hands_busy")
                 } else {
-                    format!("The {}'s queue is full", recipe.station.name)
+                    tr_with("craft.queue_full", &[("station", &recipe.station.name())])
                 },
             );
             return false;
         }
         Err(station::Refused::NotBetter) => {
-            note.say(wall_s, "You already have this tool");
+            note.say(wall_s, tr("craft.have_tool"));
             return false;
         }
         Err(station::Refused::Elsewhere) => return false,
@@ -308,8 +312,11 @@ pub fn collect(
             });
         }
         let what = match recipe.tools.first() {
-            Some(&(tool, tier)) => format!("{} made", pbd_core::inventory::tool_title(tool, tier)),
-            None => format!("{} done", recipe.name),
+            Some(&(tool, tier)) => tr_with(
+                "craft.made",
+                &[("thing", &pbd_core::inventory::tool_title(tool, tier))],
+            ),
+            None => tr_with("craft.done", &[("recipe", &recipe.name())]),
         };
         note.say(wall_s, what);
     }
@@ -351,7 +358,7 @@ fn well(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, w
                 WellIcon,
             ));
             cell.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(1),
@@ -392,7 +399,7 @@ fn craft_row(
                     },
                 );
             }
-            row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+            row.spawn(KitText::new(Localized::verbatim("→"), ui_kit::TEXT).shadow(ui_kit::INK));
             well(
                 row,
                 kit,
@@ -412,7 +419,7 @@ fn craft_row(
             ))
             .with_children(|p| {
                 p.spawn((
-                    ui_kit::plaque_label(Set::Stone, "CRAFT"),
+                    ui_kit::plaque_label(Set::Stone, tr("craft.craft")),
                     CraftLabel(station),
                 ));
             });
@@ -448,7 +455,7 @@ pub fn spawn_pack_craft(
                     ..default()
                 })
                 .with_children(|top| {
-                    super::menu::lintel(top, kit, "CRAFT");
+                    super::menu::lintel(top, kit, tr("craft.title"));
                     // Six rows show; a longer list scrolls with the wheel.
                     top.spawn((
                         Node {
@@ -566,12 +573,12 @@ fn recipe_row(
             },
             RowIcon(k),
         ));
-        row.spawn(ui_kit::plaque_label(Set::Stone, &name));
+        row.spawn(ui_kit::plaque_label(Set::Stone, name));
         row.spawn(Node {
             flex_grow: 1.0,
             ..default()
         });
-        row.spawn(ui_kit::plaque_label(Set::Stone, &count));
+        row.spawn(ui_kit::plaque_label(Set::Stone, count));
     });
 }
 
@@ -601,7 +608,7 @@ pub fn spawn_bench(
             super::forge::StationPanel("workbench"),
         ))
         .with_children(|panel| {
-            super::menu::lintel(panel, kit, "WORKBENCH");
+            super::menu::lintel(panel, kit, tr("craft.workbench"));
             panel
                 .spawn(Node {
                     flex_wrap: FlexWrap::Wrap,
@@ -624,7 +631,7 @@ pub fn spawn_bench(
                 });
             craft_row(panel, kit, atlas, "workbench", 3);
             panel.spawn((
-                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::new(px(0), px(0), px(4), px(3)),
                     ..default()
@@ -696,7 +703,10 @@ pub fn press(
             continue;
         };
         match locks.locked(&recipe.code) {
-            Some(opens) => note.say(time.elapsed_secs(), format!("Opens with: {opens}")),
+            Some(opens) => note.say(
+                time.elapsed_secs(),
+                tr_with("craft.opens_with", &[("mission", &opens)]),
+            ),
             None => pick.hand = Some(row.0),
         }
     }
@@ -721,7 +731,10 @@ pub fn press(
         // Locked by the mission tree (`starter-missions` T.1): it says
         // which mission opens it.
         if let Some(opens) = locks.locked(&code) {
-            note.say(time.elapsed_secs(), format!("Opens with: {opens}"));
+            note.say(
+                time.elapsed_secs(),
+                tr_with("craft.opens_with", &[("mission", &opens)]),
+            );
             continue;
         }
         queue(
@@ -825,7 +838,7 @@ pub fn paint_locks(
     for (line, mut text, mut node) in &mut lines {
         let words = locks
             .locked(&line.0)
-            .map(|m| format!("OPENS WITH: {}", m.to_uppercase()));
+            .map(|m| caps(&tr_with("craft.opens_with", &[("mission", &m)])));
         let display = if words.is_some() {
             Display::Flex
         } else {
@@ -956,17 +969,23 @@ pub fn paint(
         }
         .and_then(|r| locks.locked(&r.code));
         let words = match (well.role, item) {
-            (Role::Pick(_) | Role::Result, Some(_)) if shut.is_some() => {
-                format!("Opens with: {}", shut.unwrap_or_default())
-            }
-            (_, None) => String::new(),
-            (Role::Need(_), Some((item, n, _))) => {
-                format!("{}: need {n}, have {}", item.name(), carried(item))
-            }
+            (Role::Pick(_) | Role::Result, Some(_)) if shut.is_some() => tr_with(
+                "craft.opens_with",
+                &[("mission", &shut.unwrap_or_default())],
+            ),
+            (_, None) => Localized::empty(),
+            (Role::Need(_), Some((item, n, _))) => tr_with(
+                "craft.need_have",
+                &[
+                    ("item", &item.name()),
+                    ("need", &n),
+                    ("have", &carried(item)),
+                ],
+            ),
             (_, Some((Item::Tool(tool), _, Some(tier)))) => {
                 pbd_core::inventory::tool_title(tool, tier)
             }
-            (_, Some((item, _, _))) => item.name().to_string(),
+            (_, Some((item, _, _))) => item.name(),
         };
         if tip.0 != words {
             tip.0 = words;
@@ -985,7 +1004,7 @@ pub fn paint(
             if let Ok(mut text) = counts.get_mut(child)
                 && text.text != number
             {
-                text.text.clone_from(&number);
+                text.text = Localized::verbatim(number.clone());
             }
         }
     }
@@ -998,16 +1017,16 @@ pub fn paint(
     // The hands' plaque counts a running job up; a locked recipe's says so.
     for (label, mut text) in &mut labels {
         let want = match of(label.0) {
-            Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => "LOCKED".to_string(),
+            Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => tr("craft.locked"),
             // The bar under the row shows how far; the word says what a press
             // does now: queue another, with how many already wait.
             Some((_, state, _)) if label.0 == "hand" && state.busy() => {
                 match state.jobs.len() - 1 {
-                    0 => "QUEUE".to_string(),
-                    n => format!("QUEUE +{n}"),
+                    0 => tr("craft.queue"),
+                    n => tr_with("craft.queue_more", &[("count", &n)]),
                 }
             }
-            _ => "CRAFT".to_string(),
+            _ => tr("craft.craft"),
         };
         if text.text != want {
             text.text = want;
@@ -1026,7 +1045,9 @@ pub fn paint(
             plaque.disabled = shut.is_some();
             plaque.focus = chosen;
         }
-        let words = shut.map(|m| format!("Opens with: {m}")).unwrap_or_default();
+        let words = shut
+            .map(|m| tr_with("craft.opens_with", &[("mission", &m)]))
+            .unwrap_or_default();
         if tip.0 != words {
             tip.0 = words;
         }
@@ -1069,22 +1090,26 @@ pub fn paint(
     if let Some((_, state, _)) = &bench {
         let shut = picked(&recipes, &pick, "workbench").and_then(|r| locks.locked(&r.code));
         let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
-            _ if state.jobs.is_empty() && shut.is_some() => {
-                format!("OPENS WITH: {}", shut.unwrap_or_default().to_uppercase())
-            }
+            _ if state.jobs.is_empty() && shut.is_some() => caps(&tr_with(
+                "craft.opens_with",
+                &[("mission", &shut.unwrap_or_default())],
+            )),
             Some(recipe) => {
                 let waiting = state.jobs.len() - 1;
                 if waiting > 0 {
-                    format!("{}  +{waiting} WAITING", recipe.name)
+                    tr_with(
+                        "craft.waiting",
+                        &[("recipe", &recipe.name()), ("waiting", &waiting)],
+                    )
                 } else {
-                    recipe.name.clone()
+                    recipe.name()
                 }
             }
-            None => "PICK A RECIPE".into(),
+            None => tr("craft.pick"),
         };
         for mut words in line.iter_mut() {
             if words.text != text {
-                words.text.clone_from(&text);
+                words.text = text.clone();
             }
         }
         let want = percent(state.head_progress(&recipes.0, now_s).unwrap_or(0.0) * 100.0);
@@ -1292,7 +1317,10 @@ mod tests {
     #[test]
     fn a_row_names_its_recipe_and_counts_once() {
         let recipes = book();
-        let words = |code: &str| row_words(recipes.0.get(code).unwrap());
+        let words = |code: &str| {
+            let (name, count) = row_words(recipes.0.get(code).unwrap());
+            (name.into_string(), count.into_string())
+        };
         assert_eq!(words("torch"), ("TORCH".into(), "X2".into()));
         assert_eq!(words("planks"), ("PLANKS".into(), "X4".into()));
         assert_eq!(words("workbench"), ("WORKBENCH".into(), String::new()));

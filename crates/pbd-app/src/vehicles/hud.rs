@@ -8,7 +8,9 @@
 //! player reads is.
 
 use super::{Aboard, Vehicle, view::VehicleView};
+use crate::ui_kit::Localized;
 use bevy::prelude::*;
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::vehicle::{Kind, Telemetry};
 use std::fmt::Write;
 
@@ -49,17 +51,18 @@ pub fn spawn(mut commands: Commands) {
 /// what it does), and a warning when there is one.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Lines {
-    pub title: String,
-    pub rows: Vec<(Vec<&'static str>, String)>,
-    pub warning: Option<String>,
+    pub title: Localized,
+    pub rows: Vec<(Vec<Localized>, Localized)>,
+    pub warning: Option<Localized>,
 }
 
 impl Lines {
     /// As one string: what a test reads.
     #[cfg(test)]
     pub fn text(&self) -> String {
-        let mut s = self.title.clone();
+        let mut s = self.title.to_string();
         for (keys, what) in &self.rows {
+            let keys: Vec<&str> = keys.iter().map(Localized::as_str).collect();
             let _ = write!(s, "\n{}  {what}", keys.join("/"));
         }
         if let Some(w) = &self.warning {
@@ -181,7 +184,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         })
         .with_children(|row| {
             for key in keys {
-                crate::ui_kit::key_cap(row, kit, key, ());
+                crate::ui_kit::key_cap(row, kit, key.clone(), ());
             }
             row.spawn((
                 KitText::new(what.clone(), LABEL).outline(INK),
@@ -199,7 +202,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
 }
 
 /// The key a player has on a slot (`"vehicles:KeyT"`), as its label.
-fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> &'static str {
+fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> Localized {
     let key = crate::controls::slots()
         .find(|s| s.name() == name)
         .map_or(default, |s| binds.key(&s));
@@ -217,70 +220,77 @@ const BAIL_KG: f64 = 20.0;
 /// ([`instruments`]).
 fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     let craft = &vehicle.craft;
-    let word = pbd_core::vehicle::anchor::word(craft.anchor.as_ref()).to_lowercase();
-    let moored = if craft.anchored() {
-        " - at anchor".to_string()
+    let craft_title = craft.kind.title();
+    let title = if craft.anchored() {
+        tr_with("vehicles.hud.at_anchor", &[("craft", &craft_title)])
     } else if craft.anchor.is_some() {
-        format!(" - {word}")
+        let state = pbd_core::vehicle::anchor::word_lower(craft.anchor.as_ref());
+        tr_with(
+            "vehicles.hud.anchor_state",
+            &[("craft", &craft_title), ("state", &state)],
+        )
     } else if craft.mooring.is_some() {
-        " - tied up".to_string()
+        tr_with("vehicles.hud.tied_up", &[("craft", &craft_title)])
     } else {
-        String::new()
+        craft_title
     };
-    let mut lines = Lines {
-        title: format!("{}{moored}", craft.kind.name().to_uppercase()),
-        ..default()
-    };
+    let mut lines = Lines { title, ..default() };
     let bail = craft.bilge_kg > BAIL_KG;
-    for (keys, what) in crate::controls::caps(&craft.kind.name().to_uppercase(), binds) {
+    let group = match craft.kind {
+        Kind::Loon => "loon",
+        Kind::Tube => "inner_tube",
+        Kind::Raft => "raft",
+    };
+    let wasd = [KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD]
+        .map(crate::controls::key_label);
+    for (keys, what) in crate::controls::caps(group, binds) {
         // The bail key only while there is water to bail.
-        if what == "bail" && !bail {
+        if what == tr("controls.does.bail") && !bail {
             continue;
         }
         // Moving on W, A, S and D goes without saying (owner, 2026-11-16:
         // "we probably dont need WASD, its obvious enough"); a row the
         // player has moved to other keys is shown.
-        if keys.iter().all(|k| ["W", "A", "S", "D"].contains(k)) {
+        if keys.iter().all(|k| wasd.contains(k)) {
             continue;
         }
-        lines.rows.push((keys, what.to_string()));
+        lines.rows.push((keys, what));
     }
     // One anchor per boat (`river-craft` design 4); the tube has none.
     let out = craft.anchor.is_some() || craft.mooring.is_some_and(|m| m.anchored);
     let anchor = if craft.has_anchor() && out {
-        Some("weigh the anchor")
+        Some(tr("vehicles.hud.weigh_anchor"))
     } else if craft.mooring.is_some() {
-        Some("cast off")
+        Some(tr("vehicles.hud.cast_off"))
     } else if craft.has_anchor() {
-        Some("drop the anchor")
+        Some(tr("vehicles.hud.drop_anchor"))
     } else {
         None
     };
     if let Some(anchor) = anchor {
-        lines.rows.push((
-            vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)],
-            anchor.into(),
-        ));
+        lines
+            .rows
+            .push((vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)], anchor));
     }
     // The boat's menu (design 10.2): its hold, anchor and lantern.
     if craft.has_anchor() {
         lines.rows.push((
             vec![bound("vehicles:KeyC", KeyCode::KeyC, binds)],
-            "the boat".into(),
+            tr("vehicles.hud.boat"),
         ));
     }
     lines.rows.push((
         vec![crate::controls::key_label(crate::interact::key(binds))],
-        "step off".into(),
+        tr("vehicles.hud.step_off"),
     ));
     lines.rows.push((
         vec![bound("vehicles:KeyV", KeyCode::KeyV, binds)],
-        "camera".into(),
+        tr("vehicles.hud.camera"),
     ));
     if bail {
-        lines.warning = Some("Water aboard: bail".into());
+        lines.warning = Some(tr("vehicles.hud.bail"));
     } else if craft.rowing().is_some_and(|(_, r)| r.on_bed) {
-        lines.warning = Some("Oar on the bed".into());
+        lines.warning = Some(tr("vehicles.hud.oar_on_bed"));
     }
     lines
 }

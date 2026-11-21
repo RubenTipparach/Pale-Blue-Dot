@@ -25,6 +25,7 @@ use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
 use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
+use pbd_core::locale::{Localized, tr, tr_with};
 
 /// Which screen is open. One enum and not two flags, because two flags is how
 /// a settings page ends up open over a closed pause menu.
@@ -265,15 +266,15 @@ fn with_step(action: MenuAction, player: PlayerSettings, step: usize) -> PlayerS
 }
 
 /// What a settings slider says beside it.
-fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String> {
+fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<Localized> {
     Some(match action {
-        MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
-        MenuAction::RenderScale => format!("{}%", player.render_scale),
-        MenuAction::Reflections => player.reflections.label().to_string(),
-        MenuAction::Shadows => player.shadows.label().to_string(),
+        MenuAction::FrameLimit => player.frame_limit.label(),
+        MenuAction::RenderScale => Localized::verbatim(format!("{}%", player.render_scale)),
+        MenuAction::Reflections => player.reflections.label(),
+        MenuAction::Shadows => player.shadows.label(),
         MenuAction::Volume(which) => {
             let mut volumes = player.volumes;
-            format!("{}%", volume_of(&mut volumes, which))
+            Localized::verbatim(format!("{}%", volume_of(&mut volumes, which)))
         }
         _ => return None,
     })
@@ -438,7 +439,20 @@ pub struct Check;
 
 /// The settings page's tabs: Picture (with the rain shadow and the
 /// reflections), Weather (the storm forcing), World (the clock and the globe overlay), Movement, Input.
-pub const SETTINGS_TABS: [&str; 6] = ["PICTURE", "WEATHER", "WORLD", "MOVEMENT", "INPUT", "SOUND"];
+/// Each is an id: its label is `menu.tab.<id>` in the locale file.
+pub const SETTINGS_TABS: [&str; 6] = ["picture", "weather", "world", "movement", "input", "sound"];
+
+/// A settings tab's label.
+fn settings_tab_label(id: &str) -> Localized {
+    match id {
+        "picture" => tr("menu.tab.picture"),
+        "weather" => tr("menu.tab.weather"),
+        "world" => tr("menu.tab.world"),
+        "movement" => tr("menu.tab.movement"),
+        "input" => tr("menu.tab.input"),
+        _ => tr("menu.tab.sound"),
+    }
+}
 
 /// Which settings tab is open.
 #[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
@@ -581,7 +595,7 @@ impl NameField {
     pub fn name(&self, worlds: usize) -> String {
         let typed = self.text.trim();
         if typed.is_empty() {
-            format!("World {}", worlds + 1)
+            tr_with("menu.world_name", &[("number", &(worlds + 1))]).into()
         } else {
             typed.to_string()
         }
@@ -590,7 +604,7 @@ impl NameField {
     /// Offer the next number unless the player has typed something.
     pub fn prefill(&mut self, worlds: usize) {
         if !self.edited {
-            self.text = format!("World {}", worlds + 1);
+            self.text = tr_with("menu.world_name", &[("number", &(worlds + 1))]).into();
         }
     }
 }
@@ -705,15 +719,16 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
                         .with_children(|gap| {
                             gap.spawn(framed(kit, Set::Oak, 120.0))
                                 .with_children(|panel| {
-                                    let go = button(panel, kit, "CONTINUE", MenuAction::Resume);
+                                    let go =
+                                        button(panel, kit, tr("menu.continue"), MenuAction::Resume);
                                     panel.commands().entity(go).insert(Plaque {
                                         focus: true,
                                         ..Plaque::new(Set::Oak)
                                     });
-                                    button(panel, kit, "NEW WORLD", MenuAction::NewWorld);
-                                    button(panel, kit, "LOAD WORLD", MenuAction::Saves);
-                                    button(panel, kit, "SETTINGS", MenuAction::Settings);
-                                    button(panel, kit, "QUIT", MenuAction::Quit);
+                                    button(panel, kit, tr("menu.new_world"), MenuAction::NewWorld);
+                                    button(panel, kit, tr("menu.load_world"), MenuAction::Saves);
+                                    button(panel, kit, tr("menu.settings"), MenuAction::Settings);
+                                    button(panel, kit, tr("menu.quit"), MenuAction::Quit);
                                 });
                         });
                 });
@@ -769,7 +784,7 @@ pub(super) fn framed(kit: &UiKit, set: Set, width: f32) -> impl Bundle {
 
 /// The carved oak lintel over a panel, its title cut into it (design 3,
 /// accent 1): pegged on the frame's top edge.
-pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: &str) {
+pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized) {
     parent
         .spawn(Node {
             justify_content: JustifyContent::Center,
@@ -796,7 +811,7 @@ pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: &str)
 }
 
 /// A section label inside a panel, carved in the kit's font.
-pub(super) fn section(parent: &mut ChildSpawnerCommands, text: &str) {
+pub(super) fn section(parent: &mut ChildSpawnerCommands, text: Localized) {
     parent.spawn((
         KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
         Node {
@@ -825,7 +840,7 @@ pub(super) fn body(text: impl Into<String>, size: f32, colour: Color) -> impl Bu
 pub(super) fn button(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
-    label: &str,
+    label: Localized,
     action: MenuAction,
 ) -> Entity {
     parent
@@ -869,15 +884,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                 // their own tabs in Settings, so the panel fits every window.
                 .spawn(framed(kit, Set::Oak, 120.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, "PAUSED");
-                    let resume = button(panel, kit, "RESUME", MenuAction::Resume);
+                    lintel(panel, kit, tr("menu.paused"));
+                    let resume = button(panel, kit, tr("menu.resume"), MenuAction::Resume);
                     panel.commands().entity(resume).insert(Plaque {
                         focus: true,
                         ..Plaque::new(Set::Oak)
                     });
-                    button(panel, kit, "SAVES", MenuAction::Saves);
-                    button(panel, kit, "SETTINGS", MenuAction::Settings);
-                    button(panel, kit, "QUIT", MenuAction::Quit);
+                    button(panel, kit, tr("menu.saves"), MenuAction::Saves);
+                    button(panel, kit, tr("menu.settings"), MenuAction::Settings);
+                    button(panel, kit, tr("menu.quit"), MenuAction::Quit);
                 });
         });
 
@@ -887,7 +902,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
             layer
                 .spawn(framed(kit, Set::Oak, 324.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, "SETTINGS");
+                    lintel(panel, kit, tr("menu.settings"));
                     // The tabs, oak, the open one capped (design 8).
                     panel
                         .spawn(Node {
@@ -915,7 +930,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                                 ))
                                 .with_children(|tab| {
                                     tab.spawn(KitText::new(
-                                        *name,
+                                        settings_tab_label(name),
                                         if open {
                                             ui_kit::OAK_LABEL
                                         } else {
@@ -943,16 +958,16 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     panel.commands().entity(picture).with_children(|rows| {
                         // `player-settings`: each control shows what is chosen,
                         // kept up by `label_graphics`.
-                        check_row(rows, kit, "Bloom", "", MenuAction::Bloom);
-                        slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
-                        slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
-                        slider_row(rows, kit, "Reflections", "", MenuAction::Reflections);
-                        slider_row(rows, kit, "Shadow quality", "", MenuAction::Shadows);
-                        check_row(rows, kit, "Antialiasing", "", MenuAction::Antialiasing);
+                        check_row(rows, kit, tr("menu.bloom"), MenuAction::Bloom);
+                        slider_row(rows, kit, tr("menu.frame_limit"), MenuAction::FrameLimit);
+                        slider_row(rows, kit, tr("menu.render_scale"), MenuAction::RenderScale);
+                        slider_row(rows, kit, tr("menu.reflections"), MenuAction::Reflections);
+                        slider_row(rows, kit, tr("menu.shadow_quality"), MenuAction::Shadows);
+                        check_row(rows, kit, tr("menu.antialiasing"), MenuAction::Antialiasing);
                         // On PICTURE beside Reflections (owner, 2026-11-16:
                         // "rain shadow should be under picture").
-                        check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
-                        check_row(rows, kit, "Flow arrows", "", MenuAction::FlowArrows);
+                        check_row(rows, kit, tr("menu.rain_shadow"), MenuAction::RainShadows);
+                        check_row(rows, kit, tr("menu.flow_arrows"), MenuAction::FlowArrows);
                     });
                     let weather = page(panel, 1);
                     panel.commands().entity(weather).with_children(|rows| {
@@ -962,11 +977,11 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     panel.commands().entity(world).with_children(|rows| {
                         super::time_ui::spawn(rows, kit);
                         super::overlay_ui::spawn_row(rows, kit);
-                        check_row(rows, kit, "Mission line", "", MenuAction::MissionLine);
+                        check_row(rows, kit, tr("menu.mission_line"), MenuAction::MissionLine);
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {
-                        check_row(rows, kit, "Auto step", "", MenuAction::AutoStep);
+                        check_row(rows, kit, tr("menu.auto_step"), MenuAction::AutoStep);
                     });
                     let input = page(panel, 4);
                     panel.commands().entity(input).with_children(|page| {
@@ -976,11 +991,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     // once and kept as every setting is.
                     let sound = page(panel, 5);
                     panel.commands().entity(sound).with_children(|rows| {
-                        for (which, label) in ["Master", "Effects", "Ambience", "Music", "Menus"]
-                            .iter()
-                            .enumerate()
-                        {
-                            slider_row(rows, kit, label, "", MenuAction::Volume(which as u8));
+                        let labels = [
+                            tr("menu.sound.master"),
+                            tr("menu.sound.effects"),
+                            tr("menu.sound.ambience"),
+                            tr("menu.sound.music"),
+                            tr("menu.sound.menus"),
+                        ];
+                        for (which, label) in labels.into_iter().enumerate() {
+                            slider_row(rows, kit, label, MenuAction::Volume(which as u8));
                         }
                     });
                     panel
@@ -990,7 +1009,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                             ..default()
                         })
                         .with_children(|foot| {
-                            small(foot, kit, "BACK", MenuAction::Back);
+                            small(foot, kit, tr("menu.back"), MenuAction::Back);
                         });
                 });
         });
@@ -1051,8 +1070,7 @@ pub(super) fn slider(
 /// A settings row: what it is, a dim note, and its control on the right.
 fn setting_row(
     rows: &mut ChildSpawnerCommands,
-    label: &str,
-    note: &str,
+    label: Localized,
     control: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
     rows.spawn(Node {
@@ -1070,23 +1088,14 @@ fn setting_row(
         })
         .with_children(|words| {
             words.spawn(body(label, 10.0, ui_kit::TEXT));
-            if !note.is_empty() {
-                words.spawn(body(format!("({note})"), 8.0, ui_kit::TEXT_DIM));
-            }
         });
         control(row);
     });
 }
 
 /// A row with a checkbox: the stone well, the tick a glowing rune.
-fn check_row(
-    rows: &mut ChildSpawnerCommands,
-    kit: &UiKit,
-    label: &str,
-    note: &str,
-    action: MenuAction,
-) {
-    setting_row(rows, label, note, |row| {
+fn check_row(rows: &mut ChildSpawnerCommands, kit: &UiKit, label: Localized, action: MenuAction) {
+    setting_row(rows, label, |row| {
         row.spawn((
             Button,
             kit.whole(Set::Stone, "check-off"),
@@ -1110,14 +1119,8 @@ const SETTING_SLIDER: f32 = 70.0;
 const SLIDER_VALUE_GAP: f32 = 9.0;
 
 /// A row whose stone slider steps through values, the value beside it.
-fn slider_row(
-    rows: &mut ChildSpawnerCommands,
-    kit: &UiKit,
-    label: &str,
-    note: &str,
-    action: MenuAction,
-) {
-    setting_row(rows, label, note, |row| {
+fn slider_row(rows: &mut ChildSpawnerCommands, kit: &UiKit, label: Localized, action: MenuAction) {
+    setting_row(rows, label, |row| {
         row.spawn(Node {
             // The grip (9 px, centred on its step) stands 5 px past the
             // groove's end at the top value: the gap keeps 4 px clear of the
@@ -1142,7 +1145,7 @@ fn slider_row(
                 SettingKnob(action),
             );
             control.spawn((
-                KitText::new("", ui_kit::LABEL).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).shadow(ui_kit::INK),
                 Node {
                     min_width: px(42),
                     ..default()
@@ -1232,11 +1235,11 @@ fn spawn_input_page(page: &mut ChildSpawnerCommands, kit: &UiKit) {
     })
     .with_children(|foot| {
         foot.spawn(body(
-            "Click a key, then press the new one. Esc cancels.",
+            tr("menu.click_key_then_press_new"),
             9.0,
             ui_kit::TEXT_DIM,
         ));
-        small(foot, kit, "RESET TAB", MenuAction::ResetTab);
+        small(foot, kit, tr("menu.reset_tab"), MenuAction::ResetTab);
     });
 }
 
@@ -1261,9 +1264,9 @@ pub fn rebuild_input(
         commands.entity(entity).despawn_related::<Children>();
         commands.entity(entity).with_children(|rows| {
             for group in BINDINGS.iter().filter(|g| g.tab == tab) {
-                section(rows, group.heading);
+                section(rows, group.heading());
                 for binding in group.rows {
-                    let clashes: Vec<&str> = (0..binding.keys.len())
+                    let clashes: Vec<Localized> = (0..binding.keys.len())
                         .filter_map(|i| controls::slot_at(group, binding, i))
                         .flat_map(|slot| binds.clashes(&slot))
                         .fold(Vec::new(), |mut all, does| {
@@ -1282,7 +1285,7 @@ pub fn rebuild_input(
                     })
                     .with_children(|line| {
                         line.spawn((
-                            body(binding.does, 10.0, ui_kit::TEXT),
+                            body(binding.does(), 10.0, ui_kit::TEXT),
                             Node {
                                 flex_shrink: 1.0,
                                 ..default()
@@ -1312,7 +1315,7 @@ pub fn rebuild_input(
                                             Some(slot) => {
                                                 let name = slot.name();
                                                 let label = if waiting.0.as_ref() == Some(&name) {
-                                                    "PRESS A KEY"
+                                                    tr("menu.input.press_a_key")
                                                 } else {
                                                     controls::key_label(binds.key(&slot))
                                                 };
@@ -1324,7 +1327,17 @@ pub fn rebuild_input(
                                 });
                             if !clashes.is_empty() {
                                 right.spawn(body(
-                                    format!("also: {}", clashes.join(", ")),
+                                    tr_with(
+                                        "menu.input.also",
+                                        &[(
+                                            "actions",
+                                            &clashes
+                                                .iter()
+                                                .map(Localized::as_str)
+                                                .collect::<Vec<_>>()
+                                                .join(", "),
+                                        )],
+                                    ),
                                     8.0,
                                     ui_kit::TITLE,
                                 ));
@@ -1342,7 +1355,7 @@ pub fn rebuild_input(
 fn rebind_cap(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
-    label: &str,
+    label: Localized,
     slot: String,
     waiting: &Rebinding,
 ) {
@@ -1458,7 +1471,7 @@ pub fn press_bindings(
 pub fn key_taken(keys: &ButtonInput<KeyCode>) -> Option<KeyCode> {
     controls::ASSIGNABLE
         .iter()
-        .map(|(key, _)| *key)
+        .copied()
         .find(|key| keys.just_pressed(*key))
 }
 
@@ -1498,7 +1511,7 @@ pub fn capture_rebind(
 }
 
 /// A key in a cap: the oak-rimmed tooltip with the key cut in the kit's font.
-fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, key: &str) {
+fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, key: Localized) {
     parent
         .spawn((
             kit.nine(Set::Oak, "tooltip"),
@@ -1525,7 +1538,7 @@ fn spawn_saves(commands: &mut Commands, kit: &UiKit) {
             layer
                 .spawn(framed(kit, Set::Oak, 280.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, "WORLDS");
+                    lintel(panel, kit, tr("menu.worlds"));
                     panel.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
@@ -1541,7 +1554,7 @@ fn spawn_saves(commands: &mut Commands, kit: &UiKit) {
                             ..default()
                         })
                         .with_children(|foot| {
-                            small(foot, kit, "BACK", MenuAction::Back);
+                            small(foot, kit, tr("menu.back"), MenuAction::Back);
                         });
                 });
         });
@@ -1558,10 +1571,10 @@ fn since(then: u64) -> String {
     let now = saves::now_unix_s();
     let seconds = now.saturating_sub(then);
     match seconds {
-        0..=90 => "just now".into(),
-        s if s < 5400 => format!("{} min ago", s / 60),
-        s if s < 172_800 => format!("{} hours ago", s / 3600),
-        s => format!("{} days ago", s / 86_400),
+        0..=90 => tr("menu.just_now").into(),
+        s if s < 5400 => tr_with("menu.since.minutes", &[("count", &(s / 60))]).into(),
+        s if s < 172_800 => tr_with("menu.since.hours", &[("count", &(s / 3600))]).into(),
+        s => tr_with("menu.since.days", &[("count", &(s / 86_400))]).into(),
     }
 }
 
@@ -1596,12 +1609,12 @@ pub fn rebuild_saves(
                 && let Some(slot) = index.slots.get(row)
             {
                 rows.spawn(body(
-                    format!("Delete '{}'?", slot.file.name),
+                    tr_with("menu.delete_world", &[("world", &slot.file.name)]),
                     11.0,
                     ui_kit::TITLE,
                 ));
                 rows.spawn(note(
-                    "Everything dug, built and carried in it is gone for good.".into(),
+                    tr("menu.everything_dug_built_carried_gone").into(),
                     ui_kit::TEXT,
                 ));
                 rows.spawn(Node {
@@ -1613,8 +1626,13 @@ pub fn rebuild_saves(
                     ..default()
                 })
                 .with_children(|line| {
-                    small(line, kit, "DELETE FOREVER", MenuAction::Delete(row));
-                    let keep = small(line, kit, "CANCEL", MenuAction::Keep);
+                    small(
+                        line,
+                        kit,
+                        tr("menu.delete_forever"),
+                        MenuAction::Delete(row),
+                    );
+                    let keep = small(line, kit, tr("menu.cancel"), MenuAction::Keep);
                     line.commands().entity(keep).insert(Plaque {
                         focus: true,
                         ..Plaque::new(Set::Oak)
@@ -1623,7 +1641,7 @@ pub fn rebuild_saves(
                 return;
             }
             if index.slots.is_empty() {
-                rows.spawn(note("no worlds yet".into(), ui_kit::TEXT_DIM));
+                rows.spawn(note(tr("menu.no_worlds_yet").into(), ui_kit::TEXT_DIM));
             }
             for (row, slot) in index.slots.iter().enumerate() {
                 let here = Some(&slot.id) == playing.as_ref();
@@ -1642,19 +1660,19 @@ pub fn rebuild_saves(
                     })
                     .with_children(|words| {
                         let shown = if here {
-                            format!("{} (open)", slot.file.name)
+                            tr_with("menu.world_open", &[("world", &slot.file.name)])
                         } else {
-                            slot.file.name.clone()
+                            Localized::verbatim(slot.file.name.clone())
                         };
                         words.spawn(KitText::new(shown, ui_kit::TITLE).shadow(ui_kit::INK));
                         words.spawn(note(since(slot.file.played_unix_s), ui_kit::TEXT_DIM));
                     });
                     if here {
-                        small(line, kit, "CONTINUE", MenuAction::Resume);
+                        small(line, kit, tr("menu.continue"), MenuAction::Resume);
                     } else {
-                        small(line, kit, "LOAD", MenuAction::Load(row));
+                        small(line, kit, tr("menu.load"), MenuAction::Load(row));
                     }
-                    small(line, kit, "DELETE", MenuAction::Ask(row));
+                    small(line, kit, tr("menu.delete"), MenuAction::Ask(row));
                 });
             }
             rows.spawn(Node {
@@ -1671,7 +1689,7 @@ pub fn rebuild_saves(
                 ..default()
             })
             .with_children(|line| {
-                line.spawn(KitText::new("NAME", ui_kit::TITLE).shadow(ui_kit::INK));
+                line.spawn(KitText::new(tr("menu.name"), ui_kit::TITLE).shadow(ui_kit::INK));
                 line.spawn((
                     Button,
                     kit.nine(Set::Oak, "tooltip"),
@@ -1693,7 +1711,7 @@ pub fn rebuild_saves(
                 ..default()
             })
             .with_children(|line| {
-                small(line, kit, "NEW WORLD", MenuAction::New);
+                small(line, kit, tr("menu.new_world"), MenuAction::New);
             });
         });
     }
@@ -1703,7 +1721,7 @@ pub fn rebuild_saves(
 pub(super) fn small(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
-    label: &str,
+    label: Localized,
     action: MenuAction,
 ) -> Entity {
     parent
@@ -1855,11 +1873,15 @@ pub fn press(
                 if open {
                     // Deleting the world you are standing in would leave the
                     // writer appending to a directory that is not there.
-                    index.trouble = Some("that world is open; load another first".into());
+                    index.trouble = Some(tr("menu.that_world_open_load_another").into());
                 } else {
-                    index.trouble = saves::delete(&root, &slot.id)
-                        .err()
-                        .map(|error| format!("could not delete {}: {error}", slot.file.name));
+                    index.trouble = saves::delete(&root, &slot.id).err().map(|error| {
+                        tr_with(
+                            "menu.could_not_delete",
+                            &[("world", &slot.file.name), ("error", &error)],
+                        )
+                        .into()
+                    });
                 }
                 index.slots = saves::list(&root);
             }
@@ -1881,7 +1903,8 @@ pub fn press(
                         *screen = Screen::Playing;
                     }
                     Err(error) => {
-                        index.trouble = Some(format!("could not make a world: {error}"));
+                        index.trouble =
+                            Some(tr_with("menu.could_not_make_world", &[("error", &error)]).into());
                     }
                 }
                 index.slots = saves::list(&root);
@@ -1910,16 +1933,25 @@ pub fn press(
                 if slot.file.seed != seed {
                     // A save is OF a world. Loading it into a different one
                     // would make it silently become somebody else's.
-                    index.trouble = Some(format!(
-                        "{} was made in another world (seed {})",
-                        slot.file.name, slot.file.seed
-                    ));
+                    index.trouble = Some(
+                        tr_with(
+                            "menu.other_world",
+                            &[("world", &slot.file.name), ("seed", &slot.file.seed)],
+                        )
+                        .into(),
+                    );
                     continue;
                 }
                 if let Some(why) = saves::refusal(&slot) {
                     // Opened, it would be generated by rules it was not made
                     // by: say which version this build lacks instead.
-                    index.trouble = Some(format!("{} was made with {why}", slot.file.name));
+                    index.trouble = Some(
+                        tr_with(
+                            "menu.made_with",
+                            &[("world", &slot.file.name), ("why", &why)],
+                        )
+                        .into(),
+                    );
                     continue;
                 }
                 // A world of another generator than the planet's is loaded
@@ -2252,7 +2284,7 @@ mod tests {
         let labels: Vec<String> = world
             .query::<&KitText>()
             .iter(world)
-            .map(|t| t.text.clone())
+            .map(|t| t.text.to_string())
             .collect();
         assert!(labels.contains(&"F".to_string()));
     }

@@ -19,6 +19,7 @@
 //! reader applies to its own capture flag.
 
 use bevy::{ecs::system::SystemParam, prelude::*};
+use pbd_core::locale::{Localized, tr};
 use pbd_core::vehicle::Kind;
 use std::collections::BTreeMap;
 
@@ -145,106 +146,124 @@ pub enum Key {
 /// is in the kit's font (`ui_kit::tests::the_kit_font_has_every_label_glyph`
 /// reads this table). A key outside it is not taken by a rebind, and a cap
 /// waits for another.
-pub const ASSIGNABLE: [(KeyCode, &str); 87] = [
-    (KeyCode::KeyA, "A"),
-    (KeyCode::KeyB, "B"),
-    (KeyCode::KeyC, "C"),
-    (KeyCode::KeyD, "D"),
-    (KeyCode::KeyE, "E"),
-    (KeyCode::KeyF, "F"),
-    (KeyCode::KeyG, "G"),
-    (KeyCode::KeyH, "H"),
-    (KeyCode::KeyI, "I"),
-    (KeyCode::KeyJ, "J"),
-    (KeyCode::KeyK, "K"),
-    (KeyCode::KeyL, "L"),
-    (KeyCode::KeyM, "M"),
-    (KeyCode::KeyN, "N"),
-    (KeyCode::KeyO, "O"),
-    (KeyCode::KeyP, "P"),
-    (KeyCode::KeyQ, "Q"),
-    (KeyCode::KeyR, "R"),
-    (KeyCode::KeyS, "S"),
-    (KeyCode::KeyT, "T"),
-    (KeyCode::KeyU, "U"),
-    (KeyCode::KeyV, "V"),
-    (KeyCode::KeyW, "W"),
-    (KeyCode::KeyX, "X"),
-    (KeyCode::KeyY, "Y"),
-    (KeyCode::KeyZ, "Z"),
-    (KeyCode::Digit0, "0"),
-    (KeyCode::Digit1, "1"),
-    (KeyCode::Digit2, "2"),
-    (KeyCode::Digit3, "3"),
-    (KeyCode::Digit4, "4"),
-    (KeyCode::Digit5, "5"),
-    (KeyCode::Digit6, "6"),
-    (KeyCode::Digit7, "7"),
-    (KeyCode::Digit8, "8"),
-    (KeyCode::Digit9, "9"),
-    (KeyCode::F1, "F1"),
-    (KeyCode::F2, "F2"),
-    (KeyCode::F3, "F3"),
-    (KeyCode::F4, "F4"),
-    (KeyCode::F5, "F5"),
-    (KeyCode::F6, "F6"),
-    (KeyCode::F7, "F7"),
-    (KeyCode::F8, "F8"),
-    (KeyCode::F9, "F9"),
-    (KeyCode::F10, "F10"),
-    (KeyCode::F11, "F11"),
-    (KeyCode::F12, "F12"),
-    (KeyCode::Space, "SPACE"),
-    (KeyCode::Tab, "TAB"),
-    (KeyCode::Enter, "ENTER"),
-    (KeyCode::Backspace, "BACK"),
-    (KeyCode::CapsLock, "CAPS"),
-    (KeyCode::ShiftLeft, "SHIFT"),
-    (KeyCode::ShiftRight, "R SHIFT"),
-    (KeyCode::ControlLeft, "CTRL"),
-    (KeyCode::ControlRight, "R CTRL"),
-    (KeyCode::AltLeft, "ALT"),
-    (KeyCode::AltRight, "R ALT"),
-    (KeyCode::ArrowUp, "↑"),
-    (KeyCode::ArrowDown, "↓"),
-    (KeyCode::ArrowLeft, "←"),
-    (KeyCode::ArrowRight, "→"),
-    (KeyCode::Home, "HOME"),
-    (KeyCode::End, "END"),
-    (KeyCode::Insert, "INS"),
-    (KeyCode::Delete, "DEL"),
-    (KeyCode::PageUp, "PG UP"),
-    (KeyCode::PageDown, "PG DN"),
-    (KeyCode::Minus, "-"),
-    (KeyCode::Equal, "="),
-    (KeyCode::Semicolon, ";"),
-    (KeyCode::Quote, "'"),
-    (KeyCode::Comma, ","),
-    (KeyCode::Period, "."),
-    (KeyCode::Slash, "/"),
-    (KeyCode::Numpad0, "NUM 0"),
-    (KeyCode::Numpad1, "NUM 1"),
-    (KeyCode::Numpad2, "NUM 2"),
-    (KeyCode::Numpad3, "NUM 3"),
-    (KeyCode::Numpad4, "NUM 4"),
-    (KeyCode::Numpad5, "NUM 5"),
-    (KeyCode::Numpad6, "NUM 6"),
-    (KeyCode::Numpad7, "NUM 7"),
-    (KeyCode::Numpad8, "NUM 8"),
-    (KeyCode::Numpad9, "NUM 9"),
-    (KeyCode::NumpadEnter, "NUM ENTER"),
+pub const ASSIGNABLE: [KeyCode; 87] = [
+    KeyCode::KeyA,
+    KeyCode::KeyB,
+    KeyCode::KeyC,
+    KeyCode::KeyD,
+    KeyCode::KeyE,
+    KeyCode::KeyF,
+    KeyCode::KeyG,
+    KeyCode::KeyH,
+    KeyCode::KeyI,
+    KeyCode::KeyJ,
+    KeyCode::KeyK,
+    KeyCode::KeyL,
+    KeyCode::KeyM,
+    KeyCode::KeyN,
+    KeyCode::KeyO,
+    KeyCode::KeyP,
+    KeyCode::KeyQ,
+    KeyCode::KeyR,
+    KeyCode::KeyS,
+    KeyCode::KeyT,
+    KeyCode::KeyU,
+    KeyCode::KeyV,
+    KeyCode::KeyW,
+    KeyCode::KeyX,
+    KeyCode::KeyY,
+    KeyCode::KeyZ,
+    KeyCode::Digit0,
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+    KeyCode::Digit6,
+    KeyCode::Digit7,
+    KeyCode::Digit8,
+    KeyCode::Digit9,
+    KeyCode::F1,
+    KeyCode::F2,
+    KeyCode::F3,
+    KeyCode::F4,
+    KeyCode::F5,
+    KeyCode::F6,
+    KeyCode::F7,
+    KeyCode::F8,
+    KeyCode::F9,
+    KeyCode::F10,
+    KeyCode::F11,
+    KeyCode::F12,
+    KeyCode::Space,
+    KeyCode::Tab,
+    KeyCode::Enter,
+    KeyCode::Backspace,
+    KeyCode::CapsLock,
+    KeyCode::ShiftLeft,
+    KeyCode::ShiftRight,
+    KeyCode::ControlLeft,
+    KeyCode::ControlRight,
+    KeyCode::AltLeft,
+    KeyCode::AltRight,
+    KeyCode::ArrowUp,
+    KeyCode::ArrowDown,
+    KeyCode::ArrowLeft,
+    KeyCode::ArrowRight,
+    KeyCode::Home,
+    KeyCode::End,
+    KeyCode::Insert,
+    KeyCode::Delete,
+    KeyCode::PageUp,
+    KeyCode::PageDown,
+    KeyCode::Minus,
+    KeyCode::Equal,
+    KeyCode::Semicolon,
+    KeyCode::Quote,
+    KeyCode::Comma,
+    KeyCode::Period,
+    KeyCode::Slash,
+    KeyCode::Numpad0,
+    KeyCode::Numpad1,
+    KeyCode::Numpad2,
+    KeyCode::Numpad3,
+    KeyCode::Numpad4,
+    KeyCode::Numpad5,
+    KeyCode::Numpad6,
+    KeyCode::Numpad7,
+    KeyCode::Numpad8,
+    KeyCode::Numpad9,
+    KeyCode::NumpadEnter,
 ];
 
 /// What a cap prints for a keyboard key: its `ASSIGNABLE` label, `ESC` for
-/// the menu key, and nothing for a key the table does not know.
-pub fn key_label(code: KeyCode) -> &'static str {
-    if code == KeyCode::Escape {
-        return "ESC";
+/// the menu key, and nothing for a key the table does not know. The label is
+/// `controls.key.<name>` in the locale file, from Bevy's name for the key in
+/// snake case (`KeyA` is `key_a`, `NumpadEnter` is `numpad_enter`).
+pub fn key_label(code: KeyCode) -> Localized {
+    if code == KeyCode::Escape || ASSIGNABLE.contains(&code) {
+        tr(&label_key(code))
+    } else {
+        Localized::empty()
     }
-    ASSIGNABLE
-        .iter()
-        .find(|(k, _)| *k == code)
-        .map_or("", |(_, label)| *label)
+}
+
+/// The locale key of a keyboard key's cap.
+pub fn label_key(code: KeyCode) -> String {
+    let name = key_name(code);
+    let mut out = String::with_capacity(name.len() + 4);
+    let mut prev: Option<char> = None;
+    for c in name.chars() {
+        if let Some(p) = prev
+            && ((p.is_ascii_lowercase() && (c.is_ascii_uppercase() || c.is_ascii_digit()))
+                || (p.is_ascii_digit() && c.is_ascii_uppercase()))
+        {
+            out.push('_');
+        }
+        out.push(c.to_ascii_lowercase());
+        prev = Some(c);
+    }
+    format!("controls.key.{out}")
 }
 
 /// How a key is written in the settings file: Bevy's own name (`KeyQ`).
@@ -254,23 +273,20 @@ pub fn key_name(code: KeyCode) -> String {
 
 /// The key a name in the settings file names, if it is one a slot can take.
 pub fn key_named(name: &str) -> Option<KeyCode> {
-    ASSIGNABLE
-        .iter()
-        .map(|(k, _)| *k)
-        .find(|k| key_name(*k) == name)
+    ASSIGNABLE.iter().copied().find(|k| key_name(*k) == name)
 }
 
 impl Key {
     /// What the settings page and `--help` print. A keyboard key is printed
     /// as its cap (`key_label`): the default shift and ctrl are the left
     /// ones, and the readers take either side, so they print plain.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Localized {
         match self {
             Key::Board(code) => key_label(code),
-            Key::Mouse(MouseButton::Left) => "LEFT CLICK",
-            Key::Mouse(MouseButton::Right) => "RIGHT CLICK",
-            Key::Mouse(_) => "",
-            Key::Wheel => "WHEEL",
+            Key::Mouse(MouseButton::Left) => tr("controls.key.left_click"),
+            Key::Mouse(MouseButton::Right) => tr("controls.key.right_click"),
+            Key::Mouse(_) => Localized::empty(),
+            Key::Wheel => tr("controls.key.wheel"),
         }
     }
 
@@ -295,7 +311,8 @@ pub struct Binding {
     pub keys: &'static [Key],
     /// The separator between them when printed.
     pub joiner: &'static str,
-    pub does: &'static str,
+    /// What it does: `controls.does.<act>` in the locale file ([`Binding::does`]).
+    pub act: &'static str,
     /// A range (the number row's `1 - 0`): its caps are its ends, and it is
     /// read as every key between, so no key of it can be rebound alone.
     pub range: bool,
@@ -327,13 +344,13 @@ impl Tab {
     ];
 
     /// The sub-tab's label, in the kit's font.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Localized {
         match self {
-            Tab::OnFoot => "ON FOOT",
-            Tab::Hands => "HANDS",
-            Tab::Flying => "FLYING",
-            Tab::Vehicles => "VEHICLES",
-            Tab::Menus => "MENUS",
+            Tab::OnFoot => tr("controls.tab.on_foot"),
+            Tab::Hands => tr("controls.tab.hands"),
+            Tab::Flying => tr("controls.tab.flying"),
+            Tab::Vehicles => tr("controls.tab.vehicles"),
+            Tab::Menus => tr("controls.tab.menus"),
         }
     }
 }
@@ -394,7 +411,10 @@ impl When {
 /// A heading and the controls under it.
 #[derive(Debug)]
 pub struct Group {
-    pub heading: &'static str,
+    /// Its id: the start of its slots' names in the settings file
+    /// (`on_foot:KeyW`), and its heading `controls.group.<id>` in the locale
+    /// file ([`Group::heading`]).
+    pub id: &'static str,
     /// The Input sub-tab it is listed on.
     pub tab: Tab,
     /// When its keys are read, which is when a rebind of them applies.
@@ -402,11 +422,18 @@ pub struct Group {
     pub rows: &'static [Binding],
 }
 
-const fn row(keys: &'static [Key], joiner: &'static str, does: &'static str) -> Binding {
+impl Group {
+    /// The group's heading on the Input page.
+    pub fn heading(&self) -> Localized {
+        tr(&format!("controls.group.{}", self.id))
+    }
+}
+
+const fn row(keys: &'static [Key], joiner: &'static str, act: &'static str) -> Binding {
     Binding {
         keys,
         joiner,
-        does,
+        act,
         range: false,
         chord: false,
     }
@@ -422,11 +449,7 @@ const WASD: [Key; 4] = [
 const ON_FOOT: [Binding; 4] = [
     row(&WASD, " ", "move"),
     row(&[Key::Board(KeyCode::KeyB)], " ", "breeding"),
-    row(
-        &[Key::Board(KeyCode::Space)],
-        " ",
-        "jump, and rise in water",
-    ),
+    row(&[Key::Board(KeyCode::Space)], " ", "jump"),
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
 ];
 
@@ -434,11 +457,7 @@ const ON_FOOT: [Binding; 4] = [
 /// interact since E will be used for roll in space"). What one press does is
 /// the highest row of `interact::ACTS` the eye is on; with nothing there, it
 /// boards a craft in reach, and aboard it steps off.
-const INTERACT: [Binding; 1] = [row(
-    &[Key::Board(KeyCode::KeyF)],
-    " ",
-    "open, harvest, pick, feed, till; board or step off",
-)];
+const INTERACT: [Binding; 1] = [row(&[Key::Board(KeyCode::KeyF)], " ", "interact")];
 
 /// The interact slot's name in the settings file.
 pub const INTERACT_SLOT: &str = "interact:KeyF";
@@ -449,30 +468,18 @@ pub const INTERACT_SLOT: &str = "interact:KeyF";
 pub const BEFORE_INTERACT: [&str; 2] = ["hands:KeyE", "vehicles:KeyF"];
 
 const HANDS: [Binding; 5] = [
-    row(
-        &[Key::Mouse(MouseButton::Left)],
-        " ",
-        "use the tool in hand: dig, or cast, hook and reel",
-    ),
-    row(
-        &[Key::Mouse(MouseButton::Right)],
-        " ",
-        "place the held block, plant a seed, or wind the line in",
-    ),
+    row(&[Key::Mouse(MouseButton::Left)], " ", "use_tool"),
+    row(&[Key::Mouse(MouseButton::Right)], " ", "place"),
     Binding {
         range: true,
         ..row(
             &[Key::Board(KeyCode::Digit1), Key::Board(KeyCode::Digit0)],
             " - ",
-            "select a slot",
+            "select_slot",
         )
     },
-    row(&[Key::Wheel], " ", "step through the slots"),
-    row(
-        &[Key::Board(KeyCode::KeyG)],
-        " ",
-        "hold for the tools; the wheel picks one",
-    ),
+    row(&[Key::Wheel], " ", "step_slots"),
+    row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
 ];
 
 const FLYING: [Binding; 6] = [
@@ -480,7 +487,7 @@ const FLYING: [Binding; 6] = [
     row(
         &[Key::Board(KeyCode::Space), Key::Board(KeyCode::ControlLeft)],
         " / ",
-        "up and down",
+        "up_down",
     ),
     row(
         &[Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)],
@@ -497,54 +504,39 @@ const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
 const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
 
 const VEHICLES: [Binding; 3] = [
-    row(&[Key::Board(KeyCode::KeyV)], " ", "change the camera"),
-    row(
-        &[Key::Board(KeyCode::KeyT)],
-        " ",
-        "drop or weigh the anchor",
-    ),
-    row(&[Key::Board(KeyCode::KeyC)], " ", "the boat"),
+    row(&[Key::Board(KeyCode::KeyV)], " ", "camera"),
+    row(&[Key::Board(KeyCode::KeyT)], " ", "anchor"),
+    row(&[Key::Board(KeyCode::KeyC)], " ", "boat"),
 ];
 
 const LOON: [Binding; 4] = [
-    row(&W_S, "/", "paddle forward or back"),
+    row(&W_S, "/", "paddle"),
     row(&A_D, "/", "turn"),
-    row(&Q_E, "/", "steer with the paddle"),
+    row(&Q_E, "/", "paddle_steer"),
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const TUBE: [Binding; 2] = [
-    row(&W_S, "/", "kick forward or back"),
-    row(&A_D, "/", "turn"),
-];
+const TUBE: [Binding; 2] = [row(&W_S, "/", "kick"), row(&A_D, "/", "turn")];
 
 const RAFT: [Binding; 3] = [
-    row(&W_S, "/", "row forward or back"),
+    row(&W_S, "/", "row"),
     row(&A_D, "/", "turn"),
-    row(&Q_E, "/", "row the left or right oar"),
+    row(&Q_E, "/", "row_oar"),
 ];
 
 /// The rod from a paddled boat's seat (`small-boats` design 6).
 const AFLOAT: [Binding; 3] = [
-    row(
-        &[Key::Mouse(MouseButton::Left)],
-        " ",
-        "with the rod: hold to cast, press to strike, hold to reel",
-    ),
-    row(&[Key::Mouse(MouseButton::Right)], " ", "wind the line in"),
-    row(
-        &[Key::Board(KeyCode::KeyG)],
-        " ",
-        "hold for the tools; the wheel picks one",
-    ),
+    row(&[Key::Mouse(MouseButton::Left)], " ", "rod"),
+    row(&[Key::Mouse(MouseButton::Right)], " ", "wind_in"),
+    row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
 ];
 
 const WORLD: [Binding; 5] = [
-    row(&[Key::Board(KeyCode::KeyM)], " ", "the map"),
-    row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
-    row(&[Key::Board(KeyCode::KeyH)], " ", "return to the spawn"),
-    row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
-    row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
+    row(&[Key::Board(KeyCode::KeyM)], " ", "map"),
+    row(&[Key::Board(KeyCode::KeyR)], " ", "walk_or_fly"),
+    row(&[Key::Board(KeyCode::KeyH)], " ", "spawn"),
+    row(&[Key::Board(KeyCode::KeyP)], " ", "weather"),
+    row(&[Key::Board(KeyCode::KeyL)], " ", "noon_midnight"),
 ];
 
 /// The repro key (`repro-capture`; the owner, 2026-11-16: "add a button
@@ -558,30 +550,26 @@ const REPRO_KEYS: [Key; 3] = [
 
 const SCREEN: [Binding; 9] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
-    row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
+    row(&[Key::Board(KeyCode::KeyJ)], " ", "guide"),
     row(
         &[Key::Board(KeyCode::KeyI), Key::Board(KeyCode::Tab)],
         " / ",
-        "the pack: thirty more slots",
+        "pack",
     ),
-    row(&[Key::Board(KeyCode::KeyO)], " ", "the starter missions"),
+    row(&[Key::Board(KeyCode::KeyO)], " ", "missions"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
     Binding {
         chord: true,
-        ..row(&REPRO_KEYS, " + ", "copy the location for a bug report")
+        ..row(&REPRO_KEYS, " + ", "repro")
     },
-    row(
-        &[Key::Board(KeyCode::F3)],
-        " ",
-        "frame graph, again for its GPU breakdown",
-    ),
-    row(&[Key::Board(KeyCode::F5)], " ", "flow arrows"),
-    row(&[Key::Board(KeyCode::F6)], " ", "pour water"),
+    row(&[Key::Board(KeyCode::F3)], " ", "frame_graph"),
+    row(&[Key::Board(KeyCode::F5)], " ", "flow_arrows"),
+    row(&[Key::Board(KeyCode::F6)], " ", "pour_water"),
 ];
 
-const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Binding]) -> Group {
+const fn group(id: &'static str, tab: Tab, when: When, rows: &'static [Binding]) -> Group {
     Group {
-        heading,
+        id,
         tab,
         when,
         rows,
@@ -593,17 +581,17 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
 /// `retire-tern`, and ROWBOAT and COG in `retire-rowboat-and-cog`; a saved
 /// rebind of one of their slots is kept in the file and read by nothing.)
 pub static BINDINGS: [Group; 11] = [
-    group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
-    group("INTERACT", Tab::Hands, When::OnFootOrAboard, &INTERACT),
-    group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
-    group("FLYING", Tab::Flying, When::Flying, &FLYING),
-    group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
-    group("LOON", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
-    group("INNER TUBE", Tab::Vehicles, When::Aboard(Kind::Tube), &TUBE),
-    group("RAFT", Tab::Vehicles, When::Aboard(Kind::Raft), &RAFT),
-    group("FISHING AFLOAT", Tab::Vehicles, When::Paddled, &AFLOAT),
-    group("WORLD", Tab::Menus, When::Always, &WORLD),
-    group("SCREEN", Tab::Menus, When::Always, &SCREEN),
+    group("on_foot", Tab::OnFoot, When::OnFoot, &ON_FOOT),
+    group("interact", Tab::Hands, When::OnFootOrAboard, &INTERACT),
+    group("hands", Tab::Hands, When::OnFoot, &HANDS),
+    group("flying", Tab::Flying, When::Flying, &FLYING),
+    group("vehicles", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
+    group("loon", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
+    group("inner_tube", Tab::Vehicles, When::Aboard(Kind::Tube), &TUBE),
+    group("raft", Tab::Vehicles, When::Aboard(Kind::Raft), &RAFT),
+    group("fishing_afloat", Tab::Vehicles, When::Paddled, &AFLOAT),
+    group("world", Tab::Menus, When::Always, &WORLD),
+    group("screen", Tab::Menus, When::Always, &SCREEN),
 ];
 
 /// One key of one row that a player can change: named by its group and its
@@ -621,11 +609,7 @@ pub struct Slot {
 impl Slot {
     /// The slot's name in the settings file.
     pub fn name(&self) -> String {
-        format!(
-            "{}:{}",
-            self.group.heading.to_lowercase().replace(' ', "_"),
-            key_name(self.default)
-        )
+        format!("{}:{}", self.group.id, key_name(self.default))
     }
 }
 
@@ -751,7 +735,7 @@ impl KeyBinds {
     /// flag on its row. The defaults share keys only between contexts that
     /// are never live together (W is move on foot and paddle forward in the Loon),
     /// so with no rebinds nothing is flagged.
-    pub fn clashes(&self, slot: &Slot) -> Vec<&'static str> {
+    pub fn clashes(&self, slot: &Slot) -> Vec<Localized> {
         let key = self.key(slot);
         let mut also: Vec<&'static str> = Vec::new();
         for group in &BINDINGS {
@@ -780,12 +764,12 @@ impl KeyBinds {
                         !same && read == Some(other)
                     })
                 };
-                if reads(key) && !also.contains(&row.does) {
-                    also.push(row.does);
+                if reads(key) && !also.contains(&row.act) {
+                    also.push(row.act);
                 }
             }
         }
-        also
+        also.into_iter().map(Binding::does_of).collect()
     }
 }
 
@@ -820,11 +804,20 @@ const DIGITS: [KeyCode; 10] = [
 ];
 
 impl Binding {
+    /// What the row does, in the player's words.
+    pub fn does(&self) -> Localized {
+        Self::does_of(self.act)
+    }
+
+    fn does_of(act: &str) -> Localized {
+        tr(&format!("controls.does.{act}"))
+    }
+
     /// The key column with the player's keys: what the settings page, an
     /// instrument panel and `--help` print. One function, so they cannot
     /// print a control differently.
     /// Each key's own label, with the player's rebinds: one glyph a key.
-    pub fn key_labels(&'static self, group: &'static Group, binds: &KeyBinds) -> Vec<&'static str> {
+    pub fn key_labels(&'static self, group: &'static Group, binds: &KeyBinds) -> Vec<Localized> {
         self.keys
             .iter()
             .enumerate()
@@ -841,8 +834,8 @@ impl Binding {
             .iter()
             .enumerate()
             .map(|(index, key)| match slot_at(group, this, index) {
-                Some(slot) => key_label(binds.key(&slot)),
-                None => key.label(),
+                Some(slot) => key_label(binds.key(&slot)).into_string(),
+                None => key.label().into_string(),
             })
             .collect::<Vec<_>>()
             .join(this.joiner)
@@ -855,30 +848,30 @@ impl Binding {
 /// boat's panel lists (`small-boats`).
 /// A group's rows as each key's label and what the row does: what a key
 /// glyph row draws (`small-boats`).
-pub fn caps(heading: &str, binds: &KeyBinds) -> Vec<(Vec<&'static str>, &'static str)> {
+pub fn caps(group_id: &str, binds: &KeyBinds) -> Vec<(Vec<Localized>, Localized)> {
     BINDINGS
         .iter()
-        .filter(|group| group.heading == heading)
+        .filter(|group| group.id == group_id)
         .flat_map(|group| group.rows.iter().map(move |row| (group, row)))
-        .map(|(group, binding)| (binding.key_labels(group, binds), binding.does))
+        .map(|(group, binding)| (binding.key_labels(group, binds), binding.does()))
         .collect()
 }
 
-pub fn rows(heading: &str, binds: &KeyBinds) -> Vec<String> {
+pub fn rows(group_id: &str, binds: &KeyBinds) -> Vec<String> {
     BINDINGS
         .iter()
-        .filter(|group| group.heading == heading)
+        .filter(|group| group.id == group_id)
         .flat_map(|group| group.rows.iter().map(move |row| (group, row)))
-        .map(|(group, binding)| format!("{}  {}", binding.keys_label(group, binds), binding.does))
+        .map(|(group, binding)| format!("{}  {}", binding.keys_label(group, binds), binding.does()))
         .collect()
 }
 
-pub fn line(heading: &str, binds: &KeyBinds) -> String {
+pub fn line(group_id: &str, binds: &KeyBinds) -> String {
     BINDINGS
         .iter()
-        .filter(|group| group.heading == heading)
+        .filter(|group| group.id == group_id)
         .flat_map(|group| group.rows.iter().map(move |row| (group, row)))
-        .map(|(group, binding)| format!("{} {}", binding.keys_label(group, binds), binding.does))
+        .map(|(group, binding)| format!("{} {}", binding.keys_label(group, binds), binding.does()))
         .collect::<Vec<_>>()
         .join("   ")
 }
@@ -889,12 +882,12 @@ pub fn help_text() -> String {
     let binds = KeyBinds::default();
     let mut out = String::new();
     for group in &BINDINGS {
-        out.push_str(&format!("\n  {}\n", group.heading));
+        out.push_str(&format!("\n  {}\n", group.heading()));
         for binding in group.rows {
             out.push_str(&format!(
                 "    {:<16}{}\n",
                 binding.keys_label(group, &binds),
-                binding.does
+                binding.does()
             ));
         }
     }
@@ -1165,7 +1158,7 @@ mod tests {
                     assert!(
                         found,
                         "{} is on the {} list as '{}' and no system reads it",
-                        token, group.heading, binding.does
+                        token, group.id, binding.act
                     );
                 }
             }
@@ -1183,10 +1176,10 @@ mod tests {
                         !key.label().is_empty(),
                         "{:?} on the {} list has no label",
                         key,
-                        group.heading
+                        group.id
                     );
                 }
-                assert!(!binding.does.is_empty(), "a row with no action");
+                assert!(!binding.does().is_empty(), "a row with no action");
             }
         }
     }
@@ -1239,6 +1232,28 @@ mod tests {
         }
     }
 
+    /// Every key cap, group heading and action has its words in the locale
+    /// file: the table holds ids, and the words are built from them.
+    #[test]
+    fn every_control_has_its_words() {
+        let english = pbd_core::locale::Locale::english();
+        for code in ASSIGNABLE.iter().copied().chain([KeyCode::Escape]) {
+            assert!(
+                english.get(&label_key(code)).is_some(),
+                "{}",
+                label_key(code)
+            );
+        }
+        for group in &BINDINGS {
+            let key = format!("controls.group.{}", group.id);
+            assert!(english.get(&key).is_some(), "{key}");
+            for binding in group.rows {
+                let key = format!("controls.does.{}", binding.act);
+                assert!(english.get(&key).is_some(), "{key}");
+            }
+        }
+    }
+
     /// Every sub-tab has rows, and every group is on one (decision 6).
     #[test]
     fn the_input_page_has_five_sub_tabs_and_every_group_is_on_one() {
@@ -1249,12 +1264,12 @@ mod tests {
                 tab.label()
             );
         }
-        let on = |heading: &str| BINDINGS.iter().find(|g| g.heading == heading).unwrap().tab;
-        assert_eq!(on("ON FOOT"), Tab::OnFoot);
-        assert_eq!(on("HANDS"), Tab::Hands);
-        assert_eq!(on("FLYING"), Tab::Flying);
-        assert_eq!(on("RAFT"), Tab::Vehicles);
-        assert_eq!(on("SCREEN"), Tab::Menus);
+        let on = |id: &str| BINDINGS.iter().find(|g| g.id == id).unwrap().tab;
+        assert_eq!(on("on_foot"), Tab::OnFoot);
+        assert_eq!(on("hands"), Tab::Hands);
+        assert_eq!(on("flying"), Tab::Flying);
+        assert_eq!(on("raft"), Tab::Vehicles);
+        assert_eq!(on("screen"), Tab::Menus);
     }
 
     /// The defaults share keys only between contexts that are never live
@@ -1344,7 +1359,7 @@ mod tests {
         let on_foot = live_pairs(&binds, Live::OnFoot, false);
         assert!(on_foot.iter().all(|(d, _)| *d != KeyCode::KeyE));
         assert_eq!(
-            line("FLYING", &KeyBinds::default()).split("   ").nth(2),
+            line("flying", &KeyBinds::default()).split("   ").nth(2),
             Some("Q / E roll")
         );
     }
@@ -1372,7 +1387,7 @@ mod tests {
         assert_eq!(skipped.len(), 2);
         assert_eq!(read.to_names(), later, "and the rest are written back");
         assert_eq!(
-            line("FLYING", &binds).split("   ").nth(2),
+            line("flying", &binds).split("   ").nth(2),
             Some("← / E roll")
         );
     }

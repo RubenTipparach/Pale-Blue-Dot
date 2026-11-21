@@ -61,13 +61,13 @@ fn every_species_has_a_class_a_status_and_a_guide_entry_and_airless_bodies_have_
                 "{body}/{}",
                 sp.id
             );
-            assert!(!sp.guide.entry.is_empty());
+            assert!(!sp.entry().starts_with('\u{27e6}'));
             assert!(ids.insert(sp.id.clone()));
         }
     }
     for (body, list) in &s.land {
         for sp in list {
-            assert!(!sp.guide.entry.is_empty(), "{body}/{}", sp.id);
+            assert!(!sp.entry().starts_with('\u{27e6}'), "{body}/{}", sp.id);
             assert!(sp.class != crate::fauna::Class::Fish);
             assert!(ids.insert(sp.id.clone()), "{} is also a fish", sp.id);
         }
@@ -126,17 +126,23 @@ fn a_plodder_takes_five_feeds_and_a_spook_costs_ten() {
 fn a_wild_only_or_protected_species_refuses_with_its_reason() {
     let fish = &crate::fauna::FaunaSettings::default().bodies["home"][0];
     assert_eq!(
-        fish.status.refusal(fish.class),
+        fish.status.refusal(fish.class).as_deref(),
         Some("wild only: fish are kept in tanks, not pens")
     );
     let mut otter = species("woolback");
     otter.status = crate::fauna::Status::Protected;
     otter.keep = None;
-    assert_eq!(otter.refusal(), Some("protected: it may not be caught"));
+    assert_eq!(
+        otter.refusal().as_deref(),
+        Some("protected: it may not be caught")
+    );
     let mut fox = species("woolback");
     fox.status = crate::fauna::Status::WildOnly;
     fox.keep = None;
-    assert_eq!(fox.refusal(), Some("wild only: it cannot be tamed"));
+    assert_eq!(
+        fox.refusal().as_deref(),
+        Some("wild only: it cannot be tamed")
+    );
     assert_eq!(species("meadow-hen").refusal(), None);
     // Food (S3): a woolback eats wheat and turf, a hen seed and wheat.
     let keep = species("woolback").keep.unwrap();
@@ -844,4 +850,32 @@ fn a_fed_happy_hen_lays_four_eggs_a_day_and_feeds_add_up() {
     };
     let day = advance_all(&hen, 1.0, penned, &sp, Sex::F);
     assert_eq!(day.waiting("egg"), 4);
+}
+
+/// Every product, collection and life stage a kept species names has its
+/// words in the locale file.
+#[test]
+fn every_keeping_word_is_in_the_locale_file() {
+    let english = crate::locale::Locale::english();
+    let has = |key: String| assert!(english.get(&key).is_some(), "{key}");
+    for sp in HusbandrySettings::default().land.values().flatten() {
+        let Some(keep) = &sp.keep else { continue };
+        for p in &keep.products {
+            has(format!("husbandry.collect.{}", p.good));
+            has(format!("husbandry.collected.{}", p.good));
+            has(format!("husbandry.waiting.{}", p.good));
+        }
+        for stage in &keep.young.stages {
+            has(format!("husbandry.stage.{}", stage.name));
+        }
+        for coat in &keep.coats {
+            has(format!("husbandry.coat.{coat}"));
+        }
+        for pattern in &keep.patterns {
+            has(format!("husbandry.pattern.{pattern}"));
+        }
+        has(format!("husbandry.morph.{}", keep.morph));
+        has(format!("husbandry.adult.{}", keep.young.adult.0));
+        has(format!("husbandry.adult.{}", keep.young.adult.1));
+    }
 }

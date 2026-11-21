@@ -424,6 +424,7 @@ pub fn build_base(cfg: &TerrainConfig) -> Vec<Texel> {
 #[derive(Clone, Copy, Debug)]
 pub struct RasterLayer {
     /// Its button in the legend.
+    /// Its button's words: a key in the locale file.
     pub name: &'static str,
     /// One line under the legend saying what it shows.
     pub note: &'static str,
@@ -492,12 +493,13 @@ pub fn biome_colour(texel: &Texel) -> [u8; 4] {
 
 /// The sea's places as the chart draws them (`ocean-environments` 6.1):
 /// the places themselves coloured, the open sea left clear.
+/// Each place's legend name is its key in the locale file.
 pub const PLACE_KEY: &[(&str, [u8; 3])] = &[
-    ("coral reef", [235, 110, 120]),
-    ("kelp forest", [150, 140, 50]),
-    ("polar sea", [225, 240, 255]),
-    ("vents", [250, 120, 40]),
-    ("trench", [70, 40, 120]),
+    ("world_map.place.coral_reef", [235, 110, 120]),
+    ("world_map.place.kelp_forest", [150, 140, 50]),
+    ("world_map.place.polar_sea", [225, 240, 255]),
+    ("world_map.place.vents", [250, 120, 40]),
+    ("world_map.place.trench", [70, 40, 120]),
 ];
 
 /// A texel's row in [`PLACE_KEY`].
@@ -525,13 +527,13 @@ pub fn place_colour(texel: &Texel) -> [u8; 4] {
 
 /// The biome key, in the mockup's order and colours.
 pub const BIOME_KEY: &[(&str, [u8; 3])] = &[
-    ("beach", [232, 214, 150]),
-    ("fields", [150, 190, 80]),
-    ("desert", [222, 150, 60]),
-    ("jungle", [30, 120, 60]),
-    ("swamp", [90, 130, 110]),
-    ("mountains", [140, 130, 125]),
-    ("tundra", [225, 235, 245]),
+    ("world_map.biome.beach", [232, 214, 150]),
+    ("world_map.biome.fields", [150, 190, 80]),
+    ("world_map.biome.desert", [222, 150, 60]),
+    ("world_map.biome.jungle", [30, 120, 60]),
+    ("world_map.biome.swamp", [90, 130, 110]),
+    ("world_map.biome.mountains", [140, 130, 125]),
+    ("world_map.biome.tundra", [225, 235, 245]),
 ];
 
 /// A texel's row in [`BIOME_KEY`]; the sea has none.

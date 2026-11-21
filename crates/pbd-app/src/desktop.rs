@@ -1543,6 +1543,9 @@ struct CaptureState {
 pub struct FrameStats {
     pub frame_ms: f32,
     pub samples: Vec<f64>,
+    /// Frames measured since the start: the frame log's frame number, which
+    /// `samples` (trimmed in a long session) no longer is.
+    frames: u64,
     previous: Instant,
     /// When the app started: the frame log's clock, to line a slow frame up
     /// with what the log says happened then.
@@ -1631,7 +1634,7 @@ pub fn run(args: &[String]) {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Pale Blue Dot | Planet Explorer".into(),
+                    title: pbd_core::locale::tr("window.title").into(),
                     resolution: window_size().into(),
                     present_mode: if launch.capture.is_some()
                         || launch.no_vsync
@@ -1837,6 +1840,7 @@ pub fn run(args: &[String]) {
     .insert_resource(FrameStats {
         frame_ms: 0.0,
         samples: Vec::new(),
+        frames: 0,
         previous: Instant::now(),
         started: Instant::now(),
     })
@@ -2273,6 +2277,8 @@ pub fn run(args: &[String]) {
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
             pbd_app::beaver::BeaverPlugin,
+            // The beavers' and otters' skinned bodies (`ocean-environments` B29).
+            pbd_app::critters::CrittersPlugin,
             // The light a player carries (`glowing-mushrooms` part B).
             pbd_app::carried_light::CarriedLightPlugin,
         ))
@@ -5534,7 +5540,7 @@ fn write_frame_log(
     let _ = writeln!(
         out,
         "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3}",
-        stats.samples.len(),
+        stats.frames,
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
         walk.map_or(f32::NAN, |walk| walk.walked_m),
@@ -5693,9 +5699,15 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
     let ms = now.duration_since(stats.previous).as_secs_f64() * 1000.0;
     stats.previous = now;
     stats.frame_ms = stats.frame_ms * 0.9 + ms as f32 * 0.1;
-    if stats.samples.len() < 100_000 {
-        stats.samples.push(ms);
+    // Kept to the last 100 000 frames: past that the oldest half goes, so
+    // the F3 graph keeps showing the latest frames. It stopped at 100 000
+    // and froze half an hour into a session (owner, 2026-11-20: "why did
+    // the frame graph not tick forward?").
+    if stats.samples.len() >= 100_000 {
+        stats.samples.drain(..50_000);
     }
+    stats.samples.push(ms);
+    stats.frames += 1;
 }
 
 /// `--verify-route far-side`: fly the whole route headless and report what the

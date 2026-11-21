@@ -300,7 +300,7 @@ fn step_vehicles(
         // MEASUREMENT (`town-frame-time` decision 6): each kind's step.
         let started = std::time::Instant::now();
         step_one(&mut vehicle, dt, &input, &env, &mut fleet);
-        let entry = timing.1.entry(vehicle.craft.kind.name()).or_default();
+        let entry = timing.1.entry(vehicle.craft.kind.key()).or_default();
         entry.0 += 1;
         entry.1 += started.elapsed().as_secs_f64();
         // MEASUREMENT (`small-boats` 2b): the water the craft aboard floats
@@ -691,7 +691,7 @@ fn offer_board(
     if let Some((_, vehicle)) = nearest_in_reach(vehicles.iter(), at) {
         interact.offer(crate::interact::Offer::new(
             crate::interact::Act::Board,
-            vehicle.craft.kind.name().to_lowercase(),
+            vehicle.craft.kind.name(),
         ));
     }
 }
