@@ -768,6 +768,7 @@ menu:
   load: LOAD
   load_world: LOAD WORLD
   made_with: "{world} was made with {why}"
+  main_menu: MAIN MENU
   mission_line: Mission line
   name: NAME
   new_world: NEW WORLD

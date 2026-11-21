@@ -92,6 +92,8 @@ pub enum MenuAction {
     NewWorld,
     Settings,
     Saves,
+    /// The pause menu's MAIN MENU: the title, as the front door again.
+    MainMenu,
     Quit,
     Back,
     /// Open the slot at this row.
@@ -684,10 +686,31 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
         let aspect = img.width() as f32 / img.height().max(1) as f32;
         (images.add(img), aspect)
     };
+    // The splash: deep space under the logo, opaque, so the title never
+    // shows the world behind it (`title-screen`, "The splash").
+    let splash = {
+        let path = pbd_app::paths::assets_dir().join("ui/splash-space.jpg");
+        let pixels = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut img = Image::from_dynamic(pixels, true, bevy::asset::RenderAssetUsages::default());
+        img.sampler = bevy::image::ImageSampler::linear();
+        images.add(img)
+    };
     let logo_w = 300.0;
     commands
         .spawn(timber_layer(Screen::Title))
+        .insert(BackgroundColor(Color::BLACK))
         .with_children(|layer| {
+            layer.spawn((
+                ImageNode::new(splash),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(0),
+                    width: percent(100.0),
+                    height: percent(100.0),
+                    ..default()
+                },
+            ));
             layer
                 // The logo near the top of the screen, the way in centred in
                 // the space under it (owner, 2026-11-17: "this logo should be
@@ -892,6 +915,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     });
                     button(panel, kit, tr("menu.saves"), MenuAction::Saves);
                     button(panel, kit, tr("menu.settings"), MenuAction::Settings);
+                    button(panel, kit, tr("menu.main_menu"), MenuAction::MainMenu);
                     button(panel, kit, tr("menu.quit"), MenuAction::Quit);
                 });
         });
@@ -1849,6 +1873,12 @@ pub fn press(
             // first run - and is this project's own lesson about two paths to
             // one job, where the one nobody presses is the one that is wrong.
             MenuAction::Saves => *screen = Screen::Saves,
+            // Back to the title as the front door (`title-screen`, "The
+            // splash"). Every change is already saved as it is made.
+            MenuAction::MainMenu => {
+                front.0 = true;
+                *screen = Screen::Title;
+            }
             MenuAction::Back => {
                 let has_world = save.as_ref().is_some_and(|s| s.slot().is_some());
                 *screen = screen.back(front.0, has_world);

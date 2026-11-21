@@ -30,3 +30,25 @@
    crosshair (owner, 2026-11-17: "why would you have hot bar in title
    screen?"). They carry `InPlayHud`; `hide_hud_on_title` hides them while the
    title is up.
+
+## The splash, and back to the main menu (owner, 2026-11-20)
+
+The owner: "also need a way to quit to main menu from game world, and also
+need some cool splash screen for menu instead of loading into a world", and
+"thats top priority".
+
+- **The splash.** The title no longer stands over the open world. It stands
+  on deep space: the store cover's field, nebula and stars without the logo,
+  at 1920 x 1080 (`assets/ui/splash-space.jpg`, made by
+  `tools/art/logo/splash_space.py` from `logo_cover.py`'s own field and seed),
+  stretched to the window, opaque. The logo and the oak panel sit on it as
+  before. The HUD is already hidden on the title.
+- **MAIN MENU in the pause menu**, between SETTINGS and QUIT. It opens the
+  title as the front door again (`FrontDoor(true)`), so its SETTINGS and LOAD
+  WORLD step back to it, and CONTINUE returns to the world. Nothing is saved
+  on the way: every change is already on the durable path as it is made.
+- **What is not changed yet.** The world still loads behind the splash at
+  launch, so the loading screen comes first and then the splash. Launching to
+  the splash with no world loaded at all, and loading one only on CONTINUE or
+  LOAD, is a larger change to how a run opens its world (`open_world`,
+  `drive_loading`), written up as the next step and not built here.
