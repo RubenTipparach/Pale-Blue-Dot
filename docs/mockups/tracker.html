@@ -114,8 +114,12 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .st.building { color: var(--done); background: var(--done-soft); }
 .st.planned { color: var(--accent); }
 .st.later { color: var(--muted); }
+.st.optional { color: var(--accent); border-style: dashed; }
 .miss { display: grid; gap: 4px; }
 .miss-h { font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--warn); }
+.warn { display: grid; gap: 4px; border-left: 2px solid var(--accent); padding-left: 8px; }
+.warn-h { font: 600 10px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.warn ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
 .miss ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 12.5px; color: var(--ink); }
 </style>
 
@@ -502,20 +506,20 @@ const ROADMAP = [
     { title: 'Cooking', status: 'built', change: 'cooking', refs: ['M27'], text: 'A campfire that cooks fish, crops and eggs into dishes that give effects. On the phase-1 branch; oven and pot later.' },
     { title: 'Starter missions', status: 'built', change: 'starter-missions', refs: [], text: 'Nineteen missions through the loop, from gathering by hand to a farm meal, with a HUD line and a Missions tab (O). On the phase-1 branch.' },
   ] },
-  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
-    { title: 'Advanced foliage and flora', status: 'built', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
+  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul: built and merged to main (M13, M25 and M28 approved 2026-11-15). Your checks and later extras are warnings, not requirements.', steps: [
+    { title: 'Advanced foliage and flora', status: 'built', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.',
+      warn: ['Far tree impostors, the fungal forest, the desert palm, alien species'] },
     { title: 'Glowing mushrooms and carried light', status: 'built', change: 'glowing-mushrooms', refs: ['M13'], text: 'Pick the glowing mushrooms the game already grows (F), eat one to glow for 3 minutes, and hold a torch, lantern or mushroom to light the ground round you, every frame, with no shadow.',
-      missing: ['Your play of it on the GPU: the held flame reads pinkish at its heart and the body glow faint on the software renderer', 'Frame cost on your machine (PBD_CARRIED=0 against the new build)', 'The cap (survey A3)', 'Whether the placed torch should match the new held one (a separate look change)'] },
-    { title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with pink and white shells and no blue; a warmer rippled desert sand. Sand dug in a desert is desert sand and keeps its look where it is placed.',
-      missing: ['Your look on the GPU (captures are software-rendered)'] },
+      warn: ['The placed torch matching the new held one (a look change, mockup first)'] },
+    { title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with pink and white shells and no blue; a warmer rippled desert sand. Sand dug in a desert is desert sand and keeps its look where it is placed.' },
     { title: 'Mountain flora', status: 'built', change: 'mountain-ground', refs: ['M13'], text: 'Firs to a tree line with krummholz, alpine turf and meadow plants, scree, lichen and moss on varied rock, snow patches and ice. The ground and trees are generator version 15, for new worlds; the rock, lichen, scree and plants are drawn on every world.',
-      missing: ['Bilberry bushes, the snow-edge flower and the gentian and campion colours (the kit\'s blue and red stand in)', 'The grass riser reads bright lime beside the dark turf: a turf-side tile', 'Proposals: tarns, cairns, bilberry as food, boulders taken only by pickaxe', 'Frame cost on your hardware: a mountain walk, A/B'] },
-    { title: 'Underwater overhaul', status: 'built', change: 'ocean-environments', refs: ['M25', 'M9'], text: 'In the game on main: light that fades with depth (sunlit, twilight, midnight) with caustics, shafts and marine snow; spray and foam in a gale; reefs, kelp forests, vents, a trench and floes placed by the sea\'s own climate; rivers that run to the sea, marsh pools and beaver dams; 3D water life in M9\'s skins (crabs, lobsters, clams, turtles, octopus, tube worms, seals, ducks); beavers by their colonies, river otters and sea otters with M25\'s motion.',
-      missing: ['Your call on the deep zones (survey W21, with the mockup\'s shots at 40, 90 and 140 m)', 'More water creatures: 12 are in (with the beaver and the river otter), 28 more from the mockup wait', 'Beavers and otters next: fur tufts that spring and spike when wet, splashes and chips, felling a standing tree, the otter\'s slide and fish, the kelp wrap; a lamp-lit night shot', 'Your look on the GPU (the captures are software-rendered)', 'Frame cost on your machine: caustics and shafts, the beavers and otters, under water', 'Videos (the batch)'] },
-    { title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; smoothing between ticks, filling and drying; the fall\'s mist, bubbles and churn (M35); rain splashes on rivers and the sea; tides.',
-      missing: ['Your look: water drying away smoothly (the videos)', 'Your listen: the waterfall sounds on the Sounds page', 'Your call: froth only on faces that fall a layer or more (M31), and the texture panning along the flow on still water too (water-flow 3.5)'] },
-    { title: 'Checks', status: 'planned', change: '', refs: [], text: 'What the whole phase still owes before it is done.',
-      missing: ['Frame cost on your hardware: the flow, its smoothing, the fall\'s mist and churn, the light under water', 'Videos of every phase 2 feature (the batch)', 'Your playtest of environment v2'] },
+      warn: ['Bilberry bushes and the snow-edge flower (the kit\'s blue and red stand in)', 'Tarns, cairns, bilberry as food, boulders taken only by pickaxe (proposals)'] },
+    { title: 'Underwater overhaul', status: 'built', change: 'ocean-environments', refs: ['M25', 'M9'], text: 'Light that fades with depth (sunlit, twilight, midnight) with caustics, shafts and marine snow; spray and foam in a gale; reefs, kelp forests, vents, a trench and floes placed by the sea\'s own climate; rivers that run to the sea, marsh pools and beaver dams; 3D water life in M9\'s skins (crabs, lobsters, clams, turtles, octopus, tube worms, seals, ducks); beavers by their colonies, river otters and sea otters with M25\'s motion.',
+      warn: ['28 more water creatures from the mockup (12 are in)', 'Beavers and otters: splashes and chips, felling a standing tree, the otter\'s mud slide and catching fish, the sea otter\'s kelp wrap'] },
+    { title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; smoothing between ticks, filling and drying; the fall\'s mist, bubbles and churn (M35); rain splashes on rivers and the sea.',
+      warn: ['The M31 splash tab (fall foot, entry, cast, wake), mockup first'] },
+    { title: 'Your checks', status: 'optional', change: '', refs: [], text: 'Everything is built. These are for you when you have time, and nothing waits on them.',
+      warn: ['Survey: the deep zones (W21), the mushroom cap (A3), held mushroom light (G5) and its colour (A4)', 'M31: froth only on faces that fall a layer or more, and the texture panning on still water too', 'Listen: the waterfall sounds on the Sounds page (M30)', 'Look on your GPU: sand, mountains, the held light, the beavers and otters (every capture is software-rendered)', 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters', 'Videos of phase 2 (the batch), then your playtest'] },
   ] },
   { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
@@ -580,7 +584,7 @@ const ROADMAP = [
     { title: 'Interstellar travel', status: 'later', change: 'star-systems', refs: ['M1', 'M2'], text: 'Leaving the home system for other stars, by star lanes rather than a warp drive.' },
   ] },
 ];
-const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };
+const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started', optional: 'Optional' };
 function roadmap() {
   const root = document.getElementById('roadmap');
   let n = 0, pn = 0;
@@ -595,7 +599,7 @@ function roadmap() {
         const m = MOCKUPS.find((x) => x.id === id);
         if (m) refs.append(m.url ? el('a', { href: m.url, target: '_blank', rel: 'noopener', title: m.title, text: id }) : el('span', { text: id }));
       }
-      if (!st.refs.length && !st.missing) refs.append(el('span', { text: 'no mockup yet' }));
+      if (!st.refs.length && !st.missing && !st.warn) refs.append(el('span', { text: 'no mockup yet' }));
       if (st.change) refs.append(el('span', { text: st.change }));
       list.append(el('li', { class: 'step' },
         el('div', { class: 'top', 'data-n': `${p}.${i}` }, el('b', { text: st.title })),
@@ -603,6 +607,8 @@ function roadmap() {
         el('p', { text: st.text }),
         st.missing ? el('div', { class: 'miss' }, el('span', { class: 'miss-h', text: 'Missing' }),
           el('ul', {}, st.missing.map((t) => el('li', { text: t })))) : null,
+        st.warn ? el('div', { class: 'warn' }, el('span', { class: 'warn-h', text: '\u26a0 Warning (not required)' }),
+          el('ul', {}, st.warn.map((t) => el('li', { text: t })))) : null,
         refs));
     });
     root.append(el('div', { class: 'phase', id: `phase-${p}` },
