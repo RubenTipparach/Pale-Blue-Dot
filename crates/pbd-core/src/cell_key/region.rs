@@ -155,7 +155,7 @@ mod tests {
         for level in [11u8, 12] {
             let n = 1u32 << level;
             for face in 0..20u8 {
-                let mut check = |i: u32, j: u32| {
+                let check = |i: u32, j: u32| {
                     let a = Address { face, level, i, j };
                     let c = canonical(a);
                     let (r, p) = (region(a).unwrap(), place(a).unwrap());
