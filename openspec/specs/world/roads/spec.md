@@ -24,13 +24,11 @@ Pinned by `pbd_core::roads::tests::a_road_up_ten_layers_never_steps` and
 
 ### Requirement: A road is its own shape over its ground
 
-A road cell SHALL be a piece laid over its cell's ground, with its own top,
-sides and floor: the terrain's contact keeps reporting a step between cells
-as a step (`planet/contact`), and a road's slope comes only from the road
-piece. The floor the walker stands on SHALL be the top that is drawn. The
-ground SHALL be changed only where a version 2 road is cut into it, by the
-world, through the yield check; a road SHALL be laid wherever the player
-has not touched its cell, whatever the world dug there.
+A road cell SHALL be a piece over its cell's ground with its own top, sides
+and floor, its slope only the piece's (`planet/contact` still reports a
+step as a step), and the walker SHALL stand on the top that is drawn. Only
+the world's cutting for a version 2 road SHALL change the ground, and a
+road SHALL be laid wherever the player has not touched its cell.
 
 #### Scenario: Standing on a sloped road cell
 

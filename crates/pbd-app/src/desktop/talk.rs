@@ -916,6 +916,7 @@ pub fn scripted_press(
     state: Res<super::CaptureState>,
     mut buttons: Query<(&mut Interaction, &TalkAction)>,
     script: Local<std::sync::OnceLock<Vec<(u32, String)>>>,
+    mut done: Local<std::collections::BTreeSet<usize>>,
 ) {
     let script = script.get_or_init(|| {
         std::env::var("PBD_KEY_SCRIPT")
@@ -928,8 +929,10 @@ pub fn scripted_press(
             })
             .collect()
     });
-    for (frame, what) in script {
-        if state.frame != *frame {
+    // From its frame on, until the button is there to press (a panel is
+    // drawn a frame after it opens), for at most a second of frames.
+    for (k, (frame, what)) in script.iter().enumerate() {
+        if state.frame < *frame || done.contains(&k) {
             continue;
         }
         let wanted = |a: &TalkAction| {
@@ -947,10 +950,18 @@ pub fn scripted_press(
         };
         match buttons.iter_mut().find(|(_, a)| wanted(a)) {
             Some((mut interaction, action)) => {
-                info!("PBD_KEY_SCRIPT: pressed {action:?} at frame {frame}");
+                info!(
+                    "PBD_KEY_SCRIPT: pressed {action:?} at frame {}",
+                    state.frame
+                );
                 *interaction = Interaction::Pressed;
+                done.insert(k);
             }
-            None => warn!("PBD_KEY_SCRIPT: no {what} button at frame {frame}"),
+            None if state.frame >= frame + 60 => {
+                warn!("PBD_KEY_SCRIPT: no {what} button by frame {}", state.frame);
+                done.insert(k);
+            }
+            None => {}
         }
     }
 }

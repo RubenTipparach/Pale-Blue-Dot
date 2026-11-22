@@ -1,27 +1,34 @@
-# townsfolk-economy: coins, trade and town jobs in the game (`townsfolk` 5, 6 and 7)
-
-The owner, 2026-11-21: "People approved. Build.phase 3. Do it in parallel if
-you can". These are the first frames of the coin count beside the hotbar, the
-talk panel, a town trader's panel and a town's job board, in the game's
-stone-and-wood kit.
+# townsfolk-economy: talking, trade and the job board with a real townsperson (`townsfolk` 5 to 7, design 35)
 
 Fixed-step captures in the Claude Code cloud container: **lavapipe, no GPU**,
-`--profile fast`, memory-only worlds, a 960 x 600 window. They show the look
-only: **frame time was not measured**.
+`--profile fast`, new memory-only worlds, a 1200 x 750 window. They show the
+look only: **frame time was not measured**. A capture skips the loading
+screen's warm-up, so each logs its pipelines as `LATE_PIPELINE` by design.
 
-The townsfolk are agent A's work on the same branch and were not in the game
-when these were taken, so there is no one standing to talk to. The panels
-are opened by a capture instrument, `PBD_TALK=talk|trade|board|hud`
-(`desktop/talk.rs`, `capture_open`): once the world is open it stands a
-merchant at the nearest held town, puts 48 coins in the purse and three
-perch, six wheat and four logs in the pack, and opens that panel. It is never
-set in play. The rules the panels show are the game's own
-(`pbd_core::economy`), and the trades, jobs and pay are pinned by tests
-(`economy::tests` in both crates), not by these frames.
+Taken by `tools/capture_talk.sh` (2026-11-22). They replace the frames of
+2026-11-21, which were posed by the `PBD_TALK` instrument before the
+townsfolk stood (that instrument is removed). **The one thing set is where
+the walker stands**: face to face with Linenleigh's merchant (its trader)
+and its reeve (its job giver), 1.6 m off, from the spots
+`towns::tests::print_where_to_stand_for_the_townsfolk_shots` prints. The
+rest is played: `PBD_KEY_SCRIPT` presses F on frame 120 to talk, and a
+`press:<button>` step presses the talk panel's TRADE or WORK button as a
+click on it would. The pack and purse are a new world's: empty, 0 coins.
 
-| Shot | Command | What it shows |
-| --- | --- | --- |
-| `talk.jpg` | `PBD_TALK=talk PBD_WINDOW=960x600 pbd-app --world econ-talk --walk --time 12 --frames 200 --capture talk.png` | The talk panel with Tahal's merchant: the town's name on the lintel, who they are, one plain line, and the buttons they offer (TRADE as the town's trader, WORK as its job giver, BYE). The coin count, 48, sits right of the hotbar. |
-| `trade.jpg` | `PBD_TALK=trade`, the same flags (`--world econ-trade`) | Tahal (a desert town) trades: buy on the left, what it makes (stone and fruit at need 0.6 and 0.7) and its bread, each with its stock and price; sell on the right, what the pack holds that it buys: perch at 5, wheat at 2 (it lacks crops, need 1.6), logs at 3. The purse under it. |
-| `board.jpg` | `PBD_TALK=board`, the same flags (`--world econ-board`) | Tahal's board for the day: its own job first (a desert town's is a delivery, to Holingmouth), then a second delivery and a hunt (bring 4 wool), each with its reward. |
-| `coin-count-close.png` | cropped from `trade.jpg` and scaled 3x (nearest) | The coin beside the hotbar: the gold piece (`assets/items/ui/coin.png`, with the UI's 1 px outline) and the purse's count. |
+| Shot | What it shows |
+| --- | --- |
+| `talk.jpg` | F on Linenleigh's merchant, who stands in the town's market hall: the talk panel (the town's name on the lintel, MERCHANT, "Want to trade?", TRADE and BYE). The merchant's mouth is open: a townsperson talks while the panel is open with them (design 30). The coin count, 0, right of the hotbar. |
+| `trade.jpg` | The same, then TRADE pressed: what Linenleigh sells (rope, its dishes and the wooden bucket, sixteen of each, at its prices) and, to sell, nothing: the pack is empty. The purse, 0, and BACK. |
+| `board.jpg` | F on the reeve (standing in a lane's shade), then WORK pressed: Linenleigh's board for the day, a walled town's own job first (cook a grilled fish), then bring four bronze ingots and cook a flatbread, each with its reward and TAKE. |
+
+What is wrong in them, honestly:
+
+- The merchant stands inside the market hall, so `talk.jpg` and `trade.jpg`
+  are dim: the hall is lit as the field lights it, with no lamp near.
+- The talk panel sits over the townsperson's head and covers the top of it.
+- The pack is empty, so the trade's sell column has nothing in it and no
+  coins change hands: task 5.2's "coins in the purse" is not shown by a
+  played capture yet.
+- A board's line reads "Bring 4 bronze ingot": the job lines do not take a
+  plural yet.
+- These are stills; the mouth's movement is only seen as one open frame.
