@@ -29,6 +29,42 @@ to the turning place and counts the eye's jumps (a rise of more than
 0.1 m in one 0.1 m piece of the sweep): it climbs 10 layers in 692 ticks
 with **0 eye jumps**, the steepest rise 0.046 m a tick.
 
+## The mockup: M15's Wide roads scene (`docs/mockups/towns.html#wideroads`, `townsfolk` design 10b)
+
+Rendered by `tools/mockup_wide_roads_shots.js` the same way: headless
+Chromium on **SwiftShader, no GPU**, 1440 x 900; the look only, no frame
+time.
+
+    THREE_JS=<three.min.js r128> NODE_PATH=$(npm root -g) \
+      node tools/mockup_wide_roads_shots.js $PWD/docs/mockups/towns.html docs/screenshots/roads
+
+| Shot | What it shows |
+| --- | --- |
+| `mockup-wide-parallel-*` | From the knoll: three roads side by side, one, two and three cells wide, dirt near, gravel beyond, climbing the hill together in the distance. |
+| `mockup-wide-lanes-*` | Standing on the three-wide road looking east along it to the climb. |
+| `mockup-wide-climbfoot-*` | The three-wide climb from its foot: one ramp across the whole width. |
+| `mockup-wide-climbing-*` | Half way up the three-wide climb, across the lanes: no step between lanes; the cut bank on the uphill (north) side. |
+| `mockup-wide-cutfill-*` | From below the road on the downhill (south) side: the road's bed above the stepped ground (fill), and the cut bank beyond it. |
+| `mockup-wide-climb-above-*` | The climbs from above and the side: the one-, two- and three-wide ramps smooth beside ground that steps a metre a cell. |
+| `mockup-wide-bend3-*`, `mockup-wide-bend2-*` | The three-wide road's bend (south-east) and the two-wide road's bend (north-east) on the plateau, from a lookout mound beside each. At eye height a bend is hard to read; the shot from above is the one to look at. |
+| `mockup-wide-bends-above-*` | Both bends from above, level, with the one-wide road meeting the two-wide road's bend in a T. |
+| `mockup-wide-junction-*` | A one-wide track leaving the three-wide road in a T. |
+| `mockup-wide-bridge2-*`, `mockup-wide-bridge3-*` | Two- and three-wide timber bridges: a deck over the full width, rails only on the outer edges. |
+| `mockup-wide-overview-*` | The whole scene from above. |
+
+The same script walks the mockup's walker diagonally across every lane up
+and down both wide climbs (1 to 11 m) and round both bends: **0 eye jumps**
+on every walk, the steepest rise 0.027 m a tick at 120 Hz. It also samples
+every shared edge of the 53 sloped wide cells from both sides: the largest
+difference between two lanes' surfaces is 0.0007 m (the 1 mm sampling
+offset across a 19-degree slope). Of those 53 cells, 23 are in step with the
+plane (no cut, no fill) and 30 are half a cell along it (column cut a
+layer, a bed 0.5 to 1.5 m).
+
+Not right yet: the far ground past the map's north and south edges is cut in
+slices a cell wide at each edge cell's height, and near the horizon thin
+lines show between slices of different heights.
+
 ## The game (`townsfolk` 8.2 and 8.4)
 
 Fixed-step `--capture` shots in the Claude Code cloud container:
