@@ -1,5 +1,6 @@
 //! A townsperson's figure (`townsfolk` decision 21): M5 version 9's
-//! `friend()`, ported piece for piece. Every piece is flat shaded and
+//! `friend()`, ported piece for piece. Every piece is flat shaded but the
+//! beard and the ears, which are soft shaded (decision 38), and every piece
 //! carries its colour per vertex (sRGB `0xRRGGBB`), which the game turns
 //! into a swatch of its atlas; a part is in its pivot's own space, the
 //! figure facing +z with y up.
@@ -80,6 +81,34 @@ impl Part {
                 self.normals.push(n.to_array());
                 self.colours.push(colour);
             }
+        }
+    }
+
+    /// Soft shading (decision 38): from corner `from` on, each corner's
+    /// normal becomes the mean of the face normals of the corners at its
+    /// exact point whose face is within the crease of its own (`crease_cos`,
+    /// the cosine of the widest angle smoothed). Faces meeting at a sharper
+    /// angle keep a crisp edge. Called once, on a part's flat normals.
+    pub fn smooth_from(&mut self, from: usize, crease_cos: f32) {
+        let n = self.positions.len();
+        let face: Vec<Vec3> = self.normals[from..n]
+            .iter()
+            .map(|v| Vec3::from(*v))
+            .collect();
+        let key = |p: [f32; 3]| p.map(f32::to_bits);
+        let mut at: std::collections::BTreeMap<[u32; 3], Vec<usize>> = Default::default();
+        for i in from..n {
+            at.entry(key(self.positions[i])).or_default().push(i - from);
+        }
+        for i in from..n {
+            let own = face[i - from];
+            let mut sum = Vec3::ZERO;
+            for &j in &at[&key(self.positions[i])] {
+                if own.dot(face[j]) >= crease_cos {
+                    sum += face[j];
+                }
+            }
+            self.normals[i] = sum.try_normalize().unwrap_or(own).to_array();
         }
     }
 
@@ -366,18 +395,7 @@ impl Figure {
         let mut head = block(HW, HH, HD, HC, 0.0, BlockOpts::default(), look.skin);
         if look.ears {
             for s in [-1.0, 1.0] {
-                head.extend(block(
-                    0.05,
-                    0.14,
-                    0.1,
-                    0.0,
-                    0.2,
-                    BlockOpts {
-                        x: s * (HW / 2.0 + 0.02),
-                        ..default_block()
-                    },
-                    skin_s,
-                ));
+                head.extend(ear(s, look.skin, skin_s));
             }
         }
         match look.nose {
@@ -777,8 +795,7 @@ pub fn beard_shell(b: Beard, hair: u32, skin: u32) -> Part {
                     .iter()
                     .map(|&(eu, ey)| (eu - u).hypot(ey - y))
                     .fold(1.0f32, f32::min);
-                let lump = ((i * 7 + j * 13) % 5) as f32 / 4.0 - 0.5;
-                core * (0.7 + 0.3 * (d / 0.06).min(1.0)) + lump * 0.006
+                core * (0.7 + 0.3 * (d / 0.06).min(1.0))
             };
             let (x, z, n) = beard_base(u, 0.0);
             let mut fr = Vec3::new(x + n.x * t, y, z + n.z * t);
@@ -850,6 +867,76 @@ pub fn beard_shell(b: Beard, hair: u32, skin: u32) -> Part {
             }
         }
     }
+    p.smooth_from(0, SMOOTH_CREASE);
+    p
+}
+
+/// Soft shading's crease (decisions 36a and 38): faces meeting within 60
+/// degrees share their normals; sharper turns stay crisp.
+pub const SMOOTH_CREASE: f32 = 0.5;
+/// An ear's middle on the head's side face, (z, y) m in the head's space.
+pub const EAR_AT: [f32; 2] = [-0.005, 0.26];
+/// An ear's outline about its middle, (z, y) m: wide at the top, narrowing
+/// to a lobe, front (+z) first after the top, round the loop.
+pub const EAR_OUTLINE: [[f32; 2]; 8] = [
+    [0.0, 0.078],
+    [0.04, 0.058],
+    [0.05, 0.01],
+    [0.03, -0.045],
+    [0.006, -0.075],
+    [-0.03, -0.06],
+    [-0.05, -0.005],
+    [-0.042, 0.05],
+];
+/// The ear's rings, root to rim: the outline's scale and how far out of the
+/// side face, m (the root sinks into the head).
+pub const EAR_RINGS: [[f32; 2]; 3] = [[1.3, -0.002], [1.0, 0.014], [0.86, 0.042]];
+/// How far the rim leans back at its top, m.
+pub const EAR_LEAN: f32 = 0.01;
+/// The cup's middle: how far out of the side face, and how far back, m.
+pub const EAR_CUP: [f32; 2] = [0.026, -0.004];
+
+/// An ear on the head's side `s` (-1 left, +1 right): one tapered, cupped
+/// form grown from the side face (decision 38, the mockup's `earGeo`), its
+/// outside in the skin, its cup in `inner`, soft shaded.
+pub fn ear(s: f32, skin: u32, inner: u32) -> Part {
+    let mut p = Part::default();
+    let x0 = HW / 2.0;
+    let ring = |k: usize| -> [Vec3; 8] {
+        let [sc, out] = EAR_RINGS[k];
+        std::array::from_fn(|i| {
+            let [dz, dy] = EAR_OUTLINE[i];
+            let lean = if k == 2 { -EAR_LEAN * dy / 0.078 } else { 0.0 };
+            Vec3::new(
+                s * (x0 + out),
+                EAR_AT[1] + dy * sc,
+                EAR_AT[0] + dz * sc + lean,
+            )
+        })
+    };
+    let rings = [ring(0), ring(1), ring(2)];
+    let axis = |x: f32| Vec3::new(x, EAR_AT[1], EAR_AT[0]);
+    for k in 0..2 {
+        for i in 0..8 {
+            let (a, b) = (rings[k][i], rings[k][(i + 1) % 8]);
+            let (c, d) = (rings[k + 1][(i + 1) % 8], rings[k + 1][i]);
+            let radial = (a + b) / 2.0 - axis(a.x);
+            p.face(
+                &[a, b, c, d],
+                radial + Vec3::X * s * 0.5 * radial.length(),
+                skin,
+            );
+        }
+    }
+    let cup = Vec3::new(s * (x0 + EAR_CUP[0]), EAR_AT[1], EAR_AT[0] + EAR_CUP[1]);
+    for i in 0..8 {
+        p.face(
+            &[rings[2][i], rings[2][(i + 1) % 8], cup],
+            Vec3::X * s,
+            inner,
+        );
+    }
+    p.smooth_from(0, SMOOTH_CREASE);
     p
 }
 

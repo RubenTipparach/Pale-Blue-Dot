@@ -211,6 +211,18 @@ details.about[open]{display:grid;gap:10px}
 .fc-card a{color:var(--sky)}
 .fc-x{position:absolute;right:10px;top:10px;cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;width:32px;height:32px;color:var(--ink);font-size:16px}
 @media (max-width:760px){.fc-stage{height:56vh !important;min-height:300px;display:block}.fc-stage canvas{height:100%}.fc-k{width:100%}}
+/* talk tab (version 12): the game's stone kit, drawn at whole-number scales */
+.tk-stage{min-height:460px}
+.tk-layer{position:absolute;inset:0 0 56px 0;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;pointer-events:none}
+.tk-fit{pointer-events:auto;transform-origin:center top}
+.tk-hud{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);pointer-events:none}
+.kn{box-sizing:border-box}
+.kt{display:block;image-rendering:pixelated;flex:none}
+.kt-box{overflow:hidden;flex:none}
+.kplaque{cursor:pointer;background:none;color:inherit;font:inherit;flex:none}
+.kplaque:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.kclick{cursor:pointer}
+@media (max-width:760px){.tk-stage{height:72vh !important;min-height:420px;display:block}.tk-stage canvas{height:100%}}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 </style>
 
@@ -226,7 +238,7 @@ details.about[open]{display:grid;gap:10px}
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
-    <button role="tab" data-tab="square">The square at night</button><button role="tab" data-tab="people">Peoples</button><button role="tab" data-tab="jobs">Roles</button><button role="tab" data-tab="figures">Character sheets</button><button role="tab" data-tab="days">Daily schedules</button><button role="tab" data-tab="talk">Talk and standing</button><button role="tab" data-tab="towns">In towns</button><button role="tab" data-tab="decisions">Decisions</button><button role="tab" data-tab="faces">Faces</button>
+    <button role="tab" data-tab="square">The square at night</button><button role="tab" data-tab="people">Peoples</button><button role="tab" data-tab="jobs">Roles</button><button role="tab" data-tab="figures">Character sheets</button><button role="tab" data-tab="days">Daily schedules</button><button role="tab" data-tab="talk">Talk and trade</button><button role="tab" data-tab="towns">In towns</button><button role="tab" data-tab="decisions">Decisions</button><button role="tab" data-tab="faces">Faces</button>
   </nav>
 
   <section id="tab-square" class="tabpanel" role="tabpanel" aria-labelledby="sq-h">
@@ -286,44 +298,16 @@ details.about[open]{display:grid;gap:10px}
   </section>
 
   <section id="tab-talk" class="tabpanel" role="tabpanel" aria-labelledby="ui-h" hidden>
-    <div class="sec-head"><div class="eyebrow">6 &middot; Talking, quests, standing</div><h2 id="ui-h">The conversation, the job board and who likes you</h2>
-      <p class="lede">E on a person opens talk, as E opens a door today. Talk is short: a line, three or four answers, and the doors it opens (trade, a job, a rumour). Mouse look stops while the panel is up; the world clock does not.</p></div>
-    <div class="mocks">
-      <div class="mock">
-        <div class="tag">Talk</div>
-        <div class="dlg"><img src="npcs/smith.png" alt="Portrait of Orrin the smith"><div><div class="speaker">Orrin Vale, smith</div><div class="line" id="dlgLine">"Forge is banked for the night. If it's an edge you want, come back at six. If it's iron you're selling, I'm listening."</div></div></div>
-        <div class="opts" id="dlgOpts">
-          <button data-r="trade"><img src="npcs/ui_trade.png" alt="">Show me what you have.<small>Trade</small></button>
-          <button data-r="quest"><img src="npcs/ui_quest.png" alt="">Anything you need fetched?<small>Job</small></button>
-          <button data-r="rumour"><img src="npcs/ui_talk.png" alt="">Who's the hooded one by the well?<small>Rumour</small></button>
-          <button data-r="bye"><img src="npcs/ui_heart.png" alt="">Good night, Orrin.<small>+1 standing</small></button>
-        </div>
-      </div>
-      <div class="mock">
-        <div class="tag">Job &middot; from the smith</div>
-        <div class="quest">
-          <h3>Ore for the gate hinges</h3>
-          <p style="font-size:13.5px;color:var(--muted)">The north gate's hinges have rusted through. Orrin needs iron ore from the hills east of town before the guard captain loses patience.</p>
-          <ul><li class="done">Talk to Orrin at the forge</li><li>Mine 12 iron ore <span class="src">7 / 12</span></li><li>Bring it to the forge between 06:00 and 19:00</li></ul>
-          <div class="trade"><div>Reward<span>40 coin</span></div><div>Standing<span>+8 Orrin</span></div></div>
-        </div>
-        <p class="note">A job names a real place and a real thing to dig or carry, as station contracts do in game-design section 13. The hours come from the giver's schedule: he is not at the forge at midnight.</p>
-      </div>
-      <div class="mock">
-        <div class="tag">Standing &middot; Hollin Cross</div>
-        <div class="rel" id="relList"></div>
-        <p class="note">Standing is per person and per town. It rises with trade, jobs and kindness, and falls with theft and with a house of theirs you take apart (the owner's P2 and T5: "you can steal from people lol, but there will be consequences").</p>
-      </div>
-      <div class="mock">
-        <div class="tag">Trade &middot; Mara Quell, trader</div>
-        <div class="dlg"><img src="npcs/trader.png" alt="Portrait of Mara the trader"><div><div class="speaker">Mara Quell</div><div class="line">"Salt from the desert, glass from the coast. Prices hold till the caravan leaves."</div></div></div>
-        <div class="trade">
-          <div>Lantern<span>18</span></div><div>Iron ore x10<span>-22</span></div>
-          <div>Rope, 20 m<span>9</span></div><div>Wheat x20<span>-14</span></div>
-          <div>Glass pane<span>12</span></div><div>Fish x5<span>-8</span></div>
-        </div>
-        <p class="note">Buy on the left, sell on the right. Prices are stable enough to plan a trip (game-design 13). Mood shifts them a little: standing above 60 takes 10% off.</p>
-      </div>
+    <div class="sec-head fc-head"><div class="eyebrow">6 &middot; Talk, trade and the job board</div><h2 id="ui-h">The game's talk, trade and board panels</h2><button class="btn fc-info" id="tkInfo" aria-haspopup="dialog" title="About this tab">i &middot; About</button></div>
+    <div class="stage tk-stage" id="tkStage" data-fit data-min="620" data-reserve="110">
+      <canvas id="tk" tabindex="0" aria-label="A caravan master on a lit patch of a desert town, talking, with the game's talk, trade or job board panel open over them."></canvas>
+      <div class="tk-layer" id="tkLayer"><div class="tk-fit" id="tkFit"></div></div>
+      <div class="tk-hud" id="tkHud"></div>
+    </div>
+    <div class="fc-ctl tk-ctl">
+      <div class="fc-grp"><span class="fc-k">Panel</span><button class="btn" data-tkp="talk" aria-pressed="true">Talk</button><button class="btn" data-tkp="trade" aria-pressed="false">Trade</button><button class="btn" data-tkp="board" aria-pressed="false">Board</button><button class="btn" data-tkp="none" aria-pressed="false">Closed</button></div>
+      <div class="fc-grp"><span class="fc-k">Trade</span><button class="btn" data-tkm="today" aria-pressed="true">The game's</button><button class="btn" data-tkm="basket" aria-pressed="false">Basket (design 37)</button></div>
+      <div class="fc-grp"><span class="fc-k">Time</span><button class="btn" data-tkt="12.5" aria-pressed="false">Day</button><button class="btn" data-tkt="22.5" aria-pressed="true">Night</button><button class="btn" id="tkReset">Reset purse and pack</button></div>
     </div>
   </section>
 
@@ -378,6 +362,26 @@ details.about[open]{display:grid;gap:10px}
   <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Portraits and icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/npcs_art.py</span>); walls, roofs and ground are the game's settlement textures, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>); the kiosk's metal panel is drawn the same way for the mockup (<span class="src">tools/art/building_art.py</span>).</footer>
 </div>
 <div id="err" hidden></div>
+<div class="fc-modal" id="tkModal" hidden role="dialog" aria-modal="true" aria-labelledby="tkModalH">
+  <div class="fc-card">
+    <button class="fc-x" id="tkX" aria-label="Close">&#x2715;</button>
+    <h3 id="tkModalH">Talk, trade and the board: what this tab shows</h3>
+    <p>Version 12. The owner approved the game's talk, trade and job board panels on 2026-11-22, from the in-game captures (<span class="src">docs/screenshots/townsfolk-economy/talk.jpg</span>, <span class="src">trade.jpg</span>, <span class="src">board.jpg</span>), and said "I dont see trade panel": this tab showed an older draft (Orrin Vale, Mara Quell, made-up prices). It now shows the game's panels as the game draws them (<span class="src">crates/pbd-app/src/desktop/talk.rs</span>), over a townsperson who talks while a panel is open (design 30), by day and at night.</p>
+    <h4>Taken from the game, not redrawn</h4>
+    <ul>
+      <li><b>The stone kit</b>: the frame, the oak lintel, the plaques in their idle, hover and pressed states and the pack's slot well are the game's own pieces (<span class="src">assets/ui/stone/*.png</span>, reduced to their native size from the 8x render, nine-sliced by <span class="src">slices.json</span>), drawn at a whole-number scale with no smoothing. The words are the kit font (<span class="src">assets/fonts/kit-font.png</span>), upper case as the game draws it, with its 1 px ink shadow, in the kit's colours (<span class="src">ui_kit.rs</span>: TEXT, TEXT_DIM, TITLE, LABEL).</li>
+      <li><b>The words</b> are the locale file's (<span class="src">assets/locale/locale_en.yaml</span>): <span class="src">talk.*</span>, <span class="src">trade.*</span>, <span class="src">jobs.*</span>, the item and species names.</li>
+      <li><b>The icons</b> are the item PNGs the pack draws (<span class="src">assets/items/goods</span>, <span class="src">assets/items/fish</span>; 16 px, made by <span class="src">tools/gen_item_icons.py</span>), each in the pack's 24 px slot well, and the coin (<span class="src">assets/items/ui/coin.png</span>) beside every price. In the game since this version too (design 38a): the trade rows' icons and the board's job rows sit in the pack's own well; a job's well holds the good it asks for, the parcel, or the planks a wall is mended with, and is empty for the lost villager.</li>
+      <li><b>The layout</b> is <span class="src">talk.rs</span>'s: the talk card 300 native px wide (the town's name on the lintel, the role, the line, TRADE, WORK, BYE); the trade panel 490 wide, two columns of nine rows (well, name, count, price, BUY or SELL) and the purse with BACK; the board 450 wide, YOUR JOBS and ON THE BOARD, each row a well, the job's line, its reward and TAKE or HAND IN.</li>
+      <li><b>The numbers</b> follow the game's rules (<span class="src">pbd_core::economy::trade</span> and <span class="src">::jobs</span>) on <span class="src">values.ron</span>, <span class="src">trade.ron</span> and <span class="src">jobs.ron</span>, worked out by <span class="src">tools/mockup_talk_assets.py</span>: a desert town's caravan master (a trader and a job giver, <span class="src">jobs.ron</span>'s roles), selling what a desert makes (stone and fruit, need 0.6 and 0.7) and flatbread (the staple), its stock 8 a size-1 town; buying the player's fish and wood at 60% of value times the desert's need (fish and wood 1.8). The pack holds 3 perch, 2 silverfin, 4 logs and 8 planks. Job rewards are count times value times 1.5. Buying, selling, taking and handing in work on the page; Reset puts the purse and the pack back.</li>
+    </ul>
+    <h4>The basket (design 37, proposed)</h4>
+    <p>The owner: "you can either pay with cash or sell goods (will need stock market to determine goods prices) raw materials dont go a smuch , butthey do relate to the goods porices in someway". In the Basket view a deal is two baskets: what you take, and what you give, coins, goods or both. The trader values your goods at its buying price and its goods at its selling price, and the difference is paid in coins either way; a deal with no coins is barter. Click a good to put one in a basket, a basket's well to take it out, DEAL to settle. Prices here are design 37's: a raw material keeps its low value from <span class="src">values.ron</span>, a made good is worth its inputs plus labour (the recipe's seconds at 0.1 coin a second, the mockup's assumption) times the 1.25 craft margin, from <span class="src">recipes.ron</span> and <span class="src">cooking.ron</span>; then times the town's need. The game's barter and market wait for a request; its labels (YOU TAKE, YOU GIVE, YOU PAY, THEY PAY, DEAL, CLEAR) are not in the locale file yet and would be added with it.</p>
+    <div class="tbl"><table id="tkValues"><thead><tr><th>Good</th><th>Kind</th><th>Made from</th><th>Value</th><th>Today's value</th></tr></thead><tbody></tbody></table></div>
+    <h4>Not shown</h4>
+    <p>Standing is the town's goodwill in the game (design 12): it moves prices 2% a step and opens more jobs, and has no panel of its own, so the older draft's "who likes you" list is gone. The hotbar and coin count at the bottom are the game's HUD as it stands while a panel is open.</p>
+  </div>
+</div>
 <div class="fc-modal" id="csModal" hidden role="dialog" aria-modal="true" aria-labelledby="csModalH">
   <div class="fc-card">
     <button class="fc-x" id="csX" aria-label="Close">&#x2715;</button>
@@ -399,6 +403,12 @@ details.about[open]{display:grid;gap:10px}
     <button class="fc-x" id="fcX" aria-label="Close">&#x2715;</button>
     <h3 id="fcModalH">Friendly faces: what this tab shows</h3>
     <p>The friendly townsperson of <span class="src">townsfolk</span> design 13 to 18 and 13a, the figure the game draws since version 9 was approved for it ("People approved. Build.phase 3", 2026-11-21). Since version 10 it is the only figure on the page: the square and the Character sheets wear it too, and the hexagonal-prism figure that stood beside it here as "today" is gone, since that is no longer the game's look.</p>
+    <h4>What changed in version 12</h4>
+    <ul>
+      <li><b>Ears are one shaped piece</b> (design 38), under the owner's "I can see obvious primitives ... avoid obvioud primitives": version 9's ear was a 0.05 x 0.14 x 0.1 m box stood on the head's side. Each ear is now a tapered, slightly cupped form grown out of the side face: a root sunk into the head that flares into the side like a bevel, an irregular rounded outline wider at the top and narrowing to a lobe, a rim 42 mm out leaning back at its top, and a shallow cup inside it in the skin's shade. 40 triangles an ear; the hero is 734 with its face. The roll is unchanged.</li>
+      <li><b>The beard and the ears are soft shaded</b> (owner, 2026-11-22, on the game's full front beard: "soft shade the beard, not flat shade"; the facets read as crumpled). Corners that meet at a point share one normal, the mean of the faces there within 60 degrees of each other, so light rolls over the cheeks and the chin; the crease stays crisp where a wall turns into the head. The lump pattern is gone: under soft shading it read as dents. The game builds both the same way (<span class="src">figure::ear</span>, <span class="src">Part::smooth_from</span>).</li>
+      <li>The Talk tab shows the game's own talk, trade and job board panels (its About says what).</li>
+    </ul>
     <h4>What changed in version 11</h4>
     <ul>
       <li>From the owner (2026-11-22), on a close-up of version 10's full front beard, a box across the jaw and a box on each cheek: "I can see obvious primitives, this is signof bad work ... avoid obvioud primitives" (design 36a). The reference is a Kerbal Space Program 2 Kerbal's goatee and moustache: one sculpted form that follows the face and tapers to a point.</li>
@@ -503,7 +513,7 @@ function beardShell(style) {
     let t;
     if (k === 0) t = BEARD_STUBBLE;
     else if (k < 4) t = BEARD_EDGE + (core - BEARD_EDGE) * (k - 1) / 3 * 0.65;
-    else { let d = 1; for (const [eu, ey] of edge) d = Math.min(d, Math.hypot(eu - u, ey - y)); t = core * (0.7 + 0.3 * Math.min(1, d / 0.06)) + ((i * 7 + j * 13) % 5 / 4 - 0.5) * 0.006; }
+    else { let d = 1; for (const [eu, ey] of edge) d = Math.min(d, Math.hypot(eu - u, ey - y)); t = core * (0.7 + 0.3 * Math.min(1, d / 0.06)); }
     const f = base(u, 0), fr = [f.x + f.n[0] * t, y, f.z + f.n[2] * t];
     if (y < 0) fr[2] += y * 0.15;
     const inset = y >= HC ? 0 : y >= 0 ? HC - y : HC, b = base(u, inset), bk = [b.x - b.n[0] * BEARD_SINK, y, b.z - b.n[2] * BEARD_SINK];
@@ -524,7 +534,43 @@ function beardShell(style) {
       g.face([F[i0][j0], F[i1][j1], Bk[i1][j1], Bk[i0][j0]], sub(mid(F[i0][j0], F[i1][j1]), out));
     }
   }
+  smoothGeos([G.beard, G.stubble], SMOOTH_CREASE);
   return { beard: G.beard.build(1), stubble: G.stubble.build(1) };
+}
+// soft shading (design 36a and 38, owner 2026-11-22: "soft shade the beard, not flat shade"): each corner's normal
+// becomes the mean of the face normals of the corners at its exact point whose face is within the crease of its
+// own (cos 0.5, 60 degrees); sharper turns stay crisp. The game's Part::smooth_from does the same.
+const SMOOTH_CREASE = 0.5;
+function smoothGeos(geos, crease) {
+  const at = new Map(), all = [];
+  for (const g of geos) for (let i = 0; i < g.p.length / 3; i++) {
+    const k = g.p[3 * i] + "," + g.p[3 * i + 1] + "," + g.p[3 * i + 2], f = [g.n[3 * i], g.n[3 * i + 1], g.n[3 * i + 2]];
+    all.push([g, i, k, f]); if (!at.has(k)) at.set(k, []); at.get(k).push(f);
+  }
+  for (const [g, i, k, f] of all) {
+    let x = 0, y = 0, z = 0; for (const o of at.get(k)) if (f[0] * o[0] + f[1] * o[1] + f[2] * o[2] >= crease) { x += o[0]; y += o[1]; z += o[2]; }
+    const l = Math.hypot(x, y, z); if (l > 1e-9) { g.n[3 * i] = x / l; g.n[3 * i + 1] = y / l; g.n[3 * i + 2] = z / l; }
+  }
+}
+// ears (design 38, version 12): one tapered, slightly cupped form grown from the head's side face, never a box.
+// Three rings of an eight-point outline (root 1.3x sunk 2 mm so the foot flares into the head like a bevel, the
+// outline 14 mm out, a rim 0.86x 42 mm out leaning back 10 mm at its top) and a bowl inside the rim falling to
+// 26 mm out; the outside in the skin, the cup in the skin's shade; soft shaded. The game's figure::ear.
+const EAR_AT = [-0.005, 0.26], EAR_LEAN = 0.01, EAR_CUP = [0.026, -0.004];
+const EAR_OUTLINE = [[0, 0.078], [0.04, 0.058], [0.05, 0.01], [0.03, -0.045], [0.006, -0.075], [-0.03, -0.06], [-0.05, -0.005], [-0.042, 0.05]];
+const EAR_RINGS = [[1.3, -0.002], [1.0, 0.014], [0.86, 0.042]];
+function earGeo(s) {
+  const x0 = HW / 2, G = { skin: new PBD.Geo(), inner: new PBD.Geo() };
+  const R = EAR_RINGS.map(([sc, out], k) => EAR_OUTLINE.map(([dz, dy]) => [s * (x0 + out), EAR_AT[1] + dy * sc, EAR_AT[0] + dz * sc + (k === 2 ? -EAR_LEAN * dy / 0.078 : 0)]));
+  for (let k = 0; k < 2; k++) for (let i = 0; i < 8; i++) {
+    const a = R[k][i], b = R[k][(i + 1) % 8], c = R[k + 1][(i + 1) % 8], d = R[k + 1][i];
+    const rad = [0, (a[1] + b[1]) / 2 - EAR_AT[1], (a[2] + b[2]) / 2 - EAR_AT[0]], rl = Math.hypot(rad[1], rad[2]);
+    G.skin.face([a, b, c, d], [s * 0.5 * rl, rad[1], rad[2]]);
+  }
+  const cup = [s * (x0 + EAR_CUP[0]), EAR_AT[1], EAR_AT[0] + EAR_CUP[1]];
+  for (let i = 0; i < 8; i++) G.inner.face([R[2][i], R[2][(i + 1) % 8], cup], [s, 0, 0]);
+  smoothGeos([G.skin, G.inner], SMOOTH_CREASE);
+  return { skin: G.skin.build(1), inner: G.inner.build(1) };
 }
 const beardOf = spec => spec.beard === true ? "goatee" : BEARDS[spec.beard] ? spec.beard : "none";
 // ---- materials: lit like the ground (scene-kit.js), one cache by colour and face layer -------------
@@ -683,7 +729,7 @@ function friend(spec) {
   // the head, and the face on its flat front
   const head = new THREE.Group(); head.position.set(0, torsoH - 0.035, 0); head.scale.setScalar(hs); body.add(head);
   mesh(block(HW, HH, HD, HC, 0), mat(skin), head);
-  if (spec.ears) for (const s of [-1, 1]) mesh(block(0.05, 0.14, 0.1, 0, 0.2, { x: s * (HW / 2 + 0.02) }), mat(skinS), head);
+  if (spec.ears) for (const s of [-1, 1]) { const E = earGeo(s); mesh(E.skin, mat(skin), head); mesh(E.inner, mat(skinS), head); }
   if (spec.nose === "button") mesh(lathe([[0.14, 0], [0.152, 0.032], [0.188, 0.032], [0.2, 0]], { cz: HA + 0.012 }), mat(skinS), head, 0, 0, 0, false);
   if (spec.nose === "long") mesh(lathe([[0.138, 0], [0.152, 0.028], [0.192, 0.028], [0.206, 0]], { sz: 2.6, cz: HA + 0.046 }), mat(skinS), head, 0, 0, 0, false);
   const hair = mat(spec.hairC), hairS = mat(shade(spec.hairC, 0.78));
@@ -816,7 +862,7 @@ function liveFace(F, dt) {
     const b = F.cur.blush; e.blush.visible = b > 0.04; if (e.blush.visible) e.blushM.color.copy(lin(mixHex(F.spec.skin, 0xf27a7a, 0.55 * b)));
   }
 }
-return { MC, shade, mixHex, mat, AC, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn, genSpec, liveFace, BEARDS, BEARD_SINK, BEARD_U, BEARD_Y, beardShell, beardOf, frontStrip, prop };
+return { MC, shade, mixHex, mat, AC, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn, genSpec, liveFace, BEARDS, BEARD_SINK, BEARD_U, BEARD_Y, beardShell, beardOf, frontStrip, prop, earGeo, smoothGeos };
 })();
 </script>
 <script>
@@ -1165,11 +1211,6 @@ function schedRow(label, sched) {
 }
 $("schedBody").innerHTML = Object.entries(ROLES).map(([k, r]) => schedRow(r.label, r.sched)).join("") + schedRow("Night guard", [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]]);
 function updateNow() { for (const el of document.querySelectorAll(".bar .now")) el.style.left = (STATE.hour / 24 * 100) + "%"; }
-$("relList").innerHTML = [["smith", "Orrin Vale, smith", 74, "Friendly"], ["trader", "Mara Quell, trader", 55, "Neutral"], ["guard", "Tam Holt, guard", 40, "Wary: saw you near the stall"], ["smuggler", "Hal Cobb, smuggler", 22, "Owes you; you owe him more"], ["farmer", "Hollin Cross (town)", 58, "Mean of 14 people"]]
-  .map(([img, n, v, t]) => `<div class="r"><img src="npcs/${img}.png" alt=""><div><div>${n}</div><div class="meter"><i style="width:${v}%"></i></div></div><span class="lv">${v} \u00b7 ${t}</span></div>`).join("");
-const REPLY = { trade: "\"Nails, hinges, a good axe head. Iron I'll buy at four a lump.\"", quest: "\"The north gate's hinges are rust. Bring me twelve ore from the east hills and I'll see you right.\"", rumour: "\"Hal? Comes at dark, gone by three. The guards pretend not to see. You'd do well to do the same.\"", bye: "\"Mind the step. Night.\"" };
-for (const b of document.querySelectorAll("#dlgOpts button")) b.addEventListener("click", () => { $("dlgLine").textContent = REPLY[b.dataset.r]; });
-
 // ---- the lineup: six peoples, four each ------------------------------------
 const lu = $("lu"); let lr = null;   // made when the Character sheets tab first opens
 function makeLineupRenderer() { lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding; }
@@ -1568,4 +1609,312 @@ window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, 
 if (TAB === "faces") TAB_HOOKS.faces.show();
 })();
 </script>
+<script src="npcs/talk-assets.js?v=12"></script>
+<script>
+"use strict";
+// ===================================================================
+// Talk tab (version 12; townsfolk design 5 to 9, 30, 37, 38a): the game's talk, trade and board panels as
+// crates/pbd-app/src/desktop/talk.rs draws them, in the stone kit's own pieces and font (talk-assets.js,
+// made by tools/mockup_talk_assets.py from the game's assets), over a caravan master who talks while a
+// panel is open. One 3D view, made when the tab first opens; its loop runs only while the tab shows.
+// The camera is the game's walker (eye 1.6 m) and moves only when dragged.
+// ===================================================================
+(function () {
+const TA = window.TALK_ASSETS, C = TA.colours, W = TA.words;
+const TK = { panel: "talk", mode: "today", hour: 22.5, night: 1, said: null };
+let S = 2;   // native px to CSS px: whole numbers only, so the pixel art stays crisp
 
+// ---- the kit: nine-sliced stone pieces, the kit font, slot wells, plaques -----------------------------
+function nine(el, name, extra) {
+  const P = TA.pieces[name], [t, r, b, l] = P.slice;
+  el.style.borderStyle = "solid"; el.style.borderWidth = `${t * S}px ${r * S}px ${b * S}px ${l * S}px`;
+  el.style.borderImage = `url(${P.uri}) ${t} ${r} ${b} ${l} fill stretch`; el.style.imageRendering = "pixelated";
+  el.style.boxSizing = "border-box";
+  if (extra) Object.assign(el.style, extra);
+  return el;
+}
+const tinted = {};
+function fontIn(colour) {
+  if (tinted[colour]) return tinted[colour];
+  const img = fontIn.img, c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+  const x = c.getContext("2d"); x.drawImage(img, 0, 0); x.globalCompositeOperation = "source-in"; x.fillStyle = colour; x.fillRect(0, 0, c.width, c.height);
+  return (tinted[colour] = c);
+}
+function textWidth(s) { const F = TA.font; let w = 0; for (const ch of s.toUpperCase()) { const g = F.glyphs[ch]; w += (g ? g[1] : F.space) + F.spacing; } return Math.max(0, w - F.spacing); }
+// a line of kit text: native pixels drawn into a canvas, shown at S with no smoothing; an optional 1 px shadow
+function kitText(s, colour, shadow, width) {
+  const F = TA.font, up = String(s).toUpperCase(), tw = textWidth(up), sh = shadow ? 1 : 0;
+  const cv = document.createElement("canvas"); cv.width = Math.max(1, tw + sh); cv.height = F.height + sh;
+  const x = cv.getContext("2d"); x.imageSmoothingEnabled = false;
+  const draw = (col, ox, oy) => { let at = 0; const src = fontIn(col); for (const ch of up) { const g = F.glyphs[ch]; if (g) { x.drawImage(src, g[0], 0, g[1], F.height, at + ox, oy, g[1], F.height); at += g[1] + F.spacing; } else at += F.space + F.spacing; } };
+  if (shadow) draw(shadow, 1, 1); draw(colour, 0, 0);
+  cv.className = "kt"; cv.style.width = cv.width * S + "px"; cv.style.height = cv.height * S + "px";
+  if (width) { const box = document.createElement("div"); box.className = "kt-box"; box.style.width = width * S + "px"; box.appendChild(cv); return box; }
+  return cv;
+}
+const node = (style = {}, kids = []) => { const d = document.createElement("div"); d.className = "kn"; for (const [k, v] of Object.entries(style)) d.style[k] = typeof v === "number" ? v * S + "px" : v; for (const k of kids) if (k) d.appendChild(k); return d; };
+const row = (gap, kids, more = {}) => node({ display: "flex", alignItems: "center", columnGap: gap, ...more }, kids);
+const img = (uri, size, more = {}) => { const i = document.createElement("img"); i.src = uri; i.alt = ""; i.draggable = false; i.style.width = i.style.height = size * S + "px"; i.style.imageRendering = "pixelated"; Object.assign(i.style, more); return i; };
+// the pack's slot well, its 16 px icon on the floor at 4, 4 (slots.rs SLOT, ICON_AT, ICON); a count in its corner
+function well(code, count) {
+  const w = node({ width: 24, height: 24, position: "relative", flexShrink: "0", backgroundImage: `url(${TA.pieces["slot-idle"].uri})`, backgroundSize: "100% 100%", imageRendering: "pixelated" });
+  const it = code && TA.items[code];
+  if (it) { const i = img(it.uri, 16, { position: "absolute", left: 4 * S + "px", top: 4 * S + "px" }); i.alt = it.name; w.appendChild(i); w.title = it.name; }
+  if (count > 1) { const t = kitText(String(count), C.LABEL, C.INK); t.style.position = "absolute"; t.style.right = S + "px"; t.style.bottom = S + "px"; w.appendChild(t); }
+  return w;
+}
+// a coin amount: the coin at 12 px and the number (talk.rs coins())
+const coins = (n, colour = C.TITLE) => row(1, [img(TA.coin, 12), kitText(W["trade.coins"].replace("{coins}", n), colour, C.INK)]);
+// a stone plaque: button-idle nine-sliced, 22 high, its label at 8 from the top; hover and press swap the piece
+function plaque(label, minW, onClick) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "kplaque";
+  nine(b, "button-idle", { minWidth: minW * S + "px", height: 22 * S + "px", padding: "0", display: "flex", justifyContent: "center", alignItems: "flex-start" });
+  const inner = node({ paddingLeft: 2, paddingRight: 2 }); inner.appendChild(kitText(label, C.LABEL, C.WELL)); b.appendChild(inner);
+  const set = n => { const P = TA.pieces[n]; b.style.borderImageSource = `url(${P.uri})`; };
+  b.addEventListener("pointerenter", () => set("button-hover")); b.addEventListener("pointerleave", () => set("button-idle"));
+  b.addEventListener("pointerdown", () => set("button-pressed")); b.addEventListener("pointerup", () => set("button-hover"));
+  b.addEventListener("click", e => { e.stopPropagation(); onClick(); });
+  b.setAttribute("aria-label", label);
+  return b;
+}
+// the panel's frame, 14 px margin as padding, children in a column 3 px apart (menu.rs framed())
+const frame = (width, kids) => nine(node({ width: width, display: "flex", flexDirection: "column", rowGap: 3 }, kids), "frame");
+// the oak lintel pegged on the frame's top edge, its title cut in (menu.rs lintel())
+function lintel(text) {
+  const b = nine(node({ minHeight: 16, minWidth: 40, display: "flex", justifyContent: "center", paddingLeft: 2, paddingRight: 2 }, [kitText(text, C.OAK_LABEL)]), "lintel");
+  return node({ display: "flex", justifyContent: "center", marginTop: -15, marginBottom: 4, flexShrink: "0" }, [b]);
+}
+const section = text => node({ marginTop: 3 }, [kitText(text, C.TITLE, C.INK)]);
+const line = (text, colour = C.TEXT) => kitText(text, colour, C.INK);
+const fill = (s, args) => s.replace(/\{(\w+)\}/g, (m, k) => k in args ? args[k] : m);
+const nameOf = code => TA.items[code] ? TA.items[code].name : code;
+
+// ---- the state: purse, pack, the town's stock, the jobs -------------------------------------------------
+let ST;
+function reset() {
+  ST = { purse: TA.purse, pack: Object.fromEntries(TA.sell.map(r => [r.code, r.count])), stock: Object.fromEntries(TA.buy.map(r => [r.code, r.count])),
+    jobs: TA.jobs.map(j => ({ ...j })), take: {}, give: {} };
+  TK.said = null;
+}
+reset();
+const price = code => (TA.buy.find(r => r.code === code) || {}).price;
+const pays = code => (TA.sell.find(r => r.code === code) || {}).price;
+function jobLine(j) {
+  const t = W["jobs.kind." + j.kind]; if (!t) return j.kind;
+  return fill(t, { count: j.count, have: j.have, thing: j.thing ? nameOf(j.thing) : "", town: j.town || "" });
+}
+const ready = () => ST.jobs.some(j => j.list === "yours" && j.have >= j.count);
+
+// ---- the three panels, as talk.rs paints them --------------------------------------------------------------
+function paintTalk() {
+  const greeting = ready() ? W["talk.line.ready"] : W["talk.line.trader"];
+  return frame(300, [
+    lintel(TA.town), line(W["talk.role.caravan_master"], C.TEXT_DIM), line(greeting, C.TEXT),
+    TK.said ? line(TK.said, C.TITLE) : null,
+    node({ display: "flex", columnGap: 4, rowGap: 4, flexWrap: "wrap", marginTop: 4 }, [
+      plaque(W["talk.trade"], 60, () => open("trade")), plaque(W["talk.work"], 60, () => open("board")), plaque(W["talk.bye"], 50, () => open("none")),
+    ]),
+  ]);
+}
+function tradeRow(code, count, cost, label, act) {
+  return row(4, [well(code), kitText(nameOf(code), C.TEXT, C.INK, 86), kitText(fill(W["trade.count"], { count }), C.TEXT_DIM, C.INK, 22), node({ width: 30 }, [coins(cost)]), plaque(label, 40, act)]);
+}
+function footer(extra) {
+  return [TK.said ? line(TK.said, C.TITLE) : null,
+    row(8, [line(W["trade.purse"], C.TEXT_DIM), coins(ST.purse), plaque(W["talk.back"], 50, () => open("talk")), ...(extra || [])], { marginTop: 4 })];
+}
+function paintTrade() {
+  if (TK.mode === "basket") return paintBasket();
+  const buyCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.buy"]),
+    ...TA.buy.map(r => tradeRow(r.code, ST.stock[r.code], r.price, W["trade.buy_one"], () => {
+      if (ST.purse < r.price) TK.said = W["trade.short"]; else if (ST.stock[r.code] <= 0) TK.said = W["trade.sold_out"];
+      else { ST.purse -= r.price; ST.stock[r.code]--; ST.pack[r.code] = (ST.pack[r.code] || 0) + 1; TK.said = fill(W["trade.bought"], { coins: r.price }); }
+      paint(); }))]);
+  const held = TA.sell.filter(r => ST.pack[r.code] > 0);
+  const sellCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.sell"]),
+    held.length ? null : line(W["trade.nothing_to_sell"], C.TEXT_DIM),
+    ...held.map(r => tradeRow(r.code, ST.pack[r.code], r.price, W["trade.sell_one"], () => {
+      ST.pack[r.code]--; ST.purse += r.price; TK.said = fill(W["trade.sold"], { coins: r.price }); paint(); }))]);
+  return frame(490, [lintel(W["trade.title"]), row(12, [buyCol, sellCol], { alignItems: "flex-start" }), ...footer()]);
+}
+// design 37: a deal is two baskets; the trader's goods at its selling price, yours at its buying price,
+// the difference in coins (prices from the derived values: inputs plus labour times the margin, times need)
+const B = TA.basket;
+const bSell = code => Math.max(1, Math.ceil(B[code].value * B[code].need - 1e-6));
+const bPays = code => Math.max(0, Math.min(Math.floor(B[code].value * B[code].need * TA.buy_share + 1e-6), bSell(code) - 1));
+function basketWells(side, unit) {
+  const items = Object.entries(ST[side]).filter(([, n]) => n > 0);
+  const wells = items.map(([code, n]) => { const w = well(code, n); w.classList.add("kclick"); w.addEventListener("click", () => { ST[side][code]--; paint(); }); return w; });
+  while (wells.length < 4) wells.push(well(null));
+  return row(2, wells);
+}
+function paintBasket() {
+  const take = Object.entries(ST.take).reduce((s, [c, n]) => s + bSell(c) * n, 0), give = Object.entries(ST.give).reduce((s, [c, n]) => s + bPays(c) * n, 0);
+  const diff = take - give;
+  const buyCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.buy"]),
+    ...TA.buy.map(r => tradeRow(r.code, ST.stock[r.code] - (ST.take[r.code] || 0), bSell(r.code), "+", () => { if (ST.stock[r.code] - (ST.take[r.code] || 0) > 0) ST.take[r.code] = (ST.take[r.code] || 0) + 1; paint(); }))]);
+  const held = TA.sell.filter(r => ST.pack[r.code] > 0);
+  const sellCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.sell"]),
+    ...held.map(r => tradeRow(r.code, ST.pack[r.code] - (ST.give[r.code] || 0), bPays(r.code), "+", () => { if (ST.pack[r.code] - (ST.give[r.code] || 0) > 0) ST.give[r.code] = (ST.give[r.code] || 0) + 1; paint(); }))]);
+  const baskets = row(12, [
+    node({ width: 214, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU TAKE"), row(6, [basketWells("take"), coins(take)])]),
+    node({ width: 214, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU GIVE"), row(6, [basketWells("give"), coins(give)])]),
+  ], { alignItems: "flex-start", marginTop: 2 });
+  const settle = row(8, [line(diff > 0 ? "YOU PAY" : diff < 0 ? "THEY PAY" : "EVEN", C.TEXT), coins(Math.abs(diff)),
+    plaque("DEAL", 50, () => {
+      if (!take && !give) return;
+      if (diff > ST.purse) { TK.said = W["trade.short"]; paint(); return; }
+      for (const [c, n] of Object.entries(ST.take)) { ST.stock[c] -= n; ST.pack[c] = (ST.pack[c] || 0) + n; }
+      for (const [c, n] of Object.entries(ST.give)) ST.pack[c] -= n;
+      ST.purse -= diff; ST.take = {}; ST.give = {};
+      TK.said = diff >= 0 ? fill(W["trade.bought"], { coins: diff }) : fill(W["trade.sold"], { coins: -diff }); paint();
+    }),
+    plaque("CLEAR", 50, () => { ST.take = {}; ST.give = {}; paint(); })], { marginTop: 2 });
+  return frame(490, [lintel(W["trade.title"]), row(12, [buyCol, sellCol], { alignItems: "flex-start" }), baskets, settle, ...footer()]);
+}
+function jobRow(j, action) {
+  return row(6, [well(j.icon), kitText(jobLine(j), C.TEXT, C.INK, 250), node({ width: 36 }, [coins(j.reward)]), action]);
+}
+function paintBoard() {
+  const mine = ST.jobs.filter(j => j.list === "yours"), posted = ST.jobs.filter(j => j.list === "posted");
+  const kids = [lintel(W["jobs.title"])];
+  if (mine.length) { kids.push(section(W["jobs.yours"])); for (const j of mine) kids.push(jobRow(j, j.have >= j.count ? plaque(W["jobs.hand_in"], 56, () => {
+    ST.purse += j.reward; ST.jobs.splice(ST.jobs.indexOf(j), 1); TK.said = fill(W["jobs.paid"], { coins: j.reward }); paint(); }) : null)); }
+  kids.push(section(W["jobs.posted"]));
+  for (const j of posted) kids.push(jobRow(j, plaque(W["jobs.take"], 56, () => { j.list = "yours"; TK.said = W["jobs.taken_line"]; paint(); })));
+  return frame(450, [...kids, ...footer()]);
+}
+// the HUD while a panel is open: the hotbar (the pack's first slots) and the coin count beside it
+function paintHud() {
+  const slots = Object.entries(ST.pack).filter(([, n]) => n > 0).map(([c, n]) => well(c, n));
+  while (slots.length < 10) slots.push(well(null));
+  return row(0, [...slots, node({ width: 6 }), img(TA.coin, 16), kitText(String(ST.purse), C.LABEL, C.INK)]);
+}
+
+// ---- the 3D view: a lit patch of a desert town, and the caravan master --------------------------------
+const tkCanvas = $("tk"); let tr = null;
+const ts = new THREE.Scene(); ts.fog = new THREE.Fog(0x0e1424, 20, 70);
+const tcam = new THREE.PerspectiveCamera(60, 1, 0.05, 200);   // the game's walker: 60 degrees, eye 1.6 m
+const tsun = new THREE.DirectionalLight(0xffffff, 1); tsun.castShadow = true; tsun.shadow.mapSize.set(2048, 2048);
+Object.assign(tsun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 80 }); tsun.shadow.bias = -0.0004; tsun.shadow.normalBias = 0.015;
+tsun.shadow.camera.updateProjectionMatrix(); ts.add(tsun, tsun.target);
+const themi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.3); ts.add(themi);
+const TL = [], TLK = { lamp: [0xffd27a, 1.6, 5.2], window: [0xffa850, 1.0, 4.5], fire: [0xff8a3a, 1.3, 6.0] };
+const addTL = (x, y, z, k) => TL.push({ x, y, z, c: lin(TLK[k][0]), p: TLK[k][1], R: TLK[k][2], kind: k });
+const glow = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), pane = new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }), fireM = new THREE.MeshBasicMaterial({ color: 0xff7a24 });
+let flame = null;
+(function patch() {
+  const GS = new PBD.GeoSet();
+  for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) {
+    if (hexDist(q, r) > 2) continue;
+    const pts = [0, 1, 2, 3, 4, 5].map(k => corner(q, r, k)), path = hexDist(q, r) === 0 || (r === 1 && q >= -1 && q <= 0);
+    GS.prism(path ? "cobble" : "sand", "sand", pts, -1, 0, { uvTop: PBD.cellUV(hx(q, r), hz(q, r)) });
+  }
+  // a stall behind the trader: posts, a counter, a cloth roof; a house front with a lit window and a door
+  GS.box("plaster", 0, 0, -4.05, 6.4, 3.0, 0.3);
+  for (const x of [-3.2, -1.0, 2.2, 3.2]) GS.box("timber", x, 0, -3.88, 0.18, 3.0, 0.08);
+  GS.box("timber", 0, 2.92, -3.88, 6.6, 0.16, 0.1); GS.box("plank", -1.9, 0, -3.88, 1.0, 2.1, 0.06);
+  GS.box("timber", 0.9, 0.95, -3.87, 1.2, 0.08, 0.1); GS.box("timber", 0.9, 1.95, -3.87, 1.2, 0.08, 0.1);
+  for (const [a, b] of [[-1.2, -1.6], [1.2, -1.6], [-1.2, -0.6], [1.2, -0.6]]) GS.box("timber", a, 0, b, 0.1, 2.3, 0.1);
+  GS.box("plank", 0, 0.85, -1.1, 2.4, 0.1, 1.1); GS.box("cloth2", 0, 2.3, -1.1, 2.7, 0.08, 1.5);
+  const lamps = [[2.05, -0.25], [-2.6, -0.9]];
+  for (const [x, z] of lamps) { PBD.lampPost(GS, x, 0, z); const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.16), glow); m.position.set(x + 0.45, 2.26, z); ts.add(m); addTL(x + 0.45, 2.26, z, "lamp"); }
+  PBD.REP.cloth2 = 2.5; PBD.addMeshes(GS, ts);
+  const pn = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.92), pane); pn.position.set(0.9, 1.49, -3.885); ts.add(pn); addTL(0.9, 1.5, -3.55, "window");
+  const BG = new PBD.GeoSet(), bz = [0, 1, 2, 3, 4, 5].map(k => [-1.5 + 0.24 * Math.cos(k * Math.PI / 3 + Math.PI / 6), 0.9 + 0.24 * Math.sin(k * Math.PI / 3 + Math.PI / 6)]);
+  BG.prism("iron", "iron", bz.map(([x, z]) => [-1.5 + (x + 1.5) * 0.35, 0.9 + (z - 0.9) * 0.35]), 0, 0.42); BG.prism("iron", "iron", bz, 0.42, 0.62); PBD.addMeshes(BG, ts);
+  flame = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.13, 0.3, 6), fireM); flame.position.set(-1.5, 0.75, 0.9); ts.add(flame); addTL(-1.5, 1.0, 0.9, "fire");
+})();
+// the caravan master: the desert people's palette, the trader's turban and pouch (the square's townSpec)
+const spec = townSpec("desert", "trader", 12, 3); spec.mood = "happy"; spec.ears = true;
+const who = FK.friend(spec); who.g.position.set(0, 0, 0.05); ts.add(who.g); FK.setExprOn(who, "happy", true);
+// time of day, as the Faces tab: at night only the lamps, the window and the brazier light anything
+function setHourT(h) {
+  TK.hour = h; const ang = (h - 6) / 12 * Math.PI, el = Math.sin(ang), day = clamp((el + 0.08) / 0.3, 0, 1);
+  const sky = new THREE.Color(0x0e1424).lerp(new THREE.Color(0x9fc6e2), day); ts.background = sky.clone(); ts.fog.color.copy(sky);
+  const sd = el > 0 ? new THREE.Vector3(Math.cos(ang) * 0.7, Math.max(0.2, el), 0.75).normalize() : new THREE.Vector3(-0.4, 0.7, 0.55).normalize();
+  tsun.position.copy(sd).multiplyScalar(30); tsun.target.position.set(0, 0, -0.6);
+  if (el > 0) { tsun.color.setHSL(0.09, 0.5, 0.85); tsun.intensity = 1.8 * clamp(el * 3, 0, 1); } else { tsun.color.set(0x8fa6d8); tsun.intensity = 0.035; }
+  themi.intensity = 0.008 + 0.57 * day; themi.color.copy(sky).lerp(new THREE.Color(0xffffff), 0.35); themi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
+  TK.night = 1 - day; PBD.LU.uLamp.value = 0.85 * clamp((TK.night - 0.25) / 0.35, 0, 1);
+  glow.color.set(TK.night > 0.3 ? 0xffd9a0 : 0x6a655a); pane.color.setRGB(...(TK.night > 0.3 ? [1.0, 0.72, 0.36] : [0.12, 0.13, 0.16]));
+  document.querySelectorAll("[data-tkt]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.tkt === h));
+}
+// the walker's eye, 1.6 m up, 1.9 m from the trader, looking at the face; drag to look round
+const EYE = { x: 0.05, z: 1.9, yaw: 0, pitch: 0.1 };
+(function look(el) {
+  let p = null;
+  el.addEventListener("pointerdown", e => { if (e.target !== el) return; el.setPointerCapture(e.pointerId); p = [e.clientX, e.clientY]; });
+  el.addEventListener("pointermove", e => { if (!p) return; EYE.yaw = clamp(EYE.yaw - (e.clientX - p[0]) * 0.004, -1.2, 1.2); EYE.pitch = clamp(EYE.pitch - (e.clientY - p[1]) * 0.004, -0.8, 0.8); p = [e.clientX, e.clientY]; });
+  const up = () => { p = null; }; el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+})(tkCanvas);
+
+// ---- opening a panel: the person talks while one is open (design 30) ----------------------------------
+function open(p) {
+  if (p !== TK.panel) TK.said = null;
+  TK.panel = p; FK.setExprOn(who, p === "none" ? "happy" : "talking", false);
+  document.querySelectorAll("[data-tkp]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tkp === p));
+  paint();
+}
+function paint() {
+  const fit = $("tkFit"); fit.innerHTML = "";
+  const stage = $("tkStage"), w = stage.clientWidth || 1000, h = stage.clientHeight || 600;
+  const build = () => { fit.innerHTML = ""; if (TK.panel !== "none") fit.appendChild(TK.panel === "talk" ? paintTalk() : TK.panel === "trade" ? paintTrade() : paintBoard()); };
+  // the largest whole-number scale the panel fits at (the game's own UI scale steps the same way)
+  S = 1; fit.style.transform = ""; build();
+  const fw0 = Math.max(1, fit.scrollWidth), fh0 = Math.max(1, fit.scrollHeight);
+  const best = clamp(Math.floor((w - 16) / fw0), 1, 2);
+  if (best !== S) { S = best; build(); }
+  // a panel wider than a phone's stage even at 1x is shrunk to fit; the stage grows to hold a tall one
+  const k = Math.min(1, (w - 16) / Math.max(1, fit.scrollWidth));
+  if (k < 1) fit.style.transform = `scale(${k})`;
+  const need = Math.ceil(fit.scrollHeight * k + 330);   // room under the panel for the person it is open over
+  if (h < need) { stage.style.height = need + "px"; if (tr) { tr.setSize(tkCanvas.clientWidth, tkCanvas.clientHeight, false); tcam.aspect = tkCanvas.clientWidth / tkCanvas.clientHeight; tcam.updateProjectionMatrix(); } }
+  const hud = $("tkHud"); hud.innerHTML = ""; hud.appendChild(paintHud());
+  const tbody = $("tkValues").tBodies[0];
+  if (!tbody.rows.length) tbody.innerHTML = Object.entries(B).map(([c, b]) => `<tr><td>${nameOf(c)}</td><td>${b.raw ? "raw" : "made"}</td><td>${b.raw ? "-" : b.inputs.map(([i, n]) => n + " " + (TA.items[i] ? TA.items[i].name : i)).join(", ") + ", " + b.secs + " s" + (b.makes > 1 ? `, makes ${b.makes}` : "")}</td><td>${b.value.toFixed(2)}</td><td>${valueToday(c)}</td></tr>`).join("");
+}
+function valueToday(c) { return c in TA.today ? TA.today[c] : "-"; }
+document.querySelectorAll("[data-tkp]").forEach(b => b.addEventListener("click", () => open(b.dataset.tkp)));
+document.querySelectorAll("[data-tkm]").forEach(b => b.addEventListener("click", () => { TK.mode = b.dataset.tkm; ST.take = {}; ST.give = {}; document.querySelectorAll("[data-tkm]").forEach(x => x.setAttribute("aria-pressed", x === b)); if (TK.panel !== "trade") open("trade"); else paint(); }));
+document.querySelectorAll("[data-tkt]").forEach(b => b.addEventListener("click", () => setHourT(+b.dataset.tkt)));
+$("tkReset").addEventListener("click", () => { reset(); paint(); });
+addEventListener("keydown", e => { if (TAB !== "talk" || (e.target.closest && e.target.closest("input,textarea,select"))) return;
+  if (e.key === "e" || e.key === "E" || e.key === "f" || e.key === "F") open(TK.panel === "none" ? "talk" : "none");
+  if (e.key === "Escape" && $("tkModal").hidden) open(TK.panel === "talk" || TK.panel === "none" ? "none" : "talk"); });
+{ const m = $("tkModal"); $("tkInfo").addEventListener("click", () => { m.hidden = false; $("tkX").focus(); }); $("tkX").addEventListener("click", () => { m.hidden = true; });
+  m.addEventListener("click", e => { if (e.target === m) m.hidden = true; }); addEventListener("keydown", e => { if (e.key === "Escape" && !m.hidden) m.hidden = true; }); }
+
+// ---- the frame -----------------------------------------------------------------------------------------
+function tResize() { const w = tkCanvas.clientWidth, h = tkCanvas.clientHeight; if (!tr || !w) return; tr.setSize(w, h, false); tcam.aspect = w / h; tcam.updateProjectionMatrix(); paint(); }
+addEventListener("resize", () => { if (TAB === "talk") tResize(); });
+let tLast = 0, tT = 0, tRun = false, tRaf = 0;
+function tFrame(now) {
+  if (!tRun) return;
+  const dt = clamp((now - tLast) / 1000, 0, 0.05); tLast = now; tT += dt;
+  FK.liveFace(who, dt);
+  flame.scale.set(1, 0.8 + 0.3 * Math.sin(tT * 9) * Math.sin(tT * 5.3 + 1), 1); flame.visible = TK.night > 0.3;
+  tcam.position.set(EYE.x, 1.6, EYE.z); tcam.rotation.set(EYE.pitch, EYE.yaw, 0, "YXZ");
+  tr.render(ts, tcam); tRaf = requestAnimationFrame(tFrame);
+}
+TAB_HOOKS.talk = {
+  show() {
+    if (!tr) { tr = new THREE.WebGLRenderer({ canvas: tkCanvas, antialias: true }); tr.setPixelRatio(Math.min(2, devicePixelRatio)); tr.outputEncoding = THREE.sRGBEncoding; tr.shadowMap.enabled = true; tr.shadowMap.type = THREE.PCFSoftShadowMap; }
+    PBD.setLights(TL); setHourT(TK.hour); tResize();
+    if (!tRun) { tRun = true; tLast = performance.now(); tRaf = requestAnimationFrame(tFrame); }
+  },
+  hide() { tRun = false; cancelAnimationFrame(tRaf); PBD.setLights(LIGHTS); setHour(STATE.hour); },
+};
+const TQ = new URLSearchParams(location.search);
+fontIn.img = new Image();
+fontIn.img.onload = () => {
+  if (TQ.has("thour")) TK.hour = +TQ.get("thour");
+  if (TQ.has("tmode")) { TK.mode = TQ.get("tmode"); document.querySelectorAll("[data-tkm]").forEach(x => x.setAttribute("aria-pressed", x.dataset.tkm === TK.mode)); }
+  open(TQ.get("tpanel") || "talk");
+  if (TQ.has("tbasket")) { for (const c of TQ.get("tbasket").split(",")) { const k = c.indexOf(":"), side = c.slice(0, k), code = c.slice(k + 1); ST[side][code] = (ST[side][code] || 0) + 1; } paint(); }
+  if (TAB === "talk") TAB_HOOKS.talk.show();
+};
+fontIn.img.src = TA.font.uri;
+window.__talk = { TK, open, setHourT, paint, ST: () => ST, who, EYE };
+})();
+</script>

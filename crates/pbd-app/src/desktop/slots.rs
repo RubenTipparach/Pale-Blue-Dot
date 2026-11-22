@@ -243,8 +243,8 @@ pub struct SlotCount(pub usize);
 /// A slot, native pixels: the dressed-stone well of `slot-idle` (24 x 24)
 /// with its 16 px icon floor at 4, 4, the item PNGs' own size.
 pub const SLOT: f32 = 24.0;
-const ICON_AT: f32 = 4.0;
-const ICON: f32 = 16.0;
+pub const ICON_AT: f32 = 4.0;
+pub const ICON: f32 = 16.0;
 /// The hotbar row stands this far off the bottom of the window.
 pub const HOTBAR_BOTTOM: f32 = 10.0;
 

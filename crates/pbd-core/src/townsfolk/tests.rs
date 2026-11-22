@@ -413,8 +413,105 @@ fn a_beard_is_only_in_front_and_off_the_mouth() {
     assert!(none > 1000);
 }
 
+/// An ear is one tapered, cupped piece grown from the head's side, soft
+/// shaded, the same each time and mirrored side to side (decision 38).
+#[test]
+fn an_ear_grows_from_the_side_and_is_soft_shaded() {
+    let (skin, inner) = (0xe2ac80, 0xbe9069);
+    let right = figure::ear(1.0, skin, inner);
+    let left = figure::ear(-1.0, skin, inner);
+    assert_eq!(right, figure::ear(1.0, skin, inner), "the same every time");
+    assert_eq!(right.triangles(), 40);
+    // Mirrored: the same points with x turned over (each face's corners
+    // come in the other order, so compare them as sets).
+    let set = |p: &figure::Part, s: f32| {
+        let mut v: Vec<[u32; 3]> = p
+            .positions
+            .iter()
+            .map(|q| [(s * q[0]).to_bits(), q[1].to_bits(), q[2].to_bits()])
+            .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(set(&right, 1.0), set(&left, -1.0), "mirrored");
+    let side = HW / 2.0;
+    let (mut out, mut lo_y, mut hi_y) = (0.0f32, f32::MAX, f32::MIN);
+    for p in &right.positions {
+        // Never behind the side face but for its 2 mm root, never past the
+        // head's front or back bevels, never above the sideburns' middle.
+        assert!(p[0] >= side - 0.0021, "behind the side at {p:?}");
+        assert!(
+            p[2].abs() < figure::HD / 2.0 - figure::HC,
+            "off the side at {p:?}"
+        );
+        out = out.max(p[0] - side);
+        lo_y = lo_y.min(p[1]);
+        hi_y = hi_y.max(p[1]);
+    }
+    assert!((0.035..=0.05).contains(&out), "stands {out} m out");
+    assert!(lo_y > figure::HC && hi_y < 0.37, "{lo_y}..{hi_y}");
+    // The cup is in the inner colour and sits below the rim.
+    let cup: Vec<_> = (0..right.positions.len())
+        .filter(|&i| right.colours[i] == inner)
+        .collect();
+    assert_eq!(cup.len(), 8 * 3);
+    let rim = figure::EAR_RINGS[2][1];
+    assert!(
+        cup.iter()
+            .all(|&i| right.positions[i][0] - side <= rim + 1e-6)
+    );
+    // Soft: where faces meet gently a corner's normal is shared, so most
+    // corners differ from their own face's flat normal.
+    let mut flat = right.clone();
+    let mut soft = 0;
+    for t in 0..flat.triangles() {
+        let [a, b, c] = [0, 1, 2].map(|k| Vec3::from(flat.positions[3 * t + k]));
+        let n = (b - a).cross(c - a).normalize();
+        for k in 0..3 {
+            if Vec3::from(right.normals[3 * t + k]).dot(n) < 0.999 {
+                soft += 1;
+            }
+            flat.normals[3 * t + k] = n.to_array();
+        }
+    }
+    assert!(soft > right.positions.len() / 2, "{soft} soft corners");
+    // Every normal still faces out of its own face.
+    for t in 0..flat.triangles() {
+        for k in 0..3 {
+            let (s, f) = (right.normals[3 * t + k], flat.normals[3 * t + k]);
+            assert!(Vec3::from(s).dot(Vec3::from(f)) > 0.4);
+        }
+    }
+}
+
+/// The beard is soft shaded (owner, 2026-11-22: "soft shade the beard, not
+/// flat shade"): its front sheet's corners at one point share one normal.
+#[test]
+fn the_beard_is_soft_shaded() {
+    for b in [Beard::Goatee, Beard::FullFront] {
+        let p = figure::beard_shell(b, 0x8a5a2a, 0xe2ac80);
+        let mut at: std::collections::BTreeMap<[u32; 3], Vec<[f32; 3]>> = Default::default();
+        for (q, n) in p.positions.iter().zip(&p.normals) {
+            at.entry(q.map(f32::to_bits)).or_default().push(*n);
+        }
+        let mut shared = 0;
+        for ns in at.values() {
+            // The front sheet's normals point forward; at one point they agree.
+            let front: Vec<Vec3> = ns
+                .iter()
+                .map(|n| Vec3::from(*n))
+                .filter(|n| n.z > 0.8)
+                .collect();
+            if front.len() >= 3 && front.iter().all(|n| n.dot(front[0]) > 0.9999) {
+                shared += 1;
+            }
+        }
+        assert!(shared > 20, "{b:?}: {shared} smooth points");
+    }
+}
+
 /// The figure is the Faces tab's: its block head, its height, and about
-/// its triangles (the hero's 678, face included).
+/// its triangles (the hero's 734, face included, since decision 38's ears).
 #[test]
 fn the_figure_is_the_faces_tabs() {
     let hero = Look {
@@ -438,7 +535,7 @@ fn the_figure_is_the_faces_tabs() {
     let f = Figure::of(&hero);
     assert!((f.height_m() - 1.545).abs() < 0.01, "{}", f.height_m());
     let tris = f.triangles() + FACE_TRIANGLES;
-    assert!((660..=700).contains(&tris), "{tris} triangles");
+    assert!((715..=750).contains(&tris), "{tris} triangles");
     // The head block alone: 0.5 wide, 0.6 tall, 0.45 deep.
     let block = figure::block(HW, HH, HD, figure::HC, 0.0, Default::default(), 0);
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));

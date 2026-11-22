@@ -900,6 +900,15 @@ mesh, a shell laid over the head's surface:
   28 mm in the moustache, 26 mm beside the mouth and 34 mm at the chin, with
   a small fixed lump pattern (up to 3 mm) so the facets read as hair, not a
   slab. Each cell is two triangles on an alternating diagonal, flat shaded.
+  *Soft shaded since 2026-11-22* (owner, on the game's full front beard
+  capture `docs/screenshots/townsfolk/beard-full-front.jpg`: "soft shade
+  the beard, not flat shade"; its faceted triangles read as crumpled): the
+  shell's corners that meet at a point share one normal, the mean of the
+  face normals there within 60 degrees of each other (decision 38's
+  `smooth_from`), so light rolls over the cheeks, the front corners and the
+  chin, and the crease stays crisp only where a wall turns into the head
+  (about 90 degrees). The lump pattern is dropped: under soft shading it
+  read as dents, not hair.
   Below the chin the shell's front tucks back and its underside slopes up
   into the head, so the point is thin.
 - **What it keeps from 36**: the hair's colour, lit like the rest of the
@@ -915,6 +924,56 @@ mesh, a shell laid over the head's surface:
 - The mockup's `FK.BEARDS` and the game's `figure::beard_shell` build it
   from the same grid, stencils and thickness rule; the stubble colours join
   the atlas's swatches (each people's hair with each of its skins).
+
+**38. An ear is one shaped piece grown from the head, soft shaded (owner,
+2026-11-22, M5 version 12).** Under CLAUDE.md's "No obvious primitives"
+(the owner: "I can see obvious primitives, this is signof bad work ...
+avoid obvioud primitives"), version 9's ear, a 0.05 x 0.14 x 0.1 m box
+stood on the head's side face in the skin's shade, reads as a primitive
+stuck on: straight edges, a flat outer face, a hard corner where it meets
+the head. From version 12 each ear is one tapered, slightly cupped form
+that grows out of the side face:
+- **The outline** is an irregular rounded shape on the side face, wider at
+  the top and narrowing to a lobe (eight points, `figure::EAR_OUTLINE`,
+  about 0.1 m deep and 0.15 m tall at its rim), centred 0.26 m up the head
+  and 5 mm behind its middle, where the box stood.
+- **Three rings and a cup** (`EAR_RINGS`): a root ring 1.3 times the
+  outline sunk 2 mm into the head, so the ear's foot flares into the side
+  face like a bevel instead of meeting it at a corner; the outline itself
+  14 mm out; a rim 0.86 times it, 42 mm out (the box stood 45 mm proud, so
+  the ear still shows past the head from the front) and leaning back 10 mm
+  at its top. Inside the rim a shallow bowl falls 16 mm to its middle
+  (`EAR_CUP`), in the skin's shade (the colour the box wore),
+  the rest in the skin: the cup reads as an ear's hollow, the outside as
+  the head's own skin.
+- **Soft shaded** like the beard (owner, 2026-11-22: "soft shade the beard,
+  not flat shade", and the ears the same way): `Part::smooth_from` gives
+  every corner the mean of the face normals meeting at its point within
+  60 degrees of its own (`SMOOTH_CREASE`, cos 0.5), so the flare and the
+  outside roll smoothly and only the rim's turn into the cup stays crisp.
+  The rule is deterministic: corners are matched by their exact position,
+  in the order built, and the mockup's `smoothGeos` does the same.
+- 40 triangles an ear (the box was 12), so the hero is about 730 with its
+  face. The roll is unchanged (`Look::ears`, 60%; hoods and headsets none),
+  and a look is never stored, so saves are untouched.
+- Painted into the side face was the other way open; a modelled ear keeps
+  the block head's silhouette from the front, which is how a townsperson
+  is mostly seen at game distance, so it is modelled.
+- The mockup's `FK.earGeo` and the game's `figure::ear` build it from the
+  same outline, rings, cup and crease.
+
+**38a. The trade and board panels' icons sit in the pack's slot wells
+(2026-11-22, on the owner's "you need proper icons for trade").** The trade
+rows showed each good's pack icon at 16 px with no well, and the board's
+rows none. Every buy row, sell row and job row now shows its good in the
+same 24 px dressed-stone well as a pack slot (`slots::SLOT`, the
+`slot-idle` piece, its 16 px icon floor at 4, 4, the item PNG's own size),
+so a good reads the same in the pack, the hotbar and a deal; a job's well
+holds the good it asks for (the dish, the ingot, the parcel, the planks a
+repair is mended with), and a job with no good (the lost villager, lamps, a
+catch of any fish, selling any goods) its well empty, the pack's empty slot. The coin sits
+beside every price as before. The barter basket of decision 37 is drawn in
+M5 only and waits for a request.
 
 ## Risks / Trade-offs
 

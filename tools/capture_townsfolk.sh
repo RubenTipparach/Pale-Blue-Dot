@@ -26,6 +26,13 @@ shot() {
 GOATEE="--walk --at 29.726465 8.515085 --yaw -4.4 --pitch -6"
 FULL_FRONT="--walk --at 29.707064 9.102589 --yaw 87.3 --pitch -6"
 ONLY=${ONLY:-all}
+# The ears (design 38): the smith from the side, and the two bearded faces.
+if [ "$ONLY" = ears ]; then
+  shot ears-smith-side "" $SMITH_SIDE --time 11
+  shot ears-smith-front "" $SMITH_FRONT --time 11
+  shot ears-smith-side-2230 "" $SMITH_SIDE --time 22.5
+  exit 0
+fi
 if [ "$ONLY" = beards ]; then
   shot beard-goatee "" $GOATEE --time 11
   shot beard-goatee-talking talking $GOATEE --time 11

@@ -85,8 +85,8 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
     let kit = &*kit;
     for (screen, width) in [
         (Screen::Talk, 300.0),
-        (Screen::Trade, 470.0),
-        (Screen::Board, 420.0),
+        (Screen::Trade, 490.0),
+        (Screen::Board, 450.0),
     ] {
         commands
             .spawn((menu::layer(), GlobalZIndex(10), Panel(screen)))
@@ -484,24 +484,58 @@ fn coins(parent: &mut ChildSpawnerCommands, n: u64, colour: Color, coin: &Handle
         });
 }
 
-/// An item's picture.
+/// An item's picture in the pack's own slot well (decision 38a): the
+/// dressed-stone `slot-idle` piece, [`slots::SLOT`] square, its icon at the
+/// item PNG's own size on the well's floor. No item, an empty well.
 fn icon(
     parent: &mut ChildSpawnerCommands,
-    item: pbd_core::inventory::Item,
+    kit: &UiKit,
+    item: Option<pbd_core::inventory::Item>,
     icons: &ItemIcons,
     images: &Assets<Image>,
 ) {
-    let mut node = ImageNode::default();
-    slots::paint_icon(&mut node, Some(Stack::new(item, 1)), icons, images);
-    parent.spawn((
-        node,
-        Node {
-            width: px(16),
-            height: px(16),
-            flex_shrink: 0.0,
-            ..default()
-        },
-    ));
+    let mut node = ImageNode {
+        color: Color::NONE,
+        ..default()
+    };
+    slots::paint_icon(&mut node, item.map(|i| Stack::new(i, 1)), icons, images);
+    parent
+        .spawn((
+            Node {
+                width: px(slots::SLOT),
+                height: px(slots::SLOT),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            kit.whole(Set::Stone, slots::slot_piece(false)),
+        ))
+        .with_children(|well| {
+            well.spawn((
+                node,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(slots::ICON_AT),
+                    top: px(slots::ICON_AT),
+                    width: px(slots::ICON),
+                    height: px(slots::ICON),
+                    ..default()
+                },
+            ));
+        });
+}
+
+/// The good a job asks for, for its well: its thing (the first of a
+/// choice), a delivery's parcel, a repair's planks (design 29 mends with
+/// them); none for a job with no good (a lost villager, lamps).
+fn job_item(job: &Job, ids: &[String]) -> Option<pbd_core::inventory::Item> {
+    use pbd_core::economy::jobs::JobKind;
+    match job.kind {
+        JobKind::Deliver => return item_of("parcel", ids),
+        JobKind::Repair => return item_of("planks", ids),
+        _ => {}
+    }
+    let first = job.thing.split('|').next().unwrap_or_default();
+    item_of(first, ids)
 }
 
 /// What every panel reads to paint.
@@ -573,7 +607,7 @@ pub fn paint(
     commands.entity(body).with_children(|panel| match open {
         Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco),
         Screen::Trade => paint_trade(panel, kit, with, &p, save, icons, &ids, now_s, coin),
-        _ => paint_board(panel, kit, with, &p, coin),
+        _ => paint_board(panel, kit, with, &p, icons, &ids, coin),
     });
 }
 
@@ -664,7 +698,7 @@ fn paint_trade(
             cols.spawn(Node {
                 flex_direction: FlexDirection::Column,
                 row_gap: px(2),
-                width: px(205),
+                width: px(214),
                 ..default()
             })
             .with_children(|col| {
@@ -689,7 +723,7 @@ fn paint_trade(
             cols.spawn(Node {
                 flex_direction: FlexDirection::Column,
                 row_gap: px(2),
-                width: px(205),
+                width: px(214),
                 ..default()
             })
             .with_children(|col| {
@@ -730,7 +764,7 @@ fn trade_row(
         ..default()
     })
     .with_children(|row| {
-        icon(row, item, icons, images);
+        icon(row, kit, Some(item), icons, images);
         row.spawn((
             KitText::new(item.name(), ui_kit::TEXT).shadow(ui_kit::INK),
             Node {
@@ -781,9 +815,12 @@ fn paint_board(
     kit: &UiKit,
     with: &TalkWith,
     p: &PaintParams,
+    icons: &ItemIcons,
+    ids: &[String],
     coin: &Handle<Image>,
 ) {
     menu::lintel(panel, kit, tr("jobs.title"));
+    let well = (icons, &*p.images, ids);
     let town = &with.town;
     let eco = &p.eco;
     let towns = &*p.towns;
@@ -800,7 +837,7 @@ fn paint_board(
             let done = eco.jobs.is_done(job.id);
             job_row(
                 panel,
-                (kit, coin),
+                (kit, coin, well),
                 job,
                 &eco.jobs.counts(job.id),
                 towns,
@@ -832,7 +869,7 @@ fn paint_board(
         for job in &posted {
             job_row(
                 panel,
-                (kit, coin),
+                (kit, coin, well),
                 job,
                 &[],
                 towns,
@@ -844,9 +881,12 @@ fn paint_board(
     footer(panel, kit, p, coin);
 }
 
+/// What a job row's well paints from: the icons, the images, the fish ids.
+type Well<'a> = (&'a ItemIcons, &'a Assets<Image>, &'a [String]);
+
 fn job_row(
     panel: &mut ChildSpawnerCommands,
-    (kit, coin): (&UiKit, &Handle<Image>),
+    (kit, coin, (icons, images, ids)): (&UiKit, &Handle<Image>, Well),
     job: &Job,
     counts: &[u32],
     towns: &Towns,
@@ -860,6 +900,7 @@ fn job_row(
             ..default()
         })
         .with_children(|row| {
+            icon(row, kit, job_item(job, ids), icons, images);
             row.spawn((
                 KitText::new(job_line(job, counts, towns), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
