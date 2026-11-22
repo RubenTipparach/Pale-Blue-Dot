@@ -576,6 +576,19 @@ and on `Welcome` opens the world it names. Then:
 - a `Refused` drops the prediction and the region's `Snapshot` that
   follows replaces the client's copy of it.
 
+**First cut of the joined client (2026-11-22).** Three things are simpler
+than decision 4 asks, each named so it is not mistaken for done:
+- *No prediction yet.* A joined player's dig or place is sent and shows when
+  the server's `Change` comes back, rather than at once and then rolled back
+  on a refusal. A refusal then has nothing to undo. On a LAN the round trip
+  is a frame or two; prediction with its rollback is a follow-up.
+- *The pack starts as the kit on both sides.* The host joins a new remote
+  player with the starting kit, which is what the joining game deals itself,
+  so the two agree. Until the inventory message (task 8.2) a joined
+  player's pack moves and pickups stay on their own game.
+- *A remote dig floats nothing yet.* The server decides the dig, but the
+  block it would float needs a drop record the client can see (task 8.2).
+
 **Snapshots on join.** Until region subscription (task 6.3) is built, a
 joining client is sent every region that has an edit, nearest first. That
 is the whole world's edits, which is small today and is exactly what 6.3
