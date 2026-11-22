@@ -151,6 +151,7 @@ body.coarse .keys,body.coarse .hint{display:none}
         <option value="caves">Mountains, cave dwellers</option>
         <option value="roads">Roads: dirt, gravel, a hill, a ford, a bridge</option>
         <option value="wideroads">Wide roads: two and three cells</option>
+        <option value="paving">Paving: marked cells, a paved run, grinder and mixer</option>
       </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
@@ -226,11 +227,27 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>Which roads are wide</b> (recommendation taken, ask only with screenshots): gravel roads between the largest walled towns are two wide, three wide inside a large town's gate; village tracks stay one wide. A player lays any width by laying cells side by side.</li>
       </ul>
 
+      <h3>Paving (townsfolk design 39 to 41, version 4)</h3>
+      <ul>
+        <li>The owner, 2026-11-22: <i>"building roads shjould be like a way point system, where you have to mark road for pavving and then you walk up to blocks with gravel and pave it. to make gravel you need a grinder and mixer"</i>. Pick <i>Paving</i> under Settlement (<code>towns.html#paving</code>). Written up, not built.</li>
+        <li><b>Marking.</b> Survey stakes are driven as waypoints. The cells between two stakes are found by the world's own road search, at most a layer apart, and marked. A marked cell is still its natural ground: east of the first stake the marks cross a one-layer step, which stays a step until it is paved.</li>
+        <li><b>How a mark looks.</b> A band of lime dust about 0.9 m wide along the road's line, from the edge it comes in by, through the middle, to the edge it leaves by, its edges ragged and broken, grass showing through. It is painted on the cell's own top, so it is lit, shadowed and coloured as the ground is; in the game the terrain shader blends it in from a mark bit, no geometry laid on the grass. No outline.</li>
+        <li><b>Stakes</b> stand at the waypoints: where paving stopped, at the bend, and at the plan's end. Each is one tapered peg of split timber, its point sunk, its head spread and frayed by the mallet, a strip of faded madder cloth tied under the head.</li>
+        <li><b>The preview.</b> Past the last stake, the cells the next stake would mark show at half strength, aimed at the village track (the world's dirt track to the north-east), which is how a plan joins a road.</li>
+        <li><b>Paving.</b> With the shovel in hand and gravel in the pack, F on a marked cell paves it, one gravel a cell; held, it paves the next one in reach on the shovel's beat. The paved run from the worksite is gravel road cells cut by the world road's own rule from the plan's order: the step at the first rise is a sloped cell, no step. Standing on a marked cell, a chip says so.</li>
+        <li><b>The grinder</b> crushes stone: a board hopper over two stone rollers in a hewn frame, an iron crank, a plank chute to a heap of crushed stone. 2 stone make 3 crushed stone.</li>
+        <li><b>The mixer</b> mixes crushed stone with sand into gravel: a bellied drum of staves bound with iron on two trestles, a crank, a trough of gravel under its mouth. 3 crushed stone and a block of sand make 4 gravel. Stone, sand and gravel lie in heaps round the worksite.</li>
+        <li><b>Dirt tracks</b> stay the world's, between villages. The player lays gravel only; paving over a village track makes those cells the player's gravel.</li>
+        <li><b>Lit at night</b> by the worksite's lantern, lanterns along the paved run, one by the bend stake and one on the track: slide the time past dusk. The marks are seen only where light falls on them, like the ground.</li>
+        <li>The town tree that walks a player through this is M33's Town tab (<code>town-missions-tree</code>).</li>
+      </ul>
+
       <h3>Versions</h3>
       <ul>
         <li><b>Version 1</b>: the settlements, stairs, the walker and the night.</li>
         <li><b>Version 2</b> (2026-11-21): the Roads scene; the description moved into this modal.</li>
         <li><b>Version 3</b> (2026-11-22): the Wide roads scene, roads two and three cells wide.</li>
+        <li><b>Version 4</b> (2026-11-22): the Paving scene, roads marked by survey stakes and paved with gravel, the grinder and the mixer.</li>
       </ul>
     
       <h3>What is modelled</h3>
@@ -3816,6 +3833,222 @@ function blockLighter() {
   };
 }
 
+// =====================================================================
+// Paving (townsfolk design 39 to 41, M15 version 4): a road the player
+// marks with survey stakes and paves with gravel, and the grinder and the
+// mixer that make the gravel. A plan runs east from a worksite: the paved
+// run behind (gravel road cells, sloped by the world road's own rule), the
+// marked cells ahead on their natural ground (a lime band painted along the
+// road's line, a stake at each waypoint), and, past the last stake, the
+// half-strength preview of the next stake's cells, aimed at a village track.
+// Nothing here is a primitive left on the ground: the marks are the ground's
+// own top, each stake, roller, drum and heap is one lofted form.
+// =====================================================================
+Object.assign(PAINT, {
+  // Lime dust on the grass along a marked line: chalky, broken, the grass
+  // flattened under it and showing through.
+  limedust(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x8c8b6c), 0.1);
+    for (let i = 0; i < 260; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb([0x6f8a3c, 0x587232, 0x7c8a52][rnd() * 3 | 0])); if (rnd() < 0.4) px(x + 1, y, hex2rgb(0x64803a)); }
+    for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xa8a48a));
+  },
+  // The preview of the next stake: the same dust at half strength.
+  limeghost(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x6f8048), 0.12);
+    for (let i = 0; i < 120; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(rnd() < 0.5 ? 0x6f8a3c : 0x587232)); }
+    for (let i = 0; i < 40; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x9c9c80));
+  },
+  // The stake's cloth: a strip of madder-dyed wool, faded.
+  rag(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x9a4a34), 0.12); for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x++) if (rnd() < 0.3) px(x, y, hex2rgb(0x7e3a28)); },
+});
+Object.assign(REP, { limedust: 2, limeghost: 2, rag: 0.5 });
+
+// A form of revolution about the axis `u` through `O`: rings [t, r, mat]
+// (the material of the band from this ring to the next), `sides` round, a
+// fixed jitter of each side's radius so a hand-made thing is not a perfect
+// prism. Every band's outward normal is radial x dt - u x dr, so end discs
+// and tapers face the right way. One form, one piece.
+function loftAxis(O, u, rings, sides, opt = {}) {
+  u = V.norm(u);
+  const v = Math.abs(u[1]) < 0.9 ? V.norm(V.cross(u, [0, 1, 0])) : V.norm(V.cross(u, [1, 0, 0])), w = V.cross(u, v);
+  const rn = rng(opt.seed || 7), J = []; for (let k = 0; k < sides; k++) J.push(1 + (rn() - 0.5) * (opt.jit || 0));
+  const rot = opt.rot || 0, ang = k => rot + k / sides * Math.PI * 2;
+  const P = rings.map(([t, r]) => { const out = []; for (let k = 0; k < sides; k++) { const a = ang(k), rr = r * J[k]; out.push(V.add(V.add(V.add(O, V.mul(u, t)), V.mul(v, Math.cos(a) * rr)), V.mul(w, Math.sin(a) * rr))); } return out; });
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const m = rings[i][2] || opt.m || "timber", dt = rings[i + 1][0] - rings[i][0], dr = rings[i + 1][1] - rings[i][1];
+    for (let k = 0; k < sides; k++) {
+      const k2 = (k + 1) % sides, am = (ang(k) + ang(k + 1)) / 2, rad = V.add(V.mul(v, Math.cos(am)), V.mul(w, Math.sin(am)));
+      face(m, [P[i][k], P[i][k2], P[i + 1][k2], P[i + 1][k]], V.sub(V.mul(rad, dt), V.mul(u, dr)));
+    }
+  }
+  if (opt.capStart) face(opt.capStart, P[0], V.mul(u, -1));
+  if (opt.capEnd) face(opt.capEnd, P[P.length - 1], u);
+}
+// A dressed timber from A to B: an octagon, a square with its edges taken
+// off, so it reads as a hewn beam, not a box.
+function beam(m, A, B, s = 0.12) {
+  const d = V.sub(B, A), L = Math.hypot(d[0], d[1], d[2]), r = s / 2 / Math.cos(Math.PI / 8);
+  loftAxis(A, d, [[0, r, m], [L, r, m]], 8, { rot: Math.PI / 8, capStart: m, capEnd: m });
+}
+// A heap tipped on the ground: a low, lumpy dome, wider than it is high.
+function heap(m, x, y, z, R, H, seed) {
+  loftAxis([x, y - 0.05, z], [0, 1, 0], [[0, R * 1.04], [0.22 * H, 0.95 * R], [0.55 * H, 0.72 * R], [0.85 * H, 0.38 * R], [H, 0.06 * R]], 11, { m, seed, jit: 0.28, capEnd: m });
+}
+// A survey stake (design 39a): one tapered peg of split timber, its point
+// sunk under the ground, its head spread by the mallet and frayed, a strip of
+// dyed cloth tied under the head with its tail hanging. 0.9 m out of the
+// ground.
+function surveyStake(x, y, z, seed) {
+  const lean = [(hash2(seed, 3) - 0.5) * 0.08, 1, (hash2(seed, 5) - 0.5) * 0.08];
+  loftAxis([x, y, z], lean, [[-0.22, 0.004, "timber"], [-0.04, 0.05, "timber"], [0.02, 0.058, "timber"], [0.62, 0.047, "rag"], [0.7, 0.05, "timber"], [0.8, 0.045, "timber"], [0.85, 0.058, "timber"], [0.9, 0.05, "timber"], [0.92, 0.03]],
+    6, { seed, jit: 0.22, capEnd: "timber" });
+  // the cloth's tail: two folds hanging from the knot, turned by the seed
+  const a = hash2(seed, 11) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), p = (dx, dy, dz) => [x + ca * dx - sa * dz + lean[0] * dy, y + dy, z + sa * dx + ca * dz + lean[2] * dy];
+  face("rag", [p(0.05, 0.69, -0.02), p(0.05, 0.69, 0.025), p(0.17, 0.52, 0.04), p(0.16, 0.5, -0.005)], [ca, 0.2, sa]);
+  face("rag", [p(0.16, 0.5, -0.005), p(0.17, 0.52, 0.04), p(0.21, 0.38, 0.03), p(0.19, 0.37, 0.0)], [ca, 0.1, sa]);
+  addSolid({ type: "circ", x, z, r: 0.07, y0: y, y1: y + 0.9, cls: "wall", label: "Survey stake" });
+}
+// A marked cell (design 39a): a band of lime dust about 0.9 m wide along the
+// road's line, from the middle of the edge it comes in by, through the
+// middle, to the middle of the edge it leaves by (`-1`: the cell's middle, at
+// a plan's end), its edges ragged and broken. Painted on the cell's own top:
+// it is the ground, lit as the ground.
+const MARKED = new Set();
+function markBand(c, r, inD, outD, m = "limedust") {
+  const i = idx(c, r), y = TOP[i] + 0.012, C = [cx(c, r), cz(c, r)];
+  MARKED.add(i); NO_TREE.add(i);
+  const mid = d => { if (d < 0) return C; const [A, B] = edgeEnds(c, r, d); return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]; };
+  const legs = [[mid(inD), C], [C, mid(outD)]];
+  // the band's half-width and its wander at every joint, shared by the
+  // pieces either side of it (and by the two legs at the cell's middle), so
+  // its edges are ragged but never torn
+  const n = 5, hw = j => 0.32 + 0.2 * hash2(c * 37 + r * 11 + j, 17), sh = j => (hash2(c * 7 + j, r * 13 - j) - 0.5) * 0.14;
+  legs.forEach(([A, B], li) => {
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (L < 1e-3) return;
+    const ux = (B[0] - A[0]) / L, uz = (B[1] - A[1]) / L, nx = -uz, nz = ux;
+    const P = (j, side) => { const J = li * n + j, t = j / n * L, ww = side * hw(J) + sh(J); return [A[0] + ux * t + nx * ww, y, A[1] + uz * t + nz * ww]; };
+    for (let j = 0; j < n; j++) {
+      if (hash2(c * 13 + r * 7 + li * n + j, 23) < 0.1) continue;   // a break in the dust
+      face(m, [P(j, -1), P(j + 1, -1), P(j + 1, 1), P(j, 1)], [0, 1, 0]);
+    }
+  });
+}
+// A plan's cells in order: each marked with its in and out edges.
+function markPlan(cells, m) {
+  cells.forEach(([c, r], k) => {
+    const inD = k > 0 ? dirTo(c, r, ...cells[k - 1]) : -1, outD = k + 1 < cells.length ? dirTo(c, r, ...cells[k + 1]) : -1;
+    markBand(c, r, inD, outD, m);
+    if (m !== "limeghost") AREA[idx(c, r)] = "Marked for paving";
+  });
+}
+// The grinder (design 41): a hopper of boards over two stone rollers in a
+// hewn timber frame, turned by an iron crank; crushed stone falls down a
+// plank chute to a heap in front.
+function grinder(x, y, z) {
+  const P = (a, b, c) => [x + a, y + b, z + c];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) beam("timber", P(sx * 0.66, 0, sz * 0.46), P(sx * 0.6, 1.28, sz * 0.42), 0.13);
+  for (const sz of [-1, 1]) { beam("timber", P(-0.74, 1.18, sz * 0.44), P(0.74, 1.18, sz * 0.44), 0.11); beam("timber", P(-0.7, 0.34, sz * 0.47), P(0.7, 0.34, sz * 0.47), 0.09); }
+  for (const sx of [-1, 1]) beam("timber", P(sx * 0.62, 1.2, -0.52), P(sx * 0.62, 1.2, 0.52), 0.1);
+  for (const sx of [-1, 1]) {
+    loftAxis(P(sx * 0.19, 1.0, 0), [0, 0, 1], [[-0.36, 0.0, "granite"], [-0.36, 0.15, "granite"], [-0.31, 0.2, "granite"], [0.31, 0.2, "granite"], [0.36, 0.15, "granite"], [0.36, 0]], 12, { seed: 31 + sx, jit: 0.05 });
+    loftAxis(P(sx * 0.19, 1.0, -0.5), [0, 0, 1], [[0, 0.035, "iron"], [1.02, 0.035]], 6, { capStart: "iron", capEnd: "iron" });
+  }
+  // the hopper: a square funnel of boards, stone in its mouth
+  loftAxis(P(0, 1.16, 0), [0, 1, 0], [[0, 0.22, "boards"], [0.5, 0.64, "boards"], [0.56, 0.62, "boards"]], 4, { rot: Math.PI / 4, capEnd: "rubble" });
+  // the crank: an iron arm off the near roller's axle, and its grip
+  beam("iron", P(0.19, 1.0, 0.53), P(0.19, 1.42, 0.58), 0.05);
+  loftAxis(P(0.19, 1.42, 0.58), [0, 0, 1], [[0, 0.03, "timber"], [0.02, 0.045, "timber"], [0.2, 0.04, "timber"], [0.22, 0.02]], 6, { capStart: "timber", capEnd: "timber" });
+  // the chute and the crushed stone at its foot
+  face("plank", [P(-0.18, 0.78, -0.3), P(-0.18, 0.78, 0.3), P(-1.0, 0.3, 0.36), P(-1.0, 0.3, -0.36)], [0.5, 1, 0]);
+  for (const sz of [-1, 1]) face("timber", [P(-0.18, 0.78, sz * 0.32), P(-1.0, 0.3, sz * 0.38), P(-1.0, 0.42, sz * 0.38), P(-0.18, 0.92, sz * 0.32)], [0, 0, sz]);
+  heap("scree", x - 1.3, y, z, 0.55, 0.34, 41);
+  addSolid({ type: "poly", pts: rectPts(x, z, 1.5, 1.05, 0), y0: y, y1: y + 1.75, cls: "wall", label: "Grinder" });
+  PLACES[idx(...cellAt(x, z))].push([y - 0.5, y + 3, "The grinder"]);
+}
+// The mixer (design 41): a bellied drum of staves bound with iron on an iron
+// axle between two trestles, a crank at one end, a trough under its mouth.
+function mixer(x, y, z) {
+  const P = (a, b, c) => [x + a, y + b, z + c];
+  loftAxis(P(0, 1.02, 0), [1, 0, 0], [[-0.7, 0.0, "timber"], [-0.7, 0.34, "iron"], [-0.64, 0.42, "timber"], [-0.36, 0.52, "iron"], [-0.3, 0.535, "timber"], [0.3, 0.535, "iron"], [0.36, 0.52, "timber"], [0.64, 0.42, "iron"], [0.7, 0.34, "iron"], [0.7, 0.22]], 12, { seed: 51, jit: 0.03, capEnd: "rubble" });
+  loftAxis(P(-1.02, 1.02, 0), [1, 0, 0], [[0, 0.04, "iron"], [2.04, 0.04]], 6, { capStart: "iron", capEnd: "iron" });
+  for (const sx of [-1, 1]) {
+    beam("timber", P(sx * 0.92, 0, -0.5), P(sx * 0.88, 1.08, 0), 0.12);
+    beam("timber", P(sx * 0.92, 0, 0.5), P(sx * 0.88, 1.08, 0), 0.12);
+    beam("timber", P(sx * 0.92, 0.35, -0.38), P(sx * 0.92, 0.35, 0.38), 0.09);
+  }
+  beam("iron", P(1.04, 1.02, 0), P(1.06, 1.42, 0.12), 0.05);
+  loftAxis(P(1.06, 1.42, 0.12), [1, 0, 0], [[0, 0.03, "timber"], [0.02, 0.045, "timber"], [0.2, 0.04, "timber"], [0.22, 0.02]], 6, { capStart: "timber", capEnd: "timber" });
+  // the trough: tapered plank sides, gravel inside it
+  const T = (a, b, c) => P(0.95 + a, b, c);
+  const lo = [[-0.32, -0.26], [0.32, -0.26], [0.32, 0.26], [-0.32, 0.26]], hi = [[-0.42, -0.36], [0.42, -0.36], [0.42, 0.36], [-0.42, 0.36]];
+  for (let k = 0; k < 4; k++) { const a = lo[k], b = lo[(k + 1) % 4], c = hi[(k + 1) % 4], d = hi[k]; face("boards", [T(a[0], 0.02, a[1]), T(b[0], 0.02, b[1]), T(c[0], 0.42, c[1]), T(d[0], 0.42, d[1])], [(a[0] + b[0]), 0, (a[1] + b[1])]); }
+  face("gravel", hi.map(p => T(p[0] * 0.95, 0.36, p[1] * 0.95)), [0, 1, 0]);
+  addSolid({ type: "poly", pts: rectPts(x + 0.2, z, 2.2, 1.1, 0), y0: y, y1: y + 1.6, cls: "wall", label: "Mixer" });
+  PLACES[idx(...cellAt(x, z))].push([y - 0.5, y + 3, "The mixer"]);
+}
+
+function makePaving() {
+  STAIR_CELLS.clear(); MARKED.clear(); SUNBEAMS.length = 0;
+  const RR = 12, TRACK = RR + 7;
+  // fields at layer 1, a step to 2 and another to 3 as the land rises east
+  const hAt = c => c < 16 ? 1 : c < 22 ? 2 : 3;
+  ground((c, r) => ({ h: hAt(c), top: "meadow", side: "dirt", area: c < 9 && r >= RR - 5 && r <= RR - 1 ? "The worksite" : "The fields" }));
+  for (let r = RR - 5; r <= RR - 1; r++) for (let c = 1; c <= 9; c++) { const i = idx(c, r); TOPMAT[i] = "dirt"; NO_TREE.add(i); }
+  // the paved run: gravel road cells of the player's from the worksite, up
+  // the first step (one sloped cell, the world road's rule), to the first
+  // stake. `road()` cuts it as the game cuts a plan's paved cells.
+  const paved = []; for (let c = 5; c <= 19; c++) paved.push([c, RR]);
+  road(paved, () => "gravel", () => "Your gravel road");
+  // the plan's marked cells ahead, on their natural ground: east over the
+  // second step to the bend stake, then north-east toward the village track
+  const marked = walkCells(20, RR, [[0, 7], [1, 5]]);
+  markPlan(marked);
+  // the preview: what the next stake, aimed at the track, would mark
+  const last = marked[marked.length - 1], ghost = walkCells(last[0], last[1], [[1, 2]]).slice(1);
+  markPlan(ghost, "limeghost");
+  for (const [c, r] of ghost) AREA[idx(c, r)] = "The next stake's cells";
+  // stakes: where paving stopped, at the bend, and the plan's last
+  const stake = ([c, r], seed, side = 0.55) => surveyStake(cx(c, r) + 0.05, TOP[idx(c, r)], cz(c, r) - side, seed);
+  stake(marked[0], 3); stake(marked[7], 5); stake(last, 9);
+  // the village track the plan is aimed at: the world's, dirt
+  const track = []; for (let c = 18; c < NC; c++) track.push([c, TRACK]);
+  road(track, () => "roaddirt", () => "Village track (the world's)");
+  // the worksite: the grinder and the mixer, stone, sand and the gravel made
+  const gx = cx(3, RR - 3), gz = cz(0, RR - 3), wy = TOP[idx(3, RR - 3)];
+  grinder(gx, wy, gz);
+  mixer(cx(7, RR - 3) - 0.6, wy, cz(0, RR - 3));
+  heap("rubble", cx(1, RR - 4) + 0.3, wy, cz(0, RR - 4), 0.9, 0.55, 61);
+  heap("sand", cx(5, RR - 5) + 0.6, wy, cz(0, RR - 5), 0.8, 0.45, 63);
+  heap("gravel", cx(8, RR - 1) + 0.5, wy, cz(0, RR - 1) - 0.4, 0.95, 0.5, 67);
+  heap("gravel", cx(20, RR + 1), TOP[idx(20, RR + 1)], cz(0, RR + 1) + 0.3, 0.5, 0.28, 69);
+  // lamps: the worksite's lantern on its post, every fifth cell of the paved
+  // run on its south side, and one by the bend stake so the marks read at night
+  lantern(cx(5, RR - 2) + 0.9, wy, cz(0, RR - 2) + 0.4);
+  for (const [c, r] of paved.filter(([c]) => c % 5 === 0)) lantern(cx(c, r), TOP[idx(c, r)], cz(c, r) + 1.75);
+  { const [c, r] = marked[7]; lantern(cx(c, r) + 0.6, TOP[idx(c, r)], cz(c, r) + 1.8); }
+  { const [c, r] = track[10]; lantern(cx(c, r), TOP[idx(c, r)], cz(c, r) - 1.75); }
+  // trees and shrubs off the road, the plan and the worksite
+  for (const [c, r] of [...paved, ...marked, ...ghost, ...track]) for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b)) NO_TREE.add(idx(a, b)); }
+  scatter(0.06, (x, y, z, rnd) => rnd() < 0.6 ? tree(x, y, z, 1 + rnd() * 0.4) : shrub(x, y, z, 0.8, "leaves"), 29);
+  const at = (c, r, dx = 0, dz = 0) => ({ x: cx(c, r) + dx, z: cz(0, r) + dz, y: TOP[idx(c, r)] });
+  GOTO.worksite = { ...at(6, RR - 1, 0, 1.2), look: [gx, gz], pitch: -0.18 };
+  GOTO.grinder = { ...at(3, RR - 1, 0.8, 0.4), look: [gx, gz], pitch: -0.3 };
+  GOTO.mixer = { ...at(7, RR - 1, -0.6, 0.6), look: [cx(7, RR - 3) - 0.6, cz(0, RR - 3)], pitch: -0.3 };
+  GOTO.paved = { ...at(9, RR, 0, -0.3), look: [cx(20, RR), cz(0, RR)], pitch: -0.08 };
+  GOTO.firststake = { ...at(18, RR, 0, 0.2), look: [cx(27, RR), cz(0, RR)], pitch: -0.22 };
+  GOTO.marked = { ...at(22, RR, -0.6, 1.4), look: [cx(27, RR), cz(0, RR)], pitch: -0.3 };
+  { const [c, r] = marked[0], sx = cx(c, r) + 0.05, sz = cz(c, r) - 0.55; GOTO.stake = { x: sx - 1.1, z: sz + 0.9, y: TOP[idx(c, r)], look: [sx, sz], pitch: -0.5 }; }
+  GOTO.bend = { ...at(26, RR, 0, 1.0), look: [cx(last[0], last[1]), cz(0, last[1])], pitch: -0.28 };
+  GOTO.preview = { ...at(last[0], last[1], -1.4, -1.6), look: [cx(...TRACK_AIM(last)), cz(0, TRACK)], pitch: -0.25 };
+  buildTerrain(); buildPosts();
+}
+const TRACK_AIM = last => [last[0] + 1, last[1] + 2];
+SCENES.paving = { label: "Paving: marked cells, a paved run, grinder and mixer", build: makePaving, start: "firststake",
+  orbit: { tx: W * 17, tz: ROW * 13, dist: 58, yaw: -1.57, pitch: 0.7 },
+  places: [["worksite", "The worksite"], ["grinder", "The grinder"], ["mixer", "The mixer"], ["paved", "The paved run"], ["firststake", "Where paving stopped"], ["stake", "A survey stake"], ["marked", "Marked cells"], ["bend", "The bend stake"], ["preview", "The next stake's cells"]],
+  streetLight: 0, litWindows: 0,
+  env: { fog: [80, 380], water: null, far: { color: 0x5a7032, y: 0.9 } } };
+
 // How brightly each settlement's streets are lit, and how many windows: the town most.
 Object.assign(SCENES.town, { streetLight: 3.4, litWindows: 0.55 });
 Object.assign(SCENES.coast, { streetLight: 4.2, litWindows: 0.5 });
@@ -4289,6 +4522,7 @@ function hud() {
   if (P.blocked) chips.push(["Blocked", "bad"]);
   if (P.wading) chips.push(["Wading, half speed", ""]);
   if (P.gravel) chips.push(["Gravel, +15%", "good"]);
+  if (SCENE === "paving" && inMap(c, r)) { const i = idx(c, r); if (MARKED.has(i)) chips.push([AREA[i] === "Marked for paving" ? "Marked: F with the shovel paves it" : "Preview of the next stake", ""]); }
   if (P.airOnStair) chips.push([`Left the stair ${P.airOnStair}x`, "bad"]);
   $("chips").innerHTML = chips.map(([t, k]) => `<span class="chip ${k}">${t}</span>`).join("");
 }
