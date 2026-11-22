@@ -285,6 +285,9 @@ const MOCKUPS = [
   { id: 'M37', batch: 'new', title: 'Fish Behaviour', change: 'fish-behaviour', page: 'docs/mockups/fish-behaviour.html',
     url: 'https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2', published: '2026-11-17', version: 3,
     summary: 'A fish coming to the lure, swimming and fighting the line, and its body wave: the game today beside a natural approach, pecks timed to the float, a take, banking, and a shader wave head to tail.' },
+  { id: 'M38', batch: 'new', title: 'Land Transport', change: 'land-transport', page: 'docs/mockups/land-transport.html',
+    url: 'https://claude.ai/artifact/QzXe3qAL1esNJCFPHy2bDi', published: '2026-11-22', version: 1,
+    summary: 'Phase 5 on the hex roads: a ridden horse, a cart and a covered wagon, an early car and a small truck, and a steam train on hex track with a grade and a station, by day and lit at night.' },
 ];
 
 // Every other published artifact, by section, newest first.
@@ -551,9 +554,9 @@ const ROADMAP = [
   { title: 'Mass transportation', when: 'later', note: 'After civil engineering. Not started.', steps: [
     { title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
     { title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS that coaches the helm.' },
-    { title: 'Carts and horses', status: 'later', change: '', refs: [], text: 'Horses to ride and to pull carts and wagons on the roads. Mockup to make.' },
-    { title: 'Cars', status: 'later', change: '', refs: [], text: 'Cars and trucks on the roads. Mockup to make.' },
-    { title: 'Trains and tracks', status: 'later', change: '', refs: [], text: 'Track laid on the hex grid, stations, and trains between towns. Mockup to make.' },
+    { title: 'Carts and horses', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Horses to ride and to pull carts and wagons on the roads. Mocked up in M38.' },
+    { title: 'Cars', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Cars and trucks on the roads. Mocked up in M38.' },
+    { title: 'Trains and tracks', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Track laid on the hex grid, stations, and trains between towns. Mocked up in M38.' },
     { title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods between places for you.' },
     { title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Basic belts, water carried in channels, and track for carts.' },
   ] },
