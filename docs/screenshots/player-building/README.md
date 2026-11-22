@@ -36,5 +36,8 @@ What is wrong in them, and stays as a limitation for now:
   not on the towns' caster lists yet.
 
 Captures skip the loading screen's warm-up, so each logs its pipelines as
-`LATE_PIPELINE` by design; the ghost's material is spawned at startup so a
-normal launch warms it.
+`LATE_PIPELINE` by design. A normal launch with this build (no `--capture`,
+`--walk`, lavapipe) reached `READY` with 126 pipelines and logged no
+`LATE_PIPELINE` in the six minutes after; the ghost's meshes are spawned
+hidden at startup so the warm-up shows their material. Build mode itself was
+not opened in that run.

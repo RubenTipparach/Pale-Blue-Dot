@@ -237,7 +237,7 @@ controls:
     step_slots: step through the slots
     tool_wheel: "hold for the tools; the wheel picks one"
     turn: turn
-    unload_log: put a log over the side
+    unload_log: put a log in the water
     up_down: up and down
     use_tool: "use the tool in hand: dig, or cast, hook and reel"
     walk_or_fly: walk or fly
