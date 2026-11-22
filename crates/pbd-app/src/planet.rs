@@ -48,7 +48,9 @@ mod water;
 pub mod weather_maps;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
+pub use lod::{
+    Applied, BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m,
+};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, generator_version,
     nearest_ground_near, river_channel, sheet_index, snow_slot, surface_code, surface_height,

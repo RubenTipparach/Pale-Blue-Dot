@@ -1,27 +1,28 @@
 # Tasks
 
-Phase 3b. Nothing here starts until the owner asks, after phase 3 (the
-townsfolk). Groups 1 and 2 are the dependencies, and each is its own change.
+Phase 3b. Started 2026-11-21 at the owner's ask ("lets get to work on
+that"), ahead of phase 3's townsfolk; the order of work is design 16.
+Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 1. Prerequisites (other changes)
 
-- [ ] 1.1 `edit-pipeline` section 5: ACCEPT and APPLY split, a sequence on the log. Verify: that change's test that replaying a sequence from cold gives the same columns.
+- [x] 1.1 (Done 2026-11-21; `edit-pipeline` tasks 5.) `edit-pipeline` section 5: ACCEPT and APPLY split, a sequence on the log. Verify: that change's test that replaying a sequence from cold gives the same columns.
 - [ ] 1.2 `world-persistence` 4.1, 5.1 and 5.2: the world clock, regions with snapshots and their last sequence, the segmented journal. Verify: that change's tests.
 
 ## 2. The rules run without a frame
 
-- [ ] 2.1 List every system in `pbd-app` that writes stored state (edits, records, inventory, drops, crops, animals, missions) and the core rule each calls, in this change's design as a table. Verify: the table names every writer `grep` finds.
-- [ ] 2.2 Move each writer's ACCEPT half into `pbd-core` as a function of (world state, player, request) returning a change or a refusal, one rule per commit. Verify: each rule has a core test that runs it with no Bevy app, and single player plays the same (the phase-1 starter missions finish under `--capture`).
+- [x] 2.1 (Written 2026-11-21, design 17, from a sweep of `WorldSave`'s callers.) List every system in `pbd-app` that writes stored state (edits, records, inventory, drops, crops, animals, missions) and the core rule each calls, in this change's design as a table. Verify: the table names every writer `grep` finds.
+- [ ] 2.2 (Pack moves and pickups 2026-11-22, design 19: `pbd_core::accept::pack` and `pick`; `Server::pack` and `Server::pick` with the store's live drops; the pack screen and the magnet ask the server. Tests: `a_pack_move_is_applied_or_refused`, `a_pickup_gives_what_fits`, `a_pack_move_goes_through_the_server`, `two_players_reaching_one_drop_are_given_it_once`, `pack_moves_and_pickups_through_the_server_write_the_same_lines`. First rule 2026-11-21: the terrain edit, `pbd_core::accept::edit`, called by `apply_edit`; core tests `an_edit_is_refused_out_of_the_world_unchanged_or_on_a_second_lamp`, `an_accepted_edit_settles_the_hands`. The rest of design 17's writers follow.) Move each writer's ACCEPT half into `pbd-core` as a function of (world state, player, request) returning a change or a refusal, one rule per commit. Verify: each rule has a core test that runs it with no Bevy app, and single player plays the same (the phase-1 starter missions finish under `--capture`).
 
 ## 3. Protocol and digest in the core
 
-- [ ] 3.1 The region's canonical encoding and its FNV-1a 64 digest (design 2), kept incrementally. Verify: a pinned digest for a fixed region; the incremental digest equals a full recompute after a random sequence of changes.
-- [ ] 3.2 The message types (join, request, accepted, refused, region change, snapshot, digest, presence, transaction, chat) and their versioned byte encoding. Verify: a round-trip test per message, and a test that an unknown newer message is refused cleanly.
+- [x] 3.1 (Built 2026-11-21: `pbd_core::net::digest`, with `encode`, `fnv1a64`, `Regions` keeping each region's digest as edits are noted, and `recompute`; the edits section only, design 16. `a_fixed_regions_digest_is_pinned`, `the_kept_digest_equals_a_full_recompute`, `a_change_moves_only_its_own_regions_digest`. The save's material codes moved into `pbd_core::terrain` for it.) The region's canonical encoding and its FNV-1a 64 digest (design 2), kept incrementally. Verify: a pinned digest for a fixed region; the incremental digest equals a full recompute after a random sequence of changes.
+- [x] 3.2 (Built 2026-11-21: `pbd_core::net::protocol`, `ToServer` and `ToClient` with hand-written little-endian encoding, `Decode::Unknown` for a newer tag, finite and length guards, and `agree` for the join (design 9, 15.9). `every_message_round_trips_and_a_cut_one_is_refused`, `an_unknown_newer_message_is_refused_cleanly`, `a_value_no_message_has_is_refused`, `a_join_agrees_on_a_protocol_range_and_the_exact_world`.) The message types (join, request, accepted, refused, region change, snapshot, digest, presence, transaction, chat) and their versioned byte encoding. Verify: a round-trip test per message, and a test that an unknown newer message is refused cleanly.
 
 ## 4. The server, in process
 
-- [ ] 4.1 `pbd-server` crate: the world, the 20 Hz tick, per-region sequences, the journal through `SaveWriter`. Verify: a core-only test that applies requests and journals them with ascending sequences.
-- [ ] 4.2 Single player starts the server in process and talks to it over an in-memory channel. Verify: the same inputs produce byte-identical saves before and after the switch; the starter missions finish under `--capture`; an old save opens with its player as 0.
+- [x] 4.1 (Built 2026-11-21: `crates/pbd-server`, on `pbd-core` alone. `Server::join` checks versions and numbers players by install key; `handle` decides a dig or a place with `pbd_core::accept`, from a column it generates from the seed, worms and edits; numbers it with the `Ledger`; journals it through the `Journal` trait before answering; then sends `Accepted` and the `Change` to every player. A refusal re-sends the region. `tick` runs the clock only while someone is on, sent every 5 s. `MemoryJournal` for tests; the save's writer implements `Journal` with 4.2. Tests: `requests_are_journaled_in_order_and_sent_to_everyone`, `two_players_on_one_cell_are_ordered_by_the_server`, `a_place_spends_and_a_refusal_changes_nothing`, `a_join_is_checked_and_numbered`, `the_clock_runs_only_while_someone_plays`.) `pbd-server` crate: the world, the 20 Hz tick, per-region sequences, the journal through `SaveWriter`. Verify: a core-only test that applies requests and journals them with ascending sequences.
+- [ ] 4.2 (Edits done 2026-11-22, design 18: `pbd-server` takes a `Store`; `WorldSave` is single player's, through `SaveStore`, and `WorldSave::decide_edit` puts every dig and place through `Server::edit`. `saves::tests::the_in_process_server_writes_the_save_accept_always_wrote`: the same digs through the server and straight through `accept` write byte-identical logs; a capture's digs and places all taken with no `SERVER_DISAGREES` (`docs/screenshots/multiplayer-local-server/`). The player is always 0, so an old save is player 0's. Still to do: the in-memory channel and the other writers of design 17, each as its ACCEPT reaches the core.) Single player starts the server in process and talks to it over an in-memory channel. Verify: the same inputs produce byte-identical saves before and after the switch; the starter missions finish under `--capture`; an old save opens with its player as 0.
 - [ ] 4.3 Prediction and reconcile on the client (design 4), with Luanti's fix-up (design 15.3): a refusal re-sends the touched cells and the whole inventory, and the region if a snapshot was in flight. Verify: an app test where the server refuses a predicted dig and the column and inventory return to the server's; a second where the region's snapshot was in flight when the dig was predicted.
 
 ## 5. Mockups for the owner

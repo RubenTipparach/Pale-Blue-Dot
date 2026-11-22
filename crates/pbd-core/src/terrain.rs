@@ -385,6 +385,88 @@ impl TerrainGenerator {
     }
 }
 
+/// The material a saved code names, and the code it is saved as: the save's
+/// journal, a region's snapshot and its digest (`multiplayer` 3.1) all
+/// write a material by this code.
+///
+/// Written out both ways rather than transmuted: a code nothing names must not
+/// become a material, and a material added tomorrow must not silently take
+/// another's number.
+pub fn material_code(material: Material) -> u8 {
+    match material {
+        Material::Air => 0,
+        Material::Stone => 1,
+        Material::Soil => 2,
+        Material::Grass => 3,
+        Material::Water => 4,
+        Material::Ore => 5,
+        Material::Sand => 6,
+        Material::DryGrass => 7,
+        Material::JungleGrass => 8,
+        Material::Snow => 9,
+        Material::Rock => 10,
+        Material::Dirt => 11,
+        Material::Torch => 12,
+        Material::LanternPost => 13,
+        Material::LanternWall => 14,
+        Material::LanternHanging => 15,
+        Material::Brazier => 16,
+        Material::Candle => 17,
+        Material::Tilled => 18,
+        Material::Forge => 19,
+        Material::Workbench => 20,
+        Material::Campfire => 21,
+        // The sea's cells (`ocean-environments` B24); 22 and 23 are held for
+        // the kitchen. An older build reads none of them, as it reads no
+        // code it does not know.
+        Material::ReefRock => 24,
+        Material::SeaIce => 25,
+        Material::Basalt => 26,
+        Material::MusselBed => 27,
+        Material::Sticks => 28,
+        // Desert sand (`sand-tiles` design 5): the next free code.
+        Material::DesertSand => 29,
+        // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
+        // the material's own code, far from the blocks' run.
+        flowing @ crate::flowing_water!() => flowing as u16 as u8,
+    }
+}
+
+pub fn material_of(code: u8) -> Option<Material> {
+    Some(match code {
+        0 => Material::Air,
+        1 => Material::Stone,
+        2 => Material::Soil,
+        3 => Material::Grass,
+        4 => Material::Water,
+        5 => Material::Ore,
+        6 => Material::Sand,
+        7 => Material::DryGrass,
+        8 => Material::JungleGrass,
+        9 => Material::Snow,
+        10 => Material::Rock,
+        11 => Material::Dirt,
+        12 => Material::Torch,
+        13 => Material::LanternPost,
+        14 => Material::LanternWall,
+        15 => Material::LanternHanging,
+        16 => Material::Brazier,
+        17 => Material::Candle,
+        18 => Material::Tilled,
+        19 => Material::Forge,
+        20 => Material::Workbench,
+        21 => Material::Campfire,
+        24 => Material::ReefRock,
+        25 => Material::SeaIce,
+        26 => Material::Basalt,
+        27 => Material::MusselBed,
+        28 => Material::Sticks,
+        29 => Material::DesertSand,
+        64..=79 => Material::flowing((code - 64) % 8, code >= 72),
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

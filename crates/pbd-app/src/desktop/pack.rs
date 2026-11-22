@@ -21,6 +21,7 @@ use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
+use pbd_core::accept::PackMove;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
 use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
 
@@ -91,6 +92,7 @@ pub enum Click {
 ///   half of it, and a shift-click sends it between the hotbar and the pack.
 /// - A stack in hand: either click puts it down on `index` (`Slots::shift`),
 ///   and a click on the slot it came from puts it back.
+#[cfg(test)]
 pub fn click(
     slots: &Slots,
     hand: Option<Held>,
@@ -98,15 +100,30 @@ pub fn click(
     button: Click,
     shift: bool,
 ) -> (Option<Slots>, Option<Held>) {
+    let (mv, held) = resolve(slots, hand, index, button, shift);
+    let moved = mv
+        .and_then(|mv| pbd_core::accept::pack(slots, mv).ok())
+        .filter(|moved| moved != slots);
+    (moved, held)
+}
+
+/// What a click asks for: the move (`multiplayer` design 19), which the
+/// server decides, and what is in hand after. [`click`] is this with the
+/// move applied.
+pub fn resolve(
+    slots: &Slots,
+    hand: Option<Held>,
+    index: usize,
+    button: Click,
+    shift: bool,
+) -> (Option<PackMove>, Option<Held>) {
     match hand {
         None => {
             let Some(stack) = slots.get(index) else {
                 return (None, None);
             };
             if shift {
-                let mut sent = slots.clone();
-                sent.send(index);
-                return ((sent != *slots).then_some(sent), None);
+                return (Some(PackMove::Send { index }), None);
             }
             let count = match button {
                 Click::Left => stack.count,
@@ -115,11 +132,14 @@ pub fn click(
             (None, Some(Held { from: index, count }))
         }
         Some(held) if held.from == index => (None, None),
-        Some(held) => {
-            let mut moved = slots.clone();
-            moved.shift(held.from, index, held.count);
-            ((moved != *slots).then_some(moved), None)
-        }
+        Some(held) => (
+            Some(PackMove::Shift {
+                from: held.from,
+                to: index,
+                count: held.count,
+            }),
+            None,
+        ),
     }
 }
 
@@ -584,11 +604,16 @@ pub fn press(
         && held.from < CARRIED
         && trash.iter().any(|i| *i != Interaction::None)
     {
-        let mut slots = hotbar.0.clone();
-        let taken = slots.take(held.from, held.count);
-        if taken > 0 && save.record_pack(&slots) {
-            info!("TRASH {taken} from slot {}", held.from);
-            hotbar.0 = slots;
+        let trash = PackMove::Trash {
+            index: held.from,
+            count: held.count,
+        };
+        match save.decide_pack(trash, &hotbar.0) {
+            Ok(slots) => {
+                info!("TRASH {} from slot {}", held.count, held.from);
+                hotbar.0 = slots;
+            }
+            Err(refusal) => warn!("trash refused: {refusal:?}"),
         }
         hand.0 = None;
         return;
@@ -639,14 +664,20 @@ pub fn press(
     if index >= CARRIED {
         return;
     }
-    let (moved, held) = click(&hotbar.0, hand.0, index, button, shift);
-    if let Some(moved) = moved {
-        if !save.record_pack(&moved) {
-            error!("pack move BLOCKED: the save did not accept it");
-            hand.0 = None;
-            return;
+    // The move is the server's to decide (`multiplayer` design 19); one that
+    // would change nothing is not asked.
+    let (mv, held) = resolve(&hotbar.0, hand.0, index, button, shift);
+    if let Some(mv) = mv
+        && pbd_core::accept::pack(&hotbar.0, mv).is_ok_and(|moved| moved != hotbar.0)
+    {
+        match save.decide_pack(mv, &hotbar.0) {
+            Ok(moved) => hotbar.0 = moved,
+            Err(refusal) => {
+                error!("pack move BLOCKED: {refusal:?}");
+                hand.0 = None;
+                return;
+            }
         }
-        hotbar.0 = moved;
     }
     hand.0 = held;
 }
@@ -933,6 +964,7 @@ mod tests {
             .insert_resource(PackHand(Some(Held { from: 0, count: 64 })))
             .insert_resource(WorldSave::memory_only())
             .init_resource::<HoldView>()
+            .init_resource::<pbd_app::drops::Toss>()
             .add_systems(Update, (open, press).chain());
         let tap_i = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
