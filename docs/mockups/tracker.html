@@ -772,15 +772,21 @@ info.addEventListener('click', (e) => { if (e.target === info) info.close(); });
 
 // The page is drawn from data after load, so a link to an anchor is followed once the anchor exists, and again whenever
 // the hash changes. The roadmap's old anchors (#phase-3) lead to the new ones (#roadmap-phase-3).
+// One main section on the page at a time (owner, 2026-11-22: "instead of the main sections being all on one page, they
+// shouldnt show unless I select them in teh index"): the one holding the link's target, or the roadmap with no link.
+function showSection(sec) {
+  document.querySelectorAll('section.sect').forEach((s) => { s.hidden = s !== sec; });
+}
 function scrollToHash() {
   let id = decodeURIComponent(location.hash.slice(1));
-  if (!id) return;
+  if (!id) { showSection(document.getElementById('roadmap')); return; }
   if (/^phase-/.test(id)) id = 'roadmap-' + id;
   // Steps that moved keep their old links: phase 5's carts went to phase 3 (owner, 2026-11-22).
   const MOVED = { 'roadmap-phase-5-carts': 'roadmap-phase-3-carts' };
   if (MOVED[id]) id = MOVED[id];
   const t = document.getElementById(id);
-  if (!t) return;
+  if (!t) { showSection(document.getElementById('roadmap')); return; }
+  showSection(t.closest('section.sect') || document.getElementById('roadmap'));
   t.scrollIntoView({ block: 'start' });
   t.classList.add('hit');
   setTimeout(() => t.classList.remove('hit'), 1600);
