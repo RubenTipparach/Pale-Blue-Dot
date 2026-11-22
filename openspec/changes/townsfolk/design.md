@@ -543,6 +543,142 @@ faked with a light of its own.
 - `Townsfolk::people(site)` lists a standing town's people with their roles.
 None of trade, missions or the lost villager is built here.
 
+## The leftovers of phase 3 (2026-11-22)
+
+Written before the code, on the owner's "Build phase 3": the lost villager
+and repair jobs, the talking mouth, real captures of talking, roads the
+player lays, cut and fill for the links that did not route, and the road's
+smaller gaps. Each is a recommendation taken (ask only with screenshots).
+
+**28. The lost villager, as built (task 7.5).**
+- **Posted.** `lost` joins `jobs.ron`'s `posted`. Taking the job writes a
+  `lost_villager` record (`pbd_core::economy::follow::Lost`, schema 1), id
+  the job's id, authored by the player with the job in the same line set:
+  the town, who it is (a person of that town's people, by index, rolled from
+  the job's id over the roster's length, never its trader or job giver),
+  where they stand, and whether they follow.
+- **Where they stand** is rolled from the job's id: a bearing, and a reach
+  from 120 m to `LOST_REACH_M` (300 m) from the town's anchor along the
+  ground, on the first cell outward along that bearing that is dry ground
+  (no sea, no river), outside every town's footprint, holds no player's
+  edit, and stands within a layer of its neighbours. The point is stored in
+  the body's frame in `f64` (the floating origin), so it is a stored record
+  and never re-rolled.
+- **Drawn as their own person.** While the record exists and their town
+  stands, `Townsfolk::drive` stands them at the record's point, walking when
+  they moved this frame; the figure, face, solid circle and gaze follow. At
+  their post in town there is nobody in their place while they are out.
+- **A map marker.** The map shows the job's villager as a marker at the
+  record's point, with the town's name, as long as the job is taken and not
+  handed in.
+- **Found.** The interact key on them opens the talk panel with one line,
+  "Lead the way", and sets `following`; the record is written then.
+- **Following.** Each frame `follow::step` moves them behind the player at
+  the player's pace (hurrying when left past 8 m), never onto deep water:
+  `dry` is the column under the point holding no water deeper than a layer
+  over its ground, so they wait at a river's bank or the shore. Their point
+  is written to the record when they come to rest after walking, never more
+  than once a second, so a reload finds them where they stopped.
+- **Home.** Within the town's wall (`follow::home`, the town's footprint
+  radius) the job's `Escort` objective is counted from a `Did` the game
+  writes (`Escort`, `<site>:villager`), the record is removed (a `removed`
+  line), and the person goes back to their post (`Townsfolk::release`).
+  Handing in pays as every job does.
+
+**29. Repair, as built (task 7.6).**
+- **Posted.** `repair` joins `posted`. Taking the job has the world break a
+  piece: one wall of one of the town's buildings, at the ground storey, on
+  an outer edge with no door or window, rolled from the job's id. The
+  building record gains `broken: [[c, r, d, s]]` (a new field, written only
+  where there is one, so every other building's record is as it was), and
+  the cutter leaves that wall out, as it leaves a boathouse's open edge out.
+- **Through the yield check.** The change is proposed by the world
+  (`Author::World`, process `repair`, the job's id) through
+  `WorldSave::propose`. A building whose record the player has changed is
+  skipped, and the next is tried; a town with none to break has no repair on
+  its board. A player's own pieces (`piece` records) are never in a town's
+  building record, so the world never breaks a piece the player placed.
+- **Mended by placing the material.** Near the gap (within 4 m of its
+  middle) with planks in the pack, the interact key offers MEND. It takes
+  two planks, writes the building record without the wall in `broken`
+  (authored by the player, with the pack in the same line), writes a `Did`
+  (`Repair`, `<site>:piece`) that counts the job, and stands the town again
+  from its record. Planks mend every kit (the wall comes back in its own
+  kit's look): one material to carry, recommendation taken.
+- **Recut in place.** A town whose record changed is cut again on the pool
+  and swapped for the standing one in one frame when the cut is done, with
+  no fade, so it never blinks out.
+
+**30. The talking mouth (task 6.3).** While the talk panel, the trade panel
+or the board is open with a townsperson, `Townsfolk::set_talking` holds
+their mouth talking; it stops the frame the panels close or the talk turns to
+someone else.
+
+**31. Roads the player lays (task 8.3).**
+- **Gravel** is a good (`gravel`, stack 99), made by hand from loose stone
+  (`gravel` recipe: two stone make four gravel) and valued in `values.ron`.
+- **Placing.** The place button (right) on the ground with gravel in the
+  selected slot lays a gravel road cell on the aimed cell, taking one
+  gravel; with the shovel in the tool slot and the selected slot empty it
+  lays a dirt track (packed earth, nothing taken). The cell must be dry,
+  its top open to the sky over two layers, not a town's footprint, not
+  already a road. Its slope is `roads::built_up` toward the side faced. It is
+  a `road-cell` record of the player's, through the durable path, with the
+  pack in the same line; the walker walks it at its surface's speed.
+- F on a road cell of the player's with nothing selected takes it up (the
+  gravel back for a gravel cell).
+
+**32. Cut and fill: roads version 2 (design 10a's "a later change may cut
+and fill").** Measured on the shipped seed before this change: 53
+settlements, 57 links, 27 routed with the shipped weighted search (35 with
+the plain cheapest search, too slow for a loading screen); the rest have no
+way that climbs at most a layer a cell.
+- **Fill** raises a road cell's top up to `max_fill_layers` (2) over its
+  ground on a bed of packed earth, a piece like a dip's raised bed: the
+  ground is not edited. **Cut** lowers it up to `max_cut_layers` (2) under
+  its ground: the world digs the layers between (world edits through
+  `WorldSave::propose`, the yield check refusing any cell the player
+  touched, which the route never crosses anyway). A cut or filled cell is
+  dry, outside every town's footprint and not a ford or bridge.
+- **The search** carries the road's height over each cell's ground as part
+  of its state, and pays `fill_cost_m` and `cut_cost_m` a layer a cell on
+  top of a cell's length, so a road cuts or fills only where it cannot climb
+  round. The road still never moves more than a layer between cells.
+- **Deterministic and bounded.** Costs stay whole millimetres; the order
+  of states is total; the same budget (`max_expanded`) a link.
+- **A new roads version, for worlds planned from now on.** The net record
+  says `version: 2`. A world already planned keeps its roads as stored: it
+  is never planned again. Version 1 is the same search with no cut or fill
+  (`RoadsConfig::for_version(1)`), kept and pinned by its test.
+- **The record.** A road with a cut or filled cell is written as a schema 2
+  `road` record, each cell carrying its cut or fill; a road with none stays
+  schema 1. Schema 1 still reads.
+- **A cut cell's edits are the world's.** Every check that a road cell is
+  laid asks whether the PLAYER touched its cell (the save's yield set), not
+  whether it holds an edit, so a road's own cutting does not hide it.
+
+**33. No tufts on a road.** The surface word of a road cell carries a road
+bit (bit 30, `planet_terrain::ROAD_BIT`), and the clutter pass grows no
+pixel tufts there. A town's footprint keeps its tufts as it has them.
+
+**34. Lamps along the roads near towns** (M15's Roads tab lights its roads
+with lanterns on posts). Within `lamp_town_m` (90 m) of a settlement's
+anchor, every `lamp_every` (5th) cell of a road from the town's edge has a
+lantern post (`Material::LanternPost`, the towns' street lamp) on a
+neighbouring cell off the road, the first such on the left of the way out
+that is dry, within a layer of the road's ground and holds no player's
+edit, in the first air layer over its ground. Derived from the stored roads
+and installed with their clearance before the planet is built, as a town's
+lamps are: never saved, the same every load. A cell the player edits shows
+the player's edit, as with a town's lamps.
+
+**35. The captures are played, not posed.** The talk, trade and board
+captures stand the player beside a real townsperson (`--at` and `--yaw`,
+the one thing set) and use the game's keys and buttons:
+`PBD_KEY_SCRIPT` presses F, and a new `<frame>:press:<action>` step presses
+a talk panel button (TRADE, WORK, BACK, a trade row) as a click would. The
+old frames posed by `PBD_TALK` are replaced and the instrument removed.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

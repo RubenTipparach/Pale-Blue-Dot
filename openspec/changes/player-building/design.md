@@ -128,6 +128,26 @@ piece.**
   materials change lands. The setting is saved with the world, so a costed
   world cannot be turned free by a config edit.
 
+**8. A floor over lower ground stands on a footing (2026-11-22).** The
+first captures in the game showed a blueprint's floor slab hanging a layer
+or two over the desert's lower terraces with nothing under it. Every floor
+piece with no floor of the plot under it in the same cell, whose cell's
+ground is below it, is cut with a footing: a prism of the cell's own outline
+in fieldstone (`fieldstone`, the stone kit's wall) from the ground's top up
+to the slab's underside. It is solid to the walker. The ground is the
+generated ground (`planet::surface_height`, towns' ground included), read
+by the plot's cut; a dig under a house after it is built does not move it.
+Fieldstone for every kit, recommendation taken (ask only with screenshots):
+one look for a building's foot whatever its walls are. Posts were the other
+choice; a footing closes the gap a post leaves for the eye to look through.
+
+**9. A player's building casts the sun's shadow.** Each cut plot's
+triangles (not its lanterns' flames, not cut-out textures) are put in the
+sun's caster list as a town's are (`planet_shadow::TownCasters`, chunked by
+`towns::casting_of`), under an id of the plot's own past every site id, and
+replaced whenever the plots are cut again. So a house darkens the ground and
+the rooms under it as a town's house does.
+
 ## Risks / Trade-offs
 
 - [The per-frame placement check is slow in a crowded town] → It only reads
