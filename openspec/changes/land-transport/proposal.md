@@ -4,7 +4,7 @@
 
 **The owner, 2026-11-21:** "add cars and cars and carts, and horses and
 trains (and tracks) mockups to phase 5". **And 2026-11-22:** "Roads and cars
-mockup?".
+mockup?". **Approved 2026-11-22** (M38 version 1, in chat: "noth apporoved, I dont see trade panel"): phase 5 waits for the owner's request like the rest.
 
 Phase 5 is mass transportation (CLAUDE.md, "The first game loop", "Then mass
 transportation"): airships, sea ships, sailing and navigation, carts and

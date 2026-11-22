@@ -33,6 +33,7 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 ## 6. Trade
 
 - [ ] 6.1 The trade panel in M5 brought up to the game's stone-and-wood UI, by day and at night; the owner approves it for the game. Verify: on the tracker.
+  - 2026-11-22: approved by the owner in chat, on the in-game talk, trade and board captures ("noth apporoved, I dont see trade panel"). The M5 Talk tab is still the older draft; it is brought up to the game's panels so the page shows what was approved, then this is ticked.
 - [x] 6.2 Each town's trader, its prices from value times need, the 40% spread, stock and the day's drift (design 6, 7), in `pbd-core`. Verify: tests that a harbour sells fish below a mountain town, that selling back what you bought loses coins, that ten sales move the price, and that a day brings it back. Built 2026-11-21: `pbd_core::economy::trade` and `assets/config/trade.ron`; tests in `pbd_core::economy::tests`. In `openspec/specs/world/trade`.
 - [x] 6.3 The trade panel in the game, opened by talking to the trader. Verify: a bot buys a loaf and sells three fish, and the purse and the pack agree.
   - 2026-11-21: the panel is built (`desktop/talk.rs`, TRADE from the talk) and the bot test passes at the rules' level (`pbd_app::economy::tests::a_bot_takes_a_job_is_paid_buys_a_loaf_and_sells_three_fish`: purse, pack and save agree). Open until the townsfolk stand in the game to be talked to: a `Talker` on each of agent A's people opens it.
@@ -42,6 +43,7 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 ## 7. Town missions
 
 - [ ] 7.1 M5's job board and talk panel up to date with the job kinds below; the owner approves them for the game. Verify: on the tracker.
+  - 2026-11-22: approved by the owner in chat, on the in-game talk, trade and board captures ("noth apporoved, I dont see trade panel"). The M5 Talk tab is still the older draft; it is brought up to the game's panels so the page shows what was approved, then this is ticked.
 - [x] 7.2 The new objective kinds (`Deliver`, `Escort`, `Repair`, `Sell`, `Buy`, `Light`, `Clear`) counted by the starter missions' function (design 8). Verify: a test per kind from its `Happened` event. Built 2026-11-21: the kinds in `missions::Kind` (all but `Clear` live; `Clear` waits for roads), each counted from its `Happened` by `Progress::record` (`each_new_objective_kind_counts_from_its_event`).
 - [x] 7.3 A town's board made from its needs, its trades and the day's seed, three to five jobs, replaced after three days (design 8). Verify: tests that a harbour's board asks for fish, that the same day gives the same board, and that a taken job never expires. Built 2026-11-21: `pbd_core::economy::jobs::Board`; tests that a harbour's board asks for fish, the same day gives the same board, three to five jobs, a place replaced within three days, a taken job never expires. In `openspec/specs/world/town-missions`.
 - [ ] 7.4 The jobs: trade, gather or hunt for the town (herd goods until predators), deliver a parcel, cook a dish, fish, mine, tend a herd, bring in a harvest, light the lamps at dusk. Verify: a bot takes and finishes one of each and is paid.
