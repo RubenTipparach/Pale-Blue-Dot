@@ -4,7 +4,9 @@ The owner, 2026-11-18: "3c will add survival mode, falling from high places,
 dangeroous animals (we'll introduce predators), fighting with villagers,
 hunger, and oxygen - underwater can t breath, or in space".
 
-Phase 3c comes after multiplayer (3b) and before town building (phase 4).
+Planned first as phase 3c, it moved to phase 4, with town building, civil
+engineering and power generation (owner, 2026-11-22: "bump surivival to
+phase 4 s well"). It still comes after multiplayer (3b).
 Today the game has no health, no death, no hunger and no breath:
 - `cooking` decision 1 chose buffs over a hunger bar, on the owner's answer
   to Q1, which was asked with screenshots;

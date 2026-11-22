@@ -564,24 +564,25 @@ which wait for a request.
   launcher that pulls the latest from itch io based on your OS", "this
   launcher should be responsible for keeping the game up to date always";
   `game-launcher`). No mockup yet.
-- **Then survival, phase 3c** (owner, 2026-11-18: "3c will add survival
-  mode, falling from high places, dangeroous animals (we'll introduce
-  predators), fighting with villagers, hunger, and oxygen - underwater can t
-  breath, or in space"): a Survival mode per world beside today's calm
-  Explorer, with health, fall damage, hunger, breath and suit air, hunting
-  predators, townsfolk who fight back, and a dropped pack on death
-  (`survival-mode`). No mockup yet.
-- **Then town building and civil engineering** ("the after env v2, we'll
+- **Then town building, civil engineering and survival, phase 4** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (bridges and the like; roads come
   with the townsfolk); no mockup yet for the second. With them, power
   generation's first rungs, water and wind (M20; owner, 2026-11-21: "bump
   power gen to phase 4").
+  Survival comes in phase 4 too (owner, 2026-11-22: "bump surivival to
+  phase 4 s well"; first planned as 3c, 2026-11-18: "3c will add survival
+  mode, falling from high places, dangeroous animals (we'll introduce
+  predators), fighting with villagers, hunger, and oxygen - underwater can t
+  breath, or in space"): a Survival mode per world beside today's calm
+  Explorer, with health, fall damage, hunger, breath and suit air, hunting
+  predators, townsfolk who fight back, tool wear, and a dropped pack on
+  death (`survival-mode`). No mockup yet.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
   navigation (M23, `steer-and-sail`), carts and horses, cars, and trains on
   their tracks (owner, 2026-11-21: "add cars and cars and carts, and horses
-  and trains (and tracks) mockups to phase 5"; no mockups yet), hiring
+  and trains (and tracks) mockups to phase 5"; mocked up in M38, `land-transport`), hiring
   workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get
