@@ -975,6 +975,80 @@ catch of any fish, selling any goods) its well empty, the pack's empty slot. The
 beside every price as before. The barter basket of decision 37 is drawn in
 M5 only and waits for a request.
 
+**38b. Long lists scroll, in a panel of fixed height (owner, 2026-11-22,
+on the trade panel: "opt for a scroll bar incase theres lots of
+products").** The trade panel listed at most nine rows a column and
+dropped the rest (`ROWS`, `take(9)`); a pack of many goods, or a trader
+with a long stock, lost rows silently, and a board of many jobs grew the
+panel past the screen. From now:
+- **The panel keeps one height.** Each trade column shows a window of
+  `VISIBLE_ROWS` (7) rows, the board's list a window of 7; the window is
+  that tall whether it holds one row or forty, so the panel does not jump
+  as goods are bought, sold or filtered. The purse, the last line said and
+  BACK stay fixed under the lists.
+- **Each column scrolls on its own**: BUY and SELL each keep their own
+  first-shown row. Only the rows in the window are built (the panel is
+  rebuilt when what it shows moves, as before), so a list of a hundred
+  costs what a list of seven does.
+- **The mouse wheel over a column scrolls it by whole rows**, one row a
+  notch, never half a row; over the other column, or outside both, it does
+  nothing to this one.
+- **A scroll bar beside the column, only when its rows overflow**: the
+  stone kit's `slider-track` stood on end, 8 native px wide and as tall as
+  the window, with a thumb inside it in the rune fill the settings sliders
+  use (`RUNE_DIM`, `RUNE` while held or hovered; the kit has no stone thumb
+  piece, and the oak `slider-knob` is the timber menus'). The thumb's
+  height is the shown share of the list (never under 8 px) and its place
+  the first row's share of the rows that can be first. Dragging the thumb
+  scrolls, snapping to whole rows; a press on the track above or below it
+  pages by a window. With no overflow there is no bar and the space stays.
+- **Clamped**: the first row is never past `rows - VISIBLE_ROWS`, so the
+  window is never short at the bottom; a list that shrinks (the last of a
+  good sold) clamps on the next paint.
+- **Focus**: the talk panels have no keyboard or controller focus today
+  (a press is the pointer's), so there is nothing to follow. The maths
+  carries `reveal(row)`, which scrolls the least that shows a row, ready
+  for when they do.
+- **The job board scrolls the same way**: YOUR JOBS and ON THE BOARD are
+  one list (their headings rows of it), in one window with its bar.
+- **Approved by the owner** (2026-11-22, on this plan and 38c: "approved").
+- The rule is one place, `desktop::scroll_list` (`ListView`: window,
+  clamp, wheel, thumb size and place, drag, reveal), tested apart from
+  the UI; the mockup's `ListView` is the same maths.
+
+**38c. Each trade column filters by shelf (owner, 2026-11-22: "some
+filtering on each side would be nice: food, organics, raw materials,
+tools, etc").** Above each column's list, a row of tabs: ALL, then one tab
+per shelf that has goods in that column (a shelf with nothing to buy, or
+nothing in the pack the trader wants, shows no tab).
+- **The shelves are the goods' own group, read in fewer words**: every
+  good already carries a `Group` in `values.ron` (what a town's need is
+  read by), so no new data is added and no row changes.
+  `values::Shelf::of(group)` maps them onto the owner's words:
+  - **Food**: crop, fruit, fish, dish;
+  - **Organics**: seed, herd (eggs, milk, wool, hides), wood;
+  - **Raw**: ore (ore, coal, ingots) and stone;
+  - **Tools**: tool;
+  - **Goods**: made things and lights (rope, buckets, boats, lamps).
+  The ids are `food`, `organics`, `raw`, `tools`, `goods`; their names are
+  the locale file's `trade.shelf.<id>` (`trade.shelf.all` for ALL), never
+  text in code. Two goods sit by their group rather than by what a player
+  might call them: fibre is a crop (Food) and eggs and milk are herd
+  (Organics); a shelf column in `values.ron` would move them, and is left
+  until the owner asks. Tools are `untraded` today, so their tab shows on
+  no trader yet; it is there for when they are.
+- **A tab is a pack slot well** (24 px, `slot-idle`, `slot-hover` under
+  the pointer, `slot-selected` when chosen), holding a shelf's picture: a
+  good of it (grilled fish, a log, an iron ingot, the pickaxe, rope), and
+  ALL its word. The shelf's name is its tooltip (the kit's own).
+- **Choosing a tab puts that column's scroll back to the top**; the other
+  column keeps its own filter and scroll. Both go back to ALL and the top
+  when the talk closes.
+- **Approved by the owner** with 38b (2026-11-22: "approved").
+- **The board is not filtered**: a job is a kind of work (cook, bring,
+  deliver, mend, find), not a good on a shelf, and a board posts a handful
+  a day; it scrolls (38b) and no more.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
