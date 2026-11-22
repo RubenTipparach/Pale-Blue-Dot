@@ -221,7 +221,7 @@ details.about[open]{display:grid;gap:10px}
     <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
     <details class="about"><summary>About this mockup: the idea, and which art is the game's</summary>
     <p class="lede">Who lives in the towns, what they do with their day, and how you talk, trade and fall out with them. The square below runs a whole day on <b>world time</b>, which only moves while the game is played. It is 22:30 and the lamps are lit. Click anyone to see who they are.</p>
-    <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The square is <b>the game's village template</b> (<span class="src">assets/settlements/v1/village.json</span>, copied byte for byte), built the way <span class="src">towns.html</span> and the engine cut it: hex columns 2.833 m across and 1 m a layer with the terrain atlas's own tiles, walls on every outside edge per storey with its doors and windows, gable and cone roofs, the game's trees (<span class="src">planet_surface.wgsl</span>). Walls and roofs are the game's settlement textures, sampled nearest at the manifest's scale. <b>Mockup-only</b>: the stalls, well, brazier, forge, kiosk and the four lamp posts round the green (cut from the game's materials; the kiosk's metal panel is drawn), and the townsfolk, hexagonal prisms as <span class="src">townsfolk</span> design 2 builds them, wearing cloth, face and hair tiles drawn with the pixel-art kit and tinted per person. The portraits (48 px) and icons (16 px) are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/npcs_art.py</span>), shown at whole-number scales with no smoothing; the kiosk's metal panel is a 32 px tile from the same kit.</p>
+    <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The square is <b>the game's village template</b> (<span class="src">assets/settlements/v1/village.json</span>, copied byte for byte), built the way <span class="src">towns.html</span> and the engine cut it: hex columns 2.833 m across and 1 m a layer with the terrain atlas's own tiles, walls on every outside edge per storey with its doors and windows, gable and cone roofs, the game's trees (<span class="src">planet_surface.wgsl</span>). Walls and roofs are the game's settlement textures, sampled nearest at the manifest's scale. <b>Mockup-only</b>: the stalls, well, brazier, forge, kiosk and the four lamp posts round the green (cut from the game's materials; the kiosk's metal panel is drawn), and the townsfolk, since version 10 the friendly block-headed figure of the Faces tab that the game draws (<span class="src">townsfolk</span> design 13a, 21 and 36), dressed for their roles from their people's palette. The portraits (48 px) and icons (16 px) are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/npcs_art.py</span>), shown at whole-number scales with no smoothing; the kiosk's metal panel is a 32 px tile from the same kit.</p>
     </details>
   </header>
 
@@ -269,18 +269,11 @@ details.about[open]{display:grid;gap:10px}
   </section>
 
   <section id="tab-figures" class="tabpanel" role="tabpanel" aria-labelledby="cs-h" hidden>
-    <div class="sec-head"><div class="eyebrow">4 &middot; Character sheets</div><h2 id="cs-h">Variation: body, clothes, palette</h2>
-      <p class="lede">Built from hexagonal prisms that read as cubes, as the owner chose (survey T2). Every figure is rolled from the settlement's seed and the person's index, so a town's people are the same on every visit and every machine. Roll another town to see the spread.</p></div>
+    <div class="sec-head fc-head"><div class="eyebrow">4 &middot; Character sheets</div><h2 id="cs-h">Variation: body, clothes, palette</h2><button class="btn fc-info" id="csInfo" aria-haspopup="dialog" title="About this tab">i &middot; About</button></div>
     <div class="lineup">
-      <canvas id="lu" aria-label="A lineup of townsfolk figures from six peoples, each rolled with different height, build, skin, hair and clothes."></canvas>
+      <canvas id="lu" aria-label="A lineup of townsfolk from six peoples, block-headed and about 1.45 to 1.7 m tall, each rolled with its own build, height, face, hair, beard, skin and clothes, dressed for a role."></canvas>
       <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="false">Turn</button></div>
       <div class="labels" id="luLabels"></div>
-    </div>
-    <div class="parts">
-      <div><b>Body</b>Height 0.92 to 1.08 of the 1.9 m walker-sized figure, shoulders 0.85 to 1.2 wide. Children are a later question (section 8).</div>
-      <div><b>Clothes</b>Tunic, legs, belt and one headpiece from the people's list; the role adds its own piece: apron, tabard, oilskin, hard hat, headset, hood.</div>
-      <div><b>Palette</b>Skin, hair and cloth from the people's swatches, never another people's, as textures never cross planets.</div>
-      <div><b>Prop</b>One held thing says the job at a distance: pitchfork, hammer, coin pouch, spear, fish, pick, datapad, crate.</div>
     </div>
   </section>
 
@@ -365,9 +358,9 @@ details.about[open]{display:grid;gap:10px}
   <section id="tab-faces" class="tabpanel" role="tabpanel" aria-labelledby="fc-h" hidden>
     <div class="sec-head fc-head"><div class="eyebrow">9 &middot; Faces</div><h2 id="fc-h">Friendly townsfolk</h2><button class="btn fc-info" id="fcInfo" aria-haspopup="dialog" title="About this tab">i &middot; About</button></div>
     <div class="stage fc-stage" id="fcStage" data-fit data-reserve="210">
-      <canvas id="fc" tabindex="0" aria-label="Today's hex townsperson beside the proposed friendly one, with a crowd of generated townsfolk, on a hex ground patch with lamp posts and a lit window."></canvas>
+      <canvas id="fc" tabindex="0" aria-label="The game's friendly townsperson, with a crowd of generated townsfolk, some bearded, on a hex ground patch with lamp posts, a brazier and a lit window."></canvas>
       <div class="fc-tri" id="fcTri">-</div>
-      <div class="fc-labels" id="fcLabels"><span id="fcLToday">Today</span><span id="fcLNew">Proposed</span></div>
+      <div class="fc-labels" id="fcLabels"><span id="fcLNew">The game's townsperson</span></div>
       <div class="fc-cross" id="fcCross" hidden aria-hidden="true"></div>
       <div class="fc-pad" id="fcPad" hidden><button class="btn" data-fpad="f" aria-label="Walk forward">&#9650;</button><button class="btn" data-fpad="l" aria-label="Step left">&#9664;</button><button class="btn" data-fpad="b" aria-label="Walk back">&#9660;</button><button class="btn" data-fpad="r" aria-label="Step right">&#9654;</button></div>
     </div>
@@ -376,6 +369,7 @@ details.about[open]{display:grid;gap:10px}
       <div class="fc-grp"><span class="fc-k">Face</span><span id="fcExpr"></span></div>
       <div class="fc-grp"><span class="fc-k">Live</span><button class="btn" data-flayer="blink" aria-pressed="true">Blink</button><button class="btn" data-flayer="gaze" aria-pressed="true">Gaze</button><button class="btn" data-flayer="head" aria-pressed="true">Head follows</button><button class="btn" data-flayer="talk" aria-pressed="false">Talk</button></div>
       <div class="fc-grp"><span class="fc-k">Move</span><button class="btn" id="fcPlay" aria-pressed="false">Play walk</button><button class="btn" data-fact="wave">Wave</button><button class="btn" data-fact="hop">Hop</button><button class="btn" data-fact="shrug">Shrug</button><button class="btn" data-fact="tilt">Tilt</button></div>
+      <div class="fc-grp"><span class="fc-k">Beard</span><button class="btn" data-fbeard="none" aria-pressed="true">None</button><button class="btn" data-fbeard="goatee" aria-pressed="false">Goatee</button><button class="btn" data-fbeard="full" aria-pressed="false">Full front</button></div>
       <div class="fc-grp"><span class="fc-k">People</span><label class="fc-seed">Seed <input id="fcSeed" type="number" value="7" min="1" step="1"></label><button class="btn" id="fcNew">New person</button></div>
       <div class="fc-grp fc-time"><span class="fc-k">Time</span><input id="fcHour" type="range" min="0" max="24" step="0.05" value="12.5" aria-label="Time of day"><span id="fcClock" class="fc-clock">12:30</span><button class="btn" id="fcDay">Day</button><button class="btn" id="fcNight">Night</button></div>
     </div>
@@ -384,11 +378,33 @@ details.about[open]{display:grid;gap:10px}
   <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Portraits and icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/npcs_art.py</span>); walls, roofs and ground are the game's settlement textures, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>); the kiosk's metal panel is drawn the same way for the mockup (<span class="src">tools/art/building_art.py</span>).</footer>
 </div>
 <div id="err" hidden></div>
+<div class="fc-modal" id="csModal" hidden role="dialog" aria-modal="true" aria-labelledby="csModalH">
+  <div class="fc-card">
+    <button class="fc-x" id="csX" aria-label="Close">&#x2715;</button>
+    <h3 id="csModalH">Character sheets: what this tab shows</h3>
+    <p>Since version 10 every figure on this page is the friendly townsperson of the Faces tab, the one the game draws (<span class="src">townsfolk</span> design 13a, 21 and 36): a bevelled block head 0.5 m wide, 0.6 m tall and 0.45 m deep on a short six-sided body, flat shaded, two tones a material, no outlines. It replaces the hexagonal-prism figures of version 9 and before. Every figure is rolled from the settlement's seed and the person's index, as the game's <span class="src">look::generate</span> rolls it, so a town's people are the same on every visit and every machine. Roll another town to see the spread; Turn turns them, off by default.</p>
+    <h4>What varies</h4>
+    <ul>
+      <li><b>Body</b>: build (round, pear, tall, stout), height about 1.45 to 1.7 m, head size 0.9 to 1.02 of the block. Children are a later question (section 8).</li>
+      <li><b>Face</b>: eye size and spacing, nose (none, button, long), ears, hair (crop, bun, braid, bald, a hat), and a beard on about a quarter of them: on the face's front only, a goatee (a moustache over the mouth and a tuft under it) or a full front beard (the moustache, a jaw plate under the mouth and a cheek piece each side), half and half (design 36).</li>
+      <li><b>Clothes</b>: shirt, trousers and shoes from the people's list; the role adds its own piece: a straw hat, a turban, a helmet, a sou'wester, a miner's lamp helmet, a headset, a hood, an apron or a tabard.</li>
+      <li><b>Palette</b>: skin, hair and cloth from the people's swatches, never another people's, as textures never cross planets.</li>
+      <li><b>Prop</b>: one held thing says the job at a distance: pitchfork, hammer, coin pouch, spear, fish, pick, datapad, crate.</li>
+    </ul>
+    <p>The lineup is a studio shot with its own light, so it has no night; the square at night and the Faces tab's Night show these figures by their lamps.</p>
+  </div>
+</div>
 <div class="fc-modal" id="fcModal" hidden role="dialog" aria-modal="true" aria-labelledby="fcModalH">
   <div class="fc-card">
     <button class="fc-x" id="fcX" aria-label="Close">&#x2715;</button>
     <h3 id="fcModalH">Friendly faces: what this tab shows</h3>
-    <p><b>Today</b> (left) is the figure the rest of this mockup uses: hexagonal prisms with a face tile, 1.9 m tall (<span class="src">townsfolk</span> design 2). <b>Proposed</b> (right, and the crowd) is design 13 to 18 of the same change, with 13a: a friendly townsperson with Kerbal-like proportions. Proposal only; the game waits for the owner's approval of this tab.</p>
+    <p>The friendly townsperson of <span class="src">townsfolk</span> design 13 to 18 and 13a, the figure the game draws since version 9 was approved for it ("People approved. Build.phase 3", 2026-11-21). Since version 10 it is the only figure on the page: the square and the Character sheets wear it too, and the hexagonal-prism figure that stood beside it here as "today" is gone, since that is no longer the game's look.</p>
+    <h4>What changed in version 10</h4>
+    <ul>
+      <li>From the owner (2026-11-22), on the Character sheets lineup and a Kerbal Space Program 2 picture of a Kerbal with a goatee and a moustache: "get rid of these old npcs, replace with new ones. also beards should only be infront like this" (design 36).</li>
+      <li><b>Beards are on the face's front only</b>, nothing on the sides or the back, in the hair's colour, each piece sunk 5 mm into the head and standing 25 to 30 mm proud of the face, like the other face layers, and never over the mouth's opening. Two styles, half and half: a <b>goatee</b>, a moustache over the mouth (0.2 m wide, 35 mm high, its foot at 0.15 m, over the highest mouth pixel any cell draws) and a chin tuft under it (0.09 m wide, from 0.04 m below the chin to 0.055 m, under the lowest); and a <b>full front</b> beard, the same moustache, a jaw plate 0.4 m wide under the mouth and a cheek piece each side 0.13 to 0.2 m out, framing the mouth below the blush. The Beard control puts each on the hero; the crowd rolls them (a beard on 35% of those not in a bun or a braid, about a quarter of a town, its style from one roll after all the others, so nobody else's look moves).</li>
+      <li>The square and the Character sheets lineup wear this figure, with the role's hat (straw hat, turban, helmet, sou'wester, miner's lamp helmet, headset, hood), apron or tabard, and its prop in the right hand.</li>
+    </ul>
     <h4>What changed in version 9</h4>
     <ul>
       <li>From the owner's notes on version 8: "Faces are kinda small. Id like blocky heads maybe taller head as well. Characters looking great. Try rendering fps to give me a feel for height" (design 13a).</li>
@@ -397,7 +413,7 @@ details.about[open]{display:grid;gap:10px}
       <li><b>A bigger face</b> that fills the block's front: eyes, pupils and brows about 1.6 times version 8's, set wider and lower, the mouth twice as wide, the blush larger. Still layers 2 mm proud of the face, drawn after the head; every expression, blink, gaze, lid and talk works as before.</li>
       <li><b>First person.</b> The First person button puts the one camera at the game's walker: the eye 1.6 m above the ground (<span class="src">walking.rs</span> EYE_HEIGHT) and a 60 degree vertical field of view as the game's camera (<span class="src">desktop.rs</span>), walked at the game's 8 m/s. WASD or the arrow keys walk, the on-screen arrows walk on a phone, and dragging looks. You cannot walk into a person, a lamp post or the brazier. A townsperson within 5 m looks at you, so their eyes and head turn up to your eye. Choosing Compare, Face or Crowd, or the button again, goes back to the orbit camera where it was. The camera moves only when you move it.</li>
     </ul>
-    <h4>The proposed figure</h4>
+    <h4>The figure</h4>
     <ul>
       <li>About 2.6 heads tall: a 0.6 m block head on a short rounded body, stubby arms and legs.</li>
       <li>The body and limbs are six-sided: hex prisms and six-sided lathes, flat shaded, with the flat side forward, so it keeps "hexagonal blocks that look like cubes" (survey T2); the head is the block the owner asked for.</li>
@@ -433,408 +449,29 @@ details.about[open]{display:grid;gap:10px}
 <script src="building/scene-kit.js?v=1"></script>
 <script>
 "use strict";
-window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
-const $ = id => document.getElementById(id);
 // ===================================================================
-// Tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13).
-// The open tab is the URL's bare hash (#square, #people, #jobs, #figures, #days, #talk, #towns,
-// #decisions, #faces). The square's and the lineup's renderers are each made the first time their tab opens,
-// and each frame loop runs only while its tab is showing.
+// The townsperson kit (townsfolk design 13a, 21, 36): M5's friendly figure, the one the game draws, used by
+// every tab of this page since version 10: the square, the Character sheets lineup and the Faces tab.
+// friend(spec) builds one; genSpec(seed, i, people) rolls a spec from a people's palette as the game's
+// look::generate does; liveFace(F, dt) blinks a face that is not on the Faces tab.
 // ===================================================================
-const TABS = ["square", "people", "jobs", "figures", "days", "talk", "towns", "decisions", "faces"];
-const TAB_HOOKS = {};   // tab -> { show(), hide() }
-const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
-let TAB = tabOf(location.hash) || "square";
-function fitTab() {
-  // On a wide screen the square fills the window below the tab bar, so nothing needs a scroll.
-  const wide = matchMedia("(min-width:861px)").matches;
-  for (const el of document.querySelectorAll(`#tab-${TAB} [data-fit]`)) {
-    el.style.height = "";
-    if (!wide) continue;
-    const top = el.getBoundingClientRect().top + scrollY;
-    el.style.height = Math.round(Math.max(+(el.dataset.min || 420), Math.min(innerHeight - top - 16 - (+el.dataset.reserve || 0), el.clientWidth * 0.9))) + "px";
-  }
-}
-function setTab(t, push = true) {
-  if (!TABS.includes(t)) return;
-  const prev = TAB; TAB = t; document.body.dataset.tab = t;
-  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
-  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
-  if (prev !== t && TAB_HOOKS[prev] && TAB_HOOKS[prev].hide) TAB_HOOKS[prev].hide();
-  fitTab();
-  if (TAB_HOOKS[t] && TAB_HOOKS[t].show) TAB_HOOKS[t].show();
-}
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
-addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
-addEventListener("resize", fitTab);
-document.querySelector("details.about").addEventListener("toggle", fitTab);
-setTab(TAB, false);
-// ===================================================================
-// Scale: the engine's cell. 2.833 m flat to flat, 1 m a layer, 3 m a storey.
-// ===================================================================
-const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R, STOREY = 3;
-const hx = (q, r) => W * (q + r / 2), hz = (q, r) => ROW * r;
-const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
-const hexDist = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
-function corner(q, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [hx(q, r) + R * Math.cos(a), hz(q, r) + R * Math.sin(a)]; }
+window.FK = (function () {
+const lin = h => new THREE.Color(h).convertSRGBToLinear();
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
-const lin = h => new THREE.Color(h).convertSRGBToLinear();
-
-// ===================================================================
-// Peoples and roles (proposed data)
-// ===================================================================
-const PEOPLES = {
-  fields:   { name: "Fields folk", world: "Tenebris \u00b7 fields, village, walled town", skin: [0xe2ac80, 0xc99a74, 0x9c6b4a, 0xf0c49e, 0x7a5038], cloth: [0x5c9a46, 0x7a5a3a, 0xb0884a, 0x4a6e9a, 0xa04a3a, 0xd8c8a0], hair: [0x3b2a1e, 0x8a5a2a, 0xd8b060, 0x1e1a18, 0xa04a2a], hat: ["none", "none", "straw", "cap"], text: "Farmers, millers, smiths and guards in oak and limestone towns. Undyed wool, olive and madder red." },
-  desert:   { name: "Caravan folk", world: "Tenebris \u00b7 desert oasis towns", skin: [0xb07a52, 0x8a5a3c, 0xc89064, 0x6a4430], cloth: [0xe0b050, 0xc0603a, 0xf0e0c0, 0x3a8aa0, 0x9a3a2a], hair: [0x1e1a18, 0x2a201a, 0x3a2a20], hat: ["turban", "turban", "hood", "none"], text: "Traders between the sandstone towns. Ochre, salt white and the cyan of the oasis glaze; wraps against the sun." },
-  tundra:   { name: "Ice-camp folk", world: "Tenebris \u00b7 tundra camps", skin: [0xe8c0a0, 0xc8a080, 0xa88060], cloth: [0x8aa0b8, 0xe8e4dc, 0x6a4a3a, 0xc04040, 0x5a6a50], hair: [0xe0d8c8, 0x3a2a20, 0x6a5040], hat: ["hood", "hood", "cap", "none"], text: "Igloo and longhouse people. Furs in sage, granite grey and one hard red for festival days." },
-  coast:    { name: "Harbour folk", world: "Tenebris \u00b7 beach and fishing harbours", skin: [0xd8a880, 0xb08060, 0xe8c0a0, 0x8a5a40], cloth: [0xf0c830, 0x2a4a7a, 0xe8e0d0, 0x6a8a9a, 0xa04a3a], hair: [0x8a6a4a, 0xd0b080, 0x2a201a], hat: ["sou", "sou", "cap", "none"], text: "Fishers and boatwrights in driftwood and whitewash. Oilskin yellow, navy and sail canvas." },
-  redwood:  { name: "Canopy folk", world: "Sequoia \u00b7 redwood forest", skin: [0xd8a888, 0xa87858, 0xc89878, 0x7a5040], cloth: [0x2a8a80, 0x8a2a3a, 0xc06a40, 0x3a5a40], hair: [0x2a3a30, 0x5a2a20, 0xc06a40], hat: ["hood", "none", "cap", "none"], text: "Resin tappers and fibre weavers on Sequoia. Teal needle green, wine and copper bark; nothing borrowed from Tenebris." },
-  sporewood:{ name: "Basin folk", world: "Sequoia \u00b7 sporewood basins", skin: [0xe0b8a0, 0xb08a70, 0x8a6a58], cloth: [0x8a5ac0, 0x5ae0c0, 0x2a2440, 0xc0a0e0], hair: [0x2a2440, 0x5ae0c0, 0xe0e0f0], hat: ["hood", "none", "none", "cap"], text: "Mycelium growers of the flooded basins. Violet, mint and a little cyan glow on their lanterns and cuffs." },
-  station:  { name: "Station crews", world: "Stations and outposts (any origin)", skin: [0xe2ac80, 0xb07a52, 0xe8c0a0, 0x7a5038, 0xd8a888], cloth: [0x3a96be, 0xe0e4ea, 0x5a6270, 0xf0b43c], hair: [0x1e1a18, 0xa04a2a, 0xd8b060, 0x5a5a60], hat: ["headset", "none", "headset", "cap"], text: "Clerks, dock hands and traders from both worlds, in station blue. On airless bodies they are the only people, in suits outdoors." },
+const LAMP_GLOW = new THREE.MeshBasicMaterial({ color: 0xfff0b0 });
+// beards on the front of the face only (design 36): [w, h, d, bevel, y0, x] in the head's space, each sunk
+// BEARD_SINK into the head; the moustache's foot (0.15) is over the highest mouth pixel any cell draws (0.148),
+// the tuft's and the plate's tops (0.055) under the lowest (0.058), the cheeks 0.13 to 0.2 m out, past the
+// widest mouth (0.07 m, 0.105 with the thinking face's shift) and under the blush
+const MOUSTACHE = [0.2, 0.035, 0.03, 0.01, 0.15, 0];
+const BEARDS = {
+  none: [],
+  goatee: [MOUSTACHE, [0.09, 0.095, 0.03, 0.01, -0.04, 0]],
+  full: [MOUSTACHE, [0.4, 0.115, 0.035, 0.012, -0.06, 0], [0.07, 0.08, 0.035, 0.012, 0.05, -0.165], [0.07, 0.08, 0.035, 0.012, 0.05, 0.165]],
 };
-const NONE_PEOPLE = { name: "No natives", world: "Crag, Frostbite, the moons, asteroids", text: "Airless and lifeless (CLAUDE.md). People there are visitors: an outpost's crew, a miner's camp, a smuggler's cache. Their settlements are habitats, built and pressurised (see the building mockup)." };
-const ROLES = {
-  farmer:   { label: "Farmer", img: "farmer", where: "fields \u00b7 market stall", text: "Out at dawn, sells at the stall at midday, back to the fields till dusk.", offers: [["trade", "Grain, eggs"], ["quest", "Pests, fences"]], prop: "fork", hat: "straw", sched: [[0, "sleep"], [5, "away"], [12, "work"], [16, "away"], [19, "inn"], [21.5, "sleep"]] },
-  smith:    { label: "Smith", img: "smith", where: "forge", text: "Hammers from six to seven with a break at the inn. Buys ore, sells tools and hinges.", offers: [["trade", "Tools, nails"], ["quest", "Ore runs"]], prop: "hammer", apron: 0x8a5a30, sched: [[0, "sleep"], [6, "work"], [12, "inn"], [13, "work"], [19, "inn"], [23, "sleep"]] },
-  trader:   { label: "Trader", img: "trader", where: "market stall", text: "Keeps the stall from seven. Moves goods between towns; prices hold while the caravan is in.", offers: [["trade", "Everything"], ["quest", "Deliveries"]], prop: "pouch", hat: "turban", sched: [[0, "sleep"], [7, "work"], [19, "inn"], [23, "sleep"]] },
-  guard:    { label: "Guard", img: "guard", where: "gate \u00b7 patrol", text: "Two shifts, so the gate is never empty. Notices theft and remembers your face.", offers: [["law", "Bounties"], ["quest", "Patrol jobs"]], prop: "spear", hat: "helmet", tabard: 0xc03a30, sched: [[0, "sleep"], [6, "patrol"], [18, "inn"], [22, "sleep"]] },
-  fisher:   { label: "Fisher", img: "fisher", where: "harbour \u00b7 stall", text: "Out before light, sells the catch at eleven, mends nets till dark.", offers: [["trade", "Fish, bait"], ["quest", "Lost pots"]], prop: "fish", hat: "sou", sched: [[0, "sleep"], [4, "away"], [11, "work"], [15, "away"], [20, "inn"], [22, "sleep"]] },
-  miner:    { label: "Miner", img: "miner", where: "the hill mine", text: "Underground all day. Knows where the ore seams are and will tell you for a drink.", offers: [["trade", "Ore, coal"], ["quest", "Rumours of seams"]], prop: "pick", hat: "miner", sched: [[0, "sleep"], [6, "away"], [17, "idle"], [19, "inn"], [23, "sleep"]] },
-  clerk:    { label: "Station clerk", img: "clerk", where: "starport kiosk \u00b7 stations", text: "Books docking, buys survey data, posts contracts with real destinations.", offers: [["trade", "Survey data"], ["quest", "Contracts"]], prop: "pad", hat: "headset", sched: [[0, "sleep"], [7, "work"], [20, "inn"], [22, "sleep"]] },
-  smuggler: { label: "Smuggler", img: "smuggler", where: "by the well, after dark", text: "Only around at night. Buys what the stalls will not, sells what the guards would rather you did not have.", offers: [["trade", "Contraband"], ["law", "Standing risk"]], prop: "crate", hat: "hood", sched: [[0, "lurk"], [3, "sleep"], [13, "inn"], [17, "away"], [21, "lurk"]] },
-  inn:      { label: "Innkeeper", img: "trader", where: "The Plough", text: "", offers: [], prop: "none", apron: 0xe8e0d0, sched: [[0, "work"], [1.5, "sleep"], [9, "work"]] },
-};
-const ACT = { sleep: ["Asleep at home", "a-sleep"], work: ["At work", "a-work"], away: ["Away", "a-away"], inn: ["At the inn", "a-inn"], patrol: ["On patrol", "a-patrol"], idle: ["Idle about town", "a-idle"], lurk: ["Lurking", "a-lurk"] };
-
-// ===================================================================
-// A figure: hexagonal prisms that read as cubes, flat side forward.
-// ===================================================================
-function figure(spec, lit = true) { return PBD.figure(spec, lit); }
-function rollSpec(people, role, seed) {
-  const rn = rng(seed * 7919 + 13), pick = a => a[Math.floor(rn() * a.length) % a.length], P = PEOPLES[people], Ro = ROLES[role] || {};
-  const tunic = pick(P.cloth);
-  return {
-    h: 0.92 + rn() * 0.16, b: 0.85 + rn() * 0.35, skin: pick(P.skin), hair: pick(P.hair), tunic, legs: pick(P.cloth.filter(c => c !== tunic)) ?? 0x4a3b2c,
-    accent: pick(P.cloth), hat: Ro.hat || pick(P.hat), prop: Ro.prop || "none", apron: Ro.apron, tabard: Ro.tabard, long: rn() < 0.4,
-  };
-}
-
-// ===================================================================
-// Hollin Cross: the square
-// ===================================================================
-const canvas = $("sq");
-let renderer = null;   // made when the square's tab first opens
-function makeRenderer() {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-}
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 80, 200);
-const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 500);
-const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 260 }); scene.add(sun, sun.target);
-const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
-
-const LIGHTS = [], FLAMES = [], PLACES = {}, SOLIDS = [];
-// The village, as the game builds it: assets/settlements/v1/village.json (copied byte for
-// byte to npcs/game/), cut the way towns.html cuts it, on hex columns with the terrain's tiles.
-const TPL = (() => { const x = new XMLHttpRequest(); x.open("GET", "npcs/game/village.json", false); x.send(); return JSON.parse(x.responseText); })();
-const OC = 24, OR = 17;   // the green's middle, at the origin
-const VIL = PBD.buildTown(TPL, { ox: PBD.W * (OC + 0.5 * PBD.par(OR)), oz: PBD.ROW * OR });
-const GS = VIL.GS, at = (c, r) => [VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[VIL.idx(c, r)]];
-function cellOf(x, z) {
-  x += PBD.W * (OC + 0.5 * PBD.par(OR)); z += PBD.ROW * OR;
-  const qf = (Math.sqrt(3) / 3 * x - z / 3) / PBD.R, rf = (2 / 3 * z) / PBD.R, sf = -qf - rf;
-  let q = Math.round(qf), r = Math.round(rf); const s = Math.round(sf), dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
-  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
-  return PBD.toOff(q, r);
-}
-const groundY = (x, z) => { const [c, r] = cellOf(x, z); return VIL.inMap(c, r) ? VIL.TOP[VIL.idx(c, r)] : 1; };
-const LK = { lamp: [0xffd27a, 1.6, 5.2], wall: [0xffc070, 1.3, 4.4], window: [0xffa850, 0.35, 2.0], fire: [0xff8a3a, 1.3, 6.0], forge: [0xff7a30, 1.2, 5.5], kiosk: [0x9ae0ff, 0.6, 3.5] };
-function addLight(x, y, z, kind) { const K = LK[kind]; LIGHTS.push({ x, y, z, c: lin(K[0]), p: K[1], R: K[2], kind }); }
-const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
-function glowBox(x, y, z, s) { const m = new THREE.Mesh(new THREE.BoxGeometry(s, s * 1.3, s), lampMat); m.position.set(x, y, z); scene.add(m); return m; }
-function fire(x, y, z, s, kind) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.5 * s, 0.4 * s), fireMat); m.position.set(x, y + 0.25 * s, z); scene.add(m); FLAMES.push({ m, ph: Math.random() * 6 }); addLight(x, y + 0.6, z, kind); }
-// the template's street lamps, and a wall lantern by every door, as the game's towns light theirs
-for (const L of VIL.lamps) { glowBox(L.x, L.y, L.z, 0.2); addLight(L.x, L.y - 0.05, L.z, "lamp"); }
-for (const d of VIL.doors) { const [x, y, z] = d.lamp; GS.box("iron", x - d.nx * 0.14, y + 0.25, z - d.nz * 0.14, 0.06, 0.06, 0.3, d.ang + Math.PI / 2); glowBox(x, y, z, 0.18); addLight(x + d.nx * 0.2, y, z + d.nz * 0.2, "wall"); }
-VIL.buildings.forEach((b, i) => { if (b.door) PLACES["door_" + (i < 8 ? "h" + (i + 1) : i === 8 ? "inn" : "b" + i)] = [b.door.x, b.door.z]; for (const [c, r] of b.cells) SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: PBD.R * 0.98 }); });
-// windows: a pane in every opening; a lit one glows at night and lights a little round it
-const PANE = { lit: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }) };
-{ const G2 = { lit: new PBD.Geo(), dark: new PBD.Geo() };
-  for (const p of VIL.panes) {
-    const tx = Math.cos(p.ang), tz = Math.sin(p.ang), hw = p.w / 2, hh = p.h / 2, P = (a, b) => [p.x + tx * a, p.y + b, p.z + tz * a];
-    G2[p.lit ? "lit" : "dark"].face([P(-hw, -hh), P(hw, -hh), P(hw, hh), P(-hw, hh)], [p.nx, 0, p.nz]);
-    if (p.lit) addLight(p.x + p.nx * 0.6, p.y, p.z + p.nz * 0.6, "window");
-  }
-  for (const k of ["lit", "dark"]) scene.add(new THREE.Mesh(G2[k].build(), PANE[k])); }
-// The square's dressing, mockup-only but cut from the game's materials: stalls, the well, a
-// brazier, the forge in the smithy yard, the starport kiosk, lamp posts round the green.
-function stall(c, r, cloth, ang, name) {
-  const [x, z, y] = at(c, r), ux = Math.cos(ang), uz = Math.sin(ang);
-  for (const [a, b] of [[-1, -0.6], [1, -0.6], [-1, 0.6], [1, 0.6]]) GS.box("timber", x + ux * a - uz * b, y, z + uz * a + ux * b, 0.1, 2.3, 0.1, ang);
-  GS.box("plank", x, y + 0.85, z, 2.2, 0.1, 1.2, ang); GS.box(cloth, x, y + 2.3, z, 2.5, 0.08, 1.6, ang); GS.box("thatch", x + uz * 0.1, y + 0.95, z - ux * 0.1, 1.6, 0.25, 0.6, ang);
-  SOLIDS.push({ x, z, r: 1.1 }); PLACES[name] = [x - uz * 1.4, z + ux * 1.4];
-}
-stall(21, 14, "cloth", 0, "stall1"); stall(27, 14, "cloth2", 0, "stall2"); stall(22, 13, "cloth", 0, "stall3");
-{ const [x, z, y] = at(27, 20), p = []; for (let k = 0; k < 6; k++) { const a = (60 * k - 30) * Math.PI / 180; p.push([x + Math.cos(a), z + Math.sin(a)]); }
-  GS.prism("stone", "stone", p, y, y + 0.8); for (const s of [-1, 1]) GS.box("timber", x + s * 0.85, y, z, 0.12, 2.2, 0.12); GS.box("thatch", x, y + 2.2, z, 2.2, 0.18, 1.4);
-  SOLIDS.push({ x, z, r: 1.3 }); PLACES.well = [x - 1.6, z - 1.2]; }
-{ const [x, z, y] = at(25, 16); GS.box("iron", x, y, z, 0.7, 0.9, 0.7); fire(x, y + 0.9, z, 0.9, "fire"); SOLIDS.push({ x, z, r: 0.6 }); PLACES.brazier = [x + 1.0, z - 0.6]; }
-{ const [x, z, y] = at(27, 22);
-  for (const [ox, oz] of [[-1.8, -1.2], [1.8, -1.2], [-1.8, 1.2], [1.8, 1.2]]) GS.box("timber", x + ox, y, z + oz, 0.18, 2.6, 0.18);
-  GS.box("plank", x, y + 2.6, z, 4.2, 0.12, 3.0); GS.box("thatch", x, y + 2.72, z, 4.4, 0.25, 3.2);
-  GS.box("stone", x + 1.0, y, z, 1.2, 0.9, 1.2); fire(x + 1.0, y + 0.9, z, 0.7, "forge"); GS.box("iron", x - 0.3, y, z + 0.2, 0.7, 0.75, 0.35);
-  PLACES.forge = [x - 0.2, z - 0.9]; SOLIDS.push({ x: x + 1.0, z, r: 0.85 }); }
-{ const [x, z, y] = at(28, 18); GS.box("metal", x, y, z, 1.6, 2.4, 1.2); GS.box("metal", x, y + 2.4, z, 2.0, 0.12, 1.6);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x7ad8f0 })); scr.position.set(x, y + 1.5, z - 0.61); scr.rotation.y = Math.PI; scene.add(scr);
-  addLight(x, y + 1.5, z - 1.2, "kiosk"); PLACES.kiosk = [x, z - 1.4]; SOLIDS.push({ x, z, r: 1.0 }); }
-for (const [c, r] of [[20, 13], [28, 13], [20, 21], [28, 21]]) { const [x, z, y] = at(c, r); PBD.lampPost(GS, x, y, z); glowBox(x + 0.45, y + 2.25, z, 0.2); addLight(x + 0.45, y + 2.2, z, "lamp"); SOLIDS.push({ x, z, r: 0.3 }); }
-const SEATS = [];
-{ const d = VIL.buildings[8].door; for (let k = -1; k <= 1; k++) { const x = d.x + d.nx * 1.4 + Math.cos(d.ang) * k * 2.4, z = d.z + d.nz * 1.4 + Math.sin(d.ang) * k * 2.4, y = groundY(x, z); GS.box("plank", x, y + 0.72, z, 1.4, 0.08, 0.8, d.ang); GS.box("timber", x, y, z, 0.1, 0.72, 0.6, d.ang); SOLIDS.push({ x, z, r: 0.6 }); SEATS.push([x - Math.cos(d.ang) * 0.9, z - Math.sin(d.ang) * 0.9], [x + Math.cos(d.ang) * 0.9, z + Math.sin(d.ang) * 0.9]); } }
-{ const p = (c, r) => at(c, r).slice(0, 2); PLACES.east = p(46, 17); PLACES.north = p(24, 4); PLACES.gateA = p(38, 17); PLACES.gateB = p(24, 10); PLACES.alley = p(13, 16); }
-// the game's trees on the fields round the village (planet_surface.wgsl's, one to a cell)
-for (let r = 0; r < VIL.NR; r++) for (let c = 0; c < VIL.NC; c++) {
-  const i = VIL.idx(c, r); if (VIL.MAT[i] !== "grass" || VIL.AREA[i] !== "Fields" || PBD.hash2(c * 3 + 1, r * 5 + 2) > 0.09) continue;
-  let clear = true; for (let d = 0; d < 6; d++) { const [c2, r2] = PBD.nb(c, r, d); if (VIL.inMap(c2, r2) && (VIL.BLD[VIL.idx(c2, r2)] >= 0 || VIL.MAT[VIL.idx(c2, r2)] !== "grass" || VIL.AREA[VIL.idx(c2, r2)] !== "Fields")) clear = false; }
-  if (!clear) continue;
-  PBD.tree(GS, VIL.hexPts(c, r), VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[i], c * 97 + r, "a:bark", "a:leaves");
-  SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: 0.5 });
-}
-PBD.REP.cloth = 2.5; PBD.REP.cloth2 = 2.5; PBD.REP.metal = 1.5;
-PBD.addMeshes(GS, scene, { mat: k => k === "metal" ? (PBD._metal || (PBD._metal = PBD.litMaterial(PBD.tex("building/tex_metal.png?v=2")))) : PBD.mat(k), cast: k => k !== "a:grass" && k !== "a:path" });
-// the pond
-if (VIL.water) { const g = new PBD.Geo(); for (const [c, r] of VIL.water) g.face(VIL.hexPts(c, r).map(p => [p[0], 0.82, p[1]]), [0, 1, 0]); scene.add(new THREE.Mesh(g.build(), PBD.litMaterial(null, 0x2f5f8a, { transparent: true, opacity: 0.82 }))); }
-PBD.setLights(LIGHTS);
-const U = { lamp: PBD.LU.uLamp };
-// sky dome stars at night
-const stars = (() => { const n = 600, p = new Float32Array(n * 3), rn = rng(5); for (let i = 0; i < n; i++) { const a = rn() * 6.283, e = 0.08 + rn() * 1.4; p[3 * i] = Math.cos(a) * Math.cos(e) * 300; p[3 * i + 1] = Math.sin(e) * 300; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 300; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.2, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
-
-// ---- the townsfolk ---------------------------------------------------------
-const NAMES = ["Bryn Ash", "Orrin Vale", "Mara Quell", "Tam Holt", "Ide Rook", "Wen Farrow", "Sela Brook", "Cal Dunmore", "Nessa Pike", "Ivo Kett", "Rhun Mallow", "Petra Lind", "Hal Cobb", "Ysolde Fenn"];
-const TOWN = [
-  ["farmer", "h1"], ["smith", "h2"], ["trader", "h3"], ["guard", "h7"], ["fisher", "h4"], ["miner", "h5"], ["clerk", "h8"], ["smuggler", "h6"],
-  ["inn", "inn"], ["farmer", "h5"], ["trader", "h6"], ["guard", "h3", true], ["miner", "h1"], ["farmer", "h4"],
-];
-const NPCS = TOWN.map(([role, home, night], i) => {
-  const spec = rollSpec("fields", role, 100 + i), f = figure(spec); scene.add(f.g);
-  const shift = (rng(i * 31 + 7)() - 0.5);
-  let sched = ROLES[role].sched.map(([h, a]) => [h, a]);
-  if (night) sched = [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]];
-  const npc = { i, role, home, name: NAMES[i], spec, f, sched, shift, x: 0, z: 0, tx: 0, tz: 0, face: 0, vis: 1, act: null, place: null, phase: rng(i)() * 6, rel: [62, 74, 55, 40, 50, 48, 66, 22, 70, 58, 45, 38, 52, 60][i], seat: SEATS[i % SEATS.length] };
-  return npc;
-});
-function actAt(n, h) { const t = (h - n.shift + 24) % 24; let a = n.sched[0][1], nx = null; for (let k = 0; k < n.sched.length; k++) { if (t >= n.sched[k][0]) { a = n.sched[k][1]; nx = n.sched[(k + 1) % n.sched.length]; } } return { a, next: nx }; }
-function workPlace(n) {
-  return { farmer: n.i === 0 ? "stall1" : "stall3", smith: "forge", trader: n.i === 2 ? "stall2" : "stall3", fisher: "stall1", clerk: "kiosk", inn: "door_inn", miner: "well", guard: "gateA", smuggler: "alley" }[n.role];
-}
-function target(n, a) {
-  if (a === "sleep") return { p: PLACES["door_" + n.home], hide: true, label: "Asleep at home" };
-  if (a === "away") { const p = n.role === "fisher" ? PLACES.north : PLACES.east; return { p, hide: true, label: { farmer: "In the fields", fisher: "At sea", miner: "Down the hill mine", smuggler: "Out of town" }[n.role] || "Away" }; }
-  if (a === "inn") return { p: n.seat, label: "At The Plough" };
-  if (a === "patrol") return { p: n.i === 3 ? PLACES.gateA : PLACES.gateB, patrol: n.i === 3 ? [PLACES.gateA, PLACES.brazier] : [PLACES.gateB, PLACES.well], label: "On patrol" };
-  if (a === "idle") return { p: PLACES.well, label: "Idling by the well" };
-  if (a === "lurk") return { p: PLACES.alley, label: "Lurking in the alley" };
-  const w = workPlace(n); return { p: PLACES[w], work: true, label: { stall1: "Selling at the stall", stall2: "Selling at the stall", stall3: "Selling at the stall", forge: "Hammering at the forge", kiosk: "At the starport kiosk", door_inn: "Serving at The Plough" }[w] || "Working" };
-}
-const STATE = { hour: 22.5, play: false, hover: null, sel: null };
-function placeAll(snap) {
-  for (const n of NPCS) {
-    const { a } = actAt(n, STATE.hour), t = target(n, a);
-    const changed = n.act !== a; n.act = a; n.t = t;
-    if (snap || changed && snap !== false) { /* keep walking */ }
-    n.tx = t.p[0]; n.tz = t.p[1];
-    if (snap) { n.x = n.tx + (rng(n.i)() - 0.5) * 0.6; n.z = n.tz + (rng(n.i + 5)() - 0.5) * 0.6; n.vis = t.hide ? 0 : 1; }
-    if (changed && !snap && n.vis === 0 && !t.hide) { const from = n.t && (a === "sleep") ? null : (actAt(n, STATE.hour - 0.3).a === "away" ? (n.role === "fisher" ? PLACES.north : PLACES.east) : PLACES["door_" + n.home]); if (from) { n.x = from[0]; n.z = from[1]; } }
-  }
-}
-const tmpC = new THREE.Color();
-function stepNpc(n, dt, T) {
-  const t = n.t; if (!t) return;
-  let tx = n.tx, tz = n.tz;
-  if (t.patrol) { const leg = Math.floor(Math.abs(T * 0.06 + n.phase) % 2), P = t.patrol[leg]; tx = P[0]; tz = P[1]; }
-  const dx = tx - n.x, dz = tz - n.z, d = Math.hypot(dx, dz), sp = 2.2;
-  let walking = false;
-  if (d > 0.15) {
-    if (d > 40) { n.x = tx; n.z = tz; }
-    else { const s = Math.min(d, sp * dt); n.x += dx / d * s; n.z += dz / d * s; n.face = Math.atan2(dx, dz); walking = true; if (n.vis < 1 && !t.hide) n.vis = Math.min(1, n.vis + dt * 2); }
-  } else if (t.hide) n.vis = Math.max(0, n.vis - dt * 2);
-  else n.vis = Math.min(1, n.vis + dt * 2);
-  // slide round solids (houses, stalls, the well), as the walker does
-  for (const s of SOLIDS) { const ox = n.x - s.x, oz = n.z - s.z, l = Math.hypot(ox, oz), m = s.r + 0.28; if (l < m && l > 1e-4 && d > 0.3) { n.x = s.x + ox / l * m; n.z = s.z + oz / l * m; } }
-  const f = n.f; f.g.position.set(n.x, groundY(n.x, n.z), n.z); f.g.rotation.y = n.face; f.g.visible = n.vis > 0.02; f.g.scale.setScalar(0.4 + 0.6 * n.vis);
-  const sw = walking ? Math.sin(T * 7 + n.phase) * 0.6 : 0;
-  f.legL.rotation.x = sw; f.legR.rotation.x = -sw; f.armL.rotation.x = -sw * 0.8;
-  if (!walking && t.work) f.armR.rotation.x = -1.2 + Math.abs(Math.sin(T * (n.role === "smith" ? 5 : 2) + n.phase)) * (n.role === "smith" ? 1.4 : 0.5);
-  else if (!walking && n.act === "inn") f.armR.rotation.x = -0.4 - 0.6 * Math.max(0, Math.sin(T * 0.7 + n.phase * 3));
-  else f.armR.rotation.x = sw * 0.8;
-  if (!walking) { f.headG.rotation.y = Math.sin(T * 0.4 + n.phase) * 0.5; if (!t.work && !t.patrol) n.face += (Math.atan2(-n.x, -n.z) - n.face) * 0; } else f.headG.rotation.y = 0;
-  // lit like everything else: the block light reaches the figure per pixel (scene-kit.js)
-}
-
-// ---- time of day ----------------------------------------------------------
-const cA = new THREE.Color();
-function setHour(h) {
-  STATE.hour = (h + 24) % 24; $("hour").value = STATE.hour;
-  const ang = (STATE.hour - 6) / 12 * Math.PI, el = Math.sin(ang), day = clamp((el + 0.08) / 0.3, 0, 1), dusk = clamp(1 - Math.abs(el) / 0.35, 0, 1) * (STATE.hour > 3 && STATE.hour < 21 ? 1 : 0);
-  const sunDir = el > 0 ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.12, el), 0.45 - 0.2 * Math.cos(ang)).normalize() : new THREE.Vector3(-0.4, 0.7, 0.55).normalize();
-  cA.set(0x0e1424).lerp(new THREE.Color(0x9fc6e2), day).lerp(new THREE.Color(0xe0a27a), dusk * 0.55);
-  scene.background = cA.clone(); scene.fog.color.copy(cA);
-  sun.position.copy(sunDir).multiplyScalar(80); sun.target.position.set(0, 0, 0);
-  if (el > 0) { sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk); sun.intensity = 1.8 * clamp(el * 3, 0, 1); } else { sun.color.set(0x8fa6d8); sun.intensity = 0.035; }
-  hemi.intensity = 0.008 + 0.57 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35); hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
-  const night = 1 - day; STATE.night = night;
-  U.lamp.value = 0.85 * clamp((night - 0.25) / 0.35, 0, 1);
-  lampMat.color.set(night > 0.3 ? 0xffd9a0 : 0x6a655a);
-  PANE.lit.color.setRGB(...(night > 0.3 ? [1.0, 0.72, 0.36] : [0.1, 0.11, 0.14]));
-  stars.material.opacity = clamp(night * 1.2 - 0.2, 0, 1);
-  const hh = Math.floor(STATE.hour), mm = Math.floor((STATE.hour % 1) * 60);
-  $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
-  placeAll(false);
-  const out = NPCS.filter(n => !n.t.hide).length; $("status").textContent = `${NPCS.length} townsfolk \u00b7 ${out} out and about \u00b7 lamps ${U.lamp.value > 0.1 ? "lit" : "out"}`;
-  updateNow(); if (STATE.sel) showCard(STATE.sel);
-}
-
-// ---- camera: orbit ----------------------------------------------------------
-const ORB = { tx: 1, ty: 1.5, tz: 1, dist: 27, yaw: 0.6, pitch: 0.58 };
-function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
-function orbitControls(el, orb, onClick) {
-  const pts = new Map(); let moved = 0, pinch = 0;
-  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY, e.button, e.shiftKey]); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
-  el.addEventListener("pointermove", e => {
-    const p = pts.get(e.pointerId); if (!p) { if (onClick) onClick(e, true); return; }
-    const dx = e.clientX - p[0], dy = e.clientY - p[1]; moved += Math.abs(dx) + Math.abs(dy);
-    if (pts.size === 2) { p[0] = e.clientX; p[1] = e.clientY; const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) orb.dist = clamp(orb.dist * pinch / d, 6, 90); pinch = d; return; }
-    if (p[2] === 2 || p[3]) { const s = orb.dist * 0.0016; orb.tx -= (Math.cos(orb.yaw) * dx - Math.sin(orb.yaw) * dy) * s; orb.tz -= (-Math.sin(orb.yaw) * dx - Math.cos(orb.yaw) * dy) * s; }
-    else { orb.yaw -= dx * 0.006; orb.pitch = clamp(orb.pitch + dy * 0.005, 0.08, 1.45); }
-    p[0] = e.clientX; p[1] = e.clientY;
-  });
-  const up = e => { const was = pts.has(e.pointerId); pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (was && moved < 6 && onClick) onClick(e, false); };
-  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", e => pts.delete(e.pointerId));
-  el.addEventListener("contextmenu", e => e.preventDefault());
-  el.addEventListener("wheel", e => { e.preventDefault(); orb.dist = clamp(orb.dist * Math.exp(e.deltaY * 0.0012), 6, 90); }, { passive: false });
-}
-const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
-function pickNpc(e) {
-  const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, camera);
-  const hits = ray.intersectObjects(NPCS.filter(n => n.f.g.visible).map(n => n.f.g), true); if (!hits.length) return null;
-  let o = hits[0].object; while (o && !NPCS.find(n => n.f.g === o)) o = o.parent; return NPCS.find(n => n.f.g === o) || null;
-}
-orbitControls(canvas, ORB, (e, hover) => { const n = pickNpc(e); if (hover) { canvas.style.cursor = n ? "pointer" : "grab"; return; } if (n) { STATE.sel = n; showCard(n); } });
-function fmt(h) { h = (h + 24) % 24; return String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60) % 60).padStart(2, "0"); }
-function showCard(n) {
-  const R0 = ROLES[n.role], { a, next } = actAt(n, STATE.hour);
-  $("cImg").src = "npcs/" + R0.img + ".png"; $("cImg").alt = "Portrait of " + n.name;
-  $("cName").textContent = n.name; $("cMeta").textContent = R0.label + " \u00b7 Fields folk of Tenebris";
-  $("cNow").textContent = n.t.label; $("cNext").textContent = next ? (ACT[next[1]][0] + " at " + fmt(next[0] + n.shift)) : "-";
-  $("cHome").textContent = n.home === "inn" ? "Rooms above The Plough" : "House " + n.home.slice(1) + " on the square"; $("cRel").style.width = n.rel + "%";
-}
-function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.opacity = 0, 2600); }
-
-$("hour").addEventListener("input", e => { setHour(+e.target.value); placeAll(true); });
-$("play").addEventListener("click", () => { STATE.play = !STATE.play; $("play").setAttribute("aria-pressed", STATE.play); $("play").textContent = STATE.play ? "Pause" : "Play day"; });
-$("toNight").addEventListener("click", () => { setHour(22.5); placeAll(true); });
-$("toDay").addEventListener("click", () => { setHour(12.5); placeAll(true); });
-$("quit").addEventListener("click", () => { STATE.play = false; $("play").setAttribute("aria-pressed", false); $("play").textContent = "Play day"; toast("Game closed for 8 hours. World clock: still " + $("clock").textContent + ". Nobody moved."); });
-
-function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!renderer || !w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-addEventListener("resize", resize);
-let last = performance.now(), T = 0, sqRunning = false, sqRaf = 0;
-function frame(now) {
-  if (!sqRunning) return;
-  const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt;
-  if (STATE.play) setHour(STATE.hour + dt / 3);
-  for (const n of NPCS) stepNpc(n, dt, T);
-  for (const f of FLAMES) f.m.scale.set(1, 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2), 1);
-  if (FOCUS) { ORB.tx = FOCUS.x; ORB.tz = FOCUS.z; ORB.ty = groundY(FOCUS.x, FOCUS.z) + 1.2; }
-  placeCam(); renderer.render(scene, camera); sqRaf = requestAnimationFrame(frame);
-}
-TAB_HOOKS.square = {
-  show() { if (!renderer) makeRenderer(); resize(); if (!sqRunning) { sqRunning = true; last = performance.now(); sqRaf = requestAnimationFrame(frame); } },
-  hide() { sqRunning = false; cancelAnimationFrame(sqRaf); },
-};
-
-// ===================================================================
-// The page around it
-// ===================================================================
-const sw = c => `<i style="background:#${c.toString(16).padStart(6, "0")}"></i>`;
-$("peoples").innerHTML = Object.values(PEOPLES).map(p => `<div class="people"><div class="world">${p.world}</div><h3>${p.name}</h3><div class="swatches">${p.skin.map(sw).join("")}</div><div class="swatches">${p.cloth.map(sw).join("")}</div><p>${p.text}</p></div>`).join("")
-  + `<div class="people none"><div class="world">${NONE_PEOPLE.world}</div><h3>${NONE_PEOPLE.name}</h3><p>${NONE_PEOPLE.text}</p></div>`;
-$("roles").innerHTML = Object.entries(ROLES).filter(([k]) => k !== "inn").map(([k, r]) => `<div class="role"><img src="npcs/${r.img}.png" alt="Portrait of a ${r.label.toLowerCase()}"><div><h3>${r.label}</h3><div class="where">${r.where}</div><p>${r.text}</p><div class="offers">${r.offers.map(([c, t]) => `<span class="chip ${c}">${t}</span>`).join("")}</div></div></div>`).join("");
-function schedRow(label, sched) {
-  let html = ""; for (let k = 0; k < sched.length; k++) { const [h, a] = sched[k], h1 = k + 1 < sched.length ? sched[k + 1][0] : 24; html += `<i class="${ACT[a][1]}" style="left:${h / 24 * 100}%;width:${(h1 - h) / 24 * 100}%" title="${ACT[a][0]} ${fmt(h)}-${fmt(h1)}"></i>`; }
-  return `<tr><td class="name">${label}</td><td><div class="bar">${html}<span class="now"></span></div></td></tr>`;
-}
-$("schedBody").innerHTML = Object.entries(ROLES).map(([k, r]) => schedRow(r.label, r.sched)).join("") + schedRow("Night guard", [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]]);
-function updateNow() { for (const el of document.querySelectorAll(".bar .now")) el.style.left = (STATE.hour / 24 * 100) + "%"; }
-$("relList").innerHTML = [["smith", "Orrin Vale, smith", 74, "Friendly"], ["trader", "Mara Quell, trader", 55, "Neutral"], ["guard", "Tam Holt, guard", 40, "Wary: saw you near the stall"], ["smuggler", "Hal Cobb, smuggler", 22, "Owes you; you owe him more"], ["farmer", "Hollin Cross (town)", 58, "Mean of 14 people"]]
-  .map(([img, n, v, t]) => `<div class="r"><img src="npcs/${img}.png" alt=""><div><div>${n}</div><div class="meter"><i style="width:${v}%"></i></div></div><span class="lv">${v} \u00b7 ${t}</span></div>`).join("");
-const REPLY = { trade: "\"Nails, hinges, a good axe head. Iron I'll buy at four a lump.\"", quest: "\"The north gate's hinges are rust. Bring me twelve ore from the east hills and I'll see you right.\"", rumour: "\"Hal? Comes at dark, gone by three. The guards pretend not to see. You'd do well to do the same.\"", bye: "\"Mind the step. Night.\"" };
-for (const b of document.querySelectorAll("#dlgOpts button")) b.addEventListener("click", () => { $("dlgLine").textContent = REPLY[b.dataset.r]; });
-
-// ---- the lineup: six peoples, four each ------------------------------------
-const lu = $("lu"); let lr = null;   // made when the Character sheets tab first opens
-function makeLineupRenderer() { lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding; }
-const ls = new THREE.Scene(); ls.background = new THREE.Color(0x141210);
-const lc = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
-ls.add(new THREE.HemisphereLight(0xfff0d8, 0x2a2420, 0.7)); const key = new THREE.DirectionalLight(0xffe0b0, 1.1); key.position.set(-4, 6, 8); ls.add(key);
-const rimL = new THREE.DirectionalLight(0x8fb0ff, 0.5); rimL.position.set(5, 3, -6); ls.add(rimL);
-const plinth = new THREE.Mesh(new THREE.CylinderGeometry(40, 40, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 1 })); plinth.position.y = -0.1; ls.add(plinth);
-const LU_PEOPLES = ["fields", "desert", "tundra", "coast", "redwood", "station"], LU_ROLES = { fields: ["farmer", "smith", "guard", "inn"], desert: ["trader", "trader", "guard", "smuggler"], tundra: ["miner", "guard", "farmer", "inn"], coast: ["fisher", "fisher", "trader", "inn"], redwood: ["farmer", "smith", "trader", "inn"], station: ["clerk", "clerk", "smuggler", "trader"] };
-let LU = [], townSeed = 1;
-function lineup() {
-  for (const o of LU) ls.remove(o); LU = [];
-  LU_PEOPLES.forEach((p, gi) => LU_ROLES[p].forEach((role, k) => {
-    const spec = rollSpec(p, role, townSeed * 1000 + gi * 10 + k); if (role === "inn") spec.prop = "none";
-    const f = figure(spec, false); f.g.position.set((gi - 2.5) * 3.2 + (k - 1.5) * 0.72, 0, (k % 2) * 0.5); f.g.rotation.y = (k - 1.5) * 0.2; ls.add(f.g); LU.push(f.g);
-  }));
-  $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
-}
-let spin = false;
-$("reroll").addEventListener("click", () => { townSeed++; lineup(); });
-$("spin").addEventListener("click", () => { spin = !spin; $("spin").setAttribute("aria-pressed", spin); });
-function luResize() { const w = lu.clientWidth, h = lu.clientHeight; if (!lr || !w) return; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(14, 10.8 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 2.6 + dist * 0.08, dist); lc.lookAt(0, 1.0, 0); lc.updateProjectionMatrix(); }
-addEventListener("resize", luResize);
-let luRunning = false, luRaf = 0;
-function luFrame(now) { if (!luRunning) return; if (spin) LU.forEach((g, i) => g.rotation.y += 0.008); lr.render(ls, lc); luRaf = requestAnimationFrame(luFrame); }
-TAB_HOOKS.figures = {
-  show() { if (!lr) makeLineupRenderer(); luResize(); if (!luRunning) { luRunning = true; luRaf = requestAnimationFrame(luFrame); } },
-  hide() { luRunning = false; cancelAnimationFrame(luRaf); },
-};
-
-const Q = new URLSearchParams(location.search);
-setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
-for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k);
-const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]);
-lineup();
-setTab(TAB, false);   // again, now both views have registered: makes the open tab's renderer and starts its loop
-window.__npcs = { NPCS, LIGHTS, setHour, scene };
-</script>
-<script>
-"use strict";
-// ===================================================================
-// Faces tab (townsfolk design 13 to 18, 2026-11-21): today's hex figure beside a proposed friendly
-// townsperson, built from six-sided pieces, with a layered face (Wind Waker's floating pieces, the
-// High Frontier fan game's swaps) and live layers (blink, gaze, head follow, talk). One renderer, made
-// when the tab first opens; its loop runs only while the tab shows. Nothing turns on its own: the
-// camera stays where the viewer leaves it, and only the people move.
-// ===================================================================
-(function () {
-const FC = { view: "compare", layers: { blink: true, gaze: true, head: true, talk: false }, expr: "happy", hour: 12.5, night: 0 };
-const fcCanvas = $("fc"); let fr = null;
-const fs = new THREE.Scene(); fs.fog = new THREE.Fog(0x0e1424, 20, 70);
-const fcam = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
-const fsun = new THREE.DirectionalLight(0xffffff, 1); fsun.castShadow = true; fsun.shadow.mapSize.set(2048, 2048);
-Object.assign(fsun.shadow.camera, { left: -6.5, right: 6.5, top: 6.5, bottom: -6.5, near: 1, far: 80 }); fsun.shadow.bias = -0.0004; fsun.shadow.normalBias = 0.015;
-fsun.shadow.camera.updateProjectionMatrix(); fs.add(fsun, fsun.target); fsun.target.position.set(0, 0, -0.6);
-const fhemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.3); fs.add(fhemi);
-const FL = [];
-const FLK = { lamp: [0xffd27a, 1.6, 5.2], window: [0xffa850, 1.0, 4.5], fire: [0xff8a3a, 1.3, 6.0] };
-const addFL = (x, y, z, k) => FL.push({ x, y, z, c: lin(FLK[k][0]), p: FLK[k][1], R: FLK[k][2], kind: k });
-
+const BEARD_SINK = 0.005;
+const beardOf = spec => spec.beard === true ? "goatee" : BEARDS[spec.beard] ? spec.beard : "none";
 // ---- materials: lit like the ground (scene-kit.js), one cache by colour and face layer -------------
 const MC = {};
 const shade = (hex, k) => { const c = new THREE.Color(hex); return new THREE.Color(c.r * k, c.g * k, c.b * k).getHex(); };
@@ -1004,12 +641,39 @@ function friend(spec) {
   if (spec.hair === "braid") { crop(); for (let i = 0; i < 3; i++) mesh(block(0.085, 0.1, 0.075, 0.02, 0.1 - i * 0.1, { z: -HD / 2 - 0.04 - i * 0.008 }), i % 2 ? hairS : hair, head); }
   if (spec.hair === "bald") for (const s of [-1, 1]) mesh(block(0.03, 0.12, 0.17, 0.01, 0.35, { x: s * (HW / 2 + 0.01), z: -0.1 }), hair, head);
   if (spec.hair === "hat") {
-    const hc = mat(spec.hatC), hcs = mat(shade(spec.hatC, 0.74));
-    mesh(block(HW + 0.24, 0.03, HD + 0.24, 0.08, HAIR_Y + 0.03, { cTop: 0, cBot: 0 }), hcs, head);
-    mesh(block(HW + 0.05, 0.045, HD + 0.05, 0.05, HAIR_Y + 0.06, { cTop: 0, cBot: 0 }), hcs, head);
-    mesh(block(HW + 0.03, 0.2, HD + 0.03, 0.05, HAIR_Y + 0.06, { cBot: 0 }), hc, head); back();
+    const hk = spec.hatKind || "brim", hc = mat(spec.hatC), hcs = mat(shade(spec.hatC, 0.74));
+    if (hk === "brim") {
+      mesh(block(HW + 0.24, 0.03, HD + 0.24, 0.08, HAIR_Y + 0.03, { cTop: 0, cBot: 0 }), hcs, head);
+      mesh(block(HW + 0.05, 0.045, HD + 0.05, 0.05, HAIR_Y + 0.06, { cTop: 0, cBot: 0 }), hcs, head);
+      mesh(block(HW + 0.03, 0.2, HD + 0.03, 0.05, HAIR_Y + 0.06, { cBot: 0 }), hc, head); back();
+    } else if (hk === "cap") {
+      mesh(block(HW + 0.04, HH + 0.06 - HAIR_Y, HD + 0.04, 0.05, HAIR_Y, { cBot: 0 }), hc, head); back();
+      mesh(block(HW - 0.06, 0.025, 0.16, 0.02, HAIR_Y + 0.005, { z: HD / 2 + 0.07, cTop: 0, cBot: 0 }), hcs, head);
+    } else if (hk === "helmet" || hk === "miner") {
+      mesh(block(HW + 0.06, HH + 0.09 - HAIR_Y, HD + 0.06, 0.07, HAIR_Y, { cBot: 0 }), hc, head);
+      mesh(block(HW + 0.11, 0.03, HD + 0.11, 0.06, HAIR_Y, { cTop: 0, cBot: 0 }), hcs, head); back();
+      if (hk === "miner") { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.03), LAMP_GLOW); lamp.position.set(0, HAIR_Y + 0.1, HD / 2 + 0.045); head.add(lamp); }
+    } else if (hk === "turban") {
+      mesh(block(HW + 0.07, 0.13, HD + 0.07, 0.06, HAIR_Y, {}), hcs, head);
+      mesh(block(HW + 0.04, 0.15, HD + 0.04, 0.09, HAIR_Y + 0.11, {}), hc, head); back();
+    } else if (hk === "hood") {
+      mesh(block(HW + 0.08, HH + 0.07 - HAIR_Y, HD + 0.06, 0.06, HAIR_Y, { cBot: 0, z: -0.01 }), hc, head);
+      for (const s of [-1, 1]) mesh(block(0.04, HAIR_Y + 0.02, HD + 0.04, 0.012, -0.02, { x: s * (HW / 2 + 0.035), z: -0.01 }), hc, head);
+      mesh(block(HW + 0.08, HH + 0.08, 0.06, 0.02, -0.02, { z: -HD / 2 - 0.035 }), hcs, head);
+    } else if (hk === "headset") {
+      crop();
+      mesh(block(HW + 0.1, 0.03, 0.05, 0.01, HH + 0.035, {}), hcs, head);
+      for (const s of [-1, 1]) mesh(block(0.045, 0.14, 0.12, 0.015, 0.19, { x: s * (HW / 2 + 0.05) }), hc, head);
+      mesh(block(0.02, 0.02, 0.16, 0, 0.16, { x: -(HW / 2 + 0.06), z: 0.1 }), hcs, head);
+    }
   }
-  if (spec.beard) mesh(block(HW + 0.02, 0.125, HD + 0.02, HC, -0.07, { cTop: 0 }), hair, head);
+
+  // a beard is on the face's front only (design 36): each piece sunk 5 mm into the head and standing proud of it
+  for (const [bw, bh, bd, bc, by0, bx] of BEARDS[beardOf(spec)]) mesh(block(bw, bh, bd, bc, by0, { x: bx, z: HA - BEARD_SINK + bd / 2 }), hair, head);
+  // the role's dress (version 10): an apron or a tabard on the torso's front, and one held prop in the right hand
+  if (spec.apron) mesh(frontStrip(cutProf(B.prof, 0.06, 0.8, torsoH, w * 1.05)), mat(spec.apron), body);
+  if (spec.tabard) mesh(frontStrip(cutProf(B.prof, 0.12, 0.97, torsoH, w * 1.075)), mat(spec.tabard), body);
+  if (spec.prop && spec.prop !== "none") prop(spec.prop, arms[1], -armL - 0.05, mesh);
   const face = new THREE.Group(); face.position.z = HA; head.add(face);
   const eyes = [-1, 1].map(s => {
     const e = new THREE.Group(); e.position.set(s * spec.gap, EYE_Y, 0); face.add(e);
@@ -1043,23 +707,491 @@ function setExprOn(F, name, snap) {
   F.arcs = !!E.arcs; F.mouthBase = E.mouth; F.look = E.look || null; F.talkE = !!E.talk;
   for (const e of F.eyes) { e.arc.visible = F.arcs; e.white.visible = e.pg.visible = e.lid.visible = e.lash.visible = !F.arcs; }
 }
-function triCount(o) { let n = 0; o.traverse(m => { if (!m.isMesh) return; let v = m; while (v) { if (!v.visible) return; v = v.parent; } const g = m.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; }); return Math.round(n); }
 
-// ---- the people: one hero, today's figure beside it, and a crowd from the seed ----------------------
-const HERO_SPEC = { build: "round", h: 1.55, head: 0.98, eye: 1.08, gap: 0.1, nose: "button", hair: "crop", beard: false, ears: true,
-  skin: 0xe2ac80, hairC: 0x8a5a2a, shirt: 0x5c9a46, pants: 0x7a5a3a, shoe: 0x4a3428, hatC: 0xb0884a };
-function genSpec(seed, i) {
-  const rn = rng(seed * 9973 + i * 131 + 7), pick = a => a[Math.floor(rn() * a.length) % a.length], P = PEOPLES.fields;
+// the front face of a six-sided lathe only (the k = 1 side, facing +z), for an apron or a tabard
+function frontStrip(profile) {
+  const g = new PBD.Geo(), a0 = Math.PI / 3, a1 = 2 * Math.PI / 3, P = (y, r, a) => [r * Math.cos(a), y, r * Math.sin(a)];
+  for (let i = 0; i + 1 < profile.length; i++) { const [y0, r0] = profile[i], [y1, r1] = profile[i + 1]; g.face([P(y0, r0, a0), P(y0, r0, a1), P(y1, r1, a1), P(y1, r1, a0)], [0, 0, 1]); }
+  return g.build(1);
+}
+// a role's held prop on the arm's pivot, the hand at y = hy: fork, spear, hammer, pick, fish, pouch, pad, crate
+const WOOD = 0x8a6a42, IRON = 0x9aa0a8;
+function prop(P, arm, hy, mesh) {
+  const pole = (y0, y1, r, c) => mesh(lathe([[y0, r], [y1, r]]), mat(c), arm);
+  if (P === "fork") { pole(hy - 0.55, hy + 0.8, 0.02, WOOD); mesh(block(0.13, 0.02, 0.02, 0, hy + 0.79, {}), mat(IRON), arm); for (const k of [-1, 0, 1]) mesh(block(0.018, 0.16, 0.018, 0, hy + 0.8, { x: k * 0.055 }), mat(IRON), arm); }
+  if (P === "spear") { pole(hy - 0.5, hy + 1.8, 0.024, 0x6b4a2e); mesh(lathe([[hy + 1.8, 0.04], [hy + 2.0, 0]]), mat(IRON), arm); }
+  if (P === "hammer") { pole(hy - 0.3, hy + 0.04, 0.02, WOOD); mesh(block(0.17, 0.075, 0.075, 0.01, hy - 0.37, {}), mat(IRON), arm); }
+  if (P === "pick") { pole(hy - 0.5, hy + 0.04, 0.02, WOOD); mesh(block(0.42, 0.045, 0.045, 0.012, hy - 0.55, {}), mat(IRON), arm); }
+  if (P === "fish") { mesh(lathe([[hy - 0.38, 0], [hy - 0.3, 0.05], [hy - 0.13, 0.06], [hy - 0.05, 0.016]], { sx: 0.45 }), mat(0x5ab0d0), arm); mesh(block(0.03, 0.06, 0.09, 0.01, hy - 0.44, {}), mat(shade(0x5ab0d0, 0.78)), arm); }
+  if (P === "pouch") mesh(block(0.13, 0.14, 0.1, 0.03, hy - 0.19, {}), mat(0xa07a4a), arm);
+  if (P === "pad") mesh(block(0.15, 0.2, 0.025, 0.01, hy - 0.13, { z: 0.07 }), mat(0x506080), arm);
+  if (P === "crate") mesh(block(0.32, 0.25, 0.26, 0.02, hy - 0.24, { x: 0.12 }), mat(WOOD), arm);
+}
+function genSpec(seed, i, P) {
+  const rn = rng(seed * 9973 + i * 131 + 7), pick = a => a[Math.floor(rn() * a.length) % a.length];
   const build = pick(["round", "pear", "tall", "stout"]);
   const h = build === "tall" ? 1.6 + rn() * 0.1 : build === "stout" ? 1.45 + rn() * 0.08 : 1.48 + rn() * 0.16;   // version 9: the 0.1 m taller head on the same bodies
   const eye = 0.88 + rn() * 0.2, gap = clamp(0.093 + rn() * 0.014, WR * eye + 0.008, HW / 2 - HC - 0.008 - WR * eye * 1.15);
   const hairS = pick(["bun", "crop", "braid", "bald", "hat", "crop"]), shirt = pick(P.cloth);
-  return { build, h, head: 0.9 + rn() * 0.12, eye, gap, nose: pick(["none", "button", "button", "long"]), hair: hairS,
+  const S = { build, h, head: 0.9 + rn() * 0.12, eye, gap, nose: pick(["none", "button", "button", "long"]), hair: hairS,
     beard: hairS !== "bun" && hairS !== "braid" && rn() < 0.35, ears: rn() < 0.6, skin: pick(P.skin), hairC: pick(P.hair),
     shirt, pants: pick(P.cloth.filter(c => c !== shirt)), shoe: pick([0x4a3428, 0x3a2e26, 0x6a4a30]), hatC: pick(P.cloth),
-    mood: pick(["happy", "neutral", "happy", "thinking", "sleepy", "delighted", "surprised", "talking"]) };
+    mood: pick(["happy", "neutral", "happy", "thinking", "sleepy", "delighted", "surprised", "talking"]),
+    beardStyle: rn() };   // design 36: appended after every other roll, so nobody else's look moves
+  S.beard = S.beard ? (S.beardStyle < 0.5 ? "goatee" : "full") : "none";
+  return S;
 }
-let hero = null, today = null, crowd = [];
+
+// the face of a person off the Faces tab: their resting expression, eyes ahead, blinking every 2 to 6 s
+function liveFace(F, dt) {
+  let blink = 0;
+  if (F.blinkT < 0) { F.nextBlink -= dt; if (F.nextBlink <= 0) F.blinkT = 0; }
+  else { F.blinkT += dt; const t = F.blinkT; blink = t < 0.06 ? t / 0.06 : t < 0.09 ? 1 : Math.max(0, 1 - (t - 0.09) / 0.12); if (t > 0.21) { F.blinkT = -1; F.nextBlink = 2 + Math.random() * 4; } }
+  if (F.talkE) { F.talkT -= dt; if (F.talkT <= 0) { F.talkT = 0.08 + Math.random() * 0.09; const c = ["A", "O", "M", "A", "smile", "O", "M"]; F.talkCell = c[Math.floor(Math.random() * c.length)]; } }
+  const cell = F.talkE ? F.talkCell : F.mouthBase; if (cell !== F.mouthCell) { setCell(F.mg, cell); F.mouthCell = cell; }
+  F.mouth.position.x = F.cur.mx * FSC;
+  const look = F.look || [0, 0], lid = Math.min(1, Math.max(blink, F.cur.lid + Math.max(0, -look[1]) * 0.3));
+  for (const e of F.eyes) {
+    const es = F.cur.eye * F.spec.eye; e.e.scale.set(es, es, 1);
+    e.pupil.scale.setScalar(F.cur.pup); e.pg.position.set(look[0] * (0.98 * WR - PR * F.cur.pup), look[1] * (0.846 * WR - 0.87 * PR * F.cur.pup), 0.003);
+    const lh = 1.83 * WR * lid; e.lid.scale.y = Math.max(lh, 1e-4); e.lid.visible = !F.arcs && lh > 0.003;
+    const ly = 0.913 * WR - lh + 0.0008; e.lash.position.y = ly; e.lash.scale.x = Math.max(0.05, (2 * (WR - Math.abs(ly) / 1.732) + 0.01) / (2.04 * WR));
+    e.brow.position.y = BROW_Y + FSC * (F.cur.by + (e.s > 0 ? F.cur.asym : 0)) + (es - 1) * 0.065; e.brow.rotation.z = -e.s * F.cur.bt + e.s * 0.06;
+    const b = F.cur.blush; e.blush.visible = b > 0.04; if (e.blush.visible) e.blushM.color.copy(lin(mixHex(F.spec.skin, 0xf27a7a, 0.55 * b)));
+  }
+}
+return { MC, shade, mixHex, mat, AC, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn, genSpec, liveFace, BEARDS, BEARD_SINK, beardOf, frontStrip, prop };
+})();
+</script>
+<script>
+"use strict";
+window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
+const $ = id => document.getElementById(id);
+// ===================================================================
+// Tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13).
+// The open tab is the URL's bare hash (#square, #people, #jobs, #figures, #days, #talk, #towns,
+// #decisions, #faces). The square's and the lineup's renderers are each made the first time their tab opens,
+// and each frame loop runs only while its tab is showing.
+// ===================================================================
+const TABS = ["square", "people", "jobs", "figures", "days", "talk", "towns", "decisions", "faces"];
+const TAB_HOOKS = {};   // tab -> { show(), hide() }
+const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
+let TAB = tabOf(location.hash) || "square";
+function fitTab() {
+  // On a wide screen the square fills the window below the tab bar, so nothing needs a scroll.
+  const wide = matchMedia("(min-width:861px)").matches;
+  for (const el of document.querySelectorAll(`#tab-${TAB} [data-fit]`)) {
+    el.style.height = "";
+    if (!wide) continue;
+    const top = el.getBoundingClientRect().top + scrollY;
+    el.style.height = Math.round(Math.max(+(el.dataset.min || 420), Math.min(innerHeight - top - 16 - (+el.dataset.reserve || 0), el.clientWidth * 0.9))) + "px";
+  }
+}
+function setTab(t, push = true) {
+  if (!TABS.includes(t)) return;
+  const prev = TAB; TAB = t; document.body.dataset.tab = t;
+  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  if (prev !== t && TAB_HOOKS[prev] && TAB_HOOKS[prev].hide) TAB_HOOKS[prev].hide();
+  fitTab();
+  if (TAB_HOOKS[t] && TAB_HOOKS[t].show) TAB_HOOKS[t].show();
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
+addEventListener("resize", fitTab);
+document.querySelector("details.about").addEventListener("toggle", fitTab);
+setTab(TAB, false);
+// ===================================================================
+// Scale: the engine's cell. 2.833 m flat to flat, 1 m a layer, 3 m a storey.
+// ===================================================================
+const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R, STOREY = 3;
+const hx = (q, r) => W * (q + r / 2), hz = (q, r) => ROW * r;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const hexDist = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+function corner(q, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [hx(q, r) + R * Math.cos(a), hz(q, r) + R * Math.sin(a)]; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const lin = h => new THREE.Color(h).convertSRGBToLinear();
+
+// ===================================================================
+// Peoples and roles (proposed data)
+// ===================================================================
+const PEOPLES = {
+  fields:   { name: "Fields folk", world: "Tenebris \u00b7 fields, village, walled town", skin: [0xe2ac80, 0xc99a74, 0x9c6b4a, 0xf0c49e, 0x7a5038], cloth: [0x5c9a46, 0x7a5a3a, 0xb0884a, 0x4a6e9a, 0xa04a3a, 0xd8c8a0], hair: [0x3b2a1e, 0x8a5a2a, 0xd8b060, 0x1e1a18, 0xa04a2a], hat: ["none", "none", "straw", "cap"], text: "Farmers, millers, smiths and guards in oak and limestone towns. Undyed wool, olive and madder red." },
+  desert:   { name: "Caravan folk", world: "Tenebris \u00b7 desert oasis towns", skin: [0xb07a52, 0x8a5a3c, 0xc89064, 0x6a4430], cloth: [0xe0b050, 0xc0603a, 0xf0e0c0, 0x3a8aa0, 0x9a3a2a], hair: [0x1e1a18, 0x2a201a, 0x3a2a20], hat: ["turban", "turban", "hood", "none"], text: "Traders between the sandstone towns. Ochre, salt white and the cyan of the oasis glaze; wraps against the sun." },
+  tundra:   { name: "Ice-camp folk", world: "Tenebris \u00b7 tundra camps", skin: [0xe8c0a0, 0xc8a080, 0xa88060], cloth: [0x8aa0b8, 0xe8e4dc, 0x6a4a3a, 0xc04040, 0x5a6a50], hair: [0xe0d8c8, 0x3a2a20, 0x6a5040], hat: ["hood", "hood", "cap", "none"], text: "Igloo and longhouse people. Furs in sage, granite grey and one hard red for festival days." },
+  coast:    { name: "Harbour folk", world: "Tenebris \u00b7 beach and fishing harbours", skin: [0xd8a880, 0xb08060, 0xe8c0a0, 0x8a5a40], cloth: [0xf0c830, 0x2a4a7a, 0xe8e0d0, 0x6a8a9a, 0xa04a3a], hair: [0x8a6a4a, 0xd0b080, 0x2a201a], hat: ["sou", "sou", "cap", "none"], text: "Fishers and boatwrights in driftwood and whitewash. Oilskin yellow, navy and sail canvas." },
+  redwood:  { name: "Canopy folk", world: "Sequoia \u00b7 redwood forest", skin: [0xd8a888, 0xa87858, 0xc89878, 0x7a5040], cloth: [0x2a8a80, 0x8a2a3a, 0xc06a40, 0x3a5a40], hair: [0x2a3a30, 0x5a2a20, 0xc06a40], hat: ["hood", "none", "cap", "none"], text: "Resin tappers and fibre weavers on Sequoia. Teal needle green, wine and copper bark; nothing borrowed from Tenebris." },
+  sporewood:{ name: "Basin folk", world: "Sequoia \u00b7 sporewood basins", skin: [0xe0b8a0, 0xb08a70, 0x8a6a58], cloth: [0x8a5ac0, 0x5ae0c0, 0x2a2440, 0xc0a0e0], hair: [0x2a2440, 0x5ae0c0, 0xe0e0f0], hat: ["hood", "none", "none", "cap"], text: "Mycelium growers of the flooded basins. Violet, mint and a little cyan glow on their lanterns and cuffs." },
+  station:  { name: "Station crews", world: "Stations and outposts (any origin)", skin: [0xe2ac80, 0xb07a52, 0xe8c0a0, 0x7a5038, 0xd8a888], cloth: [0x3a96be, 0xe0e4ea, 0x5a6270, 0xf0b43c], hair: [0x1e1a18, 0xa04a2a, 0xd8b060, 0x5a5a60], hat: ["headset", "none", "headset", "cap"], text: "Clerks, dock hands and traders from both worlds, in station blue. On airless bodies they are the only people, in suits outdoors." },
+};
+const NONE_PEOPLE = { name: "No natives", world: "Crag, Frostbite, the moons, asteroids", text: "Airless and lifeless (CLAUDE.md). People there are visitors: an outpost's crew, a miner's camp, a smuggler's cache. Their settlements are habitats, built and pressurised (see the building mockup)." };
+const ROLES = {
+  farmer:   { label: "Farmer", img: "farmer", where: "fields \u00b7 market stall", text: "Out at dawn, sells at the stall at midday, back to the fields till dusk.", offers: [["trade", "Grain, eggs"], ["quest", "Pests, fences"]], prop: "fork", hat: "straw", sched: [[0, "sleep"], [5, "away"], [12, "work"], [16, "away"], [19, "inn"], [21.5, "sleep"]] },
+  smith:    { label: "Smith", img: "smith", where: "forge", text: "Hammers from six to seven with a break at the inn. Buys ore, sells tools and hinges.", offers: [["trade", "Tools, nails"], ["quest", "Ore runs"]], prop: "hammer", apron: 0x8a5a30, sched: [[0, "sleep"], [6, "work"], [12, "inn"], [13, "work"], [19, "inn"], [23, "sleep"]] },
+  trader:   { label: "Trader", img: "trader", where: "market stall", text: "Keeps the stall from seven. Moves goods between towns; prices hold while the caravan is in.", offers: [["trade", "Everything"], ["quest", "Deliveries"]], prop: "pouch", hat: "turban", sched: [[0, "sleep"], [7, "work"], [19, "inn"], [23, "sleep"]] },
+  guard:    { label: "Guard", img: "guard", where: "gate \u00b7 patrol", text: "Two shifts, so the gate is never empty. Notices theft and remembers your face.", offers: [["law", "Bounties"], ["quest", "Patrol jobs"]], prop: "spear", hat: "helmet", tabard: 0xc03a30, sched: [[0, "sleep"], [6, "patrol"], [18, "inn"], [22, "sleep"]] },
+  fisher:   { label: "Fisher", img: "fisher", where: "harbour \u00b7 stall", text: "Out before light, sells the catch at eleven, mends nets till dark.", offers: [["trade", "Fish, bait"], ["quest", "Lost pots"]], prop: "fish", hat: "sou", sched: [[0, "sleep"], [4, "away"], [11, "work"], [15, "away"], [20, "inn"], [22, "sleep"]] },
+  miner:    { label: "Miner", img: "miner", where: "the hill mine", text: "Underground all day. Knows where the ore seams are and will tell you for a drink.", offers: [["trade", "Ore, coal"], ["quest", "Rumours of seams"]], prop: "pick", hat: "miner", sched: [[0, "sleep"], [6, "away"], [17, "idle"], [19, "inn"], [23, "sleep"]] },
+  clerk:    { label: "Station clerk", img: "clerk", where: "starport kiosk \u00b7 stations", text: "Books docking, buys survey data, posts contracts with real destinations.", offers: [["trade", "Survey data"], ["quest", "Contracts"]], prop: "pad", hat: "headset", sched: [[0, "sleep"], [7, "work"], [20, "inn"], [22, "sleep"]] },
+  smuggler: { label: "Smuggler", img: "smuggler", where: "by the well, after dark", text: "Only around at night. Buys what the stalls will not, sells what the guards would rather you did not have.", offers: [["trade", "Contraband"], ["law", "Standing risk"]], prop: "crate", hat: "hood", sched: [[0, "lurk"], [3, "sleep"], [13, "inn"], [17, "away"], [21, "lurk"]] },
+  inn:      { label: "Innkeeper", img: "trader", where: "The Plough", text: "", offers: [], prop: "none", apron: 0xe8e0d0, sched: [[0, "work"], [1.5, "sleep"], [9, "work"]] },
+};
+const ACT = { sleep: ["Asleep at home", "a-sleep"], work: ["At work", "a-work"], away: ["Away", "a-away"], inn: ["At the inn", "a-inn"], patrol: ["On patrol", "a-patrol"], idle: ["Idle about town", "a-idle"], lurk: ["Lurking", "a-lurk"] };
+
+// ===================================================================
+// A townsperson: the kit's friendly figure (design 13a, 21, 36; version 10 replaces the hexagonal prisms),
+// rolled from the people's palette, dressed for the role: its hat, apron or tabard, and its prop.
+// ===================================================================
+const ROLE_HAT = { straw: ["brim", 0xd8b868], sou: ["brim", 0xf0c830], turban: ["turban"], helmet: ["helmet", 0x8a9098], miner: ["miner", 0xf0b428], headset: ["headset", 0x606878], hood: ["hood"], cap: ["cap"] };
+function townSpec(people, role, seed, i = 0) {
+  const P = PEOPLES[people], Ro = ROLES[role] || {}, S = FK.genSpec(seed, i, P), rn = rng(seed * 7919 + i * 31 + 13);
+  const hat = Ro.hat || P.hat[Math.floor(rn() * P.hat.length) % P.hat.length], H = ROLE_HAT[hat];
+  if (H) { S.hair = "hat"; S.hatKind = H[0]; if (H[1]) S.hatC = H[1]; if (H[0] === "hood" || H[0] === "headset") S.ears = false; }
+  S.prop = Ro.prop || "none"; S.apron = Ro.apron; S.tabard = Ro.tabard;
+  if (!["happy", "neutral", "thinking", "sleepy"].includes(S.mood)) S.mood = "happy";
+  return S;
+}
+// the square's walker names its pivots legL, legR, armL, armR and headG
+function figure(spec) {
+  const f = FK.friend(spec); FK.setExprOn(f, spec.mood, true); FK.liveFace(f, 0);
+  f.legL = f.legs[0]; f.legR = f.legs[1]; f.armL = f.arms[0]; f.armR = f.arms[1]; f.headG = f.head; return f;
+}
+
+// ===================================================================
+// Hollin Cross: the square
+// ===================================================================
+const canvas = $("sq");
+let renderer = null;   // made when the square's tab first opens
+function makeRenderer() {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+}
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 80, 200);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 500);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 260 }); scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
+
+const LIGHTS = [], FLAMES = [], PLACES = {}, SOLIDS = [];
+// The village, as the game builds it: assets/settlements/v1/village.json (copied byte for
+// byte to npcs/game/), cut the way towns.html cuts it, on hex columns with the terrain's tiles.
+const TPL = (() => { const x = new XMLHttpRequest(); x.open("GET", "npcs/game/village.json", false); x.send(); return JSON.parse(x.responseText); })();
+const OC = 24, OR = 17;   // the green's middle, at the origin
+const VIL = PBD.buildTown(TPL, { ox: PBD.W * (OC + 0.5 * PBD.par(OR)), oz: PBD.ROW * OR });
+const GS = VIL.GS, at = (c, r) => [VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[VIL.idx(c, r)]];
+function cellOf(x, z) {
+  x += PBD.W * (OC + 0.5 * PBD.par(OR)); z += PBD.ROW * OR;
+  const qf = (Math.sqrt(3) / 3 * x - z / 3) / PBD.R, rf = (2 / 3 * z) / PBD.R, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf); const s = Math.round(sf), dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return PBD.toOff(q, r);
+}
+const groundY = (x, z) => { const [c, r] = cellOf(x, z); return VIL.inMap(c, r) ? VIL.TOP[VIL.idx(c, r)] : 1; };
+const LK = { lamp: [0xffd27a, 1.6, 5.2], wall: [0xffc070, 1.3, 4.4], window: [0xffa850, 0.35, 2.0], fire: [0xff8a3a, 1.3, 6.0], forge: [0xff7a30, 1.2, 5.5], kiosk: [0x9ae0ff, 0.6, 3.5] };
+function addLight(x, y, z, kind) { const K = LK[kind]; LIGHTS.push({ x, y, z, c: lin(K[0]), p: K[1], R: K[2], kind }); }
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+function glowBox(x, y, z, s) { const m = new THREE.Mesh(new THREE.BoxGeometry(s, s * 1.3, s), lampMat); m.position.set(x, y, z); scene.add(m); return m; }
+function fire(x, y, z, s, kind) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.5 * s, 0.4 * s), fireMat); m.position.set(x, y + 0.25 * s, z); scene.add(m); FLAMES.push({ m, ph: Math.random() * 6 }); addLight(x, y + 0.6, z, kind); }
+// the template's street lamps, and a wall lantern by every door, as the game's towns light theirs
+for (const L of VIL.lamps) { glowBox(L.x, L.y, L.z, 0.2); addLight(L.x, L.y - 0.05, L.z, "lamp"); }
+for (const d of VIL.doors) { const [x, y, z] = d.lamp; GS.box("iron", x - d.nx * 0.14, y + 0.25, z - d.nz * 0.14, 0.06, 0.06, 0.3, d.ang + Math.PI / 2); glowBox(x, y, z, 0.18); addLight(x + d.nx * 0.2, y, z + d.nz * 0.2, "wall"); }
+VIL.buildings.forEach((b, i) => { if (b.door) PLACES["door_" + (i < 8 ? "h" + (i + 1) : i === 8 ? "inn" : "b" + i)] = [b.door.x, b.door.z]; for (const [c, r] of b.cells) SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: PBD.R * 0.98 }); });
+// windows: a pane in every opening; a lit one glows at night and lights a little round it
+const PANE = { lit: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }) };
+{ const G2 = { lit: new PBD.Geo(), dark: new PBD.Geo() };
+  for (const p of VIL.panes) {
+    const tx = Math.cos(p.ang), tz = Math.sin(p.ang), hw = p.w / 2, hh = p.h / 2, P = (a, b) => [p.x + tx * a, p.y + b, p.z + tz * a];
+    G2[p.lit ? "lit" : "dark"].face([P(-hw, -hh), P(hw, -hh), P(hw, hh), P(-hw, hh)], [p.nx, 0, p.nz]);
+    if (p.lit) addLight(p.x + p.nx * 0.6, p.y, p.z + p.nz * 0.6, "window");
+  }
+  for (const k of ["lit", "dark"]) scene.add(new THREE.Mesh(G2[k].build(), PANE[k])); }
+// The square's dressing, mockup-only but cut from the game's materials: stalls, the well, a
+// brazier, the forge in the smithy yard, the starport kiosk, lamp posts round the green.
+function stall(c, r, cloth, ang, name) {
+  const [x, z, y] = at(c, r), ux = Math.cos(ang), uz = Math.sin(ang);
+  for (const [a, b] of [[-1, -0.6], [1, -0.6], [-1, 0.6], [1, 0.6]]) GS.box("timber", x + ux * a - uz * b, y, z + uz * a + ux * b, 0.1, 2.3, 0.1, ang);
+  GS.box("plank", x, y + 0.85, z, 2.2, 0.1, 1.2, ang); GS.box(cloth, x, y + 2.3, z, 2.5, 0.08, 1.6, ang); GS.box("thatch", x + uz * 0.1, y + 0.95, z - ux * 0.1, 1.6, 0.25, 0.6, ang);
+  SOLIDS.push({ x, z, r: 1.1 }); PLACES[name] = [x - uz * 1.4, z + ux * 1.4];
+}
+stall(21, 14, "cloth", 0, "stall1"); stall(27, 14, "cloth2", 0, "stall2"); stall(22, 13, "cloth", 0, "stall3");
+{ const [x, z, y] = at(27, 20), p = []; for (let k = 0; k < 6; k++) { const a = (60 * k - 30) * Math.PI / 180; p.push([x + Math.cos(a), z + Math.sin(a)]); }
+  GS.prism("stone", "stone", p, y, y + 0.8); for (const s of [-1, 1]) GS.box("timber", x + s * 0.85, y, z, 0.12, 2.2, 0.12); GS.box("thatch", x, y + 2.2, z, 2.2, 0.18, 1.4);
+  SOLIDS.push({ x, z, r: 1.3 }); PLACES.well = [x - 1.6, z - 1.2]; }
+{ const [x, z, y] = at(25, 16); GS.box("iron", x, y, z, 0.7, 0.9, 0.7); fire(x, y + 0.9, z, 0.9, "fire"); SOLIDS.push({ x, z, r: 0.6 }); PLACES.brazier = [x + 1.0, z - 0.6]; }
+{ const [x, z, y] = at(27, 22);
+  for (const [ox, oz] of [[-1.8, -1.2], [1.8, -1.2], [-1.8, 1.2], [1.8, 1.2]]) GS.box("timber", x + ox, y, z + oz, 0.18, 2.6, 0.18);
+  GS.box("plank", x, y + 2.6, z, 4.2, 0.12, 3.0); GS.box("thatch", x, y + 2.72, z, 4.4, 0.25, 3.2);
+  GS.box("stone", x + 1.0, y, z, 1.2, 0.9, 1.2); fire(x + 1.0, y + 0.9, z, 0.7, "forge"); GS.box("iron", x - 0.3, y, z + 0.2, 0.7, 0.75, 0.35);
+  PLACES.forge = [x - 0.2, z - 0.9]; SOLIDS.push({ x: x + 1.0, z, r: 0.85 }); }
+{ const [x, z, y] = at(28, 18); GS.box("metal", x, y, z, 1.6, 2.4, 1.2); GS.box("metal", x, y + 2.4, z, 2.0, 0.12, 1.6);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x7ad8f0 })); scr.position.set(x, y + 1.5, z - 0.61); scr.rotation.y = Math.PI; scene.add(scr);
+  addLight(x, y + 1.5, z - 1.2, "kiosk"); PLACES.kiosk = [x, z - 1.4]; SOLIDS.push({ x, z, r: 1.0 }); }
+for (const [c, r] of [[20, 13], [28, 13], [20, 21], [28, 21]]) { const [x, z, y] = at(c, r); PBD.lampPost(GS, x, y, z); glowBox(x + 0.45, y + 2.25, z, 0.2); addLight(x + 0.45, y + 2.2, z, "lamp"); SOLIDS.push({ x, z, r: 0.3 }); }
+const SEATS = [];
+{ const d = VIL.buildings[8].door; for (let k = -1; k <= 1; k++) { const x = d.x + d.nx * 1.4 + Math.cos(d.ang) * k * 2.4, z = d.z + d.nz * 1.4 + Math.sin(d.ang) * k * 2.4, y = groundY(x, z); GS.box("plank", x, y + 0.72, z, 1.4, 0.08, 0.8, d.ang); GS.box("timber", x, y, z, 0.1, 0.72, 0.6, d.ang); SOLIDS.push({ x, z, r: 0.6 }); SEATS.push([x - Math.cos(d.ang) * 0.9, z - Math.sin(d.ang) * 0.9], [x + Math.cos(d.ang) * 0.9, z + Math.sin(d.ang) * 0.9]); } }
+{ const p = (c, r) => at(c, r).slice(0, 2); PLACES.east = p(46, 17); PLACES.north = p(24, 4); PLACES.gateA = p(38, 17); PLACES.gateB = p(24, 10); PLACES.alley = p(13, 16); }
+// the game's trees on the fields round the village (planet_surface.wgsl's, one to a cell)
+for (let r = 0; r < VIL.NR; r++) for (let c = 0; c < VIL.NC; c++) {
+  const i = VIL.idx(c, r); if (VIL.MAT[i] !== "grass" || VIL.AREA[i] !== "Fields" || PBD.hash2(c * 3 + 1, r * 5 + 2) > 0.09) continue;
+  let clear = true; for (let d = 0; d < 6; d++) { const [c2, r2] = PBD.nb(c, r, d); if (VIL.inMap(c2, r2) && (VIL.BLD[VIL.idx(c2, r2)] >= 0 || VIL.MAT[VIL.idx(c2, r2)] !== "grass" || VIL.AREA[VIL.idx(c2, r2)] !== "Fields")) clear = false; }
+  if (!clear) continue;
+  PBD.tree(GS, VIL.hexPts(c, r), VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[i], c * 97 + r, "a:bark", "a:leaves");
+  SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: 0.5 });
+}
+PBD.REP.cloth = 2.5; PBD.REP.cloth2 = 2.5; PBD.REP.metal = 1.5;
+PBD.addMeshes(GS, scene, { mat: k => k === "metal" ? (PBD._metal || (PBD._metal = PBD.litMaterial(PBD.tex("building/tex_metal.png?v=2")))) : PBD.mat(k), cast: k => k !== "a:grass" && k !== "a:path" });
+// the pond
+if (VIL.water) { const g = new PBD.Geo(); for (const [c, r] of VIL.water) g.face(VIL.hexPts(c, r).map(p => [p[0], 0.82, p[1]]), [0, 1, 0]); scene.add(new THREE.Mesh(g.build(), PBD.litMaterial(null, 0x2f5f8a, { transparent: true, opacity: 0.82 }))); }
+PBD.setLights(LIGHTS);
+const U = { lamp: PBD.LU.uLamp };
+// sky dome stars at night
+const stars = (() => { const n = 600, p = new Float32Array(n * 3), rn = rng(5); for (let i = 0; i < n; i++) { const a = rn() * 6.283, e = 0.08 + rn() * 1.4; p[3 * i] = Math.cos(a) * Math.cos(e) * 300; p[3 * i + 1] = Math.sin(e) * 300; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 300; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.2, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
+
+// ---- the townsfolk ---------------------------------------------------------
+const NAMES = ["Bryn Ash", "Orrin Vale", "Mara Quell", "Tam Holt", "Ide Rook", "Wen Farrow", "Sela Brook", "Cal Dunmore", "Nessa Pike", "Ivo Kett", "Rhun Mallow", "Petra Lind", "Hal Cobb", "Ysolde Fenn"];
+const TOWN = [
+  ["farmer", "h1"], ["smith", "h2"], ["trader", "h3"], ["guard", "h7"], ["fisher", "h4"], ["miner", "h5"], ["clerk", "h8"], ["smuggler", "h6"],
+  ["inn", "inn"], ["farmer", "h5"], ["trader", "h6"], ["guard", "h3", true], ["miner", "h1"], ["farmer", "h4"],
+];
+const NPCS = TOWN.map(([role, home, night], i) => {
+  const spec = townSpec("fields", role, 100, i), f = figure(spec); scene.add(f.g);
+  const shift = (rng(i * 31 + 7)() - 0.5);
+  let sched = ROLES[role].sched.map(([h, a]) => [h, a]);
+  if (night) sched = [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]];
+  const npc = { i, role, home, name: NAMES[i], spec, f, sched, shift, x: 0, z: 0, tx: 0, tz: 0, face: 0, vis: 1, act: null, place: null, phase: rng(i)() * 6, rel: [62, 74, 55, 40, 50, 48, 66, 22, 70, 58, 45, 38, 52, 60][i], seat: SEATS[i % SEATS.length] };
+  return npc;
+});
+function actAt(n, h) { const t = (h - n.shift + 24) % 24; let a = n.sched[0][1], nx = null; for (let k = 0; k < n.sched.length; k++) { if (t >= n.sched[k][0]) { a = n.sched[k][1]; nx = n.sched[(k + 1) % n.sched.length]; } } return { a, next: nx }; }
+function workPlace(n) {
+  return { farmer: n.i === 0 ? "stall1" : "stall3", smith: "forge", trader: n.i === 2 ? "stall2" : "stall3", fisher: "stall1", clerk: "kiosk", inn: "door_inn", miner: "well", guard: "gateA", smuggler: "alley" }[n.role];
+}
+function target(n, a) {
+  if (a === "sleep") return { p: PLACES["door_" + n.home], hide: true, label: "Asleep at home" };
+  if (a === "away") { const p = n.role === "fisher" ? PLACES.north : PLACES.east; return { p, hide: true, label: { farmer: "In the fields", fisher: "At sea", miner: "Down the hill mine", smuggler: "Out of town" }[n.role] || "Away" }; }
+  if (a === "inn") return { p: n.seat, label: "At The Plough" };
+  if (a === "patrol") return { p: n.i === 3 ? PLACES.gateA : PLACES.gateB, patrol: n.i === 3 ? [PLACES.gateA, PLACES.brazier] : [PLACES.gateB, PLACES.well], label: "On patrol" };
+  if (a === "idle") return { p: PLACES.well, label: "Idling by the well" };
+  if (a === "lurk") return { p: PLACES.alley, label: "Lurking in the alley" };
+  const w = workPlace(n); return { p: PLACES[w], work: true, label: { stall1: "Selling at the stall", stall2: "Selling at the stall", stall3: "Selling at the stall", forge: "Hammering at the forge", kiosk: "At the starport kiosk", door_inn: "Serving at The Plough" }[w] || "Working" };
+}
+const STATE = { hour: 22.5, play: false, hover: null, sel: null };
+function placeAll(snap) {
+  for (const n of NPCS) {
+    const { a } = actAt(n, STATE.hour), t = target(n, a);
+    const changed = n.act !== a; n.act = a; n.t = t;
+    if (snap || changed && snap !== false) { /* keep walking */ }
+    n.tx = t.p[0]; n.tz = t.p[1];
+    if (snap) { n.x = n.tx + (rng(n.i)() - 0.5) * 0.6; n.z = n.tz + (rng(n.i + 5)() - 0.5) * 0.6; n.vis = t.hide ? 0 : 1; }
+    if (changed && !snap && n.vis === 0 && !t.hide) { const from = n.t && (a === "sleep") ? null : (actAt(n, STATE.hour - 0.3).a === "away" ? (n.role === "fisher" ? PLACES.north : PLACES.east) : PLACES["door_" + n.home]); if (from) { n.x = from[0]; n.z = from[1]; } }
+  }
+}
+const tmpC = new THREE.Color();
+function stepNpc(n, dt, T) {
+  const t = n.t; if (!t) return;
+  let tx = n.tx, tz = n.tz;
+  if (t.patrol) { const leg = Math.floor(Math.abs(T * 0.06 + n.phase) % 2), P = t.patrol[leg]; tx = P[0]; tz = P[1]; }
+  const dx = tx - n.x, dz = tz - n.z, d = Math.hypot(dx, dz), sp = 2.2;
+  let walking = false;
+  if (d > 0.15) {
+    if (d > 40) { n.x = tx; n.z = tz; }
+    else { const s = Math.min(d, sp * dt); n.x += dx / d * s; n.z += dz / d * s; n.face = Math.atan2(dx, dz); walking = true; if (n.vis < 1 && !t.hide) n.vis = Math.min(1, n.vis + dt * 2); }
+  } else if (t.hide) n.vis = Math.max(0, n.vis - dt * 2);
+  else n.vis = Math.min(1, n.vis + dt * 2);
+  // slide round solids (houses, stalls, the well), as the walker does
+  for (const s of SOLIDS) { const ox = n.x - s.x, oz = n.z - s.z, l = Math.hypot(ox, oz), m = s.r + 0.28; if (l < m && l > 1e-4 && d > 0.3) { n.x = s.x + ox / l * m; n.z = s.z + oz / l * m; } }
+  const f = n.f; f.g.position.set(n.x, groundY(n.x, n.z), n.z); f.g.rotation.y = n.face; f.g.visible = n.vis > 0.02; f.g.scale.setScalar(0.4 + 0.6 * n.vis);
+  const sw = walking ? Math.sin(T * 7 + n.phase) * 0.6 : 0;
+  f.legL.rotation.x = sw; f.legR.rotation.x = -sw; f.armL.rotation.x = -sw * 0.8;
+  if (!walking && t.work) f.armR.rotation.x = -1.2 + Math.abs(Math.sin(T * (n.role === "smith" ? 5 : 2) + n.phase)) * (n.role === "smith" ? 1.4 : 0.5);
+  else if (!walking && n.act === "inn") f.armR.rotation.x = -0.4 - 0.6 * Math.max(0, Math.sin(T * 0.7 + n.phase * 3));
+  else f.armR.rotation.x = sw * 0.8;
+  if (!walking) { f.headG.rotation.y = Math.sin(T * 0.4 + n.phase) * 0.5; if (!t.work && !t.patrol) n.face += (Math.atan2(-n.x, -n.z) - n.face) * 0; } else f.headG.rotation.y = 0;
+  if (f.g.visible) FK.liveFace(f, dt);
+  // lit like everything else: the block light reaches the figure per pixel (scene-kit.js)
+}
+
+// ---- time of day ----------------------------------------------------------
+const cA = new THREE.Color();
+function setHour(h) {
+  STATE.hour = (h + 24) % 24; $("hour").value = STATE.hour;
+  const ang = (STATE.hour - 6) / 12 * Math.PI, el = Math.sin(ang), day = clamp((el + 0.08) / 0.3, 0, 1), dusk = clamp(1 - Math.abs(el) / 0.35, 0, 1) * (STATE.hour > 3 && STATE.hour < 21 ? 1 : 0);
+  const sunDir = el > 0 ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.12, el), 0.45 - 0.2 * Math.cos(ang)).normalize() : new THREE.Vector3(-0.4, 0.7, 0.55).normalize();
+  cA.set(0x0e1424).lerp(new THREE.Color(0x9fc6e2), day).lerp(new THREE.Color(0xe0a27a), dusk * 0.55);
+  scene.background = cA.clone(); scene.fog.color.copy(cA);
+  sun.position.copy(sunDir).multiplyScalar(80); sun.target.position.set(0, 0, 0);
+  if (el > 0) { sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk); sun.intensity = 1.8 * clamp(el * 3, 0, 1); } else { sun.color.set(0x8fa6d8); sun.intensity = 0.035; }
+  hemi.intensity = 0.008 + 0.57 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35); hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
+  const night = 1 - day; STATE.night = night;
+  U.lamp.value = 0.85 * clamp((night - 0.25) / 0.35, 0, 1);
+  lampMat.color.set(night > 0.3 ? 0xffd9a0 : 0x6a655a);
+  PANE.lit.color.setRGB(...(night > 0.3 ? [1.0, 0.72, 0.36] : [0.1, 0.11, 0.14]));
+  stars.material.opacity = clamp(night * 1.2 - 0.2, 0, 1);
+  const hh = Math.floor(STATE.hour), mm = Math.floor((STATE.hour % 1) * 60);
+  $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  placeAll(false);
+  const out = NPCS.filter(n => !n.t.hide).length; $("status").textContent = `${NPCS.length} townsfolk \u00b7 ${out} out and about \u00b7 lamps ${U.lamp.value > 0.1 ? "lit" : "out"}`;
+  updateNow(); if (STATE.sel) showCard(STATE.sel);
+}
+
+// ---- camera: orbit ----------------------------------------------------------
+const ORB = { tx: 1, ty: 1.5, tz: 1, dist: 27, yaw: 0.6, pitch: 0.58 };
+function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
+function orbitControls(el, orb, onClick) {
+  const pts = new Map(); let moved = 0, pinch = 0;
+  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY, e.button, e.shiftKey]); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  el.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId); if (!p) { if (onClick) onClick(e, true); return; }
+    const dx = e.clientX - p[0], dy = e.clientY - p[1]; moved += Math.abs(dx) + Math.abs(dy);
+    if (pts.size === 2) { p[0] = e.clientX; p[1] = e.clientY; const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) orb.dist = clamp(orb.dist * pinch / d, 6, 90); pinch = d; return; }
+    if (p[2] === 2 || p[3]) { const s = orb.dist * 0.0016; orb.tx -= (Math.cos(orb.yaw) * dx - Math.sin(orb.yaw) * dy) * s; orb.tz -= (-Math.sin(orb.yaw) * dx - Math.cos(orb.yaw) * dy) * s; }
+    else { orb.yaw -= dx * 0.006; orb.pitch = clamp(orb.pitch + dy * 0.005, 0.08, 1.45); }
+    p[0] = e.clientX; p[1] = e.clientY;
+  });
+  const up = e => { const was = pts.has(e.pointerId); pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (was && moved < 6 && onClick) onClick(e, false); };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", e => pts.delete(e.pointerId));
+  el.addEventListener("contextmenu", e => e.preventDefault());
+  el.addEventListener("wheel", e => { e.preventDefault(); orb.dist = clamp(orb.dist * Math.exp(e.deltaY * 0.0012), 6, 90); }, { passive: false });
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function pickNpc(e) {
+  const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(NPCS.filter(n => n.f.g.visible).map(n => n.f.g), true); if (!hits.length) return null;
+  let o = hits[0].object; while (o && !NPCS.find(n => n.f.g === o)) o = o.parent; return NPCS.find(n => n.f.g === o) || null;
+}
+orbitControls(canvas, ORB, (e, hover) => { const n = pickNpc(e); if (hover) { canvas.style.cursor = n ? "pointer" : "grab"; return; } if (n) { STATE.sel = n; showCard(n); } });
+function fmt(h) { h = (h + 24) % 24; return String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60) % 60).padStart(2, "0"); }
+function showCard(n) {
+  const R0 = ROLES[n.role], { a, next } = actAt(n, STATE.hour);
+  $("cImg").src = "npcs/" + R0.img + ".png"; $("cImg").alt = "Portrait of " + n.name;
+  $("cName").textContent = n.name; $("cMeta").textContent = R0.label + " \u00b7 Fields folk of Tenebris";
+  $("cNow").textContent = n.t.label; $("cNext").textContent = next ? (ACT[next[1]][0] + " at " + fmt(next[0] + n.shift)) : "-";
+  $("cHome").textContent = n.home === "inn" ? "Rooms above The Plough" : "House " + n.home.slice(1) + " on the square"; $("cRel").style.width = n.rel + "%";
+}
+function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.opacity = 0, 2600); }
+
+$("hour").addEventListener("input", e => { setHour(+e.target.value); placeAll(true); });
+$("play").addEventListener("click", () => { STATE.play = !STATE.play; $("play").setAttribute("aria-pressed", STATE.play); $("play").textContent = STATE.play ? "Pause" : "Play day"; });
+$("toNight").addEventListener("click", () => { setHour(22.5); placeAll(true); });
+$("toDay").addEventListener("click", () => { setHour(12.5); placeAll(true); });
+$("quit").addEventListener("click", () => { STATE.play = false; $("play").setAttribute("aria-pressed", false); $("play").textContent = "Play day"; toast("Game closed for 8 hours. World clock: still " + $("clock").textContent + ". Nobody moved."); });
+
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!renderer || !w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+let last = performance.now(), T = 0, sqRunning = false, sqRaf = 0;
+function frame(now) {
+  if (!sqRunning) return;
+  const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt;
+  if (STATE.play) setHour(STATE.hour + dt / 3);
+  for (const n of NPCS) stepNpc(n, dt, T);
+  for (const f of FLAMES) f.m.scale.set(1, 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2), 1);
+  if (FOCUS) { ORB.tx = FOCUS.x; ORB.tz = FOCUS.z; ORB.ty = groundY(FOCUS.x, FOCUS.z) + 1.2; }
+  placeCam(); renderer.render(scene, camera); sqRaf = requestAnimationFrame(frame);
+}
+TAB_HOOKS.square = {
+  show() { if (!renderer) makeRenderer(); resize(); if (!sqRunning) { sqRunning = true; last = performance.now(); sqRaf = requestAnimationFrame(frame); } },
+  hide() { sqRunning = false; cancelAnimationFrame(sqRaf); },
+};
+
+// ===================================================================
+// The page around it
+// ===================================================================
+const sw = c => `<i style="background:#${c.toString(16).padStart(6, "0")}"></i>`;
+$("peoples").innerHTML = Object.values(PEOPLES).map(p => `<div class="people"><div class="world">${p.world}</div><h3>${p.name}</h3><div class="swatches">${p.skin.map(sw).join("")}</div><div class="swatches">${p.cloth.map(sw).join("")}</div><p>${p.text}</p></div>`).join("")
+  + `<div class="people none"><div class="world">${NONE_PEOPLE.world}</div><h3>${NONE_PEOPLE.name}</h3><p>${NONE_PEOPLE.text}</p></div>`;
+$("roles").innerHTML = Object.entries(ROLES).filter(([k]) => k !== "inn").map(([k, r]) => `<div class="role"><img src="npcs/${r.img}.png" alt="Portrait of a ${r.label.toLowerCase()}"><div><h3>${r.label}</h3><div class="where">${r.where}</div><p>${r.text}</p><div class="offers">${r.offers.map(([c, t]) => `<span class="chip ${c}">${t}</span>`).join("")}</div></div></div>`).join("");
+function schedRow(label, sched) {
+  let html = ""; for (let k = 0; k < sched.length; k++) { const [h, a] = sched[k], h1 = k + 1 < sched.length ? sched[k + 1][0] : 24; html += `<i class="${ACT[a][1]}" style="left:${h / 24 * 100}%;width:${(h1 - h) / 24 * 100}%" title="${ACT[a][0]} ${fmt(h)}-${fmt(h1)}"></i>`; }
+  return `<tr><td class="name">${label}</td><td><div class="bar">${html}<span class="now"></span></div></td></tr>`;
+}
+$("schedBody").innerHTML = Object.entries(ROLES).map(([k, r]) => schedRow(r.label, r.sched)).join("") + schedRow("Night guard", [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]]);
+function updateNow() { for (const el of document.querySelectorAll(".bar .now")) el.style.left = (STATE.hour / 24 * 100) + "%"; }
+$("relList").innerHTML = [["smith", "Orrin Vale, smith", 74, "Friendly"], ["trader", "Mara Quell, trader", 55, "Neutral"], ["guard", "Tam Holt, guard", 40, "Wary: saw you near the stall"], ["smuggler", "Hal Cobb, smuggler", 22, "Owes you; you owe him more"], ["farmer", "Hollin Cross (town)", 58, "Mean of 14 people"]]
+  .map(([img, n, v, t]) => `<div class="r"><img src="npcs/${img}.png" alt=""><div><div>${n}</div><div class="meter"><i style="width:${v}%"></i></div></div><span class="lv">${v} \u00b7 ${t}</span></div>`).join("");
+const REPLY = { trade: "\"Nails, hinges, a good axe head. Iron I'll buy at four a lump.\"", quest: "\"The north gate's hinges are rust. Bring me twelve ore from the east hills and I'll see you right.\"", rumour: "\"Hal? Comes at dark, gone by three. The guards pretend not to see. You'd do well to do the same.\"", bye: "\"Mind the step. Night.\"" };
+for (const b of document.querySelectorAll("#dlgOpts button")) b.addEventListener("click", () => { $("dlgLine").textContent = REPLY[b.dataset.r]; });
+
+// ---- the lineup: six peoples, four each ------------------------------------
+const lu = $("lu"); let lr = null;   // made when the Character sheets tab first opens
+function makeLineupRenderer() { lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding; }
+const ls = new THREE.Scene(); ls.background = new THREE.Color(0x141210);
+const lc = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
+ls.add(new THREE.HemisphereLight(0xfff0d8, 0x2a2420, 0.7)); const key = new THREE.DirectionalLight(0xffe0b0, 1.1); key.position.set(-4, 6, 8); ls.add(key);
+const rimL = new THREE.DirectionalLight(0x8fb0ff, 0.5); rimL.position.set(5, 3, -6); ls.add(rimL);
+const plinth = new THREE.Mesh(new THREE.CylinderGeometry(40, 40, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 1 })); plinth.position.y = -0.1; ls.add(plinth);
+const LU_PEOPLES = ["fields", "desert", "tundra", "coast", "redwood", "station"], LU_ROLES = { fields: ["farmer", "smith", "guard", "inn"], desert: ["trader", "trader", "guard", "smuggler"], tundra: ["miner", "guard", "farmer", "inn"], coast: ["fisher", "fisher", "trader", "inn"], redwood: ["farmer", "smith", "trader", "inn"], station: ["clerk", "clerk", "smuggler", "trader"] };
+let LU = [], townSeed = 1;
+function lineup() {
+  for (const F of LU) { ls.remove(F.g); F.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); } LU = [];
+  LU_PEOPLES.forEach((p, gi) => LU_ROLES[p].forEach((role, k) => {
+    const spec = townSpec(p, role, townSeed * 1000 + gi * 10, k); if (role === "inn") spec.prop = "none";
+    const f = figure(spec); f.g.position.set((gi - 2.5) * 3.2 + (k - 1.5) * 0.72, 0, (k % 2) * 0.5); f.g.rotation.y = (k - 1.5) * 0.2; ls.add(f.g); LU.push(f);
+  }));
+  $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
+}
+let spin = false;
+$("reroll").addEventListener("click", () => { townSeed++; lineup(); });
+{ const m = $("csModal"); $("csInfo").addEventListener("click", () => { m.hidden = false; $("csX").focus(); }); $("csX").addEventListener("click", () => { m.hidden = true; });
+  m.addEventListener("click", e => { if (e.target === m) m.hidden = true; }); addEventListener("keydown", e => { if (e.key === "Escape" && !m.hidden) m.hidden = true; }); }
+$("spin").addEventListener("click", () => { spin = !spin; $("spin").setAttribute("aria-pressed", spin); });
+function luResize() { const w = lu.clientWidth, h = lu.clientHeight; if (!lr || !w) return; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(11, 10.4 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 1.7 + dist * 0.06, dist); lc.lookAt(0, 0.8, 0); lc.updateProjectionMatrix(); }
+addEventListener("resize", luResize);
+let luRunning = false, luRaf = 0;
+let luLast = 0;
+function luFrame(now) {
+  if (!luRunning) return;
+  const dt = clamp((now - luLast) / 1000, 0, 0.1); luLast = now;
+  for (const F of LU) { if (spin) F.g.rotation.y += 0.5 * dt; FK.liveFace(F, dt); }
+  lr.render(ls, lc); luRaf = requestAnimationFrame(luFrame);
+}
+TAB_HOOKS.figures = {
+  show() { if (!lr) makeLineupRenderer(); PBD.setLights([]); luResize(); if (!luRunning) { luRunning = true; luLast = performance.now(); luRaf = requestAnimationFrame(luFrame); } },
+  hide() { luRunning = false; cancelAnimationFrame(luRaf); PBD.setLights(LIGHTS); },
+};
+
+const Q = new URLSearchParams(location.search);
+setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
+for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k);
+const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]);
+lineup();
+setTab(TAB, false);   // again, now both views have registered: makes the open tab's renderer and starts its loop
+window.__npcs = { NPCS, LIGHTS, setHour, scene };
+</script>
+<script>
+"use strict";
+// ===================================================================
+// Faces tab (townsfolk design 13 to 18, 13a, 36): the game's friendly townsperson (version 10: the hex figure
+// that stood beside it is gone, since the game draws this one), built from six-sided pieces, with a layered face (Wind Waker's floating pieces, the
+// High Frontier fan game's swaps) and live layers (blink, gaze, head follow, talk). One renderer, made
+// when the tab first opens; its loop runs only while the tab shows. Nothing turns on its own: the
+// camera stays where the viewer leaves it, and only the people move.
+// ===================================================================
+(function () {
+const FC = { view: "compare", layers: { blink: true, gaze: true, head: true, talk: false }, expr: "happy", hour: 12.5, night: 0 };
+const fcCanvas = $("fc"); let fr = null;
+const fs = new THREE.Scene(); fs.fog = new THREE.Fog(0x0e1424, 20, 70);
+const fcam = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
+const fsun = new THREE.DirectionalLight(0xffffff, 1); fsun.castShadow = true; fsun.shadow.mapSize.set(2048, 2048);
+Object.assign(fsun.shadow.camera, { left: -6.5, right: 6.5, top: 6.5, bottom: -6.5, near: 1, far: 80 }); fsun.shadow.bias = -0.0004; fsun.shadow.normalBias = 0.015;
+fsun.shadow.camera.updateProjectionMatrix(); fs.add(fsun, fsun.target); fsun.target.position.set(0, 0, -0.6);
+const fhemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.3); fs.add(fhemi);
+const FL = [];
+const FLK = { lamp: [0xffd27a, 1.6, 5.2], window: [0xffa850, 1.0, 4.5], fire: [0xff8a3a, 1.3, 6.0] };
+const addFL = (x, y, z, k) => FL.push({ x, y, z, c: lin(FLK[k][0]), p: FLK[k][1], R: FLK[k][2], kind: k });
+
+// ---- the townsperson kit (the script before the page's): materials, the face atlas, six-sided pieces, the figure
+const { shade, mixHex, mat, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn } = FK;
+const genSpec = (seed, i) => FK.genSpec(seed, i, PEOPLES.fields);
+
+function triCount(o) { let n = 0; o.traverse(m => { if (!m.isMesh) return; let v = m; while (v) { if (!v.visible) return; v = v.parent; } const g = m.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; }); return Math.round(n); }
+
+// ---- the people: one hero (with the Beard control's beard) and a crowd from the seed ---------------
+const HERO_SPEC = { build: "round", h: 1.55, head: 0.98, eye: 1.08, gap: 0.1, nose: "button", hair: "crop", beard: "none", ears: true,
+  skin: 0xe2ac80, hairC: 0x8a5a2a, shirt: 0x5c9a46, pants: 0x7a5a3a, shoe: 0x4a3428, hatC: 0xb0884a };
+let hero = null, crowd = [];
 const crowdG = new THREE.Group(); fs.add(crowdG);
 function placeHero() { hero = friend(HERO_SPEC); hero.home = new THREE.Vector3(0.45, 0, 0.6); hero.g.position.copy(hero.home); fs.add(hero.g); setExprOn(hero, FC.expr, true); }
 function buildCrowd(seed) {
@@ -1099,7 +1231,6 @@ const lampGlow = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), paneMat = new
   flame = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.13, 0.3, 6), fireMat); flame.position.set(1.45, 0.75, 1.75); fs.add(flame);
   addFL(1.45, 1.0, 1.75, "fire");
 })();
-today = PBD.figure(rollSpec("fields", "inn", 4), true); today.g.position.set(-0.75, 0, 0.6); fs.add(today.g);
 
 // ---- time of day: the square's sun and moon; at night only the lamps and the window light anything ---
 const fcA = new THREE.Color();
@@ -1121,7 +1252,7 @@ function setHourF(h) {
 
 // ---- camera: the viewer's orbit, never one of its own --------------------------------------------
 const VIEWS = {
-  compare: { tx: -0.15, ty: 0.95, tz: 0.6, dist: 3.7, yaw: 0.12, pitch: 0.12 },
+  compare: { tx: 0.45, ty: 0.85, tz: 0.6, dist: 3.0, yaw: 0.12, pitch: 0.12 },
   face:    { tx: 0.45, ty: 1.25, tz: 0.6, dist: 1.5, yaw: 0, pitch: 0.05 },
   crowd:   { tx: 0, ty: 0.85, tz: -1.6, dist: 7.6, yaw: 0, pitch: 0.2 },
 };
@@ -1166,7 +1297,7 @@ function setFP(on, at) {
 }
 // what the walker cannot walk into: the people, the lamp posts and the brazier (circles), the house front and the patch's edge
 function fpSolids() {
-  const out = [[today.g.position.x, today.g.position.z, 0.45], [2.05, -0.15, 0.25], [-2.85, -1.05, 0.25], [1.45, 1.75, 0.45]];
+  const out = [[2.05, -0.15, 0.25], [-2.85, -1.05, 0.25], [1.45, 1.75, 0.45]];
   for (const F of [hero, ...crowd]) out.push([F.g.position.x, F.g.position.z, 0.45]);
   return out;
 }
@@ -1319,6 +1450,15 @@ exprBox.addEventListener("click", e => { const b = e.target.closest("[data-fexpr
 document.querySelectorAll("[data-flayer]").forEach(b => b.addEventListener("click", () => setLayer(b.dataset.flayer, !FC.layers[b.dataset.flayer])));
 document.querySelectorAll("[data-fview]").forEach(b => b.addEventListener("click", () => setView(b.dataset.fview)));
 document.querySelectorAll("[data-fact]").forEach(b => b.addEventListener("click", () => { if (hero) play(hero, b.dataset.fact); if (b.dataset.fact === "hop" || b.dataset.fact === "wave") for (const F of crowd) if (Math.random() < 0.5) play(F, b.dataset.fact); }));
+// Beard: the hero rebuilt with none, a goatee or a full front beard (design 36)
+function setBeard(k) {
+  HERO_SPEC.beard = k; document.querySelectorAll("[data-fbeard]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fbeard === k));
+  if (!hero) return;
+  const walking = hero.walk.on; fs.remove(hero.g); hero.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); placeHero(); $("fcTri").textContent = `Figure: ${triCount(hero.g)} triangles`;
+  if (walking) { hero.walk.on = false; $("fcPlay").setAttribute("aria-pressed", false); $("fcPlay").textContent = "Play walk"; }
+  if (FC.view === "face") setView("face");
+}
+document.querySelectorAll("[data-fbeard]").forEach(b => b.addEventListener("click", () => setBeard(b.dataset.fbeard)));
 $("fcPlay").addEventListener("click", () => { const on = !hero.walk.on; hero.walk.on = on; if (on) hero.walk.going = true; $("fcPlay").setAttribute("aria-pressed", on); $("fcPlay").textContent = on ? "Stop walk" : "Play walk"; });
 $("fcNew").addEventListener("click", () => { $("fcSeed").value = (+$("fcSeed").value || 1) + 1; buildCrowd(+$("fcSeed").value); });
 $("fcSeed").addEventListener("change", () => buildCrowd(Math.max(1, Math.round(+$("fcSeed").value) || 1)));
@@ -1349,7 +1489,7 @@ function fFrame(now) {
   stepFriend(hero, dt, fT); for (const F of crowd) stepFriend(F, dt, fT);
   flame.scale.set(1, 0.8 + 0.3 * Math.sin(fT * 9) * Math.sin(fT * 5.3 + 1), 1); flame.visible = FC.night > 0.3;
   placeFCam(); fr.render(fs, fcam);
-  label($("fcLToday"), today.g, 2.15); label($("fcLNew"), hero.g, hero.spec.h + 0.2);
+  label($("fcLNew"), hero.g, hero.spec.h + 0.2);
   fRaf = requestAnimationFrame(fFrame);
 }
 TAB_HOOKS.faces = {
@@ -1361,13 +1501,14 @@ TAB_HOOKS.faces = {
   hide() { fRun = false; FP.keys.clear(); cancelAnimationFrame(fRaf); PBD.setLights(LIGHTS); setHour(STATE.hour); },
 };
 placeHero(); buildCrowd(+$("fcSeed").value || 7);
-const tri = triCount(hero.g); $("fcTri").textContent = `Proposed figure: ${tri} triangles`; $("fcTriNote").textContent = `Triangles: the proposed figure here is ${tri}, face included (version 8 was 634; design 13 asks about 600).`;
+const tri = triCount(hero.g); $("fcTri").textContent = `Figure: ${tri} triangles`; $("fcTriNote").textContent = `Triangles: the hero here is ${tri}, face included (version 8 was 634; design 13 asks about 600).`;
 const FQ = new URLSearchParams(location.search);
 if (FQ.has("fhour")) FC.hour = +FQ.get("fhour");
+if (FQ.has("fbeard")) setBeard(FQ.get("fbeard"));
 if (FQ.has("fexpr")) setExpr(FQ.get("fexpr"));
 if (FQ.has("fview")) setView(FQ.get("fview"));
 if (FQ.has("ffp")) setFP(true);
-window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, hero: () => hero, crowd: () => crowd, buildCrowd, play, FO, triCount };
+window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, setBeard, hero: () => hero, crowd: () => crowd, buildCrowd, play, FO, triCount };
 if (TAB === "faces") TAB_HOOKS.faces.show();
 })();
 </script>

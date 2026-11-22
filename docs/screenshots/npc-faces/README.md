@@ -46,3 +46,24 @@ button, WASD and drag change.
 Checked on these: no console errors in the Faces tab, in first person, or after switching Square,
 Character sheets, Faces and back to Square (the only failed requests are the web fonts, blocked
 in the container).
+
+## Version 10 (2026-11-22, drafted): the new figure everywhere, beards on the front only (townsfolk design 36)
+
+The `v10-` shots, made the same way (Chromium headless through Playwright, SwiftShader software
+rendering; they show the look, not the speed), the page served from `docs/mockups/` and driven through
+`window.__npcs`, `window.__faces` (`setBeard`, `setExpr`, `setView`, `setHourF`, `setLayer`) and the
+square's orbit. Blink, gaze and head follow were turned off for the face shots so each pose is held.
+
+| File | Shows |
+| --- | --- |
+| `v10-square-night.jpg`, `v10-square-day.jpg` | The square at 22:30 and at 12:30 with the new figures (they are small at this distance) |
+| `v10-square-night-inn.jpg` | People on the inn's benches at 22:30, lit by the wall lanterns (from behind) |
+| `v10-square-night-close.jpg` | The smuggler in the alley at 22:30, hooded, as dark as the alley is |
+| `v10-square-day-close.jpg`, `v10-square-day-close-2.jpg` | The gate guard (helmet, tabard, spear, a goatee) and a farmer (straw hat, fork, a goatee) at noon |
+| `v10-character-sheets.jpg`, `v10-character-sheets-town2.jpg`, `v10-character-sheets-modal.jpg` | The lineup of six peoples in the new figure, after Roll another town, and its info modal |
+| `v10-faces-day.jpg`, `v10-faces-night.jpg` | The Faces tab without the old "today" figure, by day and at 22:30 |
+| `v10-beard-goatee-*.jpg`, `v10-beard-full-front-*.jpg` | Each beard from the front, three-quarter, the side and the back (nothing behind the face), talking, surprised, delighted, sad and thinking; the full front beard at night |
+| `v10-crowd-day-seed1.jpg`, `v10-crowd-night-seed1.jpg` | Seed 1's crowd, the first seed with both styles in it (the fifth a goatee, the sixth a full front beard) |
+
+Checked on these: no page errors or console errors in any tab, and after Square, Character sheets,
+Faces, Square, Character sheets, Square the square's lamps are back (128 of its 147, its cap).

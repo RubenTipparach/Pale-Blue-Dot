@@ -107,6 +107,17 @@ pub enum Nose {
     Long,
 }
 
+/// A beard: pieces on the face's front only (`townsfolk` decision 36).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Beard {
+    None,
+    /// A moustache over the mouth and a tuft under it.
+    Goatee,
+    /// The moustache, a jaw plate under the mouth and a cheek piece each
+    /// side of it.
+    FullFront,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Hair {
     Bun,
@@ -130,7 +141,7 @@ pub struct Look {
     pub gap: f32,
     pub nose: Nose,
     pub hair: Hair,
-    pub beard: bool,
+    pub beard: Beard,
     pub ears: bool,
     /// Colours, `0xRRGGBB` sRGB.
     pub skin: u32,
@@ -225,7 +236,7 @@ pub fn generate(people: People, seed: u32, index: u32, tunic: u32) -> Look {
     let _rolled_shirt = rn.pick(people.cloth);
     let head = 0.9 + rn.roll() * 0.12;
     let nose = rn.pick(&[Nose::None, Nose::Button, Nose::Button, Nose::Long]);
-    let beard = !matches!(hair, Hair::Bun | Hair::Braid) && rn.roll() < 0.35;
+    let bearded = !matches!(hair, Hair::Bun | Hair::Braid) && rn.roll() < 0.35;
     let ears = rn.roll() < 0.6;
     let skin = rn.pick(people.skin);
     let hair_colour = rn.pick(people.hair);
@@ -254,6 +265,14 @@ pub fn generate(people: People, seed: u32, index: u32, tunic: u32) -> Look {
         "neutral" | "surprised" | "sleepy" => Expression::Neutral,
         "thinking" => Expression::Thinking,
         _ => Expression::Happy,
+    };
+    // The beard's style, appended after every other roll so nobody else's
+    // look moves (decision 36): half goatees, half full front beards.
+    let style = rn.roll();
+    let beard = match (bearded, style < 0.5) {
+        (false, _) => Beard::None,
+        (true, true) => Beard::Goatee,
+        (true, false) => Beard::FullFront,
     };
     Look {
         build,

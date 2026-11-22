@@ -1,6 +1,6 @@
 use super::face::{Chosen, Expression, Face, Mood, Mouth, Seen};
 use super::figure::{self, FACE_TRIANGLES, Figure, HD, HH, HW};
-use super::look::{self, Build, Hair, Look, Nose, Rng};
+use super::look::{self, Beard, Build, Hair, Look, Nose, Rng};
 use super::*;
 use crate::settlement::chart::Patch;
 use crate::settlement::record;
@@ -291,7 +291,7 @@ fn the_generator_is_the_mockups() {
     assert!((l.gap - 0.095_475).abs() < 1e-5);
     assert_eq!(
         (l.nose, l.hair, l.beard, l.ears),
-        (Nose::Button, Hair::Braid, false, true)
+        (Nose::Button, Hair::Braid, Beard::None, true)
     );
     assert_eq!(
         (l.skin, l.hair_colour, l.trousers),
@@ -300,8 +300,69 @@ fn the_generator_is_the_mockups() {
     let l = look::generate(look::FIELDS, 7, 0, 0x7a5a3a);
     assert_eq!(
         (l.hair, l.beard, l.ears, l.trousers),
-        (Hair::Hat, true, false, 0xd8c8a0)
+        (Hair::Hat, Beard::FullFront, false, 0xd8c8a0)
     );
+}
+
+/// A beard is on the face's front only (decision 36): every piece of it in
+/// front of the head's flat front but for the 5 mm it sinks in, within the
+/// front's width, and off the mouth's opening; and the styles come half and
+/// half, a third of the town bearded or so, with every other roll the same.
+#[test]
+fn a_beard_is_only_in_front_and_off_the_mouth() {
+    let hero = |beard| Look {
+        build: Build::Round,
+        height_m: 1.55,
+        head: 0.98,
+        eye: 1.08,
+        gap: 0.1,
+        nose: Nose::Button,
+        hair: Hair::Crop,
+        beard,
+        ears: false,
+        skin: 0xe2ac80,
+        hair_colour: 0x8a5a2a,
+        shirt: 0x5c9a46,
+        trousers: 0x7a5a3a,
+        shoe: 0x4a3428,
+        hat: 0xb0884a,
+        resting: Expression::Happy,
+    };
+    let bare = Figure::of(&hero(Beard::None)).head.positions.len();
+    let [lo_y, hi_y, half_x] = figure::MOUTH_CLEAR;
+    for b in [Beard::Goatee, Beard::FullFront] {
+        let f = Figure::of(&hero(b));
+        let added = &f.head.positions[bare..];
+        assert!(!added.is_empty(), "{b:?} adds pieces");
+        for p in added {
+            assert!(
+                p[2] >= figure::HA - figure::BEARD_SINK - 1e-5,
+                "{b:?} behind the face at {p:?}"
+            );
+            assert!(
+                p[0].abs() <= HW / 2.0 - figure::HC + 1e-5,
+                "{b:?} past the front's width at {p:?}"
+            );
+        }
+        for &[w, h, _, _, y0, x] in figure::beard_pieces(b) {
+            let over_mouth = y0 < hi_y && y0 + h > lo_y && (x.abs() - w / 2.0) < half_x;
+            assert!(!over_mouth, "{b:?} piece at y {y0} x {x} covers the mouth");
+        }
+    }
+    let (mut goatee, mut full, mut none) = (0i32, 0i32, 0);
+    for i in 0..2000 {
+        match look::generate(look::FIELDS, 11, i, 0xa04a3a).beard {
+            Beard::None => none += 1,
+            Beard::Goatee => goatee += 1,
+            Beard::FullFront => full += 1,
+        }
+    }
+    assert!(
+        (400..560).contains(&(goatee + full)),
+        "{goatee} + {full} bearded of 2000"
+    );
+    assert!((goatee - full).abs() < 120, "{goatee} goatees, {full} full");
+    assert!(none > 1000);
 }
 
 /// The figure is the Faces tab's: its block head, its height, and about
@@ -316,7 +377,7 @@ fn the_figure_is_the_faces_tabs() {
         gap: 0.1,
         nose: Nose::Button,
         hair: Hair::Crop,
-        beard: false,
+        beard: Beard::None,
         ears: true,
         skin: 0xe2ac80,
         hair_colour: 0x8a5a2a,

@@ -20,7 +20,18 @@ shot() {
     --rain 0 --weather-at 7200 --capture "$D/$name.png" --frames 150 > "$D/$name.log" 2>&1
   echo "$name exit $?"
 }
+# Face to face with the first person at a post wearing each beard (design 36):
+# Linenleigh's innkeeper (a goatee) and a stallholder (a full front beard).
+GOATEE="--walk --at 29.727104 8.505633 --yaw -4.4 --pitch -10"
+FULL_FRONT="--walk --at 29.698841 9.102147 --yaw 87.3 --pitch -10"
 ONLY=${ONLY:-all}
+if [ "$ONLY" = beards ]; then
+  shot beard-goatee "" $GOATEE --time 11
+  shot beard-goatee-talking talking $GOATEE --time 11
+  shot beard-full-front "" $FULL_FRONT --time 11
+  shot beard-full-front-2230 "" $FULL_FRONT --time 22.5
+  exit 0
+fi
 [ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
 [ "$ONLY" = all ] && shot smith-forge-2230 "" $SMITH_SIDE --time 22.5
 shot market-day "" $MARKET --time 11

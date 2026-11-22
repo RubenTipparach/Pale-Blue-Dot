@@ -710,6 +710,37 @@ the one thing set) and use the game's keys and buttons:
 a talk panel button (TRADE, WORK, BACK, a trade row) as a click would. The
 old frames posed by `PBD_TALK` are replaced and the instrument removed.
 
+**36. Beards are on the front of the face only (owner, 2026-11-22, M5
+version 10).** The owner, on the Character sheets lineup and a Kerbal Space
+Program 2 picture of a Kerbal with a goatee and a moustache: "get rid of
+these old npcs, replace with new ones. also beards should only be infront
+like this". Version 9's beard was a block wrapping the bottom of the head,
+sides and back; from version 10 a beard is pieces on the face's flat front
+and nothing on the sides or the back, in the hair's colour, each sitting
+proud of the face as the other face layers do (embedded 5 mm, standing
+25 to 30 mm out) and never over the mouth's opening:
+- **Goatee**: a moustache over the mouth, 0.2 m wide and 35 mm high from
+  0.15 m up the head (the highest mouth pixel any cell draws is at 0.148),
+  and a chin tuft 0.09 m wide from 0.04 m below the chin to 0.055 m up (the
+  lowest mouth pixel is at 0.058).
+- **Full front**: the same moustache, a jaw plate 0.4 m wide (the head's
+  flat front is 0.43) from 0.06 m below the chin to 0.055 m, and a cheek
+  piece each side, 0.07 m wide at 0.13 to 0.2 m from the middle, from
+  0.05 to 0.13 m up: it frames the mouth (whose widest cell reaches 0.07 m
+  out, 0.105 m with the thinking face's shift) and stops under the blush.
+- **The roll**: a beard as before (35% of those whose hair is not a bun or
+  a braid), and its style half and half, goatee or full front, from one new
+  roll appended at the very end of the sequence, after the resting face, so
+  every other trait of every person is what it was.
+- **Saves**: a person's look is derived from the town record and the seed,
+  never stored (decisions 1 and 20), so this is a look change for old saves
+  and new alike, and no save format changes.
+- **The mockup**: version 10 replaces the hexagonal-prism figures of the
+  square and the Character sheets with this figure (clothes rolled from each
+  people's palette, the role's hat, apron, tabard and held prop), and puts a
+  Beard control (none, goatee, full front) on the Faces tab's hero; the
+  Faces tab's "today" figure goes, since the game now draws the new one.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

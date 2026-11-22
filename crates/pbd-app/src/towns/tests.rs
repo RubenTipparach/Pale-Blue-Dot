@@ -2615,6 +2615,26 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
             );
         }
     }
+    // Face to face with the first person at a post wearing each beard
+    // (`townsfolk` design 36), Linenleigh's or else Holbrook's, 1.3 m off.
+    let holbrook_folk = people(&holbrook(), &village);
+    for beard in [
+        pbd_core::townsfolk::look::Beard::Goatee,
+        pbd_core::townsfolk::look::Beard::FullFront,
+    ] {
+        if let Some(p) = folk
+            .iter()
+            .chain(&holbrook_folk)
+            .find(|p| p.look.beard == beard && p.work().is_some())
+        {
+            let at = p.at(0.0, radius);
+            spot(
+                &format!("face to face with a {beard:?} ({} {})", p.role, p.id.site),
+                at.feet + at.forward * 1.3,
+                -at.forward,
+            );
+        }
+    }
     let guard = folk
         .iter()
         .find(|p| p.role == "guard")

@@ -4,7 +4,7 @@
 //! into a swatch of its atlas; a part is in its pivot's own space, the
 //! figure facing +z with y up.
 
-use super::look::{Hair, Look, Nose, shade};
+use super::look::{Beard, Hair, Look, Nose, shade};
 use glam::Vec3;
 
 /// The head block, wide by tall by deep, and its bevel (`HW`, `HH`, `HD`,
@@ -525,20 +525,7 @@ impl Figure {
                 head.extend(back());
             }
         }
-        if look.beard {
-            head.extend(block(
-                HW + 0.02,
-                0.125,
-                HD + 0.02,
-                HC,
-                -0.07,
-                BlockOpts {
-                    c_top: Some(0.0),
-                    ..default_block()
-                },
-                hair,
-            ));
-        }
+        head.extend(beard(look.beard, hair));
         Figure {
             leg_len,
             torso_h,
@@ -596,6 +583,53 @@ impl Figure {
         out.dedup();
         out
     }
+}
+
+/// A beard's pieces as `(w, h, d, bevel, y0, x)`, each standing on the
+/// head's flat front (decision 36, the mockup's `BEARDS`): its back 5 mm into
+/// the head, its front `d - 0.005` proud of it, nothing on the sides or the
+/// back, and nothing between [`MOUTH_CLEAR`]'s heights within its reach.
+pub const MOUSTACHE: [f32; 6] = [0.2, 0.035, 0.03, 0.01, 0.15, 0.0];
+pub const GOATEE: [[f32; 6]; 2] = [MOUSTACHE, [0.09, 0.095, 0.03, 0.01, -0.04, 0.0]];
+pub const FULL_FRONT: [[f32; 6]; 4] = [
+    MOUSTACHE,
+    [0.4, 0.115, 0.035, 0.012, -0.06, 0.0],
+    [0.07, 0.08, 0.035, 0.012, 0.05, -0.165],
+    [0.07, 0.08, 0.035, 0.012, 0.05, 0.165],
+];
+/// How far a beard piece sinks into the head behind its face.
+pub const BEARD_SINK: f32 = 0.005;
+/// The mouth's opening, as low, high and half wide as any mouth cell draws
+/// (with the thinking face's shift): a beard keeps out of it.
+pub const MOUTH_CLEAR: [f32; 3] = [0.058, 0.148, 0.105];
+
+/// The pieces of a beard, in the head's space.
+pub fn beard_pieces(b: Beard) -> &'static [[f32; 6]] {
+    match b {
+        Beard::None => &[],
+        Beard::Goatee => &GOATEE,
+        Beard::FullFront => &FULL_FRONT,
+    }
+}
+
+fn beard(b: Beard, colour: u32) -> Part {
+    let mut p = Part::default();
+    for &[w, h, d, c, y0, x] in beard_pieces(b) {
+        p.extend(block(
+            w,
+            h,
+            d,
+            c,
+            y0,
+            BlockOpts {
+                x,
+                z: HA - BEARD_SINK + d / 2.0,
+                ..default_block()
+            },
+            colour,
+        ));
+    }
+    p
 }
 
 fn default_block() -> BlockOpts {
