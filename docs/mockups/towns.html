@@ -118,6 +118,15 @@ body.coarse .keys,body.coarse .hint{display:none}
   .where{font-size:16px}
   .goto button{font-size:11.5px}
 }
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px}
+.modal[hidden]{display:none}
+.modal-card{position:relative;max-width:720px;width:100%;max-height:calc(100vh - 32px);overflow:auto;padding:14px 18px;font-size:13px;line-height:1.5;color:var(--muted)}
+.modal-card header{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-14px;background:var(--panel-solid);padding:4px 0}
+.modal-card h2{margin:0;font-family:var(--display);font-size:18px;color:var(--ink)}
+.modal-card h3{font-family:var(--display);font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);margin:12px 0 4px}
+.modal-card b{color:var(--ink);font-weight:500}
+.modal-card ul{margin:4px 0 0;padding-left:18px}
+.modal-card li{margin:4px 0}
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
 </style>
 
@@ -126,7 +135,7 @@ body.coarse .keys,body.coarse .hint{display:none}
   <div class="cross" id="cross" aria-hidden="true"></div>
 
   <section class="panel town" aria-label="Town">
-    <div class="townhead"><h1>Tenebris towns<span>PROTOTYPE</span></h1><button class="small" id="townToggle" aria-expanded="true" aria-controls="goto">Hide</button></div>
+    <div class="townhead"><h1>Tenebris towns<span>PROTOTYPE</span></h1><button class="small" id="infoOpen" aria-label="About this mockup">i</button><button class="small" id="townToggle" aria-expanded="true" aria-controls="goto">Hide</button></div>
     <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
     <div class="field scenefield"><label for="scene">Settlement</label>
       <select id="scene">
@@ -140,6 +149,8 @@ body.coarse .keys,body.coarse .hint{display:none}
         <option value="mounds">Fields, mound houses</option>
         <option value="mountain">Mountains, cliff village</option>
         <option value="caves">Mountains, cave dwellers</option>
+        <option value="roads">Roads: dirt, gravel, a hill, a ford, a bridge</option>
+        <option value="wideroads">Wide roads: two and three cells</option>
       </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
@@ -172,8 +183,57 @@ body.coarse .keys,body.coarse .hint{display:none}
     <div class="field"><label for="tod">Time of day</label><output id="todO"></output><input type="range" id="tod" min="0" max="24" step="0.25" value="15.5"></div>
     <div class="field" id="cutField"><label for="cut">Cutaway height (overview)</label><output id="cutO"></output><input type="range" id="cut" min="1" max="20" step="0.5" value="20"></div>
     <div class="note" id="stairNote"></div>
-    <details class="note">
-      <summary>What is modelled</summary>
+  </aside>
+
+  <section class="panel inst" aria-label="Where you are">
+    <div class="where" id="where">-</div>
+    <div class="readouts" id="readouts"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="panel keys" aria-label="Controls"><div class="eyebrow" style="margin-bottom:6px">Controls</div><table id="keys"></table></section>
+  <div class="panel hint" id="hint">Click to walk</div>
+  <div class="panel toast" id="toast" role="status"></div>
+  <div class="panel loading" id="loading">Laying out the town...</div>
+
+<div class="modal" id="infoModal" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+  <div class="modal-card panel">
+    <header><h2 id="infoTitle">About this mockup</h2><button class="small" id="infoClose" aria-label="Close">&#x2715;</button></header>
+      <h3>Roads (townsfolk design 10 and 11)</h3>
+      <ul>
+        <li><b>A road cell is an ordinary cell with a road top.</b> Flat where the road is level; where the next cell of the road stands a layer higher, its top is a plane rising from the middle of the edge the road comes in by to the middle of the edge it climbs out of: one layer over 2.833 m straight through (19&deg;), over 2.45 m round a 60&deg; bend (22&deg;). Never more than a layer a cell, so a road has no step. The slope is the walker's floor, as a street step's pitch line is: the Eye jumps readout stays at nought all the way up.</li>
+        <li><b>The hill road climbs ten layers</b>, layer 1 to layer 11, one cell a layer, with one bend, beside a hillside that steps a metre a row.</li>
+        <li><b>Dirt track and gravel road.</b> Packed earth, built with a shovel; gravel, from crushed stone, walked 15% faster (the chip says so while you are on it). Generated roads are dirt between villages and gravel between the large towns (recommendation taken).</li>
+        <li><b>The ford.</b> Where a brook is shallow the road goes down into it a layer and up out of it again, on a gravel bed 0.3 m under the water, waded at full speed.</li>
+        <li><b>The timber bridge.</b> Where the water is deep, a plank deck at the bank's height on posts down to the bed, with rails on both sides; a piece the world builds with the road.</li>
+        <li><b>Lit at night</b> by lanterns on posts every sixth cell and at both ends of the ford and the bridge; slide the time of day past dusk.</li>
+        <li><b>In the game</b> the roads between towns are planned once from the sites and the seed, each settlement to its two nearest within 2 km and the largest towns to each other, stored as records the world authored, and laid only on cells with no edit of yours: a road goes round your work.</li>
+        <li><b>Roads two and three cells wide</b> are in their own scene: pick <i>Wide roads: two and three cells</i> under Settlement.</li>
+      </ul>
+
+      <h3>Wide roads (townsfolk design 10b)</h3>
+      <ul>
+        <li><b>Three roads side by side</b>, one, two and three cells wide (about 2.5, 4.9 and 7.4 m), dirt to the west and gravel to the east, a cart and a townsperson on each. Seen from the knoll: <i>One, two, three wide</i>.</li>
+        <li><b>Why a wide climb cannot copy the one-wide rule lane by lane.</b> The next lane is the next row, shifted half a cell along the road, so at the same place it is half a layer higher. Lane by lane, each cell rising from its own entry edge, the lanes would meet with steps of up to half a metre.</li>
+        <li><b>The rule: one shared plane for the whole width.</b> Every cell of a wide road on a slope takes its top from one plane along the road, rising a layer per 2.833 m (19&deg;, the one-wide road's grade), level past the foot and the top. Its column is cut or filled to the whole layer under the plane's lowest point on it, and a bed of packed earth fills to the plane. The surface is the same on both sides of every edge, so there is no step between lanes.</li>
+        <li><b>What it costs.</b> Every other lane is half a layer off its cells. A lane in step with the plane is exactly the one-wide road cell (no cut, no fill). A lane half a cell along has its column cut a layer and a bed 0.5 to 1.5 m deep: against its natural ground the road is cut half a metre at the downhill end of each cell and filled half a metre at the uphill end. A two-wide road has one such lane, a three-wide road two (its outer lanes). Stand on a cell to read its cut and bed in the chips.</li>
+        <li><b>Cut and fill sides.</b> The hill is a side-hill: higher to the north of each road (a cut bank of earth faces down to the road) and lower to the south (the road's bed shows as an embankment). See <i>Cut and fill</i>.</li>
+        <li><b>The walker</b> crosses every lane diagonally up and down both wide climbs, and round both bends, with the Eye jumps readout at nought.</li>
+        <li><b>Bends only on the level</b> (recommendation taken, ask only with screenshots). In a 60&deg; bend the inner lane turns in one cell and the outer lane in two or three, so a bend on a slope would need each lane at a different grade, the inner lane up to three times as steep. Wide roads climb straight and bend on the plateau: the two-wide turns north-east, the three-wide south-east, inner and outer lanes named on the cells; a lookout mound by each bend shows it from above. The one-wide road may still bend while it climbs.</li>
+        <li><b>Junctions are level.</b> A one-wide track leaves the three-wide road in a T, crosses the two-wide road below and meets the south three-wide road; on the plateau the one-wide road ends in a T on the two-wide's bend.</li>
+        <li><b>Wide timber bridges</b>, two and three wide: a plank deck over the full width at the banks' height, rails only on the outer edges.</li>
+        <li><b>Lamps</b> on posts every sixth cell, one side of a one- or two-wide road, both sides (staggered) of a three-wide road, and at the bridges and the junction.</li>
+        <li><b>Which roads are wide</b> (recommendation taken, ask only with screenshots): gravel roads between the largest walled towns are two wide, three wide inside a large town's gate; village tracks stay one wide. A player lays any width by laying cells side by side.</li>
+      </ul>
+
+      <h3>Versions</h3>
+      <ul>
+        <li><b>Version 1</b>: the settlements, stairs, the walker and the night.</li>
+        <li><b>Version 2</b> (2026-11-21): the Roads scene; the description moved into this modal.</li>
+        <li><b>Version 3</b> (2026-11-22): the Wide roads scene, roads two and three cells wide.</li>
+      </ul>
+    
+      <h3>What is modelled</h3>
       <ul>
         <li><b>The engine's cell.</b> Every hex is 2.833 m flat to flat and every layer 1.000 m, the gold standard in CLAUDE.md. Walls, floors, stairs and doors are cut to it; nothing is scaled to fit.</li>
         <li><b>Walls sit on edges, floors in cells.</b> A wall is a 0.3 m (timber) or 0.5 m (stone) slab on a cell's shared edge, so a one-cell room is 2.5 m across inside, not a solid block. The town wall and keep are whole masonry cells.</li>
@@ -189,20 +249,9 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>A newel stair ends in a 30&deg; landing and a rail</b>, so a walker who keeps turning meets the rail, not the well. A wider landing would take headroom from the turn below.</li>
         <li><b>Light.</b> Sky light is dimmed on faces under a roof, standing in for the baked skylight of the voxel-light change. Hearths and the forge are the only lights indoors.</li>
       </ul>
-    </details>
-  </aside>
-
-  <section class="panel inst" aria-label="Where you are">
-    <div class="where" id="where">-</div>
-    <div class="readouts" id="readouts"></div>
-    <div class="chips" id="chips"></div>
-  </section>
-
-  <section class="panel keys" aria-label="Controls"><div class="eyebrow" style="margin-bottom:6px">Controls</div><table id="keys"></table></section>
-  <div class="panel hint" id="hint">Click to walk</div>
-  <div class="panel toast" id="toast" role="status"></div>
-  <div class="panel loading" id="loading">Laying out the town...</div>
-
+    
+  </div>
+</div>
   <div class="touch" id="touch" aria-hidden="true">
     <div class="stick" id="stick"><i id="knob"></i></div>
     <button class="tbtn" id="tJump">Jump</button>
@@ -232,6 +281,7 @@ const WALK = 8, SPRINT = 14, JUMP = 12, GRAV = 25;
 const TOL = 0.03;                // walking.rs's 3 cm "already on it" band
 const SNAP = 0.35;               // proposed: hold a grounded walker to a floor this far below
 const TICK = 1 / 120;
+const GRAVEL_SPEED = 1.15;      // a gravel road is walked 15% faster (townsfolk design 10)
 
 // Stairs, all landing on layer lines.
 const FLIGHT = { risers: 16, rise: STOREY / 16, run: 2 * W / 16 };     // 0.1875 m on 0.354 m
@@ -3227,6 +3277,371 @@ Object.assign(SCENES, {
 });
 
 // =====================================================================
+// Roads (townsfolk design 10 and 11, task 8.1): road cells whose top slopes
+// from one layer to the next instead of stepping, in dirt and gravel; a road
+// climbing a hill of ten layers; a ford over a shallow river and a timber
+// bridge over a deep one. The look the game builds from.
+// =====================================================================
+Object.assign(PAINT, {
+  // A dirt track: packed earth, lighter than the field's dirt, worn smooth,
+  // with a few pebbles pressed in.
+  roaddirt(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x8a6a48), 0.1);
+    for (let i = 0; i < 40; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0x9c7c56)); px(x + 1, y, hex2rgb(0x9c7c56)); }
+    for (let i = 0; i < 14; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0x6e5236 : 0xa89272));
+  },
+  // A gravel road: small grey-brown stones, two or three pixels each, packed
+  // close on a dark bed.
+  gravel(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x544d43), 0.08);
+    for (let i = 0; i < 130; i++) {
+      const x = rnd() * w | 0, y = rnd() * h | 0, col = hex2rgb([0x7d7568, 0x8a8170, 0x6c645a, 0x958a78, 0x75695a][rnd() * 5 | 0]);
+      px(x, y, col, 1.08); px(x + 1, y, col, 1.0); if (rnd() < 0.5) px(x, y + 1, col, 0.86);
+    }
+  },
+});
+Object.assign(REP, { roaddirt: 2, gravel: 2 });
+
+// One road cell (design 10): flat where `up` is -1; otherwise its top is a
+// plane rising one layer, from `low` at the middle of the edge it is entered
+// by (`from`) to `low + 1` at the middle of edge `up`, the edge it climbs out
+// of. Straight through, that is one layer over the cell's 2.833 m (19
+// degrees); round a bend of 60 degrees, over 2.45 m (22 degrees). The game
+// cuts the same plane. Its side faces run down to the cell's own ground.
+function roadCell(c, r, up, from, m, label) {
+  const i = idx(c, r), low = TOP[i];
+  TOPMAT[i] = m; NO_TREE.add(i);
+  AREA[i] = label;
+  if (up < 0) return;
+  STEPCELL.add(i);
+  const hex = hexPts(c, r);
+  const mid = d => { const [A, B] = edgeEnds(c, r, d); return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]; };
+  const [fx, fz] = mid(from), [tx, tz] = mid(up), len = Math.hypot(tx - fx, tz - fz), ux = (tx - fx) / len, uz = (tz - fz) / len;
+  const hAt = (px, pz) => low + clamp(((px - fx) * ux + (pz - fz) * uz) / len, 0, 1);
+  face(m, hex.map(p => [p[0], hAt(p[0], p[1]), p[1]]), [0, 1, 0]);
+  for (let d = 0; d < 6; d++) {
+    const [A, B] = edgeEnds(c, r, d), ha = hAt(A[0], A[1]), hb = hAt(B[0], B[1]);
+    if (ha < low + 1e-3 && hb < low + 1e-3) continue;
+    const [nx, nz] = dvec(d);
+    face("dirt", [[A[0], low, A[1]], [B[0], low, B[1]], [B[0], hb, B[1]], [A[0], ha, A[1]]], [nx, 0, nz]);
+  }
+  addSurface({
+    pts: hex, y0: low, y1: low + 1, label, detail: `1 m over ${len.toFixed(2)} m, ${Math.round(Math.atan(1 / len) * 180 / Math.PI)}°, no step`,
+    iv(px, pz, out) { if (inPoly(this.pts, px, pz)) out.push([low - 1, hAt(px, pz), this]); },
+  });
+}
+
+// A road along `cells`: each cell flat, or sloped up toward its neighbour in
+// the road that stands a layer higher, from the edge of its other neighbour
+// (or the opposite edge at an end). Never more than a layer a cell.
+// `mat(c, r)` and `label(c, r)` name each cell's surface and place.
+function road(cells, mat, label) {
+  for (let k = 0; k < cells.length; k++) {
+    const [c, r] = cells[k], h = TOP[idx(c, r)];
+    let up = -1, other = -1;
+    for (const [j, o] of [[k + 1, k - 1], [k - 1, k + 1]]) {
+      if (j < 0 || j >= cells.length) continue;
+      const [c2, r2] = cells[j];
+      if (TOP[idx(c2, r2)] === h + 1) { up = dirTo(c, r, c2, r2); other = o; break; }
+    }
+    let from = (up + 3) % 6;
+    if (up >= 0 && other >= 0 && other < cells.length) { const d = dirTo(c, r, ...cells[other]); if (d >= 0 && d !== up) from = d; }
+    roadCell(c, r, up, from, mat(c, r), label(c, r));
+  }
+}
+// From (c, r), `n` cells along each direction of `dirs` in turn.
+function walkCells(c, r, legs) {
+  const out = [[c, r]];
+  for (const [d, n] of legs) for (let k = 0; k < n; k++) { [c, r] = nb(c, r, d); out.push([c, r]); }
+  return out;
+}
+// A timber bridge cell: a plank deck at `y` over the cell, posts down to the
+// bed at its corners, and rails on the edges `railDirs`.
+function bridgeCell(c, r, y, railDirs, bed) {
+  const i = idx(c, r), x = cx(c, r), z = cz(c, r);
+  slabHex(c, r, y, "plank", "timber");
+  PLACES[i].push([y - 0.5, y + 3, "Timber bridge"]);
+  for (const d of railDirs) {
+    const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d), ang = Math.atan2(B[1] - A[1], B[0] - A[0]);
+    const mx = (A[0] + B[0]) / 2 - nx * 0.06, mz = (A[1] + B[1]) / 2 - nz * 0.06;
+    solidBox("timber", mx, y, mz, R + 0.04, 1.0, 0.1, ang, { label: "rail" });
+    box("timber", mx, y + 0.95, mz, R + 0.1, 0.08, 0.16, ang);
+    cyl("timber", A[0] - nx * 0.06, bed, A[1] - nz * 0.06, 0.1, y + 1.05 - bed, 6);
+  }
+  for (const d of [1, 4]) { const [A] = edgeEnds(c, r, d); cyl("timber", (A[0] + x) / 2, bed, (A[1] + z) / 2, 0.12, y - bed - SLAB, 6); }
+}
+
+function makeRoads() {
+  STAIR_CELLS.clear();
+  // the plain at layer 1, a hill rising a layer a row to a plateau at 11
+  const hill = r => r <= 14 ? 1 : Math.min(11, 1 + (r - 14));
+  const ford = c => c >= 13 && c <= 15, gorge = c => c >= 34 && c <= 36;
+  ground((c, r) => {
+    if (r <= 13 && ford(c)) return { h: -1, top: "sand", side: "dirt", area: "The brook" };
+    if (r <= 13 && gorge(c)) return { h: -3, top: "scree", side: "slaterock", area: "The river" };
+    const h = hill(r);
+    return { h, top: "meadow", side: "dirt", area: r >= 25 ? "The plateau" : r >= 15 ? "The hillside" : "The fields" };
+  });
+  SUNBEAMS.length = 0;
+  const ROW_ROAD = 7;
+  // the ford: the brook shallows to a layer of gravel where the road crosses
+  for (let c = 13; c <= 15; c++) for (const r of [ROW_ROAD - 1, ROW_ROAD, ROW_ROAD + 1]) { const i = idx(c, r); TOP[i] = 0; TOPMAT[i] = "gravel"; SIDEMAT[i] = "scree"; AREA[i] = "The ford"; }
+  // the dirt track from the west, down into the ford and up out of it, to
+  // the crossroads
+  const west = []; for (let c = 0; c <= 24; c++) west.push([c, ROW_ROAD]);
+  road(west, c => ford(c) ? "gravel" : "roaddirt", c => ford(c) ? "The ford" : "Dirt track");
+  // the gravel road east over the bridge
+  const east = []; for (let c = 25; c < NC; c++) if (!gorge(c)) east.push([c, ROW_ROAD]);
+  road(east, () => "gravel", () => "Gravel road");
+  for (let c = 34; c <= 36; c++) bridgeCell(c, ROW_ROAD, 1, [1, 2, 4, 5], -3);
+  // the gravel road up the hill: north from the crossroads, a layer a cell up
+  // the hillside, with one switchback, onto the plateau
+  const climb = walkCells(24, ROW_ROAD + 1, [[1, 7], [1, 6], [2, 4], [0, 2]]);
+  road(climb, () => "gravel", () => "Hill road");
+  // the plateau's end of it: a flat turning place
+  const [tc, tr] = climb[climb.length - 1];
+  for (let d = 0; d < 6; d++) { const [a, b] = nb(tc, tr, d); if (inMap(a, b) && TOP[idx(a, b)] === TOP[idx(tc, tr)]) roadCell(a, b, -1, -1, "gravel", "The turning place"); }
+  // lamps: a post at every sixth cell of a road, on its south side, and at
+  // both ends of the ford and the bridge
+  const post = (c, r, side = -1) => { const x = cx(c, r), z = cz(c, r) + side * 1.75, y = TOP[idx(c, r)]; lantern(x, y, z); };
+  for (const [c, r] of west.filter(([c]) => c % 6 === 2 && c > 0)) post(c, r);
+  for (const [c, r] of east.filter(([c]) => c % 6 === 2)) post(c, r);
+  post(12, ROW_ROAD); post(16, ROW_ROAD, 1); post(33, ROW_ROAD, 1); post(37, ROW_ROAD);
+  climb.forEach(([c, r], k) => { if (k > 0 && k % 4 === 0) { const x = cx(c, r) + 2.2, z = cz(c, r), [a, b] = cellAt(x, z); lantern(x, TOP[idx(a, b)], z); } });
+  post(tc, tr, 1);
+  // a milestone at the crossroads, and a cart's load of logs left by it
+  solidBox("fieldstone", cx(24, ROW_ROAD) - 1.5, 1, cz(0, ROW_ROAD) - 1.4, 0.4, 0.9, 0.3, 0, { label: "Milestone" });
+  // people on the roads
+  person(cx(6, ROW_ROAD), 1, cz(0, ROW_ROAD) + 0.4, 0, 0x7a6a3a, { role: "Traveller", path: [[cx(2, ROW_ROAD), cz(0, ROW_ROAD) + 0.4], [cx(11, ROW_ROAD), cz(0, ROW_ROAD) + 0.4]], speed: 1.1 });
+  person(cx(40, ROW_ROAD), 1, cz(0, ROW_ROAD) - 0.4, 0, 0x4f6a8a, { role: "Carter", path: [[cx(38, ROW_ROAD), cz(0, ROW_ROAD) - 0.4], [cx(47, ROW_ROAD), cz(0, ROW_ROAD) - 0.4]], speed: 0.9 });
+  // reeds along the brook, trees on the hill and in the fields
+  for (let r = 0; r <= 13; r++) for (const c of [12, 16]) if (Math.abs(r - ROW_ROAD) > 1 && hash2(c, r) < 0.6) reeds(cx(c, r), 1, cz(c, r), 3);
+  scatter((c, r) => ford(c) || gorge(c) ? 0 : r >= 15 && r <= 24 ? 0.1 : 0.04, (x, y, z, rnd) => rnd() < 0.6 ? tree(x, y, z, 1 + rnd() * 0.5) : shrub(x, y, z, 0.8, "leaves"), 23);
+  GOTO.west = { x: cx(3, ROW_ROAD), z: cz(0, ROW_ROAD), y: 1, look: [cx(12, ROW_ROAD), cz(0, ROW_ROAD)] };
+  GOTO.ford = { x: cx(11, ROW_ROAD), z: cz(0, ROW_ROAD) + 0.3, y: 1, look: [cx(17, ROW_ROAD), cz(0, ROW_ROAD)], pitch: -0.12 };
+  GOTO.crossroads = { x: cx(22, ROW_ROAD), z: cz(0, ROW_ROAD) - 1, y: 1, look: [cx(25, ROW_ROAD + 6), cz(0, ROW_ROAD + 6)] };
+  GOTO.hillfoot = { x: cx(climb[5][0], climb[5][1]), z: cz(0, climb[5][1]), y: 1, look: [cx(climb[12][0], climb[12][1]), cz(0, climb[12][1])], pitch: 0.18 };
+  GOTO.climb = { x: cx(climb[10][0], climb[10][1]), z: cz(0, climb[10][1]), y: TOP[idx(...climb[10])], look: [cx(climb[16][0], climb[16][1]), cz(0, climb[16][1])], pitch: 0.12 };
+  GOTO.hilltop = { x: cx(tc, tr), z: cz(0, tr), y: TOP[idx(tc, tr)], look: [cx(24, ROW_ROAD), cz(0, ROW_ROAD)], pitch: -0.3 };
+  GOTO.bridge = { x: cx(31, ROW_ROAD), z: cz(0, ROW_ROAD) - 0.3, y: 1, look: [cx(38, ROW_ROAD), cz(0, ROW_ROAD)] };
+  GOTO.gravel = { x: cx(40, ROW_ROAD), z: cz(0, ROW_ROAD), y: 1, look: [cx(48, ROW_ROAD), cz(0, ROW_ROAD)] };
+  ROAD_CLIMB.length = 0; ROAD_CLIMB.push(...climb);
+  buildTerrain(); buildPosts();
+}
+const ROAD_CLIMB = [];
+SCENES.roads = { label: "Roads: dirt, gravel, a hill, a ford, a bridge", build: makeRoads, start: "crossroads",
+  orbit: { tx: W * 26, tz: ROW * 12, dist: 105, yaw: 1.25, pitch: 0.55 },
+  places: [["west", "Dirt track"], ["ford", "The ford"], ["crossroads", "Crossroads"], ["hillfoot", "Hill road, foot"], ["climb", "Hill road, climbing"], ["hilltop", "The turning place"], ["bridge", "Timber bridge"], ["gravel", "Gravel road"]],
+  streetLight: 0, litWindows: 0,
+  // the far ground rings the map, so it never lies over the brook and the river
+  env: { fog: [80, 380], water: { level: 0.3, color: 0x3a6a70, opacity: 0.86 },
+    far: [{ color: 0x66763a, y: 0.9, xMax: -W }, { color: 0x66763a, y: 0.9, xMin: W * NC + W / 2 },
+      { color: 0x66763a, y: 0.9, xMin: -W, xMax: W * NC + W / 2, zMax: -R }, { color: 0x66763a, y: 10.9, xMin: -W, xMax: W * NC + W / 2, zMin: ROW * NR }] } };
+
+// =====================================================================
+// Wide roads (townsfolk design 10b, M15 version 3): roads two and three
+// cells wide beside a one-wide one, on the level and up a hill. On a slope
+// the whole width takes its top from ONE plane along the road (a layer per
+// cell pitch, level past the foot and the top), so no lane steps against
+// the next; each cell's column is cut or filled to the whole layer under
+// the plane's lowest point on it, and a bed of packed earth fills to the
+// plane. Bends and junctions only on the level.
+// =====================================================================
+const WX0 = W * 27.5, WCLIMB = 10;                      // the foot of the climb, and its layers
+const WX1 = WX0 + WCLIMB * W;                           // the top
+const wideH = x => 1 + clamp((x - WX0) / W, 0, WCLIMB); // the shared plane: one layer per 2.833 m
+const WIDE = new Set(), ROADSET = new Set();
+const WIDE_WALKS = {};
+// Lay the cells of one wide road: register them all first, so a side face
+// is drawn only where the road meets something that is not road.
+function wideRoad(cells, mat, label) {
+  const list = cells.filter(([c, r]) => inMap(c, r));
+  for (const [c, r] of list) { WIDE.add(idx(c, r)); ROADSET.add(idx(c, r)); }
+  for (const [c, r] of list) wideCell(c, r, typeof mat === "function" ? mat(c, r) : mat, typeof label === "function" ? label(c, r) : label);
+}
+function wideCell(c, r, m, label) {
+  const i = idx(c, r), hex = hexPts(c, r), ground = TOP[i];
+  const hs = hex.map(p => wideH(p[0])), lo = Math.floor(Math.min(...hs) + 1e-6), hi = Math.max(...hs);
+  TOP[i] = lo; TOPMAT[i] = m; SIDEMAT[i] = "dirt"; NO_TREE.add(i); AREA[i] = label;
+  if (hi - lo < 1e-6) return;                          // level: an ordinary flat road cell
+  STEPCELL.add(i);
+  // the top, split where the plane levels off at the foot and at the top
+  let pieces = [hex];
+  for (const xc of [WX0, WX1]) pieces = pieces.flatMap(P => [clipPoly(P, 1, 0, xc), clipPoly(P, -1, 0, -xc)]).filter(P => P.length >= 3);
+  for (const P of pieces) face(m, P.map(p => [p[0], wideH(p[0]), p[1]]), [0, 1, 0]);
+  // the bed's sides, down to the column, where the neighbour is not road
+  for (let d = 0; d < 6; d++) {
+    const [a, b] = nb(c, r, d); if (inMap(a, b) && WIDE.has(idx(a, b))) continue;
+    const [A, B] = edgeEnds(c, r, d), ha = wideH(A[0]), hb = wideH(B[0]);
+    if (ha < lo + 1e-3 && hb < lo + 1e-3) continue;
+    const [nx, nz] = dvec(d);
+    face("dirt", [[A[0], lo, A[1]], [B[0], lo, B[1]], [B[0], hb, B[1]], [A[0], ha, A[1]]], [nx, 0, nz]);
+  }
+  const bed0 = Math.min(...hs) - lo, bed1 = hi - lo, cut = ground - lo;
+  const detail = (cut > 0 ? `column cut ${cut} layer${cut > 1 ? "s" : ""}, ` : cut < 0 ? `column filled ${-cut} layer${cut < -1 ? "s" : ""}, ` : "") +
+    (bed0 < 1e-3 && bed1 < 1 + 1e-3 && cut === 0 ? "no cut, no fill" : `a bed ${bed0.toFixed(1)} to ${bed1.toFixed(1)} m`) + `; 1 m over ${W.toFixed(2)} m, no step between lanes`;
+  WIDE_CELLS.push({ c, r, lo, ground, bed0, bed1, label });
+  addSurface({ pts: hex, y0: lo, y1: hi, label, detail,
+    iv(px, pz, out) { if (inPoly(this.pts, px, pz)) out.push([lo - 1, wideH(px), this]); } });
+}
+const WIDE_CELLS = [];
+const LOOKOUTS = [[40, 15], [45, 6]];   // peaks of the plateau's two lookout mounds   // every sloped wide cell: its column, natural ground and bed, for the shots
+// The cells of a band of `w` lanes along rows r0 .. r0 + w - 1, columns c0
+// to c1 (offset columns, so its ends zigzag half a cell).
+function rowBand(r0, w, c0, c1) { const out = []; for (let r = r0; r < r0 + w; r++) for (let c = c0; c <= c1; c++) out.push([c, r]); return out; }
+// A cart: a plank bed on two wheels, shafts forward; solid to the walker.
+function cart(x, y, z, ang, s = 1) {
+  const L = 2.0 * s, B = 1.3 * s, ca = Math.cos(ang), sa = Math.sin(ang);
+  box("plank", x, y + 0.5, z, L, 0.1, B, ang);
+  for (const k of [-1, 1]) { box("timber", x - sa * k * B / 2, y + 0.6, z + ca * k * B / 2, L, 0.32, 0.07, ang); box("timber", x + ca * k * L / 2, y + 0.6, z + sa * k * L / 2, 0.07, 0.32, B, ang); }
+  for (const k of [-1, 1]) box("timber", x + ca * (L / 2 + 0.7) - sa * k * 0.45, y + 0.45, z + sa * (L / 2 + 0.7) + ca * k * 0.45, 1.6, 0.07, 0.07, ang);
+  const wr = 0.5 * s;
+  for (const k of [-1, 1]) for (const off of [0.04, -0.04]) {
+    const wx = x - sa * k * (B / 2 + 0.1 + off), wz = z + ca * k * (B / 2 + 0.1 + off), pts = [];
+    for (let j = 0; j < 10; j++) { const a = j / 10 * Math.PI * 2; pts.push([wx + ca * Math.cos(a) * wr, y + wr + Math.sin(a) * wr, wz + sa * Math.cos(a) * wr]); }
+    face("timber", pts, [-sa * k * Math.sign(off), 0, ca * k * Math.sign(off)]);
+  }
+  addSolid({ type: "poly", pts: rectPts(x, z, L, B + 0.3, ang), y0: y, y1: y + 1.0, cls: "wall", label: "Cart" });
+}
+
+function makeWideRoads() {
+  STAIR_CELLS.clear(); WIDE.clear(); ROADSET.clear(); WIDE_CELLS.length = 0; SUNBEAMS.length = 0;
+  for (const k of Object.keys(WIDE_WALKS)) delete WIDE_WALKS[k];
+  const river = (c, r) => r >= 14 && r <= 31 && c >= 9 && c <= 11;
+  // the hill's own ground: a layer a cell up the climb, and across it a
+  // side-hill, higher to the north of each road and lower to the south
+  // (it fades out where it meets the plateau, so the plateau has no cliff)
+  const side = r => r <= 8 ? 1 : r <= 13 ? -1 : 0;
+  const hillGround = (c, r) => { const x = cx(c, r), base = Math.floor(wideH(x) + 1e-6), inClimb = x > WX0 && x < WX1, s = inClimb ? side(r) : 0; return clamp(s < 0 ? base - Math.min(-s, 11 - base, base - 1) : base + s, 1, 11); };
+  ground((c, r) => {
+    if (river(c, r)) return { h: -3, top: "scree", side: "slaterock", area: "The river" };
+    const kd = hexDist(c, r, 5, 14);
+    if (kd <= 2) return { h: 4 - kd, top: "meadow", side: "dirt", area: "The knoll" };
+    // two lookout mounds on the plateau, one inside each bend, to see them from
+    for (const [mc, mr] of LOOKOUTS) { const d = hexDist(c, r, mc, mr); if (d <= 1) return { h: 13 - d, top: "meadow", side: "dirt", area: "Lookout" }; }
+    const x = cx(c, r);
+    return { h: hillGround(c, r), top: "meadow", side: "dirt", area: x >= WX1 ? "The plateau" : x > WX0 ? "The hillside" : "The fields" };
+  });
+  // a road cell's natural ground is the hill's with no side-hill, so its cut
+  // or fill is measured from that
+  const natural = (c, r) => { TOP[idx(c, r)] = clamp(Math.floor(wideH(cx(c, r)) + 1e-6), 1, 11); };
+  const surf = c => c <= 12 ? "roaddirt" : "gravel", surfName = c => c <= 12 ? "dirt" : "gravel";
+  const P = (q, r) => { const [a, b] = toOff(q, r); return [cx(a, b), cz(a, b)]; };
+  // ---- 1 and 2. three roads side by side, one, two and three cells wide,
+  // dirt to the west and gravel to the east, climbing the hill together
+  const one = []; for (let c = 0; c <= 41; c++) one.push([c, 2]);
+  for (const [c, r] of one) natural(c, r);
+  road(one, c => surf(c), c => `One-wide road, ${surfName(c)}`);
+  for (const [c, r] of one) ROADSET.add(idx(c, r));
+  // ---- 3a. the two-wide road, rows 5 and 6, bending 60 degrees north-east
+  // (direction 5) on the plateau; after the bend its lanes are q + r = S2
+  // (inner) and S2 + 1 (outer). The one-wide road meets it there in a T.
+  const S2 = 43, two = rowBand(5, 2, 0, 41);
+  for (let r = 4; r >= 0; r--) for (const q of [S2 - r, S2 + 1 - r]) two.push(toOff(q, r));
+  for (const [c, r] of two) natural(c, r);
+  wideRoad(two, c => surf(c), (c, r) => r >= 5 && c >= 40 ? "Two-wide road, the bend" : r >= 5 ? `Two-wide road, ${surfName(c)}, ${r === 5 ? "inner" : "outer"} lane` : `Two-wide road, ${toAx(c, r)[0] + r === S2 ? "inner" : "outer"} lane`);
+  // ---- 3b. the three-wide road, rows 9 to 11, bending 60 degrees south-east
+  // (direction 1) on the plateau; after the bend its lanes are q = Q3
+  // (inner), Q3 + 1 and Q3 + 2 (outer)
+  const Q3 = 35, three = rowBand(9, 3, 0, 41);
+  three.push([42, 10], [42, 11]);
+  for (let r = 12; r <= 20; r++) for (const q of [Q3, Q3 + 1, Q3 + 2]) three.push(toOff(q, r));
+  const lane3 = (c, r) => { if (r <= 11) return r === 9 ? "outer" : r === 10 ? "middle" : "inner"; const q = toAx(c, r)[0]; return q === Q3 ? "inner" : q === Q3 + 1 ? "middle" : "outer"; };
+  for (const [c, r] of three) natural(c, r);
+  wideRoad(three, c => surf(c), (c, r) => r <= 11 && toAx(c, r)[0] >= Q3 ? "Three-wide road, the bend" : `Three-wide road, ${r <= 11 ? surfName(c) + ", " : ""}${lane3(c, r)} lane`);
+  // ---- 5. the south roads over the river: two wide (dirt) and three wide
+  // (gravel), a plank deck over the full width, rails on the outer edges only
+  const legs = []; for (let k = 0; k < 7; k++) legs.push([1, 1], [2, 1]);
+  const track = walkCells(21, 12, legs.slice(0, 13));
+  const onTrack = (c, r) => track.some(([a, b]) => a === c && b === r);
+  const two2 = rowBand(19, 2, 0, 24).filter(([c, r]) => !river(c, r));
+  const three2 = rowBand(26, 3, 0, 26).filter(([c, r]) => !river(c, r));
+  wideRoad(two2, "roaddirt", (c, r) => onTrack(c, r) ? "Crossroads" : "Two-wide road, dirt");
+  wideRoad(three2, "gravel", (c, r) => onTrack(c, r) || (r === 26 && Math.abs(c - 21) <= 1) ? "Junction" : "Three-wide road, gravel");
+  for (const [r0, w] of [[19, 2], [26, 3]]) for (let r = r0; r < r0 + w; r++) for (let c = 8; c <= 12; c++) {
+    if (!river(c, r)) continue;
+    const rails = r === r0 ? [4, 5] : r === r0 + w - 1 ? [1, 2] : [];
+    bridgeCell(c, r, 1, rails, -3); ROADSET.add(idx(c, r)); AREA[idx(c, r)] = `Timber bridge, ${w} wide`;
+  }
+  // ---- 4. the junction: a one-wide dirt track leaves the three-wide road in
+  // a T, crosses the two-wide road and meets the south three-wide road
+  const trackOwn = track.filter(([c, r]) => !ROADSET.has(idx(c, r)));
+  road(trackOwn, () => "roaddirt", (c, r) => r === 12 ? "Junction" : "One-wide track");
+  for (const [c, r] of trackOwn) ROADSET.add(idx(c, r));
+  for (const [c, r] of [[20, 11], [21, 11], [22, 11]]) AREA[idx(c, r)] = "Junction";
+  // ---- 6. lamps: a lantern on a post off the road every sixth cell, one
+  // side of a one- or two-wide road, both sides (staggered) of a three-wide
+  const lamp = (x, z) => {
+    const [c, r] = cellAt(x, z); if (!inMap(c, r) || ROADSET.has(idx(c, r)) || river(c, r)) return;
+    NO_TREE.add(idx(c, r)); lantern(x, TOP[idx(c, r)], z);
+  };
+  const north = (c, r) => lamp(cx(c, r) + 0.25, cz(c, r) - R - 0.35), south = (c, r) => lamp(cx(c, r) + 0.25, cz(c, r) + R + 0.35);
+  const westOf = (q, r) => { const [x, z] = P(q, r); lamp(x - W / 2 - 0.4, z); }, eastOf = (q, r) => { const [x, z] = P(q, r); lamp(x + W / 2 + 0.4, z); };
+  for (let c = 2; c <= 38; c += 6) { north(c, 2); south(c, 6); north(c, 9); south(c + 3, 11); }
+  for (let r = 12; r <= 20; r += 3) { westOf(Q3, r); eastOf(Q3 + 2, r); }
+  for (const r of [0, 3]) eastOf(S2 + 1 - r, r);
+  for (let c = 2; c <= 24; c += 6) { south(c, 20); north(c, 26); south(c + 3, 28); }
+  for (const c of [7, 13]) { north(c, 19); south(c, 20); north(c, 26); south(c, 28); }
+  for (const r of [12, 15, 18, 23]) { const t = track.find(([, rr]) => rr === r); if (t) lamp(cx(...t) + W / 2 + 0.4, cz(...t)); }
+  solidBox("fieldstone", cx(20, 12) - 0.6, 1, cz(0, 12) + 0.2, 0.4, 0.9, 0.3, 0, { label: "Milestone" });
+  // ---- people and carts on each road, for scale
+  const zr = r => cz(0, r);
+  person(cx(4, 2), 1, zr(2), 0, 0x7a6a3a, { role: "Traveller", path: [[cx(1, 2), zr(2)], [cx(11, 2), zr(2)]], speed: 1.0 });
+  cart(cx(15, 2), 1, zr(2), 0, 0.85);
+  person(cx(6, 5), 1, zr(5), 0, 0x4f6a8a, { role: "Carter", path: [[cx(2, 5), zr(5)], [cx(12, 5), zr(5)]], speed: 1.1 });
+  cart(cx(16, 6), 1, zr(6), 0);
+  person(cx(8, 9), 1, zr(9), 0, 0x6a4a3a, { role: "Trader", path: [[cx(3, 9), zr(9)], [cx(14, 9), zr(9)]], speed: 0.9 });
+  person(cx(10, 11), 1, zr(11), 0, 0x5a6a3a, { role: "Drover", path: [[cx(16, 11), zr(11)], [cx(5, 11), zr(11)]], speed: 1.2 });
+  cart(cx(14, 10), 1, zr(10), 0); cart(cx(19, 10), 1, zr(10), Math.PI);
+  { const x = cx(35, 11) + 0.4; person(x, wideH(x), zr(11) + 0.5, Math.PI, 0x4a5a6a, { role: "Carter", work: "idle" }); }
+  { const x = cx(34, 6) + 0.6; person(x, wideH(x), zr(6), 0, 0x7a5a3a, { role: "Traveller", work: "idle" }); }
+  person(cx(21, 22), 1, zr(22), 0, 0x6a5a4a, { role: "Shepherd", path: [[cx(21, 21) + 0.6, zr(21)], [cx(21, 25) + 0.6, zr(25)]], speed: 1.0 });
+  person(cx(15, 19), 1, zr(19) + 0.6, 0, 0x5a4a6a, { role: "Traveller", path: [[cx(13, 19), zr(19) + 0.6], [cx(23, 19), zr(19) + 0.6]], speed: 1.1 });
+  cart(cx(15, 20), 1, zr(20) - 0.3, 0);
+  person(cx(15, 26), 1, zr(26) - 0.4, 0, 0x3a6a5a, { role: "Drover", path: [[cx(13, 26), zr(26) - 0.4], [cx(24, 26), zr(26) - 0.4]], speed: 0.9 });
+  cart(cx(17, 28), 1, zr(28) - 0.3, 0); cart(cx(3, 28), 1, zr(28) - 0.3, Math.PI);
+  { const [x, z] = P(Q3 + 1, 16); cart(x, 11, z, Math.PI / 3); person(x - 1.8, 11, z + 0.6, 1.0, 0x4f6a8a, { role: "Carter", work: "idle" }); }
+  { const [x, z] = P(S2 - 3, 3); person(x, 11, z, -1.0, 0x7a6a3a, { role: "Traveller", work: "idle" }); }
+  // places
+  const yAt = (x, z) => { const [c, r] = cellAt(x, z); return WIDE.has(idx(c, r)) ? Math.max(TOP[idx(c, r)], wideH(x)) : TOP[idx(c, r)]; };
+  const spot = (c, r, dx, dz, look, pitch = 0) => { const x = cx(c, r) + dx, z = cz(c, r) + dz; return { x, z, y: yAt(x, z), look, pitch }; };
+  GOTO.parallel = spot(5, 14, 0, 0, [cx(14, 6), zr(6)], -0.2);
+  GOTO.lanes = spot(2, 10, 0, 0, [cx(16, 10), zr(10)], -0.05);
+  GOTO.climbfoot = spot(23, 10, 0, 0, [cx(38, 8), zr(8)], 0.16);
+  GOTO.climbing = spot(31, 9, 0, -0.4, [cx(37, 11), zr(11)], 0.1);
+  GOTO.cutfill = spot(31, 13, 0, 0.3, [cx(32, 9), zr(9)], 0.22);
+  GOTO.bend3 = spot(LOOKOUTS[0][0], LOOKOUTS[0][1], 0, 0, [cx(42, 11), zr(11)], -0.42);
+  GOTO.bend2 = spot(LOOKOUTS[1][0], LOOKOUTS[1][1], 0, 0, [cx(41, 4), zr(4)], -0.42);
+  GOTO.junction = spot(21, 16, 0.4, 0, [cx(21, 10), zr(10)], -0.06);
+  GOTO.bridge2 = spot(5, 19, 0, 1.2, [cx(16, 19), zr(19) + 1.2], -0.1);
+  GOTO.bridge3 = spot(5, 27, 0, 0, [cx(16, 27), zr(27)], -0.1);
+  // trees and shrubs off the roads, thicker on the hillside, none in front of a place
+  for (const g of Object.values(GOTO)) { const [gc, gr] = cellAt(g.x, g.z); for (let r = gr - 2; r <= gr + 2; r++) for (let c = gc - 2; c <= gc + 2; c++) if (inMap(c, r) && hexDist(c, r, gc, gr) <= 1) NO_TREE.add(idx(c, r)); }
+  scatter((c, r) => river(c, r) || hexDist(c, r, 5, 14) <= 2 ? 0 : cx(c, r) > WX0 && cx(c, r) < WX1 ? 0.09 : 0.04, (x, y, z, rnd) => rnd() < 0.6 ? tree(x, y, z, 1 + rnd() * 0.5) : shrub(x, y, z, 0.8, "leaves"), 41);
+  for (let r = 14; r <= 31; r++) for (const c of [8, 12]) if (!river(c, r) && !ROADSET.has(idx(c, r)) && hash2(c, r) < 0.5) reeds(cx(c, r), 1, cz(c, r), 3);
+  // the walks the shots take, across every lane, up and down the climbs and round the bends
+  WIDE_WALKS.three = [[24, 9], [29, 11], [31, 9], [33, 11], [34, 9], [37, 11], [39, 10], [36, 9], [33, 11], [30, 10], [30, 9], [30, 11], [26, 9], [23, 11]].map(([c, r]) => [cx(c, r), zr(r)]);
+  WIDE_WALKS.two = [[24, 5], [29, 6], [31, 5], [34, 6], [36, 5], [39, 6], [33, 5], [28, 6], [24, 5]].map(([c, r]) => [cx(c, r), zr(r)]);
+  WIDE_WALKS.bends = [[cx(36, 10), zr(10)], [cx(41, 9), zr(9)], P(Q3 + 2, 18), P(Q3, 18), [cx(40, 11), zr(11)], [cx(39, 6), zr(6)], P(S2, 1), P(S2 - 1, 1), [cx(36, 5), zr(5)]];
+  buildTerrain(); buildPosts();
+}
+SCENES.wideroads = { label: "Wide roads: two and three cells", build: makeWideRoads, start: "parallel",
+  orbit: { tx: W * 27, tz: ROW * 15, dist: 125, yaw: -0.75, pitch: 0.62 },
+  places: [["parallel", "One, two, three wide"], ["lanes", "Three lanes"], ["climbfoot", "Wide climb, foot"], ["climbing", "Wide climb, across lanes"], ["cutfill", "Cut and fill"], ["bend3", "Three-wide bend"], ["bend2", "Two-wide bend"], ["junction", "Junction"], ["bridge2", "Two-wide bridge"], ["bridge3", "Three-wide bridge"]],
+  streetLight: 0, litWindows: 0,
+  // the far ground rings the map just under its edge cells' own ground, a
+  // slice a cell along the north and south edges, so the hill and the
+  // plateau do not end in a cliff over nothing
+  env: { fog: [80, 380], water: { level: 0.3, color: 0x3a6a70, opacity: 0.86 },
+    get far() {
+      const col = 0x66763a, out = [{ color: col, y: 0.9, xMax: 0 }, { color: col, y: 10.9, xMin: W * (NC - 0.5) },
+        { color: col, y: 0.8, xMin: 0, xMax: W * (NC - 0.5), zMax: -R / 2 }, { color: col, y: 0.8, xMin: 0, xMax: W * (NC - 0.5), zMin: ROW * (NR - 1) + R / 2 }];   // under the slices, so no water shows between them
+      for (const [r, key, edge] of [[0, "zMax", -R / 2], [NR - 1, "zMin", ROW * (NR - 1) + R / 2]])
+        for (let c = 0; c < NC; c++) { const x = cx(c, r); out.push({ color: col, y: TOP[idx(c, r)] - 0.1, xMin: x - W / 2, xMax: x + W / 2, [key]: edge }); }
+      return out;
+    } } };
+
+// =====================================================================
 // Night. Every lamp, torch, brazier and fire lights what is near it,
 // wherever the camera is: its light is baked into the vertices when a
 // settlement is built, the way the voxel-light change carries block light,
@@ -3493,7 +3908,9 @@ function tick(dt, inp) {
   const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
   const env = SCENES[SCENE] && SCENES[SCENE].env, wading = env && env.water && P.feet < env.water.level - 0.3 && !MODE.noclip;
   P.wading = !!wading;
-  const speed = (inp.sprint ? SPRINT : WALK) * (wading ? 0.5 : 1); // walking.rs water_movement_mult
+  const under = cellAt(P.x, P.z), gravel = P.grounded && !wading && inMap(under[0], under[1]) && TOPMAT[idx(under[0], under[1])] === "gravel";
+  P.gravel = gravel;
+  const speed = (inp.sprint ? SPRINT : WALK) * (wading ? 0.5 : 1) * (gravel ? GRAVEL_SPEED : 1); // walking.rs water_movement_mult; gravel, townsfolk design 10
   if (MODE.noclip) {
     const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
     P.x += (inp.fwd * fx * cp + inp.side * rx) * speed * dt; P.z += (inp.fwd * fz * cp + inp.side * rz) * speed * dt; P.feet += (inp.fwd * sp + (inp.jump ? 1 : 0) - (inp.down ? 1 : 0)) * speed * dt;
@@ -3697,6 +4114,11 @@ function fillList(which) {
 }
 function buildUI() {
   fillList("places");
+  { const m = $("infoModal"), close = () => { m.hidden = true; };
+    $("infoOpen").onclick = () => { m.hidden = false; $("infoClose").focus(); };
+    $("infoClose").onclick = close;
+    m.onclick = e => { if (e.target === m) close(); };
+    addEventListener("keydown", e => { if (e.key === "Escape" && !m.hidden) close(); }); }
   $("tabPlaces").onclick = () => fillList("places");
   $("tabKits").onclick = () => fillList("kits");
   $("townToggle").onclick = () => setTownOpen(document.querySelector(".town").dataset.open === "false");
@@ -3866,6 +4288,7 @@ function hud() {
   if (now - P.lastStepT < 0.5 && Math.abs(P.lastStep) > 0.04) chips.push([(P.lastStep > 0 ? "Stepped up " : "Held down ") + Math.abs(P.lastStep).toFixed(2) + " m", ""]);
   if (P.blocked) chips.push(["Blocked", "bad"]);
   if (P.wading) chips.push(["Wading, half speed", ""]);
+  if (P.gravel) chips.push(["Gravel, +15%", "good"]);
   if (P.airOnStair) chips.push([`Left the stair ${P.airOnStair}x`, "bad"]);
   $("chips").innerHTML = chips.map(([t, k]) => `<span class="chip ${k}">${t}</span>`).join("");
 }

@@ -3,7 +3,7 @@
 ## Purpose
 
 What it takes to stay alive in a Survival world: health, falls, hunger,
-breath and air, predators, fights with townsfolk, death and respawn, with
+breath and air, tool wear, predators, fights with townsfolk, death and respawn, with
 Explorer worlds left exactly as calm as before.
 
 ## ADDED Requirements
@@ -105,10 +105,42 @@ standing with it. In Explorer, townsfolk SHALL NOT be harmed.
 - **THEN** the guards come for the player, and the town's standing with them
   drops
 
+### Requirement: Tools wear out in Survival
+In Survival, each owned tool SHALL carry the uses it has left, starting at
+the number its tier sets. A finished action with the tool (a block broken, a
+tree felled, a cell tilled, a fish landed, a hit landed) SHALL spend one use,
+or two for a block of a higher tier than the tool.  At zero uses the tool SHALL become a broken
+tool in the same slot that works as bare hands, and repairing it at a
+workbench or with a town's smith SHALL restore all its uses. In Explorer,
+tools SHALL NOT wear.
+
+#### Scenario: A stone pickaxe wears out
+- **WHEN** a Survival player breaks stone with a stone pickaxe until its
+  uses reach zero
+- **THEN** the pickaxe stays in its slot as a broken pickaxe, digs as bare
+  hands do, and is still there after the world is reopened
+
+#### Scenario: Repair at the workbench
+- **WHEN** the player repairs a broken stone pickaxe at the workbench with
+  half its head materials
+- **THEN** it has its full uses again and keeps its tier
+
+#### Scenario: A missed swing is free
+- **WHEN** the player swings at nothing, or stops a dig half way
+- **THEN** the tool spends no use
+
+#### Scenario: An old save
+- **WHEN** a world saved before tool wear is opened in Survival
+- **THEN** every tool it holds has its full uses
+
+#### Scenario: Explorer never wears
+- **WHEN** an Explorer player breaks a thousand blocks with one pickaxe
+- **THEN** the pickaxe has not changed
+
 ### Requirement: The server decides survival
 In a multiplayer world, health, hunger, breath, damage, death and the
 dropped pack SHALL be decided by the server like any other stored change.
-Players SHALL NOT damage each other.
+Tool wear SHALL be counted by the server too. Players SHALL NOT damage each other.
 
 #### Scenario: Two players and a fox
 - **WHEN** a fox attacks one of two players standing together

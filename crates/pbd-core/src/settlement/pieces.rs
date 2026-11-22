@@ -1453,6 +1453,11 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                 continue;
             }
             for s in 0..storeys {
+                // A wall the world broke for a repair job is not there
+                // until it is mended (`townsfolk` design 29).
+                if def.broken.contains(&[c, r, d as i32, s as i32]) {
+                    continue;
+                }
                 let wall = &kit.walls[(s as usize).min(kit.walls.len() - 1)];
                 let y0 = s as f32 * storey_m;
                 let y1 = y0 + storey_m;

@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Buying and selling with a town's trader: prices from what the town makes and
-needs, limited stock, and prices that move with your sales.
+Buying and selling with a town's trader. Its prices, stock and goodwill are
+built and in `openspec/specs/world/trade` (2026-11-21); what is left here
+waits for the townsfolk standing in the game to talk to.
 
 ## ADDED Requirements
 
@@ -17,30 +18,55 @@ sell to for coins.
 - **WHEN** the player buys a loaf from a town's trader with enough coins
 - **THEN** the loaf is in the pack and its price has left the purse
 
-### Requirement: Prices follow the town
+### Requirement: The trade panel lists every good in a window that scrolls and filters
+The trade panel SHALL list every good the trader sells and every good in
+the pack it buys, each column in a window of a fixed number of rows that
+scrolls on its own by whole rows with the mouse wheel and a scroll bar
+shown only when the column overflows, the purse and BACK fixed under it.
+Each column SHALL offer ALL and one filter per shelf (food, organics, raw,
+tools, goods) that has goods in it, read from each good's group, and a
+filter change SHALL show the column from its top.
 
-A town's price for a good SHALL be the good's value times the town's need for
-it, buying at 60% of its selling price. A town that makes a good SHALL sell it
-for less than a town that lacks it.
+#### Scenario: A long stock scrolls
+- **WHEN** a trader sells more goods than its column shows and the player
+  turns the wheel one notch over the BUY column
+- **THEN** the BUY column shows from its second good, the SELL column is
+  where it was, and the panel's height is unchanged
 
-#### Scenario: Fish by the sea and in the hills
+#### Scenario: Filtering to food
+- **WHEN** the player chooses the food filter over the BUY column
+- **THEN** only the trader's crops, fruit, fish and dishes are listed,
+  from the first of them
 
-- **WHEN** a harbour town and a mountain town both trade fish
-- **THEN** the harbour sells fish for less than the mountain town buys them
+### Requirement: A deal is paid in coins, goods or both
+A trade SHALL take a basket of goods each way. The player SHALL be able to
+pay with coins, with goods valued at the trader's buying price, or with
+both, and the difference SHALL be settled in coins. The pack, the purse and
+the town's market record SHALL change together in one durable write.
 
-#### Scenario: Buying and selling back
+#### Scenario: Paying half in goods
+- **WHEN** the player buys a bronze pickaxe and puts fish worth half its
+  price on the other side
+- **THEN** the fish leave the pack, the pickaxe enters it, half the price
+  leaves the purse, and all three are in the same saved line
 
-- **WHEN** the player buys a good and sells it straight back to the same trader
-- **THEN** the player has fewer coins than before
+### Requirement: A made good is worth more than what it is made of
+Raw materials SHALL carry a base value. A good made by a recipe SHALL be
+valued from its inputs and its labour, so it is always worth more than its
+inputs, and a dearer input SHALL make the goods made from it dearer.
 
-### Requirement: Stock is limited and prices move with your trade
+#### Scenario: Planks from a log
+- **WHEN** the values are worked out at start
+- **THEN** every made good is worth more than the sum of its inputs
 
-A trader's stock of each good SHALL be limited, each sale SHALL move its
-price, and stock and prices SHALL return to rest over a game day. A town's
-market SHALL be saved only once the player has traded there.
+### Requirement: Prices follow a market per good
+Each good SHALL have a market index per world that rises when it is short
+across the towns, falls when it floods, and drifts back toward rest over
+game days. A town's price SHALL be the good's value times its index, the
+town's need and the player's goodwill. A world saved before the market
+SHALL open with every index at rest.
 
-#### Scenario: Selling a lot
-
-- **WHEN** the player sells ten of a good to one trader
-- **THEN** each sale pays less than the one before, and the price is back at
-  rest a game day later
+#### Scenario: Flooding the fish market
+- **WHEN** the player sells many fish across the towns in one day
+- **THEN** fish fetch less everywhere that day, and the price recovers over
+  the following days of play

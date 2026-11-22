@@ -270,6 +270,46 @@ ICONS.update({
 })
 
 
+# Town jobs (`townsfolk` design 9): the parcel a delivery job hands you, brown
+# paper tied with twine; and the coin beside the hotbar (design 5), a gold
+# piece with a stamped ring. Inventory and UI icons, with the 1 px outline.
+ECONOMY = {
+    "k": "#3a2614", "p": "#b98a56", "P": "#d6a96e", "d": "#8a6238",
+    "t": "#efe3c2", "c": "#7a4f12", "g": "#d9a334", "G": "#f4cf5c", "W": "#fff3b8",
+    "o": "#a87521",
+}
+
+ICONS.update({
+    "goods/parcel": ([
+        "................", "................", "......k..k......", ".....ktkkt......",
+        "...kkkkttkkkkk..", "..kPPPPttPPPPk..", "..kPppPttPppPk..", "..kPpppttpppPk..",
+        "..kttttttttttk..", "..kpppptttpppk..", "..kppppttppppk..", "..kdppptttpddk..",
+        "..kddddttddddk..", "...kkkkkkkkkk...", "................", "................",
+    ], ECONOMY),
+    "ui/coin": ([
+        "................", "................", ".....kkkkkk.....", "....kGGGGGGk....",
+        "...kGWWggggok...", "..kGWgooooggok..", "..kGgoGGGGogok..", "..kGgoGggGogok..",
+        "..kGgoGggGogok..", "..kGgoGGGGogok..", "..kggoooooogok..", "...kggggggook...",
+        "....koooooock...", ".....kkkkkk.....", "................", "................",
+    ], ECONOMY),
+})
+
+
+# `townsfolk` design 31: gravel, a heap of crushed stone for a road.
+ROADS = {
+    "k": "#2e2a26", "w": "#e6e0d4", "l": "#c4bcae", "m": "#998f82", "d": "#6b645a",
+}
+
+ICONS.update({
+    "goods/gravel": ([
+        "................", "................", "................", "................",
+        "......kkkk......", ".....kwlmlk.....", "....kllmdmlk....", "...kwmdlwmdlk...",
+        "..klmlwmdlmwmk..", "..kdmlmdwlmdlk..", ".klwmdlmlmdwmlk.", ".kmdlwmdwlmldmk.",
+        ".kdmmdmddmdmmdk.", "..kkkkkkkkkkkk..", "................", "................",
+    ], ROADS),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

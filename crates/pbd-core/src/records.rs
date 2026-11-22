@@ -301,6 +301,15 @@ impl YieldSet {
         self.cells.contains(&cell)
     }
 
+    /// Whether a player's line changed any field of a record: a world
+    /// process that leaves alone whatever the player has worked on (a
+    /// repair job's broken wall, `townsfolk` design 29) asks this first.
+    pub fn has_record(&self, kind: &str, id: u64) -> bool {
+        self.fields
+            .get(&(kind.to_string(), id))
+            .is_some_and(|f| !f.is_empty())
+    }
+
     /// Whether the world may make `proposal` over `records`: every cell it
     /// edits is one the player never touched, and every record field it
     /// changes is one the player never changed. The first conflict refuses

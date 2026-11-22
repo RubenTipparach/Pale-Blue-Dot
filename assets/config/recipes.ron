@@ -45,6 +45,14 @@
             inputs: [("fibre", 3)],
             outputs: [("rope", 1)],
         ),
+        // ---- townsfolk design 31: loose stone crushed by hand, for a road.
+        (
+            code: "gravel",
+            station: "hand",
+            secs: 1.5,
+            inputs: [("stone", 2)],
+            outputs: [("gravel", 4)],
+        ),
         (
             code: "workbench",
             station: "hand",

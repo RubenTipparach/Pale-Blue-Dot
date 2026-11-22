@@ -683,6 +683,14 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     {
         layers[i] = lamp.material;
     }
+    // A lantern post beside a road near a town (`townsfolk` design 34), as
+    // a town's street lamp.
+    if let Some(altitude) = crate::roads::lamp(direction)
+        && let Some(i) = layer_at(altitude + 0.5)
+        && layers[i] == Material::Air
+    {
+        layers[i] = Material::LanternPost;
+    }
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
     Column::generated(layers)

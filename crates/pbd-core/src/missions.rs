@@ -86,13 +86,29 @@ pub enum Kind {
     Open,
     /// A fish landed on a baited line, by its species' name (G1).
     Baited,
+    // ---- `townsfolk` design 8: the town jobs' kinds. A town's job names
+    // its thing as `<site>:<thing>`, so it counts in that town only.
+    /// A parcel handed to the named town's person: `<site>:parcel`.
+    Deliver,
+    /// A townsperson walked home or to a place: `<site>:villager`,
+    /// `<site>:trader`.
+    Escort,
+    /// A broken piece of a town building mended: `<site>:piece`.
+    Repair,
+    /// A good sold to a town's trader: `<site>:<trade code>`.
+    Sell,
+    /// A good bought from a town's trader: `<site>:<trade code>`.
+    Buy,
+    /// A town lamp lit at dusk: `<site>:lamp`.
+    Light,
+    /// A road cell dug clear: `<site>:road` (roads bring it).
+    Clear,
 }
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
-    /// raises an event for (all of them, since felling, eating and the
-    /// night came in with the Homestead chain).
-    pub const LIVE: [Kind; 27] = [
+    /// raises an event for: all but `Clear`, which waits for the roads.
+    pub const LIVE: [Kind; 33] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -120,6 +136,12 @@ impl Kind {
         Kind::Travel,
         Kind::Open,
         Kind::Baited,
+        Kind::Deliver,
+        Kind::Escort,
+        Kind::Repair,
+        Kind::Sell,
+        Kind::Buy,
+        Kind::Light,
     ];
 }
 
@@ -247,6 +269,10 @@ pub enum Want {
     Group(Group),
     /// Any of these names (the ones this build knows).
     Names(Vec<String>),
+    /// Any name that starts with this: a town job's `<site>:`, so anything
+    /// sold to that town counts (`townsfolk` design 8). Never from the
+    /// starter chain's file.
+    Prefix(String),
 }
 
 impl Want {
@@ -255,6 +281,7 @@ impl Want {
             Want::Any => true,
             Want::Group(group) => group.holds(kind, what),
             Want::Names(names) => names.iter().any(|n| n == what),
+            Want::Prefix(prefix) => what.starts_with(prefix.as_str()),
         }
     }
 }
@@ -362,6 +389,12 @@ impl Catalog {
             Kind::Eat => item(),
             Kind::Place => name.starts_with("block:") && item(),
             Kind::Till | Kind::BuildPen => false,
+            Kind::Deliver => name == "parcel",
+            Kind::Escort => matches!(name, "villager" | "trader"),
+            Kind::Repair => name == "piece",
+            Kind::Light => name == "lamp",
+            Kind::Clear => name == "road",
+            Kind::Sell | Kind::Buy => item(),
             Kind::Gather
             | Kind::Find
             | Kind::Plant

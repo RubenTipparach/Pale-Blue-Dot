@@ -1,0 +1,41 @@
+// Roads (`townsfolk` design 10 and 11), read by `pbd_core::roads`.
+(
+    // A settlement is joined to its `neighbours` nearest within `link_m`
+    // metres, and a walled town to its nearest walled town within
+    // `large_link_m` metres.
+    link_m: 2000.0,
+    neighbours: 2,
+    large_link_m: 6000.0,
+    // Walking speed on a road, times the ground's: gravel 15% faster.
+    dirt_speed: 1.0,
+    gravel_speed: 1.15,
+    // What the route search pays: metres of level road a climb of a layer
+    // is worth, and a bridged and a forded cell times its length.
+    slope_cost_m: 2.0,
+    bridge_cost: 4.0,
+    ford_cost: 2.0,
+    // Water at most this deep over its bed, metres, is forded; deeper is
+    // bridged, for at most `max_bridge_cells` cells.
+    ford_depth_m: 1.0,
+    max_bridge_cells: 10,
+    // How many cells one road's search may look at before it gives up, and
+    // how far it trusts its estimate (1 the cheapest road and the most
+    // cells looked at; more, a road a little dearer for far fewer).
+    max_expanded: 100000,
+    search_weight: 1.5,
+    // Roads version 2 (`townsfolk` design 32): a road cell may stand up to
+    // `max_fill_layers` over its ground on packed earth, or `max_cut_layers`
+    // under it in a cutting the world digs, at `fill_cost_m` and
+    // `cut_cost_m` metres of level road a layer; never on water, in a town
+    // or on a cell the player touched. A world planned by version 1 keeps
+    // its roads.
+    max_fill_layers: 2,
+    max_cut_layers: 2,
+    fill_cost_m: 20.0,
+    cut_cost_m: 25.0,
+    // Lamps along the roads near a town (`townsfolk` design 34): within
+    // `lamp_town_m` metres of a settlement, a lantern post beside every
+    // `lamp_every`th road cell out of it.
+    lamp_town_m: 90.0,
+    lamp_every: 5,
+)

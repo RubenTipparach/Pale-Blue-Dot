@@ -2843,3 +2843,13 @@ the page should take the same, and its next version will):
 
 `no_foot_slides_in_stance` measures both: no foot down in its stance moves
 more than 1.5 mm in a frame in the walk or the bound.
+
+## Owner answers (survey, 2026-11-22)
+
+- **W21: fit the zones to the column** ("Fit the zones to the column: dark below 90 m"): sunlit to 40 m,
+  twilight to 90 m, midnight below. The recommendation the game builds stays, no longer provisional.
+  With it the owner wrote: "powered ligths should work underwater? mushgroom glow should work
+  underwater too". So a powered lamp and a glowing mushroom keep lighting what is near them under
+  water, held or placed, through the same cell light field as on land. A torch or campfire (an open
+  flame) does not; that part is a recommendation taken (ask only with screenshots). Written up as a
+  task; code waits for a request.

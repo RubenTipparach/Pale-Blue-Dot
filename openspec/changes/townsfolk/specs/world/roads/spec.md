@@ -3,46 +3,19 @@
 ## Purpose
 
 Road cells that slope instead of step, in dirt and gravel, built by the
-player and laid by the world between towns.
+player and laid by the world between towns. The slope, the network, cut and
+fill, the lamps near towns and the player's own road cells are built and in
+`openspec/specs/world/roads` (2026-11-22); the road jobs are left here.
 
 ## ADDED Requirements
 
-### Requirement: A road slopes, never steps
+### Requirement: Jobs on the roads
 
-A road cell SHALL be a hex whose top may tilt from one layer to the next
-across the cell, rising at most one layer (1 m) per cell. Its slope SHALL be
-its collision, so the walker moves up and down it without a step.
+A town's board SHALL be able to post a rockfall on a road to clear and a
+trader to walk with to the next town, and each SHALL be counted by the
+starter missions' rule.
 
-#### Scenario: Up a hill
+#### Scenario: A rockfall
 
-- **WHEN** the walker walks a road climbing ten layers
-- **THEN** its height changes smoothly and it never steps up
-
-### Requirement: Dirt and gravel
-
-The player SHALL be able to build a dirt road with a shovel and a gravel road
-with gravel, and walking SHALL be faster on gravel than on dirt.
-
-#### Scenario: Building a road
-
-- **WHEN** the player places a gravel road cell
-- **THEN** it is saved as the player's edit, and the walker moves faster on it
-
-### Requirement: Roads join the towns
-
-The world SHALL plan roads once from the settlements and the seed, joining
-each settlement to its two nearest neighbours within 2 km and the largest
-towns to each other, and SHALL save them as records it authored. A road cell
-SHALL be laid only where the player has made no edit. A world saved before
-roads SHALL gain them when next opened, without a restart.
-
-#### Scenario: A player's house on the route
-
-- **WHEN** a planned road would cross a cell the player built on
-- **THEN** the road goes round it and the player's cell is unchanged
-
-#### Scenario: An old save
-
-- **WHEN** a world saved before roads is opened
-- **THEN** its towns are joined by roads, and nothing the player made has
-  changed
+- **WHEN** the player takes a rockfall job and digs the road cell clear
+- **THEN** the job counts it, and the road is walked again

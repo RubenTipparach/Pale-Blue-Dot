@@ -12327,6 +12327,54 @@
   }
  ],
  "lamps": [],
+ "people": [
+  {
+   "role": "watcher",
+   "at": [
+    97.7385,
+    7,
+    41.70864947166235
+   ],
+   "facing": 0,
+   "tunic": 4016734,
+   "work": "idle",
+   "spear": true
+  },
+  {
+   "role": "hunter",
+   "at": [
+    38.429,
+    1,
+    30.041399627055778
+   ],
+   "facing": 3.141592653589793,
+   "tunic": 4864558,
+   "work": "idle"
+  },
+  {
+   "role": "hunter",
+   "at": [
+    35.329,
+    1,
+    29.041399627055778
+   ],
+   "facing": 0,
+   "tunic": 5915186,
+   "work": "idle"
+  },
+  {
+   "role": "wall_guard",
+   "at": [
+    110.48700000000001,
+    6,
+    39.255199502741036
+   ],
+   "facing": 0,
+   "tunic": 4016734,
+   "work": "idle",
+   "spear": true
+  }
+ ],
  "masonry": [
   {
    "c": 33,

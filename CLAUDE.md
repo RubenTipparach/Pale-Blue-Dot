@@ -93,6 +93,25 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## No obvious primitives (owner, 2026-11-22)
+
+**Standing instruction from the user:** "I can see obvious primitives, this
+is signof bad work ... avoid obvioud primitives" (on the townsfolk's full
+front beard: a box across the jaw and two boxes on the cheeks, stuck on the
+face). A shape in the game or a mockup is one form fitted to what it sits
+on, never boxes, cylinders or spheres placed on a surface and left to read
+as separate parts:
+- a part that grows from a body (a beard, hair, a mane, a root, a branch, a
+  cloak) is one piece shaped to the body: it follows its curves and
+  bevels, tapers into it, and has an irregular edge, never a hard rectangle
+  floating proud of it;
+- where pieces must meet, they blend: a shared edge, a bevel, a taper, or
+  the detail painted into the surface's texture instead of modelled;
+- the blocky, low-poly style is a choice of silhouette, not an excuse for
+  primitives: a block head is still one shaped head;
+- every new model is looked at close up before it is shown, and a part
+  that reads as a primitive stuck on is redone, not shipped.
+
 ## Everything in the world is lit as the terrain is (owner, 2026-11-18)
 
 **Standing instruction from the user:** "moving forward we need to apply
@@ -552,7 +571,9 @@ which wait for a request.
   some towns", "doing missions and rtrading should get you money, so we need
   currency"): coins, a trader in every town, town missions from a board and
   its people, and sloped dirt and gravel roads, laid by the world between
-  neighbouring towns (`townsfolk`, design 5 to 12).
+  neighbouring towns (`townsfolk`, design 5 to 12). Started on the owner's
+  word (2026-11-21): "People approved. Build.phase 3. Do it in parallel if
+  you can".
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
@@ -562,24 +583,25 @@ which wait for a request.
   launcher that pulls the latest from itch io based on your OS", "this
   launcher should be responsible for keeping the game up to date always";
   `game-launcher`). No mockup yet.
-- **Then survival, phase 3c** (owner, 2026-11-18: "3c will add survival
-  mode, falling from high places, dangeroous animals (we'll introduce
-  predators), fighting with villagers, hunger, and oxygen - underwater can t
-  breath, or in space"): a Survival mode per world beside today's calm
-  Explorer, with health, fall damage, hunger, breath and suit air, hunting
-  predators, townsfolk who fight back, and a dropped pack on death
-  (`survival-mode`). No mockup yet.
-- **Then town building and civil engineering** ("the after env v2, we'll
+- **Then town building, civil engineering and survival, phase 4** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (bridges and the like; roads come
   with the townsfolk); no mockup yet for the second. With them, power
   generation's first rungs, water and wind (M20; owner, 2026-11-21: "bump
   power gen to phase 4").
+  Survival comes in phase 4 too (owner, 2026-11-22: "bump surivival to
+  phase 4 s well"; first planned as 3c, 2026-11-18: "3c will add survival
+  mode, falling from high places, dangeroous animals (we'll introduce
+  predators), fighting with villagers, hunger, and oxygen - underwater can t
+  breath, or in space"): a Survival mode per world beside today's calm
+  Explorer, with health, fall damage, hunger, breath and suit air, hunting
+  predators, townsfolk who fight back, tool wear, and a dropped pack on
+  death (`survival-mode`). No mockup yet.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
   navigation (M23, `steer-and-sail`), carts and horses, cars, and trains on
   their tracks (owner, 2026-11-21: "add cars and cars and carts, and horses
-  and trains (and tracks) mockups to phase 5"; no mockups yet), hiring
+  and trains (and tracks) mockups to phase 5"; mocked up in M38, `land-transport`), hiring
   workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get
@@ -792,6 +814,10 @@ a test pins it. When the scale moves, both move in the same commit.
   local gravity falloff, Newtonian motion, configurable linear/angular limits,
   and inertial/rotational dampeners. Do not restore rocket patched conics,
   maneuver nodes, transfer-window requirements, or n-body ship simulation.
+  **Lifted for rockets by the owner (survey G4 and G4a, 2026-11-22: "All of
+  Tenebris: patched conics, sphere-of-influence hops and maneuver nodes").**
+  `ship-tiers` (design, "Owner answers") is the plan; this clause is rewritten
+  in the commit that builds it. Until then nothing in the game changes.
 - Store system coordinates and orbital time as `f64`; render and simulate
   collision in bounded local `f32` frames. Subtract the origin before casting.
   Keep frame identity explicit in poses, velocities, persistence, and uploads.
