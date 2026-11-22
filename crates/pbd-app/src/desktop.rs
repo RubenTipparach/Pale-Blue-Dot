@@ -1615,7 +1615,9 @@ pub fn run(args: &[String]) {
     // host's, opened in memory from its welcome, before anything is built.
     let mut joined = None;
     if let Some(addr) = launch.join {
-        match pbd_app::net_play::join(addr, std::time::Duration::from_secs(20)) {
+        // Two minutes: a host still building its world answers when its first
+        // frame runs.
+        match pbd_app::net_play::join(addr, std::time::Duration::from_secs(120)) {
             Ok(joining) => {
                 world = saves::WorldSave::memory_only();
                 world.identity.seed = joining.seed;
