@@ -299,9 +299,9 @@ const MOCKUPS = [
     url: 'https://claude.ai/artifact/SYxYGeMvtPwqXi7AHHJDTF', published: '2026-10-29',
     summary: 'The lighting model: the game\'s light today beside the new one, by day and at night.' },
   { id: 'M15', batch: 'old', title: 'Tenebris Towns', change: 'tenebris-towns', page: 'docs/mockups/towns.html',
-    url: 'https://claude.ai/artifact/5kpyRd9sqcTqheTSzoShgR', published: '2026-09-30',
+    url: 'https://claude.ai/artifact/5kpyRd9sqcTqheTSzoShgR', published: '2026-09-30', version: 4,
     recordedNote: 'Every feature of it is on the roadmap (survey, 2026-09-27); the towns in the game are built from it. The Roads tab approved (owner, 2026-11-22: "roads look great"); roads two and three cells wide asked for next.',
-    summary: 'A walled market town on the hex grid, lit by its own lamps at night: the reference for the towns in the game. Version 2 (2026-11-21): a Roads scene (#roads, townsfolk 8.1): sloped road cells in dirt and gravel, a hill road climbing ten layers without a step, a ford and a timber bridge, by day and lit at night; the description in an info modal. Version 3 (2026-11-22): a Wide roads scene (#wideroads), roads two and three cells wide beside a one-wide one, climbing on one shared slope with no step between lanes, bends, a junction and wide bridges, lit at night.' },
+    summary: 'A walled market town on the hex grid, lit by its own lamps at night: the reference for the towns in the game. Version 2 (2026-11-21): a Roads scene (#roads, townsfolk 8.1): sloped road cells in dirt and gravel, a hill road climbing ten layers without a step, a ford and a timber bridge, by day and lit at night; the description in an info modal. Version 3 (2026-11-22): a Wide roads scene (#wideroads), roads two and three cells wide beside a one-wide one, climbing on one shared slope with no step between lanes, bends, a junction and wide bridges, lit at night. Version 4 (2026-11-22, drafted): a Paving scene (#paving, townsfolk design 39 to 41), a road marked with survey stakes (a lime band painted along each marked cell, a stake at each waypoint) beside a paved run of gravel, the next stake\'s cells at half strength, and the grinder and the mixer that make gravel, by day and lit at night.' },
   { id: 'M16', batch: 'old', title: 'Tenebris World Map', change: 'world-map, city-sites', page: 'docs/mockups/world-map.html',
     url: 'https://claude.ai/artifact/8X3Zqzg4o5BhGaTa22bmJf', published: '2026-09-29', recorded: 'build',
     recordedNote: 'Approved: "good approve" (survey M6, 2026-09-27); the 55 city sites "approve" (C4, C5, 2026-09-29). The in-game map is built from it.',
@@ -356,9 +356,9 @@ const MOCKUPS = [
   { id: 'M32', batch: 'new', title: 'Rain Splashes', change: 'weather-rain', page: 'docs/mockups/rain-splashes.html',
     url: 'https://claude.ai/artifact/QCeBF7hGuyBncS7tHSzbHV', published: '2026-11-15', version: 1,
     summary: 'Where rain lands: crowns on puddles and spray on wet ground, GPU particles beside today\'s rain, by day and lit at night.' },
-  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions', page: 'docs/mockups/mission-tree.html',
-    url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev', published: '2026-11-16', version: 4,
-    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them.' },
+  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions, town-missions-tree', page: 'docs/mockups/mission-tree.html',
+    url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev', published: '2026-11-16', version: 5,
+    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them. Version 5 (2026-11-22, drafted): a Town tab (#town), phase 3\'s town tree of its own (town-missions-tree): a trunk and five branches (trade, jobs, roads, carts, houses and logs), 25 missions paying 525 coins, opened on first reaching a town; the starter tree on its own tab (#starter).' },
   { id: 'M34', batch: 'new', title: 'River Craft', change: 'river-craft', recorded: 'impl', recordedNote: 'Approved for the game (owner, 2026-11-19, at version 6), and asked to be built (owner, 2026-11-20, in chat: "approve sand and mountains, and rivers"). Built on claude/phase-2-1 (PR 133 merged, captures in PR 135): rowing with two oars, the one anchor, the boat\'s menu (C), the raft\'s lantern at night and the tube rider. The tug, logs and nets wait. Open: in first person the oar grips sit at the frame\'s edges with the 60-degree view.', page: 'docs/mockups/river-craft.html',
     url: 'https://claude.ai/artifact/GZTZJ4Vg1bSbg4SH2rYY97', published: '2026-11-16', version: 6,
     summary: 'A playable river: a raft and an inner tube on the flow, a tug towing barges, a log drive with a boom, a net boat and anchoring. Version 3: the Rowing tab, today\'s raft stroke beside proposed oars (five stages on one beat, splash and swirls, first-person hands) and the raft\'s own lantern lit at night. Version 4: oars only (no pole, on the Raft tab too), the stroke smoothed with no clipping, first-person hands only in first person; the tube rider sits back and paddles with no lantern; a set anchor holds the boat. Version 5: the anchor\'s rope stops paying out at the bed. Version 6: the boat\'s menu (Boat, C) on the Anchor, Raft and Rowing tabs, with the hold beside the pack, the anchor\'s drop or weigh and rope length, and the lantern; one anchor per boat.' },
@@ -372,8 +372,8 @@ const MOCKUPS = [
     url: 'https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2', published: '2026-11-17', version: 3,
     summary: 'A fish coming to the lure, swimming and fighting the line, and its body wave: the game today beside a natural approach, pecks timed to the float, a take, banking, and a shader wave head to tail.' },
   { id: 'M38', batch: 'new', title: 'Land Transport', change: 'land-transport', recorded: 'build', recordedNote: 'Approved in chat (owner, 2026-11-22: "noth apporoved"). Phase 5 waits for a request.', page: 'docs/mockups/land-transport.html',
-    url: 'https://claude.ai/artifact/QzXe3qAL1esNJCFPHy2bDi', published: '2026-11-22', version: 1,
-    summary: 'Phase 5 on the hex roads: a ridden horse, a cart and a covered wagon, an early car and a small truck, and a steam train on hex track with a grade and a station, by day and lit at night.' },
+    url: 'https://claude.ai/artifact/QzXe3qAL1esNJCFPHy2bDi', published: '2026-11-22', version: 2,
+    summary: 'Phase 5 on the hex roads: a ridden horse, a cart and a covered wagon, an early car and a small truck, and a steam train on hex track with a grade and a station, by day and lit at night. Version 2 (2026-11-22, drafted): the hand cart (new) and the horse cart marked phase 3 (land-transport design 9, 10), and a Road or not tab (#offroad) driving both carts on gravel, a dirt track and grass at 1.0, 0.6 and a quarter of their road speed.' },
 ];
 
 // Every other published artifact, by section, newest first.
@@ -607,13 +607,17 @@ const ROADMAP = [
     { key: 'water-flow', title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Water that floods, spreads and falls, with mist, bubbles and rain splashes.', issues: 'phase-2-water-flow', nIssues: 1 },
     { key: 'checks', title: 'Your checks', status: 'optional', change: '', refs: [], text: 'Looks, sounds and frame cost on your machine, when you have time.', issues: 'phase-2-checks', nIssues: 5 },
   ] },
-  { title: 'Townsfolk', when: 'done', note: 'Built and merged (PR #145).', steps: [
+  { title: 'Townsfolk', when: 'next', note: 'Built and merged (PR #145); the town tree, paving and carts written up 2026-11-22, not built.', steps: [
     { key: 'npcs', title: 'NPCs', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, and talking to them.', issues: 'phase-3-npcs', nIssues: 2 },
     { key: 'trade', title: 'Coins and trade', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'Coins, a trader in every town, and prices that follow what the town makes and needs.', issues: 'phase-3-trade', nIssues: 2 },
     { key: 'missions', title: 'Town missions', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'Jobs from a town\'s board and its people, paid in coins.', issues: 'phase-3-missions', nIssues: 3 },
     { key: 'roads', title: 'Roads', status: 'built', change: 'townsfolk', refs: ['M15'], text: 'Sloped dirt and gravel roads, laid by you and by the world between towns.', issues: 'phase-3-roads', nIssues: 3 },
     { key: 'building', title: 'Carpentry and house building', status: 'built', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid.', issues: 'phase-3-building', nIssues: 4 },
     { key: 'logging', title: 'Logging', status: 'built', change: 'log-drives', refs: ['M34'], text: 'Logs on a raft, or floated down a river until the water stops.', issues: 'phase-3-logging', nIssues: 1 },
+    { key: 'town-tree', title: 'Town mission tree', status: 'planned', change: 'town-missions-tree', refs: ['M33'], text: 'A mission tree of its own for the town: people, trade, jobs, roads, carts, a house and logs, paid in coins.' },
+    { key: 'gravel', title: 'Grinder, mixer and gravel', status: 'planned', change: 'townsfolk', refs: ['M15'], text: 'A grinder crushes stone and a mixer makes gravel from it and sand.' },
+    { key: 'paving', title: 'Marking and paving roads', status: 'planned', change: 'townsfolk', refs: ['M15'], text: 'Mark a road with survey stakes, then pave each marked cell with the shovel and gravel.' },
+    { key: 'carts', title: 'Hand carts and horse carts', status: 'planned', change: 'land-transport', refs: ['M38'], text: 'Carts with a hold, a horse bought at a stable; a quarter of the speed off the road.' },
   ] },
   { title: 'Multiplayer', num: '3b', when: 'now', note: 'Being built on main.', steps: [
     { key: 'authority', title: 'One authority', status: 'building', change: 'multiplayer', refs: [], doc: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw', text: 'The server holds every edit, item, crop and animal; single player runs the same server.' },
@@ -635,8 +639,7 @@ const ROADMAP = [
   { title: 'Mass transportation', when: 'later', note: 'After phase 4.', steps: [
     { key: 'airships', title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
     { key: 'sea-ships', title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS for the helm.' },
-    { key: 'carts', title: 'Carts and horses', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Horses to ride and to pull carts and wagons.' },
-    { key: 'cars', title: 'Cars', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Cars and trucks on the roads.' },
+    { key: 'cars', title: 'Cars', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Cars and trucks on the roads, and the ridden horse and covered wagon beside them.' },
     { key: 'trains', title: 'Trains and tracks', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Track on the hex grid, stations, and trains between towns.' },
     { key: 'haulers', title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods for you.' },
     { key: 'conveyors', title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Belts, water in channels, and track for carts.' },
@@ -808,6 +811,9 @@ function scrollToHash() {
   let id = decodeURIComponent(location.hash.slice(1));
   if (!id) return;
   if (/^phase-/.test(id)) id = 'roadmap-' + id;
+  // Steps that moved keep their old links: phase 5's carts went to phase 3 (owner, 2026-11-22).
+  const MOVED = { 'roadmap-phase-5-carts': 'roadmap-phase-3-carts' };
+  if (MOVED[id]) id = MOVED[id];
   const t = document.getElementById(id);
   if (!t) return;
   t.scrollIntoView({ block: 'start' });
