@@ -211,7 +211,7 @@ details.about[open]{display:grid;gap:10px}
 .fc-card a{color:var(--sky)}
 .fc-x{position:absolute;right:10px;top:10px;cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;width:32px;height:32px;color:var(--ink);font-size:16px}
 @media (max-width:760px){.fc-stage{height:56vh !important;min-height:300px;display:block}.fc-stage canvas{height:100%}.fc-k{width:100%}}
-/* talk tab (version 12): the game's stone kit, drawn at whole-number scales */
+/* talk tab (version 13): the game's stone kit, drawn at whole-number scales */
 .tk-stage{min-height:460px}
 .tk-layer{position:absolute;inset:0 0 56px 0;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;pointer-events:none}
 .tk-fit{pointer-events:auto;transform-origin:center top}
@@ -222,6 +222,10 @@ details.about[open]{display:grid;gap:10px}
 .kplaque{cursor:pointer;background:none;color:inherit;font:inherit;flex:none}
 .kplaque:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
 .kclick{cursor:pointer}
+.ktab{cursor:pointer;border:0;padding:0;flex:none}
+.ktab:focus-visible,.kthumb:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.ktrack{flex:none;position:relative;cursor:pointer}
+.kthumb{position:absolute;cursor:grab;touch-action:none}
 @media (max-width:760px){.tk-stage{height:72vh !important;min-height:420px;display:block}.tk-stage canvas{height:100%}}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 </style>
@@ -366,14 +370,20 @@ details.about[open]{display:grid;gap:10px}
   <div class="fc-card">
     <button class="fc-x" id="tkX" aria-label="Close">&#x2715;</button>
     <h3 id="tkModalH">Talk, trade and the board: what this tab shows</h3>
-    <p>Version 12. The owner approved the game's talk, trade and job board panels on 2026-11-22, from the in-game captures (<span class="src">docs/screenshots/townsfolk-economy/talk.jpg</span>, <span class="src">trade.jpg</span>, <span class="src">board.jpg</span>), and said "I dont see trade panel": this tab showed an older draft (Orrin Vale, Mara Quell, made-up prices). It now shows the game's panels as the game draws them (<span class="src">crates/pbd-app/src/desktop/talk.rs</span>), over a townsperson who talks while a panel is open (design 30), by day and at night.</p>
+    <p>Version 13. The trade columns and the job board scroll, and each trade column filters by shelf (below). Since version 12: the owner approved the game's talk, trade and job board panels on 2026-11-22, from the in-game captures (<span class="src">docs/screenshots/townsfolk-economy/talk.jpg</span>, <span class="src">trade.jpg</span>, <span class="src">board.jpg</span>), and said "I dont see trade panel": this tab showed an older draft (Orrin Vale, Mara Quell, made-up prices). It now shows the game's panels as the game draws them (<span class="src">crates/pbd-app/src/desktop/talk.rs</span>), over a townsperson who talks while a panel is open (design 30), by day and at night.</p>
+    <h4>What changed in version 13: long lists scroll and filter</h4>
+    <ul>
+      <li><b>A scroll bar in case there are lots of products</b> (the owner, 2026-11-22: "opt for a scroll bar incase theres lots of products"; <span class="src">townsfolk</span> design 38b). The panel keeps one height: each trade column, and the board's list, shows a window of seven rows however long the list is, and PURSE and BACK stay fixed under it. Each column scrolls on its own: the mouse wheel over it moves one whole row a notch, and beside it, only when its rows overflow, a scroll bar in the stone kit (the <span class="src">slider-track</span> piece on end, its thumb in the rune fill the settings sliders use) whose thumb is the shown share of the list. Drag the thumb, or press the track above or below it to move a window. Arrow keys on a focused row move to the next row and scroll it into view. The trader here sells everything a desert makes, twelve goods, and the pack holds nine goods it buys, so both columns overflow; the board has seven jobs and two headings.</li>
+      <li><b>Filters on each side</b> (the owner, 2026-11-22: "some filtering on each side would be nice: food, organics, raw materials, tools, etc"; design 38c). Above each column, ALL and a tab for each shelf with goods in that column: Food (crops, fruit, fish, dishes, eggs and milk), Organics (seeds, wool, wood), Raw materials (ore, ingots, stone), Tools, and Goods (made things and lights). The shelves are the goods' own groups in <span class="src">values.ron</span>, read in fewer words. A tab is a pack slot well with a good of its shelf in it (ALL its word), the selected well when chosen; its name shows on hover. A tab change shows the column from its top. The board is not filtered: a job is a kind of work, not a good on a shelf.</li>
+      <li>The same is in the game (<span class="src">talk.rs</span>, <span class="src">scroll_list.rs</span>).</li>
+    </ul>
     <h4>Taken from the game, not redrawn</h4>
     <ul>
       <li><b>The stone kit</b>: the frame, the oak lintel, the plaques in their idle, hover and pressed states and the pack's slot well are the game's own pieces (<span class="src">assets/ui/stone/*.png</span>, reduced to their native size from the 8x render, nine-sliced by <span class="src">slices.json</span>), drawn at a whole-number scale with no smoothing. The words are the kit font (<span class="src">assets/fonts/kit-font.png</span>), upper case as the game draws it, with its 1 px ink shadow, in the kit's colours (<span class="src">ui_kit.rs</span>: TEXT, TEXT_DIM, TITLE, LABEL).</li>
       <li><b>The words</b> are the locale file's (<span class="src">assets/locale/locale_en.yaml</span>): <span class="src">talk.*</span>, <span class="src">trade.*</span>, <span class="src">jobs.*</span>, the item and species names.</li>
       <li><b>The icons</b> are the item PNGs the pack draws (<span class="src">assets/items/goods</span>, <span class="src">assets/items/fish</span>; 16 px, made by <span class="src">tools/gen_item_icons.py</span>), each in the pack's 24 px slot well, and the coin (<span class="src">assets/items/ui/coin.png</span>) beside every price. In the game since this version too (design 38a): the trade rows' icons and the board's job rows sit in the pack's own well; a job's well holds the good it asks for, the parcel, or the planks a wall is mended with, and is empty for the lost villager.</li>
-      <li><b>The layout</b> is <span class="src">talk.rs</span>'s: the talk card 300 native px wide (the town's name on the lintel, the role, the line, TRADE, WORK, BYE); the trade panel 490 wide, two columns of nine rows (well, name, count, price, BUY or SELL) and the purse with BACK; the board 450 wide, YOUR JOBS and ON THE BOARD, each row a well, the job's line, its reward and TAKE or HAND IN.</li>
-      <li><b>The numbers</b> follow the game's rules (<span class="src">pbd_core::economy::trade</span> and <span class="src">::jobs</span>) on <span class="src">values.ron</span>, <span class="src">trade.ron</span> and <span class="src">jobs.ron</span>, worked out by <span class="src">tools/mockup_talk_assets.py</span>: a desert town's caravan master (a trader and a job giver, <span class="src">jobs.ron</span>'s roles), selling what a desert makes (stone and fruit, need 0.6 and 0.7) and flatbread (the staple), its stock 8 a size-1 town; buying the player's fish and wood at 60% of value times the desert's need (fish and wood 1.8). The pack holds 3 perch, 2 silverfin, 4 logs and 8 planks. Job rewards are count times value times 1.5. Buying, selling, taking and handing in work on the page; Reset puts the purse and the pack back.</li>
+      <li><b>The layout</b> is <span class="src">talk.rs</span>'s: the talk card 300 native px wide (the town's name on the lintel, the role, the line, TRADE, WORK, BYE); the trade panel 512 wide, two columns each with its filter tabs and a window of seven rows (well, name, count, price, BUY or SELL) with its scroll bar, and the purse with BACK; the board 464 wide, YOUR JOBS and ON THE BOARD in one window of seven rows, each row a well, the job's line, its reward and TAKE or HAND IN.</li>
+      <li><b>The numbers</b> follow the game's rules (<span class="src">pbd_core::economy::trade</span> and <span class="src">::jobs</span>) on <span class="src">values.ron</span>, <span class="src">trade.ron</span> and <span class="src">jobs.ron</span>, worked out by <span class="src">tools/mockup_talk_assets.py</span>: a desert town's caravan master (a trader and a job giver, <span class="src">jobs.ron</span>'s roles), selling what a desert makes (stone and fruit, need 0.6 and 0.7) and flatbread (the staple), its stock 8 a size-1 town; buying the player's fish and wood at 60% of value times the desert's need (fish and wood 1.8). The pack holds 3 perch, 2 silverfin, 4 logs, 8 planks, 6 wheat, 3 wool, 5 eggs, 2 copper ingots, 4 rope and 9 fibre (fibre fetches nothing, so it is not listed). Job rewards are count times value times 1.5. Buying, selling, taking and handing in work on the page; Reset puts the purse and the pack back.</li>
     </ul>
     <h4>The basket (design 37, proposed)</h4>
     <p>The owner: "you can either pay with cash or sell goods (will need stock market to determine goods prices) raw materials dont go a smuch , butthey do relate to the goods porices in someway". In the Basket view a deal is two baskets: what you take, and what you give, coins, goods or both. The trader values your goods at its buying price and its goods at its selling price, and the difference is paid in coins either way; a deal with no coins is barter. Click a good to put one in a basket, a basket's well to take it out, DEAL to settle. Prices here are design 37's: a raw material keeps its low value from <span class="src">values.ron</span>, a made good is worth its inputs plus labour (the recipe's seconds at 0.1 coin a second, the mockup's assumption) times the 1.25 craft margin, from <span class="src">recipes.ron</span> and <span class="src">cooking.ron</span>; then times the town's need. The game's barter and market wait for a request; its labels (YOU TAKE, YOU GIVE, YOU PAY, THEY PAY, DEAL, CLEAR) are not in the locale file yet and would be added with it.</p>
@@ -1609,11 +1619,11 @@ window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, 
 if (TAB === "faces") TAB_HOOKS.faces.show();
 })();
 </script>
-<script src="npcs/talk-assets.js?v=12"></script>
+<script src="npcs/talk-assets.js?v=13"></script>
 <script>
 "use strict";
 // ===================================================================
-// Talk tab (version 12; townsfolk design 5 to 9, 30, 37, 38a): the game's talk, trade and board panels as
+// Talk tab (version 13; townsfolk design 5 to 9, 30, 37, 38a, 38b, 38c): the game's talk, trade and board panels as
 // crates/pbd-app/src/desktop/talk.rs draws them, in the stone kit's own pieces and font (talk-assets.js,
 // made by tools/mockup_talk_assets.py from the game's assets), over a caravan master who talks while a
 // panel is open. One 3D view, made when the tab first opens; its loop runs only while the tab shows.
@@ -1622,6 +1632,19 @@ if (TAB === "faces") TAB_HOOKS.faces.show();
 (function () {
 const TA = window.TALK_ASSETS, C = TA.colours, W = TA.words;
 const TK = { panel: "talk", mode: "today", hour: 22.5, night: 1, said: null };
+// design 38b and 38c: each list's first shown row and its filter (null is ALL), forgotten when the talk closes
+const VISIBLE_ROWS = 7, ROW_H = 24, ROW_GAP = 2, LIST_H = VISIBLE_ROWS * (ROW_H + ROW_GAP) - ROW_GAP, BAR_W = 8, BAR_INSET = 2, MIN_THUMB = 8;
+const freshScroll = () => ({ buy: { first: 0, shelf: null }, sell: { first: 0, shelf: null }, board: { first: 0, shelf: null }, drag: null });
+TK.scroll = freshScroll();
+// scroll_list.rs ListView, the same maths: a window of whole rows, clamped; the wheel a row a notch; the thumb the shown share
+const LV = {
+  make: (rows, shown, first) => ({ rows, shown, first: clamp(first, 0, Math.max(0, rows - shown)) }),
+  over: v => v.rows > v.shown,
+  win: v => [v.first, Math.min(v.first + v.shown, v.rows)],
+  thumb(v, track) { if (!LV.over(v)) return [0, track]; const len = Math.min(track, Math.max(MIN_THUMB, track * v.shown / v.rows)); return [(track - len) * v.first / (v.rows - v.shown), len]; },
+  drag(v, track, top) { const [, len] = LV.thumb(v, track), travel = track - len; return travel <= 0 ? v.first : Math.round(clamp(top / travel, 0, 1) * (v.rows - v.shown)); },
+  reveal: (v, r) => r < v.first ? r : r >= v.first + v.shown ? r + 1 - v.shown : v.first,
+};
 let S = 2;   // native px to CSS px: whole numbers only, so the pixel art stays crisp
 
 // ---- the kit: nine-sliced stone pieces, the kit font, slot wells, plaques -----------------------------
@@ -1662,6 +1685,62 @@ function well(code, count) {
   if (it) { const i = img(it.uri, 16, { position: "absolute", left: 4 * S + "px", top: 4 * S + "px" }); i.alt = it.name; w.appendChild(i); w.title = it.name; }
   if (count > 1) { const t = kitText(String(count), C.LABEL, C.INK); t.style.position = "absolute"; t.style.right = S + "px"; t.style.bottom = S + "px"; w.appendChild(t); }
   return w;
+}
+// a filter tab (design 38c): a pack slot well, the selected well when chosen, the hover well under the pointer;
+// the shelf's good in it, or ALL its word; the shelf's name its tooltip
+function shelfTab(list, shelf) {
+  const on = TK.scroll[list].shelf === shelf, name = W["trade.shelf." + (shelf || "all")];
+  const b = document.createElement("button"); b.type = "button"; b.className = "ktab kn"; b.title = name; b.setAttribute("aria-label", name); b.setAttribute("aria-pressed", on);
+  Object.assign(b.style, { width: 24 * S + "px", height: 24 * S + "px", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", imageRendering: "pixelated", backgroundSize: "100% 100%" });
+  const set = n => { b.style.backgroundImage = `url(${TA.pieces[n].uri})`; };
+  set(on ? "slot-selected" : "slot-idle");
+  if (!on) { b.addEventListener("pointerenter", () => set("slot-hover")); b.addEventListener("pointerleave", () => set("slot-idle")); }
+  if (shelf) { const it = TA.items[TA.shelf_picture[shelf]]; if (it) b.appendChild(img(it.uri, 16, { position: "absolute", left: 4 * S + "px", top: 4 * S + "px" })); }
+  else b.appendChild(kitText(name, C.TEXT, C.INK));
+  b.addEventListener("click", e => { e.stopPropagation(); TK.scroll[list].shelf = shelf; TK.scroll[list].first = 0; paint(); });
+  return b;
+}
+// a list in a window of VISIBLE_ROWS whole rows, with the stone slider-track on end beside it when the rows
+// overflow (the thumb in the settings sliders' rune fill), the wheel over it a row a notch (design 38b)
+function scrolled(list, rows, width, empty) {
+  const st = TK.scroll[list], v = LV.make(rows.length, VISIBLE_ROWS, st.first); st.first = v.first;
+  const [a, b] = LV.win(v);
+  const shown = rows.slice(a, b).map((mk, k) => { const el = mk(); el.dataset.row = a + k; el.style.height = ROW_H * S + "px"; el.style.flexShrink = "0"; return el; });
+  const win = node({ width, height: LIST_H, display: "flex", flexDirection: "column", rowGap: ROW_GAP, overflow: "hidden", flexShrink: "0" }, rows.length ? shown : [empty]);
+  win.addEventListener("wheel", e => { if (!LV.over(v)) return; e.preventDefault(); const n = Math.sign(e.deltaY); const f = clamp(st.first + n, 0, v.rows - v.shown); if (f !== st.first) { st.first = f; paint(); } }, { passive: false });
+  // keyboard focus moving onto a hidden row scrolls the least that shows it
+  win.addEventListener("keydown", e => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const at = e.target.closest("[data-row]"); if (!at) return; e.preventDefault();
+    const r = clamp(+at.dataset.row + (e.key === "ArrowDown" ? 1 : -1), 0, v.rows - 1);
+    st.first = LV.reveal(v, r); paint(); const next = document.querySelector(`#tkFit [data-list="${list}"] [data-row="${r}"] button`); if (next) next.focus();
+  });
+  win.dataset.list = list;
+  let bar;
+  if (!LV.over(v)) bar = node({ width: BAR_W, flexShrink: "0" });
+  else {
+    const inner = LIST_H - 2 * BAR_INSET, [top, len] = LV.thumb(v, inner), held = TK.scroll.drag === list;
+    bar = nine(node({ width: BAR_W, height: LIST_H }), "slider-track"); bar.classList.add("ktrack");
+    const th = node({ left: BAR_INSET - 3, width: BAR_W - 2 * BAR_INSET, top: top - 3 + BAR_INSET, height: len, background: held ? "#84e3b5" : "#53998b" });
+    th.className = "kn kthumb"; th.setAttribute("role", "scrollbar"); th.setAttribute("aria-valuenow", v.first); th.setAttribute("aria-valuemax", v.rows - v.shown); th.tabIndex = 0;
+    th.addEventListener("pointerenter", () => { th.style.background = "#84e3b5"; }); th.addEventListener("pointerleave", () => { if (TK.scroll.drag !== list) th.style.background = "#53998b"; });
+    bar.appendChild(th);
+    // drag: held by the pointer, not the thumb, since the panel is rebuilt as it scrolls; snaps to whole rows
+    th.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      const r0 = bar.getBoundingClientRect(), grab = (e.clientY - r0.top) / (S * curK()) - BAR_INSET - top;
+      TK.scroll.drag = list;
+      const move = ev => { const r = document.querySelector(`#tkFit [data-track="${list}"]`); if (!r) return; const y = (ev.clientY - r.getBoundingClientRect().top) / (S * curK()) - BAR_INSET;
+        const f = LV.drag(LV.make(rows.length, VISIBLE_ROWS, st.first), inner, y - grab); if (f !== st.first) { st.first = f; paint(); } };
+      const up = () => { TK.scroll.drag = null; removeEventListener("pointermove", move); removeEventListener("pointerup", up); paint(); };
+      addEventListener("pointermove", move); addEventListener("pointerup", up); paint();
+    });
+    // the track above or below the thumb: a window's worth
+    bar.addEventListener("pointerdown", e => { const y = (e.clientY - bar.getBoundingClientRect().top) / (S * curK()) - BAR_INSET;
+      st.first = clamp(st.first + (y > top ? v.shown : -v.shown), 0, v.rows - v.shown); paint(); });
+    bar.dataset.track = list;
+  }
+  return row(3, [win, bar], { alignItems: "flex-start" });
 }
 // a coin amount: the coin at 12 px and the number (talk.rs coins())
 const coins = (n, colour = C.TITLE) => row(1, [img(TA.coin, 12), kitText(W["trade.coins"].replace("{coins}", n), colour, C.INK)]);
@@ -1720,22 +1799,26 @@ function tradeRow(code, count, cost, label, act) {
   return row(4, [well(code), kitText(nameOf(code), C.TEXT, C.INK, 86), kitText(fill(W["trade.count"], { count }), C.TEXT_DIM, C.INK, 22), node({ width: 30 }, [coins(cost)]), plaque(label, 40, act)]);
 }
 function footer(extra) {
-  return [TK.said ? line(TK.said, C.TITLE) : null,
+  return [node({ minHeight: 10, marginTop: 3, flexShrink: "0" }, [TK.said ? line(TK.said, C.TITLE) : null]),
     row(8, [line(W["trade.purse"], C.TEXT_DIM), coins(ST.purse), plaque(W["talk.back"], 50, () => open("talk")), ...(extra || [])], { marginTop: 4 })];
+}
+function tradeColumn(list, heading, rows, empty) {
+  const st = TK.scroll[list], shelves = TA.shelves.filter(sh => rows.some(r => r.shelf === sh));
+  if (st.shelf && !shelves.includes(st.shelf)) { st.shelf = null; st.first = 0; }
+  const shown = rows.filter(r => !st.shelf || r.shelf === st.shelf);
+  const tabs = node({ display: "flex", columnGap: 2, height: 24, flexShrink: "0" }, shelves.length ? [shelfTab(list, null), ...shelves.map(sh => shelfTab(list, sh))] : []);
+  return node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 + 3 + BAR_W }, [section(heading), tabs, scrolled(list, shown.map(r => r.make), 214, empty)]);
 }
 function paintTrade() {
   if (TK.mode === "basket") return paintBasket();
-  const buyCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.buy"]),
-    ...TA.buy.map(r => tradeRow(r.code, ST.stock[r.code], r.price, W["trade.buy_one"], () => {
+  const buyRows = TA.buy.map(r => ({ shelf: r.shelf, make: () => tradeRow(r.code, ST.stock[r.code], r.price, W["trade.buy_one"], () => {
       if (ST.purse < r.price) TK.said = W["trade.short"]; else if (ST.stock[r.code] <= 0) TK.said = W["trade.sold_out"];
       else { ST.purse -= r.price; ST.stock[r.code]--; ST.pack[r.code] = (ST.pack[r.code] || 0) + 1; TK.said = fill(W["trade.bought"], { coins: r.price }); }
-      paint(); }))]);
+      paint(); }) }));
   const held = TA.sell.filter(r => ST.pack[r.code] > 0);
-  const sellCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.sell"]),
-    held.length ? null : line(W["trade.nothing_to_sell"], C.TEXT_DIM),
-    ...held.map(r => tradeRow(r.code, ST.pack[r.code], r.price, W["trade.sell_one"], () => {
-      ST.pack[r.code]--; ST.purse += r.price; TK.said = fill(W["trade.sold"], { coins: r.price }); paint(); }))]);
-  return frame(490, [lintel(W["trade.title"]), row(12, [buyCol, sellCol], { alignItems: "flex-start" }), ...footer()]);
+  const sellRows = held.map(r => ({ shelf: r.shelf, make: () => tradeRow(r.code, ST.pack[r.code], r.price, W["trade.sell_one"], () => {
+      ST.pack[r.code]--; ST.purse += r.price; TK.said = fill(W["trade.sold"], { coins: r.price }); paint(); }) }));
+  return frame(512, [lintel(W["trade.title"]), row(12, [tradeColumn("buy", W["trade.buy"], buyRows), tradeColumn("sell", W["trade.sell"], sellRows, line(W["trade.nothing_to_sell"], C.TEXT_DIM))], { alignItems: "flex-start" }), ...footer()]);
 }
 // design 37: a deal is two baskets; the trader's goods at its selling price, yours at its buying price,
 // the difference in coins (prices from the derived values: inputs plus labour times the margin, times need)
@@ -1751,14 +1834,12 @@ function basketWells(side, unit) {
 function paintBasket() {
   const take = Object.entries(ST.take).reduce((s, [c, n]) => s + bSell(c) * n, 0), give = Object.entries(ST.give).reduce((s, [c, n]) => s + bPays(c) * n, 0);
   const diff = take - give;
-  const buyCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.buy"]),
-    ...TA.buy.map(r => tradeRow(r.code, ST.stock[r.code] - (ST.take[r.code] || 0), bSell(r.code), "+", () => { if (ST.stock[r.code] - (ST.take[r.code] || 0) > 0) ST.take[r.code] = (ST.take[r.code] || 0) + 1; paint(); }))]);
+  const buyCol = tradeColumn("buy", W["trade.buy"], TA.buy.map(r => ({ shelf: r.shelf, make: () => tradeRow(r.code, ST.stock[r.code] - (ST.take[r.code] || 0), bSell(r.code), "+", () => { if (ST.stock[r.code] - (ST.take[r.code] || 0) > 0) ST.take[r.code] = (ST.take[r.code] || 0) + 1; paint(); }) })));
   const held = TA.sell.filter(r => ST.pack[r.code] > 0);
-  const sellCol = node({ display: "flex", flexDirection: "column", rowGap: 2, width: 214 }, [section(W["trade.sell"]),
-    ...held.map(r => tradeRow(r.code, ST.pack[r.code] - (ST.give[r.code] || 0), bPays(r.code), "+", () => { if (ST.pack[r.code] - (ST.give[r.code] || 0) > 0) ST.give[r.code] = (ST.give[r.code] || 0) + 1; paint(); }))]);
+  const sellCol = tradeColumn("sell", W["trade.sell"], held.map(r => ({ shelf: r.shelf, make: () => tradeRow(r.code, ST.pack[r.code] - (ST.give[r.code] || 0), bPays(r.code), "+", () => { if (ST.pack[r.code] - (ST.give[r.code] || 0) > 0) ST.give[r.code] = (ST.give[r.code] || 0) + 1; paint(); }) })), line(W["trade.nothing_to_sell"], C.TEXT_DIM));
   const baskets = row(12, [
-    node({ width: 214, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU TAKE"), row(6, [basketWells("take"), coins(take)])]),
-    node({ width: 214, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU GIVE"), row(6, [basketWells("give"), coins(give)])]),
+    node({ width: 225, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU TAKE"), row(6, [basketWells("take"), coins(take)])]),
+    node({ width: 225, display: "flex", flexDirection: "column", rowGap: 2 }, [section("YOU GIVE"), row(6, [basketWells("give"), coins(give)])]),
   ], { alignItems: "flex-start", marginTop: 2 });
   const settle = row(8, [line(diff > 0 ? "YOU PAY" : diff < 0 ? "THEY PAY" : "EVEN", C.TEXT), coins(Math.abs(diff)),
     plaque("DEAL", 50, () => {
@@ -1770,19 +1851,21 @@ function paintBasket() {
       TK.said = diff >= 0 ? fill(W["trade.bought"], { coins: diff }) : fill(W["trade.sold"], { coins: -diff }); paint();
     }),
     plaque("CLEAR", 50, () => { ST.take = {}; ST.give = {}; paint(); })], { marginTop: 2 });
-  return frame(490, [lintel(W["trade.title"]), row(12, [buyCol, sellCol], { alignItems: "flex-start" }), baskets, settle, ...footer()]);
+  return frame(512, [lintel(W["trade.title"]), row(12, [buyCol, sellCol], { alignItems: "flex-start" }), baskets, settle, ...footer()]);
 }
 function jobRow(j, action) {
   return row(6, [well(j.icon), kitText(jobLine(j), C.TEXT, C.INK, 250), node({ width: 36 }, [coins(j.reward)]), action]);
 }
 function paintBoard() {
+  // one list in one window (design 38b): the headings are rows of it
   const mine = ST.jobs.filter(j => j.list === "yours"), posted = ST.jobs.filter(j => j.list === "posted");
-  const kids = [lintel(W["jobs.title"])];
-  if (mine.length) { kids.push(section(W["jobs.yours"])); for (const j of mine) kids.push(jobRow(j, j.have >= j.count ? plaque(W["jobs.hand_in"], 56, () => {
+  const head = t => () => node({ display: "flex", alignItems: "flex-end" }, [section(t)]);
+  const rows = [];
+  if (mine.length) { rows.push(head(W["jobs.yours"])); for (const j of mine) rows.push(() => jobRow(j, j.have >= j.count ? plaque(W["jobs.hand_in"], 56, () => {
     ST.purse += j.reward; ST.jobs.splice(ST.jobs.indexOf(j), 1); TK.said = fill(W["jobs.paid"], { coins: j.reward }); paint(); }) : null)); }
-  kids.push(section(W["jobs.posted"]));
-  for (const j of posted) kids.push(jobRow(j, plaque(W["jobs.take"], 56, () => { j.list = "yours"; TK.said = W["jobs.taken_line"]; paint(); })));
-  return frame(450, [...kids, ...footer()]);
+  rows.push(head(W["jobs.posted"]));
+  for (const j of posted) rows.push(() => jobRow(j, plaque(W["jobs.take"], 56, () => { j.list = "yours"; TK.said = W["jobs.taken_line"]; paint(); })));
+  return frame(464, [lintel(W["jobs.title"]), scrolled("board", rows, 390), ...footer()]);
 }
 // the HUD while a panel is open: the hotbar (the pack's first slots) and the coin count beside it
 function paintHud() {
@@ -1852,10 +1935,12 @@ const EYE = { x: 0.05, z: 1.9, yaw: 0, pitch: 0.1 };
 // ---- opening a panel: the person talks while one is open (design 30) ----------------------------------
 function open(p) {
   if (p !== TK.panel) TK.said = null;
+  if (p === "none") TK.scroll = freshScroll();
   TK.panel = p; FK.setExprOn(who, p === "none" ? "happy" : "talking", false);
   document.querySelectorAll("[data-tkp]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tkp === p));
   paint();
 }
+function curK() { const t = $("tkFit").style.transform.match(/scale\(([\d.]+)\)/); return t ? +t[1] : 1; }
 function paint() {
   const fit = $("tkFit"); fit.innerHTML = "";
   const stage = $("tkStage"), w = stage.clientWidth || 1000, h = stage.clientHeight || 600;

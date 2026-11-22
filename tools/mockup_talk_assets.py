@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write docs/mockups/npcs/talk-assets.js for M5's Talk tab (version 12).
+"""Write docs/mockups/npcs/talk-assets.js for M5's Talk tab (version 13).
 
 The tab draws the game's own talk, trade and job board panels, so it takes
 the game's own art and words, never redrawn or retyped:
@@ -51,7 +51,8 @@ def native(name: str) -> Image.Image:
 def pieces():
     slices = json.loads((A / "ui/slices.json").read_text())["pieces"]
     out = {}
-    for n in ["frame", "lintel", "slot-idle", "button-idle", "button-hover", "button-pressed"]:
+    for n in ["frame", "lintel", "slot-idle", "slot-hover", "slot-selected", "slider-track",
+              "button-idle", "button-hover", "button-pressed"]:
         s = slices[n].get("slice", 0)
         if isinstance(s, int):
             s = [s, s, s, s]
@@ -121,7 +122,28 @@ def icon_path(code):
 def name_of(L, code):
     if code.startswith("fish:"):
         return key(L, f"species.{code[5:]}.name") if "species" in L else code
+    if code.startswith("tool:"):
+        return key(L, f"tool.{code[5:]}.name")
     return key(L, f"item.{code}.name")
+
+
+# The trade filters' shelves (design 38c), as pbd_core::economy::values::
+# Shelf::of maps the groups, in tab order, with the good each tab shows.
+SHELF_OF = {"crop": "food", "fruit": "food", "fish": "food", "dish": "food",
+            "seed": "organics", "herd": "organics", "wood": "organics",
+            "ore": "raw", "stone": "raw", "tool": "tools", "goods": "goods", "light": "goods"}
+HERD_FOOD = {"egg", "milk"}  # values::HERD_FOOD: eaten, so Food
+SHELVES = ["food", "organics", "raw", "tools", "goods"]
+SHELF_PICTURE = {"food": "grilled-fish", "organics": "log", "raw": "iron-ingot",
+                 "tools": "tool:pickaxe", "goods": "rope"}
+
+
+def shelf_of(code):
+    return "food" if code in HERD_FOOD else SHELF_OF[ron_values_by_code()[code]]
+
+
+def ron_values_by_code():
+    return {c: g for c, _, g in ron_values()}
 
 
 def main():
@@ -149,24 +171,25 @@ def main():
         pays = min(math.floor(raw * T["buy_share"] + 1e-6), sell - 1)
         return sell, pays
 
-    # The trade panel's lists, as paint_trade makes them: what it sells in
-    # values order (the first nine, block codes have no pack icon file and
-    # are drawn from the terrain atlas in the game, so the list is goods),
-    # and what the pack holds that it buys.
+    # The trade panel's lists, as paint_trade makes them: everything it
+    # sells in values order (since version 13 no longer cut at nine: the
+    # column scrolls, design 38b; block codes have no pack icon file and are
+    # drawn from the terrain atlas in the game, so the list is goods), and
+    # what the pack holds that it buys: a full pack, so both columns
+    # overflow their seven rows and show the scroll bar.
     buy_rows = []
     for c, _, _ in values:
-        if len(buy_rows) == 9:
-            break
         if sells(c) and not c.startswith("block:"):
             s, _ = quote(c)
-            buy_rows.append({"code": c, "price": s, "count": scaled(T["stock"])})
-    pack = [("fish:perch", 3), ("fish:silverfin", 2), ("log", 4), ("planks", 8)]
+            buy_rows.append({"code": c, "price": s, "count": scaled(T["stock"]), "shelf": shelf_of(c)})
+    pack = [("fish:perch", 3), ("fish:silverfin", 2), ("log", 4), ("planks", 8), ("wheat", 6),
+            ("wool", 3), ("egg", 5), ("copper-ingot", 2), ("rope", 4), ("fibre", 9)]
     sell_rows = []
     for c, n in pack:
         if buys(c):
             _, p = quote(c)
             if p > 0:
-                sell_rows.append({"code": c, "price": p, "count": n})
+                sell_rows.append({"code": c, "price": p, "count": n, "shelf": shelf_of(c)})
 
     # The board: posted jobs and one of the player's, rewards by jobs.rs
     # (count x unit value x pay_share, rounded).
@@ -180,6 +203,9 @@ def main():
         {"kind": "cook", "count": 2, "have": 0, "thing": "grilled-fish", "icon": "grilled-fish", "reward": rnd(2 * V["grilled-fish"][0] * pay_share), "list": "posted"},
         {"kind": "gather", "count": 6, "have": 0, "thing": "log", "icon": "log", "reward": rnd(6 * V["log"][0] * pay_share), "list": "posted"},
         {"kind": "lost", "count": 1, "have": 0, "icon": None, "reward": rnd(1 * unit["lost"] * pay_share), "list": "posted"},
+        # Two more, so the board's list overflows its seven rows (design 38b).
+        {"kind": "cook", "count": 3, "have": 0, "thing": "flatbread", "icon": "flatbread", "reward": rnd(3 * V["flatbread"][0] * pay_share), "list": "posted"},
+        {"kind": "gather", "count": 8, "have": 0, "thing": "wheat", "icon": "wheat", "reward": rnd(8 * V["wheat"][0] * pay_share), "list": "posted"},
         {"kind": "repair", "count": 1, "have": 1, "icon": "planks", "reward": rnd(1 * unit["repair"] * pay_share), "list": "yours"},
     ]
 
@@ -222,7 +248,7 @@ def main():
                      "inputs": recipes[c][0] if c in recipes else [], "secs": recipes[c][1] if c in recipes else 0,
                      "makes": recipes[c][2] if c in recipes else 0}
 
-    codes = sorted({r["code"] for r in buy_rows + sell_rows} | {j["icon"] for j in job_rows if j["icon"]} | set(basket_codes)
+    codes = sorted({r["code"] for r in buy_rows + sell_rows} | set(SHELF_PICTURE.values()) | {j["icon"] for j in job_rows if j["icon"]} | set(basket_codes)
                    | {i for c in basket_codes for i, _ in basket[c]["inputs"]})
     items = {}
     for c in codes:
@@ -234,6 +260,8 @@ def main():
         "talk.trade", "talk.work", "talk.bye", "talk.back", "talk.line.trader", "talk.line.ready", "talk.line.giver",
         "talk.role.caravan_master", "trade.title", "trade.buy", "trade.sell", "trade.buy_one", "trade.sell_one",
         "trade.purse", "trade.nothing_to_sell", "trade.bought", "trade.sold", "trade.short", "trade.sold_out", "trade.coins", "trade.count",
+        "trade.shelf.all", "trade.shelf.food", "trade.shelf.organics", "trade.shelf.raw", "trade.shelf.tools",
+        "trade.shelf.goods",
         "jobs.title", "jobs.posted", "jobs.yours", "jobs.take", "jobs.hand_in", "jobs.taken_line", "jobs.paid",
         "jobs.kind.deliver", "jobs.kind.cook", "jobs.kind.gather", "jobs.kind.lost", "jobs.kind.repair"]}
     data = {
@@ -246,7 +274,7 @@ def main():
         "colours": {"TEXT": "#eab798", "TEXT_DIM": "#cfaa81", "TITLE": "#faaf5c", "LABEL": "#fffefe",
                     "INK": "#010000", "WELL": "#011c34", "OAK_LABEL": "#010000"},
         "town": town, "kind": kind,
-        "buy": buy_rows, "sell": sell_rows, "jobs": job_rows, "purse": 37,
+        "buy": buy_rows, "sell": sell_rows, "shelves": SHELVES, "shelf_picture": SHELF_PICTURE, "jobs": job_rows, "purse": 37,
         "basket": basket, "today": {c: V[c][0] for c in basket_codes}, "margin": MARGIN, "rate": RATE, "buy_share": T["buy_share"],
     }
     OUT.write_text("// Generated by tools/mockup_talk_assets.py from the game's own assets; do not edit.\n"

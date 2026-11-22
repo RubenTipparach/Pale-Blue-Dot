@@ -27,6 +27,7 @@ mod overlay_ui;
 mod pack;
 mod repro;
 mod scene;
+mod scroll_list;
 mod showcase;
 mod slots;
 mod sounds;

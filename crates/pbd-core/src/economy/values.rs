@@ -42,6 +42,96 @@ pub enum Group {
     Tool,
 }
 
+/// A shelf of the trade panel's filters (`townsfolk` design 38c): the
+/// groups read in the owner's fewer words. An id, never a name: the name is
+/// the locale file's `trade.shelf.<id>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Shelf {
+    /// Crops, fruit, fish, dishes, eggs and milk.
+    Food,
+    /// Seeds, wool and hides, and wood.
+    Organics,
+    /// Ore, coal, ingots and stone.
+    Raw,
+    Tools,
+    /// Made things and lights.
+    Goods,
+}
+
+impl Shelf {
+    /// Every shelf, in the order the tabs stand.
+    pub const ALL: [Shelf; 5] = [
+        Shelf::Food,
+        Shelf::Organics,
+        Shelf::Raw,
+        Shelf::Tools,
+        Shelf::Goods,
+    ];
+
+    /// The shelf a group's goods stand on.
+    pub const fn of(group: Group) -> Shelf {
+        match group {
+            Group::Crop | Group::Fruit | Group::Fish | Group::Dish => Shelf::Food,
+            Group::Seed | Group::Herd | Group::Wood => Shelf::Organics,
+            Group::Ore | Group::Stone => Shelf::Raw,
+            Group::Tool => Shelf::Tools,
+            Group::Goods | Group::Light => Shelf::Goods,
+        }
+    }
+
+    /// Its id: the locale key's last word.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Shelf::Food => "food",
+            Shelf::Organics => "organics",
+            Shelf::Raw => "raw",
+            Shelf::Tools => "tools",
+            Shelf::Goods => "goods",
+        }
+    }
+
+    /// The code of the good its tab shows.
+    pub const fn picture(self) -> &'static str {
+        match self {
+            Shelf::Food => "grilled-fish",
+            Shelf::Organics => "log",
+            Shelf::Raw => "iron-ingot",
+            Shelf::Tools => "tool:pickaxe",
+            Shelf::Goods => "rope",
+        }
+    }
+}
+
+/// What kept animals give that is eaten: on the Food shelf, not with the
+/// wool and hides (owner, 2026-11-22). A fertile egg is for hatching.
+pub const HERD_FOOD: [&str; 2] = ["egg", "milk"];
+
+impl Values {
+    /// The shelf `code` stands on; none for a code with no row. Its
+    /// group's, but for the herd's food ([`HERD_FOOD`]).
+    pub fn shelf(&self, code: &str) -> Option<Shelf> {
+        let value = self.get(code)?;
+        if HERD_FOOD.contains(&code) {
+            return Some(Shelf::Food);
+        }
+        Some(Shelf::of(value.group))
+    }
+
+    /// The shelves that hold any of `codes`, in tab order: the tabs a
+    /// column shows after ALL.
+    pub fn shelves_of<'a>(&self, codes: impl IntoIterator<Item = &'a str>) -> Vec<Shelf> {
+        let mut found: Vec<Shelf> = codes.into_iter().filter_map(|c| self.shelf(c)).collect();
+        found.sort_unstable();
+        found.dedup();
+        found
+    }
+
+    /// Whether `code` is listed under `filter` (none is ALL).
+    pub fn on_shelf(&self, code: &str, filter: Option<Shelf>) -> bool {
+        filter.is_none_or(|f| self.shelf(code) == Some(f))
+    }
+}
+
 /// `assets/config/values.ron`: `(code, coins, group)`, in the order shipped.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

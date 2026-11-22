@@ -1025,17 +1025,18 @@ nothing in the pack the trader wants, shows no tab).
   good already carries a `Group` in `values.ron` (what a town's need is
   read by), so no new data is added and no row changes.
   `values::Shelf::of(group)` maps them onto the owner's words:
-  - **Food**: crop, fruit, fish, dish;
-  - **Organics**: seed, herd (eggs, milk, wool, hides), wood;
+  - **Food**: crop, fruit, fish, dish, and the herd's eggs and milk
+    (`values::HERD_FOOD`; owner, 2026-11-22: "put egg in food, not
+    organics (milk too)");
+  - **Organics**: seed, herd (wool, hides, a fertile egg for hatching),
+    wood;
   - **Raw**: ore (ore, coal, ingots) and stone;
   - **Tools**: tool;
   - **Goods**: made things and lights (rope, buckets, boats, lamps).
   The ids are `food`, `organics`, `raw`, `tools`, `goods`; their names are
   the locale file's `trade.shelf.<id>` (`trade.shelf.all` for ALL), never
-  text in code. Two goods sit by their group rather than by what a player
-  might call them: fibre is a crop (Food) and eggs and milk are herd
-  (Organics); a shelf column in `values.ron` would move them, and is left
-  until the owner asks. Tools are `untraded` today, so their tab shows on
+  text in code. Fibre is a crop, so it stands on Food; a shelf column in
+  `values.ron` would move it, and is left until the owner asks. Tools are `untraded` today, so their tab shows on
   no trader yet; it is there for when they are.
 - **A tab is a pack slot well** (24 px, `slot-idle`, `slot-hover` under
   the pointer, `slot-selected` when chosen), holding a shelf's picture: a

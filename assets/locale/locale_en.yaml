@@ -1553,6 +1553,13 @@ trade:
   purse: PURSE
   sell: SELL
   sell_one: SELL
+  shelf:
+    all: ALL
+    food: Food
+    goods: Goods
+    organics: Organics
+    raw: Raw materials
+    tools: Tools
   short: Not enough coins
   sold: "Sold for {coins}"
   sold_out: Sold out

@@ -14,6 +14,7 @@
 //! lines only (CLAUDE.md, "Game text is plain").
 
 use super::menu::{self, Panel, Screen};
+use super::scroll_list::{self, ListView};
 use super::slots::{self, Hotbar, ItemIcons};
 use bevy::prelude::*;
 use pbd_app::economy::{
@@ -23,16 +24,97 @@ use pbd_app::economy::{
 use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::saves::WorldSave;
 use pbd_app::towns::Towns;
-use pbd_app::ui_kit::{self, KitText, Localized, Set, UiKit, tr};
+use pbd_app::ui_kit::{self, KitText, Localized, Set, Tooltip, UiKit, tr};
 use pbd_core::economy::jobs::Job;
-use pbd_core::economy::values::{item_of, trade_code};
+use pbd_core::economy::values::{Shelf, Values, item_of, trade_code};
 use pbd_core::inventory::Stack;
 use pbd_core::locale::tr_with;
 
 /// How near a townsperson must be to talk to, metres from the eye.
 pub const TALK_REACH_M: f32 = 3.0;
-/// The most rows a trade column lists.
-const ROWS: usize = 9;
+/// The rows a trade column and the board show at once; a longer list
+/// scrolls (design 38b).
+const VISIBLE_ROWS: usize = 7;
+/// A row's height and the gap under it, native px: a slot well and 2.
+const ROW_H: f32 = 24.0;
+const ROW_GAP: f32 = 2.0;
+/// The window's height: the panel's, whatever the list holds.
+const LIST_H: f32 = VISIBLE_ROWS as f32 * (ROW_H + ROW_GAP) - ROW_GAP;
+/// A trade row's width, and a column's with its scroll bar.
+const TRADE_ROW_W: f32 = 214.0;
+const BAR_GAP: f32 = 3.0;
+/// A board row's width.
+const BOARD_ROW_W: f32 = 390.0;
+
+/// A list of the trade and board panels that scrolls on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum List {
+    Buy,
+    Sell,
+    Board,
+}
+
+/// Where one list is scrolled to, and its filter (none is ALL).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Column {
+    pub first: usize,
+    pub shelf: Option<Shelf>,
+    /// Its rows when last painted, for the wheel's and the drag's clamp.
+    pub rows: usize,
+}
+
+/// The trade and board lists' scroll and filters, kept while the talk is
+/// open and forgotten when it closes; and a thumb being dragged, with where
+/// it was taken hold of (native px from its top).
+#[derive(Resource, Clone, Debug, Default, PartialEq)]
+pub struct TalkScroll {
+    pub buy: Column,
+    pub sell: Column,
+    pub board: Column,
+    pub drag: Option<(List, f32)>,
+}
+
+impl TalkScroll {
+    pub fn column(&mut self, list: List) -> &mut Column {
+        match list {
+            List::Buy => &mut self.buy,
+            List::Sell => &mut self.sell,
+            List::Board => &mut self.board,
+        }
+    }
+
+    /// A list's view as last painted.
+    fn view(&mut self, list: List) -> ListView {
+        let c = *self.column(list);
+        ListView::new(c.rows, VISIBLE_ROWS, c.first)
+    }
+
+    /// What the panel shows of the scroll, for its "rebuild when it moves".
+    fn key(&self) -> String {
+        format!(
+            "{:?}{:?}|{:?}{:?}|{}|{}",
+            self.buy.first,
+            self.buy.shelf,
+            self.sell.first,
+            self.sell.shelf,
+            self.board.first,
+            self.drag.map_or(0, |d| d.0 as u8 + 1)
+        )
+    }
+}
+
+/// A list's window, which the wheel scrolls while the pointer is over it.
+#[derive(Component)]
+pub struct ScrollArea(pub List);
+/// A list's scroll bar track; a press on it pages.
+#[derive(Component)]
+pub struct ScrollTrack(pub List);
+/// A list's scroll bar thumb, which drags.
+#[derive(Component)]
+pub struct ScrollThumb(pub List);
+/// A filter tab, and whether it is the chosen one.
+#[derive(Component)]
+pub struct ShelfTab(pub bool);
 
 /// Who the open talk is with.
 #[derive(Clone, Debug, PartialEq)]
@@ -61,6 +143,8 @@ pub enum TalkAction {
     Sell(String),
     Take(u64),
     HandIn(u64),
+    /// A trade column's filter tab: ALL (none) or a shelf.
+    Shelf(List, Option<Shelf>),
 }
 
 #[derive(Component)]
@@ -357,12 +441,13 @@ pub fn use_talk(
 }
 
 /// Leaving every talk panel forgets who it was with.
-pub fn forget(screen: Res<Screen>, mut talking: ResMut<Talking>) {
+pub fn forget(screen: Res<Screen>, mut talking: ResMut<Talking>, mut scroll: ResMut<TalkScroll>) {
     if screen.is_changed()
         && !matches!(*screen, Screen::Talk | Screen::Trade | Screen::Board)
         && talking.with.is_some()
     {
         *talking = Talking::default();
+        *scroll = TalkScroll::default();
     }
 }
 
@@ -372,10 +457,18 @@ pub fn press(
     buttons: Query<(&Interaction, &TalkAction), Changed<Interaction>>,
     mut screen: ResMut<Screen>,
     mut talking: ResMut<Talking>,
+    mut scroll: ResMut<TalkScroll>,
     (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): ShopParams,
 ) {
     for (interaction, action) in &buttons {
         if *interaction != Interaction::Pressed {
+            continue;
+        }
+        // A filter tab: that column from its top (design 38c); nothing said.
+        if let TalkAction::Shelf(list, shelf) = action {
+            let column = scroll.column(*list);
+            column.shelf = *shelf;
+            column.first = 0;
             continue;
         }
         let ids = fish_ids(&fauna, &body.0);
@@ -562,6 +655,7 @@ pub fn paint(
     mut commands: Commands,
     mut shown: Local<String>,
     p: PaintParams,
+    mut scroll: ResMut<TalkScroll>,
     talk: Query<Entity, With<TalkBody>>,
     trade: Query<Entity, With<TradeBody>>,
     board: Query<Entity, With<BoardBody>>,
@@ -572,12 +666,13 @@ pub fn paint(
     }
     // What the panel shows, as one line: it is rebuilt only when this moves.
     let now = format!(
-        "{open:?}|{:?}|{}|{:?}|{:?}|{}",
+        "{open:?}|{:?}|{}|{:?}|{:?}|{}|{}",
         p.talking,
         p.eco.purse.coins,
         p.eco.jobs,
         p.hotbar.0,
-        p.sun.clock.day()
+        p.sun.clock.day(),
+        scroll.key()
     );
     if *shown == now && !p.screen.is_changed() {
         return;
@@ -606,8 +701,19 @@ pub fn paint(
     let now_s = p.sun.clock.seconds;
     commands.entity(body).with_children(|panel| match open {
         Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco),
-        Screen::Trade => paint_trade(panel, kit, with, &p, save, icons, &ids, now_s, coin),
-        _ => paint_board(panel, kit, with, &p, icons, &ids, coin),
+        Screen::Trade => paint_trade(
+            panel,
+            kit,
+            with,
+            &p,
+            &mut scroll,
+            save,
+            icons,
+            &ids,
+            now_s,
+            coin,
+        ),
+        _ => paint_board(panel, kit, with, &p, &mut scroll, icons, &ids, coin),
     });
 }
 
@@ -663,6 +769,7 @@ fn paint_trade(
     kit: &UiKit,
     with: &TalkWith,
     p: &PaintParams,
+    scroll: &mut TalkScroll,
     save: &WorldSave,
     icons: &ItemIcons,
     ids: &[String],
@@ -679,74 +786,278 @@ fn paint_trade(
         fish_ids: ids,
     };
     let market = pbd_app::economy::market_of(save, with.town.site).settled(now_s, &p.cfg.trade);
+    // Every good the trader sells, at its price and stock.
+    let buy: Vec<Good> = trader
+        .stock_list()
+        .into_iter()
+        .filter_map(|code| {
+            let item = item_of(&code, ids)?;
+            let q = trader.quote(&market, &code);
+            Some(Good {
+                price: q.sell?,
+                count: q.stock,
+                item,
+                code,
+            })
+        })
+        .collect();
     // What the pack holds that the trader buys, in slot order, once each.
-    let mut held: Vec<(String, pbd_core::inventory::Item, u32)> = Vec::new();
+    let mut sell: Vec<Good> = Vec::new();
     for stack in p.hotbar.0.iter().flatten() {
         let Some(code) = trade_code(stack.item, ids) else {
             continue;
         };
-        if trader.buys(&code) && !held.iter().any(|(c, _, _)| *c == code) {
-            held.push((code, stack.item, p.hotbar.0.count(stack.item)));
+        if !trader.buys(&code) || sell.iter().any(|g| g.code == code) {
+            continue;
+        }
+        if let Some(price) = trader.quote(&market, &code).buy {
+            sell.push(Good {
+                price,
+                count: p.hotbar.0.count(stack.item),
+                item: stack.item,
+                code,
+            });
         }
     }
+    let art = (icons, &*p.images, coin, ids);
+    let values = &p.cfg.values;
     panel
         .spawn(Node {
             column_gap: px(12),
+            align_items: AlignItems::FlexStart,
             ..default()
         })
         .with_children(|cols| {
-            cols.spawn(Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(2),
-                width: px(214),
-                ..default()
-            })
-            .with_children(|col| {
-                menu::section(col, tr("trade.buy"));
-                for code in trader.stock_list().into_iter().take(ROWS) {
-                    let Some(item) = item_of(&code, ids) else {
-                        continue;
-                    };
-                    let q = trader.quote(&market, &code);
-                    let Some(price) = q.sell else { continue };
-                    trade_row(
-                        col,
-                        kit,
-                        (icons, &p.images, coin),
-                        item,
-                        (price, q.stock),
-                        TalkAction::Buy(code),
-                        tr("trade.buy_one"),
-                    );
-                }
-            });
-            cols.spawn(Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(2),
-                width: px(214),
-                ..default()
-            })
-            .with_children(|col| {
-                menu::section(col, tr("trade.sell"));
-                if held.is_empty() {
-                    line(col, tr("trade.nothing_to_sell"), ui_kit::TEXT_DIM);
-                }
-                for (code, item, count) in held.into_iter().take(ROWS) {
-                    let q = trader.quote(&market, &code);
-                    let Some(price) = q.buy else { continue };
-                    trade_row(
-                        col,
-                        kit,
-                        (icons, &p.images, coin),
-                        item,
-                        (price, count),
-                        TalkAction::Sell(code),
-                        tr("trade.sell_one"),
-                    );
-                }
-            });
+            let buy_side = Side {
+                list: List::Buy,
+                heading: tr("trade.buy"),
+                label: tr("trade.buy_one"),
+                act: TalkAction::Buy,
+                empty: None,
+            };
+            trade_column(cols, kit, art, values, scroll, buy_side, buy);
+            let sell_side = Side {
+                list: List::Sell,
+                heading: tr("trade.sell"),
+                label: tr("trade.sell_one"),
+                act: TalkAction::Sell,
+                empty: Some(tr("trade.nothing_to_sell")),
+            };
+            trade_column(cols, kit, art, values, scroll, sell_side, sell);
         });
     footer(panel, kit, p, coin);
+}
+
+/// A good in a trade column: its code, its item, its price and how many.
+struct Good {
+    code: String,
+    item: pbd_core::inventory::Item,
+    price: u64,
+    count: u32,
+}
+
+/// What tells the two trade columns apart.
+struct Side {
+    list: List,
+    heading: Localized,
+    label: Localized,
+    act: fn(String) -> TalkAction,
+    empty: Option<Localized>,
+}
+
+/// What a column's wells and prices paint from.
+type Art<'a> = (
+    &'a ItemIcons,
+    &'a Assets<Image>,
+    &'a Handle<Image>,
+    &'a [String],
+);
+
+/// A shelf's name, for its tab's tooltip.
+fn shelf_name(shelf: Option<Shelf>) -> Localized {
+    tr(match shelf {
+        None => "trade.shelf.all",
+        Some(Shelf::Food) => "trade.shelf.food",
+        Some(Shelf::Organics) => "trade.shelf.organics",
+        Some(Shelf::Raw) => "trade.shelf.raw",
+        Some(Shelf::Tools) => "trade.shelf.tools",
+        Some(Shelf::Goods) => "trade.shelf.goods",
+    })
+}
+
+/// One trade column (design 38b and 38c): its heading, its filter tabs,
+/// and the rows of its filter in a window of [`VISIBLE_ROWS`] with a scroll
+/// bar when they overflow.
+fn trade_column(
+    cols: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    art: Art,
+    values: &Values,
+    scroll: &mut TalkScroll,
+    side: Side,
+    goods: Vec<Good>,
+) {
+    let (icons, images, coin, ids) = art;
+    let held = scroll.drag.is_some_and(|d| d.0 == side.list);
+    let column = scroll.column(side.list);
+    let shelves = values.shelves_of(goods.iter().map(|g| g.code.as_str()));
+    // A filter whose last good went (sold, or bought out of the pack) is ALL.
+    if column.shelf.is_some_and(|s| !shelves.contains(&s)) {
+        column.shelf = None;
+        column.first = 0;
+    }
+    let chosen = column.shelf;
+    let shown: Vec<&Good> = goods
+        .iter()
+        .filter(|g| values.on_shelf(&g.code, chosen))
+        .collect();
+    let view = ListView::new(shown.len(), VISIBLE_ROWS, column.first);
+    column.first = view.first;
+    column.rows = shown.len();
+    cols.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: px(2),
+        width: px(TRADE_ROW_W + BAR_GAP + scroll_list::BAR_W),
+        flex_shrink: 0.0,
+        ..default()
+    })
+    .with_children(|col| {
+        menu::section(col, side.heading);
+        // The tabs: ALL and a shelf a tab, only shelves with goods here. The
+        // row keeps its height with none, so the two windows line up.
+        col.spawn(Node {
+            column_gap: px(2),
+            height: px(slots::SLOT),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|tabs| {
+            if !shelves.is_empty() {
+                shelf_tab(tabs, kit, (icons, images, ids), side.list, None, chosen);
+                for shelf in &shelves {
+                    let art = (icons, images, ids);
+                    shelf_tab(tabs, kit, art, side.list, Some(*shelf), chosen);
+                }
+            }
+        });
+        col.spawn(Node {
+            column_gap: px(BAR_GAP),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|window| {
+            window
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(ROW_GAP),
+                        width: px(TRADE_ROW_W),
+                        height: px(LIST_H),
+                        flex_shrink: 0.0,
+                        overflow: Overflow::clip(),
+                        ..default()
+                    },
+                    bevy::ui::RelativeCursorPosition::default(),
+                    ScrollArea(side.list),
+                ))
+                .with_children(|rows| {
+                    if goods.is_empty()
+                        && let Some(empty) = side.empty
+                    {
+                        line(rows, empty, ui_kit::TEXT_DIM);
+                    }
+                    for good in &shown[view.window()] {
+                        trade_row(
+                            rows,
+                            kit,
+                            (icons, images, coin),
+                            good.item,
+                            (good.price, good.count),
+                            (side.act)(good.code.clone()),
+                            side.label.clone(),
+                        );
+                    }
+                });
+            scroll_list::bar(
+                window,
+                kit,
+                view,
+                LIST_H,
+                held,
+                ScrollTrack(side.list),
+                ScrollThumb(side.list),
+            );
+        });
+    });
+}
+
+/// A filter tab: a pack slot well (chosen, the selected well) holding the
+/// shelf's good, or ALL its word; the shelf's name its tooltip.
+fn shelf_tab(
+    tabs: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    (icons, images, ids): (&ItemIcons, &Assets<Image>, &[String]),
+    list: List,
+    shelf: Option<Shelf>,
+    chosen: Option<Shelf>,
+) {
+    let on = shelf == chosen;
+    tabs.spawn((
+        Button,
+        Node {
+            width: px(slots::SLOT),
+            height: px(slots::SLOT),
+            flex_shrink: 0.0,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        kit.whole(Set::Stone, slots::slot_piece(on)),
+        ShelfTab(on),
+        Tooltip(shelf_name(shelf)),
+        TalkAction::Shelf(list, shelf),
+    ))
+    .with_children(|well| match shelf {
+        None => {
+            well.spawn(KitText::new(shelf_name(None), ui_kit::TEXT).shadow(ui_kit::INK));
+        }
+        Some(shelf) => {
+            let mut node = ImageNode {
+                color: Color::NONE,
+                ..default()
+            };
+            let item = item_of(shelf.picture(), ids);
+            slots::paint_icon(&mut node, item.map(|i| Stack::new(i, 1)), icons, images);
+            well.spawn((
+                node,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(slots::ICON_AT),
+                    top: px(slots::ICON_AT),
+                    width: px(slots::ICON),
+                    height: px(slots::ICON),
+                    ..default()
+                },
+            ));
+        }
+    });
+}
+
+/// A filter tab under the pointer shows the pack's hover well.
+pub fn paint_tabs(
+    kit: Res<UiKit>,
+    mut tabs: Query<(&Interaction, &ShelfTab, &mut ImageNode), Changed<Interaction>>,
+) {
+    for (interaction, tab, mut image) in &mut tabs {
+        let piece = if tab.0 {
+            "slot-selected"
+        } else if *interaction == Interaction::None {
+            "slot-idle"
+        } else {
+            "slot-hover"
+        };
+        image.image = kit.image(&Set::Stone.key(piece));
+    }
 }
 
 fn trade_row(
@@ -761,6 +1072,8 @@ fn trade_row(
     col.spawn(Node {
         align_items: AlignItems::Center,
         column_gap: px(4),
+        height: px(ROW_H),
+        flex_shrink: 0.0,
         ..default()
     })
     .with_children(|row| {
@@ -795,7 +1108,16 @@ fn trade_row(
 
 /// The purse, the last thing said, and BACK.
 fn footer(panel: &mut ChildSpawnerCommands, kit: &UiKit, p: &PaintParams, coin: &Handle<Image>) {
-    said_line(panel, &p.talking.said);
+    // The line keeps its height when nothing is said, so the panel does not
+    // grow as a deal is made (design 38b).
+    panel
+        .spawn(Node {
+            min_height: px(10),
+            margin: UiRect::top(px(3)),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|said| said_line(said, &p.talking.said));
     panel
         .spawn(Node {
             column_gap: px(8),
@@ -810,11 +1132,13 @@ fn footer(panel: &mut ChildSpawnerCommands, kit: &UiKit, p: &PaintParams, coin: 
         });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_board(
     panel: &mut ChildSpawnerCommands,
     kit: &UiKit,
     with: &TalkWith,
     p: &PaintParams,
+    scroll: &mut TalkScroll,
     icons: &ItemIcons,
     ids: &[String],
     coin: &Handle<Image>,
@@ -824,30 +1148,27 @@ fn paint_board(
     let town = &with.town;
     let eco = &p.eco;
     let towns = &*p.towns;
+    // One list (design 38b): the headings are rows of it.
+    let mut entries: Vec<Entry> = Vec::new();
     // The jobs taken here: done ones to hand in, the rest in hand.
-    let mine: Vec<&Job> = eco
+    let mine: Vec<Job> = eco
         .jobs
         .taken
         .iter()
         .filter(|j| j.site == town.site)
+        .cloned()
         .collect();
     if !mine.is_empty() {
-        menu::section(panel, tr("jobs.yours"));
+        entries.push(Entry::Heading(tr("jobs.yours")));
         for job in mine {
             let done = eco.jobs.is_done(job.id);
-            job_row(
-                panel,
-                (kit, coin, well),
-                job,
-                &eco.jobs.counts(job.id),
-                towns,
-                done.then_some(TalkAction::HandIn(job.id)),
-                tr("jobs.hand_in"),
-            );
+            let counts = eco.jobs.counts(job.id);
+            let action = done.then_some(TalkAction::HandIn(job.id));
+            entries.push(Entry::Job(job, counts, action, tr("jobs.hand_in")));
         }
     }
     if with.giver {
-        menu::section(panel, tr("jobs.posted"));
+        entries.push(Entry::Heading(tr("jobs.posted")));
         // The board as the rules post it today.
         let posted = {
             let board = pbd_core::economy::jobs::Board {
@@ -864,21 +1185,83 @@ fn paint_board(
             board.posted(town.as_town(), day, goodwill, &eco.jobs.gone())
         };
         if posted.is_empty() {
-            line(panel, tr("jobs.none"), ui_kit::TEXT_DIM);
+            entries.push(Entry::Line(tr("jobs.none")));
         }
-        for job in &posted {
-            job_row(
-                panel,
-                (kit, coin, well),
-                job,
-                &[],
-                towns,
-                Some(TalkAction::Take(job.id)),
-                tr("jobs.take"),
-            );
+        for job in posted {
+            let action = Some(TalkAction::Take(job.id));
+            entries.push(Entry::Job(job, Vec::new(), action, tr("jobs.take")));
         }
     }
+    let held = scroll.drag.is_some_and(|d| d.0 == List::Board);
+    let column = scroll.column(List::Board);
+    let view = ListView::new(entries.len(), VISIBLE_ROWS, column.first);
+    column.first = view.first;
+    column.rows = entries.len();
+    panel
+        .spawn(Node {
+            column_gap: px(BAR_GAP),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|window| {
+            window
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(ROW_GAP),
+                        width: px(BOARD_ROW_W),
+                        height: px(LIST_H),
+                        flex_shrink: 0.0,
+                        overflow: Overflow::clip(),
+                        ..default()
+                    },
+                    bevy::ui::RelativeCursorPosition::default(),
+                    ScrollArea(List::Board),
+                ))
+                .with_children(|rows| {
+                    for entry in entries.drain(view.window()) {
+                        match entry {
+                            Entry::Heading(text) => {
+                                rows.spawn(Node {
+                                    height: px(ROW_H),
+                                    align_items: AlignItems::FlexEnd,
+                                    flex_shrink: 0.0,
+                                    ..default()
+                                })
+                                .with_children(|r| menu::section(r, text));
+                            }
+                            Entry::Line(text) => line(rows, text, ui_kit::TEXT_DIM),
+                            Entry::Job(job, counts, action, label) => job_row(
+                                rows,
+                                (kit, coin, well),
+                                &job,
+                                &counts,
+                                towns,
+                                action,
+                                label,
+                            ),
+                        }
+                    }
+                });
+            scroll_list::bar(
+                window,
+                kit,
+                view,
+                LIST_H,
+                held,
+                ScrollTrack(List::Board),
+                ScrollThumb(List::Board),
+            );
+        });
     footer(panel, kit, p, coin);
+}
+
+/// A row of the board's list: a heading, a plain line, or a job with what
+/// its button does.
+enum Entry {
+    Heading(Localized),
+    Line(Localized),
+    Job(Job, Vec<u32>, Option<TalkAction>, Localized),
 }
 
 /// What a job row's well paints from: the icons, the images, the fish ids.
@@ -919,6 +1302,100 @@ fn job_row(
         });
 }
 
+/// The mouse wheel over a list scrolls it by whole rows (design 38b): a
+/// notch a row; pixel motion gathered into rows.
+pub fn scroll_wheel(
+    screen: Res<Screen>,
+    mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
+    areas: Query<(&ScrollArea, &bevy::ui::RelativeCursorPosition)>,
+    mut scroll: ResMut<TalkScroll>,
+    mut carry: Local<f32>,
+) {
+    let mut turned = 0;
+    for w in wheel.read() {
+        let pixels = w.unit == bevy::input::mouse::MouseScrollUnit::Pixel;
+        turned += scroll_list::notches(w.y, pixels, ROW_H + ROW_GAP, &mut carry);
+    }
+    if turned == 0 || !matches!(*screen, Screen::Trade | Screen::Board) {
+        return;
+    }
+    let Some(list) = areas
+        .iter()
+        .find(|(_, at)| at.cursor_over())
+        .map(|(area, _)| area.0)
+    else {
+        return;
+    };
+    let first = scroll.view(list).wheel(turned).first;
+    scroll.column(list).first = first;
+}
+
+/// The scroll bar's thumb drags, snapping to whole rows; a press on the
+/// track beside it pages (design 38b). The drag is held by the mouse
+/// button, not the thumb: the panel is rebuilt as it scrolls.
+pub fn scroll_drag(
+    mouse: Res<ButtonInput<MouseButton>>,
+    thumbs: Query<(
+        &Interaction,
+        &ScrollThumb,
+        &bevy::ui::RelativeCursorPosition,
+    )>,
+    tracks: Query<(
+        &Interaction,
+        &ScrollTrack,
+        &bevy::ui::RelativeCursorPosition,
+    )>,
+    mut scroll: ResMut<TalkScroll>,
+) {
+    let inner = LIST_H - 2.0 * scroll_list::BAR_INSET;
+    // Where the pointer is down the track's inside, native px.
+    let along = |list: List| {
+        tracks
+            .iter()
+            .find(|(_, t, _)| t.0 == list)
+            .and_then(|(_, _, at)| {
+                at.normalized
+                    .map(|n| (n.y + 0.5) * LIST_H - scroll_list::BAR_INSET)
+            })
+    };
+    if !mouse.pressed(MouseButton::Left) {
+        if scroll.drag.is_some() {
+            scroll.drag = None;
+        }
+        return;
+    }
+    if let Some((list, grab)) = scroll.drag {
+        if let Some(y) = along(list) {
+            let first = scroll.view(list).drag(inner, y - grab).first;
+            if scroll.column(list).first != first {
+                scroll.column(list).first = first;
+            }
+        }
+        return;
+    }
+    if !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    // Taken hold of: where on the thumb, so it does not jump to the pointer.
+    if let Some((_, thumb, _)) = thumbs.iter().find(|(i, _, _)| **i == Interaction::Pressed) {
+        let list = thumb.0;
+        if let Some(y) = along(list) {
+            let (top, _) = scroll.view(list).thumb(inner);
+            scroll.drag = Some((list, y - top));
+        }
+        return;
+    }
+    // The track above or below the thumb: a window's worth.
+    if let Some((_, track, _)) = tracks.iter().find(|(i, _, _)| **i == Interaction::Pressed) {
+        let list = track.0;
+        if let Some(y) = along(list) {
+            let view = scroll.view(list);
+            let (top, _) = view.thumb(inner);
+            scroll.column(list).first = view.page(y > top).first;
+        }
+    }
+}
+
 /// The townsperson the talk is with talks: their mouth moves while the
 /// talk, trade or board panel is open with them, and stops when it closes
 /// or turns to someone else (`townsfolk` design 30).
@@ -951,11 +1428,16 @@ pub fn talking_mouth(
 
 /// A capture instrument (`townsfolk` design 35): a `PBD_KEY_SCRIPT` step
 /// `<frame>:press:<button>` presses a talk panel's button on that capture
-/// frame, as a click on it would: `trade`, `work`, `back`, `bye`, or the
-/// first `buy`, `sell`, `take` or `handin` row. Nothing reads it in play.
+/// frame, as a click on it would: `trade`, `work`, `back`, `bye`, the first
+/// `buy`, `sell`, `take` or `handin` row, or a filter tab, `<buy|sell>-<all|
+/// food|organics|raw|tools|goods>` (design 38c); `<frame>:wheel:<buy|sell|
+/// board>:<notches>` turns the wheel over that list as the wheel would
+/// (design 38b; negative is toward you, down the list). Nothing reads it in
+/// play.
 pub fn scripted_press(
     state: Res<super::CaptureState>,
     mut buttons: Query<(&mut Interaction, &TalkAction)>,
+    mut scroll: ResMut<TalkScroll>,
     script: Local<std::sync::OnceLock<Vec<(u32, String)>>>,
     mut done: Local<std::collections::BTreeSet<usize>>,
 ) {
@@ -965,8 +1447,12 @@ pub fn scripted_press(
             .split(',')
             .filter_map(|step| {
                 let (frame, rest) = step.trim().split_once(':')?;
-                let what = rest.trim().strip_prefix("press:")?;
-                Some((frame.trim().parse().ok()?, what.to_string()))
+                let rest = rest.trim();
+                let what = rest
+                    .strip_prefix("press:")
+                    .map(str::to_string)
+                    .or_else(|| rest.starts_with("wheel:").then(|| rest.to_string()))?;
+                Some((frame.trim().parse().ok()?, what))
             })
             .collect()
     });
@@ -976,18 +1462,47 @@ pub fn scripted_press(
         if state.frame < *frame || done.contains(&k) {
             continue;
         }
+        if let Some(turn) = what.strip_prefix("wheel:") {
+            let mut parts = turn.split(':');
+            let list = match parts.next() {
+                Some("buy") => Some(List::Buy),
+                Some("sell") => Some(List::Sell),
+                Some("board") => Some(List::Board),
+                _ => None,
+            };
+            let notches = parts.next().and_then(|n| n.parse::<i32>().ok());
+            if let (Some(list), Some(notches)) = (list, notches) {
+                let first = scroll.view(list).wheel(notches).first;
+                scroll.column(list).first = first;
+                info!(
+                    "PBD_KEY_SCRIPT: wheel {notches} over {list:?} at frame {}",
+                    state.frame
+                );
+            }
+            done.insert(k);
+            continue;
+        }
+        let tab = |a: &TalkAction| match a {
+            TalkAction::Shelf(list, shelf) => {
+                let side = if *list == List::Buy { "buy" } else { "sell" };
+                let name = shelf.map_or("all", Shelf::id);
+                *what == format!("{side}-{name}")
+            }
+            _ => false,
+        };
         let wanted = |a: &TalkAction| {
-            matches!(
-                (what.as_str(), a),
-                ("trade", TalkAction::Trade)
-                    | ("work", TalkAction::Work)
-                    | ("back", TalkAction::Back)
-                    | ("bye", TalkAction::Bye)
-                    | ("buy", TalkAction::Buy(_))
-                    | ("sell", TalkAction::Sell(_))
-                    | ("take", TalkAction::Take(_))
-                    | ("handin", TalkAction::HandIn(_))
-            )
+            tab(a)
+                || matches!(
+                    (what.as_str(), a),
+                    ("trade", TalkAction::Trade)
+                        | ("work", TalkAction::Work)
+                        | ("back", TalkAction::Back)
+                        | ("bye", TalkAction::Bye)
+                        | ("buy", TalkAction::Buy(_))
+                        | ("sell", TalkAction::Sell(_))
+                        | ("take", TalkAction::Take(_))
+                        | ("handin", TalkAction::HandIn(_))
+                )
         };
         match buttons.iter_mut().find(|(_, a)| wanted(a)) {
             Some((mut interaction, action)) => {
@@ -1013,6 +1528,7 @@ impl Plugin for TalkPlugin {
     fn build(&self, app: &mut App) {
         use pbd_app::interact::InteractSet;
         app.init_resource::<Talking>()
+            .init_resource::<TalkScroll>()
             .add_systems(PostStartup, spawn)
             .add_systems(PostUpdate, offer_talk.in_set(InteractSet::Offer))
             .add_systems(
@@ -1022,7 +1538,10 @@ impl Plugin for TalkPlugin {
                     forget,
                     scripted_press,
                     press,
+                    scroll_wheel,
+                    scroll_drag,
                     paint,
+                    paint_tabs,
                     coin_hud,
                     talking_mouth,
                 )
