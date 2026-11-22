@@ -8,7 +8,7 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 11] = [
+const FILES: [&str; 13] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
@@ -24,6 +24,9 @@ const FILES: [&str; 11] = [
     // `ocean-environments` B29: the beavers and otters drawn on the fauna's
     // creatures.
     "crates/pbd-app/src/critters.rs",
+    // `townsfolk` 25: the townspeople, placed in the planet's frame in f64.
+    "crates/pbd-core/src/townsfolk.rs",
+    "crates/pbd-app/src/townsfolk.rs",
 ];
 
 /// What taking up or a radius from a local position looks like.

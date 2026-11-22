@@ -664,6 +664,7 @@ pub fn replace(world: &mut World, towns: Towns) {
     }
     world.insert_resource(Structures::default());
     world.insert_resource(crate::planet::shadow::TownCasters::default());
+    crate::townsfolk::on_replace(world);
     world.insert_resource(towns);
 }
 
@@ -1115,6 +1116,7 @@ fn drop_town(world: &mut World, site: u32) {
     if let Ok(e) = world.get_entity_mut(gone.entity) {
         e.despawn();
     }
+    crate::townsfolk::on_drop(world, site);
     if let Some(mut structures) = world.get_resource_mut::<Structures>() {
         let end = (gone.first + gone.count).min(structures.0.len());
         structures.0.drain(gone.first.min(end)..end);
@@ -1152,6 +1154,7 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     };
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
+    crate::townsfolk::on_stand(world, site.id, &held.town, &laid);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
     let dressing = match (things, off) {
@@ -1315,7 +1318,7 @@ pub fn door_states(
 }
 
 /// A triangle soup as a Bevy mesh.
-fn to_mesh(buf: &MeshBuf) -> Mesh {
+pub(crate) fn to_mesh(buf: &MeshBuf) -> Mesh {
     let count = buf.positions.len() as u32;
     Mesh::new(
         PrimitiveTopology::TriangleList,

@@ -518,10 +518,23 @@ const LOON: [Binding; 4] = [
 
 const TUBE: [Binding; 2] = [row(&W_S, "/", "kick"), row(&A_D, "/", "turn")];
 
-const RAFT: [Binding; 3] = [
+const RAFT: [Binding; 5] = [
     row(&W_S, "/", "row"),
     row(&A_D, "/", "turn"),
     row(&Q_E, "/", "row_oar"),
+    // Logs on and off the raft (`log-drives`).
+    row(&[Key::Board(KeyCode::KeyY)], " ", "load_log"),
+    row(&[Key::Board(KeyCode::KeyU)], " ", "unload_log"),
+];
+
+/// Build mode (`player-building` design B5): N opens and closes it (B, which
+/// the design first named, is the breeding screen on foot), K the kits.
+const BUILDING: [Binding; 5] = [
+    row(&[Key::Board(KeyCode::KeyN)], " ", "build_mode"),
+    row(&[Key::Mouse(MouseButton::Left)], " ", "build_place"),
+    row(&[Key::Mouse(MouseButton::Right)], " ", "build_remove"),
+    row(&[Key::Wheel], " ", "build_turn"),
+    row(&[Key::Board(KeyCode::KeyK)], " ", "kits"),
 ];
 
 /// The rod from a paddled boat's seat (`small-boats` design 6).
@@ -580,10 +593,11 @@ const fn group(id: &'static str, tab: Tab, when: When, rows: &'static [Binding])
 /// Flying sub-tab, went with it in `retire-kestrel`, the Tern's, TERN, in
 /// `retire-tern`, and ROWBOAT and COG in `retire-rowboat-and-cog`; a saved
 /// rebind of one of their slots is kept in the file and read by nothing.)
-pub static BINDINGS: [Group; 11] = [
+pub static BINDINGS: [Group; 12] = [
     group("on_foot", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("interact", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("hands", Tab::Hands, When::OnFoot, &HANDS),
+    group("building", Tab::Hands, When::OnFoot, &BUILDING),
     group("flying", Tab::Flying, When::Flying, &FLYING),
     group("vehicles", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
     group("loon", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
@@ -1120,7 +1134,7 @@ mod tests {
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 14] = [
+    const READERS: [(&str, &str); 16] = [
         ("controls.rs", include_str!("controls.rs")),
         ("fish.rs", include_str!("fish.rs")),
         ("desktop/guide.rs", include_str!("desktop/guide.rs")),
@@ -1138,6 +1152,11 @@ mod tests {
         ("desktop/menu.rs", include_str!("desktop/menu.rs")),
         ("desktop.rs", include_str!("desktop.rs")),
         ("desktop/repro.rs", include_str!("desktop/repro.rs")),
+        (
+            "desktop/build_mode.rs",
+            include_str!("desktop/build_mode.rs"),
+        ),
+        ("logs.rs", include_str!("logs.rs")),
     ];
 
     /// A binding list that names a key nothing reads is a lie a player acts

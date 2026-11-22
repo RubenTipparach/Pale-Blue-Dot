@@ -467,6 +467,18 @@ const CANOPY = new Set(["jungle"]);
         }
       }
       const out = { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
+      // Its people (`townsfolk` task 1.1), as the scene's `person()` calls
+      // put them: where each stands (the mockup's metres, its feet's
+      // height), the way it faces, its role, its work or its path and pace,
+      // its tunic and whether it holds a spear.
+      const people = NPCS.map((n) => {
+        const p = { role: n.role.toLowerCase().replace(/ /g, "_"), at: [n.solid.x, n.y, n.solid.z], facing: Math.PI / 2 - n.g.rotation.y, tunic: n.g.children[2].material.color.clone().convertLinearToSRGB().getHex() };
+        if (n.path) { p.path = n.path.map((q) => q.slice()); p.speed = n.speed; }
+        else if (n.work) p.work = n.work;
+        if (n.armR.children.length > 1) p.spear = true;
+        return p;
+      });
+      if (people.length) out.people = people;
       if (masonry.length) out.masonry = masonry;
       if (curtains.length) {
         out.masonry = curtains.slice();

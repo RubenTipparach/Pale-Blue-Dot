@@ -209,6 +209,9 @@ pub struct Prepared {
     /// The towns, read or laid and stored, their ground installed; `None`
     /// where there are no sites.
     pub towns: Option<Towns>,
+    /// The roads between the towns, read or planned and stored
+    /// (`townsfolk` design 11); `None` where there are no towns.
+    pub roads: Option<crate::roads::RoadNet>,
     pub planet: PreparedPlanet,
 }
 
@@ -274,6 +277,7 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         }
     }
     ground::install(None);
+    pbd_core::roads::install_cleared(None);
     let towns = sites.as_ref().map(|list| {
         progress.set(Step::Laying);
         let ids: Vec<u32> = list.iter().map(|s| s.id).collect();
@@ -303,6 +307,19 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         }
         Towns::opened(ids, kept, unsettled)
     });
+    // The roads between them (`townsfolk` design 11): read, or planned
+    // once over the towns' ground and stored, so a world saved before
+    // roads gains them here, in place.
+    let roads = towns.as_ref().map(|t| {
+        let sites: Vec<Site> = t.held.iter().map(|h| h.site.clone()).collect();
+        let (net, seq) =
+            crate::roads::prepare(&mut save, &sites, &config, &crate::roads::load_config());
+        if seq > 0 && !committed(&save, seq) {
+            error!("the roads were not saved, so none is shown");
+            return crate::roads::RoadNet::default();
+        }
+        net
+    });
     progress.set(Step::Planet);
     let built = Instant::now();
     let planet = PreparedPlanet::build(inputs.near, &inputs.columns, &inputs.scatter, &save.edits);
@@ -315,6 +332,7 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         save,
         sites,
         towns,
+        roads,
         planet,
     }
 }
@@ -825,6 +843,7 @@ fn drive_loading(world: &mut World) {
         save,
         sites,
         towns,
+        roads,
         planet,
     } = match prepared {
         Ok(prepared) => prepared,
@@ -835,6 +854,7 @@ fn drive_loading(world: &mut World) {
         // In place of the open world's: its towns taken down, its save
         // dropped (which drains and joins its writer), its planet replaced.
         crate::towns::replace(world, towns.unwrap_or_default());
+        crate::roads::replace(world, roads);
         let fresh = save.pose.is_none();
         world.insert_resource(save);
         crate::planet::install_prepared(world, planet);
@@ -842,6 +862,9 @@ fn drive_loading(world: &mut World) {
     } else {
         if let Some(towns) = towns {
             world.insert_resource(towns);
+        }
+        if let Some(roads) = roads {
+            world.insert_resource(roads);
         }
         world.insert_resource(save);
         world.insert_resource(planet);

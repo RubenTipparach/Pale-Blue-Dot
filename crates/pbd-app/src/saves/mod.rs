@@ -433,6 +433,11 @@ impl WorldSave {
         Self::default()
     }
 
+    /// The world's seed, from its identity.
+    pub fn seed(&self) -> u64 {
+        self.identity.seed
+    }
+
     /// Which opening of a world this is: unique for the run.
     pub fn serial(&self) -> u64 {
         self.serial

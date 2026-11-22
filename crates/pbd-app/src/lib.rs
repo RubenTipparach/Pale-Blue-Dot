@@ -9,6 +9,7 @@ pub mod audio;
 pub mod beaver;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod builds;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
 pub mod clutter;
@@ -24,6 +25,8 @@ pub mod controls;
 pub mod critters;
 #[cfg(feature = "desktop")]
 pub mod drops;
+#[cfg(feature = "desktop")]
+pub mod economy;
 pub mod field_light;
 #[cfg(feature = "desktop")]
 pub mod fish;
@@ -43,6 +46,7 @@ pub mod kitchen;
 pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod locale;
+pub mod logs;
 #[cfg(feature = "desktop")]
 pub mod memory_trace;
 #[cfg(feature = "desktop")]
@@ -67,6 +71,7 @@ pub mod repro;
 pub mod river_band;
 pub mod river_fill;
 pub mod river_walk;
+pub mod roads;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
@@ -81,6 +86,7 @@ pub mod sky;
 pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
+pub mod townsfolk;
 pub mod tree_shake;
 pub mod trees_taken;
 #[cfg(feature = "desktop")]

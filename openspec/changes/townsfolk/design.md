@@ -158,11 +158,124 @@ no new generator version.
 better prices (up to 10%) and more jobs on the board. Theft and damage lower
 it in the consequences change, not here.
 
+**10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
+3").** The look was built in the towns mockup first (M15's Roads tab,
+`towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
+climbing ten layers a layer a cell with one bend, a ford and a timber
+bridge, by day and lit at night by lanterns on posts; the mockup's walker
+climbs the hill road with no eye jump. The owner asked for the game to
+follow straight on ("Build phase 3"), so the game was built from the tab
+without waiting for its approval; the tab is on the tracker for it.
+- **A road is a piece on an ordinary cell, not a ground edit.** The cell's
+  column is the generator's, untouched; the road top is cut like a town's
+  street step: its own mesh 2 cm over the ground (`roads::piece::LIFT_M`),
+  its side faces down to the cell's ground, and a floor for the walker
+  (`settlement::pieces::Surface::Steps` for a slope, `Floor` for a flat or
+  raised cell or a deck) in a frame of its own, met through the same
+  `walking` floors a town is. So `planet/contact`'s "steps are reported as
+  steps" holds for the terrain, and a road's slope is a separate, explicit
+  shape (a new requirement in `world/roads`). No save format changes and no
+  generator version moves.
+- **The slope's plane** runs from the middle of the side the road comes in
+  by, at the cell's ground, to the middle of the side it climbs out of, a
+  layer up, held level past each: one layer over 2.83 m straight through
+  (19 degrees), over 2.45 m round a 60-degree bend (22 degrees). It goes on
+  the lower cell of each one-layer pair. A cell lower than both its
+  neighbours in the road (a dip one cell wide) would need two slopes, so it
+  is raised a layer on a bed of packed earth instead (`RoadCell::raised`).
+- **The route** is A* over the finest cells by their exact keys
+  (`roads::neighbours`, on every face a key's point lies on), costed in
+  millimetres so the order is total: a cell's length, plus
+  `slope_cost_m` for a layer up or down; never two layers; shallow river
+  water (`ford_depth_m`, 1 m) forded at `ford_cost` times the length on its
+  bed; deeper water bridged at the bank's height for at most
+  `max_bridge_cells`, at `bridge_cost`; never the sea; never a cell holding a
+  player's edit or road cell. A town's footprint is crossed and not laid
+  (its lanes are the road there). Tunables in `assets/config/roads.ron`.
+  The search is weighted A* (`search_weight` 1.5: a road at most half as
+  long again as the cheapest, for far fewer cells looked at), capped at
+  `max_expanded` cells a link, and the links are routed side by side on all
+  but one of the machine's threads, given back in link order. Measured on
+  the shipped seed in this container (4 cores, `--profile fast`,
+  `roads::tests::the_shipped_seed_network`): 53 settlements (the cave
+  towns left out: their anchor is under the mountain), 57 links, 27 routed,
+  11,730 cells, in 3.2 s; with the plain cheapest search and 600,000 cells a
+  link it was 35 routed in 59 s, too long for a loading screen. The links
+  not routed have no way that climbs at most a layer a cell, keeps off the
+  sea and bridges at most ten cells within the search's reach; a later
+  change may cut and fill (world edits through the yield check) to reach
+  them.
+- **Stored records**, authored by the world (`@wroads:road-net/0`) and
+  passed through the yield check: one `road` record a road (id: its two
+  sites, the cells compact), and `road-net` id 0 once the plan is made,
+  which is what keeps a world from being planned twice. Planned in the
+  loading thread after the towns' ground is installed, so an old save gains
+  its roads on its next open, in place, with no restart. A player's road
+  cell is a `road-cell` record of the player's, by its cell key.
+- **No tree grows on a road**: the road cells are installed beside the
+  towns' ground before the planet is built (`roads::Cleared`), and the
+  foliage pass's cleared bit is set on them as on a town's footprint. The
+  first in-game capture had trees standing in the track. Grass tufts are
+  still drawn on a road (not yet cleared).
+- **Laid only where no player edit stands, at every build**: a stored
+  road's cell that the player has since edited is not drawn or stood on,
+  so the road yields however late the edit came.
+- **Gravel is walked `gravel_speed` (1.15) times the ground's**, dirt
+  `dirt_speed` (1.0), read off the road piece under the walker's feet.
+- Frame cost not measured (cloud session, lavapipe; CLAUDE.md).
+
 **Order.** Coins first, then trade, then missions (they pay coins and use
 trade), then roads (the delivery, escort and clear jobs want them). Each is
 mocked up before code where it has a look: the road surfaces and slopes in a
 new tab of the towns mockup (M15) and the board and trade panel in M5.
 
+
+**12a. As built (2026-11-21, on the owner's "People approved. Build.phase 3").**
+The decisions above, made concrete where they left a choice; each is a
+recommendation taken (ask only with screenshots):
+- **One authority.** `pbd_core::economy` holds every rule: `coins` (the
+  purse and `Purse::change`, the one function, with its reason), `values`
+  (`assets/config/values.ron`, `(code, coins, group)` rows in shipped
+  order), `trade` (`assets/config/trade.ron`: the need table by town kind
+  and group, the 0.6 share, the 2% step within 0.5 to 2.0 of rest, a day to
+  rest), `goodwill` (in `trade.ron`: +1 a trade, +10 a job, 100 at most,
+  steps of 20, 2% a step, a fourth and fifth job at steps 2 and 4), `jobs`
+  (`assets/config/jobs.ron`: the board and the taken jobs) and `follow` (the
+  lost villager's step). `pbd-app` only feeds them and stores the records.
+- **Item codes.** A good by its code, `block:<name>`, `tool:<code>`, and a
+  fish as `fish:<species id>` (a fish in the pack is its roster index).
+  Coins are whole: a trader's asking price rounds up, its paying price down,
+  and the paying price is always at least a coin under the asking one, so
+  buying and selling back always loses. A town sells the groups it makes
+  (need 0.8 or less) and bread everywhere; it buys every valued good but a
+  delivery's parcel, wanting twelve of each at size 1 (a walled town is
+  size 2, a harbour 1.5), and stocks eight of what it sells.
+- **The town jobs' things are scoped.** A job's objective names
+  `<site>:<thing>` where only that town's counts (a sale to its trader, a
+  parcel handed to its people); `Want::Prefix` (`<site>:*`) lets "sell six
+  goods here" count anything sold there. The new kinds join
+  `missions::Kind` and are counted by `Progress::record`, the starter
+  missions' own function: the taken jobs are a chain of their own and keep
+  their counts in a `Progress` inside the `town_jobs` record.
+- **The board.** Each place on it keeps its job for three days, the places
+  changing on staggered days; the first place is the town's own trade (a
+  harbour fishes, a mountain town mines, a village harvests). A job's id is
+  a hash of the world's seed, the town, the place and the period.
+- **Talking is the interact key (F)**, the key every door and station uses
+  in the game today (`interact.rs`), not M5's E, which predates it. Talking
+  to anyone in a town hands over a parcel owed there. A town's trader and job
+  giver are its people's roles, first match in `jobs.ron`'s
+  `trader_roles` and `giver_roles`; a town with none of them trades and
+  gives jobs through its first person, so every town has both.
+- **The lines a deal writes.** A trade writes the market and goodwill, then
+  the purse with the slots in one `with` line; handing in writes the purse,
+  the goodwill and the jobs, in that order. A torn write costs only the last
+  line (`saves::format`): a price moved with nothing bought, or a job to hand
+  in again, never coins or goods lost.
+- **Lamps, lost villagers and repairs** are made and counted by the rules
+  (`JobKind`, `follow`) and tested there; a board posts them only once the
+  game raises their events (`jobs.ron`'s `posted`), since the lamp's F, the
+  villager's figure and the world's broken piece are not in the game yet.
 
 ## Friendly faces (research, 2026-11-21)
 
@@ -278,6 +391,157 @@ nothing read by a rule.
 today's hex figure beside the proposed one, with the expression set, the
 live layers (blink, gaze at the cursor, talk), the generator, and a lit
 night square. The game waits for the owner's approval of that tab.
+
+## In the game (2026-11-21, tasks 1 to 3 and 10.4)
+
+**The owner (2026-11-21):** "People approved. Build.phase 3. Do it in
+parallel if you can". The approved look is M5 version 9's Faces tab
+(`docs/mockups/npcs.html#faces`, design 13a); it supersedes decision 2's
+hexagonal-prism figure for the look. Decisions 1, 3 and 4 stand. Coins,
+trade, missions, the lost villager and roads are built beside this by other
+hands and are not part of it; what they need from the people is decision 27.
+
+**19. The people come from the mockup's own `person()` calls.**
+`tools/export_town_templates.js` records each call a scene makes, as it
+records `building()`, into the template's `people`: a role id (the mockup's
+role, lower case with underscores), where it stands (`at`, the mockup's
+metres, its feet's height), the way it faces (radians from the mockup's
+east toward its south), its tunic, its work (`hammer`, `wipe`, `sit`,
+`idle`) or its path and pace, and whether it holds a spear. Nothing else in
+the templates changes (the jungle's file is spliced so its kapok angles keep
+their old rounding). What the templates hold, re-exported 2026-11-21:
+
+| Template | People | Among them |
+| --- | ---: | --- |
+| `village` | 5 | a smith hammering, three villagers and a farmer walking |
+| `town` (walled) | 19 | the smith, the innkeeper, four stallholders, a gate guard, a lookout, two wall guards on the wall walk |
+| `coast` (harbour) | 12 | a boatwright hammering, four fishwives, fishers and a porter |
+| `desert` | 6 | a caravan master, four traders, a water carrier |
+| `tundra` | 4 | a watcher on the ice keep, two hunters, a wall guard |
+| `jungle` | 3 | a forager, a tree dweller, a lookout |
+
+**Task 1.1 said 16 for the walled town; it holds 19.** The mockup's market
+puts four stallholders round its stalls (the count of 16 was taken before
+they were added), and its other people are the ones the task names. The
+test pins 19, with a smith and a gate guard among them.
+
+**20. `pbd_core::townsfolk` derives a town's people from its record.**
+`people_of(town, template, chart, patch)` gives each person, in the
+template's order:
+- an id (the site and its index), its role, its work or its path;
+- its post as a direction on the planet, placed by `sea::point` as the
+  boats and the dressing are, so it follows the sphere's cells as a
+  building's corners do; its height is the town's terrace plus the
+  template's height over its datum, as a lantern's is;
+- its facing as a tangent there; a path as a polyline of directions, the
+  mockup's straight line sampled every half metre through the same chart;
+- its look from the generator (decision 16, the mockup's `genSpec` ported
+  number for number, its xorshift too), seeded by the site and the index.
+  The people's palette is the town's: the village, the walled town and the
+  jungle wear the fields folk's (M5 has no jungle people; recommendation
+  taken, ask only with screenshots), the harbour the harbour folk's, the
+  desert the caravan folk's and the tundra the ice-camp folk's. Each
+  person's shirt is the template's tunic, so the guards keep their grey and
+  the smith his dark; trousers, skin, hair and the rest are rolled.
+- a path stops half a metre short of the first wall it would cross,
+  walking out from the person's post toward each end. The mockup's people
+  walk through what was built after their lanes: its village lane walker
+  goes from (25, 9) to (25, 27) straight through the village hall, which
+  stands on (25, 10) and (25, 11). In the game that villager turns back at
+  the hall's south wall. A path that crosses nothing is kept whole, and a
+  test holds every path to more than half its length.
+Nothing about a person is saved: it is derived, as the masonry is.
+
+**21. The figure is M5 version 9's `friend()`, ported.** The same pieces
+and numbers: the bevelled block head 0.5 x 0.6 x 0.45 m (`HC` 0.035) at
+the given head scale, six-sided lathes for the torso (the four builds'
+profiles), legs, boots, sleeves, cuffs and hands, ears, button and long
+noses, the hair kit (crop, bun, braid, bald, hat) and beards as blocks; the
+face 2 mm proud of the head's front: eye whites (r 0.08), pupils (0.048)
+with catch-lights (0.016), lids and lash lines, brows, the mouth (0.24 x
+0.12 m) and blush.
+- **One texture, one material.** The field-lit shader reads a mesh's
+  vertex colour as the town's bake, never a tint, so a person's colours are
+  texels: one small atlas holds a swatch for every colour a person can
+  wear (each palette's colours and the shades the mockup takes of them:
+  0.84, 0.78, 0.74, 0.72, 0.62, the blush mixes) and the mockup's mouth
+  atlas, drawn pixel for pixel as its canvas draws it. Every part's UVs
+  point at its swatch, sampled nearest. So every person, of every town, is
+  drawn with one opaque material and the mouths with one masked one: two
+  pipelines.
+- **A rig per drawn person**: a root with the body, two legs, two arms and
+  the head as pivots, each part one mesh built from that person's look;
+  the face pieces are shared meshes (unit discs and quads, scaled). A mouth
+  shape is a swap of the shared quad that carries that cell's UVs, the
+  game's form of the mockup's UV change.
+
+**22. Expressions are a state machine in `pbd-core`, fed by the game.**
+`townsfolk::face` holds the ten expressions with the mockup's numbers and
+`Mood`, which picks one from what happens:
+- the player comes within 5 m: surprised for 0.5 s, then happy for 6 s,
+  then back to the resting face; met again once the player has been 8 m off;
+- night (the sun's daylight under 0.12 where the person stands, as the
+  herd's night is): sleepy, unless just met;
+- the smith (any `hammer` worker) at work: the resting face with the brows
+  drawn down ("focused"), not an eleventh expression;
+- otherwise the resting face, happy or neutral from the seed;
+- one set from outside (decision 27) wins over all of them while it holds.
+The layers run on their own as the mockup runs them: blink (2 to 6 s,
+one in five doubled, 60 ms closing, 30 held, 120 opening), gaze (saccades
+held 0.5 to 2 s; to the player's eye while within 5 m, the head following
+late, at most 0.6 rad), talk (A, O, M cycling, 80 to 170 ms each) and the
+brows' lift on a saccade. Each person rolls its own sequence from its seed,
+never the global random.
+
+**23. Motion is the mockup's, on the CPU.**
+- A walker goes back and forth along its path at its pace, as the towns
+  mockup's `animateNpc` does, its start in the cycle from its seed, with
+  the Faces tab's walk: a bob and squash on each step, the legs and arms
+  swinging against each other, the steps' rate following the pace. It
+  turns at the ends over 0.12 s.
+- A worker works in place: the hammer stroke and the wipe of the towns
+  mockup on the right arm; `sit` is drawn standing at its post, as the
+  mockup draws it. An idler sways and looks about (the gaze layer).
+- The actions wave, hop, shrug and tilt are keyed poses blended by the
+  mockup's curves; delighted plays the hop.
+
+**24. At most 32 people are drawn, within 60 m, faded over 0.8 s**, through
+`Faded` as the critters are; the rest of a town's people still stand and are
+solid. A rig is made when its person comes into range and dropped when it
+has faded out. The two materials are prewarmed behind the loading screen by
+one proxy figure, as the critters' are.
+
+**25. Every person of a standing town is a solid circle**, 0.28 m round
+from its feet to 1.9 m, in a list apart from the towns' pieces
+(`TownsfolkSolids`), updated each frame from where each person is; the
+walker's refused-move test and its slide ask it after the pieces, in the
+planet frame in f64. A body already overlapping a person (one walked into
+it) is let walk out, as with a wall built round it. People do not push the
+walker.
+
+**26. Lit by the field.** Each rig's root carries `LitByField` and
+`LitLikeTerrain`, so a person is lit as the ground under them, by the sun
+with its shadows and the cell light field's sky and lamps. **The forge is
+not in the game yet**: the towns' cut has no smithy shed or forge fire in
+any template (they are the mockup's dressing, not a `building()`), so task
+3.2's "the side facing the forge" waits for the forge's light; at 22:30 the
+smith is lit by the town's lamps and the field. Recorded as a limit, not
+faked with a light of its own.
+
+**27. What other parts may use** (`pbd_app::townsfolk`):
+- `TownPerson { id: PersonId { site, index }, role }` is on the root of
+  every drawn person, so a talk or trade can find who is in front of the
+  player.
+- `Townsfolk::set_expression(id, Expression, seconds)` holds an expression
+  on a person, drawn or not (a trader's smile on a trade: `Happy` for 2 s;
+  a job done: `Delighted`, which plays its hop); `play(id, Act)` plays wave,
+  hop, shrug or tilt.
+- `Townsfolk::drive(id, feet, forward, walking)` takes a person off its post
+  or path and stands them where the caller says, each frame, in the planet
+  frame in f64 (a lost villager following the player); `release(id)` puts
+  them back. The figure, the face, the solid circle and the gaze follow.
+- `Townsfolk::people(site)` lists a standing town's people with their roles.
+None of trade, missions or the lost villager is built here.
 
 ## Risks / Trade-offs
 
