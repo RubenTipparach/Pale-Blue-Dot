@@ -612,6 +612,7 @@ interact:
     harvest: "Harvest {thing}"
     lead: "Lead {thing}"
     let_stay: "Let {thing} stay"
+    mend: "Mend {thing}"
     open: "Open {thing}"
     open_door: "Open {thing}"
     pick_fruit: "Pick {thing}"
@@ -674,6 +675,8 @@ item:
     name: gate
   glowing-mushroom:
     name: "glowing mushroom"
+  gravel:
+    name: gravel
   grilled-fish:
     name: grilled fish
   incubator:
@@ -764,6 +767,7 @@ jobs:
   taken: Already taken
   taken_line: Job taken
   title: JOBS
+  wall: wall
   wrong_town: Hand it in where you took it
   yours: YOUR JOBS
 kitchen:
@@ -1433,6 +1437,7 @@ talk:
     hello: Hello.
     ready: You're back. Here for your pay?
     trader: Want to trade?
+  lost_found: I'm lost. Lead the way.
   parcel_thanks: Thanks for the parcel.
   role:
     boatman: boatman

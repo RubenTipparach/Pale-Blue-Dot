@@ -129,7 +129,8 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let cfg = terrain_config();
     let biome = planet_gen::biome_at(cfg, d, height);
     // A town's footprint, or a road (`townsfolk` design 10a): no tree.
-    let cleared = pbd_core::settlement::ground::cleared(cfg, d) || pbd_core::roads::cleared(d);
+    let road = pbd_core::roads::cleared(d);
+    let cleared = pbd_core::settlement::ground::cleared(cfg, d) || road;
     let back = planet_gen::beach_back(cfg, d, height, biome);
     // A sea cell's top far off is drawn from its own sheet, as the column
     // draws it near (`ocean-environments` B24).
@@ -149,7 +150,14 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
         | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
         | u32::from(height < high_water_m()) << FLOODED_BIT
+        | u32::from(road) << ROAD_BIT
 }
+
+/// The bit of a record's material word that says a road lies on the cell
+/// (`townsfolk` design 33): the clutter pass grows no pixel tufts there.
+/// `planet_surface.wgsl` reads it.
+pub const ROAD_BIT: u32 = 30;
+const _: () = assert!(PLACED_SHEET_SHIFT + 4 <= ROAD_BIT);
 
 /// The bit of a record's material word that says no tree grows on it.
 /// `planet_visibility.wgsl`'s foliage pass reads it.

@@ -138,7 +138,7 @@ pub fn cut(
     let foot_h = if bridge {
         low - DECK_M
     } else {
-        cell.base_m as f32
+        cell.ground_m() as f32
     };
     let side_tex = if bridge { TIMBER } else { SIDE };
     {
@@ -306,6 +306,7 @@ mod tests {
             base_m: 12,
             kind,
             raised: false,
+            cut_fill: 0,
             up,
             from: None,
         }

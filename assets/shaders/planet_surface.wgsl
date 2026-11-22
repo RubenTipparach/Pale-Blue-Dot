@@ -1875,7 +1875,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             let j = v/12u;
             let i = v%12u;
             let tufts = u32(round((0.6+0.4*roll(id,SALT_GRASS+1u))*params.flora.x));
-            if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
+            // No tuft grows on a road (`townsfolk` design 33): bit 30 of the
+            // material word, `planet_terrain::ROAD_BIT`.
+            let road = ((cell.metadata.y >> 30u) & 1u) == 1u;
+            if green && !road && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
                 let sj = SALT_GRASS+16u+j*8u;
                 let k = u32(roll(id,sj)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,sj+1u);

@@ -209,6 +209,8 @@ impl Default for RecipeFile {
         file.recipes.extend([
             recipe("planks", "hand", 1.0, &[("log", 1)], &[("planks", 4)]),
             recipe("rope", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
+            // townsfolk design 31: loose stone crushed for a road.
+            recipe("gravel", "hand", 1.5, &[("stone", 2)], &[("gravel", 4)]),
             recipe(
                 "workbench",
                 "hand",
@@ -697,9 +699,10 @@ mod tests {
         assert_eq!(file, RecipeFile::default());
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
-        // Planks, rope, the workbench, the stone axe and torches by hand
-        // (`starter-missions` T.2); at the bench the rest, fences and gates.
-        assert_eq!(book.at("hand").count(), 5);
+        // Planks, rope, gravel (`townsfolk` design 31), the workbench, the
+        // stone axe and torches by hand (`starter-missions` T.2); at the
+        // bench the rest, fences and gates.
+        assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
             16,

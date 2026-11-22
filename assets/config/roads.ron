@@ -23,4 +23,19 @@
     // cells looked at; more, a road a little dearer for far fewer).
     max_expanded: 100000,
     search_weight: 1.5,
+    // Roads version 2 (`townsfolk` design 32): a road cell may stand up to
+    // `max_fill_layers` over its ground on packed earth, or `max_cut_layers`
+    // under it in a cutting the world digs, at `fill_cost_m` and
+    // `cut_cost_m` metres of level road a layer; never on water, in a town
+    // or on a cell the player touched. A world planned by version 1 keeps
+    // its roads.
+    max_fill_layers: 2,
+    max_cut_layers: 2,
+    fill_cost_m: 20.0,
+    cut_cost_m: 25.0,
+    // Lamps along the roads near a town (`townsfolk` design 34): within
+    // `lamp_town_m` metres of a settlement, a lantern post beside every
+    // `lamp_every`th road cell out of it.
+    lamp_town_m: 90.0,
+    lamp_every: 5,
 )

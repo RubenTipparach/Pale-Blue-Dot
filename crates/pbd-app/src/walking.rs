@@ -4154,6 +4154,7 @@ mod tests {
                     base_m: height(k),
                     kind: Kind::Ground,
                     raised: false,
+                    cut_fill: 0,
                     up,
                     from: up.and(k.checked_sub(1).map(|j| keys[j])),
                 }

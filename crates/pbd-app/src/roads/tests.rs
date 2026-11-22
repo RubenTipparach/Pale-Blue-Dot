@@ -76,15 +76,39 @@ fn a_road_is_never_laid_on_a_players_edit() {
         .iter()
         .position(|c| c.cells.iter().any(|&i| net.cells[i].cell.key == later))
         .unwrap();
-    let before = cut_chunk(&net, chunk, &save.edits, &cfg, config.radius_m, &|_| 2.0).1;
+    let cut = |save: &WorldSave| {
+        let yields = save.yields.clone();
+        cut_chunk(
+            &net,
+            chunk,
+            &|k| yields.has_cell(k),
+            &cfg,
+            config.radius_m,
+            &|_| 2.0,
+        )
+        .1
+    };
+    let before = cut(&save);
+    // The world's own edit there (a cutting, `townsfolk` design 32) does not
+    // take the road away.
+    save.edits.set(Edit {
+        cell: later,
+        layer: 199,
+        material: Material::Air,
+    });
+    assert_eq!(cut(&save).len(), before.len(), "the world's edit");
     save.edits.set(Edit {
         cell: later,
         layer: 200,
         material: Material::Dirt,
     });
-    let after = cut_chunk(&net, chunk, &save.edits, &cfg, config.radius_m, &|_| 2.0).1;
+    save.yields.touch_cell(later);
+    let after = cut(&save);
     assert_eq!(after.len() + 1, before.len());
-    assert_eq!(save.edits.for_cell(later), &[(200, Material::Dirt)]);
+    assert_eq!(
+        save.edits.for_cell(later),
+        &[(199, Material::Air), (200, Material::Dirt)]
+    );
 }
 
 /// `world/roads`, "Dirt and gravel": the road under the feet is walked at
@@ -100,6 +124,7 @@ fn gravel_is_walked_faster_than_dirt() {
         base_m: 10,
         kind: roads::Kind::Ground,
         raised: false,
+        cut_fill: 0,
         up: None,
         from: None,
     };
@@ -131,7 +156,19 @@ fn gravel_is_walked_faster_than_dirt() {
 #[ignore]
 fn the_shipped_seed_network() {
     let config = *crate::planet::terrain_config();
-    let cfg = load_config();
+    let base = load_config();
+    let version: u32 = std::env::var("PBD_ROADS_VERSION")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(roads::NET_VERSION);
+    let expanded: Option<usize> = std::env::var("PBD_ROADS_EXPANDED")
+        .ok()
+        .and_then(|v| v.parse().ok());
+    let mut cfg = base.for_version(version);
+    if let Some(e) = expanded {
+        cfg.max_expanded = e;
+    }
+    println!("roads version {version}, {} cells a link", cfg.max_expanded);
     let sites = pbd_core::sites::generate(
         &crate::sites::load_rules(),
         &config,
@@ -156,6 +193,12 @@ fn the_shipped_seed_network() {
         .flat_map(|r| &r.cells)
         .filter(|c| matches!(c.kind, roads::Kind::Bridge { .. }))
         .count();
+    let worked = planned
+        .iter()
+        .flat_map(|r| &r.cells)
+        .filter(|c| c.cut_fill != 0)
+        .count();
+    println!("{worked} cells cut or filled");
     println!(
         "{} settlements, {} links, {} routed, {cells} cells ({slopes} sloped, {bridges} bridged), in {:.1} s",
         set.len(),
@@ -179,5 +222,161 @@ fn the_shipped_seed_network() {
             r.cells.len()
         );
     }
+    // Why the links left out were left out: what the straight way between
+    // their towns crosses (the sea, deep water wider than a bridge, a climb
+    // of more than a layer), sampled a cell at a time.
+    let routed: BTreeSet<(u32, u32)> = planned.iter().map(|r| (r.from_site, r.to_site)).collect();
+    for &(a, b) in links.iter().filter(|l| !routed.contains(l)) {
+        let (da, db) = (
+            set.iter().find(|s| s.site == a).unwrap().direction,
+            set.iter().find(|s| s.site == b).unwrap().direction,
+        );
+        let m = pbd_core::sites::arc_m(da, db, config.radius_m);
+        let n = (m / 2.8).ceil() as usize;
+        let (mut sea, mut cliffs, mut water_run, mut widest) = (0, 0, 0, 0);
+        let mut last: Option<i32> = None;
+        for k in 0..=n {
+            let d = da.lerp(db, k as f32 / n as f32).normalize();
+            let Some(g) = roads::nearest_key(d).and_then(&ground) else {
+                continue;
+            };
+            match g.water {
+                roads::Water::Sea => sea += 1,
+                roads::Water::River { .. } => {
+                    water_run += 1;
+                    widest = widest.max(water_run);
+                }
+                roads::Water::Dry => water_run = 0,
+            }
+            if let Some(h) = last
+                && (g.top_m - h).abs() > 1
+            {
+                cliffs += 1;
+            }
+            last = Some(g.top_m);
+        }
+        println!(
+            "  unrouted {a} to {b}: {m:.0} m, straight way crosses {sea} sea cells, river {widest} cells wide at most, {cliffs} steps of over a layer"
+        );
+    }
     assert!(!planned.is_empty());
+}
+
+/// `world/roads`, "Dirt and gravel" (`townsfolk` task 8.3): the place
+/// button with gravel lays a gravel road cell of the player's on dry
+/// ground, taking one gravel and writing it with the pack; a cell with a
+/// road already, or no gravel, is refused; the shovel lays a dirt track;
+/// the player's own cell is taken up with its gravel back.
+#[test]
+fn the_player_lays_gravel_and_dirt_and_takes_them_up() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    let config = *crate::planet::terrain_config();
+    let start = crate::flight_view::FlightViewConfig::default().spawn_direction;
+    let (_, east) = pbd_core::geo::north_east(start);
+    // Dry ground near the start: the first of a few cells east that is.
+    let dry = (0..40)
+        .map(|k| (start + east * (k as f32 * 3.0 / config.radius_m)).normalize())
+        .filter_map(|d| roads::nearest_key(d))
+        .find(|&k| {
+            let c = roads::centre(k).unwrap();
+            let top = pbd_core::column::surface_m(&config, c);
+            top > config.sea_level_m + 1.0
+                && !pbd_core::map::river_water(&config, c)
+                && !ground::cleared(&config, c)
+        })
+        .expect("dry ground near the start");
+    let on_top = |key: u32| {
+        let c = roads::centre(key).unwrap();
+        c * (config.radius_m + pbd_core::column::surface_m(&config, c).floor())
+    };
+    let mut save = WorldSave::memory_only();
+    let net = RoadNet::default();
+    let mut slots = Slots::new();
+    let facing = east;
+    let point = on_top(dry);
+    assert_eq!(
+        lay(
+            &mut save,
+            &mut slots,
+            &net,
+            &config,
+            point,
+            facing,
+            Some(Surface::Gravel)
+        ),
+        Err(LayRefused::NoGravel)
+    );
+    slots.give(Item::Good(Good::GRAVEL), 3);
+    assert_eq!(
+        lay(
+            &mut save,
+            &mut slots,
+            &net,
+            &config,
+            point,
+            facing,
+            Some(Surface::Gravel)
+        ),
+        Ok(Lay::Laid(dry, Surface::Gravel))
+    );
+    assert_eq!(slots.count(Item::Good(Good::GRAVEL)), 2);
+    let built = roads::built(&save.records);
+    assert_eq!(built.get(&dry).map(|b| b.surface), Some(Surface::Gravel));
+    assert_eq!(
+        lay(
+            &mut save,
+            &mut slots,
+            &net,
+            &config,
+            point,
+            facing,
+            Some(Surface::Dirt)
+        ),
+        Err(LayRefused::Road),
+        "a road is there already"
+    );
+    // Off a cell's top (half way up a side): refused.
+    let side = point * (1.0 + 0.5 / point.length());
+    assert_eq!(
+        lay(
+            &mut save,
+            &mut slots,
+            &net,
+            &config,
+            side,
+            facing,
+            Some(Surface::Dirt)
+        ),
+        Err(LayRefused::NotATop)
+    );
+    // The net the player's cells are drawn from has it, at its speed.
+    let fresh = RoadNet::of(&roads::stored(&save.records), &built, save.serial());
+    assert!(
+        fresh
+            .cells
+            .iter()
+            .any(|l| l.cell.key == dry && l.surface == Surface::Gravel)
+    );
+    // Taken up: the gravel back, the cell gone.
+    assert_eq!(
+        lay(&mut save, &mut slots, &fresh, &config, point, facing, None),
+        Ok(Lay::TakenUp(dry))
+    );
+    assert_eq!(slots.count(Item::Good(Good::GRAVEL)), 3);
+    assert!(!roads::built(&save.records).contains_key(&dry));
+    // A dirt track takes nothing.
+    assert_eq!(
+        lay(
+            &mut save,
+            &mut slots,
+            &net,
+            &config,
+            point,
+            facing,
+            Some(Surface::Dirt)
+        ),
+        Ok(Lay::Laid(dry, Surface::Dirt))
+    );
+    assert_eq!(slots.count(Item::Good(Good::GRAVEL)), 3);
 }

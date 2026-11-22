@@ -93,3 +93,8 @@ plant's low cap in the cyan its head burns with at night
 with a cross of twine and a bow, the 1 px outline of an inventory icon. The
 coin beside the hotbar (`assets/items/ui/coin.png`, design 5) is drawn by the
 same script: a gold piece with a stamped square ring.
+
+## townsfolk design 31: gravel
+
+`gravel` is drawn by `tools/gen_item_icons.py` (`ROADS`): a heap of crushed
+stone in four greys, with the 1 px outline of an inventory icon.

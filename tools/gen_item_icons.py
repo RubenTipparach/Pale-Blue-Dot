@@ -295,6 +295,21 @@ ICONS.update({
 })
 
 
+# `townsfolk` design 31: gravel, a heap of crushed stone for a road.
+ROADS = {
+    "k": "#2e2a26", "w": "#e6e0d4", "l": "#c4bcae", "m": "#998f82", "d": "#6b645a",
+}
+
+ICONS.update({
+    "goods/gravel": ([
+        "................", "................", "................", "................",
+        "......kkkk......", ".....kwlmlk.....", "....kllmdmlk....", "...kwmdlwmdlk...",
+        "..klmlwmdlmwmk..", "..kdmlmdwlmdlk..", ".klwmdlmlmdwmlk.", ".kmdlwmdwlmldmk.",
+        ".kdmmdmddmdmmdk.", "..kkkkkkkkkkkk..", "................", "................",
+    ], ROADS),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

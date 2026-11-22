@@ -242,9 +242,12 @@ fn log_road(road: &Road) {
     let first = |f: &dyn Fn(&RoadCell) -> bool| road.cells.iter().position(f);
     let m = spot(Some(road.cells.len() / 2));
     let c = spot(first(&|c| c.up.is_some()));
-    let b = spot(first(&|c| matches!(c.kind, roads::Kind::Bridge { .. })));
+    let bridge = first(&|c| matches!(c.kind, roads::Kind::Bridge { .. }));
+    let b = spot(bridge);
+    // The bank before it, at the deck's height: where to stand to walk on.
+    let bank = spot(bridge.and_then(|k| k.checked_sub(1)));
     info!(
-        "road {} to {} ({:?}, {} cells): middle --at {:.5} {:.5} --yaw {:.1}; first climb --at {:.5} {:.5} --yaw {:.1}; first bridge --at {:.5} {:.5} --yaw {:.1}",
+        "road {} to {} ({:?}, {} cells): middle --at {:.5} {:.5} --yaw {:.1}; first climb --at {:.5} {:.5} --yaw {:.1}; first bridge --at {:.5} {:.5} --yaw {:.1}; its bank --at {:.5} {:.5} --yaw {:.1}",
         road.from_site,
         road.to_site,
         road.surface,
@@ -258,6 +261,9 @@ fn log_road(road: &Road) {
         b[0],
         b[1],
         b[2],
+        bank[0],
+        bank[1],
+        bank[2],
     );
 }
 
@@ -281,6 +287,24 @@ pub fn settlements(sites: &[Site]) -> Vec<Settlement> {
         .collect();
     out.sort_by_key(|s| s.site);
     out
+}
+
+/// The world's edits a plan's cuttings make (`townsfolk` design 32): each
+/// cut cell's layers from its floor to its ground's top dug to air.
+pub fn cut_edits(roads: &[Road]) -> Vec<pbd_core::edits::Edit> {
+    roads
+        .iter()
+        .flat_map(|r| &r.cells)
+        .flat_map(|cell| {
+            roads::cut_layers(cell)
+                .into_iter()
+                .map(|layer| pbd_core::edits::Edit {
+                    cell: cell.key,
+                    layer,
+                    material: Material::Air,
+                })
+        })
+        .collect()
 }
 
 /// The author a world's roads are stored by (design 11).
@@ -323,22 +347,33 @@ pub fn prepare(
         let links = roads::links(&settlements(towns), cfg, config.radius_m).len();
         let cells: usize = planned.iter().map(|r| r.cells.len()).sum();
         let mut records: Vec<_> = planned.iter().map(roads::to_record).collect();
+        let schema = records
+            .iter()
+            .map(|r| r.schema)
+            .max()
+            .unwrap_or(roads::RECORD_SCHEMA);
         records.push(roads::net_record(planned.len()));
-        match save.propose(
-            &author(),
-            Proposal {
-                edits: Vec::new(),
-                records,
-            },
-        ) {
+        // A cutting's layers, dug by the world (`townsfolk` design 32).
+        let edits = cut_edits(&planned);
+        let (cut, filled) = planned
+            .iter()
+            .flat_map(|r| &r.cells)
+            .fold((0, 0), |(c, f), cell| {
+                (
+                    c + usize::from(cell.cut_fill < 0),
+                    f + usize::from(cell.cut_fill > 0),
+                )
+            });
+        match save.propose(&author(), Proposal { edits, records }) {
             Ok(Some(s)) => {
                 seq = s;
                 save.note_record_kinds(&[
-                    (roads::ROAD_RECORD, roads::RECORD_SCHEMA),
+                    (roads::ROAD_RECORD, schema),
                     (roads::ROAD_NET_RECORD, roads::RECORD_SCHEMA),
                 ]);
                 info!(
-                    "roads planned: {} of {links} links, {cells} cells, in {:.2} s",
+                    "roads planned (version {}): {} of {links} links, {cells} cells ({cut} cut, {filled} filled), in {:.2} s",
+                    roads::NET_VERSION,
                     planned.len(),
                     started.elapsed().as_secs_f32()
                 );
@@ -350,16 +385,22 @@ pub fn prepare(
     let stored = roads::stored(&save.records);
     let built = roads::built(&save.records);
     let net = RoadNet::of(&stored, &built, save.serial());
+    // The lamps beside them near the towns (design 34), derived each load.
+    let lamps = {
+        let ground = ground_of(config, &save.edits, &save.yields, &built);
+        roads::lamps(&stored, &settlements(towns), cfg, config.radius_m, &ground)
+    };
     // No tree grows on a road: installed before the planet is built.
-    roads::install_cleared(Some(roads::Cleared::new(
-        net.cells.iter().map(|l| l.cell.key),
-        config.radius_m,
-    )));
+    roads::install_cleared(Some(
+        roads::Cleared::new(net.cells.iter().map(|l| l.cell.key), config.radius_m)
+            .with_lamps(lamps.iter().copied()),
+    ));
     info!(
-        "{} roads read, {} cells to lay in {} chunks",
+        "{} roads read, {} cells to lay in {} chunks, {} lamps beside them",
         stored.len(),
         net.cells.len(),
-        net.chunks.len()
+        net.chunks.len(),
+        lamps.len()
     );
     (net, seq)
 }
@@ -410,6 +451,9 @@ struct StandingChunk {
 #[derive(Resource, Default)]
 pub struct RoadsStanding {
     chunks: Vec<StandingChunk>,
+    /// The player has laid or taken up a road cell: the chunks from this
+    /// one on (theirs) are stood again at once, drawn whole.
+    pub redraw_from: Option<usize>,
 }
 
 /// A chunk's road root: moved with the planet's render frame.
@@ -435,12 +479,13 @@ fn to_mesh(buf: &MeshBuf) -> Mesh {
     .with_inserted_indices(Indices::U32((0..count).collect()))
 }
 
-/// Cut a chunk's cells, but any the player has edited: its meshes by
-/// texture, and its pieces with their speeds.
+/// Cut a chunk's cells, but any the player has touched (`player`: the
+/// save's yield set, so a road's own cutting, the world's edit, does not
+/// hide it): its meshes by texture, and its pieces with their speeds.
 pub fn cut_chunk(
     net: &RoadNet,
     chunk: usize,
-    edits: &Edits,
+    player: &dyn Fn(u32) -> bool,
     cfg: &RoadsConfig,
     radius_m: f32,
     repeat_m: &dyn Fn(&str) -> f32,
@@ -450,7 +495,7 @@ pub fn cut_chunk(
     let mut speed = Vec::new();
     for &i in &net.chunks[chunk].cells {
         let laid = &net.cells[i];
-        if !edits.for_cell(laid.cell.key).is_empty() {
+        if player(laid.cell.key) {
             continue;
         }
         let Some(piece) = roads::piece::cut(
@@ -552,12 +597,21 @@ pub fn stand_roads(world: &mut World) {
         .0
         .clone();
     let repeat = crate::towns::repeat_in(world);
-    let mut standing = std::mem::take(
-        &mut world
-            .get_resource_or_insert_with(RoadsStanding::default)
-            .chunks,
-    );
+    let (mut standing, redraw_from) = {
+        let mut s = world.get_resource_or_insert_with(RoadsStanding::default);
+        (std::mem::take(&mut s.chunks), s.redraw_from.take())
+    };
     let mut changed = false;
+    if let Some(from) = redraw_from {
+        standing.retain(|s| {
+            let again = s.chunk >= from;
+            if again && let Ok(e) = world.get_entity_mut(s.entity) {
+                e.despawn();
+            }
+            !again
+        });
+        changed = true;
+    }
     let dist = |c: &Chunk| (c.centre * at.length()).distance(at);
     // leave, fade, re-cut
     for s in &mut standing {
@@ -580,13 +634,14 @@ pub fn stand_roads(world: &mut World) {
         }
         !gone
     });
-    let edits = world.resource::<WorldSave>().edits.clone();
+    let yields = world.resource::<WorldSave>().yields.clone();
+    let player = |key: u32| yields.has_cell(key);
     for s in &mut standing {
         if s.revision == revision {
             continue;
         }
         s.revision = revision;
-        let (meshes, solids, speed) = cut_chunk(&net, s.chunk, &edits, &cfg, radius, &repeat);
+        let (meshes, solids, speed) = cut_chunk(&net, s.chunk, &player, &cfg, radius, &repeat);
         if solids.len() == s.solids.len() {
             continue;
         }
@@ -604,14 +659,18 @@ pub fn stand_roads(world: &mut World) {
         if held.contains(&k) || dist(c) > STAND_M {
             continue;
         }
-        let (meshes, solids, speed) = cut_chunk(&net, k, &edits, &cfg, radius, &repeat);
+        let (meshes, solids, speed) = cut_chunk(&net, k, &player, &cfg, radius, &repeat);
         let entity = spawn_chunk(world, &meshes);
         standing.push(StandingChunk {
             chunk: k,
             entity,
             solids,
             speed,
-            shown: 0.0,
+            shown: if redraw_from.is_some_and(|f| k >= f) {
+                1.0
+            } else {
+                0.0
+            },
             leaving: false,
             revision,
         });
@@ -687,6 +746,214 @@ fn follow_frame(frame: Res<PlanetRenderFrame>, mut roots: Query<&mut Transform, 
     }
 }
 
+// ---- Roads the player lays (`townsfolk` design 31) ---------------------------
+
+/// Why a road cell was not laid or taken up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayRefused {
+    /// The aim is not on a cell's top.
+    NotATop,
+    /// Water, the sea, or a town's footprint.
+    NotGround,
+    /// A road is there already.
+    Road,
+    /// No gravel in the selected slot.
+    NoGravel,
+    /// No room in the pack for the gravel taken up.
+    PackFull,
+    /// The save refused the write.
+    Unsaved,
+}
+
+/// What a press did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lay {
+    Laid(u32, Surface),
+    TakenUp(u32),
+}
+
+/// A road cell taken up: its record with no cell in it, which
+/// [`roads::built`] reads as none.
+pub fn taken_up_record(key: u32) -> pbd_core::records::Record {
+    pbd_core::records::Record::of(
+        roads::ROAD_CELL_RECORD,
+        u64::from(key),
+        roads::RECORD_SCHEMA,
+        &Option::<roads::BuiltCell>::None,
+    )
+}
+
+/// Lay a road cell of `surface` on the cell whose top `point` (body-local,
+/// planet-centred metres) is on, rising toward the neighbour faced first
+/// along `facing` that stands a layer up; or, with `surface` `None`, take
+/// up the player's own road cell there. Gravel is taken from (and given
+/// back to) `slots`; the record and the pack are written in one line.
+pub fn lay(
+    save: &mut WorldSave,
+    slots: &mut pbd_core::inventory::Slots,
+    net: &RoadNet,
+    config: &TerrainConfig,
+    point: Vec3,
+    facing: Vec3,
+    surface: Option<Surface>,
+) -> Result<Lay, LayRefused> {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::Item;
+    let d = point.normalize_or(Vec3::Y);
+    let alt = point.length() - config.radius_m;
+    let base_m = alt.round() as i32;
+    if (alt - base_m as f32).abs() > 0.08 {
+        return Err(LayRefused::NotATop);
+    }
+    let key = roads::nearest_key(d).ok_or(LayRefused::NotATop)?;
+    let built = roads::built(&save.records);
+    let gravel = Item::Good(Good::GRAVEL);
+    let mut hands = slots.clone();
+    let Some(surface) = surface else {
+        let Some(cell) = built.get(&key) else {
+            return Err(LayRefused::Road);
+        };
+        if cell.surface == Surface::Gravel && hands.give(gravel, 1) != 0 {
+            return Err(LayRefused::PackFull);
+        }
+        if !save.store_with_hands(taken_up_record(key), roads::RECORD_SCHEMA, &hands) {
+            return Err(LayRefused::Unsaved);
+        }
+        *slots = hands;
+        info!("road cell {key} taken up");
+        return Ok(Lay::TakenUp(key));
+    };
+    if built.contains_key(&key) || net.cells.iter().any(|l| l.cell.key == key) {
+        return Err(LayRefused::Road);
+    }
+    let centre = roads::centre(key).ok_or(LayRefused::NotATop)?;
+    if ground::cleared(config, centre) || base_m < config.sea_level_m.ceil() as i32 {
+        return Err(LayRefused::NotGround);
+    }
+    let column = pbd_core::column::generate_solid(config, centre);
+    let over = |m: i32| pbd_core::column::layer_at(m as f32 + 0.5).map(|i| column.material(i));
+    // Dry: no water standing over the generated ground at this height.
+    if over(base_m).is_some_and(|m| m.is_water()) {
+        return Err(LayRefused::NotGround);
+    }
+    if surface == Surface::Gravel && !hands.take_item(gravel, 1) {
+        return Err(LayRefused::NoGravel);
+    }
+    // The slope: toward the neighbour faced first that stands a layer up,
+    // its road's top or its ground's.
+    let height = |n: u32| -> i32 {
+        if let Some(b) = built.get(&n) {
+            return b.base_m;
+        }
+        if let Some(l) = net.cells.iter().find(|l| l.cell.key == n) {
+            return l.cell.low_m();
+        }
+        roads::centre(n).map_or(i32::MIN, |c| {
+            pbd_core::column::surface_m(config, c).floor() as i32
+        })
+    };
+    let mut toward: Vec<(f32, u32, i32)> = roads::neighbours(key)
+        .into_iter()
+        .filter_map(|n| Some((-(roads::centre(n)? - centre).dot(facing), n, height(n))))
+        .collect();
+    toward.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    let toward: Vec<(u32, i32)> = toward.into_iter().map(|(_, n, h)| (n, h)).collect();
+    let cell = roads::BuiltCell {
+        surface,
+        base_m,
+        up: roads::built_up(base_m, &toward),
+        from: None,
+    };
+    if !save.store_with_hands(
+        roads::built_record(key, &cell),
+        roads::RECORD_SCHEMA,
+        &hands,
+    ) {
+        return Err(LayRefused::Unsaved);
+    }
+    save.note_record_kinds(&[(roads::ROAD_CELL_RECORD, roads::RECORD_SCHEMA)]);
+    *slots = hands;
+    info!("road cell {key} laid in {surface:?} at {base_m} m");
+    Ok(Lay::Laid(key, surface))
+}
+
+/// The place button on the ground: gravel in the selected slot lays a
+/// gravel road cell; an empty slot with the shovel in the tool slot lays a
+/// dirt track, or takes up the player's own road cell there. The net is
+/// rebuilt with the player's cells, and their chunks stood again at once.
+#[allow(clippy::too_many_arguments)]
+pub fn lay_roads(
+    buttons: Option<Res<ButtonInput<MouseButton>>>,
+    aimed: Option<Res<crate::husbandry::AimedGround>>,
+    walking: Option<Res<crate::walking::WalkingReadout>>,
+    menu: Option<Res<crate::controls::MenuOpen>>,
+    tools: Option<Res<crate::fish::ToolSlot>>,
+    hotbar: Option<ResMut<crate::hotbar::Hotbar>>,
+    save: Option<ResMut<WorldSave>>,
+    net: Option<ResMut<RoadNet>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut standing: ResMut<RoadsStanding>,
+) {
+    let (Some(buttons), Some(aimed), Some(mut hotbar), Some(mut save), Some(mut net)) =
+        (buttons, aimed, hotbar, save, net)
+    else {
+        return;
+    };
+    if !buttons.just_pressed(MouseButton::Right)
+        || menu.is_some_and(|m| m.0)
+        || !walking.is_some_and(|w| w.active && w.captured)
+    {
+        return;
+    }
+    let Some(point) = aimed.0 else {
+        return;
+    };
+    let held = hotbar.0.held().map(|s| s.item);
+    let shovel = tools.is_some_and(|t| t.0.held() == Some(pbd_core::inventory::Tool::Shovel));
+    let gravel = pbd_core::inventory::Item::Good(pbd_core::goods::Good::GRAVEL);
+    let key = roads::nearest_key(point.normalize_or(Vec3::Y));
+    let mine = key.is_some_and(|k| roads::built(&save.records).contains_key(&k));
+    let surface = match held {
+        Some(item) if item == gravel => Some(Surface::Gravel),
+        None if shovel && mine => None,
+        None if shovel => Some(Surface::Dirt),
+        _ => return,
+    };
+    let facing = cameras
+        .iter()
+        .find(|(_, c)| c.is_active)
+        .map_or(Vec3::Z, |(g, _)| g.forward().as_vec3());
+    let config = *crate::planet::terrain_config();
+    match lay(
+        &mut save,
+        &mut hotbar.0,
+        &net,
+        &config,
+        point,
+        facing,
+        surface,
+    ) {
+        Ok(_) => {
+            let stored = roads::stored(&save.records);
+            let built = roads::built(&save.records);
+            let fresh = RoadNet::of(&stored, &built, save.serial());
+            let first_mine = fresh
+                .chunks
+                .iter()
+                .position(|c| {
+                    c.cells
+                        .iter()
+                        .any(|&i| built.contains_key(&fresh.cells[i].cell.key))
+                })
+                .unwrap_or(fresh.chunks.len());
+            // The player's chunks are the last: stand them again, drawn whole.
+            standing.redraw_from = Some(first_mine.min(net.chunks.len()));
+            *net = fresh;
+        }
+        Err(why) => info!("ROAD refused: {why:?}"),
+    }
+}
+
 /// The roads.
 pub struct RoadsPlugin;
 
@@ -697,7 +964,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<RoadsStanding>()
             .add_systems(
                 Update,
-                (keep_roads, stand_roads, follow_frame)
+                (keep_roads, lay_roads, stand_roads, follow_frame)
                     .chain()
                     .after(crate::towns::build_towns),
             );

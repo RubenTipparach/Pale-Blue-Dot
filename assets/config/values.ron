@@ -120,5 +120,7 @@
         ("fish:river_otter", 12, fish),
         // ---- townsfolk: a delivery's parcel (never traded, `trade.ron`)
         ("parcel", 1, goods),
+        // ---- townsfolk design 31: crushed stone for a road
+        ("gravel", 1, stone),
     ],
 )

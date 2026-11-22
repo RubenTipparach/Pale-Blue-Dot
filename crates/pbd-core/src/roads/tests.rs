@@ -110,6 +110,7 @@ fn a_road_up_ten_layers_never_steps() {
             key,
             ground: dry(height(k)),
             deck: None,
+            lift: 0,
         })
         .collect();
     let road = profile(&steps).expect("a layer a cell is a road");
@@ -150,6 +151,7 @@ fn a_dip_one_cell_wide_is_raised_and_a_cliff_is_no_road() {
                 key,
                 ground: dry(h),
                 deck: None,
+                lift: 0,
             })
             .collect()
     };
@@ -371,4 +373,171 @@ fn a_road_cell_is_cleared_and_its_neighbour_is_not() {
     for n in neighbours(key) {
         assert!(!cleared.on_road(centre(n).unwrap()));
     }
+}
+
+/// Ground round `here` stepped `rise` layers at 30 m east, across every
+/// cell north and south: a cliff no road can climb a layer a cell.
+fn cliff(rise: i32) -> impl Fn(u32) -> Option<Ground> + Sync {
+    move |key| {
+        let (e, _) = local(centre(key)?);
+        Some(dry(if e > 30.0 { 5 + rise } else { 5 }))
+    }
+}
+
+/// `world/roads`, "Cut and fill reach a link a climb cannot" (`townsfolk`
+/// design 32): a two-layer cliff with no way round is no road for version
+/// 1, and a road for version 2, which cuts and fills within its bounds,
+/// still never more than a layer between cells, and finds the same road
+/// every time.
+#[test]
+fn a_cliff_is_cut_and_filled_in_version_2_and_no_road_in_version_1() {
+    let cfg = RoadsConfig {
+        max_expanded: 30_000,
+        ..RoadsConfig::default()
+    };
+    let from = nearest_key(at(0.0, 0.0)).unwrap();
+    let to = nearest_key(at(60.0, 0.0)).unwrap();
+    let ground = cliff(2);
+    assert!(
+        route(from, to, &ground, &cfg.for_version(1), RADIUS).is_none(),
+        "version 1 climbs a layer a cell at most"
+    );
+    let steps = route(from, to, &ground, &cfg, RADIUS).expect("version 2 cuts and fills");
+    let road = profile(&steps).expect("a layer a cell");
+    let worked: Vec<i32> = road
+        .iter()
+        .map(|c| c.cut_fill)
+        .filter(|&l| l != 0)
+        .collect();
+    assert!(!worked.is_empty(), "the cliff was cut or filled");
+    let bounds = -(cfg.max_cut_layers as i32)..=cfg.max_fill_layers as i32;
+    assert!(worked.iter().all(|l| bounds.contains(l)), "{worked:?}");
+    for w in road.windows(2) {
+        assert!((w[0].low_m() - w[1].low_m()).abs() <= 1, "no step");
+    }
+    let again = profile(&route(from, to, &ground, &cfg, RADIUS).unwrap()).unwrap();
+    assert_eq!(road, again, "the same road twice");
+}
+
+/// A cut or filled cell is never laid on water, in a town or on a player's
+/// cell: the river is still forded as version 1 did it.
+#[test]
+fn cut_and_fill_keep_off_water_towns_and_the_player() {
+    let cfg = RoadsConfig {
+        max_expanded: 30_000,
+        ..RoadsConfig::default()
+    };
+    let from = nearest_key(at(0.0, 0.0)).unwrap();
+    let to = nearest_key(at(60.0, 0.0)).unwrap();
+    let g = ground_fn(
+        |e, n| (e - 45.0).abs() < 3.0 && n.abs() < 10.0,
+        Some((25.0, 8.0, 0)),
+    );
+    let steps = route(from, to, &g, &cfg, RADIUS).unwrap();
+    for s in &steps {
+        assert!(!s.ground.player);
+        if s.lift != 0 {
+            assert_eq!(s.ground.water, Water::Dry);
+            assert!(!s.ground.town);
+        }
+    }
+    let road = profile(&steps).unwrap();
+    assert!(road.iter().any(|c| c.kind == Kind::Ford));
+}
+
+/// A road with a cut or filled cell is a schema 2 record, read back whole;
+/// a road with none stays schema 1. A cut cell digs the layers between its
+/// floor and the ground's top.
+#[test]
+fn a_cut_road_is_a_schema_2_record_and_digs_its_layers() {
+    let key = nearest_key(at(0.0, 0.0)).unwrap();
+    let cell = |cut_fill| RoadCell {
+        key,
+        base_m: 7,
+        kind: Kind::Ground,
+        raised: false,
+        cut_fill,
+        up: None,
+        from: None,
+    };
+    let road = |cut_fill| Road {
+        from_site: 1,
+        to_site: 2,
+        surface: Surface::Dirt,
+        cells: vec![cell(cut_fill)],
+    };
+    assert_eq!(to_record(&road(0)).schema, RECORD_SCHEMA);
+    let cut = road(-2);
+    let record = to_record(&cut);
+    assert_eq!(record.schema, CUT_FILL_SCHEMA);
+    assert_eq!(from_record(&record), Some(cut.clone()));
+    assert_eq!(cut.cells[0].low_m(), 5);
+    assert_eq!(cut.cells[0].ground_m(), 5);
+    let dug = cut_layers(&cut.cells[0]);
+    assert_eq!(dug.len(), 2);
+    assert_eq!(
+        dug[0] as usize,
+        crate::column::layer_at(5.5).unwrap(),
+        "from the cutting's floor"
+    );
+    assert!(cut_layers(&cell(2)).is_empty(), "fill digs nothing");
+    assert_eq!(cell(2).low_m(), 9);
+}
+
+/// `townsfolk` design 34: a road out of a town has a lamp beside every
+/// fifth cell within 90 m of it, never on the road, never on a player's
+/// cell, and none further out; the column there stands a lantern post.
+#[test]
+fn a_road_near_a_town_is_lit_by_lamps_beside_it() {
+    let cfg = RoadsConfig::default();
+    let cells = line_east(60);
+    let road = Road {
+        from_site: 1,
+        to_site: 2,
+        surface: Surface::Dirt,
+        cells: cells
+            .iter()
+            .map(|&key| RoadCell {
+                key,
+                base_m: 5,
+                kind: Kind::Ground,
+                raised: false,
+                cut_fill: 0,
+                up: None,
+                from: None,
+            })
+            .collect(),
+    };
+    let towns = [
+        Settlement {
+            site: 1,
+            direction: centre(cells[0]).unwrap(),
+            large: false,
+        },
+        Settlement {
+            site: 2,
+            direction: at(10_000.0, 0.0),
+            large: false,
+        },
+    ];
+    let player = |e: f32, n: f32| (e - 14.0 * 2.83).abs() < 1.6 && n > 0.0;
+    let g = ground_fn(player, None);
+    let lit = lamps(std::slice::from_ref(&road), &towns, &cfg, RADIUS, &g);
+    assert!(lit.len() >= 4, "{lit:?}");
+    assert_eq!(
+        lit,
+        lamps(std::slice::from_ref(&road), &towns, &cfg, RADIUS, &g),
+        "the same lamps every time"
+    );
+    for &(key, top) in &lit {
+        assert!(!cells.contains(&key), "beside the road, not on it");
+        assert_eq!(top, 5);
+        let ground = g(key).unwrap();
+        assert!(!ground.player, "never on a player's cell");
+        let m = crate::sites::arc_m(centre(key).unwrap(), towns[0].direction, RADIUS);
+        assert!(m < cfg.lamp_town_m + 5.0, "near the town: {m}");
+    }
+    let installed = Cleared::new(cells.iter().copied(), RADIUS).with_lamps(lit.iter().copied());
+    assert_eq!(installed.lamp(centre(lit[0].0).unwrap()), Some(5.0));
+    assert_eq!(installed.lamp(centre(cells[3]).unwrap()), None);
 }
