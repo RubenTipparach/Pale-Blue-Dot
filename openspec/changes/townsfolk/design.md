@@ -1011,7 +1011,10 @@ panel past the screen. From now:
   for when they do.
 - **The job board scrolls the same way**: YOUR JOBS and ON THE BOARD are
   one list (their headings rows of it), in one window with its bar.
-- **Approved by the owner** (2026-11-22, on this plan and 38c: "approved").
+- **Approved by the owner** (2026-11-22, on this plan and 38c: "approved";
+  then on M5 version 13's trade panel screenshots, scroll and filters:
+  "looks good"; and for the game: "approved trading ui", the trade panel,
+  its scroll bars and its filters).
 - The rule is one place, `desktop::scroll_list` (`ListView`: window,
   clamp, wheel, thumb size and place, drag, reveal), tested apart from
   the UI; the mockup's `ListView` is the same maths.
@@ -1045,7 +1048,9 @@ nothing in the pack the trader wants, shows no tab).
 - **Choosing a tab puts that column's scroll back to the top**; the other
   column keeps its own filter and scroll. Both go back to ALL and the top
   when the talk closes.
-- **Approved by the owner** with 38b (2026-11-22: "approved").
+- **Approved by the owner** with 38b (2026-11-22: "approved"; on the
+  version 13 screenshots: "looks good"; for the game: "approved trading
+  ui").
 - **The board is not filtered**: a job is a kind of work (cook, bring,
   deliver, mend, find), not a good on a shelf, and a board posts a handful
   a day; it scrolls (38b) and no more.
