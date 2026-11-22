@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Land Transport</title>
-<meta name="description" content="Pale Blue Dot mockup M38, version 1: phase 5's land transport on phase 3's hex roads. Horses, carts and a wagon, an early car and a small truck, a little steam train on hex track with a grade and a station, all at the game's scale, lit at night by their own lamps.">
+<meta name="description" content="Pale Blue Dot mockup M38, version 2 (the hand cart and the horse cart moved to phase 3, and a Road or not tab): phase 5's land transport on phase 3's hex roads. Horses, carts and a wagon, an early car and a small truck, a little steam train on hex track with a grade and a station, all at the game's scale, lit at night by their own lamps.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -96,13 +96,15 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <button class="tab" role="tab" data-tab="cars" aria-selected="false">Cars</button>
   <button class="tab" role="tab" data-tab="trains" aria-selected="false">Trains and tracks</button>
   <button class="tab" role="tab" data-tab="side" aria-selected="false">Side by side</button>
+  <button class="tab" role="tab" data-tab="offroad" aria-selected="false">Road or not</button>
 </nav>
 <div class="stage" id="stage">
   <canvas id="cv-carts" hidden></canvas>
   <canvas id="cv-cars" hidden></canvas>
   <canvas id="cv-trains" hidden></canvas>
   <canvas id="cv-side" hidden></canvas>
-  <div class="hud"><span class="chip title" id="hudTitle"></span><span class="chip"><b>Cell</b>2.833 m</span><span class="chip"><b>Layer</b>1 m</span><span class="chip"><b>Person</b>1.55 m</span><span class="chip" id="hudTime"></span></div>
+  <canvas id="cv-offroad" hidden></canvas>
+  <div class="hud"><span class="chip title" id="hudTitle"></span><span class="chip" id="hudPhase"></span><span id="hudExtra" style="display:contents"></span><span class="chip"><b>Cell</b>2.833 m</span><span class="chip"><b>Layer</b>1 m</span><span class="chip"><b>Person</b>1.55 m</span><span class="chip" id="hudTime"></span></div>
 </div>
 <div class="bar wrap">
   <div class="grp"><button class="btn" id="drive" aria-pressed="false">Drive</button><button class="btn" id="line" aria-pressed="false">Drive line</button></div>
@@ -116,7 +118,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 
 <dialog class="infomodal" id="modal" aria-labelledby="mtitle">
   <div class="mhead"><b id="mtitle">Land Transport (M38)</b><button id="mclose" aria-label="Close">✕</button></div>
-  <nav class="mnav"><a href="#m-about">About</a><a href="#m-carts">Carts</a><a href="#m-cars">Cars</a><a href="#m-trains">Trains</a><a href="#m-side">Side by side</a><a href="#m-scale">Scale</a><a href="#m-engine">In the engine</a></nav>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-carts">Carts</a><a href="#m-cars">Cars</a><a href="#m-trains">Trains</a><a href="#m-side">Side by side</a><a href="#m-offroad">Road or not</a><a href="#m-phase3">Phase 3</a><a href="#m-scale">Scale</a><a href="#m-engine">In the engine</a></nav>
   <div class="mbody">
     <h2 id="m-about">About</h2>
     <p>Phase 5's land transport, on the roads phase 3 builds. The owner, 2026-11-21: <q>add cars and cars and carts, and horses and trains (and tracks) mockups to phase 5</q>, and 2026-11-22: <q>Roads and cars mockup?</q>. This is design only: nothing here is in the game, and phase 5 does not start until the owner asks. The OpenSpec change is <code>land-transport</code>.</p>
@@ -153,6 +155,37 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 
     <h2 id="m-side">Side by side</h2>
     <p>Everything on one straight gravel road and a track beside it, at one scale, with a townsperson beside each. Drive sends them all east at their own speeds; each comes back round from the west end.</p>
+
+    <h2 id="m-offroad">Road or not</h2>
+    <p>The owner, 2026-11-22: <q>wheeled vihecles will move slower without the road (like 1/4 speed)</q>. Three lanes side by side: a gravel road, a village dirt track (the world's) and open grass. A hand cart and a horse cart on each. <b>Drive</b> sends all six east at the game's own speeds (a hand cart 6 m/s and a horse cart 9 m/s on a road) times their lane's factor, so the lanes spread apart as they go; each comes back round from the west end.</p>
+    <div class="tw"><table>
+      <tr><th>Surface</th><th>Factor</th><th>Hand cart</th><th>Horse cart</th></tr>
+      <tr><td>Gravel road, a bridge deck, a town's lanes</td><td>1.0</td><td>6 m/s</td><td>9 m/s</td></tr>
+      <tr><td>Dirt track</td><td>0.6</td><td>3.6 m/s</td><td>5.4 m/s</td></tr>
+      <tr><td>Ford</td><td>0.5</td><td>3 m/s</td><td>4.5 m/s</td></tr>
+      <tr><td>Anything else, a cell marked and not paved included</td><td>0.25</td><td>1.5 m/s</td><td>2.25 m/s</td></tr>
+    </table></div>
+    <ul>
+      <li>The quarter off the road is the owner's. Dirt at 0.6 and the ford at 0.5 are recommendations taken (ask only with screenshots).</li>
+      <li>With its wheels on two surfaces a cart takes the lower factor, so a cart half off the road is slowed. The climb's slowing (a horse to about 70% on a layer a cell) applies on top.</li>
+      <li>Walking does not change: on foot gravel is still 1.15 times the ground and dirt 1.0.</li>
+    </ul>
+
+    <h2 id="m-phase3">Phase 3: the hand cart and the horse cart</h2>
+    <p>The owner, 2026-11-22: <q>we also need to add basic carts to phase 3 as well, and horse carts too</q>. The hand cart and the horse cart (the two-wheeled cart on the Carts and horses tab) move to phase 3 with the roads they run on; the ridden horse, the covered wagon, cars, trucks and trains stay in phase 5. <code>land-transport</code> design 9 and 10.</p>
+    <ul>
+      <li><b>The hand cart</b>: two wheels, a plank bed, two handles, pulled by the player. A hold of 9 slots. Wheels (4 planks and an iron tyre each), 8 planks and 2 rope at the workbench.</li>
+      <li><b>The horse cart</b>: the horse in the shafts, the player on the seat, a lantern. A hold of 24 slots. Two wheels, 14 planks, 4 rope and 2 leather for the harness.</li>
+      <li><b>A horse is bought</b> for 120 coins from a stable keeper in the larger towns: a kept animal of a new species no wild herd rolls, so every world's wild herds stay as they are. Hitching writes the horse and the cart in one step, never half.</li>
+      <li><b>Stored as vehicles</b>: set down from the pack, a cart is a record with its place, hold and horse. Letting go or stepping down changes who is with it, never whether it exists; a loaded cart left on a road is there next session.</li>
+      <li>The town tree's Carts branch (M33's Town tab) walks a player through it: wheels, a hand cart, haul a load, buy a horse, hitch up, 500 m on the road.</li>
+    </ul>
+
+    <h2 id="m-versions">Versions</h2>
+    <ul>
+      <li><b>Version 1</b> (2026-11-22): carts and horses, cars, trains and tracks, side by side, all phase 5.</li>
+      <li><b>Version 2</b> (2026-11-22): the hand cart and the horse cart marked phase 3, a hand cart on the Carts and horses tab, and the Road or not tab.</li>
+    </ul>
 
     <h2 id="m-scale">Scale</h2>
     <div class="tw"><table>
@@ -678,13 +711,33 @@ function cartVehicle(coat, tunic) {
   bx(cart, "sack", 0.5, 0.35, 0.4, -0.35, 1.1, 0.3); bx(cart, "sack", 0.5, 0.35, 0.4, -0.35, 1.1, -0.2); cyl(cart, "barrel", 0.24, 0.6, 0.25, 0.92, -0.35, 8);
   bx(cart, "iron", 0.04, 0.5, 0.04, 1.0, 1.55, 0.62);
   const lg = lantern(cart, 1.05, 1.68, 0.62, 0.8);
-  return { g, name: "Two-wheeled cart", wheels, lamps: [lampSpec(lg, 0.8, 10)], len: 5.5,
+  return { g, name: "Horse cart (phase 3)", wheels, lamps: [lampSpec(lg, 0.8, 10)], len: 5.5,
     place(path, s, grid, ds) {
       const a = path.at(s), hs = s + 3.05, b = path.at(hs);
       placeHorse(h, path, hs, grid);
       const ya = grid.heightAt(a.x, a.z), yb = grid.heightAt(b.x, b.z), dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 1;
       cart.position.set(a.x, ya, a.z); cart.rotation.order = "YZX"; cart.rotation.set(0, -Math.atan2(dz, dx), Math.atan2(yb - ya, d));
       if (ds) { spin(wheels, ds); horseWalk(h, ds); }
+    } };
+}
+// The hand cart (phase 3, design 10): two wheels, a plank bed with low
+// sides, two handles, pulled by a walker between them.
+function handCartVehicle(tunic) {
+  const g = new THREE.Group(), cart = new THREE.Group(); g.add(cart);
+  const wheels = [wheel(cart, 0.45, 0.08, "wheel", "iron", 0, 0.45, 0.6), wheel(cart, 0.45, 0.08, "wheel", "iron", 0, 0.45, -0.6)];
+  bx(cart, "iron", 0.06, 0.06, 1.2, 0, 0.45, 0);
+  bx(cart, "plank", 1.3, 0.07, 1.0, -0.05, 0.62, 0);
+  for (const z of [-0.5, 0.5]) bx(cart, "boards", 1.3, 0.28, 0.04, -0.05, 0.79, z);
+  bx(cart, "boards", 0.04, 0.28, 1.0, -0.7, 0.79, 0); bx(cart, "boards", 0.04, 0.28, 1.0, 0.6, 0.79, 0);
+  for (const z of [-0.33, 0.33]) bx(cart, "timber", 1.05, 0.06, 0.06, 1.1, 0.78, z, 0, 0, 0.12);
+  bx(cart, "timber", 0.06, 0.06, 0.72, 1.6, 0.85, 0);
+  bx(cart, "sack", 0.5, 0.35, 0.4, -0.3, 0.83, 0.2); bx(cart, "sack", 0.45, 0.3, 0.38, -0.25, 0.83, -0.22); cyl(cart, "barrel", 0.2, 0.5, 0.25, 0.66, 0, 8);
+  const man = person(tunic); man.position.set(1.3, 0, 0); cart.add(man);
+  return { g, name: "Hand cart (phase 3)", wheels, lamps: [], len: 2.4,
+    place(path, s, grid, ds) {
+      const a = path.at(s), b = path.at(s + 1.4), ya = grid.heightAt(a.x, a.z), yb = grid.heightAt(b.x, b.z), dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 1;
+      cart.position.set(a.x, ya, a.z); cart.rotation.order = "YZX"; cart.rotation.set(0, -Math.atan2(dz, dx), Math.atan2(yb - ya, d));
+      if (ds) spin(wheels, ds);
     } };
 }
 function wagonVehicle(coat, tunic) {
@@ -926,7 +979,8 @@ class Stage {
   }
   addLamp(obj, power = 1, range = 12, dir = null, cone = 0.8) { this.lampList.push({ obj, power, range, dir, cone }); }
   addVehicle(v, path, grid, s0, speed, opts = {}) {
-    this.root.add(v.g); v.path = path; v.grid = grid; v.s = s0; v.speed = speed; v.wrap = opts.wrap; v.slow = opts.slow !== undefined ? opts.slow : 0.4;
+    this.root.add(v.g); v.path = path; v.grid = grid; v.s = s0; v.speed = speed; v.wrap = opts.wrap; v.slow = opts.slow !== undefined ? opts.slow : 0.4; v.factor = opts.factor;
+    if (opts.name) v.name = opts.name;
     for (const L of v.lamps) this.lampList.push(L);
     this.vehicles.push(v); return v;
   }
@@ -937,7 +991,7 @@ class Stage {
         // slower uphill: the grade over the next metre
         let f = 1;
         if (v.path.at(v.s).h === undefined) { const a = v.path.at(v.s - 0.8), b = v.path.at(v.s + 0.8), gr = (v.grid.heightAt(b.x, b.z) - v.grid.heightAt(a.x, a.z)) / 1.6; f = clamp(1 - v.slow * Math.max(0, gr) / 0.35, 0.4, 1); }
-        ds = v.speed * f * dt; v.s += ds;
+        ds = v.speed * f * (v.factor || 1) * dt; v.s += ds;
         if (v.wrap && v.s > v.wrap[1]) v.s = v.wrap[0];
       }
       v.place(v.path, v.s, v.grid, ds);
@@ -1052,7 +1106,7 @@ const yardstick = (st, g, path, s, side, tunic, back = 0) => {
 };
 const DEFS = {
   carts: {
-    title: "Carts and horses", shadow: { x: 34, z: 22, half: 52 },
+    title: "Carts and horses", phase: "Hand cart, horse cart: phase 3 · rider, wagon: phase 5", shadow: { x: 34, z: 22, half: 52 },
     views: [["Overview", { tx: 36, ty: 2, tz: 21, yaw: 1.2, pitch: 0.62, dist: 66 }], ["Hitching rail", { tx: 23, ty: 1.4, tz: 10.6, yaw: 1.3, pitch: 0.3, dist: 11 }],
       ["The dirt road", { tx: 38, ty: 1.5, tz: 12.3, yaw: 1.25, pitch: 0.33, dist: 15 }], ["The climb", { tx: 55.8, ty: 2.6, tz: 17.2, yaw: 2.75, pitch: 0.3, dist: 15 }]],
     build(st) {
@@ -1060,6 +1114,7 @@ const DEFS = {
       st.addVehicle(riderVehicle("coatdun", TUNICS[1]), path, g, 9, 1.7);
       st.addVehicle(wagonVehicle("coatgrey", TUNICS[2]), path, g, 22, 1.7);
       st.addVehicle(cartVehicle("coat", TUNICS[0]), path, g, 39.5, 1.7);
+      st.addVehicle(handCartVehicle(TUNICS[5]), path, g, 50, 1.7);
       yardstick(st, g, path, 9, -1, TUNICS[3]); yardstick(st, g, path, 23, -1, TUNICS[5]); yardstick(st, g, path, 40.5, 1, TUNICS[4]);
       // the hitching rail by the west end of the track, a horse tied to it, a lamp over it
       const hx = cx(8, 4) - 0.6, hz = cz(0, 4) - 0.2, hy = g.top[g.i(8, 4)];
@@ -1071,7 +1126,7 @@ const DEFS = {
       const man = person(TUNICS[2]); man.position.set(hx + 0.5, hy, hz + 0.9); man.rotation.y = -Math.PI / 2; st.root.add(man);
     } },
   cars: {
-    title: "Cars", shadow: { x: 34, z: 22, half: 52 },
+    title: "Cars", phase: "Phase 5", shadow: { x: 34, z: 22, half: 52 },
     views: [["The climb", { tx: 55.8, ty: 2.6, tz: 17.2, yaw: 2.75, pitch: 0.3, dist: 15 }], ["The bridge", { tx: 35.4, ty: 4.4, tz: 31.9, yaw: 1.75, pitch: 0.36, dist: 15 }],
       ["The bend", { tx: 51.5, ty: 1.4, tz: 13, yaw: 1.0, pitch: 0.8, dist: 14 }], ["Overview", { tx: 36, ty: 2, tz: 21, yaw: 1.2, pitch: 0.62, dist: 66 }]],
     build(st) {
@@ -1081,7 +1136,7 @@ const DEFS = {
       yardstick(st, g, path, 41.5, 1, TUNICS[3]); yardstick(st, g, path, 79, 1, TUNICS[4]);
     } },
   trains: {
-    title: "Trains and tracks", shadow: { x: 56, z: 42, half: 64 },
+    title: "Trains and tracks", phase: "Phase 5", shadow: { x: 56, z: 42, half: 64 },
     views: [["The station", { tx: 30, ty: 2, tz: 54, yaw: -0.3, pitch: 0.3, dist: 22 }], ["The grade", { tx: 52, ty: 1.8, tz: 19.6, yaw: 1.1, pitch: 0.25, dist: 26 }],
       ["The curve", { tx: 81, ty: 2.4, tz: 28, yaw: 2.2, pitch: 0.7, dist: 32 }], ["Overview", { tx: 56, ty: 2, tz: 40, yaw: 1.4, pitch: 0.75, dist: 105 }]],
     build(st) {
@@ -1147,7 +1202,7 @@ const DEFS = {
       { const p = path.at(sStation + 4), q = path.at(sStation + 4.5), h2 = Math.atan2(q.z - p.z, q.x - p.x), x = p.x + Math.sin(h2) * 2.2 * out, z = p.z - Math.cos(h2) * 2.2 * out, man = person(TUNICS[0]); man.position.set(x, g.colTop(x, z), z); st.root.add(man); }
     } },
   side: {
-    title: "Side by side", shadow: { x: 52, z: 14, half: 56 },
+    title: "Side by side", phase: "Carts phase 3 · the rest phase 5", shadow: { x: 52, z: 14, half: 56 },
     views: [["Line-up", { tx: 46, ty: 1.5, tz: 13.5, yaw: -1.4, pitch: 0.26, dist: 34 }], ["Close", { tx: 30, ty: 1.5, tz: 15.5, yaw: -1.0, pitch: 0.22, dist: 15 }], ["Overview", { tx: 50, ty: 1, tz: 13, yaw: -1.57, pitch: 0.9, dist: 70 }]],
     build(st) {
       const g = new Grid(40, 18); g.fill(() => ({ h: 1, top: "grass", side: "dirt" }));
@@ -1163,6 +1218,25 @@ const DEFS = {
       const rn = rng(9); for (let c = 0; c < g.nc; c++) for (const r of [0, 1]) if (rn() < 0.25) tree(st.root, cx(c, r), 1, cz(c, r), 0.9 + rn() * 0.3);
       g.buildMesh(st.root);
       st.lines.push({ path, grid: g }, { path: tpath, grid: g });
+    } },
+  offroad: {
+    title: "Road or not", phase: "Phase 3", shadow: { x: 50, z: 17, half: 56 },
+    chips: [["Gravel", "x1.0"], ["Dirt track", "x0.6"], ["Grass", "x0.25"]],
+    views: [["Three lanes", { tx: 30, ty: 1.5, tz: 17, yaw: -1.25, pitch: 0.42, dist: 34 }], ["From the west", { tx: 24, ty: 1.4, tz: 17, yaw: 0.25, pitch: 0.3, dist: 20 }], ["Overview", { tx: 50, ty: 1, tz: 17, yaw: -1.57, pitch: 0.95, dist: 66 }]],
+    build(st) {
+      const g = new Grid(38, 15); g.fill(() => ({ h: 1, top: "grass", side: "dirt" }));
+      const lanes = [[3, "gravel", "gravel", 1.0], [7, "roaddirt", "dirt track", 0.6], [11, null, "grass", 0.25]];
+      for (const [r, mat, label, f] of lanes) {
+        const cells = []; for (let c = 0; c < g.nc; c++) cells.push([c, r]);
+        if (mat) g.road(cells, () => mat, false);
+        const path = roadPath(cells, false), end = path.L - 7;
+        st.addVehicle(handCartVehicle(TUNICS[(r + 1) % 6]), path, g, 6, 6, { wrap: [4, end], factor: f, name: `Hand cart, ${label} (x${f})` });
+        st.addVehicle(cartVehicle("coat", TUNICS[r % 6]), path, g, 14, 9, { wrap: [4, end], factor: f, name: `Horse cart, ${label} (x${f})` });
+        for (let c = 3; c < g.nc; c += 7) st.addLamp(lampPost(st.root, cx(c, r), 1, cz(0, r) - 1.9, Math.PI / 2), 1, 13);
+        st.lines.push({ path, grid: g });
+      }
+      for (let c = 0; c < g.nc; c++) for (const r of [0, 14]) { const i = g.i(c, r); if (hash2(c, r) < 0.3) tree(st.root, cx(c, r), 1, cz(c, r), 0.9 + hash2(r, c) * 0.3); }
+      g.buildMesh(st.root);
     } },
 };
 
@@ -1182,6 +1256,8 @@ function openTab(id) {
   if (!STAGES[id]) STAGES[id] = new Stage(id, $("cv-" + id), DEFS[id]);
   const st = STAGES[id];
   $("hudTitle").textContent = DEFS[id].title;
+  $("hudPhase").textContent = DEFS[id].phase || "";
+  $("hudExtra").innerHTML = (DEFS[id].chips || []).map(([k, v]) => `<span class="chip"><b>${k}</b>${v}</span>`).join("");
   $("view").innerHTML = DEFS[id].views.map(([n], k) => `<option value="${k}">${n}</option>`).join("");
   $("follow").innerHTML = `<option value="-1">Free view</option>` + st.vehicles.map((v, k) => `<option value="${k}">${v.name}</option>`).join("");
   syncFollow();
