@@ -1,0 +1,60 @@
+// Town jobs (`townsfolk` design 8 and 9; `pbd_core::economy::jobs`).
+(
+    // A board shows three jobs, and one more at goodwill steps 2 and 4
+    // (`trade.ron`), five at the most.
+    base: 3,
+    most: 5,
+    // A place on the board keeps its job three game days.
+    refresh_days: 3,
+    // A job pays its objectives' value times 1.5.
+    pay_share: 1.5,
+    // What one of an objective is worth where it names no good's value.
+    unit_value: {
+        trade: 4,
+        fish: 5,
+        deliver: 20,
+        lamps: 3,
+        lost: 30,
+        repair: 15,
+    },
+    counts: {
+        trade: (3, 6),
+        gather: (4, 8),
+        hunt: (2, 4),
+        deliver: (1, 1),
+        cook: (1, 3),
+        fish: (2, 5),
+        mine: (6, 12),
+        herd: (2, 5),
+        harvest: (4, 10),
+        lamps: (3, 5),
+        lost: (1, 1),
+        repair: (1, 1),
+    },
+    // The kinds a board posts. Lamps, lost villagers and repairs are made
+    // and counted by the rules, and posted once the game raises their
+    // events (`townsfolk` tasks 7.4 to 7.6).
+    posted: [trade, gather, hunt, deliver, cook, fish, mine, herd, harvest],
+    signature: {
+        Walled: cook,
+        Village: harvest,
+        Desert: deliver,
+        Tundra: gather,
+        Jungle: gather,
+        Swamp: fish,
+        Harbour: fish,
+        Cliff: mine,
+        Cave: mine,
+    },
+    dishes: ["grilled-fish", "flatbread", "roast-turnip", "kale-skewer", "fried-egg", "roast-meat"],
+    stone: ["block:stone", "block:rock", "stone"],
+    ore: ["block:ore", "coal", "tin-ore"],
+    herd: ["egg", "wool", "milk"],
+    hunt: ["wool", "leather"],
+    harvest: ["wheat", "turnip", "frost-kale", "chili"],
+    // Who keeps a town's trade and who gives its jobs, by the roles of its
+    // people (the towns mockup's), first match wins. A town with no one in
+    // these roles trades through its first person, who gives the jobs too.
+    trader_roles: ["merchant", "trader", "stallholder", "fishwife", "innkeeper", "caravan_master"],
+    giver_roles: ["reeve", "keeper", "caravan_master", "smith", "farmer", "watcher", "hunter", "forager", "lookout"],
+)

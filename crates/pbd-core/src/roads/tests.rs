@@ -361,3 +361,14 @@ fn the_shipped_config_validates() {
     assert_eq!(cfg, RoadsConfig::default(), "the tests' copy is the file's");
     assert!((cfg.speed(Surface::Gravel) / cfg.speed(Surface::Dirt) - 1.15).abs() < 1e-6);
 }
+
+#[test]
+fn a_road_cell_is_cleared_and_its_neighbour_is_not() {
+    let key = nearest_key(at(0.0, 0.0)).unwrap();
+    let cleared = Cleared::new([key], RADIUS);
+    assert!(cleared.on_road(centre(key).unwrap()));
+    assert!(cleared.on_road(at(0.5, 0.5)));
+    for n in neighbours(key) {
+        assert!(!cleared.on_road(centre(n).unwrap()));
+    }
+}

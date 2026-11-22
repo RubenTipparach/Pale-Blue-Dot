@@ -82,6 +82,10 @@ pub const DATA_PREFIXES: &[&str] = &[
     "mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
+    // `economy::jobs::JobKind`: each job's line by its code; the townsfolk's
+    // roles by the template's id (`desktop::talk::role_name`).
+    "jobs.kind.",
+    "talk.role.",
     // `building::rules::Rule`, `building::Class` and the kits: build mode's
     // reasons, pieces and kit names by id (`builds::tests`).
     "build.refused.",

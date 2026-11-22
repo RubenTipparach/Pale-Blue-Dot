@@ -25,6 +25,8 @@ pub mod controls;
 pub mod critters;
 #[cfg(feature = "desktop")]
 pub mod drops;
+#[cfg(feature = "desktop")]
+pub mod economy;
 pub mod field_light;
 #[cfg(feature = "desktop")]
 pub mod fish;

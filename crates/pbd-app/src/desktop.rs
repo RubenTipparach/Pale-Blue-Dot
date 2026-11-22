@@ -30,6 +30,7 @@ mod scene;
 mod showcase;
 mod slots;
 mod sounds;
+mod talk;
 mod time_ui;
 mod toasts;
 mod water;
@@ -1826,6 +1827,10 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    // Coins, trade and town jobs (`townsfolk` design 5 to 12): the rules'
+    // state and counting, then the coin count and the talk, trade and
+    // board panels.
+    .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(

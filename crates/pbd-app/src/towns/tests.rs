@@ -2523,7 +2523,7 @@ fn every_towns_path_risers_have_their_stairs() {
 /// A measurement instrument, run by hand (`townsfolk` 2.1, 3.2): where to
 /// stand for the townsfolk's captures. Holbrook's smith from a metre in
 /// front of him and from three metres off his side, and the walled town's
-/// people from beside its first stallholder, looking at the middle of the
+/// people (Linenleigh's) from beside its first stallholder, looking at the middle of the
 /// people within 20 m. Each as `--at` and `--yaw`.
 #[test]
 #[ignore]
@@ -2575,7 +2575,12 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
     let off = at.forward * 1.6 + side * 2.4;
     spot("off the smith's side", at.feet + off, -off);
     let walled = load_template("town");
-    let site = sites_of(SiteKind::Walled).into_iter().next().unwrap();
+    // Linenleigh, the walled town nearest Holbrook (Ashenham, the first by
+    // id, stands in water on today's ground).
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
     let folk = people(&site, &walled);
     let first = folk
         .iter()

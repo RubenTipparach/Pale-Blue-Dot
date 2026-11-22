@@ -265,6 +265,7 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         }
     }
     ground::install(None);
+    pbd_core::roads::install_cleared(None);
     let towns = sites.as_ref().map(|list| {
         progress.set(Step::Laying);
         let ids: Vec<u32> = list.iter().map(|s| s.id).collect();

@@ -725,6 +725,93 @@ pub fn plan(
     done.into_iter().map(|(_, r)| r).collect()
 }
 
+// ---- Clearance ---------------------------------------------------------------
+
+/// The road cells standing in the world, by where they are: what the
+/// foliage asks so no tree grows on a road (design 10a), as a town's
+/// footprint is asked (`settlement::ground::cleared`). Installed when a
+/// world's roads are read, before its planet is built.
+#[derive(Clone, Debug, Default)]
+pub struct Cleared {
+    /// Road cell centres by the 4 m box their point at the sea radius
+    /// falls in: a keyed lookup, never iterated.
+    buckets: HashMap<(i32, i32, i32), Vec<Vec3>>,
+    radius_m: f32,
+}
+
+/// The side of a clearance box, m.
+const CLEAR_BOX_M: f32 = 4.0;
+/// How near a road cell's centre a direction must be to be on it, m: under
+/// a cell's inradius (1.42 m at the gold standard).
+const CLEAR_REACH_M: f32 = 1.4;
+
+impl Cleared {
+    pub fn new(keys: impl IntoIterator<Item = u32>, radius_m: f32) -> Self {
+        let mut buckets: HashMap<(i32, i32, i32), Vec<Vec3>> = HashMap::new();
+        for key in keys {
+            if let Some(c) = centre(key) {
+                buckets
+                    .entry(Self::bucket(c, radius_m))
+                    .or_default()
+                    .push(c);
+            }
+        }
+        Self { buckets, radius_m }
+    }
+
+    fn bucket(d: Vec3, radius_m: f32) -> (i32, i32, i32) {
+        let p = (d * radius_m / CLEAR_BOX_M).floor();
+        (p.x as i32, p.y as i32, p.z as i32)
+    }
+
+    /// Whether a direction lies on a road cell.
+    pub fn on_road(&self, direction: Vec3) -> bool {
+        let d = direction.normalize_or_zero();
+        let (x, y, z) = Self::bucket(d, self.radius_m);
+        let reach = CLEAR_REACH_M / self.radius_m;
+        (-1..=1).any(|i| {
+            (-1..=1).any(|j| {
+                (-1..=1).any(|k| {
+                    self.buckets
+                        .get(&(x + i, y + j, z + k))
+                        .is_some_and(|cs| cs.iter().any(|c| (*c - d).length() < reach))
+                })
+            })
+        })
+    }
+}
+
+static CLEARED: std::sync::RwLock<Option<std::sync::Arc<Cleared>>> = std::sync::RwLock::new(None);
+static CLEARED_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    /// This thread's copy of the installed clearance and its generation, so
+    /// the build threads do not share a lock's count (as the towns' ground).
+    static CLEARED_LOCAL: std::cell::RefCell<(u64, Option<std::sync::Arc<Cleared>>)> =
+        const { std::cell::RefCell::new((u64::MAX, None)) };
+}
+
+/// Install the world's road cells, or none.
+pub fn install_cleared(cleared: Option<Cleared>) {
+    *CLEARED.write().unwrap_or_else(|e| e.into_inner()) = cleared.map(std::sync::Arc::new);
+    CLEARED_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+}
+
+/// Whether a direction lies on a road cell of the installed world.
+pub fn cleared(direction: Vec3) -> bool {
+    let generation = CLEARED_GENERATION.load(std::sync::atomic::Ordering::Acquire);
+    CLEARED_LOCAL.with(|local| {
+        let mut local = local.borrow_mut();
+        if local.0 != generation {
+            *local = (
+                generation,
+                CLEARED.read().unwrap_or_else(|e| e.into_inner()).clone(),
+            );
+        }
+        local.1.as_ref().is_some_and(|c| c.on_road(direction))
+    })
+}
+
 // ---- Records -----------------------------------------------------------------
 
 /// A road record's body: the cells compact, `(key, base_m, kind, deck_m,
