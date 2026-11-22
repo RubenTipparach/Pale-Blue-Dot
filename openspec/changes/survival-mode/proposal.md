@@ -43,6 +43,11 @@ HUD and the danger look go to the owner as mockups.
   their hand.
 - **Fighting villagers**: a townsperson can be struck. They and the town's
   guards fight back, and the town remembers it (`townsfolk`'s reputation).
+- **Tool wear**: in Survival every tool has a number of uses, set by its
+  tier, and each finished action spends one. A worn-out tool breaks but
+  stays in its slot. It can be repaired at the workbench or by a town's
+  smith for coins. The owner, 2026-11-22: "for planning survival: can you
+  add tool degredation?".
 - **Death**: the player's pack drops where they died as a marked bag that
   stays until it is picked up, and they wake at their bed or the world's
   spawn.
@@ -57,8 +62,8 @@ needs, difficulty levels beyond one tuning file, and craft crash damage.
 
 ### New Capabilities
 - `player/survival`: the world's mode, the player's health, damage from
-  falls, hunger, breath and suit air, death and the dropped pack, and
-  respawn.
+  falls, hunger, breath and suit air, tool wear and repair, death and the
+  dropped pack, and respawn.
 
 ### Modified Capabilities
 <!-- None in openspec/specs: predators (`animal-husbandry`), townsfolk,
@@ -74,8 +79,8 @@ what each gains in Survival, and each keeps its Explorer behaviour. -->
   server requests like any other damage.
 - **Townsfolk**: guards and villagers gain a fight-back state. Reputation
   records a fight.
-- **Saves**: the world records its mode, and the player record gains health,
-  hunger, breath and spawn, with full values for every older save. A dropped
+- **Saves**: the world records its mode, the player record gains health,
+  hunger, breath and spawn, and each owned tool gains its uses left, with full values for every older save. A dropped
   pack is a record. Additive only.
 - **Animation**: the swing becomes an attack too (`held-swing`), and
   predators gain stalk, lunge and flee motions, mockup first by the

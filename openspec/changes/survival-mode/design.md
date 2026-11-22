@@ -146,7 +146,53 @@ entry.
   numbers win.
 - No player can damage another (PvP stays off).
 
+### 11. Tool wear
+
+The owner, 2026-11-22: "for planning survival: can you add tool degredation?".
+
+- **Survival only.** In Explorer a tool never wears, as today. Every
+  recommendation below is taken (ask only with screenshots); the look goes
+  to the owner on the HUD mockup (task 1.1).
+- **Wear is counted in uses.** Each owned tool carries the uses it has left.
+  A use is one finished action: a block broken, a tree felled, a field cell
+  tilled, a fish landed, a hit on a creature or a townsperson. A swing at
+  nothing, a cast that catches nothing, and a dig given up half way cost
+  nothing, so practice and missed swings are free.
+- **Harder work costs more.** Breaking a block whose tier is above the
+  tool's own (allowed by `tool-crafting` decision 6) costs 2 uses; anything
+  else costs 1.
+- **The tier sets how long a tool lasts**, in `assets/config/survival.ron`
+  (`tool_uses`, by tier): stone 60, bronze 160, iron 320, steel 640. The rod
+  has one number per tier as well. These are starting values for the owner
+  to play with, not a balance claim.
+- **A worn-out tool breaks but is not lost.** At zero uses it becomes a
+  broken tool in the same slot: it works as bare hands (`held-swing`'s
+  punch), its icon is cracked, and the line "Pickaxe broke" shows once.
+  Nothing the player made disappears, in keeping with "Saved games survive".
+- **Repair.**
+  - At the workbench: half the tool's head materials, rounded up (`tool-crafting`'s recipe for that tool and tier), restore all its uses.
+  - In a town: the smith or the trader repairs it for coins, priced from the tool's value (`townsfolk` design 5) times the share worn.
+  - A broken tool is repaired the same way.
+  - Repairing never raises a tier.
+- **What the player sees, Survival only:**
+  - a thin bar along the bottom of the tool's slot icon (UI, so the icon's
+    1 px outline rule applies), shown once the tool is below full;
+  - the bar turns red below a tenth;
+  - a short crack sound when it breaks.
+  The held model in the world does not change.
+- **Saving.** The owned-tool record gains `uses` (additive; a save without
+  it reads as full). A use is written in the same durable line as the
+  action that spent it (the dig's drop, the catch, the hit), so wear never
+  costs an extra write and is never lost on a crash.
+- **Multiplayer.** The server counts uses like any damage (decision 10). A
+  client shows its own prediction, and the server's number wins.
+- **Not in this decision:** tool enchantments or upgrades, wear on armour
+  (no armour yet), wear on vehicles and boats (craft damage stays a
+  follow-up), and tools wearing in Explorer.
+
 ## Risks / Trade-offs
+
+- **Wear can feel like a chore.** That is why missed swings and abandoned digs are free, why a broken tool is kept and can be repaired, and why the numbers live in one file.
 
 - **It reverses a decision the owner made with screenshots** (`cooking` Q1),
   but only in Survival. Explorer keeps it. The owner sees both on the HUD
