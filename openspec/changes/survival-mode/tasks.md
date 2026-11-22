@@ -1,6 +1,6 @@
 # Tasks
 
-Phase 3c, after `multiplayer` and `game-launcher` (3b). Nothing here starts
+Phase 4 (moved from 3c, owner, 2026-11-22), after `multiplayer` and `game-launcher` (3b). Nothing here starts
 until the owner asks.
 
 ## 1. Mockups for the owner

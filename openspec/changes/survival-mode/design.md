@@ -204,4 +204,4 @@ The owner, 2026-11-22: "for planning survival: can you add tool degredation?".
   the floating origin, on every body. A test lands on the home planet and on a
   lower-gravity body.
 - **Fighting townsfolk needs `townsfolk`** (phase 3) to have reputation and
-  guards. 3c comes after it, so it will.
+  guards. Phase 4 comes after it, so it will.
