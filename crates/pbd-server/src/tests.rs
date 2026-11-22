@@ -14,13 +14,13 @@ fn versions() -> Versions {
     }
 }
 
-fn server() -> Server<MemoryJournal> {
+fn server() -> (Server, MemoryStore) {
     let world = World {
         terrain: TerrainConfig::for_version(GENERATOR_VERSION).expect("the current generator"),
         worms: WormField::DEFAULT,
         versions: versions(),
     };
-    Server::new(world, Edits::new(), 1000.0, MemoryJournal::default())
+    (Server::new(world, 1000.0), MemoryStore::new(Edits::new()))
 }
 
 fn hello(key: u8) -> ToServer {
@@ -32,7 +32,7 @@ fn hello(key: u8) -> ToServer {
 }
 
 /// Dry ground cells: a surface with air over it, no water in the column.
-fn dry_cells(s: &Server<MemoryJournal>, count: usize) -> Vec<(u32, u16)> {
+fn dry_cells(s: &Server, count: usize) -> Vec<(u32, u16)> {
     let mut out = Vec::new();
     'faces: for face in 0..20u8 {
         for n in 0..40u32 {
@@ -43,7 +43,7 @@ fn dry_cells(s: &Server<MemoryJournal>, count: usize) -> Vec<(u32, u16)> {
                 j: 300 + n * 17,
             };
             let Some(cell) = key(a) else { continue };
-            let column = s.column(cell).unwrap();
+            let column = s.column(&Edits::new(), cell).unwrap();
             let Some(top) = column.surface() else {
                 continue;
             };
@@ -62,7 +62,7 @@ fn dry_cells(s: &Server<MemoryJournal>, count: usize) -> Vec<(u32, u16)> {
     out
 }
 
-fn joined(s: &mut Server<MemoryJournal>, keys: &[u8], slots: Slots) -> Vec<u32> {
+fn joined(s: &mut Server, keys: &[u8], slots: Slots) -> Vec<u32> {
     let players = keys
         .iter()
         .enumerate()
@@ -76,7 +76,7 @@ fn joined(s: &mut Server<MemoryJournal>, keys: &[u8], slots: Slots) -> Vec<u32> 
 /// region, answered, and sent to every player in the server's order.
 #[test]
 fn requests_are_journaled_in_order_and_sent_to_everyone() {
-    let mut s = server();
+    let (mut s, mut st) = server();
     let players = joined(&mut s, &[1, 2], Slots::default());
     assert_eq!(players, vec![0, 1]);
     let cells = dry_cells(&s, 3);
@@ -85,6 +85,7 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
         for layer in [top, top - 1] {
             id += 1;
             s.handle(
+                &mut st,
                 0,
                 ToServer::Request {
                     id,
@@ -93,7 +94,7 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
             );
         }
     }
-    let journal = &s.journal().entries;
+    let journal = &st.entries;
     assert_eq!(journal.len(), 6);
     // Ascending within each region, from 1.
     let mut last: BTreeMap<u32, u64> = BTreeMap::new();
@@ -104,7 +105,9 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
     }
     for (cell, top) in &cells {
         assert_eq!(
-            s.column(*cell).unwrap().material(usize::from(*top)),
+            s.column(&st.edits, *cell)
+                .unwrap()
+                .material(usize::from(*top)),
             Material::Air
         );
     }
@@ -119,14 +122,12 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
         assert!(matches!(chunk[1], (To::Player(0), ToClient::Change { .. })));
         assert!(matches!(chunk[2], (To::Player(1), ToClient::Change { .. })));
     }
-    // What was dug floats, for the drop's record (task 8.2).
-    assert_eq!(s.floating.len(), 6);
     // The ledger is the world's: its digest is a recompute of the edits.
-    for (_, sequenced, _) in &s.journal().entries {
+    for (_, sequenced, _) in &st.entries {
         let r = sequenced.region;
         assert_eq!(
-            s.ledger().digest(r),
-            pbd_core::net::digest::recompute(r, s.edits())
+            st.ledger.digest(r),
+            pbd_core::net::digest::recompute(r, &st.edits)
         );
     }
 }
@@ -136,10 +137,11 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
 /// the journal.
 #[test]
 fn two_players_on_one_cell_are_ordered_by_the_server() {
-    let mut s = server();
+    let (mut s, mut st) = server();
     joined(&mut s, &[1, 2], Slots::default());
     let (cell, top) = dry_cells(&s, 1)[0];
     s.handle(
+        &mut st,
         1,
         ToServer::Request {
             id: 7,
@@ -147,14 +149,15 @@ fn two_players_on_one_cell_are_ordered_by_the_server() {
         },
     );
     s.handle(
+        &mut st,
         0,
         ToServer::Request {
             id: 3,
             request: Request::Dig { cell, layer: top },
         },
     );
-    assert_eq!(s.journal().entries.len(), 1);
-    assert_eq!(s.journal().entries[0].0, Author::Player(1));
+    assert_eq!(st.entries.len(), 1);
+    assert_eq!(st.entries[0].0, Author::Player(1));
     let out = s.drain();
     let refused: Vec<_> = out
         .iter()
@@ -189,13 +192,14 @@ fn two_players_on_one_cell_are_ordered_by_the_server() {
 /// that refuses changes nothing.
 #[test]
 fn a_place_spends_and_a_refusal_changes_nothing() {
-    let mut s = server();
+    let (mut s, mut st) = server();
     let mut slots = Slots::default();
     slots.give(Item::Block(Material::Stone), 2);
     joined(&mut s, &[1], slots);
     let (cell, top) = dry_cells(&s, 1)[0];
     let above = top + 1;
     s.handle(
+        &mut st,
         0,
         ToServer::Request {
             id: 1,
@@ -207,12 +211,15 @@ fn a_place_spends_and_a_refusal_changes_nothing() {
         },
     );
     assert_eq!(
-        s.column(cell).unwrap().material(usize::from(above)),
+        s.column(&st.edits, cell)
+            .unwrap()
+            .material(usize::from(above)),
         Material::Stone
     );
     assert_eq!(s.player(0).unwrap().slots.get(0).unwrap().count, 1);
     // Slot 5 holds nothing.
     s.handle(
+        &mut st,
         0,
         ToServer::Request {
             id: 2,
@@ -231,18 +238,21 @@ fn a_place_spends_and_a_refusal_changes_nothing() {
         }
     )));
     // The writer fails: the dig is refused and the world stays.
-    s.journal_mut().failed = true;
-    let before = s.edits().len();
+    st.failed = true;
+    let before = &st.edits.len();
     s.handle(
+        &mut st,
         0,
         ToServer::Request {
             id: 3,
             request: Request::Dig { cell, layer: above },
         },
     );
-    assert_eq!(s.edits().len(), before);
+    assert_eq!(&st.edits.len(), before);
     assert_eq!(
-        s.column(cell).unwrap().material(usize::from(above)),
+        s.column(&st.edits, cell)
+            .unwrap()
+            .material(usize::from(above)),
         Material::Stone
     );
     assert!(s.drain().iter().any(|(_, m)| matches!(
@@ -259,7 +269,7 @@ fn a_place_spends_and_a_refusal_changes_nothing() {
 /// install key gets the same number back; a ninth player is refused.
 #[test]
 fn a_join_is_checked_and_numbered() {
-    let mut s = server();
+    let (mut s, _) = server();
     let wrong = ToServer::Hello {
         versions: Versions {
             generator: 1,
@@ -297,7 +307,7 @@ fn a_join_is_checked_and_numbered() {
 /// clock; with a player on, it runs and is sent every five seconds.
 #[test]
 fn the_clock_runs_only_while_someone_plays() {
-    let mut s = server();
+    let (mut s, _) = server();
     for _ in 0..200 {
         s.tick(TICK_S);
     }

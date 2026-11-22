@@ -1,10 +1,13 @@
 //! The server: the one authority over a shared world (`multiplayer` design
 //! 4 and 5, task 4.1).
 //!
-//! It holds the world's edits and every player's slots. A client sends what
-//! its player tried ([`ToServer::Request`]); the server decides it with the
-//! same core rule a client predicts with (`pbd_core::accept`), numbers it in
-//! its region (`net::ledger`), hands it to the [`Journal`], and only then
+//! It holds every player's slots and decides every change; the world's
+//! edits, their order and the journal are its [`Store`]'s (design 18): a
+//! dedicated server's own ([`MemoryStore`], then its save), single player's
+//! the save it already has. A client sends what its player tried
+//! ([`ToServer::Request`]); the server decides it with the same core rule a
+//! client predicts with (`pbd_core::accept`), has the store number it in its
+//! region (`net::ledger`) and make it durable, and only then
 //! answers [`ToClient::Accepted`] and sends the change to every player, the
 //! requester included, in that order. A refusal carries no undo: the
 //! requester is sent the cell's layers and its own slots again (design 15.3).
@@ -35,33 +38,67 @@ pub const CLOCK_EVERY_S: f64 = 5.0;
 /// Players at most (design 14.2).
 pub const MAX_PLAYERS: usize = 8;
 
-/// Where an accepted change is made durable. The server answers a change
-/// as accepted only after this has taken it (design 4, "the durability rule
-/// does not move"); the app's implementation is the save's writer.
-pub trait Journal {
-    /// Take one accepted edit, by its author, with the author's slots after
-    /// it. `false` refuses it, and the server refuses the request.
-    fn edit(&mut self, author: &Author, sequenced: &Sequenced, carried: &Slots) -> bool;
+/// The world's edits, their order, and where an accepted change is made
+/// durable. The server answers a change as accepted only after
+/// [`Store::commit`] has taken it (design 4, "the durability rule does not
+/// move").
+pub trait Store {
+    fn edits(&self) -> &Edits;
+    fn ledger(&self) -> &Ledger;
+    /// Take one accepted edit by `author`, with the author's slots after it:
+    /// set it in the edits, number it in its region and journal it. `None`
+    /// refuses it, changing nothing, and the server refuses the request.
+    fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced>;
 }
 
-/// A journal that keeps everything in memory: tests and a world with no
-/// disk behind it.
+/// A store in memory: tests, and a world with no disk behind it.
 #[derive(Clone, Debug, Default)]
-pub struct MemoryJournal {
+pub struct MemoryStore {
+    pub edits: Edits,
+    pub ledger: Ledger,
+    /// Every commit, in order.
     pub entries: Vec<(Author, Sequenced, Slots)>,
     /// Refuse everything from here on, as a failed writer does.
     pub failed: bool,
 }
 
-impl Journal for MemoryJournal {
-    fn edit(&mut self, author: &Author, sequenced: &Sequenced, carried: &Slots) -> bool {
-        if self.failed {
-            return false;
+impl MemoryStore {
+    pub fn new(edits: Edits) -> Self {
+        Self {
+            ledger: Ledger::of(&edits),
+            edits,
+            ..Self::default()
         }
-        self.entries
-            .push((author.clone(), *sequenced, carried.clone()));
-        true
     }
+}
+
+impl Store for MemoryStore {
+    fn edits(&self) -> &Edits {
+        &self.edits
+    }
+    fn ledger(&self) -> &Ledger {
+        &self.ledger
+    }
+    fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
+        if self.failed {
+            return None;
+        }
+        self.edits.set(edit);
+        let sequenced = self.ledger.accept(edit, &self.edits);
+        self.entries
+            .push((author.clone(), sequenced, carried.clone()));
+        Some(sequenced)
+    }
+}
+
+/// An accepted edit, as the server decided it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Decided {
+    pub sequenced: Sequenced,
+    /// The player's slots after it.
+    pub slots: Slots,
+    /// What floats out at the cell: a drop (a region record, task 8.2).
+    pub floats: Option<Item>,
 }
 
 /// Who a message is for.
@@ -88,38 +125,27 @@ pub struct Player {
     pub slots: Slots,
 }
 
-pub struct Server<J: Journal> {
+pub struct Server {
     world: World,
-    edits: Edits,
-    ledger: Ledger,
     /// By number; iterated in number order, so a broadcast's order is fixed.
     players: BTreeMap<u32, Player>,
     /// Players' install keys to their numbers, kept across leaving.
     known: Vec<([u8; 16], u32)>,
-    journal: J,
     clock_s: f64,
     since_clock_s: f64,
     outbox: Vec<(To, ToClient)>,
-    /// What floated out of accepted digs and has not been picked up: drops
-    /// become region records in task 8.2.
-    pub floating: Vec<(u32, Item)>,
 }
 
-impl<J: Journal> Server<J> {
-    /// A server over `edits`, the world as its save holds them, at world
-    /// time `clock_s`.
-    pub fn new(world: World, edits: Edits, clock_s: f64, journal: J) -> Self {
+impl Server {
+    /// A server over `world`, at world time `clock_s`.
+    pub fn new(world: World, clock_s: f64) -> Self {
         Self {
             world,
-            ledger: Ledger::of(&edits),
-            edits,
             players: BTreeMap::new(),
             known: Vec::new(),
-            journal,
             clock_s,
             since_clock_s: 0.0,
             outbox: Vec::new(),
-            floating: Vec::new(),
         }
     }
 
@@ -176,14 +202,17 @@ impl<J: Journal> Server<J> {
     }
 
     /// One message from a joined player.
-    pub fn handle(&mut self, player: u32, message: ToServer) {
+    pub fn handle(&mut self, store: &mut impl Store, player: u32, message: ToServer) {
         if !self.players.contains_key(&player) {
             return;
         }
         match message {
-            ToServer::Request { id, request } => self.request(player, id, request),
+            ToServer::Request { id, request } => {
+                // What floats out becomes a drop record with task 8.2.
+                let _ = self.request(store, player, id, request);
+            }
             ToServer::Resync { region } => {
-                let snap = self.ledger.snapshot(region, &self.edits);
+                let snap = store.ledger().snapshot(region, store.edits());
                 self.send(
                     To::Player(player),
                     ToClient::Snapshot {
@@ -219,14 +248,6 @@ impl<J: Journal> Server<J> {
         std::mem::take(&mut self.outbox)
     }
 
-    pub fn edits(&self) -> &Edits {
-        &self.edits
-    }
-
-    pub fn ledger(&self) -> &Ledger {
-        &self.ledger
-    }
-
     pub fn player(&self, player: u32) -> Option<&Player> {
         self.players.get(&player)
     }
@@ -235,17 +256,9 @@ impl<J: Journal> Server<J> {
         self.clock_s
     }
 
-    pub fn journal(&self) -> &J {
-        &self.journal
-    }
-
-    pub fn journal_mut(&mut self) -> &mut J {
-        &mut self.journal
-    }
-
     /// The column a cell has now: generated from the seed, its worms and its
     /// edits, the same pure function a client's tier builds.
-    pub fn column(&self, cell: u32) -> Option<Column> {
+    pub fn column(&self, edits: &Edits, cell: u32) -> Option<Column> {
         let direction: Vec3 = pbd_core::cell_key::key_direction(cell)?;
         let near = worms::gather(&self.world.worms, &self.world.terrain, direction, 0.0);
         Some(column::generate_edited(
@@ -253,29 +266,75 @@ impl<J: Journal> Server<J> {
             &self.world.worms,
             &self.world.terrain,
             direction,
-            self.edits.for_cell(cell),
+            edits.for_cell(cell),
         ))
     }
 
-    fn request(&mut self, player: u32, id: u32, request: Request) {
-        let (cell, layer, material, hands) = match request {
-            Request::Dig { cell, layer } => (cell, layer, Material::Air, Hands::Take),
+    fn request(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        request: Request,
+    ) -> Result<Decided, Refusal> {
+        let (cell, layer, material, hands, slot) = match request {
+            Request::Dig { cell, layer } => (cell, layer, Material::Air, Hands::Take, None),
             Request::Place { cell, layer, slot } => {
                 let held = self.players[&player].slots.get(usize::from(slot));
                 match held.map(|stack| stack.item) {
-                    Some(Item::Block(material)) => (cell, layer, material, Hands::Spend),
-                    _ => return self.refuse(player, id, cell, Refusal::EmptySlot),
+                    Some(Item::Block(material)) => {
+                        (cell, layer, material, Hands::Spend, Some(slot))
+                    }
+                    _ => return Err(self.refuse(store, player, id, cell, Refusal::EmptySlot)),
                 }
             }
         };
-        let Some(column) = self.column(cell) else {
-            return self.refuse(player, id, cell, Refusal::OutOfWorld);
-        };
-        let layer_at = usize::from(layer);
         let mut slots = self.players[&player].slots.clone();
-        if let Request::Place { slot, .. } = request {
+        if let Some(slot) = slot {
             slots.select(usize::from(slot));
         }
+        self.edit(
+            store,
+            player,
+            id,
+            Edit {
+                cell,
+                layer,
+                material,
+            },
+            hands,
+            slots,
+        )
+    }
+
+    /// Decide one edit by `player` with the hands as asked, from `slots`:
+    /// the path every edit takes, a remote request's and single player's
+    /// alike. In process (design 18) the player's slots are the app's as
+    /// they stand, because the game's other writers still change them
+    /// outside the server until they move (task 2.2), and the hands are the
+    /// ones the app settled (a dig's finds, a till's seed), which only a
+    /// remote client is held to the server's own roll for (task 8.7).
+    pub fn edit(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        edit: Edit,
+        hands: Hands,
+        slots: Slots,
+    ) -> Result<Decided, Refusal> {
+        let Edit {
+            cell,
+            layer,
+            material,
+        } = edit;
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(column) = self.column(store.edits(), cell) else {
+            return Err(self.refuse(store, player, id, cell, Refusal::OutOfWorld));
+        };
+        let layer_at = usize::from(layer);
         let ask = Ask {
             cell,
             layer: layer_at,
@@ -288,9 +347,9 @@ impl<J: Journal> Server<J> {
             lamp_in_column: (0..column::LAYERS).any(|l| column.material(l).is_lamp()),
             hands,
         };
-        let (terrain, edits) = (&self.world.terrain, &self.edits);
+        let terrain = &self.world.terrain;
         let taken = match accept::edit(ask, &slots, || {
-            accept::yield_of(terrain, edits, ask.was, cell, layer_at)
+            accept::yield_of(terrain, store.edits(), ask.was, cell, layer_at)
         }) {
             Ok(taken) => taken,
             Err(refused) => {
@@ -300,38 +359,16 @@ impl<J: Journal> Server<J> {
                     Refused::LampTaken => Refusal::LampTaken,
                     Refused::EmptySlot => Refusal::EmptySlot,
                 };
-                return self.refuse(player, id, cell, reason);
+                return Err(self.refuse(store, player, id, cell, reason));
             }
         };
-        let edit = Edit {
-            cell,
-            layer,
-            material,
+        // Made durable and numbered before anything is answered: a store
+        // that refuses leaves the world as it was.
+        let Some(sequenced) = store.commit(&Author::Player(player), edit, &taken.slots) else {
+            return Err(self.refuse(store, player, id, cell, Refusal::NotSaved));
         };
-        // Numbered and journaled before anything changes or is answered: a
-        // journal that refuses leaves the world as it was. The number is the
-        // one the ledger gives the edit when it takes it just below.
-        let region =
-            pbd_core::cell_key::region::of_key(cell).unwrap_or(pbd_core::net::ledger::NO_REGION);
-        let numbered = Sequenced {
-            region,
-            seq: self.ledger.seq(region) + 1,
-            edit,
-        };
-        if !self
-            .journal
-            .edit(&Author::Player(player), &numbered, &taken.slots)
-        {
-            return self.refuse(player, id, cell, Refusal::NotSaved);
-        }
-        self.edits.set(edit);
-        let sequenced = self.ledger.accept(edit, &self.edits);
-        debug_assert_eq!(sequenced, numbered);
         if let Some(player) = self.players.get_mut(&player) {
-            player.slots = taken.slots;
-        }
-        if let Some(item) = taken.floats {
-            self.floating.push((cell, item));
+            player.slots = taken.slots.clone();
         }
         self.send(
             To::Player(player),
@@ -350,15 +387,27 @@ impl<J: Journal> Server<J> {
                 material,
             },
         });
+        Ok(Decided {
+            sequenced,
+            slots: taken.slots,
+            floats: taken.floats,
+        })
     }
 
     /// Refuse a request, and re-send what the requester may have predicted
     /// wrongly (design 15.3): the cell's region whole. The slots go when the
     /// inventory has its message (task 8.2).
-    fn refuse(&mut self, player: u32, id: u32, cell: u32, reason: Refusal) {
+    fn refuse(
+        &mut self,
+        store: &impl Store,
+        player: u32,
+        id: u32,
+        cell: u32,
+        reason: Refusal,
+    ) -> Refusal {
         self.send(To::Player(player), ToClient::Refused { id, reason });
         if let Some(region) = pbd_core::cell_key::region::of_key(cell) {
-            let snap = self.ledger.snapshot(region, &self.edits);
+            let snap = store.ledger().snapshot(region, store.edits());
             self.send(
                 To::Player(player),
                 ToClient::Snapshot {
@@ -368,6 +417,7 @@ impl<J: Journal> Server<J> {
                 },
             );
         }
+        reason
     }
 
     fn reject(&mut self, connection: u64, reason: JoinRefusal) {

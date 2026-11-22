@@ -391,10 +391,11 @@ pub fn apply_edit(
         error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
         return None;
     }
-    let moved = taken.slots;
+    let mut moved = taken.slots;
+    let taken_floats = taken.floats;
     // What floats out does so at the cell's centre, and the magnet brings it
     // in (`inventory-grid` decision 4).
-    let dropped = taken.floats.and_then(|item| {
+    let dropped = taken_floats.and_then(|item| {
         let direction = fine
             .set
             .finest_records()
@@ -427,11 +428,35 @@ pub fn apply_edit(
         layer: layer as u16,
         material,
     };
-    let Some(sequenced) = save.accept_sequenced(edit, dropped.as_ref(), &moved) else {
-        // The durable path refused it, so the world must not change either:
-        // an edit that shows and does not save is the worse of the two.
-        error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
-        return None;
+    // The server decides (`multiplayer` 4.2, design 18): in single player it
+    // is in process and the save is its store, so this answers now and
+    // journals the line the save always wrote. What it decides is what
+    // happens; where it differs from the prediction above, its answer wins
+    // and the difference is logged, for a playtest to find.
+    let sequenced = match save.decide_edit(edit, hands, &slots.0, dropped.as_ref()) {
+        Ok(decided) => {
+            if decided.slots != moved || decided.floats != taken_floats {
+                warn!(
+                    "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: the server's hands \
+                     differ from the prediction; the server's are kept"
+                );
+                moved = decided.slots;
+            }
+            decided.sequenced
+        }
+        Err(pbd_core::net::protocol::Refusal::NotSaved) => {
+            // The durable path refused it, so the world must not change
+            // either: an edit that shows and does not save is the worse of
+            // the two.
+            error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
+            return None;
+        }
+        Err(refusal) => {
+            warn!(
+                "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: refused as {refusal:?}"
+            );
+            return None;
+        }
     };
     if was_placed {
         info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
@@ -489,6 +514,19 @@ pub fn apply_edit(
     fine.set = set;
     fine.version += 1;
     Some(was)
+}
+
+/// The in-process server carves its columns with the tier's own worms
+/// (`multiplayer` design 18), so the cell it decides on is the cell the
+/// player sees. Without touching the save's change ticks: nothing about the
+/// world changed.
+pub fn server_worms(
+    columns: Option<Res<pbd_app::config::ColumnSettings>>,
+    mut save: ResMut<WorldSave>,
+) {
+    if let Some(columns) = columns {
+        save.bypass_change_detection().set_worms(columns.worms());
+    }
 }
 
 /// The eye ray, the click, and the two verbs.

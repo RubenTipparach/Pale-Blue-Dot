@@ -297,6 +297,13 @@ pub struct WorldSave {
     /// Each region's last sequence and digest (`multiplayer` design 4):
     /// every edit the writers below take is numbered in its region.
     ledger: Ledger,
+    /// Single player's server, in process (`multiplayer` design 18): every
+    /// player edit is decided by it, with this save as its store. Made on
+    /// first use, from the world's generator and the worms it is set to.
+    local: Option<pbd_server::Server>,
+    /// The worms the server's columns are carved by: the tier's own
+    /// (`ColumnSettings::worms`), set by the app.
+    worms: pbd_core::worms::WormField,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -323,11 +330,36 @@ fn next_serial() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// The save as the in-process server's store (`multiplayer` design 18):
+/// its edits and ledger, and its writer for the journal, writing the line
+/// [`WorldSave::accept`] writes, the drop the app made included.
+struct SaveStore<'a> {
+    save: &'a mut WorldSave,
+    drop: Option<&'a ItemDrop>,
+}
+
+impl pbd_server::Store for SaveStore<'_> {
+    fn edits(&self) -> &Edits {
+        &self.save.edits
+    }
+    fn ledger(&self) -> &Ledger {
+        &self.save.ledger
+    }
+    fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
+        // A player's line carries no author token, and single player is
+        // player 0 (`world-persistence` decision 11).
+        debug_assert_eq!(*author, Author::Player(0));
+        self.save.accept_sequenced(edit, self.drop, carried)
+    }
+}
+
 impl Default for WorldSave {
     fn default() -> Self {
         Self {
             edits: Edits::new(),
             ledger: Ledger::default(),
+            local: None,
+            worms: pbd_core::worms::WormField::DEFAULT,
             carried: None,
             kit: 0,
             pose: None,
@@ -411,6 +443,8 @@ impl WorldSave {
         let vehicles = read_vehicles(&directory.join(VEHICLES));
         Self {
             ledger: Ledger::of(&edits),
+            local: None,
+            worms: pbd_core::worms::WormField::DEFAULT,
             edits,
             carried,
             kit,
@@ -497,6 +531,72 @@ impl WorldSave {
         }
         self.writer.append(format::line_of(edit, drop, carried));
         sequenced
+    }
+
+    /// Decide a player's edit on the in-process server and, if it takes it,
+    /// journal it exactly as [`WorldSave::accept`] does (`multiplayer` 4.2,
+    /// design 18): the server decides with the core rule over a column it
+    /// generates from the seed, the worms and these edits, then this save
+    /// takes it as the server's store. `carried` is the player's slots as
+    /// they stand and `hands` what the app settled; `drop` is the drop the
+    /// app made for what the edit floats out.
+    pub fn decide_edit(
+        &mut self,
+        edit: Edit,
+        hands: pbd_core::accept::Hands,
+        carried: &Slots,
+        drop: Option<&ItemDrop>,
+    ) -> Result<pbd_server::Decided, pbd_core::net::protocol::Refusal> {
+        let mut server = self
+            .local
+            .take()
+            .unwrap_or_else(|| self.local_server(carried));
+        let decided = {
+            let mut store = SaveStore { save: self, drop };
+            server.edit(&mut store, 0, 0, edit, hands, carried.clone())
+        };
+        // Single player has nobody to send to: the app applies the decision
+        // itself. A hosted world's clients are sent this (task 6.2).
+        server.drain();
+        self.local = Some(server);
+        decided
+    }
+
+    /// The worms the in-process server carves its columns by: the tier's.
+    pub fn set_worms(&mut self, worms: pbd_core::worms::WormField) {
+        if self.worms != worms {
+            self.worms = worms;
+            self.local = None;
+        }
+    }
+
+    /// Single player's server: this world's generator and worms, with the
+    /// player as player 0 (design 10).
+    fn local_server(&self, carried: &Slots) -> pbd_server::Server {
+        use pbd_core::net::protocol::{PROTOCOL, PROTOCOL_MIN, ToServer, Versions};
+        let versions = Versions {
+            protocol: PROTOCOL,
+            protocol_min: PROTOCOL_MIN,
+            topology: self.identity.topology,
+            generator: self.identity.generator,
+            content: 0,
+            world: self.identity.seed,
+        };
+        let world = pbd_server::World {
+            terrain: *crate::planet::terrain_config(),
+            worms: self.worms,
+            versions,
+        };
+        let mut server = pbd_server::Server::new(world, self.world_seconds.unwrap_or(0.0));
+        let hello = ToServer::Hello {
+            versions,
+            key: [0; 16],
+            name: String::new(),
+        };
+        let joined = server.join(0, &hello, carried.clone());
+        debug_assert_eq!(joined, Some(0), "single player is player 0");
+        server.drain();
+        server
     }
 
     /// Each region's last sequence and digest.
@@ -914,6 +1014,132 @@ mod tests {
     use super::*;
     use pbd_core::inventory::Item;
     use pbd_core::terrain::Material;
+
+    /// Dry ground cells near the default spawn, and their tops: what the
+    /// in-process server and a direct `accept` both take as a dig.
+    fn dry_tops(count: usize) -> Vec<(u32, u16)> {
+        use pbd_core::cell_key::{Address, key};
+        let terrain = crate::planet::terrain_config();
+        let mut out = Vec::new();
+        'faces: for face in 0..20u8 {
+            for n in 0..40u32 {
+                let a = Address {
+                    face,
+                    level: 11,
+                    i: 300 + n * 19,
+                    j: 200 + n * 13,
+                };
+                let Some(cell) = key(a) else { continue };
+                let direction = pbd_core::cell_key::key_direction(cell).unwrap();
+                let near = pbd_core::worms::gather(
+                    &pbd_core::worms::WormField::DEFAULT,
+                    terrain,
+                    direction,
+                    0.0,
+                );
+                let column = pbd_core::column::generate_edited(
+                    &near,
+                    &pbd_core::worms::WormField::DEFAULT,
+                    terrain,
+                    direction,
+                    &[],
+                );
+                let Some(top) = column.surface() else {
+                    continue;
+                };
+                if column.material(top + 1) == Material::Air
+                    && (0..pbd_core::column::LAYERS).all(|l| !column.material(l).is_water())
+                    && matches!(
+                        column.material(top),
+                        Material::Grass
+                            | Material::Dirt
+                            | Material::Stone
+                            | Material::Sand
+                            | Material::Snow
+                    )
+                {
+                    out.push((cell, top as u16));
+                    if out.len() == count {
+                        break 'faces;
+                    }
+                }
+            }
+        }
+        assert_eq!(out.len(), count);
+        out
+    }
+
+    /// `multiplayer` 4.2: the same digs taken through the in-process server
+    /// and straight through `accept` write byte-identical logs, with the
+    /// drops they made and the hands after them; and a dig the server
+    /// refuses writes nothing.
+    #[test]
+    fn the_in_process_server_writes_the_save_accept_always_wrote() {
+        let root = temporary("server-same");
+        let (a, b) = (
+            create(&root, "Through the server", 11).unwrap(),
+            create(&root, "Straight", 11).unwrap(),
+        );
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Stone), 5);
+        let digs = dry_tops(4);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            for (n, &(cell, top)) in digs.iter().enumerate() {
+                for layer in [top, top - 1] {
+                    let edit = Edit {
+                        cell,
+                        layer,
+                        material: Material::Air,
+                    };
+                    let item = Item::Block(Material::Dirt);
+                    let drop = ItemDrop {
+                        id: through.next_drop_id(),
+                        item,
+                        count: 1,
+                        position: bevy::math::DVec3::new(n as f64, 1.0, 2.0),
+                        made_s: 5.0,
+                    };
+                    let decided = through
+                        .decide_edit(edit, pbd_core::accept::Hands::Take, &carried, Some(&drop))
+                        .expect("a dig of dry ground is taken");
+                    assert_eq!(
+                        decided.slots, carried,
+                        "a dig floats its block, the hands keep"
+                    );
+                    assert!(decided.floats.is_some());
+                    assert!(straight.accept(edit, Some(&drop), &carried));
+                }
+            }
+            // A second dig of a layer already air is refused, and writes
+            // nothing.
+            let (cell, top) = digs[0];
+            let again = Edit {
+                cell,
+                layer: top,
+                material: Material::Air,
+            };
+            assert_eq!(
+                through.decide_edit(again, pbd_core::accept::Hands::Take, &carried, None),
+                Err(pbd_core::net::protocol::Refusal::Unchanged)
+            );
+            through.drain();
+            straight.drain();
+            assert_eq!(
+                through
+                    .ledger()
+                    .seq(pbd_core::cell_key::region::of_key(cell).unwrap()),
+                straight
+                    .ledger()
+                    .seq(pbd_core::cell_key::region::of_key(cell).unwrap())
+            );
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
+        assert!(!log(&a).is_empty());
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     fn temporary(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
