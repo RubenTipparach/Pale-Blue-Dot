@@ -715,8 +715,9 @@ function roadmap() {
 
 // The index on the left (owner, 2026-11-22: "organize mockup tracker into sections ... some sort of index thing on the left
 // to navigate around"): sections, the roadmap's phases and steps, and the mockups, each a link to a stable anchor
-// (#roadmap, #roadmap-phase-3, #roadmap-phase-3-npcs, #mockups, #mockups-new, #card-M5, #guides, #misc). The entry for
-// what is on screen is highlighted as the page scrolls. On a phone the index is a drawer opened from the Index button.
+// (#roadmap, #roadmap-phase-3, #roadmap-phase-3-npcs, #mockups, #mockups-new, #card-M5, #guides, #misc). It is only for
+// jumping: it never opens, closes or highlights as the page scrolls (owner, 2026-11-22: "it shouldnt change based on where
+// I scroll, its just there for me to jump around"). On a phone the index is a drawer opened from the Index button.
 const spy = []; // { id, link } in page order
 function buildIndex() {
   const body = document.getElementById('index-body');
@@ -747,43 +748,7 @@ function buildIndex() {
   const order = new Map([...document.querySelectorAll('[id]')].map((n, i) => [n.id, i]));
   spy.sort((x, y) => (order.get(x.id) ?? 0) - (order.get(y.id) ?? 0));
   body.addEventListener('click', (e) => { if (e.target.closest('a') && narrow()) drawer(false); });
-  window.addEventListener('scroll', () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(markCurrent); } }, { passive: true });
   window.addEventListener('resize', () => { if (!narrow()) drawer(false); });
-  markCurrent();
-}
-
-let spyQueued = false;
-let current = null;
-const autoOpened = new Set();
-function markCurrent() {
-  spyQueued = false;
-  let best = null, bestTop = -Infinity;
-  for (const s of spy) {
-    const t = document.getElementById(s.id);
-    if (!t || !t.offsetParent) continue;
-    const top = t.getBoundingClientRect().top;
-    if (top <= 120 && top > bestTop) { best = s; bestTop = top; }
-  }
-  best = best || spy[0];
-  if (!best || best === current) return;
-  current = best;
-  document.querySelectorAll('#index a.cur, #index a.in').forEach((a) => a.classList.remove('cur', 'in'));
-  best.link.classList.add('cur');
-  best.link.setAttribute('aria-current', 'location');
-  spy.forEach((s) => { if (s !== best) s.link.removeAttribute('aria-current'); });
-  // Open the groups that hold it, mark their links, and close the ones the highlight opened before.
-  const holding = new Set();
-  for (let d = best.link.closest('details'); d; d = d.parentElement.closest('details')) {
-    holding.add(d);
-    const a = d.querySelector(':scope > summary > a');
-    if (a && a !== best.link) a.classList.add('in');
-    if (!d.open) { d.open = true; autoOpened.add(d); }
-  }
-  for (const d of autoOpened) if (!holding.has(d)) { d.open = false; autoOpened.delete(d); }
-  // Keep the highlighted entry in view inside the index without moving the page.
-  const nav = document.getElementById('index');
-  const lr = best.link.getBoundingClientRect(), nr = nav.getBoundingClientRect();
-  if (lr.top < nr.top + 48 || lr.bottom > nr.bottom - 16) nav.scrollTop += lr.top - nr.top - nr.height / 3;
 }
 
 const narrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -819,7 +784,6 @@ function scrollToHash() {
   t.scrollIntoView({ block: 'start' });
   t.classList.add('hit');
   setTimeout(() => t.classList.remove('hit'), 1600);
-  markCurrent();
 }
 
 MOCKUPS.forEach((m) => document.getElementById(m.batch === 'new' ? 'list-new' : 'list-old').append(card(m)));
