@@ -739,6 +739,10 @@ someone else.
 **31. Roads the player lays (task 8.3).**
 - **Gravel** is a good (`gravel`, stack 99), made by hand from loose stone
   (`gravel` recipe: two stone make four gravel) and valued in `values.ron`.
+  It is the seventh hand recipe, so the pack's craft list shows eight rows
+  before it scrolls (`craft::ROWS_SHOWN`, was six), keeping decision 12 of
+  the craft panel: every hand recipe shows without scrolling, with one row
+  to spare.
 - **Placing.** The place button (right) on the ground with gravel in the
   selected slot lays a gravel road cell on the aimed cell, taking one
   gravel; with the shovel in the tool slot and the selected slot empty it

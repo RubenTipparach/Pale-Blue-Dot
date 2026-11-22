@@ -97,7 +97,7 @@ pub const CRAFT_COLUMN: f32 = 180.0;
 pub const ROW: f32 = 22.0;
 /// The rows shown before the list scrolls.
 #[allow(dead_code)]
-pub const ROWS_SHOWN: usize = 6;
+pub const ROWS_SHOWN: usize = 8;
 /// The CRAFT plaque's width, wide enough for its longest word (LOCKED), so
 /// it never grows past the row.
 pub const CRAFT_PLAQUE: f32 = 56.0;
