@@ -1058,6 +1058,16 @@ nothing in the pack the trader wants, shows no tab).
 - **The board is not filtered**: a job is a kind of work (cook, bring,
   deliver, mend, find), not a good on a shelf, and a board posts a handful
   a day; it scrolls (38b) and no more.
+- **No trader sells basic tools (survey E1, owner, 2026-11-22: "we'll have
+  a special weapons and enchanted tools that give +1 mining speed +1 yeild,
+  stuff like that").** The stone pickaxe, axe, hoe, rod and the rest are
+  made, never bought: making them is the loop's first step. The Tools
+  shelf on a trader's side is for what comes later: enchanted tools and
+  special weapons, each with its bonus (such as +1 mining speed or +1
+  yield). Neither is designed yet; they wait for a write-up of
+  enchantments and weapons (weapons come with survival, phase 4,
+  `survival-mode`). Until then tools stay `untraded` and the buy side
+  shows no Tools tab, as today.
 
 ## Risks / Trade-offs
 

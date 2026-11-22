@@ -101,4 +101,5 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 - [ ] 12.2 The scroll thumb is widened past its 4 px at 1x
 - [ ] 12.3 A made good's labour is priced at 0.1 coin per second of crafting (design 37's open rate)
 - [ ] 12.4 The lost-villager job gets an icon of its own
-- [ ] 12.5 Traders sell tools or not, per survey E1 (open; the recommendation, none, is today's game)
+- [x] 12.5 Traders sell tools or not, per survey E1: answered 2026-11-22, no basic tools; enchanted tools and special weapons later (design 38c). Today's game already sells none.
+- [ ] 12.6 Traders' Tools shelf: enchanted tools and special weapons with their bonuses (such as +1 mining speed, +1 yield), per survey E1. Waits for a write-up of enchantments and weapons (weapons tie to survival, phase 4, `survival-mode`). Verify: that write-up exists and names the trader's stock.
