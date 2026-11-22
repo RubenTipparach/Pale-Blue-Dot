@@ -265,6 +265,18 @@ impl Client {
     }
 }
 
+/// Both ends ping every few seconds, so a connection stays open through a
+/// quiet spell (a joining game building its world takes most of a minute
+/// on a slow machine), and one that stops answering is closed in a minute.
+fn transport() -> Arc<quinn::TransportConfig> {
+    let mut t = quinn::TransportConfig::default();
+    t.keep_alive_interval(Some(std::time::Duration::from_secs(4)));
+    t.max_idle_timeout(Some(
+        quinn::IdleTimeout::try_from(std::time::Duration::from_secs(60)).expect("a minute fits"),
+    ));
+    Arc::new(t)
+}
+
 fn runtime() -> std::io::Result<tokio::runtime::Runtime> {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -277,8 +289,9 @@ fn server_endpoint(addr: SocketAddr) -> std::io::Result<quinn::Endpoint> {
         .map_err(std::io::Error::other)?;
     let der = rustls::pki_types::CertificateDer::from(cert.cert);
     let key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
-    let config = quinn::ServerConfig::with_single_cert(vec![der], key.into())
+    let mut config = quinn::ServerConfig::with_single_cert(vec![der], key.into())
         .map_err(std::io::Error::other)?;
+    config.transport_config(transport());
     quinn::Endpoint::server(config, addr)
 }
 
@@ -306,7 +319,9 @@ async fn open(
     .with_no_client_auth();
     let quic =
         quinn::crypto::rustls::QuicClientConfig::try_from(crypto).map_err(std::io::Error::other)?;
-    endpoint.set_default_client_config(quinn::ClientConfig::new(Arc::new(quic)));
+    let mut client = quinn::ClientConfig::new(Arc::new(quic));
+    client.transport_config(transport());
+    endpoint.set_default_client_config(client);
     let connection = endpoint
         .connect(addr, "pale-blue-dot")
         .map_err(std::io::Error::other)?

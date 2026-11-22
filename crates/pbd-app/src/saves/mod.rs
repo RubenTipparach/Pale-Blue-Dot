@@ -308,7 +308,7 @@ pub struct WorldSave {
     local: Option<pbd_server::Server>,
     /// On a game that joined another's world: the requests for that server,
     /// sent each frame (design 20). `None` when this game is the authority.
-    outgoing: Option<Vec<pbd_core::net::protocol::Request>>,
+    outgoing: Option<Outgoing>,
     /// The worms the server's columns are carved by: the tier's own
     /// (`ColumnSettings::worms`), set by the app.
     worms: pbd_core::worms::WormField,
@@ -336,6 +336,14 @@ fn fold_glow_pick(edits: &mut Edits, record: &StoredRecord) {
 fn next_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A joined game's requests: queued for the next send, and sent and waiting
+/// for the server's answer, oldest first (design 20).
+#[derive(Clone, Debug, Default)]
+struct Outgoing {
+    queued: Vec<pbd_core::net::protocol::Request>,
+    waiting: Vec<pbd_core::net::protocol::Request>,
 }
 
 /// The save as the in-process server's store (`multiplayer` design 18):
@@ -689,22 +697,40 @@ impl WorldSave {
 
     /// Mark this game as joined to a remote world.
     pub fn join_remote(&mut self) {
-        self.outgoing = Some(Vec::new());
+        self.outgoing = Some(Outgoing::default());
     }
 
-    /// Queue a request for the remote server.
-    pub fn send_request(&mut self, request: pbd_core::net::protocol::Request) {
-        if let Some(out) = self.outgoing.as_mut() {
-            out.push(request);
+    /// Queue a request for the remote server, once: a request already queued
+    /// or waiting for its answer is not sent again (a held button asks every
+    /// frame until the server's change comes back).
+    pub fn send_request(&mut self, request: pbd_core::net::protocol::Request) -> bool {
+        let Some(out) = self.outgoing.as_mut() else {
+            return false;
+        };
+        if out.queued.contains(&request) || out.waiting.contains(&request) {
+            return false;
         }
+        out.queued.push(request);
+        true
     }
 
-    /// The requests queued for the remote server.
+    /// The requests queued for the remote server, now waiting for answers.
     pub fn take_requests(&mut self) -> Vec<pbd_core::net::protocol::Request> {
-        self.outgoing
-            .as_mut()
-            .map(std::mem::take)
-            .unwrap_or_default()
+        let Some(out) = self.outgoing.as_mut() else {
+            return Vec::new();
+        };
+        let sent = std::mem::take(&mut out.queued);
+        out.waiting.extend(sent.iter().copied());
+        sent
+    }
+
+    /// The server answered the oldest request waiting (it answers in order).
+    pub fn answered(&mut self) {
+        if let Some(out) = self.outgoing.as_mut()
+            && !out.waiting.is_empty()
+        {
+            out.waiting.remove(0);
+        }
     }
 
     /// Hold drops as floating, as their lines would have: for a test that

@@ -267,8 +267,12 @@ pub fn receive(player: u32, message: ToClient, save: &mut WorldSave, applied: &m
                 _ => warn!("region {region:#x}'s snapshot could not be read"),
             }
         }
-        ToClient::Refused { id, reason } => info!("the host refused request {id}: {reason:?}"),
-        ToClient::Accepted { .. } | ToClient::Clock { .. } => {}
+        ToClient::Refused { id, reason } => {
+            save.answered();
+            info!("the host refused request {id}: {reason:?}");
+        }
+        ToClient::Accepted { .. } => save.answered(),
+        ToClient::Clock { .. } => {}
         ToClient::Rejected { reason } => warn!("the host closed the game: {reason:?}"),
         other => debug!("player {player}: from the host, not used yet: {other:?}"),
     }

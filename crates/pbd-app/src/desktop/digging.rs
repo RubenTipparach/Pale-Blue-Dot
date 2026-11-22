@@ -412,8 +412,9 @@ pub fn apply_edit(
                 return None;
             }
         };
-        save.send_request(request);
-        info!("sent to the host: {request:?}");
+        if save.send_request(request) {
+            info!("sent to the host: {request:?}");
+        }
         return None;
     }
     let mut moved = taken.slots;
