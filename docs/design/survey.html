@@ -236,26 +236,29 @@ const PHASES = [
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
   { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
-    { id: 'phase-3-npcs', step: 'NPCs', items: [
-      { id: 'phase-3-npcs.2', text: 'Their motion is not captured in a sequence yet.' } ] },
     { id: 'phase-3-trade', step: 'Coins and trade', items: [
-      { id: 'phase-3-trade.1', text: 'A new world\'s pack is empty, so the sell list is too.' },
-      { id: 'phase-3-trade.2', text: 'The lost-villager job has no icon yet.' } ] },
+      { id: 'phase-3-trade.2', text: 'The lost-villager job has no icon yet, and there is no button to abandon a job.' } ] },
     { id: 'phase-3-missions', step: 'Town missions', items: [
       { id: 'phase-3-missions.1', text: 'No map marker for a lost villager.' },
-      { id: 'phase-3-missions.2', text: 'Lighting the lamps at dusk is not posted yet.' },
-      { id: 'phase-3-missions.3', text: 'The lost villager and repair jobs are not in a screenshot yet.' } ] },
+      { id: 'phase-3-missions.2', text: 'Lighting the lamps at dusk is not posted yet.' } ] },
     { id: 'phase-3-roads', step: 'Roads', items: [
-      { id: 'phase-3-roads.1', text: '22 of 49 links between towns route; most of the rest cross the sea.' },
-      { id: 'phase-3-roads.2', text: 'Tufts stay under a road you lay until the world is reopened.' },
-      { id: 'phase-3-roads.3', text: 'No screenshot from a bridge or of the road lamps yet.' } ] },
+      { id: 'phase-3-roads.1', text: 'Towns start linked by roads; they should start unlinked, or at most two towns joined.' },
+      { id: 'phase-3-roads.2', text: 'Tufts stay under a road you lay until the world is reopened.' } ] },
     { id: 'phase-3-building', step: 'Carpentry and house building', items: [
       { id: 'phase-3-building.1', text: 'The stone footing has no texture yet.' },
-      { id: 'phase-3-building.2', text: 'Shadows are not clear in a screenshot yet.' },
-      { id: 'phase-3-building.3', text: 'No build camera; doors are open doorways.' },
+      { id: 'phase-3-building.3', text: 'No build camera (architecture mode); doors are open doorways and cannot be crafted.' },
       { id: 'phase-3-building.4', text: 'Build mode is on N (B opens breeding).' } ] },
-    { id: 'phase-3-logging', step: 'Logging', items: [
-      { id: 'phase-3-logging.1', text: 'No shot of a log drifting or resting yet (owed from a GPU).' } ] },
+  ], tests: [
+    { id: 'phase-3-test-npcs', step: 'NPCs', items: [
+      { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
+    { id: 'phase-3-test-missions', step: 'Town missions', items: [
+      { id: 'phase-3-test-missions.1', text: 'Screenshots of the lost villager and repair jobs, taken and handed in.' } ] },
+    { id: 'phase-3-test-roads', step: 'Roads', items: [
+      { id: 'phase-3-test-roads.1', text: 'Screenshots from a bridge and of the road lamps at night.' } ] },
+    { id: 'phase-3-test-building', step: 'Carpentry and house building', items: [
+      { id: 'phase-3-test-building.1', text: 'A house\'s shadows clear in a screenshot, by day.' } ] },
+    { id: 'phase-3-test-logging', step: 'Logging', items: [
+      { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
   ] },
   { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [], issues: [
     { id: 'phase-3b-launcher', step: 'Launcher', items: [
@@ -360,6 +363,7 @@ const DECIDED = [
 
 const ALL_QS = PHASES.flatMap((p) => p.qs);
 const issueCount = (p) => p.issues.reduce((n, g) => n + g.items.length, 0);
+const testCount = (p) => (p.tests || []).reduce((n, g) => n + g.items.length, 0);
 const answers = {}; // id -> { choice: number|null, text: string }
 const cards = {};   // id -> { root, opts, textarea, status }
 let db = null;
@@ -383,12 +387,12 @@ function render() {
   const root = document.getElementById('sections');
   const toc = document.getElementById('toc-list');
   for (const p of PHASES) {
-    const nq = p.qs.length, ni = issueCount(p);
+    const nq = p.qs.length, ni = issueCount(p), nt = testCount(p);
     const label = 'Phase ' + p.num + ' \u00b7 ' + p.name;
-    const counts = [nq ? nq + (nq === 1 ? ' question' : ' questions') : '', ni ? ni + (ni === 1 ? ' known issue' : ' known issues') : ''].filter(Boolean).join(', ');
+    const counts = [nq ? nq + (nq === 1 ? ' question' : ' questions') : '', ni ? ni + (ni === 1 ? ' known issue' : ' known issues') : '', nt ? nt + ' to test' : ''].filter(Boolean).join(', ');
     toc.append(el('li', { class: counts ? '' : 'quiet' },
       el('a', { href: '#' + p.id, text: label }), counts ? el('span', { class: 'toc-n', text: counts }) : null));
-    if (!nq && !ni) {
+    if (!nq && !ni && !nt) {
       // A phase with nothing open and no known issues is one quiet line.
       root.append(el('p', { class: 'phase-quiet', id: p.id }, el('span', { class: 'tag', text: 'Phase ' + p.num }), p.name + ': nothing open.'));
       continue;
@@ -403,6 +407,15 @@ function render() {
           el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
           el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-'), class: it.blocking ? 'blocking' : '' },
             it.blocking ? el('span', { class: 'blk', text: 'Blocking' }) : null, it.text, issueNote(it.id))))));
+      }
+    }
+    // The testing plan (owner, 2026-11-22: "place this in a section called testing plan"): shots and checks owed, not bugs.
+    if (nt) {
+      sec.append(el('h3', { class: 'ki-h', text: 'Testing plan' }));
+      for (const g of p.tests) {
+        sec.append(el('div', { class: 'ki', id: g.id },
+          el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
+          el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-') }, it.text, issueNote(it.id))))));
       }
     }
     root.append(sec);
