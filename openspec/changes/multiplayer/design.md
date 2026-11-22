@@ -487,6 +487,47 @@ whether it happens.
 after (a scripted dig run, both builds, the logs compared); the starter
 missions finish under `--capture`; an old save opens with its player as 0.
 
+### 19. Pack moves and pickups through the server (task 2.2, 4.2; 2026-11-22)
+
+The next two writers of design 17, after edits: the pack and the drops.
+Both change only the player's own slots and, for a pickup, a drop. The
+journal lines stay what they are (`pack`, `pick`), so saves do not change.
+
+**Pack moves.** The pack screen's `click` today returns the slots after a
+move. It becomes a resolver that returns the move itself, a `PackMove`:
+`Shift { from, to, count }` (put a held stack down), `Send { index }`
+(shift-click between hotbar and pack) or `Trash { index, count }` (a stack
+dropped on the trash). Applying a move is a core rule,
+`pbd_core::accept::pack`, which refuses a move from an empty slot or of
+more than the slot holds, and otherwise applies `Slots::shift`, `send` or
+`take`, the same calls the screen makes now. The server's
+`Server::pack` decides it and the store journals the slots after it (the
+`pack` line). A move that changes nothing is not sent. The protocol gains
+`Request::Pack`. The hold (a craft's cargo, `hold::store`) stays as it is
+until craft are shared (design 8's follow-up).
+
+**Pickups need the drops.** The server can only decide a pickup if it
+knows the drop: that it exists, what it holds and how many are left. Today
+the live drops are the app's (`Drops`), and the save keeps them only as
+they were at load. So the store keeps them: `WorldSave` holds the live
+drops by id, kept by the lines that already make and change them (a dig's
+drop, a toss, a pickup), and the store reads one with `Store::drop`.
+Expiry stays the app's for now: an expired drop is never asked about, and a
+load never restores one (`drops.rs`).
+
+The magnet, the pull and when a drop is close enough stay the client's
+(`drops::step`): they are motion, not stored state. When the client's step
+says a drop is picked, it asks the server, `Server::pick`, which gives the
+drop's item to the player's slots with the core's own give order and
+journals the `pick` line with what is left. A drop the store does not hold
+is refused (`Refusal::Gone`), which is what two players reaching one drop
+at once will need: the first pickup empties it and the second is refused.
+Reach is checked only for a remote player (task 8.7).
+
+**Checks:** a pack move and a pickup through the server write the same
+lines as straight through the save; a pickup of a drop that is gone is
+refused and writes nothing; two pickups of one drop give it once.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,
