@@ -51,3 +51,12 @@ has built them into the engine.
 - [x] 6.1 A floor over lower ground stands on a fieldstone footing down to it (design 8). Verify: `building::tests::a_floor_over_lower_ground_stands_on_a_footing`, and a capture of the house on the desert's terraces.
 - [x] 6.2 A player's building casts the sun's shadow as a town's does (design 9). Verify: `builds::tests::a_plot_casts_the_suns_shadow_but_its_flames_do_not`, and a capture.
 - [ ] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`.
+
+## 7. The owner's notes (2026-11-22; design B7 to B10)
+
+- [ ] 7.1 The footing's own texture, `footing.png`, in the stones' palette, with its manifest row, drawn by `tools/art/footing_texture.py` (design B7). Verify: a test holds its colours to the palette and its manifest row to the PNG; `--check` holds the PNG; a capture of the footing close up.
+- [ ] 7.2 The door: the good, its icon and its workbench recipe, 4 planks and 1 iron ingot (design B8). Verify: a core test of the recipe.
+- [ ] 7.3 The door piece: the `doorway` rule, the wall's dependant, the leaf in the plot's solids and the casing (design B8). Verify: core tests that a door is refused off a doorway and blocks the walker shut and not open; the casing and leaf cut.
+- [ ] 7.4 Hanging, opening and shutting a door in the game, on the durable path, the door taken from the pack and given back (design B8). Verify: an app test that a door placed and opened comes back open after a reload, and an old house's doorway comes back open with no leaf; captures of a door shut and open.
+- [ ] 7.5 Architecture mode on Z (design B9). Verify: an app test that the walker's camera is exactly as it was after the mode is left; captures over a house by day and at 22:30.
+- [ ] 7.6 Build mode on B, breeding on N, old rebinds moved (design B10). Verify: the bindings' clash test, a test that B opens build mode and N breeding, and a test that an old rebind of either is kept.

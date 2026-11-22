@@ -283,7 +283,7 @@ plot's pieces, so the same pieces always cut the same way.
 
 ### B5. The game side
 
-- **N** on foot opens and closes build mode. The design named B, which
+- **N** on foot opens and closes build mode (moved to B on 2026-11-22, B10). The design named B, which
   was free on foot when it was written; it is the breeding screen's key
   now, so build mode takes N from the risk note's own list of free keys
   (I, K, N, O, U, Y; recommendation taken, ask only with screenshots). The
@@ -315,11 +315,175 @@ plot's pieces, so the same pieces always cut the same way.
 
 ### B6. Not built in this pass
 
-- The build camera (task 4.5): orbit, pan, zoom, double-click to walk and
-  the cutaway. It is a camera of its own beside the walker's and is left
-  for a later pass.
+- The build camera (task 4.5) as first planned: double-click to walk and
+  the cutaway. The orbit, pan, zoom and a build layer are built as
+  architecture mode (B9).
 - Filling a blueprint piece by piece in the game (the core test does it;
   the game fills it whole, as free building allows).
 - Building costs (decision 7: free only).
 - Frame cost: not measured in the cloud (lavapipe); `can_place` is timed in
   a core test instead (task 5.1).
+
+## The owner's notes on phase 3 (2026-11-22)
+
+The owner, on the survey's known issues for this step, then "continue
+build":
+
+- "The stone footing has no texture yet": "add one" (B7);
+- "No build camera; doors are open doorways": "need to craft door, add
+  crafting camera \"architecture mode\"" (B8, B9);
+- "Build mode is on N (B opens breeding)": "fix it" (B10).
+
+### B7. The footing's own texture
+
+The footing (design 8) was cut in `fieldstone`, the fieldstone kit's wall:
+loose round field stones in a dark mortar, drawn for a wall seen from a
+lane. Under a floor, a storey's height of it reads as a grey smear, which
+is what the owner saw. It gets a texture of its own, `footing`:
+
+- 32 x 32 in `assets/textures/settlement/`, as every town texture is, with
+  its row in that folder's `manifest.ron` (`repeat_m` 2.0, so four courses
+  stand in a metre and a half);
+- dressed blocks laid in courses, each course's joints staggered from the
+  one under it, the blocks a little uneven in height and shade, the mortar
+  recessed and darker, a damp darker course at the foot of each repeat;
+- every colour taken from the stone the town kits already use
+  (`fieldstone`, `stone` and `rubble`), so it sits in their palette and
+  in the ground's; no outline and no contrast stronger than theirs;
+- drawn in code by `tools/art/footing_texture.py`, deterministic, with
+  `--check`; a test holds every colour to the three stones' palette, and the
+  manifest and the PNG together;
+- sampled nearest, as every town texture is (`towns::texture`).
+
+`building::cut::FOOTING` names it. Only the footing changes; the stone kit's
+walls keep `fieldstone`.
+
+### B8. Doors: crafted, hung in a doorway, opened and shut
+
+**The item.** A door is a good, `door` (a stack of 8), made at the
+workbench from **4 planks and 1 iron ingot** in 4 s: the leaf is planks, the
+fitting (two strap hinges and a pull) is iron. Iron over bronze because the
+forge's first smelt of mixed ore gives iron directly, where bronze takes a
+second step (copper and tin); a door should come before a bronze pickaxe.
+Recommendation taken (ask only with screenshots). Its icon is drawn by
+`tools/gen_item_icons.py`, an inventory icon with the 1 px outline.
+
+**The piece.** `Shape::Door { a, b, layer }`, class `Door`, on the same
+edge and layer as a wall, in its own slot (`door:a:b:layer`), so a wall and
+its door are two records. A wall with a doorway (`Opening::Door`) is still a
+doorway: open, with no leaf.
+
+- **Rule `doorway`:** a door goes only where a wall with a doorway stands
+  on its edge, at its layer ("Needs a doorway").
+- **Removal:** a wall with a door in it is not taken away before the door
+  ("Remove the door first").
+- **Placing** takes a door from the pack: the piece and the slots go into
+  the journal as one line (`WorldSave::store_with_hands`). With none
+  carried, nothing is placed and the line under the crosshair says "No door
+  in the pack". Taking a door away gives it back.
+- **In the palette** the Door slot does both jobs: aimed at an edge with a
+  doorway and no door, its ghost is the door; aimed anywhere else, the
+  doorway as before.
+
+**Opening and shutting.** F (interact), in reach of the leaf as a town's
+door is (`towns::DOOR_REACH_M`, in front of the eye), offers "Door", and
+opens or shuts it. The state is the towns' own door record (`door`, schema
+1, open or not, no record shut), at the id `building::door_state_id(piece)`:
+the piece's id with the top bit set, past every town door's id (a site's
+building over its door number never reaches 2^56). The record is written
+before the leaf moves; a refused save leaves the door as it was. The leaf
+swings a quarter turn at the towns' swing speed. Shut, the leaf is a solid
+of the plot (`BuildingSolids::doors`), so the walker cannot pass; open, it
+is none. Taking the door away writes it shut, so a door hung there later
+starts shut.
+
+**Old houses keep their doorways.** Nothing is migrated: a saved wall with
+`Opening::Door` has no `Door` piece, so it is cut as the doorway it was, and
+stays open until the player hangs a door in it. Blueprints still fill
+doorways, not doors: building is free, doors are crafted.
+
+**The model.** One shaped form, not boxes:
+
+- the **leaf** is one slab cut from a chamfered outline (the corners
+  clipped), its faces bevelled into its edges all round, drawn in its own
+  texture, `door` (32 x 64): four vertical planks, two ledges and a brace,
+  the iron strap hinges on the hinge side and a ring pull on the other,
+  painted into the face rather than modelled (CLAUDE.md, "No obvious
+  primitives": detail painted into the surface). Its colours are the
+  `plank`, `timber` and `iron` textures';
+- the **frame** is one U-shaped casing lining the doorway's two jambs and
+  its head, cut as a single outline through the wall's thickness, its
+  inner edge chamfered, in the kit's wall edge texture so it belongs to the
+  wall;
+- the leaf hangs on the jamb on the side away from the room's floor (or
+  cell `a`'s side where both or neither are floored) and swings into the
+  room.
+
+Both are children of the plot's root, so they take the field and the
+terrain's sun as the walls do (`LitByField`, `LitLikeTerrain`).
+
+### B9. Architecture mode: the build camera
+
+**Z** in build mode turns architecture mode on and off (B leaves build mode
+and architecture mode together). The camera pulls up and back from the
+walker's eye, over the build site, and the pointer is freed: the cursor is
+the aim.
+
+| Control | In architecture mode |
+| --- | --- |
+| Z | back to the walker's own view |
+| Move keys (W A S D) | pan over the site, along the camera's heading |
+| Right drag | orbit: turn round the site and tilt (20 to 85 degrees down) |
+| Ctrl + wheel | zoom (6 to 60 m) |
+| Wheel, Shift + wheel | as in build mode: turn a piece; the next blueprint |
+| Page Up / Page Down | the build layer up or down a storey (three layers) |
+| Left click | place the ghost at the cursor |
+| Right click (no drag) | remove the piece at the cursor |
+| Number row, K | as in build mode |
+
+- **The site** is where the walker's aim was when the mode opened (or 8 m
+  ahead of the eye if it was on nothing), and **the build layer** starts as
+  the floor layer there. The cursor's ray is marched to the ground or a
+  piece as the walker's aim is, but no further than the build layer's
+  sphere: a ray that reaches the build layer in open air lands there, so a
+  floor or wall can be put on an upper storey by pointing at it.
+- **It moves smoothly.** The shown eye and look ease toward the target
+  (a time constant of 0.12 s), so entering, panning, orbiting and zooming
+  glide. The walker's rule of raw mouse look (CLAUDE.md) is for walking and
+  is not this camera's.
+- **The walker stands still.** While it is on, the walker reads no keys and
+  no mouse, as under a menu (`controls::Pointer`), so its position, heading
+  and pitch are exactly as they were.
+- **Returning restores the walker's camera exactly.** Leaving the mode
+  hands the pointer back (the menu's edge rule) and the walker's camera is
+  written from the walker's own pose on the same frame: nothing is eased
+  back, and nothing of the build camera is left in it.
+- **Positions** are kept as a planet direction and a radius in f64 and put
+  in the local frame through the origin (`SimOrigin::at`), so a rebase
+  moves nothing (CLAUDE.md, floating origin).
+
+The camera's pose, its easing and the cursor's ray are in
+`pbd_app::build_view`; the walker reads only its on flag.
+
+### B10. Keys: build mode on B, breeding on N
+
+The owner's P3 ("B for now") and "fix it": build mode moves to **B** on
+foot. B is the brake in flight and the bail in a canoe, which are never live
+with the walker (the bindings' contexts), so nothing clashes.
+
+Breeding needs a new key. Every binding was checked (`controls::BINDINGS`
+and every `KeyCode` a system reads): on foot the free letters were E, N, Q
+(read by the pack's toss, though not listed), U, X, Y and Z. E is kept free
+for the roll in space (owner, 2026-11-16), Q is the toss, and U and Y are
+the raft's logs. **N** is taken for breeding: it is the key build mode
+gives up, beside B on the keyboard, read by nothing else in any context, so
+the set of keys the game reads does not grow. Architecture mode takes Z
+(B9) and the build layer Page Up and Page Down, all free on foot.
+Recommendations taken (ask only with screenshots).
+
+A player who rebound breeding (`on_foot:KeyB`) or build mode
+(`building:KeyN`) keeps that key: the settings file's old slot names are
+moved to the new ones (`on_foot:KeyN`, `building:KeyB`) when they are read,
+as the interact key's were. Every on-screen key name is printed from the
+table, so the controls page, `--help` and the hints follow the table with no
+text of their own.
