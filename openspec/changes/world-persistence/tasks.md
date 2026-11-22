@@ -28,7 +28,7 @@ Moved to `openspec/changes/exact-cell-keys`, which lands before this change.
 
 ## 5. Regions and checkpoints
 
-- [ ] 5.1 The region of a key by shifts, and region snapshots with their last sequence number. Verify: tests that every finest cell's region contains it, and that a snapshot round-trips.
+- [x] 5.1 (Built 2026-11-21 for `multiplayer`: the region of a key is `cell_key::region` (`region-cell-keys` 2.1); a snapshot is `net::ledger::Ledger::snapshot`, the region's canonical bytes (`net::digest`) as of its last sequence, read back by `net::digest::decode` and `snapshot_edits`. `every_cells_region_contains_it`, `a_regions_snapshot_round_trips`, `each_region_numbers_its_own_changes`. The sequence is not yet written to disk: that is the region files of 5.2 and `region-cell-keys` 2.4.) The region of a key by shifts, and region snapshots with their last sequence number. Verify: tests that every finest cell's region contains it, and that a snapshot round-trips.
 - [ ] 5.2 The segmented journal and the four-step checkpoint on the writer thread, with a test-only fault hook. Verify: the writer is killed at each step in turn, and every reload holds every committed entry exactly once.
 - [ ] 5.3 Loading by region, ahead of the fine set, with held entries for regions not yet loaded. Verify: a synthetic save with a million edits loads reading only nearby regions, the load time is recorded in the risk note, and a far-side flight over it never builds a fine cell before its region.
 

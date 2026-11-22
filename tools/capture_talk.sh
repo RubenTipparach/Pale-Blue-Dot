@@ -26,4 +26,13 @@ ONLY=${ONLY:-all}
 [ "$ONLY" = all -o "$ONLY" = talk ] && shot talk "120:KeyF" $STALL --frames 170
 [ "$ONLY" = all -o "$ONLY" = trade ] && shot trade "120:KeyF,140:press:trade,160:press:sell" $STALL --frames 200
 [ "$ONLY" = all -o "$ONLY" = board ] && shot board "120:KeyF,140:press:work" $SMITH --frames 190
+# The trade columns scroll and filter (design 38b, 38c): the merchant's nine
+# goods in a window of seven, at the top, one wheel notch down over BUY, and
+# the BUY column filtered to food. `wheel:<list>:<notches>` turns the wheel
+# over that list as the wheel would; `press:buy-food` presses its tab.
+if [ "$ONLY" = all -o "$ONLY" = scroll ]; then
+  shot trade-scroll-top "120:KeyF,140:press:trade" $STALL --frames 190
+  shot trade-scroll-partway "120:KeyF,140:press:trade,170:wheel:buy:-1" $STALL --frames 200
+  shot trade-filter-food "120:KeyF,140:press:trade,170:press:buy-food" $STALL --frames 200
+fi
 true

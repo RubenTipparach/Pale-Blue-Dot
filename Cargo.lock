@@ -3782,6 +3782,7 @@ dependencies = [
  "kira",
  "naga",
  "pbd-core",
+ "pbd-server",
  "proc-macro2",
  "quote",
  "ron",
@@ -3800,6 +3801,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "pbd-server"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.10",
+ "pbd-core",
 ]
 
 [[package]]

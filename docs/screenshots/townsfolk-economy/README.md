@@ -43,3 +43,28 @@ slot well, its 16 px icon on the well's floor, as in the pack and the hotbar
 (the board's rows had no icon before). The panels are wider by the wells
 (trade 490, board 450 native px). `talk.jpg`, `trade.jpg` and `board.jpg`
 stay as the frames the owner approved.
+
+## Long lists scroll, and each column filters (design 38b and 38c, 2026-11-22)
+
+`trade-scroll-top.jpg`, `trade-scroll-partway.jpg` and `trade-filter-food.jpg`
+are `tools/capture_talk.sh` with `ONLY=scroll` (lavapipe, frame time not
+measured), after the owner's "opt for a scroll bar incase theres lots of
+products" and "some filtering on each side would be nice: food, organics,
+raw materials, tools, etc" (the plan approved: "approved"). Played as
+before: F on Linenleigh's merchant, TRADE pressed; a `wheel:buy:-1` step
+turns the wheel one notch over the BUY column as the wheel would, and
+`press:buy-food` presses the BUY column's Food tab.
+
+
+| Shot | What it shows |
+| --- | --- |
+| `trade-scroll-top.jpg` | Linenleigh's merchant sells nine goods; the BUY column shows seven (rope to fried egg) in its fixed window, with the stone scroll bar beside it, its thumb seven ninths of the track at the top. Above the list, ALL (chosen), Food and Goods: the merchant's goods stand on those two shelves. The SELL column has nothing (a new world's pack is empty), so no tabs and no bar, but the same height: "Nothing they want" lines up with the first row. PURSE and BACK under both. |
+| `trade-scroll-partway.jpg` | The same, one wheel notch down over BUY: grilled fish to roast meat, the rope gone off the top, the thumb moved down; the panel the same height. |
+| `trade-filter-food.jpg` | The Food tab pressed: the seven dishes, from the top; seven rows fit the window, so there is no bar. |
+
+Not in these frames: the job board's scroll (Linenleigh's board posts three
+jobs, which fit; the mockup's `v13-board-*` shows it overflowing), a drag of
+the thumb (a capture has no pointer drag; the mockup's
+`v13-trade-dragged-night` shows it), and the tooltip (a capture holds the
+pointer, so nothing is hovered). The thumb is 4 px wide at 1x, a thin bar
+at this scale.

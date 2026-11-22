@@ -27,6 +27,7 @@ mod overlay_ui;
 mod pack;
 mod repro;
 mod scene;
+mod scroll_list;
 mod showcase;
 mod slots;
 mod sounds;
@@ -2066,7 +2067,7 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
-            (digging::dig_and_place, cracks::show)
+            (digging::server_worms, digging::dig_and_place, cracks::show)
                 .chain()
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,

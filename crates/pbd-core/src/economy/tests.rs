@@ -3,7 +3,7 @@ use super::follow::{self, GAP_M};
 use super::goodwill::{GOODWILL_KIND, GOODWILL_SCHEMA, Goodwill};
 use super::jobs::{Board, Job, JobKind, JobRefused, JobsConfig, TakenJobs, Town, scoped};
 use super::trade::{MARKET_KIND, MARKET_SCHEMA, Market, Refused, TradeConfig, Trader};
-use super::values::{Values, item_of, known_codes, trade_code};
+use super::values::{Shelf, Values, item_of, known_codes, trade_code};
 use crate::daylight::DAY_S;
 use crate::goods::Good;
 use crate::inventory::{CARRIED, Item, Slots};
@@ -727,4 +727,43 @@ fn every_town_has_a_trader_and_a_giver() {
     let one = ["lookout"];
     assert_eq!(j.keepers(&one).map(|k| (k.trader, k.giver)), Some((0, 0)));
     assert_eq!(j.keepers(&[]), None);
+}
+
+/// The trade panel's filters (`townsfolk` design 38c): every good stands on
+/// one shelf, read from its group; a column's tabs are the shelves its
+/// goods are on, in tab order; ALL lists everything and a shelf only its
+/// own; and every shelf's picture is a good of that shelf.
+#[test]
+fn the_trade_filters_shelve_every_good_by_its_group() {
+    let values = values();
+    for code in values.codes() {
+        assert!(values.shelf(code).is_some(), "{code} has no shelf");
+    }
+    assert_eq!(values.shelf("grilled-fish"), Some(Shelf::Food));
+    assert_eq!(values.shelf("apple"), Some(Shelf::Food));
+    assert_eq!(values.shelf("log"), Some(Shelf::Organics));
+    assert_eq!(values.shelf("wool"), Some(Shelf::Organics));
+    assert_eq!(values.shelf("egg"), Some(Shelf::Food), "eaten: food");
+    assert_eq!(values.shelf("milk"), Some(Shelf::Food));
+    assert_eq!(values.shelf("fertile-egg"), Some(Shelf::Organics));
+    assert_eq!(values.shelf("iron-ingot"), Some(Shelf::Raw));
+    assert_eq!(values.shelf("stone"), Some(Shelf::Raw));
+    assert_eq!(values.shelf("tool:pickaxe"), Some(Shelf::Tools));
+    assert_eq!(values.shelf("rope"), Some(Shelf::Goods));
+    assert_eq!(values.shelf("no-such-good"), None);
+    for shelf in Shelf::ALL {
+        assert_eq!(values.shelf(shelf.picture()), Some(shelf), "{shelf:?}");
+    }
+    let column = ["rope", "grilled-fish", "log", "flatbread", "planks"];
+    assert_eq!(
+        values.shelves_of(column),
+        vec![Shelf::Food, Shelf::Organics, Shelf::Goods],
+        "only shelves with goods, in tab order, once each"
+    );
+    let food: Vec<&str> = column
+        .into_iter()
+        .filter(|c| values.on_shelf(c, Some(Shelf::Food)))
+        .collect();
+    assert_eq!(food, ["grilled-fish", "flatbread"]);
+    assert!(column.iter().all(|c| values.on_shelf(c, None)));
 }

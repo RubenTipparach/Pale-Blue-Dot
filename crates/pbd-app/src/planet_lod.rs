@@ -355,6 +355,19 @@ pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
     })
 }
 
+/// What [`FineSet::apply`] did with an edit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Applied {
+    /// Its column was written (and adopted, if it was past the edge).
+    Written,
+    /// The column already held it, or refused the layer (bedrock).
+    Unchanged,
+    /// The tier has no record for the cell: the next build reads the edits.
+    Beyond,
+    /// The cell needed adopting and the tier is full.
+    Full,
+}
+
 /// The fine levels around one anchor, with the finest level's neighbour
 /// table for the walker's contact.
 #[derive(Clone)]
@@ -589,6 +602,43 @@ impl FineSet {
         // re-baked (`mark_sea`): a pit dug below sea level is dry until the
         // sea comes in.
         true
+    }
+
+    /// APPLY (`edit-pipeline` 5): bring the tier round to one accepted edit,
+    /// whoever accepted it (this player's click, a world process, a server).
+    /// It cannot refuse: the edit is already the world's. `edits` hold it.
+    ///
+    /// A cell the tier has a column for has its layer written; a cell past
+    /// the tier's edge is adopted, as a click past the edge is; a cell the
+    /// tier does not reach at all is left to the next build, which reads
+    /// `edits`. Not the light or the sea's sheet, which the caller re-bakes
+    /// once for however many edits it applied ([`FineSet::finish_edits`]).
+    pub fn apply(&mut self, edit: pbd_core::edits::Edit, edits: &Edits) -> Applied {
+        let Some(record) = self.levels[3].iter().position(|c| c.key() == edit.cell) else {
+            return Applied::Beyond;
+        };
+        let mut adopted = false;
+        if self.columns.column(record).is_none() {
+            let Some(column) = self.adoptable(record, edits) else {
+                return Applied::Beyond;
+            };
+            if !self.adopt(record, column) {
+                return Applied::Full;
+            }
+            adopted = true;
+        }
+        if self.write_layer(record, usize::from(edit.layer), edit.material, edits) || adopted {
+            Applied::Written
+        } else {
+            Applied::Unchanged
+        }
+    }
+
+    /// After one or more [`FineSet::apply`]: the light re-baked and the sea's
+    /// sheet marked, once.
+    pub fn finish_edits(&mut self) {
+        self.columns.relight();
+        self.mark_sea();
     }
 
     /// Bring the glowing mushrooms' bits round to the picks as they stand
@@ -2842,6 +2892,104 @@ mod tool_crafting_ground {
 #[cfg(test)]
 mod landing_replay {
     use super::*;
+
+    /// `edit-pipeline` 5: applying a sequence of edits in order gives the
+    /// same tier whether each is applied and relit on its own or all are
+    /// applied and relit once, and the same columns as a tier built from cold
+    /// with them: the property a shared world rests on, and the one a replay
+    /// after a server's order needs.
+    #[test]
+    fn a_sequence_of_edits_applied_in_order_is_the_tier_built_with_them() {
+        use pbd_core::edits::Edit;
+        use pbd_core::terrain::Material;
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let set = generate_fine(anchor, &settings, &Edits::new());
+        let dry: Vec<usize> = (0..set.levels[3].len())
+            .filter(|&record| {
+                let slot = set.columns.slots[record];
+                slot != usize::MAX
+                    && set.columns.gpu_records()[slot].more[3] & column::RIM_BIT == 0
+                    && set.columns.column(record).is_some_and(|c| {
+                        c.surface().is_some_and(|top| {
+                            c.material(top + 1) == Material::Air
+                                && (0..pbd_core::column::LAYERS).all(|l| !c.material(l).is_water())
+                        })
+                    })
+            })
+            .step_by(131)
+            .take(8)
+            .collect();
+        assert!(dry.len() >= 6, "{}", dry.len());
+        // Digs, places on top, a lamp, and one cell dug twice and refilled.
+        let mut sequence = Vec::new();
+        for (n, &record) in dry.iter().enumerate() {
+            let cell = set.levels[3][record].key();
+            let top = set.columns.column(record).unwrap().surface().unwrap();
+            let edit = |layer: usize, material| Edit {
+                cell,
+                layer: layer as u16,
+                material,
+            };
+            match n % 3 {
+                0 => sequence.extend([edit(top, Material::Air), edit(top - 1, Material::Air)]),
+                1 => sequence.extend([
+                    edit(top + 1, Material::Stone),
+                    edit(top + 2, Material::Torch),
+                ]),
+                _ => sequence.extend([
+                    edit(top, Material::Air),
+                    edit(top, Material::Dirt),
+                    edit(top - 1, Material::Air),
+                ]),
+            }
+        }
+        let mut all = Edits::new();
+        for &edit in &sequence {
+            all.set(edit);
+        }
+        // One at a time, as clicks come.
+        let mut stepwise = set.clone();
+        let mut so_far = Edits::new();
+        for &edit in &sequence {
+            so_far.set(edit);
+            assert_eq!(stepwise.apply(edit, &so_far), Applied::Written, "{edit:?}");
+            stepwise.finish_edits();
+        }
+        // All of them, relit once, as a server's batch comes.
+        let mut batch = set.clone();
+        for &edit in &sequence {
+            batch.apply(edit, &all);
+        }
+        batch.finish_edits();
+        let bytes = |s: &FineSet| bytemuck::cast_slice::<_, u8>(s.columns.gpu_records()).to_vec();
+        assert!(bytes(&stepwise) == bytes(&batch), "the records agree");
+        // And from cold: a tier generated with the edits.
+        let cold = generate_fine(anchor, &settings, &all);
+        for record in 0..set.levels[3].len() {
+            let (Some(a), Some(b)) = (stepwise.columns.column(record), cold.columns.column(record))
+            else {
+                continue;
+            };
+            let slot = stepwise.columns.slots[record];
+            for layer in 0..pbd_core::column::LAYERS {
+                assert_eq!(
+                    a.material(layer),
+                    b.material(layer),
+                    "record {record} layer {layer}"
+                );
+                assert_eq!(
+                    stepwise.columns.light_at(slot, layer),
+                    batch.columns.light_at(slot, layer),
+                    "record {record} layer {layer} light"
+                );
+            }
+        }
+        for &record in &dry {
+            let key = set.levels[3][record].key();
+            assert!(stepwise.missing_edits(&all).iter().all(|m| m.0 != key));
+        }
+    }
 
     /// `edit-pipeline` 1b, the owner's vanished lamp (2026-11-16: "I placed a
     /// lamp but it somehow despawned"). A set is built from the edits as they

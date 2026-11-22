@@ -71,15 +71,27 @@ the only code this change has produced so far.
 - [ ] Measure the bounded pass against the 9.3 ms full one, same instrument.
 
 ## 5. Accept, sequence, apply - the seam multiplayer needs
-- [ ] Split `apply_edit`: an ACCEPT that validates, spends the item and writes
+- [x] (Built 2026-11-21. ACCEPT: `pbd_core::accept::edit` with `yield_of`,
+      design "Accept as a core rule"; the save numbers the edit in its region,
+      `WorldSave::accept_sequenced` over `pbd_core::net::ledger::Ledger`.
+      APPLY: `FineSet::apply`, then `FineSet::finish_edits` once, which
+      `apply_edit` calls and which takes no source.)
+      Split `apply_edit`: an ACCEPT that validates, spends the item and writes
       the log for a sequence, and an APPLY that takes a sequenced edit and
       mutates the derived state. The apply must not know where the edit came
       from.
-- [ ] The local click runs both, optimistically, with its own sequence.
-- [ ] A test that applying a sequence of edits in order, from cold, gives the
-      same tier as having applied them one at a time - which is the property a
-      shared world rests on and the one a replay after a supersede needs.
-- [ ] Nothing about a socket. The seam is the deliverable.
+- [x] (Built 2026-11-21: `apply_edit` runs the core ACCEPT, the save's
+      sequence and `FineSet::apply` in one go; the sequence is the save's, as
+      a server's will be.) The local click runs both, optimistically, with
+      its own sequence.
+- [x] (Built 2026-11-21:
+      `planet::lod::landing_replay::a_sequence_of_edits_applied_in_order_is_the_tier_built_with_them`:
+      each edit applied and relit alone, all applied and relit once, and a tier
+      generated with them agree.) A test that applying a sequence of edits in
+      order, from cold, gives the same tier as having applied them one at a
+      time - which is the property a shared world rests on and the one a
+      replay after a supersede needs.
+- [x] Nothing about a socket. The seam is the deliverable.
 
 ## 6. Only then, a thread if it is still worth it
 - [ ] If the bounded re-bake still costs more than a frame can spare, move that
