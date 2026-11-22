@@ -1,14 +1,17 @@
 // Mission Tree mockup: the starter-missions tree (openspec/changes/starter-missions/design.md,
-// "Missions are a tree that unlocks the tech" and "The full tree"), drawn as the game's Missions
-// screen. Nothing moves until the viewer drags, zooms, steps or presses Play.
+// "Missions are a tree that unlocks the tech" and "The full tree") and, on the Town tab, the town
+// tree (openspec/changes/town-missions-tree/design.md, decision 2), each drawn as the game's
+// Missions screen. The open tree is the page's #anchor (#starter, #town). Nothing moves until the
+// viewer drags, zooms, steps or presses Play.
 (function () {
   "use strict";
   const IMG = "mission-tree/items/";
   const UI = "mission-tree/ui/";
+  const TREE = location.hash.slice(1) === "town" ? "town" : "starter";
 
   // ---- what a mission can unlock: recipes and stations (a code the recipe list shows), or a skill
   // or branch (no recipe). new = a recipe the game does not have yet.
-  const U = {
+  const S_U = {
     "stone-axe": { name: "Stone axe", icon: "stone-axe", kind: "recipe" },
     felling: { name: "Felling", icon: "log", kind: "skill" },
     planks: { name: "Planks", icon: "planks", kind: "recipe" },
@@ -40,7 +43,7 @@
     lanterns: { name: "Lanterns (when they get a recipe)", icon: "lantern_post", kind: "recipe" },
   };
 
-  const BRANCHES = [
+  const S_BRANCHES = [
     { key: "trunk", name: "0 · HANDS TO TOOLS" },
     { key: "fishing", name: "1 · FISHING" },
     { key: "farming", name: "2 · FARMING" },
@@ -59,7 +62,7 @@
   // multiple child nodes. if something depends on something to be done, simply dont unlock it until
   // the dependent thing is done"). needs: the one parent, the only line drawn. after: missions that
   // must also be done before it opens, never drawn. col/row are worked out from the tree below.
-  const M = [
+  const S_M = [
     // 0. Trunk
     { id: "gather", b: "trunk", col: 0, row: 3, icon: "hand", title: "Gather by hand", needs: [],
       obj: [o("gather fibre", 8, "gather 8 fibre by hand"), o("gather stone", 9, "gather 9 stone by hand"), o("gather soil", 6, "gather 6 soil by hand")],
@@ -196,6 +199,106 @@
       help: "Board a rowboat or a cog at a town's quay (E) and head out." },
   ];
 
+  // ---- the town tree (town-missions-tree design 2): a trunk and five branches, a strict tree, every
+  // mission paying coins. Its unlocks are recipes and stations the game does not have yet (NEW).
+  const T_U = {
+    grinder: { name: "Grinder", icon: "grinder", kind: "station", new: true },
+    "crushed-stone": { name: "Crushed stone", icon: "crushed-stone", kind: "recipe", new: true },
+    mixer: { name: "Mixer", icon: "mixer", kind: "station", new: true },
+    "mixed-gravel": { name: "Gravel (at the mixer)", icon: "gravel", kind: "recipe", new: true },
+    "survey-stakes": { name: "Survey stakes", icon: "survey-stakes", kind: "recipe", new: true },
+    wheel: { name: "Wheel", icon: "wheel", kind: "recipe", new: true },
+    "hand-cart": { name: "Hand cart", icon: "hand-cart", kind: "recipe", new: true },
+    "horse-cart": { name: "Horse cart", icon: "horse-cart", kind: "recipe", new: true },
+  };
+  const T_BRANCHES = [
+    { key: "town", name: "0 · TOWN" },
+    { key: "trade", name: "1 · TRADE" },
+    { key: "jobs", name: "2 · JOBS" },
+    { key: "roads", name: "3 · ROADS" },
+    { key: "carts", name: "4 · CARTS" },
+    { key: "houses", name: "5 · HOUSES & LOGS" },
+  ];
+  const T_M = [
+    // 0. Town: opens the first time you reach a town
+    { id: "meet", b: "town", icon: "talk", title: "Meet the townsfolk", needs: [], coins: 5,
+      obj: [o("talk to people", 3, "talk to 3 people", true)], unl: [], help: "Walk up to people in town and talk with F." },
+    { id: "first-trade", b: "town", icon: "coin", title: "Buy and sell", needs: [["meet"]], coins: 10,
+      obj: [o("sell goods", 5, "sell 5 goods to a trader"), o("buy a good", 1, "buy 1 good from a trader")], unl: [],
+      help: "Talk to a town's trader and pick TRADE." },
+    { id: "first-job", b: "town", icon: "board", title: "A job from the board", needs: [["first-trade"]], coins: 15,
+      obj: [o("hand in a job", 1, "take a job from a board, do it and hand it in", true)], unl: ["grinder"],
+      help: "Take a job from a town's board, do it and hand it in." },
+
+    // 1. Trade
+    { id: "trade-more", b: "trade", icon: "coin", title: "Trade in earnest", needs: [["first-job"]], coins: 20,
+      obj: [o("sell goods", 20, "sell 20 goods in any town")], unl: [], help: "Sell what you grow, catch and make." },
+    { id: "deliver", b: "trade", icon: "parcel", title: "Carry a parcel", needs: [["trade-more"]], coins: 20,
+      obj: [o("deliver a parcel", 1, "deliver 1 parcel to another town")], unl: [], help: "Take a delivery job and carry the parcel to the town it names." },
+    { id: "goodwill", b: "trade", icon: "heart", title: "A friend in town", needs: [["deliver"]], coins: 25,
+      obj: [o("goodwill step", 1, "reach goodwill step 1 in any town", true)], unl: [], help: "Jobs and fair trade make a town like you." },
+
+    // 2. Jobs
+    { id: "three-jobs", b: "jobs", icon: "board", title: "Three jobs", needs: [["first-job"]], coins: 15,
+      obj: [o("hand in jobs", 3, "hand in 3 jobs", true)], unl: [], help: "Boards post new jobs every few days." },
+    { id: "lost", b: "jobs", icon: "villager", title: "Bring them home", needs: [["three-jobs"]], coins: 30,
+      obj: [o("walk a villager home", 1, "find a lost villager and walk them home")], unl: [], help: "Find them, talk with F, and lead them back inside the walls." },
+    { id: "mend", b: "jobs", icon: "planks", title: "Mend a building", needs: [["lost"]], coins: 25,
+      obj: [o("mend a wall", 1, "mend 1 broken wall with planks")], unl: [], help: "Bring two planks to the gap and press F." },
+    { id: "lamps", b: "jobs", icon: "lantern_post", title: "Light the lamps", needs: [["mend"]], coins: 15, pend: true,
+      obj: [o("light town lamps", 4, "light 4 town lamps at dusk")], unl: [], help: "Light the town's lamps as the sun goes down." },
+
+    // 3. Roads (townsfolk design 39 to 41)
+    { id: "grinder", b: "roads", icon: "grinder", title: "Build a grinder", needs: [["first-job"]], coins: 10,
+      obj: [o("craft a grinder", 1, "craft a grinder at the workbench", true), o("place it", 1, "place the grinder")], unl: ["crushed-stone"],
+      help: "Make a grinder at the workbench and set it down." },
+    { id: "crush", b: "roads", icon: "crushed-stone", title: "Crush stone", needs: [["grinder"]], coins: 10,
+      obj: [o("make crushed stone", 9, "make 9 crushed stone at the grinder", true)], unl: ["mixer"],
+      help: "Put stone in the grinder (F)." },
+    { id: "mixer", b: "roads", icon: "mixer", title: "Build a mixer", needs: [["crush"]], coins: 10,
+      obj: [o("craft a mixer", 1, "craft a mixer at the workbench", true), o("place it", 1, "place the mixer")], unl: ["mixed-gravel"],
+      help: "Make a mixer at the workbench and set it down." },
+    { id: "gravel", b: "roads", icon: "gravel", title: "Mix gravel", needs: [["mixer"]], coins: 10,
+      obj: [o("make gravel", 8, "make 8 gravel at the mixer from crushed stone and sand", true)], unl: ["survey-stakes"],
+      help: "Put crushed stone and sand in the mixer (F)." },
+    { id: "mark", b: "roads", icon: "survey-stakes", title: "Mark a road", needs: [["gravel"]], coins: 10,
+      obj: [o("drive stakes", 2, "drive 2 survey stakes", true), o("mark cells", 8, "mark 8 cells for paving", true)], unl: [],
+      help: "Hold survey stakes and drive one at each turn of your road." },
+    { id: "pave", b: "roads", icon: "stone-shovel", title: "Pave it", needs: [["mark"]], coins: 30,
+      obj: [o("pave cells", 8, "pave 8 marked cells with gravel", true)], unl: ["wheel"],
+      help: "Hold the shovel, carry gravel, and press F on a marked cell." },
+    { id: "join", b: "roads", icon: "lantern_post", title: "Join a town", needs: [["pave"]], coins: 60,
+      obj: [o("pave to a town or road", 1, "pave a road that joins a town or a road of the world", true)], unl: [],
+      help: "Mark and pave until your road meets a town or a road." },
+
+    // 4. Carts (land-transport design 9, 10)
+    { id: "wheels", b: "carts", icon: "wheel", title: "Make wheels", needs: [["pave"]], coins: 10,
+      obj: [o("craft wheels", 2, "craft 2 wheels at the workbench", true)], unl: ["hand-cart"], help: "Wheels take planks and an iron tyre." },
+    { id: "hand-cart", b: "carts", icon: "hand-cart", title: "A hand cart", needs: [["wheels"]], coins: 15,
+      obj: [o("craft a hand cart", 1, "craft a hand cart", true), o("set it down", 1, "place the hand cart")], unl: [],
+      help: "Set the cart down, then press F at its handles to pull it." },
+    { id: "haul", b: "carts", icon: "hand-cart", title: "Haul a load", needs: [["hand-cart"]], coins: 20,
+      obj: [o("haul goods (m)", 100, "move a loaded cart 100 m", true)], unl: [], help: "Put goods in the cart's hold (C) and pull it. Roads are faster." },
+    { id: "horse", b: "carts", icon: "horse", title: "Buy a horse", needs: [["haul"]], coins: 25,
+      obj: [o("buy a horse", 1, "buy a horse at a stable")], unl: ["horse-cart"], help: "Stables in the larger towns sell horses." },
+    { id: "horse-cart", b: "carts", icon: "horse-cart", title: "Hitch up", needs: [["horse"]], coins: 25,
+      obj: [o("craft a horse cart", 1, "craft a horse cart", true), o("hitch your horse", 1, "hitch your horse to it", true)], unl: [],
+      help: "Lead your horse to the cart's shafts and press F." },
+    { id: "road-trip", b: "carts", icon: "horse-cart", title: "On the road", needs: [["horse-cart"]], coins: 50,
+      obj: [o("drive on road (m)", 500, "drive the horse cart 500 m on road", true)], unl: [], help: "Off the road a cart is four times slower." },
+
+    // 5. Houses and logs
+    { id: "house", b: "houses", icon: "house", title: "A house of your own", needs: [["first-job"]], coins: 40,
+      obj: [o("build walls", 6, "build 6 walls", true), o("build a door", 1, "build 1 door", true), o("fit a roof", 1, "fit a roof over them", true)], unl: [],
+      help: "Build walls, a door and a roof on the hex grid." },
+    { id: "logs", b: "houses", icon: "log", title: "Float logs", needs: [["house"]], coins: 20,
+      obj: [o("float logs", 4, "float 4 logs down a river until they stop", true)], unl: [],
+      help: "Drop logs in a river; they stop where the water stops." },
+  ];
+  const U = TREE === "town" ? T_U : S_U;
+  const BRANCHES = TREE === "town" ? T_BRANCHES : S_BRANCHES;
+  const M = TREE === "town" ? T_M : S_M;
+
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
   const byIdRaw = byId;
   const order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
@@ -206,6 +309,7 @@
   const steps = [];
   order.forEach((id) => {
     const m = byId[id];
+    if (m.pend) return; // a mission this build cannot count yet: the bot leaves it
     steps.push({ t: "now", m: id });
     m.obj.forEach((ob, i) => {
       if (ob.n >= 3) steps.push({ t: "obj", m: id, i, v: Math.floor(ob.n / 2) });
@@ -224,6 +328,7 @@
     const log = [];
     let fresh = [];
     let lit = null;
+    let coins = 0;
     for (let i = 0; i < k; i++) {
       const s = steps[i];
       const m = byId[s.m];
@@ -242,16 +347,18 @@
         cur = null;
         lit = s.m;
         const u = m.unl.length ? " · unlocked " + m.unl.map(unlName).join(", ") : "";
-        log.push({ text: "DONE: " + m.title + u, d: true });
+        coins += m.coins || 0;
+        log.push({ text: "DONE: " + m.title + (m.coins ? " · +" + m.coins + " coins" : "") + u, d: true });
         fresh = M.filter((x) => !done.has(x.id) && !before.has(x.id) && isOpen(x, done)).map((x) => x.id);
         if (fresh.length) log.push({ text: "OPEN: " + fresh.map((id) => byId[id].title).join(", ") });
       }
     }
-    return { k, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit };
+    return { k, coins, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit };
   }
 
   function standing(id, st) {
     if (st.done.has(id)) return "done";
+    if (byId[id].pend) return "pending";
     if (st.cur === id) return "now";
     return isOpen(byId[id], st.done) ? "open" : "locked";
   }
@@ -400,7 +507,8 @@
   const check = (on, cls) => `<img src="${UI}stone-check-${on ? "on" : "off"}.png" alt="${on ? "done" : ""}" class="ck ${cls || ""}">`;
   const needText = (m) => "after " + [...m.needs.flat(), ...(m.after || [])].map((id) => byId[id].title).join(" + ");
   const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d · /, "");
-  const WORD = { done: "DONE", now: "NOW", open: "OPEN", locked: "LOCKED" };
+  const WORD = { done: "DONE", now: "NOW", open: "OPEN", locked: "LOCKED", pending: "NOT YET" };
+  const coinChip = (m) => m.coins ? `<span class="coins" title="${m.coins} coins">${icon("coin", "ci")}${m.coins}</span>` : "";
 
   function counts(m, st, s) {
     if (s === "done") return m.obj.map((ob) => ob.n);
@@ -433,7 +541,7 @@
       `<ul class="obj">${m.obj
         .map((ob, i) => `<li class="${c[i] >= ob.n ? "full" : ""}">${check(c[i] >= ob.n)}<span>${esc(ob.s)}</span>${ob.nw ? '<span class="nw">NEW</span>' : ""}<em>${c[i]}/${ob.n}</em></li>`)
         .join("")}</ul>` +
-      `<div class="un${st.lit === m.id ? " litrow" : ""}"><span class="lbl">UNLOCKS</span>${unlocks}</div>`;
+      `<div class="un${st.lit === m.id ? " litrow" : ""}"><span class="lbl">UNLOCKS</span>${unlocks}${coinChip(m)}</div>`;
     if (st.lit === m.id) el.querySelectorAll(".un .slot, .un .chip").forEach((x) => x.classList.add("lit"));
   }
 
@@ -468,7 +576,7 @@
     } else hud.textContent = "";
     const lines = st.log.slice(-5);
     $("#log").innerHTML = lines.map((l) => `<div class="${l.d ? "d" : ""}">${esc(l.text)}</div>`).join("");
-    $("#stepNo").textContent = `step ${st.k}/${steps.length}`;
+    $("#stepNo").textContent = `step ${st.k}/${steps.length}` + (TREE === "town" ? ` · ${st.coins} coins` : "");
     $("#stepBtn").disabled = st.k >= steps.length;
   }
 
@@ -491,10 +599,12 @@
     body.innerHTML =
       `<div class="who"><span class="slot">${icon(m.icon)}</span><div><h2>${esc(m.title)}</h2><div class="sub">${esc(branchName(m))} · ${WORD[s]}</div></div></div>` +
       (s === "locked" ? `<p class="help" style="margin-top:8px">Opens ${esc(needText(m))}.</p>` : "") +
+      (s === "pending" ? `<p class="help" style="margin-top:8px">Not in this build: the game does not count this yet.</p>` : "") +
       `<h3>OBJECTIVES</h3><ul class="pobj">${m.obj
         .map((ob, i) => `<li>${check(c[i] >= ob.n)}<span>${esc(ob.t)}${ob.nw ? '<span class="nw">NEW</span>' : ""}</span><em>${c[i]}/${ob.n}</em><span class="pb"><i style="width:${Math.round((100 * c[i]) / ob.n)}%"></i></span></li>`)
         .join("")}</ul>` +
       `<h3>HELP</h3><p class="help">${esc(m.help)}</p>` +
+      (m.coins ? `<h3>REWARD</h3><div class="ulist"><div><span class="slot sm ${s === "done" ? "on" : "off"}">${icon("coin")}</span><span>${m.coins} coins<small>${s === "done" ? "paid" : "paid when this is done"}</small></span></div></div>` : "") +
       `<h3>UNLOCKS</h3>` +
       (m.unl.length
         ? `<div class="ulist">${m.unl
@@ -738,8 +848,10 @@
     if (e.key === "Escape" && !info.open && (selected || tab === "r")) { selected = null; tab = "m"; render(); }
   });
 
-  // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three)
-  const sample = steps.findIndex((s) => s.t === "obj" && s.m === "go-fishing" && s.i === 1) + 1;
+  // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three), or on
+  // the Town tab in the middle of "Mark a road" (both stakes driven, four cells of eight marked)
+  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : { m: "go-fishing", i: 1 };
+  const sample = steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
   // centre a mission at a level (used by the stills; the page never calls it on its own)
   function focus(id, level) {
     if (level !== undefined) { setLevel(Math.max(0, Math.min(LEVELS.length - 1, level))); relayout(); }
@@ -750,8 +862,18 @@
     apply();
   }
   // test hooks for the stills
-  window.missionTree = { steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
+  window.missionTree = { tree: TREE, steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
   setStep(sample);
   // Open at full size on the mission the bot is playing; Fit shows the whole tree.
-  focus("go-fishing", OPEN);
+  focus(SAMPLE.m, OPEN);
+
+  // ---- the two trees, one at a time: the open one is the page's #anchor
+  document.querySelectorAll("[data-tree]").forEach((b) => {
+    b.setAttribute("aria-selected", String(b.dataset.tree === TREE));
+  });
+  if (location.hash.slice(1) !== TREE) history.replaceState(null, "", "#" + TREE);
+  window.addEventListener("hashchange", () => {
+    const want = location.hash.slice(1) === "town" ? "town" : "starter";
+    if (want !== TREE) location.reload();
+  });
 })();
