@@ -245,7 +245,7 @@ fn nearest(logs: &Logs, at: DVec3, reach: f64) -> Option<usize> {
 }
 
 /// Aboard a raft: Y loads the nearest log in reach into its hold, U puts one
-/// from the hold over the side. The hold's line goes first: a crash between
+/// from the hold over the bow. The hold's line goes first: a crash between
 /// the two lines leaves a log too many, never one lost (design, Risks).
 #[allow(clippy::too_many_arguments)]
 pub fn raft(
@@ -303,12 +303,14 @@ pub fn raft(
         hold.slots[slot] =
             (stack.count > 1).then(|| pbd_core::inventory::Stack::new(log_item, stack.count - 1));
         let up = at.normalize_or(DVec3::Y);
+        // Over the bow (the body's forward is its -z), lying across it.
         let heading = vehicle.craft.body.orientation * DVec3::X;
-        let side = up.cross(heading).normalize_or(up.any_orthonormal_vector());
+        let bow = vehicle.craft.body.orientation * DVec3::NEG_Z;
+        let bow = (bow - up * bow.dot(up)).normalize_or(up.any_orthonormal_vector());
         let Some(contact) = contact else {
             return;
         };
-        let over = at + side * 2.2;
+        let over = at + bow * 3.0;
         let Some(water) = water_at(&contact, over) else {
             return;
         };
@@ -323,7 +325,11 @@ pub fn raft(
         }
         let _ = save.store(&Author::Player(0), vec![log_drive::record(&log)]);
         save.note_record_kinds(&[(log_drive::LOG_RECORD, LOG_SCHEMA)]);
-        info!("LOG {} unloaded off raft {id}", log.id);
+        info!(
+            "LOG {} unloaded off raft {id}, {:.1} m from it",
+            log.id,
+            log.position().distance(at)
+        );
         logs.live.push(log);
     }
 }
@@ -368,9 +374,10 @@ fn log_meshes() -> (Mesh, Mesh) {
                 [u1, 2.0],
             ),
         ] {
-            side.0.extend([pa, pb, pc].map(|v| v.to_array()));
-            side.1.extend([na, nb, nc].map(|v| v.to_array()));
-            side.2.extend([ua, ub, uc]);
+            // Wound counter-clockwise seen from outside.
+            side.0.extend([pa, pc, pb].map(|v| v.to_array()));
+            side.1.extend([na, nc, nb].map(|v| v.to_array()));
+            side.2.extend([ua, uc, ub]);
         }
         for x in [-half, half] {
             let out = Vec3::X * x.signum();
@@ -462,6 +469,11 @@ fn draw(
         if drawn.contains(&log.id) {
             continue;
         }
+        info!(
+            "LOG {} drawn at {:.2} m over the radius",
+            log.id,
+            log.position().length() - f64::from(PLANET_RADIUS)
+        );
         commands
             .spawn((
                 Name::new(format!("log {}", log.id)),
@@ -508,6 +520,35 @@ impl Plugin for LogsPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every face of the log's shape faces out, so the back-face cull keeps
+    /// what is seen.
+    #[test]
+    fn a_log_is_closed_and_faces_out() {
+        let (side, ends) = log_meshes();
+        for mesh in [side, ends] {
+            let Some(bevy::mesh::VertexAttributeValues::Float32x3(p)) =
+                mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+            else {
+                panic!("positions");
+            };
+            for t in p.chunks(3) {
+                let [a, b, c] = [t[0], t[1], t[2]].map(Vec3::from);
+                let n = (b - a).cross(c - a);
+                let middle = (a + b + c) / 3.0;
+                let out = Vec3::new(
+                    if middle.x.abs() > log_drive::LENGTH_M * 0.49 {
+                        middle.x
+                    } else {
+                        0.0
+                    },
+                    middle.y,
+                    middle.z,
+                );
+                assert!(n.dot(out) > 0.0, "a face turned in at {middle}");
+            }
+        }
+    }
 
     /// Task 2.2: a log written as it drifts comes back from the disk where
     /// its last line left it, and a taken one does not come back.

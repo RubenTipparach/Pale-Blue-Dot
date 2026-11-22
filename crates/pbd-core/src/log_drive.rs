@@ -25,8 +25,8 @@ pub const REST_S: f64 = 1.5;
 pub const WAKE_MPS: f64 = 0.3;
 /// The log's draught: shallower water grounds it, m.
 pub const FLOAT_DEPTH_M: f32 = 0.3;
-/// How far its middle rides under the surface, m.
-pub const RIDE_M: f64 = 0.12;
+/// How far its middle rides under the surface, m: a log floats half out.
+pub const RIDE_M: f64 = 0.0;
 /// How often a moving log is written, s.
 pub const SAVE_EVERY_S: f64 = 5.0;
 /// A log's length and radius, m.

@@ -78,7 +78,7 @@ is never lost; at worst it is a few seconds upstream of where it was.
 - **F** on foot, near a log (the interact prompt names it), takes it back
   into the slots, in one line with the slots.
 - **F aboard a raft**, near a log, loads it into the raft's hold.
-- **U aboard a raft** unloads one log from its hold over the side.
+- **U aboard a raft** puts one log from its hold over the bow, across it.
 
 ### L4. Drawn like everything else in the world
 
