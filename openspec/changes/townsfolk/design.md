@@ -158,6 +158,51 @@ no new generator version.
 better prices (up to 10%) and more jobs on the board. Theft and damage lower
 it in the consequences change, not here.
 
+**37. Paying with coins or with goods, and prices from a market (owner,
+2026-11-22).** The owner: "you can either pay with cash or sell goods (will
+need stock market to determine goods prices) raw materials dont go a smuch ,
+butthey do relate to the goods porices in someway". Three rules, each a
+recommendation taken (ask only with screenshots) where the owner left the
+detail open:
+
+- **A deal is a basket, settled in coins or in goods.** The trade panel puts
+  what you take on one side and what you give on the other; what you give
+  can be coins, goods or both. The trader values your goods at its buying
+  price and its goods at its selling price (design 6's spread holds), and
+  the difference is paid in coins, either way. A deal with no coins at all
+  is barter. Each deal is one durable line: the pack, the purse and the
+  town's `town_market` record together.
+- **A made good's value comes from what it is made of.** Only raw materials
+  (gathered, mined, caught, grown or herded: stone, log, fibre, ore, wheat,
+  fish, egg) carry a base value in `values.ron`, and it is low. A good with a
+  recipe is worth the sum of its inputs' values plus its labour (the
+  recipe's seconds at a station rate) times a craft margin (recommended
+  1.25), worked out from `recipes.ron` and the cooking recipes when the
+  game starts, never typed in. So a plank is worth a little more than half a
+  log, a bronze pickaxe much more than its ingots, and a raw material is
+  always worth less than the goods made from it. A raw material's market
+  price moves the goods made from it: dear tin makes dear bronze. A test
+  holds every made good above its inputs. `values.ron` stays append-only:
+  its rows for made goods stay readable and become overrides only where a
+  row says so (none at first), so no shipped row is dropped.
+- **Prices come from a market, per good, per world.** Each good has a market
+  index, 1.0 at rest. Towns make and use goods each game day by their
+  trades (design 6's need), and the player's sales and buys add supply and
+  demand. The index rises when a good is short across the towns and falls
+  when it floods, and drifts back toward 1.0 over days. A town's price is
+  the good's derived value, times the market index, times the town's need,
+  times goodwill (design 12). The market is a stored record per world
+  (`market`, one row per good touched), written only on a trade or at a day
+  boundary that moved a row, and world time passes only while the world is
+  played. It is the price ledger the phase 6 stock market (M12) shows,
+  charts and lets the player trade on later; phase 3 builds only the index
+  and the rules, not the exchange's screens.
+
+Saves: a world from before this decision has no `market` record and opens
+with every index at 1.0; its `town_market` and `purse` records keep their
+meaning. Prices shown in the trade panel will move from today's hand-set
+values to derived ones, which changes no stored amount.
+
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
 `towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
