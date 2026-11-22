@@ -541,3 +541,52 @@ fn a_road_near_a_town_is_lit_by_lamps_beside_it() {
     assert_eq!(installed.lamp(centre(lit[0].0).unwrap()), Some(5.0));
     assert_eq!(installed.lamp(centre(cells[3]).unwrap()), None);
 }
+
+/// A fixed layout of 40 settlements over about 8 km, every fifth a walled
+/// town: the planner's link rule is measured on it.
+fn fixed_layout() -> Vec<Settlement> {
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((state >> 33) as f32) / (1u64 << 31) as f32
+    };
+    (0..40)
+        .map(|k| Settlement {
+            site: 100 + k,
+            direction: at(next() * 8_000.0 - 4_000.0, next() * 8_000.0 - 4_000.0),
+            large: k % 5 == 0,
+        })
+        .collect()
+}
+
+/// An order-free digest of a link list (FNV-1a over the pairs, in order).
+fn links_digest(pairs: &[(u32, u32)]) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for &(a, b) in pairs {
+        for byte in a.to_le_bytes().into_iter().chain(b.to_le_bytes()) {
+            h ^= u64::from(byte);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// Roads versions 1 and 2 join each settlement to its two nearest within
+/// 2 km and the walled towns to each other (`townsfolk` design 11); a world
+/// they planned keeps those roads, so the rule is pinned as it shipped,
+/// before version 3 (design 42) was added beside it.
+#[test]
+fn version_2_links_are_pinned() {
+    let towns = fixed_layout();
+    let cfg = RoadsConfig::default();
+    for version in [1, 2] {
+        let pairs = links(&towns, &cfg.for_version(version), RADIUS);
+        assert_eq!(
+            (pairs.len(), links_digest(&pairs)),
+            (56, 9_275_962_080_190_881_147),
+            "version {version}"
+        );
+    }
+}

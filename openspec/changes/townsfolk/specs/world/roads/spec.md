@@ -67,6 +67,37 @@ held SHALL stay usable.
 
 ## MODIFIED Requirements
 
+### Requirement: Roads join the towns
+
+The world SHALL plan roads once from the settlements and the seed and SHALL
+save them as records it authored. A world planned from now on (roads
+version 3) SHALL join each settlement to at most one other within 2 km, so
+that no network of its roads joins three or more settlements; a world
+planned by an earlier version SHALL keep the roads it has, cell for cell.
+A road cell SHALL be laid only where the player has made no edit. A world
+saved before roads SHALL gain them when next opened, without a restart.
+
+#### Scenario: A new world
+
+- **WHEN** a new world's roads are planned
+- **THEN** every network of roads joins one or two settlements
+
+#### Scenario: A world planned before
+
+- **WHEN** a world whose roads version 2 planned is opened
+- **THEN** its roads are the ones it was saved with
+
+#### Scenario: A player's house on the route
+
+- **WHEN** a planned road would cross a cell the player built on
+- **THEN** the road goes round it and the player's cell is unchanged
+
+#### Scenario: An old save
+
+- **WHEN** a world saved before roads is opened
+- **THEN** its towns are joined by roads, and nothing the player made has
+  changed
+
 ### Requirement: Dirt and gravel
 
 The player SHALL pave a marked cell with gravel by the interact key with the

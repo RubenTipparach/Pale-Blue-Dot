@@ -1232,6 +1232,42 @@ for wheels, `land-transport` design 9 gives each its own factor.
 - **The rest of phase 3 is unchanged**: `values.ron`'s gravel row (1 coin)
   stays; traders may stock gravel as before.
 
+**42. A sparse road network: roads version 3 (owner, 2026-11-22: "towns
+should start out unlinked, or very loosly linked (at most 2 towns are
+connected in a network)").** Roads are now something the player builds
+(design 39 to 41), so the world lays far fewer.
+- **Each settlement is joined to at most one other.** Every pair within
+  `link_m` (2 km) is taken nearest first, by arc length then by site ids;
+  a pair whose either town is already joined is skipped. The large towns'
+  long link (`large_link_m`) is not made. So a network of the world's roads
+  is one town or two, never three.
+- **A pair stays apart on the ground as in the plan.** A road whose route
+  crosses a third settlement's footprint, or shares or touches a cell of a
+  road kept before it (in link order), is left out: a crossing or a fork
+  would join four towns on the ground whatever the link list says. The
+  check is on the stored cells, so it is the same on every machine.
+- **A new roads version, for worlds planned from now on.** The net record
+  says `version: 3`; `RoadsConfig::max_network` (2 in `roads.ron`) is the
+  rule, and `for_version(1)` and `for_version(2)` set it to nought, which
+  is the old rule (two nearest and the large towns' link). A world planned
+  by version 1 or 2 is never planned again and keeps every road it has,
+  cell for cell. Pinned before the change by a count and digest of
+  version 2's links on a fixed layout of settlements
+  (`roads::tests::version_2_links_are_pinned`).
+- Surfaces are unchanged: gravel between two walled towns, dirt otherwise.
+- Recommendation taken (ask only with screenshots): pairs, not lone towns
+  only, so a new world still shows a road or two for the player to follow
+  and widen.
+
+**43. Grass tufts go at once from a paved or marked cell (owner,
+2026-11-22: "ok").** A cell the player paves or marks has no pixel tufts
+from that moment, not from the world's next open (the known issue
+`phase-3-roads.2`): the road bit of the cell's surface word (design 33) is
+set in the standing fine set as the record is written, and the cells are
+added to the installed clearance so a set built later has it too. Only the
+tufts go: a tree standing on the cell stays until it is felled, so nothing
+the world grew vanishes behind the player's back.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
