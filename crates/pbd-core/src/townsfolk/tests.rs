@@ -304,10 +304,12 @@ fn the_generator_is_the_mockups() {
     );
 }
 
-/// A beard is on the face's front only (decision 36): every piece of it in
-/// front of the head's flat front but for the 5 mm it sinks in, within the
-/// front's width, and off the mouth's opening; and the styles come half and
-/// half, a third of the town bearded or so, with every other roll the same.
+/// A beard is one shaped piece on the face's front only (decisions 36 and
+/// 36a): every point of it in front of the head but for the 5 mm it sinks,
+/// on the front or its front bevels and never the sides, nothing in the
+/// mouth's opening, its beard cells one connected piece, and the same every
+/// time it is built; and the styles come half and half, a third of the town
+/// bearded or so, with every other roll the same.
 #[test]
 fn a_beard_is_only_in_front_and_off_the_mouth() {
     let hero = |beard| Look {
@@ -332,22 +334,68 @@ fn a_beard_is_only_in_front_and_off_the_mouth() {
     let [lo_y, hi_y, half_x] = figure::MOUTH_CLEAR;
     for b in [Beard::Goatee, Beard::FullFront] {
         let f = Figure::of(&hero(b));
+        assert_eq!(
+            f,
+            Figure::of(&hero(b)),
+            "{b:?} is built the same every time"
+        );
         let added = &f.head.positions[bare..];
-        assert!(!added.is_empty(), "{b:?} adds pieces");
+        assert!(!added.is_empty(), "{b:?} adds a shell");
         for p in added {
+            // In front of the head's flat front and its front bevels (moved
+            // in by the bottom bevel at the chin), less the sink.
+            let inset = (figure::HC - p[1]).clamp(0.0, figure::HC);
+            let sink = figure::BEARD_SINK * std::f32::consts::SQRT_2 + 1e-5;
             assert!(
-                p[2] >= figure::HA - figure::BEARD_SINK - 1e-5,
-                "{b:?} behind the face at {p:?}"
+                p[2] >= figure::HA - figure::HC - inset - sink
+                    && (p[2] >= figure::HA - inset - sink
+                        || p[2] + p[0].abs()
+                            >= figure::HA + HW / 2.0 - figure::HC - 2.0 * inset - sink),
+                "{b:?} behind the front at {p:?}"
             );
             assert!(
-                p[0].abs() <= HW / 2.0 - figure::HC + 1e-5,
-                "{b:?} past the front's width at {p:?}"
+                p[0].abs() <= HW / 2.0 + 0.03,
+                "{b:?} past the sides at {p:?}"
+            );
+            assert!(
+                !(p[0].abs() < half_x && p[1] > lo_y && p[1] < hi_y),
+                "{b:?} in the mouth at {p:?}"
             );
         }
-        for &[w, h, _, _, y0, x] in figure::beard_pieces(b) {
-            let over_mouth = y0 < hi_y && y0 + h > lo_y && (x.abs() - w / 2.0) < half_x;
-            assert!(!over_mouth, "{b:?} piece at y {y0} x {x} covers the mouth");
+        let cells = figure::beard_cells(b);
+        for &(x0, x1, y0, y1, _) in &cells {
+            let over_mouth = y0 < hi_y && y1 > lo_y && x0 < half_x && x1 > -half_x;
+            assert!(
+                !over_mouth,
+                "{b:?} cell {x0}..{x1} x {y0}..{y1} covers the mouth"
+            );
         }
+        // One piece: the beard cells, joined edge to edge, are one region.
+        let beard: Vec<_> = cells.iter().filter(|c| !c.4).collect();
+        let touch = |a: &&(f32, f32, f32, f32, bool), b: &&(f32, f32, f32, f32, bool)| {
+            let side = (a.1 == b.0 || b.1 == a.0) && a.2 == b.2;
+            let over = (a.3 == b.2 || b.3 == a.2) && a.0 == b.0;
+            side || over
+        };
+        let mut seen = vec![false; beard.len()];
+        let mut stack = vec![0];
+        seen[0] = true;
+        while let Some(k) = stack.pop() {
+            for m in 0..beard.len() {
+                if !seen[m] && touch(&beard[k], &beard[m]) {
+                    seen[m] = true;
+                    stack.push(m);
+                }
+            }
+        }
+        assert!(seen.iter().all(|&s| s), "{b:?} is in more than one piece");
+        // It hangs below the chin, and its triangles stay few.
+        assert!(
+            added.iter().any(|p| p[1] < -0.05),
+            "{b:?} hangs below the chin"
+        );
+        let tris = (f.head.positions.len() - bare) / 3;
+        assert!((150..=450).contains(&tris), "{b:?}: {tris} triangles");
     }
     let (mut goatee, mut full, mut none) = (0i32, 0i32, 0);
     for i in 0..2000 {

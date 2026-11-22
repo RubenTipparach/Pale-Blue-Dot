@@ -525,7 +525,7 @@ impl Figure {
                 head.extend(back());
             }
         }
-        head.extend(beard(look.beard, hair));
+        head.extend(beard_shell(look.beard, hair, look.skin));
         Figure {
             leg_len,
             torso_h,
@@ -585,49 +585,270 @@ impl Figure {
     }
 }
 
-/// A beard's pieces as `(w, h, d, bevel, y0, x)`, each standing on the
-/// head's flat front (decision 36, the mockup's `BEARDS`): its back 5 mm into
-/// the head, its front `d - 0.005` proud of it, nothing on the sides or the
-/// back, and nothing between [`MOUTH_CLEAR`]'s heights within its reach.
-pub const MOUSTACHE: [f32; 6] = [0.2, 0.035, 0.03, 0.01, 0.15, 0.0];
-pub const GOATEE: [[f32; 6]; 2] = [MOUSTACHE, [0.09, 0.095, 0.03, 0.01, -0.04, 0.0]];
-pub const FULL_FRONT: [[f32; 6]; 4] = [
-    MOUSTACHE,
-    [0.4, 0.115, 0.035, 0.012, -0.06, 0.0],
-    [0.07, 0.08, 0.035, 0.012, 0.05, -0.165],
-    [0.07, 0.08, 0.035, 0.012, 0.05, 0.165],
+/// A beard is one shell laid over the head's front and its two front
+/// bevels, never boxes (decision 36a, the mockup's `beardShell`). The grid's
+/// column edges either side of the middle: 0.215 m is the bevel's start and
+/// the last its end at the side, the bevel unrolled so a column past 0.215
+/// wraps round the front corner.
+pub const BEARD_U: [f32; 9] = [
+    0.0,
+    0.035,
+    0.07,
+    0.108,
+    0.14,
+    0.175,
+    0.215,
+    0.24,
+    0.215 + 0.035 * std::f32::consts::SQRT_2,
 ];
-/// How far a beard piece sinks into the head behind its face.
+/// The grid's row edges, bottom to top: 0 is the head's bottom, 0.035 the
+/// bottom bevel's top, 0.058 and 0.148 the mouth's lowest and highest pixel.
+pub const BEARD_Y: [f32; 13] = [
+    -0.11, -0.075, -0.04, 0.0, 0.035, 0.058, 0.103, 0.148, 0.163, 0.178, 0.208, 0.238, 0.268,
+];
+/// Each style's stencil, top row first and middle column first, mirrored
+/// about the middle: `#` beard, `+` stubble lying flush.
+pub const GOATEE: [&str; 12] = [
+    "........", "........", "........", "+##.....", "+####...", "...##...", "...#....", "+###+...",
+    "###+....", "##......", "#.......", "........",
+];
+pub const FULL_FRONT: [&str; 12] = [
+    "......+#", "......##", "......##", "+###.###", "+#######", "...#####", "...#####", "+#######",
+    "#######+", "#####...", "###.....", "#.......",
+];
+/// How far the shell's back sinks into the head; its thickness where it
+/// meets the face, and the stubble's; and how far the stubble's colour is
+/// from the hair's to the skin's.
 pub const BEARD_SINK: f32 = 0.005;
+pub const BEARD_EDGE: f32 = 0.004;
+pub const BEARD_STUBBLE: f32 = 0.0015;
+pub const BEARD_STUBBLE_MIX: f32 = 0.45;
 /// The mouth's opening, as low, high and half wide as any mouth cell draws
 /// (with the thinking face's shift): a beard keeps out of it.
 pub const MOUTH_CLEAR: [f32; 3] = [0.058, 0.148, 0.105];
 
-/// The pieces of a beard, in the head's space.
-pub fn beard_pieces(b: Beard) -> &'static [[f32; 6]] {
+/// A beard's stencil, or none.
+pub fn beard_stencil(b: Beard) -> Option<&'static [&'static str; 12]> {
     match b {
-        Beard::None => &[],
-        Beard::Goatee => &GOATEE,
-        Beard::FullFront => &FULL_FRONT,
+        Beard::None => None,
+        Beard::Goatee => Some(&GOATEE),
+        Beard::FullFront => Some(&FULL_FRONT),
     }
 }
 
-fn beard(b: Beard, colour: u32) -> Part {
+/// The stubble's colour for this hair on this skin.
+pub fn stubble(hair: u32, skin: u32) -> u32 {
+    super::look::mix(hair, skin, BEARD_STUBBLE_MIX)
+}
+
+/// The full thickness at a height: chin, beside the mouth, moustache, cheeks.
+fn beard_core(y: f32) -> f32 {
+    if y < 0.058 {
+        0.034
+    } else if y < 0.148 {
+        0.026
+    } else if y < 0.178 {
+        0.03
+    } else {
+        0.018
+    }
+}
+
+/// The grid's cells as `(x0, x1, y0, y1, stubble)` on the unrolled front,
+/// for the tests.
+pub fn beard_cells(b: Beard) -> Vec<(f32, f32, f32, f32, bool)> {
+    let g = BeardGrid::of(b);
+    let mut out = Vec::new();
+    if let Some(g) = g {
+        for c in 0..BeardGrid::NC {
+            for r in 0..BeardGrid::NR {
+                if g.filled(c as i32, r as i32) {
+                    out.push((
+                        g.u[c],
+                        g.u[c + 1],
+                        BEARD_Y[r],
+                        BEARD_Y[r + 1],
+                        !g.beard(c as i32, r as i32),
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+struct BeardGrid {
+    m: &'static [&'static str; 12],
+    u: [f32; 17],
+}
+
+impl BeardGrid {
+    const NC: usize = 16;
+    const NR: usize = 12;
+
+    fn of(b: Beard) -> Option<Self> {
+        let m = beard_stencil(b)?;
+        let u = std::array::from_fn(|i| {
+            if i >= 8 {
+                BEARD_U[i - 8]
+            } else {
+                -BEARD_U[8 - i]
+            }
+        });
+        Some(Self { m, u })
+    }
+
+    fn cell(&self, c: i32, r: i32) -> u8 {
+        if c < 0 || c >= Self::NC as i32 || r < 0 || r >= Self::NR as i32 {
+            return b'.';
+        }
+        let hc = if c >= 8 { c - 8 } else { 7 - c } as usize;
+        self.m[Self::NR - 1 - r as usize].as_bytes()[hc]
+    }
+
+    fn beard(&self, c: i32, r: i32) -> bool {
+        self.cell(c, r) == b'#'
+    }
+
+    fn filled(&self, c: i32, r: i32) -> bool {
+        self.cell(c, r) != b'.'
+    }
+
+    /// How many of a grid point's four cells are beard.
+    fn around(&self, i: i32, j: i32) -> usize {
+        [(i - 1, j - 1), (i, j - 1), (i - 1, j), (i, j)]
+            .iter()
+            .filter(|&&(c, r)| self.beard(c, r))
+            .count()
+    }
+}
+
+/// The head's surface at `u` across the unrolled front, the head drawn
+/// `inset` in from its sides (its bottom bevel): its x and z, and its normal.
+fn beard_base(u: f32, inset: f32) -> (f32, f32, Vec3) {
+    let s2 = std::f32::consts::FRAC_1_SQRT_2;
+    let fh = HW / 2.0 - HC;
+    let (a, s) = (u.abs(), if u < 0.0 { -1.0 } else { 1.0 });
+    let f = fh - inset;
+    if a <= fh {
+        let n = if (a - fh).abs() < 1e-6 {
+            Vec3::new(s * s2, 0.0, 1.0 + s2).normalize()
+        } else {
+            Vec3::Z
+        };
+        (u * f / fh, HA - inset, n)
+    } else {
+        let q = (a - fh) * s2;
+        (s * (f + q), HA - inset - q, Vec3::new(s * s2, 0.0, s2))
+    }
+}
+
+/// A beard's shell in the head's space: a front sheet, a wall round every
+/// edge that meets no cell, and an underside where it hangs below the chin,
+/// each cell two triangles on an alternating diagonal; beard cells in the
+/// hair's colour, stubble in [`stubble`]'s.
+pub fn beard_shell(b: Beard, hair: u32, skin: u32) -> Part {
     let mut p = Part::default();
-    for &[w, h, d, c, y0, x] in beard_pieces(b) {
-        p.extend(block(
-            w,
-            h,
-            d,
-            c,
-            y0,
-            BlockOpts {
-                x,
-                z: HA - BEARD_SINK + d / 2.0,
-                ..default_block()
-            },
-            colour,
-        ));
+    let Some(g) = BeardGrid::of(b) else {
+        return p;
+    };
+    let (nc, nr) = (BeardGrid::NC as i32, BeardGrid::NR as i32);
+    let mut edge = Vec::new();
+    for i in 0..=nc {
+        for j in 0..=nr {
+            let k = g.around(i, j);
+            if k > 0 && k < 4 {
+                edge.push((g.u[i as usize], BEARD_Y[j as usize]));
+            }
+        }
+    }
+    let mut front = vec![[Vec3::ZERO; 13]; 17];
+    let mut back = vec![[Vec3::ZERO; 13]; 17];
+    for i in 0..=nc {
+        for j in 0..=nr {
+            let (u, y) = (g.u[i as usize], BEARD_Y[j as usize]);
+            let (k, core) = (g.around(i, j), beard_core(y));
+            let t = if k == 0 {
+                BEARD_STUBBLE
+            } else if k < 4 {
+                BEARD_EDGE + (core - BEARD_EDGE) * (k as f32 - 1.0) / 3.0 * 0.65
+            } else {
+                let d = edge
+                    .iter()
+                    .map(|&(eu, ey)| (eu - u).hypot(ey - y))
+                    .fold(1.0f32, f32::min);
+                let lump = ((i * 7 + j * 13) % 5) as f32 / 4.0 - 0.5;
+                core * (0.7 + 0.3 * (d / 0.06).min(1.0)) + lump * 0.006
+            };
+            let (x, z, n) = beard_base(u, 0.0);
+            let mut fr = Vec3::new(x + n.x * t, y, z + n.z * t);
+            if y < 0.0 {
+                fr.z += y * 0.15;
+            }
+            let inset = if y >= HC {
+                0.0
+            } else if y >= 0.0 {
+                HC - y
+            } else {
+                HC
+            };
+            let (x, z, n) = beard_base(u, inset);
+            let mut bk = Vec3::new(x - n.x * BEARD_SINK, y, z - n.z * BEARD_SINK);
+            if y < 0.0 {
+                bk.z = (HA - HC - BEARD_SINK - y * 0.5).min(fr.z - BEARD_EDGE);
+            }
+            front[i as usize][j as usize] = fr;
+            back[i as usize][j as usize] = bk;
+        }
+    }
+    let stub = stubble(hair, skin);
+    for c in 0..nc {
+        for r in 0..nr {
+            if !g.filled(c, r) {
+                continue;
+            }
+            let colour = if g.beard(c, r) { hair } else { stub };
+            let (cu, ru) = (c as usize, r as usize);
+            let f = |i: usize, j: usize| front[i][j];
+            let bk = |i: usize, j: usize| back[i][j];
+            let (a, b2, cc, d) = (f(cu, ru), f(cu + 1, ru), f(cu + 1, ru + 1), f(cu, ru + 1));
+            let out = (a + b2 + cc + d) / 4.0;
+            if (c + r) % 2 == 1 {
+                p.face(&[a, b2, cc], Vec3::Z, colour);
+                p.face(&[a, cc, d], Vec3::Z, colour);
+            } else {
+                p.face(&[a, b2, d], Vec3::Z, colour);
+                p.face(&[b2, cc, d], Vec3::Z, colour);
+            }
+            if BEARD_Y[ru] < 0.0 {
+                p.face(
+                    &[
+                        bk(cu, ru),
+                        bk(cu + 1, ru),
+                        bk(cu + 1, ru + 1),
+                        bk(cu, ru + 1),
+                    ],
+                    Vec3::new(0.0, -0.7, -1.0),
+                    colour,
+                );
+            }
+            for (dc, dr, i0, j0, i1, j1) in [
+                (0, -1, cu, ru, cu + 1, ru),
+                (1, 0, cu + 1, ru, cu + 1, ru + 1),
+                (0, 1, cu + 1, ru + 1, cu, ru + 1),
+                (-1, 0, cu, ru + 1, cu, ru),
+            ] {
+                if g.filled(c + dc, r + dr) {
+                    continue;
+                }
+                let (fa, fb) = (f(i0, j0), f(i1, j1));
+                p.face(
+                    &[fa, fb, bk(i1, j1), bk(i0, j0)],
+                    (fa + fb) / 2.0 - out,
+                    colour,
+                );
+            }
+        }
     }
     p
 }

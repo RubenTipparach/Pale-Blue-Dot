@@ -816,6 +816,61 @@ proud of the face as the other face layers do (embedded 5 mm, standing
   Beard control (none, goatee, full front) on the Faces tab's hero; the
   Faces tab's "today" figure goes, since the game now draws the new one.
 
+**36a. A beard is one shaped piece, never boxes (owner, 2026-11-22, M5
+version 11).** On a close-up of version 10's full front beard (a 0.4 m box
+across the jaw and a box on each cheek): "I can see obvious primitives,
+this is signof bad work ... avoid obvioud primitives" (CLAUDE.md, "No
+obvious primitives"). The goatee's chin box and moustache bar are the same
+fault. The owner's reference is a Kerbal Space Program 2 Kerbal with a
+goatee and moustache, whose beard is one sculpted form that follows the
+face, tapers to a point at the chin, has a soft irregular edge and grows
+from the face rather than sitting on it. From version 11 each beard is one
+mesh, a shell laid over the head's surface:
+- **The surface.** The shell is drawn on a grid laid over the head's front
+  and its two front bevels (the bevel is unrolled, so a cell 0.215 m or
+  more from the middle lies on the bevel and wraps round the front corner),
+  and below the chin it hangs free. The grid's columns are edged at 0,
+  0.035, 0.07, 0.108, 0.14, 0.175, 0.215 (the bevel's start), 0.24 and
+  0.2645 m (the bevel's end at the side) either side of the middle; its
+  rows at -0.11, -0.075, -0.04, 0, 0.035 (the bottom bevel's top), 0.058
+  (the lowest mouth pixel), 0.103, 0.148 (the highest), 0.178, 0.208, 0.238
+  and 0.268 m. The mouth's opening is three whole columns and two whole
+  rows, so no cell can reach it.
+- **The shape** is a pixel stencil on that grid, one per style (`#` beard,
+  `+` stubble), mirrored about the middle, so its edge steps irregularly like
+  the game's pixel art instead of running as a straight box edge:
+  - *Full front*: a moustache parted under the nose; cheeks that run from
+    it round onto the front bevels and rise up the bevel as sideburn points
+    to 0.268 m; a frame either side of the mouth; a chin that covers the
+    bottom bevel and hangs 0.11 m below the head, narrowing row by row
+    (0.35, 0.14, 0.07 m wide) to a rounded point.
+  - *Goatee*: a moustache parted under the nose, its ends drooping beside
+    the mouth and joining a chin piece that narrows (0.14, 0.07 m) to a
+    point 0.075 m below the head: one ring round the mouth.
+  - *Stubble* (`+`) cells lie flush (1.5 mm) in a colour between the hair
+    and the skin (45% of the way to the skin): the edge fades into the face
+    as if painted, where geometry would stand proud.
+- **The thickness** tapers: 4 mm wherever the shell meets the face, growing
+  inward with how much beard surrounds a point, to 18 mm on the cheeks,
+  28 mm in the moustache, 26 mm beside the mouth and 34 mm at the chin, with
+  a small fixed lump pattern (up to 3 mm) so the facets read as hair, not a
+  slab. Each cell is two triangles on an alternating diagonal, flat shaded.
+  Below the chin the shell's front tucks back and its underside slopes up
+  into the head, so the point is thin.
+- **What it keeps from 36**: the hair's colour, lit like the rest of the
+  figure; nothing on the sides or the back (it wraps onto the front bevels
+  only, never past them); every point in front of the head but for the
+  5 mm it sinks; the mouth's opening clear in every expression and while
+  talking; the roll and the saves unchanged (a look is never stored).
+- **Why one piece**: boxes placed on a surface keep their own straight
+  edges, flat tops and hard corners, so they read as parts put there.
+  A shell laid on the surface shares the face's shape and meets it at
+  nothing, and its taper and stepped edge are what makes a block head's
+  beard look grown.
+- The mockup's `FK.BEARDS` and the game's `figure::beard_shell` build it
+  from the same grid, stencils and thickness rule; the stubble colours join
+  the atlas's swatches (each people's hair with each of its skins).
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

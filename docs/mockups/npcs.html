@@ -386,7 +386,7 @@ details.about[open]{display:grid;gap:10px}
     <h4>What varies</h4>
     <ul>
       <li><b>Body</b>: build (round, pear, tall, stout), height about 1.45 to 1.7 m, head size 0.9 to 1.02 of the block. Children are a later question (section 8).</li>
-      <li><b>Face</b>: eye size and spacing, nose (none, button, long), ears, hair (crop, bun, braid, bald, a hat), and a beard on about a quarter of them: on the face's front only, a goatee (a moustache over the mouth and a tuft under it) or a full front beard (the moustache, a jaw plate under the mouth and a cheek piece each side), half and half (design 36).</li>
+      <li><b>Face</b>: eye size and spacing, nose (none, button, long), ears, hair (crop, bun, braid, bald, a hat), and a beard on about a quarter of them: one shaped piece on the face's front, a goatee (a parted moustache drooping into a chin point) or a full front beard (moustache, cheeks wrapping the front corners into sideburns, a chin hanging to a rounded point), half and half (design 36, 36a).</li>
       <li><b>Clothes</b>: shirt, trousers and shoes from the people's list; the role adds its own piece: a straw hat, a turban, a helmet, a sou'wester, a miner's lamp helmet, a headset, a hood, an apron or a tabard.</li>
       <li><b>Palette</b>: skin, hair and cloth from the people's swatches, never another people's, as textures never cross planets.</li>
       <li><b>Prop</b>: one held thing says the job at a distance: pitchfork, hammer, coin pouch, spear, fish, pick, datapad, crate.</li>
@@ -399,6 +399,13 @@ details.about[open]{display:grid;gap:10px}
     <button class="fc-x" id="fcX" aria-label="Close">&#x2715;</button>
     <h3 id="fcModalH">Friendly faces: what this tab shows</h3>
     <p>The friendly townsperson of <span class="src">townsfolk</span> design 13 to 18 and 13a, the figure the game draws since version 9 was approved for it ("People approved. Build.phase 3", 2026-11-21). Since version 10 it is the only figure on the page: the square and the Character sheets wear it too, and the hexagonal-prism figure that stood beside it here as "today" is gone, since that is no longer the game's look.</p>
+    <h4>What changed in version 11</h4>
+    <ul>
+      <li>From the owner (2026-11-22), on a close-up of version 10's full front beard, a box across the jaw and a box on each cheek: "I can see obvious primitives, this is signof bad work ... avoid obvioud primitives" (design 36a). The reference is a Kerbal Space Program 2 Kerbal's goatee and moustache: one sculpted form that follows the face and tapers to a point.</li>
+      <li><b>Each beard is one shaped piece</b>, a shell laid over the head's front and wrapped round its front bevels, never boxes. Its outline is a pixel stencil on a grid over the face, so its edge steps irregularly like the game's pixel art; where it meets the face it is 4 mm thick, and it thickens inward to 18 mm on the cheeks, 30 mm in the moustache and 34 mm at the chin, with a small fixed lumpy pattern so the facets read as hair. Its outermost cells are stubble, lying flush in a colour between the hair and the skin, so the edge fades into the face.</li>
+      <li><b>Full front</b>: a moustache parted under the nose, cheeks that run round the front corners and rise as sideburn points up the bevel, a frame either side of the mouth, and a chin that hangs 0.11 m below the head and narrows to a rounded point. <b>Goatee</b>: a moustache parted under the nose, its ends drooping beside the mouth into a chin piece that narrows to a point below the chin, one ring round the mouth.</li>
+      <li>The mouth's opening stays clear in every expression and while talking; nothing is on the sides or the back. The full front beard is 424 triangles (48 of them stubble), the goatee 216 (52).</li>
+    </ul>
     <h4>What changed in version 10</h4>
     <ul>
       <li>From the owner (2026-11-22), on the Character sheets lineup and a Kerbal Space Program 2 picture of a Kerbal with a goatee and a moustache: "get rid of these old npcs, replace with new ones. also beards should only be infront like this" (design 36).</li>
@@ -460,17 +467,65 @@ const lin = h => new THREE.Color(h).convertSRGBToLinear();
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
 const LAMP_GLOW = new THREE.MeshBasicMaterial({ color: 0xfff0b0 });
-// beards on the front of the face only (design 36): [w, h, d, bevel, y0, x] in the head's space, each sunk
-// BEARD_SINK into the head; the moustache's foot (0.15) is over the highest mouth pixel any cell draws (0.148),
-// the tuft's and the plate's tops (0.055) under the lowest (0.058), the cheeks 0.13 to 0.2 m out, past the
-// widest mouth (0.07 m, 0.105 with the thinking face's shift) and under the blush
-const MOUSTACHE = [0.2, 0.035, 0.03, 0.01, 0.15, 0];
+// beards (design 36a, version 11): one shell per beard laid over the head's front and front bevels, never
+// boxes. BEARD_U are the grid's column edges either side of the middle (0.215 the bevel's start, 0.2645 its end at
+// the side), BEARD_Y its row edges (0 the head's bottom, 0.058 and 0.148 the mouth's lowest and highest pixel). A
+// stencil per style, top row first, middle column first, mirrored: "#" beard, "+" stubble lying flush in a
+// colour between the hair and the skin. The game's figure::beard_shell builds the same shell from the same data.
+const BEARD_U = [0, 0.035, 0.07, 0.108, 0.14, 0.175, 0.215, 0.24, 0.215 + 0.035 * Math.SQRT2];
+const BEARD_Y = [-0.11, -0.075, -0.04, 0, 0.035, 0.058, 0.103, 0.148, 0.163, 0.178, 0.208, 0.238, 0.268];
 const BEARDS = {
-  none: [],
-  goatee: [MOUSTACHE, [0.09, 0.095, 0.03, 0.01, -0.04, 0]],
-  full: [MOUSTACHE, [0.4, 0.115, 0.035, 0.012, -0.06, 0], [0.07, 0.08, 0.035, 0.012, 0.05, -0.165], [0.07, 0.08, 0.035, 0.012, 0.05, 0.165]],
+  none: null,
+  goatee: ["........", "........", "........", "+##.....", "+####...", "...##...", "...#....", "+###+...", "###+....", "##......", "#.......", "........"],
+  full:   ["......+#", "......##", "......##", "+###.###", "+#######", "...#####", "...#####", "+#######", "#######+", "#####...", "###.....", "#......."],
 };
-const BEARD_SINK = 0.005;
+const BEARD_SINK = 0.005, BEARD_EDGE = 0.004, BEARD_STUBBLE = 0.0015, BEARD_STUBBLE_MIX = 0.45;
+const beardCore = y => y < 0.058 ? 0.034 : y < 0.148 ? 0.026 : y < 0.178 ? 0.03 : 0.018;
+// the shell: { beard, stubble } geometries in the head's space (front sheet, walls round its edge, an underside
+// where it hangs below the chin), each cell two triangles on an alternating diagonal
+function beardShell(style) {
+  const M = BEARDS[style]; if (!M) return null;
+  const S2 = Math.SQRT1_2, FH = HW / 2 - HC, nc = 16, nr = BEARD_Y.length - 1;
+  const U = [...BEARD_U.slice(1).reverse().map(u => -u), ...BEARD_U];
+  const cell = (c, r) => c < 0 || c >= nc || r < 0 || r >= nr ? "." : M[nr - 1 - r][c >= 8 ? c - 8 : 7 - c];
+  const isB = (c, r) => cell(c, r) === "#", isF = (c, r) => cell(c, r) !== ".";
+  const norm = v => { const l = Math.hypot(...v); return v.map(k => k / l); };
+  const base = (u, inset) => {
+    const a = Math.abs(u), s = u < 0 ? -1 : 1, fh = FH - inset;
+    if (a <= FH) return { x: u * fh / FH, z: HA - inset, n: Math.abs(a - FH) < 1e-6 ? norm([s * S2, 0, 1 + S2]) : [0, 0, 1] };
+    const q = (a - FH) * S2; return { x: s * (fh + q), z: HA - inset - q, n: [s * S2, 0, S2] };
+  };
+  const nb = (i, j) => [isB(i - 1, j - 1), isB(i, j - 1), isB(i - 1, j), isB(i, j)].filter(Boolean).length;
+  const edge = []; for (let i = 0; i <= nc; i++) for (let j = 0; j <= nr; j++) { const k = nb(i, j); if (k > 0 && k < 4) edge.push([U[i], BEARD_Y[j]]); }
+  const F = [], Bk = [];
+  for (let i = 0; i <= nc; i++) { F.push([]); Bk.push([]); for (let j = 0; j <= nr; j++) {
+    const u = U[i], y = BEARD_Y[j], k = nb(i, j), core = beardCore(y);
+    let t;
+    if (k === 0) t = BEARD_STUBBLE;
+    else if (k < 4) t = BEARD_EDGE + (core - BEARD_EDGE) * (k - 1) / 3 * 0.65;
+    else { let d = 1; for (const [eu, ey] of edge) d = Math.min(d, Math.hypot(eu - u, ey - y)); t = core * (0.7 + 0.3 * Math.min(1, d / 0.06)) + ((i * 7 + j * 13) % 5 / 4 - 0.5) * 0.006; }
+    const f = base(u, 0), fr = [f.x + f.n[0] * t, y, f.z + f.n[2] * t];
+    if (y < 0) fr[2] += y * 0.15;
+    const inset = y >= HC ? 0 : y >= 0 ? HC - y : HC, b = base(u, inset), bk = [b.x - b.n[0] * BEARD_SINK, y, b.z - b.n[2] * BEARD_SINK];
+    if (y < 0) bk[2] = Math.min(HA - HC - BEARD_SINK - y * 0.5, fr[2] - BEARD_EDGE);
+    F[i].push(fr); Bk[i].push(bk);
+  } }
+  const G = { beard: new PBD.Geo(), stubble: new PBD.Geo() };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], mid = (...p) => [0, 1, 2].map(k => p.reduce((s, q) => s + q[k], 0) / p.length);
+  for (let c = 0; c < nc; c++) for (let r = 0; r < nr; r++) {
+    if (!isF(c, r)) continue;
+    const g = isB(c, r) ? G.beard : G.stubble, a = F[c][r], b = F[c + 1][r], cc = F[c + 1][r + 1], d = F[c][r + 1], out = mid(a, b, cc, d);
+    const want = [0, 0, 1];
+    if ((c + r) % 2) { g.face([a, b, cc], want); g.face([a, cc, d], want); } else { g.face([a, b, d], want); g.face([b, cc, d], want); }
+    if (BEARD_Y[r] < 0) g.face([Bk[c][r], Bk[c + 1][r], Bk[c + 1][r + 1], Bk[c][r + 1]], [0, -0.7, -1]);
+    // a wall on each side that meets no cell, from the front sheet into the head
+    for (const [dc, dr, i0, j0, i1, j1] of [[0, -1, c, r, c + 1, r], [1, 0, c + 1, r, c + 1, r + 1], [0, 1, c + 1, r + 1, c, r + 1], [-1, 0, c, r + 1, c, r]]) {
+      if (isF(c + dc, r + dr)) continue;
+      g.face([F[i0][j0], F[i1][j1], Bk[i1][j1], Bk[i0][j0]], sub(mid(F[i0][j0], F[i1][j1]), out));
+    }
+  }
+  return { beard: G.beard.build(1), stubble: G.stubble.build(1) };
+}
 const beardOf = spec => spec.beard === true ? "goatee" : BEARDS[spec.beard] ? spec.beard : "none";
 // ---- materials: lit like the ground (scene-kit.js), one cache by colour and face layer -------------
 const MC = {};
@@ -668,8 +723,9 @@ function friend(spec) {
     }
   }
 
-  // a beard is on the face's front only (design 36): each piece sunk 5 mm into the head and standing proud of it
-  for (const [bw, bh, bd, bc, by0, bx] of BEARDS[beardOf(spec)]) mesh(block(bw, bh, bd, bc, by0, { x: bx, z: HA - BEARD_SINK + bd / 2 }), hair, head);
+  // a beard is one shell on the face's front and front bevels (design 36a), its edge in stubble
+  const shell = beardShell(beardOf(spec));
+  if (shell) { mesh(shell.beard, hair, head); mesh(shell.stubble, mat(mixHex(spec.hairC, skin, BEARD_STUBBLE_MIX)), head, 0, 0, 0, false); }
   // the role's dress (version 10): an apron or a tabard on the torso's front, and one held prop in the right hand
   if (spec.apron) mesh(frontStrip(cutProf(B.prof, 0.06, 0.8, torsoH, w * 1.05)), mat(spec.apron), body);
   if (spec.tabard) mesh(frontStrip(cutProf(B.prof, 0.12, 0.97, torsoH, w * 1.075)), mat(spec.tabard), body);
@@ -760,7 +816,7 @@ function liveFace(F, dt) {
     const b = F.cur.blush; e.blush.visible = b > 0.04; if (e.blush.visible) e.blushM.color.copy(lin(mixHex(F.spec.skin, 0xf27a7a, 0.55 * b)));
   }
 }
-return { MC, shade, mixHex, mat, AC, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn, genSpec, liveFace, BEARDS, BEARD_SINK, beardOf, frontStrip, prop };
+return { MC, shade, mixHex, mat, AC, CELL, atlasTex, aMat, cellQuad, setCell, SIX, lathe, disc, block, HW, HH, HD, HC, HA, EYE_Y, MOUTH_Y, BROW_Y, HAIR_Y, WR, PR, GR, FSC, BUILDS, profAt, cutProf, EXPR, EXPR_KEYS, NUMK, friend, setExprOn, genSpec, liveFace, BEARDS, BEARD_SINK, BEARD_U, BEARD_Y, beardShell, beardOf, frontStrip, prop };
 })();
 </script>
 <script>

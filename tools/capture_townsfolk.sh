@@ -21,9 +21,10 @@ shot() {
   echo "$name exit $?"
 }
 # Face to face with the first person at a post wearing each beard (design 36):
-# Linenleigh's innkeeper (a goatee) and a stallholder (a full front beard).
-GOATEE="--walk --at 29.727104 8.505633 --yaw -4.4 --pitch -10"
-FULL_FRONT="--walk --at 29.698841 9.102147 --yaw 87.3 --pitch -10"
+# Linenleigh's innkeeper (a goatee) and a stallholder (a full front beard),
+# 2 m off so the head and shoulders show (design 36a).
+GOATEE="--walk --at 29.726465 8.515085 --yaw -4.4 --pitch -6"
+FULL_FRONT="--walk --at 29.707064 9.102589 --yaw 87.3 --pitch -6"
 ONLY=${ONLY:-all}
 if [ "$ONLY" = beards ]; then
   shot beard-goatee "" $GOATEE --time 11

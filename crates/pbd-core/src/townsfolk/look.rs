@@ -107,7 +107,8 @@ pub enum Nose {
     Long,
 }
 
-/// A beard: pieces on the face's front only (`townsfolk` decision 36).
+/// A beard: one shell on the face's front only (`townsfolk` decisions 36
+/// and 36a).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Beard {
     None,
@@ -347,6 +348,8 @@ pub fn swatches(tunics: impl IntoIterator<Item = u32>) -> Vec<u32> {
     for p in PEOPLES {
         for &s in p.skin {
             out.extend(BLUSH_LEVELS.iter().map(|&b| blush(s, b)));
+            // A beard's stubble, its people's hair on its skin (decision 36a).
+            out.extend(p.hair.iter().map(|&h| super::figure::stubble(h, s)));
         }
     }
     out.extend(super::figure::FACE_COLOURS);
