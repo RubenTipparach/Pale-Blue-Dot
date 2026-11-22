@@ -569,3 +569,76 @@ fn time_can_place_over_the_walled_towns_biggest_building() {
         def.name
     );
 }
+
+/// `player-building` design 8: a house whose ground storey stands two
+/// layers over its ground is cut with a fieldstone footing under every
+/// ground floor, solid from the ground to the slab, and none under the
+/// upper storey's floors; on ground at its own layer it has none.
+#[test]
+fn a_floor_over_lower_ground_stands_on_a_footing() {
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let t = template("village");
+    let def = t
+        .buildings
+        .iter()
+        .find(|b| b.storeys == 2)
+        .expect("a two-storey house");
+    let kit = kits.get(&def.kit).unwrap();
+    let pieces = blueprint(patch, def, kit, *at, 0, GROUND).unwrap();
+    let all: Vec<&Piece> = pieces.iter().collect();
+    let anchor = key(*at);
+    // Its ground floor: the template's base may raise it over GROUND.
+    let lowest = pieces
+        .iter()
+        .filter_map(|p| match p.shape {
+            Shape::Floor { layer, .. } => Some(layer),
+            _ => None,
+        })
+        .min()
+        .unwrap();
+    let ground_floors = pieces
+        .iter()
+        .filter(|p| matches!(p.shape, Shape::Floor { layer, .. } if layer == lowest))
+        .count();
+    assert!(ground_floors > 0);
+    let low = super::cut::cut_on(&cells, anchor, &all, &kits, &|_| 2.0, RADIUS_M, &|_| {
+        Some(lowest - 2)
+    })
+    .expect("cut");
+    assert!(low.meshes.contains_key(super::cut::FOOTING), "a footing");
+    let deepest = low
+        .solids
+        .solids
+        .iter()
+        .map(|s| s.y0)
+        .fold(f32::MAX, f32::min);
+    assert!(
+        deepest < (lowest - GROUND) as f32 - 1.9 && deepest > (lowest - GROUND) as f32 - 2.5,
+        "solid down to the ground two layers under: {deepest}"
+    );
+    let level = super::cut::cut_on(&cells, anchor, &all, &kits, &|_| 2.0, RADIUS_M, &|_| {
+        Some(lowest)
+    })
+    .expect("cut");
+    // One solid footing a ground floor, and none on level ground or with no
+    // ground known (the kit's own walls may be fieldstone too).
+    assert_eq!(
+        low.solids.solids.len(),
+        level.solids.solids.len() + ground_floors,
+        "a footing a ground floor"
+    );
+    let plain = cut(&cells, anchor, &all, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    assert_eq!(plain.solids.solids.len(), level.solids.solids.len());
+    let floor_y = level
+        .solids
+        .solids
+        .iter()
+        .map(|s| s.y0)
+        .fold(f32::MAX, f32::min);
+    assert!(
+        floor_y > deepest + 1.5,
+        "nothing under the floor on level ground"
+    );
+}

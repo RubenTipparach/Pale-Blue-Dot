@@ -45,3 +45,9 @@ has built them into the engine.
 
   Verify: the gate page is linked from the PR.
 - [ ] 5.2 The owner watches the video, builds in the game, and accepts. Verify: the quote is in `proposal.md`. Sync `player/building`, and archive.
+
+## 6. Fixes after the first captures (2026-11-22)
+
+- [x] 6.1 A floor over lower ground stands on a fieldstone footing down to it (design 8). Verify: `building::tests::a_floor_over_lower_ground_stands_on_a_footing`, and a capture of the house on the desert's terraces.
+- [x] 6.2 A player's building casts the sun's shadow as a town's does (design 9). Verify: `builds::tests::a_plot_casts_the_suns_shadow_but_its_flames_do_not`, and a capture.
+- [ ] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`.

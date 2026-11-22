@@ -71,3 +71,19 @@ be refused, with the reason.
 
 - **WHEN** the player removes a floor a table stands on
 - **THEN** the removal is refused and names the table
+
+### Requirement: A building stands on its ground and casts the sun's shadow
+
+A floor of the player's with no floor or stair of its plot under it, over
+ground lower than it, SHALL stand on a solid fieldstone footing down to that
+ground. Every piece of a player's building but its lanterns' flames SHALL
+cast into the sun's shadow cascades, as a town's building does.
+
+(`building::tests::a_floor_over_lower_ground_stands_on_a_footing`, `pbd-app` `builds::tests::a_plot_casts_the_suns_shadow_but_its_flames_do_not`)
+
+#### Scenario: A house on a terrace
+
+- **WHEN** a house's ground floor stands two layers over the ground of some
+  of its cells
+- **THEN** a footing fills the space under those floors to the ground, and
+  the walker cannot walk under the floor

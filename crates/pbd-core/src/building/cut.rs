@@ -30,6 +30,12 @@ pub const SILL_M: f32 = 1.0;
 pub const POST_HALF_M: f32 = 0.13;
 /// The texture an unlit flame is drawn in (the towns' `FLAME`).
 pub const FLAME: &str = "flame";
+/// A footing's stone (`player-building` design 8): the fieldstone kit's
+/// wall, under every kit's floor that stands over lower ground.
+pub const FOOTING: &str = "fieldstone";
+/// How far a footing runs into the ground under it, metres, so no seam
+/// shows where the two meet.
+pub const FOOTING_SINK_M: f32 = 0.1;
 
 /// A plot cut: its meshes by texture, and its solids for the walker.
 #[derive(Clone, Debug)]
@@ -55,6 +61,11 @@ pub fn frame_at(cells: &Cells, anchor: u32, layer: u16, radius_m: f32) -> Option
 
 struct Cutter<'a> {
     cells: &'a Cells<'a>,
+    /// The first layer over the ground in a cell, as the rules read it.
+    ground: &'a dyn Fn(u32) -> Option<u16>,
+    /// Every floor and stair of the plot, by cell and layer: a floor with
+    /// neither under it stands on a footing.
+    floors: std::collections::BTreeSet<(u32, u16)>,
     repeat: &'a dyn Fn(&str) -> f32,
     radius_m: f32,
     frame: Frame,
@@ -70,7 +81,8 @@ struct Cutter<'a> {
 
 /// Cut `pieces` in the frame at `anchor`. A piece whose cells are not all in
 /// `cells`, or whose kit is unknown, is left out (and is refused before it
-/// could be placed). `None` with nothing to cut.
+/// could be placed). `None` with nothing to cut. No ground is known, so no
+/// floor stands on a footing: [`cut_on`].
 pub fn cut(
     cells: &Cells,
     anchor: u32,
@@ -79,10 +91,36 @@ pub fn cut(
     repeat: &dyn Fn(&str) -> f32,
     radius_m: f32,
 ) -> Option<Cut> {
+    cut_on(cells, anchor, pieces, kits, repeat, radius_m, &|_| None)
+}
+
+/// [`cut`] over `ground`, the first layer over the ground in a cell: a
+/// floor with no floor of the plot under it, over ground lower than it,
+/// stands on a fieldstone footing down to that ground (design 8).
+pub fn cut_on(
+    cells: &Cells,
+    anchor: u32,
+    pieces: &[&Piece],
+    kits: &Kits,
+    repeat: &dyn Fn(&str) -> f32,
+    radius_m: f32,
+    ground: &dyn Fn(u32) -> Option<u16>,
+) -> Option<Cut> {
     let base = pieces.iter().map(|p| p.shape.layer()).min()?;
     let frame = frame_at(cells, anchor, base, radius_m)?;
+    // What stands in each cell, by layer: a floor or a stair's foot or head.
+    let floors = pieces
+        .iter()
+        .flat_map(|p| match p.shape {
+            Shape::Floor { cell, layer } => vec![(cell, layer)],
+            Shape::Stair { foot, head, layer } => vec![(foot, layer), (head, layer)],
+            _ => Vec::new(),
+        })
+        .collect();
     let mut c = Cutter {
         cells,
+        ground,
+        floors,
 
         repeat,
         radius_m,
@@ -328,6 +366,20 @@ impl Cutter<'_> {
         let top = top + FLOOR_LIFT_M;
         let outline: Vec<Vec2> = c.corners.iter().map(|&k| self.plan_y(k, layer).0).collect();
         let edge = wall_of(kit, 0).edge.clone();
+        // A footing down to lower ground, where no floor of the plot is
+        // under this one (design 8).
+        let below = self.floors.iter().any(|&(c2, l)| c2 == cell && l < layer);
+        if !below && let Some(g) = (self.ground)(cell).filter(|&g| g < layer) {
+            let (_, foot) = self.plan_y(c.direction, g);
+            self.prism(
+                &outline,
+                foot - FOOTING_SINK_M,
+                top - SLAB_M,
+                FOOTING,
+                FOOTING,
+                true,
+            );
+        }
         self.prism(&outline, top - SLAB_M, top, &edge, &kit.floor, false);
         self.surfaces.push(Surface::Floor {
             outline: ccw(outline),

@@ -15,7 +15,7 @@ use crate::saves::WorldSave;
 use crate::towns::{TownAssets, TownFlame, TownRoot};
 use crate::walking::PlayerStructures;
 use bevy::prelude::*;
-use pbd_core::building::cut::{FLAME, cut};
+use pbd_core::building::cut::{FLAME, cut_on};
 use pbd_core::building::{
     Cells, PIECE_RECORD, PIECE_SCHEMA, PLOT_M, Piece, from_records, placed, plots, removed,
 };
@@ -117,6 +117,18 @@ pub fn kits_in(world: &World) -> Arc<Kits> {
         .unwrap_or_else(|| Arc::new(crate::towns::load_kits()))
 }
 
+/// The first id a plot's shadow casters take in the sun's caster list,
+/// past every site's id (`player-building` design 9).
+pub const PLOT_CASTER_ID: u32 = 0xF000_0000;
+
+/// The first layer over the generated ground in a cell (towns' ground
+/// included), which a floor's footing stands on (design 8).
+pub fn ground_layer(cell: u32) -> Option<u16> {
+    let d = pbd_core::cell_key::key_direction(cell)?;
+    let surface = crate::planet::surface_height(d);
+    pbd_core::column::layer_at(surface - 0.5).map(|l| (l + 1) as u16)
+}
+
 /// The root of a plot's meshes.
 #[derive(Component)]
 pub struct BuildRoot;
@@ -153,6 +165,7 @@ pub fn sync(world: &mut World) {
     let pieces = world.resource::<Builds>().pieces.clone();
     let mut solids = Vec::new();
     let mut drawn = Vec::new();
+    let mut casting = Vec::new();
     for (anchor, ids) in plots(&pieces, PLANET_RADIUS, pbd_core::cell_key::key_direction) {
         let Some(direction) = pbd_core::cell_key::key_direction(anchor) else {
             continue;
@@ -160,14 +173,31 @@ pub fn sync(world: &mut World) {
         let patch = patch_round(direction, PATCH_REACH_M);
         let cells = Cells::new(&patch);
         let of: Vec<&Piece> = ids.iter().filter_map(|id| pieces.get(id)).collect();
-        let Some(c) = cut(&cells, anchor, &of, &kits, &repeat, PLANET_RADIUS) else {
+        let Some(c) = cut_on(
+            &cells,
+            anchor,
+            &of,
+            &kits,
+            &repeat,
+            PLANET_RADIUS,
+            &ground_layer,
+        ) else {
             continue;
         };
         drawn.push(spawn_plot(world, &c.meshes, &c.solids.lights));
+        casting.push(std::sync::Arc::new(crate::towns::casting_of(&c.meshes)));
         solids.push(c.solids);
     }
     info!("BUILDS {} pieces in {} plots", pieces.len(), solids.len());
     world.insert_resource(PlayerStructures(solids));
+    // The plots cast the sun's shadow as a town does (design 9), under ids
+    // past every site's.
+    let mut casters =
+        world.get_resource_or_insert_with(crate::planet::shadow::TownCasters::default);
+    casters.0.retain(|(id, _)| *id < PLOT_CASTER_ID);
+    for (k, c) in casting.into_iter().enumerate() {
+        casters.0.push((PLOT_CASTER_ID + k as u32, c));
+    }
     let mut builds = world.resource_mut::<Builds>();
     builds.drawn = drawn;
     builds.drawn_revision = Some(revision);
@@ -248,6 +278,32 @@ mod tests {
     use pbd_core::building::rules::RULES;
     use pbd_core::building::{Class, Opening, Shape};
     use pbd_core::locale::Locale;
+
+    /// `player-building` design 9: a plot's walls and floors cast into the
+    /// sun's cascades, its lanterns' flames do not, and its ids are past
+    /// every site's.
+    #[test]
+    fn a_plot_casts_the_suns_shadow_but_its_flames_do_not() {
+        let mut meshes = pbd_core::settlement::pieces::Meshes::new();
+        let tri = |x: f32| [[x, 0.0, 0.0], [x + 1.0, 0.0, 0.0], [x, 1.0, 0.0]];
+        let mut boards = pbd_core::settlement::pieces::MeshBuf::default();
+        boards.positions.extend(tri(0.0));
+        boards.positions.extend(tri(40.0));
+        meshes.insert("boards".into(), boards);
+        let mut flame = pbd_core::settlement::pieces::MeshBuf::default();
+        flame.positions.extend(tri(2.0));
+        meshes.insert(FLAME.into(), flame);
+        let casting = crate::towns::casting_of(&meshes);
+        assert_eq!(casting.positions.len(), 6, "the boards' two triangles");
+        assert_eq!(casting.chunks.len(), 2, "chunked by where they stand");
+        assert!(
+            casting
+                .chunks
+                .iter()
+                .all(|c| c.cascades as usize == crate::planet::shadow::CASCADE_COUNT)
+        );
+        assert!(PLOT_CASTER_ID > 1 << 24, "past every site id");
+    }
 
     /// Every reason, piece and kit build mode names by id has its words.
     #[test]
