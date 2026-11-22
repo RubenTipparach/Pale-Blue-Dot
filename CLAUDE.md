@@ -93,6 +93,25 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## No obvious primitives (owner, 2026-11-22)
+
+**Standing instruction from the user:** "I can see obvious primitives, this
+is signof bad work ... avoid obvioud primitives" (on the townsfolk's full
+front beard: a box across the jaw and two boxes on the cheeks, stuck on the
+face). A shape in the game or a mockup is one form fitted to what it sits
+on, never boxes, cylinders or spheres placed on a surface and left to read
+as separate parts:
+- a part that grows from a body (a beard, hair, a mane, a root, a branch, a
+  cloak) is one piece shaped to the body: it follows its curves and
+  bevels, tapers into it, and has an irregular edge, never a hard rectangle
+  floating proud of it;
+- where pieces must meet, they blend: a shared edge, a bevel, a taper, or
+  the detail painted into the surface's texture instead of modelled;
+- the blocky, low-poly style is a choice of silhouette, not an excuse for
+  primitives: a block head is still one shaped head;
+- every new model is looked at close up before it is shown, and a part
+  that reads as a primitive stuck on is redone, not shipped.
+
 ## Everything in the world is lit as the terrain is (owner, 2026-11-18)
 
 **Standing instruction from the user:** "moving forward we need to apply
