@@ -226,6 +226,81 @@ roads of width 2 or 3?" (wide roads: decision 10b).
   `dirt_speed` (1.0), read off the road piece under the walker's feet.
 - Frame cost not measured (cloud session, lavapipe; CLAUDE.md).
 
+**10b. Wide roads (2026-11-22, on the owner's "roads look great, can you
+also show roads of width 2 or 3?").** Shown first in the towns mockup
+(M15 version 3, the Wide roads scene, `towns.html#wideroads`); not built in
+the game (task 8.6). A road two or three cells wide is two or three lanes of
+road cells side by side, each lane an ordinary road cell of design 10. On
+the level that is all there is to it. On a slope it is not, and the reason
+is the grid:
+- **Why the one-wide rule cannot be copied lane by lane.** A road running
+  along a row climbs a layer a cell, 1 m over 2.833 m. The next lane is the
+  next row, shifted half a cell along the road, so at the same place along
+  the road it is half a layer higher or lower. Lane by lane, each cell
+  running from its own entry edge at its ground to its exit edge a layer up,
+  the two lanes' tops meet at their shared slanted edges with a step of up
+  to half a layer, and a walker crossing from one lane to the other gets an
+  eye jump. Turning the slope off the row's axis does not help: a plane that
+  puts every cell of a hex band at the same height above its column spans
+  4/3 of a layer over a cell, never one (the hex's corners, in the lattice's
+  own terms, sit a third and two thirds of a cell along both axes).
+- **The rule: one shared plane for the whole width.** Every cell of a wide
+  road on a slope takes its top from one plane along the road, rising a
+  layer per cell pitch (2.833 m, 19 degrees, the one-wide road's own grade),
+  held level past the foot and the top of the climb (a crease across the
+  cells that straddle them, which is drawn as two faces). Its column is cut
+  or filled to the whole layer `low` under the plane's lowest point on the
+  cell, and the road piece's bed of packed earth fills from `low` to the
+  plane. The surface is the same function on both sides of every edge, so
+  there is no step between lanes, across or along, by construction.
+- **What it costs, measured in the mockup.** Every other lane is half a
+  layer off its cells. A lane in step with the plane (its cells' middles at
+  a half layer) is exactly the one-wide road cell: the plane spans
+  `[low, low + 1]`, no cut, no fill. A lane half a cell along spans
+  `[low + 0.5, low + 1.5]`: its natural ground is `low + 1`, so its column is
+  cut a layer and the bed is 0.5 to 1.5 m deep; against the natural ground
+  the road there is cut half a metre at the cell's downhill end and filled
+  half a metre at its uphill end. A two-wide road has one such lane, a
+  three-wide road two (the outer lanes; the middle lane is in step). Beside
+  the road the hillside keeps its own steps: where it stands higher (a
+  side-hill's uphill side) its cut bank shows as earth faces down to the
+  road; where it stands lower the road's bed shows as an embankment.
+  Walking across all three lanes diagonally up the climb and back gives no
+  eye jump in the mockup's walker (numbers in `mockup-work.md`'s M15 row).
+- **Bends only on the level** (recommendation taken, ask only with
+  screenshots). A 60-degree bend of a wide road is a rhombus of cells where
+  the lanes cross over: the inner lane turns in one cell, the outer lane in
+  `w` cells, so a turn of the whole width on a slope would need a warped
+  surface (each lane a different grade) rather than a plane, and the inner
+  lane would climb at up to `w` times the grade. A wide road therefore climbs
+  straight and bends on a level stretch: at the foot, on a landing, or at
+  the top. The one-wide road keeps its bends on the slope (22 degrees round
+  a bend, design 10a). The mockup shows the two- and three-wide roads
+  climbing straight and bending on the plateau, one each way.
+- **Junctions are level.** Where a narrow road meets a wide one the cells
+  where they touch are level road cells: the narrow road meets the wide
+  road's edge lane, and its last cell before the wide road is flat. A road
+  never joins another on a slope, for the same reason a wide road does not
+  bend on one. The mockup shows a one-wide road leaving a three-wide road in
+  a T and crossing a two-wide road.
+- **Bridges.** A wide bridge is a plank deck over every cell of the width at
+  the banks' height, on posts to the bed, with rails only on the outer edges
+  of the outer lanes; the lanes between are open to each other.
+- **Lamps.** Lanterns on posts off the road every sixth cell: one side of a
+  one- or two-wide road, both sides of a three-wide road (staggered), at
+  both ends of a bridge and at a junction. Lit at night as every road is.
+- **Which world roads are wide** (recommendation taken, ask only with
+  screenshots): the gravel roads between the largest walled towns are two
+  wide; inside a large town's gate, to its market, three wide; village
+  tracks and every other road stay one wide. The planner (design 11) routes
+  a wide road's middle line as today and lays its lanes either side, with a
+  wide road's slopes allowed only where its line runs straight along a row
+  and its bends only where the ground is level.
+- **The player** lays any width by laying road cells side by side (task
+  8.3): a player's lane on a slope beside another takes its top from the
+  same rule, the shared plane of the cells it adjoins, so a road the player
+  widens has no step either.
+
 **Order.** Coins first, then trade, then missions (they pay coins and use
 trade), then roads (the delivery, escort and clear jobs want them). Each is
 mocked up before code where it has a look: the road surfaces and slopes in a
