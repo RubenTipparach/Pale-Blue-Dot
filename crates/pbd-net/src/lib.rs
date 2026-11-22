@@ -40,7 +40,8 @@ pub enum HostEvent {
 
 /// A listening host.
 pub struct Host {
-    events: mpsc::Receiver<HostEvent>,
+    /// Behind a lock so a `Host` can be shared (a game resource is).
+    events: Mutex<mpsc::Receiver<HostEvent>>,
     out: tmpsc::UnboundedSender<(u64, Vec<u8>)>,
     close: tmpsc::UnboundedSender<u64>,
     addr: SocketAddr,
@@ -60,7 +61,7 @@ impl Host {
         let (close, mut close_rx) = tmpsc::unbounded_channel::<u64>();
         let (ready_tx, ready_rx) = mpsc::channel();
         let thread = std::thread::Builder::new()
-            .name("pbd-net host".into())
+            .name("pbd_net_host".into())
             .spawn(move || {
                 let runtime = match runtime() {
                     Ok(r) => r,
@@ -144,7 +145,7 @@ impl Host {
             .recv()
             .map_err(|_| std::io::Error::other("the network thread stopped"))??;
         Ok(Host {
-            events,
+            events: Mutex::new(events),
             out,
             close,
             addr,
@@ -159,7 +160,10 @@ impl Host {
 
     /// Everything that happened since the last poll, in order.
     pub fn poll(&self) -> Vec<HostEvent> {
-        self.events.try_iter().collect()
+        self.events
+            .lock()
+            .map(|e| e.try_iter().collect())
+            .unwrap_or_default()
     }
 
     /// Send one message to a connection.
@@ -175,7 +179,8 @@ impl Host {
 
 /// A connected client.
 pub struct Client {
-    inbox: mpsc::Receiver<Result<ToClient, Decode>>,
+    /// Behind a lock so a `Client` can be shared (a game resource is).
+    inbox: Mutex<mpsc::Receiver<Result<ToClient, Decode>>>,
     out: tmpsc::UnboundedSender<Vec<u8>>,
     closed: Arc<std::sync::atomic::AtomicBool>,
     _thread: std::thread::JoinHandle<()>,
@@ -190,7 +195,7 @@ impl Client {
         let closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = closed.clone();
         let thread = std::thread::Builder::new()
-            .name("pbd-net client".into())
+            .name("pbd_net_client".into())
             .spawn(move || {
                 let runtime = match runtime() {
                     Ok(r) => r,
@@ -233,7 +238,7 @@ impl Client {
             .recv()
             .map_err(|_| std::io::Error::other("the network thread stopped"))??;
         Ok(Client {
-            inbox,
+            inbox: Mutex::new(inbox),
             out,
             closed,
             _thread: thread,
@@ -243,7 +248,10 @@ impl Client {
     /// Every message since the last poll, in order. An `Err` is bytes this
     /// build cannot read; the connection closes after it.
     pub fn poll(&self) -> Vec<Result<ToClient, Decode>> {
-        self.inbox.try_iter().collect()
+        self.inbox
+            .lock()
+            .map(|i| i.try_iter().collect())
+            .unwrap_or_default()
     }
 
     /// Send one message.

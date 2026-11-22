@@ -391,6 +391,31 @@ pub fn apply_edit(
         error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
         return None;
     }
+    // A game that joined another's world sends what the player tried, and
+    // shows it when the server's change comes back (`multiplayer` design 20,
+    // first cut: no prediction yet, so a refusal has nothing to undo).
+    if save.joined() {
+        use pbd_core::net::protocol::Request;
+        let layer16 = layer as u16;
+        let request = match hands {
+            Hands::Spend => Request::Place {
+                cell,
+                layer: layer16,
+                slot: slots.0.selected() as u8,
+            },
+            Hands::Take | Hands::TakeFinds(_) if material == Material::Air => Request::Dig {
+                cell,
+                layer: layer16,
+            },
+            other => {
+                info!("not sent to the host yet: {other:?} at cell {cell} layer {layer}");
+                return None;
+            }
+        };
+        save.send_request(request);
+        info!("sent to the host: {request:?}");
+        return None;
+    }
     let mut moved = taken.slots;
     let taken_floats = taken.floats;
     // What floats out does so at the cell's centre, and the magnet brings it

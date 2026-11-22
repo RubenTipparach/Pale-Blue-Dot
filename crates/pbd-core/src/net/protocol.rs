@@ -246,8 +246,12 @@ pub fn agree(server: &Versions, client: &Versions) -> Result<u16, JoinRefusal> {
     if protocol < server.protocol_min.max(client.protocol_min) {
         return Err(JoinRefusal::GameVersion);
     }
-    if (server.topology, server.generator, server.content)
-        != (client.topology, client.generator, client.content)
+    // A client joining a world it does not hold (world 0, design 20) takes
+    // the world's generator from the welcome, and refuses it itself if it
+    // does not carry it; the topology and content are this build's and must
+    // match.
+    let generator_matches = client.world == 0 || server.generator == client.generator;
+    if (server.topology, server.content) != (client.topology, client.content) || !generator_matches
     {
         return Err(JoinRefusal::WorldVersion);
     }
@@ -1012,7 +1016,23 @@ mod tests {
             Err(JoinRefusal::DifferentWorld)
         );
         assert_eq!(agree(&versions(), &versions()), Ok(PROTOCOL));
-        let anywhere = Versions { world: 0, ..server };
-        assert_eq!(agree(&server, &anywhere), Ok(3), "world 0 joins any world");
+        let anywhere = Versions {
+            world: 0,
+            generator: 0,
+            ..server
+        };
+        assert_eq!(
+            agree(&server, &anywhere),
+            Ok(3),
+            "world 0 joins any world, any generator"
+        );
+        let other_topology = Versions {
+            topology: 9,
+            ..anywhere
+        };
+        assert_eq!(
+            agree(&server, &other_topology),
+            Err(JoinRefusal::WorldVersion)
+        );
     }
 }

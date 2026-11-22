@@ -3856,6 +3856,7 @@ dependencies = [
  "kira",
  "naga",
  "pbd-core",
+ "pbd-net",
  "pbd-server",
  "proc-macro2",
  "quote",

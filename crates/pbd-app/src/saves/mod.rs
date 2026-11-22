@@ -306,6 +306,9 @@ pub struct WorldSave {
     /// player edit is decided by it, with this save as its store. Made on
     /// first use, from the world's generator and the worms it is set to.
     local: Option<pbd_server::Server>,
+    /// On a game that joined another's world: the requests for that server,
+    /// sent each frame (design 20). `None` when this game is the authority.
+    outgoing: Option<Vec<pbd_core::net::protocol::Request>>,
     /// The worms the server's columns are carved by: the tier's own
     /// (`ColumnSettings::worms`), set by the app.
     worms: pbd_core::worms::WormField,
@@ -375,6 +378,7 @@ impl Default for WorldSave {
             edits: Edits::new(),
             ledger: Ledger::default(),
             local: None,
+            outgoing: None,
             worms: pbd_core::worms::WormField::DEFAULT,
             carried: None,
             kit: 0,
@@ -461,6 +465,7 @@ impl WorldSave {
         Self {
             ledger: Ledger::of(&edits),
             local: None,
+            outgoing: None,
             worms: pbd_core::worms::WormField::DEFAULT,
             edits,
             carried,
@@ -617,11 +622,89 @@ impl WorldSave {
             let mut store = SaveStore { save: self, drop };
             decide(&mut server, &mut store)
         };
-        // Single player has nobody to send to: the app applies the decision
-        // itself. A hosted world's clients are sent this (task 6.2).
-        server.drain();
         self.local = Some(server);
         decided
+    }
+
+    /// Everything the in-process server has to send (design 20): a hosted
+    /// world's network sends it each frame; single player drops it, having
+    /// nobody to send to.
+    pub fn take_outbox(&mut self) -> Vec<(pbd_server::To, pbd_core::net::protocol::ToClient)> {
+        self.local.as_mut().map(|s| s.drain()).unwrap_or_default()
+    }
+
+    /// Whether the in-process server has anything to send.
+    pub fn has_outbox(&self) -> bool {
+        self.local.as_ref().is_some_and(|s| s.has_outbox())
+    }
+
+    /// A remote player's first message, on a hosted world (design 20): joined
+    /// with `slots` if new, and sent every region with an edit, nearest to
+    /// `near` first. Returns their number, or `None` with the refusal queued.
+    pub fn serve_join(
+        &mut self,
+        connection: u64,
+        hello: &pbd_core::net::protocol::ToServer,
+        slots: &Slots,
+        near: Option<bevy::math::Vec3>,
+    ) -> Option<u32> {
+        self.with_server(slots, None, |server, store| {
+            let player = server.join(connection, hello, slots.clone())?;
+            server.snapshot_all(&*store, player, near);
+            Some(player)
+        })
+    }
+
+    /// A remote player's message, on a hosted world: decided against this
+    /// save (design 20). The answers are in [`WorldSave::take_outbox`].
+    pub fn serve(&mut self, player: u32, message: pbd_core::net::protocol::ToServer) {
+        let carried = self.carried.clone().unwrap_or_default();
+        self.with_server(&carried, None, |server, store| {
+            server.handle(store, player, message)
+        });
+    }
+
+    /// A remote player left.
+    pub fn serve_leave(&mut self, player: u32) {
+        if let Some(server) = self.local.as_mut() {
+            server.leave(player);
+        }
+    }
+
+    /// Changes the server sent this joined game (design 20): set in its copy
+    /// of the edits and numbered, written nowhere (the world's save is the
+    /// host's).
+    pub fn take_remote(&mut self, edits: &[Edit]) {
+        for &edit in edits {
+            self.edits.set(edit);
+            self.ledger.accept(edit, &self.edits);
+        }
+    }
+
+    /// Whether this game joined another's world (design 20): its edits are
+    /// requests to that server, not decided here.
+    pub fn joined(&self) -> bool {
+        self.outgoing.is_some()
+    }
+
+    /// Mark this game as joined to a remote world.
+    pub fn join_remote(&mut self) {
+        self.outgoing = Some(Vec::new());
+    }
+
+    /// Queue a request for the remote server.
+    pub fn send_request(&mut self, request: pbd_core::net::protocol::Request) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.push(request);
+        }
+    }
+
+    /// The requests queued for the remote server.
+    pub fn take_requests(&mut self) -> Vec<pbd_core::net::protocol::Request> {
+        self.outgoing
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
     }
 
     /// Hold drops as floating, as their lines would have: for a test that

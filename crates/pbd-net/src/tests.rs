@@ -128,7 +128,8 @@ fn a_mismatched_generator_is_refused() {
     let host = Host::bind_to("127.0.0.1:0".parse().unwrap()).unwrap();
     let mut server = server();
     let client = Client::connect(host.local_addr(), Duration::from_secs(10)).unwrap();
-    client.send(&hello(0, GENERATOR_VERSION - 1));
+    // A client that names the world, on another generator.
+    client.send(&hello(77, GENERATOR_VERSION - 1));
     let answer = until("the refusal", || {
         serve(&host, &mut server);
         client.poll().into_iter().next()
