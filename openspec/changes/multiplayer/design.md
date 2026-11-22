@@ -528,6 +528,70 @@ Reach is checked only for a remote player (task 8.7).
 lines as straight through the save; a pickup of a drop that is gone is
 refused and writes nothing; two pickups of one drop give it once.
 
+### 20. Wiring two games together (tasks 6.1, 6.2; 2026-11-22)
+
+The owner, 2026-11-22: "wire it up". The rules and the server are in place
+(designs 16 to 19); this is the network between two processes, and a
+second game joining a hosted one, with nothing new on screen. The host and
+join screens and another player's body wait for their mockups (tasks 5.1,
+5.2), so this step is driven from the command line and checked with logs,
+tests and captures.
+
+**`pbd-net`, the transport (task 6.1).** A crate on `quinn` (QUIC) and the
+core's protocol, with no Bevy. It runs its own thread with its own async
+runtime, and the game talks to it through plain channels, so no frame waits
+on a socket:
+- `Host::bind(port)` listens; each connection is numbered, and its
+  messages come out as `(connection, ToServer)` and go in as
+  `(To, ToClient)`, the server's own outbox type.
+- `Client::connect(address)` gives one channel each way.
+- One reliable, ordered stream each way, each message length-prefixed
+  (`u32` little-endian, then the protocol's bytes). Presence moves to
+  unreliable datagrams with task 8.1, when there is presence to send.
+- The certificate is self-signed per run, and a client accepts any: this
+  is play on a LAN or a direct address among friends (design 14.3), and
+  the join check, not TLS, is what refuses another world. A trusted
+  certificate is a follow-up with the relay.
+
+**Joining a world you do not have (design 9, amended).** A joining player
+does not hold the host's world, so the client's `Hello` names world 0,
+"any", and the server's `Welcome` carries the world's seed, generator and
+topology. The client opens a memory-only world from them: it writes no
+save, because the world's save is the host's (design 4). A client that
+names a world still has it checked exactly, as before.
+
+**The host (task 6.2).** `--host <port>` starts single player as always,
+with its in-process server, and also binds `pbd-net`: remote players join
+the same `Server`, their requests are decided against the same store (the
+host's save), and the server's outbox is sent each frame. The host's own
+edits keep going through `decide_edit`; their `Change` now reaches the
+remote players too.
+
+**The joining client.** `--join <address:port>` connects, sends `Hello`,
+and on `Welcome` opens the world it names. Then:
+- its digs and places are predicted as now, and sent as requests instead
+  of decided locally;
+- every `Change` the server sends is applied to the client's copy of the
+  edits and to its tier through `FineSet::apply`, the one APPLY;
+- a `Refused` drops the prediction and the region's `Snapshot` that
+  follows replaces the client's copy of it.
+
+**Snapshots on join.** Until region subscription (task 6.3) is built, a
+joining client is sent every region that has an edit, nearest first. That
+is the whole world's edits, which is small today and is exactly what 6.3
+replaces with the regions near the player.
+
+**Not in this step:** subscription and its radii (6.3), the near and far
+rule (6.4), the digest round-robin (7.1), other players' bodies and
+presence (8.1, after mockup 5.2), and every writer of design 17 besides
+edits, pack moves and pickups: on a joined client those still change only
+the client's own slots and are not sent, which is said in the log.
+
+**Checks:** two processes on loopback join and a mismatched generator is
+refused with its plain message (6.1); a hosted game and a joined game on
+loopback in a cloud run, a dig on each, with `--capture` shots from both
+showing both holes (6.2).
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,
