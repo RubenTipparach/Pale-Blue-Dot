@@ -25,6 +25,21 @@ Ashenham, the first walled town by id, stands in water on today's ground
 (its lanes are flooded to its people's waists); the market shot was moved to
 Linenleigh. That is the towns' ground, not the people.
 
+## Ears and soft shading (design 38 and 36a, 2026-11-22)
+
+Retaken with the same flags (`tools/capture_townsfolk.sh`, `ONLY=ears` and
+`ONLY=beards`; lavapipe, `--profile fast`, frame time not measured). Each ear
+is one tapered, cupped piece grown from the head's side (it was a box), and
+the beard and the ears are soft shaded (the owner: "soft shade the beard, not
+flat shade").
+
+| Shot | What it shows |
+| --- | --- |
+| `ears-smith-side.jpg`, `ears-smith-side-close.jpg` | Holbrook's smith three-quarter on (the `smith-forge-2230` spot at 11:00), and a 3x nearest-neighbour crop of his head: the right ear flares out of the side face and rolls round to its rim, no hard corner where it meets the head; his goatee shaded smoothly. |
+| `ears-smith-side-2230.jpg`, `ears-smith-side-2230-close.jpg` | The same at 22:30, by the lamp post. |
+| `ears-smith-front.jpg` | The smith face on from a metre: at that distance the ears stay inside the head's silhouette. |
+| `beard-goatee.jpg`, `beard-goatee-talking.jpg`, `beard-full-front.jpg`, `beard-full-front-2230.jpg` | The beard shots retaken soft shaded: no crumpled facets; the innkeeper's ears show either side of his bald head. |
+
 ## The loading screen
 
 A normal launch (no `--capture`, lavapipe) beside Holbrook's smith,

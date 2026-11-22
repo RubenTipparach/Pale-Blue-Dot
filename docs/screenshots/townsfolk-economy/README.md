@@ -32,3 +32,14 @@ What is wrong in them, honestly:
 - A board's line reads "Bring 4 bronze ingot": the job lines do not take a
   plural yet.
 - These are stills; the mouth's movement is only seen as one open frame.
+
+## The icons in the pack's slot well (design 38a, 2026-11-22)
+
+`trade-wells.jpg` and `board-wells.jpg` are `trade` and `board` retaken
+(`tools/capture_talk.sh`, `ONLY=trade` and `ONLY=board`; lavapipe, frame time
+not measured) after the owner's "you need proper icons for trade": every
+trade row's good and every job's good now sits in the pack's own 24 px stone
+slot well, its 16 px icon on the well's floor, as in the pack and the hotbar
+(the board's rows had no icon before). The panels are wider by the wells
+(trade 490, board 450 native px). `talk.jpg`, `trade.jpg` and `board.jpg`
+stay as the frames the owner approved.
