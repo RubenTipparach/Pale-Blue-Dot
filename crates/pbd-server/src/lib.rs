@@ -19,6 +19,7 @@
 use glam::Vec3;
 use pbd_core::accept::{self, Ask, Hands, Refused};
 use pbd_core::column::{self, Column};
+use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::net::ledger::{Ledger, Sequenced};
@@ -49,7 +50,19 @@ pub trait Store {
     /// set it in the edits, number it in its region and journal it. `None`
     /// refuses it, changing nothing, and the server refuses the request.
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced>;
+    /// Journal a player's slots after a move in the pack. `false` refuses
+    /// it (design 19).
+    fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool;
+    /// A drop the world holds now, by id.
+    fn drop(&self, id: u64) -> Option<ItemDrop>;
+    /// Journal a pickup: `left` remain on drop `id` (none: it is gone), the
+    /// rest went into `carried`. `false` refuses it.
+    fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool;
 }
+
+/// A pack or pickup a [`MemoryStore`] journaled: the author, the drop and
+/// what was left on it for a pickup, and the slots after.
+pub type HandsEntry = (Author, Option<(u64, u16)>, Slots);
 
 /// A store in memory: tests, and a world with no disk behind it.
 #[derive(Clone, Debug, Default)]
@@ -58,6 +71,11 @@ pub struct MemoryStore {
     pub ledger: Ledger,
     /// Every commit, in order.
     pub entries: Vec<(Author, Sequenced, Slots)>,
+    /// The live drops, by id.
+    pub drops: BTreeMap<u64, ItemDrop>,
+    /// Every pack and pickup journaled, in order: the author, the drop and
+    /// what was left on it for a pickup, and the slots after.
+    pub hands: Vec<HandsEntry>,
     /// Refuse everything from here on, as a failed writer does.
     pub failed: bool,
 }
@@ -88,6 +106,29 @@ impl Store for MemoryStore {
         self.entries
             .push((author.clone(), sequenced, carried.clone()));
         Some(sequenced)
+    }
+    fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
+        if self.failed {
+            return false;
+        }
+        self.hands.push((author.clone(), None, carried.clone()));
+        true
+    }
+    fn drop(&self, id: u64) -> Option<ItemDrop> {
+        self.drops.get(&id).copied()
+    }
+    fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
+        if self.failed {
+            return false;
+        }
+        if left == 0 {
+            self.drops.remove(&id);
+        } else if let Some(drop) = self.drops.get_mut(&id) {
+            drop.count = left;
+        }
+        self.hands
+            .push((author.clone(), Some((id, left)), carried.clone()));
+        true
     }
 }
 
@@ -288,6 +329,42 @@ impl Server {
                     _ => return Err(self.refuse(store, player, id, cell, Refusal::EmptySlot)),
                 }
             }
+            Request::Pack(mv) => {
+                let slots = self.players[&player].slots.clone();
+                return self
+                    .pack(store, player, id, mv, slots)
+                    .map(|slots| Decided {
+                        sequenced: Sequenced {
+                            region: pbd_core::net::ledger::NO_REGION,
+                            seq: 0,
+                            edit: Edit {
+                                cell: 0,
+                                layer: 0,
+                                material: Material::Air,
+                            },
+                        },
+                        slots,
+                        floats: None,
+                    });
+            }
+            Request::Pick { drop } => {
+                let slots = self.players[&player].slots.clone();
+                return self
+                    .pick(store, player, id, drop, slots)
+                    .map(|(slots, _)| Decided {
+                        sequenced: Sequenced {
+                            region: pbd_core::net::ledger::NO_REGION,
+                            seq: 0,
+                            edit: Edit {
+                                cell: 0,
+                                layer: 0,
+                                material: Material::Air,
+                            },
+                        },
+                        slots,
+                        floats: None,
+                    });
+            }
         };
         let mut slots = self.players[&player].slots.clone();
         if let Some(slot) = slot {
@@ -392,6 +469,80 @@ impl Server {
             slots: taken.slots,
             floats: taken.floats,
         })
+    }
+
+    /// Decide a move in `player`'s pack, from `slots` (design 19): the core
+    /// rule, then the store journals the slots after it. In process the
+    /// slots are the app's as they stand (design 18).
+    pub fn pack(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        mv: pbd_core::accept::PackMove,
+        slots: Slots,
+    ) -> Result<Slots, Refusal> {
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Ok(moved) = accept::pack(&slots, mv) else {
+            return Err(self.refuse_hands(player, id, Refusal::EmptySlot));
+        };
+        if !store.commit_pack(&Author::Player(player), &moved) {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        }
+        self.players.get_mut(&player).expect("checked").slots = moved.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        Ok(moved)
+    }
+
+    /// Decide a pickup of drop `drop_id` by `player`, from `slots` (design
+    /// 19): the drop must be in the store; it gives by the core's give order
+    /// and the store journals what is left on it. Returns the slots after
+    /// and what is left. A drop that is gone is refused, so two players
+    /// reaching one drop are given it once.
+    pub fn pick(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        drop_id: u64,
+        slots: Slots,
+    ) -> Result<(Slots, u16), Refusal> {
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(drop) = store.drop(drop_id).filter(|d| d.count > 0) else {
+            return Err(self.refuse_hands(player, id, Refusal::Gone));
+        };
+        let (taken, left) = accept::pick(&drop, &slots);
+        if !store.commit_pick(&Author::Player(player), drop_id, left, &taken) {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        }
+        self.players.get_mut(&player).expect("checked").slots = taken.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        Ok((taken, left))
+    }
+
+    /// Refuse a request about the hands. The slots go back with the
+    /// inventory's message (task 8.2); until then the client keeps its own.
+    fn refuse_hands(&mut self, player: u32, id: u32, reason: Refusal) -> Refusal {
+        self.send(To::Player(player), ToClient::Refused { id, reason });
+        reason
     }
 
     /// Refuse a request, and re-send what the requester may have predicted

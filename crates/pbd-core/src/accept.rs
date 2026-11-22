@@ -130,6 +130,55 @@ pub fn edit(ask: Ask, slots: &Slots, yields: impl FnOnce() -> Item) -> Result<Ta
     })
 }
 
+/// A move in the pack (`multiplayer` design 19), as the pack screen
+/// resolves a click.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PackMove {
+    /// Put `count` of slot `from` down on slot `to` (`Slots::shift`).
+    Shift { from: usize, to: usize, count: u16 },
+    /// Send a stack between the hotbar and the pack (`Slots::send`).
+    Send { index: usize },
+    /// Destroy `count` of a stack (the trash).
+    Trash { index: usize, count: u16 },
+}
+
+/// Accept or refuse a move in the pack: the slots after it. Refused, as
+/// [`Refused::EmptySlot`], when the slot it takes from is empty or holds
+/// fewer than it would take, or the move names a slot past the player's.
+pub fn pack(slots: &Slots, mv: PackMove) -> Result<Slots, Refused> {
+    let (from, count) = match mv {
+        PackMove::Shift { from, count, .. } => (from, count),
+        PackMove::Send { index } => (index, 1),
+        PackMove::Trash { index, count } => (index, count),
+    };
+    let held = slots.get(from).map_or(0, |stack| stack.count);
+    if count == 0 || held < count {
+        return Err(Refused::EmptySlot);
+    }
+    let mut moved = slots.clone();
+    match mv {
+        PackMove::Shift { from, to, count } => {
+            if to >= crate::inventory::CARRIED {
+                return Err(Refused::EmptySlot);
+            }
+            moved.shift(from, to, count);
+        }
+        PackMove::Send { index } => moved.send(index),
+        PackMove::Trash { index, count } => {
+            moved.take(index, count);
+        }
+    }
+    Ok(moved)
+}
+
+/// A pickup of `drop` into `slots` by the give order: the slots after it
+/// and how many are left on the drop. What does not fit stays on the drop.
+pub fn pick(drop: &crate::drops::ItemDrop, slots: &Slots) -> (Slots, u16) {
+    let mut taken = slots.clone();
+    let left = taken.give(drop.item, drop.count);
+    (taken, left)
+}
+
 /// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
 /// tilled soil gives dirt; a generated ore cell gives mixed ore or, in a coal
 /// seam, coal; a placed one gives ore; generated sand in a desert cell gives
@@ -212,6 +261,67 @@ mod tests {
             Hands::Swap(Item::Block(Material::Water)),
         );
         assert_eq!(edit(bucket, &slots, stone), Err(Refused::EmptySlot));
+    }
+
+    /// Design 19: a pack move is the slots' own call, refused from an empty
+    /// slot or for more than it holds.
+    #[test]
+    fn a_pack_move_is_applied_or_refused() {
+        let stone = Item::Block(Material::Stone);
+        let slots = holding(stone, 5);
+        let mut by_hand = slots.clone();
+        by_hand.shift(0, 3, 2);
+        assert_eq!(
+            pack(
+                &slots,
+                PackMove::Shift {
+                    from: 0,
+                    to: 3,
+                    count: 2
+                }
+            ),
+            Ok(by_hand)
+        );
+        let mut sent = slots.clone();
+        sent.send(0);
+        assert_eq!(pack(&slots, PackMove::Send { index: 0 }), Ok(sent));
+        assert_eq!(
+            pack(&slots, PackMove::Trash { index: 0, count: 5 }).map(|s| s.get(0)),
+            Ok(None)
+        );
+        assert_eq!(
+            pack(&slots, PackMove::Trash { index: 0, count: 6 }),
+            Err(Refused::EmptySlot)
+        );
+        assert_eq!(
+            pack(&slots, PackMove::Send { index: 4 }),
+            Err(Refused::EmptySlot)
+        );
+        assert_eq!(
+            pack(
+                &slots,
+                PackMove::Shift {
+                    from: 0,
+                    to: 999,
+                    count: 1
+                }
+            ),
+            Err(Refused::EmptySlot)
+        );
+    }
+
+    /// A pickup gives by the give order and leaves what does not fit.
+    #[test]
+    fn a_pickup_gives_what_fits() {
+        let drop = crate::drops::ItemDrop {
+            id: 4,
+            item: Item::Block(Material::Dirt),
+            count: 3,
+            position: glam::DVec3::ZERO,
+            made_s: 0.0,
+        };
+        let (slots, left) = pick(&drop, &Slots::default());
+        assert_eq!((slots, left), (holding(Item::Block(Material::Dirt), 3), 0));
     }
 
     /// A dig floats its yield and leaves the slots; a dig with finds gives

@@ -11,6 +11,7 @@
 //! Positions go as body-relative `f64` (design 7); nothing on the wire is an
 //! `f32` relative to a render origin.
 
+use crate::accept::PackMove;
 use crate::terrain::{Material, material_code, material_of};
 use crate::world_frame::{FrameId, WorldPos};
 use glam::DVec3;
@@ -64,6 +65,10 @@ pub enum Request {
     Dig { cell: u32, layer: u16 },
     /// Place what the hotbar's slot holds into the layer of the cell.
     Place { cell: u32, layer: u16, slot: u8 },
+    /// A move in the pack (design 19).
+    Pack(crate::accept::PackMove),
+    /// Pick up a drop the client's magnet brought in (design 19).
+    Pick { drop: u64 },
 }
 
 /// Why a request was refused. No undo rides with it: the server re-sends
@@ -82,6 +87,8 @@ pub enum Refusal {
     Cheat,
     /// The save did not take it.
     NotSaved,
+    /// The drop is not there: picked up already, or never was.
+    Gone,
 }
 
 /// A change to a region's state, in the server's order.
@@ -385,13 +392,14 @@ const JOIN_REFUSALS: [JoinRefusal; 6] = [
     JoinRefusal::Banned,
     JoinRefusal::WrongPassword,
 ];
-const REFUSALS: [Refusal; 6] = [
+const REFUSALS: [Refusal; 7] = [
     Refusal::OutOfWorld,
     Refusal::Unchanged,
     Refusal::EmptySlot,
     Refusal::LampTaken,
     Refusal::Cheat,
     Refusal::NotSaved,
+    Refusal::Gone,
 ];
 
 fn code_of<T: PartialEq>(table: &[T], v: &T) -> u8 {
@@ -433,6 +441,30 @@ impl ToServer {
                         w.u32(cell);
                         w.u16(layer);
                         w.u8(slot);
+                    }
+                    Request::Pack(mv) => {
+                        w.u8(3);
+                        match mv {
+                            PackMove::Shift { from, to, count } => {
+                                w.u8(1);
+                                w.u8(from as u8);
+                                w.u8(to as u8);
+                                w.u16(count);
+                            }
+                            PackMove::Send { index } => {
+                                w.u8(2);
+                                w.u8(index as u8);
+                            }
+                            PackMove::Trash { index, count } => {
+                                w.u8(3);
+                                w.u8(index as u8);
+                                w.u16(count);
+                            }
+                        }
+                    }
+                    Request::Pick { drop } => {
+                        w.u8(4);
+                        w.u64(drop);
                     }
                 }
             }
@@ -505,6 +537,22 @@ impl ToServer {
                         layer: r.u16()?,
                         slot: r.u8()?,
                     },
+                    3 => Request::Pack(match r.u8()? {
+                        1 => PackMove::Shift {
+                            from: usize::from(r.u8()?),
+                            to: usize::from(r.u8()?),
+                            count: r.u16()?,
+                        },
+                        2 => PackMove::Send {
+                            index: usize::from(r.u8()?),
+                        },
+                        3 => PackMove::Trash {
+                            index: usize::from(r.u8()?),
+                            count: r.u16()?,
+                        },
+                        other => return Err(Decode::Unknown(other)),
+                    }),
+                    4 => Request::Pick { drop: r.u64()? },
                     other => return Err(Decode::Unknown(other)),
                 };
                 Self::Request { id, request }

@@ -324,3 +324,116 @@ fn the_clock_runs_only_while_someone_plays() {
         .count();
     assert_eq!(clocks, 2);
 }
+
+/// Design 19: a pack move is decided by the core rule and journaled; one
+/// from an empty slot is refused and journals nothing.
+#[test]
+fn a_pack_move_goes_through_the_server() {
+    use pbd_core::accept::PackMove;
+    let (mut s, mut st) = server();
+    let mut slots = Slots::default();
+    slots.give(Item::Block(Material::Stone), 10);
+    joined(&mut s, &[1], slots.clone());
+    let mv = PackMove::Shift {
+        from: 0,
+        to: 12,
+        count: 4,
+    };
+    s.handle(
+        &mut st,
+        0,
+        ToServer::Request {
+            id: 1,
+            request: Request::Pack(mv),
+        },
+    );
+    let mut by_hand = slots.clone();
+    by_hand.shift(0, 12, 4);
+    assert_eq!(s.player(0).unwrap().slots, by_hand);
+    assert_eq!(st.hands, vec![(Author::Player(0), None, by_hand.clone())]);
+    s.handle(
+        &mut st,
+        0,
+        ToServer::Request {
+            id: 2,
+            request: Request::Pack(PackMove::Send { index: 7 }),
+        },
+    );
+    assert_eq!(st.hands.len(), 1, "an empty slot's move is refused");
+    assert!(s.drain().iter().any(|(_, m)| matches!(
+        m,
+        ToClient::Refused {
+            id: 2,
+            reason: Refusal::EmptySlot
+        }
+    )));
+}
+
+/// Design 19: two players reach one drop; the first is given it and the
+/// second is refused as gone, so it is given once. A partial pickup leaves
+/// the rest on the drop.
+#[test]
+fn two_players_reaching_one_drop_are_given_it_once() {
+    let (mut s, mut st) = server();
+    joined(&mut s, &[1, 2], Slots::default());
+    let item = Item::Block(Material::Dirt);
+    st.drops.insert(
+        9,
+        ItemDrop {
+            id: 9,
+            item,
+            count: 3,
+            position: glam::DVec3::ZERO,
+            made_s: 0.0,
+        },
+    );
+    s.handle(
+        &mut st,
+        1,
+        ToServer::Request {
+            id: 1,
+            request: Request::Pick { drop: 9 },
+        },
+    );
+    s.handle(
+        &mut st,
+        0,
+        ToServer::Request {
+            id: 2,
+            request: Request::Pick { drop: 9 },
+        },
+    );
+    assert_eq!(s.player(1).unwrap().slots.get(0).map(|x| x.count), Some(3));
+    assert_eq!(s.player(0).unwrap().slots.get(0), None);
+    assert!(st.drops.is_empty());
+    assert_eq!(st.hands.len(), 1);
+    assert_eq!(st.hands[0].1, Some((9, 0)));
+    assert!(s.drain().iter().any(|(to, m)| *to == To::Player(0)
+        && matches!(
+            m,
+            ToClient::Refused {
+                id: 2,
+                reason: Refusal::Gone
+            }
+        )));
+    // A pack with room for only part of a drop leaves the rest on it.
+    let mut full = Slots::default();
+    assert!(
+        full.give(Item::Block(Material::Stone), u16::MAX) > 0,
+        "every slot full"
+    );
+    assert_eq!(full.take(5, 2), 2);
+    st.drops.insert(
+        10,
+        ItemDrop {
+            id: 10,
+            item: Item::Block(Material::Stone),
+            count: 5,
+            position: glam::DVec3::ZERO,
+            made_s: 0.0,
+        },
+    );
+    let (_, left) = s.pick(&mut st, 0, 3, 10, full).unwrap();
+    assert_eq!(left, 3);
+    assert_eq!(st.drops[&10].count, 3);
+}

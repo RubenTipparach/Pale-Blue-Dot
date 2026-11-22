@@ -283,6 +283,11 @@ pub struct WorldSave {
     /// made, for the load to put back. Their time is judged by the world's
     /// clock once it is running, so one past its life is simply not shown.
     pub drops: Vec<ItemDrop>,
+    /// The drops floating now, by id, kept by the lines that make and change
+    /// them (a dig's drop, a toss, a pickup): what the in-process server
+    /// reads a pickup against (`multiplayer` design 19). Expiry is the app's
+    /// (`drops.rs`): an expired drop is never asked about.
+    live_drops: BTreeMap<u64, ItemDrop>,
     /// What this world is: its seed and the versions that make it.
     pub identity: Identity,
     /// Every record the log holds, by kind and id: its last value
@@ -351,6 +356,17 @@ impl pbd_server::Store for SaveStore<'_> {
         debug_assert_eq!(*author, Author::Player(0));
         self.save.accept_sequenced(edit, self.drop, carried)
     }
+    fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
+        debug_assert_eq!(*author, Author::Player(0));
+        self.save.record_pack(carried)
+    }
+    fn drop(&self, id: u64) -> Option<ItemDrop> {
+        self.save.live_drops.get(&id).copied()
+    }
+    fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
+        debug_assert_eq!(*author, Author::Player(0));
+        self.save.record_pick(id, left, carried)
+    }
 }
 
 impl Default for WorldSave {
@@ -369,6 +385,7 @@ impl Default for WorldSave {
             catches: BTreeMap::new(),
             equipment: None,
             drops: Vec::new(),
+            live_drops: BTreeMap::new(),
             records: Records::new(),
             yields: YieldSet::new(),
             // The seed is every generator version's (only the moisture moves), and
@@ -454,6 +471,7 @@ impl WorldSave {
             vehicles,
             catches,
             equipment,
+            live_drops: drops.iter().map(|(&id, &drop)| (id, drop)).collect(),
             drops: drops.into_values().collect(),
             identity,
             records,
@@ -528,6 +546,7 @@ impl WorldSave {
         self.yields.touch_cell(edit.cell);
         if let Some(drop) = drop {
             self.next_drop = self.next_drop.max(drop.id + 1);
+            self.live_drops.insert(drop.id, *drop);
         }
         self.writer.append(format::line_of(edit, drop, carried));
         sequenced
@@ -547,19 +566,66 @@ impl WorldSave {
         carried: &Slots,
         drop: Option<&ItemDrop>,
     ) -> Result<pbd_server::Decided, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, drop, |server, store| {
+            server.edit(store, 0, 0, edit, hands, carried.clone())
+        })
+    }
+
+    /// Decide a move in the pack on the in-process server and journal the
+    /// slots after it (`multiplayer` design 19): the `pack` line
+    /// [`WorldSave::record_pack`] writes.
+    pub fn decide_pack(
+        &mut self,
+        mv: pbd_core::accept::PackMove,
+        carried: &Slots,
+    ) -> Result<Slots, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.pack(store, 0, 0, mv, carried.clone())
+        })
+    }
+
+    /// Decide a pickup of drop `id` on the in-process server (`multiplayer`
+    /// design 19): the slots after it and what is left on the drop, with the
+    /// `pick` line [`WorldSave::record_pick`] writes.
+    pub fn decide_pick(
+        &mut self,
+        id: u64,
+        carried: &Slots,
+    ) -> Result<(Slots, u16), pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.pick(store, 0, 0, id, carried.clone())
+        })
+    }
+
+    /// Run `decide` on single player's server with this save as its store.
+    fn with_server<T>(
+        &mut self,
+        carried: &Slots,
+        drop: Option<&ItemDrop>,
+        decide: impl FnOnce(&mut pbd_server::Server, &mut SaveStore) -> T,
+    ) -> T {
         let mut server = self
             .local
             .take()
             .unwrap_or_else(|| self.local_server(carried));
         let decided = {
             let mut store = SaveStore { save: self, drop };
-            server.edit(&mut store, 0, 0, edit, hands, carried.clone())
+            decide(&mut server, &mut store)
         };
         // Single player has nobody to send to: the app applies the decision
         // itself. A hosted world's clients are sent this (task 6.2).
         server.drain();
         self.local = Some(server);
         decided
+    }
+
+    /// Hold drops as floating, as their lines would have: for a test that
+    /// puts drops in the world without making them.
+    #[cfg(test)]
+    pub fn hold_drops(&mut self, drops: &[ItemDrop]) {
+        for drop in drops {
+            self.live_drops.insert(drop.id, *drop);
+        }
     }
 
     /// The worms the in-process server carves its columns by: the tier's.
@@ -617,6 +683,11 @@ impl WorldSave {
             return false;
         }
         self.carried = Some(carried.clone());
+        if left == 0 {
+            self.live_drops.remove(&id);
+        } else if let Some(drop) = self.live_drops.get_mut(&id) {
+            drop.count = left;
+        }
         self.writer.append(format::pick_line_of(id, left, carried));
         true
     }
@@ -628,6 +699,7 @@ impl WorldSave {
             return false;
         }
         self.next_drop = self.next_drop.max(drop.id + 1);
+        self.live_drops.insert(drop.id, *drop);
         self.carried = Some(carried.clone());
         self.writer.append(format::toss_line_of(drop, carried));
         true
@@ -1134,6 +1206,67 @@ mod tests {
                     .ledger()
                     .seq(pbd_core::cell_key::region::of_key(cell).unwrap())
             );
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
+        assert!(!log(&a).is_empty());
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 19: pack moves and pickups through the
+    /// in-process server write what `record_pack` and `record_pick` always
+    /// wrote; a pickup of a drop that is gone is refused and writes nothing.
+    #[test]
+    fn pack_moves_and_pickups_through_the_server_write_the_same_lines() {
+        use pbd_core::accept::PackMove;
+        use pbd_core::net::protocol::Refusal as Refused;
+        let root = temporary("server-hands");
+        let (a, b) = (
+            create(&root, "Through the server", 12).unwrap(),
+            create(&root, "Straight", 12).unwrap(),
+        );
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Stone), 20);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            let mut slots = carried.clone();
+            for mv in [
+                PackMove::Shift {
+                    from: 0,
+                    to: 14,
+                    count: 8,
+                },
+                PackMove::Send { index: 14 },
+                PackMove::Trash { index: 0, count: 2 },
+            ] {
+                let moved = through
+                    .decide_pack(mv, &slots)
+                    .expect("a move of a held stack");
+                assert_eq!(Ok(moved.clone()), pbd_core::accept::pack(&slots, mv));
+                assert!(straight.record_pack(&moved));
+                slots = moved;
+            }
+            // A toss makes a drop in both; the pickup takes it back.
+            let drop = ItemDrop {
+                id: through.next_drop_id(),
+                item: Item::Block(Material::Stone),
+                count: 4,
+                position: bevy::math::DVec3::new(1.0, 2.0, 3.0),
+                made_s: 9.0,
+            };
+            let mut tossed = slots.clone();
+            tossed.take(1, 4);
+            assert!(through.record_toss(&drop, &tossed));
+            assert!(straight.record_toss(&drop, &tossed));
+            let (picked, left) = through
+                .decide_pick(drop.id, &tossed)
+                .expect("a floating drop");
+            assert_eq!(left, 0);
+            assert!(straight.record_pick(drop.id, left, &picked));
+            assert_eq!(through.decide_pick(drop.id, &picked), Err(Refused::Gone));
+            through.drain();
+            straight.drain();
         }
         let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert!(!log(&a).is_empty());
