@@ -171,6 +171,11 @@ pub struct Building {
     /// only where it is raised.
     #[serde(default, skip_serializing_if = "is_false")]
     pub raised: bool,
+    /// Walls the world broke for a repair job (`townsfolk` design 29),
+    /// `[c, r, d, storey]`, written only where there are some, so every
+    /// other building's record is as it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub broken: Vec<[i32; 4]>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -203,6 +208,7 @@ impl Building {
             parapet_gaps: def.parapet_gaps.clone(),
             archways: def.archways.clone(),
             raised: def.raised,
+            broken: Vec::new(),
         }
     }
 
@@ -228,7 +234,40 @@ impl Building {
             parapet_gaps: self.parapet_gaps.clone(),
             archways: self.archways.clone(),
             raised: self.raised,
+            broken: self.broken.clone(),
         }
+    }
+
+    /// The walls a repair job may break (`townsfolk` design 29): the ground
+    /// storey's outer walls with no door, window or archway in them, on no
+    /// open edge and no stair's cell, in cell then side order. Empty for a
+    /// building on stilts, a raised one or a stair tower.
+    pub fn breakable(&self) -> Vec<[i32; 4]> {
+        if self.stilts.is_some() || self.raised || self.newel.is_some() || self.storeys == 0 {
+            return Vec::new();
+        }
+        let inside = |c: i32, r: i32| self.cells.iter().any(|x| *x == [c, r]);
+        let mut out = Vec::new();
+        for &[c, r] in &self.cells {
+            if self.stair_cells.contains(&[c, r]) {
+                continue;
+            }
+            for d in 0..6 {
+                let (c2, r2) = super::neighbour(c, r, d);
+                let at = [c, r, d as i32, 0];
+                if inside(c2, r2)
+                    || self.open.contains(&[c, r, d as i32])
+                    || self.doors.contains(&at)
+                    || self.windows.contains(&at)
+                    || self.archways.contains(&at)
+                    || self.broken.contains(&at)
+                {
+                    continue;
+                }
+                out.push(at);
+            }
+        }
+        out
     }
 }
 

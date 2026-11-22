@@ -516,6 +516,12 @@ pub struct Towns {
     pub standing: Vec<Standing>,
     /// Towns being cut on the pool, by site (decision 5: published whole).
     cutting: Vec<(u32, Task<Result<Laid, String>>)>,
+    /// Standing towns whose record changed (a wall broken or mended,
+    /// `townsfolk` design 29), to be cut again and swapped in whole.
+    pub recut: BTreeSet<u32>,
+    /// Each standing town's chart and patch, for finding a layout cell's
+    /// place on the planet (a broken wall's gap).
+    pub charts: BTreeMap<u32, Arc<(Chart, Patch)>>,
 }
 
 impl Towns {
@@ -979,7 +985,33 @@ pub fn stand_in_range(world: &mut World) {
             continue;
         };
         match result {
-            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => stand(world, &h, laid, 0.0),
+            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => {
+                // A town cut again stands in its own place at once, drawn
+                // whole, so it never blinks out (design 29).
+                let again = world
+                    .resource::<Towns>()
+                    .standing
+                    .iter()
+                    .any(|s| s.site == site);
+                if again {
+                    drop_town(world, site);
+                }
+                stand(world, &h, laid, if again { 1.0 } else { 0.0 });
+                if again {
+                    let root = world
+                        .resource_mut::<Towns>()
+                        .standing
+                        .iter_mut()
+                        .find(|s| s.site == site)
+                        .map(|s| {
+                            s.shown = 1.0;
+                            s.entity
+                        });
+                    if let Some(root) = root {
+                        show(world, root, 1.0);
+                    }
+                }
+            }
             Ok(_) => {}
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
@@ -1000,6 +1032,12 @@ pub fn stand_in_range(world: &mut World) {
             let d = (h.point(radius) - at).length();
             if let Some(s) = towns.standing.iter_mut().find(|s| s.site == h.site.id) {
                 s.leaving = leaving(d, s.leaving);
+                if towns.recut.contains(&h.site.id)
+                    && !towns.cutting.iter().any(|(site, _)| *site == h.site.id)
+                {
+                    towns.recut.remove(&h.site.id);
+                    wanted_now.push(h.clone());
+                }
             } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
                 wanted_now.push(h.clone());
             }
@@ -1117,6 +1155,7 @@ fn drop_town(world: &mut World, site: u32) {
         e.despawn();
     }
     crate::townsfolk::on_drop(world, site);
+    world.resource_mut::<Towns>().charts.remove(&site);
     if let Some(mut structures) = world.get_resource_mut::<Structures>() {
         let end = (gone.first + gone.count).min(structures.0.len());
         structures.0.drain(gone.first.min(end)..end);
@@ -1155,6 +1194,10 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
     crate::townsfolk::on_stand(world, site.id, &held.town, &laid);
+    world
+        .resource_mut::<Towns>()
+        .charts
+        .insert(site.id, Arc::new((laid.chart.clone(), laid.patch.clone())));
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
     let dressing = match (things, off) {
@@ -1686,6 +1729,27 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
             }
         }
     }
+    chunked(triangles)
+}
+
+/// What a player's plot casts (`player-building` design 9): every triangle
+/// of its meshes but its flames and what is cut out, into every cascade,
+/// chunked as a town's.
+pub fn casting_of(meshes: &Meshes) -> TownCasting {
+    let cut = cut_textures();
+    let all = crate::planet::shadow::CASCADE_COUNT as u8;
+    let triangles = meshes
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name) && name.as_str() != FLAME)
+        .flat_map(|(_, buf)| buf.positions.chunks_exact(3))
+        .map(|t| ([t[0], t[1], t[2]], all))
+        .collect();
+    chunked(triangles)
+}
+
+/// Triangles, each with how many cascades it casts into, laid out in
+/// chunks of [`CASTER_CHUNK_M`] with their bounds.
+fn chunked(triangles: Vec<([[f32; 3]; 3], u8)>) -> TownCasting {
     // By chunk: its cascades, then the cell its centroid is in. A BTreeMap,
     // so the order is the same on every run.
     type Triangle = [[f32; 3]; 3];

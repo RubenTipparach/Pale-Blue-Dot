@@ -2602,6 +2602,19 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
         site.name
     );
     spot("the walled town's market", stand, middle - stand);
+    // Face to face with its trader (the first stallholder) and its job
+    // giver (its smith, `jobs.ron`'s giver roles), 1.6 m off, for the talk,
+    // trade and board captures (`townsfolk` design 35).
+    for role in ["stallholder", "smith"] {
+        if let Some(p) = folk.iter().find(|p| p.role == role) {
+            let at = p.at(0.0, radius);
+            spot(
+                &format!("face to face with {}'s {role}", site.name),
+                at.feet + at.forward * 1.6,
+                -at.forward,
+            );
+        }
+    }
     let guard = folk
         .iter()
         .find(|p| p.role == "guard")

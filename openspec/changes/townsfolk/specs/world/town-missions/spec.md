@@ -24,18 +24,4 @@ starter missions.
   person in the other town
 - **THEN** the job is done, and returning to the giver pays its reward
 
-#### Scenario: A lost villager
 
-- **WHEN** the player finds the lost villager and talks to them
-- **THEN** they follow the player, wait at deep water, and the job is done
-  when they are inside their town's wall
-
-### Requirement: Repairs never touch the player's work
-
-A broken piece a repair job asks for SHALL be a change the world made to a
-town building, and SHALL never be a piece the player placed.
-
-#### Scenario: A player's wall in town
-
-- **WHEN** the world chooses a piece to break for a repair job
-- **THEN** no piece the player placed is chosen

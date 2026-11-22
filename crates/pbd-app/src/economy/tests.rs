@@ -283,3 +283,214 @@ fn a_town_with_no_people_laid_keeps_trade_by_its_drawn_talkers() {
     let folk = crate::townsfolk::Townsfolk::default();
     assert_eq!(roster(Some(&folk), &refs, 7), people);
 }
+
+/// `townsfolk` task 7.5: a lost villager taken as a job is found by talking
+/// to them, follows the player at their pace, waits at deep water, and at
+/// the town's wall is home: the job counts it, its record is cleared, and
+/// handing it in pays.
+#[test]
+fn a_lost_villager_follows_waits_at_deep_water_and_counts_at_the_wall() {
+    use bevy::math::DVec3;
+    use special::{Walked, find_lost, lost_of, lost_record, walk};
+    let mut app = app();
+    let cfg = config();
+    let town = harbour(40);
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: 3,
+    };
+    assert!(cfg.jobs.posted.contains(&JobKind::Lost), "posted on boards");
+    let job = board.make(town.as_town(), JobKind::Lost, 77, 9).unwrap();
+    shop(&mut app, |s| s.take(job.clone())).unwrap();
+    // Stood out of town; not yet following.
+    let mut lost = pbd_core::economy::follow::Lost {
+        site: town.site,
+        at: [0.0, 0.0, 0.0],
+        following: false,
+        person: 3,
+    };
+    {
+        let world = app.world_mut();
+        let mut save = world.remove_resource::<WorldSave>().unwrap();
+        save.store(&Author::Player(0), vec![lost_record(job.id, &lost)])
+            .unwrap();
+        let eco = world.resource::<Economy>().clone();
+        assert!(!find_lost(&mut save, &eco, town.site, 2), "someone else");
+        assert!(find_lost(&mut save, &eco, town.site, 3), "found");
+        assert!(!find_lost(&mut save, &eco, town.site, 3), "found once");
+        lost = lost_of(&save, job.id).unwrap();
+        assert!(lost.following);
+        world.insert_resource(save);
+    }
+    // Deep water from x = 20 m, the town's wall inside x = -30 m.
+    let dry = |p: DVec3| p.x < 20.0;
+    let home = |p: DVec3| p.x < -30.0;
+    let flat = |p: DVec3| p;
+    // The player walks off at 1.5 m/s; the villager keeps behind.
+    let mut player = DVec3::new(6.0, 0.0, 0.0);
+    let mut moved = 0.0;
+    for _ in 0..20 {
+        player.x += 0.15;
+        if let Walked::Moved(m) = walk(&mut lost, player, 1.5, 0.1, dry, flat, home) {
+            moved += m;
+        }
+    }
+    assert!(moved > 2.0, "it followed {moved} m");
+    assert!(player.x - lost.at[0] >= pbd_core::economy::follow::GAP_M - 1e-6);
+    // Across deep water: it waits at the edge.
+    player = DVec3::new(45.0, 0.0, 0.0);
+    for _ in 0..200 {
+        walk(&mut lost, player, 0.0, 0.1, dry, flat, home);
+    }
+    assert!(lost.at[0] < 20.0 && lost.at[0] > 18.0, "{:?}", lost.at);
+    assert_eq!(
+        walk(&mut lost, player, 0.0, 0.1, dry, flat, home),
+        Walked::Still
+    );
+    // Back over the wall: home.
+    player = DVec3::new(-40.0, 0.0, 0.0);
+    let mut came = false;
+    for _ in 0..600 {
+        if walk(&mut lost, player, 4.0, 0.1, dry, flat, home) == Walked::Home {
+            came = true;
+            break;
+        }
+    }
+    assert!(came, "home at {:?}", lost.at);
+    // What the game writes on the way in: the job counts it.
+    app.world_mut().write_message(Did::new(
+        Kind::Escort,
+        pbd_core::economy::jobs::scoped(town.site, "villager"),
+        1,
+    ));
+    app.update();
+    assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+    let paid = shop(&mut app, |s| s.hand_in(&town, job.id)).unwrap();
+    assert_eq!(app.world().resource::<Economy>().purse.coins, paid.reward);
+}
+
+/// A one-cell house with a door on side 0, and a second the same.
+fn small_town(site: u32) -> pbd_core::settlement::record::Town {
+    let house = |name: &str| -> pbd_core::settlement::record::Building {
+        serde_json::from_value(serde_json::json!({
+            "name": name, "kit": "timber", "cells": [[0, 0]], "floor": 0,
+            "storeys": 1, "tall": 1, "doors": [[0, 0, 0, 0]], "windows": [],
+            "roof": "gable", "pitch": 1.0, "chimney": null, "stair_cells": [],
+        }))
+        .unwrap()
+    };
+    pbd_core::settlement::record::Town {
+        site,
+        template: "village".into(),
+        layout: 1,
+        terrace: 10,
+        anchor: (0, 0),
+        cells: Vec::new(),
+        levels: Vec::new(),
+        buildings: vec![house("a"), house("b")],
+        over_sea: Vec::new(),
+    }
+}
+
+/// `townsfolk` task 7.6: the world breaks a wall of a town building for a
+/// repair job only where the player has changed nothing of it (so never a
+/// piece the player placed or touched), and placing the planks back mends
+/// it and counts the job.
+#[test]
+fn a_repair_breaks_no_players_work_and_placing_planks_counts() {
+    use pbd_core::settlement::record::{BUILDING_RECORD, building_id, to_records};
+    use special::{break_wall, mend, repair_of};
+    let mut app = app();
+    let cfg = config();
+    let site = 50;
+    let town_info = harbour(site);
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: 3,
+    };
+    assert!(
+        cfg.jobs.posted.contains(&JobKind::Repair),
+        "posted on boards"
+    );
+    let job = board
+        .make(town_info.as_town(), JobKind::Repair, 91, 4)
+        .unwrap();
+    shop(&mut app, |s| s.take(job.clone())).unwrap();
+    let mut town = small_town(site);
+    assert_eq!(town.buildings[0].breakable().len(), 5, "six sides, a door");
+    let world = app.world_mut();
+    let mut save = world.remove_resource::<WorldSave>().unwrap();
+    save.store(&Author::Creation, to_records(&town)).unwrap();
+    // The player has changed both buildings: nothing is broken.
+    let mut touched = town.clone();
+    for (b, building) in touched.buildings.iter_mut().enumerate() {
+        building.windows.push([0, 0, 2, 0]);
+        save.store(
+            &Author::Player(0),
+            vec![pbd_core::records::Record::of(
+                BUILDING_RECORD,
+                building_id(site, b as u32),
+                pbd_core::settlement::record::RECORD_SCHEMA,
+                building,
+            )],
+        )
+        .unwrap();
+    }
+    let mut held = touched.clone();
+    assert_eq!(break_wall(&mut save, &job, &mut held), None);
+    assert_eq!(
+        held, touched,
+        "the player's buildings are as they left them"
+    );
+    assert!(repair_of(&save, job.id).is_none());
+    // A town the player has not touched: one wall is broken, the world's.
+    let other = 51;
+    let mut fresh = small_town(other);
+    save.store(&Author::Creation, to_records(&fresh)).unwrap();
+    let repair = break_wall(&mut save, &job, &mut fresh).expect("a wall to break");
+    let building = &fresh.buildings[repair.building as usize];
+    assert_eq!(building.broken, vec![repair.wall]);
+    assert!(!building.doors.contains(&repair.wall), "never the doorway");
+    let stored: pbd_core::settlement::record::Building = save
+        .records
+        .get(BUILDING_RECORD, building_id(other, repair.building))
+        .unwrap()
+        .read()
+        .unwrap();
+    assert_eq!(stored.broken, vec![repair.wall], "stored as the world's");
+    town = fresh;
+    // Mended: two planks, the wall back, the job's record mended.
+    let mut slots = Slots::new();
+    assert!(!mend(&mut save, &mut slots, job.id, &mut town), "no planks");
+    slots.give(Item::Good(Good::PLANKS), 3);
+    assert!(mend(&mut save, &mut slots, job.id, &mut town));
+    assert_eq!(slots.count(Item::Good(Good::PLANKS)), 1);
+    assert!(town.buildings[repair.building as usize].broken.is_empty());
+    assert!(repair_of(&save, job.id).unwrap().mended);
+    assert!(
+        !mend(&mut save, &mut slots, job.id, &mut town),
+        "mended once"
+    );
+    world.insert_resource(save);
+    // Placing it counts the job, as the game writes it.
+    app.world_mut().write_message(Did::new(
+        Kind::Repair,
+        pbd_core::economy::jobs::scoped(other, "piece"),
+        1,
+    ));
+    app.update();
+    // Its town is the one the repair was in: here the job's town is 50
+    // and the wall in 51, so it counts only for a piece in 50.
+    assert!(!app.world().resource::<Economy>().jobs.is_done(job.id));
+    app.world_mut().write_message(Did::new(
+        Kind::Repair,
+        pbd_core::economy::jobs::scoped(site, "piece"),
+        1,
+    ));
+    app.update();
+    assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+}

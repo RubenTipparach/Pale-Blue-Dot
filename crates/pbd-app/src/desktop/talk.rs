@@ -328,6 +328,11 @@ pub fn use_talk(
     let drawn: Vec<&Talker> = talkers.iter().map(|(t, _, _)| t).collect();
     let people = roster(folk.as_deref(), &drawn, talker.site);
     let all: Vec<&Talker> = people.iter().collect();
+    // A taken job's lost villager, found: they follow from now on
+    // (`townsfolk` design 28).
+    let found = save.as_deref_mut().is_some_and(|save| {
+        pbd_app::economy::special::find_lost(save, &eco, talker.site, talker.index)
+    });
     let ids = fish_ids(&fauna, &body.0);
     let mut shop = save.as_deref_mut().map(|save| Shop {
         save,
@@ -346,6 +351,9 @@ pub fn use_talk(
         &mut talking,
         &mut screen,
     );
+    if found {
+        talking.said = Some(tr("talk.lost_found"));
+    }
 }
 
 /// Leaving every talk panel forgets who it was with.
@@ -870,71 +878,81 @@ fn job_row(
         });
 }
 
-/// A capture instrument (`PBD_TALK=talk|trade|board`): once the world is
-/// open, stand a trader at the nearest held town, put coins and a catch in
-/// the pack, and open that panel, for the screenshots in
-/// `docs/screenshots/townsfolk-economy/`. Never set in play.
-#[allow(clippy::too_many_arguments)]
-pub fn capture_open(
-    mut done: Local<bool>,
-    mut screen: ResMut<Screen>,
-    towns: Res<Towns>,
-    mut eco: ResMut<Economy>,
-    mut hotbar: ResMut<Hotbar>,
-    mut talking: ResMut<Talking>,
-    save: Option<Res<WorldSave>>,
-    time: Res<Time>,
+/// The townsperson the talk is with talks: their mouth moves while the
+/// talk, trade or board panel is open with them, and stops when it closes
+/// or turns to someone else (`townsfolk` design 30).
+pub fn talking_mouth(
+    talking: Res<Talking>,
+    folk: Option<ResMut<pbd_app::townsfolk::Townsfolk>>,
+    mut was: Local<Option<pbd_core::townsfolk::PersonId>>,
 ) {
-    if *done {
+    let Some(mut folk) = folk else {
         return;
+    };
+    let now = talking
+        .with
+        .as_ref()
+        .map(|w| pbd_core::townsfolk::PersonId {
+            site: w.talker.site,
+            index: w.talker.index,
+        });
+    if let Some(old) = *was
+        && Some(old) != now
+    {
+        folk.set_talking(old, false);
     }
-    let Ok(want) = std::env::var("PBD_TALK") else {
-        *done = true;
-        return;
-    };
-    if time.elapsed_secs() < 2.0 || save.is_none() || towns.held.is_empty() {
-        return;
+    // Held every frame it is open, so a town stood again keeps it talking.
+    if let Some(id) = now {
+        folk.set_talking(id, true);
     }
-    let Some(save) = save else { return };
-    if !eco.joined(&save) {
-        return;
+    *was = now;
+}
+
+/// A capture instrument (`townsfolk` design 35): a `PBD_KEY_SCRIPT` step
+/// `<frame>:press:<button>` presses a talk panel's button on that capture
+/// frame, as a click on it would: `trade`, `work`, `back`, `bye`, or the
+/// first `buy`, `sell`, `take` or `handin` row. Nothing reads it in play.
+pub fn scripted_press(
+    state: Res<super::CaptureState>,
+    mut buttons: Query<(&mut Interaction, &TalkAction)>,
+    script: Local<std::sync::OnceLock<Vec<(u32, String)>>>,
+) {
+    let script = script.get_or_init(|| {
+        std::env::var("PBD_KEY_SCRIPT")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|step| {
+                let (frame, rest) = step.trim().split_once(':')?;
+                let what = rest.trim().strip_prefix("press:")?;
+                Some((frame.trim().parse().ok()?, what.to_string()))
+            })
+            .collect()
+    });
+    for (frame, what) in script {
+        if state.frame != *frame {
+            continue;
+        }
+        let wanted = |a: &TalkAction| {
+            matches!(
+                (what.as_str(), a),
+                ("trade", TalkAction::Trade)
+                    | ("work", TalkAction::Work)
+                    | ("back", TalkAction::Back)
+                    | ("bye", TalkAction::Bye)
+                    | ("buy", TalkAction::Buy(_))
+                    | ("sell", TalkAction::Sell(_))
+                    | ("take", TalkAction::Take(_))
+                    | ("handin", TalkAction::HandIn(_))
+            )
+        };
+        match buttons.iter_mut().find(|(_, a)| wanted(a)) {
+            Some((mut interaction, action)) => {
+                info!("PBD_KEY_SCRIPT: pressed {action:?} at frame {frame}");
+                *interaction = Interaction::Pressed;
+            }
+            None => warn!("PBD_KEY_SCRIPT: no {what} button at frame {frame}"),
+        }
     }
-    *done = true;
-    let site = towns.held[0].site.id;
-    let Some(town) = town_info(&towns, site) else {
-        return;
-    };
-    eco.purse.coins = eco.purse.coins.max(48);
-    hotbar.0.give(pbd_core::inventory::Item::Fish(2), 3);
-    hotbar.0.give(
-        pbd_core::inventory::Item::Good(pbd_core::goods::Good::WHEAT),
-        6,
-    );
-    hotbar.0.give(
-        pbd_core::inventory::Item::Good(pbd_core::goods::Good::LOG),
-        4,
-    );
-    let talker = Talker {
-        site,
-        index: 0,
-        role: "merchant".into(),
-    };
-    *talking = Talking {
-        with: Some(TalkWith {
-            talker,
-            town,
-            trader: true,
-            giver: true,
-        }),
-        said: None,
-    };
-    *screen = match want.as_str() {
-        "trade" => Screen::Trade,
-        "board" => Screen::Board,
-        "hud" => Screen::Playing,
-        _ => Screen::Talk,
-    };
-    info!("PBD_TALK: opened {want} at {}", towns.held[0].site.name);
 }
 
 pub struct TalkPlugin;
@@ -947,7 +965,16 @@ impl Plugin for TalkPlugin {
             .add_systems(PostUpdate, offer_talk.in_set(InteractSet::Offer))
             .add_systems(
                 Update,
-                (use_talk, forget, press, capture_open, paint, coin_hud).chain(),
+                (
+                    use_talk,
+                    forget,
+                    scripted_press,
+                    press,
+                    paint,
+                    coin_hud,
+                    talking_mouth,
+                )
+                    .chain(),
             );
     }
 }

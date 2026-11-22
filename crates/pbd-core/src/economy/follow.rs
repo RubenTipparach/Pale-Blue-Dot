@@ -34,6 +34,9 @@ pub struct Lost {
     pub at: [f64; 3],
     /// Whether they have been found and follow.
     pub following: bool,
+    /// Who they are: their place in their town's people.
+    #[serde(default)]
+    pub person: u32,
 }
 
 impl Lost {
@@ -71,6 +74,44 @@ pub fn step(
     }
     let next = villager + to / distance * stride;
     if dry(next) { next } else { villager }
+}
+
+/// How near the town a lost villager may stand, metres along the ground.
+pub const LOST_NEAREST_M: f64 = 120.0;
+
+/// Where a job's lost villager stands (`townsfolk` design 28): along a
+/// bearing rolled from the job's id, out from the town's anchor `anchor` (a
+/// unit direction), from a reach rolled between [`LOST_NEAREST_M`] and
+/// [`LOST_REACH_M`] outward, then back in from it, a few metres at a time,
+/// at the first direction `open` takes. The same job gives the same place.
+pub fn spot(
+    job: u64,
+    anchor: glam::Vec3,
+    radius_m: f32,
+    open: impl Fn(glam::Vec3) -> bool,
+) -> Option<glam::Vec3> {
+    let roll = super::jobs::mix(job ^ 0x6c6f_7374);
+    let bearing = ((roll % 3600) as f32 / 10.0).to_radians();
+    let first = LOST_NEAREST_M as i32 + (super::jobs::mix(roll) % 181) as i32;
+    let (north, east) = crate::geo::north_east(anchor);
+    let way = east * bearing.cos() + north * bearing.sin();
+    let out = (first..=LOST_REACH_M as i32).step_by(3);
+    let back = (LOST_NEAREST_M as i32..first).rev().step_by(3);
+    out.chain(back)
+        .map(|m| (anchor + way * (m as f32 / radius_m)).normalize())
+        .find(|&d| open(d))
+}
+
+/// Who is lost (design 28): one of the town's people, rolled from the job's
+/// id over its `people`, never its trader or job
+/// giver (`keepers`). `None` for a town of no one else.
+pub fn who(job: u64, people: usize, keepers: &[usize]) -> Option<u32> {
+    let others: Vec<usize> = (0..people).filter(|i| !keepers.contains(i)).collect();
+    if others.is_empty() {
+        return None;
+    }
+    let pick = others[(super::jobs::mix(job ^ 0x7768_6f) % others.len() as u64) as usize];
+    Some(pick as u32)
 }
 
 /// Whether a villager at `at` is home: within `wall_m` of their town's

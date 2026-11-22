@@ -570,7 +570,7 @@ smaller gaps. Each is a recommendation taken (ask only with screenshots).
   their post in town there is nobody in their place while they are out.
 - **A map marker.** The map shows the job's villager as a marker at the
   record's point, with the town's name, as long as the job is taken and not
-  handed in.
+  handed in. Not built yet (2026-11-22): the map has no job markers.
 - **Found.** The interact key on them opens the talk panel with one line,
   "Lead the way", and sets `following`; the record is written then.
 - **Following.** Each frame `follow::step` moves them behind the player at
@@ -625,8 +625,10 @@ someone else.
   already a road. Its slope is `roads::built_up` toward the side faced. It is
   a `road-cell` record of the player's, through the durable path, with the
   pack in the same line; the walker walks it at its surface's speed.
-- F on a road cell of the player's with nothing selected takes it up (the
-  gravel back for a gravel cell).
+- The place button with the shovel and an empty slot on a road cell of the
+  player's takes it up (the gravel back for a gravel cell), so laying and
+  taking up are one tool's two sides and the interact key stays the
+  world's. As built.
 
 **32. Cut and fill: roads version 2 (design 10a's "a later change may cut
 and fill").** Measured on the shipped seed before this change: 53
@@ -641,9 +643,14 @@ way that climbs at most a layer a cell.
   touched, which the route never crosses anyway). A cut or filled cell is
   dry, outside every town's footprint and not a ford or bridge.
 - **The search** carries the road's height over each cell's ground as part
-  of its state, and pays `fill_cost_m` and `cut_cost_m` a layer a cell on
-  top of a cell's length, so a road cuts or fills only where it cannot climb
-  round. The road still never moves more than a layer between cells.
+  of its state, and pays `fill_cost_m` (20 m) and `cut_cost_m` (25 m) a
+  layer a cell on top of a cell's length, so a road cuts or fills only where
+  it cannot climb round. A cut or fill is tried only onto a cell more than a
+  layer from the road's height (so a ramp goes on cell by cell only while
+  the ground still is); offering it on every cell put a copy of the whole
+  search at each height and cost routes under the budget (22 routed of 57
+  at first, against version 1's 27). The road still never moves more than a
+  layer between cells.
 - **Deterministic and bounded.** Costs stay whole millimetres; the order
   of states is total; the same budget (`max_expanded`) a link.
 - **A new roads version, for worlds planned from now on.** The net record
@@ -656,6 +663,28 @@ way that climbs at most a layer a cell.
 - **A cut cell's edits are the world's.** Every check that a road cell is
   laid asks whether the PLAYER touched its cell (the save's yield set), not
   whether it holds an edit, so a road's own cutting does not hide it.
+- **What it reached, measured** (2026-11-22, this container, 4 cores,
+  `--profile fast`, `roads::tests::the_shipped_seed_network` with no towns'
+  ground installed, a measurement instrument whose version and budget are
+  set by `PBD_ROADS_VERSION` and `PBD_ROADS_EXPANDED`):
+
+  | Budget a link | Version 1 routed | Version 2 routed | Cells cut or filled |
+  | ---: | ---: | ---: | ---: |
+  | 100,000 (shipped) | 27 of 57, 2.0 s | 27 of 57, 2.2 s | 4 |
+  | 300,000 | 31 | 30 | 4 |
+  | 1,500,000 | 34, 18.8 s | 35, 18.6 s | |
+
+  **Cut and fill does not reach the links left out.** Of the 27 links left
+  out at 300,000 cells, 23 cross the sea on the straight way between their
+  towns (from 12 to 855 sea cells: an inlet or another shore, which a road
+  goes round by the coast, past the budget, or cannot), one crosses a river
+  eleven cells wide (the longest bridge is ten), and three run 1 to 5.4 km
+  over ground with a step of more than a layer every few cells, past the
+  budget. The binding limit on the shipped seed
+  is the sea and the search's budget, not the climb. Version 2 ships with
+  the version 1 budget, so a loading screen is no longer; it cuts or fills
+  the few cells where a road meets a two-layer step, and a later change may
+  bridge longer water or raise the budget with a better estimate.
 
 **33. No tufts on a road.** The surface word of a road cell carries a road
 bit (bit 30, `planet_terrain::ROAD_BIT`), and the clutter pass grows no

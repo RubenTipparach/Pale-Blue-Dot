@@ -557,6 +557,9 @@ pub fn job_thing(job: &Job) -> Localized {
     pbd_core::economy::values::item_of(first, &[]).map_or_else(Localized::empty, Item::name)
 }
 
+/// The lost villager and repair jobs (`townsfolk` design 28 and 29).
+pub mod special;
+
 /// The economy's config, state and counting.
 pub struct EconomyPlugin;
 
@@ -565,12 +568,25 @@ impl Plugin for EconomyPlugin {
         if !app.world().contains_resource::<EconomyConfig>() {
             app.insert_resource(EconomyConfig::load());
         }
-        app.init_resource::<Economy>().add_systems(
-            PostUpdate,
-            count_jobs
-                .after(crate::missions::MissionsSet)
-                .run_if(crate::world_open),
-        );
+        app.init_resource::<Economy>()
+            .add_systems(
+                PostUpdate,
+                count_jobs
+                    .after(crate::missions::MissionsSet)
+                    .run_if(crate::world_open),
+            )
+            .add_systems(
+                Update,
+                (special::lost_villagers, special::repairs, special::use_mend)
+                    .run_if(crate::world_open)
+                    .run_if(resource_exists::<Towns>),
+            )
+            .add_systems(
+                PostUpdate,
+                special::offer_mend
+                    .in_set(crate::interact::InteractSet::Offer)
+                    .run_if(resource_exists::<Towns>),
+            );
     }
 }
 
