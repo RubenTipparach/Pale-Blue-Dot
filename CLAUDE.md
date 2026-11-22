@@ -814,6 +814,10 @@ a test pins it. When the scale moves, both move in the same commit.
   local gravity falloff, Newtonian motion, configurable linear/angular limits,
   and inertial/rotational dampeners. Do not restore rocket patched conics,
   maneuver nodes, transfer-window requirements, or n-body ship simulation.
+  **Lifted for rockets by the owner (survey G4 and G4a, 2026-11-22: "All of
+  Tenebris: patched conics, sphere-of-influence hops and maneuver nodes").**
+  `ship-tiers` (design, "Owner answers") is the plan; this clause is rewritten
+  in the commit that builds it. Until then nothing in the game changes.
 - Store system coordinates and orbital time as `f64`; render and simulate
   collision in bounded local `f32` frames. Subtract the origin before casting.
   Keep frame identity explicit in poses, velocities, persistence, and uploads.

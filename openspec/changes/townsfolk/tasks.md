@@ -94,3 +94,11 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 - [ ] 11.3 Barter in the trade panel: a basket each side, coins or goods or both, the difference in coins, one durable line. Verify: an app test of a deal paid half in goods; a capture of the panel. The M5 Talk tab shows it first.
 - [ ] 11.4 The phase 6 stock market (M12) reads this index; nothing of its screens here. Verify: the M12 change names `market` as its source.
 
+
+## 12. Trade follow-ups (recommendations taken, ask only with screenshots, 2026-11-22)
+
+- [ ] 12.1 Fibre moves from the Food shelf to Organics
+- [ ] 12.2 The scroll thumb is widened past its 4 px at 1x
+- [ ] 12.3 A made good's labour is priced at 0.1 coin per second of crafting (design 37's open rate)
+- [ ] 12.4 The lost-villager job gets an icon of its own
+- [ ] 12.5 Traders sell tools or not, per survey E1 (open; the recommendation, none, is today's game)

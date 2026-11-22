@@ -629,3 +629,10 @@ code departs from the plan above, and why:
   field-lit things take the full term.
 - **The held flame is drawn at 0.75 of its texture**, under the tonemapper's
   shoulder as the placed flame is, so it reads orange rather than white.
+
+## Owner answers (survey, 2026-11-22)
+
+- **A3: keep today's square cap.**
+- **G5: keep it faint**: a mushroom is a small light, held and planted read one value (level 3).
+- **A4: keep the warm light for now**; a colour per light is its own change later.
+- Under water a glowing mushroom keeps glowing (survey W21's note; `ocean-environments` task 21.1).
