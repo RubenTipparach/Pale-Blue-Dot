@@ -1212,6 +1212,8 @@ recipe:
     name: FENCE X2
   flatbread:
     name: FLATBREAD
+  gravel:
+    name: GRAVEL X4
   forge:
     name: FORGE
   fried-egg:
