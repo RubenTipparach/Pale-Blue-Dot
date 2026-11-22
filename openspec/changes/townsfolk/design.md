@@ -165,7 +165,9 @@ climbing ten layers a layer a cell with one bend, a ford and a timber
 bridge, by day and lit at night by lanterns on posts; the mockup's walker
 climbs the hill road with no eye jump. The owner asked for the game to
 follow straight on ("Build phase 3"), so the game was built from the tab
-without waiting for its approval; the tab is on the tracker for it.
+without waiting for its approval; the tab is on the tracker for it. The
+owner approved it on 2026-11-22: "roads look great, can you also show
+roads of width 2 or 3?" (wide roads: decision 10b).
 - **A road is a piece on an ordinary cell, not a ground edit.** The cell's
   column is the generator's, untouched; the road top is cut like a town's
   street step: its own mesh 2 cm over the ground (`roads::piece::LIFT_M`),
