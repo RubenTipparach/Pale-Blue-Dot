@@ -232,6 +232,9 @@ impl Server {
             ToClient::Welcome {
                 player: number,
                 clock_s: self.clock_s,
+                seed: self.world.versions.world,
+                generator: self.world.versions.generator,
+                topology: self.world.versions.topology,
             },
         );
         Some(number)

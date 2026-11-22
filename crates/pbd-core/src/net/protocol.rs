@@ -162,10 +162,15 @@ pub enum ToServer {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToClient {
-    /// Joined: the player's number and the world clock, s.
+    /// Joined: the player's number, the world clock, s, and the world to
+    /// open, its seed, generator and topology (design 20), for a client
+    /// that joined without it.
     Welcome {
         player: u32,
         clock_s: f64,
+        seed: u64,
+        generator: u32,
+        topology: u32,
     },
     /// Not joined, and nothing else follows.
     Rejected {
@@ -246,7 +251,9 @@ pub fn agree(server: &Versions, client: &Versions) -> Result<u16, JoinRefusal> {
     {
         return Err(JoinRefusal::WorldVersion);
     }
-    if server.world != client.world {
+    // World 0 is "any": a player joining a world they do not hold yet
+    // (design 20), who is sent it in the welcome.
+    if client.world != 0 && server.world != client.world {
         return Err(JoinRefusal::DifferentWorld);
     }
     Ok(protocol)
@@ -593,10 +600,19 @@ impl ToClient {
     pub fn encode(&self) -> Vec<u8> {
         let mut w = W(Vec::new());
         match self {
-            Self::Welcome { player, clock_s } => {
+            Self::Welcome {
+                player,
+                clock_s,
+                seed,
+                generator,
+                topology,
+            } => {
                 w.u8(1);
                 w.u32(*player);
                 w.f64(*clock_s);
+                w.u64(*seed);
+                w.u32(*generator);
+                w.u32(*topology);
             }
             Self::Rejected { reason } => {
                 w.u8(2);
@@ -679,6 +695,9 @@ impl ToClient {
             1 => Self::Welcome {
                 player: r.u32()?,
                 clock_s: r.f64()?,
+                seed: r.u64()?,
+                generator: r.u32()?,
+                topology: r.u32()?,
             },
             2 => Self::Rejected {
                 reason: of_code(&JOIN_REFUSALS, r.u8()?)?,
@@ -815,6 +834,9 @@ mod tests {
             ToClient::Welcome {
                 player: 1,
                 clock_s: 12_345.5,
+                seed: 0xfeed_beef,
+                generator: 15,
+                topology: 1,
             },
             ToClient::Accepted {
                 id: 9,
@@ -990,5 +1012,7 @@ mod tests {
             Err(JoinRefusal::DifferentWorld)
         );
         assert_eq!(agree(&versions(), &versions()), Ok(PROTOCOL));
+        let anywhere = Versions { world: 0, ..server };
+        assert_eq!(agree(&server, &anywhere), Ok(3), "world 0 joins any world");
     }
 }
