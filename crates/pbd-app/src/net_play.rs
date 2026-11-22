@@ -31,10 +31,13 @@ pub enum NetPlay {
         host: pbd_net::Host,
         players: BTreeMap<u64, u32>,
     },
-    /// Joined another's world, as this player.
+    /// Joined another's world, as this player, with the changes the server
+    /// sent that the tier has not been given yet (it may not be built yet:
+    /// a joining game hears its first snapshots while it loads).
     Joined {
         client: pbd_net::Client,
         player: u32,
+        pending: Vec<Edit>,
     },
 }
 
@@ -218,15 +221,23 @@ pub fn play(
                 }
             }
         }
-        NetPlay::Joined { client, player } => {
+        NetPlay::Joined {
+            client,
+            player,
+            pending,
+        } => {
             for request in save.take_requests() {
                 client.send(&ToServer::Request { id: 0, request });
             }
             for message in client.poll() {
                 match message {
-                    Ok(message) => receive(*player, message, &mut save, &mut applied),
+                    Ok(message) => receive(*player, message, &mut save, pending),
                     Err(why) => warn!("the host's message could not be read: {why:?}"),
                 }
+            }
+            // Given to the tier once there is one.
+            if fine.is_some() && contact.is_some() {
+                applied.append(pending);
             }
         }
     }

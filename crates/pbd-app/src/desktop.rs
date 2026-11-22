@@ -2648,7 +2648,11 @@ pub fn run(args: &[String]) {
     }
     // On the network (`multiplayer` design 20): joined, or hosting.
     if let Some((client, player)) = joined {
-        app.insert_resource(pbd_app::net_play::NetPlay::Joined { client, player });
+        app.insert_resource(pbd_app::net_play::NetPlay::Joined {
+            client,
+            player,
+            pending: Vec::new(),
+        });
     } else if let Some(port) = launch.host {
         match pbd_net::Host::bind(port) {
             Ok(host) => {
