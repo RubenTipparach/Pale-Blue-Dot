@@ -574,6 +574,16 @@ which wait for a request.
   neighbouring towns (`townsfolk`, design 5 to 12). Started on the owner's
   word (2026-11-21): "People approved. Build.phase 3. Do it in parallel if
   you can".
+  And (owner, 2026-11-22: "can you add a new mission tree for phase 3? this
+  would be an entirely separate tree since phase 3 is mostly interacting
+  with the town", "building roads shjould be like a way point system, where
+  you have to mark road for pavving and then you walk up to blocks with
+  gravel and pave it. to make gravel you need a grinder and mixer", "we also
+  need to add basic carts to phase 3 as well, and horse carts too"): a town
+  mission tree of its own (`town-missions-tree`), roads marked with survey
+  stakes and paved with gravel from a grinder and a mixer (`townsfolk`
+  design 39 to 41), and hand carts and horse carts, a quarter of their speed
+  off the road (`land-transport` design 9 and 10). Written up, not built.
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
@@ -599,9 +609,11 @@ which wait for a request.
   death (`survival-mode`). No mockup yet.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
-  navigation (M23, `steer-and-sail`), carts and horses, cars, and trains on
-  their tracks (owner, 2026-11-21: "add cars and cars and carts, and horses
-  and trains (and tracks) mockups to phase 5"; mocked up in M38, `land-transport`), hiring
+  navigation (M23, `steer-and-sail`), ridden horses and wagons, cars, and
+  trains on their tracks (owner, 2026-11-21: "add cars and cars and carts,
+  and horses and trains (and tracks) mockups to phase 5"; mocked up in M38,
+  `land-transport`; the hand cart and the horse cart moved to phase 3 on
+  2026-11-22, above), hiring
   workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get

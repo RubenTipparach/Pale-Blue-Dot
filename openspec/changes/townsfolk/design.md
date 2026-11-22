@@ -736,7 +736,10 @@ or the board is open with a townsperson, `Townsfolk::set_talking` holds
 their mouth talking; it stops the frame the panels close or the talk turns to
 someone else.
 
-**31. Roads the player lays (task 8.3).**
+**31. Roads the player lays (task 8.3).** *Replaced in the plan by design
+39 to 41 (owner, 2026-11-22: roads marked by waypoints and paved with
+gravel from a grinder and a mixer); the game keeps this until they are
+built, and a road cell laid this way stays as it is in every save.*
 - **Gravel** is a good (`gravel`, stack 99), made by hand from loose stone
   (`gravel` recipe: two stone make four gravel) and valued in `values.ron`.
   It is the seventh hand recipe, so the pack's craft list shows eight rows
@@ -1068,6 +1071,166 @@ nothing in the pack the trader wants, shows no tab).
   enchantments and weapons (weapons come with survival, phase 4,
   `survival-mode`). Until then tools stay `untraded` and the buy side
   shows no Tools tab, as today.
+
+## Roads marked by waypoints, paved with gravel (2026-11-22)
+
+**The owner, 2026-11-22:** "building roads shjould be like a way point
+system, where you have to mark road for pavving and then you walk up to
+blocks with gravel and pave it. to make gravel you need a grinder and mixer.
+which needs to be crafted in phase 3. with gravel you just equip a shovel and
+interact with the blocks marked for crafting a road." This replaces design
+31's place-a-cell in the plan; the game keeps design 31 until this is built
+(task 13). Written before code; shown first in M15 version 4's Paving scene
+(`towns.html#paving`). The town tree's Roads branch
+(`town-missions-tree` design 2) walks a player through it. Every choice the
+owner did not make is a recommendation taken (ask only with screenshots).
+
+**39. Marking a road with survey stakes.**
+- **Survey stakes** are a good (`survey-stakes`, stack 32), made by hand:
+  one planks and one fibre make four (`survey-stakes` recipe, unlocked by
+  the town tree's "Mix gravel"). A stake is a waypoint.
+- **Driving a stake.** With stakes in the selected slot, the place button on
+  the ground drives one into the aimed cell's top and takes it from the pack.
+  - The first stake starts a **plan**: a road the player means to pave.
+  - Each next stake joins the plan's last stake: the cells between are found
+    by the world's own road search (`roads::route`, version 2's rules, design
+    10a and 32): at most a layer between cells, a shallow ford allowed, deep
+    water bridged only by the world, never the sea, never a town's footprint
+    (its lanes are already road), never a cell holding a player's edit
+    unless that edit is a road cell. A segment is at most 24 cells
+    (`max_stake_cells` in `roads.ron`) and its search is capped
+    (`stake_expanded`, 4,000 cells), so it is quick.
+  - Every cell of the segment, the stake's cell included, is **marked**.
+  - Refused, with nothing taken, when there is no way: "Too far", "Too
+    steep", "Water in the way" (the locale's `roads.mark.*`).
+  - **While aiming**, the cells the next stake would mark are shown in the
+    mark's own look at half strength, so the player sees the way before
+    driving the stake.
+- **A plan ends** when the stakes leave the hand. The next stake starts a new
+  plan, unless it is driven on the last stake of a plan (which continues it)
+  or on a marked cell (a new plan that starts there: a junction).
+- **Taking a stake back.** Digging a stake (any tool, or the hand) takes it
+  into the pack. The segments either side of it lose their marks where they
+  are not paved, and its neighbours in the plan are joined by a fresh search
+  if there is a way, otherwise the plan splits in two. A paved cell stays
+  road whatever happens to the marks.
+- **One cell wide.** A plan is one lane. A wider road is two or three plans
+  side by side; when wide roads are built (task 8.6), a player's lane beside
+  another takes its top from their shared plane (design 10b).
+
+**39a. How a mark looks.** No outline, no primitive stuck on the ground,
+lit as the ground is (CLAUDE.md):
+- **A marked cell is dusted with lime along the line of the road**: a band
+  about 0.9 m wide from the middle of the edge the road comes in by to the
+  middle of the edge it leaves by (to the cell's middle at the plan's two
+  ends), pale and chalky, with a ragged, broken edge and the grass under it
+  flattened. It is painted into the cell's own top, never laid over it: in
+  the game a mark bit on the cell's surface word (`MARK_BIT`, bit 29, beside
+  design 33's road bit) and the band's two edges (three bits each) make the
+  terrain shader blend a lime dust texture into the biome's own top along
+  the band, so it is lit, shadowed and coloured by the ground's own light
+  and palette, and sits in the scene. The clutter pass grows no pixel tufts
+  on the band, as on a road (design 33).
+- **A stake at each waypoint**: one tapered peg of split timber driven into
+  the cell, its foot sunk under the top, its head split and frayed by the
+  mallet, a strip of dyed cloth tied under the head, 0.9 m out of the
+  ground; in the timber of the land's own trees. One mesh shaped as one
+  form, `field_light::LitByField` and `LitLikeTerrain` on its root, so at
+  night it is as dark as the ground there, lit by the lamps and the moon.
+- **At night** the band and stakes are seen only where light falls on them,
+  like the ground; the compass bar shows the open plan's next unpaved stake
+  as a tick and the map shows every plan's stakes.
+- M15 version 4's Paving scene shows marked cells beside a paved run, by day
+  and at night.
+
+**39b. Marks as data.**
+- **`road-plan`**, a record of the player's, schema 1, id the plan's number
+  (counted up, never reused): its stakes (cell keys, in order) and its cells
+  (cell keys, in order along the road, each stake's cell among them).
+  Written through the durable path with the pack (the stake taken or given
+  back) in the same line, on every stake driven or taken back.
+- **The cells are stored, not re-searched**, so a later search or road
+  version never moves a plan a player made. Marked is derived: a plan's cell
+  that is not paved.
+- **Old saves** have no plans; nothing they hold changes.
+
+**40. Paving.**
+- **Shovel in hand, gravel in the pack, interact on a marked cell.** With the
+  shovel in the tool slot, the interact key (F) on a marked cell within reach
+  (4 m) takes one gravel from the pack and makes the cell a gravel road cell
+  of the player's. Held, it paves the next marked cell in reach on the
+  shovel's stroke beat (`held-swing`), so walking the line with F held paves
+  it. One gravel a cell. The shovel's dig stroke plays and the gravel tips
+  out.
+- Refused, nothing taken, with one plain line: "Needs a shovel", "Needs
+  gravel".
+- **The slope is the world road's.** A paved cell's top follows the plan's
+  order exactly as `roads::road()` cuts a world road (design 10, 10a): flat,
+  or sloped up toward the plan's neighbour a layer higher, from the edge of
+  its other neighbour; a dip one cell wide is raised a layer on packed earth
+  (`RoadCell::raised`). The order is known when the cells are marked, so a
+  cell's slope does not wait on its neighbours being paved, and paving in any
+  order gives the same road. The cells were found with at most a layer
+  between them, so a paved plan never steps.
+- **The record.** A paved cell is a `road-cell` record of the player's
+  (schema 2: the surface, the plan, the two edges its slope runs between and
+  whether it is raised), with the pack in the same line. Schema 1 (design
+  31's cells, with `built_up`'s slope) still reads and is drawn as it was.
+- **Taking up.** Digging a road cell of the player's with the shovel takes
+  it up and gives its gravel back; a cell of a plan goes back to marked.
+- **Over a world road.** A plan may cross a world road cell (a village's dirt
+  track); paving it writes the player's road cell at that key, which the
+  world's road yields to, as it yields to every player edit (design 11). So
+  a village track can be upgraded to gravel cell by cell.
+- **The place button no longer lays a road.** Design 31's place rule (gravel
+  in the slot lays a gravel cell; the shovel and an empty slot lay a dirt
+  track) is retired from the game when this is built. Every road cell laid
+  that way stays in its save, drawn and walked as before.
+
+**40a. Dirt tracks still exist, laid by the world only.** The world's roads
+between villages stay dirt (design 10, 11), and every world already planned
+keeps its tracks. The player lays only gravel: a dirt track needed no
+material, so it skipped the grinder and mixer the owner asked for, and two
+ways to lay a road were one too many. A player's dirt cell from design 31
+stays as it is. Recommendation taken (ask only with screenshots). On foot,
+gravel is still walked 1.15 times the ground and dirt 1.0 (design 10a);
+for wheels, `land-transport` design 9 gives each its own factor.
+
+**41. Gravel from a grinder and a mixer.**
+- **The grinder** (a station, `grinder`) crushes stone. A hopper over a pair
+  of stone rollers in a timber frame, turned by a crank, crushed stone
+  falling onto an apron. Made at the workbench, unlocked by the town tree's
+  "A job from the board". It stands on one dry level cell like the forge,
+  holds a queue like every station (`farming-and-smelting`), and is lit like
+  the ground.
+- **The mixer** (a station, `mixer`) mixes crushed stone with sand into
+  road gravel. A tumbling drum on a timber frame with a crank and a trough
+  under it. Made at the workbench, unlocked by "Crush stone".
+- **The recipes** (`recipes.ron`, append-only codes):
+
+| code | station | secs | inputs | outputs |
+| --- | --- | ---: | --- | --- |
+| `grinder` | workbench | 6 | 10 stone, 6 planks, 2 iron ingots | 1 grinder |
+| `mixer` | workbench | 6 | 8 planks, 2 rope, 1 iron ingot, 1 bucket | 1 mixer |
+| `crushed-stone` | grinder | 4 | 2 stone | 3 crushed stone |
+| `mixed-gravel` | mixer | 6 | 3 crushed stone, 1 `block:sand` | 4 gravel |
+| `survey-stakes` | hand | 1 | 1 planks, 1 fibre | 4 survey stakes |
+
+  So a cell of road costs half a stone and a quarter of a sand block, and
+  ten seconds of station time per four cells. Recommendation taken (ask only
+  with screenshots); the numbers are data.
+- **New goods**: `crushed-stone` (stack 99), `survey-stakes` (stack 32),
+  `grinder` and `mixer` (placed stations, stack 1), each a row appended to
+  `values.ron` and an icon from `tools/gen_item_icons.py`.
+- **Gravel's hand recipe goes.** The `gravel` recipe of design 31 (two stone
+  make four gravel, by hand) is removed from `recipes.ron` when this is
+  built. Its code is retired, never reused: a hand recipe has no station
+  queue, so no save holds it. Gravel itself stays a good, and gravel already
+  in a pack stays there and paves. `craft::ROWS_SHOWN` stays 8 (bc54742e):
+  the survey stakes take gravel's row, so every hand recipe still shows
+  without scrolling, with one to spare.
+- **The rest of phase 3 is unchanged**: `values.ron`'s gravel row (1 coin)
+  stays; traders may stock gravel as before.
 
 ## Risks / Trade-offs
 

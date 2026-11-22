@@ -96,6 +96,27 @@ Frontier's swap rule), expressions driven by what happens to the person,
 blink and gaze running on their own layers, and people generated from the
 town and the seed. The look is decided in M5's new Faces tab first.
 
+## Added 2026-11-22: roads by waypoints, gravel from a grinder and a mixer
+
+**The owner (2026-11-22):** "building roads shjould be like a way point
+system, where you have to mark road for pavving and then you walk up to
+blocks with gravel and pave it. to make gravel you need a grinder and mixer.
+which needs to be crafted in phase 3. with gravel you just equip a shovel and
+interact with the blocks marked for crafting a road."
+
+- **Marking.** Survey stakes are driven as waypoints; the cells between two
+  stakes are found by the world's road search and marked, a band of lime
+  painted into each cell's own top, a stake at each waypoint. Plans are
+  saved as the player's records.
+- **Paving.** With the shovel in hand and gravel in the pack, the interact
+  key on a marked cell paves it, one gravel a cell, sloped by the world
+  road's own rule. The place button no longer lays road.
+- **Gravel** comes from two new stations: a grinder crushes stone, a mixer
+  mixes crushed stone and sand into gravel. The hand recipe goes.
+- **Dirt tracks** stay the world's, between villages; the player lays gravel.
+- Design 39 to 41; the town tree that teaches it is `town-missions-tree`;
+  wheel speeds on and off the road and the carts are `land-transport`.
+
 ## Capabilities
 
 ### New Capabilities

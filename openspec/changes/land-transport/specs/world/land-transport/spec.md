@@ -4,7 +4,9 @@
 
 Carts, wagons, ridden horses, cars and trucks on the road cells, and trains
 on track laid on the hex grid: how each sits on what it runs on, and how each
-is stored. Proposed for phase 5; nothing here is built.
+is stored. Proposed for phase 5, but for the hand cart, the horse cart and
+wheels off the road, which are phase 3 (owner, 2026-11-22); nothing here is
+built.
 
 ## ADDED Requirements
 
@@ -117,3 +119,53 @@ engine's lamp, a coach's windows) SHALL be lights in the cell light field.
 
 - **WHEN** a cart stands in a cutting at night with its lantern out
 - **THEN** it is as dark as the cutting's floor beside it
+
+### Requirement: Wheels are slow off the road
+
+A wheeled vehicle SHALL move at its road speed times the factor of the
+surface under its wheels: 1.0 on a gravel road, a bridge deck or a town's
+lanes, 0.6 on a dirt track, 0.5 in a ford, and 0.25 anywhere else,
+including a cell marked for paving and not yet paved. With its axles on two
+surfaces it SHALL take the lower factor. The climb's slowing SHALL apply on
+top. Walking SHALL NOT read this table.
+
+#### Scenario: Off the road
+
+- **WHEN** a horse cart leaves a gravel road for open grass on the level
+- **THEN** it moves at a quarter of its speed on the road
+
+#### Scenario: One wheel off
+
+- **WHEN** a hand cart runs with one wheel on gravel and one on grass
+- **THEN** it moves at a quarter of its road speed
+
+### Requirement: Hand carts and horse carts are vehicles with a hold
+
+A hand cart and a horse cart SHALL be made at the workbench, set down from
+the pack as a vehicle record with a hold, and taken up again only when
+empty. Letting go of a hand cart or stepping down from a horse cart SHALL
+change who is with it, never whether it exists.
+
+#### Scenario: A loaded cart left on a road
+
+- **WHEN** the player lets go of a hand cart holding goods, walks away and
+  reopens the world
+- **THEN** the cart stands where it was with the same goods in its hold
+
+### Requirement: A horse is bought and never changes the wild herds
+
+A horse SHALL be bought for coins from a town's stable keeper as a kept
+animal of a species no wild herd rolls, so that every existing world's wild
+herds stay as they were. Hitching a horse to a horse cart SHALL write both
+records in one transaction.
+
+#### Scenario: An old world's herds
+
+- **WHEN** a world saved before horses is opened by a build with them
+- **THEN** its wild herds are the same animals in the same places
+
+#### Scenario: Hitching
+
+- **WHEN** the player hitches a bought horse to a horse cart and the game
+  stops at that moment
+- **THEN** on reopening, either both records name each other or neither does

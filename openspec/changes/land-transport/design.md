@@ -16,7 +16,9 @@ and cars mockup?"). It runs on the roads phase 3 builds (`townsfolk` design
 - a timber bridge is a plank deck on posts whose top is the road's height;
 - lamps stand by the roads near towns.
 
-**Status: nothing is built.** Phase 5 starts when the owner asks. The mockup
+**Status: nothing is built.** The hand cart and the horse cart are phase 3
+(decisions 9 and 10, owner 2026-11-22); the rest is phase 5, which starts
+when the owner asks. The mockup
 is M38, `docs/mockups/land-transport.html`. Every choice below that is not
 the owner's own word is marked **recommendation taken (ask only with
 screenshots)**: CLAUDE.md's rule is that a question goes to the owner only
@@ -182,6 +184,111 @@ changes who is in it, never whether it exists):
   ordinary cell edits naming their author.
 - Nothing about this changes an existing save's format; it adds record kinds,
   read as absent by an older save.
+
+## Phase 3: hand carts and horse carts (owner, 2026-11-22)
+
+**The owner, 2026-11-22:** "wheeled vihecles will move slower without the
+road (like 1/4 speed), we also need to add basic carts to phase 3 as well,
+and horse carts too". So the hand cart and the horse cart move from phase 5
+to phase 3, beside the roads they run on (`townsfolk` design 39 to 41) and
+the town tree that teaches them (`town-missions-tree`, the Carts branch).
+**Cars, trucks, trains and track stay in phase 5**, and so do the ridden
+horse and the covered wagon: the owner named carts and horse carts, and the
+rider and the wagon are mass transport's (recommendation taken, ask only
+with screenshots). Decisions 1 to 8 above hold for the carts as written;
+what follows adds to them. Shown first in M38 version 2: the Carts and
+horses tab marks the hand cart and the horse cart as phase 3, and a new
+Road or not tab drives the two carts side by side on a gravel road, a dirt
+track and open ground.
+
+### 9. Wheels are slow off the road
+
+Every wheeled vehicle (the hand cart and the horse cart now; the wagon, the
+car and the truck in phase 5) moves at its road speed times the factor of
+the surface under its wheels:
+
+| Surface | Factor | Why |
+| --- | ---: | --- |
+| Gravel road (the player's or the world's), a bridge deck, a town's lanes and streets | 1.0 | what a road speed means |
+| Dirt track (the world's village roads, a player's old dirt cell) | 0.6 | packed earth, rutted; between gravel and open ground |
+| Ford | 0.5 | decision 2's half speed for a car, now for every wheel |
+| Anything else: grass, sand, snow, scree, a marked cell not yet paved | 0.25 | the owner's "like 1/4 speed" |
+
+- **The rule is one function in `pbd-core`**, `roads::wheel_factor`, read
+  off the road piece (or its absence) under each axle, with the factors in
+  `roads.ron` (`wheel: (gravel: 1.0, dirt: 0.6, ford: 0.5, off_road:
+  0.25)`). A vehicle with its axles on two surfaces takes the lower factor,
+  so a cart half off the road is slowed: the road is worth staying on.
+  Recommendation taken (ask only with screenshots) for dirt and the ford;
+  the off-road quarter is the owner's.
+- **The climb multiplies it**: decision 2's slowing on a layer a cell (a
+  horse to about 70%) applies on top, on and off the road.
+- **Walking is not changed**: the walker keeps design 10a's gravel 1.15 and
+  dirt 1.0. Only wheels read this table. A ridden horse is not wheeled and
+  keeps its pace off the road (phase 5).
+- **Where the cart cannot go**: a step of more than a layer between cells
+  stops a wheel, as a wall does; off the road that is most of a hillside, so
+  a cart crosses country slowly and only where it is gentle.
+
+### 10. The hand cart and the horse cart
+
+- **The hand cart**: two wheels, a plank bed with low sides, two handles,
+  pulled by the player walking between them. About 2.2 m long with its
+  handles, 1.3 m wide, wheels 0.9 m. **Road speed 6 m/s** (the walker's 8
+  m/s, slowed by the load), so 1.5 m/s off the road. **Hold: 9 slots** of the
+  pack's stacks.
+- **The horse cart**: decision 1's two-wheeled cart, its horse in the
+  shafts, the player on the seat. **Road speed 9 m/s**, faster than walking
+  (the reason to have one), 2.25 m/s off the road. **Hold: 24 slots.**
+  Recommendation taken (ask only with screenshots) for the speeds and holds.
+- **Built at the workbench**, unlocked by the town tree:
+
+| code | secs | inputs | outputs |
+| --- | ---: | --- | --- |
+| `wheel` | 4 | 4 planks, 1 iron ingot (its tyre) | 1 wheel |
+| `hand-cart` | 6 | 2 wheels, 8 planks, 2 rope | 1 hand cart |
+| `horse-cart` | 8 | 2 wheels, 14 planks, 4 rope, 2 leather (the harness) | 1 horse cart |
+
+- **Placed and stored as a vehicle.** A made cart is a good in the pack
+  (`hand-cart`, `horse-cart`, stack 1), as the raft is (`river-craft`).
+  The place button on dry ground sets it down: it becomes a vehicle record
+  (decision 8: its id, kind, pose in the body's frame as a `WorldPos` in
+  `f64`, its hold, damage, owner and the id of the horse in its shafts),
+  written on the durable path, and the good leaves the pack in the same
+  line. Picking an empty cart up (interact, then TAKE UP in its menu) turns
+  it back into the good.
+- **Using it.** The interact key at the handles takes up a hand cart (the
+  player walks it; the camera stays the player's own, mouse look raw as
+  ever); at the seat it boards a horse cart. The interact key again lets go
+  or steps down. **Letting go changes who is with the cart, never whether it
+  exists** (CLAUDE.md): the record stays where it stood, with its hold and
+  its horse, boardable by anyone, in every save.
+- **The hold** opens with the vehicle menu key (C), beside the pack, as a
+  boat's hold does (`river-craft`, M34 version 6). A cart's hold is part of
+  its record, so goods in a cart left on a road are there next session.
+- **A horse is bought, not tamed** (the owner said "tamed or bought"; the
+  game has no horse: `animal-husbandry`'s home roster is the hen, the
+  woolback and the plodder). A stable keeper in every town of the larger
+  sizes sells horses for 120 coins (`values.ron`; a stable is a role in the
+  town's roster, standing at a hitching rail). Buying writes a kept-animal
+  record (`animal-husbandry`) of a new species, `horse`, appended to the end
+  of the home roster (append-only, as its file requires) with a new status,
+  **Bought**, that no wild herd rolls: wild herds are rolled from the
+  tameable species only, so every existing world's herds stay as they are,
+  animal for animal (a test pins it). A horse is fed and kept like the herd
+  (wheat, turnip and turf) and gives leather as the owner asked of horses
+  (`small-boats` design 2e). Taming wild horses is left for later, as it
+  would change what herds a world rolls. Recommendation taken (ask only with
+  screenshots).
+- **Hitching.** The interact key with a led horse (it follows after buying,
+  as a tamed animal does) at a horse cart's shafts hitches it; both records
+  are written in one transaction, so neither is saved half-hitched (decision
+  8). Unhitching at the shafts lets the horse follow again, or tie it to a
+  hitching rail.
+- **Lit like the ground**: `LitByField` and `LitLikeTerrain` on each cart and
+  horse; a horse cart's lantern is a light in the cell field (decision 7).
+- **Not in phase 3**: passing places (decision 2) wait for the world's
+  traffic of phase 5; a phase 3 road has one cart at a time on most of it.
 
 ## Risks / Trade-offs
 
