@@ -159,6 +159,12 @@ section.topic, .ki, .phase-quiet, .ki li, details.decided { scroll-margin-top: 7
 .ki ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 15px; }
 .ki li.blocking::marker { color: var(--star); }
 .ki .blk { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--star); margin-right: 8px; }
+.ki-note { margin-top: 4px; }
+.ki-note summary { cursor: pointer; font: 500 12px/1 var(--mono); color: var(--brass); padding: 6px 0; min-height: 28px; list-style: none; }
+.ki-note summary::-webkit-details-marker { display: none; }
+.ki-note textarea { min-height: 54px; font-size: 14px; }
+.ki-note .status { margin-top: 4px; }
+.ki-said { margin: 2px 0 0; font-size: 14px; color: var(--done); white-space: pre-wrap; }
 .hit { outline: 2px solid var(--brass); outline-offset: 4px; transition: outline-color 1.2s; }
 .dec-list .d-phase { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; margin-right: 8px; }
 @media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
@@ -183,7 +189,7 @@ section.topic, .ki, .phase-quiet, .ki li, details.decided { scroll-margin-top: 7
     <p>Answers save as you go. Tap a chosen option again to clear it.</p>
     <p>A question comes to you only with something to look at (your rule, 2026-09-29). For anything without screenshots I take my recommendation and list it under Already decided as "recommendation taken".</p>
     <p>Your earlier answers are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn" target="_blank" rel="noopener">the first survey (a Claude Doc)</a>, kept as the record; all of them are copied under Already decided.</p>
-    <p>Each phase of the roadmap has its open questions, then its known issues: things not done yet, listed to read, with nothing to answer.</p>
+    <p>Each phase of the roadmap has its open questions, then its known issues: things not done yet. Add a note on any issue and I read it with your answers.</p>
     <p class="notice" id="mode" hidden></p>
   </div>
 
@@ -397,7 +403,7 @@ function render() {
         sec.append(el('div', { class: 'ki', id: g.id },
           el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
           el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-'), class: it.blocking ? 'blocking' : '' },
-            it.blocking ? el('span', { class: 'blk', text: 'Blocking' }) : null, it.text)))));
+            it.blocking ? el('span', { class: 'blk', text: 'Blocking' }) : null, it.text, issueNote(it.id))))));
       }
     }
     root.append(sec);
@@ -601,6 +607,7 @@ function readOnly() {
     c.textarea.readOnly = true;
     c.opts.forEach((b) => { b.disabled = true; });
   }
+  for (const n of Object.values(noteEls)) n.ta.readOnly = true;
   showMode('You can read this survey, but only its owner can answer it.');
 }
 
@@ -666,9 +673,50 @@ async function setupDownload() {
   });
 }
 
+// A note on a known issue (owner, 2026-11-22: "can I add notes or something?"): one per issue, saved to the db collection
+// `issue_notes` (doc id = the issue id with '.' as '-'), read back by Claude like the answers.
+const notes = {};      // doc id -> text
+const noteEls = {};    // doc id -> { box, ta, said, status }
+const noteTimers = {};
+function issueNote(issueId) {
+  const id = issueId.replace('.', '-');
+  const ta = el('textarea', { rows: '2', placeholder: 'Your note on this (optional)', 'aria-label': 'Note on ' + issueId });
+  const status = el('div', { class: 'status', 'aria-live': 'polite' });
+  const said = el('p', { class: 'ki-said' });
+  const box = el('details', { class: 'ki-note' }, el('summary', { text: 'Add a note' }), ta, status);
+  ta.addEventListener('input', () => {
+    notes[id] = ta.value; paintNote(id);
+    clearTimeout(noteTimers[id]); status.textContent = 'Editing…'; status.className = 'status';
+    noteTimers[id] = setTimeout(() => saveNote(id), 900);
+  });
+  ta.addEventListener('blur', () => { clearTimeout(noteTimers[id]); saveNote(id); });
+  noteEls[id] = { box, ta, said, status };
+  return el('div', {}, said, box);
+}
+function paintNote(id) {
+  const n = noteEls[id]; if (!n) return;
+  const t = (notes[id] ?? '').trim();
+  n.said.textContent = t ? 'Your note: ' + t : '';
+  n.box.querySelector('summary').textContent = t ? 'Edit your note' : 'Add a note';
+  if (document.activeElement !== n.ta) n.ta.value = notes[id] ?? '';
+}
+async function saveNote(id) {
+  const n = noteEls[id]; if (!n || !canWrite) return;
+  const body = { text: notes[id] ?? '', updatedAt: new Date().toISOString() };
+  if (!db) {
+    try { localStorage.setItem(LOCAL_KEY + '.notes', JSON.stringify(notes)); } catch (e) { /* storage blocked */ }
+    n.status.textContent = standalone ? 'Saved in this browser' : ''; n.status.className = 'status ok'; return;
+  }
+  n.status.textContent = 'Saving…';
+  try { await db.collection('issue_notes').doc(id).set(body); n.status.textContent = 'Saved'; n.status.className = 'status ok'; }
+  catch (e) { n.status.textContent = 'Not saved. Try again in a moment.'; n.status.className = 'status err'; }
+}
+
 async function connect() {
   if (standalone) {
     loadLocal();
+    try { Object.assign(notes, JSON.parse(localStorage.getItem(LOCAL_KEY + '.notes') || '{}')); } catch (e) { /* nothing saved */ }
+    Object.keys(noteEls).forEach(paintNote);
     ALL_QS.forEach((q) => paint(q.id));
     showMode('This copy is open outside claude.ai, so answers are kept in this browser only. Claude reads the answers on the survey page at claude.ai.');
     return;
@@ -682,6 +730,14 @@ async function connect() {
   }
   db = store;
   if (user && (await user.can('data.write')) === false) { canWrite = false; readOnly(); }
+  db.collection('issue_notes').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists || document.activeElement === noteEls[d.id]?.ta) continue;
+      const body = d.data();
+      notes[d.id] = typeof body.text === 'string' ? body.text : '';
+      paintNote(d.id);
+    }
+  }, () => {});
   db.collection('answers').onSnapshot((snap) => {
     for (const d of snap.docs) {
       if (!d.exists) continue;
