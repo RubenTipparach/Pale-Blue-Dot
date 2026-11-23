@@ -262,7 +262,8 @@ fn the_sea_is_never_crossed() {
 /// town further off.
 #[test]
 fn every_settlement_reaches_its_two_nearest_within_2_km() {
-    let cfg = RoadsConfig::default();
+    // Versions 1 and 2's rule; version 3's is `no_network_joins_three`.
+    let cfg = RoadsConfig::default().for_version(2);
     let s = |site: u32, e: f32, n: f32, large: bool| Settlement {
         site,
         direction: at(e, n),
@@ -344,8 +345,18 @@ fn a_built_cell_rises_toward_the_first_neighbour_a_layer_up() {
         base_m: 4,
         up: Some(11),
         from: None,
+        raised: false,
+        plan: None,
     };
     let key = nearest_key(at(0.0, 0.0)).unwrap();
+    // A schema 1 body written before `raised` and `plan` reads back.
+    let old = Record {
+        kind: ROAD_CELL_RECORD.into(),
+        id: 7,
+        schema: RECORD_SCHEMA,
+        body: "(surface:Gravel,base_m:4,up:Some(11),from:None)".into(),
+    };
+    assert_eq!(old.read::<BuiltCell>(), Some(cell));
     records.put(built_record(key, &cell));
     assert_eq!(built(&records).get(&key), Some(&cell));
     assert_eq!(built_cell(key, &cell).up, Some(11));
@@ -589,4 +600,42 @@ fn version_2_links_are_pinned() {
             "version {version}"
         );
     }
+}
+
+/// Roads version 3 (`townsfolk` design 42): each settlement joined to at
+/// most one other within 2 km, nearest first, and the roads planned from
+/// them never make a network of three.
+#[test]
+fn no_network_joins_three() {
+    let towns = fixed_layout();
+    let cfg = RoadsConfig::default();
+    assert_eq!(cfg.max_network, 2);
+    let pairs = links(&towns, &cfg, RADIUS);
+    let mut seen = BTreeSet::new();
+    for &(a, b) in &pairs {
+        assert!(seen.insert(a) && seen.insert(b), "{a} or {b} twice");
+        let ta = towns.iter().find(|t| t.site == a).unwrap();
+        let tb = towns.iter().find(|t| t.site == b).unwrap();
+        assert!(crate::sites::arc_m(ta.direction, tb.direction, RADIUS) <= cfg.link_m);
+    }
+    assert!(!pairs.is_empty() && pairs.len() <= towns.len() / 2);
+    // Planned over flat dry ground: every network is one pair.
+    let flat = |_: u32| Some(dry(0));
+    let near: Vec<Settlement> = towns
+        .iter()
+        .filter(|t| {
+            let (e, n) = local(t.direction);
+            e.abs() < 1_500.0 && n.abs() < 1_500.0
+        })
+        .copied()
+        .collect();
+    let mut small = cfg.clone();
+    small.max_expanded = 20_000;
+    let roads = plan(&near, &flat, &small, RADIUS, 2);
+    assert!(!roads.is_empty());
+    for net in networks(&roads) {
+        assert!(net.len() <= 2, "a network of {}", net.len());
+    }
+    // A world planned by version 2 keeps its rule.
+    assert_eq!(links(&towns, &cfg.for_version(2), RADIUS).len(), 56);
 }

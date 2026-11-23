@@ -122,5 +122,10 @@
         ("parcel", 1, goods),
         // ---- townsfolk design 31: crushed stone for a road
         ("gravel", 1, stone),
+        // ---- townsfolk design 41: the gravel stations and their goods
+        ("crushed-stone", 1, stone),
+        ("survey-stakes", 1, wood),
+        ("block:grinder", 40, goods),
+        ("block:mixer", 35, goods),
     ],
 )

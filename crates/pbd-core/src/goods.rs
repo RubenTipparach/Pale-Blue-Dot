@@ -116,6 +116,10 @@ pub const GOODS: &[GoodRow] = &[
     row("parcel", 1, "items/goods/parcel.png"),
     // ---- townsfolk design 31: crushed stone, laid as a gravel road.
     row("gravel", 99, "items/goods/gravel.png"),
+    // ---- townsfolk design 41: the grinder's crushed stone, which the mixer
+    // makes gravel of, and survey stakes, a road's waypoints.
+    row("crushed-stone", 99, "items/goods/crushed-stone.png"),
+    row("survey-stakes", 32, "items/goods/survey-stakes.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -185,6 +189,9 @@ impl Good {
     pub const PARCEL: Good = by_code_const("parcel");
     // townsfolk: crushed stone for a gravel road.
     pub const GRAVEL: Good = by_code_const("gravel");
+    // townsfolk design 41: the grinder's output, and a road's waypoints.
+    pub const CRUSHED_STONE: Good = by_code_const("crushed-stone");
+    pub const SURVEY_STAKES: Good = by_code_const("survey-stakes");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {

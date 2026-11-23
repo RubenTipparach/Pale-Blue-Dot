@@ -70,7 +70,9 @@ impl Class {
             Material::MusselBed => Class::Dirt,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
-            Material::Workbench | Material::Sticks => Class::Wood,
+            Material::Workbench | Material::Sticks | Material::Grinder | Material::Mixer => {
+                Class::Wood
+            }
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall
