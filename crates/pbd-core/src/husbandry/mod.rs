@@ -47,6 +47,9 @@ pub enum Plan {
     Bird,
     /// Four legs, a head that grazes: the woolback and the plodder.
     Quadruped,
+    /// A long-legged grazer with a long neck, drawn as one shaped body: the
+    /// horse (`land-transport` design 10).
+    Horse,
 }
 
 /// A sex. Hens lay and cows give milk; a product may name one.
@@ -430,7 +433,10 @@ impl HusbandrySettings {
                 {
                     return Err(format!("{at}: colours are 0..1"));
                 }
-                let tameable = matches!(sp.status, Status::Tameable | Status::Domestic);
+                let tameable = matches!(
+                    sp.status,
+                    Status::Tameable | Status::Domestic | Status::Bought
+                );
                 if tameable != sp.keep.is_some() {
                     return Err(format!(
                         "{at}: a tameable species says how it is kept, and only one"

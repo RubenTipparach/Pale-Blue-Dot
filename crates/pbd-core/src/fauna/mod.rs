@@ -179,13 +179,16 @@ pub enum Status {
     Domestic,
     /// May not be caught (M25).
     Protected,
+    /// Bought, never wild (`land-transport` design 10): a town sells it,
+    /// no wild herd rolls it, and it is kept like the herd. The horse.
+    Bought,
 }
 
 impl Status {
     /// Why taming is refused, or `None` where it is not.
     pub fn refusal(self, class: Class) -> Option<Localized> {
         match (self, class) {
-            (Status::Tameable | Status::Domestic, _) => None,
+            (Status::Tameable | Status::Domestic | Status::Bought, _) => None,
             (Status::Protected, _) => Some(tr("fauna.refusal.protected")),
             (Status::WildOnly, Class::Fish) => Some(tr("fauna.refusal.fish_wild")),
             (Status::WildOnly, _) => Some(tr("fauna.refusal.wild")),

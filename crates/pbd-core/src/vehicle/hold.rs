@@ -8,17 +8,29 @@
 
 use crate::inventory::{CARRIED, Slots, Stack};
 
-/// Slots in a hold.
+/// Slots in a boat's hold (the raft's).
 pub const HOLD: usize = 10;
+
+/// The most slots any vehicle's hold has (a horse cart's, `land-transport`
+/// design 10): what the HOLD panel can show.
+pub const HOLD_MAX: usize = 24;
 
 /// The record kind a hold is stored as, and its schema.
 pub const HOLD_KIND: &str = "hold";
 pub const HOLD_SCHEMA: u32 = 1;
 
-/// A craft's hold.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// A vehicle's hold: as many slots as its vehicle gives it (a raft's ten,
+/// a hand cart's nine, a horse cart's 24).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hold {
-    pub slots: [Option<Stack>; HOLD],
+    pub slots: Vec<Option<Stack>>,
+}
+
+impl Default for Hold {
+    /// A boat's hold: [`HOLD`] slots.
+    fn default() -> Self {
+        Self::sized(HOLD)
+    }
 }
 
 /// A slot a move names: one of the player's (hotbar and pack, as
@@ -30,6 +42,18 @@ pub enum Place {
 }
 
 impl Hold {
+    /// An empty hold of `slots` slots, at most [`HOLD_MAX`].
+    pub fn sized(slots: usize) -> Self {
+        Self {
+            slots: vec![None; slots.min(HOLD_MAX)],
+        }
+    }
+
+    /// Slots holding something.
+    pub fn filled(&self) -> usize {
+        self.slots.iter().flatten().count()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.slots.iter().all(Option::is_none)
     }
@@ -58,10 +82,10 @@ fn set(slots: &mut Slots, hold: &mut Hold, at: Place, stack: Option<Stack>) {
     }
 }
 
-fn valid(at: Place) -> bool {
+fn valid(hold: &Hold, at: Place) -> bool {
     match at {
         Place::Carried(i) => i < CARRIED,
-        Place::Hold(i) => i < HOLD,
+        Place::Hold(i) => i < hold.slots.len(),
     }
 }
 
@@ -71,7 +95,7 @@ fn valid(at: Place) -> bool {
 /// different item the two swap, if the whole stack was moved; otherwise
 /// nothing happens. Nothing is ever lost or made.
 pub fn shift(slots: &mut Slots, hold: &mut Hold, from: Place, to: Place, count: u16) {
-    if from == to || !valid(from) || !valid(to) {
+    if from == to || !valid(hold, from) || !valid(hold, to) {
         return;
     }
     let Some(stack) = get(slots, hold, from) else {
@@ -118,7 +142,7 @@ pub fn send(slots: &mut Slots, hold: &mut Hold, from: Place) {
             .chain(0..crate::inventory::SLOTS)
             .map(Place::Carried)
             .collect(),
-        Place::Carried(_) => (0..HOLD).map(Place::Hold).collect(),
+        Place::Carried(_) => (0..hold.slots.len()).map(Place::Hold).collect(),
     };
     // Onto the same item first, then into empty slots.
     for merge in [true, false] {

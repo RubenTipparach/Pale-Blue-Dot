@@ -116,6 +116,11 @@ pub const GOODS: &[GoodRow] = &[
     row("parcel", 1, "items/goods/parcel.png"),
     // ---- townsfolk design 31: crushed stone, laid as a gravel road.
     row("gravel", 99, "items/goods/gravel.png"),
+    // ---- land-transport design 10: a cart wheel, and the two carts,
+    // carried until they are set down as vehicles.
+    row("wheel", 8, "items/goods/wheel.png"),
+    row("hand-cart", 1, "items/goods/hand-cart.png"),
+    row("horse-cart", 1, "items/goods/horse-cart.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
