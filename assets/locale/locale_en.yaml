@@ -35,6 +35,8 @@ block:
     name: forge
   grass:
     name: grass
+  grinder:
+    name: grinder
   jungle_grass:
     name: jungle grass
   lantern_hanging:
@@ -43,6 +45,8 @@ block:
     name: street lantern
   lantern_wall:
     name: wall lantern
+  mixer:
+    name: mixer
   mussel_bed:
     name: "mussel bed"
   ore:
@@ -655,6 +659,8 @@ item:
     name: coal
   copper-ingot:
     name: copper ingot
+  crushed-stone:
+    name: crushed stone
   egg:
     name: egg
   fence:
@@ -727,6 +733,8 @@ item:
     name: rowboat
   stone:
     name: loose stone
+  survey-stakes:
+    name: survey stakes
   tin-ore:
     name: tin ore
   turnip:
@@ -1208,12 +1216,12 @@ recipe:
     name: CAMPFIRE
   chili-fish:
     name: CHILI FISH
+  crushed-stone:
+    name: CRUSH STONE
   fence:
     name: FENCE X2
   flatbread:
     name: FLATBREAD
-  gravel:
-    name: GRAVEL X4
   forge:
     name: FORGE
   fried-egg:
@@ -1224,6 +1232,8 @@ recipe:
     name: GATE
   grilled-fish:
     name: GRILL FISH
+  grinder:
+    name: GRINDER
   incubator:
     name: INCUBATOR
   inner-tube:
@@ -1236,8 +1246,12 @@ recipe:
     name: IRON SHOVEL
   kale-skewer:
     name: KALE SKEWER
+  mixed-gravel:
+    name: GRAVEL X4
   mixed-ore:
     name: SMELT ORE
+  mixer:
+    name: MIXER
   planks:
     name: PLANKS
   raft:
@@ -1256,10 +1270,23 @@ recipe:
     name: STONE PICK
   stone-shovel:
     name: STONE SHOVEL
+  survey-stakes:
+    name: STAKES X4
   torch:
     name: TORCH X2
   workbench:
     name: WORKBENCH
+roads:
+  mark:
+    too_far: Too far
+    too_steep: Too steep
+    water: Water in the way
+    not_ground: Can't stake here
+    staked: Already staked
+  pave:
+    not_marked: Not marked
+    needs_shovel: Needs a shovel
+    needs_gravel: Needs gravel
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"
@@ -1427,8 +1454,12 @@ station:
     name: campfire
   forge:
     name: forge
+  grinder:
+    name: grinder
   hand:
     name: hands
+  mixer:
+    name: mixer
   workbench:
     name: workbench
 talk:

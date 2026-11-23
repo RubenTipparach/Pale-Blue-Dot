@@ -1268,6 +1268,46 @@ added to the installed clearance so a set built later has it too. Only the
 tufts go: a tree standing on the cell stays until it is felled, so nothing
 the world grew vanishes behind the player's back.
 
+**44. As built (2026-11-23, design 39 to 43, on the owner's "continue
+build").** What the game does, and where it differs from the plan:
+- **The stations are blocks, as the forge and the workbench are.** The
+  grinder and the mixer are `Material::Grinder` (30) and `Material::Mixer`
+  (31), stations of `pbd_core::station` with a queue each, made at the
+  workbench (`block:grinder`, `block:mixer`; valued 40 and 35 in
+  `values.ron`). The block is drawn in the local trees' wood, as the
+  workbench's is, and its form stands on it: lofted, tapered and bevelled
+  parts (`pbd_app::roads::models`): the grinder's splayed posts, rails,
+  thick-walled hopper, two bellied stone rollers, iron axle and crank and
+  sloping apron; the mixer's bellied drum of staves with three iron hoops,
+  two A-frames, axle, crank and trough. Plain colours in the forge's
+  pipeline, prewarmed, `LitByField` and `LitLikeTerrain` on the root.
+- **Gravel by hand is retired** into `station::RETIRED_RECIPES` (two stone),
+  so a hand queue saved with it refunds its stone; gravel in a pack stays
+  and paves. Survey stakes take its row in the hand list.
+- **The stake search allows no ford** (recommendation taken, ask only with
+  screenshots): a player's plan stays on dry ground, so a paved cell is
+  never under water; "Water in the way" refuses it.
+- **The band** is the record's `spare[2]` bits 16 to 22
+  (`planet_column::MARK_*`), not the surface word (bits 26 to 30 of that
+  are taken by the placed sheet and the road bit). The cap's fan triangles
+  each carry the signed distance across the band's nearest leg in the
+  vertex's `shade`, which is linear over the triangle, and the fragment
+  reads it at each texel's centre, so the band's ragged edge is the tile's
+  own pixels. Lit and shaded as the ground is.
+- **Taking a stake back** is the dig press on its cell (any tool or the
+  hand), spent before the digging; taking up a paved cell is the place
+  button with the shovel and an empty slot, as design 31 had it.
+- **Held paving** paves the nearest marked cell within 4 m of the aim every
+  `pave_beat_s` (0.45 s) while F is held with the shovel in hand.
+- **Not yet built:** the half-strength preview of the next stake's cells,
+  the compass tick and the map's stakes, and the shovel's stroke and the
+  gravel tipping out as a cell is paved.
+- **For the town tree** (`town-missions-tree` design 4): every stake, mark
+  and paving raises `pbd_app::roads::paving::RoadWork` (`Stake`,
+  `Mark(cells)`, `Pave`) on the frame its line is accepted; the grinder's
+  and the mixer's jobs are station recipes, counted as every recipe is.
+- Frame cost not measured (cloud session, lavapipe; CLAUDE.md).
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

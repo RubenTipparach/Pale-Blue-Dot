@@ -380,3 +380,144 @@ fn the_player_lays_gravel_and_dirt_and_takes_them_up() {
     );
     assert_eq!(slots.count(Item::Good(Good::GRAVEL)), 3);
 }
+
+/// Two stakes a few cells apart on dry ground near the shipped start, and
+/// where the top of each cell is.
+fn staked_ground() -> (Vec3, Vec3) {
+    let config = *crate::planet::terrain_config();
+    let start = crate::flight_view::FlightViewConfig::default().spawn_direction;
+    let (north, east) = pbd_core::geo::north_east(start);
+    let dry = |d: Vec3| {
+        let k = roads::nearest_key(d)?;
+        let c = roads::centre(k)?;
+        let top = pbd_core::column::surface_m(&config, c);
+        (top > config.sea_level_m + 1.0
+            && !pbd_core::map::river_water(&config, c)
+            && !ground::cleared(&config, c))
+        .then(|| c * (config.radius_m + top.floor()))
+    };
+    // The first pair 12 m apart, east to west, that both stand dry and
+    // that the stake's search joins.
+    for k in 0..200 {
+        let a = (start
+            + east * ((k % 20) as f32 * 9.0 / config.radius_m)
+            + north * ((k / 20) as f32 * 9.0 / config.radius_m))
+            .normalize();
+        let b = (a + east * (12.0 / config.radius_m)).normalize();
+        if let (Some(pa), Some(pb)) = (dry(a), dry(b)) {
+            let (edits, yields) = (
+                pbd_core::edits::Edits::default(),
+                pbd_core::records::YieldSet::new(),
+            );
+            let ground = paving::stake_ground(&config, &edits, &yields);
+            let (ka, kb) = (
+                roads::nearest_key(a).unwrap(),
+                roads::nearest_key(b).unwrap(),
+            );
+            if pbd_core::roads::paving::segment(ka, kb, &ground, &load_config(), config.radius_m)
+                .is_ok()
+            {
+                return (pa, pb);
+            }
+        }
+    }
+    panic!("no dry pair near the start")
+}
+
+/// `world/roads`, "A road is marked before it is paved", "Marks are saved"
+/// and "Dirt and gravel" (`townsfolk` design 39 to 41): two stakes mark the
+/// cells between, each marked cell is paved with one gravel, the last with
+/// none is refused with nothing taken, and the plan, the paved cells and
+/// the pack read back from the save as they were written.
+#[test]
+fn a_plan_is_marked_and_paved_and_survives_a_reload() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::roads::paving as core;
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let (a, b) = staked_ground();
+    let root = std::env::temp_dir().join(format!("pbd-paving-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let slot = crate::saves::create(&root, "Paving", 41).unwrap();
+    let stake = Item::Good(Good::SURVEY_STAKES);
+    let gravel = Item::Good(Good::GRAVEL);
+    let (plans, built, carried, marked) = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let mut slots = Slots::new();
+        // No stake in the pack: refused, nothing written.
+        assert!(paving::drive_stake(&mut save, &mut slots, None, a, &config, &cfg).is_err());
+        slots.give(stake, 4);
+        let first = paving::drive_stake(&mut save, &mut slots, None, a, &config, &cfg).unwrap();
+        let paving::Staked::Driven { plan, .. } = first else {
+            panic!("a new plan");
+        };
+        let second =
+            paving::drive_stake(&mut save, &mut slots, Some(plan), b, &config, &cfg).unwrap();
+        let paving::Staked::Driven { marked, .. } = second else {
+            panic!("the plan goes on");
+        };
+        assert!(marked >= 3, "{marked} cells marked");
+        assert_eq!(slots.count(stake), 2, "one stake a waypoint");
+        let plans = core::plans(&save.records);
+        let cells = plans[&plan].cells.clone();
+        // One gravel a cell: three gravel pave three cells, then none.
+        slots.give(gravel, 3);
+        for (n, &key) in cells.iter().take(3).enumerate() {
+            assert!(paving::pave(&mut save, &mut slots, key, &config).is_ok());
+            assert_eq!(slots.count(gravel), 2 - n as u32);
+        }
+        assert_eq!(
+            paving::pave(&mut save, &mut slots, cells[3], &config),
+            Err(paving::PaveRefused::NoGravel)
+        );
+        assert_eq!(slots.count(gravel), 0);
+        // A cell paved twice, or one not marked, takes nothing.
+        slots.give(gravel, 1);
+        assert_eq!(
+            paving::pave(&mut save, &mut slots, cells[0], &config),
+            Err(paving::PaveRefused::NotMarked)
+        );
+        assert_eq!(slots.count(gravel), 1);
+        // That gravel was never written; the pack saved is the last paving's.
+        assert!(slots.take_item(gravel, 1));
+        let built = roads::built(&save.records);
+        assert_eq!(built.len(), 3);
+        assert!(
+            built
+                .values()
+                .all(|c| c.surface == Surface::Gravel && c.plan == Some(plan))
+        );
+        let marked = core::marked(&plans, &built);
+        assert_eq!(marked.len(), cells.len() - 3);
+        save.drain();
+        (plans, built, slots, marked)
+    };
+    let reopened = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+    assert_eq!(
+        core::plans(&reopened.records),
+        plans,
+        "the plan, cell for cell"
+    );
+    assert_eq!(roads::built(&reopened.records), built, "the paved cells");
+    assert_eq!(reopened.carried.as_ref(), Some(&carried), "the pack");
+    // Tufts go at once from a paved or marked cell (design 43): the
+    // terrain's word for the cell carries the road bit once installed.
+    let road_bit = 1u32 << crate::planet::terrain::ROAD_BIT;
+    paving::install(&reopened.records, config.radius_m);
+    for &key in built.keys().chain(marked.keys()) {
+        let c = roads::centre(key).unwrap();
+        let h = pbd_core::column::surface_m(&config, c);
+        assert!(pbd_core::roads::paving::bare(c), "cell {key} is bare");
+        assert_ne!(
+            crate::planet::surface_code(c, h) & road_bit,
+            0,
+            "cell {key}"
+        );
+        assert_eq!(
+            pbd_core::roads::paving::mark_of(key).is_some(),
+            marked.contains_key(&key)
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

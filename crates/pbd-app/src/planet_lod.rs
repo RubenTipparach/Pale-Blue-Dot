@@ -685,6 +685,38 @@ impl FineSet {
         changed
     }
 
+    /// Bring the finest records of the cells `keys` round to the installed
+    /// marks and bare cells (`townsfolk` design 39a and 43): a cell marked or
+    /// paved since the set was built has its band and loses its tufts on
+    /// the frame it is written, not on the world's next open. Only the
+    /// records the keys name are looked at. Returns how many changed.
+    pub fn apply_road_marks(&mut self, keys: &std::collections::HashSet<u32>) -> usize {
+        if keys.is_empty() {
+            return 0;
+        }
+        let road = 1u32 << super::terrain::ROAD_BIT;
+        let mut changed = 0;
+        for record in 0..self.levels[3].len() {
+            let cell = &self.levels[3][record];
+            let key = cell.key();
+            if !keys.contains(&key) {
+                continue;
+            }
+            let d = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
+            let spare = column::mark_bits(cell, key);
+            let bare = pbd_core::roads::cleared(d) || pbd_core::roads::paving::bare(d);
+            let word = (cell.metadata[1] & !road) | if bare { road } else { 0 };
+            if spare == cell.spare[2] && word == cell.metadata[1] {
+                continue;
+            }
+            let cell = &mut self.levels[3][record];
+            cell.spare[2] = spare;
+            cell.metadata[1] = word;
+            changed += 1;
+        }
+        changed
+    }
+
     /// Bring a set built from the edits `built` round to the edits as they
     /// stand `now` (`edit-pipeline` 1b): a set is built off the frame from the
     /// edits as they were when it was REQUESTED, and anything accepted while it

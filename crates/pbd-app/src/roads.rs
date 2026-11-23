@@ -395,6 +395,9 @@ pub fn prepare(
         roads::Cleared::new(net.cells.iter().map(|l| l.cell.key), config.radius_m)
             .with_lamps(lamps.iter().copied()),
     ));
+    // The player's marks and road cells, for the terrain (`townsfolk`
+    // design 39a and 43), before the planet is built too.
+    paving::install(&save.records, config.radius_m);
     info!(
         "{} roads read, {} cells to lay in {} chunks, {} lamps beside them",
         stored.len(),
@@ -559,7 +562,7 @@ fn spawn_chunk(world: &mut World, meshes: &Meshes) -> Entity {
 }
 
 /// The viewer in the planet's frame: the camera, or the walker.
-fn viewer(world: &mut World) -> Option<Vec3> {
+pub(crate) fn viewer(world: &mut World) -> Option<Vec3> {
     let centre = world.get_resource::<PlanetRenderFrame>().map(|f| f.center);
     let mut cameras = world.query_filtered::<(&Camera, &GlobalTransform), With<Camera3d>>();
     if let Some(centre) = centre
@@ -863,6 +866,8 @@ pub fn lay(
         base_m,
         up: roads::built_up(base_m, &toward),
         from: None,
+        raised: false,
+        plan: None,
     };
     if !save.store_with_hands(
         roads::built_record(key, &cell),
@@ -877,80 +882,203 @@ pub fn lay(
     Ok(Lay::Laid(key, surface))
 }
 
-/// The place button on the ground: gravel in the selected slot lays a
-/// gravel road cell; an empty slot with the shovel in the tool slot lays a
-/// dirt track, or takes up the player's own road cell there. The net is
-/// rebuilt with the player's cells, and their chunks stood again at once.
-#[allow(clippy::too_many_arguments)]
-pub fn lay_roads(
-    buttons: Option<Res<ButtonInput<MouseButton>>>,
-    aimed: Option<Res<crate::husbandry::AimedGround>>,
-    walking: Option<Res<crate::walking::WalkingReadout>>,
-    menu: Option<Res<crate::controls::MenuOpen>>,
-    tools: Option<Res<crate::fish::ToolSlot>>,
-    hotbar: Option<ResMut<crate::hotbar::Hotbar>>,
-    save: Option<ResMut<WorldSave>>,
-    net: Option<ResMut<RoadNet>>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    mut standing: ResMut<RoadsStanding>,
+/// A plain line for the player from the roads (a refused stake, "Needs
+/// gravel"): the desktop shows it as the farm's note.
+#[derive(Resource, Default)]
+pub struct RoadSay(pub Option<String>);
+
+/// The player's hands on the roads (`townsfolk` design 39 to 41):
+/// - the place button with survey stakes in the selected slot drives a
+///   stake; the stakes leaving the slot end the plan;
+/// - the interact key with the shovel in hand paves the marked cell aimed
+///   at with one gravel, and held, the next marked cell in reach on the
+///   shovel's beat;
+/// - the place button with the shovel and an empty slot takes up the
+///   player's own road cell, its gravel back. The place button no longer
+///   lays a road.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn road_hands(
+    (buttons, keys, aimed, walking, menu): (
+        Option<Res<ButtonInput<MouseButton>>>,
+        Option<ResMut<ButtonInput<KeyCode>>>,
+        Option<Res<crate::husbandry::AimedGround>>,
+        Option<Res<crate::walking::WalkingReadout>>,
+        Option<Res<crate::controls::MenuOpen>>,
+    ),
+    (tools, hotbar, save, net): (
+        Option<Res<crate::fish::ToolSlot>>,
+        Option<ResMut<crate::hotbar::Hotbar>>,
+        Option<ResMut<WorldSave>>,
+        Option<ResMut<RoadNet>>,
+    ),
+    (settings, mut open, mut standing, mut say, mut work): (
+        Res<RoadsSettings>,
+        ResMut<paving::OpenPlan>,
+        ResMut<RoadsStanding>,
+        ResMut<RoadSay>,
+        MessageWriter<paving::RoadWork>,
+    ),
+    time: Res<Time>,
+    mut beat: Local<f32>,
 ) {
-    let (Some(buttons), Some(aimed), Some(mut hotbar), Some(mut save), Some(mut net)) =
-        (buttons, aimed, hotbar, save, net)
+    let (
+        Some(buttons),
+        Some(mut keys),
+        Some(aimed),
+        Some(mut hotbar),
+        Some(mut save),
+        Some(mut net),
+    ) = (buttons, keys, aimed, hotbar, save, net)
     else {
         return;
     };
-    if !buttons.just_pressed(MouseButton::Right)
+    let stake = pbd_core::inventory::Item::Good(pbd_core::goods::Good::SURVEY_STAKES);
+    let held = hotbar.0.held().map(|s| s.item);
+    if held != Some(stake) {
+        open.0 = None;
+    }
+    if menu.is_some_and(|m| m.0) || !walking.is_some_and(|w| w.active && w.captured) {
+        *beat = 0.0;
+        return;
+    }
+    let Some(point) = aimed.0 else {
+        *beat = 0.0;
+        return;
+    };
+    let shovel = tools.is_some_and(|t| t.0.held() == Some(pbd_core::inventory::Tool::Shovel));
+    let config = *crate::planet::terrain_config();
+    let cfg = settings.0.clone();
+    let key = roads::nearest_key(point.normalize_or(Vec3::Y));
+    if buttons.just_pressed(MouseButton::Right) {
+        if held == Some(stake) {
+            match paving::drive_stake(&mut save, &mut hotbar.0, open.0, point, &config, &cfg) {
+                Ok(paving::Staked::Driven { plan, marked }) => {
+                    open.0 = Some(plan);
+                    work.write(paving::RoadWork::Stake);
+                    if marked > 0 {
+                        work.write(paving::RoadWork::Mark(marked as u32));
+                    }
+                }
+                Ok(paving::Staked::Resumed(plan)) => open.0 = Some(plan),
+                Err(why) => {
+                    info!("STAKE refused: {why:?}");
+                    say.0 = Some(why.line().into());
+                }
+            }
+            return;
+        }
+        let mine = key.is_some_and(|k| roads::built(&save.records).contains_key(&k));
+        if held.is_none() && shovel && mine {
+            match lay(
+                &mut save,
+                &mut hotbar.0,
+                &net,
+                &config,
+                point,
+                Vec3::Z,
+                None,
+            ) {
+                Ok(_) => paving::restand(&save, &mut net, &mut standing),
+                Err(why) => info!("ROAD refused: {why:?}"),
+            }
+        }
+        return;
+    }
+    if !keys.pressed(KeyCode::KeyF) {
+        *beat = 0.0;
+        return;
+    }
+    let pressed = keys.just_pressed(KeyCode::KeyF);
+    let aimed_marked = key.filter(|&k| paving::marked_near(&save, point, 1.5).contains(&k));
+    if pressed {
+        if aimed_marked.is_none() {
+            return;
+        }
+        keys.clear_just_pressed(KeyCode::KeyF);
+        if !shovel {
+            say.0 = Some(pbd_core::locale::tr("roads.pave.needs_shovel").into());
+            return;
+        }
+        *beat = 0.0;
+    } else {
+        if !shovel {
+            return;
+        }
+        *beat += time.delta_secs();
+        if *beat < cfg.pave_beat_s {
+            return;
+        }
+        *beat -= cfg.pave_beat_s;
+    }
+    if !shovel {
+        return;
+    }
+    // The aimed cell first, else the nearest marked cell in reach.
+    let Some(target) = aimed_marked.or_else(|| {
+        paving::marked_near(&save, point, PAVE_REACH_M)
+            .first()
+            .copied()
+    }) else {
+        return;
+    };
+    match paving::pave(&mut save, &mut hotbar.0, target, &config) {
+        Ok(_) => {
+            work.write(paving::RoadWork::Pave);
+            paving::restand(&save, &mut net, &mut standing);
+        }
+        Err(why) => {
+            info!("PAVE refused: {why:?}");
+            if let Some(line) = why.line() {
+                say.0 = Some(line.into());
+            }
+        }
+    }
+}
+
+/// How far from the aim a held interact key reaches for the next marked
+/// cell to pave, m (design 40).
+pub const PAVE_REACH_M: f32 = 4.0;
+
+/// The dig press on a survey stake takes it back into the pack (design
+/// 39), whatever is in hand, and is spent: the ground under it is not dug.
+/// Runs before the digging.
+#[allow(clippy::type_complexity)]
+pub fn take_stakes(
+    (buttons, aimed, walking, menu): (
+        Option<ResMut<ButtonInput<MouseButton>>>,
+        Option<Res<crate::husbandry::AimedGround>>,
+        Option<Res<crate::walking::WalkingReadout>>,
+        Option<Res<crate::controls::MenuOpen>>,
+    ),
+    (hotbar, save, settings): (
+        Option<ResMut<crate::hotbar::Hotbar>>,
+        Option<ResMut<WorldSave>>,
+        Res<RoadsSettings>,
+    ),
+) {
+    let (Some(mut buttons), Some(aimed), Some(mut hotbar), Some(mut save)) =
+        (buttons, aimed, hotbar, save)
+    else {
+        return;
+    };
+    if !buttons.just_pressed(MouseButton::Left)
         || menu.is_some_and(|m| m.0)
         || !walking.is_some_and(|w| w.active && w.captured)
     {
         return;
     }
-    let Some(point) = aimed.0 else {
+    let Some(key) = aimed
+        .0
+        .and_then(|p| roads::nearest_key(p.normalize_or(Vec3::Y)))
+    else {
         return;
     };
-    let held = hotbar.0.held().map(|s| s.item);
-    let shovel = tools.is_some_and(|t| t.0.held() == Some(pbd_core::inventory::Tool::Shovel));
-    let gravel = pbd_core::inventory::Item::Good(pbd_core::goods::Good::GRAVEL);
-    let key = roads::nearest_key(point.normalize_or(Vec3::Y));
-    let mine = key.is_some_and(|k| roads::built(&save.records).contains_key(&k));
-    let surface = match held {
-        Some(item) if item == gravel => Some(Surface::Gravel),
-        None if shovel && mine => None,
-        None if shovel => Some(Surface::Dirt),
-        _ => return,
-    };
-    let facing = cameras
-        .iter()
-        .find(|(_, c)| c.is_active)
-        .map_or(Vec3::Z, |(g, _)| g.forward().as_vec3());
+    if !paving::stakes(&save).contains(&key) {
+        return;
+    }
     let config = *crate::planet::terrain_config();
-    match lay(
-        &mut save,
-        &mut hotbar.0,
-        &net,
-        &config,
-        point,
-        facing,
-        surface,
-    ) {
-        Ok(_) => {
-            let stored = roads::stored(&save.records);
-            let built = roads::built(&save.records);
-            let fresh = RoadNet::of(&stored, &built, save.serial());
-            let first_mine = fresh
-                .chunks
-                .iter()
-                .position(|c| {
-                    c.cells
-                        .iter()
-                        .any(|&i| built.contains_key(&fresh.cells[i].cell.key))
-                })
-                .unwrap_or(fresh.chunks.len());
-            // The player's chunks are the last: stand them again, drawn whole.
-            standing.redraw_from = Some(first_mine.min(net.chunks.len()));
-            *net = fresh;
-        }
-        Err(why) => info!("ROAD refused: {why:?}"),
+    if paving::take_stake(&mut save, &mut hotbar.0, key, &config, &settings.0) {
+        buttons.reset(MouseButton::Left);
     }
 }
 
@@ -962,14 +1090,29 @@ impl Plugin for RoadsPlugin {
         app.init_resource::<RoadsSettings>()
             .init_resource::<RoadPieces>()
             .init_resource::<RoadsStanding>()
+            .init_resource::<RoadSay>()
+            .init_resource::<paving::OpenPlan>()
+            .init_resource::<paving::MarksShown>()
+            .add_message::<paving::RoadWork>()
+            .add_systems(Startup, paving::make_looks)
             .add_systems(
                 Update,
-                (keep_roads, lay_roads, stand_roads, follow_frame)
+                (
+                    keep_roads,
+                    road_hands,
+                    stand_roads,
+                    paving::stand_stakes,
+                    paving::follow_marks,
+                    follow_frame,
+                )
                     .chain()
                     .after(crate::towns::build_towns),
             );
     }
 }
+
+pub mod models;
+pub mod paving;
 
 #[cfg(test)]
 mod tests;
