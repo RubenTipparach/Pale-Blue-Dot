@@ -57,6 +57,10 @@ pub struct CompassMark(usize);
 #[derive(Component)]
 pub struct CompassPlace(usize);
 
+/// Pins for lost villagers, ahead of the waypoints' (`town-missions-tree`
+/// design 10).
+pub const LOST_PINS: usize = 2;
+
 /// One of the waypoint pins, by slot.
 #[derive(Component)]
 pub struct CompassWaypoint(usize);
@@ -180,7 +184,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         ));
                     }
                     // Spawned after the studs, so a pin stands over a town.
-                    for k in 0..MARKS_MAX {
+                    for k in 0..MARKS_MAX + LOST_PINS {
                         inner.spawn((
                             CompassWaypoint(k),
                             ImageNode::new(pin.clone()),
@@ -263,6 +267,7 @@ pub fn update(
     >,
     mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
     mut read: Local<(String, Vec<Mark>)>,
+    eco: Option<Res<pbd_app::economy::Economy>>,
 ) {
     let Ok(mut visibility) = root.single_mut() else {
         return;
@@ -358,10 +363,17 @@ pub fn update(
     if read.0 != body {
         *read = (body.to_string(), read_marks(body).unwrap_or_default());
     }
-    let waypoints: Vec<Place> = read
-        .1
+    // A taken job's lost villager first, then the player's waypoints.
+    let lost: Vec<Vec3> = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => pbd_app::economy::special::lost_directions(eco, save),
+        _ => Vec::new(),
+    };
+    let lost = &lost[..lost.len().min(LOST_PINS)];
+    let waypoints: Vec<Place> = lost
         .iter()
-        .map(|m| Place::seen(view.up, m.direction(), PLANET_RADIUS))
+        .copied()
+        .chain(read.1.iter().map(|m| m.direction()))
+        .map(|d| Place::seen(view.up, d, PLANET_RADIUS))
         .collect();
     let on_bar = compass::waypoint_marks(heading, &waypoints);
     for (slot, mut node, mut image) in &mut pins {
@@ -376,8 +388,12 @@ pub fn update(
     }
     if let Ok(mut text) = name.single_mut() {
         let line = match compass::named_ahead(heading, &waypoints, &places) {
+            Some(Named::Waypoint(i)) if i < lost.len() => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.lost_marker").to_string(),
+                waypoints[i].distance_m,
+            ),
             Some(Named::Waypoint(i)) => {
-                compass::name_line(&read.1[i].label(), waypoints[i].distance_m)
+                compass::name_line(&read.1[i - lost.len()].label(), waypoints[i].distance_m)
             }
             Some(Named::Place(i)) => compass::name_line(towns[i].0, towns[i].1.distance_m),
             None => Localized::empty(),

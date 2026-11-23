@@ -143,6 +143,8 @@ pub enum TalkAction {
     Sell(String),
     Take(u64),
     HandIn(u64),
+    /// Give a taken job up (`town-missions-tree` design 9).
+    Abandon(u64),
     /// A trade column's filter tab: ALL (none) or a shelf.
     Shelf(List, Option<Shelf>),
     /// Buy a horse (`land-transport` design 10): a kept animal, not a good.
@@ -158,6 +160,9 @@ pub struct BoardBody;
 /// The coin icon, for every price shown.
 #[derive(Resource, Clone)]
 pub struct CoinIcon(pub Handle<Image>);
+/// The lost villager job's own icon (`town-missions-tree` design 10).
+#[derive(Resource, Clone)]
+pub struct LostIcon(pub Handle<Image>);
 
 /// The coin count beside the hotbar.
 #[derive(Component)]
@@ -167,7 +172,13 @@ pub struct CoinCount;
 pub struct CoinNotice;
 
 /// Build the three panels, hidden, and the coin count. `PostStartup`.
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<Image>>) {
+pub fn spawn(
+    mut commands: Commands,
+    kit: Res<UiKit>,
+    mut images: ResMut<Assets<Image>>,
+    assets: Res<AssetServer>,
+) {
+    commands.insert_resource(LostIcon(assets.load("items/missions/lost-villager.png")));
     let kit = &*kit;
     for (screen, width) in [
         (Screen::Talk, 300.0),
@@ -358,6 +369,7 @@ pub fn open_talk(
     let giver = k.is_some_and(|k| k.giver == talker.index as usize);
     let mut said = None;
     if let Some(shop) = shop {
+        shop.talked(&talker);
         match shop.deliver(&town) {
             Ok(n) if n > 0 => said = Some(tr("talk.parcel_thanks")),
             Err(why) => said = Some(why.words()),
@@ -537,6 +549,7 @@ pub fn act(shop: &mut Shop, town: &TownInfo, action: &TalkAction) -> Option<Loca
         TalkAction::HandIn(id) => shop
             .hand_in(town, *id)
             .map(|j| tr_with("jobs.paid", &[("coins", &j.reward)])),
+        TalkAction::Abandon(id) => shop.abandon(*id).map(|_| tr("jobs.abandoned_line")),
         _ => return None,
     };
     Some(result.unwrap_or_else(Why::words))
@@ -594,11 +607,28 @@ fn icon(
     icons: &ItemIcons,
     images: &Assets<Image>,
 ) {
+    icon_or(parent, kit, item, None, icons, images);
+}
+
+/// [`icon`], or an icon of its own where a job has one and no good.
+fn icon_or(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    item: Option<pbd_core::inventory::Item>,
+    own: Option<&Handle<Image>>,
+    icons: &ItemIcons,
+    images: &Assets<Image>,
+) {
     let mut node = ImageNode {
         color: Color::NONE,
         ..default()
     };
     slots::paint_icon(&mut node, item.map(|i| Stack::new(i, 1)), icons, images);
+    if let (None, Some(own)) = (item, own) {
+        node.image = own.clone();
+        node.rect = None;
+        node.color = Color::WHITE;
+    }
     parent
         .spawn((
             Node {
@@ -655,6 +685,7 @@ pub struct PaintParams<'w> {
     fauna: Res<'w, pbd_app::config::FaunaConfig>,
     body: Res<'w, pbd_app::fish::Body>,
     coin: Option<Res<'w, CoinIcon>>,
+    lost: Option<Res<'w, LostIcon>>,
 }
 
 /// Rebuild the open panel when what it shows changes.
@@ -1183,8 +1214,12 @@ fn paint_board(
         for job in mine {
             let done = eco.jobs.is_done(job.id);
             let counts = eco.jobs.counts(job.id);
-            let action = done.then_some(TalkAction::HandIn(job.id));
-            entries.push(Entry::Job(job, counts, action, tr("jobs.hand_in")));
+            let (action, label) = if done {
+                (TalkAction::HandIn(job.id), tr("jobs.hand_in"))
+            } else {
+                (TalkAction::Abandon(job.id), tr("jobs.abandon"))
+            };
+            entries.push(Entry::Job(job, counts, Some(action), label));
         }
     }
     if with.giver {
@@ -1202,7 +1237,12 @@ fn paint_board(
                 .save
                 .as_deref()
                 .map_or(0, |s| pbd_app::economy::goodwill_of(s, town.site).points);
-            board.posted(town.as_town(), day, goodwill, &eco.jobs.gone())
+            let hour = p.sun.clock.hour();
+            board
+                .posted(town.as_town(), day, goodwill, &eco.jobs.gone())
+                .into_iter()
+                .filter(|j| pbd_core::economy::jobs::shown_at(j, hour))
+                .collect::<Vec<_>>()
         };
         if posted.is_empty() {
             entries.push(Entry::Line(tr("jobs.none")));
@@ -1253,7 +1293,7 @@ fn paint_board(
                             Entry::Line(text) => line(rows, text, ui_kit::TEXT_DIM),
                             Entry::Job(job, counts, action, label) => job_row(
                                 rows,
-                                (kit, coin, well),
+                                (kit, coin, well, p.lost.as_deref().map(|l| &l.0)),
                                 &job,
                                 &counts,
                                 towns,
@@ -1289,7 +1329,7 @@ type Well<'a> = (&'a ItemIcons, &'a Assets<Image>, &'a [String]);
 
 fn job_row(
     panel: &mut ChildSpawnerCommands,
-    (kit, coin, (icons, images, ids)): (&UiKit, &Handle<Image>, Well),
+    (kit, coin, (icons, images, ids), lost): (&UiKit, &Handle<Image>, Well, Option<&Handle<Image>>),
     job: &Job,
     counts: &[u32],
     towns: &Towns,
@@ -1303,7 +1343,8 @@ fn job_row(
             ..default()
         })
         .with_children(|row| {
-            icon(row, kit, job_item(job, ids), icons, images);
+            let own = lost.filter(|_| job.kind == pbd_core::economy::jobs::JobKind::Lost);
+            icon_or(row, kit, job_item(job, ids), own, icons, images);
             row.spawn((
                 KitText::new(job_line(job, counts, towns), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
@@ -1522,6 +1563,7 @@ pub fn scripted_press(
                         | ("sell", TalkAction::Sell(_))
                         | ("take", TalkAction::Take(_))
                         | ("handin", TalkAction::HandIn(_))
+                        | ("abandon", TalkAction::Abandon(_))
                 )
         };
         match buttons.iter_mut().find(|(_, a)| wanted(a)) {

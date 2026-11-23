@@ -417,6 +417,15 @@ pub struct Launch {
     /// `--tree-hover <id>`: zoomed out, show that mission's hover card as if
     /// the pointer were on its tile (a capture instrument).
     pub tree_hover: Option<String>,
+    /// `--tree-town`: the Missions tab shows the town tree once it is open;
+    /// `--town-focus <id>`: that town mission is made the one the player is
+    /// on once it opens, as a pick on the tree would (capture instruments,
+    /// `town-missions-tree` design 6).
+    pub tree_town: bool,
+    pub town_focus: Option<String>,
+    /// `--no-readout`: no debug readout at the top left, as in a showcase
+    /// (a capture instrument).
+    pub no_readout: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -583,6 +592,9 @@ impl Launch {
             tree_select: None,
             tree_zoom: None,
             tree_hover: None,
+            tree_town: false,
+            town_focus: None,
+            no_readout: false,
             dig_ahead: false,
             take_trees: false,
             pick_only: false,
@@ -842,6 +854,16 @@ impl Launch {
                     result.tree_select = Some(
                         args.get(i)
                             .expect("--tree-select takes a mission id")
+                            .clone(),
+                    );
+                }
+                "--tree-town" => result.tree_town = true,
+                "--no-readout" => result.no_readout = true,
+                "--town-focus" => {
+                    i += 1;
+                    result.town_focus = Some(
+                        args.get(i)
+                            .expect("--town-focus takes a town mission id")
                             .clone(),
                     );
                 }
@@ -1864,6 +1886,8 @@ pub fn run(args: &[String]) {
                 missions::press_tabs,
                 missions::paint,
                 missions::show_line,
+                mission_tree::tree_tabs,
+                mission_tree::switch_tree,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -1872,6 +1896,8 @@ pub fn run(args: &[String]) {
             )
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::scripted_town.run_if(pbd_app::loading::ready),
+            showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
         ),
@@ -1964,6 +1990,11 @@ pub fn run(args: &[String]) {
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
+    .insert_resource(if launch.tree_town {
+        mission_tree::ShownTree::Town
+    } else {
+        mission_tree::ShownTree::Starter
+    })
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()

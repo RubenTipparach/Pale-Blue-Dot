@@ -34,6 +34,8 @@ pub enum Reader {
     Mend,
     /// The carts (`land-transport` design 11).
     Carts,
+    /// A town lamp at dusk (`town-missions-tree` design 8).
+    Lamps,
 }
 
 /// A thing F can do.
@@ -78,6 +80,8 @@ pub enum Act {
     Hitch,
     /// Take it out of them.
     Unhitch,
+    /// Light a town lamp at dusk, for a lamps job.
+    Light,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -96,7 +100,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 28] = [
+pub const ACTS: [Row; 29] = [
     // A cart in hand or a seat taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
@@ -126,6 +130,7 @@ pub const ACTS: [Row; 28] = [
     row(Act::Hitch, "hitch", Reader::Carts),
     row(Act::Unhitch, "unhitch", Reader::Carts),
     row(Act::Mend, "mend", Reader::Mend),
+    row(Act::Light, "light", Reader::Lamps),
 ];
 
 impl Act {

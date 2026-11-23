@@ -975,13 +975,11 @@ fn report(world: &mut World) {
     }
 }
 
-/// The town tree's cart events (`town-missions-tree` design 4). `Travel`
-/// with `cart-road` and `Place` with a cart's code are raised here today;
-/// `haul` (`cart`) and `hitch` (`horse`) wait for the tree to add their
-/// kinds: these two functions are what the tree calls, and they give
-/// `None` until then.
+/// The town tree's cart events (`town-missions-tree` design 4): `Travel`
+/// with `cart-road`, `Place` with a cart's code, `Buy` with `<site>:horse`,
+/// `haul` (`cart`) and `hitch` (`horse`).
 pub mod missions {
-    use pbd_core::missions::Happened;
+    use pbd_core::missions::{Happened, Kind};
 
     /// What a cart driven on road cells counts under `Travel`.
     pub const CART_ROAD: &str = "cart-road";
@@ -989,13 +987,12 @@ pub mod missions {
     /// Metres hauled by a cart with something in its hold: `haul`
     /// (`cart`).
     pub fn hauled(metres: u32) -> Option<Happened> {
-        let _ = metres;
-        None
+        (metres > 0).then(|| Happened::new(Kind::Haul, "cart", metres))
     }
 
     /// A horse put in a horse cart's shafts: `hitch` (`horse`).
     pub fn hitched() -> Option<Happened> {
-        None
+        Some(Happened::new(Kind::Hitch, "horse", 1))
     }
 }
 

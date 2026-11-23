@@ -1,0 +1,315 @@
+// The town tree (pbd_core::missions::town, `town-missions-tree` design 1-5;
+// M33's Town tab): a second tree, apart from the starter tree, that walks a
+// player through the town. A trunk and five branches; every mission pays
+// coins when it is done (`coins`), into the purse in the same line as its
+// done mark.
+//
+// The same file shape and rules as `missions.ron`: a mission opens when the
+// one mission in `needs` is done (or pending), counts start when it opens,
+// and `unlocks` names the recipes its completion opens. The tree opens the
+// first time the player reaches a town; its root has no `needs`.
+//
+// `any:<thing>` counts the thing in any town (a town's events are named
+// `<site>:<thing>`); `any:any` counts anything in any town. `talk` counts
+// each person once a mission, `job` a town job handed in (by its kind),
+// `goodwill` a town's goodwill reaching its next step, `build` a piece of a
+// house placed (`wall`, `door`, `roof`), `float` a log come to rest after
+// floating 20 m or more, `light` a town lamp lit at dusk (each lamp once an
+// evening).
+//
+// `awaited` names what the paving will bring (`townsfolk` design 39-41): the
+// grinder, the mixer, their recipes and the stakes (the wheels, the carts and
+// the horse are built, `land-transport` design 11). A mission naming only
+// these, or a kind the game does not raise yet (`stake`, `mark`, `pave`), is
+// PENDING:
+// shown as not in this build, and met for the missions that need it. An
+// unlock may name an awaited recipe: it is data only until it is built.
+//
+// A mission's `id` is saved in the world's `town_missions` record:
+// append-only, never renamed. Its words are `town_mission.<id>.*` in the
+// locale file.
+//
+(
+    awaited: [
+        "grinder",
+        "recipe:crushed-stone",
+        "crushed-stone",
+        "mixer",
+        "recipe:mixed-gravel",
+        "mixed-gravel",
+        "survey-stakes",
+    ],
+    missions: [
+        // ---- 0. Town: opens the first time you reach a town.
+        (
+            id: "meet",
+            branch: "town",
+            icon: "lights/lantern_post",
+            coins: 5,
+            objectives: [
+                (kind: talk, what: "any", count: 3),
+            ],
+        ),
+        (
+            id: "first-trade",
+            branch: "town",
+            icon: "ui/coin",
+            needs: ["meet"],
+            coins: 10,
+            objectives: [
+                (kind: sell, what: "any:any", count: 5),
+                (kind: buy, what: "any:any", count: 1),
+            ],
+        ),
+        (
+            id: "first-job",
+            branch: "town",
+            icon: "goods/parcel",
+            needs: ["first-trade"],
+            coins: 15,
+            objectives: [
+                (kind: job, what: "any", count: 1),
+            ],
+            unlocks: ["grinder"],
+        ),
+        // ---- 1. Trade.
+        (
+            id: "trade-more",
+            branch: "trade",
+            icon: "ui/coin",
+            needs: ["first-job"],
+            coins: 20,
+            objectives: [
+                (kind: sell, what: "any:any", count: 20),
+            ],
+        ),
+        (
+            id: "deliver",
+            branch: "trade",
+            icon: "goods/parcel",
+            needs: ["trade-more"],
+            coins: 20,
+            objectives: [
+                (kind: deliver, what: "any:parcel", count: 1),
+            ],
+        ),
+        (
+            id: "goodwill",
+            branch: "trade",
+            icon: "lights/lantern_hanging",
+            needs: ["deliver"],
+            coins: 25,
+            objectives: [
+                (kind: goodwill, what: "any:step", count: 1),
+            ],
+        ),
+        // ---- 2. Jobs.
+        (
+            id: "three-jobs",
+            branch: "jobs",
+            icon: "goods/parcel",
+            needs: ["first-job"],
+            coins: 15,
+            objectives: [
+                (kind: job, what: "any", count: 3),
+            ],
+        ),
+        (
+            id: "lost",
+            branch: "jobs",
+            icon: "lights/lantern_hanging",
+            needs: ["three-jobs"],
+            coins: 30,
+            objectives: [
+                (kind: escort, what: "any:villager", count: 1),
+            ],
+        ),
+        (
+            id: "mend",
+            branch: "jobs",
+            icon: "goods/planks",
+            needs: ["lost"],
+            coins: 25,
+            objectives: [
+                (kind: repair, what: "any:piece", count: 1),
+            ],
+        ),
+        (
+            id: "lamps",
+            branch: "jobs",
+            icon: "lights/lantern_post",
+            needs: ["mend"],
+            coins: 15,
+            objectives: [
+                (kind: light, what: "any:lamp", count: 4),
+            ],
+        ),
+        // ---- 3. Roads (`townsfolk` design 39-41).
+        (
+            id: "grinder",
+            branch: "roads",
+            icon: "goods/stone",
+            needs: ["first-job"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "grinder", count: 1),
+                (kind: place, what: "grinder", count: 1),
+            ],
+            unlocks: ["crushed-stone"],
+        ),
+        (
+            id: "crush",
+            branch: "roads",
+            icon: "goods/stone",
+            needs: ["grinder"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "recipe:crushed-stone", count: 9),
+            ],
+            unlocks: ["mixer"],
+        ),
+        (
+            id: "mixer",
+            branch: "roads",
+            icon: "goods/gravel",
+            needs: ["crush"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "mixer", count: 1),
+                (kind: place, what: "mixer", count: 1),
+            ],
+            unlocks: ["mixed-gravel"],
+        ),
+        (
+            id: "gravel",
+            branch: "roads",
+            icon: "goods/gravel",
+            needs: ["mixer"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "recipe:mixed-gravel", count: 8),
+            ],
+            unlocks: ["survey-stakes"],
+        ),
+        (
+            id: "mark",
+            branch: "roads",
+            icon: "goods/fence",
+            needs: ["gravel"],
+            coins: 10,
+            objectives: [
+                (kind: stake, what: "stake", count: 2),
+                (kind: mark, what: "cell", count: 8),
+            ],
+        ),
+        (
+            id: "pave",
+            branch: "roads",
+            icon: "tools/stone-shovel",
+            needs: ["mark"],
+            coins: 30,
+            objectives: [
+                (kind: pave, what: "gravel", count: 8),
+            ],
+            unlocks: ["wheel"],
+        ),
+        (
+            id: "join",
+            branch: "roads",
+            icon: "lights/lantern_post",
+            needs: ["pave"],
+            coins: 60,
+            objectives: [
+                (kind: pave, what: "joined", count: 1),
+            ],
+        ),
+        // ---- 4. Carts (`land-transport` design 9-10), off "Pave it".
+        (
+            id: "wheels",
+            branch: "carts",
+            icon: "goods/planks",
+            needs: ["pave"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "wheel", count: 2),
+            ],
+            unlocks: ["hand-cart"],
+        ),
+        (
+            id: "hand-cart",
+            branch: "carts",
+            icon: "goods/rope",
+            needs: ["wheels"],
+            coins: 15,
+            objectives: [
+                (kind: craft, what: "hand-cart", count: 1),
+                (kind: place, what: "hand-cart", count: 1),
+            ],
+        ),
+        (
+            id: "haul",
+            branch: "carts",
+            icon: "goods/rope",
+            needs: ["hand-cart"],
+            coins: 20,
+            objectives: [
+                (kind: haul, what: "cart", count: 100),
+            ],
+        ),
+        (
+            id: "horse",
+            branch: "carts",
+            icon: "goods/leather",
+            needs: ["haul"],
+            coins: 25,
+            objectives: [
+                (kind: buy, what: "any:horse", count: 1),
+            ],
+            unlocks: ["horse-cart"],
+        ),
+        (
+            id: "horse-cart",
+            branch: "carts",
+            icon: "goods/leather",
+            needs: ["horse"],
+            coins: 25,
+            objectives: [
+                (kind: craft, what: "horse-cart", count: 1),
+                (kind: hitch, what: "horse", count: 1),
+            ],
+        ),
+        (
+            id: "road-trip",
+            branch: "carts",
+            icon: "goods/gravel",
+            needs: ["horse-cart"],
+            coins: 50,
+            objectives: [
+                (kind: travel, what: "cart-road", count: 500),
+            ],
+        ),
+        // ---- 5. Houses and logs.
+        (
+            id: "house",
+            branch: "houses",
+            icon: "goods/planks",
+            needs: ["first-job"],
+            coins: 40,
+            objectives: [
+                (kind: build, what: "wall", count: 6),
+                (kind: build, what: "door", count: 1),
+                (kind: build, what: "roof", count: 1),
+            ],
+        ),
+        (
+            id: "logs",
+            branch: "houses",
+            icon: "goods/log",
+            needs: ["house"],
+            coins: 20,
+            objectives: [
+                (kind: float, what: "log", count: 4),
+            ],
+        ),
+    ],
+)

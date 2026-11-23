@@ -270,6 +270,90 @@ added with the code that reads them (the locale lint fails an unused key):
 The other titles are the tables' (decision 2). No riddles, no colons that
 explain, no notes.
 
+## As built (2026-11-22)
+
+What the build changed from the plan above, each a recommendation taken
+(ask only with screenshots):
+
+- **The coins' line.** A save writes one record a line, so a mission's done
+  mark and its coins cannot share a line. The purse carries the mark
+  instead: `Purse::paid` holds `town_missions:<id>` for every town mission
+  it has paid, and `Purse::pay_once` pays a key once. A count that finishes
+  missions writes the purse first, then the `town_missions` record; a write
+  torn between them leaves the mission paid and not done, the next count
+  finishes it again and pays nothing. Old purses read with nothing paid.
+- **The record's body** is `(opened, progress)`, the starter tree's
+  `Progress` nested whole rather than flattened (RON does not flatten).
+- **A kind with an underscore** (`town_missions`, and the town's
+  `town_jobs`, `town_market`, `town_repair`, `lost_villager`) was read back
+  as a damaged journal line, so those records did not survive a reload.
+  The journal now reads a kind of words joined by `_`
+  (`records::is_kind`); records already written come back from their lines.
+- **Branch shape** follows M33's Town tab, the approved shape: within a
+  branch each mission needs the one before it (`deliver` after
+  `trade-more`, `goodwill` after `deliver`, `lost` after `three-jobs` ...),
+  each branch's first mission off `first-job`, Carts off `pave`.
+- **`talk` and `job` name `any`** in the file (each person counts once by
+  `<site>:<index>`); `goodwill` names `any:step`.
+- **Pending in this build**: all of Roads, all of Carts. `lamps` is live
+  with decision 8.
+- **Icons** are existing item art standing in (the coin, the parcel, the
+  lantern post, planks, stone, gravel, rope, leather, a log); new art for
+  talk, the board, the grinder, the mixer, stakes, wheels and carts waits.
+- **No chime** on a finished town mission: the starter tree has none to
+  share yet. The coins show as `+N` in the coin count's notice line.
+- **Capture instruments**: `--tree-town` shows the town tree on the tab,
+  `--town-focus <id>` makes a town mission the focus once the tree opens.
+
+## Follow-ups from the owner's known issues (2026-11-22)
+
+The owner's notes on phase 3, in the jobs and missions: "need button to
+abandon jobs too, add icon or job", "we need a marker", and, on lamps at
+dusk, "ok do it". Each below is a recommendation taken (ask only with
+screenshots).
+
+### 8. Lamps at dusk
+
+- **When.** Dusk is 17:00 to 22:00 by the sun's clock (`DUSK_FROM_H`,
+  `DUSK_TO_H` in `pbd_core::economy::jobs`). A board shows its lamps job
+  only from 17:00; before that the board's place keeps the job and shows
+  the rest. `lamps` joins `jobs.ron`'s `posted`.
+- **What counts.** With a lamps job of that town taken, the interact key
+  within 2.5 m of one of the town's lamps (`record::lamps_of`, the lamps
+  the town already draws) during dusk raises `light <site>:lamp`, once a
+  lamp a job (the lamp's index in the town's list is the counted name, as a
+  person is for `talk`). Out of dusk the key does nothing to a lamp. The
+  lamps are lit by the town at night as they are today; nothing about
+  their look changes.
+- **The town tree's "Light the lamps"** counts the same event, so it is
+  live: `Light` returns to `Kind::LIVE`.
+- **Text.** The prompt is "Light lamp"; the job line keeps its words.
+
+### 9. Abandon a job
+
+- **The board's row** of a taken job that is not done shows ABANDON where a
+  done one shows HAND IN.
+- **Abandoning** takes the job out of the taken jobs and drops its counts;
+  it is not handed in, so while its board place keeps it, the board shows
+  it again. No coins, no goodwill change. A delivery's parcel leaves the
+  pack if it is there. A lost villager's record is cleared, so they are
+  back at their post. A repair's broken wall stays as it is: taking the
+  job again from the board finds the same wall. The jobs record is written
+  first, then the job's own.
+- **Text.** "ABANDON", and the line "Job abandoned".
+
+### 10. The lost villager's icon and marker
+
+- **An icon of its own**: a 16 px item icon, `assets/items/missions/
+  lost-villager.png`, a townsperson's head and shoulders with a question
+  mark, in the item icons' style (a 1 px dark outline, as UI icons have),
+  shown in the job's well on the board and the talk panel where a job with
+  no good showed an empty well.
+- **A marker**: while a lost villager's job is taken and not handed in, the
+  map shows a marker at the record's point (where they stand, or where they
+  follow the player), named "Lost villager", and the compass shows it as a
+  waypoint is shown, with its distance.
+
 ## Risks / Trade-offs
 
 - **Two trees to keep in step.** The counting, unlocks and focus are one

@@ -20,6 +20,8 @@ use crate::station::{RecipeBook, item_named};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod town;
+
 /// The record kind progress is stored as, its schema and its one id (the
 /// player's).
 pub const MISSIONS_KIND: &str = "missions";
@@ -103,12 +105,36 @@ pub enum Kind {
     Light,
     /// A road cell dug clear: `<site>:road` (roads bring it).
     Clear,
+    // ---- `town-missions-tree` design 4: the town tree's kinds.
+    /// A townsperson talked to: `<site>:<roster index>`, counted once a
+    /// person in each mission.
+    Talk,
+    /// A town job handed in: the job's kind code (`fish`, `deliver`).
+    Job,
+    /// A town's goodwill reaching its next step: `<site>:step`.
+    Goodwill,
+    /// A building piece placed by the player: `wall`, `door`, `roof`, ...
+    Build,
+    /// A log come to rest after floating down a river: `log`.
+    Float,
+    /// A survey stake driven (`townsfolk` design 39): `stake`.
+    Stake,
+    /// A cell marked for paving: `cell`.
+    Mark,
+    /// A marked cell paved (`gravel`), or a road joined to a town (`joined`).
+    Pave,
+    /// Metres moved by a loaded cart: `cart`.
+    Haul,
+    /// A horse put in a cart's shafts: `horse`.
+    Hitch,
 }
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
-    /// raises an event for: all but `Clear`, which waits for the roads.
-    pub const LIVE: [Kind; 33] = [
+    /// raises an event for. Not `Clear`, `Stake`, `Mark` or `Pave`, which
+    /// wait for the paving: a mission naming one of those is pending.
+    /// `Haul` and `Hitch` are the carts' (`land-transport` design 11).
+    pub const LIVE: [Kind; 40] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -142,7 +168,20 @@ impl Kind {
         Kind::Sell,
         Kind::Buy,
         Kind::Light,
+        Kind::Talk,
+        Kind::Job,
+        Kind::Goodwill,
+        Kind::Build,
+        Kind::Float,
+        Kind::Haul,
+        Kind::Hitch,
     ];
+
+    /// Whether this kind counts each name once in a mission (a fish's kind,
+    /// a person talked to), however often it happens.
+    pub fn once_a_name(self) -> bool {
+        matches!(self, Kind::Species | Kind::Talk)
+    }
 }
 
 /// Something the player did, as the missions system counts it.
@@ -214,6 +253,14 @@ pub struct MissionEntry {
     /// `assets/items/` without `.png` (`tools/hand`); none for a plain card.
     #[serde(default)]
     pub icon: String,
+    /// The coins its completion pays (`town-missions-tree` design 2); the
+    /// starter tree pays none.
+    #[serde(default, skip_serializing_if = "is_nought")]
+    pub coins: u32,
+}
+
+fn is_nought(n: &u32) -> bool {
+    *n == 0
 }
 
 /// `assets/config/missions.ron`.
@@ -273,6 +320,9 @@ pub enum Want {
     /// sold to that town counts (`townsfolk` design 8). Never from the
     /// starter chain's file.
     Prefix(String),
+    /// `any:<thing>` in a chain's file (`town-missions-tree` design 3):
+    /// what is named `<site>:<thing>`, in any town.
+    AnyTown(Box<Want>),
 }
 
 impl Want {
@@ -282,6 +332,9 @@ impl Want {
             Want::Group(group) => group.holds(kind, what),
             Want::Names(names) => names.iter().any(|n| n == what),
             Want::Prefix(prefix) => what.starts_with(prefix.as_str()),
+            Want::AnyTown(inner) => what
+                .split_once(':')
+                .is_some_and(|(_, thing)| inner.matches(kind, thing)),
         }
     }
 }
@@ -313,6 +366,8 @@ pub struct Mission {
     pub branch: String,
     /// Its icon on the mission tree, a path under `assets/items/`.
     pub icon: String,
+    /// The coins its completion pays.
+    pub coins: u32,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -384,17 +439,52 @@ impl Catalog {
             Kind::Pour | Kind::Swim => name == "water",
             Kind::Waters => matches!(name, "sea" | "fresh"),
             Kind::Reach => matches!(name, "marked" | "reef" | "town"),
-            Kind::Board | Kind::Travel => name == "boat",
+            Kind::Board => name == "boat",
+            // Metres aboard a boat, or driven by a cart on road cells.
+            Kind::Travel => matches!(name, "boat" | "cart-road"),
             Kind::Open => name == "map",
             Kind::Eat => item(),
-            Kind::Place => name.starts_with("block:") && item(),
+            // A block, or a cart set down (`land-transport` design 10).
+            Kind::Place => {
+                (name.starts_with("block:") && item())
+                    || crate::vehicle::cart::CartKind::of_code(name).is_some()
+            }
             Kind::Till | Kind::BuildPen => false,
             Kind::Deliver => name == "parcel",
             Kind::Escort => matches!(name, "villager" | "trader"),
             Kind::Repair => name == "piece",
             Kind::Light => name == "lamp",
             Kind::Clear => name == "road",
-            Kind::Sell | Kind::Buy => item(),
+            Kind::Sell => item(),
+            // A good, or a horse from a town's trader (`land-transport`).
+            Kind::Buy => item() || name == "horse",
+            Kind::Talk => name == "person",
+            Kind::Job => matches!(
+                name,
+                "trade"
+                    | "gather"
+                    | "hunt"
+                    | "deliver"
+                    | "cook"
+                    | "fish"
+                    | "mine"
+                    | "herd"
+                    | "harvest"
+                    | "lamps"
+                    | "lost"
+                    | "repair"
+            ),
+            Kind::Goodwill => name == "step",
+            Kind::Build => matches!(
+                name,
+                "wall" | "door" | "window" | "floor" | "roof" | "stair" | "post" | "lantern"
+            ),
+            Kind::Float => name == "log",
+            Kind::Stake => name == "stake",
+            Kind::Mark => name == "cell",
+            Kind::Pave => matches!(name, "gravel" | "joined"),
+            Kind::Haul => name == "cart",
+            Kind::Hitch => name == "horse",
             Kind::Gather
             | Kind::Find
             | Kind::Plant
@@ -429,6 +519,14 @@ impl MissionFile {
     /// that the file awaits makes its mission pending; any other is an error,
     /// by mission and name.
     pub fn resolve(&self, catalog: &Catalog) -> Result<Chain, String> {
+        self.resolve_keyed(catalog, "mission")
+    }
+
+    /// [`MissionFile::resolve`], with the missions' words under `keys` in
+    /// the locale file (`<keys>.<id>.title`): `mission` for the starter
+    /// tree, `town_mission` for the town tree. An unlock may name a recipe
+    /// the file awaits: it is data only until the recipe is built.
+    pub fn resolve_keyed(&self, catalog: &Catalog, keys: &str) -> Result<Chain, String> {
         let mut missions: Vec<Mission> = Vec::new();
         for entry in &self.missions {
             let at = &entry.id;
@@ -456,7 +554,11 @@ impl MissionFile {
                     return Err(format!("{at}: a count of nought"));
                 }
                 let live = catalog.live.contains(&objective.kind);
-                let want = match objective.what.as_str() {
+                let (anywhere, what) = match objective.what.strip_prefix("any:") {
+                    Some(thing) => (true, thing),
+                    None => (false, objective.what.as_str()),
+                };
+                let want = match what {
                     "any" => Want::Any,
                     name if Group::named(name).is_some() => {
                         Want::Group(Group::named(name).expect("named"))
@@ -486,6 +588,11 @@ impl MissionFile {
                         Want::Names(known)
                     }
                 };
+                let want = if anywhere {
+                    Want::AnyTown(Box::new(want))
+                } else {
+                    want
+                };
                 if !live {
                     missing.push(format!("{:?} in the game", objective.kind).to_lowercase());
                 }
@@ -494,12 +601,12 @@ impl MissionFile {
                     want,
                     count: objective.count,
                     label: objective.label.clone().unwrap_or_else(|| {
-                        crate::locale::tr(&format!("mission.{at}.objective.{index}")).into()
+                        crate::locale::tr(&format!("{keys}.{at}.objective.{index}")).into()
                     }),
                 });
             }
             for code in &entry.unlocks {
-                if !catalog.recipes.contains(code) {
+                if !catalog.recipes.contains(code) && !self.awaited.iter().any(|a| a == code) {
                     return Err(format!("{at}: unlocks {code:?}, which is no recipe"));
                 }
             }
@@ -508,11 +615,11 @@ impl MissionFile {
                 title: entry
                     .title
                     .clone()
-                    .unwrap_or_else(|| crate::locale::tr(&format!("mission.{at}.title")).into()),
+                    .unwrap_or_else(|| crate::locale::tr(&format!("{keys}.{at}.title")).into()),
                 help: entry
                     .help
                     .clone()
-                    .unwrap_or_else(|| crate::locale::tr(&format!("mission.{at}.help")).into()),
+                    .unwrap_or_else(|| crate::locale::tr(&format!("{keys}.{at}.help")).into()),
                 needs: entry.needs.clone(),
                 objectives,
                 pending: (!missing.is_empty()).then_some(missing),
@@ -520,6 +627,7 @@ impl MissionFile {
                 after: entry.after.clone(),
                 branch: entry.branch.clone(),
                 icon: entry.icon.clone(),
+                coins: entry.coins,
             });
         }
         for m in &missions {
@@ -583,12 +691,44 @@ impl Chain {
             })
     }
 
+    /// The coins the missions `done` pay together: what one count's
+    /// completions put in the purse, in the same line as their done marks.
+    pub fn coins_for(&self, done: &[String]) -> u64 {
+        done.iter()
+            .filter_map(|id| self.get(id))
+            .map(|m| u64::from(m.coins))
+            .sum()
+    }
+
+    /// Whether any mission of this chain names `recipe` as an unlock.
+    pub fn names(&self, recipe: &str) -> bool {
+        self.missions
+            .iter()
+            .any(|m| m.unlocks.iter().any(|u| u == recipe))
+    }
+
     /// The missions skipped in this build, with what each waits for.
     pub fn pending(&self) -> impl Iterator<Item = (&str, &[String])> {
         self.missions
             .iter()
             .filter_map(|m| m.pending.as_deref().map(|p| (m.id.as_str(), p)))
     }
+}
+
+/// Whether `recipe` may be crafted, asking every tree (`town-missions-tree`
+/// design 2): open when no tree names it, when the world holds what it makes,
+/// or when a tree that names it holds it open by [`Chain::recipe_open`].
+pub fn recipe_open_in(
+    trees: &[(&Chain, &Progress)],
+    recipe: &str,
+    makes: &[String],
+    holds: bool,
+) -> bool {
+    let mut naming = trees.iter().filter(|(c, _)| c.names(recipe)).peekable();
+    if holds || naming.peek().is_none() {
+        return true;
+    }
+    naming.any(|(c, p)| c.recipe_open(p, recipe, makes, holds))
 }
 
 /// Where a mission stands, for the tab.
@@ -743,7 +883,7 @@ impl Progress {
                     && objective.want.matches(happened.kind, &happened.what)
                     && *count < objective.count
                 {
-                    if happened.kind == Kind::Species {
+                    if happened.kind.once_a_name() {
                         // A kind counts once a mission, however often landed.
                         let seen = self.seen.get(&mission.id);
                         if seen.is_some_and(|s| s.contains(&happened.what)) {
