@@ -150,7 +150,12 @@ for a mockup to fine-tune.
     `player-building` decision 8, fills up to that);
   - in the way: a solid block (a player's edit or a rock above the ground
     floor), a tree, a road cell or a town's footprint, "Something is in the
-    way";
+    way". Each of these takes only the block it is on, never its whole
+    column (owner, 2026-11-23: "The tree being in the way thing should only
+    apply to the block three is actually on. Not the whole column"): a tree
+    refuses only the plan's pieces in its cell on the ground storey, so a
+    storey can stand over it once that cell is left out of the ground floor,
+    and a road cell or a lamp likewise;
   - existing pieces: any piece of the plan failing the slot rule against
     pieces already in the world, "Something is already here";
   - and `check_layout` on the charted pieces with the world's own, so a plan
