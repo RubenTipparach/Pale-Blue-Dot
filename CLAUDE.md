@@ -584,6 +584,16 @@ which wait for a request.
   stakes and paved with gravel from a grinder and a mixer (`townsfolk`
   design 39 to 41), and hand carts and horse carts, a quarter of their speed
   off the road (`land-transport` design 9 and 10). Written up, not built.
+  And (owner, 2026-11-23: "Make presets for houses and buildings too. I
+  want the player to be able to design structures and build according to
+  blue prints. That way we avoid the jankiness of free building. Buildings
+  can be modified mid builds in the building planner too. Please mock this
+  up so I can fine tune it. Add this requirement to.phase 3"): a building
+  planner at a drafting table, house and building presets the player can
+  edit and save as their own blueprints, set out in the world as a
+  construction site built piece by piece from the pack, and changed in the
+  planner mid-build (`building-planner`, mocked up in M6's Planner and Site
+  tabs). Written up, not built.
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
