@@ -601,7 +601,12 @@ which wait for a request.
   mission tree of its own (`town-missions-tree`), roads marked with survey
   stakes and paved with gravel from a grinder and a mixer (`townsfolk`
   design 39 to 41), and hand carts and horse carts, a quarter of their speed
-  off the road (`land-transport` design 9 and 10). Written up, not built.
+  off the road (`land-transport` design 9 and 10), all built on
+  `claude/phase-2-1`. With them (owner, 2026-11-23: "update horses -
+  plodders like your carriage", "You should also be able to ride plodders
+  as well"): a tamed plodder pulls the cart as the horse does, and a
+  plodder or a horse can be ridden, pulled forward from phase 5's ridden
+  horses (`land-transport` design).
   And (owner, 2026-11-23: "Make presets for houses and buildings too. I
   want the player to be able to design structures and build according to
   blue prints. That way we avoid the jankiness of free building. Buildings
