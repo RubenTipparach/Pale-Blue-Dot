@@ -31,13 +31,6 @@
 //
 (
     awaited: [
-        "grinder",
-        "recipe:crushed-stone",
-        "crushed-stone",
-        "mixer",
-        "recipe:mixed-gravel",
-        "mixed-gravel",
-        "survey-stakes",
         "wheel",
         "hand-cart",
         "horse-cart",
@@ -153,19 +146,19 @@
         (
             id: "grinder",
             branch: "roads",
-            icon: "goods/stone",
+            icon: "stations/grinder",
             needs: ["first-job"],
             coins: 10,
             objectives: [
-                (kind: craft, what: "grinder", count: 1),
-                (kind: place, what: "grinder", count: 1),
+                (kind: craft, what: "block:grinder", count: 1),
+                (kind: place, what: "block:grinder", count: 1),
             ],
             unlocks: ["crushed-stone"],
         ),
         (
             id: "crush",
             branch: "roads",
-            icon: "goods/stone",
+            icon: "goods/crushed-stone",
             needs: ["grinder"],
             coins: 10,
             objectives: [
@@ -176,12 +169,12 @@
         (
             id: "mixer",
             branch: "roads",
-            icon: "goods/gravel",
+            icon: "stations/mixer",
             needs: ["crush"],
             coins: 10,
             objectives: [
-                (kind: craft, what: "mixer", count: 1),
-                (kind: place, what: "mixer", count: 1),
+                (kind: craft, what: "block:mixer", count: 1),
+                (kind: place, what: "block:mixer", count: 1),
             ],
             unlocks: ["mixed-gravel"],
         ),
@@ -199,7 +192,7 @@
         (
             id: "mark",
             branch: "roads",
-            icon: "goods/fence",
+            icon: "goods/survey-stakes",
             needs: ["gravel"],
             coins: 10,
             objectives: [

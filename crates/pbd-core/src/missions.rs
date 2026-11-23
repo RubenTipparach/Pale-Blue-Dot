@@ -131,10 +131,11 @@ pub enum Kind {
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
-    /// raises an event for. Not `Clear`, `Stake`, `Mark`, `Pave`, `Haul` or
-    /// `Hitch`, which wait for the paving and the carts: a mission naming
-    /// one of those is pending.
-    pub const LIVE: [Kind; 38] = [
+    /// raises an event for. Not `Clear`, `Haul` or `Hitch`, which wait for
+    /// the road jobs and the carts: a mission naming one of those is
+    /// pending. `Stake`, `Mark` and `Pave` are raised by the paving
+    /// (`townsfolk` design 39 to 41, 44).
+    pub const LIVE: [Kind; 41] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -173,6 +174,9 @@ impl Kind {
         Kind::Goodwill,
         Kind::Build,
         Kind::Float,
+        Kind::Stake,
+        Kind::Mark,
+        Kind::Pave,
     ];
 
     /// Whether this kind counts each name once in a mission (a fish's kind,

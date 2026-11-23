@@ -146,13 +146,7 @@ fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
     assert_eq!(
         pending,
         [
-            "grinder",
-            "crush",
-            "mixer",
-            "gravel",
-            "mark",
-            "pave",
-            "join",
+            // The paving is built (`townsfolk` design 44).
             "wheels",
             "hand-cart",
             "haul",
@@ -174,6 +168,13 @@ fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
         "lamps",
         "house",
         "logs",
+        "grinder",
+        "crush",
+        "mixer",
+        "gravel",
+        "mark",
+        "pave",
+        "join",
     ];
     for id in live {
         assert!(chain.get(id).unwrap().pending.is_none(), "{id} is live");
@@ -268,9 +269,27 @@ fn each_town_kind_counts_from_its_event() {
         );
     }
     assert!(p.is_done("lamps"));
+    // The roads (`townsfolk` design 44): the stations made and set down,
+    // stone crushed, gravel mixed, a plan staked and marked, paved, and a
+    // paved cell beside a town.
+    for (kind, what, count) in [
+        (Kind::Craft, "block:grinder", 1),
+        (Kind::Place, "block:grinder", 1),
+        (Kind::Craft, "recipe:crushed-stone", 9),
+        (Kind::Craft, "block:mixer", 1),
+        (Kind::Place, "block:mixer", 1),
+        (Kind::Craft, "recipe:mixed-gravel", 8),
+        (Kind::Stake, "stake", 2),
+        (Kind::Mark, "cell", 8),
+        (Kind::Pave, "gravel", 8),
+        (Kind::Pave, "joined", 1),
+    ] {
+        p.record(&chain, &Happened::new(kind, what, count), &none);
+    }
+    assert!(p.is_done("join"));
     // Every live mission is done, and nothing is open: the rest wait.
     assert_eq!(p.current(&chain), None);
-    assert_eq!(p.done.len(), 12);
+    assert_eq!(p.done.len(), 19);
 }
 
 /// Task 2.3: a mission's coins are paid by the count that finishes it, and

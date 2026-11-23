@@ -18,6 +18,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use pbd_core::edits::Edits;
+use pbd_core::missions::Kind;
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::{Author, Proposal, YieldSet};
 use pbd_core::roads::{self, Ground, Road, RoadCell, RoadsConfig, Settlement, Surface, Water};
@@ -918,6 +919,7 @@ pub fn road_hands(
         ResMut<RoadSay>,
         MessageWriter<paving::RoadWork>,
     ),
+    mut did: MessageWriter<crate::missions::Did>,
     time: Res<Time>,
     mut beat: Local<f32>,
 ) {
@@ -955,8 +957,10 @@ pub fn road_hands(
                 Ok(paving::Staked::Driven { plan, marked }) => {
                     open.0 = Some(plan);
                     work.write(paving::RoadWork::Stake);
+                    did.write(crate::missions::Did::new(Kind::Stake, "stake", 1));
                     if marked > 0 {
                         work.write(paving::RoadWork::Mark(marked as u32));
+                        did.write(crate::missions::Did::new(Kind::Mark, "cell", marked as u32));
                     }
                 }
                 Ok(paving::Staked::Resumed(plan)) => open.0 = Some(plan),
@@ -1024,6 +1028,15 @@ pub fn road_hands(
     match paving::pave(&mut save, &mut hotbar.0, target, &config) {
         Ok(_) => {
             work.write(paving::RoadWork::Pave);
+            did.write(crate::missions::Did::new(Kind::Pave, "gravel", 1));
+            // A paved cell beside a town's footprint joins the road to it
+            // (`town-missions-tree` design 2, "Join a town").
+            let beside_town = roads::neighbours(target)
+                .into_iter()
+                .any(|n| roads::centre(n).is_some_and(|c| ground::cleared(&config, c)));
+            if beside_town {
+                did.write(crate::missions::Did::new(Kind::Pave, "joined", 1));
+            }
             paving::restand(&save, &mut net, &mut standing);
         }
         Err(why) => {

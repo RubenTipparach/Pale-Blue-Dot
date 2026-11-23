@@ -1264,9 +1264,11 @@ connected in a network)").** Roads are now something the player builds
 from that moment, not from the world's next open (the known issue
 `phase-3-roads.2`): the road bit of the cell's surface word (design 33) is
 set in the standing fine set as the record is written, and the cells are
-added to the installed clearance so a set built later has it too. Only the
-tufts go: a tree standing on the cell stays until it is felled, so nothing
-the world grew vanishes behind the player's back.
+added to the installed clearance so a set built later has it too. Every
+piece of ground clutter goes from a road cell, the world's or the
+player's (a shrub through fresh gravel read as a mistake in the first
+capture), but a tree standing on the cell stays until it is felled, so
+nothing the world grew vanishes behind the player's back.
 
 **44. As built (2026-11-23, design 39 to 43, on the owner's "continue
 build").** What the game does, and where it differs from the plan:

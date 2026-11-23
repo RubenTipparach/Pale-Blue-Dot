@@ -2157,7 +2157,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             normal = axis;
             out_shade = select(shade_hi,shade_lo,c==0u||c==1u);
         }
-        if !grown { position = axis*radius; }
+        // Nothing grows through a road (`townsfolk` design 33 and 43): the
+        // road bit of the material word clears every piece, not only the
+        // tufts, so a paved cell is not pierced by a shrub.
+        let paved = ((cell.metadata.y >> 30u) & 1u) == 1u;
+        if !grown || paved { position = axis*radius; }
     }
     // Trees and ground clutter take the field at their own cell
     // (`lamps-and-lanterns` decision 9): clutter at the air over the cap, as
