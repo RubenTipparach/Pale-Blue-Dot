@@ -145,7 +145,11 @@ pub fn holds<'a>(
                 layer,
                 side,
                 kind,
-            } => !crate::furniture::in_doorway(*kind, *side, &door_sides(site, others, *cell, *layer)),
+            } => !crate::furniture::in_doorway(
+                *kind,
+                *side,
+                &door_sides(site, others, *cell, *layer),
+            ),
             Shape::Wall {
                 a,
                 b,
@@ -159,9 +163,9 @@ pub fn holds<'a>(
                     kind,
                 } if (cell == a || cell == b) && *l >= *layer && *l < layer + STOREY => {
                     let other = if cell == a { *b } else { *a };
-                    site.cells.side(*cell, other).is_some_and(|d| {
-                        crate::furniture::in_doorway(*kind, *side, &[d as u8])
-                    })
+                    site.cells
+                        .side(*cell, other)
+                        .is_some_and(|d| crate::furniture::in_doorway(*kind, *side, &[d as u8]))
                 }
                 _ => false,
             }),
@@ -401,7 +405,9 @@ fn headroom<'a>(others: impl Iterator<Item = &'a Piece> + Clone, shape: &Shape) 
                 if (cell == foot || cell == head) && well(layer).contains(&l))
         }),
         // A floor over a piece of furniture closer than its height.
-        Shape::Furniture { cell, layer, kind, .. } => !others.clone().any(|o| {
+        Shape::Furniture {
+            cell, layer, kind, ..
+        } => !others.clone().any(|o| {
             matches!(o.shape, Shape::Floor { cell: c, layer: l }
                 if c == cell && l > layer && f32::from(l - layer) < kind.height_m())
         }),

@@ -37,9 +37,7 @@ pub const DOOR_CLEAR_M: (f32, f32) = (1.1, 0.9);
 pub const MIDDLE: u8 = 6;
 
 /// A piece of furniture.
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub enum Kind {
     Chair,
     Stool,
@@ -267,9 +265,9 @@ pub fn door_clear(side: u8) -> [Vec2; 4] {
 /// Whether a footprint is inside the cell, clear of its walls: every corner
 /// at least [`BACK_M`] in from every side (design 4, "Into a wall").
 pub fn fits(points: &[Vec2; 4]) -> bool {
-    points.iter().all(|p| {
-        (0..6).all(|s| p.dot(side_normal(s)) <= INNER_M - BACK_M + 1e-4)
-    })
+    points
+        .iter()
+        .all(|p| (0..6).all(|s| p.dot(side_normal(s)) <= INNER_M - BACK_M + 1e-4))
 }
 
 /// Whether two convex quads overlap (by the separating axis), touching
@@ -311,7 +309,10 @@ pub fn in_doorway(kind: Kind, side: u8, doors: &[u8]) -> bool {
 pub enum Who {
     Player,
     /// A townsperson: their site and their place in its people.
-    Person { site: u32, index: u32 },
+    Person {
+        site: u32,
+        index: u32,
+    },
 }
 
 /// One place of one piece: the piece's id and the place's number.

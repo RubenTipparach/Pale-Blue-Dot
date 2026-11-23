@@ -23,12 +23,27 @@ fn every_piece_fits_against_every_side() {
 fn pieces_share_a_cell_without_crossing() {
     let table = footprint(Kind::Table, MIDDLE);
     for side in 0..6 {
-        assert!(!overlaps(&table, &footprint(Kind::Chair, side)), "chair {side}");
+        assert!(
+            !overlaps(&table, &footprint(Kind::Chair, side)),
+            "chair {side}"
+        );
     }
-    assert!(!overlaps(&footprint(Kind::Bed, 0), &footprint(Kind::Chest, 3)));
-    assert!(overlaps(&footprint(Kind::Bed, 0), &footprint(Kind::Table, MIDDLE)));
-    assert!(overlaps(&footprint(Kind::Bed, 0), &footprint(Kind::Closet, 1)));
-    assert!(overlaps(&footprint(Kind::Chest, 2), &footprint(Kind::Crate, 2)));
+    assert!(!overlaps(
+        &footprint(Kind::Bed, 0),
+        &footprint(Kind::Chest, 3)
+    ));
+    assert!(overlaps(
+        &footprint(Kind::Bed, 0),
+        &footprint(Kind::Table, MIDDLE)
+    ));
+    assert!(overlaps(
+        &footprint(Kind::Bed, 0),
+        &footprint(Kind::Closet, 1)
+    ));
+    assert!(overlaps(
+        &footprint(Kind::Chest, 2),
+        &footprint(Kind::Crate, 2)
+    ));
 }
 
 /// Design 4: nothing stands in the clear space inside a door, and a piece
@@ -40,7 +55,10 @@ fn a_door_keeps_its_way_clear() {
     }
     assert!(!in_doorway(Kind::Chest, 5, &[2]));
     assert!(!in_doorway(Kind::Chair, 0, &[3]));
-    assert!(in_doorway(Kind::Bed, 0, &[3]), "a bed's foot reaches the door");
+    assert!(
+        in_doorway(Kind::Bed, 0, &[3]),
+        "a bed's foot reaches the door"
+    );
 }
 
 /// Design 7: a place holds one body, a body one place, a bench two.
@@ -154,7 +172,10 @@ fn stacks_move_both_ways() {
     assert_eq!(carried.count(Item::Good(Good::PLANKS)), 5);
     assert_eq!(chest.put_from(&mut carried, index, false), 5);
     assert_eq!(carried.count(Item::Good(Good::PLANKS)), 0);
-    assert_eq!(chest.slots[0], Some(Stack::new(Item::Good(Good::PLANKS), 10)));
+    assert_eq!(
+        chest.slots[0],
+        Some(Stack::new(Item::Good(Good::PLANKS), 10))
+    );
     assert_eq!(chest.take_into(0, &mut carried, false), 10);
     assert!(chest.is_empty());
     // A full crate takes nothing more.
@@ -169,7 +190,10 @@ fn stacks_move_both_ways() {
 #[test]
 fn loot_is_seeded_and_fits_its_trade() {
     let id = town_piece_id(4, 2, 1);
-    assert_eq!(loot(id, Trade::Farmer, Kind::Chest), loot(id, Trade::Farmer, Kind::Chest));
+    assert_eq!(
+        loot(id, Trade::Farmer, Kind::Chest),
+        loot(id, Trade::Farmer, Kind::Chest)
+    );
     let farm = ["wheat-seed", "turnip-seed", "wheat", "turnip", "fibre"];
     let common = ["planks", "rope", "fibre", "log", "stone"];
     let mut coins = 0;
@@ -182,13 +206,19 @@ fn loot_is_seeded_and_fits_its_trade() {
         assert!(!stacks.is_empty() && stacks.len() <= 4, "{stacks:?}");
         for s in &stacks {
             let name = item_name(s.item);
-            assert!(farm.contains(&name.as_str()) || common.contains(&name.as_str()), "{name}");
+            assert!(
+                farm.contains(&name.as_str()) || common.contains(&name.as_str()),
+                "{name}"
+            );
         }
         coins += usize::from(l.coins > 0);
         differ |= l != loot(town_piece_id(4, n + 1, 0), Trade::Farmer, Kind::Chest);
     }
     assert!(differ);
-    assert!((20..90).contains(&coins), "{coins} of 200 farmers' chests hold coins");
+    assert!(
+        (20..90).contains(&coins),
+        "{coins} of 200 farmers' chests hold coins"
+    );
     let traders = (0..50)
         .filter(|&n| loot(town_piece_id(1, n, 0), Trade::Trader, Kind::Crate).coins > 0)
         .count();
@@ -263,7 +293,10 @@ fn every_model_is_shaped_inside_its_footprint() {
             for q in &p.points {
                 assert!(q.x.abs() <= s.x / 2.0 + 0.03, "{kind:?} {q}");
                 assert!(q.z.abs() <= s.y / 2.0 + 0.03, "{kind:?} {q}");
-                assert!(q.y >= -0.01 && q.y <= kind.height_m() + 0.03, "{kind:?} {q}");
+                assert!(
+                    q.y >= -0.01 && q.y <= kind.height_m() + 0.03,
+                    "{kind:?} {q}"
+                );
             }
         }
         // Bevelled: no two faces meet at a right angle along a box's edge
@@ -276,4 +309,50 @@ fn every_model_is_shaped_inside_its_footprint() {
             .count();
         assert!(slopes >= tops, "{kind:?}: {tops} tops, {slopes} bevels");
     }
+}
+
+/// A measurement instrument for the mockup (`furniture` task 1.2): writes
+/// every model's faces to `PBD_FURNITURE_EXPORT`, so M15's Furniture scene
+/// draws the game's own pieces. Run with `--ignored`.
+#[test]
+#[ignore]
+fn export_models_for_the_mockup() {
+    let Ok(path) = std::env::var("PBD_FURNITURE_EXPORT") else {
+        return;
+    };
+    let r = |v: f32| (v * 1000.0).round() / 1000.0;
+    let polys_json = |polys: Vec<model::Poly>| -> String {
+        let faces: Vec<String> = polys
+            .iter()
+            .map(|p| {
+                let pts: Vec<String> = p
+                    .points
+                    .iter()
+                    .map(|q| format!("{},{},{}", r(q.x), r(q.y), r(q.z)))
+                    .collect();
+                format!("[\"{}\",[{}]]", p.texture, pts.join(","))
+            })
+            .collect();
+        format!("[{}]", faces.join(","))
+    };
+    let mut parts: Vec<String> = Kind::ALL
+        .iter()
+        .map(|&k| {
+            let s = k.size_m();
+            format!(
+                "\"{}\":{{\"size\":[{},{}],\"height\":{},\"solid\":{},\"faces\":{}}}",
+                k.code(),
+                s.x,
+                s.y,
+                k.height_m(),
+                k.solid(),
+                polys_json(model::polys(k))
+            )
+        })
+        .collect();
+    parts.push(format!(
+        "\"carpenter-top\":{{\"faces\":{}}}",
+        polys_json(model::carpenter_top())
+    ));
+    std::fs::write(&path, format!("{{{}}}\n", parts.join(","))).unwrap();
 }

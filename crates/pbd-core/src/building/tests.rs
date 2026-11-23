@@ -673,7 +673,10 @@ fn furniture_is_placed_by_the_building_rules() {
     let bed = furniture(k, 0, Kind::Bed);
     assert_eq!(can_place(&site, &room, &bed), Ok(()));
     room.push(bed);
-    assert_eq!(can_place(&site, &room, &furniture(k, 3, Kind::Chest)), Ok(()));
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 3, Kind::Chest)),
+        Ok(())
+    );
     assert_eq!(
         can_place(&site, &room, &furniture(k, 0, Kind::Crate)),
         Err(Rule::Slot)
@@ -691,7 +694,10 @@ fn furniture_is_placed_by_the_building_rules() {
     let mut doorway = hut(&cells, k, GROUND);
     doorway.retain(|p| p.shape.slot() != door.slot());
     doorway.push(Piece::new("timber", door.clone()));
-    assert_eq!(can_place(&site, &doorway, &furniture(k, 1, Kind::Chest)), Ok(()));
+    assert_eq!(
+        can_place(&site, &doorway, &furniture(k, 1, Kind::Chest)),
+        Ok(())
+    );
     assert_eq!(
         can_place(&site, &doorway, &furniture(k, 4, Kind::Chest)),
         Err(Rule::Doorway)
@@ -746,7 +752,13 @@ fn furniture_is_placed_by_the_building_rules() {
 fn furniture_is_a_piece_record_and_old_pieces_read_as_before() {
     use crate::furniture::Kind;
     let k = key(plot().1);
-    let old = Piece::new("timber", Shape::Floor { cell: k, layer: GROUND });
+    let old = Piece::new(
+        "timber",
+        Shape::Floor {
+            cell: k,
+            layer: GROUND,
+        },
+    );
     let old_line = serde_json::to_string(&PieceBody {
         piece: Some(old.clone()),
     })

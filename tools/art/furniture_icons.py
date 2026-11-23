@@ -268,7 +268,15 @@ def main(argv):
     for name, rows in ICONS.items():
         im = paint(rows)
         made[name] = im
-        im.save(OUT / f"{name}.png")
+        if name == "carpenter-bench":
+            # A station's slot icon, beside the workbench's.
+            im.save(ROOT / "assets" / "items" / "stations" / "carpenter.png")
+        else:
+            im.save(OUT / f"{name}.png")
+    # Build mode's Furniture tool: the chair.
+    made["chair"].resize((32, 32), Image.NEAREST).save(
+        ROOT / "assets" / "textures" / "ui" / "build" / "furniture.png"
+    )
     if "--sheet" in argv:
         path = argv[argv.index("--sheet") + 1]
         sheet = Image.new("RGBA", (len(made) * 136, 136), (40, 38, 34, 255))

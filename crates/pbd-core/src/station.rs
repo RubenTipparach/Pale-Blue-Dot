@@ -305,13 +305,20 @@ impl Default for RecipeFile {
             ),
             // furniture design 1 and 2: the carpenter's bench, and the
             // Furniture branch made at it and nowhere else.
-            recipe(
-                "carpenter-bench",
-                "workbench",
-                6.0,
-                &[("planks", 8), ("log", 2), ("iron-ingot", 1)],
-                &[("block:carpenter's bench", 1)],
-            ),
+            RecipeEntry {
+                code: "carpenter-bench".into(),
+                station: "workbench".into(),
+                secs: 6.0,
+                inputs: vec![pair("planks", 8), pair("log", 2), pair("iron-ingot", 1)],
+                // The block's name is its English name (`material_id`).
+                outputs: vec![(
+                    format!(
+                        "block:{}",
+                        crate::inventory::material_id(Material::Carpenter)
+                    ),
+                    1,
+                )],
+            },
             recipe("chair", "carpenter", 3.0, &[("planks", 3)], &[("chair", 1)]),
             recipe("stool", "carpenter", 2.0, &[("planks", 2)], &[("stool", 1)]),
             recipe("bench", "carpenter", 3.0, &[("planks", 4)], &[("bench", 1)]),

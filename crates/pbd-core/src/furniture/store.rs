@@ -201,7 +201,14 @@ impl Trade {
             Trade::Smith
         } else if has(&["fish", "net", "sailor", "boatman", "porter"]) {
             Trade::Fisher
-        } else if has(&["trader", "merchant", "stallholder", "caravan", "innkeeper", "keeper"]) {
+        } else if has(&[
+            "trader",
+            "merchant",
+            "stallholder",
+            "caravan",
+            "innkeeper",
+            "keeper",
+        ]) {
             Trade::Trader
         } else if has(&["hunter", "lookout", "watcher", "guard"]) {
             Trade::Hunter
@@ -213,12 +220,29 @@ impl Trade {
     /// What its households keep: goods by code, each with the most of it.
     fn goods(self) -> &'static [(&'static str, u16)] {
         match self {
-            Trade::Farmer => &[("wheat-seed", 6), ("turnip-seed", 5), ("wheat", 8), ("turnip", 6), ("fibre", 8)],
-            Trade::Smith => &[("coal", 8), ("iron-ingot", 3), ("copper-ingot", 3), ("stone", 10)],
+            Trade::Farmer => &[
+                ("wheat-seed", 6),
+                ("turnip-seed", 5),
+                ("wheat", 8),
+                ("turnip", 6),
+                ("fibre", 8),
+            ],
+            Trade::Smith => &[
+                ("coal", 8),
+                ("iron-ingot", 3),
+                ("copper-ingot", 3),
+                ("stone", 10),
+            ],
             Trade::Fisher => &[("rope", 4), ("bait", 6), ("fibre", 8), ("log", 3)],
             Trade::Trader => &[("planks", 8), ("rope", 3), ("wool", 4), ("leather", 3)],
             Trade::Hunter => &[("leather", 4), ("rope", 3), ("fibre", 6)],
-            Trade::Common => &[("planks", 6), ("rope", 2), ("fibre", 6), ("log", 3), ("stone", 6)],
+            Trade::Common => &[
+                ("planks", 6),
+                ("rope", 2),
+                ("fibre", 6),
+                ("log", 3),
+                ("stone", 6),
+            ],
         }
     }
 }

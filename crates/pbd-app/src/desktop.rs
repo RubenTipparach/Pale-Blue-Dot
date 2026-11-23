@@ -14,6 +14,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
@@ -1781,6 +1782,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::builds::BuildsPlugin)
     // Logs on the water (`log-drives`).
     .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
     .add_systems(Startup, build_mode::spawn_ghost)
@@ -2075,10 +2078,12 @@ pub fn run(args: &[String]) {
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
                 pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),

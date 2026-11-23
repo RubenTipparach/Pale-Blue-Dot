@@ -4309,8 +4309,14 @@ fn every_house_is_furnished_by_its_record() {
     let (village, solids) = cut_village();
     let (_, again) = cut_village();
     assert_eq!(
-        solids.iter().map(|s| s.furniture.clone()).collect::<Vec<_>>(),
-        again.iter().map(|s| s.furniture.clone()).collect::<Vec<_>>()
+        solids
+            .iter()
+            .map(|s| s.furniture.clone())
+            .collect::<Vec<_>>(),
+        again
+            .iter()
+            .map(|s| s.furniture.clone())
+            .collect::<Vec<_>>()
     );
     for (b, cut) in village.buildings.iter().zip(&solids) {
         let kinds: Vec<Kind> = cut.furniture.iter().map(|f| f.kind).collect();
@@ -4322,7 +4328,11 @@ fn every_house_is_furnished_by_its_record() {
                     assert!(kinds.contains(&Kind::Bed), "{}: a bed in {kinds:?}", b.name);
                     assert!(kinds.contains(&Kind::Table), "{}: a table", b.name);
                 } else {
-                    assert!(kinds.contains(&Kind::Chest), "{}: a chest in {kinds:?}", b.name);
+                    assert!(
+                        kinds.contains(&Kind::Chest),
+                        "{}: a chest in {kinds:?}",
+                        b.name
+                    );
                 }
             }
             Some(Use::Inn | Use::Hall) => {
@@ -4335,7 +4345,12 @@ fn every_house_is_furnished_by_its_record() {
         let top = b.storeys.max(1) as f32 * crate::settlement::STOREY_M * b.tall.max(1) as f32;
         for piece in &cut.furniture {
             let p = f.local(piece.at);
-            assert!(p.y > -0.05 && p.y < top, "{}: {:?} at {p}", b.name, piece.kind);
+            assert!(
+                p.y > -0.05 && p.y < top,
+                "{}: {:?} at {p}",
+                b.name,
+                piece.kind
+            );
             assert!(
                 p.x.abs() < cut.reach_m && p.z.abs() < cut.reach_m,
                 "{}: {:?} inside",
@@ -4346,8 +4361,8 @@ fn every_house_is_furnished_by_its_record() {
             // half a metre from any piece's footprint.
             for door in &cut.doors {
                 let s = door.solid();
-                let mid = s.outline.iter().fold(glam::Vec2::ZERO, |a, q| a + *q)
-                    / s.outline.len() as f32;
+                let mid =
+                    s.outline.iter().fold(glam::Vec2::ZERO, |a, q| a + *q) / s.outline.len() as f32;
                 if (s.y0 - p.y).abs() > 1.0 {
                     continue;
                 }
@@ -4363,7 +4378,12 @@ fn every_house_is_furnished_by_its_record() {
                     .iter()
                     .map(|q| q.distance(mid))
                     .fold(f32::MAX, f32::min);
-                assert!(near > 0.25, "{}: {:?} {near} m from a door", b.name, piece.kind);
+                assert!(
+                    near > 0.25,
+                    "{}: {:?} {near} m from a door",
+                    b.name,
+                    piece.kind
+                );
             }
         }
     }

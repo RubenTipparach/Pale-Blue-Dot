@@ -509,7 +509,6 @@ furniture:
   get_up: Move to get up
   occupied: Someone is there
   of_house: "{thing}, {house}"
-  yours: "{thing}"
 guide:
   caught: "caught {count}, best {best} cm"
   from_tenebris: "from Tenebris ({kind})"

@@ -25,7 +25,7 @@ pub fn use_of(name: &str) -> Option<Use> {
         Some(Use::Inn)
     } else if has(&["hall", "exchange", "longhouse", "keep"]) {
         Some(Use::Hall)
-    } else if has(&["boathouse", "fish hut", "tower", "lookout"]) {
+    } else if has(&["boathouse", "tower", "lookout"]) || n.starts_with("fish") {
         Some(Use::Store)
     } else if has(&["house", "cottage", "hut", "igloo"]) {
         Some(Use::House)
@@ -120,7 +120,12 @@ impl Layout<'_> {
         }
         let backs = matches!(
             kind,
-            Kind::Bed | Kind::Drawers | Kind::Closet | Kind::Chest | Kind::BandedChest | Kind::Crate
+            Kind::Bed
+                | Kind::Drawers
+                | Kind::Closet
+                | Kind::Chest
+                | Kind::BandedChest
+                | Kind::Crate
         );
         if side < MIDDLE && backs && !self.outer(cell, side) {
             return false;
@@ -139,7 +144,8 @@ impl Layout<'_> {
         let crosses = self.out.iter().any(|l| {
             l.cell == cell
                 && l.storey == storey
-                && (l.side == side || furniture::overlaps(&mine, &furniture::footprint(l.kind, l.side)))
+                && (l.side == side
+                    || furniture::overlaps(&mine, &furniture::footprint(l.kind, l.side)))
         });
         if crosses {
             return false;

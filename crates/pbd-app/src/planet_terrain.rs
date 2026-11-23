@@ -234,7 +234,7 @@ pub fn render_code(material: Material) -> u32 {
         Material::Forge => FORGE,
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
-        Material::Workbench => WOOD,
+        Material::Workbench | Material::Carpenter => WOOD,
         // A beaver's sticks (B25): the bark of the local trees, as the
         // workbench is drawn.
         Material::Sticks => WOOD,

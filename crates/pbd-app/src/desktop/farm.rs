@@ -1015,6 +1015,32 @@ pub struct FarmLooks {
     board: Handle<Mesh>,
     vise: Handle<Mesh>,
     oak: Handle<StandardMaterial>,
+    /// The carpenter's bench's board, saw and square (`furniture` design
+    /// 1), in the oak and the iron.
+    carpenter_wood: Handle<Mesh>,
+    carpenter_iron: Handle<Mesh>,
+}
+
+/// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
+fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str]) -> Mesh {
+    let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
+    for poly in polys.iter().filter(|p| keep.contains(&p.texture)) {
+        let n = poly.normal().to_array();
+        for i in 1..poly.points.len().saturating_sub(1) {
+            for p in [poly.points[0], poly.points[i], poly.points[i + 1]] {
+                positions.push(p.to_array());
+                normals.push(n);
+                uvs.push([0.0f32, 0.0]);
+            }
+        }
+    }
+    Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
 }
 
 /// The path of a crop's stage sprite (decision 5).
@@ -1103,6 +1129,17 @@ pub fn make_looks(
         }),
         flame: meshes.add(clumps_mesh(0.45, 0.0)),
         board: meshes.add(Cuboid::new(1.5, 0.08, 0.32)),
+        carpenter_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+        )),
+        carpenter_iron: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[pbd_core::furniture::model::IRON],
+        )),
         vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
         oak: materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.38, 0.21),
@@ -1377,7 +1414,10 @@ pub fn show(
     // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
     let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
-        if !matches!(edit.material, Material::Forge | Material::Workbench) {
+        if !matches!(
+            edit.material,
+            Material::Forge | Material::Workbench | Material::Carpenter
+        ) {
             continue;
         }
         let Some(&index) = keys.map.get(&edit.cell) else {
@@ -1421,6 +1461,35 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::Carpenter {
+            // A board laid on it, a saw across the board and a square at
+            // its end (`furniture` design 1).
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|bench| {
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_wood.clone()),
+                        MeshMaterial3d(looks.oak.clone()),
+                    ));
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_iron.clone()),
+                        MeshMaterial3d(looks.iron.clone()),
+                    ));
+                });
+            continue;
+        }
         if material == Material::Workbench {
             // Two planks laid across the top and an iron vise at one end,
             // after M3's workbench icon.
