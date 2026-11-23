@@ -124,6 +124,9 @@ pub struct BuildMode {
     /// Where the aim last met something, planet-local: where architecture
     /// mode starts over.
     pub aim: Option<Vec3>,
+    /// No ghost is aimed or drawn: set only by the capture instrument
+    /// (`PBD_BUILD_SHOT`'s `quiet`), for a shot of what is built.
+    pub quiet: bool,
     /// What the ghost shows: its pieces, whether they may go, and the piece
     /// a removal aims at.
     pub ghost: Option<GhostShown>,
@@ -493,7 +496,7 @@ pub fn aim_and_build(
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
 ) {
-    if !mode.on || mode.picker {
+    if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
             mode.ghost = None;
         }
@@ -1133,7 +1136,8 @@ pub fn load_blueprints(assets: Res<TownAssets>, mut blueprints: ResMut<Blueprint
 /// doorway through [`Builds::place_door`]; `open` opens them as F would;
 /// `view` raises architecture mode over the house, `view:door` over its
 /// first door from outside, with `dist:<m>`, `tilt:<degrees>` and
-/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up.
+/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up; `quiet` shows no
+/// ghost.
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
     state: Res<super::CaptureState>,
@@ -1190,6 +1194,7 @@ pub fn scripted(
                 mode.on = true;
                 mode.picker = true;
             }
+            "quiet" => mode.quiet = true,
             _ => {}
         }
     }
