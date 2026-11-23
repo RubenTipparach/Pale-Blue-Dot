@@ -354,6 +354,15 @@ screenshots).
   follow the player), named "Lost villager", and the compass shows it as a
   waypoint is shown, with its distance.
 
+## 11. The Carpentry branch (from `furniture`, 2026-11-23)
+
+The owner, 2026-11-23: "Carpenter missions / And yes we need a carpentry
+station for furniture". A sixth branch, `carpentry`, off the trunk's
+`first-job`: nine missions, 115 coins, written up in `furniture` design 12
+(the table of missions, the new kinds `sit`, `lie` and `loot`, and `build`'s
+furniture names). The tree is then 34 missions paying 640 coins. M33's Town
+tab draws the branch.
+
 ## Risks / Trade-offs
 
 - **Two trees to keep in step.** The counting, unlocks and focus are one
