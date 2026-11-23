@@ -602,8 +602,24 @@ the client's own slots and are not sent, which is said in the log.
 
 **Checks:** two processes on loopback join and a mismatched generator is
 refused with its plain message (6.1); a hosted game and a joined game on
-loopback in a cloud run, a dig on each, with `--capture` shots from both
-showing both holes (6.2).
+loopback in a cloud run, a dig on each (done 2026-11-22: the joined game
+took the host's three-layer hole and dug two more layers through it, and
+the host applied them).
+
+**The real test is on two machines (owner, 2026-11-23):** "Multiplayer
+test should use Mac and laptop mining mike sessions". The two-machine check
+of 6.2, and every multiplayer gate after it, runs on the owner's own
+computers through their Claude sessions, "[Mac] pale-blue-dot" and
+"[Laptop] mining mike continue", not on one cloud container's loopback:
+1. both check out the PR's branch and build `fast`;
+2. the Mac hosts: `pbd-app --world mp-test --host 47123`, and reports its
+   LAN address;
+3. the laptop joins: `pbd-app --join <mac address>:47123`;
+4. each digs and places by hand or with `--dig`; each takes a screenshot
+   showing the other's change, and the logs (`player 1 joined`, `edits from
+   the network applied`, any `SERVER_DISAGREES` or refusal) go with them;
+5. the shots and logs land in `docs/screenshots/multiplayer-two-machines/`.
+The GPUs make it real time, which the cloud's software renderer is not.
 
 ## Risks / Trade-offs
 
