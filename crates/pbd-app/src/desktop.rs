@@ -198,6 +198,9 @@ pub struct Launch {
     /// pack's own move and save (`small-boats` design 5). A capture
     /// instrument.
     pub load_hold: bool,
+    /// `--carts` (`land-transport` 5.6): a hand cart and a hitched horse cart
+    /// set down ahead; `--cart-pull` takes the handles, `--cart-drive` the seat.
+    pub carts: Option<pbd_app::vehicles::carts::CartScript>,
     /// `--husbandry SCENE`: set a farm scene in front of the walker through
     /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
     /// animals can be photographed (`animal-husbandry` S12). A capture
@@ -522,6 +525,7 @@ impl Launch {
             cast: false,
             rod_cue: None,
             load_hold: false,
+            carts: None,
             husbandry: None,
             life: None,
             aboard: None,
@@ -1338,6 +1342,21 @@ impl Launch {
                     });
                 }
                 "--load-hold" => result.load_hold = true,
+                "--carts" => {
+                    result.walk = true;
+                    result.carts.get_or_insert_default();
+                }
+                "--cart-pull" => result.carts.get_or_insert_default().pull = true,
+                "--cart-drive" => result.carts.get_or_insert_default().drive = true,
+                "--cart-close" => {
+                    i += 1;
+                    result.walk = true;
+                    let code = args.get(i).expect("--cart-close requires hand or horse");
+                    result.carts.get_or_insert_default().close =
+                        pbd_core::vehicle::cart::CartKind::ALL
+                            .into_iter()
+                            .find(|k| k.code().starts_with(code.as_str()));
+                }
                 "--life" => {
                     i += 1;
                     result.walk = true;
@@ -2406,6 +2425,11 @@ pub fn run(args: &[String]) {
         }
         if launch.load_hold {
             app.add_systems(Update, load_hold_script.before(pack::find_hold));
+        }
+        if let Some(script) = launch.carts {
+            app.world_mut()
+                .get_resource_or_insert_with(pbd_app::vehicles::carts::Carts::default)
+                .script = Some(script);
         }
         if launch.fish {
             if launch.fish_play {

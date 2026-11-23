@@ -23,7 +23,7 @@ use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::accept::PackMove;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
-use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
+use pbd_core::vehicle::hold::{self, HOLD_MAX, Hold, Place};
 
 /// How near a raft must be, m, for the pack opened on foot to show its hold.
 pub const HOLD_REACH_M: f64 = 3.5;
@@ -165,7 +165,7 @@ pub fn hold_click(
     button: Click,
     shift: bool,
 ) -> Option<Held> {
-    if index >= CARRIED + HOLD {
+    if index >= CARRIED + hold_now.slots.len() {
         return hand;
     }
     let at = place_of(index);
@@ -206,10 +206,40 @@ pub fn find_hold(
     save: Res<WorldSave>,
     mut view: ResMut<HoldView>,
     frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
-    mut panels: Query<&mut Node, With<HoldPanel>>,
+    mut panels: Query<&mut Node, (With<HoldPanel>, Without<PackCell>)>,
+    (carts, cart_state, fleet, mut squares): (
+        Query<(Entity, &pbd_app::vehicles::carts::CartThing)>,
+        Option<Res<pbd_app::vehicles::carts::Carts>>,
+        Option<Res<pbd_app::vehicles::Fleet>>,
+        Query<(&PackCell, &mut Node), Without<HoldPanel>>,
+    ),
 ) {
     let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
-    let found = if *screen != Screen::Pack {
+    // A cart's hold (`land-transport` design 10): the one in hand or under
+    // the seat, else the nearest in reach on foot, at its own size.
+    let frame_now = frame.as_deref().copied().unwrap_or_default();
+    let cart_size = |kind| fleet.as_deref().map_or(9, |f| f.specs.carts.of(kind).hold);
+    let with_cart = cart_state
+        .as_deref()
+        .and_then(|c| c.holding.or(c.seated))
+        .and_then(|e| carts.get(e).ok())
+        .or_else(|| {
+            let feet = walkers
+                .iter()
+                .next()
+                .map(|p| p.0.as_dvec3() - frame_now.physics_center())?;
+            carts
+                .iter()
+                .map(|(e, t)| (e, t, t.cart.at.distance(feet)))
+                .filter(|(_, _, d)| *d <= HOLD_REACH_M)
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+                .map(|(e, t, _)| (e, t))
+        })
+        .map(|(e, t)| (e, t.cart.id, cart_size(t.cart.kind)));
+    let found_cart = with_cart.filter(|_| *screen == Screen::Pack);
+    let found = if let Some((e, id, _)) = found_cart {
+        Some((e, id))
+    } else if *screen != Screen::Pack {
         None
     } else if let Some(entity) = aboard.and_then(|a| a.0) {
         vehicles
@@ -241,10 +271,29 @@ pub fn find_hold(
         })
     };
     if found != view.craft {
-        view.hold = found.map_or_else(Hold::default, |(_, id)| {
-            pbd_app::vehicles::hold::read(&save, id)
-        });
+        view.hold = match (found, found_cart) {
+            (Some((_, id)), Some((_, _, size))) => {
+                pbd_app::vehicles::hold::read_sized(&save, id, size)
+            }
+            (Some((_, id)), None) => pbd_app::vehicles::hold::read(&save, id),
+            (None, _) => Hold::default(),
+        };
         view.craft = found;
+    }
+    // Only the hold's own squares show.
+    let size = view.hold.slots.len();
+    for (cell, mut node) in &mut squares {
+        if cell.0 < CARRIED {
+            continue;
+        }
+        let want = if cell.0 - CARRIED < size {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != want {
+            node.display = want;
+        }
     }
     let want = if found.is_some() {
         Display::Flex
@@ -522,7 +571,18 @@ pub fn spawn(
                         ))
                         .with_children(|panel| {
                             menu::lintel(panel, kit, tr("pack.hold"));
-                            slot_line(panel, kit, &atlas, CARRIED);
+                            // As many squares as the largest hold (a horse
+                            // cart's, `land-transport` design 10), in rows of
+                            // ten; a smaller hold hides the rest.
+                            for first in (CARRIED..CARRIED + HOLD_MAX).step_by(SLOTS) {
+                                slot_row(
+                                    panel,
+                                    kit,
+                                    &atlas,
+                                    first,
+                                    (CARRIED + HOLD_MAX - first).min(SLOTS),
+                                );
+                            }
                         });
                 });
         });
@@ -555,6 +615,21 @@ pub fn spawn(
                 HeldCount,
             ));
         });
+}
+
+/// `count` slots in a row, from slot `first`.
+fn slot_row(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    first: usize,
+    count: usize,
+) {
+    parent.spawn(Node::default()).with_children(|line| {
+        for index in first..first + count {
+            slots::cell(line, kit, index, atlas, (Button, PackCell(index)));
+        }
+    });
 }
 
 /// Ten slots in a row, from slot `first`.
@@ -880,8 +955,8 @@ mod tests {
         let n = cells.iter(world).count();
         assert_eq!(
             n,
-            PACK + SLOTS + HOLD,
-            "and the hold's ten, shown with a raft"
+            PACK + SLOTS + HOLD_MAX,
+            "and the hold's squares, as many as a horse cart's"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
         // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its

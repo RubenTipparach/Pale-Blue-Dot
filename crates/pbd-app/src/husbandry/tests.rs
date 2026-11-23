@@ -157,8 +157,14 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
             b
         };
         let still = build(0.0, 0.0);
-        assert_eq!(still.positions.len() % 24, 0, "{}", sp.id);
-        assert_eq!(still.indices.len(), still.positions.len() / 4 * 6);
+        if sp.plan == pbd_core::husbandry::Plan::Horse {
+            // The horse is one lofted body of flat triangles, not boxes
+            // (`land-transport` design 11).
+            assert_eq!(still.indices.len(), still.positions.len(), "{}", sp.id);
+        } else {
+            assert_eq!(still.positions.len() % 24, 0, "{}", sp.id);
+            assert_eq!(still.indices.len(), still.positions.len() / 4 * 6);
+        }
         let top = still
             .positions
             .iter()

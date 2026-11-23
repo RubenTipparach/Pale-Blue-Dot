@@ -32,6 +32,8 @@ pub enum Reader {
     Logs,
     /// A broken town wall (`townsfolk` design 29).
     Mend,
+    /// The carts (`land-transport` design 11).
+    Carts,
 }
 
 /// A thing F can do.
@@ -64,6 +66,18 @@ pub enum Act {
     Talk,
     /// Mend a broken town wall with planks.
     Mend,
+    /// Let go of a hand cart's handles (`land-transport` design 11).
+    LetGo,
+    /// Step down from a horse cart's seat.
+    StepDown,
+    /// Take a hand cart's handles.
+    Pull,
+    /// Take a horse cart's seat.
+    Drive,
+    /// Put a horse in a horse cart's shafts.
+    Hitch,
+    /// Take it out of them.
+    Unhitch,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -82,7 +96,10 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 22] = [
+pub const ACTS: [Row; 28] = [
+    // A cart in hand or a seat taken comes first: F lets it go.
+    row(Act::LetGo, "let_go", Reader::Carts),
+    row(Act::StepDown, "step_down", Reader::Carts),
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
@@ -104,6 +121,10 @@ pub const ACTS: [Row; 22] = [
     row(Act::Till, "till", Reader::Farm),
     row(Act::TakeLog, "take_log", Reader::Logs),
     row(Act::Board, "board", Reader::Boats),
+    row(Act::Pull, "pull", Reader::Carts),
+    row(Act::Drive, "drive", Reader::Carts),
+    row(Act::Hitch, "hitch", Reader::Carts),
+    row(Act::Unhitch, "unhitch", Reader::Carts),
     row(Act::Mend, "mend", Reader::Mend),
 ];
 

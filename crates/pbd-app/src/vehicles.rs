@@ -8,6 +8,7 @@
 //! the craft, the sea table and its state, the planet's gravity, and the
 //! walker's own ground query for anything a craft touches.
 
+pub mod carts;
 mod chase;
 mod draw;
 pub(crate) mod harbour;
@@ -164,6 +165,7 @@ pub struct VehiclePlugin;
 
 impl Plugin for VehiclePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(carts::CartsPlugin);
         app.add_systems(PreStartup, init_fleet)
             .init_resource::<Aboard>()
             .init_resource::<VehicleControls>()

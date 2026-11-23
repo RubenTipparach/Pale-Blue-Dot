@@ -98,3 +98,10 @@ same script: a gold piece with a stamped square ring.
 
 `gravel` is drawn by `tools/gen_item_icons.py` (`ROADS`): a heap of crushed
 stone in four greys, with the 1 px outline of an inventory icon.
+
+## land-transport design 10: the wheel and the carts
+
+`wheel`, `hand-cart` and `horse-cart` are drawn by `tools/gen_item_icons.py`
+(`CARTS`): a spoked wheel with its iron tyre, and the two carts side on, each
+from a few shapes in the boats' browns with the 1 px outline of an inventory
+icon.
