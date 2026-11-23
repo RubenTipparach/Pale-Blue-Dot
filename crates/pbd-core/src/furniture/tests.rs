@@ -281,10 +281,16 @@ fn every_model_is_shaped_inside_its_footprint() {
         model::SHEET,
         model::BLANKET,
         model::IRON,
+        model::DRAWER_FRONT,
+        model::CLOSET_FRONT,
+        model::CHEST_SIDE,
+        model::CHEST_FRONT,
+        model::BANDED_SIDE,
+        model::BANDED_FRONT,
     ];
     for kind in Kind::ALL {
         let polys = model::polys(kind);
-        assert!(polys.len() > 40, "{kind:?}: {} faces", polys.len());
+        assert!(polys.len() > 30, "{kind:?}: {} faces", polys.len());
         let s = kind.size_m();
         for p in &polys {
             assert!(textures.contains(&p.texture));
@@ -330,7 +336,25 @@ fn export_models_for_the_mockup() {
                     .iter()
                     .map(|q| format!("{},{},{}", r(q.x), r(q.y), r(q.z)))
                     .collect();
-                format!("[\"{}\",[{}]]", p.texture, pts.join(","))
+                let ns: Vec<String> = p
+                    .normals
+                    .iter()
+                    .map(|q| format!("{},{},{}", r(q.x), r(q.y), r(q.z)))
+                    .collect();
+                let uvs = p.uvs.as_ref().map_or("null".to_string(), |uvs| {
+                    let t: Vec<String> = uvs
+                        .iter()
+                        .map(|q| format!("{},{}", r(q.x), r(q.y)))
+                        .collect();
+                    format!("[{}]", t.join(","))
+                });
+                format!(
+                    "[\"{}\",[{}],[{}],{}]",
+                    p.texture,
+                    pts.join(","),
+                    ns.join(","),
+                    uvs
+                )
             })
             .collect();
         format!("[{}]", faces.join(","))
@@ -385,4 +409,55 @@ fn an_old_world_opens_a_town_chest_without_writing_and_taken_stays_taken() {
     });
     assert!(again.is_empty(), "a town chest does not refill");
     assert_eq!(records.of_kind(STORE_KIND).count(), 1);
+}
+
+/// Owner, 2026-11-23: "Make sure things have textures" and "I didn't like
+/// flat shaded crap". Every face is in a texture; the painted details (a
+/// drawer front, a closet's doors, a chest's bands and lock) are mapped once
+/// over their faces in 0 to 1; and curved parts (a bevel's roll, a turned
+/// leg, the mattress, the crowned lid) carry normals of their own at their
+/// points, not the face's.
+#[test]
+fn pieces_are_textured_and_shaded_smooth() {
+    for kind in Kind::ALL {
+        let polys = model::polys(kind);
+        let smooth = polys
+            .iter()
+            .filter(|p| p.normals.iter().any(|n| n.dot(p.normal()) < 0.999))
+            .count();
+        assert!(
+            smooth * 3 > polys.len(),
+            "{kind:?}: {smooth} of {} faces smooth",
+            polys.len()
+        );
+        for p in &polys {
+            assert_eq!(p.normals.len(), p.points.len());
+            for n in &p.normals {
+                assert!((n.length() - 1.0).abs() < 1e-3 && n.dot(p.normal()) > 0.0);
+            }
+            if let Some(uvs) = &p.uvs {
+                assert_eq!(uvs.len(), p.points.len());
+                assert!(
+                    uvs.iter()
+                        .all(|t| (-1e-3..=1.001).contains(&t.x) && (-1e-3..=1.001).contains(&t.y))
+                );
+            }
+        }
+    }
+    let painted = |kind: Kind, texture: &str| {
+        model::polys(kind)
+            .iter()
+            .any(|p| p.texture == texture && p.uvs.is_some())
+    };
+    assert!(painted(Kind::Drawers, model::DRAWER_FRONT));
+    assert!(painted(Kind::Closet, model::CLOSET_FRONT));
+    assert!(painted(Kind::Chest, model::CHEST_FRONT) && painted(Kind::Chest, model::CHEST_SIDE));
+    assert!(painted(Kind::BandedChest, model::BANDED_FRONT));
+    // Nothing is stuck on a chest any more: its faces are its body, its lid
+    // and the lid's two ends.
+    assert!(
+        !model::polys(Kind::Chest)
+            .iter()
+            .any(|p| p.texture == model::IRON)
+    );
 }

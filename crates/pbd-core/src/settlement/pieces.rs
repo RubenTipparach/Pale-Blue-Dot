@@ -788,8 +788,12 @@ impl<'a> Sink<'a> {
     /// a seat.
     pub fn furnish(&mut self, kind: crate::furniture::Kind, at: Vec2, y0: f32, front: Vec2) {
         for poly in crate::furniture::model::placed(kind, at, y0, front) {
-            let n = poly.normal();
-            self.face(poly.texture, &poly.points, n, None);
+            self.smooth_face(
+                poly.texture,
+                &poly.points,
+                &poly.normals,
+                poly.uvs.as_deref(),
+            );
         }
         if kind.solid() {
             let outline = crate::furniture::rect(at, front, kind.size_m()).to_vec();
@@ -905,6 +909,49 @@ impl<'a> Sink<'a> {
                 buf.positions.push(self.frame.world(pts[k]).to_array());
                 buf.normals.push(world_n);
                 buf.uvs.push(uv_of(pts[k]));
+            }
+        }
+    }
+
+    /// A convex face already wound to face out, a normal at each point (a
+    /// piece of furniture's, shaded smooth across its curves), textured as
+    /// [`Sink::face`] textures one.
+    fn smooth_face(
+        &mut self,
+        material: &str,
+        pts: &[Vec3],
+        normals: &[Vec3],
+        mapped: Option<&[Vec2]>,
+    ) {
+        if pts.len() < 3 || normals.len() != pts.len() {
+            return;
+        }
+        let n = (pts[1] - pts[0]).cross(pts[2] - pts[0]).normalize_or_zero();
+        let rep = (self.repeat_m)(material);
+        let centre = pts.iter().fold(Vec3::ZERO, |s, p| s + *p) / pts.len() as f32;
+        let inside = self
+            .indoors
+            .as_ref()
+            .is_some_and(|rooms| rooms.holds(centre, n));
+        let frame = self.frame;
+        let meshes = if inside {
+            &mut self.rooms
+        } else {
+            &mut *self.meshes
+        };
+        let buf = meshes.entry(material.to_string()).or_default();
+        for i in 1..pts.len() - 1 {
+            for k in [0, i, i + 1] {
+                let uv = match mapped {
+                    Some(uvs) => uvs[k].to_array(),
+                    None => {
+                        let t = uv_world(pts[k], n, rep);
+                        [t.x, -t.y]
+                    }
+                };
+                buf.positions.push(frame.world(pts[k]).to_array());
+                buf.normals.push(frame.world_dir(normals[k]).to_array());
+                buf.uvs.push(uv);
             }
         }
     }

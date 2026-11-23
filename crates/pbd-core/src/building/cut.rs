@@ -627,13 +627,26 @@ impl Cutter<'_> {
         for poly in crate::furniture::model::placed(kind, at, y, front) {
             let n = poly.normal();
             let rep = (self.repeat)(poly.texture).max(0.1);
-            let uv = |p: Vec3| {
-                let t = furniture_uv(p, n, rep);
-                Vec2::new(t.x, -t.y)
-            };
+            let frame = self.frame;
+            let to_world =
+                |v: Vec3| (frame.x * v.x + frame.y * v.y + frame.z * v.z).normalize_or_zero();
+            let buf = self.buf(poly.texture);
+            // Wound outward already; each point its own normal, so the piece
+            // is shaded smooth across its curves.
             for i in 1..poly.points.len().saturating_sub(1) {
-                let p = [poly.points[0], poly.points[i], poly.points[i + 1]];
-                self.tri(poly.texture, p, p.map(uv), n);
+                for k in [0, i, i + 1] {
+                    let p = poly.points[k];
+                    let uv = match &poly.uvs {
+                        Some(uvs) => uvs[k].to_array(),
+                        None => {
+                            let t = furniture_uv(p, n, rep);
+                            [t.x, -t.y]
+                        }
+                    };
+                    buf.positions.push(frame.world(p).to_array());
+                    buf.normals.push(to_world(poly.normals[k]).to_array());
+                    buf.uvs.push(uv);
+                }
             }
         }
         if kind.solid() {

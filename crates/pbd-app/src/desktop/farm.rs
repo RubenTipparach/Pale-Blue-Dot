@@ -1019,18 +1019,31 @@ pub struct FarmLooks {
     /// 1), in the oak and the iron.
     carpenter_wood: Handle<Mesh>,
     carpenter_iron: Handle<Mesh>,
+    plank_tex: Handle<StandardMaterial>,
+    iron_tex: Handle<StandardMaterial>,
 }
 
 /// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
-fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str]) -> Mesh {
+fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str], repeat_m: f32) -> Mesh {
     let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
     for poly in polys.iter().filter(|p| keep.contains(&p.texture)) {
-        let n = poly.normal().to_array();
+        let n = poly.normal();
+        // The town's world mapping at the texture's own scale, so its texels
+        // match the walls'; each point its own normal, shaded smooth.
+        let uv = |p: Vec3| -> [f32; 2] {
+            let s = 1.0 / repeat_m;
+            if n.y.abs() > 0.7 {
+                return [p.x * s, -p.z * s];
+            }
+            let l = n.x.hypot(n.z).max(1e-6);
+            [(p.x * -n.z + p.z * n.x) / l * s, -p.y * s]
+        };
         for i in 1..poly.points.len().saturating_sub(1) {
-            for p in [poly.points[0], poly.points[i], poly.points[i + 1]] {
+            for k in [0, i, i + 1] {
+                let p = poly.points[k];
                 positions.push(p.to_array());
-                normals.push(n);
-                uvs.push([0.0f32, 0.0]);
+                normals.push(poly.normals[k].to_array());
+                uvs.push(uv(p));
             }
         }
     }
@@ -1135,11 +1148,25 @@ pub fn make_looks(
                 pbd_core::furniture::model::FRAME,
                 pbd_core::furniture::model::TOP,
             ],
+            2.0,
         )),
         carpenter_iron: meshes.add(polys_mesh(
             &pbd_core::furniture::model::carpenter_top(),
             &[pbd_core::furniture::model::IRON],
+            1.0,
         )),
+        // The carpenter's bench's board and tools in the town's own plank
+        // and iron, sampled nearest (owner: "Make sure things have textures").
+        plank_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "plank")),
+            perceptual_roughness: 0.92,
+            ..default()
+        }),
+        iron_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "iron")),
+            perceptual_roughness: 0.6,
+            ..default()
+        }),
         vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
         oak: materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.38, 0.21),
@@ -1481,11 +1508,11 @@ pub fn show(
                 .with_children(|bench| {
                     bench.spawn((
                         Mesh3d(looks.carpenter_wood.clone()),
-                        MeshMaterial3d(looks.oak.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
                     ));
                     bench.spawn((
                         Mesh3d(looks.carpenter_iron.clone()),
-                        MeshMaterial3d(looks.iron.clone()),
+                        MeshMaterial3d(looks.iron_tex.clone()),
                     ));
                 });
             continue;

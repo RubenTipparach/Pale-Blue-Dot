@@ -12,11 +12,21 @@
 use super::Kind;
 use glam::{Vec2, Vec3};
 
-/// One face: its texture and its points, counter-clockwise from outside.
+/// One face: its texture, its points counter-clockwise from outside, and a
+/// normal at each point: the face's own at a real board edge, shared across
+/// a curve (a bevel's roll, a turned leg, a crowned lid, a mattress's bulge),
+/// so a piece is shaded smooth and not faceted (owner, 2026-11-23: "I didn't
+/// like flat shaded crap").
 #[derive(Clone, Debug, PartialEq)]
 pub struct Poly {
     pub texture: &'static str,
     pub points: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
+    /// Texture coordinates when the texture is mapped once over the face
+    /// (image space: u right, v down, 0 to 1), as a drawer front's or a
+    /// chest's painted bands are; `None` is the town's world mapping, at the
+    /// manifest's scale, so texels match the walls round it.
+    pub uvs: Option<Vec<Vec2>>,
 }
 
 impl Poly {
@@ -43,6 +53,15 @@ pub const BOARDS: &str = "boards";
 pub const SHEET: &str = "linen";
 pub const BLANKET: &str = "wool";
 pub const IRON: &str = "iron";
+/// Painted once over a face (`tools/art/furniture_textures.py`): a chest of
+/// drawers' front with its three drawers and pulls, a closet's two doors and
+/// ring pulls, and chests' boards with their bands and lock.
+pub const DRAWER_FRONT: &str = "drawerfront";
+pub const CLOSET_FRONT: &str = "closetfront";
+pub const CHEST_SIDE: &str = "chestside";
+pub const CHEST_FRONT: &str = "chestfront";
+pub const BANDED_SIDE: &str = "bandedside";
+pub const BANDED_FRONT: &str = "bandedfront";
 
 #[derive(Default)]
 struct Kit {
@@ -50,20 +69,85 @@ struct Kit {
 }
 
 impl Kit {
-    /// A face, turned to face away from `inside`.
-    fn face(&mut self, texture: &'static str, mut points: Vec<Vec3>, inside: Vec3) {
+    /// A flat face, turned to face away from `inside`.
+    fn face(&mut self, texture: &'static str, points: Vec<Vec3>, inside: Vec3) {
+        self.face_n(texture, points, inside, &|_, n| n);
+    }
+
+    /// A face turned to face away from `inside`, its normal at each point
+    /// `normal(point, face normal)`.
+    fn face_n(
+        &mut self,
+        texture: &'static str,
+        mut points: Vec<Vec3>,
+        inside: Vec3,
+        normal: &dyn Fn(Vec3, Vec3) -> Vec3,
+    ) {
         if points.len() < 3 {
             return;
         }
-        let poly = Poly {
+        let mut poly = Poly {
             texture,
             points: points.clone(),
+            normals: Vec::new(),
+            uvs: None,
         };
         let centre = points.iter().copied().sum::<Vec3>() / points.len() as f32;
         if poly.normal().dot(centre - inside) < 0.0 {
             points.reverse();
         }
-        self.polys.push(Poly { texture, points });
+        poly.points = points;
+        let n = poly.normal();
+        poly.normals = poly
+            .points
+            .iter()
+            .map(|&p| {
+                let m = normal(p, n);
+                if m.dot(n) > 0.05 { m.normalize() } else { n }
+            })
+            .collect();
+        self.polys.push(poly);
+    }
+
+    /// Paint the upright main faces among the polys from `from` on with a
+    /// texture mapped once over each face (`texture(normal)`, or none to
+    /// leave a face as it is): a drawer front, a closet's doors, a chest's
+    /// sides with their bands. u runs left to right seen from outside, v
+    /// from the face's top down.
+    fn map_faces(&mut self, from: usize, texture: &dyn Fn(Vec3) -> Option<&'static str>) {
+        for poly in &mut self.polys[from..] {
+            let n = poly.normal();
+            if n.y.abs() > 0.1 || n.length() < 0.5 {
+                continue;
+            }
+            // A main face: flat across all its points.
+            if poly.normals.iter().any(|m| m.dot(n) < 0.999) {
+                continue;
+            }
+            let Some(t) = texture(n) else { continue };
+            let right = Vec3::Y.cross(n).normalize();
+            let us: Vec<f32> = poly.points.iter().map(|p| p.dot(right)).collect();
+            let (u0, u1) = us
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), &u| (a.min(u), b.max(u)));
+            let (y0, y1) = poly
+                .points
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
+            poly.texture = t;
+            poly.uvs = Some(
+                poly.points
+                    .iter()
+                    .zip(&us)
+                    .map(|(p, u)| {
+                        Vec2::new(
+                            (u - u0) / (u1 - u0).max(1e-4),
+                            (y1 - p.y) / (y1 - y0).max(1e-4),
+                        )
+                    })
+                    .collect(),
+            );
+        }
     }
 
     /// A bevelled box: its bottom's middle at `at`, `size` across, up and
@@ -76,6 +160,17 @@ impl Kit {
         let i = h - Vec3::splat(b);
         let pick = |n: Vec3| if n.y > 0.5 { top } else { side };
         let axes = [Vec3::X, Vec3::Y, Vec3::Z];
+        // A rounded box's normals: out from the inner box, so its faces stay
+        // flat and its bevels roll from one face into the next.
+        let (lo, hi) = (c - i, c + i);
+        let round = move |p: Vec3, n: Vec3| {
+            let d = p - p.clamp(lo, hi);
+            if d.length_squared() < 1e-10 {
+                n
+            } else {
+                d.normalize()
+            }
+        };
         // The six faces.
         for a in 0..3 {
             for s in [-1.0f32, 1.0] {
@@ -89,7 +184,7 @@ impl Kit {
                     o + u * hu + v * hv,
                     o - u * hu + v * hv,
                 ];
-                self.face(pick(n), pts, c);
+                self.face_n(pick(n), pts, c, &round);
             }
         }
         // The twelve edges.
@@ -101,10 +196,11 @@ impl Kit {
                     let e1 = c + p * (sp * h.dot(p)) + q * (sq * i.dot(q));
                     let e2 = c + p * (sp * i.dot(p)) + q * (sq * h.dot(q));
                     let n = (p * sp + q * sq).normalize();
-                    self.face(
+                    self.face_n(
                         pick(n),
                         vec![e1 - along, e1 + along, e2 + along, e2 - along],
                         c,
+                        &round,
                     );
                 }
             }
@@ -120,7 +216,7 @@ impl Kit {
                         c + Vec3::new(i.x, i.y, h.z) * s,
                     ];
                     let n = s.normalize();
-                    self.face(pick(n), pts, c);
+                    self.face_n(pick(n), pts, c, &round);
                 }
             }
         }
@@ -151,15 +247,29 @@ impl Kit {
         let rs: Vec<Vec<Vec3>> = rings.iter().map(|&(t, r)| ring(t, r)).collect();
         for j in 0..rs.len().saturating_sub(1) {
             let mid = base + u * ((rings[j].0 + rings[j + 1].0) / 2.0);
+            // Round (six sides or more): each point's normal is out from the
+            // axis, tipped by the band's taper; a slab of four is flat.
+            let (dt, dr) = (rings[j + 1].0 - rings[j].0, rings[j + 1].1 - rings[j].1);
+            let smooth = move |p: Vec3, n: Vec3| {
+                if sides < 6 {
+                    return n;
+                }
+                let q = p - base;
+                let radial = (q - u * q.dot(u)).normalize_or_zero();
+                if radial == Vec3::ZERO {
+                    return n;
+                }
+                (radial * dt - u * dr).normalize_or(n)
+            };
             for k in 0..sides {
                 let k2 = (k + 1) % sides;
                 let (a, b, c, d) = (rs[j][k], rs[j][k2], rs[j + 1][k2], rs[j + 1][k]);
                 if rings[j].1 < 1e-4 {
-                    self.face(texture, vec![a, c, d], mid);
+                    self.face_n(texture, vec![a, c, d], mid, &smooth);
                 } else if rings[j + 1].1 < 1e-4 {
-                    self.face(texture, vec![a, b, c], mid);
+                    self.face_n(texture, vec![a, b, c], mid, &smooth);
                 } else {
-                    self.face(texture, vec![a, b, c, d], mid);
+                    self.face_n(texture, vec![a, b, c, d], mid, &smooth);
                 }
             }
         }
@@ -194,13 +304,55 @@ impl Kit {
 
     /// A convex profile in the (z, y) plane, `prof`, run across x from `x0`
     /// to `x1`: a chest's lid and its bands.
-    fn run_x(&mut self, side: &'static str, ends: &'static str, prof: &[Vec2], x0: f32, x1: f32) {
+    /// Its sides' texture is mapped once over the whole curve when `mapped`:
+    /// u along x, v along the profile from its first point.
+    fn run_x_mapped(
+        &mut self,
+        side: &'static str,
+        ends: &'static str,
+        prof: &[Vec2],
+        x0: f32,
+        x1: f32,
+        mapped: bool,
+    ) {
+        let from = self.polys.len();
         let n = prof.len();
         let c2 = prof.iter().copied().sum::<Vec2>() / n as f32;
         let mid = Vec3::new((x0 + x1) / 2.0, c2.y, c2.x);
+        // Each edge's outward normal in (z, y); a point between two edges
+        // less than 40 degrees apart shares their mean (the lid's curve), a
+        // sharper corner keeps each edge's own (its foot).
+        let out: Vec<Vec2> = (0..n)
+            .map(|k| {
+                let e = prof[(k + 1) % n] - prof[k];
+                let o = Vec2::new(e.y, -e.x).normalize_or_zero();
+                if o.dot((prof[k] + prof[(k + 1) % n]) * 0.5 - c2) < 0.0 {
+                    -o
+                } else {
+                    o
+                }
+            })
+            .collect();
+        let at = |k: usize, own: usize| -> Vec3 {
+            let (p, q) = (out[(k + n - 1) % n], out[k % n]);
+            let m = if p.dot(q) > 0.766 {
+                (p + q).normalize()
+            } else {
+                out[own]
+            };
+            Vec3::new(0.0, m.y, m.x)
+        };
         for k in 0..n {
             let (a, b) = (prof[k], prof[(k + 1) % n]);
-            self.face(
+            let (na, nb) = (at(k, k), at((k + 1) % n, k));
+            let smooth = move |p: Vec3, _n: Vec3| {
+                if (p.y - a.y).abs() < 1e-5 && (p.z - a.x).abs() < 1e-5 {
+                    na
+                } else {
+                    nb
+                }
+            };
+            self.face_n(
                 side,
                 vec![
                     Vec3::new(x0, a.y, a.x),
@@ -209,7 +361,32 @@ impl Kit {
                     Vec3::new(x0, b.y, b.x),
                 ],
                 mid,
+                &smooth,
             );
+        }
+        if mapped {
+            // Arc length to each profile point, over the curve's whole run.
+            let mut along = vec![0.0f32; n];
+            for k in 1..n {
+                along[k] = along[k - 1] + prof[k].distance(prof[k - 1]);
+            }
+            let total = along[n - 1].max(1e-4);
+            let at_point = |p: Vec3| {
+                (0..n)
+                    .min_by(|&a, &b| {
+                        let d = |k: usize| (prof[k] - Vec2::new(p.z, p.y)).length_squared();
+                        d(a).total_cmp(&d(b))
+                    })
+                    .map_or(0.0, |k| along[k] / total)
+            };
+            for poly in &mut self.polys[from..] {
+                poly.uvs = Some(
+                    poly.points
+                        .iter()
+                        .map(|p| Vec2::new((p.x - x0) / (x1 - x0), at_point(*p)))
+                        .collect(),
+                );
+            }
         }
         for x in [x0, x1] {
             let pts = prof.iter().map(|p| Vec3::new(x, p.y, p.x)).collect();
@@ -498,6 +675,7 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                     0.0,
                 );
             }
+            let from = k.polys.len();
             k.block(
                 FRAME,
                 FRAME,
@@ -505,6 +683,8 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x - 0.04, h - 0.06, s.y - 0.04),
                 0.016,
             );
+            // The three drawers and their pulls are painted on its front.
+            k.map_faces(from, &|n| (n.z > 0.9).then_some(DRAWER_FRONT));
             k.block(
                 TOP,
                 FRAME,
@@ -512,27 +692,6 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x, 0.04, s.y),
                 0.014,
             );
-            // Three drawer fronts, each a raised panel with a turned knob.
-            for j in 0..3 {
-                let y = 0.1 + j as f32 * 0.255;
-                k.block(
-                    TOP,
-                    TOP,
-                    Vec3::new(0.0, y, hz - 0.03),
-                    Vec3::new(s.x - 0.1, 0.22, 0.03),
-                    0.01,
-                );
-                for x in [-0.22f32, 0.22] {
-                    k.loft(
-                        FRAME,
-                        Vec3::new(x, y + 0.11, hz - 0.016),
-                        Vec3::Z,
-                        &[(0.0, 0.014), (0.022, 0.02), (0.032, 0.014), (0.036, 0.0)],
-                        8,
-                        0.0,
-                    );
-                }
-            }
         }
         Kind::Closet => {
             let h = 1.95;
@@ -543,6 +702,9 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x - 0.02, 0.1, s.y - 0.02),
                 0.02,
             );
+            // The carcass, its two doors and their ring pulls painted on its
+            // front.
+            let from = k.polys.len();
             k.block(
                 FRAME,
                 FRAME,
@@ -550,6 +712,7 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x - 0.06, h - 0.18, s.y - 0.06),
                 0.018,
             );
+            k.map_faces(from, &|n| (n.z > 0.9).then_some(CLOSET_FRONT));
             // The cornice, stepped out over the carcass.
             k.block(
                 FRAME,
@@ -565,28 +728,19 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x, 0.05, s.y),
                 0.02,
             );
-            // Two doors, raised panels, and their iron ring pulls.
-            for x in [-1.0f32, 1.0] {
-                k.block(
-                    TOP,
-                    TOP,
-                    Vec3::new(x * 0.245, 0.18, hz - 0.04),
-                    Vec3::new(0.46, h - 0.36, 0.03),
-                    0.012,
-                );
-                k.loft(
-                    IRON,
-                    Vec3::new(x * 0.05, 1.0, hz - 0.025),
-                    Vec3::Z,
-                    &[(0.0, 0.012), (0.03, 0.016), (0.04, 0.0)],
-                    6,
-                    0.0,
-                );
-            }
         }
         Kind::Chest | Kind::BandedChest => {
             let body = if kind == Kind::Chest { 0.38 } else { 0.42 };
             let (edge, rise) = (0.04, s.y * 0.2);
+            // Its bands, its lock and its corners are painted on its boards,
+            // mapped once round each side and once over the lid, so they run
+            // on round the curve.
+            let (side, front) = if kind == Kind::Chest {
+                (CHEST_SIDE, CHEST_FRONT)
+            } else {
+                (BANDED_SIDE, BANDED_FRONT)
+            };
+            let from = k.polys.len();
             k.block(
                 BOARDS,
                 FRAME,
@@ -594,63 +748,15 @@ pub fn polys(kind: Kind) -> Vec<Poly> {
                 Vec3::new(s.x, body, s.y),
                 0.02,
             );
-            k.run_x(
-                TOP,
+            k.map_faces(from, &|n| Some(if n.z > 0.9 { front } else { side }));
+            k.run_x_mapped(
+                side,
                 FRAME,
                 &crown(s.y, body, edge, rise, 0.0),
                 -hx + 0.005,
                 hx - 0.005,
+                true,
             );
-            // The bands wrap the body and the lid's curve: two of timber on
-            // the plain chest, four of iron and iron corners on the banded.
-            let (band, xs): (&'static str, Vec<f32>) = if kind == Kind::Chest {
-                (FRAME, vec![-hx + 0.16, hx - 0.16])
-            } else {
-                (IRON, vec![-hx + 0.08, -0.15, 0.15, hx - 0.08])
-            };
-            for x in xs {
-                k.block(
-                    band,
-                    band,
-                    Vec3::new(x, -0.002, 0.0),
-                    Vec3::new(0.06, body, s.y + 0.016),
-                    0.006,
-                );
-                k.run_x(
-                    band,
-                    band,
-                    &crown(s.y, body, edge, rise, 0.008),
-                    x - 0.03,
-                    x + 0.03,
-                );
-            }
-            // The lock: a plate on the front where the lid meets it, and its hasp.
-            k.block(
-                IRON,
-                IRON,
-                Vec3::new(0.0, body - 0.13, hz),
-                Vec3::new(0.09, 0.12, 0.02),
-                0.006,
-            );
-            k.block(
-                IRON,
-                IRON,
-                Vec3::new(0.0, body - 0.02, hz + 0.004),
-                Vec3::new(0.04, 0.09, 0.018),
-                0.006,
-            );
-            if kind == Kind::BandedChest {
-                for x in [-1.0f32, 1.0] {
-                    k.loft(
-                        IRON,
-                        Vec3::new(x * hx, body * 0.6, 0.0),
-                        Vec3::new(x, 0.0, 0.0),
-                        &[(0.0, 0.035), (0.02, 0.035), (0.03, 0.0)],
-                        6,
-                        0.0,
-                    );
-                }
-            }
         }
         Kind::Crate => {
             k.block(
@@ -773,6 +879,15 @@ pub fn placed(kind: Kind, at: Vec2, y0: f32, front: Vec2) -> Vec<Poly> {
                     Vec3::new(h.x, y0 + q.y, h.y)
                 })
                 .collect(),
+            normals: p
+                .normals
+                .iter()
+                .map(|n| {
+                    let h = x * n.x + z * n.z;
+                    Vec3::new(h.x, n.y, h.y)
+                })
+                .collect(),
+            uvs: p.uvs,
         })
         .collect()
 }

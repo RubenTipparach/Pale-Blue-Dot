@@ -51,6 +51,12 @@ def main():
         "// CHEST_ICONS:END",
         "const CHEST_ICONS = " + json.dumps(icons) + ";",
     )
+    furn = {
+        n: "data:image/png;base64,"
+        + base64.b64encode((ROOT / "assets/textures/settlement" / f"{n}.png").read_bytes()).decode()
+        for n in ["drawerfront", "closetfront", "chestside", "chestfront", "bandedside", "bandedfront"]
+    }
+    page = between(page, "// FURN_TEX:BEGIN", "// FURN_TEX:END", "const FURN_TEX = " + json.dumps(furn) + ";")
     PAGE.write_text(page)
     print(f"{PAGE}: {len(models)} models, {len(icons)} icons")
 
