@@ -114,6 +114,8 @@ pub fn mount(world: &mut World, id: u64) -> bool {
     if let Some(mut yard) = world.get_resource_mut::<Farmyard>() {
         yard.hand_over(id);
     }
+    // Its coat, made here if no cart has made it yet.
+    super::materials(world);
     let at = body_local(world, pos);
     let up = at.normalize_or(DVec3::Y);
     let at = up * ground(world, at);
