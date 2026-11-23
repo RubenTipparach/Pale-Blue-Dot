@@ -50,6 +50,14 @@ owner to look at M33's Town tab and ask for the build.
 - [ ] 4.1 `stake`, `mark`, `pave` raised by the paving; `haul`, `hitch` and
       `Travel cart-road` by the carts; their missions no longer pending.
       Verify: tests per kind.
+      - 2026-11-23: the Roads half (`townsfolk` design 44): `stake`
+        (`stake`), `mark` (`cell`, the count newly marked) and `pave`
+        (`gravel`; `joined` for a paved cell beside a town's footprint) are
+        raised by `pbd_app::roads::road_hands` with the durable line, and
+        are in `Kind::LIVE`; grinder to join are live, their craft and place
+        objectives naming `block:grinder` and `block:mixer`. Test
+        `each_town_kind_counts_from_its_event` walks the Roads branch. The
+        carts' half waits.
 
 ## 5. The owner's check
 

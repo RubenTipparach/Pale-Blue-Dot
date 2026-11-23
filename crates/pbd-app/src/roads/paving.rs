@@ -413,7 +413,10 @@ pub fn make_looks(
             crate::field_light::LitByField,
             crate::field_light::LitLikeTerrain,
             Transform::default(),
-            Visibility::Hidden,
+            // Shown behind the loading screen, as the townsfolk's stand-in
+            // is, so their pipelines are built before play; gone at READY.
+            Visibility::Visible,
+            crate::loading::PrewarmProxy,
             Name::new("Paving prewarm"),
         ))
         .with_children(|root| {
