@@ -197,3 +197,17 @@ hard only at real creases.
 - **THEN** the wood shows its grain along each piece and the plodder its
   coat, and neither shows flat facets across its curves
 
+### Requirement: A kept plodder or horse can be ridden
+
+The player SHALL mount a kept plodder or horse of theirs that is not
+hitched, ride it at its own ridden speeds, and get off it again. Mounting and
+getting off SHALL each write the animal's one record; getting off SHALL
+change who rides it, never whether it exists, and riding SHALL never count as
+hitching.
+
+#### Scenario: A reload while riding
+
+- **WHEN** the player is riding a plodder and the game closes
+- **THEN** on reopening the world the player stands dismounted with the
+  same plodder beside them
+

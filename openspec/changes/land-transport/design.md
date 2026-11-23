@@ -445,6 +445,57 @@ same quality as the plodder so the two read as one family of models.
   gait over its stride as the horse is; its name in the messages is its
   species' ("Plodder hitched").
 
+### 14. Riding a plodder or a horse (owner, 2026-11-23)
+
+The owner: "You should also be able to ride plodders as well". Riding was
+phase 5's (ridden horses with the wagons); this pulls riding a kept plodder
+into phase 3, and the bought horse with it (recommendation taken, ask only
+with screenshots).
+
+- **Mount: F on a kept plodder or horse of the player's** that is not in a
+  cart's shafts, within 2 m. The prompt reads "Ride Plodder". It ranks
+  after Collect and Feed (food in hand still feeds, a full pail is still
+  taken) and before Let stay and Lead, so for these two species F rides
+  rather than leads: a rider brings the animal where it is wanted (to the
+  shafts, to a pen) and steps down there. **Dismount: F again** ("Get off
+  Plodder"), ranked first with letting go of a cart. Getting off changes who
+  is riding, never whether the animal exists.
+- **A hitched animal cannot be mounted** until it is unhitched (the cart's
+  record names it), and **riding never counts as hitching**: no `hitch`
+  event, no cart record. A ridden animal cannot be hitched: it is not in the
+  yard while ridden, so the shafts do not find it.
+- **Moving.** W and S ride on and rein back, A and D turn, Shift runs. The
+  camera is the walker's own, at the rider's eye on the animal's back
+  (`eye_m` above its withers), mouse look raw as ever with no easing; the
+  turn the animal takes carries the view round as the cart's seat does.
+  The ride is kinematic in `pbd-core` (`vehicle::ride`), like a cart: a
+  body-local `f64` point on the ground and a heading, eased to the asked
+  speed at `accel_mps2`, stood on the ground query the carts use. An animal
+  is not wheeled, so decision 9's surface factors do not apply; instead **a
+  rise of more than `max_step_m` (1.1 m, one layer and a little) between
+  steps refuses**, as a wall does, and it stands where it was.
+- **Speeds** (`vehicles.ron`, `riding`): the species' `walk_mps` and
+  `run_mps` in `husbandry.ron` are how each moves on its own and are slower
+  than the walker's 8 m/s, so ridden speeds are their own rows. **Plodder:
+  walk 3 m/s, run 6 m/s** (its pace in the shafts, decision 13); **horse:
+  walk 4 m/s, run 12 m/s**, faster than the walker's 8 and slower than its
+  sprint's 14 (recommendation taken). Turn 1.6 rad/s for both, accel 3 m/s^2.
+- **Drawn** by the species' own form (animal-husbandry design 16), its gait
+  phase advanced by distance over its stride so its feet never slide, a
+  bridle-less saddle blanket painted on its back as a tint of the coat's
+  vertices. The rider is the walker, seen from its own eye; the walker has
+  no body drawn in first person, so there is no rider mesh to pose (a
+  third-person rider waits for the townsfolk's body kit to carry one).
+- **Saved on the animal's own record**: mounting writes its record with
+  `ridden: true` (one line, a new field read as `false` from every older
+  record), and getting off writes `ridden: false` with its home the cell it
+  stands on. A save therefore never holds half a mount. **A reload while
+  mounted comes back dismounted beside it**: on opening, an animal whose
+  record says ridden is written back unridden with its home the walker's
+  cell, and stands beside the walker, following (recommendation taken).
+- **Missions:** a `ride` event (metres ridden, `ride` key) is raised so a
+  town mission can count it; no mission is added to the tree now.
+
 ## Risks / Trade-offs
 
 - **One-cell roads jam.** Two carts meeting on a one-cell road cannot pass.

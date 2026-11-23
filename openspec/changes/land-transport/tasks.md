@@ -86,3 +86,8 @@ the owner to look at M38 version 2 and ask.
       Verify: tests that a plodder is hitched by the one-record hitch, reads
       back after a reload, drives at `plodder_mps`, and that an old save's
       horse cart reads unchanged; a capture of a plodder in the shafts.
+- [ ] 5.9 Design 14: riding a kept plodder or the bought horse. Verify:
+      pbd-core tests of the ride's step (speed, turn, the step refused);
+      app tests of mounting, getting off, a reload while mounted (back
+      beside it, dismounted), a hitched animal refused, and an old save's
+      animal records unchanged; captures riding a plodder by day and night.
