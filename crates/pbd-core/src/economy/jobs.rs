@@ -205,6 +205,7 @@ impl Job {
             after: Vec::new(),
             branch: String::new(),
             icon: String::new(),
+            coins: 0,
         }
     }
 
@@ -229,6 +230,22 @@ pub fn want_of(what: &str) -> Want {
     } else {
         Want::Names(what.split('|').map(str::to_string).collect())
     }
+}
+
+/// Dusk by the sun's clock, hours (`town-missions-tree` design 8): a board
+/// shows its lamps job from the first, and a lamp is lit until the second.
+pub const DUSK_FROM_H: f32 = 17.0;
+pub const DUSK_TO_H: f32 = 22.0;
+
+/// Whether `hour` (0..24) is dusk.
+pub fn is_dusk(hour: f32) -> bool {
+    (DUSK_FROM_H..DUSK_TO_H).contains(&hour)
+}
+
+/// Whether a posted job is shown on its board at `hour`: a lamps job from
+/// dusk to midnight, every other job all day.
+pub fn shown_at(job: &Job, hour: f32) -> bool {
+    job.kind != JobKind::Lamps || hour >= DUSK_FROM_H
 }
 
 /// A town job's thing: `<site>:<thing>`.
@@ -554,6 +571,26 @@ impl TakenJobs {
             .find(|j| j.id == id)
             .map(|j| self.progress.counts(&j.mission()))
             .unwrap_or_default()
+    }
+
+    /// Give a taken job up (`town-missions-tree` design 9): it leaves the
+    /// taken list with its counts, and is not handed in, so its board place
+    /// shows it again while it keeps it. The job, for its own records.
+    pub fn abandon(&mut self, id: u64) -> Result<Job, JobRefused> {
+        let at = self
+            .taken
+            .iter()
+            .position(|j| j.id == id)
+            .ok_or(JobRefused::NotTaken)?;
+        let job = self.taken.remove(at);
+        let mission = job.mission_id();
+        self.progress.done.remove(&mission);
+        self.progress.counts.remove(&mission);
+        self.progress.seen.remove(&mission);
+        if self.progress.focus.as_deref() == Some(mission.as_str()) {
+            self.progress.focus = None;
+        }
+        Ok(job)
     }
 
     /// Hand in a done job at `site`, its town: it leaves the taken list and

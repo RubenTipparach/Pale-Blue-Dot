@@ -7,6 +7,7 @@
 //! [`Entry`], is what the game logs.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 /// The record kind, its schema and its one id (the player's).
 pub const PURSE_KIND: &str = "purse";
@@ -47,9 +48,15 @@ impl Reason {
 }
 
 /// The player's coins.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Purse {
     pub coins: u64,
+    /// The one-off rewards already paid, by key (`town_mission:<id>`,
+    /// `town-missions-tree` design 5): the purse's own line says a reward is
+    /// paid, so a reward is paid once whatever line follows it. Absent from a
+    /// purse written before it.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub paid: BTreeSet<String>,
 }
 
 /// One accepted change, for the log.
@@ -79,7 +86,19 @@ pub enum Refused {
 
 impl Purse {
     pub fn new(coins: u64) -> Self {
-        Self { coins }
+        Self {
+            coins,
+            paid: BTreeSet::new(),
+        }
+    }
+
+    /// Pay a one-off reward of `coins` under `key`, unless it was paid
+    /// before: the entry, or `None` when it already was.
+    pub fn pay_once(&mut self, reason: Reason, key: &str, coins: u64) -> Option<Entry> {
+        if reason.spends() || !self.paid.insert(key.to_string()) {
+            return None;
+        }
+        self.change(reason, coins).ok()
     }
 
     /// Whether the purse covers a spend of `coins`.
