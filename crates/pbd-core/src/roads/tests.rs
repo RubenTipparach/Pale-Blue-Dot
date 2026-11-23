@@ -587,7 +587,7 @@ fn links_digest(pairs: &[(u32, u32)]) -> u64 {
 /// Roads versions 1 and 2 join each settlement to its two nearest within
 /// 2 km and the walled towns to each other (`townsfolk` design 11); a world
 /// they planned keeps those roads, so the rule is pinned as it shipped,
-/// before version 3 (design 42) was added beside it.
+/// before version 3 (design 43) was added beside it.
 #[test]
 fn version_2_links_are_pinned() {
     let towns = fixed_layout();
@@ -602,7 +602,7 @@ fn version_2_links_are_pinned() {
     }
 }
 
-/// Roads version 3 (`townsfolk` design 42): each settlement joined to at
+/// Roads version 3 (`townsfolk` design 43): each settlement joined to at
 /// most one other within 2 km, nearest first, and the roads planned from
 /// them never make a network of three.
 #[test]

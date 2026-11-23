@@ -143,7 +143,7 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
 fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
     let chain = town_chain();
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    // The paving (`townsfolk` design 44) and the carts (`land-transport`
+    // The paving (`townsfolk` design 45) and the carts (`land-transport`
     // design 11) are built: nothing waits.
     assert!(pending.is_empty(), "{pending:?}");
     let live = [
@@ -266,7 +266,7 @@ fn each_town_kind_counts_from_its_event() {
         );
     }
     assert!(p.is_done("lamps"));
-    // The roads (`townsfolk` design 44): the stations made and set down,
+    // The roads (`townsfolk` design 45): the stations made and set down,
     // stone crushed, gravel mixed, a plan staked and marked, paved, and a
     // paved cell beside a town.
     for (kind, what, count) in [

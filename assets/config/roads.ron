@@ -38,7 +38,7 @@
     // `lamp_every`th road cell out of it.
     lamp_town_m: 90.0,
     lamp_every: 5,
-    // Roads version 3 (`townsfolk` design 42): one network of the world's
+    // Roads version 3 (`townsfolk` design 43): one network of the world's
     // roads joins at most `max_network` settlements (2: each town to one
     // other at most). A world planned by version 1 or 2 keeps its roads.
     max_network: 2,

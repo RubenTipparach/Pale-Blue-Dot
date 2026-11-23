@@ -501,7 +501,7 @@ fn a_plan_is_marked_and_paved_and_survives_a_reload() {
     );
     assert_eq!(roads::built(&reopened.records), built, "the paved cells");
     assert_eq!(reopened.carried.as_ref(), Some(&carried), "the pack");
-    // Tufts go at once from a paved or marked cell (design 43): the
+    // Tufts go at once from a paved or marked cell (design 44): the
     // terrain's word for the cell carries the road bit once installed.
     let road_bit = 1u32 << crate::planet::terrain::ROAD_BIT;
     paving::install(&reopened.records, config.radius_m);

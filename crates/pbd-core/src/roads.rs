@@ -53,7 +53,7 @@ pub const CUT_FILL_SCHEMA: u32 = 2;
 /// The planner's version, stored in the net record: 1 climbed a layer a
 /// cell at most over the ground as it is; 2 may also cut and fill
 /// (`townsfolk` design 32); 3 joins each settlement to at most one other,
-/// so no network joins three (design 42). A world keeps the roads it was
+/// so no network joins three (design 43). A world keeps the roads it was
 /// planned with.
 pub const NET_VERSION: u32 = 3;
 /// The level the roads are laid on: the finest, the one the player edits.
@@ -120,7 +120,7 @@ pub struct RoadsConfig {
     pub lamp_town_m: f32,
     #[serde(default)]
     pub lamp_every: u32,
-    /// Roads version 3 (`townsfolk` design 42): the most settlements one
+    /// Roads version 3 (`townsfolk` design 43): the most settlements one
     /// network of the world's roads joins; nought for no limit (versions 1
     /// and 2: each to its nearest and the walled towns to each other). Only
     /// 2 is a rule today: each settlement joined to at most one other.
@@ -642,7 +642,7 @@ pub fn links(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Ve
     pairs.into_iter().collect()
 }
 
-/// Roads version 3's links (`townsfolk` design 42): every pair within
+/// Roads version 3's links (`townsfolk` design 43): every pair within
 /// `link_m`, nearest first (then by site ids), taken where neither town is
 /// joined yet. Each settlement is in one pair at most.
 fn pairs(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Vec<(u32, u32)> {

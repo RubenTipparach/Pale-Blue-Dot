@@ -133,7 +133,7 @@ impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
     /// raises an event for. Not `Clear`, which waits for the road jobs: a
     /// mission naming it is pending. `Stake`, `Mark` and `Pave` are raised
-    /// by the paving (`townsfolk` design 39 to 41, 44), `Haul` and `Hitch`
+    /// by the paving (`townsfolk` design 39 to 41, 45), `Haul` and `Hitch`
     /// by the carts (`land-transport` design 11).
     pub const LIVE: [Kind; 43] = [
         Kind::Gather,

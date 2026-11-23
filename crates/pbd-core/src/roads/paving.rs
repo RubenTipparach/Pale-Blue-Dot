@@ -484,7 +484,7 @@ pub fn mark_of(key: u32) -> Option<(Option<u32>, Option<u32>)> {
 }
 
 /// Whether a direction lies on a cell the player marked or paved: no tufts
-/// grow there (design 43).
+/// grow there (design 44).
 pub fn bare(direction: glam::Vec3) -> bool {
     with(|i| i.is_some_and(|i| i.bare.on_road(direction)))
 }

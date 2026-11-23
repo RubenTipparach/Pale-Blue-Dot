@@ -6,7 +6,7 @@ towns. Built by `townsfolk` (design 10, 10a and 11, tasks 8.2 and 8.4);
 the player's own road building (task 8.3) is in it too, and cut and fill
 (roads version 2) and the lamps near towns (design 32 and 34), and the
 roads marked by survey stakes and paved with gravel from a grinder and a
-mixer, and roads version 3's sparse network (design 39 to 43).
+mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44).
 
 ## Requirements
 

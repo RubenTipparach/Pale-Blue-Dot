@@ -1,5 +1,5 @@
 #!/bin/bash
-# Marking and paving (`townsfolk` design 39 to 44): the grinder and the
+# Marking and paving (`townsfolk` design 39 to 41, 43 to 45): the grinder and the
 # mixer either side of the view, and a plan staked along it, its nearer
 # half paved, by day and at 22:30. `--paving [metres]` is the capture
 # instrument: the stations and the stakes go in through the same paths a

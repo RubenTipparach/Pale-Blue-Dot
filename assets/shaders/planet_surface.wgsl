@@ -2157,7 +2157,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             normal = axis;
             out_shade = select(shade_hi,shade_lo,c==0u||c==1u);
         }
-        // Nothing grows through a road (`townsfolk` design 33 and 43): the
+        // Nothing grows through a road (`townsfolk` design 33 and 44): the
         // road bit of the material word clears every piece, not only the
         // tufts, so a paved cell is not pierced by a shrub.
         let paved = ((cell.metadata.y >> 30u) & 1u) == 1u;

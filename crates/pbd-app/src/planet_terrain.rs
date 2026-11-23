@@ -154,7 +154,7 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
 }
 
 /// The bit of a record's material word that says a road lies on the cell
-/// (`townsfolk` design 33), or one the player marked or paved (design 43):
+/// (`townsfolk` design 33), or one the player marked or paved (design 44):
 /// the clutter pass grows no pixel tufts there.
 /// `planet_surface.wgsl` reads it.
 pub const ROAD_BIT: u32 = 30;

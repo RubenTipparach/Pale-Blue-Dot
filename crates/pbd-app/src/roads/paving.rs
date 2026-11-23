@@ -1,4 +1,4 @@
-//! Marking and paving in the game (`townsfolk` design 39 to 43): survey
+//! Marking and paving in the game (`townsfolk` design 39 to 41, 43 and 44): survey
 //! stakes driven with the place button, the cells between them marked with
 //! a lime band the terrain draws, and each marked cell paved with gravel by
 //! the interact key with the shovel in hand.
@@ -263,7 +263,7 @@ pub struct MarksShown {
 }
 
 /// Re-install when the plans or the player's road cells change, and bring
-/// the standing fine set round to them at once (design 43).
+/// the standing fine set round to them at once (design 44).
 pub fn follow_marks(
     save: Option<Res<WorldSave>>,
     fine: Option<ResMut<crate::planet::PlanetFine>>,
