@@ -85,6 +85,7 @@ pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod tone;
 #[cfg(feature = "desktop")]
+pub mod town_missions;
 pub mod towns;
 pub mod townsfolk;
 pub mod tree_shake;

@@ -32,6 +32,8 @@ pub enum Reader {
     Logs,
     /// A broken town wall (`townsfolk` design 29).
     Mend,
+    /// A town lamp at dusk (`town-missions-tree` design 8).
+    Lamps,
 }
 
 /// A thing F can do.
@@ -64,6 +66,8 @@ pub enum Act {
     Talk,
     /// Mend a broken town wall with planks.
     Mend,
+    /// Light a town lamp at dusk, for a lamps job.
+    Light,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -82,7 +86,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 22] = [
+pub const ACTS: [Row; 23] = [
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
@@ -105,6 +109,7 @@ pub const ACTS: [Row; 22] = [
     row(Act::TakeLog, "take_log", Reader::Logs),
     row(Act::Board, "board", Reader::Boats),
     row(Act::Mend, "mend", Reader::Mend),
+    row(Act::Light, "light", Reader::Lamps),
 ];
 
 impl Act {
