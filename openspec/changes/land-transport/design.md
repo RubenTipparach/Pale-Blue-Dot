@@ -366,6 +366,85 @@ second vehicle system:
   raise `Travel` (`cart-road`). Where the tree has not added a kind yet,
   `carts::missions` holds the function it calls.
 
+### 12. Textured and smooth: the carts, the horse and the herd (2026-11-23)
+
+The owner, on the captures of decision 11: "Make sure things have
+textures", then "I didn't like flat shaded crap". CLAUDE.md now says it
+for every model ("Every model is textured").
+
+**Audit** (phase 3's meshes built in code, and what they stand beside):
+
+| Mesh | Today | Change |
+| --- | --- | --- |
+| Hand cart and horse cart: bed, sides, seat, shafts, handles, axle | flat vertex colour on a white material, every face flat-shaded | the settlement `timber` texture (grain along each piece, `repeat_m` 1.0 from the manifest), oak and pine as a tint of it |
+| Wheels: rim, spokes, hub | flat colour, 16 rim segments, flat-shaded | rim and spokes in `timber` (grain along the rim and each spoke), the tyre and the hub's bands in `iron`; 24 rim segments; hub and spokes smooth round, the rim's chamfers kept as creases |
+| The horse | flat colour, every face flat, 10 sides round | one smooth-shaded lofted form with more rings and sides, in the new `coat` texture (below) tinted by its genome's colours |
+| The herd: meadow hen, woolback, plodder | boxes of flat colour, with its pattern and eyes as boxes stuck on (a primitive by CLAUDE.md's rule) | rebuilt as lofted forms of the horse's family (animal-husbandry design 16), smooth-shaded and in the `coat` texture |
+| The pen, fences, incubator | settlement textures since animal-husbandry design 14 | none |
+| The player's door, frame and leaf | `door` and the piece textures (player-building B8) | none |
+| Townsfolk | their own texture atlas | none |
+| Survey stakes | not in the game yet (the paving work builds them) | the paving change takes them in the settlement textures |
+
+Out of phase 3 and left as they are, listed so they are not lost: the wild
+critters (`critters.rs`, flat colours), the fishing bobber and line
+(`fish.rs`), the farm's flat-coloured markers (`desktop/farm.rs`).
+
+**Textures.** Wood and iron are the game's own: a cart is three meshes,
+one per material, `timber` and `iron` from `textures/settlement`, sampled
+nearest and repeated at the manifest's `repeat_m`, so a cart's timbers show
+the grain at the size a town's beams do. Each lofted piece lays its UVs by
+metres: across its section by the section's perimeter, along it by its
+length, so the grain runs along every board, spoke and shaft and round the
+rim. Nothing fits a hide, so a new texture is drawn: `coat.png`, a strip of
+32 px tiles (short hair, long hair for a mane and tail, hoof horn, feather,
+fleece, bare skin), drawn by `tools/art/coat_texture.py` (`--check` holds
+the file to the script) with its manifest row. Its tiles are light neutral
+tones with the detail painted in (hair strokes along the body, a darker
+underside, horn bands, feather scallops, wool curls), and the animal's
+colours from its genome tint it as vertex colours: a coat's variation tints
+its texture, it never replaces it. On a lofted part the tile is laid once
+round the section and repeats along it at square texels, so a hen and a
+plodder show the same size of pixel for their size.
+
+**Shading.** A lofted form shares its vertices round each ring and along
+the loft, with normals averaged from the faces about them, so the light
+rolls round a barrel, a neck, a leg or a hub. Hard normals stay only at
+real creases: the chamfered edges of every timber and board, a loft's cut
+ends (a hoof's sole, a timber's end grain). Rings are interpolated along a
+smooth curve (Catmull-Rom through the authored rings) where a silhouette
+bends, so a back, a neck and a belly read as curves.
+
+**Drawing only.** No record, rule, config number or save changes. The
+textured pipeline is the pen's (positions, normals, colours, UVs on a
+textured `StandardMaterial`), already built behind the loading screen; the
+herd's prewarm template is drawn textured too.
+
+### 13. A plodder pulls the cart (owner, 2026-11-23)
+
+The owner: "Also update horses - plodders like your carriage". **My
+reading, recommendation taken (ask only with screenshots):** a tamed
+plodder of the player's, the game's existing draft beast, may be hitched to
+the horse cart as the bought horse is, and the horse is brought up to the
+same quality as the plodder so the two read as one family of models.
+
+- **Who may be hitched** is a short list in `pbd-core`
+  (`vehicle::cart::PULLERS`: `horse`, `plodder`), found by species id in
+  the home roster. Hitching takes the nearest kept animal of either within
+  reach of the shafts, by the same one-record hitch (the cart's record names
+  the animal), the same seat and the same `hitch` mission event.
+- **Its speed is its own:** `vehicles.ron` `carts.plodder_mps`, **6 m/s**
+  on gravel, two thirds of the horse's 9, the factor of decision 9 on top
+  (1.5 m/s off the road). A cart reads the species of the animal its record
+  names (the animal's own record) when it is driven, and takes the lower of
+  the cart's road speed and the puller's. The horse stays the faster beast.
+- **Saves:** nothing new is written. A cart record names an animal id as it
+  always did, so an old save's cart and horse read exactly as before, and a
+  plodder hitched in a new build reads back as a plodder. A missing
+  `plodder_mps` in an older `vehicles.ron` takes the default.
+- **Drawn** in the shafts by its own form (the plodder's), walked by its
+  gait over its stride as the horse is; its name in the messages is its
+  species' ("Plodder hitched").
+
 ## Risks / Trade-offs
 
 - **One-cell roads jam.** Two carts meeting on a one-cell road cannot pass.
