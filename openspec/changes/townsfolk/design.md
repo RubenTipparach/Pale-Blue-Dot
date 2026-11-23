@@ -1354,9 +1354,9 @@ site HUD):
   cell, times `cost_scale`), planks (`bridge_planks`, 6 a bridge cell), logs
   (1 a bridge cell for its posts, 1 a lamp post) and street lanterns (1 a
   lamp);
-- **the counts**: cells, metres, **turns** (each change of direction along
-  the centre line, at a waypoint or inside a segment's hex line) and "12 of
-  38 left";
+- **the counts**: cells, metres, **turns** (each waypoint where the road's
+  heading changes; a hex line's own zigzag along a diagonal is not a turn)
+  and "12 of 38 left";
 - the aim's segment shows what the next stake would add, so its cost is seen
   before it is driven.
 

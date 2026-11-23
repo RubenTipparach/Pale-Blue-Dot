@@ -127,6 +127,42 @@ body.coarse .keys,body.coarse .hint{display:none}
 .modal-card b{color:var(--ink);font-weight:500}
 .modal-card ul{margin:4px 0 0;padding-left:18px}
 .modal-card li{margin:4px 0}
+body.rpmode .opts .stairsonly{display:none}
+.rp{right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:270px;padding:10px 12px;display:grid;gap:7px}
+.rp[hidden],.rpaim[hidden],.radial[hidden],.rpopts[hidden]{display:none!important}
+.rp header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.rp[data-open="false"] > :not(header){display:none}
+.hotbar{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.hotbar button{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 4px;text-align:center;font-family:var(--display);font-size:13px;letter-spacing:.05em;background:rgba(0,0,0,.25)}
+.hotbar button b{display:block;font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400}
+.hotbar button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.hotbar button:focus-visible,.radial button:focus-visible{outline:2px solid var(--amber)}
+.rpmenu{text-align:left!important}
+.bill{border-collapse:collapse;width:100%;font-size:12px}
+.bill th{font-family:var(--display);font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:0 0 2px}
+.bill th:first-child,.bill td:first-child{text-align:left}
+.bill td{padding:1px 0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bill td:first-child{font-family:var(--body);color:var(--muted)}
+.bill td small{color:var(--sky);margin-left:3px}
+.bill tr.short td{color:var(--warn)}
+.rpnote{min-height:1.2em;color:var(--ink)}
+.rpnote .bad{color:var(--warn)}
+.rpacts{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.rpacts .small{font-size:12px;padding:5px 2px}
+.rpacts .small[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+.rpaim{left:50%;top:50%;transform:translate(-50%,24px);padding:3px 9px;font-family:var(--display);letter-spacing:.06em;font-size:14px;pointer-events:none;white-space:nowrap}
+.rpaim.bad{color:#fff;background:rgba(150,40,28,.82);border-color:var(--warn)}
+.radial{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(0,0,0,.18)}
+.radial .ring{position:relative;width:250px;height:250px}
+.radial button{all:unset;cursor:pointer;position:absolute;left:50%;top:50%;width:78px;height:40px;margin:-20px 0 0 -39px;transform:rotate(var(--a)) translate(92px) rotate(calc(-1 * var(--a)));background:var(--panel-solid);border:1px solid var(--line);border-radius:20px;text-align:center;line-height:40px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink)}
+.radial button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+.radial button.mid{width:44px;height:44px;margin:-22px 0 0 -22px;line-height:44px;border-radius:50%;transform:none}
+.rec{font-family:var(--mono);font-size:11.5px;color:var(--ink);white-space:pre-wrap;margin:6px 0 0}
+@media (max-width:1180px){ .rp{width:244px} }
+@media (max-width:860px){
+  .rp{top:auto;bottom:calc(234px + env(safe-area-inset-bottom,0px));width:auto;left:auto;right:16px;max-width:calc(100vw - 32px)}
+  .rp[data-open="true"]{left:16px;max-height:52%;overflow:auto}
+}
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
 </style>
 
@@ -152,6 +188,7 @@ body.coarse .keys,body.coarse .hint{display:none}
         <option value="roads">Roads: dirt, gravel, a hill, a ford, a bridge</option>
         <option value="wideroads">Wide roads: two and three cells</option>
         <option value="paving">Paving: marked cells, a paved run, grinder and mixer</option>
+        <option value="roadplanner">Road planner: waypoints walked in first person</option>
       </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
@@ -171,19 +208,28 @@ body.coarse .keys,body.coarse .hint{display:none}
 
   <aside class="panel opts" id="opts" data-open="true" aria-label="Options">
     <header>
-      <h2>Stairs and collision</h2>
+      <h2 id="optsTitle">Stairs and collision</h2>
       <button class="small" id="optsToggle" aria-expanded="true">Hide</button>
     </header>
-    <div class="field"><label for="walker">Walker</label><output id="walkerO"></output>
+    <div id="rpOpts" class="rpopts" hidden>
+      <div class="field"><label for="rpGhost">Ghost strength</label><output id="rpGhostO"></output><input type="range" id="rpGhost" min="0.1" max="0.8" step="0.05"></div>
+      <div class="field"><label for="rpGrade">Steepest grade</label><output id="rpGradeO"></output><input type="range" id="rpGrade" min="1" max="3" step="1"></div>
+      <div class="field"><label for="rpScale">Cost scale</label><output id="rpScaleO"></output><input type="range" id="rpScale" min="0.5" max="3" step="0.5"></div>
+      <div class="field"><label for="rpSpacing">Lamp spacing</label><output id="rpSpacingO"></output><input type="range" id="rpSpacing" min="3" max="12" step="1"></div>
+      <div class="field"><label for="rpShare">Gravel returned</label><output id="rpShareO"></output><input type="range" id="rpShare" min="0" max="1" step="0.1"></div>
+      <div class="field"><label for="rpRemoval">Dropped paved cells</label><output></output>
+        <select id="rpRemoval"><option value="mark">Marked for removal</option><option value="return">Given back at once</option></select></div>
+    </div>
+    <div class="field stairsonly"><label for="walker">Walker</label><output id="walkerO"></output>
       <select id="walker">
         <option value="proposed">Proposed: pitch line, snap down, slide</option>
         <option value="today">Today's walker.rs: treads, no snap, stop dead</option>
       </select></div>
-    <label class="check"><input type="checkbox" id="colliders"> Show collision near you <span class="src">C</span></label>
-    <label class="check"><input type="checkbox" id="noclip"> Fly through walls <span class="src">N</span></label>
+    <label class="check stairsonly"><input type="checkbox" id="colliders"> Show collision near you <span class="src">C</span></label>
+    <label class="check stairsonly"><input type="checkbox" id="noclip"> Fly through walls <span class="src">N</span></label>
     <div class="field"><label for="tod">Time of day</label><output id="todO"></output><input type="range" id="tod" min="0" max="24" step="0.25" value="15.5"></div>
-    <div class="field" id="cutField"><label for="cut">Cutaway height (overview)</label><output id="cutO"></output><input type="range" id="cut" min="1" max="20" step="0.5" value="20"></div>
-    <div class="note" id="stairNote"></div>
+    <div class="field stairsonly" id="cutField"><label for="cut">Cutaway height (overview)</label><output id="cutO"></output><input type="range" id="cut" min="1" max="20" step="0.5" value="20"></div>
+    <div class="note stairsonly" id="stairNote"></div>
   </aside>
 
   <section class="panel inst" aria-label="Where you are">
@@ -192,6 +238,25 @@ body.coarse .keys,body.coarse .hint{display:none}
     <div class="chips" id="chips"></div>
   </section>
 
+  <section class="panel rp" id="rp" data-open="true" hidden aria-label="Road plan">
+    <header><span class="eyebrow">Road plan</span><button class="small" id="rpHide">Hide</button></header>
+    <div class="hotbar" role="group" aria-label="In hand">
+      <button id="rpT_stakes" aria-pressed="true"><b>1</b>Stakes</button><button id="rpT_shovel" aria-pressed="false"><b>2</b>Shovel</button><button id="rpT_axe" aria-pressed="false"><b>3</b>Axe</button>
+    </div>
+    <button class="small rpmenu" id="rpMenuBtn">Width 1 &middot; Gravel &middot; Lamps</button>
+    <table class="bill" id="rpBill"></table>
+    <div class="status" id="rpCounts"></div>
+    <div class="status rpnote" id="rpNote"></div>
+    <div class="rpacts"><button class="small" id="rpEnd">End plan</button><button class="small" id="rpKeep" aria-pressed="false">Keep paving</button><button class="small" id="rpEdit">Edit mid-build</button><button class="small" id="rpReset">Reset</button><button class="small" id="rpFill">Fill pack</button><button class="small" id="rpRec">Record</button></div>
+  </section>
+  <div class="panel rpaim" id="rpAim" hidden></div>
+  <div class="radial" id="radial" hidden role="dialog" aria-label="Width and surface">
+    <div class="ring">
+      <button data-w="1" style="--a:-90deg">Width 1</button><button data-w="2" style="--a:-30deg">Width 2</button><button data-w="3" style="--a:30deg">Width 3</button>
+      <button data-s="gravel" style="--a:90deg">Gravel</button><button data-s="dirt" style="--a:150deg">Dirt</button><button id="rdLamps" style="--a:210deg">Lamps</button>
+      <button class="mid" id="rdClose" aria-label="Close">&#x2715;</button>
+    </div>
+  </div>
   <section class="panel keys" aria-label="Controls"><div class="eyebrow" style="margin-bottom:6px">Controls</div><table id="keys"></table></section>
   <div class="panel hint" id="hint">Click to walk</div>
   <div class="panel toast" id="toast" role="status"></div>
@@ -242,12 +307,30 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li>The town tree that walks a player through this is M33's Town tab (<code>town-missions-tree</code>).</li>
       </ul>
 
+      <h3>Road planner (townsfolk design 42, version 5)</h3>
+      <ul>
+        <li>The owner, 2026-11-23: <i>"Do you have a good mock.up for road building too? Should work similar to the house architecture but we can just use the regular fps controller for that since it's just moving from one spot to another to place down waypoints.gor road"</i>. Pick <i>Road planner</i> under Settlement (<code>towns.html#roadplanner</code>). Written up, not built.</li>
+        <li><b>Walking it out.</b> With survey stakes in hand (1), walk and click (or F) to drive a stake where you aim, within 6 m. While the plan is open, the ghost of the finished road runs live from the last stake to the cell you aim at: the line of cells between them, cut by the road rule. A cell a layer below the next is a sloped cell, never a step; deep water is a plank bridge at the bank's height (up to 6 cells); shallow water is a ford on a gravel bed. Click the last stake, or Enter, to end the plan; click it again to go on.</li>
+        <li><b>Refusals.</b> Only the cells that clash are red, the first named under the crosshair and in the panel: Too steep (the higher of two cells more than a layer apart, or two rises closer than the grade), Too wide to bridge, Open water (the mere), In a town (Wenmoor), A tree in the way (that one cell; fell it with the axe, 3), Too far (past 24 cells), Wide roads bend on the level, Too steep across. A refused stake is not driven and takes nothing.</li>
+        <li><b>Width and surface.</b> R (or the panel's menu button) opens a small radial menu: width 1, 2 or 3, gravel or dirt, lamps. A wide road's lanes sit beside the centre line (to the left for 2, both sides for 3), every lane on one surface along it, so no lane steps against another. Dirt costs nothing and is slower; fords are gravel either way.</li>
+        <li><b>Bill and turns.</b> The panel counts what is still to build against the pack: stakes, gravel (a cell), planks and a log (a bridge cell), and a log and a street lantern (a lamp). The aim's segment adds its share in blue before the stake is driven; short goods are red. Under it, the cells, the metres, the turns and how many are left.</li>
+        <li><b>Editing.</b> Click a stake to pick it up: its two segments follow the aim, refusals and all, and a click sets it down. Click a marked cell between stakes to add a stake there and pick it up. X or right-click on a stake takes it back, if the two either side can be joined. Esc puts a held stake back.</li>
+        <li><b>Edits mid-build</b> follow the house planner's rule: paved cells the new route drops are marked for removal under a pale chalk wash, and the shovel takes each up for the share of its gravel set on the slider; with <i>Given back at once</i> they go back to their ground on the spot. <i>Edit mid-build</i> moves the bridge leg's stake south off a paved run to show it.</li>
+        <li><b>Building it.</b> With the shovel (2), click a marked cell in reach to pave it (a bridge cell takes planks and a log); <i>Keep paving</i> walks down the line paving one cell a stroke. The ghost goes as each cell is paved, so what is left is what is still ghost. A lamp is built with the cell beside it, every sixth cell on the left verge, and lights the road at night.</li>
+        <li><b>The record.</b> <i>Record</i> shows the plan as the game saves it: <code>road-plan</code> schema 2, its waypoints, width, surface, lamps, paved cells and cells to take up. The cells are the hex line between the waypoints, so the plan reads back cell for cell.</li>
+        <li><b>In the overview</b> (V) the same clicks work at the mouse, from any distance: the game has no overview, so it is the mockup's shortcut, not a feature.</li>
+        <li><b>Sliders.</b> Ghost strength, the steepest grade (a layer a cell, every 2 or every 3 cells), the cost scale, the lamp spacing, the share of gravel returned, and what happens to dropped paved cells.</li>
+        <li><b>How it relates to the paving scene (design 39 to 41).</b> Survey stakes stay the item, a stake stays a waypoint, the lime band and the stakes look the same, paving is the same shovel and gravel. New: the ghost of the whole road, red refusals, the menu, the bill and turns, grabbing and inserting, the mid-build rule, lamps, and the plan saved whole. A segment is now the straight line between its stakes, not a search, so the road goes where it was walked.</li>
+        <li><b>Lit at night</b> by the worksite's lantern, Wenmoor's lamps and windows, and the plan's lamps once built. The ghost is a preview and is not lit, as the house planner's.</li>
+      </ul>
+
       <h3>Versions</h3>
       <ul>
         <li><b>Version 1</b>: the settlements, stairs, the walker and the night.</li>
         <li><b>Version 2</b> (2026-11-21): the Roads scene; the description moved into this modal.</li>
         <li><b>Version 3</b> (2026-11-22): the Wide roads scene, roads two and three cells wide.</li>
         <li><b>Version 4</b> (2026-11-22): the Paving scene, roads marked by survey stakes and paved with gravel, the grinder and the mixer.</li>
+        <li><b>Version 5</b> (2026-11-23): the Road planner scene, a road planned in first person with a live ghost, red refusals, a width and surface menu, a bill, edits mid-build and lamps.</li>
       </ul>
     
       <h3>What is modelled</h3>
@@ -267,6 +350,12 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>Light.</b> Sky light is dimmed on faces under a roof, standing in for the baked skylight of the voxel-light change. Hearths and the forge are the only lights indoors.</li>
       </ul>
     
+  </div>
+</div>
+<div class="modal" id="recModal" hidden role="dialog" aria-modal="true" aria-labelledby="recTitle">
+  <div class="modal-card panel">
+    <header><h2 id="recTitle">The road-plan record</h2><button class="small" id="recClose" aria-label="Close">&#x2715;</button></header>
+    <pre id="recBody" class="rec"></pre>
   </div>
 </div>
   <div class="touch" id="touch" aria-hidden="true">
@@ -1564,6 +1653,7 @@ const BOBBERS = [];          // things that float: moored boats
 const INDOOR_SHAPES = [];    // round rooms (igloos) the per-cell sky test cannot see
 
 function resetWorld() {
+  rpClear();
   for (const k of Object.keys(BUF)) delete BUF[k];
   TOP.fill(0); TOPMAT.fill("grass"); SIDEMAT.fill("dirt"); AREA.fill("");
   for (let i = 0; i < NC * NR; i++) { RUNS[i] = []; INDOOR[i] = []; PLACES[i] = []; }
@@ -4049,6 +4139,742 @@ SCENES.paving = { label: "Paving: marked cells, a paved run, grinder and mixer",
   streetLight: 0, litWindows: 0,
   env: { fog: [80, 380], water: null, far: { color: 0x5a7032, y: 0.9 } } };
 
+// =====================================================================
+// Road planner (townsfolk design 42, M15 version 5): a road planned in first
+// person, the house planner's way. With stakes in hand the walker drops
+// waypoints; the ghost of the finished road runs live from the last one to
+// the aimed cell, cut by the road rule (a layer a cell, wide roads on one
+// plane, fords, bridges), red on only the cells that clash. A menu picks the
+// width, the surface and lamps; a bill counts what is left against the pack;
+// waypoints are grabbed, inserted and taken back; edits mid-build mark the
+// paved cells a new route drops for removal. The shovel paves.
+//
+// Three layers: the static scene (the worksite, the hamlet; built once), the
+// ground layer (the terrain, paved cells, built bridges and lamps, the trees:
+// rebuilt when something is built or felled) and the plan layer (marks,
+// stakes and the ghost: rebuilt when the aim moves to another cell).
+// =====================================================================
+const RP_W = { gravel: 1, planks: 6 };
+const RP_TUNE = { ghost: 0.35, grade: 1, scale: 1, spacing: 6, share: 1, removal: "mark", maxSeg: 24, maxBridge: 6, stakeReach: 6, reach: 4 };
+const RP_FULL = { stakes: 16, gravel: 60, planks: 30, logs: 8, lanterns: 6 };
+const RP = {
+  wps: [], open: true, width: 1, surface: "gravel", lamps: true,
+  paved: new Map(), remove: new Set(), lampsBuilt: new Map(), world: new Map(),
+  tool: "stakes", grab: null, aim: null, aimKey: -1, aimPt: null, keep: false, keepT: 0,
+  pack: { ...RP_FULL }, frac: 0, note: "", A: null, prev: null,
+};
+const RP_NAT = new Float32Array(NC * NR), RP_NATMAT = new Array(NC * NR).fill("meadow");
+const RP_WATER = new Array(NC * NR).fill(null);   // "shallow" (fordable), "deep" (bridged), "lake" (still)
+const RP_TOWN = new Set(), RP_TREES = new Map(), RP_SOLIDS = [];
+const RP_LAYER = { ground: [], plan: [], glow: [] };
+const rk = (c, r) => idx(c, r), rcr = k => [k % NC, (k - k % NC) / NC];
+
+// ---- smooth forms: per-vertex normals across a body's curves --------------
+function sface(m, pts, ns) {
+  const b = buf(m), rep = REP[m] || 1;
+  let fn = [0, 0, 0]; for (const n of ns) fn = V.add(fn, n); fn = V.norm(fn);
+  let c = [0, 0, 0]; for (const p of pts) c = V.add(c, p); c = V.mul(c, 1 / pts.length);
+  const start = b.p.length / 3;
+  for (let i = 1; i + 1 < pts.length; i++) for (const k of [0, i, i + 1]) { b.p.push(...pts[k]); b.n.push(...V.norm(ns[k])); b.uv.push(...uvWorld(pts[k], fn, rep)); b.c.push(...TINT); }
+  b.faces.push([c[0] + fn[0] * 0.06, c[1] + fn[1] * 0.06, c[2] + fn[2] * 0.06, start, b.p.length / 3 - start]);
+}
+// A form of revolution like loftAxis, smooth round its axis: each ring's
+// normal is the radial direction tilted by the profile's slope.
+function loftSmooth(O, u, rings, sides, opt = {}) {
+  u = V.norm(u);
+  const v = Math.abs(u[1]) < 0.9 ? V.norm(V.cross(u, [0, 1, 0])) : V.norm(V.cross(u, [1, 0, 0])), w = V.cross(u, v);
+  const rn = rng(opt.seed || 7), J = []; for (let k = 0; k < sides; k++) J.push(1 + (rn() - 0.5) * (opt.jit || 0));
+  const ang = k => (opt.rot || 0) + k / sides * Math.PI * 2, rad = k => V.add(V.mul(v, Math.cos(ang(k))), V.mul(w, Math.sin(ang(k))));
+  const P = rings.map(([t, r]) => { const o = []; for (let k = 0; k < sides; k++) o.push(V.add(V.add(O, V.mul(u, t)), V.mul(rad(k), r * J[k]))); return o; });
+  const slope = i => { const a = rings[Math.max(0, i - 1)], b = rings[Math.min(rings.length - 1, i + 1)]; return [b[0] - a[0], b[1] - a[1]]; };
+  const N = (i, k) => { const [dt, dr] = slope(i); return V.norm(V.sub(V.mul(rad(k), dt), V.mul(u, dr))); };
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const m = rings[i][2] || opt.m || "timber";
+    for (let k = 0; k < sides; k++) { const k2 = (k + 1) % sides; sface(m, [P[i][k], P[i][k2], P[i + 1][k2], P[i + 1][k]], [N(i, k), N(i, k2), N(i + 1, k2), N(i + 1, k)]); }
+  }
+  if (opt.capEnd) face(opt.capEnd, P[P.length - 1], u);
+}
+// A broadleaf tree: one trunk flaring into its roots, one lumpy crown grown
+// from it (no boxes), leaves and bark from the page's own textures.
+function rpTree(x, y, z, s, seed) {
+  loftSmooth([x, y - 0.1, z], [0, 1, 0], [[0, 0.42 * s, "bark"], [0.25, 0.26 * s, "bark"], [1.2 * s, 0.2 * s, "bark"], [2.3 * s, 0.17 * s, "bark"], [2.6 * s, 0.3 * s]], 7, { seed, jit: 0.15 });
+  const rn = rng(seed * 7 + 3), lean = [(rn() - 0.5) * 0.15, 1, (rn() - 0.5) * 0.15];
+  loftSmooth([x, y + 2.0 * s, z], lean, [[0, 0.25 * s, "leaves"], [0.35 * s, 1.35 * s, "leaves"], [1.0 * s, 1.85 * s, "leaves"], [1.7 * s, 1.75 * s, "leaves"], [2.35 * s, 1.25 * s, "leaves"], [2.8 * s, 0.55 * s, "leaves"], [3.0 * s, 0.05]], 11, { seed: seed + 1, jit: 0.32 });
+}
+// A road lamp: a timber post flaring at its foot, an arm out over the verge,
+// an iron-capped lantern whose glass is the light. `into`: the ghost buffer,
+// or null for a built lamp (its glass a glow mesh, its light in LIGHTS).
+function rpLamp(x, y, z, ax, az, into, list) {
+  const m = into || "timber", iron = into || "iron";
+  const L = into ? loftAxis : loftSmooth;
+  L([x, y - 0.15, z], [0, 1, 0], [[0, 0.16, m], [0.3, 0.1, m], [2.55, 0.075, m], [2.62, 0.06]], 7, { seed: 5, capEnd: m });
+  const tip = [x + ax * 0.55, y + 2.5, z + az * 0.55];
+  beam(m, [x, y + 2.45, z], tip, 0.07);
+  const top = [tip[0], y + 2.47, tip[2]];
+  L(V.add(top, [0, -0.04, 0]), [0, 1, 0], [[0, 0.03, iron], [0.08, 0.17, iron], [0.15, 0.03]], 6, { capEnd: iron });
+  L(V.add(top, [0, -0.47, 0]), [0, 1, 0], [[0, 0.0, iron], [0.04, 0.1, iron], [0.07, 0.11]], 6, {});
+  if (!into && list) {
+    const ours = list === RP_LAYER.glow;
+    const g = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(0.001, 0), new THREE.Vector2(0.1, 0.04), new THREE.Vector2(0.12, 0.2), new THREE.Vector2(0.1, 0.36), new THREE.Vector2(0.001, 0.4)], 6), lampMat);
+    g.position.set(top[0], top[1] - 0.44, top[2]); scene.add(g); list.push(g);
+    if (!ours) LIGHTS.push({ x: top[0], y: top[1] - 0.25, z: top[2], color: 0xffc070, kind: "lamp", power: 0.8 });
+    const sol = addSolid({ type: "circ", x, z, r: 0.11, y0: y, y1: y + 2.6, cls: "wall", label: "Lamp post" }); if (ours) RP_SOLIDS.push(sol);
+  }
+}
+
+// ---- the world ------------------------------------------------------------
+function makeRoadPlanner() {
+  STAIR_CELLS.clear(); MARKED.clear(); SUNBEAMS.length = 0;
+  RP_TOWN.clear(); RP_TREES.clear(); RP_WATER.fill(null); RP.world.clear();
+  const lake = (c, r) => Math.hypot(cx(c, r) - cx(9, 27), cz(c, r) - cz(9, 27)) < 3.6 * W;
+  const terr = c => 1 + clamp(Math.floor((c - 22) / 2), 0, 4);
+  ground((c, r) => {
+    if (c >= 19 && c <= 21) return r <= 11 ? { h: 0, top: "gravel", side: "scree", area: "The brook, a ford" } : { h: -3, top: "scree", side: "slaterock", area: "The brook" };
+    if (lake(c, r)) return { h: -2, top: "sand", side: "dirt", area: "The mere" };
+    if (c >= 22 && r >= 22) return { h: c >= 31 ? 3 : 1, top: "meadow", side: "dirt", area: c >= 31 ? "Above the bank" : "Under the bank" };
+    if (c >= 22) return { h: terr(c), top: "meadow", side: "dirt", area: c >= 36 && r <= 12 ? "Wenmoor" : "The terraces" };
+    return { h: 1, top: "meadow", side: "dirt", area: c <= 9 && r >= 13 && r <= 19 ? "The worksite" : "The meadow" };
+  });
+  for (let i = 0; i < NC * NR; i++) { const [c, r] = rcr(i); if (c >= 19 && c <= 21) RP_WATER[i] = r <= 11 ? "shallow" : "deep"; else if (lake(c, r)) RP_WATER[i] = "lake"; }
+  // the hamlet of Wenmoor on the top terrace: its footprint and lanes
+  for (let r = 2; r <= 12; r++) for (let c = 36; c <= 46; c++) { const i = idx(c, r); RP_TOWN.add(i); NO_TREE.add(i); AREA[i] = "Wenmoor"; if (r === 7 || c === 41) TOPMAT[i] = "cobble"; }
+  hut("timber", [[38, 4], [39, 4]], "Wenmoor, the carter's");
+  hut("halftimber", [[43, 4], [44, 4]], "Wenmoor, the inn");
+  hut("timber", [[38, 10], [39, 10]], "Wenmoor, a cottage");
+  hut("stone", [[43, 10]], "Wenmoor, the smithy");
+  for (const [c, r] of [[36, 7], [41, 9], [45, 7]]) { const x = cx(c, r), z = cz(c, r) + 1.2, y = TOP[idx(c, r)]; rpLamp(x, y, z, 1, 0, null, DRESS); }
+  // the world's dirt track from Wenmoor's gate down the terraces to the ford
+  const track = []; for (let c = 35; c >= 18; c--) track.push([c, 7]);
+  for (const [c, r] of track) NO_TREE.add(idx(c, r));
+  RP.trackCells = track;
+  // the worksite: grinder, mixer and their heaps; a lantern by them
+  for (let r = 14; r <= 18; r++) for (let c = 1; c <= 8; c++) { const i = idx(c, r); TOPMAT[i] = "dirt"; NO_TREE.add(i); }
+  const wy = 1;
+  grinder(cx(3, 14), wy, cz(0, 14)); mixer(cx(6, 14) - 0.4, wy, cz(0, 14));
+  heap("rubble", cx(1, 16), wy, cz(0, 16), 0.9, 0.55, 61);
+  heap("sand", cx(2, 18) + 0.4, wy, cz(0, 18), 0.8, 0.45, 63);
+  heap("gravel", cx(5, 18), wy, cz(0, 18), 1.0, 0.55, 67);
+  rpLamp(cx(7, 17) + 0.6, wy, cz(0, 17) + 0.6, 0, -1, null, DRESS);
+  // trees: scattered off the water, the town, the worksite and the track,
+  // and two standing where the plan's next leg wants to go
+  const rn = rng(83);
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r); if (RP_WATER[i] || NO_TREE.has(i) || r === 16) continue;
+    if (rn() < 0.075) RP_TREES.set(i, { x: cx(c, r) + (rn() - 0.5) * 0.8, z: cz(c, r) + (rn() - 0.5) * 0.8, s: 0.85 + rn() * 0.35, seed: i });
+  }
+  for (const [c, r] of [[33, 12], [27, 20]]) RP_TREES.set(idx(c, r), { x: cx(c, r), z: cz(c, r), s: 1.1, seed: c * 3 + r });
+  for (const k of [...RP_TREES.keys()]) { const [c, r] = rcr(k); if (r >= 14 && r <= 18 && c < 32) RP_TREES.delete(k); }
+  for (const [c, r] of [[24, 11], [26, 10], [28, 12]]) RP_TREES.delete(idx(c, r));
+  for (const [a, b] of [[[8, 16], [13, 19]], [[13, 19], [23, 16]], [[30, 16], [32, 24]], [[30, 16], [39, 8]], [[17, 16], [25, 12]], [[25, 12], [30, 16]]]) for (const [c, r] of hexLine(a, b)) RP_TREES.delete(idx(c, r));
+  for (const [c, r] of hexLine([30, 16], [35, 10])) if (!(c === 33 && r === 12)) RP_TREES.delete(idx(c, r));
+  // reeds along the brook's banks
+  for (let r = 0; r < NR; r++) for (const c of [18, 22]) if (r !== 16 && r !== 7 && hash2(c, r) < 0.35) reeds(cx(c, r) + (c === 18 ? 0.7 : -0.7), TOP[idx(c, r)], cz(c, r), 3);
+  const at = (c, r, dx = 0, dz = 0) => ({ x: cx(c, r) + dx, z: cz(0, r) + dz, y: TOP[idx(c, r)] });
+  GOTO.worksite = { ...at(8, 17, 0.5, 0.6), look: [cx(16, 16), cz(0, 16)], pitch: -0.2 };
+  GOTO.planend = { ...at(29, 15, -0.4, 0.8), look: [cx(33, 11), cz(0, 11)], pitch: -0.28 };
+  GOTO.bridge = { ...at(16, 16, 0, 0.9), look: [cx(23, 16), cz(0, 16)], pitch: -0.2 };
+  GOTO.terraces = { ...at(23, 15, 0, 0), look: [cx(30, 16), cz(0, 16)], pitch: -0.05 };
+  GOTO.ford = { ...at(17, 7, 0, 0.6), look: [cx(23, 7), cz(0, 7)], pitch: -0.25 };
+  GOTO.bank = { ...at(27, 25, 0, 0), look: [cx(33, 25), cz(0, 25)], pitch: -0.1 };
+  GOTO.hamlet = { ...at(34, 8, 0, 0), look: [cx(41, 7), cz(0, 7)], pitch: -0.05 };
+  GOTO.mere = { ...at(15, 24, 0, 0), look: [cx(9, 27), cz(0, 27)], pitch: -0.2 };
+}
+SCENES.roadplanner = { label: "Road planner: waypoints walked in first person", build: makeRoadPlanner, start: "planend", after: rpAfterLoad,
+  orbit: { tx: W * 24, tz: ROW * 14, dist: 74, yaw: -1.35, pitch: 0.8 },
+  places: [["worksite", "The worksite"], ["bridge", "The bridge leg"], ["terraces", "Up the terraces"], ["planend", "The open end"], ["ford", "The ford"], ["bank", "The bank"], ["hamlet", "Wenmoor"], ["mere", "The mere"]],
+  streetLight: 0, litWindows: 0.5, noDblWalk: true,
+  env: { fog: [80, 380], water: { level: 0.3, color: 0x3a6a70, opacity: 0.86 },
+    far: [{ color: 0x66763a, y: 0.9, xMax: -W }, { color: 0x66763a, y: 4.9, xMin: W * NC + W / 2 },
+      { color: 0x66763a, y: 0.9, xMin: -W, xMax: W * NC + W / 2, zMax: -R }, { color: 0x66763a, y: 0.9, xMin: -W, xMax: W * NC + W / 2, zMin: ROW * NR }] } };
+
+// The demo plan the scene opens on: from the worksite east, over the brook on
+// a bridge, up the terraces; the first leg paved, the rest staked, open.
+const RP_DEMO = [[8, 16], [17, 16], [23, 16], [30, 16]];
+function rpAfterLoad() {
+  for (let i = 0; i < NC * NR; i++) { RP_NAT[i] = TOP[i]; RP_NATMAT[i] = TOPMAT[i]; }
+  // the world's track is road the world laid: cut by the road rule, dirt
+  const a = rpAnalyse(RP.trackCells, 1, "roaddirt");
+  for (const ci of a.cells) RP.world.set(ci.key, { surface: "roaddirt", spec: ci.spec });
+  rpReset(true);
+}
+function rpReset(quiet) {
+  Object.assign(RP, { wps: RP_DEMO.map(p => p.slice()), open: true, width: 1, surface: "gravel", lamps: true, tool: "stakes", grab: null, aimKey: -1, keep: false, frac: 0, note: "" });
+  RP.paved.clear(); RP.remove.clear(); RP.lampsBuilt.clear(); RP.pack = { ...RP_FULL, stakes: RP_FULL.stakes - RP_DEMO.length };
+  rpCommit();
+  for (const ci of RP.A.cells) { const [c] = rcr(ci.key); if (ci.lane === 0 && c <= 15) rpPave(ci, true); }
+  rpBuildGround(); rpPlanLayer(); rpUI();
+  if (!quiet) toast("Plan reset");
+}
+
+// ---- the line and the rule --------------------------------------------------
+const cube = (c, r) => { const [q, rr] = toAx(c, r); return [q, rr, -q - rr]; };
+function cubeRound(x, y, z) { let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z); const dx = Math.abs(rx - x), dy = Math.abs(ry - y), dz = Math.abs(rz - z); if (dx > dy && dx > dz) rx = -ry - rz; else if (dy > dz) ry = -rx - rz; else rz = -rx - ry; return [rx, ry, rz]; }
+function hexLine(a, b) {
+  const A = cube(...a), B = cube(...b), n = Math.max(Math.abs(A[0] - B[0]), Math.abs(A[1] - B[1]), Math.abs(A[2] - B[2]));
+  const out = []; if (!n) return [a.slice()];
+  for (let i = 0; i <= n; i++) { const t = i / n, p = cubeRound(lerp(A[0] + 1e-6, B[0] + 1e-6, t), lerp(A[1] + 2e-6, B[1] + 2e-6, t), lerp(A[2] - 3e-6, B[2] - 3e-6, t)); out.push(toOff(p[0], p[1])); }
+  return out;
+}
+// The centre line: every segment's line, each waypoint once. `seg` is the
+// segment a cell belongs to, `pos` its place along that segment.
+function rpRoute(wps) {
+  const out = []; if (!wps.length) return out;
+  out.push({ c: wps[0][0], r: wps[0][1], seg: 0, pos: 0, wp: 0 });
+  for (let s = 0; s + 1 < wps.length; s++) hexLine(wps[s], wps[s + 1]).slice(1).forEach(([c, r], j, L) => out.push({ c, r, seg: s, pos: j + 1, wp: j === L.length - 1 ? s + 1 : -1 }));
+  return out;
+}
+// A road surface as data, so a paved cell keeps the cut it was paved with:
+// flat, the one-wide plane of design 10, or design 10b's centre line.
+function rpH(spec) {
+  if (spec.t === "flat") return () => spec.h;
+  if (spec.t === "plane") { const { low, fx, fz, ux, uz, len } = spec; return (x, z) => low + clamp(((x - fx) * ux + (z - fz) * uz) / len, 0, 1); }
+  const P = spec.pts, H = spec.H;
+  return (x, z) => {
+    let best = 1e9, h = H[0];
+    for (let i = 0; i + 1 < P.length; i++) {
+      const ax = P[i][0], az = P[i][1], dx = P[i + 1][0] - ax, dz = P[i + 1][1] - az, L2 = dx * dx + dz * dz || 1, t = clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1);
+      const d = (x - ax - dx * t) ** 2 + (z - az - dz * t) ** 2; if (d < best) { best = d; h = lerp(H[i], H[i + 1], t); }
+    }
+    return h;
+  };
+}
+const rpMid = (c, r, d) => { const [A, B] = edgeEnds(c, r, d); return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]; };
+// Analyse a route at a width: every cell's kind, cut and the first clash.
+// `wps` given: segments, waypoints and lamps are worked out too.
+function rpAnalyse(route, width, surface, wps) {
+  const T = RP_TUNE, cells = [], byKey = new Map(), bad = [];
+  const C = route.map(p => Array.isArray(p) ? { c: p[0], r: p[1], seg: 0, pos: 0, wp: -1 } : p);
+  const n = C.length; if (!n) return { cells, byKey, bad, turns: 0, lamps: [], centre: [] };
+  const K = C.map(p => idx(p.c, p.r)), W0 = K.map(k => RP_WATER[k]);
+  const fail = (ci, why) => { if (!ci.bad) { ci.bad = why; bad.push(ci); } };
+  const E = K.map(k => RP_NAT[k]), kind = K.map((k, j) => W0[j] === "deep" ? "bridge" : W0[j] === "shallow" ? "ford" : "road");
+  // bridges: a run of deep water at the near bank's height, at most maxBridge
+  const runBad = new Set();
+  for (let j = 0; j < n;) {
+    if (kind[j] !== "bridge") { j++; continue; }
+    let e = j; while (e + 1 < n && kind[e + 1] === "bridge") e++;
+    const deck = j > 0 ? E[j - 1] : e + 1 < n ? E[e + 1] : 1;
+    for (let q = j; q <= e; q++) { E[q] = deck; if (q - j >= T.maxBridge) runBad.add(q); }
+    j = e + 1;
+  }
+  const raised = new Array(n).fill(false);
+  for (let j = 1; j + 1 < n; j++) if (kind[j] === "road" && RP_NAT[K[j - 1]] === E[j] + 1 && RP_NAT[K[j + 1]] === E[j] + 1) { raised[j] = true; E[j] += 1; }
+  // the centre cells and the rule on each
+  const dir = j => j + 1 < n ? dirTo(C[j].c, C[j].r, C[j + 1].c, C[j + 1].r) : j > 0 ? dirTo(C[j - 1].c, C[j - 1].r, C[j].c, C[j].r) : 0;
+  for (let j = 0; j < n; j++) {
+    const k = K[j], ci = { key: k, c: C[j].c, r: C[j].r, lane: 0, j, seg: C[j].seg, wp: C[j].wp, kind: kind[j], raised: raised[j], E: E[j], surface: kind[j] === "ford" ? "gravel" : surface };
+    cells.push(ci); byKey.set(k, ci);
+    if (!inMap(ci.c, ci.r)) { fail(ci, "Off the map"); continue; }
+    if (C[j].pos > T.maxSeg) fail(ci, "Too far");
+    if (RP_TOWN.has(k)) fail(ci, "In a town");
+    if (RP_TREES.has(k)) fail(ci, "A tree in the way");
+    if (W0[j] === "lake") fail(ci, "Open water");
+    if (runBad.has(j)) fail(ci, "Too wide to bridge");
+  }
+  // steps between cells, and the grade
+  let lastRise = -99;
+  for (let j = 0; j + 1 < n; j++) {
+    const d = E[j + 1] - E[j];
+    if (Math.abs(d) > 1) { fail(cells[d > 0 ? j + 1 : j], "Too steep"); continue; }
+    if (d !== 0) { if (j - lastRise < T.grade) fail(cells[d > 0 ? j + 1 : j], "Too steep"); lastRise = j; }
+  }
+  // each centre cell's one-wide cut (design 10: road())
+  for (let j = 0; j < n; j++) {
+    const ci = cells[j]; if (!inMap(ci.c, ci.r)) continue;
+    const h = E[j];
+    if (ci.kind === "bridge" || ci.raised) { ci.spec = { t: "flat", h }; continue; }
+    let up = -1, other = -1;
+    for (const [a, o] of [[j + 1, j - 1], [j - 1, j + 1]]) { if (a < 0 || a >= n) continue; if (E[a] === h + 1 && kind[a] !== "bridge") { up = dirTo(ci.c, ci.r, C[a].c, C[a].r); other = o; break; } }
+    if (up < 0) { ci.spec = { t: "flat", h }; continue; }
+    let from = (up + 3) % 6;
+    if (other >= 0 && other < n) { const d = dirTo(ci.c, ci.r, C[other].c, C[other].r); if (d >= 0 && d !== up) from = d; }
+    const [fx, fz] = rpMid(ci.c, ci.r, from), [tx, tz] = rpMid(ci.c, ci.r, up), len = Math.hypot(tx - fx, tz - fz);
+    ci.spec = { t: "plane", low: h, fx, fz, ux: (tx - fx) / len, uz: (tz - fz) / len, len };
+  }
+  // wide roads: lanes beside the centre line, every cell on the one surface
+  // along the centre line (design 10b); a bend only on the level
+  if (width > 1) {
+    const pts = cells.map(ci => [cx(ci.c, ci.r), cz(ci.c, ci.r)]), H = cells.map(ci => ci.spec ? rpH(ci.spec)(cx(ci.c, ci.r), cz(ci.c, ci.r)) : ci.E);
+    const spec = { t: "line", pts, H };
+    for (const ci of cells) if (ci.kind !== "bridge") ci.spec = spec;
+    for (let j = 1; j + 1 < n; j++) if (dir(j - 1) !== dir(j) && (E[j - 1] !== E[j] || E[j + 1] !== E[j])) fail(cells[j], "Wide roads bend on the level");
+    const sides = width === 2 ? [1] : [1, -1];
+    for (let j = 0; j < n; j++) for (const s of sides) for (const dd of [1, 2]) {
+      const d = (dir(j) + s * dd + 12) % 6, [a, b] = nb(C[j].c, C[j].r, d), k = idx(a, b);
+      if (!inMap(a, b) || byKey.has(k)) continue;
+      const cen = cells[j], w = RP_WATER[k];
+      const ci = { key: k, c: a, r: b, lane: s, j, seg: cen.seg, wp: -1, kind: cen.kind === "bridge" && w === "deep" ? "bridge" : w === "shallow" ? "ford" : "road", E: cen.E, surface: w === "shallow" ? "gravel" : surface };
+      ci.spec = ci.kind === "bridge" ? { t: "flat", h: cen.E } : spec;
+      cells.push(ci); byKey.set(k, ci);
+      if (RP_TOWN.has(k)) fail(ci, "In a town");
+      else if (RP_TREES.has(k)) fail(ci, "A tree in the way");
+      else if (w === "lake" || (w === "deep" && ci.kind !== "bridge")) fail(ci, "Open water");
+      else if (cen.bad) fail(ci, cen.bad);
+      else if (ci.kind === "road") { const f = rpH(spec), hs = hexPts(a, b).map(p => f(p[0], p[1])); if (RP_NAT[k] - Math.min(...hs) > 2.001 || Math.max(...hs) - RP_NAT[k] > 2.001) fail(ci, "Too steep across"); }
+    }
+  }
+  // turns: a bend at a waypoint, where the road's heading changes (a hex
+  // line's own zigzag along a diagonal is not a turn)
+  let turns = 0;
+  if (wps) for (let i = 1; i + 1 < wps.length; i++) {
+    const a = [cx(...wps[i]) - cx(...wps[i - 1]), cz(...wps[i]) - cz(...wps[i - 1])], b = [cx(...wps[i + 1]) - cx(...wps[i]), cz(...wps[i + 1]) - cz(...wps[i])];
+    const la = Math.hypot(...a), lb = Math.hypot(...b); if (la && lb && (a[0] * b[0] + a[1] * b[1]) / (la * lb) < 0.996) turns++;
+  }
+  // lamps on the left verge of every spacing'th centre cell
+  const lamps = [];
+  if (wps && RP.lamps) for (let j = 1; j < n; j++) {
+    if (j % T.spacing) continue;
+    const d = dir(j), a = (d + 1.5) * Math.PI / 3, off = W * 0.5 + (width >= 2 ? W * 0.87 : 0) + 0.45;
+    const x = cx(C[j].c, C[j].r) + Math.cos(a) * off, z = cz(C[j].c, C[j].r) + Math.sin(a) * off, [lc, lr] = cellAt(x, z), lk = idx(lc, lr);
+    if (!inMap(lc, lr) || RP_WATER[lk] || RP_TOWN.has(lk) || byKey.has(lk)) continue;
+    lamps.push({ anchor: K[j], x, z, cell: lk, ax: -Math.cos(a), az: -Math.sin(a) });
+  }
+  return { cells, byKey, bad, turns, lamps, n };
+}
+
+// ---- state changes ------------------------------------------------------------
+function rpCommit() { RP.A = rpAnalyse(rpRoute(RP.wps), RP.width, RP.surface, RP.wps); for (const [k, v] of RP.paved) { const ci = RP.A.byKey.get(k); if (ci && !RP.remove.has(k)) v.spec = ci.spec; } }
+const rpCost = ci => ci.kind === "bridge" ? { planks: Math.round(RP_W.planks * RP_TUNE.scale), logs: 1 } : ci.surface === "gravel" ? { gravel: Math.max(1, Math.round(RP_W.gravel * RP_TUNE.scale)) } : {};
+// An edit: the new waypoints (or width) diffed against the old route by key,
+// the house planner's rule for what is paved and dropped.
+function rpApply(wps, width) {
+  const oldKeys = new Set(RP.A.cells.map(c => c.key));
+  const A = rpAnalyse(rpRoute(wps), width ?? RP.width, RP.surface, wps);
+  if (A.bad.length) return A.bad[0].bad;
+  RP.wps = wps; if (width) RP.width = width;
+  const nk = new Set(A.cells.map(c => c.key)); let dropped = 0, back = 0;
+  for (const [k, v] of [...RP.paved]) {
+    if (nk.has(k)) { RP.remove.delete(k); continue; }
+    if (!oldKeys.has(k) && RP.remove.has(k)) continue;
+    dropped++;
+    if (RP_TUNE.removal === "mark") RP.remove.add(k);
+    else { back += rpRefund(v); RP.paved.delete(k); RP.remove.delete(k); }
+  }
+  rpCommit();
+  RP.note = dropped ? (RP_TUNE.removal === "mark" ? `${dropped} paved cell${dropped > 1 ? "s" : ""} to take up` : `${dropped} paved cell${dropped > 1 ? "s" : ""} taken up, ${back} gravel back`) : "";
+  return null;
+}
+function rpRefund(v) { if (v.surface !== "gravel") return 0; RP.frac += RP_TUNE.share * (v.cost || 1); const g = Math.floor(RP.frac + 1e-9); RP.frac -= g; RP.pack.gravel += g; return g; }
+function rpPave(ci, free) {
+  const cost = rpCost(ci);
+  if (!free) for (const [g, q] of Object.entries(cost)) if ((RP.pack[g] || 0) < q) return g === "gravel" ? "Needs gravel" : g === "planks" ? "Needs planks" : "Needs logs";
+  if (!free) for (const [g, q] of Object.entries(cost)) RP.pack[g] -= q;
+  RP.paved.set(ci.key, { surface: ci.kind === "bridge" ? "bridge" : ci.surface, spec: ci.spec, cost: cost.gravel || 0, deck: ci.kind === "bridge" ? ci.E : null });
+  // a lamp beside this cell is built with it
+  for (const L of RP.A.lamps) if (L.anchor === ci.key && !RP.lampsBuilt.has(L.anchor)) {
+    if (!free && (RP.pack.lanterns < 1 || RP.pack.logs < 1)) { RP.note = "Lamp waits: needs a street lantern and a log"; continue; }
+    if (!free) { RP.pack.lanterns--; RP.pack.logs--; }
+    RP.lampsBuilt.set(L.anchor, { ...L });
+  }
+  return null;
+}
+
+// ---- the ground layer ---------------------------------------------------------
+function rpClearLayer(list) { for (const m of list) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } list.length = 0; }
+function rpRemoveSolids(list = RP_SOLIDS) {
+  const gone = new Set(list);
+  for (const s of list) for (let gx = Math.floor(s.minx / HG); gx <= Math.floor(s.maxx / HG); gx++) for (let gz = Math.floor(s.minz / HG); gz <= Math.floor(s.maxz / HG); gz++) { const l = HASH.get(hk(gx, gz)); if (l) HASH.set(hk(gx, gz), l.filter(x => !gone.has(x))); }
+  for (let i = SOLIDS.length - 1; i >= 0; i--) if (gone.has(SOLIDS[i])) SOLIDS.splice(i, 1);
+  list.length = 0;
+}
+const GHOSTMAT = {};
+function ghostMat(m) {
+  if (GHOSTMAT[m]) return GHOSTMAT[m];
+  const col = { "g:ghost": 0x7fe0ff, "g:aim": 0x9fe8ff, "g:bad": 0xd8452e, "g:drop": 0xfff6e2, "g:cursor": 0xfff0c0 }[m];
+  return (GHOSTMAT[m] = new THREE.MeshBasicMaterial({ color: lin(col), transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+}
+function rpGhostOpacity() { const g = RP_TUNE.ghost; Object.assign(ghostMat("g:ghost"), { opacity: g }); ghostMat("g:aim").opacity = g * 0.7; ghostMat("g:bad").opacity = Math.min(0.85, 0.3 + g); ghostMat("g:drop").opacity = 0.62; ghostMat("g:cursor").opacity = 0.35; }
+// Draw into a fresh set of buffers and make meshes of them: lit materials
+// baked as the static scene is (sky, fires, lamps), ghosts as plain tints.
+function rpBake(draw, list) {
+  const saved = {}; for (const k of Object.keys(BUF)) { saved[k] = BUF[k]; delete BUF[k]; }
+  draw();
+  const light = blockLighter();
+  for (const [m, b] of Object.entries(BUF)) {
+    if (!b.p.length) continue;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(b.p, 3));
+    if (m.startsWith("g:")) { const mesh = new THREE.Mesh(g, ghostMat(m)); mesh.renderOrder = 5; scene.add(mesh); list.push(mesh); continue; }
+    const nv = b.p.length / 3, sky = new Float32Array(nv), { fire, lamp } = light(b);
+    for (const [x, y, z, s, cnt] of b.faces) { const v = skyAt(x, y, z); for (let k = s; k < s + cnt; k++) sky[k] = v; }
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(b.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(b.c, 3)); g.setAttribute("sky", new THREE.BufferAttribute(sky, 1));
+    g.setAttribute("fire", new THREE.BufferAttribute(fire, 3)); g.setAttribute("lamp", new THREE.BufferAttribute(lamp, 3));
+    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = !ALPHA.has(m); mesh.receiveShadow = true; mesh.userData.m = m;
+    scene.add(mesh); list.push(mesh);
+  }
+  for (const k of Object.keys(BUF)) delete BUF[k];
+  Object.assign(BUF, saved);
+}
+// A road cell's surface: a fan from its middle over its six corners, and the
+// packed-earth bed down to whatever is lower beside it.
+function rpRoadTop(c, r, f, m, lift = 0) {
+  const hex = hexPts(c, r), X = cx(c, r), Z = cz(c, r), mid = [X, f(X, Z) + lift, Z];
+  for (let k = 0; k < 6; k++) { const a = hex[k], b = hex[(k + 1) % 6]; face(m, [mid, [a[0], f(a[0], a[1]) + lift, a[1]], [b[0], f(b[0], b[1]) + lift, b[1]]], [0, 1, 0]); }
+}
+// Everything in a cell's top: the road (the player's or the world's) or none.
+function rpRoadAt(k) { const p = RP.paved.get(k); return p ? p : RP.world.get(k) || null; }
+function rpSurfAt(c, r, x, z) {
+  if (!inMap(c, r)) return -9; const k = idx(c, r), p = rpRoadAt(k);
+  if (p && p.surface !== "bridge") return rpH(p.spec)(x, z);
+  if (p && p.surface === "bridge") return p.deck;
+  return TOP[k];
+}
+function rpBuildGround() {
+  rpRemoveSolids(); rpClearLayer(RP_LAYER.ground); rpClearLayer(RP_LAYER.glow);
+  for (let i = LIGHTS.length - 1; i >= 0; i--) if (LIGHTS[i].rp) LIGHTS.splice(i, 1);
+  // the cut: a road cell whose ground stands over its surface is dug to the
+  // whole layer under its lowest point
+  for (let i = 0; i < NC * NR; i++) { TOP[i] = RP_NAT[i]; TOPMAT[i] = RP_NATMAT[i]; }
+  for (let i = 0; i < NC * NR; i++) {
+    const p = rpRoadAt(i); if (!p || p.surface === "bridge") continue;
+    const [c, r] = rcr(i), f = rpH(p.spec), lo = Math.min(...hexPts(c, r).map(q => f(q[0], q[1])), f(cx(c, r), cz(c, r)));
+    if (RP_NAT[i] > lo + 1e-3) TOP[i] = Math.floor(lo + 1e-6);
+    TOPMAT[i] = p.surface === "gravel" ? "gravel" : "roaddirt";
+  }
+  // the lamps' lights first, so the ground they stand on is baked with them
+  const lampSpots = [...RP.lampsBuilt.values()];
+  for (const L of lampSpots) LIGHTS.push({ x: L.x + L.ax * 0.55, y: rpSurfAt(...cellAt(L.x, L.z), L.x, L.z) + 2.0, z: L.z + L.az * 0.55, color: 0xffc070, kind: "lamp", power: 0.8, rp: true });
+  rpBake(() => {
+    for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+      const i = idx(c, r), h = TOP[i], p = rpRoadAt(i), road = p && p.surface !== "bridge";
+      if (!road) face(TOPMAT[i], hexPts(c, r).map(q => [q[0], h, q[1]]), [0, 1, 0]);
+      for (let d = 0; d < 6; d++) {
+        const [c2, r2] = nb(c, r, d), h2 = inMap(c2, r2) ? TOP[idx(c2, r2)] : -8;
+        if (h2 >= h) continue;
+        const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d);
+        face(SIDEMAT[i] === "dirt" || RP_NATMAT[i] === "meadow" ? "dirt" : SIDEMAT[i], [[A[0], h2, A[1]], [B[0], h2, B[1]], [B[0], h, B[1]], [A[0], h, A[1]]], [nx, 0, nz]);
+      }
+      if (!p) continue;
+      if (road) {
+        const f = rpH(p.spec), m = p.surface === "gravel" ? "gravel" : "roaddirt";
+        rpRoadTop(c, r, f, m);
+        // the bed: down from the surface to the ground or road beside it
+        for (let d = 0; d < 6; d++) {
+          const [c2, r2] = nb(c, r, d), [A, B] = edgeEnds(c, r, d), ha = f(A[0], A[1]), hb = f(B[0], B[1]);
+          const nbr = inMap(c2, r2) ? rpRoadAt(idx(c2, r2)) : null, g = nbr && nbr.surface !== "bridge" ? rpH(nbr.spec) : null;
+          const la = g ? g(A[0], A[1]) : inMap(c2, r2) ? TOP[idx(c2, r2)] : -8, lb = g ? g(B[0], B[1]) : inMap(c2, r2) ? TOP[idx(c2, r2)] : -8;
+          const a0 = Math.max(la, h), b0 = Math.max(lb, h);
+          if (ha <= a0 + 1e-3 && hb <= b0 + 1e-3) continue;
+          const [nx, nz] = dvec(d);
+          face("dirt", [[A[0], Math.min(a0, ha), A[1]], [B[0], Math.min(b0, hb), B[1]], [B[0], hb, B[1]], [A[0], ha, A[1]]], [nx, 0, nz]);
+        }
+        RP_SOLIDS.push(addSurface({ pts: hexPts(c, r), y0: h, y1: h + 2, label: p.surface === "gravel" ? "Gravel road" : RP.world.has(i) && !RP.paved.has(i) ? "Village track (the world's)" : "Dirt road",
+          detail: RP.remove.has(i) ? "marked for removal" : "", iv(px, pz, out) { if (inPoly(this.pts, px, pz)) out.push([h - 1, f(px, pz), this]); } }));
+      } else rpBridgeCell(c, r, p.deck, null);
+    }
+    for (const [k, t] of RP_TREES) { const [c, r] = rcr(k); rpTree(t.x, TOP[k], t.z, t.s, t.seed); RP_SOLIDS.push(addSolid({ type: "circ", x: t.x, z: t.z, r: 0.24 * t.s, y0: TOP[k], y1: TOP[k] + 3, cls: "wall", label: "Tree" })); }
+    for (const L of lampSpots) { const y = rpSurfAt(...cellAt(L.x, L.z), L.x, L.z); rpLamp(L.x, y, L.z, L.ax, L.az, null, RP_LAYER.glow); }
+  }, RP_LAYER.ground);
+  rpRelightStatic();
+}
+// A built lamp lights the static scene near it too: rebake its lamp light.
+let RP_LIT = "";
+function rpRelightStatic() {
+  const sig = LIGHTS.filter(l => l.rp).map(l => l.x.toFixed(1) + l.z.toFixed(1)).join();
+  if (sig === RP_LIT) return; RP_LIT = sig;
+  const light = blockLighter();
+  for (const mesh of STATIC) { const b = BUF[mesh.userData.m]; if (!b || !b.p.length) continue; const { fire, lamp } = light(b); mesh.geometry.setAttribute("fire", new THREE.BufferAttribute(fire, 3)); mesh.geometry.setAttribute("lamp", new THREE.BufferAttribute(lamp, 3)); }
+}
+// A bridge cell: a plank deck at the bank's height, a hewn post at two of
+// its corners down to the bed, a rail along every edge over the water.
+function rpBridgeCell(c, r, deck, ghost) {
+  const m = ghost || "plank", t = ghost || "timber", k = idx(c, r), bed = RP_NAT[k];
+  const hex = hexPts(c, r);
+  face(m, hex.map(p => [p[0], deck, p[1]]), [0, 1, 0]);
+  face(t, hex.map(p => [p[0], deck - 0.22, p[1]]), [0, -1, 0]);
+  for (let d = 0; d < 6; d++) {
+    const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d), [c2, r2] = nb(c, r, d), k2 = idx(c2, r2);
+    face(t, [[A[0], deck - 0.22, A[1]], [B[0], deck - 0.22, B[1]], [B[0], deck, B[1]], [A[0], deck, A[1]]], [nx, 0, nz]);
+    const onRoad = inMap(c2, r2) && (RP.A && RP.A.byKey.has(k2) || rpRoadAt(k2));
+    if (onRoad || !inMap(c2, r2) || RP_NAT[k2] >= deck - 0.5) continue;
+    const ia = [A[0] - nx * 0.12, A[1] - nz * 0.12], ib = [B[0] - nx * 0.12, B[1] - nz * 0.12];
+    beam(t, [ia[0], deck, ia[1]], [ia[0], deck + 1.0, ia[1]], 0.13);
+    beam(t, [ia[0], deck + 0.95, ia[1]], [ib[0], deck + 0.95, ib[1]], 0.1);
+    beam(t, [ia[0], deck + 0.5, ia[1]], [ib[0], deck + 0.5, ib[1]], 0.07);
+    if (!ghost) RP_SOLIDS.push(addSolid({ type: "poly", pts: [[ia[0] - nx * 0.06, ia[1] - nz * 0.06], [ib[0] - nx * 0.06, ib[1] - nz * 0.06], [ib[0] + nx * 0.06, ib[1] + nz * 0.06], [ia[0] + nx * 0.06, ia[1] + nz * 0.06]], y0: deck, y1: deck + 1.0, cls: "wall", label: "Rail" }));
+  }
+  for (const kk of [1, 4]) { const p = hex[kk]; loftAxis([p[0] + (cx(c, r) - p[0]) * 0.2, bed - 0.1, p[1] + (cz(c, r) - p[1]) * 0.2], [0, 1, 0], [[0, 0.17, t], [deck - bed - 0.15, 0.13, t], [deck - bed - 0.12, 0.0]], 7, { seed: k + kk }); }
+  if (!ghost) RP_SOLIDS.push(addSurface({ pts: hex, y0: deck - 0.22, y1: deck, label: "Timber bridge", detail: "", iv(px, pz, out) { if (inPoly(this.pts, px, pz)) out.push([deck - 0.22, deck, this]); } }));
+}
+
+// ---- the plan layer: marks, stakes, the ghost -------------------------------
+function rpPreview() {
+  // what the plan would be with the aim: a grabbed waypoint moved to it, or
+  // the next stake at it while the plan is open
+  if (!RP.aim || RP.tool !== "stakes") return null;
+  const wps = RP.wps.map(p => p.slice());
+  if (RP.grab) wps[RP.grab.i] = RP.aim.slice();
+  else if (RP.open) { const last = wps[wps.length - 1]; if (last && last[0] === RP.aim[0] && last[1] === RP.aim[1]) return null; wps.push(RP.aim.slice()); }
+  else return null;
+  return { wps, A: rpAnalyse(rpRoute(wps), RP.width, RP.surface, wps) };
+}
+function rpPlanLayer() {
+  rpClearLayer(RP_LAYER.plan);
+  const prev = RP.prev = rpPreview(), A = RP.A, show = prev ? prev.A : A, committed = new Set(A.cells.map(c => c.key));
+  const newKeys = prev ? new Set(prev.A.cells.map(c => c.key)) : committed;
+  rpBake(() => {
+    MARKED.clear();
+    // the lime band on every marked cell of the committed plan, along the
+    // road's line, and the ghost of the road it will be
+    for (const ci of A.cells) {
+      if (RP.paved.has(ci.key)) continue;
+      const cen = A.cells[ci.j], nxt = A.cells.find(o => o.lane === 0 && o.j === ci.j + 1), prv = A.cells.find(o => o.lane === 0 && o.j === ci.j - 1);
+      const dOut = nxt ? dirTo(cen.c, cen.r, nxt.c, nxt.r) : prv ? dirTo(prv.c, prv.r, cen.c, cen.r) : -1;
+      if (ci.kind !== "bridge") {
+        if (ci.lane === 0) markBand(ci.c, ci.r, prv ? dirTo(ci.c, ci.r, prv.c, prv.r) : -1, nxt ? dirTo(ci.c, ci.r, nxt.c, nxt.r) : -1);
+        else if (dOut >= 0) markBand(ci.c, ci.r, (dOut + 3) % 6, dOut);
+      }
+      // a marked cell a held stake would drop keeps its band and loses its ghost
+      if (!newKeys.has(ci.key)) continue;
+      rpGhostCell(show.byKey.get(ci.key) || ci, show.byKey.get(ci.key)?.bad ? "g:bad" : "g:ghost");
+    }
+    // the aim's cells: what the next stake (or the moved one) would add
+    if (prev) for (const ci of prev.A.cells) if (!committed.has(ci.key) || ci.bad) { if (RP.paved.has(ci.key) && !ci.bad) continue; rpGhostCell(ci, ci.bad ? "g:bad" : "g:aim"); }
+    // paved cells an edit has dropped: a chalk wash until they are taken up;
+    // paved cells a grabbed waypoint would drop, the same wash
+    for (const k of RP.remove) { const [c, r] = rcr(k), p = RP.paved.get(k); if (p) rpRoadTop(c, r, p.surface === "bridge" ? () => p.deck : rpH(p.spec), "g:drop", 0.04); }
+    if (prev) for (const [k, p] of RP.paved) if (!newKeys.has(k) && !RP.remove.has(k)) { const [c, r] = rcr(k); rpRoadTop(c, r, p.surface === "bridge" ? () => p.deck : rpH(p.spec), "g:drop", 0.04); }
+    // lamps: ghosts where they will stand, until built
+    const lamps = prev ? prev.A.lamps : A.lamps;
+    for (const L of lamps) if (!RP.lampsBuilt.has(L.anchor)) rpLamp(L.x, RP_NAT[L.cell], L.z, L.ax, L.az, "g:ghost");
+    // stakes at the waypoints (a grabbed one at the aim)
+    const wps = prev && RP.grab ? prev.wps : RP.wps;
+    wps.forEach(([c, r], i) => { if (!inMap(c, r)) return; const y = rpSurfAt(c, r, cx(c, r) + 0.45, cz(c, r) - 0.95); surveyStake(cx(c, r) + 0.45, y, cz(c, r) - 0.95, 3 + i * 2); });
+    // the aimed cell under the crosshair
+    if (RP.aim && inMap(...RP.aim)) { const [c, r] = RP.aim, k = idx(c, r); if (!(prev && prev.A.byKey.has(k))) rpRoadTop(c, r, (x, z) => rpSurfAt(c, r, x, z), RP.tool === "axe" && RP_TREES.has(k) ? "g:bad" : "g:cursor", 0.05); }
+  }, RP_LAYER.plan);
+  rpRemoveStakeSolids();
+}
+function rpRemoveStakeSolids() { // the stakes' circles from surveyStake: a plan's stakes move, so they are not kept as solids
+  rpRemoveSolids(SOLIDS.filter(s => s.label === "Survey stake"));
+}
+function rpGhostCell(ci, m) {
+  if (!ci || !inMap(ci.c, ci.r)) return;
+  if (ci.kind === "bridge" && m !== "g:bad") { rpBridgeCell(ci.c, ci.r, ci.E, m); return; }
+  const f = ci.spec ? rpH(ci.spec) : () => RP_NAT[ci.key];
+  rpRoadTop(ci.c, ci.r, (x, z) => Math.max(f(x, z), m === "g:bad" ? RP_NAT[ci.key] : -9), m, 0.035);
+}
+
+// ---- aiming, acting -----------------------------------------------------------
+const _rv = new THREE.Vector3();
+function rpAimFrom(ox, oy, oz, dx, dy, dz, maxT = 45) {
+  let inside = false;
+  for (let t = 0.3; t < maxT; t += 0.12) {
+    const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t, [c, r] = cellAt(x, z);
+    if (!inMap(c, r)) { if (inside || y < -5) return null; continue; }
+    inside = true;
+    const k = idx(c, r), tr = RP_TREES.get(k);
+    if (RP.tool === "axe" && tr && Math.hypot(x - tr.x, z - tr.z) < 1.4 && y < TOP[k] + 4.5) return { c, r, x, z, d: t };
+    const s = rpSurfAt(c, r, x, z), water = RP_WATER[k] && !rpRoadAt(k) ? 0.3 : -9;
+    if (y <= Math.max(s, water)) return { c, r, x, z, d: t };
+  }
+  return null;
+}
+function rpUpdateAim(force) {
+  let hit = null;
+  if (STATE.view === "walk") { camera.getWorldDirection(_rv); hit = rpAimFrom(P.x, P.feet + EYE, P.z, _rv.x, _rv.y, _rv.z); }
+  else if (RP.mouse) {
+    const r = canvas.getBoundingClientRect();
+    ray.setFromCamera({ x: (RP.mouse[0] - r.left) / r.width * 2 - 1, y: -(RP.mouse[1] - r.top) / r.height * 2 + 1 }, camera);
+    const o = ray.ray.origin, d = ray.ray.direction; hit = rpAimFrom(o.x, o.y, o.z, d.x, d.y, d.z, 400);
+  }
+  RP.aimPt = hit; const key = hit ? idx(hit.c, hit.r) : -1;
+  if (key !== RP.aimKey || force) { RP.aimKey = key; RP.aim = hit ? [hit.c, hit.r] : null; rpPlanLayer(); rpUI(); }
+}
+const rpNear = (c, r, reach) => STATE.view !== "walk" || Math.hypot(cx(c, r) - P.x, cz(c, r) - P.z) <= reach + R * 0.8;
+function rpAct() {
+  rpUpdateAim(true);
+  const aim = RP.aim; if (!aim) { toast("Aim at the ground"); return; }
+  const [c, r] = aim, k = idx(c, r);
+  if (RP.tool === "axe") {
+    if (!RP_TREES.has(k)) { toast("No tree there"); return; }
+    if (!rpNear(c, r, RP_TUNE.reach)) { toast("Too far away"); return; }
+    RP_TREES.delete(k); RP.pack.logs += 2; rpCommit(); rpBuildGround(); rpPlanLayer(); rpUI(); toast("+2 logs"); return;
+  }
+  if (RP.tool === "shovel") {
+    if (!rpNear(c, r, RP_TUNE.reach)) { toast("Too far away"); return; }
+    if (RP.remove.has(k)) { const v = RP.paved.get(k), g = rpRefund(v); RP.paved.delete(k); RP.remove.delete(k); const n = RP.remove.size; RP.note = n ? `${n} paved cell${n > 1 ? "s" : ""} to take up` : ""; rpAfterBuild(); toast(g ? `+${g} gravel` : "Taken up"); return; }
+    const ci = RP.A.byKey.get(k);
+    if (!ci) { toast("Not marked"); return; }
+    if (RP.paved.has(k)) { toast("Already paved"); return; }
+    if (ci.bad) { toast(ci.bad); return; }
+    const why = rpPave(ci); if (why) { toast(why); return; }
+    rpAfterBuild(); toast(ci.kind === "bridge" ? "Bridge built" : "Paved"); return;
+  }
+  // stakes
+  if (RP.grab) {
+    if (!RP.prev) { rpCancelGrab(); return; }
+    if (RP.prev.A.bad.length) { toast(RP.prev.A.bad[0].bad); return; }
+    if (!rpNear(c, r, RP_TUNE.stakeReach)) { toast("Too far away"); return; }
+    const why = rpApply(RP.prev.wps); if (why) { toast(why); return; }
+    RP.grab = null; rpAfterBuild(); toast(RP.note || "Stake moved"); return;
+  }
+  const wi = RP.wps.findIndex(p => p[0] === c && p[1] === r);
+  if (wi >= 0 && RP.open && wi === RP.wps.length - 1 && RP.wps.length > 1) { RP.open = false; rpPlanLayer(); rpUI(); toast("Plan ended"); return; }
+  if (wi >= 0 && !(RP.open && wi === RP.wps.length - 1)) {
+    if (!RP.open && wi === RP.wps.length - 1) { RP.open = true; rpPlanLayer(); rpUI(); toast("Plan open"); return; }
+    RP.grab = { i: wi, orig: RP.wps[wi].slice(), insert: false }; rpPlanLayer(); rpUI(); toast("Stake picked up"); return;
+  }
+  const ci = RP.A.byKey.get(k);
+  if (ci && ci.lane === 0 && ci.wp < 0 && RP.wps.length > 1) {
+    if (RP.pack.stakes < 1) { toast("No survey stakes"); return; }
+    RP.pack.stakes--; RP.wps.splice(ci.seg + 1, 0, [c, r]); rpCommit();
+    RP.grab = { i: ci.seg + 1, orig: [c, r], insert: true }; rpPlanLayer(); rpUI(); toast("Stake added, picked up"); return;
+  }
+  if (!RP.open) { toast("Plan ended: aim at its last stake"); return; }
+  if (RP.pack.stakes < 1) { toast("No survey stakes"); return; }
+  if (!rpNear(c, r, RP_TUNE.stakeReach)) { toast("Too far away"); return; }
+  if (RP.prev && RP.prev.A.bad.length) { toast(RP.prev.A.bad[0].bad); return; }
+  const why = rpApply([...RP.wps, [c, r]]); if (why) { toast(why); return; }
+  RP.pack.stakes--; rpAfterBuild(); toast("Stake driven");
+}
+function rpCancelGrab() {
+  if (!RP.grab) return false;
+  if (RP.grab.insert) { RP.wps.splice(RP.grab.i, 1); RP.pack.stakes++; rpCommit(); }
+  RP.grab = null; rpPlanLayer(); rpUI(); toast("Stake put back"); return true;
+}
+function rpDelete() {
+  if (RP.tool !== "stakes") return;
+  rpUpdateAim(true); if (!RP.aim) return;
+  const wi = RP.wps.findIndex(p => p[0] === RP.aim[0] && p[1] === RP.aim[1]);
+  if (wi < 0) { toast("Aim at a stake"); return; }
+  const wps = RP.wps.filter((_, i) => i !== wi), why = rpApply(wps);
+  if (why) { toast("Can't join: " + why); return; }
+  RP.pack.stakes++; RP.grab = null; rpAfterBuild(); toast(RP.note || "Stake taken back");
+}
+function rpAfterBuild() { rpCommit(); rpBuildGround(); rpPlanLayer(); rpUI(); }
+function rpSetTool(t) { if (RP.grab) rpCancelGrab(); RP.tool = t; RP.aimKey = -2; rpUpdateAim(true); renderKeys(); }
+function rpMenu(what, v) {
+  if (what === "width") { const why = rpApply(RP.wps.map(p => p.slice()), v); if (why) { toast(`Width ${v}: ${why}`); return; } rpAfterBuild(); toast(RP.note || `Width ${v}`); return; }
+  if (what === "surface") { RP.surface = v; rpCommit(); }
+  if (what === "lamps") { RP.lamps = !RP.lamps; rpCommit(); }
+  rpPlanLayer(); rpUI();
+}
+// Keep paving: the walker goes down the line and paves each cell in turn on
+// the shovel's beat, as a player walking the line with the key held.
+function rpKeepStep() {
+  const todo = RP.A.cells.filter(ci => !RP.paved.has(ci.key) && !ci.bad).sort((a, b) => a.j - b.j || Math.abs(a.lane) - Math.abs(b.lane));
+  const next = todo.find(ci => { const c = rpCost(ci); return Object.entries(c).every(([g, q]) => RP.pack[g] >= q); });
+  if (!next) { RP.keep = false; rpUI(); toast(todo.length ? "Needs " + Object.keys(rpCost(todo[0]))[0] : "All paved"); return; }
+  const back = RP.A.cells.find(o => o.lane === 0 && o.j === Math.max(0, next.j - 1)), [bc, br] = back ? [back.c, back.r] : [next.c, next.r];
+  if (STATE.view === "walk") { const dx = cx(next.c, next.r) - cx(bc, br), dz = cz(next.c, next.r) - cz(bc, br), l = Math.hypot(dx, dz) || 1; teleport({ x: cx(bc, br) - dx / l * 0.6 + (next.lane ? 0 : 0.6) * -dz / l, z: cz(bc, br) - dz / l * 0.6 + (next.lane ? 0 : 0.6) * dx / l, y: rpSurfAt(bc, br, cx(bc, br), cz(bc, br)) + 0.2, look: [cx(next.c, next.r), cz(next.c, next.r)], pitch: -0.42 }); }
+  rpPave(next); rpAfterBuild();
+}
+// The edit mid-build demo: the bridge leg's stake moved south, off the paved
+// run, so the cells it no longer passes are marked for removal (or given back).
+function rpEditDemo() {
+  rpReset(true);
+  for (const ci of RP.A.cells) { const [c] = rcr(ci.key); if (ci.lane === 0 && c <= 17 && !RP.paved.has(ci.key)) rpPave(ci, true); }
+  rpAfterBuild();
+  RP.grab = { i: 1, orig: RP.wps[1].slice(), insert: false };
+  const why = rpApply([RP.wps[0], [13, 19], ...RP.wps.slice(2)]);
+  RP.grab = null; rpAfterBuild();
+  if (STATE.view === "walk") teleport({ x: cx(11, 19), z: cz(0, 19) + 1, y: 1.2, look: [cx(15, 16), cz(0, 16)], pitch: -0.45 });
+  toast(why || RP.note || "Moved");
+}
+function rpFrame(dt) {
+  if (SCENE !== "roadplanner") return;
+  if ((RP.aimT = (RP.aimT || 0) - dt) <= 0) { RP.aimT = 0.08; rpUpdateAim(false); }
+  if (RP.keep && (RP.keepT -= dt) <= 0) { RP.keepT = 0.5; rpKeepStep(); }
+}
+function rpRecord() {
+  const key = ([c, r]) => `${c},${r}`;
+  return { record: "road-plan", schema: 2, id: 7, author: "player", waypoints: RP.wps.map(key), width: RP.width, surface: RP.surface, lamps: RP.lamps,
+    paved: [...RP.paved].filter(([k]) => !RP.remove.has(k)).map(([k, v]) => [key(rcr(k)), v.surface]), remove: [...RP.remove].map(k => key(rcr(k))) };
+}
+function rpClear() { rpRemoveSolids(); rpClearLayer(RP_LAYER.ground); rpClearLayer(RP_LAYER.plan); rpClearLayer(RP_LAYER.glow); RP.keep = false; RP_LIT = ""; }
+
+// ---- the planner's own panel --------------------------------------------------
+function rpBill(A) {
+  const need = { stakes: 0, gravel: 0, planks: 0, logs: 0, lanterns: 0 };
+  if (!A) return need;
+  for (const ci of A.cells) if (!RP.paved.has(ci.key) && !ci.bad) for (const [g, q] of Object.entries(rpCost(ci))) need[g] += q;
+  for (const L of A.lamps) if (!RP.lampsBuilt.has(L.anchor)) { need.lanterns++; need.logs++; }
+  return need;
+}
+function rpUI() {
+  if (SCENE !== "roadplanner") return;
+  const A = RP.A, need = rpBill(A), prev = RP.prev, pn = prev ? rpBill(prev.A) : null;
+  if (prev && !RP.grab) pn.stakes = 1;
+  const GOODS = [["stakes", "Survey stakes"], ["gravel", "Gravel"], ["planks", "Planks"], ["logs", "Logs"], ["lanterns", "Street lanterns"]];
+  $("rpBill").innerHTML = `<tr><th>Goods</th><th>Need</th><th>Pack</th></tr>` + GOODS.map(([g, n]) => {
+    const add = pn ? pn[g] - need[g] : 0, short = need[g] + Math.max(0, add) > RP.pack[g];
+    return `<tr${short ? ' class="short"' : ""}><td>${n}</td><td>${need[g]}${add > 0 ? `<small>+${add}</small>` : ""}</td><td>${RP.pack[g]}</td></tr>`;
+  }).join("");
+  const cen = A.cells.filter(c => c.lane === 0).length, left = A.cells.filter(c => !RP.paved.has(c.key)).length;
+  const t = prev ? prev.A.turns : A.turns;
+  $("rpCounts").textContent = `${A.cells.length} cells, ${Math.round(Math.max(0, cen - 1) * W)} m, ${t} turn${t === 1 ? "" : "s"}, ${left} of ${A.cells.length} left`;
+  const bad = prev && prev.A.bad.length ? prev.A.bad[0].bad : "";
+  let line = bad ? `<span class="bad">${bad}</span>` : RP.note ? RP.note : "";
+  if (prev && RP.grab) { const nk = new Set(prev.A.cells.map(c => c.key)), drop = [...RP.paved.keys()].filter(k => !nk.has(k) && !RP.remove.has(k)).length; if (drop && !bad) line = `${drop} paved cell${drop > 1 ? "s" : ""} to take up, ${Math.floor(drop * RP_TUNE.share)} gravel back`; }
+  $("rpNote").innerHTML = line;
+  $("rpMenuBtn").textContent = `Width ${RP.width} \u00b7 ${RP.surface === "gravel" ? "Gravel" : "Dirt"} \u00b7 ${RP.lamps ? "Lamps" : "No lamps"}`;
+  for (const t of ["stakes", "shovel", "axe"]) $("rpT_" + t).setAttribute("aria-pressed", RP.tool === t);
+  for (const b of document.querySelectorAll("#radial [data-w]")) b.setAttribute("aria-pressed", +b.dataset.w === RP.width);
+  for (const b of document.querySelectorAll("#radial [data-s]")) b.setAttribute("aria-pressed", b.dataset.s === RP.surface);
+  $("rdLamps").setAttribute("aria-pressed", RP.lamps);
+  $("rpEnd").textContent = RP.open ? "End plan" : "Plan ended";
+  $("rpKeep").textContent = RP.keep ? "Stop paving" : "Keep paving";
+  $("rpKeep").setAttribute("aria-pressed", RP.keep);
+  // under the crosshair: what the click would do here
+  let what = "";
+  if (RP.aim) {
+    const k = idx(...RP.aim), ci = A.byKey.get(k), wi = RP.wps.findIndex(p => p[0] === RP.aim[0] && p[1] === RP.aim[1]);
+    if (RP.tool === "stakes") what = bad ? bad : RP.grab ? "Set the stake here" : wi >= 0 && !(RP.open && wi === RP.wps.length - 1) ? "Pick up the stake" : ci && ci.lane === 0 && RP.wps.length > 1 ? "Add a stake here" : RP.open ? "Drive a stake" : "";
+    else if (RP.tool === "shovel") what = RP.remove.has(k) ? "Take up" : ci && !RP.paved.has(k) ? (ci.bad || (ci.kind === "bridge" ? "Build the bridge" : "Pave")) : "";
+    else what = RP_TREES.has(k) ? "Fell the tree" : "";
+  }
+  $("rpAim").textContent = what; $("rpAim").hidden = !what || STATE.view !== "walk";
+  $("rpAim").classList.toggle("bad", !!bad && RP.tool === "stakes");
+}
+function rpShowUI(on) {
+  $("rp").hidden = !on; $("rpOpts").hidden = !on;
+  document.body.classList.toggle("rpmode", on); $("optsTitle").textContent = on ? "Road planner" : "Stairs and collision";
+  if (!on) { $("radial").hidden = true; $("rpAim").hidden = true; }
+}
+
+function rpKey(e) {
+  const c = e.code;
+  if (c === "Digit1") { rpSetTool("stakes"); return true; }
+  if (c === "Digit2") { rpSetTool("shovel"); return true; }
+  if (c === "Digit3") { rpSetTool("axe"); return true; }
+  if (c === "KeyR") { $("radial").hidden = !$("radial").hidden; return true; }
+  if (c === "KeyF") { rpAct(); return true; }
+  if (c === "KeyX") { rpDelete(); return true; }
+  if (c === "Enter") { RP.open = !RP.open; if (RP.grab) rpCancelGrab(); rpPlanLayer(); rpUI(); toast(RP.open ? "Plan open" : "Plan ended"); return true; }
+  if (c === "Escape") { if (!$("radial").hidden) { $("radial").hidden = true; return true; } if (RP.grab) { rpCancelGrab(); return false; } }
+  return false;
+}
+function rpSetupUI() {
+  for (const t of ["stakes", "shovel", "axe"]) $("rpT_" + t).onclick = () => rpSetTool(t);
+  $("rpMenuBtn").onclick = () => { $("radial").hidden = !$("radial").hidden; };
+  $("radial").onclick = e => { if (e.target === $("radial")) $("radial").hidden = true; };
+  $("rdClose").onclick = () => { $("radial").hidden = true; };
+  for (const b of document.querySelectorAll("#radial [data-w]")) b.onclick = () => rpMenu("width", +b.dataset.w);
+  for (const b of document.querySelectorAll("#radial [data-s]")) b.onclick = () => rpMenu("surface", b.dataset.s);
+  $("rdLamps").onclick = () => rpMenu("lamps");
+  $("rpEnd").onclick = () => { RP.open = !RP.open; if (RP.grab) rpCancelGrab(); rpPlanLayer(); rpUI(); };
+  $("rpKeep").onclick = () => { RP.keep = !RP.keep; RP.keepT = 0; rpUI(); };
+  $("rpEdit").onclick = () => rpEditDemo();
+  $("rpReset").onclick = () => rpReset();
+  $("rpFill").onclick = () => { RP.pack = { ...RP_FULL }; rpUI(); toast("Pack filled"); };
+  $("rpHide").onclick = () => { const o = $("rp"), open = o.dataset.open !== "true"; o.dataset.open = open; $("rpHide").textContent = open ? "Hide" : "Show"; };
+  { const m = $("recModal"), close = () => { m.hidden = true; };
+    $("rpRec").onclick = () => { $("recBody").textContent = JSON.stringify(rpRecord(), null, 1); m.hidden = false; $("recClose").focus(); };
+    $("recClose").onclick = close; m.onclick = e => { if (e.target === m) close(); };
+    addEventListener("keydown", e => { if (e.key === "Escape" && !m.hidden) close(); }); }
+  const rng2 = (id, key, fmt, after) => { const el = $(id), out = $(id + "O"); const show = () => { out.textContent = fmt(+el.value); }; el.oninput = () => { RP_TUNE[key] = +el.value; show(); if (after) after(); }; el.value = RP_TUNE[key]; show(); };
+  rng2("rpGhost", "ghost", v => v.toFixed(2), () => rpGhostOpacity());
+  rng2("rpGrade", "grade", v => `a layer a ${v === 1 ? "cell" : v + " cells"}, ${Math.round(Math.atan(1 / (v * W)) * 180 / Math.PI)}\u00b0`, () => { rpCommit(); rpPlanLayer(); rpUI(); });
+  rng2("rpScale", "scale", v => v.toFixed(1) + "x", () => rpUI());
+  rng2("rpSpacing", "spacing", v => v + " cells", () => { rpCommit(); rpPlanLayer(); rpUI(); });
+  rng2("rpShare", "share", v => Math.round(v * 100) + "%", () => rpUI());
+  $("rpRemoval").onchange = e => { RP_TUNE.removal = e.target.value; };
+  rpGhostOpacity();
+  if (matchMedia("(max-width:860px)").matches) $("rpHide").click();
+}
+
 // How brightly each settlement's streets are lit, and how many windows: the town most.
 Object.assign(SCENES.town, { streetLight: 3.4, litWindows: 0.55 });
 Object.assign(SCENES.coast, { streetLight: 4.2, litWindows: 0.5 });
@@ -4314,7 +5140,10 @@ function setView(v) {
 // view, so nothing floats over the scene; walking keeps its "Click to walk".
 function updateHint() { const h = $("hint"); h.hidden = !(STATE.view === "walk" && !STATE.locked && !document.body.classList.contains("coarse")); h.textContent = "Click to walk"; }
 function renderKeys() {
-  const keys = STATE.view === "overview"
+  const keys = SCENE === "roadplanner" ? (STATE.view === "overview"
+    ? [["Click", RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["Right-click", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["Enter", "End or open the plan"], ["Drag", "Turn"], ["Wheel", "Zoom"], ["V", "Walk / overview"], ["L", "Day / night"]]
+    : [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Click / F", RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["X / right", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["Enter", "End or open the plan"], ["Esc", "Put a held stake back"], ["V", "Walk / overview"], ["L", "Day / night"]])
+    : STATE.view === "overview"
     ? [["Drag", "Turn"], ["Right-drag", "Pan (or Shift-drag)"], ["W A S D", "Pan"], ["Wheel", "Zoom"], ["Double-click", "Walk there"], ["V", "Walk / overview"], ["C", "Show collision"], ["L", "Day / night"]]
     : [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Shift", "Sprint"], ["Space", "Jump"], ["E", "Open or close a door"], ["V", "Walk / overview"], ["C", "Show collision"], ["T", "Proposed / today's walker"], ["N", "Fly through walls"], ["L", "Day / night"], ["Esc", "Let go of the mouse"]];
   $("keys").innerHTML = keys.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
@@ -4379,6 +5208,7 @@ function setWalker(v) {
 }
 addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (SCENE === "roadplanner" && rpKey(e)) { if (e.code === "Enter") e.preventDefault(); return; }
   STATE.keys[e.code] = true;
   if (e.code === "KeyV") setView(STATE.view === "walk" ? "overview" : "walk");
   if (e.code === "KeyC") { $("colliders").checked = STATE.colliders = !STATE.colliders; }
@@ -4402,7 +5232,8 @@ function useDoor() {
   if (!best) { toast("No door in reach"); return; }
   best.open = !best.open; best.solid.off = best.open; toast(best.open ? "Door opened" : "Door closed");
 }
-canvas.addEventListener("click", () => { if (STATE.view === "walk" && !document.body.classList.contains("coarse") && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} } });
+canvas.addEventListener("mousedown", e => { if (SCENE === "roadplanner" && STATE.view === "walk" && STATE.locked && e.button === 2) rpDelete(); });
+canvas.addEventListener("click", () => { if (SCENE === "roadplanner" && STATE.view === "walk" && STATE.locked) { rpAct(); return; } if (STATE.view === "walk" && !document.body.classList.contains("coarse") && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} } });
 document.addEventListener("pointerlockchange", () => { STATE.locked = document.pointerLockElement === canvas; updateHint(); });
 let drag = null;
 canvas.addEventListener("mousemove", e => {
@@ -4419,6 +5250,9 @@ canvas.addEventListener("pointerdown", e => {
 });
 const release = e => {
   const p = PTRS.get(e.pointerId);
+  if (p && e.type === "pointerup" && SCENE === "roadplanner" && STATE.view === "overview" && PTRS.size === 1 && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) {
+    RP.mouse = [e.clientX, e.clientY]; if (e.button === 2) rpDelete(); else rpAct();
+  }
   if (p && e.type === "pointerup" && e.pointerType === "touch" && PTRS.size === 1 && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 12) {
     const now = e.timeStamp; // when the finger lifted, not when a slow frame let us see it
     if (now - lastTap.t < 450 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { walkFrom(e.clientX, e.clientY); lastTap.t = 0; }
@@ -4429,6 +5263,7 @@ const release = e => {
 };
 addEventListener("pointerup", release); addEventListener("pointercancel", release);
 canvas.addEventListener("pointermove", e => {
+  RP.mouse = [e.clientX, e.clientY];
   const p = PTRS.get(e.pointerId); if (p) { p.x = e.clientX; p.y = e.clientY; }
   if (PTRS.size === 2 && STATE.view === "overview") { // two fingers: pinch to zoom, move together to pan
     const d = pinchDist(), [a, b] = [...PTRS.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -4454,7 +5289,7 @@ function panOrbit(dx, dy) {
 const ray = new THREE.Raycaster();
 canvas.addEventListener("dblclick", e => walkFrom(e.clientX, e.clientY));
 function walkFrom(clientX, clientY) {
-  if (STATE.view !== "overview") return;
+  if (STATE.view !== "overview" || SCENES[SCENE].noDblWalk) return;
   const r = canvas.getBoundingClientRect();
   ray.setFromCamera({ x: (clientX - r.left) / r.width * 2 - 1, y: -(clientY - r.top) / r.height * 2 + 1 }, camera);
   const cut = renderer.clippingPlanes.length ? +$("cut").value : 1e9;
@@ -4479,14 +5314,14 @@ const TOUCH = { fwd: 0, side: 0, jump: false, id: null };
   $("tJump").addEventListener("pointerdown", e => { TOUCH.jump = true; e.stopPropagation(); });
   $("tJump").addEventListener("pointerup", () => { TOUCH.jump = false; });
   $("tJump").addEventListener("pointercancel", () => { TOUCH.jump = false; });
-  $("tUse").addEventListener("pointerdown", e => { e.stopPropagation(); useDoor(); });
+  $("tUse").addEventListener("pointerdown", e => { e.stopPropagation(); if (SCENE === "roadplanner") rpAct(); else useDoor(); });
   if (!window.PointerEvent) { // old WebKit: the same stick on touch events
     const t0 = e => e.changedTouches[0];
     stick.addEventListener("touchstart", e => move(t0(e)), { passive: false });
     stick.addEventListener("touchmove", e => move(t0(e)), { passive: false });
     stick.addEventListener("touchend", end);
     $("tJump").addEventListener("touchstart", () => { TOUCH.jump = true; }); $("tJump").addEventListener("touchend", () => { TOUCH.jump = false; });
-    $("tUse").addEventListener("touchstart", useDoor);
+    $("tUse").addEventListener("touchstart", () => SCENE === "roadplanner" ? rpAct() : useDoor());
   }
 })();
 function input() {
@@ -4523,6 +5358,7 @@ function hud() {
   if (P.wading) chips.push(["Wading, half speed", ""]);
   if (P.gravel) chips.push(["Gravel, +15%", "good"]);
   if (SCENE === "paving" && inMap(c, r)) { const i = idx(c, r); if (MARKED.has(i)) chips.push([AREA[i] === "Marked for paving" ? "Marked: F with the shovel paves it" : "Preview of the next stake", ""]); }
+  if (SCENE === "roadplanner") { chips.unshift([{ stakes: "Survey stakes", shovel: "Shovel", axe: "Axe" }[RP.tool] + " in hand", "on"]); const u = P.surface && P.surface.detail === "marked for removal"; if (u) chips.push(["Marked for removal", "bad"]); }
   if (P.airOnStair) chips.push([`Left the stair ${P.airOnStair}x`, "bad"]);
   $("chips").innerHTML = chips.map(([t, k]) => `<span class="chip ${k}">${t}</span>`).join("");
 }
@@ -4612,6 +5448,7 @@ function frame(now) {
   sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(STATE.sunDir, 120);
   sun.shadow.camera.far = 300;
   drawColliders();
+  rpFrame(dt);
   if ((hudT -= dt) <= 0) { hud(); hudT = 0.1; }
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -4644,6 +5481,8 @@ function loadScene(key) {
   nightLamps();
   finalize();
   buildDressing();
+  rpShowUI(key === "roadplanner"); $("tUse").textContent = key === "roadplanner" ? "Use" : "Door"; renderKeys();
+  if (SCENES[key].after) SCENES[key].after();
   fillList("places");
   Object.assign(ORB, { ty: 2, yaw: -1.9, pitch: 0.72 }, SCENES[key].orbit);
   teleport(GOTO[SCENES[key].start]);
@@ -4652,7 +5491,7 @@ function loadScene(key) {
   try { history.replaceState(null, "", "#" + key); } catch (e) {}
 }
 function boot() {
-  buildUI();
+  buildUI(); rpSetupUI();
   setWalker("proposed");
   let first = "town"; try { const h = location.hash.slice(1); if (SCENES[h]) first = h; } catch (e) {}
   loadScene(first);
@@ -4660,6 +5499,6 @@ function boot() {
   $("loading").hidden = true;
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-window.__town = { BUF, TOPMAT, WINDOWS, FACADES, P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB, loadScene, SCENES, NPCS, three: scene, DRESS, get scene() { return SCENE; } };
+window.__town = { rp: { RP, RP_TUNE, rpAct, rpSetTool, rpMenu, rpApply, rpAfterBuild, rpEditDemo, rpReset, rpUpdateAim, rpKeepStep, rpRecord, rpUI, rpPlanLayer, rpDelete, rpCancelGrab, hexLine, rpAnalyse, rpRoute }, BUF, TOPMAT, WINDOWS, FACADES, P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB, loadScene, SCENES, NPCS, three: scene, DRESS, get scene() { return SCENE; } };
 setTimeout(boot, 30);
 </script>
