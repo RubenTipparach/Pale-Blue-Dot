@@ -122,6 +122,11 @@
         ("parcel", 1, goods),
         // ---- townsfolk design 31: crushed stone for a road
         ("gravel", 1, stone),
+        // ---- townsfolk design 41: the gravel stations and their goods
+        ("crushed-stone", 1, stone),
+        ("survey-stakes", 1, wood),
+        ("block:grinder", 40, goods),
+        ("block:mixer", 35, goods),
         // ---- land-transport design 10: the cart wheel and the two carts
         ("wheel", 12, goods),
         ("hand-cart", 45, goods),

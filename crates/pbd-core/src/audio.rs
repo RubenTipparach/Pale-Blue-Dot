@@ -473,7 +473,11 @@ pub fn surface_family(material: Material) -> Option<Family> {
         Material::DryGrass => Family::Dry,
         Material::Sand | Material::DesertSand => Family::Sand,
         Material::Snow => Family::Snow,
-        Material::Workbench | Material::Carpenter | Material::Sticks => Family::Wood,
+        Material::Workbench
+        | Material::Carpenter
+        | Material::Sticks
+        | Material::Grinder
+        | Material::Mixer => Family::Wood,
         Material::Water | crate::flowing_water!() => Family::Shallow,
         Material::Air
         | Material::Torch

@@ -979,7 +979,14 @@ pub fn show_note(
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
     mut text: Query<&mut pbd_app::ui_kit::KitText, With<NoteText>>,
+    road: Option<ResMut<pbd_app::roads::RoadSay>>,
 ) {
+    // A road's refusal (`townsfolk` design 39 and 40) shows as the note.
+    if let Some(mut road) = road
+        && let Some(line) = road.0.take()
+    {
+        note.say(time.elapsed_secs(), line);
+    }
     if !note.text.is_empty() && time.elapsed_secs() > note.until_s {
         note.text.clear();
     }
@@ -1290,8 +1297,10 @@ pub fn show(
     mut flames: Query<&mut Visibility, With<Flame>>,
     mut keys: Local<Keys>,
     mut since: Local<f32>,
+    paving: Option<Res<pbd_app::roads::paving::PavingLooks>>,
 ) {
     let Some(looks) = looks else { return };
+    let Some(paving) = paving else { return };
     let dt = time.delta_secs();
     let step = dt / FADE_S;
     // Fades run every frame.
@@ -1443,7 +1452,11 @@ pub fn show(
     for edit in save.edits.all() {
         if !matches!(
             edit.material,
-            Material::Forge | Material::Workbench | Material::Carpenter
+            Material::Forge
+                | Material::Workbench
+                | Material::Carpenter
+                | Material::Grinder
+                | Material::Mixer
         ) {
             continue;
         }
@@ -1514,6 +1527,38 @@ pub fn show(
                         Mesh3d(looks.carpenter_iron.clone()),
                         MeshMaterial3d(looks.iron_tex.clone()),
                     ));
+                });
+            continue;
+        }
+        if matches!(material, Material::Grinder | Material::Mixer) {
+            // The gravel stations (`townsfolk` design 41): shaped forms of
+            // timber, iron and stone, lit as the ground is.
+            let parts = if material == Material::Grinder {
+                &paving.grinder
+            } else {
+                &paving.mixer
+            };
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|station| {
+                    for (stuff, mesh) in parts {
+                        station.spawn((
+                            Mesh3d(mesh.clone()),
+                            MeshMaterial3d(paving.material(*stuff)),
+                        ));
+                    }
                 });
             continue;
         }
@@ -1688,8 +1733,16 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
+    (net, standing, roads_cfg): (
+        Option<ResMut<pbd_app::roads::RoadNet>>,
+        Option<ResMut<pbd_app::roads::RoadsStanding>>,
+        Option<Res<pbd_app::roads::RoadsSettings>>,
+    ),
 ) {
-    if *done || launch.capture.is_none() || (launch.farm.is_none() && launch.forge.is_none()) {
+    if *done
+        || launch.capture.is_none()
+        || (launch.farm.is_none() && launch.forge.is_none() && launch.paving.is_none())
+    {
         return;
     }
     if refresh.in_flight_s().is_some() {
@@ -1718,7 +1771,11 @@ pub fn scripted(
         let top = fine.set.columns.column(record)?.surface()?;
         Some((key, top))
     };
-    let first = launch.farm.or(launch.forge).unwrap_or(6.0);
+    let first = launch
+        .farm
+        .or(launch.forge)
+        .or(launch.paving)
+        .unwrap_or(6.0);
     if spot(&fine, &contact, first, 0.0).is_none() {
         return;
     }
@@ -1910,6 +1967,59 @@ pub fn scripted(
             *screen = Screen::Forge;
         }
         info!("scripted forge at cell {cell} layer {layer}");
+    }
+    if let Some(metres) = launch.paving {
+        use pbd_app::roads::paving;
+        // The grinder to the left and the mixer to the right.
+        for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
+            if let Some((cell, top)) = spot(&fine, &contact, metres, across) {
+                apply_edit(world!(), Hands::Empty, cell, top + 1, material);
+                info!("scripted paving: a {material:?} at cell {cell}");
+            }
+        }
+        // A plan staked from past them along the view, two stakes 9 m
+        // apart and a third 9 m on.
+        let config = *pbd_app::planet::terrain_config();
+        let cfg = roads_cfg.map_or_else(pbd_app::roads::load_config, |r| (*r.0).clone());
+        let top_of = |key: u32| {
+            let c = pbd_core::roads::centre(key)?;
+            Some(c * (config.radius_m + pbd_core::column::surface_m(&config, c).floor()))
+        };
+        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 8);
+        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 6);
+        let mut open = None;
+        for ahead_m in [metres + 4.0, metres + 13.0, metres + 22.0] {
+            let Some(point) =
+                spot(&fine, &contact, ahead_m, 0.0).and_then(|(cell, _)| top_of(cell))
+            else {
+                continue;
+            };
+            match paving::drive_stake(&mut save, &mut slots, open, point, &config, &cfg) {
+                Ok(paving::Staked::Driven { plan, marked }) => {
+                    open = Some(plan);
+                    info!("scripted paving: a stake {ahead_m:.0} m ahead, {marked} cells marked");
+                }
+                Ok(paving::Staked::Resumed(plan)) => open = Some(plan),
+                Err(why) => {
+                    warn!("scripted paving: the stake {ahead_m:.0} m ahead refused: {why:?}")
+                }
+            }
+        }
+        // The nearer cells paved, one gravel each.
+        if let Some(plan) = open.and_then(|id| {
+            pbd_core::roads::paving::plans(&save.records)
+                .get(&id)
+                .cloned()
+        }) {
+            for &key in plan.cells.iter().take(6) {
+                if let Err(why) = paving::pave(&mut save, &mut slots, key, &config) {
+                    warn!("scripted paving: cell {key} not paved: {why:?}");
+                }
+            }
+        }
+        if let (Some(mut net), Some(mut standing)) = (net, standing) {
+            paving::restand(&save, &mut net, &mut standing);
+        }
     }
 }
 

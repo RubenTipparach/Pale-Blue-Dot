@@ -1,5 +1,5 @@
 // The towns mockup's Furniture scene (`makeFurniture`, `furniture` task 1.2,
-// M15 version 5): its places by day (11:00) and at 22:30, the chest panel,
+// M15 version 6): its places by day (11:00) and at 22:30, the chest panel,
 // and the whole scene from above, at desktop width and at phone width.
 // Usage: THREE_JS=<path to three.min.js r128> NODE_PATH=$(npm root -g)
 // node tools/mockup_furniture_shots.js <towns.html> <out dir>

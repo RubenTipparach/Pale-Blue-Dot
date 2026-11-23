@@ -150,11 +150,12 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
         | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
         | u32::from(height < high_water_m()) << FLOODED_BIT
-        | u32::from(road) << ROAD_BIT
+        | u32::from(road || pbd_core::roads::paving::bare(d)) << ROAD_BIT
 }
 
 /// The bit of a record's material word that says a road lies on the cell
-/// (`townsfolk` design 33): the clutter pass grows no pixel tufts there.
+/// (`townsfolk` design 33), or one the player marked or paved (design 44):
+/// the clutter pass grows no pixel tufts there.
 /// `planet_surface.wgsl` reads it.
 pub const ROAD_BIT: u32 = 30;
 const _: () = assert!(PLACED_SHEET_SHIFT + 4 <= ROAD_BIT);
@@ -235,6 +236,8 @@ pub fn render_code(material: Material) -> u32 {
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
         Material::Workbench | Material::Carpenter => WOOD,
+        // The gravel stations (`townsfolk` design 41): the workbench's timber.
+        Material::Grinder | Material::Mixer => WOOD,
         // A beaver's sticks (B25): the bark of the local trees, as the
         // workbench is drawn.
         Material::Sticks => WOOD,

@@ -290,37 +290,53 @@ fn app_fresh() -> App {
 }
 
 /// The town tree's unlocks are recipes the game has, or recipes it awaits
-/// (data only): the paving's are awaited, and the carts' are shipped and
-/// locked by the tree (`land-transport` design 10), the wheel open while
-/// the paving that unlocks it is pending.
+/// (data only). The paving's and the carts' are built (`townsfolk` design
+/// 44, `land-transport` design 10): the grinder, crushed stone, the mixer,
+/// gravel, survey stakes, the wheel and the two carts are locked until
+/// their missions.
 #[test]
-fn only_the_carts_shipped_recipes_wait_on_the_town_tree() {
+fn the_town_tree_locks_its_recipes_until_their_missions() {
     let mut app = app(WorldSave::memory_only());
     reach_town(&mut app);
     app.update();
     let chain = app.world().resource::<TownChain>().0.clone();
     let recipes = app.world().resource::<Recipes>();
+    let locks = app.world().resource::<crate::missions::RecipeLocks>();
+    let mut built = Vec::new();
     for m in &chain.missions {
         for code in &m.unlocks {
-            let carts = ["wheel", "hand-cart", "horse-cart"];
-            assert!(
-                recipes.0.get(code).is_none() || carts.contains(&code.as_str()),
-                "{code} is not built yet"
-            );
+            if recipes.0.get(code).is_some() {
+                assert!(locks.0.contains_key(code), "{code} waits on {}", m.id);
+                built.push(code.as_str());
+            }
         }
     }
-    let locks = app.world().resource::<crate::missions::RecipeLocks>();
+    built.sort_unstable();
+    assert_eq!(
+        built,
+        [
+            "crushed-stone",
+            "grinder",
+            "hand-cart",
+            "horse-cart",
+            "mixed-gravel",
+            "mixer",
+            "survey-stakes",
+            "wheel",
+        ]
+    );
     let starter = &app.world().resource::<MissionChain>().0;
     for code in locks.0.keys() {
         assert!(
-            starter.names(code) || chain.names(code),
+            starter.names(code) || built.contains(&code.as_str()),
             "{code} is a tree's lock"
         );
     }
-    assert!(locks.0.contains_key("hand-cart") && locks.0.contains_key("horse-cart"));
+    // The paving is built, so the wheel waits on "Pave it" too.
     assert!(
-        !locks.0.contains_key("wheel"),
-        "open while paving is pending"
+        locks.0.contains_key("hand-cart")
+            && locks.0.contains_key("horse-cart")
+            && locks.0.contains_key("wheel")
     );
 }
 

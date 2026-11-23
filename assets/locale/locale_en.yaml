@@ -37,6 +37,8 @@ block:
     name: forge
   grass:
     name: grass
+  grinder:
+    name: grinder
   jungle_grass:
     name: jungle grass
   lantern_hanging:
@@ -45,6 +47,8 @@ block:
     name: street lantern
   lantern_wall:
     name: wall lantern
+  mixer:
+    name: mixer
   mussel_bed:
     name: "mussel bed"
   ore:
@@ -710,6 +714,8 @@ item:
     name: copper ingot
   crate:
     name: crate
+  crushed-stone:
+    name: crushed stone
   drawers:
     name: chest of drawers
   egg:
@@ -792,6 +798,8 @@ item:
     name: loose stone
   stool:
     name: stool
+  survey-stakes:
+    name: survey stakes
   table:
     name: table
   tin-ore:
@@ -1308,6 +1316,8 @@ recipe:
     name: CLOSET
   crate:
     name: CRATE
+  crushed-stone:
+    name: CRUSH STONE
   drawers:
     name: DRAWERS
   fence:
@@ -1316,8 +1326,6 @@ recipe:
     name: FLATBREAD
   door:
     name: DOOR
-  gravel:
-    name: GRAVEL X4
   forge:
     name: FORGE
   fried-egg:
@@ -1328,6 +1336,8 @@ recipe:
     name: GATE
   grilled-fish:
     name: GRILL FISH
+  grinder:
+    name: GRINDER
   hand-cart:
     name: HAND CART
   horse-cart:
@@ -1344,8 +1354,12 @@ recipe:
     name: IRON SHOVEL
   kale-skewer:
     name: KALE SKEWER
+  mixed-gravel:
+    name: GRAVEL X4
   mixed-ore:
     name: SMELT ORE
+  mixer:
+    name: MIXER
   planks:
     name: PLANKS
   raft:
@@ -1366,6 +1380,8 @@ recipe:
     name: STONE SHOVEL
   stool:
     name: STOOL
+  survey-stakes:
+    name: STAKES X4
   table:
     name: TABLE
   torch:
@@ -1374,6 +1390,17 @@ recipe:
     name: WHEEL
   workbench:
     name: WORKBENCH
+roads:
+  mark:
+    too_far: Too far
+    too_steep: Too steep
+    water: Water in the way
+    not_ground: Can't stake here
+    staked: Already staked
+  pave:
+    not_marked: Not marked
+    needs_shovel: Needs a shovel
+    needs_gravel: Needs gravel
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"
@@ -1549,8 +1576,12 @@ station:
     name: "carpenter's bench"
   forge:
     name: forge
+  grinder:
+    name: grinder
   hand:
     name: hands
+  mixer:
+    name: mixer
   workbench:
     name: workbench
 talk:
