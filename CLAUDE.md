@@ -129,6 +129,20 @@ craft, drops, props, creatures and anything held up in the world, so in a
 canyon's shade, a cave or the night it is as dark as the ground there. UI
 and inventory icons are not in the world and keep their own look.
 
+## Every model is textured (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Make sure things have textures"
+(after the carts and the horse went in as flat colour). Nothing in the world
+is a flat-coloured mesh:
+- a model uses the game's own pixel textures where one fits (the settlement
+  set's planks, boards, timber, stone, iron), sampled nearest and laid at
+  the manifest's scale so its texels match the walls beside it;
+- where none fits, a new 16 or 32 px pixel texture is drawn in the same
+  palette by a committed script in `tools/art/`, with its manifest row;
+- detail (grain, bands, hinges, a coat's shading, a mane) is painted into
+  the texture, never modelled as a stuck-on box;
+- a creature's colour variation tints its texture, it does not replace it.
+
 ## Notes stay out of the game (owner, 2026-11-15)
 
 **Standing instruction from the user:** "notes belong in mockups and chats,
