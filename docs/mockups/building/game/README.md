@@ -19,3 +19,5 @@ The atlas also gives the ground and trees of both pages (`scene-kit.js`): the fi
 All are sampled nearest, as the game samples them. Mockup-only art (pixel art
 drawn in code with the balatro-pixel-art kit, `tools/art/building_art.py`) is the habitat metal panel and glass,
 which the game does not have yet, and the piece icons.
+
+The building planner's bill of materials (the Planner and Site tabs, `building-planner`) shows the pack goods by their own icons: `items/{planks,stone,log,rope,fibre}.png`, byte-identical copies of `assets/items/goods/<name>.png`, 16 px, shown at 2x.

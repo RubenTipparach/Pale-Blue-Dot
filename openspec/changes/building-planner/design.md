@@ -110,18 +110,23 @@ for a mockup to fine-tune.
   a locale key, its kit, and three sizes (small, standard, large). Ids are
   saved in a site's record, so a preset id is never renamed once shipped.
 - The library at first (standard size, cells x storeys):
-  | Preset | Standard | Notes |
-  | --- | --- | --- |
-  | Straw hut | 1 x 1 | the first night's shelter, cone roof |
-  | Cottage | 3 x 1 | a door, two windows, a hearth slot |
-  | Two-storey house | 4 x 2 | stair, landing, beds upstairs |
-  | Townhouse | 3 x 3 | narrow, for a town lane |
-  | Workshop | 4 x 1 | double door, a workbench slot |
-  | Shop | 4 x 1 | front windows, a counter slot |
-  | Barn | 7 x 1 | wide door, a hayloft floor over half |
-  | Stable | 5 x 1 | stall slots, for the horse cart (`land-transport` 10) |
-  | Warehouse | 9 x 1 | two doors, chest slots |
-  | Tower | 3 x 3 | a stair a storey, a flat roof |
+  | Preset | Kit | Small / standard / large (cells x storeys) | Notes |
+  | --- | --- | --- | --- |
+  | Straw hut | straw | 1x1, 1x1, 2x1 | the first night's shelter, cone roof |
+  | Cottage | timber | 2x1, 3x1, 6x1 | a door, windows, hearth, bed and table slots |
+  | Two-storey house | fieldstone | 3x2, 6x2, 8x2 | a stair and its landing, beds upstairs |
+  | Townhouse | half-timbered | 6x2, 6x3, 8x3 | narrow, for a town lane, a stair each storey |
+  | Workshop | timber | 4x1, 6x1, 8x1 | a double door, a bench slot |
+  | Shop | half-timbered | 3x1, 6x1, 8x1 | front windows, a counter (table) slot |
+  | Barn | timber | 6x1, 8x1, 12x1 | a double door, store slots |
+  | Stable | timber | 3x1, 4x1, 8x1 | a double door, for the horse cart (`land-transport` 10) |
+  | Warehouse | fieldstone | 6x1, 12x1, 15x1 | a double door, chest slots |
+  | Tower | fieldstone | 7x2, 9x3, 12x3 | a stair a storey, a flat roof with a parapet |
+- Doors, windows, lanterns and slots are laid out by rule from the
+  footprint (the door on the front's middle edge, two side by side for a
+  double door, windows spread round each storey, a lantern in each
+  storey's middle), so a size is only a footprint and a storey count. The
+  mockup's three sizes are these; every one passes the planner's checks.
 - **Every plain building of the settlement templates** (`assets/settlements/`,
   `blueprint::plain`) is in the library too, under the town's name, as
   `player-building` decision 5 has them. So the towns' houses are presets
@@ -187,7 +192,8 @@ for a mockup to fine-tune.
   ground has a buildable piece, the site puts up scaffolding round that
   storey's outer walls: timber poles lashed with rope, a board walk at the
   storey's floor line, outside each outer edge. It costs
-  `scaffold_cost` a bay, taken when it goes up and given back when the
+  `scaffold_cost` (2 planks a bay, and a rope for every three bays), taken
+  when it goes up and given back when the
   storey's walls are all built and it comes down. It is solid to the walker
   and climbed by its ladder bay, so the upper walls are in reach. A pole is
   one tapered hexagonal post, bound to its boards where they cross, lit as
@@ -315,11 +321,27 @@ named, defaults in one place:
 | `stroke_s` | 0.5 | s | the mallet's beat (`held-swing`) |
 | `reach_m` | 4 | m | how far F reaches a ghost |
 | `scaffold` | true | | scaffolding for upper storeys |
-| `scaffold_cost` | 2 planks, 1 rope | a bay | given back when it comes down |
+| `scaffold_cost` | 2 planks a bay, 1 rope every 3 bays | | given back when it comes down |
 | `removal` | mark | mark / return | dropped built pieces |
 | `refund_share` | 1.0 | 0..1 | goods back from a piece taken down |
 | `cost_scale` | 1.0 | x | every cost |
 | preset sizes | small, standard, large | | each preset's three footprints |
+
+## The mockup (M6 version 2)
+
+`docs/mockups/building.html`, tabs `#planner`, `#site` and `#builder` (today's
+build mode, "Free building"); the code of the new tabs is
+`docs/mockups/building/planner.js`. It runs the plan model of decision 1,
+the planner's checks of decision 2 (in M6's words), the presets of decision
+4, the world checks of decision 5, building and scaffolding of decision 6,
+the diff of decision 7 and the cost table of decision 8, with the tunables
+of decision 12 as live sliders. Mockup-only, and not a claim about the
+game: the stand-in furniture slot shapes (amber ghosts until `furniture` is
+drawn), the plot and its neighbour, and the plan drawn flat in the planner
+where the game will add the build camera's preview. Screenshots:
+`docs/screenshots/building-planner/` (made with
+`tools/mockup_building_planner_shots.js`, headless Chromium on SwiftShader in
+a cloud session; no frame times taken).
 
 ## Risks / Trade-offs
 

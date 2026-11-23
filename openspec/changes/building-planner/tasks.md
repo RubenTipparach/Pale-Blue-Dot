@@ -8,7 +8,7 @@ for it to be built.
 
 - [x] 1.1 This change: proposal, design, tasks and the
       `player/building-planner` spec delta; `openspec validate --all` passes.
-- [ ] 1.2 M6 Hex House Builder (`docs/mockups/building.html`): a Planner tab
+- [x] 1.2 M6 Hex House Builder (`docs/mockups/building.html`): a Planner tab
       (presets in three sizes, rooms, walls, doors, windows, stairs,
       lanterns, slots, the roof and kit, the checks in red with their
       reasons, the bill of materials, save as mine) and a Site tab (the 3D
@@ -18,10 +18,10 @@ for it to be built.
       goods that come back); the old builder is the Free building tab; one
       3D view at a time, made when its tab opens; the notes in an info
       modal.
-- [ ] 1.3 Live tunables in the mockup: ghost look, build rate, rotation
+- [x] 1.3 Live tunables in the mockup: ghost look, build rate, rotation
       step, preset sizes, scaffolding, removal mode, refund share, cost
       scale, plan limits, and the world's building setting.
-- [ ] 1.4 Screenshots of every tab at desktop and phone sizes, day and
+- [x] 1.4 Screenshots of every tab at desktop and phone sizes, day and
       night, in `docs/screenshots/building-planner/` (headless Chromium,
       software GL, in a cloud session; no frame times taken).
 - [x] 1.5 CLAUDE.md's phase 3 bullet, the tracker's Roadmap step, and M6's
