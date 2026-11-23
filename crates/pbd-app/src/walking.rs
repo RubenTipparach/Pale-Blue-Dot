@@ -1124,17 +1124,22 @@ fn read_walking_input(
     walkers: Query<&Position, With<Walker>>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     space: crate::SimSpace,
+    view: Option<Res<crate::build_view::BuildView>>,
 ) {
     if !state.active {
         return;
     }
     let Some(keys) = keys else { return };
+    // Architecture mode (`player-building` design B9) holds the pointer as a
+    // menu does, and the walker reads nothing under it: its pose is kept
+    // exactly for the camera to come back to.
+    let building = view.as_deref().is_some_and(|v| v.on);
     // A menu is a second claimant on the pointer. While it holds it the walker
     // reads nothing - not the look, not the keys, and above all not the click
     // that presses a button, which would otherwise grab the mouse on its way
     // through to the world. `Escape` is the menu's key now and is consumed
     // before this system runs, so there is no arm for it here.
-    let menu_open = pointer.menu_holds(&mut state.captured);
+    let menu_open = pointer.held_by(building, &mut state.captured);
     if !menu_open && buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
         state.captured = true;
     }
@@ -1157,7 +1162,7 @@ fn read_walking_input(
     }
     state.axes = Vec2::ZERO;
     state.sprinting = false;
-    if !state.captured {
+    if !state.captured || building {
         state.jump = false;
         state.jump_held = false;
         return;
@@ -2114,6 +2119,7 @@ pub(crate) fn follow_walker(
     space: crate::SimSpace,
     time: Res<Time>,
     mut step_ease: Local<(Option<f64>, f32)>,
+    view: Option<Res<crate::build_view::BuildView>>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2163,6 +2169,15 @@ pub(crate) fn follow_walker(
             crate::render_origin::render_from_physics(frame, eye)
         });
         camera.rotation = state.rotation();
+        // Architecture mode's camera in the walker's place (design B9);
+        // off, the walker's own is written above, exactly as it was.
+        if let Some(view) = view.as_deref().filter(|v| v.on)
+            && let Some(shown) =
+                view.shown_transform(frame.as_deref().map_or(DVec3::ZERO, |f| f.center))
+        {
+            camera.translation = shown.translation;
+            camera.rotation = shown.rotation;
+        }
     }
     let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(up).degrees();
     *readout = WalkingReadout {
@@ -2376,6 +2391,90 @@ mod tests {
         assert!(
             spawn_now.angle_between(fresh.world().resource::<WalkingState>().spawn_direction)
                 < 1e-5
+        );
+    }
+
+    /// `player-building` design B9: architecture mode puts the camera over
+    /// the site and the walker reads nothing under it, though W is held and
+    /// the mouse moves; leaving it, the camera is the walker's exactly as it
+    /// was, eye and look, on the same frame.
+    #[test]
+    fn architecture_mode_gives_the_walkers_camera_back_exactly() {
+        use crate::build_view::BuildView;
+        let mut app = app();
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        for _ in 0..180 {
+            app.update();
+        }
+        let camera = |app: &mut App| {
+            let mut q = app
+                .world_mut()
+                .query_filtered::<&Transform, With<WalkingCamera>>();
+            *q.single(app.world()).unwrap()
+        };
+        let before = camera(&mut app);
+        let view_before = app.world().resource::<WalkingState>().view();
+        let body = app.world().resource::<WalkingState>().body;
+        let at_before = app.world().entity(body).get::<Position>().unwrap().0;
+        let frame = app
+            .world()
+            .get_resource::<crate::planet::PlanetRenderFrame>()
+            .cloned();
+        let eye = crate::render_origin::local_of(frame.as_ref(), before.translation);
+        let site = eye + before.forward().as_vec3() * 8.0;
+        let mut view = BuildView::default();
+        view.enter(
+            site.as_dvec3(),
+            pbd_core::column::layer_at(site.length() - PLANET_RADIUS).unwrap_or(0) as u16,
+            before.forward().as_vec3().as_dvec3(),
+            eye.as_dvec3(),
+            site.as_dvec3(),
+        );
+        app.insert_resource(view);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        for _ in 0..90 {
+            app.world_mut()
+                .resource_mut::<AccumulatedMouseMotion>()
+                .delta = Vec2::new(30.0, 12.0);
+            app.world_mut().resource_mut::<BuildView>().step(1.0 / 60.0);
+            app.update();
+        }
+        let over = camera(&mut app);
+        assert!(
+            over.translation.distance(before.translation) > 10.0,
+            "the camera is up and back over the site"
+        );
+        assert_eq!(
+            app.world().resource::<WalkingState>().view(),
+            view_before,
+            "the walker did not turn"
+        );
+        let at = app.world().entity(body).get::<Position>().unwrap().0;
+        assert!(at.distance(at_before) < 0.01, "nor walk: {at} {at_before}");
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        app.world_mut()
+            .resource_mut::<AccumulatedMouseMotion>()
+            .delta = Vec2::ZERO;
+        app.world_mut().resource_mut::<BuildView>().leave();
+        app.update();
+        let back = camera(&mut app);
+        assert!(
+            back.translation.distance(before.translation) < 1e-3,
+            "the eye: {} against {}",
+            back.translation,
+            before.translation
+        );
+        assert!(
+            back.rotation.dot(before.rotation).abs() > 1.0 - 1e-6,
+            "the look"
+        );
+        assert!(
+            app.world().resource::<WalkingState>().captured,
+            "the pointer handed back to the walker"
         );
     }
 

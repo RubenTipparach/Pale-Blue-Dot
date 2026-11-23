@@ -69,7 +69,14 @@ impl Pointer<'_, '_> {
     /// `captured` across the edge: cleared while one is open, and set on the
     /// frame the last one closes.
     pub fn menu_holds(&mut self, captured: &mut bool) -> bool {
-        let open = self.menu.as_ref().is_some_and(|open| open.0);
+        self.held_by(false, captured)
+    }
+
+    /// [`Pointer::menu_holds`], with `also` holding it as a menu does:
+    /// architecture mode (`player-building` design B9), which frees the
+    /// cursor and hands it back to the walker on the frame it ends.
+    pub fn held_by(&mut self, also: bool, captured: &mut bool) -> bool {
+        let open = also || self.menu.as_ref().is_some_and(|open| open.0);
         hand_over_pointer(open, &mut self.was_open, captured);
         open
     }
@@ -448,7 +455,8 @@ const WASD: [Key; 4] = [
 
 const ON_FOOT: [Binding; 4] = [
     row(&WASD, " ", "move"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "breeding"),
+    // Breeding on N (`player-building` design B10): B is build mode's.
+    row(&[Key::Board(KeyCode::KeyN)], " ", "breeding"),
     row(&[Key::Board(KeyCode::Space)], " ", "jump"),
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
 ];
@@ -527,14 +535,31 @@ const RAFT: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyU)], " ", "unload_log"),
 ];
 
-/// Build mode (`player-building` design B5): N opens and closes it (B, which
-/// the design first named, is the breeding screen on foot), K the kits.
-const BUILDING: [Binding; 5] = [
-    row(&[Key::Board(KeyCode::KeyN)], " ", "build_mode"),
+/// Build mode (`player-building` design B5, B10): B opens and closes it (the
+/// owner's P3, "B for now"; breeding moved to N), K the kits. Z raises the
+/// architecture camera (design B9), where the move keys pan it, a right drag
+/// orbits it, ctrl and the wheel zoom, and Page Up and Page Down move the
+/// build layer.
+const BUILDING: [Binding; 8] = [
+    row(&[Key::Board(KeyCode::KeyB)], " ", "build_mode"),
     row(&[Key::Mouse(MouseButton::Left)], " ", "build_place"),
     row(&[Key::Mouse(MouseButton::Right)], " ", "build_remove"),
     row(&[Key::Wheel], " ", "build_turn"),
     row(&[Key::Board(KeyCode::KeyK)], " ", "kits"),
+    row(&[Key::Board(KeyCode::KeyZ)], " ", "build_view"),
+    row(
+        &[Key::Board(KeyCode::PageUp), Key::Board(KeyCode::PageDown)],
+        " / ",
+        "build_layer",
+    ),
+    row(&[Key::Wheel], " ", "build_zoom"),
+];
+
+/// The slots build mode and breeding swapped (`player-building` design
+/// B10), old name to new: a player's rebind of either is kept on it.
+pub const BEFORE_BUILD_ON_B: [(&str, &str); 2] = [
+    ("on_foot:KeyB", "on_foot:KeyN"),
+    ("building:KeyN", "building:KeyB"),
 ];
 
 /// The rod from a paddled boat's seat (`small-boats` design 6).
@@ -793,6 +818,15 @@ impl KeyBinds {
 /// in place, unread and written back as it was.
 fn migrate_interact(names: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut names = names.clone();
+    // Build mode on B and breeding on N (`player-building` design B10): an
+    // old slot's rebind moves to the slot that does what it did.
+    for (old, new) in BEFORE_BUILD_ON_B {
+        if !names.contains_key(new)
+            && let Some(key) = names.remove(old)
+        {
+            names.insert(new.to_string(), key);
+        }
+    }
     if names.contains_key(INTERACT_SLOT) {
         return names;
     }
@@ -1381,6 +1415,36 @@ mod tests {
             line("flying", &KeyBinds::default()).split("   ").nth(2),
             Some("Q / E roll")
         );
+    }
+
+    /// `player-building` design B10: build mode is on B and breeding on N,
+    /// B in flight is still the brake, and a player's rebind of either old
+    /// slot is kept on the slot that does what it did.
+    #[test]
+    fn build_mode_is_on_b_and_breeding_on_n() {
+        let named = |name: &str| slots().find(|s| s.name() == name);
+        let build = named("building:KeyB").expect("build mode on B");
+        let breeding = named("on_foot:KeyN").expect("breeding on N");
+        assert_eq!(build.row.act, "build_mode");
+        assert_eq!(breeding.row.act, "breeding");
+        assert!(named("on_foot:KeyB").is_none() && named("building:KeyN").is_none());
+        assert_eq!(named("flying:KeyB").unwrap().row.act, "brake");
+        let none = KeyBinds::default();
+        assert!(none.clashes(&build).is_empty());
+        assert!(none.clashes(&breeding).is_empty());
+        for name in ["building:KeyZ", "building:PageUp", "building:PageDown"] {
+            let slot = named(name).unwrap_or_else(|| panic!("{name}"));
+            assert!(none.clashes(&slot).is_empty(), "{name}");
+        }
+        let names: BTreeMap<String, String> = [
+            ("on_foot:KeyB".to_string(), "KeyJ".to_string()),
+            ("building:KeyN".to_string(), "KeyU".to_string()),
+        ]
+        .into();
+        let (binds, skipped) = KeyBinds::from_names(&names);
+        assert!(skipped.is_empty(), "{skipped:?}");
+        assert_eq!(binds.key(&breeding), KeyCode::KeyJ);
+        assert_eq!(binds.key(&build), KeyCode::KeyU);
     }
 
     /// The file's names round trip, and a slot or key this build does not

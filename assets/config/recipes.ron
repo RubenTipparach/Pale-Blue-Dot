@@ -140,6 +140,15 @@
             inputs: [("planks", 4), ("rope", 2)],
             outputs: [("incubator", 1)],
         ),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        // (its strap hinges and pull), hung in a doorway.
+        (
+            code: "door",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 4), ("iron-ingot", 1)],
+            outputs: [("door", 1)],
+        ),
         (
             code: "bronze-pickaxe",
             station: "workbench",

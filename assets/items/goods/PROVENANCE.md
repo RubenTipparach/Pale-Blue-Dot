@@ -94,6 +94,15 @@ with a cross of twine and a bow, the 1 px outline of an inventory icon. The
 coin beside the hotbar (`assets/items/ui/coin.png`, design 5) is drawn by the
 same script: a gold piece with a stamped square ring.
 
+## player-building design B8: the door
+
+`door` is drawn by `tools/gen_item_icons.py`: a door of planks with two iron
+strap hinges on its hinge side and a ring pull, in the fence's browns and the
+lights' irons (`FARM`), with the 1 px outline of an inventory icon. The leaf
+in the world (`assets/textures/settlement/door.png`) has no outline and is
+drawn by `tools/art/door_texture.py` from the `plank`, `timber` and `iron`
+textures' own colours.
+
 ## townsfolk design 31: gravel
 
 `gravel` is drawn by `tools/gen_item_icons.py` (`ROADS`): a heap of crushed

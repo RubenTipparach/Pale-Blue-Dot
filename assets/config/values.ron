@@ -127,5 +127,7 @@
         ("survey-stakes", 1, wood),
         ("block:grinder", 40, goods),
         ("block:mixer", 35, goods),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        ("door", 24, goods),
     ],
 )

@@ -24,6 +24,21 @@ PBD_BUILD_SHOT="<plan>" PBD_WINDOW=1200x750 xvfb-run -a -s "-screen 0 1200x750x2
 | `two-storey-house-night.jpg` | The same house whole at 22:00: its lanterns light its rooms, warm through the windows; the field lights the walls as the ground. | `choice:2,house:999,ahead:20,at:100`, `--time 22 --frames 240` |
 | `kit-picker.jpg` | K in build mode: every kit the game ships (22), each with its wall, floor and roof textures; Timber, the chosen one, lit. | `picker,kit:2,at:150`, `--pitch -10 --frames 260` |
 
+### The owner's notes (design B7 to B10, 2026-11-23)
+
+The same timber house (`choice:2,house:999,ahead:18,at:200`), with
+`doors` (a door put in the pack and hung in its doorway through
+`Builds::place_door`), and architecture mode (`view`) over it. Run with
+`--walk --rain 0 --weather-at 7200 --frames 300`; lavapipe, so the look
+only, not the frame time.
+
+| Shot | What it shows | Extra plan, args |
+| --- | --- | --- |
+| `architecture-day.png` | Architecture mode (Z in build mode) over the house at 11:00: the camera up and back, the palette, the cursor's ghost on the build layer (red: a wall there has nothing to stand on). The footing's coursed stone shows under the house. | `doors,view`, `--time 11` |
+| `architecture-night.png` | The same at 22:30: the house as dark as the ground round it, its lanterns faint at the windows. | `quiet,doors,view`, `--time 22.5` |
+| `footing-close.png` | The footing close up: the new `footing` texture under the floor where the desert falls away. | `quiet,doors,view,dist:12,tilt:18` |
+| `door-shut.png`, `door-open.png` | The door hung in the doorway, shut, then opened a quarter turn into the room: one bevelled leaf of planks with its ledges, brace, strap hinges and pull painted in, in a U frame. | `quiet,doors,view:door,dist:7,tilt:28` (and `open`) |
+
 What is wrong in them, and stays as a limitation for now:
 
 - **The house stands on the highest ground under it.** On the desert's
@@ -31,7 +46,7 @@ What is wrong in them, and stays as a limitation for now:
   nothing under it. A blueprint's ground floor goes on the highest cell so
   no floor is under the ground; a foundation or posts down to the ground
   are not built yet.
-- Doors are doorways with no leaf (design B1).
+- Doors were doorways with no leaf (design B1) until design B8.
 - The house casts no shadow into the sun's cascades: player buildings are
   not on the towns' caster lists yet.
 

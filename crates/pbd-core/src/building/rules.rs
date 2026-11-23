@@ -14,6 +14,8 @@ pub enum Rule {
     Outside,
     /// One piece of a class per slot.
     Slot,
+    /// A door hangs only in a wall's doorway (design B8).
+    Doorway,
     /// No building on a pentagon or a pentagon's neighbour.
     Pentagon,
     /// Something under it holds it up.
@@ -39,6 +41,7 @@ impl Rule {
         match self {
             Rule::Outside => "outside",
             Rule::Slot => "slot",
+            Rule::Doorway => "doorway",
             Rule::Pentagon => "pentagon",
             Rule::HeldUp => "held_up",
             Rule::Headroom => "headroom",
@@ -53,9 +56,10 @@ impl Rule {
 
 /// Every rule, in the order they are asked: the first to fail is the
 /// reason.
-pub const RULES: [Rule; 10] = [
+pub const RULES: [Rule; 11] = [
     Rule::Outside,
     Rule::Slot,
+    Rule::Doorway,
     Rule::Pentagon,
     Rule::HeldUp,
     Rule::Headroom,
@@ -78,6 +82,13 @@ pub fn holds<'a>(
     match rule {
         Rule::Outside => shape.cells().iter().all(|&c| site.cells.has(c)) && joined(site, shape),
         Rule::Slot => slot_free(others, shape),
+        Rule::Doorway => match *shape {
+            Shape::Door { a, b, layer } => others.clone().any(|o| {
+                matches!(o.shape, Shape::Wall { a: a2, b: b2, layer: l, opening: Opening::Door }
+                    if a2 == a && b2 == b && l == layer)
+            }),
+            _ => true,
+        },
         Rule::Pentagon => shape.cells().iter().all(|&c| {
             !site.cells.pentagon(c)
                 && site
@@ -174,6 +185,16 @@ fn rests_on(upper: &Shape, lower: &Shape) -> bool {
                 ..
             },
         ) => a == a2 && b == b2 && *layer == l + STOREY,
+        // A door hangs in its wall (design B8).
+        (
+            Shape::Door { a, b, layer },
+            Shape::Wall {
+                a: a2,
+                b: b2,
+                layer: l,
+                ..
+            },
+        ) => a == a2 && b == b2 && layer == l,
         _ => false,
     }
 }
@@ -182,6 +203,7 @@ fn rests_on(upper: &Shape, lower: &Shape) -> bool {
 fn joined(site: &Site, shape: &Shape) -> bool {
     match shape {
         Shape::Wall { a, b, .. }
+        | Shape::Door { a, b, .. }
         | Shape::Stair {
             foot: a, head: b, ..
         } => a != b && site.cells.adjacent(*a, *b),
@@ -278,8 +300,9 @@ fn held_up<'a>(
                 })
         }
         Shape::Stair { foot, layer, .. } | Shape::Lantern { cell: foot, layer } => stands(foot, layer),
-        // A roof is held by its room's walls: the room rule.
-        Shape::Roof { .. } => true,
+        // A roof is held by its room's walls: the room rule; a door by its
+        // wall: the doorway rule.
+        Shape::Roof { .. } | Shape::Door { .. } => true,
     }
 }
 
