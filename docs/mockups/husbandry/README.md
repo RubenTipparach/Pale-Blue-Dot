@@ -9,6 +9,7 @@ them: if a source changes, copy it again.
 | --- | --- | --- |
 | `atlas.png` | `assets/tilesets/atlas.png` | Hex tops and sides, read the way `planet_surface.wgsl` (`pixel_tile`) does: the fields sheet (slot 4 in `planet_terrain.rs` `TILESETS`), grass (0,0) on top, (1,0) the first metre of a side, earth (2,0) below and on paths, tilled soil (2,3) under the wheat |
 | `timber.png`, `poles.png`, `boards.png`, `plank.png`, `plaster.png`, `whitewash.png`, `thatch.png`, `shingle.png`, `iron.png`, `bark.png`, `leaves.png`, `linen.png`, `wool.png` | `assets/textures/settlement/<name>.png` | Fence posts and rails, gates, coop, barn, stable, sty, hives, duck house, kennel, troughs, the farmhouse, the incubator, trees, the player's clothes; each at its `repeat_m` from `assets/textures/settlement/manifest.ron`, sampled nearest |
+| `coat.png` | `assets/textures/settlement/coat.png` (drawn by `tools/art/coat_texture.py`) | The herd's coats on the Art style tab: six 32 px tiles (hair, mane, hoof, feather, fleece, skin), sampled nearest and tinted by the species' colours, as the game's coat material does |
 | `fish-<name>.png` (8) | `assets/items/fish/<name>.png` | The game's eight fish in the Kingdom |
 
 ## Other mockups' art (byte-identical; their designs are the source)
@@ -53,3 +54,13 @@ functions. Run `python tools/art/husbandry_art.py` to redraw them.
   `tex_mud` (the sty, the compost heap).
 
 Water, glass and the sky are flat colour, as the game draws them.
+
+## `art/`: the Art style tab (`animal-husbandry` design 17)
+
+- `forms.js`: a port of the game's `crates/pbd-app/src/husbandry/loft.rs` and
+  `forms.rs`, with the design's style knobs (sides, rings, squareness, facet,
+  creases, texture scale, the neck's carriage). Its `today` style is the game's.
+- `today.json`: the game's own meshes of the four species (and the plodder
+  grazing), written by the measurement test
+  `dump_the_herds_forms_for_the_art_mockup` (`husbandry/tests.rs`, run with
+  `--ignored`); `forms.js`'s `check` holds the port to it.

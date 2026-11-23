@@ -745,8 +745,12 @@ neck fix.
    normal, the same creases and texture scale (about 1,100 triangles): every
    part still one shaped piece fitted into the body, never a box.
 
-The recommendation is given with the screenshots, in the survey (A5) and
-the tab's info: see "Questions for the owner".
+**Recommendation: Soft low-poly**, with the neck fixed (Q4 below, survey
+A5, with the screenshots). Its shapes are today's and its light still rolls
+across a curve, but the planes, the creases and coat pixels the size of the
+ground's put it in the same world as the hex columns, the timber and the
+townsfolk. Carved blocky reads boxier than an animal needs; Today with the
+neck fixed is still the rubber tube.
 
 ## Risks / Trade-offs
 
@@ -789,3 +793,10 @@ Recorded so they are never mistaken for the owner's words:
   (as drawn), or a simpler "better, same, worse" arrow per trait?
   Screenshot: `breeding.jpg`. Recommendation: the ticks, with the arrow as a
   summary beside each.
+- **Q4 (survey A5). The herd's art style** (design 17): Today with the neck
+  fixed, Soft low-poly, or Carved blocky? Screenshots:
+  `docs/screenshots/animal-husbandry/art-*.jpg`, and M26's `#art` tab.
+  Recommendation: **Soft low-poly** (with the neck fixed). It keeps today's
+  shapes and their smooth light across the curves, but its planes, its
+  creases at the hoof, horn and jaw, and coat pixels the ground's size sit it
+  beside the hex columns, the timber and the townsfolk.

@@ -60,3 +60,16 @@ capture does not warm, so `LATE_PIPELINE` lines are in both logs by design.
 | `herd-before-after-16h00.jpg` | `--husbandry close --at -37.5 -84 --time 16 --pitch -14 --frames 200` | The meadow hen (left), the woolback, the plodder grazing and the horse: before, boxes of flat colour with their pattern and eyes as boxes stuck on; after, one smooth lofted form each in the `coat` strip tinted by its genome, heads down to graze. |
 | `hen-before-after-16h00.jpg` | the same, the hen cropped and enlarged 3x | The hen: an egg-shaped body in feathers, wings folded along her sides, the comb and wattle grown from her head, the beak tapering out of the face, thin legs with three toes. |
 | `herd-before-after-03h48.jpg` | the same, `--time 3.8` | The herd at night, lying down and roosting, lit as the ground is. |
+
+## The Art style tab (M26 `#art`, design 17; mockup, not the game)
+
+Chromium on SwiftShader in a cloud container (no GPU): the look, never the speed. Each is the page's `#art-<style>-<pose>-<day|night>`.
+
+| File | Shows |
+| --- | --- |
+| `art-close-plodder-neck-graze-today-vs-fixed.jpg` | The plodder grazing, TODAY (face turned back under its chest, muzzle 0.36 m above the grass) beside NECK FIXED (muzzle at the grass, face never past vertical). |
+| `art-close-plodder-neck-stand-today-vs-fixed.jpg` | The same standing: the fixed head carried with its poll level with the withers. |
+| `art-close-plodder-soft-vs-carved-graze.jpg`, `-stand.jpg` | The plodder close up in Soft low-poly beside Carved blocky. |
+| `art-<today,neck,soft,carved>-<stand,graze>-<11h00,22h30>.jpg` | The four species, the 1.8 m player and the 1 m grid in each style and pose, by day and at 22:30 by the two lanterns. |
+| `art-today-graze-phone-11h00.jpg`, `art-soft-graze-phone-11h00.jpg`, `art-soft-stand-phone-22h30.jpg` | Phone width (390 px). |
+| `art-info-modal.jpg` | The tab's info modal. |
