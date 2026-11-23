@@ -81,3 +81,17 @@ work done before it.
 - **WHEN** a world with a purse but no `town_missions` record is opened
 - **THEN** the town tree is open at its root, the purse is unchanged, and no
   other record differs
+
+### Requirement: The Carpentry branch
+
+The town tree SHALL hold a Carpentry branch off "Take a job" (`furniture`
+design 12): build a carpenter's bench, make a chair, take a seat, make a
+table, make a bed, lie in a bed, make a chest, furnish a room and look in a
+town chest, each paying its coins once, counted on the game's own events
+(`sit`, `lie`, `loot`, `craft`, `place`, `build`), and unlocking the
+iron-banded chest and the closet.
+
+#### Scenario: Sitting counts
+
+- **WHEN** "Take a seat" is open and the player sits on a stool
+- **THEN** the mission is done and pays its coins

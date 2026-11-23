@@ -118,3 +118,12 @@ nothing more is read into it. The open questions the gate was to settle
 where they still fit: M6's palette order and aim-snap. The key is N, not
 B: B opens the breeding screen on foot now (design B5). Recommendations
 taken, ask only with screenshots.
+
+## The owner's notes (2026-11-22)
+
+On the survey's known issues for this step, then "continue build": on "The
+stone footing has no texture yet", "add one"; on "No build camera; doors are
+open doorways", "need to craft door, add crafting camera \"architecture
+mode\""; on "Build mode is on N (B opens breeding)", "fix it". Design B7 to
+B10 and task group 7: a footing texture, crafted doors hung in doorways,
+architecture mode, and build mode on B with breeding on N.

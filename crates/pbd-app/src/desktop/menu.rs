@@ -50,7 +50,7 @@ pub enum Screen {
     Kitchen,
     /// The starter missions, opened with O (`starter-missions`).
     Missions,
-    /// The herd's breeding screen, opened with B on foot (`animal-husbandry`).
+    /// The herd's breeding screen, opened with N on foot (`animal-husbandry`).
     Breeding,
     /// Talking to a townsperson, opened with F on them (`townsfolk`).
     Talk,

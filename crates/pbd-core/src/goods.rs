@@ -121,6 +121,9 @@ pub const GOODS: &[GoodRow] = &[
     row("wheel", 8, "items/goods/wheel.png"),
     row("hand-cart", 1, "items/goods/hand-cart.png"),
     row("horse-cart", 1, "items/goods/horse-cart.png"),
+    // ---- player-building design B8: a door, made at the workbench and hung
+    // in a doorway.
+    row("door", 8, "items/goods/door.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -190,6 +193,8 @@ impl Good {
     pub const PARCEL: Good = by_code_const("parcel");
     // townsfolk: crushed stone for a gravel road.
     pub const GRAVEL: Good = by_code_const("gravel");
+    // player-building: a door to hang in a doorway.
+    pub const DOOR: Good = by_code_const("door");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -306,6 +311,7 @@ mod tests {
             (Good::INCUBATOR, "incubator"),
             (Good::BAIT, "bait"),
             (Good::GLOWING_MUSHROOM, "glowing-mushroom"),
+            (Good::DOOR, "door"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

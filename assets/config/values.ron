@@ -126,5 +126,7 @@
         ("wheel", 12, goods),
         ("hand-cart", 45, goods),
         ("horse-cart", 90, goods),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        ("door", 24, goods),
     ],
 )
