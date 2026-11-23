@@ -45,3 +45,18 @@ Logs were checked: no `panicked`, no error but the pre-existing missing
 and again with no scene, 60-90 s each) reached `READY` with 96 pipelines and logged no
 `LATE_PIPELINE` after it: the animals' field-lit, vertex-coloured mesh is prewarmed by
 a hidden template from `Startup`.
+
+## The herd in its coats (design 16, `land-transport` design 12)
+
+`--husbandry close` is a capture instrument: one wild animal of each species held still
+where it is set (it neither flees nor wanders), broadside a few metres ahead. Fixed-step
+`--capture` in a Claude Code cloud container on lavapipe (no GPU, no frame times), 1440 x
+900, the `fast` build, a new memory-only world, `--rain 0`. BEFORE is the build before
+design 16 (the box rig), AFTER this branch; one image each, labelled in the frame. A
+capture does not warm, so `LATE_PIPELINE` lines are in both logs by design.
+
+| Shot | Command | What it shows |
+| --- | --- | --- |
+| `herd-before-after-16h00.jpg` | `--husbandry close --at -37.5 -84 --time 16 --pitch -14 --frames 200` | The meadow hen (left), the woolback, the plodder grazing and the horse: before, boxes of flat colour with their pattern and eyes as boxes stuck on; after, one smooth lofted form each in the `coat` strip tinted by its genome, heads down to graze. |
+| `hen-before-after-16h00.jpg` | the same, the hen cropped and enlarged 3x | The hen: an egg-shaped body in feathers, wings folded along her sides, the comb and wattle grown from her head, the beak tapering out of the face, thin legs with three toes. |
+| `herd-before-after-03h48.jpg` | the same, `--time 3.8` | The herd at night, lying down and roosting, lit as the ground is. |

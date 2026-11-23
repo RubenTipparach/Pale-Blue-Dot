@@ -50,5 +50,5 @@ judged against what it would cost.
 ## 9. The pen in the game's own wood (design 14; owner, 2026-11-15: "some of the fence shot is missing textures")
 
 - [ ] 9.1 Fences, gates and the incubator in the settlement textures (posts `timber`, rails `poles`, gates `boards`, incubator `plank`) at their `repeat_m`, UVs from the builder; the textured pipeline prewarmed. Verify: a builder test that a textured box's UVs span its faces at `repeat_m`; the eggs capture again beside the first take.
-- [ ] 9.2 The animals in their coats (design 16): lofted smooth-shaded forms in the `coat` texture tinted by the genome, in place of M26's box hide strips. Verify: close-up BEFORE | AFTER captures of every species.
+- [x] 9.2 The animals in their coats (design 16): lofted smooth-shaded forms in the `coat` texture tinted by the genome, in place of M26's box hide strips. Verify: close-up BEFORE | AFTER captures of every species.
 

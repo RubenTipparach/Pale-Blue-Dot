@@ -77,16 +77,18 @@ the owner to look at M38 version 2 and ask.
       22:30 beside M38's shots. Built (2026-11-23): captures
       `docs/screenshots/land-transport/game-*` (lavapipe, no frame times);
       the motion is the owner's to judge on a run of their own.
-- [ ] 5.7 Design 12: the carts in `timber` and `iron`, the horse and the herd
+- [x] 5.7 Design 12: the carts in `timber` and `iron`, the horse and the herd
       in the `coat` texture, smooth-shaded lofted forms. Verify: builder
       tests that every model's UVs and normals are whole and smooth across a
       body; BEFORE | AFTER captures of each cart and each species, by day and
-      at 22:30, no `LATE_PIPELINE`.
-- [ ] 5.8 Design 13: a plodder hitched to the horse cart at its own speed.
+      at 22:30, no `LATE_PIPELINE`. Built (2026-11-23): captures in
+      `docs/screenshots/land-transport/` and `animal-husbandry/` (lavapipe; a
+      capture does not warm, so its log lists late pipelines by design).
+- [x] 5.8 Design 13: a plodder hitched to the horse cart at its own speed.
       Verify: tests that a plodder is hitched by the one-record hitch, reads
       back after a reload, drives at `plodder_mps`, and that an old save's
       horse cart reads unchanged; a capture of a plodder in the shafts.
-- [ ] 5.9 Design 14: riding a kept plodder or the bought horse. Verify:
+- [x] 5.9 Design 14: riding a kept plodder or the bought horse. Verify:
       pbd-core tests of the ride's step (speed, turn, the step refused);
       app tests of mounting, getting off, a reload while mounted (back
       beside it, dismounted), a hitched animal refused, and an old save's
