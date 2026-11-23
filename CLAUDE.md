@@ -432,6 +432,11 @@ and laptop mining mike sessions". A multiplayer check runs between two real
 machines, the owner's Mac ("[Mac] pale-blue-dot" session) hosting and the
 laptop ("[Laptop] mining mike continue" session) joining, not two
 processes on one cloud container. The procedure is `multiplayer` design 20.
+The laptop's GPU cannot take a long run (owner, 2026-11-23: "the laptop's
+gpu cant handle the extended load"): its part is the join, the checks and
+the screenshot, then the game is closed. Anything that must run for a long
+time (soaks, presence over minutes, a demo recording) runs on the Mac or
+the desktop.
 
 ## No scheduled PR check-ins (owner, 2026-09-29)
 

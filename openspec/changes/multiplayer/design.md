@@ -620,6 +620,12 @@ computers through their Claude sessions, "[Mac] pale-blue-dot" and
    the network applied`, any `SERVER_DISAGREES` or refusal) go with them;
 5. the shots and logs land in `docs/screenshots/multiplayer-two-machines/`.
 The GPUs make it real time, which the cloud's software renderer is not.
+The laptop cannot run the game for long (owner, 2026-11-23: "the laptop's
+gpu cant handle the extended load"): it joins, does its checks and its
+screenshot, and closes. A long run (a soak, a recording) puts the Mac and
+the desktop on it instead. First run, 2026-11-23: passed
+(`docs/screenshots/multiplayer-two-machines/`), then paused on the owner's
+word.
 
 ## Risks / Trade-offs
 
