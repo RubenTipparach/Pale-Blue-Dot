@@ -752,6 +752,43 @@ ground's put it in the same world as the hex columns, the timber and the
 townsfolk. Carved blocky reads boxier than an animal needs; Today with the
 neck fixed is still the rubber tube.
 
+### The owner's pick (2026-11-23)
+
+The owner, on M26's Art style tab
+(https://claude.ai/artifact/PM7G5qGuWM5g4DN8t787EY#art): "make animals like
+this! I love this look". The owner approved the mockup's look; the tab's
+recommendation, **Soft low-poly with the neck fixed**, is taken as the style
+those words name (survey A5, answered by this). So the game takes, for all
+four species and wherever the herd is drawn (the farmyard, the wild, a cart's
+shafts, under a rider):
+
+- the authored rings joined straight; 9 sides round the body, 8 the neck and
+  head, 6 the legs; the sections slightly squared (superellipse 2.2 the body
+  and neck, 2.6 the head, 2.4 the legs, 3 the hoof);
+- normals 60% smooth and 40% the face's own (each face its own points), the
+  head 45%, the horn 50%, the hoof and the beak hard;
+- the body's few-sided section set out to the authored ellipse, the neck's
+  root flared into the chest and its colour blended from the body's to the
+  head's, so no seam shows where it grows;
+- the coat laid by the metre, a tile every 2 m, so its texels are 6.25 cm on
+  every part. The game draws the `coat` strip with the stock material, so the
+  tile cannot wrap inside the strip per pixel as the mockup's shader does:
+  each face's texture is shifted by whole tiles to sit inside its tile, and a
+  face that would cross a tile's edge is slid back inside it. The texels keep
+  their size; the pattern jumps at those few edges, a hair pattern where a
+  jump does not read;
+- design 17's neck: standing carriage per species (the plodder's neck +30,
+  face -42), the graze lowering the neck from the shoulder with an arch and
+  solved per species until the muzzle is 5 cm (the woolback 4 cm) above the
+  grass, the face its own angle and never past vertical; the plodder's neck
+  1.2 times and the woolback's 1.5 times as long to the poll.
+
+The mockup's `forms.js` is the reference: the game's soft meshes are checked
+against the mesh it writes (`docs/mockups/husbandry/art/soft.json`, by
+`soft_dump.js` beside it), every species standing and the plodder grazing.
+Visual only: the stance the behaviour sets, the saves and every rule are
+unchanged.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and
@@ -793,7 +830,10 @@ Recorded so they are never mistaken for the owner's words:
   (as drawn), or a simpler "better, same, worse" arrow per trait?
   Screenshot: `breeding.jpg`. Recommendation: the ticks, with the arrow as a
   summary beside each.
-- **Q4 (survey A5). The herd's art style** (design 17): Today with the neck
+- **Q4 (survey A5), answered 2026-11-23: Soft low-poly with the neck fixed**
+  (the owner approved the mockup's look, "make animals like this! I love this
+  look"; the recommendation taken as the style it names; design 17, "The
+  owner's pick"). As asked: **The herd's art style** (design 17): Today with the neck
   fixed, Soft low-poly, or Carved blocky? Screenshots:
   `docs/screenshots/animal-husbandry/art-*.jpg`, and M26's `#art` tab.
   Recommendation: **Soft low-poly** (with the neck fixed). It keeps today's
