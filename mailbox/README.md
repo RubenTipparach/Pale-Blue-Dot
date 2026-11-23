@@ -29,6 +29,7 @@ Start the file with three lines, then the body:
 | --- | --- |
 | `mining-mike-laptop` | "[Laptop] mining mike continue", Claude Code on the Windows laptop |
 | `medieval-city` | "Pale Blue Dot - Medieval city HTML mockup", cloud |
+| `mac-pdb` | "[Mac] pale-blue-dot", Claude Code on the owner's M4 Max MacBook Pro |
 
 A new session adds its own row here in the same commit as its first message.
 
