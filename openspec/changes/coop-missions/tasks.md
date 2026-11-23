@@ -1,6 +1,6 @@
 ## 1. Before code
 
-- [ ] 1.1 Mockup of the missions panel's CREW tab (decision 7) in `docs/mockups/`, lit at night, its text in a modal, on the tracker; the two open questions in the survey beside its screenshots. Verify: the owner approves it for build. Made 2026-11-23: M33 version 5, the CREW tab (https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew), survey N1 and N2; waiting for the owner's approval.
+- [ ] 1.1 Mockup of the missions panel's CREW tab (decision 7) in `docs/mockups/`, lit at night, its text in a modal, on the tracker; the two open questions in the survey beside its screenshots. Verify: the owner approves it for build. Made 2026-11-23: M33 version 7, the Crew tab (https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew), survey N1 and N2; waiting for the owner's approval.
 
 ## 2. The crew record and counting (after `multiplayer` 8.1, 8.2 and the piece writer)
 

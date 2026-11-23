@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen: the starter tree that unlocks the tech, and the CREW tab of crew missions, each player's share shown.">
+<meta name="description" content="Pale Blue Dot's Missions screen as two trees, the starter tree that unlocks the tech and the town tree of phase 3, each with a bot run, and the CREW tab of crew missions with each player's share.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -41,6 +41,13 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .legend .l-done i { border-color: var(--rune-dim); background: #10352e; }
 .legend .l-now i { border-color: var(--title); background: #5a3a1c; }
 .legend .l-locked i { opacity: .45; }
+
+/* ---- the two trees, one at a time: oak tabs from the kit, the open one a bare #anchor ---- */
+nav.trees { display: flex; gap: 2px; padding: 4px 16px 0; background: var(--page); border-bottom: 4px solid var(--stone-2); }
+.ttab { border-style: solid; border-width: 12px 12px 0; border-image: url(mission-tree/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated;
+  color: var(--label); font: 19px/1 var(--body); padding: 0 8px 6px; text-decoration: none; letter-spacing: 1px; }
+.ttab[aria-selected="true"] { border-image-source: url(mission-tree/ui/oak-tab-open.png); color: var(--oak-label); }
+.ttab:focus-visible { outline: 2px solid var(--rune); }
 
 /* ---- controls: plaques from the kit ---- */
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 16px; border-bottom: 4px solid var(--stone-2); background: var(--page-2); }
@@ -112,6 +119,12 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
 .card.st-locked { opacity: .82; }
+.card.st-pending { opacity: .7; }
+.card.st-pending .badge { color: var(--label-dim); }
+.card.st-pending .tt b, .card.st-pending .obj li, .card.st-pending .obj li em { color: var(--label-dim); }
+.card.st-pending .hd .slot img { filter: brightness(0) invert(1) brightness(.34); }
+.un .coins { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; color: var(--title); font: 600 17px/1 var(--body); white-space: nowrap; }
+.un .coins img.ci { width: 16px; height: 16px; }
 /* zoomed out: each card its mission's icon, big, in the same frame; a done card keeps its check */
 #world.icons .card { padding: 0; }
 #world.icons .card > :not(.hd), #world.icons .card .hd > :not(.slot):not(.ck) { display: none; }
@@ -208,12 +221,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .rrow.locked > span:last-child { color: var(--label-dim); }
 .rrow:focus-visible { outline: 2px solid var(--rune); }
 
-/* ---- the two views: STARTER (the tree) and CREW (coop-missions design 7) ---- */
-.vtabs { display: flex; gap: 2px; align-self: flex-end; }
-.vtab { border-style: solid; border-width: 10px 10px 0; border-image: url(mission-tree/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated; cursor: pointer; background: none;
-  color: var(--label); font: 18px/1 var(--body); padding: 0 6px 6px; }
-.vtab[aria-selected="true"] { border-image-source: url(mission-tree/ui/oak-tab-open.png); color: var(--oak-label); }
-.vtab:focus-visible { outline: 2px solid var(--rune); }
+/* ---- the CREW tab: crew missions (coop-missions design 7) ---- */
 body.crew .bar, body.crew .stage.tree, body.crew .legend { display: none; }
 #crew { display: none; position: relative; flex: 1; min-height: 300px; overflow: hidden; flex-direction: column; }
 body.crew #crew { display: flex; }
@@ -244,7 +252,7 @@ body.crew #crew { display: flex; }
 #crew.popen .crewboard { padding-right: calc(min(400px, 100%) + 16px); }
 #crew.popen .hud { right: calc(min(400px, 100%) + 12px); }
 .chain .link.wrap { visibility: hidden; width: 0; }
-@media (max-width: 640px) { .chain .link { display: none; } .chain { gap: 18px; } .vtab { font-size: 16px; }
+@media (max-width: 640px) { .chain .link { display: none; } .chain { gap: 18px; }
   #crew.popen .crewboard { padding-right: 16px; padding-bottom: 64vh; } #crew .hud { display: none; } }
 
 /* ---- the info modal ---- */
@@ -274,16 +282,17 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <body>
 <header class="top">
   <h1>MISSION TREE</h1>
-  <div class="vtabs" role="tablist" aria-label="Missions">
-    <button class="vtab" role="tab" id="vStarter" aria-selected="true">STARTER</button>
-    <button class="vtab" role="tab" id="vCrew" aria-selected="false">CREW</button>
-  </div>
   <button class="infobtn" id="infoBtn" aria-label="About this page" title="About this page">i</button>
   <p class="pbd-tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   <div class="legend" aria-label="Legend">
     <span class="l-done"><i></i>Done</span><span class="l-now"><i></i>Now</span><span class="l-open"><i></i>Open</span><span class="l-locked"><i></i>Locked</span>
   </div>
 </header>
+<nav class="trees" role="tablist" aria-label="Mission trees">
+  <a class="ttab" role="tab" href="#starter" data-tree="starter" aria-selected="true">STARTER</a>
+  <a class="ttab" role="tab" href="#town" data-tree="town" aria-selected="false">TOWN</a>
+  <a class="ttab" role="tab" href="#crew" data-tree="crew" aria-selected="false">CREW</a>
+</nav>
 <div class="bar">
   <div class="grp"><button class="btn" id="fitBtn">Fit</button><button class="btn" id="zoomOut" aria-label="Zoom out">−</button><button class="btn" id="zoomIn" aria-label="Zoom in">+</button></div>
   <div class="grp"><span class="lab">BOT RUN</span>
@@ -318,6 +327,31 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
+    <p>Three tabs: a tree each on <b>Starter</b> (<code>#starter</code>) and <b>Town</b> (<code>#town</code>), as the game's Missions screen will have them, and <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer.</p>
+    <h3>The CREW tab (version 7) <span class="nw">NEW</span></h3>
+    <p>The crew missions of <code>coop-missions</code> (design 7: "The panel shows the crew and each share"). A crew is whoever is in the world; its progress is the world's, counted by the server, so a player who joins halfway sees it as it stands and adds to it. Each objective shows the crew's total and a short bar per player in their colour, so nobody carries the crew unseen.</p>
+    <ul>
+      <li><b>Raise a house together</b>, H1 to H7: clear the site, gather timber, lay the floor, raise the walls, set the ridge beam, roof it, light the hearth. When the hearth is lit the house belongs to everyone who built it.</li>
+      <li><b>The crew rules</b> (design 3 and 4), shown only when they hold a mission back: "Needs another pair of hands" (an objective two or more must share), "Waiting on Cy" (everyone must add a share), and the ridge beam, a step for two: two players at its two ends within 3 s, "Needs two of you at once". In single player the step for two counts as met, so the chain can still be finished alone.</li>
+      <li><b>Drafted</b>: Log drive, Bucket chain, Fish and fry and The town's order, each waiting for its systems to move behind the server.</li>
+    </ul>
+    <p>The Crew run controls play three players, Ana, Bo and Cy, through the chain. The tab opens partway through, with the walls five of six up and Cy's wall still to come. Nothing moves until Step or Play.</p>
+    <p>Two choices for the owner, with this tab's screenshots in the survey: the site marker (a map marker shared by the crew, recommended, or the first floor piece) and the first chain's reward (the house itself, recommended, or coins or a tool).</p>
+    <h3>The town tree (version 5, phase 3)</h3>
+    <p>The owner, 2026-11-22: <em>"can you add a new mission tree for phase 3? this would be an entirely separate tree since phase 3 is mostly interacting with the town"</em>. The Town tab draws <code>town-missions-tree</code>'s design 2: every mission, objective, unlock and reward on it comes from there. Written up, not built.</p>
+    <ul>
+      <li><b>Its own tree</b>: its own file, its own saved record (<code>town_missions</code>), its own tab. No mission of one tree is a parent of a mission of the other.</li>
+      <li><b>It opens the first time you reach a town</b>, whatever the starter tree's state: trade, the board and the people need no tools, and a player who walks to a town early should be shown what to do there. Missions that need tools ask for things the starter tree teaches (planks, rope, iron) as craft objectives.</li>
+      <li><b>The trunk, Town</b>: meet the townsfolk, buy and sell, a job from the board. Then five branches: <b>Trade</b> (trade in earnest, carry a parcel, goodwill), <b>Jobs</b> (three jobs, a lost villager, mend a building, light the lamps), <b>Roads</b> (grinder, crushed stone, mixer, gravel, mark a road with survey stakes, pave it, join a town), <b>Carts</b> off "Pave it" (wheels, a hand cart, haul a load, buy a horse, hitch up, 500 m on the road), <b>Houses and logs</b>, and <b>Carpentry</b> (version 6, <code>furniture</code> design 12: a carpenter's bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest; it unlocks the iron-banded chest and the closet).</li>
+      <li><b>Every mission pays coins</b>, shown with the coin on each card: 5 to 60, 640 in all (525 before Carpentry's 115), paid in the same saved line as the mission's done mark, so never twice. A horse costs 120 at a stable.</li>
+      <li><b>Unlocks</b> are the new recipes and stations: grinder, crushed stone, mixer, gravel, survey stakes, wheel, hand cart, horse cart (<code>townsfolk</code> design 41, <code>land-transport</code> design 10), locked until their mission by the starter tree's own rule.</li>
+      <li><b>NEW</b> marks an objective kind the game does not raise yet: talk, job, goodwill, stake, mark, pave, haul, hitch, build, float.</li>
+      <li><b>Light the lamps</b> reads NOT YET: the game raises no lamp-lit event, so it is pending, as the starter tree's mechanism has it, and the bot leaves it.</li>
+      <li><b>Old saves</b>: no record they hold changes. A world that has been to a town (a purse, goodwill, a taken job, a lost villager, or "Find a town" done) opens with the tree at its root, nothing paid for work done before.</li>
+      <li>The Town tab opens with the bot partway through "Mark a road": both stakes driven, four cells of eight marked. The coin count beside the step number is what the tree has paid so far.</li>
+      <li><b>Icons</b>: the grinder, mixer, crushed stone, survey stakes, wheel, carts, horse, board, heart, house, speech bubble and townsperson are stand-ins drawn for this page (<code>tools/mockup_town_tree_icons.py</code>) in the item set's manner; the game's own come when the things are built. Coin, gravel, parcel, planks, log and the lantern post are the game's.</li>
+    </ul>
+    <h3>The starter tree</h3>
     <p>The game's Missions screen (the pack's MISSIONS tab, opened with O), redrawn as the tree that <code>starter-missions</code> designs ("Missions are a tree that unlocks the tech" and "The full tree"). Every mission, objective and unlock on this page comes from there.</p>
     <h3>What the tree is for</h3>
     <p>The owner, 2026-11-15: <em>"The point of the missions is to get the player to play through the content and unlock new tech"</em>, and <em>"a comprehensive mission tree that would encourage the bot to try all these game play mechanics"</em>. Every mechanic the game has today has a mission that needs it: hands, tools at three tiers, building, light, water, fishing, farming, herding, mining and smelting, cooking and eating, and getting about.</p>
@@ -351,15 +385,13 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     <p>The Bot run controls walk that order here. Reset is a new world; Step takes one step (a mission becomes Now, an objective fills, the mission is Done and its unlocks light); Play runs the steps at the chosen speed. The page opens on a world partway through, the bot in the middle of "Go fishing". Nothing moves until Step or Play is pressed.</p>
     <h3>Reading the page</h3>
     <p>Drag to pan, wheel or pinch to zoom, Fit to see the whole tree. Click a mission for its full objectives, help line and unlocks. Zoom steps through set levels, so the card frames stay crisp: far out a card is its icon and title, then its frame alone; close in, the cards and their type grow.</p>
-    <h3>The CREW tab <span class="nw">NEW</span></h3>
-    <p>The crew missions of <code>coop-missions</code> (design 7: "The panel shows the crew and each share"). A crew is whoever is in the world; its progress is the world's, counted by the server, so a player who joins halfway sees it as it stands and adds to it. Each objective shows the crew's total and a short bar per player in their colour, so nobody carries the crew unseen.</p>
+    <h3>Versions</h3>
     <ul>
-      <li><b>Raise a house together</b>, H1 to H7: clear the site, gather timber, lay the floor, raise the walls, set the ridge beam, roof it, light the hearth. When the hearth is lit the house belongs to everyone who built it.</li>
-      <li><b>The crew rules</b> (design 3 and 4), shown only when they hold a mission back: "Needs another pair of hands" (an objective two or more must share), "Waiting on Cy" (everyone must add a share), and the ridge beam, a step for two: two players at its two ends within 3 s, "Needs two of you at once". In single player the step for two counts as met, so the chain can still be finished alone.</li>
-      <li><b>Drafted</b>: Log drive, Bucket chain, Fish and fry and The town's order, each waiting for its systems to move behind the server.</li>
+      <li><b>Version 4</b> (2026-11-16): the starter tree as built.</li>
+      <li><b>Version 5</b> (2026-11-22): the Town tab, phase 3's town tree; the starter tree on its own tab.</li>
+      <li><b>Version 6</b> (2026-11-23): the Town tab's Carpentry branch (<code>furniture</code>), with the game's own furniture icons.</li>
+      <li><b>Version 7</b> (2026-11-23): the Crew tab, crew missions for multiplayer (<code>coop-missions</code>).</li>
     </ul>
-    <p>The Crew run controls play three players, Ana, Bo and Cy, through the chain. The tab opens partway through, with the walls five of six up and Cy's wall still to come. Nothing moves until Step or Play.</p>
-    <p>Two choices for the owner, with this tab's screenshots in the survey: the site marker (a map marker shared by the crew, recommended, or the first floor piece) and the first chain's reward (the house itself, recommended, or coins or a tool).</p>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
   </div>
@@ -368,22 +400,20 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <script src="mission-tree/tree.js"></script>
 <script src="mission-tree/crew.js"></script>
 <script>
-// The view in the link: a bare #crew opens the CREW tab (CLAUDE.md, tabs).
+// The tab in the link: a bare #crew shows the CREW tab over the tree tree.js drew (CLAUDE.md, tabs).
 (function () {
-  const tabs = { starter: document.getElementById("vStarter"), crew: document.getElementById("vCrew") };
-  function show(v) {
-    document.body.classList.toggle("crew", v === "crew");
-    tabs.starter.setAttribute("aria-selected", String(v !== "crew"));
-    tabs.crew.setAttribute("aria-selected", String(v === "crew"));
-    if (v !== "crew" && window.crewTab) window.crewTab.stop();
-    if (v === "crew" && window.crewTab) window.crewTab.relink();
-    // The tree laid out while hidden has no size: fit it when it is shown.
-    if (v !== "crew" && hidden && window.missionTree) window.missionTree.fit();
-    hidden = v === "crew";
-  }
   let hidden = false;
-  tabs.starter.addEventListener("click", () => { history.replaceState(null, "", "#starter"); show("starter"); });
-  tabs.crew.addEventListener("click", () => { history.replaceState(null, "", "#crew"); show("crew"); });
+  function show(v) {
+    const crew = v === "crew";
+    document.body.classList.toggle("crew", crew);
+    const on = crew ? "crew" : (window.missionTree ? window.missionTree.tree : "starter");
+    document.querySelectorAll("[data-tree]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tree === on)));
+    if (!crew && window.crewTab) window.crewTab.stop();
+    if (crew && window.crewTab) window.crewTab.relink();
+    // The tree laid out while hidden has no size: fit it when it is shown.
+    if (!crew && hidden && window.missionTree) window.missionTree.fit();
+    hidden = crew;
+  }
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
   show(location.hash.slice(1));
 })();
