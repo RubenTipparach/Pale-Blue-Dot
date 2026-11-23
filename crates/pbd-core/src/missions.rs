@@ -131,11 +131,11 @@ pub enum Kind {
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
-    /// raises an event for. Not `Clear`, `Haul` or `Hitch`, which wait for
-    /// the road jobs and the carts: a mission naming one of those is
-    /// pending. `Stake`, `Mark` and `Pave` are raised by the paving
-    /// (`townsfolk` design 39 to 41, 44).
-    pub const LIVE: [Kind; 41] = [
+    /// raises an event for. Not `Clear`, which waits for the road jobs: a
+    /// mission naming it is pending. `Stake`, `Mark` and `Pave` are raised
+    /// by the paving (`townsfolk` design 39 to 41, 44), `Haul` and `Hitch`
+    /// by the carts (`land-transport` design 11).
+    pub const LIVE: [Kind; 43] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -177,6 +177,8 @@ impl Kind {
         Kind::Stake,
         Kind::Mark,
         Kind::Pave,
+        Kind::Haul,
+        Kind::Hitch,
     ];
 
     /// Whether this kind counts each name once in a mission (a fish's kind,
@@ -441,17 +443,25 @@ impl Catalog {
             Kind::Pour | Kind::Swim => name == "water",
             Kind::Waters => matches!(name, "sea" | "fresh"),
             Kind::Reach => matches!(name, "marked" | "reef" | "town"),
-            Kind::Board | Kind::Travel => name == "boat",
+            Kind::Board => name == "boat",
+            // Metres aboard a boat, or driven by a cart on road cells.
+            Kind::Travel => matches!(name, "boat" | "cart-road"),
             Kind::Open => name == "map",
             Kind::Eat => item(),
-            Kind::Place => name.starts_with("block:") && item(),
+            // A block, or a cart set down (`land-transport` design 10).
+            Kind::Place => {
+                (name.starts_with("block:") && item())
+                    || crate::vehicle::cart::CartKind::of_code(name).is_some()
+            }
             Kind::Till | Kind::BuildPen => false,
             Kind::Deliver => name == "parcel",
             Kind::Escort => matches!(name, "villager" | "trader"),
             Kind::Repair => name == "piece",
             Kind::Light => name == "lamp",
             Kind::Clear => name == "road",
-            Kind::Sell | Kind::Buy => item(),
+            Kind::Sell => item(),
+            // A good, or a horse from a town's trader (`land-transport`).
+            Kind::Buy => item() || name == "horse",
             Kind::Talk => name == "person",
             Kind::Job => matches!(
                 name,

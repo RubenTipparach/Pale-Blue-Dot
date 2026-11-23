@@ -120,6 +120,11 @@ pub const GOODS: &[GoodRow] = &[
     // makes gravel of, and survey stakes, a road's waypoints.
     row("crushed-stone", 99, "items/goods/crushed-stone.png"),
     row("survey-stakes", 32, "items/goods/survey-stakes.png"),
+    // ---- land-transport design 10: a cart wheel, and the two carts,
+    // carried until they are set down as vehicles.
+    row("wheel", 8, "items/goods/wheel.png"),
+    row("hand-cart", 1, "items/goods/hand-cart.png"),
+    row("horse-cart", 1, "items/goods/horse-cart.png"),
     // ---- player-building design B8: a door, made at the workbench and hung
     // in a doorway.
     row("door", 8, "items/goods/door.png"),

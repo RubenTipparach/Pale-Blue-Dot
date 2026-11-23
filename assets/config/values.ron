@@ -127,6 +127,10 @@
         ("survey-stakes", 1, wood),
         ("block:grinder", 40, goods),
         ("block:mixer", 35, goods),
+        // ---- land-transport design 10: the cart wheel and the two carts
+        ("wheel", 12, goods),
+        ("hand-cart", 45, goods),
+        ("horse-cart", 90, goods),
         // ---- player-building design B8: a door, planks and an iron fitting
         ("door", 24, goods),
     ],

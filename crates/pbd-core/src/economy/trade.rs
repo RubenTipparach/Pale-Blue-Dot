@@ -73,6 +73,14 @@ pub struct TradeConfig {
     #[serde(default)]
     pub needs: BTreeMap<SiteKind, BTreeMap<Group, f32>>,
     pub goodwill: super::goodwill::GoodwillConfig,
+    /// What a town sells a horse for, coins (`land-transport` design 10).
+    #[serde(default = "horse_coins")]
+    pub horse_coins: u64,
+}
+
+/// A horse's price where `trade.ron` names none.
+fn horse_coins() -> u64 {
+    120
 }
 
 impl TradeConfig {

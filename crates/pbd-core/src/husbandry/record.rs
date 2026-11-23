@@ -36,6 +36,8 @@ pub enum Via {
     Fed,
     /// Born on the farm (task 8).
     Born,
+    /// Bought from a town (`land-transport` design 10): the horse.
+    Bought,
 }
 
 /// A kept animal: `rec @p animal <id> 1 (...)`.

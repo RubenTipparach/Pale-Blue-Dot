@@ -49,4 +49,9 @@
     // Seconds between two cells paved with the interact key held (design
     // 40).
     pave_beat_s: 0.45,
+    // How fast a wheel runs on each surface, times its road speed
+    // (`land-transport` design 9): gravel, a bridge deck and a town's lanes
+    // at 1, dirt 0.6, a ford 0.5, off the road a quarter. Wheels on two
+    // surfaces take the lower. Walking is not changed.
+    wheel: (gravel: 1.0, dirt: 0.6, ford: 0.5, off_road: 0.25),
 )

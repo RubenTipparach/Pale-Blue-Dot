@@ -416,14 +416,26 @@ var TAB = "";
   const WORKLAMP = [3, 1];
   function worldCells(plan, origin, turn) { const m = new Map(); for (const k of footprint(plan)) { const [q, r] = rotN(unK(k), turn); m.set(k, [q + origin[0], r + origin[1]]); } return m; }
   const NBCELLS = new Set([...worldCells(NB.plan, NB.origin, NB.turn).values()].map(c => K(...c)));
+  // Owner, 2026-11-23: a tree (or a lane cell, or a lamp) is in the way only of the block it is on,
+  // never its whole column, so only the ground storey's pieces in its cell are refused, and only
+  // those pieces turn red. `hit` holds "q,r|s" for one storey's block, "q,r|*" for every storey.
   function checkWorld(plan, origin, turn) {
-    const cm = worldCells(plan, origin, turn), bad = []; let reason = null;
+    const cm = worldCells(plan, origin, turn), bad = [], hit = new Set(); let reason = null;
     const g0 = [...plan.st[0]].map(k => cm.get(k)); const hs = g0.map(c => groundH(...c)), base = Math.max(...hs), low = Math.min(...hs);
-    for (const c of cm.values()) { const k = K(...c); if (hexDist(...c) > WR - 2) { bad.push(k); reason = reason || "Something is in the way"; } if (NBCELLS.has(k)) { bad.push(k); reason = reason || "Something is already here"; } }
-    for (const c of cm.values()) { const k = K(...c); if (TREES.has(k) || LANESET.has(k) || VLAMPS.some(v => K(...v) === k) || K(...WORKLAMP) === k) { bad.push(k); reason = reason || "Something is in the way"; } }
-    if (!reason && base - low > TUNE.maxFooting) { reason = "Too steep here"; g0.forEach((c, i) => { if (base - hs[i] > TUNE.maxFooting) bad.push(K(...c)); }); }
+    const ground = new Set(g0.map(c => K(...c)));
+    for (const c of cm.values()) { const k = K(...c); if (hexDist(...c) > WR - 2) { bad.push(k); hit.add(k + "|*"); reason = reason || "Something is in the way"; } if (NBCELLS.has(k)) { bad.push(k); hit.add(k + "|*"); reason = reason || "Something is already here"; } }
+    for (const k of ground) { if (TREES.has(k) || LANESET.has(k) || VLAMPS.some(v => K(...v) === k) || K(...WORKLAMP) === k) { bad.push(k); hit.add(k + "|0"); reason = reason || "Something is in the way"; } }
+    if (!reason && base - low > TUNE.maxFooting) { reason = "Too steep here"; g0.forEach((c, i) => { if (base - hs[i] > TUNE.maxFooting) { bad.push(K(...c)); hit.add(K(...c) + "|0"); } }); }
     if (!reason && !planOK(plan)) reason = REASON[checkPlan(plan).find(i => i.lvl === "bad").rule];
-    return { ok: !reason, reason, bad, base };
+    return { ok: !reason, reason, bad, base, hit };
+  }
+  // Is this (world-placed) piece one the check refused? A wall touches the cells on both its sides.
+  function pieceHit(w, p, s) {
+    if (w.ok) return false;
+    if (!w.hit.size) return true; // a broken plan rule: the whole plan is refused
+    const cells = p.cells ? p.cells.slice() : p.q !== undefined ? [[p.q, p.r]] : [];
+    if (p.d !== undefined && p.q !== undefined) cells.push([p.q + DIRS[p.d][0], p.r + DIRS[p.d][1]]);
+    return cells.some(c => { const k = K(...c); return w.hit.has(k + "|*") || w.hit.has(k + "|" + s); });
   }
 
   // ================================================================= the site (design 5 to 9)
@@ -718,7 +730,7 @@ var TAB = "";
     for (const pp of P) {
       const p = wpiece(S, pp), built = isBuilt(S, pp), GS = new PBD.GeoSet();
       if (pp.cls === "lantern" && built) lanternBuilt.add(pp.s);
-      let state = built ? "built" : pp.cls === "slot" ? "slot" : S.phase === "placing" ? (S.check.ok ? "ghost" : "bad") : (st.can(pp) ? "ghost" : "wait");
+      let state = built ? "built" : pp.cls === "slot" ? "slot" : S.phase === "placing" ? (pieceHit(S.check, p, pp.s) ? "bad" : "ghost") : (st.can(pp) ? "ghost" : "wait");
       if (S.marked.has(pp.id) || (pp.cls === "slot" && (built || nb))) continue;
       pieceGeo(S, p, GS);
       const g = new THREE.Group(); g.userData.pid = pp.id;

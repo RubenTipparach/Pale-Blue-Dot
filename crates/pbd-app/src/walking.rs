@@ -409,6 +409,15 @@ pub struct GroundState {
     pub drift: Vec3,
 }
 
+/// A cap on the walker's pace (`land-transport` design 11): a hand cart in
+/// hand holds it to the cart's own speed on the ground under its wheels,
+/// and the seat of a horse cart holds it at nought. `None` is the walker's
+/// own pace; nothing else changes how the walker moves.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub struct Pace {
+    pub cap_mps: Option<f32>,
+}
+
 #[derive(Resource)]
 pub struct WalkingState {
     pub active: bool,
@@ -491,6 +500,25 @@ impl WalkingState {
         (self.heading, self.pitch)
     }
 
+    /// The move keys this frame, as the walker reads them: x to the right,
+    /// y forward, each -1..1. A horse cart's seat drives by them
+    /// (`land-transport` design 11), so they rebind with the walker's.
+    pub fn move_axes(&self) -> Vec2 {
+        self.axes
+    }
+
+    /// Turn the look about up by `angle` (left is positive): the seat of a
+    /// turning cart carries the rider's view round with it. The mouse look
+    /// is still the raw displacement on top.
+    pub fn turn_with(&mut self, angle: f32) {
+        if angle.is_finite() && angle != 0.0 {
+            self.heading = tangent_heading(
+                Quat::from_axis_angle(self.up, angle) * self.heading,
+                self.up,
+            );
+        }
+    }
+
     /// Where [`respawn`] puts the walker: the direction this world's walker
     /// started from (for a restored world, where its pose was).
     pub fn spawn_direction(&self) -> Vec3 {
@@ -569,6 +597,7 @@ impl Plugin for WalkingPlugin {
     fn build(&self, app: &mut App) {
         crate::sim_origin::add_rebase_hook(app, rebase_walker);
         app.init_resource::<WalkingConfig>()
+            .init_resource::<Pace>()
             .init_resource::<WalkingReadout>()
             .init_resource::<Lift>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
@@ -1231,6 +1260,7 @@ fn drive_walker(
     )>,
     meals: Option<Res<crate::kitchen::MealEffects>>,
     roads: Option<Res<crate::roads::RoadPieces>>,
+    pace: Option<Res<Pace>>,
     space: crate::SimSpace,
 ) {
     let o = space.origin();
@@ -1278,6 +1308,10 @@ fn drive_walker(
             && let Some(roads) = roads.as_deref()
         {
             speed *= roads.speed_at(o.query_point(position), HOLD_M);
+        }
+        // A cart in hand (`land-transport` design 11): no faster than it rolls.
+        if let Some(cap) = pace.as_deref().and_then(|p| p.cap_mps) {
+            speed = speed.min(cap.max(0.0));
         }
         if wet.body {
             speed *= config.water_movement_mult;

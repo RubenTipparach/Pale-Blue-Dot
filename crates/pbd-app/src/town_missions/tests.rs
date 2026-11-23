@@ -290,11 +290,12 @@ fn app_fresh() -> App {
 }
 
 /// The town tree's unlocks are recipes the game has, or recipes it awaits
-/// (data only). The paving's are built (`townsfolk` design 44): the
-/// grinder, crushed stone, the mixer, gravel and survey stakes are locked
-/// until their missions, and the carts' are still awaited.
+/// (data only). The paving's and the carts' are built (`townsfolk` design
+/// 44, `land-transport` design 10): the grinder, crushed stone, the mixer,
+/// gravel, survey stakes, the wheel and the two carts are locked until
+/// their missions.
 #[test]
-fn the_town_tree_locks_the_paving_recipes_until_their_missions() {
+fn the_town_tree_locks_its_recipes_until_their_missions() {
     let mut app = app(WorldSave::memory_only());
     reach_town(&mut app);
     app.update();
@@ -316,9 +317,12 @@ fn the_town_tree_locks_the_paving_recipes_until_their_missions() {
         [
             "crushed-stone",
             "grinder",
+            "hand-cart",
+            "horse-cart",
             "mixed-gravel",
             "mixer",
-            "survey-stakes"
+            "survey-stakes",
+            "wheel",
         ]
     );
     let starter = &app.world().resource::<MissionChain>().0;
@@ -328,6 +332,11 @@ fn the_town_tree_locks_the_paving_recipes_until_their_missions() {
             "{code} is a tree's lock"
         );
     }
+    assert!(locks.0.contains_key("hand-cart") && locks.0.contains_key("horse-cart"));
+    assert!(
+        !locks.0.contains_key("wheel"),
+        "open while paving is pending"
+    );
 }
 
 /// Design 8 and 9: a lamp lit at dusk counts toward a taken lamps job; an

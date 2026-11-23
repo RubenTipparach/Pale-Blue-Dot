@@ -136,6 +136,84 @@ pub struct RoadsConfig {
     /// 40): the shovel's stroke.
     #[serde(default = "default_pave_beat")]
     pub pave_beat_s: f32,
+    /// How fast a wheel runs on each surface, times its road speed
+    /// (`land-transport` design 9). Only wheels read it; the walker keeps
+    /// `dirt_speed` and `gravel_speed`.
+    #[serde(default)]
+    pub wheel: WheelFactors,
+}
+
+/// What a wheel stands on (`land-transport` design 9).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WheelGround {
+    /// A gravel road cell.
+    Gravel,
+    /// A dirt road cell.
+    Dirt,
+    /// A forded road cell, under its river's water.
+    Ford,
+    /// A road's timber bridge deck.
+    Bridge,
+    /// A town's own lanes and streets (its footprint).
+    Town,
+    /// Anything else: grass, sand, snow, scree.
+    Off,
+}
+
+/// A wheel's speed on each surface, times its road speed.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WheelFactors {
+    /// A gravel road, a bridge deck or a town's lanes.
+    pub gravel: f32,
+    pub dirt: f32,
+    pub ford: f32,
+    /// Off every road (the owner: "like 1/4 speed").
+    pub off_road: f32,
+}
+
+impl Default for WheelFactors {
+    fn default() -> Self {
+        Self {
+            gravel: 1.0,
+            dirt: 0.6,
+            ford: 0.5,
+            off_road: 0.25,
+        }
+    }
+}
+
+impl WheelFactors {
+    /// The factor of one surface.
+    pub fn of(&self, ground: WheelGround) -> f32 {
+        match ground {
+            WheelGround::Gravel | WheelGround::Bridge | WheelGround::Town => self.gravel,
+            WheelGround::Dirt => self.dirt,
+            WheelGround::Ford => self.ford,
+            WheelGround::Off => self.off_road,
+        }
+    }
+}
+
+/// The factor a wheeled vehicle runs at with its wheels on `under`: the
+/// lowest of them, so a cart half off the road is slowed (design 9). No
+/// wheel down reads as off the road.
+pub fn wheel_factor(factors: &WheelFactors, under: &[WheelGround]) -> f32 {
+    under
+        .iter()
+        .map(|&g| factors.of(g))
+        .reduce(f32::min)
+        .unwrap_or(factors.off_road)
+}
+
+/// What a wheel on a road cell stands on: its kind and its surface.
+pub fn wheel_ground(kind: Kind, surface: Surface) -> WheelGround {
+    match (kind, surface) {
+        (Kind::Bridge { .. }, _) => WheelGround::Bridge,
+        (Kind::Ford, _) => WheelGround::Ford,
+        (Kind::Ground, Surface::Gravel) => WheelGround::Gravel,
+        (Kind::Ground, Surface::Dirt) => WheelGround::Dirt,
+    }
 }
 
 fn default_stake_cells() -> u32 {
@@ -181,6 +259,17 @@ impl RoadsConfig {
         ] {
             if !(v.is_finite() && v >= 0.0) {
                 return Err(format!("{name} must be zero or more"));
+            }
+        }
+        let w = &self.wheel;
+        for (name, v) in [
+            ("wheel.gravel", w.gravel),
+            ("wheel.dirt", w.dirt),
+            ("wheel.ford", w.ford),
+            ("wheel.off_road", w.off_road),
+        ] {
+            if !(v.is_finite() && v > 0.0 && v <= 1.0) {
+                return Err(format!("{name} must be over 0 and at most 1"));
             }
         }
         if self.max_fill_layers > 4 || self.max_cut_layers > 4 {
@@ -246,6 +335,7 @@ impl Default for RoadsConfig {
             max_stake_cells: 24,
             stake_expanded: 4_000,
             pave_beat_s: 0.45,
+            wheel: WheelFactors::default(),
         }
     }
 }

@@ -17,11 +17,11 @@
 // floating 20 m or more, `light` a town lamp lit at dusk (each lamp once an
 // evening).
 //
-// `awaited` names what the paving and the carts will bring (`townsfolk`
-// design 39-41, `land-transport` design 9-10): the grinder, the mixer, their
-// recipes, the stakes, wheels, carts and the horse. A mission naming only
-// these, or a kind the game does not raise yet (`stake`, `mark`, `pave`,
-// `haul`, `hitch`), is PENDING:
+// `awaited` names what the paving will bring (`townsfolk` design 39-41): the
+// grinder, the mixer, their recipes and the stakes (the wheels, the carts and
+// the horse are built, `land-transport` design 11). A mission naming only
+// these, or a kind the game does not raise yet (`stake`, `mark`, `pave`), is
+// PENDING:
 // shown as not in this build, and met for the missions that need it. An
 // unlock may name an awaited recipe: it is data only until it is built.
 //
@@ -31,11 +31,6 @@
 //
 (
     awaited: [
-        "wheel",
-        "hand-cart",
-        "horse-cart",
-        "horse",
-        "cart-road",
     ],
     missions: [
         // ---- 0. Town: opens the first time you reach a town.

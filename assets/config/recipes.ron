@@ -240,5 +240,29 @@
             inputs: [("crushed-stone", 3), ("block:sand", 1)],
             outputs: [("gravel", 4)],
         ),
+        // ---- land-transport design 10: the cart wheel (an iron tyre on a
+        // plank wheel), and the hand cart and the horse cart made from two
+        // of them, carried as goods and set down as vehicles.
+        (
+            code: "wheel",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 4), ("iron-ingot", 1)],
+            outputs: [("wheel", 1)],
+        ),
+        (
+            code: "hand-cart",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("wheel", 2), ("planks", 8), ("rope", 2)],
+            outputs: [("hand-cart", 1)],
+        ),
+        (
+            code: "horse-cart",
+            station: "workbench",
+            secs: 8.0,
+            inputs: [("wheel", 2), ("planks", 14), ("rope", 4), ("leather", 2)],
+            outputs: [("horse-cart", 1)],
+        ),
     ],
 )

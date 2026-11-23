@@ -268,6 +268,68 @@ impl Farmyard {
             })
     }
 
+    /// The kept animals of `species` within `within_m` of `near` (local, as
+    /// a beast's feet are): their record ids and feet, nearest first. A
+    /// horse cart's shafts ask for the horse beside them (`land-transport`
+    /// design 11).
+    pub fn kept_near(&self, species: u16, near: Vec3, within_m: f32) -> Vec<(u64, Vec3)> {
+        let mut found: Vec<(u64, Vec3, f32)> = self
+            .beasts
+            .iter()
+            .filter(|b| b.species == species && !b.leaving)
+            .filter_map(|b| match b.who {
+                Who::Kept { id } => Some((id, b.pos, b.pos.distance(near))),
+                Who::Wild { .. } => None,
+            })
+            .filter(|(_, _, d)| *d <= within_m)
+            .collect();
+        found.sort_by(|a, b| a.2.total_cmp(&b.2));
+        found.into_iter().map(|(id, p, _)| (id, p)).collect()
+    }
+
+    /// A kept animal goes into a cart's shafts: the yard stops drawing it at
+    /// once, and its sync leaves it out while a cart names it.
+    pub fn hand_over(&mut self, id: u64) {
+        for b in &mut self.beasts {
+            if b.who == (Who::Kept { id }) {
+                b.leaving = true;
+                b.shown = 0.0;
+                b.mode = Mode::Idle;
+            }
+        }
+    }
+
+    /// A kept animal comes out of a cart's shafts at `pos` (local), facing
+    /// `facing`, and follows the player a while, as a newly tamed one does.
+    /// It is taken back into the yard at once, so it never blinks out.
+    pub fn take_back(
+        &mut self,
+        id: u64,
+        record: &AnimalBody,
+        pos: Vec3,
+        up: Vec3,
+        facing: Vec3,
+        follow_s: f32,
+    ) {
+        self.beasts.retain(|b| b.who != (Who::Kept { id }));
+        let mut beast = Beast::new(
+            Who::Kept { id },
+            record.sp,
+            record.sex,
+            record.genome(),
+            pos,
+            up,
+            Range::Around(up, 6.0),
+            hash2(id, 0xbea57),
+        );
+        beast.facing = facing;
+        beast.born = Some(record.born);
+        beast.shown = 1.0;
+        beast.mode = Mode::Follow;
+        beast.mode_s = follow_s;
+        self.beasts.push(beast);
+    }
+
     fn say(&mut self, text: impl Into<String>, hold_s: f32) {
         self.status = text.into();
         self.hold_s = hold_s;
@@ -738,12 +800,15 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     let near = s.herds.near_m;
     let up = feet_point.normalize_or(Vec3::Y);
     let kept = record::animals(&save.records);
+    // A horse in a cart's shafts is the cart's to draw (`land-transport`
+    // design 11).
+    let hitched = pbd_core::vehicle::cart::hitched(&save.records);
     let tamed: BTreeSet<u64> = kept.iter().map(|(_, b)| b.wild).collect();
     let mut wanted: Vec<Who> = Vec::new();
     // Kept animals near.
     let pieces = record::pieces(&save.records);
     for (id, body) in &kept {
-        if body.state != record::Life::Alive || body.body != world.body.0 {
+        if body.state != record::Life::Alive || body.body != world.body.0 || hitched.contains(id) {
             continue;
         }
         let Some(home) = pbd_core::cell_key::key_direction(body.home) else {

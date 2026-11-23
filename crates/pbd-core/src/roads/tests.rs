@@ -639,3 +639,56 @@ fn no_network_joins_three() {
     // A world planned by version 2 keeps its rule.
     assert_eq!(links(&towns, &cfg.for_version(2), RADIUS).len(), 56);
 }
+
+/// `land-transport` design 9 (task 5.2): a wheel's factor on every surface,
+/// the shipped table's, and the lower factor when the axles stand on two.
+#[test]
+fn wheels_run_at_the_surface_factor_and_the_lower_one_wins() {
+    let cfg: RoadsConfig = ron::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/config/roads.ron"
+    )))
+    .unwrap();
+    let w = cfg.wheel;
+    assert_eq!(
+        w,
+        WheelFactors::default(),
+        "the file is the code's defaults"
+    );
+    let one = |g| wheel_factor(&w, &[g]);
+    assert_eq!(one(WheelGround::Gravel), 1.0);
+    assert_eq!(one(WheelGround::Bridge), 1.0);
+    assert_eq!(one(WheelGround::Town), 1.0);
+    assert_eq!(one(WheelGround::Dirt), 0.6);
+    assert_eq!(one(WheelGround::Ford), 0.5);
+    assert_eq!(one(WheelGround::Off), 0.25, "a quarter off the road");
+    // A horse cart off the road runs at a quarter of its road speed.
+    assert_eq!(9.0 * one(WheelGround::Off), 2.25);
+    // One wheel on gravel, one on grass: the grass's quarter.
+    assert_eq!(
+        wheel_factor(&w, &[WheelGround::Gravel, WheelGround::Off]),
+        0.25
+    );
+    assert_eq!(
+        wheel_factor(&w, &[WheelGround::Dirt, WheelGround::Gravel]),
+        0.6
+    );
+    assert_eq!(
+        wheel_factor(&w, &[WheelGround::Ford, WheelGround::Dirt]),
+        0.5
+    );
+    assert_eq!(wheel_factor(&w, &[]), 0.25, "no wheel down is off the road");
+    // The road cell's own kind decides: a deck, a ford, then its surface.
+    assert_eq!(
+        wheel_ground(Kind::Bridge { deck_m: 3 }, Surface::Dirt),
+        WheelGround::Bridge
+    );
+    assert_eq!(wheel_ground(Kind::Ford, Surface::Gravel), WheelGround::Ford);
+    assert_eq!(wheel_ground(Kind::Ground, Surface::Dirt), WheelGround::Dirt);
+    // Walking keeps its own table.
+    assert_eq!(cfg.speed(Surface::Gravel), 1.15);
+    assert_eq!(cfg.speed(Surface::Dirt), 1.0);
+    let mut bad = cfg.clone();
+    bad.wheel.off_road = 0.0;
+    assert!(bad.validate().is_err());
+}

@@ -18,6 +18,8 @@ pub struct VehicleSpecs {
     pub tube: LoonSpec,
     /// The raft (`small-boats`): logs, paddled.
     pub raft: LoonSpec,
+    /// The hand cart and the horse cart (`land-transport` design 10).
+    pub carts: super::cart::CartSpecs,
 }
 
 impl Default for VehicleSpecs {
@@ -26,6 +28,7 @@ impl Default for VehicleSpecs {
             loon: Default::default(),
             tube: LoonSpec::tube(),
             raft: LoonSpec::raft(),
+            carts: Default::default(),
         }
     }
 }
@@ -34,7 +37,8 @@ impl VehicleSpecs {
     pub fn validate(&self) -> Result<(), String> {
         self.loon.validate()?;
         self.tube.validate()?;
-        self.raft.validate()
+        self.raft.validate()?;
+        self.carts.validate()
     }
 }
 
