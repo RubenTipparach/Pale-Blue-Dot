@@ -150,6 +150,6 @@ task 9.2, played through requests as a player's hands send them.
 ## Open questions (recommendations taken, ask only with screenshots)
 
 - The site marker: a map marker shared by the crew (recommended) against
-  the first floor piece placed. To the survey with the panel mockup.
+  the first floor piece placed. In the survey as N1, with the CREW tab.
 - Rewards: the house itself (recommended for the first chain) against
-  coins or a tool; to the survey with the mockup.
+  coins or a tool. In the survey as N2, with the CREW tab.

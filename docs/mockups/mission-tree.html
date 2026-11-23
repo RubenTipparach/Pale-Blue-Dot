@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen redrawn as the tree that unlocks the tech: the trunk and seven branches, every mission, objective and unlock from starter-missions, with a bot run that plays it in order.">
+<meta name="description" content="Pale Blue Dot's Missions screen: the starter tree that unlocks the tech, and the CREW tab of crew missions, each player's share shown.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -208,6 +208,45 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .rrow.locked > span:last-child { color: var(--label-dim); }
 .rrow:focus-visible { outline: 2px solid var(--rune); }
 
+/* ---- the two views: STARTER (the tree) and CREW (coop-missions design 7) ---- */
+.vtabs { display: flex; gap: 2px; align-self: flex-end; }
+.vtab { border-style: solid; border-width: 10px 10px 0; border-image: url(mission-tree/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated; cursor: pointer; background: none;
+  color: var(--label); font: 18px/1 var(--body); padding: 0 6px 6px; }
+.vtab[aria-selected="true"] { border-image-source: url(mission-tree/ui/oak-tab-open.png); color: var(--oak-label); }
+.vtab:focus-visible { outline: 2px solid var(--rune); }
+body.crew .bar, body.crew .stage.tree, body.crew .legend { display: none; }
+#crew { display: none; position: relative; flex: 1; min-height: 300px; overflow: hidden; flex-direction: column; }
+body.crew #crew { display: flex; }
+.crewbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 16px; border-bottom: 4px solid var(--stone-2); background: var(--page-2); }
+.crewbar .grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.crewbar .lab { font: 600 15px/1 var(--display); color: var(--text-dim); letter-spacing: 1px; }
+.roster { display: flex; gap: 12px; flex-wrap: wrap; }
+.roster .who { display: inline-flex; align-items: center; gap: 6px; font: 19px/1 var(--body); color: var(--label); }
+.roster .who i, .cr i { width: 14px; height: 14px; background: var(--pc); border: 2px solid var(--stone-0); display: inline-block; }
+.crewboard { flex: 1; overflow: auto; padding: 16px 16px 24px; background: var(--canvas);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 40px 40px; }
+.crewboard .clane { position: static; display: inline-flex; margin: 6px 0 18px; }
+.chain { display: flex; align-items: flex-start; gap: 0; flex-wrap: wrap; row-gap: 26px; margin-bottom: 18px; }
+.chain .card { position: relative; height: auto; min-height: 188px; }
+.chain .link { width: 26px; height: 4px; background: var(--stone-3); margin-top: 92px; flex: none; }
+.chain.drafted { gap: 26px; }
+.chain .dcard { min-height: 0; height: auto; }
+.chain .dcard .tt small { white-space: normal; }
+.obj li.sh { min-height: 10px; }
+.shares { display: flex; gap: 3px; flex: 1; }
+.shares i { flex: 1; height: 8px; background: linear-gradient(90deg, var(--pc) var(--w), var(--well) var(--w)); border: 1px solid var(--stone-0); }
+.obj li.why, .pobj .why { color: var(--new); font: 15px/1.1 var(--body); }
+.crewrows { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 16px; color: var(--text-dim); }
+.cr { display: inline-flex; align-items: center; gap: 5px; }
+.cr em { color: var(--rune); font-style: normal; }
+.pobj .why { grid-column: 2 / 4; }
+#crew .hud { top: 58px; }
+#crew.popen .crewboard { padding-right: calc(min(400px, 100%) + 16px); }
+#crew.popen .hud { right: calc(min(400px, 100%) + 12px); }
+.chain .link.wrap { visibility: hidden; width: 0; }
+@media (max-width: 640px) { .chain .link { display: none; } .chain { gap: 18px; } .vtab { font-size: 16px; }
+  #crew.popen .crewboard { padding-right: 16px; padding-bottom: 64vh; } #crew .hud { display: none; } }
+
 /* ---- the info modal ---- */
 dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
 dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
@@ -235,6 +274,10 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <body>
 <header class="top">
   <h1>MISSION TREE</h1>
+  <div class="vtabs" role="tablist" aria-label="Missions">
+    <button class="vtab" role="tab" id="vStarter" aria-selected="true">STARTER</button>
+    <button class="vtab" role="tab" id="vCrew" aria-selected="false">CREW</button>
+  </div>
   <button class="infobtn" id="infoBtn" aria-label="About this page" title="About this page">i</button>
   <p class="pbd-tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   <div class="legend" aria-label="Legend">
@@ -254,7 +297,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
   </div>
   <div class="grp"><button class="btn" id="recipesBtn">Recipes</button></div>
 </div>
-<div class="stage">
+<div class="stage tree">
   <div id="view"><div id="world"><svg id="edges"></svg></div></div>
   <div class="hud" id="hud"></div>
   <div class="log" id="log" aria-live="polite"></div>
@@ -269,6 +312,8 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     <div class="pbody" id="pbody"></div>
   </aside>
 </div>
+
+<section id="crew" aria-label="Crew missions"></section>
 
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
@@ -306,11 +351,42 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     <p>The Bot run controls walk that order here. Reset is a new world; Step takes one step (a mission becomes Now, an objective fills, the mission is Done and its unlocks light); Play runs the steps at the chosen speed. The page opens on a world partway through, the bot in the middle of "Go fishing". Nothing moves until Step or Play is pressed.</p>
     <h3>Reading the page</h3>
     <p>Drag to pan, wheel or pinch to zoom, Fit to see the whole tree. Click a mission for its full objectives, help line and unlocks. Zoom steps through set levels, so the card frames stay crisp: far out a card is its icon and title, then its frame alone; close in, the cards and their type grow.</p>
+    <h3>The CREW tab <span class="nw">NEW</span></h3>
+    <p>The crew missions of <code>coop-missions</code> (design 7: "The panel shows the crew and each share"). A crew is whoever is in the world; its progress is the world's, counted by the server, so a player who joins halfway sees it as it stands and adds to it. Each objective shows the crew's total and a short bar per player in their colour, so nobody carries the crew unseen.</p>
+    <ul>
+      <li><b>Raise a house together</b>, H1 to H7: clear the site, gather timber, lay the floor, raise the walls, set the ridge beam, roof it, light the hearth. When the hearth is lit the house belongs to everyone who built it.</li>
+      <li><b>The crew rules</b> (design 3 and 4), shown only when they hold a mission back: "Needs another pair of hands" (an objective two or more must share), "Waiting on Cy" (everyone must add a share), and the ridge beam, a step for two: two players at its two ends within 3 s, "Needs two of you at once". In single player the step for two counts as met, so the chain can still be finished alone.</li>
+      <li><b>Drafted</b>: Log drive, Bucket chain, Fish and fry and The town's order, each waiting for its systems to move behind the server.</li>
+    </ul>
+    <p>The Crew run controls play three players, Ana, Bo and Cy, through the chain. The tab opens partway through, with the walls five of six up and Cy's wall still to come. Nothing moves until Step or Play.</p>
+    <p>Two choices for the owner, with this tab's screenshots in the survey: the site marker (a map marker shared by the crew, recommended, or the first floor piece) and the first chain's reward (the house itself, recommended, or coins or a tool).</p>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
   </div>
 </dialog>
 
 <script src="mission-tree/tree.js"></script>
+<script src="mission-tree/crew.js"></script>
+<script>
+// The view in the link: a bare #crew opens the CREW tab (CLAUDE.md, tabs).
+(function () {
+  const tabs = { starter: document.getElementById("vStarter"), crew: document.getElementById("vCrew") };
+  function show(v) {
+    document.body.classList.toggle("crew", v === "crew");
+    tabs.starter.setAttribute("aria-selected", String(v !== "crew"));
+    tabs.crew.setAttribute("aria-selected", String(v === "crew"));
+    if (v !== "crew" && window.crewTab) window.crewTab.stop();
+    if (v === "crew" && window.crewTab) window.crewTab.relink();
+    // The tree laid out while hidden has no size: fit it when it is shown.
+    if (v !== "crew" && hidden && window.missionTree) window.missionTree.fit();
+    hidden = v === "crew";
+  }
+  let hidden = false;
+  tabs.starter.addEventListener("click", () => { history.replaceState(null, "", "#starter"); show("starter"); });
+  tabs.crew.addEventListener("click", () => { history.replaceState(null, "", "#crew"); show("crew"); });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+})();
+</script>
 </body>
 </html>
