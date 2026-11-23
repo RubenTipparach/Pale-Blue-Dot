@@ -13,7 +13,8 @@
 // `<site>:<thing>`); `any:any` counts anything in any town. `talk` counts
 // each person once a mission, `job` a town job handed in (by its kind),
 // `goodwill` a town's goodwill reaching its next step, `build` a piece of a
-// house placed (`wall`, `door`, `roof`), `float` a log come to rest after
+// house placed (`wall`, `door`, `roof`, `furniture`), `sit` and `lie` a seat or
+// a bed sat or lain on, `loot` a stack taken from a town container, `float` a log come to rest after
 // floating 20 m or more, `light` a town lamp lit at dusk (each lamp once an
 // evening).
 //
@@ -302,6 +303,100 @@
             coins: 20,
             objectives: [
                 (kind: float, what: "log", count: 4),
+            ],
+        ),
+        // ---- 6. Carpentry (`furniture` design 12), off the trunk's job.
+        (
+            id: "carpenter",
+            branch: "carpentry",
+            icon: "goods/chair",
+            needs: ["first-job"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "block:carpenter's bench", count: 1),
+                (kind: place, what: "block:carpenter's bench", count: 1),
+            ],
+        ),
+        (
+            id: "chair",
+            branch: "carpentry",
+            icon: "goods/chair",
+            needs: ["carpenter"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "chair", count: 1),
+            ],
+        ),
+        (
+            id: "sit",
+            branch: "carpentry",
+            icon: "goods/stool",
+            needs: ["chair"],
+            coins: 5,
+            objectives: [
+                (kind: sit, what: "any", count: 1),
+            ],
+        ),
+        (
+            id: "table",
+            branch: "carpentry",
+            icon: "goods/table",
+            needs: ["sit"],
+            coins: 10,
+            objectives: [
+                (kind: craft, what: "table", count: 1),
+            ],
+        ),
+        (
+            id: "bed",
+            branch: "carpentry",
+            icon: "goods/bed",
+            needs: ["table"],
+            coins: 15,
+            objectives: [
+                (kind: craft, what: "bed", count: 1),
+            ],
+        ),
+        (
+            id: "lie",
+            branch: "carpentry",
+            icon: "goods/bed",
+            needs: ["bed"],
+            coins: 5,
+            objectives: [
+                (kind: lie, what: "bed", count: 1),
+            ],
+        ),
+        (
+            id: "chest",
+            branch: "carpentry",
+            icon: "goods/chest",
+            needs: ["lie"],
+            coins: 15,
+            objectives: [
+                (kind: craft, what: "chest", count: 1),
+            ],
+            unlocks: ["banded-chest"],
+        ),
+        (
+            id: "furnish",
+            branch: "carpentry",
+            icon: "goods/drawers",
+            needs: ["chest"],
+            coins: 30,
+            objectives: [
+                (kind: build, what: "furniture", count: 4),
+            ],
+            unlocks: ["closet"],
+        ),
+        (
+            id: "find",
+            branch: "carpentry",
+            icon: "goods/banded-chest",
+            needs: ["furnish"],
+            coins: 15,
+            objectives: [
+                (kind: loot, what: "any:any", count: 1),
             ],
         ),
     ],

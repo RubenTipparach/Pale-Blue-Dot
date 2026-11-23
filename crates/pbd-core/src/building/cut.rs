@@ -162,9 +162,70 @@ pub fn cut_on(
             rooms: Meshes::new(),
             lights: c.lights,
             top_m: c.top_m,
+            furniture: Vec::new(),
         },
         door_ids: c.door_ids,
     })
+}
+
+/// A face's texture coordinates by its plan or its run and height, as the
+/// towns' `uvWorld`.
+fn furniture_uv(p: Vec3, n: Vec3, rep: f32) -> Vec2 {
+    let s = 1.0 / rep;
+    if n.y.abs() > 0.7 {
+        return Vec2::new(p.x * s, p.z * s);
+    }
+    let l = n.x.hypot(n.z).max(1e-6);
+    Vec2::new((p.x * -n.z + p.z * n.x) / l * s, p.y * s)
+}
+
+/// Where a piece of furniture stands in `cell`, in a plan that `plan` maps
+/// a direction into: its middle and its front (`furniture` design 3). Against
+/// side `side`, its back [`crate::furniture::BACK_M`] in from the edge's
+/// middle; in the middle, facing away from side 0.
+pub fn stand_plan(
+    cells: &Cells,
+    cell: u32,
+    side: u8,
+    kind: crate::furniture::Kind,
+    plan: impl Fn(Vec3) -> Vec2,
+) -> Option<(Vec2, Vec2)> {
+    let c = cells.cell(cell)?;
+    let centre = plan(c.direction);
+    let edge_mid = |s: usize| -> Option<Vec2> {
+        let n = cells.neighbours(cell).get(s).copied().flatten()?;
+        let (e0, e1) = cells.edge(cell, n)?;
+        Some((plan(e0) + plan(e1)) * 0.5)
+    };
+    if side >= crate::furniture::MIDDLE {
+        let m = edge_mid(0)?;
+        return Some((centre, (centre - m).normalize_or(Vec2::Y)));
+    }
+    let m = edge_mid(usize::from(side))?;
+    let inward = (centre - m).normalize_or(Vec2::Y);
+    let back = crate::furniture::BACK_M + kind.size_m().y / 2.0;
+    Some((m + inward * back, inward))
+}
+
+/// Where a piece of furniture stands on the planet: its middle on the floor
+/// (planet-centred, metres) and its front, a unit tangent there.
+pub fn furniture_stand(
+    cells: &Cells,
+    cell: u32,
+    layer: u16,
+    side: u8,
+    kind: crate::furniture::Kind,
+    radius_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let frame = frame_at(cells, cell, layer, radius_m)?;
+    let plan = |d: Vec3| {
+        let p = frame.local(d.normalize() * (radius_m + layer_altitude(layer as usize)));
+        Vec2::new(p.x, p.z)
+    };
+    let (at, front) = stand_plan(cells, cell, side, kind, plan)?;
+    let world = frame.world(Vec3::new(at.x, FLOOR_LIFT_M, at.y));
+    let f = (frame.x * front.x + frame.z * front.y).normalize_or_zero();
+    Some((world, f))
 }
 
 /// Counter-clockwise as `Surface` and `Solid` read it.
@@ -322,6 +383,12 @@ impl Cutter<'_> {
             }
             Shape::Lantern { cell, layer } => self.lantern(kit, *cell, *layer),
             Shape::Door { a, b, layer } => self.door(kit, *a, *b, *layer, shape.id()),
+            Shape::Furniture {
+                cell,
+                layer,
+                side,
+                kind,
+            } => self.furniture(*cell, *layer, *side, *kind),
             Shape::Roof {
                 cells,
                 layer,
@@ -542,6 +609,55 @@ impl Cutter<'_> {
             below_m: 1.5,
             above_m: 1.7,
         });
+    }
+
+    /// A piece of furniture (`furniture` design 3): its model stood against
+    /// its side's edge, its back [`crate::furniture::BACK_M`] in from it, or
+    /// in the cell's middle; a solid unless it is a seat.
+    fn furniture(&mut self, cell: u32, layer: u16, side: u8, kind: crate::furniture::Kind) {
+        let Some(c) = self.cells.cell(cell) else {
+            return;
+        };
+        let (_, y) = self.plan_y(c.direction, layer);
+        let y = y + FLOOR_LIFT_M;
+        let plan = |d: Vec3| self.plan_y(d, layer).0;
+        let Some((at, front)) = stand_plan(self.cells, cell, side, kind, plan) else {
+            return;
+        };
+        for poly in crate::furniture::model::placed(kind, at, y, front) {
+            let n = poly.normal();
+            let rep = (self.repeat)(poly.texture).max(0.1);
+            let frame = self.frame;
+            let to_world =
+                |v: Vec3| (frame.x * v.x + frame.y * v.y + frame.z * v.z).normalize_or_zero();
+            let buf = self.buf(poly.texture);
+            // Wound outward already; each point its own normal, so the piece
+            // is shaded smooth across its curves.
+            for i in 1..poly.points.len().saturating_sub(1) {
+                for k in [0, i, i + 1] {
+                    let p = poly.points[k];
+                    let uv = match &poly.uvs {
+                        Some(uvs) => uvs[k].to_array(),
+                        None => {
+                            let t = furniture_uv(p, n, rep);
+                            [t.x, -t.y]
+                        }
+                    };
+                    buf.positions.push(frame.world(p).to_array());
+                    buf.normals.push(to_world(poly.normals[k]).to_array());
+                    buf.uvs.push(uv);
+                }
+            }
+        }
+        if kind.solid() {
+            let outline = crate::furniture::rect(at, front, kind.size_m()).to_vec();
+            self.solids.push(Solid {
+                outline: ccw(outline),
+                y0: y,
+                y1: y + kind.height_m(),
+            });
+        }
+        self.reach(at);
     }
 
     fn roof(&mut self, kit: &Kit, keys: &[u32], layer: u16, shape: RoofShape) {

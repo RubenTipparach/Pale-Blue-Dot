@@ -610,6 +610,39 @@ ground. CLAUDE.md ("Everything in the world is lit as the terrain is") wants
 the fence root and their pipeline prewarm templates carry both. Nothing a
 rule reads changes; only the look, back to what the rule already demands.
 
+## 16. The herd in its coats, smooth and of one family (2026-11-23)
+
+The owner: "Make sure things have textures" and "I didn't like flat shaded
+crap", after the carts' captures; CLAUDE.md "Every model is textured".
+
+**Finding.** The meadow hen, the woolback and the plodder are boxes of flat
+vertex colour hung from pivots (S11), on a white material with no UVs,
+every face flat-shaded. A speckled hen's flecks, a plodder's belt and every
+eye are smaller boxes stuck on the body: the stuck-on primitive CLAUDE.md
+forbids. The horse (land-transport design 11) is already one lofted form,
+but flat-shaded and untextured too.
+
+**Change** (drawing only; no record, rule or save changes):
+
+- Every species is built as one lofted, smooth-shaded form of the horse's
+  family (`husbandry::forms`): a barrel body interpolated through a few
+  authored rings, the neck, head, legs and tail swept out of it from rings
+  that start inside it, tapering away. Each quadruped's proportions are a
+  `Form` (the horse long-legged and fine-headed, the plodder deep, heavy and
+  short-legged with a broad muzzle, the woolback round in its fleece on thin
+  dark legs); the hen is an egg-shaped body with a neck, a comb and wattle
+  grown from the head as one ridge, a wedge of tail, wings lying along its
+  sides and thin legs with toes.
+- The pose is the rig's as before (the gait phase over stride, the head's
+  graze and glance, the tail, the weight shift, lying down and roosting), so
+  nothing about how an animal moves changes.
+- The coat is the `coat` texture (land-transport design 12) tinted by the
+  genome's colours; a pattern (the plodder's belt, the hen's speckle) is a
+  tint painted onto the body's own vertices, and the eyes are dark tints of
+  the head, not boxes.
+- Task 9.2 is answered this way rather than with M26's hide strips, which
+  were drawn for box bodies.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and

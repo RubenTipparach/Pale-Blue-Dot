@@ -26,10 +26,18 @@ pub enum Reason {
     Mission,
     /// Pay for work (hired work, later).
     Wage,
+    /// Coins found in a town container (`furniture` design 9).
+    Found,
 }
 
 impl Reason {
-    pub const ALL: [Reason; 4] = [Reason::Sold, Reason::Bought, Reason::Mission, Reason::Wage];
+    pub const ALL: [Reason; 5] = [
+        Reason::Sold,
+        Reason::Bought,
+        Reason::Mission,
+        Reason::Wage,
+        Reason::Found,
+    ];
 
     /// Its name in the log and in data.
     pub fn code(self) -> &'static str {
@@ -38,6 +46,7 @@ impl Reason {
             Reason::Bought => "bought",
             Reason::Mission => "mission",
             Reason::Wage => "wage",
+            Reason::Found => "found",
         }
     }
 

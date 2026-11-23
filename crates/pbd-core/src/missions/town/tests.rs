@@ -77,7 +77,7 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
     let book = shipped_book();
     let file = town_file();
     let chain = town_chain();
-    assert_eq!(chain.missions.len(), 25);
+    assert_eq!(chain.missions.len(), 34);
     let roots: Vec<&str> = chain
         .missions
         .iter()
@@ -112,7 +112,7 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
             .iter()
             .map(|m| u64::from(m.coins))
             .sum::<u64>(),
-        525
+        640
     );
     // The two trees never name each other.
     let starter = starter_file();
@@ -299,9 +299,29 @@ fn each_town_kind_counts_from_its_event() {
         &none,
     );
     assert_eq!(step.done, ["road-trip"]);
+    // Carpentry (`furniture` design 12): the bench, a chair, a seat, a
+    // table, a bed, a lie-down, a chest, four pieces placed, a town chest.
+    let bench = "block:carpenter's bench";
+    p.record(&chain, &Happened::new(Kind::Craft, bench, 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Place, bench, 1), &none);
+    assert_eq!(step.done, ["carpenter"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "chair", 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Sit, "stool", 1), &none);
+    assert_eq!(step.done, ["sit"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "table", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "bed", 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Lie, "bed", 1), &none);
+    assert_eq!(step.done, ["lie"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "chest", 1), &none);
+    for _ in 0..4 {
+        p.record(&chain, &Happened::new(Kind::Build, "furniture", 1), &none);
+    }
+    assert!(p.is_done("furnish"));
+    let step = p.record(&chain, &Happened::new(Kind::Loot, "21:planks", 3), &none);
+    assert_eq!(step.done, ["find"]);
     // Every mission is done, and nothing is open.
     assert_eq!(p.current(&chain), None);
-    assert_eq!(p.done.len(), 25);
+    assert_eq!(p.done.len(), 34);
 }
 
 /// Task 2.3: a mission's coins are paid by the count that finishes it, and

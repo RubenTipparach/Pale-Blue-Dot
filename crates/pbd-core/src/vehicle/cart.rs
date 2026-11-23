@@ -118,12 +118,21 @@ impl CartSpec {
     }
 }
 
+/// The species that may be put in a horse cart's shafts (`land-transport`
+/// designs 11 and 13), by id in the home roster.
+pub const PULLERS: [&str; 2] = ["horse", "plodder"];
+
 /// Both carts' specs.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CartSpecs {
     pub hand_cart: CartSpec,
     pub horse_cart: CartSpec,
+    /// A plodder's speed in the shafts on gravel, m/s (design 13): the
+    /// cart runs at the lower of this and its own road speed.
+    pub plodder_mps: f32,
+    /// Riding a plodder or a horse (design 14).
+    pub riding: super::ride::RideSpecs,
 }
 
 impl Default for CartSpecs {
@@ -153,6 +162,8 @@ impl Default for CartSpecs {
                 reach_m: 2.6,
                 max_step_m: 0.55,
             },
+            plodder_mps: 6.0,
+            riding: Default::default(),
         }
     }
 }
@@ -167,7 +178,22 @@ impl CartSpecs {
 
     pub fn validate(&self) -> Result<(), String> {
         self.hand_cart.validate("carts.hand_cart")?;
-        self.horse_cart.validate("carts.horse_cart")
+        self.horse_cart.validate("carts.horse_cart")?;
+        if !(self.plodder_mps.is_finite() && self.plodder_mps > 0.0) {
+            return Err("carts.plodder_mps: a positive speed".into());
+        }
+        self.riding.validate()
+    }
+
+    /// The horse cart's spec with the animal of species `id` in its shafts:
+    /// its road speed the lower of the cart's and the animal's own (design
+    /// 13). A horse pulls at the cart's own.
+    pub fn pulled_by(&self, id: &str) -> CartSpec {
+        let mut spec = self.horse_cart;
+        if id == "plodder" {
+            spec.road_mps = spec.road_mps.min(self.plodder_mps);
+        }
+        spec
     }
 }
 
@@ -580,6 +606,33 @@ mod tests {
 
     /// A cart's record reads back as the same cart; a gone one is not in
     /// the world, and the horse it names is hitched only while it stands.
+    /// Design 13: a plodder in the shafts runs at its own speed, slower
+    /// than a horse's, and an old `vehicles.ron` without the row takes it.
+    #[test]
+    fn a_plodder_pulls_at_its_own_pace() {
+        let specs = CartSpecs::default();
+        let mut by_plodder = cart(CartKind::HorseCart);
+        let mut by_horse = cart(CartKind::HorseCart);
+        let go = Drive {
+            forward: 1.0,
+            turn: 0.0,
+        };
+        for _ in 0..600 {
+            by_plodder.drive(&specs.pulled_by("plodder"), go, 1.0, 1.0 / 60.0, &flat);
+            by_horse.drive(&specs.pulled_by("horse"), go, 1.0, 1.0 / 60.0, &flat);
+        }
+        assert!(
+            (by_plodder.speed - 6.0).abs() < 1e-6,
+            "{}",
+            by_plodder.speed
+        );
+        assert!((by_horse.speed - 9.0).abs() < 1e-6, "{}", by_horse.speed);
+        let old: CartSpecs = ron::from_str("(hand_cart: (road_mps: 6.0, hold: 9, accel_mps2: 6.0, reverse_share: 0.5, turn_rad_s: 2.2, wheel_radius_m: 0.45, track_m: 0.62, reach_m: 1.35, max_step_m: 0.55))").unwrap();
+        assert_eq!(old.plodder_mps, 6.0);
+        assert!(old.validate().is_ok());
+        assert!(PULLERS.contains(&"plodder") && PULLERS.contains(&"horse"));
+    }
+
     #[test]
     fn a_cart_record_reads_back_and_names_its_horse() {
         let mut c = cart(CartKind::HorseCart);

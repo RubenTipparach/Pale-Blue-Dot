@@ -94,8 +94,22 @@ struct Live {
     forward: DVec3,
     /// Where a caller stands them instead, and whether they are walking.
     driven: Option<Placed>,
+    /// How they rest where they are driven: on a seat or a bed
+    /// (`furniture` design 7).
+    posture: Option<Posture>,
     chosen: Chosen,
     talking: bool,
+}
+
+/// How a person rests on a piece of furniture (`furniture` design 7): their
+/// feet stood under a seat's place, or laid along a bed from its pillow.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Posture {
+    /// On a seat this high over the floor, m.
+    Sit { seat_m: f32 },
+    /// On a bed whose mattress is this high, m; laid from where they are
+    /// driven (the pillow) along their forward.
+    Lie { top_m: f32 },
 }
 
 /// One standing town's people.
@@ -202,12 +216,34 @@ impl Townsfolk {
         true
     }
 
+    /// Rest a person on a piece of furniture (`furniture` design 7): their
+    /// feet at `feet` (a seat's place on the floor, or a bed's pillow on the
+    /// floor), facing `forward`, until [`Townsfolk::release`].
+    pub fn rest(&mut self, id: PersonId, feet: DVec3, forward: DVec3, posture: Posture) -> bool {
+        let Some(l) = self.live_mut(id) else {
+            return false;
+        };
+        l.driven = Some(Placed {
+            feet,
+            forward,
+            walking: false,
+        });
+        l.posture = Some(posture);
+        true
+    }
+
+    /// Whether a person rests on furniture now.
+    pub fn resting(&self, id: PersonId) -> Option<Posture> {
+        self.live(id).and_then(|l| l.posture)
+    }
+
     /// Back to their post or path.
     pub fn release(&mut self, id: PersonId) -> bool {
         let Some(l) = self.live_mut(id) else {
             return false;
         };
         l.driven = None;
+        l.posture = None;
         true
     }
 
@@ -246,6 +282,7 @@ pub fn on_stand(
                 forward: placed.forward,
                 placed,
                 driven: None,
+                posture: None,
                 chosen: Chosen {
                     expression: resting,
                     focus: false,
@@ -1011,17 +1048,38 @@ fn step(
             ]
         });
         let face_pose = l.face.step(dt, l.chosen, look_at, l.talking);
-        let doing = if l.placed.walking {
-            Doing::Walking(l.person.pace().unwrap_or(1.0))
-        } else {
-            match l.person.work() {
+        let doing = match l.posture {
+            Some(Posture::Sit { seat_m }) => {
+                Doing::Sitting((slot.figure.leg_len - seat_m).max(0.0))
+            }
+            Some(Posture::Lie { .. }) => Doing::Lying,
+            None if l.placed.walking => Doing::Walking(l.person.pace().unwrap_or(1.0)),
+            None => match l.person.work() {
                 Some(Work::Hammer) => Doing::Hammering,
                 Some(Work::Wipe) => Doing::Wiping,
                 _ => Doing::Standing,
-            }
+            },
         };
         let pose = l.body.step(dt, doing, face_pose.tilt);
-        let local = o.to_local(WorldPos::new(o.frame, l.placed.feet));
+        // Lying: the figure laid on its back along the bed, its head on the
+        // pillow where it is driven, its feet toward the bed's foot.
+        let (feet, rot) = match l.posture {
+            Some(Posture::Lie { top_m }) => {
+                let up = up_of(l.placed.feet);
+                let along = (l.placed.forward - up * l.placed.forward.dot(up))
+                    .try_normalize()
+                    .unwrap_or(DVec3::X);
+                let head = -along;
+                let x = head.cross(up);
+                let lay =
+                    Quat::from_mat3(&Mat3::from_cols(x.as_vec3(), head.as_vec3(), up.as_vec3()));
+                let height = f64::from(slot.figure.height_m());
+                let feet = l.placed.feet + along * (height - 0.12) + up * f64::from(top_m + 0.1);
+                (feet, lay)
+            }
+            _ => (l.placed.feet, rot),
+        };
+        let local = o.to_local(WorldPos::new(o.frame, feet));
         if let Ok(mut t) = transforms.get_mut(slot.root) {
             t.translation = crate::render_origin::render_from_physics(&frame, local);
             t.rotation = rot;

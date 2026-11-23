@@ -78,6 +78,11 @@ pub struct AnimalBody {
     pub brood: Option<u64>,
     /// The sire the player chose for her on the breeding screen (E6).
     pub mate: Option<u64>,
+    /// The player is on its back (`land-transport` design 14). `false` in
+    /// every record written before, and left out of a record that is not
+    /// ridden, so every other record reads and writes as it did.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ridden: bool,
 }
 
 impl Default for AnimalBody {
@@ -104,6 +109,7 @@ impl Default for AnimalBody {
             made: BTreeMap::new(),
             brood: None,
             mate: None,
+            ridden: false,
         }
     }
 }

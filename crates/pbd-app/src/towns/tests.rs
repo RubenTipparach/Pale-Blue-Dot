@@ -454,8 +454,10 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let triangles = |m: &Meshes| m.values().map(|b| b.positions.len()).sum::<usize>();
     let outside = triangles(&laid.meshes);
     let inside: usize = laid.rooms.iter().map(triangles).sum();
+    // The rooms carry the furniture (`furniture` design 9), shaped and
+    // shaded smooth, so they now outweigh the shells: both are drawn.
     assert!(
-        inside > 1000 && outside > inside,
+        inside > 1000 && outside > 1000,
         "{inside} inside, {outside} outside"
     );
     let flames = laid

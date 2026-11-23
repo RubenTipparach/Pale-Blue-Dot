@@ -206,3 +206,205 @@ fn a_cart_is_drawn_facing_its_heading() {
     assert!((q * DVec3::Y).dot(c.up()) > 0.999);
     assert!((q * DVec3::NEG_Z).dot(c.heading) > 0.999);
 }
+
+/// The plodder's index in the home roster.
+fn plodder_sp(world: &World) -> u16 {
+    species_index(world, "plodder").expect("a plodder in the roster")
+}
+
+/// Design 13: a kept plodder is hitched by the same one-record hitch as a
+/// horse, its name in the message, and the cart then runs at its pace.
+#[test]
+fn a_plodder_is_hitched_and_pulls_at_its_own_pace() {
+    let mut world = world_with(WorldSave::memory_only());
+    let plodder = AnimalBody {
+        sp: plodder_sp(&world),
+        ..AnimalBody::default()
+    };
+    world
+        .resource_mut::<WorldSave>()
+        .store(&Author::Player(0), vec![plodder.record(12)]);
+    let e = spawn(
+        &mut world,
+        Cart::new(71, CartKind::HorseCart, at(), DVec3::X),
+    );
+    let lines = world.resource::<WorldSave>().records.len();
+    assert!(hitch_horse(&mut world, e, 12));
+    assert_eq!(
+        world.resource::<WorldSave>().records.len(),
+        lines + 1,
+        "one record: the cart's"
+    );
+    assert!(cart::hitched(&world.resource::<WorldSave>().records).contains(&12));
+    assert_eq!(animal_name(&world, 12).into_string(), "Plodder");
+    let specs = world.resource::<Fleet>().specs.carts;
+    assert_eq!(pulled_spec(&world, Some(12)).road_mps, specs.plodder_mps);
+    assert!(pulled_spec(&world, Some(12)).road_mps < specs.horse_cart.road_mps);
+}
+
+/// Design 13: a plodder in the shafts is the same plodder after a reload,
+/// and still pulls at its own pace.
+#[test]
+fn a_hitched_plodder_is_there_after_a_reload() {
+    let root = temp_root("plodder");
+    let slot = crate::saves::create(&root, "Plodder", 11).unwrap();
+    {
+        let mut world = world_with(WorldSave::open(root.clone(), slot.clone()));
+        let id =
+            keep_animal(&mut world, "plodder", at(), DVec3::X, false, Vec::new()).expect("kept");
+        let e = spawn(
+            &mut world,
+            Cart::new(72, CartKind::HorseCart, at(), DVec3::X),
+        );
+        assert!(hitch_horse(&mut world, e, id));
+        world.resource::<WorldSave>().drain();
+    }
+    let save = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+    let back = cart::carts(&save.records);
+    let id = back[0].horse.expect("an animal in the shafts");
+    let mut world = world_with(save);
+    let body = animal_body(&world, id).expect("its record");
+    assert_eq!(body.sp, plodder_sp(&world));
+    assert_eq!(
+        pulled_spec(&world, Some(id)).road_mps,
+        world.resource::<Fleet>().specs.carts.plodder_mps
+    );
+    let _ = &mut world;
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A world with a walker standing at `at()` and the farmyard.
+/// `at()`'s direction on the ground the rides stand on.
+fn on_ground(world: &World) -> DVec3 {
+    let up = at().normalize();
+    up * ground_at(world, up * 4800.0)
+}
+
+/// The farmyard's local point for a body-local one.
+fn yard_local(world: &World, p: DVec3) -> Vec3 {
+    (world.resource::<PlanetRenderFrame>().physics_center() + p).as_vec3()
+}
+
+fn riding_world(save: WorldSave) -> World {
+    let mut world = world_with(save);
+    world.insert_resource(Farmyard::default());
+    world.insert_resource(Time::<()>::default());
+    let feet = on_ground(&world);
+    let at = yard_local(&world, feet + feet.normalize() * f64::from(HALF_HEIGHT));
+    world.spawn((Walker, Position(at), LinearVelocity::default()));
+    world
+}
+
+/// A kept plodder beside the walker, in the yard.
+fn plodder_beside(world: &mut World) -> u64 {
+    let feet = on_ground(world);
+    let up = feet.normalize();
+    let beside = feet + up.any_orthonormal_vector() * 1.0;
+    let id = keep_animal(world, "plodder", beside, DVec3::X, false, Vec::new()).expect("kept");
+    let body = animal_body(world, id).unwrap();
+    let local = yard_local(world, beside);
+    world
+        .resource_mut::<Farmyard>()
+        .take_back(id, &body, local, up.as_vec3(), Vec3::X, 0.0);
+    id
+}
+
+/// Design 14: F beside a kept plodder mounts it (its record says ridden,
+/// the walker is on its back), and F again gets off it: its record is
+/// unridden, it is back in the yard, and nothing about it is lost. Riding
+/// is not hitching.
+#[test]
+fn a_plodder_is_mounted_and_got_off() {
+    let mut world = riding_world(WorldSave::memory_only());
+    let id = plodder_beside(&mut world);
+    let (_, feet) = walker_feet(&mut world).unwrap();
+    let (_, found) = riding::mountable(&world, feet).expect("a plodder to ride");
+    assert_eq!(found, id);
+    assert!(riding::mount(&mut world, id));
+    assert!(
+        animal_body(&world, id).unwrap().ridden,
+        "its record says so"
+    );
+    assert_eq!(
+        world.resource::<Carts>().riding.as_ref().unwrap().animal,
+        id
+    );
+    assert!(cart::hitched(&world.resource::<WorldSave>().records).is_empty());
+    assert!(
+        riding::mountable(&world, feet).is_none(),
+        "nothing else is mounted"
+    );
+    riding::get_off(&mut world);
+    let (_, feet) = walker_feet(&mut world).unwrap();
+    let body = animal_body(&world, id).unwrap();
+    assert!(!body.ridden);
+    assert_eq!(body.state, animal::Life::Alive);
+    assert!(world.resource::<Carts>().riding.is_none());
+    assert_eq!(world.resource::<Pace>().cap_mps, None);
+    assert!(
+        world
+            .resource::<Farmyard>()
+            .kept_pose(id, yard_local(&world, feet), 4.0)
+            .is_some(),
+        "back in the yard beside the walker"
+    );
+}
+
+/// Design 14: an animal in a cart's shafts is not mounted until it is
+/// unhitched.
+#[test]
+fn a_hitched_animal_is_not_ridden() {
+    let mut world = riding_world(WorldSave::memory_only());
+    let id = plodder_beside(&mut world);
+    let e = spawn(
+        &mut world,
+        Cart::new(73, CartKind::HorseCart, at(), DVec3::X),
+    );
+    assert!(hitch_horse(&mut world, e, id));
+    let (_, feet) = walker_feet(&mut world).unwrap();
+    assert!(riding::mountable(&world, feet).is_none());
+    assert!(!riding::mount(&mut world, id));
+}
+
+/// Design 14: a save closed while riding opens with the walker on foot and
+/// the animal unridden beside them.
+#[test]
+fn a_reload_while_riding_comes_back_beside_it() {
+    let root = temp_root("ride");
+    let slot = crate::saves::create(&root, "Ride", 13).unwrap();
+    let id = {
+        let mut world = riding_world(WorldSave::open(root.clone(), slot.clone()));
+        let id = plodder_beside(&mut world);
+        assert!(riding::mount(&mut world, id));
+        world.resource::<WorldSave>().drain();
+        id
+    };
+    let save = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+    let serial = save.serial();
+    let mut world = riding_world(save);
+    assert!(animal_body(&world, id).unwrap().ridden, "saved ridden");
+    world.resource_mut::<Carts>().loaded = Some(serial);
+    riding::restore(&mut world);
+    assert!(!animal_body(&world, id).unwrap().ridden);
+    assert!(world.resource::<Carts>().riding.is_none(), "on foot");
+    let (_, feet) = walker_feet(&mut world).unwrap();
+    assert!(
+        world
+            .resource::<Farmyard>()
+            .kept_pose(id, yard_local(&world, feet), 3.0)
+            .is_some(),
+        "beside the walker"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Design 14: an animal record from before riding reads unridden, and one
+/// written unridden holds no new field, so old saves read and write as
+/// they did.
+#[test]
+fn old_animal_records_are_unchanged_by_riding() {
+    let old: AnimalBody = ron::from_str("(sp: 2, via: Fed, home: 12)").unwrap();
+    assert!(!old.ridden);
+    let written = old.record(5).body;
+    assert!(!written.contains("ridden"), "{written}");
+}

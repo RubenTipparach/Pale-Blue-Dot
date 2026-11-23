@@ -325,13 +325,14 @@ pub fn paint_hold(
     if *screen != Screen::Pack || view.craft.is_none() {
         return;
     }
+    let hold = |i: usize| (CARRIED..super::furniture::STORE_AT).contains(&i);
     for (icon, mut node) in &mut icon_nodes {
-        if icon.0 >= CARRIED {
+        if hold(icon.0) {
             slots::paint_icon(&mut node, view.hold.get(icon.0 - CARRIED), &icons, &images);
         }
     }
     for (count, mut text) in &mut counts {
-        if count.0 < CARRIED {
+        if !hold(count.0) {
             continue;
         }
         let label = match view.hold.get(count.0 - CARRIED) {
@@ -343,7 +344,7 @@ pub fn paint_hold(
         }
     }
     for (cell, mut tip) in &mut tips {
-        if cell.0 < CARRIED {
+        if !hold(cell.0) {
             continue;
         }
         let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
@@ -584,6 +585,9 @@ pub fn spawn(
                                 );
                             }
                         });
+                    // A container's panel, beside the hold's, while one is
+                    // open (`furniture` design 11).
+                    super::furniture::spawn_panel(layer, kit, &atlas);
                 });
         });
     commands
@@ -904,6 +908,7 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            carpenter: Handle::default(),
             tiered: Vec::new(),
         });
         app.insert_resource(pbd_app::config::Recipes(

@@ -16,6 +16,7 @@
 //! `SimOrigin`.
 
 pub mod model;
+pub mod riding;
 
 use super::{Fleet, ground_under};
 use crate::field_light::{LitByField, LitLikeTerrain};
@@ -72,7 +73,8 @@ fn up_of(p: DVec3) -> DVec3 {
 #[derive(Component)]
 pub struct CartThing {
     pub cart: Cart,
-    mesh: Option<Handle<Mesh>>,
+    /// Its wood and its iron (`model::WOOD`, `model::IRON_PART`).
+    mesh: Option<[Handle<Mesh>; 2]>,
     horse: Option<(Entity, Handle<Mesh>)>,
     /// What the mesh was built for: rebuilt only when it changes.
     drawn: Option<(i32, i32, bool)>,
@@ -112,12 +114,26 @@ pub struct Carts {
     pub loaded: Option<u64>,
     pub holding: Option<Entity>,
     pub seated: Option<Entity>,
-    material: Option<Handle<StandardMaterial>>,
+    /// The animal ridden (design 14), stepped here; its record says so.
+    pub riding: Option<pbd_core::vehicle::ride::Ride>,
+    /// The ridden animal's drawing: its root and mesh.
+    ride_mesh: Option<(Entity, Handle<Mesh>)>,
+    /// This world's ridden records have been put back beside the walker.
+    ride_restored: Option<u64>,
+    materials: Option<CartMaterials>,
     /// The take-up in hand: which cart, and how long the button has been
     /// held on it.
     taking_up: Option<(Entity, f32)>,
     /// A capture script's request (`--carts`).
     pub script: Option<CartScript>,
+}
+
+/// A cart's textured materials (design 12): the settlement `timber` and
+/// `iron`, and the herd's `coat` for the animal in the shafts.
+#[derive(Clone)]
+pub struct CartMaterials {
+    pub parts: [Handle<StandardMaterial>; 2],
+    pub coat: Handle<StandardMaterial>,
 }
 
 /// `--carts`: set a hand cart and a hitched horse cart down ahead of the
@@ -130,6 +146,12 @@ pub struct CartScript {
     /// `--cart-close hand|horse`: only that cart, broadside across the
     /// view a few metres ahead, to look at close up.
     pub close: Option<CartKind>,
+    /// `--cart-close plodder`: the horse cart with a plodder in its shafts
+    /// and another loose beside it (design 13).
+    pub plodder: bool,
+    /// `--cart-close ride`: a plodder set down ahead and mounted (design
+    /// 14), ridden on a little.
+    pub ride: bool,
 }
 
 pub struct CartsPlugin;
@@ -140,15 +162,23 @@ impl Plugin for CartsPlugin {
             .init_resource::<HorseOrders>()
             .add_systems(
                 Update,
-                (load, script, use_carts, set_down_and_take_up, sell_horses)
+                (
+                    load,
+                    riding::restore,
+                    script,
+                    use_carts,
+                    set_down_and_take_up,
+                    sell_horses,
+                )
                     .chain()
                     .after(super::place::spawn_fleet)
                     .run_if(crate::world_open),
             )
-            .add_systems(FixedUpdate, roll)
+            .add_systems(FixedUpdate, (roll, riding::step).chain())
             .add_systems(
                 PostUpdate,
-                draw.after(crate::planet::update_planet_frame)
+                (draw, riding::draw)
+                    .after(crate::planet::update_planet_frame)
                     .before(bevy::transform::TransformSystems::Propagate)
                     .run_if(crate::world_open),
             )
@@ -237,7 +267,7 @@ fn factor_of(world: &World, c: &Cart, spec: &CartSpec) -> (f32, bool) {
 /// The player's free hand: none while a cart is held or the seat is taken.
 fn busy(world: &World) -> bool {
     let c = world.resource::<Carts>();
-    c.holding.is_some() || c.seated.is_some()
+    c.holding.is_some() || c.seated.is_some() || c.riding.is_some()
 }
 
 fn say(world: &mut World, text: &str) {
@@ -247,14 +277,50 @@ fn say(world: &mut World, text: &str) {
     info!("carts: {text}");
 }
 
-/// The horse species' index in the home roster.
-fn horse_species(world: &World) -> Option<u16> {
+/// A species' index in the home roster, by id.
+fn species_index(world: &World, id: &str) -> Option<u16> {
     let land = world.get_resource::<crate::config::HusbandryConfig>()?;
     land.0
         .roster(pbd_core::fauna::HOME_BODY)
         .iter()
-        .position(|s| s.id == "horse")
+        .position(|s| s.id == id)
         .map(|i| i as u16)
+}
+
+/// The species that may be put in the shafts or ridden, by index:
+/// `cart::PULLERS` found in the home roster (design 13).
+fn puller_species(world: &World) -> Vec<u16> {
+    cart::PULLERS
+        .iter()
+        .filter_map(|id| species_index(world, id))
+        .collect()
+}
+
+/// A kept animal's record, by id.
+fn animal_body(world: &World, id: u64) -> Option<AnimalBody> {
+    world
+        .get_resource::<WorldSave>()?
+        .records
+        .get(animal::ANIMAL, id)
+        .and_then(|r| r.read::<AnimalBody>())
+}
+
+/// A kept animal's species id in the home roster.
+fn species_id(world: &World, sp: u16) -> Option<String> {
+    let land = world.get_resource::<crate::config::HusbandryConfig>()?;
+    land.0
+        .roster(pbd_core::fauna::HOME_BODY)
+        .get(sp as usize)
+        .map(|s| s.id.clone())
+}
+
+/// The horse cart's spec with the animal `id` in its shafts (design 13).
+fn pulled_spec(world: &World, id: Option<u64>) -> CartSpec {
+    let specs = world.resource::<Fleet>().specs.carts;
+    let species = id
+        .and_then(|id| animal_body(world, id))
+        .and_then(|b| species_id(world, b.sp));
+    specs.pulled_by(species.as_deref().unwrap_or("horse"))
 }
 
 // ---- Loading --------------------------------------------------------------
@@ -305,17 +371,7 @@ fn load(world: &mut World) {
 /// Put a cart in the world: its root lit as the terrain is, its mesh built
 /// on the first draw.
 fn spawn(world: &mut World, c: Cart) -> Entity {
-    if world.resource::<Carts>().material.is_none() {
-        let material = world
-            .resource_mut::<Assets<StandardMaterial>>()
-            .add(StandardMaterial {
-                base_color: Color::WHITE,
-                perceptual_roughness: 0.92,
-                reflectance: 0.2,
-                ..default()
-            });
-        world.resource_mut::<Carts>().material = Some(material);
-    }
+    materials(world);
     let centre = world.resource::<PlanetRenderFrame>().center;
     world
         .spawn((
@@ -327,6 +383,31 @@ fn spawn(world: &mut World, c: Cart) -> Entity {
             CartThing::new(c),
         ))
         .id()
+}
+
+/// The carts' textured materials, made on first use (design 12): wood and
+/// iron in the towns' own textures, sampled nearest and repeated, and the
+/// herd's coat for the animal in the shafts.
+pub fn materials(world: &mut World) -> Option<CartMaterials> {
+    if let Some(m) = world.resource::<Carts>().materials.clone() {
+        return Some(m);
+    }
+    let assets = world.get_resource::<AssetServer>()?.clone();
+    let mut store = world.resource_mut::<Assets<StandardMaterial>>();
+    let mut textured = |name: &str| {
+        store.add(StandardMaterial {
+            base_color_texture: Some(crate::towns::texture(&assets, name)),
+            perceptual_roughness: 0.92,
+            reflectance: 0.2,
+            ..default()
+        })
+    };
+    let made = CartMaterials {
+        parts: model::TEXTURES.map(&mut textured),
+        coat: textured("coat"),
+    };
+    world.resource_mut::<Carts>().materials = Some(made.clone());
+    Some(made)
 }
 
 /// Write a cart's record as the player's. `false` if the save refused it.
@@ -354,8 +435,12 @@ fn what_f_does(world: &mut World) -> Option<(Act, Entity, pbd_core::locale::Loca
         let name = world.get::<CartThing>(e)?.cart.kind.name();
         return Some((Act::StepDown, e, name));
     }
+    if c.riding.is_some() {
+        let id = c.riding.as_ref()?.animal;
+        return Some((Act::GetOff, Entity::PLACEHOLDER, animal_name(world, id)));
+    }
     let (_, feet) = walker_feet(world)?;
-    let horse_sp = horse_species(world);
+    let pullers = puller_species(world);
     let specs = world.resource::<Fleet>().specs.carts;
     let mut best: Option<(f64, Act, Entity, pbd_core::locale::Localized)> = None;
     let mut found = world.query::<(Entity, &CartThing)>();
@@ -375,15 +460,14 @@ fn what_f_does(world: &mut World) -> Option<(Act, Entity, pbd_core::locale::Loca
                 if to_seat <= REACH_M + 0.4 {
                     (Act::Drive, c.kind.name())
                 } else if d <= REACH_M + 1.2 {
-                    match (c.horse, horse_sp) {
-                        (Some(_), _) => (Act::Unhitch, horse_name(world)),
-                        (None, Some(sp)) => {
-                            if led_horse(world, sp, front).is_none() {
+                    match c.horse {
+                        Some(id) => (Act::Unhitch, animal_name(world, id)),
+                        None => {
+                            let Some((id, _)) = led_puller(world, &pullers, front) else {
                                 continue;
-                            }
-                            (Act::Hitch, horse_name(world))
+                            };
+                            (Act::Hitch, animal_name(world, id))
                         }
-                        (None, None) => continue,
                     }
                 } else {
                     continue;
@@ -395,16 +479,41 @@ fn what_f_does(world: &mut World) -> Option<(Act, Entity, pbd_core::locale::Loca
             best = Some((d, act, e, thing));
         }
     }
+    // A kept plodder or horse beside the player: ridden (design 14).
+    if let Some((d, id)) = riding::mountable(world, feet) {
+        if best.as_ref().is_none_or(|b| d < b.0) {
+            best = Some((d, Act::Ride, Entity::PLACEHOLDER, animal_name(world, id)));
+        }
+    }
     best.map(|(_, a, e, t)| (a, e, t))
 }
 
-fn horse_name(world: &World) -> pbd_core::locale::Localized {
-    let _ = world;
-    tr("species.horse.name")
+/// A kept animal's name, its species': "Plodder", "Horse".
+fn animal_name(world: &World, id: u64) -> pbd_core::locale::Localized {
+    animal_body(world, id)
+        .and_then(|b| species_id(world, b.sp))
+        .map_or_else(
+            || tr("species.horse.name"),
+            |sp| tr(&format!("species.{sp}.name")),
+        )
 }
 
-/// The nearest kept horse to a body-local point, within reach of the
-/// shafts: its record id and its local feet.
+/// The nearest kept animal of any of `species` to a body-local point,
+/// within reach of the shafts and in no cart's: its record id and local
+/// feet.
+fn led_puller(world: &World, species: &[u16], near: DVec3) -> Option<(u64, Vec3)> {
+    let o = crate::sim_origin::origin_of(world);
+    let centre = world.resource::<PlanetRenderFrame>().physics_center();
+    let local = o.from_query_point(o.query_point((centre + near).as_vec3()));
+    species
+        .iter()
+        .filter_map(|&sp| led_horse(world, sp, near).map(|(id, p)| (id, p, p.distance(local))))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(id, p, _)| (id, p))
+}
+
+/// The nearest kept animal of `species` to a body-local point, within
+/// reach of the shafts: its record id and its local feet.
 fn led_horse(world: &World, species: u16, near: DVec3) -> Option<(u64, Vec3)> {
     let o = crate::sim_origin::origin_of(world);
     let centre = world.resource::<PlanetRenderFrame>().physics_center();
@@ -463,6 +572,14 @@ fn use_carts(world: &mut World) {
         Act::StepDown => step_down(world, entity),
         Act::Hitch => hitch(world, entity),
         Act::Unhitch => unhitch(world, entity),
+        Act::Ride => {
+            if let Some((_, feet)) = walker_feet(world)
+                && let Some((_, id)) = riding::mountable(world, feet)
+            {
+                riding::mount(world, id);
+            }
+        }
+        Act::GetOff => riding::get_off(world),
         _ => {}
     }
 }
@@ -531,16 +648,14 @@ pub fn step_down(world: &mut World, entity: Entity) {
 /// naming the horse: hitched is that record alone, so the save can never
 /// hold a half-hitched horse (design 11).
 pub fn hitch(world: &mut World, entity: Entity) {
-    let Some(sp) = horse_species(world) else {
-        return;
-    };
+    let pullers = puller_species(world);
     let Some(front) = world
         .get::<CartThing>(entity)
         .map(|t| t.cart.front(&spec_of(world, t.cart.kind)))
     else {
         return;
     };
-    let Some((id, _)) = led_horse(world, sp, front) else {
+    let Some((id, _)) = led_puller(world, &pullers, front) else {
         say(world, &tr("vehicles.cart.no_horse"));
         return;
     };
@@ -566,7 +681,7 @@ pub fn hitch_horse(world: &mut World, entity: Entity, id: u64) -> bool {
     if let Some(happened) = missions::hitched() {
         world.write_message(Did(happened));
     }
-    let name = horse_name(world);
+    let name = animal_name(world, id);
     say(
         world,
         &tr_with("vehicles.cart.hitched", &[("horse", &name)]),
@@ -626,7 +741,7 @@ pub fn unhitch(world: &mut World, entity: Entity) {
     {
         world.entity_mut(e).despawn();
     }
-    let name = horse_name(world);
+    let name = animal_name(world, id);
     say(
         world,
         &tr_with("vehicles.cart.unhitched", &[("horse", &name)]),
@@ -914,7 +1029,7 @@ fn drive(world: &mut World, entity: Entity, dt: f64) {
         world.resource_mut::<Carts>().seated = None;
         return;
     };
-    let spec = spec_of(world, c.kind);
+    let spec = pulled_spec(world, c.horse);
     let axes = world
         .get_resource::<WalkingState>()
         .map_or(Vec2::ZERO, |w| w.move_axes());
@@ -1029,7 +1144,7 @@ fn draw(
     mut meshes: ResMut<Assets<Mesh>>,
     mut things: Query<(Entity, &mut CartThing, &mut Transform)>,
 ) {
-    let (Some(fleet), Some(material)) = (fleet, carts.material.clone()) else {
+    let (Some(fleet), Some(materials)) = (fleet, carts.materials.clone()) else {
         return;
     };
     let roster = land
@@ -1067,9 +1182,12 @@ fn draw(
         );
         if t.drawn != Some(key) {
             t.drawn = Some(key);
-            let mut b = crate::husbandry::rig::Builder::default();
+            let mut parts = [
+                crate::husbandry::rig::Builder::default(),
+                crate::husbandry::rig::Builder::default(),
+            ];
             model::cart(
-                &mut b,
+                &mut parts,
                 c.kind,
                 &spec,
                 model::CartPose {
@@ -1078,24 +1196,30 @@ fn draw(
                 },
             );
             match &t.mesh {
-                Some(h) => {
-                    if let Some(mesh) = meshes.get_mut(h) {
-                        b.write(mesh);
+                Some(handles) => {
+                    for (b, h) in parts.into_iter().zip(handles) {
+                        if let Some(mesh) = meshes.get_mut(h) {
+                            b.write(mesh);
+                        }
                     }
                 }
                 None => {
-                    let mut mesh = Mesh::new(
-                        PrimitiveTopology::TriangleList,
-                        RenderAssetUsages::default(),
-                    );
-                    b.write(&mut mesh);
-                    let handle = meshes.add(mesh);
-                    commands.entity(entity).with_child((
-                        Mesh3d(handle.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::default(),
-                    ));
-                    t.mesh = Some(handle);
+                    let mut handles = Vec::new();
+                    for (b, material) in parts.into_iter().zip(&materials.parts) {
+                        let mut mesh = Mesh::new(
+                            PrimitiveTopology::TriangleList,
+                            RenderAssetUsages::default(),
+                        );
+                        b.write(&mut mesh);
+                        let handle = meshes.add(mesh);
+                        commands.entity(entity).with_child((
+                            Mesh3d(handle.clone()),
+                            MeshMaterial3d(material.clone()),
+                            Transform::default(),
+                        ));
+                        handles.push(handle);
+                    }
+                    t.mesh = handles.try_into().ok();
                 }
             }
         }
@@ -1111,23 +1235,20 @@ fn draw(
             .and_then(|s| s.records.get(animal::ANIMAL, id))
             .and_then(|r| r.read::<AnimalBody>());
         let species = body.as_ref().and_then(|b| roster.get(b.sp as usize));
-        let colours = match (species, body.as_ref()) {
-            (Some(sp), Some(b)) => model::colours_of(sp, &b.genome()),
-            _ => model::HorseColours::default(),
-        };
+        let genome = body.as_ref().map(|b| b.genome()).unwrap_or_default();
         let stride = species.map_or(1.7, |s| s.stride_m) as f64;
         let walk = (c.speed.abs() / 1.2).min(1.0) as f32;
         let mut b = crate::husbandry::rig::Builder::default();
-        model::horse(
+        model::puller(
             &mut b,
-            &colours,
-            model::HorsePose {
+            species,
+            &genome,
+            &crate::husbandry::forms::Stance {
                 phase: (c.rolled_m / stride * std::f64::consts::TAU) as f32,
                 walk,
                 head_down: if walk < 0.05 { 0.25 } else { 0.0 },
-                tail: 0.0,
+                ..default()
             },
-            1.0,
         );
         let place = Transform::from_xyz(0.0, 0.0, -(HORSE_AHEAD_M as f32));
         match &t.horse {
@@ -1146,7 +1267,7 @@ fn draw(
                 let child = commands
                     .spawn((
                         Mesh3d(handle.clone()),
-                        MeshMaterial3d(material.clone()),
+                        MeshMaterial3d(materials.coat.clone()),
                         place,
                         bevy::camera::visibility::NoFrustumCulling,
                     ))
@@ -1181,6 +1302,11 @@ fn script(world: &mut World) {
     let ahead = (look - up * look.dot(up)).normalize_or(DVec3::X);
     let right = ahead.cross(up);
     let stood = |world: &World, p: DVec3| p.normalize() * ground_at(world, p);
+    if s.ride {
+        riding::script(world, feet, ahead, right);
+        world.resource_mut::<Carts>().script = Some(CartScript { done: true, ..s });
+        return;
+    }
     let (hand_at, horse_at, facing) = match s.close {
         Some(CartKind::HandCart) => (feet + ahead * 3.2, feet + ahead * 1e4, right),
         Some(CartKind::HorseCart) => (feet + ahead * 1e4, feet + ahead * 6.5 - right * 1.4, right),
@@ -1206,16 +1332,17 @@ fn script(world: &mut World) {
     let horse_cart = want(CartKind::HorseCart)
         .then(|| set_down(world, CartKind::HorseCart, horse_at, facing))
         .flatten();
+    let puller = if s.plodder { "plodder" } else { "horse" };
     if let Some(e) = horse_cart
-        && let Some(id) = buy_horse(world, horse_at, facing, false)
+        && let Some(id) = keep_animal(world, puller, horse_at, facing, false, Vec::new())
     {
         hitch_horse(world, e, id);
     }
-    // Close to the horse cart, a second horse stands loose beside it, drawn
+    // Close to the horse cart, a second animal stands loose beside it, drawn
     // by the farmyard as any kept animal is.
     if s.close == Some(CartKind::HorseCart) {
         let loose = stood(world, feet + ahead * 4.0 + right * 3.0);
-        buy_horse(world, loose, -right, false);
+        keep_animal(world, puller, loose, -right, false, Vec::new());
     }
     world.resource_mut::<Carts>().script = Some(CartScript { done: true, ..s });
     if s.pull
@@ -1287,7 +1414,7 @@ fn sell_horses(world: &mut World) {
             pbd_core::economy::jobs::scoped(site, "horse"),
             1,
         ));
-        let name = horse_name(world);
+        let name = tr("species.horse.name");
         say(
             world,
             &tr_with(
@@ -1314,7 +1441,26 @@ fn buy_horse_with(
     follow: bool,
     with: Vec<pbd_core::records::Record>,
 ) -> Option<u64> {
-    let sp = horse_species(world)?;
+    keep_animal(world, "horse", at, facing, follow, with)
+}
+
+/// A grown kept animal of species `id` written at the cell under `at`
+/// (body-local): a horse bought (`via: Bought`), or, for a capture, a
+/// plodder as if tamed. Its record id, or `None`.
+pub fn keep_animal(
+    world: &mut World,
+    id: &str,
+    at: DVec3,
+    facing: DVec3,
+    follow: bool,
+    with: Vec<pbd_core::records::Record>,
+) -> Option<u64> {
+    let sp = species_index(world, id)?;
+    let via = if id == "horse" {
+        animal::Via::Bought
+    } else {
+        animal::Via::Fed
+    };
     let now_day = world.get_resource::<crate::sky::Sun>().map_or(0.0, |s| {
         s.clock.seconds / f64::from(pbd_core::daylight::DAY_S)
     });
@@ -1341,7 +1487,7 @@ fn buy_horse_with(
             born: now_day - keep_days,
             genes: genome.0.to_vec(),
             home: roads::nearest_key(up).unwrap_or(0),
-            via: animal::Via::Bought,
+            via,
             as_of: now_day,
             fed_until: now_day + 2.0,
             ..AnimalBody::default()

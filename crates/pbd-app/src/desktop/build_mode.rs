@@ -49,10 +49,13 @@ pub enum Tool {
     Lantern,
     Blueprint,
     Remove,
+    /// A piece of furniture carried in the pack (`furniture` design 5): the
+    /// eleventh slot, on the minus key.
+    Furniture,
 }
 
-/// The palette, in M6's order.
-pub const PALETTE: [Tool; 10] = [
+/// The palette, in M6's order, and the furniture after it.
+pub const PALETTE: [Tool; 11] = [
     Tool::Wall,
     Tool::Door,
     Tool::Window,
@@ -63,6 +66,7 @@ pub const PALETTE: [Tool; 10] = [
     Tool::Lantern,
     Tool::Blueprint,
     Tool::Remove,
+    Tool::Furniture,
 ];
 
 impl Tool {
@@ -79,6 +83,7 @@ impl Tool {
             Tool::Lantern => "lantern",
             Tool::Blueprint => "blueprint",
             Tool::Remove => "remove",
+            Tool::Furniture => "furniture",
         }
     }
 }
@@ -108,6 +113,8 @@ pub struct BuildMode {
     pub turn: usize,
     /// Which blueprint.
     pub choice: usize,
+    /// Which of the furniture carried, by its place among the kinds carried.
+    pub piece: usize,
     /// Whether the kit picker is open.
     pub picker: bool,
     /// The hotbar's selection when build mode opened, given back on leaving.
@@ -232,6 +239,11 @@ pub fn take_input(
         }
         keys.reset(*key);
     }
+    // The furniture, past the digits (`furniture` design 5).
+    if keys.just_pressed(KeyCode::Minus) {
+        mode.slot = DIGITS.len();
+    }
+    keys.reset(KeyCode::Minus);
     if keys.just_pressed(KeyCode::KeyK) {
         mode.picker = !mode.picker;
     }
@@ -250,6 +262,10 @@ pub fn take_input(
         if PALETTE[mode.slot] == Tool::Blueprint && keys.pressed(KeyCode::ShiftLeft) {
             let n = blueprints.0.len().max(1) as i32;
             mode.choice = (mode.choice as i32 + steps).rem_euclid(n) as usize;
+        } else if PALETTE[mode.slot] == Tool::Furniture {
+            // The wheel steps through the furniture carried.
+            let n = carried_furniture(&hotbar.0).len().max(1) as i32;
+            mode.piece = (mode.piece as i32 + steps).rem_euclid(n) as usize;
         } else {
             mode.turn = (mode.turn as i32 + steps).rem_euclid(6) as usize;
         }
@@ -275,6 +291,18 @@ pub fn take_input(
         buttons.reset(MouseButton::Left);
         buttons.reset(MouseButton::Right);
     }
+}
+
+/// The furniture carried, each kind once, in `Kind::ALL` order, with how
+/// many of it.
+pub fn carried_furniture(
+    slots: &pbd_core::inventory::Slots,
+) -> Vec<(pbd_core::furniture::Kind, u32)> {
+    pbd_core::furniture::Kind::ALL
+        .into_iter()
+        .map(|k| (k, slots.count(pbd_core::inventory::Item::Good(k.good()))))
+        .filter(|(_, n)| *n > 0)
+        .collect()
 }
 
 /// Architecture mode's camera (design B9): Z in build mode raises it over
@@ -469,6 +497,7 @@ fn reference(piece: &Piece) -> Option<Vec3> {
         Shape::Lantern { .. } => 1.0,
         Shape::Roof { .. } => 1.0,
         Shape::Floor { .. } => 0.0,
+        Shape::Furniture { .. } => 0.5,
     };
     let alt = column::layer_altitude(piece.shape.layer() as usize) + lift;
     Some(mean * (PLANET_RADIUS + alt))
@@ -686,6 +715,39 @@ pub fn aim_and_build(
                 blueprint(&patch, def, kit, at, mode.turn, storey).ok()
             })
         }
+        Tool::Furniture => {
+            let carried = carried_furniture(&hotbar.0);
+            match carried.get(mode.piece % carried.len().max(1)) {
+                Some(&(kind, count)) => {
+                    let side = if kind == pbd_core::furniture::Kind::Table {
+                        pbd_core::furniture::MIDDLE
+                    } else {
+                        pick.map_or(0, |(s, _)| s as u8)
+                    };
+                    note.say_for(
+                        time.elapsed_secs(),
+                        tr_with(
+                            "build.furniture_held",
+                            &[("piece", &kind.name()), ("count", &count.to_string())],
+                        ),
+                        0.25,
+                    );
+                    Some(vec![Piece::new(
+                        k,
+                        Shape::Furniture {
+                            cell,
+                            layer: storey,
+                            side,
+                            kind,
+                        },
+                    )])
+                }
+                None => {
+                    note.say_for(time.elapsed_secs(), tr("build.no_furniture"), 0.25);
+                    None
+                }
+            }
+        }
         Tool::Remove => {
             let aimed = near
                 .iter()
@@ -711,6 +773,10 @@ pub fn aim_and_build(
             .and_then(|p| dependant(&near, p))
         {
             Some(d) => (false, Some(format!("build.piece.{}", d.shape.class().id()))),
+            // A container with anything in it is emptied first.
+            None if !container_empty(&save, &near, id) => {
+                (false, Some("build.not_empty".to_string()))
+            }
             None => (true, None),
         }
     } else {
@@ -736,7 +802,7 @@ pub fn aim_and_build(
     }
     let now = time.elapsed_secs();
     if let Some(r) = &reason {
-        let text = if remove.is_some() {
+        let text = if remove.is_some() && r.starts_with("build.piece.") {
             tr_with("build.needed_by", &[("thing", &tr(r))])
         } else {
             tr(r)
@@ -761,7 +827,25 @@ pub fn aim_and_build(
                 .iter()
                 .map(|p| pbd_app::town_missions::build_name(&p.shape))
                 .collect();
-            if builds.place(&mut save, ordered) {
+            // A piece of furniture is taken from the pack, in the same line
+            // as its record (`furniture` design 5).
+            let furniture = ordered.iter().find_map(|p| match p.shape {
+                Shape::Furniture { kind, .. } => Some((p.clone(), kind)),
+                _ => None,
+            });
+            let placed = match furniture {
+                Some((piece, kind)) => {
+                    let mut slots = hotbar.0.clone();
+                    slots.take_item(pbd_core::inventory::Item::Good(kind.good()), 1)
+                        && builds.place_with_hands(&mut save, piece, &slots)
+                        && {
+                            hotbar.0 = slots;
+                            true
+                        }
+                }
+                None => builds.place(&mut save, ordered),
+            };
+            if placed {
                 info!("BUILD placed {n} pieces with {}", kit.name);
                 // A house's pieces, as the town tree counts them.
                 for name in named {
@@ -803,13 +887,30 @@ pub fn aim_and_build(
                     let thing = tr(&format!("build.piece.{}", d.shape.class().id()));
                     note.say(now, tr_with("build.needed_by", &[("thing", &thing)]));
                 }
+                None if !container_empty(&save, &near, p.id()) => {
+                    note.say(now, tr("build.not_empty"));
+                }
                 None => take_away(&mut builds, &mut save, &p, &mut hotbar.0, &mut note, now),
             }
         }
     }
 }
 
-/// Take a piece away; a door goes back in the pack (design B8).
+/// Whether piece `id` among `near` is no container, or an empty one.
+fn container_empty(save: &WorldSave, near: &[Piece], id: u64) -> bool {
+    match near.iter().find(|p| p.id() == id).map(|p| &p.shape) {
+        Some(Shape::Furniture { kind, .. }) if kind.slots().is_some() => {
+            pbd_core::furniture::store::Store::of(&save.records, id, *kind, || {
+                pbd_core::furniture::store::Store::empty(0)
+            })
+            .is_empty()
+        }
+        _ => true,
+    }
+}
+
+/// Take a piece away; a door or a piece of furniture goes back in the
+/// pack (design B8; `furniture` design 5).
 fn take_away(
     builds: &mut Builds,
     save: &mut WorldSave,
@@ -822,6 +923,16 @@ fn take_away(
         match builds.remove_door(save, piece.id(), carried) {
             Ok(()) => info!("BUILD took a door down"),
             Err(e) => note.say(now, e.text()),
+        }
+    } else if let Shape::Furniture { kind, .. } = piece.shape {
+        // A piece of furniture back into the pack, in the same line as its
+        // removal (`furniture` design 5).
+        let mut slots = carried.clone();
+        if slots.give(pbd_core::inventory::Item::Good(kind.good()), 1) > 0 {
+            note.say(now, tr("furniture.full"));
+        } else if builds.remove_with_hands(save, piece.id(), &slots) {
+            *carried = slots;
+            info!("BUILD took up {}", kind.code());
         }
     } else if builds.remove(save, piece.id()) {
         info!("BUILD removed piece {}", piece.id());

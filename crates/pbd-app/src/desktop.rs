@@ -14,6 +14,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
@@ -673,8 +674,9 @@ impl Launch {
                                 | "pack-locked"
                                 | "bench"
                                 | "bench-view"
+                                | "carpenter"
                         ),
-                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench, bench-view or carpenter"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -1388,11 +1390,19 @@ impl Launch {
                 "--cart-close" => {
                     i += 1;
                     result.walk = true;
-                    let code = args.get(i).expect("--cart-close requires hand or horse");
-                    result.carts.get_or_insert_default().close =
+                    let code = args
+                        .get(i)
+                        .expect("--cart-close requires hand, horse, plodder or ride");
+                    let script = result.carts.get_or_insert_default();
+                    script.plodder = code == "plodder";
+                    script.ride = code == "ride";
+                    script.close = if script.plodder {
+                        Some(pbd_core::vehicle::cart::CartKind::HorseCart)
+                    } else {
                         pbd_core::vehicle::cart::CartKind::ALL
                             .into_iter()
-                            .find(|k| k.code().starts_with(code.as_str()));
+                            .find(|k| k.code().starts_with(code.as_str()))
+                    };
                 }
                 "--life" => {
                     i += 1;
@@ -1815,6 +1825,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::builds::BuildsPlugin)
     // Logs on the water (`log-drives`).
     .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
     .init_resource::<pbd_app::build_view::BuildView>()
@@ -2111,10 +2123,12 @@ pub fn run(args: &[String]) {
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
                 pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),

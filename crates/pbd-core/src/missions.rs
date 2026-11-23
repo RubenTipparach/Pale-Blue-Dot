@@ -117,6 +117,13 @@ pub enum Kind {
     Build,
     /// A log come to rest after floating down a river: `log`.
     Float,
+    // ---- `furniture` design 12: the Carpentry branch's kinds.
+    /// Sat down on a seat: the seat's code (`chair`, `stool`, `bench`).
+    Sit,
+    /// Lain down on a bed: `bed`.
+    Lie,
+    /// A stack or coins taken out of a town container: `<site>:<thing>`.
+    Loot,
     /// A survey stake driven (`townsfolk` design 39): `stake`.
     Stake,
     /// A cell marked for paving: `cell`.
@@ -134,8 +141,9 @@ impl Kind {
     /// raises an event for. Not `Clear`, which waits for the road jobs: a
     /// mission naming it is pending. `Stake`, `Mark` and `Pave` are raised
     /// by the paving (`townsfolk` design 39 to 41, 45), `Haul` and `Hitch`
-    /// by the carts (`land-transport` design 11).
-    pub const LIVE: [Kind; 43] = [
+    /// by the carts (`land-transport` design 11), `Sit`, `Lie` and `Loot`
+    /// by the furniture (`furniture` design 12).
+    pub const LIVE: [Kind; 46] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -179,6 +187,9 @@ impl Kind {
         Kind::Pave,
         Kind::Haul,
         Kind::Hitch,
+        Kind::Sit,
+        Kind::Lie,
+        Kind::Loot,
     ];
 
     /// Whether this kind counts each name once in a mission (a fish's kind,
@@ -481,8 +492,19 @@ impl Catalog {
             Kind::Goodwill => name == "step",
             Kind::Build => matches!(
                 name,
-                "wall" | "door" | "window" | "floor" | "roof" | "stair" | "post" | "lantern"
+                "wall"
+                    | "door"
+                    | "window"
+                    | "floor"
+                    | "roof"
+                    | "stair"
+                    | "post"
+                    | "lantern"
+                    | "furniture"
             ),
+            Kind::Sit => matches!(name, "chair" | "stool" | "bench"),
+            Kind::Lie => name == "bed",
+            Kind::Loot => item() || name == "coins",
             Kind::Float => name == "log",
             Kind::Stake => name == "stake",
             Kind::Mark => name == "cell",

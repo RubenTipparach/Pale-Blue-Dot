@@ -199,7 +199,7 @@
       help: "Board a rowboat or a cog at a town's quay (E) and head out." },
   ];
 
-  // ---- the town tree (town-missions-tree design 2): a trunk and five branches, a strict tree, every
+  // ---- the town tree (town-missions-tree design 2): a trunk and six branches (Carpentry from `furniture`), a strict tree, every
   // mission paying coins. Its unlocks are recipes and stations the game does not have yet (NEW).
   const T_U = {
     grinder: { name: "Grinder", icon: "grinder", kind: "station", new: true },
@@ -210,6 +210,8 @@
     wheel: { name: "Wheel", icon: "wheel", kind: "recipe", new: true },
     "hand-cart": { name: "Hand cart", icon: "hand-cart", kind: "recipe", new: true },
     "horse-cart": { name: "Horse cart", icon: "horse-cart", kind: "recipe", new: true },
+    "banded-chest": { name: "Iron-banded chest", icon: "banded-chest", kind: "recipe", new: true },
+    closet: { name: "Closet", icon: "closet", kind: "recipe", new: true },
   };
   const T_BRANCHES = [
     { key: "town", name: "0 · TOWN" },
@@ -218,6 +220,7 @@
     { key: "roads", name: "3 · ROADS" },
     { key: "carts", name: "4 · CARTS" },
     { key: "houses", name: "5 · HOUSES & LOGS" },
+    { key: "carpentry", name: "6 · CARPENTRY" },
   ];
   const T_M = [
     // 0. Town: opens the first time you reach a town
@@ -294,6 +297,29 @@
     { id: "logs", b: "houses", icon: "log", title: "Float logs", needs: [["house"]], coins: 20,
       obj: [o("float logs", 4, "float 4 logs down a river until they stop", true)], unl: [],
       help: "Drop logs in a river; they stop where the water stops." },
+
+    // 6. Carpentry (furniture design 12): the carpenter's bench and the furniture made at it
+    { id: "carpenter", b: "carpentry", icon: "carpenter", title: "A carpenter's bench", needs: [["first-job"]], coins: 10,
+      obj: [o("carpenter's bench", 1, "make a carpenter's bench at the workbench", true), o("place it", 1, "place the carpenter's bench")], unl: [],
+      help: "Make a carpenter's bench at the workbench and set it down." },
+    { id: "chair", b: "carpentry", icon: "chair", title: "Make a chair", needs: [["carpenter"]], coins: 10,
+      obj: [o("chair", 1, "make a chair at the carpenter's bench", true)], unl: [], help: "Make a chair at the carpenter's bench." },
+    { id: "sit", b: "carpentry", icon: "stool", title: "Take a seat", needs: [["chair"]], coins: 5,
+      obj: [o("sit", 1, "sit on a chair, stool or bench", true)], unl: [], help: "Press F at a chair, stool or bench to sit." },
+    { id: "table", b: "carpentry", icon: "table", title: "Make a table", needs: [["sit"]], coins: 10,
+      obj: [o("table", 1, "make a table at the carpenter's bench", true)], unl: [], help: "Make a table at the carpenter's bench." },
+    { id: "bed", b: "carpentry", icon: "bed", title: "Make a bed", needs: [["table"]], coins: 15,
+      obj: [o("bed", 1, "make a bed from planks and wool", true)], unl: [], help: "A bed takes planks and wool." },
+    { id: "lie", b: "carpentry", icon: "bed", title: "Lie in a bed", needs: [["bed"]], coins: 5,
+      obj: [o("lie down", 1, "lie down on a bed", true)], unl: [], help: "Press F at a bed to lie down." },
+    { id: "chest", b: "carpentry", icon: "chest", title: "Make a chest", needs: [["lie"]], coins: 15,
+      obj: [o("chest", 1, "make a chest from planks and rope", true)], unl: ["banded-chest"], help: "A chest takes planks and rope." },
+    { id: "furnish", b: "carpentry", icon: "drawers", title: "Furnish a room", needs: [["chest"]], coins: 30,
+      obj: [o("furniture", 4, "place 4 pieces of furniture", true)], unl: ["closet"],
+      help: "Place four pieces of furniture with the build tools." },
+    { id: "find", b: "carpentry", icon: "banded-chest", title: "Look in a town chest", needs: [["furnish"]], coins: 15,
+      obj: [o("take", 1, "take something from a chest in a town house", true)], unl: [],
+      help: "Open a chest in a town house and take something." },
   ];
   const U = TREE === "town" ? T_U : S_U;
   const BRANCHES = TREE === "town" ? T_BRANCHES : S_BRANCHES;

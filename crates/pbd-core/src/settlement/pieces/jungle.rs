@@ -53,6 +53,7 @@ fn piece(sink: Sink, reach_m: f32) -> BuildingSolids {
         rooms: Meshes::new(),
         lights: Vec::new(),
         top_m: 0.0,
+        furniture: Vec::new(),
     }
 }
 
