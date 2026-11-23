@@ -525,7 +525,6 @@ pub fn aim_and_build(
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
     mut did: MessageWriter<pbd_app::missions::Did>,
-    mut hotbar: ResMut<super::slots::Hotbar>,
 ) {
     if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
