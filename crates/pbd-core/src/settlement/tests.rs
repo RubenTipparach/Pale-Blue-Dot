@@ -4297,3 +4297,74 @@ fn a_harbour_lays_the_cells_under_its_retired_cogs_berth() {
 }
 
 const OVER_WATER_CELLS: usize = 312;
+
+/// `furniture` design 8: every village house has a bed, a house of more
+/// than one cell a table; every piece stands inside its building, on one of
+/// its floors, and none stands in a door's way in; the hall and the inn have
+/// tables and benches; and the same record furnishes the same way twice.
+#[test]
+fn every_house_is_furnished_by_its_record() {
+    use crate::furniture::Kind;
+    use pieces::furnish::{Use, use_of};
+    let (village, solids) = cut_village();
+    let (_, again) = cut_village();
+    assert_eq!(
+        solids.iter().map(|s| s.furniture.clone()).collect::<Vec<_>>(),
+        again.iter().map(|s| s.furniture.clone()).collect::<Vec<_>>()
+    );
+    for (b, cut) in village.buildings.iter().zip(&solids) {
+        let kinds: Vec<Kind> = cut.furniture.iter().map(|f| f.kind).collect();
+        match use_of(&b.name) {
+            Some(Use::House) => {
+                // A house of one cell has no room for a bed clear of its
+                // door: a stool and a chest.
+                if b.cells.len() > 1 {
+                    assert!(kinds.contains(&Kind::Bed), "{}: a bed in {kinds:?}", b.name);
+                    assert!(kinds.contains(&Kind::Table), "{}: a table", b.name);
+                } else {
+                    assert!(kinds.contains(&Kind::Chest), "{}: a chest in {kinds:?}", b.name);
+                }
+            }
+            Some(Use::Inn | Use::Hall) => {
+                assert!(kinds.contains(&Kind::Table), "{}: tables", b.name);
+                assert!(kinds.contains(&Kind::Bench), "{}: benches", b.name);
+            }
+            _ => {}
+        }
+        let f = cut.frame;
+        let top = b.storeys.max(1) as f32 * crate::settlement::STOREY_M * b.tall.max(1) as f32;
+        for piece in &cut.furniture {
+            let p = f.local(piece.at);
+            assert!(p.y > -0.05 && p.y < top, "{}: {:?} at {p}", b.name, piece.kind);
+            assert!(
+                p.x.abs() < cut.reach_m && p.z.abs() < cut.reach_m,
+                "{}: {:?} inside",
+                b.name,
+                piece.kind
+            );
+            // Clear of every door leaf's swing: a door's middle is more than
+            // half a metre from any piece's footprint.
+            for door in &cut.doors {
+                let s = door.solid();
+                let mid = s.outline.iter().fold(glam::Vec2::ZERO, |a, q| a + *q)
+                    / s.outline.len() as f32;
+                if (s.y0 - p.y).abs() > 1.0 {
+                    continue;
+                }
+                let foot = crate::furniture::rect(
+                    glam::Vec2::new(p.x, p.z),
+                    {
+                        let fl = f.local(piece.at + piece.front) - p;
+                        glam::Vec2::new(fl.x, fl.z)
+                    },
+                    piece.kind.size_m(),
+                );
+                let near = foot
+                    .iter()
+                    .map(|q| q.distance(mid))
+                    .fold(f32::MAX, f32::min);
+                assert!(near > 0.25, "{}: {:?} {near} m from a door", b.name, piece.kind);
+            }
+        }
+    }
+}

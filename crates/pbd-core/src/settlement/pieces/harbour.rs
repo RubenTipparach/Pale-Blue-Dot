@@ -350,6 +350,7 @@ pub fn pier(
             top_m: 0.0,
             rooms: Meshes::new(),
             lights: Vec::new(),
+            furniture: Vec::new(),
         });
     }
     for stair in stairs(&cut) {
@@ -528,5 +529,6 @@ pub fn light(
         top_m: 0.0,
         rooms: Meshes::new(),
         lights: Vec::new(),
+        furniture: Vec::new(),
     })
 }

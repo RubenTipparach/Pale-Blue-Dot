@@ -123,6 +123,11 @@ pub enum Material {
     /// wherever it lands, as render code 1 (sand). It acts as sand in every
     /// other way ([`Material::is_sand`]).
     DesertSand = 29,
+    /// The carpenter's bench (`furniture` design 1): the station every piece
+    /// of furniture is made at. Solid, drawn in the workbench's wood with a
+    /// saw and a square on its top. Code 40: 30 to 39 are left to the paving
+    /// stations (`townsfolk` design 41).
+    Carpenter = 40,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -274,7 +279,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 28] = [
+    pub const ALL: [Material; 29] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -303,6 +308,7 @@ impl Material {
         Material::MusselBed,
         Material::Sticks,
         Material::DesertSand,
+        Material::Carpenter,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the
@@ -426,6 +432,7 @@ pub fn material_code(material: Material) -> u8 {
         Material::Sticks => 28,
         // Desert sand (`sand-tiles` design 5): the next free code.
         Material::DesertSand => 29,
+        Material::Carpenter => 40,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ crate::flowing_water!() => flowing as u16 as u8,
@@ -462,6 +469,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         27 => Material::MusselBed,
         28 => Material::Sticks,
         29 => Material::DesertSand,
+        40 => Material::Carpenter,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })

@@ -71,6 +71,15 @@ pub enum Shape {
         layer: u16,
         shape: RoofShape,
     },
+    /// A piece of furniture in `cell` on `layer`, its back to the cell's side
+    /// `side` (0 to 5), or in its middle (`furniture::MIDDLE`): `furniture`
+    /// design 3.
+    Furniture {
+        cell: u32,
+        layer: u16,
+        side: u8,
+        kind: crate::furniture::Kind,
+    },
 }
 
 /// A piece's class: what the slot rule and the palette speak of.
@@ -82,6 +91,7 @@ pub enum Class {
     Post,
     Lantern,
     Roof,
+    Furniture,
 }
 
 impl Class {
@@ -94,6 +104,7 @@ impl Class {
             Class::Post => "post",
             Class::Lantern => "lantern",
             Class::Roof => "roof",
+            Class::Furniture => "furniture",
         }
     }
 }
@@ -107,6 +118,7 @@ impl Shape {
             Shape::Post { .. } => Class::Post,
             Shape::Lantern { .. } => Class::Lantern,
             Shape::Roof { .. } => Class::Roof,
+            Shape::Furniture { .. } => Class::Furniture,
         }
     }
 
@@ -118,7 +130,8 @@ impl Shape {
             | Shape::Stair { layer, .. }
             | Shape::Post { layer, .. }
             | Shape::Lantern { layer, .. }
-            | Shape::Roof { layer, .. } => *layer,
+            | Shape::Roof { layer, .. }
+            | Shape::Furniture { layer, .. } => *layer,
         }
     }
 
@@ -126,7 +139,9 @@ impl Shape {
     pub fn cells(&self) -> Vec<u32> {
         match self {
             Shape::Wall { a, b, .. } => vec![*a, *b],
-            Shape::Floor { cell, .. } | Shape::Lantern { cell, .. } => vec![*cell],
+            Shape::Floor { cell, .. }
+            | Shape::Lantern { cell, .. }
+            | Shape::Furniture { cell, .. } => vec![*cell],
             Shape::Stair { foot, head, .. } => vec![*foot, *head],
             Shape::Post { cells, .. } => cells.to_vec(),
             Shape::Roof { cells, .. } => cells.clone(),
@@ -148,6 +163,9 @@ impl Shape {
             Shape::Roof { cells, layer, .. } => {
                 format!("roof:{}:{layer}", cells.first().copied().unwrap_or(0))
             }
+            Shape::Furniture {
+                cell, layer, side, ..
+            } => format!("furniture:{cell}:{side}:{layer}"),
         }
     }
 

@@ -65,6 +65,12 @@ pub const STATIONS: &[StationRow] = &[
         material: Some(Material::Workbench),
         max_jobs: 4,
     },
+    // furniture design 1: every piece of furniture, and nothing else.
+    StationRow {
+        code: "carpenter",
+        material: Some(Material::Carpenter),
+        max_jobs: 4,
+    },
 ];
 
 /// The record id of the hands' queue (`tool-crafting` decision 4): kept like
@@ -297,6 +303,55 @@ impl Default for RecipeFile {
                 &[("log", 6), ("rope", 4)],
                 &[("raft", 1)],
             ),
+            // furniture design 1 and 2: the carpenter's bench, and the
+            // Furniture branch made at it and nowhere else.
+            recipe(
+                "carpenter-bench",
+                "workbench",
+                6.0,
+                &[("planks", 8), ("log", 2), ("iron-ingot", 1)],
+                &[("block:carpenter's bench", 1)],
+            ),
+            recipe("chair", "carpenter", 3.0, &[("planks", 3)], &[("chair", 1)]),
+            recipe("stool", "carpenter", 2.0, &[("planks", 2)], &[("stool", 1)]),
+            recipe("bench", "carpenter", 3.0, &[("planks", 4)], &[("bench", 1)]),
+            recipe("table", "carpenter", 4.0, &[("planks", 5)], &[("table", 1)]),
+            recipe(
+                "bed",
+                "carpenter",
+                6.0,
+                &[("planks", 5), ("wool", 3)],
+                &[("bed", 1)],
+            ),
+            recipe(
+                "drawers",
+                "carpenter",
+                5.0,
+                &[("planks", 6)],
+                &[("drawers", 1)],
+            ),
+            recipe(
+                "closet",
+                "carpenter",
+                6.0,
+                &[("planks", 8)],
+                &[("closet", 1)],
+            ),
+            recipe(
+                "chest",
+                "carpenter",
+                4.0,
+                &[("planks", 5), ("rope", 1)],
+                &[("chest", 1)],
+            ),
+            recipe(
+                "banded-chest",
+                "carpenter",
+                5.0,
+                &[("planks", 5), ("iron-ingot", 2)],
+                &[("banded-chest", 1)],
+            ),
+            recipe("crate", "carpenter", 3.0, &[("planks", 3)], &[("crate", 1)]),
         ]);
         file
     }
@@ -705,8 +760,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            16,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the tube and raft (small-boats; the rowboat retired)"
+            17,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), and the carpenter's bench (furniture design 1)"
         );
         assert!(book.get("rowboat").is_none(), "the rowboat is retired");
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
@@ -717,6 +772,7 @@ mod tests {
             Some(Item::Tool(crate::inventory::Tool::Pickaxe))
         );
         assert_eq!(station_by_code("hand").map(|s| s.material), Some(None));
+        assert_eq!(book.at("carpenter").count(), 10, "the Furniture branch");
     }
 
     #[test]

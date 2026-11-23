@@ -122,5 +122,17 @@
         ("parcel", 1, goods),
         // ---- townsfolk design 31: crushed stone for a road
         ("gravel", 1, stone),
+        // ---- goods: furniture (`furniture` design 2), by their planks.
+        ("chair", 10, goods),
+        ("stool", 6, goods),
+        ("bench", 12, goods),
+        ("table", 16, goods),
+        ("bed", 30, goods),
+        ("drawers", 20, goods),
+        ("closet", 26, goods),
+        ("chest", 18, goods),
+        ("banded-chest", 30, goods),
+        ("crate", 9, goods),
+        ("block:carpenter's bench", 40, goods),
     ],
 )

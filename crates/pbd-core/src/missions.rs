@@ -117,6 +117,13 @@ pub enum Kind {
     Build,
     /// A log come to rest after floating down a river: `log`.
     Float,
+    // ---- `furniture` design 12: the Carpentry branch's kinds.
+    /// Sat down on a seat: the seat's code (`chair`, `stool`, `bench`).
+    Sit,
+    /// Lain down on a bed: `bed`.
+    Lie,
+    /// A stack or coins taken out of a town container: `<site>:<thing>`.
+    Loot,
     /// A survey stake driven (`townsfolk` design 39): `stake`.
     Stake,
     /// A cell marked for paving: `cell`.
@@ -134,7 +141,7 @@ impl Kind {
     /// raises an event for. Not `Clear`, `Stake`, `Mark`, `Pave`, `Haul` or
     /// `Hitch`, which wait for the paving and the carts: a mission naming
     /// one of those is pending.
-    pub const LIVE: [Kind; 38] = [
+    pub const LIVE: [Kind; 41] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -173,6 +180,9 @@ impl Kind {
         Kind::Goodwill,
         Kind::Build,
         Kind::Float,
+        Kind::Sit,
+        Kind::Lie,
+        Kind::Loot,
     ];
 
     /// Whether this kind counts each name once in a mission (a fish's kind,
@@ -467,8 +477,19 @@ impl Catalog {
             Kind::Goodwill => name == "step",
             Kind::Build => matches!(
                 name,
-                "wall" | "door" | "window" | "floor" | "roof" | "stair" | "post" | "lantern"
+                "wall"
+                    | "door"
+                    | "window"
+                    | "floor"
+                    | "roof"
+                    | "stair"
+                    | "post"
+                    | "lantern"
+                    | "furniture"
             ),
+            Kind::Sit => matches!(name, "chair" | "stool" | "bench"),
+            Kind::Lie => name == "bed",
+            Kind::Loot => item() || name == "coins",
             Kind::Float => name == "log",
             Kind::Stake => name == "stake",
             Kind::Mark => name == "cell",
