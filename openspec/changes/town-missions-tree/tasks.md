@@ -13,8 +13,10 @@ owner to look at M33's Town tab and ask for the build.
       tab (`#starter`). Screenshots at desktop and phone width in
       `docs/screenshots/town-missions-tree/` (Chromium on SwiftShader).
 - [x] 1.3 The tracker's M33 entry and `docs/mockups/mockup-work.md`.
-- [ ] 1.4 Published to M33's link (the owner's session).
-- [ ] 1.5 The owner's review; anything turned down comes back to design.md.
+- [x] 1.4 Published to M33's link (the owner's session).
+- [x] 1.5 The owner's review; anything turned down comes back to design.md.
+      Approved for the game (owner, 2026-11-22, after opening the Town tab:
+      "Ok approved").
 
 ## 2. The tree (waits for a request)
 
@@ -54,3 +56,15 @@ owner to look at M33's Town tab and ask for the build.
 - [ ] 5.1 A gameplay demo: a bot with the goal "finish the town tree", each
       branch a section, through the player's own inputs (CLAUDE.md, Demos).
       Verify: the video, for the batch.
+
+## 6. The owner's known issues (2026-11-22; design 8 to 10)
+
+- [ ] 6.1 Lamps at dusk (design 8): the board posts its lamps job from
+      17:00, the interact key lights a town lamp during dusk, each lamp once
+      a job; `Light` live, so "Light the lamps" counts. Verify: a test that
+      a lamp lit at dusk counts once and one out of dusk does not.
+- [ ] 6.2 Abandon a taken job (design 9). Verify: a test that an abandoned
+      job is off the taken list, back on the board, and its lost villager or
+      repair record cleared.
+- [ ] 6.3 The lost villager's icon and its map and compass marker (design
+      10). Verify: a capture of the board's lost row and of the marker.

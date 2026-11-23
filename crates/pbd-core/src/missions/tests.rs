@@ -66,6 +66,7 @@ fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> Mission
         after: Vec::new(),
         branch: String::new(),
         icon: String::new(),
+        coins: 0,
     }
 }
 

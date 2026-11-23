@@ -651,7 +651,7 @@ fn every_job_kind_is_made_and_finished() {
             crate::missions::Want::Any => "minnow".to_string(),
             crate::missions::Want::Prefix(p) => format!("{p}wheat"),
             crate::missions::Want::Names(n) => n[0].clone(),
-            crate::missions::Want::Group(_) => unreachable!(),
+            crate::missions::Want::Group(_) | crate::missions::Want::AnyTown(_) => unreachable!(),
         };
         let (_, done) = taken.record(&Happened::new(o.kind, what, o.count));
         assert_eq!(done, vec![job.id], "{kind:?}");
@@ -766,4 +766,34 @@ fn the_trade_filters_shelve_every_good_by_its_group() {
         .collect();
     assert_eq!(food, ["grilled-fish", "flatbread"]);
     assert!(column.iter().all(|c| values.on_shelf(c, None)));
+}
+
+/// `town-missions-tree` design 9: an abandoned job leaves the taken list
+/// with its counts and is not handed in, so its place shows it again; and
+/// design 8: a lamps job shows from dusk, other jobs all day.
+#[test]
+fn an_abandoned_job_goes_back_and_a_lamps_job_waits_for_dusk() {
+    let (j, t, v) = (jobs(), trade(), values());
+    let b = board(&j, &t, &v);
+    let town = Town {
+        site: 5,
+        kind: SiteKind::Village,
+        neighbours: &[6],
+    };
+    let job = b.make(town, JobKind::Lamps, 77, 1234).unwrap();
+    let mut taken = TakenJobs::default();
+    taken.take(job.clone()).unwrap();
+    taken.record(&Happened::new(Kind::Light, scoped(5, "lamp"), 1));
+    assert_eq!(taken.counts(job.id), [1]);
+    assert_eq!(taken.abandon(job.id).unwrap(), job);
+    assert!(taken.taken.is_empty() && taken.handed_in.is_empty());
+    assert!(!taken.gone().contains(&job.id), "back on the board");
+    assert_eq!(taken.abandon(job.id), Err(JobRefused::NotTaken));
+    taken.take(job.clone()).unwrap();
+    assert_eq!(taken.counts(job.id), [0], "its counts went with it");
+    let fish = b.make(town, JobKind::Fish, 78, 1234).unwrap();
+    assert!(!super::jobs::shown_at(&job, 12.0));
+    assert!(super::jobs::shown_at(&job, 17.5));
+    assert!(super::jobs::shown_at(&fish, 12.0));
+    assert!(super::jobs::is_dusk(18.0) && !super::jobs::is_dusk(23.0));
 }
