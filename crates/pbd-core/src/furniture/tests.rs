@@ -356,3 +356,33 @@ fn export_models_for_the_mockup() {
     ));
     std::fs::write(&path, format!("{{{}}}\n", parts.join(","))).unwrap();
 }
+
+/// Design 9 and the migration plan: a world saved before furniture holds no
+/// `store` record. Opening a town chest in it shows its loot and writes
+/// nothing; once a stack moves, the chest's record is what it holds, and the
+/// loot never comes back (no refill).
+#[test]
+fn an_old_world_opens_a_town_chest_without_writing_and_taken_stays_taken() {
+    let old = Records::new();
+    let id = town_piece_id(7, 3, 1);
+    let opened = Store::of(&old, id, Kind::Chest, || {
+        loot(id, Trade::Farmer, Kind::Chest)
+    });
+    assert_eq!(opened.slots.len(), 15);
+    assert!(!opened.is_empty());
+    assert!(old.is_empty(), "opening writes nothing");
+    // Take everything: the record holds an empty chest.
+    let mut carried = Slots::new();
+    let mut chest = opened.clone();
+    for k in 0..chest.slots.len() {
+        chest.take_into(k, &mut carried, false);
+    }
+    chest.take_coins();
+    let mut records = Records::new();
+    records.put(chest.record(id));
+    let again = Store::of(&records, id, Kind::Chest, || {
+        loot(id, Trade::Farmer, Kind::Chest)
+    });
+    assert!(again.is_empty(), "a town chest does not refill");
+    assert_eq!(records.of_kind(STORE_KIND).count(), 1);
+}

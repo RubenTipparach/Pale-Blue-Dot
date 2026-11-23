@@ -1294,9 +1294,35 @@ pub fn scripted(
         super::digging::Hands::Empty,
         cell,
         layer,
-        Material::Workbench,
+        // `--craft carpenter` (`furniture` task 3.8): the carpenter's bench.
+        if scene == "carpenter" {
+            Material::Carpenter
+        } else {
+            Material::Workbench
+        },
     );
-    info!("scripted craft: a workbench at cell {cell} layer {layer}");
+    info!("scripted craft: a station at cell {cell} layer {layer}");
+    if scene == "carpenter" {
+        slots.give(Item::Good(Good::PLANKS), 20);
+        slots.give(Item::Good(Good::WOOL), 3);
+        slots.give(Item::Good(Good::ROPE), 2);
+        let at = (cell, layer as u16);
+        queue(
+            &mut save,
+            &mut slots,
+            Some(&tools),
+            &recipes,
+            station_id(Some(at)),
+            "chair",
+            now_s - 1.0,
+            &mut note,
+            wall_s,
+        );
+        pick.bench = index_of("carpenter", "bed");
+        station_at.0 = Some(at);
+        *screen = Screen::Forge;
+        return;
+    }
     if scene != "bench" {
         return;
     }

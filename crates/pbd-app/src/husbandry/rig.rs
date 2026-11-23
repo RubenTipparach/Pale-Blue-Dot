@@ -161,6 +161,9 @@ pub fn colours(species: &LandSpecies, genome: &Genome) -> ([[f32; 3]; 4], usize)
             "golden" => [0.95, 0.72, 0.25],
             "melanic" => [0.08, 0.08, 0.09],
             "albino" => [0.97, 0.95, 0.93],
+            "bay" => [0.45, 0.28, 0.16],
+            "chestnut" => [0.58, 0.3, 0.14],
+            "dapple" => [0.7, 0.68, 0.64],
             _ => return None,
         })
     };
@@ -220,6 +223,33 @@ pub fn build(
             pattern,
             pose,
         ),
+        // The horse is one lofted body, not boxes (`land-transport` design
+        // 11): its own builder, in the same basis.
+        Plan::Horse => {
+            let mut horse = Builder::default();
+            crate::vehicles::carts::model::horse(
+                &mut horse,
+                &crate::vehicles::carts::model::colours_of(species, genome),
+                crate::vehicles::carts::model::HorsePose {
+                    phase: pose.phase,
+                    walk: (pose.swing / 0.45).clamp(0.0, 1.0),
+                    head_down: pose.head_down,
+                    tail: pose.tail,
+                },
+                s * species.height_m / 1.55,
+            );
+            // Model space faces -Z with +X right; the rig's basis is
+            // forward, up, right.
+            let to = |p: [f32; 3]| m * Vec3::new(-p[2], p[1], p[0]);
+            let base = out.positions.len() as u32;
+            for (p, n) in horse.positions.iter().zip(&horse.normals) {
+                out.positions.push(to(*p).to_array());
+                out.normals.push(to(*n).normalize_or(Vec3::Y).to_array());
+            }
+            out.colours.extend(horse.colours);
+            out.uvs.extend(horse.uvs);
+            out.indices.extend(horse.indices.iter().map(|i| i + base));
+        }
     }
 }
 

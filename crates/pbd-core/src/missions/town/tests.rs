@@ -136,9 +136,9 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
     }
 }
 
-/// What reads "not yet" in this build: the roads and the carts, each for
-/// what it waits on. The
-/// rest is live, and the pending ones block no live branch.
+/// What reads "not yet" in this build: the roads, each for what it waits
+/// on (the carts are built, `land-transport` design 11). The rest is live,
+/// and the pending ones block no live branch.
 #[test]
 fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
     let chain = town_chain();
@@ -146,19 +146,7 @@ fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
     assert_eq!(
         pending,
         [
-            "grinder",
-            "crush",
-            "mixer",
-            "gravel",
-            "mark",
-            "pave",
-            "join",
-            "wheels",
-            "hand-cart",
-            "haul",
-            "horse",
-            "horse-cart",
-            "road-trip"
+            "grinder", "crush", "mixer", "gravel", "mark", "pave", "join",
         ]
     );
     let live = [
@@ -174,6 +162,12 @@ fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
         "lamps",
         "house",
         "logs",
+        "wheels",
+        "hand-cart",
+        "haul",
+        "horse",
+        "horse-cart",
+        "road-trip",
     ];
     for id in live {
         assert!(chain.get(id).unwrap().pending.is_none(), "{id} is live");
@@ -268,6 +262,21 @@ fn each_town_kind_counts_from_its_event() {
         );
     }
     assert!(p.is_done("lamps"));
+    // The carts (`land-transport` design 11): wheels, a hand cart set down
+    // and hauling, a horse bought and hitched, and a drive on the road.
+    p.record(&chain, &Happened::new(Kind::Craft, "wheel", 2), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "hand-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Place, "hand-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Haul, "cart", 100), &none);
+    p.record(&chain, &Happened::new(Kind::Buy, "21:horse", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "horse-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Hitch, "horse", 1), &none);
+    let step = p.record(
+        &chain,
+        &Happened::new(Kind::Travel, "cart-road", 500),
+        &none,
+    );
+    assert_eq!(step.done, ["road-trip"]);
     // Carpentry (`furniture` design 12): the bench, a chair, a seat, a
     // table, a bed, a lie-down, a chest, four pieces placed, a town chest.
     let bench = "block:carpenter's bench";
@@ -290,7 +299,7 @@ fn each_town_kind_counts_from_its_event() {
     assert_eq!(step.done, ["find"]);
     // Every live mission is done, and nothing is open: the rest wait.
     assert_eq!(p.current(&chain), None);
-    assert_eq!(p.done.len(), 21);
+    assert_eq!(p.done.len(), 27);
 }
 
 /// Task 2.3: a mission's coins are paid by the count that finishes it, and

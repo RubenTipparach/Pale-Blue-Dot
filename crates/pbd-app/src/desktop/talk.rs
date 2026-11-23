@@ -147,6 +147,8 @@ pub enum TalkAction {
     Abandon(u64),
     /// A trade column's filter tab: ALL (none) or a shelf.
     Shelf(List, Option<Shelf>),
+    /// Buy a horse (`land-transport` design 10): a kept animal, not a good.
+    BuyHorse,
 }
 
 #[derive(Component)]
@@ -470,6 +472,7 @@ pub fn press(
     mut screen: ResMut<Screen>,
     mut talking: ResMut<Talking>,
     mut scroll: ResMut<TalkScroll>,
+    mut horses: ResMut<pbd_app::vehicles::carts::HorseOrders>,
     (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): ShopParams,
 ) {
     for (interaction, action) in &buttons {
@@ -502,6 +505,10 @@ pub fn press(
             }
             TalkAction::Back => {
                 *screen = Screen::Talk;
+                None
+            }
+            TalkAction::BuyHorse => {
+                horses.0.push(with.town.site);
                 None
             }
             other => {
@@ -875,6 +882,19 @@ fn paint_trade(
                 empty: Some(tr("trade.nothing_to_sell")),
             };
             trade_column(cols, kit, art, values, scroll, sell_side, sell);
+        });
+    // A horse, sold by the trader (`land-transport` design 10).
+    panel
+        .spawn(Node {
+            column_gap: px(8),
+            align_items: AlignItems::Center,
+            margin: UiRect::top(px(4)),
+            ..default()
+        })
+        .with_children(|row| {
+            line(row, tr("species.horse.name"), ui_kit::TEXT);
+            coins(row, p.cfg.trade.horse_coins, ui_kit::TITLE, coin);
+            button(row, kit, tr("trade.buy_one"), TalkAction::BuyHorse, 50.0);
         });
     footer(panel, kit, p, coin);
 }

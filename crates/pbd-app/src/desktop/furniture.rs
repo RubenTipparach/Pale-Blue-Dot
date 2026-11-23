@@ -814,5 +814,141 @@ pub fn plugin(app: &mut App) {
                 follow_screen,
             )
                 .chain(),
-        );
+        )
+        .add_systems(Update, scripted.after(gather));
+}
+
+/// Done once: the capture instrument below has acted.
+#[derive(Resource)]
+struct ShotDone;
+
+/// `PBD_FURNITURE_SHOT=<room|seated|asleep|chest>[:<frame>]`: a capture
+/// instrument (`furniture` task 3.8), never read in play. At its frame
+/// (default 140), once a town's furniture stands, it puts the walker where a
+/// player would be for the shot and does what F would: `room` stands at the
+/// chair nearest a table and looks across it; `seated` sits on that chair;
+/// `asleep` stands at the foot of a bed a townsperson lies in (or the nearest
+/// bed) looking at the pillow; `chest` stands at the nearest town container
+/// and opens it.
+pub fn scripted(world: &mut World) {
+    let Ok(plan) = std::env::var("PBD_FURNITURE_SHOT") else {
+        return;
+    };
+    if world.contains_resource::<ShotDone>() {
+        return;
+    }
+    let (mode, at) = match plan.split_once(':') {
+        Some((m, f)) => (m.to_string(), f.parse().unwrap_or(140u32)),
+        None => (plan.clone(), 140),
+    };
+    let frame = world
+        .get_resource::<super::CaptureState>()
+        .map_or(0, |c| c.frame);
+    let pieces = world.resource::<Pieces>().all.clone();
+    if frame < at || pieces.is_empty() {
+        return;
+    }
+    let Some(position) = world
+        .query_filtered::<&avian3d::prelude::Position, With<Walker>>()
+        .iter(world)
+        .next()
+        .map(|p| p.0)
+    else {
+        return;
+    };
+    let o = pbd_app::sim_origin::origin_of(world);
+    let me = o.query_point(position);
+    let town: Vec<Piece> = pieces
+        .into_iter()
+        .filter(|p| matches!(p.owner, Owner::Town { .. }))
+        .collect();
+    let nearest = |pick: &dyn Fn(&Piece) -> bool| {
+        town.iter()
+            .filter(|p| pick(p))
+            .min_by(|a, b| a.at.distance(me).total_cmp(&b.at.distance(me)))
+            .cloned()
+    };
+    let has_table = |p: &Piece| {
+        town.iter()
+            .any(|t| t.kind == Kind::Table && t.at.distance(p.at) < 1.6)
+    };
+    let seats = &world.resource::<Seats>().0;
+    let target = match mode.as_str() {
+        "room" | "seated" => nearest(&|p| p.kind == Kind::Chair && has_table(p)),
+        "asleep" => nearest(&|p| {
+            p.kind == Kind::Bed && matches!(seats.holder((p.id, 0)), Some(Who::Person { .. }))
+        })
+        .or_else(|| nearest(&|p| p.kind == Kind::Bed)),
+        "chest" => nearest(&|p| matches!(p.kind, Kind::Chest | Kind::BandedChest)),
+        _ => None,
+    };
+    let Some(piece) = target else {
+        return;
+    };
+    world.insert_resource(ShotDone);
+    let (eye, look_at) = match mode.as_str() {
+        "asleep" => (
+            piece.point(Vec3::new(0.35, 1.6, 1.45)),
+            piece.point(Vec3::new(0.0, 0.5, -0.55)),
+        ),
+        "chest" => (
+            piece.point(Vec3::new(0.2, 1.6, 1.1)),
+            piece.point(Vec3::new(0.0, 0.3, 0.0)),
+        ),
+        _ => (
+            piece.point(Vec3::new(0.0, 1.6, -0.15)),
+            piece.point(Vec3::new(0.0, 0.5, 1.6)),
+        ),
+    };
+    let up = eye.normalize_or(Vec3::Y);
+    let local = o.to_local(pbd_core::world_frame::WorldPos::new(
+        o.frame,
+        eye.as_dvec3(),
+    ));
+    let view = Transform::from_translation(local)
+        .looking_to((look_at - eye).normalize_or(Vec3::X), up)
+        .rotation;
+    pbd_app::walking::drop_walker(world, local, Vec3::ZERO, view);
+    info!(
+        "FURNITURE shot {mode}: {} {} at {:.1} m",
+        piece.kind.code(),
+        piece.id,
+        piece.at.distance(me)
+    );
+    match mode.as_str() {
+        "seated" => {
+            let _ = world
+                .resource_mut::<Seats>()
+                .0
+                .claim((piece.id, 0), Who::Player);
+            if let Some((seat_eye, facing)) = eye_of(&piece, 0) {
+                world.resource_mut::<Sitting>().0 = Some(((piece.id, 0), piece.kind));
+                world.resource_mut::<SeatedEye>().0 = Some(seat_eye.as_dvec3());
+                world.resource_mut::<WalkingState>().look_toward(facing);
+            }
+        }
+        "chest" => {
+            let Owner::Town { site, trade, house } = piece.owner.clone() else {
+                return;
+            };
+            let store = Store::of(
+                &world.resource::<WorldSave>().records,
+                piece.id,
+                piece.kind,
+                || loot(piece.id, trade, piece.kind),
+            );
+            let title = Localized::verbatim(tr_with(
+                "furniture.of_house",
+                &[("thing", &piece.kind.name()), ("house", &house)],
+            ));
+            world.resource_mut::<StoreView>().open = Some(OpenStore {
+                id: piece.id,
+                title,
+                site: Some(site),
+                store,
+            });
+            *world.resource_mut::<Screen>() = Screen::Pack;
+        }
+        _ => {}
+    }
 }

@@ -165,9 +165,11 @@ build:
     whitewash: Whitewash
   kits: KITS
   needed_by: "Remove the {thing} first"
+  no_door: "No door in the pack"
   no_furniture: No furniture carried
   not_empty: Empty it first
   piece:
+    door: door
     floor: floor
     furniture: furniture
     lantern: lantern
@@ -177,7 +179,8 @@ build:
     wall: wall
   refused:
     clear: "A stair is there"
-    doorway: In a doorway
+    door_clear: In a doorway
+    doorway: "Needs a doorway"
     held_up: "Nothing holds it up"
     headroom: "No headroom over the stair"
     in_wall: Into a wall
@@ -209,10 +212,13 @@ controls:
     boat: "the boat"
     brake: brake
     breeding: breeding
-    build_mode: "build mode: walls, floors, stairs, roofs"
+    build_layer: "in architecture mode, the build layer up or down"
+    build_mode: "build mode: walls, floors, doors, stairs, roofs"
     build_place: "place the piece, or remove with the remove slot"
     build_remove: "remove the aimed piece"
     build_turn: "turn a stair or blueprint; with shift, the next blueprint"
+    build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag"
+    build_zoom: "with ctrl, zoom the architecture camera"
     camera: change the camera
     cruise: cruise
     dampeners: dampeners
@@ -524,10 +530,14 @@ husbandry:
     cow: cow
     ewe: ewe
     hen: hen
+    mare: mare
     ram: ram
+    stallion: stallion
   coat:
+    bay: bay
     black: black
     brown: brown
+    chestnut: chestnut
     cream: cream
     dun: dun
     grey: grey
@@ -576,11 +586,13 @@ husbandry:
     strayed: "strayed: feed it"
   morph:
     albino: albino
+    dapple: dapple
     golden: golden
     melanic: melanic
   no_room: No room to carry it
   pattern:
     belted: belted
+    blaze: blaze
     piebald: piebald
     plain: plain
     speckled: speckled
@@ -596,9 +608,11 @@ husbandry:
   stage:
     calf: calf
     chick: chick
+    foal: foal
     hogg: hogg
     lamb: lamb
     pullet: pullet
+    yearling: yearling
     young: young
   state:
     loose: "{sex}, loose"
@@ -624,10 +638,13 @@ interact:
     board: "Board {thing}"
     check: "Check {thing}"
     collect: "Collect {thing}"
+    drive: "Drive {thing}"
     feed: "Feed {thing}"
     gather: "Gather {thing}"
     harvest: "Harvest {thing}"
+    hitch: "Hitch {thing}"
     lead: "Lead {thing}"
+    let_go: "Let go of {thing}"
     let_stay: "Let {thing} stay"
     lie: "Lie on {thing}"
     light: "Light {thing}"
@@ -638,15 +655,18 @@ interact:
     pick_fruit: "Pick {thing}"
     pick_glow: "Pick {thing}"
     pick_wild: "Pick wild {thing}"
+    pull: "Pull {thing}"
     set_eggs: "Set eggs under {thing}"
     set_in_incubator: "Set eggs in {thing}"
     shut_door: "Shut {thing}"
     sit: "Sit on {thing}"
+    step_down: "Step down from {thing}"
     take_incubator: "Take {thing}"
     take_log: "Take {thing}"
     take_up: "Take up {thing}"
     talk: "Talk to {thing}"
     till: "Till {thing}"
+    unhitch: "Unhitch {thing}"
   key: F
 inventory:
   fish: fish
@@ -712,10 +732,16 @@ item:
     name: gate
   glowing-mushroom:
     name: "glowing mushroom"
+  door:
+    name: door
   gravel:
     name: gravel
   grilled-fish:
     name: grilled fish
+  hand-cart:
+    name: hand cart
+  horse-cart:
+    name: horse cart
   incubator:
     name: incubator
   inner-tube:
@@ -778,6 +804,8 @@ item:
     name: bucket of water
   wheat:
     name: wheat
+  wheel:
+    name: wheel
   wheat-seed:
     name: wheat seed
   wool:
@@ -1286,6 +1314,8 @@ recipe:
     name: FENCE X2
   flatbread:
     name: FLATBREAD
+  door:
+    name: DOOR
   gravel:
     name: GRAVEL X4
   forge:
@@ -1298,6 +1328,10 @@ recipe:
     name: GATE
   grilled-fish:
     name: GRILL FISH
+  hand-cart:
+    name: HAND CART
+  horse-cart:
+    name: HORSE CART
   incubator:
     name: INCUBATOR
   inner-tube:
@@ -1336,6 +1370,8 @@ recipe:
     name: TABLE
   torch:
     name: TORCH X2
+  wheel:
+    name: WHEEL
   workbench:
     name: WORKBENCH
 saves:
@@ -1386,6 +1422,12 @@ species:
     lower: giant clam
     name: Giant clam
     tip: Swim up slowly and it still shuts. Wait a while at a distance and it opens.
+  horse:
+    caps: HORSE
+    entry: "A tall, patient horse, bred in the towns and sold at their markets. Hitched to a horse cart it pulls a load at a good pace on the road."
+    lower: horse
+    name: Horse
+    tip: Bought in town. Feed it wheat, turnip or turf.
   lobster:
     caps: SPINY LOBSTER
     entry: A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.
@@ -1844,6 +1886,12 @@ vehicle:
     setting: "setting"
     stowed: "stowed"
     weighing: "weighing"
+  hand_cart:
+    name: Hand cart
+    title: HAND CART
+  horse_cart:
+    name: Horse cart
+    title: HORSE CART
   loon:
     lower: loon
     name: Loon
@@ -1863,6 +1911,18 @@ vehicle:
     name: Inner tube
     title: INNER TUBE
 vehicles:
+  cart:
+    bought: "{horse} bought for {coins} coins"
+    empty_first: Empty the hold first
+    hitched: "{horse} hitched"
+    no_horse: No horse in the shafts
+    no_room: No room here for a cart
+    set_down: "{cart} set down"
+    short: "Not enough coins"
+    taken_up: "{cart} taken up"
+    unhitch_first: Unhitch the horse first
+    unhitched: "{horse} unhitched"
+    unsaved: Not saved
   hud:
     anchor_state: "{craft} - {state}"
     at_anchor: "{craft} - at anchor"

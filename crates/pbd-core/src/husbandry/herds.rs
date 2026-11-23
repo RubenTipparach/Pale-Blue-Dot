@@ -96,7 +96,12 @@ pub fn herd_in(
     s: &HerdSettings,
     roster: &[LandSpecies],
 ) -> Option<Herd> {
-    let candidates: Vec<usize> = (0..roster.len()).collect();
+    // Every species but a bought one (`land-transport` design 10): a
+    // horse is sold in town, never rolled wild, so the herds of every world
+    // made before it are the same animal for animal.
+    let candidates: Vec<usize> = (0..roster.len())
+        .filter(|&i| roster[i].status != crate::fauna::Status::Bought)
+        .collect();
     if candidates.is_empty() {
         return None;
     }

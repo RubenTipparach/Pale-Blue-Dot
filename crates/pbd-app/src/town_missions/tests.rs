@@ -290,10 +290,11 @@ fn app_fresh() -> App {
 }
 
 /// The town tree's unlocks are recipes the game has, or recipes it awaits
-/// (data only): today every one is awaited, so no shipped recipe is locked
-/// by the town tree.
+/// (data only): the paving's are awaited, and the carts' are shipped and
+/// locked by the tree (`land-transport` design 10), the wheel open while
+/// the paving that unlocks it is pending.
 #[test]
-fn no_shipped_recipe_waits_on_the_town_tree_yet() {
+fn only_the_carts_shipped_recipes_wait_on_the_town_tree() {
     let mut app = app(WorldSave::memory_only());
     reach_town(&mut app);
     app.update();
@@ -301,14 +302,26 @@ fn no_shipped_recipe_waits_on_the_town_tree_yet() {
     let recipes = app.world().resource::<Recipes>();
     for m in &chain.missions {
         for code in &m.unlocks {
-            assert!(recipes.0.get(code).is_none(), "{code} is not built yet");
+            let carts = ["wheel", "hand-cart", "horse-cart"];
+            assert!(
+                recipes.0.get(code).is_none() || carts.contains(&code.as_str()),
+                "{code} is not built yet"
+            );
         }
     }
     let locks = app.world().resource::<crate::missions::RecipeLocks>();
     let starter = &app.world().resource::<MissionChain>().0;
     for code in locks.0.keys() {
-        assert!(starter.names(code), "{code} is the starter tree's lock");
+        assert!(
+            starter.names(code) || chain.names(code),
+            "{code} is a tree's lock"
+        );
     }
+    assert!(locks.0.contains_key("hand-cart") && locks.0.contains_key("horse-cart"));
+    assert!(
+        !locks.0.contains_key("wheel"),
+        "open while paving is pending"
+    );
 }
 
 /// Design 8 and 9: a lamp lit at dusk counts toward a taken lamps job; an
