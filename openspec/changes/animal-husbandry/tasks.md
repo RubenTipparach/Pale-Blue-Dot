@@ -52,3 +52,10 @@ judged against what it would cost.
 - [ ] 9.1 Fences, gates and the incubator in the settlement textures (posts `timber`, rails `poles`, gates `boards`, incubator `plank`) at their `repeat_m`, UVs from the builder; the textured pipeline prewarmed. Verify: a builder test that a textured box's UVs span its faces at `repeat_m`; the eggs capture again beside the first take.
 - [x] 9.2 The animals in their coats (design 16): lofted smooth-shaded forms in the `coat` texture tinted by the genome, in place of M26's box hide strips. Verify: close-up BEFORE | AFTER captures of every species.
 
+
+## 10. The herd's art style and the grazing neck (design 17; owner, 2026-11-23: "his neck bent too far lol, alsoo these guys are a little too smooth. can you make me a mockup of animals? so i can approve the art style?")
+
+- [x] 10.1 Measure today's forms off the game's own geometry: the instrument `dump_the_herds_forms_for_the_art_mockup` (ignored test) writes `docs/mockups/husbandry/art/today.json`; the plodder's neck and face angles, poll and muzzle heights standing and grazing in design 17. No game behaviour changes.
+- [ ] 10.2 M26's Art style tab (`husbandry.html#art`): the four species, a 1.8 m player and a 1 m grid on the game's ground, one 3D view, styles Today, Neck fixed, Soft low-poly and Carved blocky, stand and graze, Walk off by default, day and night lit by lamps; text in its info modal. Screenshots of every style at 11:00 and 22:30, desktop and phone, and the plodder's head and neck Today against fixed, in `docs/screenshots/animal-husbandry/art-*.jpg`; the tracker's M26 at version 2 and survey question A5.
+- [ ] 10.3 On the owner's pick and a request: the neck's carriage and graze (design 17) in `husbandry::forms`. Verify: a test that a grazing beast's muzzle is within 10 cm of the grass and its face never past vertical; BEFORE | AFTER captures of a grazing plodder.
+- [ ] 10.4 On the owner's pick and a request: the chosen style in `husbandry::loft` and `husbandry::forms` (and the carts' horse, `land-transport` design 12). Verify: the forms tests; close-up BEFORE | AFTER captures of every species, day and night.

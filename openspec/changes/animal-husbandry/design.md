@@ -643,6 +643,111 @@ but flat-shaded and untextured too.
 - Task 9.2 is answered this way rather than with M26's hide strips, which
   were drawn for box bodies.
 
+## 17. The herd's art style, and the grazing neck (owner, 2026-11-23)
+
+The owner, on a game capture of the red plodder after design 16: "his neck
+bent too far lol, alsoo these guys are a little too smooth. can you make me
+a mockup of animals? so i can approve the art style?" In that capture the
+plodder grazes with its head dropped below its chest and its face turned
+back toward its forelegs, and the bodies read as rounded rubber tubes.
+
+This section is a write-up and a mockup only. The game's neck and style
+change after the owner picks a style on the mockup (M26's Art style tab) and
+asks for it.
+
+### What is measured, and with what
+
+A **measurement instrument**, not a behaviour change: the ignored test
+`dump_the_herds_forms_for_the_art_mockup` (`husbandry/tests.rs`, run by hand
+with `--ignored`) builds each species with `husbandry::forms` exactly as the
+game does, in its colours from `husbandry.ron`, standing and (the plodder)
+at the graze, and writes the meshes to
+`docs/mockups/husbandry/art/today.json`. The mockup's port of `loft.rs` and
+`forms.rs` (`docs/mockups/husbandry/art/forms.js`) is checked against that
+file vertex for vertex: positions, triangles and UVs agree to the file's
+0.1 mm rounding for all four species standing and the plodder grazing, and
+the colours do too except one ring of 13 points on the grazing plodder that
+sits exactly on the muzzle's tint boundary, where f32 and f64 round the tie
+differently. So the mockup's Today is the game's geometry.
+
+### The neck: what is wrong
+
+`husbandry.rs` sets a grazing beast's `head_down` to 1.85 rad (106 degrees),
+and `forms::beast` turns the neck and the head together about the neck's root
+in the chest by that angle, one rigid hinge. Measured off the plodder (size 1,
+withers 1.37 m at the forelegs):
+
+| | Neck (deg above level) | Face (deg above level) | Poll | Muzzle tip |
+| --- | ---: | ---: | --- | --- |
+| Today, standing | +18.4 | -51.5 | 1.21 m, 0.16 below the withers | 0.81 m, 0.56 below, 0.79 ahead of the chest |
+| Today, grazing | -87.6 | -157.5 | 0.55 m | **0.36 m above the grass, 0.45 m behind the neck's root**, between the forelegs |
+| Fixed, standing | +30 | -42 | 1.35 m, level with the withers | 1.01 m, 0.36 below |
+| Fixed, grazing | -35 at the chest to -70 at the poll | -76 | 0.58 m | 0.09 m: at the grass, 0.49 m ahead of the chest |
+
+Two faults, both in the rigid hinge:
+- the face's angle is the neck's plus its own, so a 106 degree graze turns a
+  face that hung 51.5 degrees down to 157.5 degrees: past vertical, pointing
+  back at the chest. That is "his neck bent too far";
+- the plodder's neck (0.5 m to the poll from a root 1.05 m up) and head
+  (0.55 m) cannot reach the grass from the shoulder: even straight down the
+  muzzle stops 0.36 m above it, so the hinge keeps turning the head under.
+  The horse (-144.5 degree face, muzzle 0.35 m up) and the woolback
+  (-139.5, 0.27 m up) do the same.
+
+**The fix, as drawn in the mockup's "Neck fixed"**: the face carries its own
+angle (standing -42 for the plodder; grazing -76, never past vertical), the
+neck is lowered from the shoulder with an arch along it (65% of the bend at
+the root, the rest growing to the poll), and the graze bends it until the
+muzzle is 5 cm above the grass, solved per species. The plodder's neck is
+1.2 times the game's to the poll and the woolback's 1.5 times (the horse's is
+long enough), so they reach the grass without folding. Standing, the
+plodder's head is raised: neck +30, poll level with the withers.
+
+### Why the forms read as too smooth
+
+- **Segments.** The plodder is 2,308 triangles: a 16-sided body through 19
+  rings (Catmull-Rom, three rings between each authored pair), a 14-sided
+  neck, a 12-sided head through 9 rings, 10-sided legs through 11. Every
+  silhouette is a continuous curve; nothing in the world beside it is (the
+  hex columns, the timber, the townsfolk's blocky heads).
+- **Normals.** Every point's normal is averaged from all the faces about it,
+  so the light rolls round every part the same way. There is no crease
+  anywhere but the flat end caps: not at the hoof, the jaw, the horn's root or
+  the brow, the places a real animal has an edge.
+- **No planes.** Every section is an ellipse and every run is a spline, so
+  there is no flat back, no flat face, no squared jaw or muzzle: the "rubber
+  tube" read.
+- **Texel size.** The coat lays its 32 px tile once round every section, so a
+  texel is 8.1 cm on the plodder's barrel (the ground's is 8.9 cm on a hex
+  top) but 2.6 cm on the head, 2.9 cm on the upper leg and 0.8 cm on the
+  cannon. The fine texels on the head and legs blur into smooth colour, a
+  different pixel scale from everything else in the world.
+
+### The styles on the mockup
+
+All four are one fitted, lofted form per animal (CLAUDE.md "No obvious
+primitives"), wear the game's `coat.png` (copied byte for byte) nearest
+sampled and tinted by the species' colours, carry no outline, and are lit by
+the page's terrain light (sun, sky, lamps). The three new ones carry the
+neck fix.
+
+1. **Today**: the game's forms as they are (the port above).
+2. **Neck fixed**: Today's forms, the neck and graze as above.
+3. **Soft low-poly**: the same authored rings, joined straight (no spline
+   rings between them), 9 sides round the body, 8 the neck and head, 6 the
+   legs (about 820 triangles for the plodder); normals 60% smooth and 40% the
+   face's own, so planes read on a curved form without it being flat-shaded;
+   hard creases at the hoof, the horn's root and a squared jaw; the coat laid
+   by the metre (a tile every 2 m, 6.25 cm texels everywhere) so its pixels
+   match the ground's.
+4. **Carved blocky**: block-led sections (rounded squares, a superellipse of
+   exponent 3.4 to 4.5) bevelled at their corners, joined straight, 20% face
+   normal, the same creases and texture scale (about 1,100 triangles): every
+   part still one shaped piece fitted into the body, never a box.
+
+The recommendation is given with the screenshots, in the survey (A5) and
+the tab's info: see "Questions for the owner".
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and

@@ -523,3 +523,94 @@ fn a_rebase_leaves_the_yard_where_it_was() {
     assert!((n.to_world(b.pos).pos - feet).length() < 1e-6);
     assert!((n.to_world(b.goal.unwrap()).pos - goal).length() < 1e-6);
 }
+
+/// MEASUREMENT INSTRUMENT (`animal-husbandry` design 17; run by hand with
+/// `--ignored`; it changes no game behaviour): writes the herd's forms as
+/// the game builds them, in the species' own colours at size 1 of their
+/// height, to `docs/mockups/husbandry/art/today.json` for the art-style
+/// mockup. Each species stands; the plodder is also written at the graze
+/// (`head_down` 1.85, the value the herd sets while it grazes).
+#[test]
+#[ignore]
+fn dump_the_herds_forms_for_the_art_mockup() {
+    use super::forms::{self, Beast, Coat, Stance};
+    use super::rig::Builder;
+    let settings: HusbandrySettings =
+        ron::from_str(include_str!("../../../../assets/config/husbandry.ron")).unwrap();
+    let find = |id: &str| -> LandSpecies {
+        settings
+            .land
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .unwrap_or_else(|| panic!("{id} in husbandry.ron"))
+            .clone()
+    };
+    let coat_of = |id: &str| {
+        let c = find(id).colours;
+        Coat {
+            body: c[0],
+            pale: c[1],
+            legs: c[2],
+            head: c[3],
+            pattern: 0,
+        }
+    };
+    let num = |x: f32| {
+        let r = (x * 10000.0).round() / 10000.0;
+        if r == 0.0 {
+            "0".to_string()
+        } else {
+            format!("{r}")
+        }
+    };
+    let list = |v: &mut dyn Iterator<Item = f32>| v.map(num).collect::<Vec<_>>().join(",");
+    let json = |b: &Builder| {
+        format!(
+            "{{\"position\":[{}],\"normal\":[{}],\"colour_linear\":[{}],\"uv\":[{}],\"index\":[{}]}}",
+            list(&mut b.positions.iter().flatten().copied()),
+            list(&mut b.normals.iter().flatten().copied()),
+            list(&mut b.colours.iter().flat_map(|c| [c[0], c[1], c[2]])),
+            list(&mut b.uvs.iter().flatten().copied()),
+            b.indices
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    };
+    let mut parts = Vec::new();
+    for (id, kind) in [
+        ("horse", Beast::Horse),
+        ("plodder", Beast::Plodder),
+        ("woolback", Beast::Woolback),
+    ] {
+        let size = find(id).height_m / kind.withers_m();
+        let mut b = Builder::default();
+        forms::beast(&mut b, kind, &coat_of(id), &Stance::default(), size);
+        parts.push(format!("\"{id}\":{}", json(&b)));
+        if kind == Beast::Plodder {
+            let graze = Stance {
+                head_down: 1.85,
+                ..default()
+            };
+            let mut g = Builder::default();
+            forms::beast(&mut g, kind, &coat_of(id), &graze, size);
+            parts.push(format!("\"plodder_graze\":{}", json(&g)));
+        }
+    }
+    let mut hen = Builder::default();
+    let size = find("meadow-hen").height_m / 0.42;
+    forms::bird(
+        &mut hen,
+        &coat_of("meadow-hen"),
+        Sex::F,
+        &Stance::default(),
+        size,
+    );
+    parts.push(format!("\"meadow-hen\":{}", json(&hen)));
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/mockups/husbandry/art");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("today.json"), format!("{{{}}}\n", parts.join(","))).unwrap();
+}
