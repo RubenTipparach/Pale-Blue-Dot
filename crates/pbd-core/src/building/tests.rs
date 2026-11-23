@@ -717,7 +717,7 @@ fn a_door_hangs_in_a_doorway_and_stops_the_walker_while_shut() {
     assert!(edge_tris(&hung) > edge_tris(&doorway), "the frame");
     let leaf = super::door::leaf_mesh(&hung.solids.doors[0], hung.solids.frame, 0.4);
     let buf = &leaf[super::door::LEAF_TEXTURE];
-    assert!(!buf.positions.is_empty() && buf.positions.len() % 3 == 0);
+    assert!(!buf.positions.is_empty() && buf.positions.len().is_multiple_of(3));
     assert!(
         buf.uvs
             .iter()
