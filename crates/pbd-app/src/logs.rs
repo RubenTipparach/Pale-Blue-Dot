@@ -26,6 +26,10 @@ pub const LOAD_M: f64 = 4.5;
 /// no column tier to read their water from.
 pub const STEP_M: f64 = 400.0;
 
+/// How far a log must float before it comes to rest for the town tree to
+/// count it, metres.
+pub const FLOAT_COUNTS_M: f64 = 20.0;
+
 /// Every log in the world that has not been taken.
 #[derive(Resource, Default)]
 pub struct Logs {
@@ -80,6 +84,8 @@ pub fn step(
     contact: Option<Res<PlanetContact>>,
     frame: Option<Res<PlanetRenderFrame>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut did: MessageWriter<crate::missions::Did>,
+    mut set_off: Local<std::collections::HashMap<u64, DVec3>>,
 ) {
     if logs.serial != Some(save.serial()) {
         logs.live = log_drive::from_records(&save.records);
@@ -105,6 +111,28 @@ pub fn step(
         match log_drive::step(log, water, dt) {
             Stepped::Quiet => {}
             Stepped::Changed => {
+                // Where a float began, and a float's end far enough from it:
+                // a log driven down a river (`town-missions-tree` design 4).
+                match (was, log.body.state) {
+                    (_, LogState::Floating) => {
+                        set_off.insert(log.id, log.position());
+                    }
+                    (LogState::Floating, LogState::Resting) => {
+                        let far = set_off
+                            .remove(&log.id)
+                            .is_some_and(|from| from.distance(log.position()) >= FLOAT_COUNTS_M);
+                        if far {
+                            did.write(crate::missions::Did::new(
+                                pbd_core::missions::Kind::Float,
+                                "log",
+                                1,
+                            ));
+                        }
+                    }
+                    _ => {
+                        set_off.remove(&log.id);
+                    }
+                }
                 info!(
                     "LOG {} {:?} -> {:?} at {:.1} m",
                     log.id,
@@ -500,7 +528,8 @@ pub struct LogsPlugin;
 
 impl Plugin for LogsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Logs>()
+        app.add_message::<crate::missions::Did>()
+            .init_resource::<Logs>()
             .add_systems(Startup, make_look)
             .add_systems(
                 Update,

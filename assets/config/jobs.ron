@@ -31,10 +31,10 @@
         lost: (1, 1),
         repair: (1, 1),
     },
-    // The kinds a board posts. Lamps are made and counted by the rules, and
-    // posted once the game raises their event (`townsfolk` task 7.4); lost
-    // villagers and repairs are in the game (design 28 and 29).
-    posted: [trade, gather, hunt, deliver, cook, fish, mine, herd, harvest, lost, repair],
+    // The kinds a board posts. A lamps job shows from dusk (17:00) and its
+    // lamps are lit at dusk (`town-missions-tree` design 8); lost villagers
+    // and repairs are in the game (`townsfolk` design 28 and 29).
+    posted: [trade, gather, hunt, deliver, cook, fish, mine, herd, harvest, lamps, lost, repair],
     signature: {
         Walled: cook,
         Village: harvest,

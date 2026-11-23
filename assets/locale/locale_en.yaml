@@ -618,6 +618,7 @@ interact:
     harvest: "Harvest {thing}"
     lead: "Lead {thing}"
     let_stay: "Let {thing} stay"
+    light: "Light {thing}"
     mend: "Mend {thing}"
     open: "Open {thing}"
     open_door: "Open {thing}"
@@ -750,6 +751,8 @@ item:
   wool:
     name: wool
 jobs:
+  abandon: ABANDON
+  abandoned_line: Job abandoned
   done_notice: Job done
   hand_in: HAND IN
   kind:
@@ -765,6 +768,8 @@ jobs:
     mine: "Dig {count} {thing}  {have}/{count}"
     repair: "Mend a broken wall  {have}/{count}"
     trade: "Sell {count} goods here  {have}/{count}"
+  lamp: lamp
+  lost_marker: Lost villager
   no_parcel: No parcel for this town
   none: No work today
   not_done: Not done yet
@@ -1145,14 +1150,20 @@ mission:
 mission_tree:
   after: "after {missions}"
   branch:
+    carts: CARTS
     cooking: COOKING
     farming: FARMING
     fishing: FISHING
     getting_about: GETTING ABOUT
     hands_tools: HANDS TO TOOLS
     herding: HERDING
+    houses_logs: "HOUSES & LOGS"
+    jobs: JOBS
     light_building: "LIGHT & BUILDING"
     mining_smelting: "MINING & SMELTING"
+    roads: ROADS
+    town: TOWN
+    trade: TRADE
   branch_label: "{number} · {name}"
   close: X
   done: DONE
@@ -1163,10 +1174,14 @@ mission_tree:
   objectives: OBJECTIVES
   open: OPEN
   opens_next: OPENS NEXT
+  tree:
+    starter: STARTER
+    town: TOWN
   unlocks: UNLOCKS
   unlocks_list: "UNLOCKS {recipes}"
   x: "[x]"
 missions:
+  coins: "+{count}"
   done: "DONE: {title}"
   tab:
     guide: GUIDE  J
@@ -1547,6 +1562,140 @@ tool:
       iron: IRON SHOVEL
       steel: STEEL SHOVEL
       stone: STONE SHOVEL
+town_mission:
+  crush:
+    help: Put stone in the grinder.
+    objective:
+      "0": crushed stone
+    title: Crush stone
+  deliver:
+    help: Take a delivery job and carry the parcel to the town it names.
+    objective:
+      "0": parcel
+    title: Carry a parcel
+  first-job:
+    help: "Take a job from a town's board, do it and hand it in."
+    objective:
+      "0": job
+    title: A job from the board
+  first-trade:
+    help: "Talk to a town's trader and pick TRADE."
+    objective:
+      "0": sell
+      "1": buy
+    title: Buy and sell
+  goodwill:
+    help: Jobs and trade make a town like you.
+    objective:
+      "0": goodwill
+    title: A friend in town
+  gravel:
+    help: Put crushed stone and sand in the mixer.
+    objective:
+      "0": gravel
+    title: Mix gravel
+  grinder:
+    help: Make a grinder at the workbench and set it down.
+    objective:
+      "0": grinder
+      "1": place it
+    title: Build a grinder
+  hand-cart:
+    help: "Set the cart down, then press F at its handles to pull it."
+    objective:
+      "0": hand cart
+      "1": place it
+    title: A hand cart
+  haul:
+    help: Put goods in the cart and pull it. Roads are faster.
+    objective:
+      "0": meters
+    title: Haul a load
+  horse:
+    help: Stables in the larger towns sell horses.
+    objective:
+      "0": horse
+    title: Buy a horse
+  horse-cart:
+    help: "Lead your horse to the cart's shafts and press F."
+    objective:
+      "0": horse cart
+      "1": hitch
+    title: Hitch up
+  house:
+    help: "Build walls, a door and a roof with the build tools."
+    objective:
+      "0": walls
+      "1": door
+      "2": roof
+    title: A house of your own
+  join:
+    help: Mark and pave until your road meets a town or a road.
+    objective:
+      "0": joined
+    title: Join a town
+  lamps:
+    help: "Light the town's lamps as the sun goes down."
+    objective:
+      "0": lamps
+    title: Light the lamps
+  logs:
+    help: Throw logs in a river; they stop where the water stops.
+    objective:
+      "0": logs
+    title: Float logs
+  lost:
+    help: "Find them, talk with F, and lead them back inside the walls."
+    objective:
+      "0": villager
+    title: Bring them home
+  mark:
+    help: Hold survey stakes and drive one at each turn of your road.
+    objective:
+      "0": stakes
+      "1": cells
+    title: Mark a road
+  meet:
+    help: Walk up to people in town and talk with F.
+    objective:
+      "0": people
+    title: Meet the townsfolk
+  mend:
+    help: Bring planks to the broken wall and press F.
+    objective:
+      "0": wall
+    title: Mend a building
+  mixer:
+    help: Make a mixer at the workbench and set it down.
+    objective:
+      "0": mixer
+      "1": place it
+    title: Build a mixer
+  pave:
+    help: "Hold the shovel, carry gravel, and press F on a marked cell."
+    objective:
+      "0": cells
+    title: Pave it
+  road-trip:
+    help: Off the road a cart is four times slower.
+    objective:
+      "0": meters
+    title: On the road
+  three-jobs:
+    help: Boards post new jobs every few days.
+    objective:
+      "0": jobs
+    title: Three jobs
+  trade-more:
+    help: "Sell what you grow, catch and make."
+    objective:
+      "0": sold
+    title: Trade in earnest
+  wheels:
+    help: Wheels take planks and an iron tyre.
+    objective:
+      "0": wheels
+    title: Make wheels
 towns:
   door: door
 trade:

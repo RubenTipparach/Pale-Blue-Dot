@@ -495,6 +495,7 @@ pub fn aim_and_build(
     ),
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
 ) {
     if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
@@ -756,8 +757,20 @@ pub fn aim_and_build(
         } else if ok {
             let n = candidate.len();
             let ordered = placing_order(&site, &near, &candidate).unwrap_or(candidate);
+            let named: Vec<&'static str> = ordered
+                .iter()
+                .map(|p| pbd_app::town_missions::build_name(&p.shape))
+                .collect();
             if builds.place(&mut save, ordered) {
                 info!("BUILD placed {n} pieces with {}", kit.name);
+                // A house's pieces, as the town tree counts them.
+                for name in named {
+                    did.write(pbd_app::missions::Did::new(
+                        pbd_core::missions::Kind::Build,
+                        name,
+                        1,
+                    ));
+                }
             } else {
                 error!("build BLOCKED: the save did not accept the piece");
             }

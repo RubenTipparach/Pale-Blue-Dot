@@ -340,7 +340,7 @@ impl Trader<'_> {
         if s.give(item, 1) != 0 {
             return Err(Refused::PackFull);
         }
-        let mut p = *purse;
+        let mut p = purse.clone();
         let entry = p
             .change(Reason::Bought, price)
             .map_err(|_| Refused::Short)?;
@@ -379,7 +379,7 @@ impl Trader<'_> {
         if !s.take_item(item, 1) {
             return Err(Refused::NotHeld);
         }
-        let mut p = *purse;
+        let mut p = purse.clone();
         let entry = p.change(Reason::Sold, price).map_err(|_| Refused::Short)?;
         let lot = m.lots.entry(code.to_string()).or_default();
         lot.factor = (lot.factor * (1.0 - self.cfg.step)).max(self.cfg.low);

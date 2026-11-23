@@ -74,14 +74,12 @@ pub fn progress_of(save: &WorldSave) -> Progress {
 /// logging each pending mission. A chain naming what this build cannot know
 /// (and does not await) is refused, as every config is.
 pub fn load_chain(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig) -> Chain {
-    let path = crate::config::config_dir().join("missions.ron");
-    let file: MissionFile = match std::fs::read_to_string(&path) {
-        Ok(text) => ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
-        Err(_) => {
-            warn!("{} not found; no missions", path.display());
-            MissionFile::default()
-        }
-    };
+    load_tree("missions.ron", "mission", &catalog_of(recipes, fauna, land))
+}
+
+/// What this build knows, for resolving a mission file's names: the recipe
+/// book and the rosters.
+pub fn catalog_of(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig) -> Catalog {
     let fish: Vec<String> = fauna
         .0
         .bodies
@@ -96,13 +94,26 @@ pub fn load_chain(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig
         .flatten()
         .map(|s| s.data_name())
         .collect();
-    let catalog = Catalog::new(
+    Catalog::new(
         &recipes.0,
         fish.iter().map(String::as_str),
         animals.iter().map(String::as_str),
-    );
+    )
+}
+
+/// Read and resolve one tree's file, its words under `keys` in the locale
+/// file, logging each pending mission.
+pub fn load_tree(name: &str, keys: &str, catalog: &Catalog) -> Chain {
+    let path = crate::config::config_dir().join(name);
+    let file: MissionFile = match std::fs::read_to_string(&path) {
+        Ok(text) => ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
+        Err(_) => {
+            warn!("{} not found; no missions", path.display());
+            MissionFile::default()
+        }
+    };
     let chain = file
-        .resolve(&catalog)
+        .resolve_keyed(catalog, keys)
         .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     for (id, missing) in chain.pending() {
         info!("mission {id} is pending: no {missing:?} in this build");
@@ -163,6 +174,7 @@ pub struct Counting<'w, 's> {
     cooked: MessageReader<'w, 's, Cooked>,
     did: MessageReader<'w, 's, Did>,
     heard: ResMut<'w, Happenings>,
+    eco: Option<Res<'w, crate::economy::Economy>>,
 }
 
 /// What the messages of this frame mean to the chain.
@@ -229,9 +241,14 @@ pub fn count(mut c: Counting) {
             c.missions.notice = None;
         }
     }
-    let happened = happenings(&mut c);
+    let mut happened = happenings(&mut c);
     if !(happened.is_empty() && c.heard.0.is_empty()) {
         c.heard.0.clone_from(&happened);
+    }
+    // What the town raised, which the taken jobs have counted already: the
+    // trees count it, the jobs never see it twice.
+    if let Some(eco) = c.eco.as_deref() {
+        happened.extend(eco.raised.iter().cloned());
     }
     let Some(mut save) = c.save else {
         return;
@@ -318,9 +335,27 @@ pub fn refresh_locks(
     hotbar: Option<Res<Hotbar>>,
     tools: Option<Res<crate::fish::ToolSlot>>,
     mut locks: ResMut<RecipeLocks>,
+    town: (
+        Option<Res<crate::town_missions::TownChain>>,
+        Option<Res<crate::town_missions::TownMissions>>,
+    ),
 ) {
     let chain = &chain.0;
-    if chain.missions.iter().all(|m| m.unlocks.is_empty()) {
+    let none = Progress::default();
+    let town_chain = town.0.as_deref().map(|t| &t.0);
+    let town_progress = town
+        .1
+        .as_deref()
+        .and_then(|t| t.progress())
+        .unwrap_or(&none);
+    let mut trees = vec![(chain, &missions.progress)];
+    if let Some(t) = town_chain {
+        trees.push((t, town_progress));
+    }
+    if trees
+        .iter()
+        .all(|(c, _)| c.missions.iter().all(|m| m.unlocks.is_empty()))
+    {
         if !locks.0.is_empty() {
             locks.0.clear();
         }
@@ -359,8 +394,8 @@ pub fn refresh_locks(
                     .map(|(t, _)| item_code(Item::Tool(*t))),
             )
             .collect();
-        if !chain.recipe_open(&missions.progress, &recipe.code, &makes, holds(recipe))
-            && let Some(m) = chain.unlocked_by(&recipe.code)
+        if !pbd_core::missions::recipe_open_in(&trees, &recipe.code, &makes, holds(recipe))
+            && let Some(m) = trees.iter().find_map(|(c, _)| c.unlocked_by(&recipe.code))
         {
             now.insert(recipe.code.clone(), m.title.clone());
         }

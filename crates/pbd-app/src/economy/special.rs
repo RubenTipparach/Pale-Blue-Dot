@@ -71,6 +71,18 @@ fn open_jobs(eco: &Economy, kind: JobKind) -> Vec<Job> {
 
 // ---- The lost villager -------------------------------------------------------
 
+/// Where each taken lost villager job's villager stands, as directions from
+/// the planet's centre, by job: what the map and the compass mark
+/// (`town-missions-tree` design 10).
+pub fn lost_directions(eco: &Economy, save: &WorldSave) -> Vec<Vec3> {
+    open_jobs(eco, JobKind::Lost)
+        .iter()
+        .filter_map(|j| lost_of(save, j.id))
+        .filter_map(|l| DVec3::from_array(l.at).try_normalize())
+        .map(|d| d.as_vec3())
+        .collect()
+}
+
 /// Whether a cell's ground will do to stand a lost villager on (design 28):
 /// dry, no town's, holding no player's edit, within a layer of each of its
 /// neighbours. Its ground's top when it will.
@@ -232,7 +244,7 @@ pub struct LostWalk {
 /// they are, walk the found ones behind the player, and count them home.
 #[allow(clippy::too_many_arguments)]
 pub fn lost_villagers(
-    eco: Res<Economy>,
+    mut eco: ResMut<Economy>,
     cfg: Res<EconomyConfig>,
     save: Option<ResMut<WorldSave>>,
     towns: Res<Towns>,
@@ -246,6 +258,12 @@ pub fn lost_villagers(
     let (Some(mut save), Some(mut folk)) = (save, folk) else {
         return;
     };
+    // An abandoned job's villager goes back to their post.
+    if !eco.let_go.is_empty() {
+        for id in std::mem::take(&mut eco.let_go) {
+            folk.release(id);
+        }
+    }
     let jobs = open_jobs(&eco, JobKind::Lost);
     if jobs.is_empty() {
         walk_state.player = None;
@@ -484,6 +502,117 @@ pub fn repairs(eco: Res<Economy>, save: Option<ResMut<WorldSave>>, mut towns: Re
             }
             None => warn!("job {}: no wall to break in town {}", job.id, job.site),
         }
+    }
+}
+
+// ---- Lamps at dusk (`town-missions-tree` design 8) -------------------------
+
+/// How near a town lamp the eye must be to light it, metres.
+pub const LAMP_REACH_M: f32 = 3.0;
+
+/// The town lamp the eye is near, while a lamps job of its town is taken
+/// and not done and the clock is at dusk: its town and its place in the
+/// town's lamps.
+pub fn lamp_in_reach(
+    eco: &Economy,
+    towns: &Towns,
+    eye: Vec3,
+    hour: f32,
+    radius_m: f32,
+) -> Option<(u32, usize)> {
+    if !pbd_core::economy::jobs::is_dusk(hour) {
+        return None;
+    }
+    let jobs = open_jobs(eco, JobKind::Lamps);
+    if jobs.is_empty() {
+        return None;
+    }
+    let ground = pbd_core::settlement::ground::installed()?;
+    // The installed grounds are the held towns', in site-id order.
+    towns
+        .held
+        .iter()
+        .zip(ground.towns())
+        .filter(|(h, _)| jobs.iter().any(|j| j.site == h.site.id))
+        .find_map(|(h, g)| {
+            g.lamps().iter().enumerate().find_map(|(i, l)| {
+                let at = l.direction * (radius_m + l.altitude_m);
+                (at.distance(eye) <= LAMP_REACH_M).then_some((h.site.id, i))
+            })
+        })
+}
+
+/// Offer LIGHT to the interact key near a town lamp at dusk, with its
+/// town's lamps job taken.
+pub fn offer_lamp(
+    eco: Res<Economy>,
+    towns: Res<Towns>,
+    sun: Option<Res<crate::sky::Sun>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    interact: Option<ResMut<crate::interact::Interact>>,
+    lit: Res<LitLamps>,
+) {
+    let (Some(sun), Some(mut interact)) = (sun, interact) else {
+        return;
+    };
+    let Some(eye) = eye_point(&cameras, frame.as_deref()) else {
+        return;
+    };
+    let radius = crate::planet::terrain_config().radius_m;
+    let day = sun.clock.day();
+    if let Some((site, i)) = lamp_in_reach(&eco, &towns, eye, sun.clock.hour(), radius)
+        && !lit.0.contains(&(day, site, i))
+    {
+        interact.offer(crate::interact::Offer::new(
+            crate::interact::Act::Light,
+            crate::ui_kit::tr("jobs.lamp"),
+        ));
+    }
+}
+
+/// The lamps lit this run, by day, town and lamp: a lamp counts once an
+/// evening.
+#[derive(Resource, Default)]
+pub struct LitLamps(pub std::collections::BTreeSet<(u64, u32, usize)>);
+
+/// The interact key at a town lamp at dusk lights it for the job: one lamp
+/// counted, once an evening.
+#[allow(clippy::too_many_arguments)]
+pub fn use_lamp(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    eco: Res<Economy>,
+    towns: Res<Towns>,
+    sun: Option<Res<crate::sky::Sun>>,
+    interact: Option<Res<crate::interact::Interact>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    mut lit: ResMut<LitLamps>,
+    mut did: MessageWriter<crate::missions::Did>,
+) {
+    let (Some(keys), Some(sun)) = (keys, sun) else {
+        return;
+    };
+    if !keys.just_pressed(KeyCode::KeyF)
+        || !crate::interact::may(interact.as_deref(), crate::interact::Reader::Lamps)
+    {
+        return;
+    }
+    let Some(eye) = eye_point(&cameras, frame.as_deref()) else {
+        return;
+    };
+    let radius = crate::planet::terrain_config().radius_m;
+    let day = sun.clock.day();
+    let Some((site, i)) = lamp_in_reach(&eco, &towns, eye, sun.clock.hour(), radius) else {
+        return;
+    };
+    if lit.0.insert((day, site, i)) {
+        info!("lamp {i} of town {site} lit");
+        did.write(crate::missions::Did::new(
+            Kind::Light,
+            scoped(site, "lamp"),
+            1,
+        ));
     }
 }
 
