@@ -40,7 +40,7 @@
 - [x] 3.5 The storage panel and its durable lines.
 - [x] 3.6 Furnished town houses with loot to take.
 - [x] 3.7 The Carpentry branch's events.
-- [ ] 3.8 Captures in `docs/screenshots/furniture/` (lavapipe).
+- [x] 3.8 Captures in `docs/screenshots/furniture/` (lavapipe): `game-room-day`, `game-seated-night`, `game-asleep-night`, `game-chest-panel`, `game-carpenter-panel`, `game-tree-carpentry`.
 
 ## 4. Later
 
