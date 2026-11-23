@@ -310,6 +310,51 @@ ICONS.update({
 })
 
 
+# `townsfolk` design 41: crushed stone, survey stakes, and the grinder and the
+# mixer, drawn from the mission tree mockup's stand-ins (M33,
+# docs/mockups/mission-tree/items/) in one palette.
+PAVING = {
+    "k": "#2a1a10",
+    "a": "#d6d0c4",
+    "b": "#9b958a",
+    "c": "#66615a",
+    "d": "#9a6a3c",
+    "e": "#6b4626",
+    "f": "#c8955c",
+    "g": "#e05a3a",
+    "h": "#a03a26",
+    "i": "#4a525c",
+    "j": "#b8c0c8",
+    "l": "#7a8490",
+}
+
+ICONS.update({
+    "goods/crushed-stone": ([
+        "................", "................", "................", "................",
+        ".......kk.......", "......kaak......", "...kkkaabckkk...", "..kaakabcckabk..",
+        ".kaabckbcckaack.", ".kabbckkkkabbck.", "..kcckaabkkcck..", "..kkkaabbckkkk..",
+        ".kabkabbcckaabk.", "kaabckccckaabbck", "kabbcckkkabbbcck", ".kkkkk...kkkkkk.",
+    ], PAVING),
+    "goods/survey-stakes": ([
+        "...kk.......kk..", "..kdek.....kdek.", "..kfdekk..kfdekk", "..kfdeghk.kfdegh",
+        "..kgggghk.kggggh", "..kfdekk..kfdekk", "..kfdek...kfdek.", "..kfdek...kfdek.",
+        "..kfdek...kfdek.", "..kfdek...kfdek.", "..kfdek...kfdek.", "...kdek....kdek.",
+        "...kdek....kdek.", "...kek......kek.", "....k........k..", "................",
+    ], PAVING),
+    "stations/grinder": ([
+        "...kkkkkkkkkk...", "..kdffffffffdk..", "..kedffffffdek..", "...kedffffdek...",
+        "....kedffdek....", "..kkkkeddekkkk..", ".kffffffffffffk.", ".kdekkbaabkkedkk",
+        ".kdekbaccabkedij", ".kdekaccccakeijk", ".kdekbaccabkedk.", ".kdekkbbbbkkedk.",
+        ".kdekkckcckkedk.", ".kdekckcckckedk.", "keddek.kk.keddek", ".kkkk......kkkk.",
+    ], PAVING),
+    "stations/mixer": ([
+        "................", "....kkkkkkkk....", "...kllllllllk...", "..klfffffffflk..",
+        ".kjffdddddddelkk", ".kjfddddddddelij", ".kjfddddddddeijk", ".kjdddeeeeeeejk.",
+        "..kldeeeeeeelk..", "...kllllllllk...", "..kdekkkkkkedk..", "..kdekkkkkkedk..",
+        ".kdabbbbbbbbdk..", ".kdebbbbbbbedk..", ".kedddddddddek..", "..kkkkkkkkkkk...",
+    ], PAVING),
+})
+
 # land-transport design 10: the cart wheel and the two carts. The grids are
 # drawn by a few shapes (a ring of rim and iron tyre, spokes, planks, shafts)
 # and then given the 1 px ink outline of an inventory icon wherever an empty

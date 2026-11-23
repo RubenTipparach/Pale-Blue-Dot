@@ -15,6 +15,12 @@ pub enum Doing {
     Hammering,
     Wiping,
     Standing,
+    /// Sitting on a seat (`furniture` design 7): the hips dropped this far,
+    /// m, the thighs out level, the hands on the lap.
+    Sitting(f32),
+    /// Lying on a bed: still, the arms at the sides. The figure is laid
+    /// down by whoever places it.
+    Lying,
 }
 
 /// The pose: each pivot's turn, rad, and the body's bob and squash. Arms
@@ -163,6 +169,18 @@ impl Body {
             Doing::Wiping => {
                 pose.arms[1][0] = -0.9 + (t_now * 3.0).sin() * 0.2;
                 pose.arms[1][1] = (t_now * 3.0).sin() * 0.3 + 0.12;
+            }
+            Doing::Sitting(drop) => {
+                pose.body_y -= drop;
+                pose.legs = [-1.42, -1.42];
+                pose.arms = [[-0.55, -0.12], [-0.55, 0.12]];
+                pose.roll *= 0.3;
+            }
+            Doing::Lying => {
+                pose.legs = [0.0; 2];
+                pose.arms = [[0.0, -0.08], [0.0, 0.08]];
+                pose.roll = 0.0;
+                pose.body_x = 0.0;
             }
             _ => {}
         }

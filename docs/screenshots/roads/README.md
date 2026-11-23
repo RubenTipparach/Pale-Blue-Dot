@@ -93,3 +93,22 @@ The walker climbing a road is pinned by a test, not by these frames:
 `walking::tests::a_walker_climbs_a_road_over_ten_layers_without_a_step`
 (ten layers up and down again at the walking speed, no eye jump, never a
 tick in the air).
+
+## The road planner mockup (M15 version 5, `townsfolk` design 42)
+
+`mockup-roadplanner-*`, from `tools/mockup_roadplanner_shots.js` on
+`towns.html#roadplanner`, headless Chromium on SwiftShader (no GPU in the
+container), 1440 x 900 (`-desktop`) and 390 x 844 (`-phone`), at 11:00 and
+22:30. Each is a state the page's own controls reach.
+
+| Shot | What it shows |
+| --- | --- |
+| `open-tree` | The open plan's live ghost from its last stake to the aim, red on the one cell a tree stands on, the reason under the crosshair and in the panel; a lamp's ghost. |
+| `overview` | The whole plan: the paved run from the worksite, the marked cells, the bridge's ghost over the deep brook, the terraces, the aim's ghost toward Wenmoor (the panel open on the phone). |
+| `refuse-steep`, `refuse-steep-overview` | Aimed down the two-layer bank: only the higher cell red, "Too steep". |
+| `refuse-town` | Aimed into Wenmoor: its footprint's cells red, "In a town". |
+| `grab-overview` | A stake picked up: its two legs follow the aim across the brook; the old leg keeps its band and loses its ghost. |
+| `bridge` | The bridge leg from the bank: deck, posts and rails as ghost. |
+| `menu-width3`, `width3-overview` | The radial menu and a three-wide ghost; the bend onto the slope at the open end refused, "Wide roads bend on the level"; short planks red in the bill. |
+| `paving`, `paved-back` | Keep paving down the line: sloped gravel cells with no step, the bridge built, lamps built and lit at night. |
+| `edit-midbuild`, `edit-overview` | The bridge leg's stake moved south off the paved run: the cells it drops under a chalk wash, "8 paved cells to take up". |

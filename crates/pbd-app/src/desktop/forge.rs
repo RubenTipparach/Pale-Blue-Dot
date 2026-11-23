@@ -178,6 +178,7 @@ pub fn spawn(
                         });
                 });
             super::craft::spawn_bench(layer, kit, &atlas, &recipes);
+            super::craft::spawn_carpenter(layer, kit, &atlas, &recipes);
         });
 }
 

@@ -393,7 +393,7 @@ pub fn rezoom(pan: Vec2, at: Vec2, from: &Level, to: &Level) -> Vec2 {
 }
 
 /// The branches in M33's order, with the keys of the names drawn over them.
-pub const BRANCHES: [(&str, &str); 14] = [
+pub const BRANCHES: [(&str, &str); 15] = [
     ("trunk", "mission_tree.branch.hands_tools"),
     ("fishing", "mission_tree.branch.fishing"),
     ("farming", "mission_tree.branch.farming"),
@@ -409,6 +409,8 @@ pub const BRANCHES: [(&str, &str); 14] = [
     ("roads", "mission_tree.branch.roads"),
     ("carts", "mission_tree.branch.carts"),
     ("houses", "mission_tree.branch.houses_logs"),
+    // `furniture` design 12.
+    ("carpentry", "mission_tree.branch.carpentry"),
 ];
 
 fn branch_rank(key: &str) -> usize {

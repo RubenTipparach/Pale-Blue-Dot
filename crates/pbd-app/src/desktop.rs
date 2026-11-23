@@ -14,6 +14,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
@@ -396,6 +397,11 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
+    /// instrument): a grinder and a mixer that far ahead either side, and a
+    /// plan staked from beyond them along the view, its nearer half paved,
+    /// through the same paths a player's stake and shovel take.
+    pub paving: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -581,6 +587,7 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            paving: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -667,8 +674,9 @@ impl Launch {
                                 | "pack-locked"
                                 | "bench"
                                 | "bench-view"
+                                | "carpenter"
                         ),
-                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench, bench-view or carpenter"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -802,6 +810,15 @@ impl Launch {
                     } else {
                         result.forge = Some(metres);
                     }
+                }
+                "--paving" => {
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--paving takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.paving = Some(metres);
                 }
                 "--gather-around" => {
                     i += 1;
@@ -1808,6 +1825,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::builds::BuildsPlugin)
     // Logs on the water (`log-drives`).
     .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
     .init_resource::<pbd_app::build_view::BuildView>()
@@ -2104,10 +2123,12 @@ pub fn run(args: &[String]) {
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
                 pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),
@@ -2127,7 +2148,14 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
-            (digging::server_worms, digging::dig_and_place, cracks::show)
+            // A dig press on a survey stake takes it back, and is spent
+            // (`townsfolk` design 39): before the digging.
+            (
+                digging::server_worms,
+                pbd_app::roads::take_stakes,
+                digging::dig_and_place,
+                cracks::show,
+            )
                 .chain()
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,

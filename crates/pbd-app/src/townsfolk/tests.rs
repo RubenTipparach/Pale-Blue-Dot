@@ -111,6 +111,7 @@ fn others_can_set_a_face_and_drive_a_person() {
             forward: placed.forward,
             placed,
             driven: None,
+            posture: None,
             chosen: Chosen {
                 expression: Expression::Neutral,
                 focus: false,

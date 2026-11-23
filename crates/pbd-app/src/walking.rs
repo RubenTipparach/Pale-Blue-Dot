@@ -599,6 +599,7 @@ impl Plugin for WalkingPlugin {
         app.init_resource::<WalkingConfig>()
             .init_resource::<Pace>()
             .init_resource::<WalkingReadout>()
+            .init_resource::<SeatedEye>()
             .init_resource::<Lift>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
@@ -1143,6 +1144,13 @@ fn turn_for_capture(config: Res<WalkingConfig>, time: Res<Time>, mut state: ResM
     }
 }
 
+/// The eye of a player sat on a seat or lain on a bed (`furniture` design
+/// 6): a planet point (f64) the camera is put at instead of the walker's
+/// eye. While it is set the walker reads no movement; the look stays free.
+/// The body is not moved, so nothing about the walker's physics changes.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+pub struct SeatedEye(pub Option<bevy::math::DVec3>);
+
 #[allow(clippy::too_many_arguments)]
 fn read_walking_input(
     keys: Option<Res<ButtonInput<KeyCode>>>,
@@ -1154,6 +1162,7 @@ fn read_walking_input(
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     space: crate::SimSpace,
     view: Option<Res<crate::build_view::BuildView>>,
+    seated: Option<Res<SeatedEye>>,
 ) {
     if !state.active {
         return;
@@ -1226,6 +1235,14 @@ fn read_walking_input(
     // Keep a jump press until a physics tick consumes it, even at >60 render FPS.
     state.jump |= keys.just_pressed(KeyCode::Space);
     state.jump_held = keys.pressed(KeyCode::Space);
+    // Seated or lying: the keys get the player up (`furniture` design 6)
+    // and move nothing.
+    if seated.is_some_and(|s| s.0.is_some()) {
+        state.axes = Vec2::ZERO;
+        state.sprinting = false;
+        state.jump = false;
+        state.jump_held = false;
+    }
 }
 
 fn walk_axis_scale() -> Option<f32> {
@@ -2154,6 +2171,7 @@ pub(crate) fn follow_walker(
     time: Res<Time>,
     mut step_ease: Local<(Option<f64>, f32)>,
     view: Option<Res<crate::build_view::BuildView>>,
+    seated: Option<Res<SeatedEye>>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2198,7 +2216,11 @@ pub(crate) fn follow_walker(
         // dependence on the body's angular velocity.
         // Render space: the physics-space eye less the render origin, in
         // f64 before the cast (`movement-smoothness` design 6.3).
-        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag);
+        let eye = match seated.as_ref().and_then(|s| s.0) {
+            // Sat or lying: the seat's eye, from the planet point in f64.
+            Some(at) => o.to_local(pbd_core::world_frame::WorldPos::new(o.frame, at)),
+            None => body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag),
+        };
         camera.translation = frame.as_deref().map_or(eye, |frame| {
             crate::render_origin::render_from_physics(frame, eye)
         });
@@ -3034,6 +3056,7 @@ mod tests {
             rooms: Default::default(),
             lights: Vec::new(),
             top_m: 3.0,
+            furniture: Vec::new(),
         };
         let walk = |across: f32| {
             let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
@@ -4538,6 +4561,7 @@ mod tests {
             rooms: Default::default(),
             lights: Vec::new(),
             top_m: 3.0,
+            furniture: Vec::new(),
         };
         let mut app = app_with_terrain_at(terrain, flat);
         app.insert_resource(Structures(vec![wall.clone()]));

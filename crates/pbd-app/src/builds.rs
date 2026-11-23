@@ -88,6 +88,41 @@ impl Builds {
         true
     }
 
+    /// Place one piece with the slots after it in one line (`furniture`
+    /// design 5: a piece of furniture taken from the pack).
+    pub fn place_with_hands(
+        &mut self,
+        save: &mut WorldSave,
+        piece: Piece,
+        carried: &pbd_core::inventory::Slots,
+    ) -> bool {
+        if !save.store_with_hands(placed(&piece), PIECE_SCHEMA, carried) {
+            return false;
+        }
+        self.pieces.insert(piece.id(), piece);
+        self.revision += 1;
+        true
+    }
+
+    /// Take a piece away with the slots after it in one line (a piece of
+    /// furniture back into the pack).
+    pub fn remove_with_hands(
+        &mut self,
+        save: &mut WorldSave,
+        id: u64,
+        carried: &pbd_core::inventory::Slots,
+    ) -> bool {
+        let Some(piece) = self.pieces.get(&id).cloned() else {
+            return false;
+        };
+        if !save.store_with_hands(removed(&piece), PIECE_SCHEMA, carried) {
+            return false;
+        }
+        self.pieces.remove(&id);
+        self.revision += 1;
+        true
+    }
+
     /// Hang a door (design B8): one door taken from `carried`, and the piece
     /// and the slots after it stored as one line. Nothing changes when none
     /// is carried or the save's writer has failed.

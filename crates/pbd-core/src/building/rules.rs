@@ -31,8 +31,15 @@ pub enum Rule {
     Room,
     /// Roofs never overlap, eaves included.
     RoofOverlap,
-    /// A lantern does not stand on a stair.
+    /// A lantern or a piece of furniture does not stand on a stair.
     Clear,
+    /// A piece of furniture stays clear of its cell's walls (`furniture`
+    /// design 4).
+    InWall,
+    /// Two pieces of furniture in a cell do not cross.
+    Overlap,
+    /// No furniture in the clear space inside a door.
+    DoorClear,
 }
 
 impl Rule {
@@ -50,16 +57,21 @@ impl Rule {
             Rule::Room => "room",
             Rule::RoofOverlap => "roof_overlap",
             Rule::Clear => "clear",
+            Rule::InWall => "in_wall",
+            Rule::Overlap => "overlap",
+            Rule::DoorClear => "door_clear",
         }
     }
 }
 
 /// Every rule, in the order they are asked: the first to fail is the
 /// reason.
-pub const RULES: [Rule; 11] = [
+pub const RULES: [Rule; 14] = [
     Rule::Outside,
     Rule::Slot,
     Rule::Doorway,
+    Rule::InWall,
+    Rule::Overlap,
     Rule::Pentagon,
     Rule::HeldUp,
     Rule::Headroom,
@@ -68,6 +80,7 @@ pub const RULES: [Rule; 11] = [
     Rule::Room,
     Rule::RoofOverlap,
     Rule::Clear,
+    Rule::DoorClear,
 ];
 
 /// Whether `rule` holds for `piece` among `others` (the pieces already
@@ -107,13 +120,92 @@ pub fn holds<'a>(
         Rule::Room => room(site, others, shape),
         Rule::RoofOverlap => roof_clear(site, others, shape),
         Rule::Clear => match shape {
-            Shape::Lantern { cell, layer } => !others.clone().any(|o| {
-                matches!(&o.shape, Shape::Stair { foot, head, layer: l }
-                    if (foot == cell || head == cell) && *layer >= *l && *layer < l + STOREY)
+            Shape::Lantern { cell, layer } | Shape::Furniture { cell, layer, .. } => {
+                !others.clone().any(|o| {
+                    matches!(&o.shape, Shape::Stair { foot, head, layer: l }
+                        if (foot == cell || head == cell) && *layer >= *l && *layer < l + STOREY)
+                })
+            }
+            _ => true,
+        },
+        Rule::InWall => match shape {
+            Shape::Furniture { side, kind, .. } => {
+                crate::furniture::fits(&crate::furniture::footprint(*kind, *side))
+            }
+            _ => true,
+        },
+        Rule::Overlap => match shape {
+            Shape::Furniture {
+                cell,
+                layer,
+                side,
+                kind,
+            } => {
+                let mine = crate::furniture::footprint(*kind, *side);
+                !others.clone().any(|o| {
+                    matches!(&o.shape, Shape::Furniture { cell: c, layer: l, side: s, kind: k }
+                        if c == cell && l == layer && s != side
+                            && crate::furniture::overlaps(&mine, &crate::furniture::footprint(*k, *s)))
+                })
+            }
+            _ => true,
+        },
+        Rule::DoorClear => match shape {
+            Shape::Furniture {
+                cell,
+                layer,
+                side,
+                kind,
+            } => !crate::furniture::in_doorway(
+                *kind,
+                *side,
+                &door_sides(site, others, *cell, *layer),
+            ),
+            Shape::Wall {
+                a,
+                b,
+                layer,
+                opening: Opening::Door,
+            } => !others.clone().any(|o| match &o.shape {
+                Shape::Furniture {
+                    cell,
+                    layer: l,
+                    side,
+                    kind,
+                } if (cell == a || cell == b) && *l >= *layer && *l < layer + STOREY => {
+                    let other = if cell == a { *b } else { *a };
+                    site.cells
+                        .side(*cell, other)
+                        .is_some_and(|d| crate::furniture::in_doorway(*kind, *side, &[d as u8]))
+                }
+                _ => false,
             }),
             _ => true,
         },
     }
+}
+
+/// The sides of `cell` with a door in their wall on the storey of `layer`.
+fn door_sides<'a>(
+    site: &Site,
+    others: impl Iterator<Item = &'a Piece>,
+    cell: u32,
+    layer: u16,
+) -> Vec<u8> {
+    others
+        .filter_map(|o| match o.shape {
+            Shape::Wall {
+                a,
+                b,
+                layer: l,
+                opening: Opening::Door,
+            } if (a == cell || b == cell) && layer >= l && layer < l + STOREY => {
+                let other = if a == cell { b } else { a };
+                site.cells.side(cell, other).map(|d| d as u8)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The first rule `piece` breaks among `others`, if any.
@@ -164,7 +256,8 @@ pub fn dependant<'a>(pieces: &'a [Piece], piece: &Piece) -> Option<&'a Piece> {
 /// Whether `upper` rests on `lower`.
 fn rests_on(upper: &Shape, lower: &Shape) -> bool {
     match (upper, lower) {
-        (Shape::Lantern { cell, layer }, Shape::Floor { cell: c, layer: l }) => {
+        (Shape::Lantern { cell, layer }, Shape::Floor { cell: c, layer: l })
+        | (Shape::Furniture { cell, layer, .. }, Shape::Floor { cell: c, layer: l }) => {
             cell == c && layer == l
         }
         (Shape::Stair { foot, layer, .. }, Shape::Floor { cell: c, layer: l }) => {
@@ -299,7 +392,11 @@ fn held_up<'a>(
                     matches!(o.shape, Shape::Post { cells: c, layer: l } if c == cells && l + STOREY == layer)
                 })
         }
-        Shape::Stair { foot, layer, .. } | Shape::Lantern { cell: foot, layer } => stands(foot, layer),
+        Shape::Stair { foot, layer, .. }
+        | Shape::Lantern { cell: foot, layer }
+        | Shape::Furniture {
+            cell: foot, layer, ..
+        } => stands(foot, layer),
         // A roof is held by its room's walls: the room rule; a door by its
         // wall: the doorway rule.
         Shape::Roof { .. } | Shape::Door { .. } => true,
@@ -329,6 +426,13 @@ fn headroom<'a>(others: impl Iterator<Item = &'a Piece> + Clone, shape: &Shape) 
         Shape::Stair { foot, head, layer } => !others.clone().any(|o| {
             matches!(o.shape, Shape::Floor { cell, layer: l }
                 if (cell == foot || cell == head) && well(layer).contains(&l))
+        }),
+        // A floor over a piece of furniture closer than its height.
+        Shape::Furniture {
+            cell, layer, kind, ..
+        } => !others.clone().any(|o| {
+            matches!(o.shape, Shape::Floor { cell: c, layer: l }
+                if c == cell && l > layer && f32::from(l - layer) < kind.height_m())
         }),
         _ => true,
     }

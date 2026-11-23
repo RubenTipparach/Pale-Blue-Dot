@@ -77,7 +77,7 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
     let book = shipped_book();
     let file = town_file();
     let chain = town_chain();
-    assert_eq!(chain.missions.len(), 25);
+    assert_eq!(chain.missions.len(), 34);
     let roots: Vec<&str> = chain
         .missions
         .iter()
@@ -112,7 +112,7 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
             .iter()
             .map(|m| u64::from(m.coins))
             .sum::<u64>(),
-        525
+        640
     );
     // The two trees never name each other.
     let starter = starter_file();
@@ -143,12 +143,9 @@ fn the_shipped_town_tree_is_a_strict_tree_of_its_own() {
 fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
     let chain = town_chain();
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    assert_eq!(
-        pending,
-        [
-            "grinder", "crush", "mixer", "gravel", "mark", "pave", "join",
-        ]
-    );
+    // The paving (`townsfolk` design 45) and the carts (`land-transport`
+    // design 11) are built: nothing waits.
+    assert!(pending.is_empty(), "{pending:?}");
     let live = [
         "meet",
         "first-trade",
@@ -162,6 +159,13 @@ fn the_roads_carts_and_lamps_wait_and_block_nothing_else() {
         "lamps",
         "house",
         "logs",
+        "grinder",
+        "crush",
+        "mixer",
+        "gravel",
+        "mark",
+        "pave",
+        "join",
         "wheels",
         "hand-cart",
         "haul",
@@ -262,6 +266,24 @@ fn each_town_kind_counts_from_its_event() {
         );
     }
     assert!(p.is_done("lamps"));
+    // The roads (`townsfolk` design 45): the stations made and set down,
+    // stone crushed, gravel mixed, a plan staked and marked, paved, and a
+    // paved cell beside a town.
+    for (kind, what, count) in [
+        (Kind::Craft, "block:grinder", 1),
+        (Kind::Place, "block:grinder", 1),
+        (Kind::Craft, "recipe:crushed-stone", 9),
+        (Kind::Craft, "block:mixer", 1),
+        (Kind::Place, "block:mixer", 1),
+        (Kind::Craft, "recipe:mixed-gravel", 8),
+        (Kind::Stake, "stake", 2),
+        (Kind::Mark, "cell", 8),
+        (Kind::Pave, "gravel", 8),
+        (Kind::Pave, "joined", 1),
+    ] {
+        p.record(&chain, &Happened::new(kind, what, count), &none);
+    }
+    assert!(p.is_done("join"));
     // The carts (`land-transport` design 11): wheels, a hand cart set down
     // and hauling, a horse bought and hitched, and a drive on the road.
     p.record(&chain, &Happened::new(Kind::Craft, "wheel", 2), &none);
@@ -277,9 +299,29 @@ fn each_town_kind_counts_from_its_event() {
         &none,
     );
     assert_eq!(step.done, ["road-trip"]);
-    // Every live mission is done, and nothing is open: the rest wait.
+    // Carpentry (`furniture` design 12): the bench, a chair, a seat, a
+    // table, a bed, a lie-down, a chest, four pieces placed, a town chest.
+    let bench = "block:carpenter's bench";
+    p.record(&chain, &Happened::new(Kind::Craft, bench, 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Place, bench, 1), &none);
+    assert_eq!(step.done, ["carpenter"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "chair", 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Sit, "stool", 1), &none);
+    assert_eq!(step.done, ["sit"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "table", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "bed", 1), &none);
+    let step = p.record(&chain, &Happened::new(Kind::Lie, "bed", 1), &none);
+    assert_eq!(step.done, ["lie"]);
+    p.record(&chain, &Happened::new(Kind::Craft, "chest", 1), &none);
+    for _ in 0..4 {
+        p.record(&chain, &Happened::new(Kind::Build, "furniture", 1), &none);
+    }
+    assert!(p.is_done("furnish"));
+    let step = p.record(&chain, &Happened::new(Kind::Loot, "21:planks", 3), &none);
+    assert_eq!(step.done, ["find"]);
+    // Every mission is done, and nothing is open.
     assert_eq!(p.current(&chain), None);
-    assert_eq!(p.done.len(), 18);
+    assert_eq!(p.done.len(), 34);
 }
 
 /// Task 2.3: a mission's coins are paid by the count that finishes it, and

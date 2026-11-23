@@ -23,6 +23,8 @@ block:
     name: campfire
   candle:
     name: candle
+  carpenter:
+    name: "carpenter's bench"
   desert_sand:
     name: "desert sand"
   dirt:
@@ -35,6 +37,8 @@ block:
     name: forge
   grass:
     name: grass
+  grinder:
+    name: grinder
   jungle_grass:
     name: jungle grass
   lantern_hanging:
@@ -43,6 +47,8 @@ block:
     name: street lantern
   lantern_wall:
     name: wall lantern
+  mixer:
+    name: mixer
   mussel_bed:
     name: "mussel bed"
   ore:
@@ -137,6 +143,7 @@ breeding:
   wild_caught_founder: wild-caught founder
   yield: YIELD
 build:
+  furniture_held: "{piece} ({count})"
   kit:
     adobe: Adobe dome
     ashlar: Ashlar
@@ -163,9 +170,12 @@ build:
   kits: KITS
   needed_by: "Remove the {thing} first"
   no_door: "No door in the pack"
+  no_furniture: No furniture carried
+  not_empty: Empty it first
   piece:
     door: door
     floor: floor
+    furniture: furniture
     lantern: lantern
     post: post
     roof: roof
@@ -173,11 +183,14 @@ build:
     wall: wall
   refused:
     clear: "A stair is there"
+    door_clear: In a doorway
     doorway: "Needs a doorway"
     held_up: "Nothing holds it up"
     headroom: "No headroom over the stair"
+    in_wall: Into a wall
     landing: "A wall blocks the stair"
     outside: "Too far to build"
+    overlap: Against another piece
     pentagon: "Can't build on this cell"
     room: "Walls must close round the room"
     roof_overlap: "Another roof is in the way"
@@ -372,9 +385,11 @@ cooking:
     steady: STEADY HANDS
     stride: STRIDE
 craft:
+  carpenter: "CARPENTER'S BENCH"
   count: "X{count}"
   craft: CRAFT
   done: "{recipe} done"
+  furniture: FURNITURE
   hands_busy: Your hands are busy
   have_tool: You already have this tool
   locked: LOCKED
@@ -498,6 +513,12 @@ fruit:
   grows_back: "No fruit. Grows back in {days} days"
   no_ripe: No ripe fruit
   no_room: No room in the pack
+furniture:
+  coins: "{count} coins"
+  full: No room
+  get_up: Move to get up
+  occupied: Someone is there
+  of_house: "{thing}, {house}"
 guide:
   caught: "caught {count}, best {best} cm"
   from_tenebris: "from Tenebris ({kind})"
@@ -630,10 +651,12 @@ interact:
     lead: "Lead {thing}"
     let_go: "Let go of {thing}"
     let_stay: "Let {thing} stay"
+    lie: "Lie on {thing}"
     light: "Light {thing}"
     mend: "Mend {thing}"
     open: "Open {thing}"
     open_door: "Open {thing}"
+    open_store: "Open {thing}"
     pick_fruit: "Pick {thing}"
     pick_glow: "Pick {thing}"
     pick_wild: "Pick wild {thing}"
@@ -642,6 +665,7 @@ interact:
     set_eggs: "Set eggs under {thing}"
     set_in_incubator: "Set eggs in {thing}"
     shut_door: "Shut {thing}"
+    sit: "Sit on {thing}"
     step_down: "Step down from {thing}"
     take_incubator: "Take {thing}"
     take_log: "Take {thing}"
@@ -658,26 +682,44 @@ item:
     name: apple
   bait:
     name: bait worms
+  banded-chest:
+    name: iron-banded chest
   baobab:
     many: baobab fruits
     name: baobab fruit
+  bed:
+    name: bed
+  bench:
+    name: bench
   bronze-ingot:
     name: bronze ingot
   bucket:
     name: wooden bucket
+  chair:
+    name: chair
   cherry:
     many: cherries
     name: cherry
+  chest:
+    name: chest
   chili:
     name: chili
   chili-fish:
     name: chili fish
   chili-seed:
     name: chili seed
+  closet:
+    name: closet
   coal:
     name: coal
   copper-ingot:
     name: copper ingot
+  crate:
+    name: crate
+  crushed-stone:
+    name: crushed stone
+  drawers:
+    name: chest of drawers
   egg:
     name: egg
   fence:
@@ -756,6 +798,12 @@ item:
     name: rowboat
   stone:
     name: loose stone
+  stool:
+    name: stool
+  survey-stakes:
+    name: survey stakes
+  table:
+    name: table
   tin-ore:
     name: tin ore
   turnip:
@@ -1172,6 +1220,7 @@ mission:
 mission_tree:
   after: "after {missions}"
   branch:
+    carpentry: CARPENTRY
     carts: CARTS
     cooking: COOKING
     farming: FARMING
@@ -1239,6 +1288,12 @@ pack:
   pack: PACK
   trash: TRASH
 recipe:
+  banded-chest:
+    name: BANDED CHEST
+  bed:
+    name: BED
+  bench:
+    name: BENCH
   bronze:
     name: BRONZE
   bronze-axe:
@@ -1251,16 +1306,28 @@ recipe:
     name: BUCKET
   campfire:
     name: CAMPFIRE
+  carpenter-bench:
+    name: "CARPENTER'S BENCH"
+  chair:
+    name: CHAIR
+  chest:
+    name: CHEST
   chili-fish:
     name: CHILI FISH
+  closet:
+    name: CLOSET
+  crate:
+    name: CRATE
+  crushed-stone:
+    name: CRUSH STONE
+  drawers:
+    name: DRAWERS
   fence:
     name: FENCE X2
   flatbread:
     name: FLATBREAD
   door:
     name: DOOR
-  gravel:
-    name: GRAVEL X4
   forge:
     name: FORGE
   fried-egg:
@@ -1271,6 +1338,8 @@ recipe:
     name: GATE
   grilled-fish:
     name: GRILL FISH
+  grinder:
+    name: GRINDER
   hand-cart:
     name: HAND CART
   horse-cart:
@@ -1287,8 +1356,12 @@ recipe:
     name: IRON SHOVEL
   kale-skewer:
     name: KALE SKEWER
+  mixed-gravel:
+    name: GRAVEL X4
   mixed-ore:
     name: SMELT ORE
+  mixer:
+    name: MIXER
   planks:
     name: PLANKS
   raft:
@@ -1307,12 +1380,29 @@ recipe:
     name: STONE PICK
   stone-shovel:
     name: STONE SHOVEL
+  stool:
+    name: STOOL
+  survey-stakes:
+    name: STAKES X4
+  table:
+    name: TABLE
   torch:
     name: TORCH X2
   wheel:
     name: WHEEL
   workbench:
     name: WORKBENCH
+roads:
+  mark:
+    too_far: Too far
+    too_steep: Too steep
+    water: Water in the way
+    not_ground: Can't stake here
+    staked: Already staked
+  pave:
+    not_marked: Not marked
+    needs_shovel: Needs a shovel
+    needs_gravel: Needs gravel
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"
@@ -1484,10 +1574,16 @@ species:
 station:
   campfire:
     name: campfire
+  carpenter:
+    name: "carpenter's bench"
   forge:
     name: forge
+  grinder:
+    name: grinder
   hand:
     name: hands
+  mixer:
+    name: mixer
   workbench:
     name: workbench
 talk:
@@ -1597,6 +1693,27 @@ tool:
       steel: STEEL SHOVEL
       stone: STONE SHOVEL
 town_mission:
+  bed:
+    help: A bed takes planks and wool.
+    objective:
+      "0": bed
+    title: Make a bed
+  carpenter:
+    help: "Make a carpenter's bench at the workbench and set it down."
+    objective:
+      "0": "carpenter's bench"
+      "1": place it
+    title: "A carpenter's bench"
+  chair:
+    help: "Make a chair at the carpenter's bench."
+    objective:
+      "0": chair
+    title: Make a chair
+  chest:
+    help: A chest takes planks and rope.
+    objective:
+      "0": chest
+    title: Make a chest
   crush:
     help: Put stone in the grinder.
     objective:
@@ -1607,6 +1724,11 @@ town_mission:
     objective:
       "0": parcel
     title: Carry a parcel
+  find:
+    help: Open a chest in a town house and take something.
+    objective:
+      "0": take
+    title: Look in a town chest
   first-job:
     help: "Take a job from a town's board, do it and hand it in."
     objective:
@@ -1618,6 +1740,11 @@ town_mission:
       "0": sell
       "1": buy
     title: Buy and sell
+  furnish:
+    help: Place four pieces of furniture with the build tools.
+    objective:
+      "0": furniture
+    title: Furnish a room
   goodwill:
     help: Jobs and trade make a town like you.
     objective:
@@ -1673,6 +1800,11 @@ town_mission:
     objective:
       "0": lamps
     title: Light the lamps
+  lie:
+    help: Press F at a bed to lie down.
+    objective:
+      "0": lie down
+    title: Lie in a bed
   logs:
     help: Throw logs in a river; they stop where the water stops.
     objective:
@@ -1715,6 +1847,16 @@ town_mission:
     objective:
       "0": meters
     title: On the road
+  sit:
+    help: "Press F at a chair, stool or bench to sit."
+    objective:
+      "0": sit
+    title: Take a seat
+  table:
+    help: "Make a table at the carpenter's bench."
+    objective:
+      "0": table
+    title: Make a table
   three-jobs:
     help: Boards post new jobs every few days.
     objective:

@@ -112,9 +112,12 @@ broken being the reason (`build.refused.*`):
   ships); it is kept so the rule exists for later pieces.
 - **Overlap** ("Against another piece"): its footprint does not cross the
   footprint of another piece of furniture in the cell at its layer.
-- **Doorway** ("In a doorway"): no footprint crosses the 1.1 m by 0.9 m
-  clear space inside a door, of a door in any of the cell's walls on its
-  storey.
+- **DoorClear** ("In a doorway", `build.refused.door_clear`): no footprint
+  crosses the 1.1 m by 0.9 m clear space inside a doorway, of a doorway in
+  any of the cell's walls on its storey; and a doorway is refused in a wall
+  where a piece already stands in that space. (Named apart from the
+  building rules' own `Doorway`, which hangs a door only in a doorway,
+  `player-building` B8.)
 - **Headroom**: no floor in the cell over it closer than the piece's height,
   and none of a stair's well.
 - **Clear**: not on a stair's cells.
@@ -125,10 +128,12 @@ rule.
 
 ### 5. Placing and taking up
 
-Build mode gains a **Furniture** tool after the lantern. While it is chosen,
-the wheel steps through the kinds of furniture carried (the HUD names the
-piece and how many), R turns it a side, and a click places it; the ghost is
-green or red with the reason. Placing takes one from the pack in the same
+Build mode gains a **Furniture** tool, the palette's eleventh slot, on the
+minus key (the digits keep the ten tools they had). While it is chosen, the
+wheel steps through the kinds of furniture carried (the HUD names the piece
+and how many), the aim picks the side of the cell it backs on (a table
+stands in the middle), and a click places it; the ghost is green or red with
+the reason. Recommendation taken (ask only with screenshots). Placing takes one from the pack in the same
 line as the `piece` record (`store_with_hands`). The Remove tool aimed at a
 piece of furniture takes it up into the pack; a container with anything in
 it is refused ("Empty it first").
@@ -170,9 +175,12 @@ moves**. The rule, by the building's name:
 - **A house** (house, cottage, hut, igloo, townhouse): on its ground storey a
   table in the middle of the cell with most neighbours inside the house
   (never the door's cell, a stair's, or the hearth's), chairs or stools
-  against its free sides facing it, a bench where the house is wide; on its
-  top storey (the ground one if it has one) a bed against an outer wall, a
-  chest at the bed's foot, drawers or a closet against another outer wall.
+  against its free sides facing it, a bench where the house is wide; a crate
+  or drawers by a ground-floor wall; on its top storey (the ground one if it
+  has one) a bed against an outer wall with a chest beside it, drawers or a
+  closet against another outer wall. **A house of one cell** has no room for
+  a 2 m bed clear of its door's way in: a chest and a stool. Igloos are cut
+  by their own shape and are not furnished in this change.
   Every piece is tried by the footprint rules of decision 4 and left out
   where it does not fit.
 - **An inn**: tables with benches on the ground storey, beds and chests
@@ -188,7 +196,9 @@ has this rule.
 ### 9. Town containers and their loot
 
 A town container's contents, until the player first changes them, are its
-**loot**: seeded by the container's id (site, building, number) and the
+**loot** (its coins taken from a plaque under its wells, written with the
+purse: the container's line first, so a torn write loses the coins and never
+pays them twice): seeded by the container's id (site, building, number) and the
 household's trade. A house's trade is a role of its town's people drawn by
 the building's id; a hall or inn takes the town's trader if it has one. The
 tables (`furniture::loot`): a farmer's seeds, wheat and turnips; a smith's
@@ -246,10 +256,33 @@ bench, `station.carpenter.name`, `craft.carpenter`, `build.tool.furniture`,
 `interact.act.{sit,lie,open_store}`, `furniture.*` for the panel and notes,
 `town_mission.<id>.*`. Plain and short.
 
+## As built (2026-11-23)
+
+Built on `claude/phase-2-1` in the same round as the write-up, on the
+request that asked for it. What differs from the decisions above is written
+into them (the Furniture tool's key, `DoorClear`, a house of one cell, the
+coins' plaque). Two things the decisions leave open, recommendations taken
+(ask only with screenshots):
+
+- **The storage panel stands under the pack** (the raft hold's place): F
+  opens the pack with the container's wells under it; a click on a carried
+  stack sends it in whole and a right-click half, and the pack's own
+  pick-up-and-put-down waits until the container is closed.
+- **The townsfolk are stood in their seats and beds** once a second by the
+  core's rule (`assign`), lying figures laid along the bed from the pillow;
+  they do not walk there (task 4.3).
+
 ## Risks / Trade-offs
 
 - **The towns' meshes change** (more faces inside houses), so a test that
-  counted a town's faces moves; no saved thing does.
+  counted a town's faces moves; no saved thing does. Measured on Holbrook's
+  village: its rooms went to 146,460 vertices against 62,796 for the
+  shells, the furniture's rounded, smoothly shaded forms being most of it
+  (`towns::tests::holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts`
+  no longer asks the rooms to be the lighter half). The frame cost was not
+  measured (a cloud session, no GPU); if it shows on the desktop, the cut is
+  fewer bevel and loft segments on pieces seen from inside only, the look
+  kept.
 - **A town piece is set in a regular hexagon's plan**, while a planet cell
   is up to 9% off it; every piece keeps 0.1 m or more off its walls in the
   standard cell, which covers that.

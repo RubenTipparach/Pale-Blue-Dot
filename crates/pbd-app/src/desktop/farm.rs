@@ -979,7 +979,14 @@ pub fn show_note(
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
     mut text: Query<&mut pbd_app::ui_kit::KitText, With<NoteText>>,
+    road: Option<ResMut<pbd_app::roads::RoadSay>>,
 ) {
+    // A road's refusal (`townsfolk` design 39 and 40) shows as the note.
+    if let Some(mut road) = road
+        && let Some(line) = road.0.take()
+    {
+        note.say(time.elapsed_secs(), line);
+    }
     if !note.text.is_empty() && time.elapsed_secs() > note.until_s {
         note.text.clear();
     }
@@ -1015,6 +1022,45 @@ pub struct FarmLooks {
     board: Handle<Mesh>,
     vise: Handle<Mesh>,
     oak: Handle<StandardMaterial>,
+    /// The carpenter's bench's board, saw and square (`furniture` design
+    /// 1), in the oak and the iron.
+    carpenter_wood: Handle<Mesh>,
+    carpenter_iron: Handle<Mesh>,
+    plank_tex: Handle<StandardMaterial>,
+    iron_tex: Handle<StandardMaterial>,
+}
+
+/// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
+fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str], repeat_m: f32) -> Mesh {
+    let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
+    for poly in polys.iter().filter(|p| keep.contains(&p.texture)) {
+        let n = poly.normal();
+        // The town's world mapping at the texture's own scale, so its texels
+        // match the walls'; each point its own normal, shaded smooth.
+        let uv = |p: Vec3| -> [f32; 2] {
+            let s = 1.0 / repeat_m;
+            if n.y.abs() > 0.7 {
+                return [p.x * s, -p.z * s];
+            }
+            let l = n.x.hypot(n.z).max(1e-6);
+            [(p.x * -n.z + p.z * n.x) / l * s, -p.y * s]
+        };
+        for i in 1..poly.points.len().saturating_sub(1) {
+            for k in [0, i, i + 1] {
+                let p = poly.points[k];
+                positions.push(p.to_array());
+                normals.push(poly.normals[k].to_array());
+                uvs.push(uv(p));
+            }
+        }
+    }
+    Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
 }
 
 /// The path of a crop's stage sprite (decision 5).
@@ -1103,6 +1149,31 @@ pub fn make_looks(
         }),
         flame: meshes.add(clumps_mesh(0.45, 0.0)),
         board: meshes.add(Cuboid::new(1.5, 0.08, 0.32)),
+        carpenter_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+            2.0,
+        )),
+        carpenter_iron: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[pbd_core::furniture::model::IRON],
+            1.0,
+        )),
+        // The carpenter's bench's board and tools in the town's own plank
+        // and iron, sampled nearest (owner: "Make sure things have textures").
+        plank_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "plank")),
+            perceptual_roughness: 0.92,
+            ..default()
+        }),
+        iron_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "iron")),
+            perceptual_roughness: 0.6,
+            ..default()
+        }),
         vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
         oak: materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.38, 0.21),
@@ -1226,8 +1297,10 @@ pub fn show(
     mut flames: Query<&mut Visibility, With<Flame>>,
     mut keys: Local<Keys>,
     mut since: Local<f32>,
+    paving: Option<Res<pbd_app::roads::paving::PavingLooks>>,
 ) {
     let Some(looks) = looks else { return };
+    let Some(paving) = paving else { return };
     let dt = time.delta_secs();
     let step = dt / FADE_S;
     // Fades run every frame.
@@ -1377,7 +1450,14 @@ pub fn show(
     // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
     let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
-        if !matches!(edit.material, Material::Forge | Material::Workbench) {
+        if !matches!(
+            edit.material,
+            Material::Forge
+                | Material::Workbench
+                | Material::Carpenter
+                | Material::Grinder
+                | Material::Mixer
+        ) {
             continue;
         }
         let Some(&index) = keys.map.get(&edit.cell) else {
@@ -1421,6 +1501,67 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::Carpenter {
+            // A board laid on it, a saw across the board and a square at
+            // its end (`furniture` design 1).
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|bench| {
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_wood.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
+                    ));
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_iron.clone()),
+                        MeshMaterial3d(looks.iron_tex.clone()),
+                    ));
+                });
+            continue;
+        }
+        if matches!(material, Material::Grinder | Material::Mixer) {
+            // The gravel stations (`townsfolk` design 41): shaped forms of
+            // timber, iron and stone, lit as the ground is.
+            let parts = if material == Material::Grinder {
+                &paving.grinder
+            } else {
+                &paving.mixer
+            };
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|station| {
+                    for (stuff, mesh) in parts {
+                        station.spawn((
+                            Mesh3d(mesh.clone()),
+                            MeshMaterial3d(paving.material(*stuff)),
+                        ));
+                    }
+                });
+            continue;
+        }
         if material == Material::Workbench {
             // Two planks laid across the top and an iron vise at one end,
             // after M3's workbench icon.
@@ -1592,8 +1733,16 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
+    (net, standing, roads_cfg): (
+        Option<ResMut<pbd_app::roads::RoadNet>>,
+        Option<ResMut<pbd_app::roads::RoadsStanding>>,
+        Option<Res<pbd_app::roads::RoadsSettings>>,
+    ),
 ) {
-    if *done || launch.capture.is_none() || (launch.farm.is_none() && launch.forge.is_none()) {
+    if *done
+        || launch.capture.is_none()
+        || (launch.farm.is_none() && launch.forge.is_none() && launch.paving.is_none())
+    {
         return;
     }
     if refresh.in_flight_s().is_some() {
@@ -1622,7 +1771,11 @@ pub fn scripted(
         let top = fine.set.columns.column(record)?.surface()?;
         Some((key, top))
     };
-    let first = launch.farm.or(launch.forge).unwrap_or(6.0);
+    let first = launch
+        .farm
+        .or(launch.forge)
+        .or(launch.paving)
+        .unwrap_or(6.0);
     if spot(&fine, &contact, first, 0.0).is_none() {
         return;
     }
@@ -1814,6 +1967,59 @@ pub fn scripted(
             *screen = Screen::Forge;
         }
         info!("scripted forge at cell {cell} layer {layer}");
+    }
+    if let Some(metres) = launch.paving {
+        use pbd_app::roads::paving;
+        // The grinder to the left and the mixer to the right.
+        for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
+            if let Some((cell, top)) = spot(&fine, &contact, metres, across) {
+                apply_edit(world!(), Hands::Empty, cell, top + 1, material);
+                info!("scripted paving: a {material:?} at cell {cell}");
+            }
+        }
+        // A plan staked from past them along the view, two stakes 9 m
+        // apart and a third 9 m on.
+        let config = *pbd_app::planet::terrain_config();
+        let cfg = roads_cfg.map_or_else(pbd_app::roads::load_config, |r| (*r.0).clone());
+        let top_of = |key: u32| {
+            let c = pbd_core::roads::centre(key)?;
+            Some(c * (config.radius_m + pbd_core::column::surface_m(&config, c).floor()))
+        };
+        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 8);
+        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 6);
+        let mut open = None;
+        for ahead_m in [metres + 4.0, metres + 13.0, metres + 22.0] {
+            let Some(point) =
+                spot(&fine, &contact, ahead_m, 0.0).and_then(|(cell, _)| top_of(cell))
+            else {
+                continue;
+            };
+            match paving::drive_stake(&mut save, &mut slots, open, point, &config, &cfg) {
+                Ok(paving::Staked::Driven { plan, marked }) => {
+                    open = Some(plan);
+                    info!("scripted paving: a stake {ahead_m:.0} m ahead, {marked} cells marked");
+                }
+                Ok(paving::Staked::Resumed(plan)) => open = Some(plan),
+                Err(why) => {
+                    warn!("scripted paving: the stake {ahead_m:.0} m ahead refused: {why:?}")
+                }
+            }
+        }
+        // The nearer cells paved, one gravel each.
+        if let Some(plan) = open.and_then(|id| {
+            pbd_core::roads::paving::plans(&save.records)
+                .get(&id)
+                .cloned()
+        }) {
+            for &key in plan.cells.iter().take(6) {
+                if let Err(why) = paving::pave(&mut save, &mut slots, key, &config) {
+                    warn!("scripted paving: cell {key} not paved: {why:?}");
+                }
+            }
+        }
+        if let (Some(mut net), Some(mut standing)) = (net, standing) {
+            paving::restand(&save, &mut net, &mut standing);
+        }
     }
 }
 

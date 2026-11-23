@@ -87,5 +87,11 @@
     (name: "roaddirt", width: 32, height: 32, repeat_m: 2.0),
     (name: "gravel", width: 32, height: 32, repeat_m: 2.0),
     (name: "net", width: 32, height: 32, repeat_m: 1.0, cut: true),
+    (name: "drawerfront", width: 32, height: 32, repeat_m: 0.0),
+    (name: "closetfront", width: 32, height: 64, repeat_m: 0.0),
+    (name: "chestside", width: 32, height: 32, repeat_m: 0.0),
+    (name: "chestfront", width: 32, height: 32, repeat_m: 0.0),
+    (name: "bandedside", width: 32, height: 32, repeat_m: 0.0),
+    (name: "bandedfront", width: 32, height: 32, repeat_m: 0.0),
   ],
 )

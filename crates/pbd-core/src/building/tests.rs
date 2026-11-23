@@ -732,3 +732,168 @@ fn a_door_hangs_in_a_doorway_and_stops_the_walker_while_shut() {
     );
     assert!(town_most < 1 << 63);
 }
+
+// ---- `furniture` design 3 and 4: furniture placed by the building rules.
+
+fn furniture(k: u32, side: u8, kind: crate::furniture::Kind) -> Piece {
+    Piece::new(
+        "timber",
+        Shape::Furniture {
+            cell: k,
+            layer: GROUND,
+            side,
+            kind,
+        },
+    )
+}
+
+/// A piece stands on the floor of a walled room; a second on its side, one
+/// that crosses it, one in a doorway or under a low floor, and one on a
+/// stair are refused with their rule.
+#[test]
+fn furniture_is_placed_by_the_building_rules() {
+    use crate::furniture::{Kind, MIDDLE};
+    let cells = Cells::new(&plot().0);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let k = key(plot().1);
+    let mut room = hut(&cells, k, GROUND);
+    let bed = furniture(k, 0, Kind::Bed);
+    assert_eq!(can_place(&site, &room, &bed), Ok(()));
+    room.push(bed);
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 3, Kind::Chest)),
+        Ok(())
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 0, Kind::Crate)),
+        Err(Rule::Slot)
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, MIDDLE, Kind::Table)),
+        Err(Rule::Overlap)
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 1, Kind::Closet)),
+        Err(Rule::Overlap)
+    );
+    // A door in side 4's wall: nothing in its way in.
+    let door = Shape::wall(k, nb(&cells, k, 4), GROUND, Opening::Door);
+    let mut doorway = hut(&cells, k, GROUND);
+    doorway.retain(|p| p.shape.slot() != door.slot());
+    doorway.push(Piece::new("timber", door.clone()));
+    assert_eq!(
+        can_place(&site, &doorway, &furniture(k, 1, Kind::Chest)),
+        Ok(())
+    );
+    assert_eq!(
+        can_place(&site, &doorway, &furniture(k, 4, Kind::Chest)),
+        Err(Rule::DoorClear)
+    );
+    // And a door is refused where a piece already stands in its way.
+    let mut blocked = hut(&cells, k, GROUND);
+    blocked.push(furniture(k, 4, Kind::Chest));
+    blocked.retain(|p| p.shape.slot() != door.slot());
+    assert_eq!(
+        can_place(&site, &blocked, &Piece::new("timber", door)),
+        Err(Rule::DoorClear)
+    );
+    // A floor a metre over a closet leaves it no headroom.
+    let low = [Piece::new(
+        "timber",
+        Shape::Floor {
+            cell: k,
+            layer: GROUND + 1,
+        },
+    )];
+    assert_eq!(
+        can_place(&site, &low, &furniture(k, 2, Kind::Closet)),
+        Err(Rule::Headroom)
+    );
+    // Nothing stands on a stair's cells.
+    let stair = [Piece::new(
+        "timber",
+        Shape::Stair {
+            foot: k,
+            head: nb(&cells, k, 1),
+            layer: GROUND,
+        },
+    )];
+    assert_eq!(
+        can_place(&site, &stair, &furniture(k, 2, Kind::Stool)),
+        Err(Rule::Clear)
+    );
+    // With nothing under it, nothing holds it up.
+    let air = Site {
+        cells: &cells,
+        ground: &|_| Some(GROUND - 5),
+    };
+    assert_eq!(
+        can_place(&air, &[], &furniture(k, 2, Kind::Stool)),
+        Err(Rule::HeldUp)
+    );
+}
+
+/// A furniture piece is a `piece` record like any other, and a piece record
+/// written before furniture reads as it did.
+#[test]
+fn furniture_is_a_piece_record_and_old_pieces_read_as_before() {
+    use crate::furniture::Kind;
+    let k = key(plot().1);
+    let old = Piece::new(
+        "timber",
+        Shape::Floor {
+            cell: k,
+            layer: GROUND,
+        },
+    );
+    let old_line = serde_json::to_string(&PieceBody {
+        piece: Some(old.clone()),
+    })
+    .unwrap();
+    // The floor's body as an older build wrote it: unchanged by this one.
+    let want = format!(
+        "{{\"piece\":{{\"kit\":\"timber\",\"shape\":{{\"Floor\":{{\"cell\":{k},\"layer\":{GROUND}}}}}}}}}"
+    );
+    assert_eq!(old_line, want);
+    let chest = furniture(k, 2, Kind::BandedChest);
+    let mut records = Records::new();
+    records.put(placed(&old));
+    records.put(placed(&chest));
+    let back = from_records(&records);
+    assert_eq!(back.get(&old.id()), Some(&old));
+    assert_eq!(back.get(&chest.id()), Some(&chest));
+    // A piece taken away is gone.
+    records.put(removed(&chest));
+    assert_eq!(from_records(&records).len(), 1);
+}
+
+/// A bed in a room is cut into its linen and wool and stands as a solid; a
+/// stool is cut but walked up to, not into.
+#[test]
+fn furniture_is_cut_with_the_room() {
+    use crate::furniture::Kind;
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let k = key(*at);
+    let mut room = hut(&cells, k, GROUND);
+    let bare_pieces: Vec<&Piece> = room.iter().collect();
+    let bare = cut(&cells, k, &bare_pieces, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    room.push(furniture(k, 0, Kind::Bed));
+    room.push(furniture(k, 3, Kind::Stool));
+    let all: Vec<&Piece> = room.iter().collect();
+    let c = cut(&cells, k, &all, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    assert!(c.meshes.contains_key("linen") && c.meshes.contains_key("wool"));
+    assert_eq!(c.solids.solids.len(), bare.solids.solids.len() + 1);
+    // The bed stands in its cell, its front a tangent.
+    let (bed_at, front) =
+        super::cut::furniture_stand(&cells, k, GROUND, 0, Kind::Bed, RADIUS_M).expect("stands");
+    let up = bed_at.normalize();
+    assert!(front.dot(up).abs() < 1e-3, "a tangent");
+    let centre = cells.cell(k).unwrap().direction.normalize() * bed_at.length();
+    let off = (bed_at - centre).length();
+    assert!((0.05..1.4).contains(&off), "{off} m from the middle");
+}

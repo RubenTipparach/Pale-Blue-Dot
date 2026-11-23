@@ -287,6 +287,7 @@ pub fn cut(
             rooms: Meshes::new(),
             lights: Vec::new(),
             top_m: 0.0,
+            furniture: Vec::new(),
         },
         surface,
     })
