@@ -293,7 +293,8 @@ fn app_fresh() -> App {
 /// (data only). The paving's and the carts' are built (`townsfolk` design
 /// 44, `land-transport` design 10): the grinder, crushed stone, the mixer,
 /// gravel, survey stakes, the wheel and the two carts are locked until
-/// their missions.
+/// their missions, and so are the closet and the iron-banded chest
+/// (`furniture`, the Carpentry branch).
 #[test]
 fn the_town_tree_locks_its_recipes_until_their_missions() {
     let mut app = app(WorldSave::memory_only());
@@ -315,6 +316,8 @@ fn the_town_tree_locks_its_recipes_until_their_missions() {
     assert_eq!(
         built,
         [
+            "banded-chest",
+            "closet",
             "crushed-stone",
             "grinder",
             "hand-cart",
