@@ -52,20 +52,26 @@ the owner to look at M38 version 2 and ask.
       them), and a Road or not tab drives both carts on a gravel road, a dirt
       track and open ground at design 9's factors, Drive off by default, lit
       at night. Screenshots in `docs/screenshots/town-missions-tree/`.
-- [ ] 5.2 `roads::wheel_factor` and its `roads.ron` table (design 9). Verify:
+- [x] 5.2 `roads::wheel_factor` and its `roads.ron` table (design 9). Verify:
       `pbd-core` tests that a cart off the road moves at a quarter of its
       road speed, on dirt at 0.6, in a ford at 0.5, and at the lower factor
       with its axles on two surfaces.
-- [ ] 5.3 The wheel, hand cart and horse cart recipes, goods and icons; the
+- [x] 5.3 The wheel, hand cart and horse cart recipes, goods and icons; the
       place action that makes a vehicle record and the take-up that undoes
       it. Verify: a save test that a cart left with goods in its hold is
       where it was, loaded, on reopening.
-- [ ] 5.4 Pulling a hand cart and driving a horse cart; the hold on C.
+- [x] 5.4 Pulling a hand cart and driving a horse cart; the hold on C.
       Verify: an app test that letting go keeps the record and its hold.
-- [ ] 5.5 The horse: the `horse` species appended with status Bought, the
+      Built (2026-11-23): the hold shows in the pack (I or Tab) beside a cart
+      or from its seat, at its own size; a C key of its own for carts is not
+      built.
+- [x] 5.5 The horse: the `horse` species appended with status Bought, the
       stable keeper and the 120-coin sale, hitching in one transaction.
       Verify: a test that every existing world's wild herds are unchanged
       animal for animal, and that hitching writes both records or neither.
+      Built (2026-11-23): the town's trader sells the horse (the stable
+      keeper waits for a roster role, design 11); hitched is the cart's one
+      record naming the horse, so it is written whole or not at all.
 - [ ] 5.6 The cart and horse models, lit by the field, looked at close up
       (CLAUDE.md, "No obvious primitives"). Verify: captures by day and at
       22:30 beside M38's shots.
