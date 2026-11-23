@@ -122,5 +122,7 @@
         ("parcel", 1, goods),
         // ---- townsfolk design 31: crushed stone for a road
         ("gravel", 1, stone),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        ("door", 24, goods),
     ],
 )

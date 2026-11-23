@@ -1336,8 +1336,8 @@ pub struct TownDoor {
 }
 
 /// How far a door swings open, and how fast, radians a second.
-const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
-const SWING_RAD_S: f32 = 5.0;
+pub const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+pub const SWING_RAD_S: f32 = 5.0;
 /// How far from the eye E reaches for a doorway's middle, metres.
 pub const DOOR_REACH_M: f32 = 2.2;
 
@@ -1417,6 +1417,29 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
     }
 }
 
+/// The walker's eye and look at `position` (a query point): what a door's
+/// reach is measured from, for a town's doors and a player's alike.
+pub fn eye_and_look(walking: &WalkingState, position: Vec3) -> (Vec3, Vec3) {
+    let up = position.normalize_or(Vec3::Y);
+    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
+    let (heading, pitch) = walking.view();
+    (eye, heading * pitch.cos() + up * pitch.sin())
+}
+
+/// How far a doorway's middle is from `eye`, if F reaches it: within
+/// [`DOOR_REACH_M`] and in front of the look.
+pub fn leaf_in_reach(
+    eye: Vec3,
+    look: Vec3,
+    b: &BuildingSolids,
+    d: &pbd_core::settlement::pieces::DoorLeaf,
+) -> Option<f32> {
+    let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
+    let to = middle - eye;
+    let dist = to.length();
+    (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some(dist)
+}
+
 /// The door in reach: the nearest doorway within [`DOOR_REACH_M`] of the
 /// eye and in front of it. What F opens and what the prompt names.
 fn door_in_reach<'a>(
@@ -1426,18 +1449,12 @@ fn door_in_reach<'a>(
     towns: &Towns,
     doors: impl Iterator<Item = &'a TownDoor>,
 ) -> Option<TownDoor> {
-    let up = position.normalize_or(Vec3::Y);
-    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
-    let (heading, pitch) = walking.view();
-    let look = heading * pitch.cos() + up * pitch.sin();
+    let (eye, look) = eye_and_look(walking, position);
     doors
         .filter_map(|door| {
             let b = structures.0.get(towns.index(door.site, door.building)?)?;
             let d = b.doors.get(door.door)?;
-            let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
-            let to = middle - eye;
-            let dist = to.length();
-            (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some((dist, *door))
+            leaf_in_reach(eye, look, b, d).map(|dist| (dist, *door))
         })
         .min_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, door)| door)

@@ -310,6 +310,19 @@ ICONS.update({
 })
 
 
+# player-building design B8: a door, planks with two iron strap hinges and a
+# ring pull, in the fence's browns (FARM) with the outline of an inventory
+# icon.
+ICONS.update({
+    "goods/door": ([
+        "................", "....kkkkkkkk....", "....kWwWWwWk....", "....kWwWWwWk....",
+        "....kiiiiwWk....", "....kWwWWwWk....", "....kWwWWwWk....", "....kWwWWwIk....",
+        "....kWwWWwik....", "....kWwWWwWk....", "....kiiiiwWk....", "....kWwWWwWk....",
+        "....kWwWWwWk....", "....kWwWWwWk....", "....kkkkkkkk....", "................",
+    ], FARM),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

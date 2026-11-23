@@ -274,6 +274,15 @@ impl Default for RecipeFile {
                 &[("planks", 4), ("rope", 2)],
                 &[("incubator", 1)],
             ),
+            // player-building design B8: a door, planks and an iron fitting
+            // (its strap hinges and pull).
+            recipe(
+                "door",
+                "workbench",
+                4.0,
+                &[("planks", 4), ("iron-ingot", 1)],
+                &[("door", 1)],
+            ),
             metal_tool("bronze", "pickaxe"),
             metal_tool("bronze", "shovel"),
             metal_tool("bronze", "axe"),
@@ -680,6 +689,24 @@ mod tests {
         RecipeFile::default().resolve().unwrap()
     }
 
+    /// `player-building` design B8: a door is made at the workbench from 4
+    /// planks and 1 iron ingot, and gives one door.
+    #[test]
+    fn a_door_is_planks_and_an_iron_fitting_at_the_workbench() {
+        let book = book();
+        let door = book.get("door").expect("the door's recipe");
+        assert_eq!(door.station.code, "workbench");
+        assert_eq!(
+            door.inputs,
+            vec![
+                (Item::Good(Good::PLANKS), 4),
+                (Item::Good(Good::IRON_INGOT), 1)
+            ]
+        );
+        assert_eq!(door.outputs, vec![(Item::Good(Good::DOOR), 1)]);
+        assert!(door.tools.is_empty());
+    }
+
     fn forge() -> StationState {
         StationState::new(&STATIONS[0])
     }
@@ -705,8 +732,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            16,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the tube and raft (small-boats; the rowboat retired)"
+            17,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), and the door (player-building B8)"
         );
         assert!(book.get("rowboat").is_none(), "the rowboat is retired");
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));

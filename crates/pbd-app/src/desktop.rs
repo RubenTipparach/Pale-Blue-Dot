@@ -1783,6 +1783,7 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::logs::LogsPlugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
+    .init_resource::<pbd_app::build_view::BuildView>()
     .add_systems(Startup, build_mode::spawn_ghost)
     .add_systems(
         PreUpdate,
@@ -1794,6 +1795,7 @@ pub fn run(args: &[String]) {
         Update,
         (
             build_mode::load_blueprints,
+            build_mode::drive_view,
             build_mode::aim_and_build.run_if(
                 resource_exists::<pbd_app::planet::PlanetFine>
                     .and(resource_exists::<pbd_app::planet::PlanetContact>),

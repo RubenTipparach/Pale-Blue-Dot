@@ -571,7 +571,7 @@ fn time_can_place_over_the_walled_towns_biggest_building() {
 }
 
 /// `player-building` design 8: a house whose ground storey stands two
-/// layers over its ground is cut with a fieldstone footing under every
+/// layers over its ground is cut with a stone footing under every
 /// ground floor, solid from the ground to the slab, and none under the
 /// upper storey's floors; on ground at its own layer it has none.
 #[test]
@@ -623,7 +623,11 @@ fn a_floor_over_lower_ground_stands_on_a_footing() {
     })
     .expect("cut");
     // One solid footing a ground floor, and none on level ground or with no
-    // ground known (the kit's own walls may be fieldstone too).
+    // ground known: its own texture (design B7), so none is drawn either.
+    assert!(
+        !level.meshes.contains_key(super::cut::FOOTING),
+        "no footing"
+    );
     assert_eq!(
         low.solids.solids.len(),
         level.solids.solids.len() + ground_floors,
@@ -641,4 +645,90 @@ fn a_floor_over_lower_ground_stands_on_a_footing() {
         floor_y > deepest + 1.5,
         "nothing under the floor on level ground"
     );
+}
+
+/// Design B8: a door hangs only in a wall's doorway, and the wall is not
+/// taken away before it. A doorway with no door (an old house's) is open: no
+/// leaf, and a body walks through it. Cut with a door, the plot has its
+/// leaf, keyed by the door's id, which stops a body while it is shut and not
+/// once it is open, and the frame round it in the wall's edge texture.
+#[test]
+fn a_door_hangs_in_a_doorway_and_stops_the_walker_while_shut() {
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let k = key(*at);
+    let other = nb(&cells, k, 0);
+    let mut house = hut(&cells, k, GROUND);
+    let door = Piece::new("timber", Shape::door(other, k, GROUND));
+    assert_eq!(door.shape, Shape::door(k, other, GROUND), "the pair sorted");
+    assert_eq!(can_place(&site, &house, &door), Err(Rule::Doorway));
+    // The wall on that edge made a doorway.
+    let edge = Shape::wall(k, other, GROUND, Opening::None).id();
+    house.retain(|p| p.id() != edge);
+    house.push(Piece::new(
+        "timber",
+        Shape::wall(k, other, GROUND, Opening::Door),
+    ));
+    let walk = |c: &super::cut::Cut| {
+        let (e0, e1) = cells.edge(k, other).unwrap();
+        let mid = ((e0 + e1) * 0.5).normalize();
+        let floor = c
+            .solids
+            .frame
+            .local(mid * (RADIUS_M + crate::column::layer_altitude(GROUND as usize)));
+        c.solids.frame.world(floor + Vec3::Y * 1.0)
+    };
+    let open_house: Vec<&Piece> = house.iter().collect();
+    let doorway = cut(&cells, k, &open_house, &kits, &|_| 2.0, RADIUS_M).unwrap();
+    assert!(doorway.solids.doors.is_empty() && doorway.door_ids.is_empty());
+    assert!(
+        !doorway.solids.holds(walk(&doorway), 0.8, 0.3),
+        "an open doorway lets a body through"
+    );
+    assert_eq!(can_place(&site, &house, &door), Ok(()));
+    house.push(door.clone());
+    let wall = house.iter().find(|p| p.id() == edge).unwrap().clone();
+    assert_eq!(
+        dependant(&house, &wall).map(Piece::id),
+        Some(door.id()),
+        "the door before the wall"
+    );
+    let all: Vec<&Piece> = house.iter().collect();
+    let hung = cut(&cells, k, &all, &kits, &|_| 2.0, RADIUS_M).unwrap();
+    assert_eq!(hung.door_ids, vec![door.id()]);
+    assert_eq!(hung.solids.doors.len(), 1);
+    assert!(!hung.solids.doors[0].open, "a door hangs shut");
+    let at_door = walk(&hung);
+    assert!(
+        hung.solids.holds(at_door, 0.8, 0.3),
+        "shut, it stops a body"
+    );
+    let mut opened = hung.solids.clone();
+    opened.doors[0].open = true;
+    assert!(!opened.holds(at_door, 0.8, 0.3), "open, it does not");
+    // The frame is in the timber kit's edge texture, more of it than the
+    // doorway alone had.
+    let edge_tris = |c: &super::cut::Cut| c.meshes.get("timber").map_or(0, |b| b.positions.len());
+    assert!(edge_tris(&hung) > edge_tris(&doorway), "the frame");
+    let leaf = super::door::leaf_mesh(&hung.solids.doors[0], hung.solids.frame, 0.4);
+    let buf = &leaf[super::door::LEAF_TEXTURE];
+    assert!(!buf.positions.is_empty() && buf.positions.len().is_multiple_of(3));
+    assert!(
+        buf.uvs
+            .iter()
+            .all(|uv| (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]))
+    );
+    // The open-or-shut record is the towns' own, past every town door's id.
+    let state = door_state_id(door.id());
+    assert!(state >= 1 << 63);
+    let town_most = crate::settlement::record::door_id(
+        crate::settlement::record::building_id(u32::MAX, u32::from(u16::MAX)),
+        15,
+    );
+    assert!(town_most < 1 << 63);
 }
