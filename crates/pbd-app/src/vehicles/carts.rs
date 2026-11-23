@@ -82,6 +82,10 @@ pub struct CartThing {
     /// not yet told to the missions.
     hauled_m: f64,
     road_m: f64,
+    /// The ground under its left and right wheels, m from the centre: it
+    /// is drawn leaning across them, a wheel on each. Worked out when it
+    /// moves.
+    wheels_ground: Option<[f64; 2]>,
 }
 
 impl CartThing {
@@ -94,6 +98,7 @@ impl CartThing {
             still_s: None,
             hauled_m: 0.0,
             road_m: 0.0,
+            wheels_ground: None,
         }
     }
 }
@@ -841,6 +846,20 @@ fn roll(world: &mut World) {
     if let Some(e) = seated {
         drive(world, e, dt);
     }
+    // The ground under each wheel, for a cart that moved or is new.
+    let specs = world.resource::<Fleet>().specs.carts;
+    let due: Vec<(Entity, [DVec3; 2])> = world
+        .query::<(Entity, &CartThing)>()
+        .iter(world)
+        .filter(|(_, t)| t.wheels_ground.is_none() || t.cart.speed.abs() > 0.0)
+        .map(|(e, t)| (e, t.cart.wheels(specs.of(t.cart.kind))))
+        .collect();
+    for (e, wheels) in due {
+        let g = wheels.map(|w| ground_at(world, w));
+        if let Some(mut t) = world.get_mut::<CartThing>(e) {
+            t.wheels_ground = Some(g);
+        }
+    }
     // A cart that rolled and now stands is written once.
     let mut rested = Vec::new();
     let mut q = world.query::<(Entity, &mut CartThing)>();
@@ -1021,8 +1040,19 @@ fn draw(
         let c = t.cart.clone();
         let spec = *fleet.specs.carts.of(c.kind);
         let up = c.up();
-        transform.translation = (frame.center + c.at).as_vec3();
-        transform.rotation = super::place::facing(up, c.heading).as_quat();
+        // Across its two wheels: stood at their mean, leaning to the higher.
+        let (lift, lean) = t.wheels_ground.map_or((0.0, 0.0), |[l, r]| {
+            (
+                (l + r) * 0.5 - c.at.length(),
+                ((r - l) / (2.0 * f64::from(spec.track_m)))
+                    .atan()
+                    .clamp(-0.5, 0.5),
+            )
+        });
+        transform.translation = (frame.center + c.at + up * lift).as_vec3();
+        transform.rotation = (super::place::facing(up, c.heading)
+            * pbd_core::DQuat::from_rotation_z(lean))
+        .as_quat();
         // A hand cart let go rests on its handles' ends.
         let held = carts.holding == Some(entity);
         let tilt = if c.kind == CartKind::HandCart && !held {
@@ -1221,7 +1251,7 @@ fn sell_horses(world: &mut World) {
         };
         let Some(mut purse) = world
             .get_resource::<crate::economy::Economy>()
-            .map(|e| e.purse)
+            .map(|e| e.purse.clone())
         else {
             continue;
         };

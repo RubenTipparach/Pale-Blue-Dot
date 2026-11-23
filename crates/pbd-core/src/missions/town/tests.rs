@@ -262,9 +262,24 @@ fn each_town_kind_counts_from_its_event() {
         );
     }
     assert!(p.is_done("lamps"));
+    // The carts (`land-transport` design 11): wheels, a hand cart set down
+    // and hauling, a horse bought and hitched, and a drive on the road.
+    p.record(&chain, &Happened::new(Kind::Craft, "wheel", 2), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "hand-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Place, "hand-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Haul, "cart", 100), &none);
+    p.record(&chain, &Happened::new(Kind::Buy, "21:horse", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Craft, "horse-cart", 1), &none);
+    p.record(&chain, &Happened::new(Kind::Hitch, "horse", 1), &none);
+    let step = p.record(
+        &chain,
+        &Happened::new(Kind::Travel, "cart-road", 500),
+        &none,
+    );
+    assert_eq!(step.done, ["road-trip"]);
     // Every live mission is done, and nothing is open: the rest wait.
     assert_eq!(p.current(&chain), None);
-    assert_eq!(p.done.len(), 12);
+    assert_eq!(p.done.len(), 18);
 }
 
 /// Task 2.3: a mission's coins are paid by the count that finishes it, and

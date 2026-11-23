@@ -72,6 +72,8 @@ the owner to look at M38 version 2 and ask.
       Built (2026-11-23): the town's trader sells the horse (the stable
       keeper waits for a roster role, design 11); hitched is the cart's one
       record naming the horse, so it is written whole or not at all.
-- [ ] 5.6 The cart and horse models, lit by the field, looked at close up
+- [x] 5.6 The cart and horse models, lit by the field, looked at close up
       (CLAUDE.md, "No obvious primitives"). Verify: captures by day and at
-      22:30 beside M38's shots.
+      22:30 beside M38's shots. Built (2026-11-23): captures
+      `docs/screenshots/land-transport/game-*` (lavapipe, no frame times);
+      the motion is the owner's to judge on a run of their own.
