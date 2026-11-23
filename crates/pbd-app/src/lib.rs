@@ -9,6 +9,7 @@ pub mod audio;
 pub mod beaver;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod build_view;
 pub mod builds;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
