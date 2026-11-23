@@ -345,8 +345,8 @@ is what the owner saw. It gets a texture of its own, `footing`:
   its row in that folder's `manifest.ron` (`repeat_m` 2.0, so four courses
   stand in a metre and a half);
 - dressed blocks laid in courses, each course's joints staggered from the
-  one under it, the blocks a little uneven in height and shade, the mortar
-  recessed and darker, a damp darker course at the foot of each repeat;
+  one under it, the blocks a little uneven in shade and lit from above, the
+  mortar recessed and darker;
 - every colour taken from the stone the town kits already use
   (`fieldstone`, `stone` and `rubble`), so it sits in their palette and
   in the ground's; no outline and no contrast stronger than theirs;
