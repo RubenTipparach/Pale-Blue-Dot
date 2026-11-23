@@ -78,6 +78,7 @@ for 4.1, their missions reading NOT YET.
       17:00, the interact key lights a town lamp during dusk, each lamp once
       a job; `Light` live, so "Light the lamps" counts. Verify: a test that
       a lamp lit at dusk counts once and one out of dusk does not.
+      Capture: `game-board-dusk.jpg`, the board at 18:00 with its lamps jobs.
 - [x] 6.2 Abandon a taken job (design 9). Verify: a test that an abandoned
       job is off the taken list, back on the board, and its lost villager or
       repair record cleared.
