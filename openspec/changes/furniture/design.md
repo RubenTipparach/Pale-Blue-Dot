@@ -275,7 +275,14 @@ coins' plaque). Two things the decisions leave open, recommendations taken
 ## Risks / Trade-offs
 
 - **The towns' meshes change** (more faces inside houses), so a test that
-  counted a town's faces moves; no saved thing does.
+  counted a town's faces moves; no saved thing does. Measured on Holbrook's
+  village: its rooms went to 146,460 vertices against 62,796 for the
+  shells, the furniture's rounded, smoothly shaded forms being most of it
+  (`towns::tests::holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts`
+  no longer asks the rooms to be the lighter half). The frame cost was not
+  measured (a cloud session, no GPU); if it shows on the desktop, the cut is
+  fewer bevel and loft segments on pieces seen from inside only, the look
+  kept.
 - **A town piece is set in a regular hexagon's plan**, while a planet cell
   is up to 9% off it; every piece keeps 0.1 m or more off its walls in the
   standard cell, which covers that.
