@@ -226,3 +226,34 @@ fn paving_in_any_order_gives_the_same_road() {
         (Some(plan.cells[0]), Some(plan.cells[2]))
     );
 }
+
+/// The way between two waypoints (the stake's rule, and the road planner's
+/// live ghost later): the cells a road takes, and each cell on the straight
+/// line that refuses a road with its reason.
+#[test]
+fn a_way_names_each_clashing_cell_and_why() {
+    let cfg = RoadsConfig::default();
+    let river = slope(0.0, |e, _| (14.0..20.0).contains(&e));
+    let (a, b) = (key(0.0, 0.0), key(36.0, 0.0));
+    let w = way(a, b, &river, &cfg, RADIUS);
+    assert_eq!(w.cells, Err(Refused::Water));
+    assert!(!w.clashes.is_empty());
+    assert!(w.clashes.iter().all(|(_, why)| *why == Refused::Water));
+    for (k, _) in &w.clashes {
+        let (e, _) = local(centre(*k).unwrap());
+        assert!((12.0..22.0).contains(&e), "a clash at {e} m");
+    }
+    // A clear way has a route and no clash.
+    let flat = slope(0.0, |_, _| false);
+    let w = way(a, key(20.0, 0.0), &flat, &cfg, RADIUS);
+    assert!(w.cells.is_ok() && w.clashes.is_empty());
+    // A cliff: the cell past the step clashes as too steep.
+    let cliff = |k: u32| {
+        let (e, _) = local(centre(k)?);
+        let mut g = flat(k)?;
+        g.top_m = if e > 10.0 { 3 } else { 0 };
+        Some(g)
+    };
+    let w = way(a, key(20.0, 0.0), &cliff, &cfg, RADIUS);
+    assert!(w.clashes.iter().any(|(_, why)| *why == Refused::TooSteep));
+}

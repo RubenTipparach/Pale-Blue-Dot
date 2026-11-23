@@ -117,6 +117,70 @@ pub fn stake_config(cfg: &RoadsConfig) -> RoadsConfig {
     c
 }
 
+/// What the road search makes of a way between two waypoints: the cells a
+/// road would take, and, cell by cell along the straight line between them,
+/// every cell that stands in the way and why. The one rule a stake, and a
+/// planner's live ghost road (the owner's road planner, to come), both ask.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Way {
+    /// The cells from `from` to `to`, both included, or why there is none.
+    pub cells: Result<Vec<u32>, Refused>,
+    /// The cells on the straight line that refuse a road, in order from
+    /// `from`, with their reason: water, a town or the player's work, or a
+    /// step of more than a layer from the cell before.
+    pub clashes: Vec<(u32, Refused)>,
+}
+
+/// The way from `from` to `to` (see [`Way`]): the search of [`segment`] and
+/// the straight line's clashes.
+pub fn way(from: u32, to: u32, ground: &GroundFn, cfg: &RoadsConfig, radius_m: f32) -> Way {
+    Way {
+        cells: segment(from, to, ground, cfg, radius_m),
+        clashes: clashes(from, to, ground, radius_m),
+    }
+}
+
+/// Every cell on the straight line from `from` to `to` that refuses a road,
+/// in order, with its reason (see [`Way::clashes`]).
+pub fn clashes(from: u32, to: u32, ground: &GroundFn, radius_m: f32) -> Vec<(u32, Refused)> {
+    let (Some(a), Some(b)) = (centre(from), centre(to)) else {
+        return Vec::new();
+    };
+    // Sampled every metre, under half a cell, so no cell on the line is
+    // stepped over.
+    let n = crate::sites::arc_m(a, b, radius_m).ceil().max(1.0) as usize;
+    let mut line: Vec<u32> = Vec::new();
+    for i in 0..=n {
+        if let Some(k) = super::nearest_key(a.lerp(b, i as f32 / n as f32))
+            && line.last() != Some(&k)
+        {
+            line.push(k);
+        }
+    }
+    let mut out = Vec::new();
+    let mut before: Option<i32> = None;
+    for k in line {
+        let Some(g) = ground(k) else {
+            out.push((k, Refused::NotGround));
+            continue;
+        };
+        let why = if g.water != Water::Dry {
+            Some(Refused::Water)
+        } else if g.player || g.town {
+            Some(Refused::NotGround)
+        } else if before.is_some_and(|h| (h - g.top_m).abs() > 1) {
+            Some(Refused::TooSteep)
+        } else {
+            None
+        };
+        before = Some(g.top_m);
+        if let Some(why) = why {
+            out.push((k, why));
+        }
+    }
+    out
+}
+
 /// The cells from stake `from` to stake `to`, both included, by the road
 /// search over `ground` (which answers a town or an edited cell as the
 /// player's, so it is never crossed): at most `max_stake_cells` steps, no
@@ -156,11 +220,9 @@ pub fn segment(
         Some(_) => Err(Refused::TooFar),
         None => {
             // Why not: water across the straight way, or the climb.
-            let n = (crate::sites::arc_m(a, b, radius_m) / 1.0).ceil().max(1.0) as usize;
-            let water = (0..=n).any(|i| {
-                let t = i as f32 / n as f32;
-                super::nearest_key(a.lerp(b, t)).is_some_and(wet)
-            });
+            let water = clashes(from, to, ground, radius_m)
+                .iter()
+                .any(|(_, why)| *why == Refused::Water);
             Err(if water {
                 Refused::Water
             } else {

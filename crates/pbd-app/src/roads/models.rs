@@ -11,10 +11,12 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
-/// What a part is made of: one material each.
+/// What a part is made of: one material each, drawn in the towns' own pixel
+/// textures (`assets/textures/settlement`), sampled nearest and laid at the
+/// manifest's scale, as a town's pieces are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Stuff {
-    /// Split timber and planks, in the local trees' wood.
+    /// Split timber: posts, rails, a peg.
     Wood,
     /// Iron fittings: a crank, an axle, hoops.
     Iron,
@@ -22,29 +24,77 @@ pub enum Stuff {
     Stone,
     /// A strip of dyed cloth.
     Cloth,
+    /// Sawn planks: the hopper, the apron, the trough.
+    Plank,
+    /// A drum's staves.
+    Barrel,
 }
 
-/// A mesh being built: vertices with normals, and triangles.
+impl Stuff {
+    /// Its texture in `textures/settlement/`, and the metres one repeat of
+    /// it covers (the manifest's `repeat_m`, or for a texture drawn to fit
+    /// one piece, the size it is laid at here).
+    pub fn texture(self) -> (&'static str, f32) {
+        match self {
+            Stuff::Wood => ("timber", 1.0),
+            Stuff::Iron => ("iron", 1.0),
+            Stuff::Stone => ("stone", 2.0),
+            Stuff::Cloth => ("cloth", 0.25),
+            Stuff::Plank => ("plank", 2.0),
+            Stuff::Barrel => ("barrel", 1.1),
+        }
+    }
+
+    pub const ALL: [Stuff; 6] = [
+        Stuff::Wood,
+        Stuff::Iron,
+        Stuff::Stone,
+        Stuff::Cloth,
+        Stuff::Plank,
+        Stuff::Barrel,
+    ];
+}
+
+/// A mesh being built: vertices with normals and texture coordinates in
+/// metres over the surface (the material scales them to its texture), and
+/// triangles.
 #[derive(Default, Clone, Debug)]
 pub struct Shape {
     pub positions: Vec<Vec3>,
     pub normals: Vec<Vec3>,
+    pub uvs: Vec<Vec2>,
     pub indices: Vec<u32>,
 }
 
 impl Shape {
     /// Rings of points (each closed, all the same count) joined in order
-    /// into one soft-shaded surface; capped at the first and last ring when
-    /// asked, the cap a fan to the ring's mean (or `tip`, where given).
+    /// into one soft-shaded surface, its texture running round each ring by
+    /// arc length and along the loft by distance, so the grain follows the
+    /// piece; capped at the first and last ring when asked.
     pub fn loft(&mut self, rings: &[Vec<Vec3>], cap_start: bool, cap_end: bool) {
         let n = rings[0].len();
+        let w = n + 1;
         let base = self.positions.len() as u32;
-        let mut normals = vec![Vec3::ZERO; rings.len() * n];
+        let mut along = 0.0;
+        let mut prev_mid: Option<Vec3> = None;
         for ring in rings {
             debug_assert_eq!(ring.len(), n);
-            self.positions.extend(ring.iter().copied());
+            let mid = ring.iter().copied().sum::<Vec3>() / n as f32;
+            if let Some(p) = prev_mid {
+                along += p.distance(mid);
+            }
+            prev_mid = Some(mid);
+            let mut around = 0.0;
+            for k in 0..=n {
+                if k > 0 {
+                    around += ring[k - 1].distance(ring[k % n]);
+                }
+                self.positions.push(ring[k % n]);
+                self.uvs.push(Vec2::new(around, along));
+            }
         }
-        let at = |r: usize, k: usize| r * n + k % n;
+        let mut normals = vec![Vec3::ZERO; rings.len() * w];
+        let at = |r: usize, k: usize| r * w + k;
         for r in 0..rings.len() - 1 {
             for k in 0..n {
                 let (a, b, c, d) = (at(r, k), at(r, k + 1), at(r + 1, k + 1), at(r + 1, k));
@@ -60,6 +110,12 @@ impl Shape {
                     .extend([a, b, c, a, c, d].into_iter().map(|i| base + i as u32));
             }
         }
+        // The seam's two copies of a point share one normal.
+        for r in 0..rings.len() {
+            let sum = normals[at(r, 0)] + normals[at(r, n)];
+            normals[at(r, 0)] = sum;
+            normals[at(r, n)] = sum;
+        }
         self.normals
             .extend(normals.into_iter().map(|v| v.normalize_or(Vec3::Y)));
         if cap_start {
@@ -71,7 +127,7 @@ impl Shape {
     }
 
     /// A flat fan over a ring, facing back along the loft at the start and
-    /// on along it at the end.
+    /// on along it at the end, its texture laid flat across it.
     fn cap(&mut self, ring: &[Vec3], start: bool) {
         let mid = ring.iter().copied().sum::<Vec3>() / ring.len() as f32;
         let n = ring.len();
@@ -80,12 +136,17 @@ impl Shape {
             normal += (ring[k] - mid).cross(ring[(k + 1) % n] - mid);
         }
         let normal = if start { -normal } else { normal }.normalize_or(Vec3::Y);
+        let e1 = (ring[0] - mid).normalize_or(Vec3::X);
+        let e2 = normal.cross(e1);
+        let flat = |p: Vec3| Vec2::new((p - mid).dot(e1), (p - mid).dot(e2));
         let base = self.positions.len() as u32;
         self.positions.push(mid);
         self.normals.push(normal);
+        self.uvs.push(Vec2::ZERO);
         for &p in ring {
             self.positions.push(p);
             self.normals.push(normal);
+            self.uvs.push(flat(p));
         }
         for k in 0..n as u32 {
             let (a, b) = (base + 1 + k, base + 1 + (k + 1) % n as u32);
@@ -101,6 +162,7 @@ impl Shape {
     pub fn both_sides(&mut self) {
         let count = self.positions.len() as u32;
         let positions = self.positions.clone();
+        let uvs = self.uvs.clone();
         let normals: Vec<Vec3> = self.normals.iter().map(|n| -*n).collect();
         let flipped: Vec<u32> = self
             .indices
@@ -108,12 +170,22 @@ impl Shape {
             .flat_map(|t| [t[0] + count, t[2] + count, t[1] + count])
             .collect();
         self.positions.extend(positions);
+        self.uvs.extend(uvs);
         self.normals.extend(normals);
         self.indices.extend(flipped);
     }
 
+    /// Another shape's triangles added to this one.
+    pub fn append(&mut self, other: Shape) {
+        let offset = self.positions.len() as u32;
+        self.positions.extend(other.positions);
+        self.normals.extend(other.normals);
+        self.uvs.extend(other.uvs);
+        self.indices
+            .extend(other.indices.into_iter().map(|i| i + offset));
+    }
+
     pub fn mesh(&self) -> Mesh {
-        let uvs: Vec<[f32; 2]> = self.positions.iter().map(|p| [p.x, p.y]).collect();
         Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
@@ -132,7 +204,10 @@ impl Shape {
                 .map(|p| p.to_array())
                 .collect::<Vec<_>>(),
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_UV_0,
+            self.uvs.iter().map(|p| p.to_array()).collect::<Vec<_>>(),
+        )
         .with_inserted_indices(Indices::U32(self.indices.clone()))
     }
 }
@@ -336,9 +411,15 @@ pub fn stake(seed: u32) -> Vec<(Stuff, Shape)> {
     // closing back face, which is the same strip turned: drawn once each
     // way below).
     let base = tail.positions.len() as u32;
-    for r in &rings {
+    let mut run = 0.0;
+    for (i, r) in rings.iter().enumerate() {
+        if i > 0 {
+            run += points[i].distance(points[i - 1]);
+        }
         tail.positions.extend(r.iter().copied());
         tail.normals.extend([side, side]);
+        let w = r[0].distance(r[1]);
+        tail.uvs.extend([Vec2::new(run, 0.0), Vec2::new(run, w)]);
     }
     for i in 0..rings.len() as u32 - 1 {
         let (a, b, c2, d) = (
@@ -350,12 +431,7 @@ pub fn stake(seed: u32) -> Vec<(Stuff, Shape)> {
         tail.indices.extend([a, b, c2, a, c2, d]);
     }
     tail.both_sides();
-    let offset = cloth.positions.len() as u32;
-    cloth.positions.extend(tail.positions);
-    cloth.normals.extend(tail.normals);
-    cloth
-        .indices
-        .extend(tail.indices.iter().map(|i| i + offset));
+    cloth.append(tail);
     vec![(Stuff::Wood, wood), (Stuff::Cloth, cloth)]
 }
 
@@ -364,6 +440,7 @@ pub fn stake(seed: u32) -> Vec<(Stuff, Shape)> {
 /// onto. On a cell's top, about 1.6 m tall.
 pub fn grinder() -> Vec<(Stuff, Shape)> {
     let (mut wood, mut iron, mut stone) = (Shape::default(), Shape::default(), Shape::default());
+    let mut planks = Shape::default();
     // The frame: four splayed posts and the rails between them.
     let foot = |x: f32, z: f32| Vec3::new(x * 0.58, 0.0, z * 0.46);
     let head = |x: f32, z: f32| Vec3::new(x * 0.5, 1.12, z * 0.38);
@@ -395,7 +472,7 @@ pub fn grinder() -> Vec<(Stuff, Shape)> {
     }
     // The hopper, resting on the top rails.
     vessel(
-        &mut wood,
+        &mut planks,
         Vec3::new(0.0, 0.0, 0.0),
         1.02,
         1.62,
@@ -443,11 +520,12 @@ pub fn grinder() -> Vec<(Stuff, Shape)> {
         ];
         w.loft(&rings, true, true);
     };
-    apron(&mut wood);
+    apron(&mut planks);
     vec![
         (Stuff::Wood, wood),
         (Stuff::Iron, iron),
         (Stuff::Stone, stone),
+        (Stuff::Plank, planks),
     ]
 }
 
@@ -455,10 +533,11 @@ pub fn grinder() -> Vec<(Stuff, Shape)> {
 /// on a timber frame, a crank on its axle and a trough under it.
 pub fn mixer() -> Vec<(Stuff, Shape)> {
     let (mut wood, mut iron) = (Shape::default(), Shape::default());
+    let (mut staves, mut planks) = (Shape::default(), Shape::default());
     let axis_y = 1.02;
     // The drum, bellied like a barrel.
     drum(
-        &mut wood,
+        &mut staves,
         Vec3::new(0.0, axis_y, 0.0),
         Vec3::X,
         0.52,
@@ -519,7 +598,7 @@ pub fn mixer() -> Vec<(Stuff, Shape)> {
     timber(&mut wood, elbow, elbow + Vec3::X * 0.2, 0.03, 0.032, 72);
     // The trough the gravel tips into.
     vessel(
-        &mut wood,
+        &mut planks,
         Vec3::ZERO,
         0.02,
         0.4,
@@ -527,7 +606,12 @@ pub fn mixer() -> Vec<(Stuff, Shape)> {
         Vec2::new(0.52, 0.32),
         0.045,
     );
-    vec![(Stuff::Wood, wood), (Stuff::Iron, iron)]
+    vec![
+        (Stuff::Wood, wood),
+        (Stuff::Iron, iron),
+        (Stuff::Barrel, staves),
+        (Stuff::Plank, planks),
+    ]
 }
 
 #[cfg(test)]
@@ -537,6 +621,8 @@ mod tests {
     fn parts_ok(parts: &[(Stuff, Shape)]) {
         for (_, s) in parts {
             assert_eq!(s.positions.len(), s.normals.len());
+            assert_eq!(s.positions.len(), s.uvs.len());
+            assert!(s.uvs.iter().all(|u| u.is_finite()));
             assert!(s.indices.len() % 3 == 0 && !s.indices.is_empty());
             assert!(s.indices.iter().all(|&i| (i as usize) < s.positions.len()));
             assert!(s.positions.iter().all(|p| p.is_finite()));

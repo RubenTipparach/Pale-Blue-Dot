@@ -352,10 +352,8 @@ pub struct StakesStanding {
 /// the first frame so the loading screen compiles their pipelines.
 #[derive(Resource)]
 pub struct PavingLooks {
-    pub wood: Handle<StandardMaterial>,
-    pub iron: Handle<StandardMaterial>,
-    pub stone: Handle<StandardMaterial>,
-    pub cloth: Handle<StandardMaterial>,
+    /// By [`Stuff`](super::models::Stuff), in `Stuff::ALL` order.
+    pub materials: Vec<Handle<StandardMaterial>>,
     pub stakes: Vec<Vec<(super::models::Stuff, Handle<Mesh>)>>,
     pub grinder: Vec<(super::models::Stuff, Handle<Mesh>)>,
     pub mixer: Vec<(super::models::Stuff, Handle<Mesh>)>,
@@ -363,13 +361,11 @@ pub struct PavingLooks {
 
 impl PavingLooks {
     pub fn material(&self, stuff: super::models::Stuff) -> Handle<StandardMaterial> {
-        use super::models::Stuff;
-        match stuff {
-            Stuff::Wood => self.wood.clone(),
-            Stuff::Iron => self.iron.clone(),
-            Stuff::Stone => self.stone.clone(),
-            Stuff::Cloth => self.cloth.clone(),
-        }
+        let k = super::models::Stuff::ALL
+            .iter()
+            .position(|s| *s == stuff)
+            .expect("every stuff");
+        self.materials[k].clone()
     }
 }
 
@@ -378,16 +374,24 @@ const STAKE_LOOKS: u32 = 4;
 
 pub fn make_looks(
     mut commands: Commands,
+    assets: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let plain = |materials: &mut Assets<StandardMaterial>, r: f32, g: f32, b: f32| {
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(r, g, b),
-            perceptual_roughness: 0.9,
-            ..default()
+    // The towns' own pixel textures, nearest-sampled and repeated, laid at
+    // their metres a repeat: the models' coordinates are metres.
+    let materials: Vec<Handle<StandardMaterial>> = super::models::Stuff::ALL
+        .iter()
+        .map(|stuff| {
+            let (name, repeat_m) = stuff.texture();
+            materials.add(StandardMaterial {
+                base_color_texture: Some(crate::towns::texture(&assets, name)),
+                uv_transform: bevy::math::Affine2::from_scale(Vec2::splat(1.0 / repeat_m)),
+                perceptual_roughness: 0.93,
+                ..default()
+            })
         })
-    };
+        .collect();
     let mut add = |parts: Vec<(super::models::Stuff, super::models::Shape)>| {
         parts
             .into_iter()
@@ -395,13 +399,7 @@ pub fn make_looks(
             .collect::<Vec<_>>()
     };
     let looks = PavingLooks {
-        // The local trees' split timber, as the workbench's oak.
-        wood: plain(&mut materials, 0.50, 0.36, 0.22),
-        iron: plain(&mut materials, 0.16, 0.15, 0.14),
-        stone: plain(&mut materials, 0.47, 0.45, 0.41),
-        // Dyed cloth in an earth red, so the ties read and still sit in
-        // the land's palette.
-        cloth: plain(&mut materials, 0.58, 0.22, 0.15),
+        materials,
         stakes: (0..STAKE_LOOKS)
             .map(|k| add(super::models::stake(k * 7 + 1)))
             .collect(),
@@ -420,7 +418,11 @@ pub fn make_looks(
             Name::new("Paving prewarm"),
         ))
         .with_children(|root| {
-            for (stuff, mesh) in looks.stakes[0].iter().chain(&looks.grinder) {
+            for (stuff, mesh) in looks.stakes[0]
+                .iter()
+                .chain(&looks.grinder)
+                .chain(&looks.mixer)
+            {
                 root.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(looks.material(*stuff))));
             }
         });

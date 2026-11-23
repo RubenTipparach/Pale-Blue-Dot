@@ -332,10 +332,11 @@ fn the_town_tree_locks_its_recipes_until_their_missions() {
             "{code} is a tree's lock"
         );
     }
-    assert!(locks.0.contains_key("hand-cart") && locks.0.contains_key("horse-cart"));
+    // The paving is built, so the wheel waits on "Pave it" too.
     assert!(
-        !locks.0.contains_key("wheel"),
-        "open while paving is pending"
+        locks.0.contains_key("hand-cart")
+            && locks.0.contains_key("horse-cart")
+            && locks.0.contains_key("wheel")
     );
 }
 

@@ -21,7 +21,7 @@ shot() {
 # 400 frames leaves their pipelines time to build (a capture does not warm).
 shot paving-day --frames 400 --paving 5 --pitch -20 --time 11
 shot paving-2230 --frames 400 --paving 5 --pitch -20 --time 22.5
-shot marks-close --frames 400 --paving 1 --pitch -38 --time 11
-shot stations-day --frames 150 --paving 7 --pitch -2 --time 11
-shot stations-2230 --frames 150 --paving 7 --pitch -2 --time 22.5
+shot marks-close --frames 400 --paving 0.5 --pitch -25 --time 11
+shot stations-day --frames 400 --paving 7 --pitch -2 --time 11
+shot stations-2230 --frames 400 --paving 7 --pitch -2 --time 22.5
 true

@@ -1281,11 +1281,22 @@ build").** What the game does, and where it differs from the plan:
   parts (`pbd_app::roads::models`): the grinder's splayed posts, rails,
   thick-walled hopper, two bellied stone rollers, iron axle and crank and
   sloping apron; the mixer's bellied drum of staves with three iron hoops,
-  two A-frames, axle, crank and trough. Plain colours in the forge's
-  pipeline, prewarmed, `LitByField` and `LitLikeTerrain` on the root.
+  two A-frames, axle, crank and trough. Textured in the towns' own pixel
+  textures (owner, 2026-11-23: "Make sure things have textures"): timber
+  for posts, rails and pegs, plank for the hopper, apron and trough, barrel
+  staves for the drum, iron for the fittings, stone for the rollers, cloth
+  for a stake's tie; nearest-sampled, laid in metres at the manifest's
+  repeat, the grain running along each piece and round it. Prewarmed
+  behind the loading screen, `LitByField` and `LitLikeTerrain` on the root.
 - **Gravel by hand is retired** into `station::RETIRED_RECIPES` (two stone),
   so a hand queue saved with it refunds its stone; gravel in a pack stays
   and paves. Survey stakes take its row in the hand list.
+- **One rule for a way between waypoints**: `roads::paving::way` gives
+  the cells the search takes, or why there is none, and every cell on the
+  straight line that refuses a road with its reason (water, a town or the
+  player's work, a step of more than a layer). A stake asks it; the road
+  planner's live ghost (the owner's road planner, written up beside this)
+  can ask the same function. Test `a_way_names_each_clashing_cell_and_why`.
 - **The stake search allows no ford** (recommendation taken, ask only with
   screenshots): a player's plan stays on dry ground, so a paved cell is
   never under water; "Water in the way" refuses it.
