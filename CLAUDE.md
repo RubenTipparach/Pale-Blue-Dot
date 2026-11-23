@@ -142,6 +142,10 @@ is a flat-coloured mesh:
 - detail (grain, bands, hinges, a coat's shading, a mane) is painted into
   the texture, never modelled as a stuck-on box;
 - a creature's colour variation tints its texture, it does not replace it.
+- and it is not flat-shaded (owner, the same day: "I didn't like flat
+  shaded crap"): normals are smooth across a body's curves and hard only at
+  real creases (a board's edge, a hoof), and a curved silhouette has the
+  segments to read as curved.
 
 ## Notes stay out of the game (owner, 2026-11-15)
 
