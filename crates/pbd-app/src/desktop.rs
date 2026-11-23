@@ -1390,11 +1390,19 @@ impl Launch {
                 "--cart-close" => {
                     i += 1;
                     result.walk = true;
-                    let code = args.get(i).expect("--cart-close requires hand or horse");
-                    result.carts.get_or_insert_default().close =
+                    let code = args
+                        .get(i)
+                        .expect("--cart-close requires hand, horse, plodder or ride");
+                    let script = result.carts.get_or_insert_default();
+                    script.plodder = code == "plodder";
+                    script.ride = code == "ride";
+                    script.close = if script.plodder {
+                        Some(pbd_core::vehicle::cart::CartKind::HorseCart)
+                    } else {
                         pbd_core::vehicle::cart::CartKind::ALL
                             .into_iter()
-                            .find(|k| k.code().starts_with(code.as_str()));
+                            .find(|k| k.code().starts_with(code.as_str()))
+                    };
                 }
                 "--life" => {
                     i += 1;

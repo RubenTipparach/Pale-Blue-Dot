@@ -14,6 +14,8 @@
 //! are derived from the world seed and never saved (S10).
 
 pub mod breed;
+pub mod forms;
+pub mod loft;
 pub mod rig;
 
 pub use breed::BreedingPick;
@@ -142,6 +144,9 @@ struct Beast {
     born: Option<f64>,
     /// A hen sitting on a clutch (E4): she rests on it.
     sitting: bool,
+    /// Held still where a capture set it (`--husbandry close`): it neither
+    /// flees nor wanders.
+    posed: bool,
 }
 
 impl Beast {
@@ -193,6 +198,7 @@ impl Beast {
             clock_s: 0.0,
             born: None,
             sitting: false,
+            posed: false,
         }
     }
 }
@@ -208,7 +214,10 @@ pub struct Farmyard {
     status: String,
     hold_s: f32,
     fences_drawn: Option<(BTreeMap<Edge, bool>, Vec<u32>, usize)>,
+    /// The herd's coat (design 16).
     material: Option<Handle<StandardMaterial>>,
+    /// Flat colour: the incubator's glass lid (M26: glass is flat).
+    flat: Option<Handle<StandardMaterial>>,
     /// The pen's textured materials in [`PEN_TEXTURES`] order, and each
     /// texture's repeat in metres (design 14).
     pen_materials: Option<([Handle<StandardMaterial>; 4], [f32; 4])>,
@@ -230,6 +239,7 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            flat: None,
             pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
@@ -285,6 +295,16 @@ impl Farmyard {
             .collect();
         found.sort_by(|a, b| a.2.total_cmp(&b.2));
         found.into_iter().map(|(id, p, _)| (id, p)).collect()
+    }
+
+    /// Where the kept animal `id` stands (local feet) and faces, if it is
+    /// within `within_m` of `near`.
+    pub fn kept_pose(&self, id: u64, near: Vec3, within_m: f32) -> Option<(Vec3, Vec3)> {
+        self.beasts
+            .iter()
+            .find(|b| b.who == (Who::Kept { id }) && !b.leaving)
+            .filter(|b| b.pos.distance(near) <= within_m)
+            .map(|b| (b.pos, b.facing))
     }
 
     /// A kept animal goes into a cart's shafts: the yard stops drawing it at
@@ -566,13 +586,22 @@ fn spawn(
             ));
         yard.pen_materials = Some((pen, repeat));
     }
+    // The herd's coats (design 16): the `coat` strip, tinted by each
+    // animal's colours, sampled nearest.
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
+        base_color_texture: assets.as_deref().map(|a| crate::towns::texture(a, "coat")),
         perceptual_roughness: 0.9,
         reflectance: 0.2,
         ..default()
     });
     yard.material = Some(material.clone());
+    yard.flat = Some(materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        reflectance: 0.2,
+        ..default()
+    }));
     let mut builder = rig::Builder::default();
     if let Some(sp) = config.0.roster(pbd_core::fauna::HOME_BODY).first() {
         rig::build(
@@ -811,7 +840,12 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     // Kept animals near.
     let pieces = record::pieces(&save.records);
     for (id, body) in &kept {
-        if body.state != record::Life::Alive || body.body != world.body.0 || hitched.contains(id) {
+        // An animal ridden is the ride's to draw (design 14).
+        if body.state != record::Life::Alive
+            || body.body != world.body.0
+            || hitched.contains(id)
+            || body.ridden
+        {
             continue;
         }
         let Some(home) = pbd_core::cell_key::key_direction(body.home) else {
@@ -1649,7 +1683,9 @@ fn step(
         let bird = sp.plan == Plan::Bird;
         // What it wants.
         b.mode_s -= dt;
-        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet) {
+        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet)
+            && !b.posed
+        {
             b.trust.decay(hours, &s.taming);
             let d = feet.distance(b.pos);
             let food = sp
@@ -2099,7 +2135,7 @@ fn draw_fences(
     let Some(o) = origin else {
         return;
     };
-    let Some(flat) = yard.material.clone() else {
+    let Some(flat) = yard.flat.clone() else {
         return;
     };
     commands.entity(root).insert(Transform::from_translation(
@@ -2406,6 +2442,34 @@ fn script(
                     n,
                     spot + right * (2.0 + n as f32 * 1.6) + ahead * (n as f32 - 1.0) * 1.5,
                 );
+            }
+        }
+        "close" => {
+            // One of each species of the herd broadside a few metres ahead,
+            // held where it stands, to look at close up.
+            for (n, (id, x, y)) in [
+                ("meadow-hen", -1.9f32, 2.4f32),
+                ("woolback", -0.6, 3.4),
+                ("plodder", 1.6, 4.6),
+                ("horse", 4.6, 5.6),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if !roster.iter().any(|s| s.id == id) {
+                    continue;
+                }
+                let k = wild(
+                    &mut yard,
+                    index(id),
+                    n as u64 + 1,
+                    feet_point + right * x + ahead * y,
+                );
+                let d = yard.beasts[k].pos.normalize();
+                yard.beasts[k].range = Range::Around(d, 0.05);
+                yard.beasts[k].facing = right;
+                yard.beasts[k].idle_s = 1.0e6;
+                yard.beasts[k].posed = true;
             }
         }
         "tame" => {

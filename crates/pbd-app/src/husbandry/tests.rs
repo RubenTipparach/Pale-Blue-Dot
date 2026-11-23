@@ -134,10 +134,10 @@ fn every_good_round_trips_its_slot_code_and_has_its_icon() {
     }
 }
 
-/// A rig is whole boxes, and a walking leg moves where a standing one does
-/// not: the feet follow the phase.
+/// A rig is one whole textured form (design 16), and a walking leg moves
+/// where a standing one does not: the feet follow the phase.
 #[test]
-fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
+fn a_rig_builds_its_form_and_its_legs_follow_the_phase() {
     let settings = HusbandrySettings::default();
     for sp in settings.roster("home") {
         let build = |phase: f32, swing: f32| {
@@ -157,14 +157,10 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
             b
         };
         let still = build(0.0, 0.0);
-        if sp.plan == pbd_core::husbandry::Plan::Horse {
-            // The horse is one lofted body of flat triangles, not boxes
-            // (`land-transport` design 11).
-            assert_eq!(still.indices.len(), still.positions.len(), "{}", sp.id);
-        } else {
-            assert_eq!(still.positions.len() % 24, 0, "{}", sp.id);
-            assert_eq!(still.indices.len(), still.positions.len() / 4 * 6);
-        }
+        // Lofted and textured, its points shared round its curves.
+        assert!(still.textured, "{}", sp.id);
+        assert_eq!(still.uvs.len(), still.positions.len(), "{}", sp.id);
+        assert!(still.indices.len() > still.positions.len(), "{}", sp.id);
         let top = still
             .positions
             .iter()

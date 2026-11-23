@@ -20,6 +20,7 @@ pub mod hull;
 mod loon;
 pub mod oars;
 pub mod record;
+pub mod ride;
 pub mod spec;
 #[cfg(test)]
 mod tests;

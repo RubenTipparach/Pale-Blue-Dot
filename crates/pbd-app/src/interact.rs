@@ -84,6 +84,10 @@ pub enum Act {
     Unhitch,
     /// Light a town lamp at dusk, for a lamps job.
     Light,
+    /// Mount a kept plodder or horse (`land-transport` design 14).
+    Ride,
+    /// Get off it.
+    GetOff,
     /// Sit on a chair, a stool or a bench (`furniture` design 6).
     Sit,
     /// Lie down on a bed.
@@ -108,13 +112,16 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 32] = [
-    // A cart in hand or a seat taken comes first: F lets it go.
+pub const ACTS: [Row; 34] = [
+    // A cart in hand, a seat or a back taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
+    row(Act::GetOff, "get_off", Reader::Carts),
     row(Act::Collect, "collect", Reader::Husbandry),
     row(Act::SetEggs, "set_eggs", Reader::Husbandry),
     row(Act::Feed, "feed", Reader::Husbandry),
+    // A kept plodder or horse is ridden before it is led or let stay.
+    row(Act::Ride, "ride", Reader::Carts),
     row(Act::LetStay, "let_stay", Reader::Husbandry),
     row(Act::Lead, "lead", Reader::Husbandry),
     row(Act::SetInIncubator, "set_in_incubator", Reader::Husbandry),
