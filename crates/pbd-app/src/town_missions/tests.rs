@@ -313,7 +313,13 @@ fn the_town_tree_locks_the_paving_recipes_until_their_missions() {
     built.sort_unstable();
     assert_eq!(
         built,
-        ["crushed-stone", "grinder", "mixed-gravel", "mixer", "survey-stakes"]
+        [
+            "crushed-stone",
+            "grinder",
+            "mixed-gravel",
+            "mixer",
+            "survey-stakes"
+        ]
     );
     let starter = &app.world().resource::<MissionChain>().0;
     for code in locks.0.keys() {
