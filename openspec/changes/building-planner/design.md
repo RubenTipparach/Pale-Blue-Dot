@@ -54,7 +54,10 @@ for a mockup to fine-tune.
   - `Lantern { cell, storey }`;
   - `Roof { storey, shape }`, fitted over the storey's cells not under a
     floor of the storey above, by `blueprint::fit_roof`;
-  - `Slot { cell, storey, side, kind }`, a furniture slot facing a side.
+  - `Slot { cell, storey, side, kind }`, a furniture slot: `kind` one of
+    `furniture` design 2's pieces (bed, table, chest, bench, chair...), `side`
+    0 to 5 for its back to that side or 6 for the cell's middle, exactly as
+    `building::Shape::Furniture` (`furniture` design 3) stands.
 - Charting a plan onto the planet is the template charting
   `building::blueprint` already does (`chart(patch, first, at, turn, ..)`),
   generalised to plan pieces: the origin on the aimed cell, side 0 on the
@@ -97,7 +100,7 @@ for a mockup to fine-tune.
 - **Tools:** Room (paint and erase cells on this storey; outer walls follow
   the room's edge), Wall (an inner wall on an edge), Door and Window (on any
   wall), Stair (a foot cell, then the wheel turns it), Lantern, Slot (bed,
-  table, chest, bench, hearth; the wheel turns it), Erase. Ctrl-Z undoes.
+  table, chest, bench, chair, any of `furniture` design 2; the wheel turns it), Erase. Ctrl-Z undoes.
 - **Outer walls are drawn by the room.** Painting cells makes their outside
   edges walls; an opening on an outer edge stays when the room grows past it
   only if the edge is still outside. So a plan cannot have a missing wall by
@@ -113,7 +116,7 @@ for a mockup to fine-tune.
   | Preset | Kit | Small / standard / large (cells x storeys) | Notes |
   | --- | --- | --- | --- |
   | Straw hut | straw | 1x1, 1x1, 2x1 | the first night's shelter, cone roof |
-  | Cottage | timber | 2x1, 3x1, 6x1 | a door, windows, hearth, bed and table slots |
+  | Cottage | timber | 2x1, 3x1, 6x1 | a door, windows, table, bed and chair slots |
   | Two-storey house | fieldstone | 3x2, 6x2, 8x2 | a stair and its landing, beds upstairs |
   | Townhouse | half-timbered | 6x2, 6x3, 8x3 | narrow, for a town lane, a stair each storey |
   | Workshop | timber | 4x1, 6x1, 8x1 | a double door, a bench slot |
@@ -180,6 +183,11 @@ for a mockup to fine-tune.
   build mode, with the pack in the same journal line. Refused, nothing
   taken, with one plain line: "Needs a mallet", "Needs 4 planks", or the
   rule's own reason if the world changed under the site.
+- **A furniture slot is filled, not struck.** With the slot's piece of
+  furniture in the pack (made at the carpenter's bench, `furniture` design
+  1), F on its slot places it: an ordinary `Shape::Furniture` piece record,
+  checked by furniture's own rules (design 4 there). A slot left empty does
+  not keep a site from finishing; it stays in the plan for later.
 - **Order.** Any buildable piece can be struck: a floor on the ground, a
   wall on a built floor or the ground, an upper floor once what holds it is
   built, a roof once its room is closed. The compass bar shows a tick on

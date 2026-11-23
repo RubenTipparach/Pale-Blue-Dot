@@ -172,9 +172,9 @@ var TAB = "";
   // A preset: footprint and storeys by size, then its doors, windows, lanterns and slots laid out by rule.
   const PRESETS = [
     { id: "hut", label: "Straw hut", kit: "straw", roof: "cone", cells: z => [blob(1), blob(1), rect(2, 1)][z], storeys: () => 1, doors: 1, win: 0, slots: ["bed"] },
-    { id: "cottage", label: "Cottage", kit: "timber", roof: "gable", cells: z => [rect(2, 1), rect(3, 1), rect(3, 2)][z], storeys: () => 1, doors: 1, win: 3, slots: ["hearth", "bed", "table"] },
-    { id: "house", label: "Two-storey house", kit: "stone", roof: "gable", cells: z => [rect(3, 1), rect(3, 2), rect(4, 2)][z], storeys: () => 2, doors: 1, win: 3, slots: ["hearth", "table", "bed", "chest"] },
-    { id: "townhouse", label: "Townhouse", kit: "halftimber", roof: "gable", cells: z => [rect(3, 2), rect(3, 2), rect(4, 2)][z], storeys: z => [2, 3, 3][z], doors: 1, win: 2, slots: ["hearth", "bed", "bed"] },
+    { id: "cottage", label: "Cottage", kit: "timber", roof: "gable", cells: z => [rect(2, 1), rect(3, 1), rect(3, 2)][z], storeys: () => 1, doors: 1, win: 3, slots: ["table", "bed", "chair"] },
+    { id: "house", label: "Two-storey house", kit: "stone", roof: "gable", cells: z => [rect(3, 1), rect(3, 2), rect(4, 2)][z], storeys: () => 2, doors: 1, win: 3, slots: ["table", "chair", "bed", "chest"] },
+    { id: "townhouse", label: "Townhouse", kit: "halftimber", roof: "gable", cells: z => [rect(3, 2), rect(3, 2), rect(4, 2)][z], storeys: z => [2, 3, 3][z], doors: 1, win: 2, slots: ["table", "bed", "bed"] },
     { id: "workshop", label: "Workshop", kit: "timber", roof: "gable", cells: z => [rect(2, 2), rect(3, 2), rect(4, 2)][z], storeys: () => 1, doors: 2, win: 3, slots: ["bench", "chest"] },
     { id: "shop", label: "Shop", kit: "halftimber", roof: "gable", cells: z => [rect(3, 1), rect(3, 2), rect(4, 2)][z], storeys: () => 1, doors: 1, win: 2, slots: ["table", "chest"] },
     { id: "barn", label: "Barn", kit: "timber", roof: "gable", cells: z => [rect(3, 2), rect(4, 2), rect(4, 3)][z], storeys: () => 1, doors: 2, win: 5, slots: ["chest"] },
@@ -219,7 +219,7 @@ var TAB = "";
   function saveMine() { try { localStorage.setItem("pbd-m6-blueprints", JSON.stringify(MINE.map(m => ({ name: m.name, plan: toJSON(m.plan) })))); } catch (e) { /* private window: kept for this visit only */ } }
 
   const TOOLS = [["room", "Room", "building/icon_floor.png"], ["wall", "Wall", "building/icon_wall.png"], ["door", "Door", "building/icon_door.png"], ["window", "Window", "building/icon_window.png"], ["stair", "Stair", "building/icon_stairs.png"], ["lantern", "Lantern", "building/game/items/lantern_post.png"], ["slot", "Slot", "building/icon_post.png"], ["erase", "Erase", "building/game/items/pickaxe.png"]];
-  const SLOTKINDS = ["bed", "table", "chest", "bench", "hearth"];
+  const SLOTKINDS = ["bed", "table", "chest", "bench", "chair"];
   const pcv = $("pcv"), pctx = pcv.getContext("2d");
   let PV = { s: 30, cx: 0, cy: 0 };
   function pfit() {
@@ -692,7 +692,7 @@ var TAB = "";
       else if (p.kind === "table") { at(0, 0, 0.7, 1.1, 0.07, 0.75); at(0, 0, 0, 0.1, 0.7, 0.1); }
       else if (p.kind === "chest") { at(0, 0, 0, 0.5, 0.45, 0.85); }
       else if (p.kind === "bench") { at(0, 0, 0, 0.7, 0.85, 1.6); }
-      else { at(-0.5, 0, 0, 0.6, 1.1, 1.3); }
+      else { at(0, 0, 0, 0.48, 0.46, 0.48); at(-0.22, 0, 0.46, 0.05, 0.5, 0.48); }
     }
   }
   function limeTex() {
