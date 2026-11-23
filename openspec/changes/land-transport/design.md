@@ -290,6 +290,82 @@ the surface under its wheels:
 - **Not in phase 3**: passing places (decision 2) wait for the world's
   traffic of phase 5; a phase 3 road has one cart at a time on most of it.
 
+### 11. How the carts are built (written before the code, 2026-11-23)
+
+The owner, 2026-11-22: "Get all these systems in the game". How decisions 9
+and 10 go into the code, reusing what the boats already have rather than a
+second vehicle system:
+
+- **The surface table** is `roads::WheelFactors` in `roads.ron` (`wheel:
+  (gravel: 1.0, dirt: 0.6, ford: 0.5, off_road: 0.25)`), read by one
+  function, `roads::wheel_factor(&factors, &[WheelGround])`: the lower of
+  the factors under the axles. `WheelGround` is `Gravel`, `Dirt`, `Ford`,
+  `Bridge`, `Town` or `Off`; a bridge deck and a town's lanes read 1.0. The
+  app reads it off the road cell under each wheel (the world's roads and the
+  player's own cells in `RoadNet`, which is where the paved cells of
+  `townsfolk` design 40 land) and a town's footprint (`ground::cleared`).
+  The walker's own road speed (design 10a) is untouched.
+- **A cart is a vehicle record in the journal**, kind `cart`, schema 1, its
+  id from the fleet's own counter (`Fleet::next_id`, which every cart id
+  keeps it above), so ids never collide with a boat's and **the hold is the
+  boats' own `hold` record** keyed by that id, moved by the pack's own
+  clicks under C. A boat's hold keeps its ten slots; a hold now has the size
+  its vehicle gives it (9 for a hand cart, 24 for a horse cart), and an old
+  ten-slot record reads as it did. The cart record's body is its kind, its
+  frame (`planet:0`), its pose in the body's frame in `f64` (a point and a
+  heading), its owner, its damage and the id of the horse in its shafts.
+  Setting a cart down writes the record and the slots without the good in
+  one line (`store_with_hands`), and taking it up writes the slots with the
+  good and the record marked taken in one line: neither can be half done.
+  The cart's own whole-file `vehicles.ron` is untouched, so every save's
+  craft read and write exactly as before.
+- **Hitched is the cart's record alone**: a horse is hitched when a cart
+  names it. So hitching is one line and cannot be saved half-hitched
+  (decision 8's "both records or neither" holds because there is one
+  record to write). The horse's own animal record keeps its life; a
+  hitched horse is drawn in the shafts, not by the farmyard, and when it is
+  unhitched its record's home becomes the cell beside the cart and it
+  follows again. Unhitching never ends or drops the animal.
+- **Stepping is kinematic**, in `pbd-core` (`vehicle::cart`): a cart has
+  no hull, and is not stepped by the boats' rigid body. Its pose is a
+  body-local `f64` point on the ground with a heading, like the townsfolk
+  (`townsfolk` design 25), its up taken in `f64` before any cast; a step
+  moves it along its heading at its road speed times the wheel factor, and
+  the app stands it on the same ground query the boats use (`ground_under`).
+  A step of more than a layer stops it, as a wall does.
+- **The hand cart is pulled on foot.** F at its handles takes them up: the
+  walker walks as ever, its camera its own and its mouse look raw, its pace
+  held to the cart's road speed times the factor, and the cart follows a
+  handle's length behind. F again lets go: the record stays where it
+  stands, with its hold.
+- **The horse cart is driven from its seat.** F at the seat boards it: the
+  walker is carried on the seat with the walking camera (raw look), and W
+  and S drive the horse on and back, A and D turn it. F again steps down
+  beside it. Without a horse in its shafts it does not move.
+- **The horse is a new species, appended** to the home roster with a new
+  status, `Bought`, and a new body plan, `Horse`. Wild herds are rolled
+  from every species but a bought one, so the existing worlds' herds stay
+  animal for animal (a test pins every square). A bought animal is a kept
+  animal record with `via: Bought`; its record reads in every older build's
+  fields at their defaults. The town's trader sells it for 120 coins
+  (`values.ron`), written as the animal and the purse in the store; the
+  stable keeper of decision 10 waits for the townsfolk's roster to have
+  one (recommendation taken, ask only with screenshots).
+- **Models** are built in code as shaped forms, never boxes left as parts:
+  a wheel is a hub, spokes and a rim swept as one ring with a bevelled
+  tyre; a bed, its sides, the shafts and handles are bevelled timbers
+  meeting with chamfers; the horse is one lofted body whose neck, head and
+  legs are swept out of it with tapering sections, in the game's blocky
+  low-poly look. Each carries `LitByField` and `LitLikeTerrain`. Wheels
+  turn by distance over their radius, and the horse walks by the
+  `animation` skill's rule: its gait phase advanced by ground distance over
+  its stride, so its feet do not slide.
+- **The town tree's events**: placing a cart raises `Place` with the
+  cart's code; the hitch raises the tree's `hitch` (`horse`); metres moved
+  with something in the hold raise `haul` (`cart`) and metres on road cells
+  raise `Travel` (`cart-road`). Where the tree has not added a kind yet,
+  `carts::missions` holds the function it calls.
+
 ## Risks / Trade-offs
 
 - **One-cell roads jam.** Two carts meeting on a one-cell road cannot pass.
