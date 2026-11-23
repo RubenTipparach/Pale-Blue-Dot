@@ -1,7 +1,7 @@
 //! An animal's body, posed and built as one mesh each frame (S11).
 //!
-//! Every species is one lofted, smooth-shaded form in its coat
-//! (`super::forms`, `animal-husbandry` design 16): a leg swings from its hip
+//! Every species is built from boxes in its hide (`super::forms`,
+//! `animal-husbandry` design 17, M26's blocky animals): a leg swings from its hip
 //! and a head dips from its neck. The pose is the behaviour's
 //! (`super::Beast`): a gait phase advanced by ground distance over stride
 //! (so feet never slide), a head pitch for a peck or a graze, a glance, a
@@ -164,6 +164,8 @@ pub fn coat(species: &LandSpecies, genome: &Genome) -> super::forms::Coat {
         legs: c[2],
         head: c[3],
         pattern,
+        // The coat against the species' own colour tints its hide.
+        tint: [0, 1, 2].map(|i| c[0][i] / species.colours[0][i].max(0.02)),
     }
 }
 

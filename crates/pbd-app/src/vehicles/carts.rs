@@ -404,7 +404,7 @@ pub fn materials(world: &mut World) -> Option<CartMaterials> {
     };
     let made = CartMaterials {
         parts: model::TEXTURES.map(&mut textured),
-        coat: textured("coat"),
+        coat: textured("herd_hide"),
     };
     world.resource_mut::<Carts>().materials = Some(made.clone());
     Some(made)

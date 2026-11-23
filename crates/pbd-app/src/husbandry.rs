@@ -147,6 +147,9 @@ struct Beast {
     /// Held still where a capture set it (`--husbandry close`): it neither
     /// flees nor wanders.
     posed: bool,
+    /// Its head held where a capture set it (`--husbandry close-stand` or
+    /// `close-graze`): grazing or up, looking ahead. A capture instrument.
+    held_graze: Option<bool>,
 }
 
 impl Beast {
@@ -199,6 +202,7 @@ impl Beast {
             born: None,
             sitting: false,
             posed: false,
+            held_graze: None,
         }
     }
 }
@@ -590,7 +594,9 @@ fn spawn(
     // animal's colours, sampled nearest.
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
-        base_color_texture: assets.as_deref().map(|a| crate::towns::texture(a, "coat")),
+        base_color_texture: assets
+            .as_deref()
+            .map(|a| crate::towns::texture(a, "herd_hide")),
         perceptual_roughness: 0.9,
         reflectance: 0.2,
         ..default()
@@ -1858,7 +1864,9 @@ fn step(
             b.head_down = (b.pecking * std::f32::consts::PI).sin() * 1.15;
         } else {
             // Grazing, head down while it stands; up to walk or look about.
-            let grazing = standing && b.glance_s > 0.6 && b.mode != Mode::Follow;
+            let grazing = b
+                .held_graze
+                .unwrap_or(standing && b.glance_s > 0.6 && b.mode != Mode::Follow);
             b.head_goal = if grazing { 1.85 } else { 0.0 };
             let chew = if grazing {
                 (b.clock_s * 5.0).sin() * 0.05
@@ -1879,6 +1887,9 @@ fn step(
             } else {
                 b.rng.range(2.0, 6.0)
             };
+        }
+        if b.held_graze.is_some() {
+            b.glance_goal = 0.0;
         }
         let rate = if bird { 14.0 } else { 3.0 };
         b.glance += (b.glance_goal - b.glance) * (dt * rate).min(1.0);
@@ -2444,9 +2455,15 @@ fn script(
                 );
             }
         }
-        "close" => {
+        "close" | "close-stand" | "close-graze" => {
             // One of each species of the herd broadside a few metres ahead,
-            // held where it stands, to look at close up.
+            // held where it stands, to look at close up; `close-stand` and
+            // `close-graze` hold its head up or down to graze as well.
+            let held = match script.scene.as_str() {
+                "close-stand" => Some(false),
+                "close-graze" => Some(true),
+                _ => None,
+            };
             for (n, (id, x, y)) in [
                 ("meadow-hen", -1.9f32, 2.4f32),
                 ("woolback", -0.6, 3.4),
@@ -2470,6 +2487,7 @@ fn script(
                 yard.beasts[k].facing = right;
                 yard.beasts[k].idle_s = 1.0e6;
                 yard.beasts[k].posed = true;
+                yard.beasts[k].held_graze = held;
             }
         }
         "tame" => {
