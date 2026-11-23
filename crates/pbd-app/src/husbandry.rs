@@ -19,7 +19,7 @@ pub mod rig;
 pub use breed::BreedingPick;
 
 use crate::config::HusbandryConfig;
-use crate::field_light::{Faded, LitByField};
+use crate::field_light::{Faded, LitByField, LitLikeTerrain};
 use crate::hotbar::Hotbar;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
 use crate::saves::WorldSave;
@@ -554,6 +554,7 @@ fn spawn(
             .spawn((
                 Name::new("Pen prewarm template"),
                 LitByField,
+                LitLikeTerrain,
                 Faded(1.0),
                 Transform::from_xyz(0.0, -1.0e5, 0.0),
                 Visibility::Hidden,
@@ -592,6 +593,7 @@ fn spawn(
         .spawn((
             Name::new("Husbandry prewarm template"),
             LitByField,
+            LitLikeTerrain,
             Faded(1.0),
             Transform::from_xyz(0.0, -1.0e5, 0.0),
             Visibility::Hidden,
@@ -605,6 +607,7 @@ fn spawn(
         Name::new("Fences"),
         FenceRoot,
         LitByField,
+        LitLikeTerrain,
         Transform::default(),
         Visibility::default(),
     ));
@@ -1994,6 +1997,7 @@ fn draw(
                     .spawn((
                         Name::new(sp.id.clone()),
                         LitByField,
+                        LitLikeTerrain,
                         Faded(1.0 - b.shown),
                         place,
                         Visibility::default(),

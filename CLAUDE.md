@@ -129,6 +129,24 @@ craft, drops, props, creatures and anything held up in the world, so in a
 canyon's shade, a cave or the night it is as dark as the ground there. UI
 and inventory icons are not in the world and keep their own look.
 
+## Every model is textured (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Make sure things have textures"
+(after the carts and the horse went in as flat colour). Nothing in the world
+is a flat-coloured mesh:
+- a model uses the game's own pixel textures where one fits (the settlement
+  set's planks, boards, timber, stone, iron), sampled nearest and laid at
+  the manifest's scale so its texels match the walls beside it;
+- where none fits, a new 16 or 32 px pixel texture is drawn in the same
+  palette by a committed script in `tools/art/`, with its manifest row;
+- detail (grain, bands, hinges, a coat's shading, a mane) is painted into
+  the texture, never modelled as a stuck-on box;
+- a creature's colour variation tints its texture, it does not replace it.
+- and it is not flat-shaded (owner, the same day: "I didn't like flat
+  shaded crap"): normals are smooth across a body's curves and hard only at
+  real creases (a board's edge, a hoof), and a curved silhouette has the
+  segments to read as curved.
+
 ## Notes stay out of the game (owner, 2026-11-15)
 
 **Standing instruction from the user:** "notes belong in mockups and chats,
@@ -583,7 +601,12 @@ which wait for a request.
   mission tree of its own (`town-missions-tree`), roads marked with survey
   stakes and paved with gravel from a grinder and a mixer (`townsfolk`
   design 39 to 41), and hand carts and horse carts, a quarter of their speed
-  off the road (`land-transport` design 9 and 10). Written up, not built.
+  off the road (`land-transport` design 9 and 10), all built on
+  `claude/phase-2-1`. With them (owner, 2026-11-23: "update horses -
+  plodders like your carriage", "You should also be able to ride plodders
+  as well"): a tamed plodder pulls the cart as the horse does, and a
+  plodder or a horse can be ridden, pulled forward from phase 5's ridden
+  horses (`land-transport` design).
   And (owner, 2026-11-23: "Make presets for houses and buildings too. I
   want the player to be able to design structures and build according to
   blue prints. That way we avoid the jankiness of free building. Buildings

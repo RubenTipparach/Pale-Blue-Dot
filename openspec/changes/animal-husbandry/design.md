@@ -600,6 +600,16 @@ its hide.
   the world's copy loses the outline, CLAUDE.md "No outlines in the world"),
   and that is its own step, listed as task 9.2.
 
+## 15. The herd is lit as the terrain is (2026-11-23)
+
+The carts' captures showed a loose horse in the farmyard far paler than the
+same horse hitched to its cart: the herd, its fences and its pen took only
+`LitByField`, so Bevy's own picture lit them and they glowed against the
+ground. CLAUDE.md ("Everything in the world is lit as the terrain is") wants
+`LitLikeTerrain` beside it on every creature and prop, so the herd's roots,
+the fence root and their pipeline prewarm templates carry both. Nothing a
+rule reads changes; only the look, back to what the rule already demands.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and
