@@ -290,24 +290,37 @@ fn app_fresh() -> App {
 }
 
 /// The town tree's unlocks are recipes the game has, or recipes it awaits
-/// (data only): today every one is awaited, so no shipped recipe is locked
-/// by the town tree.
+/// (data only). The paving's are built (`townsfolk` design 44): the
+/// grinder, crushed stone, the mixer, gravel and survey stakes are locked
+/// until their missions, and the carts' are still awaited.
 #[test]
-fn no_shipped_recipe_waits_on_the_town_tree_yet() {
+fn the_town_tree_locks_the_paving_recipes_until_their_missions() {
     let mut app = app(WorldSave::memory_only());
     reach_town(&mut app);
     app.update();
     let chain = app.world().resource::<TownChain>().0.clone();
     let recipes = app.world().resource::<Recipes>();
+    let locks = app.world().resource::<crate::missions::RecipeLocks>();
+    let mut built = Vec::new();
     for m in &chain.missions {
         for code in &m.unlocks {
-            assert!(recipes.0.get(code).is_none(), "{code} is not built yet");
+            if recipes.0.get(code).is_some() {
+                assert!(locks.0.contains_key(code), "{code} waits on {}", m.id);
+                built.push(code.as_str());
+            }
         }
     }
-    let locks = app.world().resource::<crate::missions::RecipeLocks>();
+    built.sort_unstable();
+    assert_eq!(
+        built,
+        ["crushed-stone", "grinder", "mixed-gravel", "mixer", "survey-stakes"]
+    );
     let starter = &app.world().resource::<MissionChain>().0;
     for code in locks.0.keys() {
-        assert!(starter.names(code), "{code} is the starter tree's lock");
+        assert!(
+            starter.names(code) || built.contains(&code.as_str()),
+            "{code} is a tree's lock"
+        );
     }
 }
 
