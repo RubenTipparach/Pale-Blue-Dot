@@ -1,0 +1,7 @@
+BOT_OK bot0 player=0 requests=245 accepted=213 refused={"Unchanged": 32} changes=1597 regions_checked=1 rtt_ms p50=13.1 p99=31.4 max=31.7
+BOT_OK bot1 player=6 requests=245 accepted=230 refused={"Unchanged": 15} changes=1597 regions_checked=1 rtt_ms p50=11.6 p99=31.5 max=34.3
+BOT_OK bot2 player=2 requests=245 accepted=221 refused={"Unchanged": 24} changes=1597 regions_checked=1 rtt_ms p50=12.1 p99=31.6 max=34.0
+BOT_OK bot3 player=3 requests=245 accepted=244 refused={"Unchanged": 1} changes=1597 regions_checked=1 rtt_ms p50=7.5 p99=22.6 max=25.7
+BOT_OK bot4 player=1 requests=245 accepted=227 refused={"Unchanged": 18} changes=1597 regions_checked=1 rtt_ms p50=13.6 p99=31.6 max=36.0
+BOT_OK bot5 player=5 requests=245 accepted=238 refused={"Unchanged": 7} changes=1597 regions_checked=1 rtt_ms p50=9.1 p99=31.7 max=33.1
+BOT_OK bot6 player=4 requests=245 accepted=224 refused={"Unchanged": 21} changes=1597 regions_checked=1 rtt_ms p50=12.0 p99=32.8 max=33.1

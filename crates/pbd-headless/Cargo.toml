@@ -1,0 +1,14 @@
+[package]
+name = "pbd-headless"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# A dedicated server and protocol bots with no window (`openspec/changes/
+# multiplayer` design 21): the server's rules and the transport, nothing of
+# Bevy, so a protocol playtest runs on one machine over loopback.
+[dependencies]
+pbd-core = { path = "../pbd-core" }
+pbd-server = { path = "../pbd-server" }
+pbd-net = { path = "../pbd-net" }
+glam.workspace = true

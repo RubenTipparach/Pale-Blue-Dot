@@ -1656,7 +1656,9 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some() || launch.showcase.is_some(),
+        // A joined game plays the host's world (`multiplayer` design 20):
+        // the title screen's CONTINUE would open a saved world instead.
+        launch.world.is_some() || launch.showcase.is_some() || launch.join.is_some(),
         // A recording instrument plays the world it was launched on, as a
         // capture does: the title screen would stand in front of the film.
         launch.capture.is_some() || launch.walk_river,

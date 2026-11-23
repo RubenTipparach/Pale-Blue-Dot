@@ -77,6 +77,10 @@ pub fn join(addr: std::net::SocketAddr, wait: std::time::Duration) -> Result<Joi
     let started = std::time::Instant::now();
     let mut early = Vec::new();
     loop {
+        // The welcome and the snapshots behind it come in one batch: the
+        // whole batch is read before the welcome is acted on, or the world's
+        // edits that came with it are lost (design 21).
+        let mut welcome = None;
         for message in client.poll() {
             match message {
                 Ok(ToClient::Welcome {
@@ -85,21 +89,24 @@ pub fn join(addr: std::net::SocketAddr, wait: std::time::Duration) -> Result<Joi
                     seed,
                     generator,
                     topology,
-                }) => {
-                    return Ok(Joining {
-                        client,
-                        player,
-                        clock_s,
-                        seed,
-                        generator,
-                        topology,
-                        early,
-                    });
+                }) if welcome.is_none() => {
+                    welcome = Some((player, clock_s, seed, generator, topology));
                 }
                 Ok(ToClient::Rejected { reason }) => return Err(format!("{reason:?}")),
                 Ok(other) => early.push(other),
                 Err(bad) => return Err(format!("{bad:?}")),
             }
+        }
+        if let Some((player, clock_s, seed, generator, topology)) = welcome {
+            return Ok(Joining {
+                client,
+                player,
+                clock_s,
+                seed,
+                generator,
+                topology,
+                early,
+            });
         }
         if client.is_closed() {
             return Err("closed".into());
@@ -166,6 +173,21 @@ pub fn play(
                         match save.serve_join(c, &hello, &kit, near) {
                             Some(player) => {
                                 info!("player {player} joined ({c})");
+                                // The same player joining again before their
+                                // old connection is seen to close (a game
+                                // restarted): the old one is forgotten and
+                                // closed, so messages go to the new one and
+                                // the old one's close leaves the player in.
+                                let stale: Vec<u64> = players
+                                    .iter()
+                                    .filter(|(_, p)| **p == player)
+                                    .map(|(c, _)| *c)
+                                    .collect();
+                                for old in stale {
+                                    players.remove(&old);
+                                    host.close(old);
+                                    info!("player {player} rejoined: dropped ({old})");
+                                }
                                 players.insert(c, player);
                             }
                             None => info!("a join was refused ({c})"),

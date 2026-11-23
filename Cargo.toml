@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/pbd-core", "crates/pbd-app", "crates/pbd-server", "crates/pbd-net"]
-default-members = ["crates/pbd-core", "crates/pbd-app", "crates/pbd-server", "crates/pbd-net"]
+members = ["crates/pbd-core", "crates/pbd-app", "crates/pbd-server", "crates/pbd-net", "crates/pbd-headless"]
+default-members = ["crates/pbd-core", "crates/pbd-app", "crates/pbd-server", "crates/pbd-net", "crates/pbd-headless"]
 
 [workspace.package]
 version = "0.1.0"

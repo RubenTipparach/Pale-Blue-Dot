@@ -3879,6 +3879,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pbd-headless"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.10",
+ "pbd-core",
+ "pbd-net",
+ "pbd-server",
+]
+
+[[package]]
 name = "pbd-net"
 version = "0.1.0"
 dependencies = [
