@@ -297,6 +297,28 @@ impl Default for RecipeFile {
                 &[("log", 6), ("rope", 4)],
                 &[("raft", 1)],
             ),
+            // land-transport design 10: the wheel and the two carts.
+            recipe(
+                "wheel",
+                "workbench",
+                4.0,
+                &[("planks", 4), ("iron-ingot", 1)],
+                &[("wheel", 1)],
+            ),
+            recipe(
+                "hand-cart",
+                "workbench",
+                6.0,
+                &[("wheel", 2), ("planks", 8), ("rope", 2)],
+                &[("hand-cart", 1)],
+            ),
+            recipe(
+                "horse-cart",
+                "workbench",
+                8.0,
+                &[("wheel", 2), ("planks", 14), ("rope", 4), ("leather", 2)],
+                &[("horse-cart", 1)],
+            ),
         ]);
         file
     }
@@ -705,8 +727,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            16,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the tube and raft (small-boats; the rowboat retired)"
+            19,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), and the wheel and the two carts (land-transport)"
         );
         assert!(book.get("rowboat").is_none(), "the rowboat is retired");
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
