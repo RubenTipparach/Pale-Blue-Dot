@@ -1557,15 +1557,23 @@ design 42's open plan that every click extended:
   aim reaches.
 - **A plan is a list of roads**, each its own segment with its own width;
   the `road-plan` record holds them as `roads`, each with its waypoints.
-- **Clicking a stake** of any road picks it up to move it, as before.
-  Clicking the start again, Esc, or changing tool drops a road that has no
+- **Roads are added, never replaced (owner, 2026-11-24: "two-click is
+  additive", "you add segments not replace", "if i click on a stake that
+  means I want to extend another segment").** A click on a stake of any road
+  starts a new road from it, joined there and sharing that stake; an end
+  clicked on another road's stake joins it the same way. Shift and a click
+  on a stake picks it up to move it.
+- **The tools carry their icons** (owner: "I expected icons for a more user
+  friendly gui"): the game's survey stakes, shovel and axe, and the
+  planner's rubber for the eraser.
+- Clicking the start again, Esc, or changing tool drops a road that has no
   end yet. Right-click on a stake takes it back; a road of two stakes goes
   with it.
 - **The eraser (4)** deletes the whole road under the aim: its stakes come
   back to the pack, and its paved cells are taken up by the removal rule
   (marked, or given back), unless another road still runs over them.
 
-Shown in M15 version 9 (version 8 had a New road button on the old open plan).
+Shown in M15 version 10 (version 8 had a New road button on the old open plan; version 9 picked a stake up on a plain click).
 
 ## Risks / Trade-offs
 
