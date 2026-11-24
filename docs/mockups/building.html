@@ -270,6 +270,7 @@ select{font:14px var(--body);background:var(--raise);color:var(--ink);border:1px
         <canvas id="pcv" tabindex="0" aria-label="The plan, seen from above, one storey at a time"></canvas>
         <div class="ptop">
           <div class="seg auto" id="storeys"></div>
+          <div class="seg auto" id="pview"></div>
           <div class="seg auto" id="pkits"></div>
           <div class="seg auto" id="proofs"></div>
         </div>
@@ -339,6 +340,8 @@ select{font:14px var(--body);background:var(--raise);color:var(--ink);border:1px
       <li><b>Opened</b> at a drafting table (a new station, made at the workbench) with F, or with O in build mode; aimed at a site or one of your houses, O opens that one (design 3).</li>
       <li><b>Presets</b> on the left: straw hut, cottage, two-storey house, townhouse, workshop, shop, barn, stable, warehouse and tower, each small, standard or large. In the game the towns' own plain buildings are presets too (design 4). Pick one, change it, and <b>Save</b> it under a name: it joins <b>Your blueprints</b> and the preset is untouched.</li>
       <li><b>Tools</b> along the bottom: <b>Room</b> paints cells on this storey (drag to paint; on a painted cell it erases) and its outside edges are walls by themselves, so a plan cannot leave a wall out by accident; <b>Wall</b> an inner wall; <b>Door</b> and <b>Window</b> on any wall (a window only outside); <b>Stair</b> on its foot cell, pointing the way you click from the cell's middle; <b>Lantern</b>; <b>Slot</b> marks a place for furniture (bed, table, chest, bench, chair: the <code>furniture</code> change's pieces, made at the carpenter's bench and placed in the slot); <b>Erase</b>. Ctrl-Z undoes.</li>
+      <li><b>Erase</b> (the rubber, 8): near a cell's rim it takes a door or window out of its wall, or an inner wall away; in the middle it takes a stair, lantern or slot, then the cell. A door, window or wall tool aimed at an outside edge from outside the room works on that edge.</li>
+      <li><b>Top down or Isometric</b> beside the storeys. Isometric stands the walls up with the near and inner ones cut low, so the floor stays in sight; every tool works in both. The page remembers the choice.</li>
       <li><b>Storeys</b> over the plan: the storey below shows faint under the one being drawn. A stair's two cells are cut out of the floor above as its well, as in the towns.</li>
       <li><b>Checks</b> are build mode's own rules run on the plan (design 2): a piece that breaks one is red on the plan and its reason is in the list, the same words as the red ghost in build mode. Amber is a warning that does not stop it (no door). Try painting an upper storey over nothing, or a stair with no landing.</li>
       <li><b>Bill of materials</b>: the goods the whole plan takes in its kit (design 8, a first guess at every number), the pieces and about how long the strokes take at the mallet's beat.</li>

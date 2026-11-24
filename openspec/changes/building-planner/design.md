@@ -356,6 +356,23 @@ where the game will add the build camera's preview. Screenshots:
 `tools/mockup_building_planner_shots.js`, headless Chromium on SwiftShader in
 a cloud session; no frame times taken).
 
+**M6 version 3 (owner, 2026-11-24).** Two asks on the planner: "need
+eraser here still" and "I also would like this to be able to toggle between
+top down and isometric".
+- **Erase has its own icon**, a rubber (`icon_eraser.png`, drawn by
+  `tools/art/building_art.py`), not the pickaxe, which stays Free building's
+  remove. It removes a door or window on an edge (the wall comes back), an
+  inner wall, a stair, lantern or slot, and then the cell.
+- **An outside edge can be clicked from outside.** Door, Window, Wall and
+  Erase aimed at a room's outer edge from the cell beyond it act on the
+  room's edge, where they used to say "Paint a room here first".
+- **Top down or isometric**, a toggle beside the storeys. Isometric turns the
+  plan 45 degrees and stands the walls up, the back outside walls full
+  height and the near and inner walls cut low (a cutaway), so the floor, the
+  doors and what is on it stay in sight and every tool still works on it.
+  The choice is remembered on the device. In the game this is the build
+  camera's preview (decision 12); the planner keeps both views.
+
 ## Risks / Trade-offs
 
 - **Two ways to build.** Free and planned worlds behave differently. Kept to

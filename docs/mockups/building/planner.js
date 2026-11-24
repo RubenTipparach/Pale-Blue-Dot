@@ -218,19 +218,24 @@ var TAB = "";
   function fromJSON(o) { return { ...o, st: o.st.map(s => new Set(s)) }; }
   function saveMine() { try { localStorage.setItem("pbd-m6-blueprints", JSON.stringify(MINE.map(m => ({ name: m.name, plan: toJSON(m.plan) })))); } catch (e) { /* private window: kept for this visit only */ } }
 
-  const TOOLS = [["room", "Room", "building/icon_floor.png"], ["wall", "Wall", "building/icon_wall.png"], ["door", "Door", "building/icon_door.png"], ["window", "Window", "building/icon_window.png"], ["stair", "Stair", "building/icon_stairs.png"], ["lantern", "Lantern", "building/game/items/lantern_post.png"], ["slot", "Slot", "building/icon_post.png"], ["erase", "Erase", "building/game/items/pickaxe.png"]];
+  const TOOLS = [["room", "Room", "building/icon_floor.png"], ["wall", "Wall", "building/icon_wall.png"], ["door", "Door", "building/icon_door.png"], ["window", "Window", "building/icon_window.png"], ["stair", "Stair", "building/icon_stairs.png"], ["lantern", "Lantern", "building/game/items/lantern_post.png"], ["slot", "Slot", "building/icon_post.png"], ["erase", "Erase", "building/icon_eraser.png"]];
   const SLOTKINDS = ["bed", "table", "chest", "bench", "chair"];
   const pcv = $("pcv"), pctx = pcv.getContext("2d");
-  let PV = { s: 30, cx: 0, cy: 0 };
+  let PV = { s: 30, cx: 0, cy: 0, iso: false };
+  try { PV.iso = localStorage.getItem("pbd-m6-view") === "iso"; } catch (e) { /* private window */ }
   function pfit() {
     const w = pcv.clientWidth, h = pcv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     pcv.width = Math.round(w * dpr); pcv.height = Math.round(h * dpr); pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let ext = 2.6; for (const k of footprint(PL.plan)) ext = Math.max(ext, hexDist(...unK(k)) + 1.6); ext = Math.min(ext, TUNE.maxRadius + 1.2);
     const top = (document.querySelector(".ptop").offsetHeight || 40) + 16, bot = 96, availH = Math.max(120, h - top - bot);
-    PV.s = Math.min(w / (2 * ext * W + W), availH / (2 * ext * ROW + 2 * R)); PV.cx = w / 2; PV.cy = top + availH / 2;
+    PV.s = Math.min(w / (2 * ext * W + W), availH / (2 * ext * ROW + 2 * R)) * (PV.iso ? 1.25 : 1); PV.cx = w / 2; PV.cy = top + availH / 2 + (PV.iso ? PV.s * 0.6 : 0);
   }
-  const P2 = (x, z) => [PV.cx + x * PV.s, PV.cy + z * PV.s];
-  const fromScreen = (sx, sy) => [(sx - PV.cx) / PV.s, (sy - PV.cy) / PV.s];
+  // Top down, or isometric: the plan turned 45 degrees and tipped, walls stood
+  // up WALLH metres. h lifts a point off the floor (isometric only).
+  const IC = Math.SQRT1_2, IS = Math.SQRT1_2 * 0.5, WALLH = 2.4, CUTH = 0.5;
+  const P2 = (x, z, h = 0) => PV.iso ? [PV.cx + (x - z) * IC * PV.s, PV.cy + ((x + z) * IS - h) * PV.s] : [PV.cx + x * PV.s, PV.cy + z * PV.s];
+  const fromScreen = (sx, sy) => { const u = (sx - PV.cx) / PV.s, v = (sy - PV.cy) / PV.s; if (!PV.iso) return [u, v]; const a = u / IC, b = v / IS; return [(a + b) / 2, (b - a) / 2]; };
+  const sdir = d => { const [x, z] = dvec(d); return PV.iso ? [(x - z) * IC, (x + z) * IS] : [x, z]; };
   function hexPath(q, r, sc = 1) { pctx.beginPath(); hexPts(q, r, sc).forEach((p, i) => { const [x, y] = P2(...p); i ? pctx.lineTo(x, y) : pctx.moveTo(x, y); }); pctx.closePath(); }
   function edgeLine(q, r, d) { const a = P2(...corner(q, r, d)), b = P2(...corner(q, r, d + 1)); return [a, b]; }
   let HOVER = null;
@@ -256,7 +261,8 @@ var TAB = "";
     for (const is of issues) if (is.s === s || is.s === -1) for (const k of is.cells) { hexPath(...unK(k), 0.9); pctx.fillStyle = is.lvl === "bad" ? "rgba(255,107,87,.38)" : "rgba(240,180,60,.3)"; pctx.fill(); }
     // walls of this storey
     const kit = PKITS[p.kit], wt = Math.max(3, (kit.t || 0.3) * PV.s);
-    for (const pc of piecesOf(p)) {
+    if (PV.iso) isoWalls(p, s, wt);
+    else for (const pc of piecesOf(p)) {
       if (pc.cls !== "wall" || pc.s !== s) continue;
       const [a, b] = edgeLine(pc.q, pc.r, pc.d);
       pctx.lineCap = "round";
@@ -271,7 +277,7 @@ var TAB = "";
     }
     // stairs, lanterns, slots
     for (const t of p.stairs) if (t.s === s) {
-      const [q2, r2] = nbr(t.q, t.r, t.d), a = P2(hx(t.q, t.r), hz(t.q, t.r)), b = P2(hx(q2, r2), hz(q2, r2)), [ux, uy] = dvec(t.d), px = -uy, py = ux;
+      const [q2, r2] = nbr(t.q, t.r, t.d), a = P2(hx(t.q, t.r), hz(t.q, t.r)), b = P2(hx(q2, r2), hz(q2, r2)), [ux, uy] = sdir(t.d), px = -uy, py = ux;
       const bad = issues.some(i => i.lvl === "bad" && i.s === s && i.cells.includes(K(t.q, t.r)) && ["landing", "stair_cut", "stair_floor", "headroom"].includes(i.rule));
       pctx.strokeStyle = bad ? "#ff6b57" : "#ece4d2"; pctx.lineWidth = 1.5; const hw = 0.55 * PV.s;
       for (let i = 0; i <= 10; i++) { const f = -0.35 + i * 0.17, x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f; pctx.beginPath(); pctx.moveTo(x + px * hw, y + py * hw); pctx.lineTo(x - px * hw, y - py * hw); pctx.stroke(); }
@@ -284,21 +290,55 @@ var TAB = "";
       const [x, y] = P2(hx(o.q, o.r), hz(o.q, o.r)), bad = issues.some(i => i.s === s && i.rule === "slot" && i.cells.includes(K(o.q, o.r)));
       const lab = o.kind.toUpperCase(); pctx.font = "600 12px Barlow Condensed, sans-serif"; const tw = pctx.measureText(lab).width + 10;
       pctx.fillStyle = bad ? "rgba(255,107,87,.85)" : "rgba(240,180,60,.85)"; pctx.fillRect(x - tw / 2, y + PV.s * 0.25, tw, 16); pctx.fillStyle = "#17150f"; pctx.textAlign = "center"; pctx.fillText(lab, x, y + PV.s * 0.25 + 12);
-      const [fx, fy] = dvec(o.d); pctx.strokeStyle = bad ? "#ff6b57" : "#f0b43c"; pctx.lineWidth = 2; pctx.beginPath(); pctx.moveTo(x, y); pctx.lineTo(x + fx * PV.s * 0.45, y + fy * PV.s * 0.45); pctx.stroke();
+      const [fx, fy] = sdir(o.d); pctx.strokeStyle = bad ? "#ff6b57" : "#f0b43c"; pctx.lineWidth = 2; pctx.beginPath(); pctx.moveTo(x, y); pctx.lineTo(x + fx * PV.s * 0.45, y + fy * PV.s * 0.45); pctx.stroke();
     }
     // hover
     if (HOVER) {
       pctx.strokeStyle = "#f0b43c"; pctx.lineWidth = 2;
       if (HOVER.edge != null) { const [a, b] = edgeLine(HOVER.q, HOVER.r, HOVER.edge); pctx.lineWidth = 5; pctx.beginPath(); pctx.moveTo(...a); pctx.lineTo(...b); pctx.stroke(); }
-      else { hexPath(HOVER.q, HOVER.r, 0.92); pctx.stroke(); if (PL.tool === "stair") { const a = P2(hx(HOVER.q, HOVER.r), hz(HOVER.q, HOVER.r)), [ux, uy] = dvec(HOVER.d); pctx.beginPath(); pctx.moveTo(...a); pctx.lineTo(a[0] + ux * W * 1.5 * PV.s, a[1] + uy * W * 1.5 * PV.s); pctx.stroke(); } }
+      else { hexPath(HOVER.q, HOVER.r, 0.92); pctx.stroke(); if (PL.tool === "stair") { const a = P2(hx(HOVER.q, HOVER.r), hz(HOVER.q, HOVER.r)), [ux, uy] = sdir(HOVER.d); pctx.beginPath(); pctx.moveTo(...a); pctx.lineTo(a[0] + ux * W * 1.5 * PV.s, a[1] + uy * W * 1.5 * PV.s); pctx.stroke(); } }
     }
     // the compass of the plan: which way is the front
-    pctx.fillStyle = "rgba(236,228,210,.55)"; pctx.font = "600 12px Barlow Condensed, sans-serif"; pctx.textAlign = "center"; pctx.fillText("FRONT", PV.cx, Math.min(h - 84, PV.cy + (TUNE.maxRadius + 1.1) * ROW * PV.s));
+    pctx.fillStyle = "rgba(236,228,210,.55)"; pctx.font = "600 12px Barlow Condensed, sans-serif"; pctx.textAlign = "center"; { const f = P2(0, (TUNE.maxRadius + 1.1) * ROW); pctx.fillText("FRONT", f[0], Math.min(h - 84, f[1])); }
+  }
+  // Isometric walls: each wall stood up as a face, far ones first, an opening
+  // cut from it with its lintel (and a window's sill) left in.
+  function isoWalls(p, s, wt) {
+    const list = piecesOf(p).filter(pc => pc.cls === "wall" && pc.s === s).map(pc => {
+      const a = corner(pc.q, pc.r, pc.d), b = corner(pc.q, pc.r, pc.d + 1); return { pc, a, b, depth: a[0] + a[1] + b[0] + b[1] };
+    }).sort((x, y) => x.depth - y.depth);
+    const face = (a, b, h0, h1, fill, edge) => {
+      const pts = [P2(a[0], a[1], h0), P2(b[0], b[1], h0), P2(b[0], b[1], h1), P2(a[0], a[1], h1)];
+      pctx.beginPath(); pts.forEach((q, i) => i ? pctx.lineTo(...q) : pctx.moveTo(...q)); pctx.closePath();
+      pctx.fillStyle = fill; pctx.fill(); pctx.strokeStyle = edge; pctx.lineWidth = 1; pctx.stroke();
+    };
+    const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    for (const { pc, a, b } of list) {
+      // lit by the face's turn to the upper left, as the icons are
+      const [nx, nz] = dvec(pc.d), lit = 0.5 + 0.5 * Math.max(-1, Math.min(1, -(nx + nz) * IC));
+      const base = pc.outer ? [226, 214, 182] : [191, 176, 140], k = 0.62 + 0.38 * lit;
+      const fill = `rgba(${base.map(c => Math.round(c * k)).join(",")},${pc.outer ? 0.92 : 0.85})`, edge = "rgba(23,21,15,.55)";
+      // cutaway: only the outside walls at the back stand full height; the
+      // walls facing the viewer and the inner ones are cut low, so the floor
+      // and what is on it stay in sight
+      const full = pc.outer && nx + nz < 0, H = full ? WALLH : CUTH;
+      if (pc.open === "none") { face(a, b, 0, H, fill, edge); continue; }
+      const gap = (pc.open === "door" ? 1.0 : 0.8) / 1.636, t0 = (1 - gap) / 2, t1 = (1 + gap) / 2, g0 = lerp2(a, b, t0), g1 = lerp2(a, b, t1);
+      face(a, g0, 0, H, fill, edge); face(g1, b, 0, H, fill, edge);
+      if (!full) { if (pc.open === "window") face(g0, g1, 0, H, "rgba(143,195,216,.55)", "#8fc3d8"); else { const q = [P2(g0[0], g0[1]), P2(g1[0], g1[1])]; pctx.strokeStyle = "#f0b43c"; pctx.lineWidth = 2; pctx.beginPath(); pctx.moveTo(...q[0]); pctx.lineTo(...q[1]); pctx.stroke(); } continue; }
+      if (pc.open === "door") { face(g0, g1, 2.0, WALLH, fill, edge); const q = [P2(g0[0], g0[1]), P2(g1[0], g1[1])]; pctx.strokeStyle = "#f0b43c"; pctx.lineWidth = 2; pctx.beginPath(); pctx.moveTo(...q[0]); pctx.lineTo(...q[1]); pctx.stroke(); }
+      else { face(g0, g1, 0, 0.9, fill, edge); face(g0, g1, 1.9, WALLH, fill, edge); face(g0, g1, 0.9, 1.9, "rgba(143,195,216,.45)", "#8fc3d8"); }
+    }
   }
   function target(ev) {
     const rc = pcv.getBoundingClientRect(), [x, z] = fromScreen(ev.clientX - rc.left, ev.clientY - rc.top), [q, r] = cellAt(x, z);
     const dx = x - hx(q, r), dz = z - hz(q, r), ang = Math.atan2(dz, dx), d = ((Math.round(ang / (Math.PI / 3)) % 6) + 6) % 6, rad = Math.hypot(dx, dz);
     const edgeTool = ["wall", "door", "window"].includes(PL.tool) || (PL.tool === "erase" && rad > R * 0.62);
+    if (edgeTool) {
+      // an edge picked from outside the room is the room's own outer edge
+      const cells = PL.plan.st[PL.storey] || new Set(), [q2, r2] = nbr(q, r, d);
+      if (!cells.has(K(q, r)) && cells.has(K(q2, r2))) return { q: q2, r: r2, d: (d + 3) % 6, edge: (d + 3) % 6 };
+    }
     return { q, r, d, edge: edgeTool ? d : null };
   }
   function markEdited() { if (PL.plan.preset && !PL.edit) { PL.plan.preset = null; PL.plan.name = PL.plan.name + " (changed)"; } }
@@ -372,6 +412,8 @@ var TAB = "";
     for (const b of $("storeys").querySelectorAll("[data-s]")) b.addEventListener("click", () => { PL.storey = +b.dataset.s; prefresh(); });
     $("addS").addEventListener("click", () => { pushUndo(); markEdited(); p.st.push(new Set(p.st[p.st.length - 1])); PL.storey = p.st.length - 1; prefresh(); });
     $("delS").addEventListener("click", () => { if (p.st.length < 2) return; pushUndo(); markEdited(); p.st.pop(); prune(p); p.stairs = p.stairs.filter(t => t.s < p.st.length); PL.storey = Math.min(PL.storey, p.st.length - 1); prefresh(); });
+    $("pview").innerHTML = [["top", "Top down"], ["iso", "Isometric"]].map(([v, l]) => `<button class="btn" data-v="${v}" aria-pressed="${(v === "iso") === PV.iso}">${l}</button>`).join("");
+    for (const b of $("pview").querySelectorAll("[data-v]")) b.addEventListener("click", () => { PV.iso = b.dataset.v === "iso"; try { localStorage.setItem("pbd-m6-view", b.dataset.v); } catch (e) { /* private window */ } prefresh(); });
     $("pkits").innerHTML = Object.entries(PKITS).map(([k, v]) => `<button class="btn" data-k="${k}" aria-pressed="${p.kit === k}"${v.locked ? ` disabled title="${v.locked}"` : ""}>${v.label}</button>`).join("");
     for (const b of $("pkits").querySelectorAll("button:not([disabled])")) b.addEventListener("click", () => { pushUndo(); markEdited(); p.kit = b.dataset.k; prefresh(); });
     $("proofs").innerHTML = [["gable", "Gable"], ["cone", "Cone"], ["flat", "Flat"]].map(([k, l]) => `<button class="btn" data-r="${k}" aria-pressed="${p.roof === k}">${l}</button>`).join("");

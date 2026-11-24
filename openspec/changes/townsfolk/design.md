@@ -1538,6 +1538,22 @@ waypoint over paved cells to show the removal rule. Sliders: ghost strength,
 the steepest grade, the cost scale, the lamp spacing and the share of gravel
 returned. By day and at night, when the built lamps light the road.
 
+**42k. A road by its two ends (owner, 2026-11-24: "road planner: needs to
+allow the player to click on start and end segment").** Besides staking a
+road a step at a time, **New road** (N) starts a plan by its ends: the
+first click sets the start (one stake), the second the end, and the plan
+between them is the straight hex line, with a stake added wherever a leg
+would pass `max_segment` cells, so a long road is one click. The ghost
+follows the aim from the start before the second click, with its red
+reasons (a tree, open water, too steep) on the cells that clash; a click
+on a clashing end does nothing and says why. The end may be clicked
+anywhere the aim reaches, not only within the stake reach: the player sets
+the road out by looking along it. Clicking the start again takes it back;
+Esc drops the new road. Starting a new road ends the plan in hand: its paved
+cells stay as road, its unpaved stakes come back to the pack. The stakes
+between the ends are ordinary waypoints afterwards: picked up, moved and
+added to as before. Shown in M15 version 8.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

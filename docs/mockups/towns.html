@@ -265,7 +265,7 @@ body.rpmode .opts .stairsonly{display:none}
     <table class="bill" id="rpBill"></table>
     <div class="status" id="rpCounts"></div>
     <div class="status rpnote" id="rpNote"></div>
-    <div class="rpacts"><button class="small" id="rpEnd">End plan</button><button class="small" id="rpKeep" aria-pressed="false">Keep paving</button><button class="small" id="rpEdit">Edit mid-build</button><button class="small" id="rpReset">Reset</button><button class="small" id="rpFill">Fill pack</button><button class="small" id="rpRec">Record</button></div>
+    <div class="rpacts"><button class="small" id="rpNew">New road</button><button class="small" id="rpEnd">End plan</button><button class="small" id="rpKeep" aria-pressed="false">Keep paving</button><button class="small" id="rpEdit">Edit mid-build</button><button class="small" id="rpReset">Reset</button><button class="small" id="rpFill">Fill pack</button><button class="small" id="rpRec">Record</button></div>
   </section>
   <div class="panel rpaim" id="rpAim" hidden></div>
   <div class="radial" id="radial" hidden role="dialog" aria-label="Width and surface">
@@ -368,6 +368,8 @@ body.rpmode .opts .stairsonly{display:none}
         <li><b>Version 4</b> (2026-11-22): the Paving scene, roads marked by survey stakes and paved with gravel, the grinder and the mixer.</li>
         <li><b>Version 5</b> (2026-11-23): the Road planner scene, a road planned in first person with a live ghost, red refusals, a width and surface menu, a bill, edits mid-build and lamps.</li>
         <li><b>Version 6</b> (2026-11-23): the Furniture scene, a furnished timber house by day and night, the carpenter's ten pieces, sitting, lying, a townsperson asleep and a chest's panel.</li>
+        <li><b>Version 7</b> (2026-11-23): the merged page repaired, so the Furniture and Road planner scenes both run.</li>
+        <li><b>Version 8</b> (2026-11-24): the Road planner's New road (N): click the start, then the end, and the road between is planned, staked every 24 cells.</li>
       </ul>
     
       <h3>What is modelled</h3>
@@ -4335,7 +4337,8 @@ function rpAfterLoad() {
   rpReset(true);
 }
 function rpReset(quiet) {
-  Object.assign(RP, { wps: RP_DEMO.map(p => p.slice()), open: true, width: 1, surface: "gravel", lamps: true, tool: "stakes", grab: null, aimKey: -1, keep: false, frac: 0, note: "" });
+  for (const [k, v] of [...RP.world]) if (v.done) RP.world.delete(k);
+  Object.assign(RP, { pick: null, wps: RP_DEMO.map(p => p.slice()), open: true, width: 1, surface: "gravel", lamps: true, tool: "stakes", grab: null, aimKey: -1, keep: false, frac: 0, note: "" });
   RP.paved.clear(); RP.remove.clear(); RP.lampsBuilt.clear(); RP.pack = { ...RP_FULL, stakes: RP_FULL.stakes - RP_DEMO.length };
   rpCommit();
   for (const ci of RP.A.cells) { const [c] = rcr(ci.key); if (ci.lane === 0 && c <= 15) rpPave(ci, true); }
@@ -4642,6 +4645,8 @@ function rpPreview() {
   if (!RP.aim || RP.tool !== "stakes") return null;
   const wps = RP.wps.map(p => p.slice());
   if (RP.grab) wps[RP.grab.i] = RP.aim.slice();
+  else if (RP.pick === "start") return null;
+  else if (RP.pick === "end") { const s0 = wps[0]; if (s0[0] === RP.aim[0] && s0[1] === RP.aim[1]) return null; const w2 = rpSplit(s0, RP.aim); return { wps: w2, A: rpAnalyse(rpRoute(w2), RP.width, RP.surface, w2) }; }
   else if (RP.open) { const last = wps[wps.length - 1]; if (last && last[0] === RP.aim[0] && last[1] === RP.aim[1]) return null; wps.push(RP.aim.slice()); }
   else return null;
   return { wps, A: rpAnalyse(rpRoute(wps), RP.width, RP.surface, wps) };
@@ -4739,7 +4744,20 @@ function rpAct() {
     const why = rpPave(ci); if (why) { toast(why); return; }
     rpAfterBuild(); toast(ci.kind === "bridge" ? "Bridge built" : "Paved"); return;
   }
-  // stakes
+  // stakes: a new road by its two ends
+  if (RP.pick === "start") {
+    if (RP.pack.stakes < 1) { toast("No survey stakes"); return; }
+    if (RP_WATER[k] === "deep") { toast("Not in deep water"); return; }
+    RP.wps = [[c, r]]; RP.open = true; RP.pick = "end"; RP.pack.stakes--; rpAfterBuild(); renderKeys(); toast("Start set. Click the end"); return;
+  }
+  if (RP.pick === "end") {
+    const s0 = RP.wps[0];
+    if (s0[0] === c && s0[1] === r) { RP.pack.stakes++; RP.wps = []; RP.pick = "start"; rpAfterBuild(); toast("Start taken back"); return; }
+    const wps = rpSplit(s0, [c, r]), need = wps.length - 1;
+    if (RP.pack.stakes < need) { toast("Needs " + need + " survey stakes"); return; }
+    const why = rpApply(wps); if (why) { toast(why); return; }
+    RP.pack.stakes -= need; RP.open = false; RP.pick = null; rpAfterBuild(); renderKeys(); toast("Road marked"); return;
+  }
   if (RP.grab) {
     if (!RP.prev) { rpCancelGrab(); return; }
     if (RP.prev.A.bad.length) { toast(RP.prev.A.bad[0].bad); return; }
@@ -4765,6 +4783,22 @@ function rpAct() {
   if (RP.prev && RP.prev.A.bad.length) { toast(RP.prev.A.bad[0].bad); return; }
   const why = rpApply([...RP.wps, [c, r]]); if (why) { toast(why); return; }
   RP.pack.stakes--; rpAfterBuild(); toast("Stake driven");
+}
+// The line from a start to an end, staked: a stake wherever a leg would run
+// past maxSeg cells, so a long road is legal in one click.
+function rpSplit(a, b) {
+  const line = hexLine(a, b), legs = Math.max(1, Math.ceil((line.length - 1) / RP_TUNE.maxSeg)), out = [a.slice()];
+  for (let i = 1; i < legs; i++) out.push(line[Math.round(i * (line.length - 1) / legs)].slice());
+  out.push(b.slice()); return out;
+}
+// New road: the plan in hand is finished (its paved cells stay as road, its
+// unpaved stakes come back), then the next two clicks are its start and end.
+function rpNewRoad() {
+  if (RP.grab) rpCancelGrab();
+  for (const [k, v] of RP.paved) if (!RP.remove.has(k)) RP.world.set(k, { surface: v.surface, spec: v.spec, done: true });
+  RP.pack.stakes += RP.wps.length;
+  RP.paved.clear(); RP.remove.clear(); RP.wps = []; RP.open = true; RP.keep = false; RP.note = "";
+  RP.pick = "start"; RP.tool = "stakes"; rpAfterBuild(); renderKeys(); toast("Click the start");
 }
 function rpCancelGrab() {
   if (!RP.grab) return false;
@@ -4833,7 +4867,7 @@ function rpBill(A) {
 function rpUI() {
   if (SCENE !== "roadplanner") return;
   const A = RP.A, need = rpBill(A), prev = RP.prev, pn = prev ? rpBill(prev.A) : null;
-  if (prev && !RP.grab) pn.stakes = 1;
+  if (prev && !RP.grab) pn.stakes = RP.pick === "end" ? prev.wps.length - 1 : 1;
   const GOODS = [["stakes", "Survey stakes"], ["gravel", "Gravel"], ["planks", "Planks"], ["logs", "Logs"], ["lanterns", "Street lanterns"]];
   $("rpBill").innerHTML = `<tr><th>Goods</th><th>Need</th><th>Pack</th></tr>` + GOODS.map(([g, n]) => {
     const add = pn ? pn[g] - need[g] : 0, short = need[g] + Math.max(0, add) > RP.pack[g];
@@ -4858,7 +4892,8 @@ function rpUI() {
   let what = "";
   if (RP.aim) {
     const k = idx(...RP.aim), ci = A.byKey.get(k), wi = RP.wps.findIndex(p => p[0] === RP.aim[0] && p[1] === RP.aim[1]);
-    if (RP.tool === "stakes") what = bad ? bad : RP.grab ? "Set the stake here" : wi >= 0 && !(RP.open && wi === RP.wps.length - 1) ? "Pick up the stake" : ci && ci.lane === 0 && RP.wps.length > 1 ? "Add a stake here" : RP.open ? "Drive a stake" : "";
+    if (RP.tool === "stakes" && RP.pick) what = bad ? bad : RP.pick === "start" ? "Set the start" : "Set the end";
+    else if (RP.tool === "stakes") what = bad ? bad : RP.grab ? "Set the stake here" : wi >= 0 && !(RP.open && wi === RP.wps.length - 1) ? "Pick up the stake" : ci && ci.lane === 0 && RP.wps.length > 1 ? "Add a stake here" : RP.open ? "Drive a stake" : "";
     else if (RP.tool === "shovel") what = RP.remove.has(k) ? "Take up" : ci && !RP.paved.has(k) ? (ci.bad || (ci.kind === "bridge" ? "Build the bridge" : "Pave")) : "";
     else what = RP_TREES.has(k) ? "Fell the tree" : "";
   }
@@ -4879,8 +4914,9 @@ function rpKey(e) {
   if (c === "KeyR") { $("radial").hidden = !$("radial").hidden; return true; }
   if (c === "KeyF") { rpAct(); return true; }
   if (c === "KeyX") { rpDelete(); return true; }
+  if (c === "KeyN") { rpNewRoad(); return true; }
   if (c === "Enter") { RP.open = !RP.open; if (RP.grab) rpCancelGrab(); rpPlanLayer(); rpUI(); toast(RP.open ? "Plan open" : "Plan ended"); return true; }
-  if (c === "Escape") { if (!$("radial").hidden) { $("radial").hidden = true; return true; } if (RP.grab) { rpCancelGrab(); return false; } }
+  if (c === "Escape") { if (!$("radial").hidden) { $("radial").hidden = true; return true; } if (RP.pick) { RP.pack.stakes += RP.wps.length; RP.wps = []; RP.pick = null; rpAfterBuild(); renderKeys(); toast("New road cancelled"); return true; } if (RP.grab) { rpCancelGrab(); return false; } }
   return false;
 }
 function rpSetupUI() {
@@ -4892,6 +4928,7 @@ function rpSetupUI() {
   for (const b of document.querySelectorAll("#radial [data-s]")) b.onclick = () => rpMenu("surface", b.dataset.s);
   $("rdLamps").onclick = () => rpMenu("lamps");
   $("rpEnd").onclick = () => { RP.open = !RP.open; if (RP.grab) rpCancelGrab(); rpPlanLayer(); rpUI(); };
+  $("rpNew").onclick = () => rpNewRoad();
   $("rpKeep").onclick = () => { RP.keep = !RP.keep; RP.keepT = 0; rpUI(); };
   $("rpEdit").onclick = () => rpEditDemo();
   $("rpReset").onclick = () => rpReset();
@@ -5416,8 +5453,8 @@ function setView(v) {
 function updateHint() { const h = $("hint"); h.hidden = !(STATE.view === "walk" && !STATE.locked && !document.body.classList.contains("coarse")); h.textContent = "Click to walk"; }
 function renderKeys() {
   const keys = SCENE === "roadplanner" ? (STATE.view === "overview"
-    ? [["Click", RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["Right-click", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["Enter", "End or open the plan"], ["Drag", "Turn"], ["Wheel", "Zoom"], ["V", "Walk / overview"], ["L", "Day / night"]]
-    : [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Click / F", RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["X / right", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["Enter", "End or open the plan"], ["Esc", "Put a held stake back"], ["V", "Walk / overview"], ["L", "Day / night"]])
+    ? [["Click", RP.pick ? (RP.pick === "start" ? "Set the road's start" : "Set the road's end") : RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["Right-click", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["N", "New road: click its start, then its end"], ["Enter", "End or open the plan"], ["Drag", "Turn"], ["Wheel", "Zoom"], ["V", "Walk / overview"], ["L", "Day / night"]]
+    : [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Click / F", RP.pick ? (RP.pick === "start" ? "Set the road's start" : "Set the road's end") : RP.tool === "stakes" ? "Drive, pick up or add a stake" : RP.tool === "shovel" ? "Pave a marked cell" : "Fell a tree"], ["X / right", "Take a stake back"], ["1 2 3", "Stakes, shovel, axe"], ["R", "Width and surface"], ["N", "New road: click its start, then its end"], ["Enter", "End or open the plan"], ["Esc", "Put a held stake back"], ["V", "Walk / overview"], ["L", "Day / night"]])
     : STATE.view === "overview"
     ? [["Drag", "Turn"], ["Right-drag", "Pan (or Shift-drag)"], ["W A S D", "Pan"], ["Wheel", "Zoom"], ["Double-click", "Walk there"], ["V", "Walk / overview"], ["C", "Show collision"], ["L", "Day / night"]]
     : [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Shift", "Sprint"], ["Space", "Jump"], ["E", "Open or close a door"], ["V", "Walk / overview"], ["C", "Show collision"], ["T", "Proposed / today's walker"], ["N", "Fly through walls"], ["L", "Day / night"], ["Esc", "Let go of the mouse"]];
