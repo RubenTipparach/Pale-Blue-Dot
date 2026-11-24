@@ -24,6 +24,7 @@ use pbd_app::walking::{EYE_HEIGHT, HALF_HEIGHT, SeatedEye, Structures, Walker, W
 use pbd_core::building::{Cells, Shape};
 use pbd_core::economy::coins::{PURSE_ID, PURSE_KIND, PURSE_SCHEMA, Reason};
 use pbd_core::furniture::store::{STORE_KIND, STORE_SCHEMA, Store, Trade, loot};
+use pbd_core::furniture::walk::{Doorway, Route};
 use pbd_core::furniture::{
     Kind, Occupancy, Place, Spot, Use, Want, Who, assign, keeps_watch, town_piece_id, want,
 };
@@ -68,6 +69,9 @@ pub struct Piece {
     pub at: Vec3,
     pub front: Vec3,
     pub owner: Owner,
+    /// The doorway a townsperson walks in by (`furniture` design 11a): its
+    /// building's nearest to the piece; none for the player's.
+    pub door: Option<Doorway>,
 }
 
 impl Piece {
@@ -192,6 +196,7 @@ pub fn gather(
                             house: house.clone(),
                             trade,
                         },
+                        door: nearest_door(b, f.at),
                     });
                 }
             }
@@ -222,12 +227,30 @@ pub fn gather(
                 at,
                 front,
                 owner: Owner::Player,
+                door: None,
             });
         }
     }
     info!("FURNITURE {} pieces within reach of play", all.len());
     pieces.all = all;
     pieces.key = Some(key);
+}
+
+/// A building's doorway nearest `at` in plan, as a walk reads it: its
+/// middle on its floor and out of the building (`furniture` design 11a).
+fn nearest_door(b: &pbd_core::settlement::pieces::BuildingSolids, at: Vec3) -> Option<Doorway> {
+    let local = b.frame.local(at);
+    let plan = Vec2::new(local.x, local.z);
+    let d = b
+        .doors
+        .iter()
+        .min_by(|a, c| a.middle.distance(plan).total_cmp(&c.middle.distance(plan)))?;
+    let middle = b.frame.world(Vec3::new(d.middle.x, d.y0, d.middle.y));
+    let out = (b.frame.x * d.out.x + b.frame.z * d.out.y).normalize_or_zero();
+    Some(Doorway {
+        middle: middle.as_dvec3(),
+        out: out.as_dvec3(),
+    })
 }
 
 /// The eye and the look of the walker, in the planet frame.
@@ -500,11 +523,10 @@ pub fn seat_townsfolk(
         let reach = if night { BED_REACH_M } else { SEAT_REACH_M };
         let wanted: Vec<(Who, DVec3, Want)> = people.iter().map(|p| (p.0, p.1, p.2)).collect();
         let placed = assign(&wanted, &spots, &mut seats.0, reach);
-        for (who, _, _, id) in &people {
+        for (who, post, _, id) in &people {
             let Some((_, spot, place)) = placed.iter().find(|(w, _, _)| w == who) else {
-                if folk.resting(*id).is_some() {
-                    folk.release(*id);
-                }
+                // Let go: back out through the door they came in by.
+                folk.leave(*id, *post);
                 continue;
             };
             let Some(piece) = mine.iter().find(|p| p.id == spot.id) else {
@@ -519,7 +541,23 @@ pub fn seat_townsfolk(
                 Use::Seat { seat_m, .. } => Posture::Sit { seat_m },
                 _ => continue,
             };
-            folk.rest(*id, feet, piece.front.as_dvec3(), posture);
+            // Already there, or on the way: left alone.
+            if folk
+                .heading_to(*id)
+                .is_some_and(|to| (to - feet).length() < 0.05)
+            {
+                continue;
+            }
+            match (piece.door, folk.placed(*id)) {
+                (Some(door), Some(now)) => {
+                    let route = Route::in_through(now.feet, door, feet);
+                    let end = (feet, piece.front.as_dvec3(), posture);
+                    folk.walk(*id, route, Some(end), Some(door));
+                }
+                _ => {
+                    folk.rest(*id, feet, piece.front.as_dvec3(), posture);
+                }
+            }
         }
     }
 }

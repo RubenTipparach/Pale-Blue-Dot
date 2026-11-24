@@ -112,6 +112,8 @@ fn others_can_set_a_face_and_drive_a_person() {
             placed,
             driven: None,
             posture: None,
+            walk: None,
+            door: None,
             chosen: Chosen {
                 expression: Expression::Neutral,
                 focus: false,
@@ -135,4 +137,40 @@ fn others_can_set_a_face_and_drive_a_person() {
     assert!(folk.live(id).unwrap().driven.is_none());
     assert!(!folk.set_expression(PersonId { site: 9, index: 0 }, Expression::Happy, 1.0));
     assert_eq!(folk.people(4).count(), 1);
+    // `furniture` task 4.3: walked in through the door to a seat, walking
+    // on the way and seated at the end; let go, walked back out to the post
+    // and released there.
+    use pbd_core::furniture::walk::{Doorway, Route, WALK_MPS};
+    let post = DVec3::new(0.0, 100.0, 8.0);
+    let door = Doorway {
+        middle: DVec3::new(0.0, 100.0, 0.0),
+        out: DVec3::Z,
+    };
+    let seat = DVec3::new(1.0, 100.0, -2.0);
+    folk.drive(id, post, DVec3::Z, false);
+    let route = Route::in_through(post, door, seat);
+    let time = route.length() / WALK_MPS;
+    let sit = Posture::Sit { seat_m: 0.46 };
+    assert!(folk.walk(id, route, Some((seat, DVec3::X, sit)), Some(door)));
+    assert_eq!(folk.heading_to(id), Some(seat));
+    folk.clock += time * 0.5;
+    let clock = folk.clock;
+    let l = folk.live_mut(id).unwrap();
+    step_walk(l, clock);
+    assert!(
+        l.driven.unwrap().walking && l.posture.is_none(),
+        "on the way"
+    );
+    folk.clock += time;
+    let clock = folk.clock;
+    step_walk(folk.live_mut(id).unwrap(), clock);
+    assert_eq!(folk.resting(id), Some(sit), "seated at the end");
+    assert_eq!(folk.live(id).unwrap().driven.unwrap().feet, seat);
+    assert!(folk.leave(id, post));
+    folk.clock += 60.0;
+    let clock = folk.clock;
+    step_walk(folk.live_mut(id).unwrap(), clock);
+    let l = folk.live(id).unwrap();
+    assert!(l.driven.is_none() && l.posture.is_none() && l.walk.is_none());
+    assert!(!folk.leave(id, post), "a person not resting is left alone");
 }

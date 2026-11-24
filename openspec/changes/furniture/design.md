@@ -272,6 +272,34 @@ coins' plaque). Two things the decisions leave open, recommendations taken
   core's rule (`assign`), lying figures laid along the bed from the pillow;
   they do not walk there (task 4.3).
 
+### 11a. Townsfolk walk to their seat or bed through the door (task 4.3, 2026-11-24)
+
+On "cool implement all the phase 3 stuff!" (owner, 2026-11-24). The rule
+that chooses a place (`assign`) is unchanged; what changes is how a person
+gets there. Each a recommendation taken (ask only with screenshots):
+
+- **The walk** (`pbd_core::furniture::walk`): from where the person stands
+  to 0.9 m outside the doorway of the building that holds the piece, 0.7 m
+  inside it, then to the place, in straight legs at 1.2 m/s, turning to
+  the way they go as a walking townsperson does. When `assign` lets them
+  go (morning for a bed, the hour turning for a seat) they walk back out
+  the same way to their post or path, and are released there.
+- **Which door**: the building's doorway nearest the piece in plan
+  (`BuildingSolids::doors`), its middle on its floor and its `out`.
+- **Upstairs**: a place more than 0.5 m over the doorway's floor is on an
+  upper storey. The walk ends inside the door and the person steps up to
+  the place, as they did before, until stairs are walked (later); on the
+  way out they step down to inside the door and walk out from there.
+- **The door leaf** is left as the player last set it: a townsperson
+  passes through the doorway's opening, and a shut leaf is not swung (the
+  doors are the player's records and a walk is drawn only).
+- **The legs from the post to the door are straight**: a walk can cross a
+  yard or a market but is not routed round another building's walls;
+  posts and doors of one town are close, and routing waits for the town's
+  own paths to be a graph.
+- **Drawn only**: nothing is saved; a person whose town stands up again
+  mid-walk sets out again from their post.
+
 ## Risks / Trade-offs
 
 - **The towns' meshes change** (more faces inside houses), so a test that
