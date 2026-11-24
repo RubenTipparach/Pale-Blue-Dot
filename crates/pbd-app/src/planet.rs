@@ -2825,6 +2825,10 @@ mod tests {
         let columns = crate::config::ColumnSettings::default();
         let scatter = crate::config::ScatterSettings::default();
         let mut save = crate::saves::WorldSave::memory_only();
+        // What the terrain reads (the towns' ground, the roads' marks and
+        // clearance) stays as it is through both builds: another test
+        // installing between them would make them differ.
+        let _ground = pbd_core::settlement::ground::hold();
         let launch = build_planet(near, &columns, &scatter, &save.edits);
         // One hole dug in the opened world, at the top of the first column
         // the launch built: the rebuilt planet must carry it.

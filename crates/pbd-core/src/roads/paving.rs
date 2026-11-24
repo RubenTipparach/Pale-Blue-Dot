@@ -460,6 +460,7 @@ thread_local! {
 
 /// Install the open world's marks and bare cells, or none.
 pub fn install(installed: Option<Installed>) {
+    let _held = crate::settlement::ground::installing();
     *INSTALLED.write().unwrap_or_else(|e| e.into_inner()) = installed.map(std::sync::Arc::new);
     GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
