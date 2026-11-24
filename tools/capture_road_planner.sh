@@ -6,7 +6,7 @@
 #   two     a road by two clicks, and an open start whose ghost follows the aim
 #   stake   a second road started from the first road's middle stake
 #   erased  that second road taken by the eraser (its stakes back)
-#   wide    a three-wide road along the view (lanes red where it climbs)
+#   wide    a three-wide road open from up the view to the aim (its ghost: lanes red where the ground is off its height)
 # Each shot is a new world. Needs the fast build:
 #   cargo build --profile fast -p pbd-app
 # Usage: tools/capture_road_planner.sh <out dir> [exe]   (minutes a shot on lavapipe)

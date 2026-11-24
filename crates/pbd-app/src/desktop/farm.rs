@@ -2007,7 +2007,11 @@ pub fn scripted(
             key_at(&fine, &contact, metres + 34.0, 0.0),
         );
         if let (Some(a), Some(b)) = (start, end) {
-            road(&mut save, &mut slots, a, b);
+            // `wide` stakes nothing: its road is the open one below, so its
+            // ghost shows which lanes the ground allows.
+            if !wide {
+                road(&mut save, &mut slots, a, b);
+            }
             let plans = pbd_core::roads::planner::plans(&save.records);
             let first = plans.values().flat_map(|p| p.roads.first()).next().cloned();
             match scene.as_deref() {
@@ -2050,8 +2054,17 @@ pub fn scripted(
             {
                 slots.select(i);
             }
-            if let (Some(mut planner), Some("two")) = (planner, scene.as_deref()) {
-                planner.start = key_at(&fine, &contact, metres + 1.0, -3.0);
+            match (planner, scene.as_deref()) {
+                (Some(mut planner), Some("two")) => {
+                    planner.start = key_at(&fine, &contact, metres + 1.0, -3.0);
+                }
+                // A three-wide road open from far up the view: its ghost
+                // runs back to the aim.
+                (Some(mut planner), Some("wide")) => {
+                    planner.how = how;
+                    planner.start = Some(b);
+                }
+                _ => {}
             }
         }
         if let (Some(mut net), Some(mut standing)) = (net, standing) {
