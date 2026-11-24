@@ -6,7 +6,9 @@ towns. Built by `townsfolk` (design 10, 10a and 11, tasks 8.2 and 8.4);
 the player's own road building (task 8.3) is in it too, and cut and fill
 (roads version 2) and the lamps near towns (design 32 and 34), and the
 roads marked by survey stakes and paved with gravel from a grinder and a
-mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44).
+mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44);
+the player's wide roads on one plane, bridges and lamps, the planner's
+lifted view and the jobs on the roads (design 42m, 42n and 46).
 
 ## Requirements
 
@@ -232,3 +234,88 @@ held SHALL stay usable.
   recipe
 
 Pinned by `pbd_core::station::tests::the_shipped_recipes_resolve_and_agree_with_the_defaults`.
+
+### Requirement: A wide road shares one plane
+
+A player's road two or three cells wide SHALL take every cell's top, centre
+and lanes alike, off one plane set by its centre line, read where each cell
+really is, so that a walker crossing from lane to lane meets no step, on the
+level and up a climb. A lane SHALL be filled to the plane on a bed of packed
+earth where its ground is under it, and SHALL be refused ("Too steep
+across") where its ground stands over it; the player's road digs nothing.
+A wide road SHALL climb only straight along a row of the lattice and bend
+only on the level.
+
+#### Scenario: Across the lanes up ten layers
+
+- **WHEN** a walker crosses a two- or three-wide road diagonally from lane to
+  lane all the way up a ten-layer climb and back
+- **THEN** no rise between two points of the way is steeper than a slope's,
+  and no seam between two cells is a centimetre high
+
+Pinned by `pbd_core::roads::planner::tests::a_wide_road_up_ten_layers_is_crossed_lane_to_lane_without_a_step`,
+`a_half_bed_is_stood_on_where_it_is_drawn` and `a_wide_road_lays_its_lanes_on_one_plane`.
+
+### Requirement: The player's roads bridge deep water
+
+A river cell on a player's road deeper than a ford SHALL be bridged by the
+same rule the world's roads use (a plank deck at the road's height on the
+near bank, carried on, standing over the water), for at most the planner's
+longest bridge; the water past that SHALL be refused ("Too wide to bridge").
+A bridge cell SHALL be paved with planks and a log. A wide bridge SHALL be
+railed only on its outer edges.
+
+#### Scenario: A river four cells wide
+
+- **WHEN** the player stakes a road across a river four cells wide
+- **THEN** the four cells are a deck at the bank's height, the bill asks for
+  their planks and logs, and the world's roads are planned exactly as before
+
+Pinned by `pbd_core::roads::planner::tests::a_river_is_bridged_by_the_worlds_rule_and_a_wide_bridge_is_railed_outside`
+and `pbd_core::roads::tests::world_routes_are_pinned`.
+
+### Requirement: A player's road with lamps is lit
+
+A player's road planned with lamps SHALL have a lamp post on its verge every
+`lamp_spacing` cells, on both sides of a three-wide road, and each SHALL be
+built as the town's street lantern, lit at dusk, when the road cell beside
+it is paved with a log and a street lantern in the pack, taken in the same
+line.
+
+#### Scenario: Paving beside a post
+
+- **WHEN** the player paves the road cell beside a lamp post with a log and
+  a street lantern in the pack
+- **THEN** a street lantern stands on the verge, the log and the lantern
+  leave the pack, and the bill no longer asks for that lamp
+
+Pinned by `pbd-app` `roads::tests::paving_beside_a_post_builds_a_street_lantern_from_the_pack`
+and `pbd_core::roads::planner::tests::lamp_posts_stand_on_the_verge_and_both_sides_of_a_three_wide_road`.
+
+### Requirement: The planner's view is lifted
+
+While survey stakes are in hand on foot, the eye SHALL ease up to the
+planner's lift (15 m by default) and back down when they leave the hand,
+never in one frame, with the look still the player's raw look.
+
+#### Scenario: Stakes in hand
+
+- **WHEN** the player selects survey stakes
+- **THEN** the eye rises to 15 m over the ease time, a little each frame,
+  and comes back down the same way when the stakes are put away
+
+Pinned by `pbd-app` `roads::tests::the_planner_view_eases_up_with_stakes_in_hand_and_back_down`.
+
+### Requirement: Jobs on the roads
+
+A town a road leaves SHALL be able to post a rockfall on its road to clear
+and a trader to walk with to the next town, and each SHALL be counted by the
+starter missions' rule.
+
+#### Scenario: A rockfall
+
+- **WHEN** the player takes a rockfall job and digs the road cell clear
+- **THEN** the job counts it, and the road is walked again
+
+Pinned by `pbd-app` `economy::tests::a_rockfall_is_dropped_on_the_road_dug_clear_and_paid`
+and `a_trader_leads_the_player_along_the_road_and_the_escort_is_paid`.

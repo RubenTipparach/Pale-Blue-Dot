@@ -464,6 +464,7 @@ fn a_harbours_board_asks_for_fish() {
             site,
             kind: SiteKind::Harbour,
             neighbours: &[900, 901],
+            roads_to: &[],
         };
         for day in 0..12 {
             let posted = b.posted(town, day, 0, &none);
@@ -485,6 +486,7 @@ fn the_same_day_gives_the_same_board_and_three_to_five_jobs() {
             site: 11,
             kind,
             neighbours: &[5, 6],
+            roads_to: &[],
         };
         for day in [0, 1, 7, 300] {
             let one = b.posted(town, day, 0, &none);
@@ -511,6 +513,7 @@ fn a_job_not_taken_is_replaced_after_three_days() {
         site: 3,
         kind: SiteKind::Village,
         neighbours: &[4],
+        roads_to: &[4],
     };
     for place in 0..3 {
         let first = b.job_at(town, 0, place).unwrap();
@@ -536,6 +539,7 @@ fn a_taken_job_never_expires() {
         site: 9,
         kind: SiteKind::Harbour,
         neighbours: &[1],
+        roads_to: &[],
     };
     let job = b.posted(town, 0, 0, &BTreeSet::new())[0].clone();
     let mut taken = TakenJobs::default();
@@ -638,6 +642,7 @@ fn every_job_kind_is_made_and_finished() {
         site: 5,
         kind: SiteKind::Village,
         neighbours: &[6],
+        roads_to: &[6],
     };
     for kind in JobKind::ALL {
         let job = b
@@ -667,6 +672,7 @@ fn a_harbour_job_pays_one_and_a_half_times_its_value() {
         site: 5,
         kind: SiteKind::Harbour,
         neighbours: &[],
+        roads_to: &[],
     };
     let job = b.make(town, JobKind::Cook, 1, 0).unwrap();
     let value = v.get(&job.thing).unwrap().coins;
@@ -679,6 +685,9 @@ fn a_harbour_job_pays_one_and_a_half_times_its_value() {
         b.make(town, JobKind::Deliver, 1, 0).is_none(),
         "nowhere to deliver to"
     );
+    // No road leaves it: no road job (`townsfolk` design 46).
+    assert!(b.make(town, JobKind::Rockfall, 1, 0).is_none());
+    assert!(b.make(town, JobKind::Escort, 1, 0).is_none());
 }
 
 // ---- the lost villager (7.5)
@@ -781,6 +790,7 @@ fn an_abandoned_job_goes_back_and_a_lamps_job_waits_for_dusk() {
         site: 5,
         kind: SiteKind::Village,
         neighbours: &[6],
+        roads_to: &[],
     };
     let job = b.make(town, JobKind::Lamps, 77, 1234).unwrap();
     let mut taken = TakenJobs::default();

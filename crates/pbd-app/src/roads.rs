@@ -132,10 +132,20 @@ impl RoadNet {
         let mut mine = Vec::new();
         for (&key, b) in built {
             mine.push(cells.len());
+            // Every road cell beside it: a bridge's rails run only along its
+            // open sides, so a wide bridge is railed outside (design 42m).
+            let neighbours = if b.deck_m.is_some() {
+                roads::neighbours(key)
+                    .into_iter()
+                    .filter(|n| built.contains_key(n) || seen.contains(n))
+                    .collect()
+            } else {
+                Vec::new()
+            };
             cells.push(Laid {
                 cell: roads::built_cell(key, b),
                 surface: b.surface,
-                neighbours: Vec::new(),
+                neighbours,
             });
             if mine.len() == CHUNK_CELLS {
                 chunks.push(std::mem::take(&mut mine));
@@ -639,7 +649,9 @@ pub fn stand_roads(world: &mut World) {
         !gone
     });
     let yields = world.resource::<WorldSave>().yields.clone();
-    let player = |key: u32| yields.has_cell(key);
+    // A rockfall dug off a road is the road again (`townsfolk` design 46).
+    let dug_clear = crate::economy::road_jobs::dug_clear(world.resource::<WorldSave>());
+    let player = |key: u32| yields.has_cell(key) && !dug_clear.contains(&key);
     for s in &mut standing {
         if s.revision == revision {
             continue;
@@ -870,6 +882,8 @@ pub fn lay(
         raised: false,
         plan: None,
         ford: false,
+        bed: Default::default(),
+        deck_m: None,
     };
     if !save.store_with_hands(
         roads::built_record(key, &cell),
@@ -921,6 +935,10 @@ pub fn road_hands(
         MessageWriter<paving::RoadWork>,
     ),
     mut did: MessageWriter<crate::missions::Did>,
+    (mut fine, mut contact): (
+        Option<ResMut<crate::planet::PlanetFine>>,
+        Option<ResMut<crate::planet::PlanetContact>>,
+    ),
     time: Res<Time>,
     mut beat: Local<f32>,
 ) {
@@ -977,6 +995,35 @@ pub fn road_hands(
     }
     let pressed = keys.just_pressed(KeyCode::KeyF);
     let aimed_marked = key.filter(|&k| paving::marked_near(&save, point, 1.5).contains(&k));
+    // The use key with the shovel on a paved cell whose lamp post waits
+    // for its log and lantern builds it (design 42m).
+    let mut lamps = |save: &mut WorldSave,
+                     slots: &mut pbd_core::inventory::Slots,
+                     at: u32,
+                     say: &mut RoadSay| {
+        match paving::build_lamps(save, slots, at, &config, &cfg) {
+            Ok(made) => {
+                if let (Some(f), Some(c)) = (fine.as_deref_mut(), contact.as_deref_mut()) {
+                    crate::economy::road_jobs::into_tier(&made, save, f, c);
+                }
+            }
+            Err(why) => {
+                if let Some(line) = why.line() {
+                    say.0 = Some(line.into());
+                }
+            }
+        }
+    };
+    if pressed && shovel && aimed_marked.is_none() {
+        if let Some(k) = key
+            && roads::built(&save.records).contains_key(&k)
+            && !paving::lamps_owed(&save, k, &config, &cfg).is_empty()
+        {
+            keys.clear_just_pressed(KeyCode::KeyF);
+            lamps(&mut save, &mut hotbar.0, k, &mut say);
+        }
+        return;
+    }
     if pressed {
         if aimed_marked.is_none() {
             return;
@@ -1019,6 +1066,9 @@ pub fn road_hands(
                 .any(|n| roads::centre(n).is_some_and(|c| ground::cleared(&config, c)));
             if beside_town {
                 did.write(crate::missions::Did::new(Kind::Pave, "joined", 1));
+            }
+            if !paving::lamps_owed(&save, target, &config, &cfg).is_empty() {
+                lamps(&mut save, &mut hotbar.0, target, &mut say);
             }
             paving::restand(&save, &mut net, &mut standing);
         }
@@ -1104,6 +1154,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
             .init_resource::<planner::Ghost>()
+            .init_resource::<planner::PlannerLift>()
             .add_message::<paving::RoadWork>()
             .add_systems(
                 Startup,
@@ -1117,6 +1168,7 @@ impl Plugin for RoadsPlugin {
                 Update,
                 (
                     keep_roads,
+                    planner::ease_lift,
                     planner::planner_menu,
                     planner::planner_aim,
                     planner::planner_hands,

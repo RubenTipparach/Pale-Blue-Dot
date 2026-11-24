@@ -18,6 +18,7 @@ use bevy::render::extract_resource::ExtractResource;
 use pbd_core::cooking::Effect;
 use pbd_core::goods::Good;
 use pbd_core::inventory::Item;
+use pbd_core::lamp_bake::REACH_M;
 use pbd_core::light::{Carried, carried_light, merge};
 
 /// The most carried lights drawn (`carried_max_lights`): the player's own,
@@ -34,17 +35,23 @@ pub const CHEST_BELOW_EYE_M: f32 = 0.55;
 pub const HELD_LIGHT_EYE: Vec3 = Vec3::new(0.28, -0.05, -0.62);
 
 /// The lights carried this frame, in the planet's frame (body-local), the
-/// player's own first.
+/// player's own first when they carry one, each with its reach in metres
+/// (the lamps' [`pbd_core::lamp_bake::REACH_M`] for every light but one
+/// set nearer, such as a talk's: `townsfolk` design 37a).
 #[derive(Resource, Clone, Default, Debug, PartialEq, ExtractResource)]
-pub struct CarriedLights(pub Vec<Carried>);
+pub struct CarriedLights {
+    pub lights: Vec<(Carried, f32)>,
+    /// Whether the first light is the player's own.
+    pub has_own: bool,
+}
 
 impl CarriedLights {
     /// As the shaders read them: two vec4s a light, where (w its reach, zero
     /// ending the list) and its colour times strength.
     pub fn packed(&self) -> [Vec4; 2 * MAX_CARRIED_LIGHTS] {
         let mut out = [Vec4::ZERO; 2 * MAX_CARRIED_LIGHTS];
-        for (i, light) in self.0.iter().take(MAX_CARRIED_LIGHTS).enumerate() {
-            out[2 * i] = light.at.extend(pbd_core::lamp_bake::REACH_M);
+        for (i, (light, reach)) in self.lights.iter().take(MAX_CARRIED_LIGHTS).enumerate() {
+            out[2 * i] = light.at.extend(reach.max(1e-3));
             out[2 * i + 1] = Vec3::from(light.colour).extend(0.0);
         }
         out
@@ -52,9 +59,18 @@ impl CarriedLights {
 
     /// The player's own light, if they carry one.
     pub fn own(&self) -> Option<&Carried> {
-        self.0.first()
+        self.has_own
+            .then(|| self.lights.first().map(|(l, _)| l))
+            .flatten()
     }
 }
+
+/// Lights other systems set for this frame, in the planet's frame
+/// (body-local), each with its reach in metres: drawn after the player's
+/// own and before the craft lanterns. A talk's light on the townsperson
+/// (`townsfolk` design 37a) is one; whoever sets one clears it.
+#[derive(Resource, Clone, Default, Debug, PartialEq)]
+pub struct NearLights(pub Vec<(Carried, f32)>);
 
 /// What the selected hotbar slot holds, written by the hotbar each frame.
 #[derive(Resource, Clone, Copy, Default, Debug, PartialEq)]
@@ -112,9 +128,11 @@ pub fn gather(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     crafts: Option<Res<crate::vehicles::lamps::CraftLamps>>,
+    near: Option<Res<NearLights>>,
     mut lights: ResMut<CarriedLights>,
 ) {
     let mut next = Vec::new();
+    let mut has_own = false;
     if !switched_off()
         && let Some((eye, _)) = cameras.iter().find(|(_, c)| c.is_active)
     {
@@ -140,7 +158,13 @@ pub fn gather(
         {
             sources.push((eye_at - up * CHEST_BELOW_EYE_M, colour));
         }
-        next.extend(merge(&sources));
+        if let Some(own) = merge(&sources) {
+            next.push((own, REACH_M));
+            has_own = true;
+        }
+        if let Some(near) = near.as_deref() {
+            next.extend(near.0.iter().copied());
+        }
         // Then the craft lanterns burning, nearest the eye first
         // (`river-craft` design 9.8), as many as the list holds.
         if let Some(crafts) = crafts.as_deref() {
@@ -149,12 +173,13 @@ pub fn gather(
                 a.at.distance_squared(eye_at)
                     .total_cmp(&b.at.distance_squared(eye_at))
             });
-            next.extend(near);
-            next.truncate(MAX_CARRIED_LIGHTS);
+            next.extend(near.into_iter().map(|l| (l, REACH_M)));
         }
+        next.truncate(MAX_CARRIED_LIGHTS);
     }
-    if *lights.0 != next {
-        lights.0 = next;
+    if lights.lights != next || lights.has_own != has_own {
+        lights.lights = next;
+        lights.has_own = has_own;
     }
 }
 
@@ -163,6 +188,7 @@ pub struct CarriedLightPlugin;
 impl Plugin for CarriedLightPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CarriedLights>()
+            .init_resource::<NearLights>()
             .init_resource::<HeldItem>()
             .init_resource::<HeldLightAt>()
             .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
@@ -189,9 +215,20 @@ mod tests {
             at: Vec3::new(1.0, 2.0, 3.0),
             colour: [0.5, 0.25, 0.125],
         };
-        let packed = CarriedLights(vec![one; 6]).packed();
+        let mut list = CarriedLights {
+            lights: vec![(one, REACH_M); 6],
+            has_own: true,
+        };
+        let packed = list.packed();
         assert_eq!(packed[0], Vec4::new(1.0, 2.0, 3.0, 16.0));
         assert_eq!(packed[1], Vec4::new(0.5, 0.25, 0.125, 0.0));
+        assert_eq!(list.own(), Some(&one));
+        // A nearer reach is its own; a list with no light of the player's
+        // has no own light.
+        list.lights[0].1 = 4.0;
+        list.has_own = false;
+        assert_eq!(list.packed()[0].w, 4.0);
+        assert_eq!(list.own(), None);
         assert_eq!(packed.len(), 2 * MAX_CARRIED_LIGHTS);
         let none = CarriedLights::default().packed();
         assert!(none.iter().all(|v| *v == Vec4::ZERO));

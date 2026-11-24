@@ -19,6 +19,7 @@ pub mod follow;
 pub mod goodwill;
 pub mod jobs;
 pub mod market;
+pub mod road_jobs;
 pub mod trade;
 pub mod values;
 

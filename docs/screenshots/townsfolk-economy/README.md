@@ -80,3 +80,15 @@ Prices are design 37a's: derived values with the world's market folded in.
 | --- | --- |
 | `trade-basket.jpg` | Two ropes in YOU TAKE (8 coins at the selling price) and two wheat in YOU GIVE (4 at the buying price): YOU PAY 4, half the price in goods. The rows count down what is left to put in a basket (wheat x4). |
 | `coins-hotbar.jpg` | Three wheat sold in one basket, DEAL, then BACK and BYE: the coin count beside the hotbar reads 6, the pack's wheat down to 3. |
+
+## Framing (`townsfolk` design 37a, framing; tasks 12.7 and 12.8; 2026-11-24)
+
+`ONLY=framed tools/capture_talk.sh`, lavapipe, no GPU: the look only, frame
+time not measured. The owner on survey P1: "Move the camera so the merchant
+is on left, and the trade UI is on the right."
+
+| Shot | What it shows |
+| --- | --- |
+| `trade-framed.jpg` | The barter of `trade-basket.jpg` with the framing's second pass (task 12.8, owner: "center the character between the left most edge of panel and left edge of the screen"): the panel right-aligned 24 px off the edge, and F turned the walker's own look (eased over 0.25 s) so the merchant's aim point, 1.2 m over the feet, is half way between the screen's left edge and the panel's, at the middle height. From about 2.7 m. The talk light is on their face (faint by day). |
+| `trade-framed-night.jpg` | The same at nightfall (`NIGHT=20.45`, the lamps lit; at 22:30 the merchant is in bed, `furniture` design 11a): the warm talk light (level 7, 4 m reach) lights the merchant's face as a carried torch would. |
+| `talk-framed-night.jpg` | A non-trade NPC dialog, the talk panel, framed the same way (owner: "same presentation style for dialog boxes of any kind of interaction with npcs"): the narrower panel's open space is wider, so the merchant stands further right, in its middle. |

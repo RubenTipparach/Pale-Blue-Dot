@@ -115,8 +115,9 @@ pub struct PlannerAim {
     pub lamps: Vec<u32>,
     pub clash: Option<Clash>,
     pub bill: Bill,
-    /// What the pack holds of the bill's goods.
-    pub have: (u32, u32),
+    /// What the pack holds of the bill's goods: stakes, gravel, planks,
+    /// logs and street lanterns.
+    pub have: [u32; 5],
     /// Bumped whenever the cells change, for the ghost.
     pub generation: u64,
     /// What it was made for: the aimed cell, the planner, the save's serial.
@@ -286,25 +287,37 @@ pub fn planner_aim(
     let mut cells = Vec::new();
     let mut lamps = Vec::new();
     for road in &roads_aimed {
-        cells.extend(planner::lay(road, &ground, &tree, &pcfg.0, ford));
-        lamps.extend(planner::lamp_cells(road, &pcfg.0));
+        let laid = planner::lay(road, &ground, &tree, &pcfg.0, ford);
+        lamps.extend(
+            planner::lamp_posts(road, &laid, &ground, &pcfg.0)
+                .into_iter()
+                .map(|(_, post)| post),
+        );
+        cells.extend(laid);
     }
     let clash = cells.iter().find_map(|c| c.clash);
     let built = roads::built(&save.records);
+    let lit = |k: u32| super::paving::lamp_standing(&save, k);
     let bill = planner::bill(
         &plans,
         roads_aimed.first().filter(|_| planner.start.is_some()),
         &built,
+        &lit,
         &ground,
         &pcfg.0,
         ford,
     );
     // What the hand holds now: the hotbar is the pack the bill is read
     // against.
-    let have = (
+    let have = [
         hotbar.0.count(Item::Good(Good::SURVEY_STAKES)),
         hotbar.0.count(Item::Good(Good::GRAVEL)),
-    );
+        hotbar.0.count(Item::Good(Good::PLANKS)),
+        hotbar.0.count(Item::Good(Good::LOG)),
+        hotbar
+            .0
+            .count(Item::Block(pbd_core::terrain::Material::LanternPost)),
+    ];
     *aim = PlannerAim {
         showing: true,
         cells,
@@ -410,6 +423,18 @@ pub fn planner_hands(
     } else if shift && staked {
         planner.grabbed = Some(key);
         planner.start = None;
+    } else if shift && planner.start.is_none() {
+        // A stake driven on a leg and picked up (design 42f, 42m).
+        match paving::insert_stake(&mut save, &mut hotbar.0, key, &config, &rcfg, &pcfg.0) {
+            Ok(true) => {
+                planner.grabbed = Some(key);
+                changed = true;
+                work.write(paving::RoadWork::Stake);
+                did.write(crate::missions::Did::new(Kind::Stake, "stake", 1));
+            }
+            Ok(false) => {}
+            Err(why) => say_why(&mut say, why),
+        }
     } else if let Some(start) = planner.start {
         if start == key {
             planner.start = None;
@@ -471,6 +496,87 @@ impl PlannerAim {
     /// The aimed cell it was made for.
     pub fn made_for_key(&self) -> Option<u32> {
         self.made_for.as_ref().and_then(|m| m.0)
+    }
+}
+
+// ---- The lifted view (design 42n, the owner's survey P2) ----------------------
+
+/// How far the planner's eye is lifted: `amount` from 0 (first person) to
+/// 1 (the whole lift), eased over `aerial_ease_s`; `height_m` the lift.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
+pub struct PlannerLift {
+    pub amount: f32,
+    pub height_m: f32,
+}
+
+/// How far behind the player the lifted eye stands, as a share of its
+/// height, and how far ahead of them the ground the view centres on is
+/// when they look level, m.
+pub const LIFT_BACK: f32 = 0.6;
+pub const LIFT_LOOK_AHEAD_M: f32 = 10.0;
+/// How far the aim reaches from the lifted eye, m: past the ground its
+/// ghost shows (`ghost_reach_m`, 60 m) from 30 m up.
+pub const LIFTED_REACH_M: f32 = 90.0;
+
+impl PlannerLift {
+    /// The lift as the eye takes it: eased in and out, never a jump.
+    pub fn eased(&self) -> f32 {
+        let t = self.amount.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+
+    /// Whether the eye is off the walker's at all.
+    pub fn lifted(&self) -> bool {
+        self.amount > 0.0
+    }
+
+    /// The eye's offset from the walker's (along `up` and back along the
+    /// level `forward`), and the tilt down added to the player's own look,
+    /// radians.
+    pub fn offset(&self, up: Vec3, forward: Vec3) -> (Vec3, f32) {
+        let k = self.eased();
+        let h = self.height_m * k;
+        let back = h * LIFT_BACK;
+        let flat = (forward - up * forward.dot(up)).normalize_or_zero();
+        let tilt = (h).atan2(back + LIFT_LOOK_AHEAD_M);
+        (up * h - flat * back, tilt)
+    }
+}
+
+/// Ease the planner's lifted view in while survey stakes are in hand on
+/// foot, and out when they leave it (design 42n).
+pub fn ease_lift(
+    hotbar: Option<Res<crate::hotbar::Hotbar>>,
+    walking: Option<Res<crate::walking::WalkingReadout>>,
+    pcfg: Res<PlannerSettings>,
+    time: Res<Time>,
+    mut lift: ResMut<PlannerLift>,
+) {
+    let on = hotbar.as_deref().is_some_and(stakes_held) && walking.is_some_and(|w| w.active);
+    let ease = pcfg.0.aerial_ease_s;
+    let step = if ease > 0.0 {
+        time.delta_secs() / ease
+    } else {
+        1.0
+    };
+    let target = if on { 1.0 } else { 0.0 };
+    let amount = if lift.amount < target {
+        (lift.amount + step).min(target)
+    } else {
+        (lift.amount - step).max(target)
+    };
+    let next = PlannerLift {
+        amount,
+        height_m: pcfg.0.aerial_m,
+    };
+    if *lift != next {
+        if (lift.amount == 0.0) != (amount == 0.0) || (lift.amount == 1.0) != (amount == 1.0) {
+            info!(
+                "ROAD_PLANNER view lifted {amount:.2} of {} m",
+                next.height_m
+            );
+        }
+        *lift = next;
     }
 }
 
@@ -772,17 +878,34 @@ pub fn hud_line(aim: &PlannerAim, planner: &Planner) -> (Localized, Color) {
         return (why.line(), crate::ui_kit::WAYPOINT);
     }
     let b = &aim.bill;
-    let short = b.stakes > aim.have.0 || b.gravel > aim.have.1;
-    let text = tr_with(
-        "roads.bill.line",
-        &[
-            ("stakes", &b.stakes),
-            ("gravel", &b.gravel),
-            ("left", &b.left),
-            ("cells", &b.cells),
-            ("turns", &b.turns),
-        ],
-    );
+    let wanted = [b.stakes, b.gravel, b.planks, b.logs, b.lanterns];
+    let short = wanted.iter().zip(aim.have).any(|(w, h)| *w > h);
+    let text = if b.planks + b.logs + b.lanterns > 0 {
+        tr_with(
+            "roads.bill.line_more",
+            &[
+                ("stakes", &b.stakes),
+                ("gravel", &b.gravel),
+                ("planks", &b.planks),
+                ("logs", &b.logs),
+                ("lanterns", &b.lanterns),
+                ("left", &b.left),
+                ("cells", &b.cells),
+                ("turns", &b.turns),
+            ],
+        )
+    } else {
+        tr_with(
+            "roads.bill.line",
+            &[
+                ("stakes", &b.stakes),
+                ("gravel", &b.gravel),
+                ("left", &b.left),
+                ("cells", &b.cells),
+                ("turns", &b.turns),
+            ],
+        )
+    };
     let colour = if short {
         crate::ui_kit::WAYPOINT
     } else {

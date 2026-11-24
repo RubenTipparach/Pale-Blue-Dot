@@ -2045,10 +2045,22 @@ pub fn scripted(
         slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 12);
         let scene = launch.road_plan.clone();
         let wide = scene.as_deref() == Some("wide");
+        // `lamps`: a three-wide dirt road with lamps, staked, paved and its
+        // lamp posts built through the paving's own calls (design 42m).
+        let lamps = scene.as_deref() == Some("lamps");
         let how = pbd_core::roads::planner::How {
-            width: if wide { 3 } else { 1 },
-            ..Default::default()
+            width: if wide || lamps { 3 } else { 1 },
+            surface: if lamps {
+                pbd_core::roads::Surface::Dirt
+            } else {
+                pbd_core::roads::Surface::Gravel
+            },
+            lamps,
         };
+        if lamps {
+            slots.give(Item::Good(pbd_core::goods::Good::LOG), 16);
+            slots.give(Item::Block(Material::LanternPost), 16);
+        }
         let road = |save: &mut WorldSave, slots: &mut super::slots::Hotbar, a: u32, b: u32| {
             match paving::end_road(save, slots, a, b, how, &|_| false, &config, &cfg, &pcfg) {
                 Ok((stakes, cells)) => {
@@ -2064,7 +2076,29 @@ pub fn scripted(
         if let (Some(a), Some(b)) = (start, end) {
             // `wide` stakes nothing: its road is the open one below, so its
             // ghost shows which lanes the ground allows.
-            if !wide {
+            if lamps {
+                // Straight along a row of the lattice, where a wide road
+                // may climb (design 42m).
+                let b = pbd_core::roads::planner::along_row(a, b, 11).unwrap_or(b);
+                road(&mut save, &mut slots, a, b);
+                if pbd_core::roads::planner::plans(&save.records).is_empty() {
+                    // Ground no wide road takes here: one wide, lamps on.
+                    let one = pbd_core::roads::planner::How { width: 1, ..how };
+                    if let Err(why) = paving::end_road(
+                        &mut save,
+                        &mut slots,
+                        a,
+                        b,
+                        one,
+                        &|_| false,
+                        &config,
+                        &cfg,
+                        &pcfg,
+                    ) {
+                        warn!("scripted road plan: refused one wide too: {why:?}");
+                    }
+                }
+            } else if !wide {
                 road(&mut save, &mut slots, a, b);
             }
             let plans = pbd_core::roads::planner::plans(&save.records);
@@ -2077,6 +2111,39 @@ pub fn scripted(
                                 paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
                             {
                                 warn!("scripted paving: cell {key} not paved: {why:?}");
+                            }
+                        }
+                    }
+                }
+                Some("lamps") => {
+                    if let Some(first) = &first {
+                        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                        let keys: Vec<u32> = pbd_core::roads::planner::lay(
+                            first,
+                            &ground,
+                            &|_| false,
+                            &pcfg,
+                            cfg.ford_depth_m,
+                        )
+                        .iter()
+                        .map(|c| c.key)
+                        .collect();
+                        drop(ground);
+                        for key in keys {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                                continue;
+                            }
+                            match paving::build_lamps(&mut save, &mut slots, key, &config, &cfg) {
+                                Ok(made) => pbd_app::economy::road_jobs::into_tier(
+                                    &made,
+                                    &save,
+                                    &mut fine,
+                                    &mut contact,
+                                ),
+                                Err(why) => warn!("scripted lamps: {why:?}"),
                             }
                         }
                     }

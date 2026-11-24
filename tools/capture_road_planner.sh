@@ -7,6 +7,8 @@
 #   stake   a second road started from the first road's middle stake
 #   erased  that second road taken by the eraser (its stakes back)
 #   wide    a three-wide road open from up the view to the aim (its ghost: lanes red where the ground is off its height)
+#   lamps   a three-wide dirt road with lamps, paved, its street lanterns built both sides (design 42m)
+# With stakes in hand the view is lifted (design 42n, the owner's survey P2).
 # Each shot is a new world. Needs the fast build:
 #   cargo build --profile fast -p pbd-app
 # Usage: tools/capture_road_planner.sh <out dir> [exe]   (minutes a shot on lavapipe)
@@ -27,10 +29,11 @@ ONLY=${ONLY:-all}
 # Every scene by day; the two-click road and the marks at 22:30 too (a shot
 # takes about a quarter of an hour on lavapipe).
 want() { [ "$ONLY" = all -o "$ONLY" = "$1" ]; }
-for scene in two stake erased wide; do
+for scene in two stake erased wide lamps; do
   want "$scene" || continue
   shot "road-planner-$scene-1100" --frames 400 --paving 5 --road-plan "$scene" --pitch -24 --time 11
 done
+want lamps && shot road-planner-lamps-2230 --frames 400 --paving 5 --road-plan lamps --pitch -24 --time 22.5
 # want two && shot road-planner-two-2230 --frames 400 --paving 5 --road-plan two --pitch -24 --time 22.5
 # The mark's look close up (design 39a, task 13.4), by day and at 22:30.
 want marks && {

@@ -348,6 +348,8 @@ fn a_built_cell_rises_toward_the_first_neighbour_a_layer_up() {
         raised: false,
         plan: None,
         ford: false,
+        bed: Default::default(),
+        deck_m: None,
     };
     let key = nearest_key(at(0.0, 0.0)).unwrap();
     // A schema 1 body written before `raised` and `plan` reads back.
@@ -469,6 +471,7 @@ fn a_cut_road_is_a_schema_2_record_and_digs_its_layers() {
         kind: Kind::Ground,
         raised: false,
         cut_fill,
+        bed: Default::default(),
         up: None,
         from: None,
     };
@@ -515,6 +518,7 @@ fn a_road_near_a_town_is_lit_by_lamps_beside_it() {
                 kind: Kind::Ground,
                 raised: false,
                 cut_fill: 0,
+                bed: Default::default(),
                 up: None,
                 from: None,
             })

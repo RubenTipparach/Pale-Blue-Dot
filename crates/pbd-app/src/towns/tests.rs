@@ -2719,6 +2719,7 @@ fn print_the_days_linenleighs_board_posts_a_lost_villager() {
         site: site.id,
         kind: site.kind,
         neighbours: &[],
+        roads_to: &[],
     };
     let mut found = 0;
     for day in 0..200 {

@@ -841,7 +841,7 @@ impl Launch {
                     i += 1;
                     result.road_plan = Some(
                         args.get(i)
-                            .expect("--road-plan takes a scene: two, stake, erased, wide")
+                            .expect("--road-plan takes a scene: two, stake, erased, wide, lamps")
                             .clone(),
                     );
                 }
