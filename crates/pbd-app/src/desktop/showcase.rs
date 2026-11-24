@@ -124,6 +124,8 @@ enum Click {
     /// Nothing: every control's press left standing is let go, so a click
     /// off the panels lands on the background (a stack held is dropped).
     Clear,
+    /// A button of the talk, trade or board panel.
+    Talk(super::talk::TalkAction),
 }
 
 /// One frame's inputs.
@@ -309,6 +311,20 @@ enum Goal {
 
 #[derive(Default)]
 struct Bot {
+    /// Townsfolk talked to in this run, by site and index (`Talk`).
+    talked: HashSet<(u32, u32)>,
+    /// The townsperson F was just pressed at, until the talk opens.
+    talking_to: Option<(u32, u32)>,
+    /// A town sought once for want of townsfolk (`Talk`).
+    sought_town: bool,
+    /// Townsfolk asked who did not offer TRADE (`Trade`).
+    not_trader: HashSet<(u32, u32)>,
+    /// Townsfolk asked who did not offer WORK (`Job`).
+    not_giver: HashSet<(u32, u32)>,
+    /// Jobs taken and given back as not the bot's kind (`Job`).
+    skipped_jobs: HashSet<u64>,
+    /// The job whose work was last set going, and how many times.
+    job_worked: Option<(u64, u32)>,
     started: Option<f32>,
     ended: Option<f32>,
     failed: bool,
@@ -390,6 +406,9 @@ struct Bot {
     /// Going up and out of a hole (`bot-path-planner` design 5.1): until the
     /// sky is open over the head.
     climbing_out: bool,
+    /// The never-dug block last found over the head on a climb out, logged
+    /// once.
+    never_over: Option<(u32, usize)>,
     /// Up to this altitude, m, when the watchdog sends it up: the goal's
     /// height, so a pit under a tree on its rim is climbed out of too.
     climb_to: Option<f32>,
@@ -532,6 +551,14 @@ struct Sight<'a> {
     legend: Vec<(usize, Vec2)>,
     /// Every town's middle, a direction from the planet's centre.
     towns: Vec<Vec3>,
+    /// The townsfolk drawn near: site, index, and their feet (planet-local).
+    talkers: Vec<(u32, u32, Vec3)>,
+    /// The town tree, once it is open (`town-missions-tree`).
+    town: Option<&'a pbd_core::missions::Progress>,
+    /// The talk, trade or board panel's buttons now spawned.
+    talk_buttons: Vec<super::talk::TalkAction>,
+    /// The town jobs taken: id, kind, how many it asks, and whether done.
+    jobs: Vec<(u64, pbd_core::economy::jobs::JobKind, u32, bool)>,
     /// Aboard a craft.
     aboard: bool,
 }
@@ -1053,7 +1080,47 @@ impl Bot {
         // unreachable block that is never dug gave up and began again every
         // frame, the bot held in its pit for minutes).
         if reachable && ground.block(here, over) == path::Block::Never {
-            // A station or unloaded ground over the head: not this way.
+            // Something never dug over the head (a station, a lamp, a tree's
+            // ground, unloaded ground): out sideways, not up. Giving up here
+            // began the climb again the next frame (2026-11-23: in a tunnel
+            // of its own planning, "building up" logged 5408 times in four
+            // minutes, the bot never moving).
+            if self.never_over != Some((key, over)) {
+                info!(
+                    "showcase: up and out: {:?} over the head at layer {over} (feet {feet}); out sideways",
+                    digging::material_of(s.fine, s.save, (key, over))
+                );
+                self.never_over = Some((key, over));
+            }
+            let neighbours = ground.neighbours(here);
+            let room =
+                |n: usize| !ground.block(n, feet).solid() && !ground.block(n, feet + 1).solid();
+            if let Some(n) = neighbours.iter().copied().find(|&n| room(n)) {
+                let to =
+                    ground.centre(n) * (PLANET_RADIUS + pbd_core::column::layer_altitude(feet));
+                self.steer(s, out, tangent(to - s.feet, s.up), 0.0);
+                out.held.insert(KeyCode::KeyW);
+                return true;
+            }
+            // None open: dig into the nearest that can be dug, chest first.
+            let dig = neighbours.iter().copied().find_map(|n| {
+                [feet + 1, feet]
+                    .into_iter()
+                    .find(|&l| matches!(ground.block(n, l), path::Block::Dig(_)))
+                    .map(|l| (n, l))
+            });
+            if let Some((n, l)) = dig {
+                let material = digging::material_of(s.fine, s.save, (records[n].key(), l))
+                    .unwrap_or(Material::Soil);
+                if self.fetch_tool(s, out, Self::tool_for(material)) {
+                    return true;
+                }
+                let at =
+                    ground.centre(n) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
+                let aimed = self.aim_at(s, out, at);
+                out.lmb = aimed || self.lmb_down;
+                return true;
+            }
             self.climbing_out = false;
             return false;
         }
@@ -2785,7 +2852,7 @@ impl Bot {
     fn until_met(&self, s: &Sight, until: &Until) -> bool {
         match until {
             Until::Have(name, n) => carried(s.slots, name) >= *n,
-            Until::Mission(id) => s.missions.progress.is_done(id),
+            Until::Mission(id) => mission_done(s, id),
             Until::Times(n) => self.count >= *n,
         }
     }
@@ -2865,6 +2932,22 @@ pub struct World<'w, 's> {
     /// Render space to planet-local (`movement-smoothness` design 6.1).
     frame: Option<Res<'w, pbd_app::planet::PlanetRenderFrame>>,
     windows: Query<'w, 's, Entity, With<PrimaryWindow>>,
+    /// The town tree's record (a shot's `until` may name its missions).
+    town_missions: Option<Res<'w, pbd_app::town_missions::TownMissions>>,
+    /// The talk panel's buttons (`Trade`).
+    talk_buttons: Query<'w, 's, &'static super::talk::TalkAction>,
+    /// The town jobs taken (`Job`).
+    economy: Option<Res<'w, pbd_app::economy::Economy>>,
+    /// The townsfolk one can talk to (`Talk`).
+    talkers: Query<
+        'w,
+        's,
+        (
+            &'static pbd_app::economy::Talker,
+            &'static GlobalTransform,
+            Option<&'static Visibility>,
+        ),
+    >,
     fine: Option<Res<'w, PlanetFine>>,
     contact: Option<Res<'w, PlanetContact>>,
     save: Res<'w, WorldSave>,
@@ -3068,6 +3151,30 @@ pub fn drive(
             t.held
                 .iter()
                 .map(|h| h.point(PLANET_RADIUS).normalize_or(Vec3::Y))
+                .collect()
+        }),
+        talkers: w
+            .talkers
+            .iter()
+            .filter(|(_, _, v)| v.is_none_or(|v| *v != Visibility::Hidden))
+            .map(|(t, g, _)| {
+                (
+                    t.site,
+                    t.index,
+                    pbd_app::render_origin::local_of(w.frame.as_deref(), g.translation()),
+                )
+            })
+            .collect(),
+        town: w.town_missions.as_deref().and_then(|t| t.progress()),
+        talk_buttons: w.talk_buttons.iter().cloned().collect(),
+        jobs: w.economy.as_deref().map_or_else(Vec::new, |e| {
+            e.jobs
+                .taken
+                .iter()
+                .map(|j| {
+                    let count = j.objectives.first().map_or(1, |o| o.count);
+                    (j.id, j.kind, count, e.jobs.is_done(j.id))
+                })
                 .collect()
         }),
         aboard: w.aboard.as_deref().is_some_and(|a| a.0.is_some()),
@@ -3291,10 +3398,7 @@ pub fn drive(
         && *w.screen == Screen::Playing
         && !at_station
         && bot.act < shot.acts.len()
-        && shot
-            .until
-            .iter()
-            .all(|id| sight.missions.progress.is_done(id))
+        && shot.until.iter().all(|id| mission_done(&sight, id))
     {
         bot.act = shot.acts.len();
     }
@@ -3337,11 +3441,7 @@ pub fn drive(
             )
         }
         None => {
-            if shot
-                .until
-                .iter()
-                .all(|id| sight.missions.progress.is_done(id))
-            {
+            if shot.until.iter().all(|id| mission_done(&sight, id)) {
                 Status::Done
             } else if shot.repeat {
                 bot.act = 0;
@@ -3352,7 +3452,7 @@ pub fn drive(
                     "its acts ended with {:?} not done",
                     shot.until
                         .iter()
-                        .filter(|id| !sight.missions.progress.is_done(id))
+                        .filter(|id| !mission_done(&sight, id))
                         .collect::<Vec<_>>()
                 ))
             }
@@ -3566,13 +3666,15 @@ pub fn press_controls(
         Option<&super::forge::RecipePlaque>,
         Option<&super::mission_tree::Card>,
         Option<&super::map_screen::MapButton>,
+        Option<&super::talk::TalkAction>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt, card, legend) in &mut controls {
+    for (mut interaction, row, button, well, cook, cell, smelt, card, legend, talk) in &mut controls
+    {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
             Click::CraftHand => button.is_some_and(|b| b.0 == "hand"),
@@ -3593,6 +3695,7 @@ pub fn press_controls(
                 hit = true;
                 false
             }
+            Click::Talk(action) => talk.is_some_and(|t| t == action),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -3639,6 +3742,9 @@ fn run(
             | Act::PickUp(_)
             | Act::Harvest(_)
             | Act::Tame(_)
+            | Act::Talk(_)
+            | Act::Trade(..)
+            | Act::Job
             | Act::Pen
             | Act::Lead(_)
             | Act::Collect(_)
@@ -3886,6 +3992,9 @@ fn run(
         Act::PickUp(until) => pick_up(bot, until, s, out),
         Act::Harvest(n) => harvest(bot, *n, s, out),
         Act::Tame(species) => tame(bot, species, s, out),
+        Act::Talk(n) => talk(bot, *n, s, out),
+        Act::Trade(sell, buy) => trade(bot, *sell, *buy, s, out),
+        Act::Job => job(bot, s, out),
         Act::Pen => pen(bot, s, out),
         Act::Lead(species) => lead(bot, species, s, out),
         Act::Collect(species) => collect(bot, species, s, out),
@@ -6764,6 +6873,340 @@ fn nearest_herd(s: &Sight, species: &str) -> Option<Vec3> {
 /// and stand still, and feed it when it comes, until it trusts.
 /// The tame act's phase while no animal it wants is in sight.
 const LOST: u32 = 99;
+
+/// Whether a mission is done, in the starter tree or the town tree.
+fn mission_done(s: &Sight, id: &str) -> bool {
+    s.missions.progress.is_done(id) || s.town.is_some_and(|t| t.is_done(id))
+}
+
+/// Talk to `n` townsfolk, each one not talked to before (`mission-playthrough`
+/// design 6, "meet"): the nearest, walked up to and looked at, then F; the
+/// talk shut with F, as the player shuts it.
+fn talk(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
+    if matches!(s.screen, Screen::Talk | Screen::Trade | Screen::Board) {
+        if let Some(who) = bot.talking_to.take()
+            && bot.talked.insert(who)
+        {
+            bot.count += 1;
+            info!(
+                "showcase: talked to {}:{} ({} of {n})",
+                who.0, who.1, bot.count
+            );
+        }
+        if bot.phase_s > 1.5 {
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+        return Status::Running;
+    }
+    if bot.count >= n {
+        return Status::Done;
+    }
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.talked.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        // None drawn: walk to the nearest town, once in the run (a failed
+        // seek resets the act, and asking again looped, 2026-11-23: "lost
+        // the place sought" every frame in a town at night, its people
+        // home), then wait for someone to come out.
+        if !bot.sought_town && bot.injected.is_empty() {
+            info!("showcase: talk: no townsfolk in sight; walking to a town");
+            bot.sought_town = true;
+            bot.injected.push_back(file::Act::Seek("town".into()));
+            return Status::Running;
+        }
+        if bot.act_s > 120.0 {
+            return Status::Fail(format!(
+                "no townsfolk left to talk to ({} of {n})",
+                bot.count
+            ));
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            info!("showcase: talk: stuck on the way to {site}:{index}; another");
+            bot.talked.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        // At their chest, as the talk's own reach measures it.
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("talked to {} of {n} townsfolk", bot.count));
+    }
+    Status::Running
+}
+
+/// Trade at the town's trader (`mission-playthrough` design 6,
+/// "first-trade"): townsfolk talked to until one offers TRADE (the town picks
+/// its trader from its people; the bot asks as a player does), TRADE
+/// pressed, `sell` goods sold one press at a time from the first row the
+/// trader buys, `buy` presses on the buy rows in turn, and the talk shut.
+/// `count` counts the sells, `tries` the buy presses.
+fn trade(bot: &mut Bot, sell: u32, buy: u32, s: &Sight, out: &mut Intent) -> Status {
+    use super::talk::TalkAction;
+    let pressing = bot.phase_s > 0.7;
+    match s.screen {
+        Screen::Talk => {
+            let shut = if !s.talk_buttons.contains(&TalkAction::Trade) {
+                // Not the trader: shut it and ask another.
+                if let Some(who) = bot.talking_to.take() {
+                    bot.not_trader.insert(who);
+                    info!("showcase: trade: {}:{} is not the trader", who.0, who.1);
+                }
+                true
+            } else {
+                bot.count >= sell && bot.tries >= buy
+            };
+            if pressing {
+                if shut {
+                    out.taps.push(KeyCode::KeyF);
+                } else {
+                    bot.talking_to = None;
+                    out.click = Some(Click::Talk(TalkAction::Trade));
+                }
+                bot.phase_s = 0.0;
+            }
+            return Status::Running;
+        }
+        Screen::Trade => {
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            let sells: Vec<&TalkAction> = s
+                .talk_buttons
+                .iter()
+                .filter(|a| matches!(a, TalkAction::Sell(_)))
+                .collect();
+            let buys: Vec<&TalkAction> = s
+                .talk_buttons
+                .iter()
+                .filter(|a| matches!(a, TalkAction::Buy(_)))
+                .collect();
+            if bot.count < sell {
+                let Some(action) = sells.first() else {
+                    return Status::Fail("the trader buys nothing the pack holds".into());
+                };
+                info!("showcase: trade: {action:?}");
+                out.click = Some(Click::Talk((*action).clone()));
+                bot.count += 1;
+            } else if bot.tries < buy {
+                if buys.is_empty() {
+                    return Status::Fail("the trader sells nothing".into());
+                }
+                let action = buys[bot.tries as usize % buys.len()];
+                info!("showcase: trade: {action:?}");
+                out.click = Some(Click::Talk(action.clone()));
+                bot.tries += 1;
+            } else {
+                // Done: F leaves every talk panel at once.
+                out.taps.push(KeyCode::KeyF);
+            }
+            return Status::Running;
+        }
+        Screen::Playing if bot.count >= sell && bot.tries >= buy => return Status::Done,
+        _ => {}
+    }
+    // Out in the world: the nearest townsperson not yet asked.
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.not_trader.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail("no townsperson offers trade".into());
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            bot.not_trader.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!(
+            "sold {} of {sell}, bought {} of {buy}",
+            bot.count, bot.tries
+        ));
+    }
+    Status::Running
+}
+
+/// One town job, played through (`mission-playthrough` design 6,
+/// "first-job"). A done job is handed in at the giver's board; a taken one
+/// is worked (its acts injected: a trade sells at the trader, a fish job
+/// fishes, a mine job digs stone); with none taken, the giver's board is
+/// opened and its first posted job taken, given back if it is not a kind the
+/// bot plays. `count` is set once a job is handed in.
+fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
+    use super::talk::TalkAction;
+    use pbd_core::economy::jobs::JobKind;
+    let plays = |k: JobKind| matches!(k, JobKind::Trade | JobKind::Fish | JobKind::Mine);
+    let done = s.jobs.iter().find(|j| j.3).copied();
+    let pending = s.jobs.iter().find(|j| !j.3 && plays(j.1)).copied();
+    let foreign = s.jobs.iter().find(|j| !j.3 && !plays(j.1)).copied();
+    let pressing = bot.phase_s > 0.7;
+    if bot.count > 0 && s.screen == Screen::Playing {
+        return Status::Done;
+    }
+    // A job in hand to work: its acts, then back here.
+    if done.is_none()
+        && foreign.is_none()
+        && let Some((id, kind, count, _)) = pending
+        && s.screen == Screen::Playing
+    {
+        if !bot.injected.is_empty() {
+            return Status::Running;
+        }
+        let times = match bot.job_worked {
+            Some((was, n)) if was == id => n,
+            _ => 0,
+        };
+        if times >= 3 {
+            return Status::Fail(format!("the {kind:?} job is not done after three goes"));
+        }
+        bot.job_worked = Some((id, times + 1));
+        info!("showcase: job: working the {kind:?} job ({count})");
+        match kind {
+            JobKind::Trade => bot.injected.push_back(file::Act::Trade(count, 0)),
+            JobKind::Fish => {
+                bot.injected.push_back(file::Act::Hand("rod".into()));
+                bot.injected
+                    .push_back(file::Act::Fish(file::Until::Times(count)));
+            }
+            _ => {
+                bot.injected.push_back(file::Act::Hand("pickaxe".into()));
+                bot.injected
+                    .push_back(file::Act::Mine(file::Until::Times(count), 2));
+            }
+        }
+        return Status::Running;
+    }
+    match s.screen {
+        Screen::Talk => {
+            let work = s.talk_buttons.contains(&TalkAction::Work);
+            if !work && let Some(who) = bot.talking_to.take() {
+                bot.not_giver.insert(who);
+                info!("showcase: job: {}:{} gives no work", who.0, who.1);
+            }
+            if pressing {
+                if work && bot.count == 0 {
+                    bot.talking_to = None;
+                    out.click = Some(Click::Talk(TalkAction::Work));
+                } else {
+                    out.taps.push(KeyCode::KeyF);
+                }
+                bot.phase_s = 0.0;
+            }
+            return Status::Running;
+        }
+        Screen::Board => {
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            // Handed in: out, and nothing more taken (2026-11-23: still on
+            // the board after the hand-in, it took a hunt job, gave it back
+            // and called the board empty).
+            if bot.count > 0 {
+                out.taps.push(KeyCode::KeyF);
+                return Status::Running;
+            }
+            let press = if let Some((id, ..)) = done {
+                bot.count = 1;
+                info!("showcase: job: handing in {id}");
+                Some(TalkAction::HandIn(id))
+            } else if let Some((id, kind, ..)) = foreign {
+                info!("showcase: job: giving back the {kind:?} job");
+                bot.skipped_jobs.insert(id);
+                Some(TalkAction::Abandon(id))
+            } else if pending.is_some() {
+                None
+            } else {
+                s.talk_buttons
+                    .iter()
+                    .find(|a| matches!(a, TalkAction::Take(id) if !bot.skipped_jobs.contains(id)))
+                    .cloned()
+            };
+            match press {
+                Some(action) => out.click = Some(Click::Talk(action)),
+                // Nothing to press here: out, F leaves every panel.
+                None => {
+                    if pending.is_none() && done.is_none() {
+                        return Status::Fail("no job on the board the bot plays".into());
+                    }
+                    out.taps.push(KeyCode::KeyF);
+                }
+            }
+            return Status::Running;
+        }
+        _ => {}
+    }
+    // Out in the world: the nearest townsperson not known to give no work.
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.not_giver.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail("no townsperson gives work".into());
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            bot.not_giver.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 1800.0 {
+        return Status::Fail("no job handed in in half an hour".into());
+    }
+    Status::Running
+}
 
 fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     if s.tally.tamed > bot.mark.tamed {

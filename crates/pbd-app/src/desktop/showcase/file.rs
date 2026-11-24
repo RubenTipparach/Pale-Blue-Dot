@@ -189,6 +189,20 @@ pub enum Act {
     /// Pick the mission to be on: open the tree (O), click its card, shut
     /// it (`mission-playthrough` 3.5).
     Focus(String),
+    /// Talk to this many townsfolk, each one not talked to before: walk up
+    /// to the nearest, look at them, F, and shut the talk with F
+    /// (`mission-playthrough` design 6, the town tree's "meet").
+    Talk(u32),
+    /// At the town's trader: talk to townsfolk until one offers TRADE,
+    /// press it, sell this many goods (one press each, the first row the
+    /// trader buys), buy this many (each press the next row), and shut the
+    /// talk (`mission-playthrough` design 6, "first-trade").
+    Trade(u32, u32),
+    /// One town job, played through: townsfolk asked until one offers WORK,
+    /// the first posted job of a kind the bot plays (trade, fish, mine)
+    /// taken (any other given back), its work done, and handed in
+    /// (`mission-playthrough` design 6, "first-job").
+    Job,
     /// A still, when `--showcase-stills` names a directory.
     Still,
     /// Go to the nearest place of a kind (`mission-playthrough` design 5):
@@ -299,11 +313,11 @@ mod tests {
     }
 
     /// Every showcase in `assets/showcase` parses, and names only missions
-    /// the chain has.
+    /// the starter tree or the town tree has.
     #[test]
     fn every_showcase_file_parses() {
-        let chain_text =
-            std::fs::read_to_string(pbd_app::config::config_dir().join("missions.ron")).unwrap();
+        let read = |f: &str| std::fs::read_to_string(pbd_app::config::config_dir().join(f));
+        let chain_text = read("missions.ron").unwrap() + &read("town_missions.ron").unwrap();
         let mut count = 0;
         for entry in std::fs::read_dir(dir()).unwrap() {
             let path = entry.unwrap().path();
