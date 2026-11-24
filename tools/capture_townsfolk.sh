@@ -26,6 +26,24 @@ shot() {
 GOATEE="--walk --at 29.726465 8.515085 --yaw -4.4 --pitch -6"
 FULL_FRONT="--walk --at 29.707064 9.102589 --yaw 87.3 --pitch -6"
 ONLY=${ONLY:-all}
+# The motion (task 2.2) as capture sequences: every 4th frame of 48 from frame
+# 150 (`PBD_CAPTURE_RUN`, a capture instrument), so a contact sheet shows
+# the smith's hammer, the innkeeper's wipe, the market's walkers and the gate
+# guard's idle look; tools/contact_sheet.py lays each run out as a sheet.
+if [ "$ONLY" = motion ]; then
+  run() {
+    name=$1; shift
+    PBD_CAPTURE_RUN="$D/motion-$name,150,48,4" timeout 2400 xvfb-run -a -s "-screen 0 960x600x24" \
+      $EXE "$@" --rain 0 --weather-at 7200 --time 11 --capture "$D/motion-$name.png" --frames 200 \
+      > "$D/motion-$name.log" 2>&1
+    echo "motion-$name exit $?"
+  }
+  run hammer $SMITH_SIDE
+  run wipe $GOATEE
+  run walk $MARKET
+  run idle $GUARD
+  exit 0
+fi
 # The ears (design 38): the smith from the side, and the two bearded faces.
 if [ "$ONLY" = ears ]; then
   shot ears-smith-side "" $SMITH_SIDE --time 11
