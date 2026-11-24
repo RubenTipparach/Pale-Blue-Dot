@@ -1575,6 +1575,64 @@ design 42's open plan that every click extended:
 
 Shown in M15 version 10 (version 8 had a New road button on the old open plan; version 9 picked a stake up on a plain click).
 
+**42l. In the game (2026-11-24, on the owner's "cool implement all the
+phase 3 stuff!"; written before the code).** Where 42 to 42k leave a choice
+open, each is a recommendation taken (ask only with screenshots):
+- **The hex line is the same both ways round.** `roads::hex_line` samples
+  the great circle between the two cells every quarter metre, always from
+  the lower key to the higher (reversed after for the other way), takes the
+  nearest cell at each sample, and where two cells in a row are not
+  neighbours (the line through a corner) puts in their common neighbour of
+  lower key. This replaces 42a's "ties broken to the left of travel", which
+  would give a different line each way round.
+- **One rule for a cell and a step.** `roads::check_cell` (a planned cell's
+  ground and whether a tree stands on it) and `roads::check_step` (two
+  neighbours' heights against the steepest grade) are what `roads::route`
+  asks too: the player's edits and the sea are never entered, and no step
+  is more than a layer. The world's roads plan the same cells as before
+  (`world_routes_are_pinned`, taken before the change).
+- **Bridges are not built yet.** A river deeper than a ford is red, "Too
+  wide to bridge", whatever its width, until the player's bridge cell (its
+  deck, posts and rails) is built. Shallow water is forded on a gravel bed,
+  whatever the road's surface (42a), and a paved ford is drawn as the
+  world's fords are.
+- **Lanes.** A wide road's lanes are the cells next to its centre line
+  that lie within 1.1 cell widths of the line (to the left for 2, both sides
+  for 3) and whose foot falls on the leg. A lane takes the plane of its
+  nearest centre cell: its slope rises toward its own neighbour in the
+  direction the centre rises. The player's road neither cuts nor fills yet
+  (that needs the world's digging in the paving's durable line), so a lane
+  is allowed only where its ground is on the plane's low layer, or a layer
+  under it, raised on packed earth as a dip is; otherwise "Too steep
+  across". A wide road bends only where the bend cell and its neighbours on
+  the line are level ("Wide roads bend on the level").
+- **The plan record.** `road-plan` schema 2 is `{ roads: [{ stakes,
+  width, surface, lamps }] }`; its cells are re-derived from the stakes. A
+  schema 1 plan reads as one road of width 1 in gravel whose cells are the
+  ones it stored (`cells`, kept on the road), so it never moves. The
+  planner writes into the plan whose stake a road starts from, else the
+  newest plan, else a new one. Paved cells stay `road-cell` records naming
+  their plan; **marked for removal is derived**: a paved cell of a plan
+  that no road of it runs over now. So it is not stored twice.
+- **The menu is X held** (with stakes in hand, on foot; F is the shovel's
+  paving key and G the tool picker). It lists width 1, 2 and 3, dirt,
+  gravel, lamps, and the eraser; the wheel moves the highlight and letting
+  X go takes it, as the G picker does. Width, surface and lamps are for the
+  next road started; a road already staked is changed by erasing it (its
+  stakes come back) and staking it again.
+- **Esc** opens the menu as ever, and drops a road with no end yet; so do
+  clicking its start again and putting the stakes away.
+- **The eraser** stays on until it is picked again in the menu or the
+  stakes leave the hand; a click erases the road under the aim.
+- **Lamps** are recorded on the road, stand in its ghost and are in its
+  bill; a lamp post is not built when its cell is paved yet (left open).
+- **The HUD** is one line under the crosshair: the red reason while the
+  aim is refused, otherwise the bill of what is still to build (stakes,
+  gravel; short goods in red) and the counts ("12 of 38 left", turns).
+- **Tunables** are `assets/config/road_planner.ron` (42i), validated at
+  load; `max_segment` (24, the cells between two stakes) is 42i's
+  `max_stake_cells`.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
