@@ -1,0 +1,17 @@
+// Framing a talk (`townsfolk` design 37a, framing; owner, survey P1,
+// 2026-11-24: "Move the camera so the merchant is on left, and the trade UI
+// is on the right"). Read at start and validated by `talk::TalkView`.
+(
+    // Seconds the look takes to turn to the townsperson (0 turns at once).
+    turn_secs: 0.25,
+    // Where the townsperson's aim point lands, in normalised screen space
+    // (x -1 left to 1 right, y -1 bottom to 1 top): the centre of the left
+    // third, at the middle height.
+    frame: (-0.6667, 0.0),
+    // The aim point's height over the townsperson's feet, metres: between
+    // chest and face.
+    aim_height_m: 1.2,
+    // The gap between a talk panel and the screen's right edge, native px
+    // (times the UI scale).
+    panel_margin_px: 24.0,
+)

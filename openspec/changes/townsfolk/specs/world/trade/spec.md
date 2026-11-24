@@ -37,3 +37,15 @@ filter change SHALL show the column from its top.
 - **WHEN** the player chooses the food filter over the BUY column
 - **THEN** only the trader's crops, fruit, fish and dishes are listed,
   from the first of them
+
+### Requirement: A talk frames the townsperson on the left and the panel on the right
+While the talk, trade or job board panel is open it SHALL sit on the right
+of the screen, and opening a talk SHALL turn the player's own look, over a
+short ease, so the townsperson stands in the left third of the frame, the
+look staying where it was turned when the talk closes. A townsperson who
+walks on while the panel is open SHALL NOT be followed.
+
+#### Scenario: Talking to the merchant
+- **WHEN** the player talks to a town's merchant
+- **THEN** the merchant stands in the left third of the screen and the
+  talk panel on the right

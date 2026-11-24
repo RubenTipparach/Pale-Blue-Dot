@@ -45,6 +45,12 @@ if [ "$ONLY" = all -o "$ONLY" = barter ]; then
   PBD_PACK="$PACK" shot trade-basket "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL --no-readout --frames 210
   PBD_PACK="$PACK" shot coins-hotbar "120:KeyF,140:press:trade,160:press:sell,165:press:sell,170:press:sell,175:press:deal,185:press:back,195:press:bye" $STALL --no-readout --frames 230
 fi
+# Framing (design 37a, framing; owner, survey P1, 2026-11-24): the same
+# barter, the panel on the right and the look turned on F so the merchant
+# stands in the left third.
+if [ "$ONLY" = all -o "$ONLY" = framed ]; then
+  PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL --no-readout --frames 210
+fi
 # The lost villager (`town-missions-tree` task 6.3, `townsfolk` 12.4): the
 # reeve's board on a day it posts one (DAY, from `cargo test --profile fast
 # -p pbd-app --lib -- --ignored print_the_days_linenleighs_board_posts_a_lost_villager
