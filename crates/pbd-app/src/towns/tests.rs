@@ -2609,7 +2609,7 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
         let stand = anvil + back * 2.0;
         spot("the forge, past the anvil", stand, forge - stand);
         // And from its side, 3.5 m off the line from the anvil to the forge,
-        // so the smith at the anvil and the forge are both in view.
+        // so the smith (0.6 m past the anvil) and the forge are in view.
         let middle = (forge + anvil) * 0.5;
         let across = middle.normalize().cross(forge - anvil).normalize();
         for (name, s) in [("left", 1.0), ("right", -1.0)] {
@@ -2679,57 +2679,11 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
             );
         }
     }
-    // The idle look (`townsfolk` task 2.2): the first idler of Linenleigh
-    // or Holbrook at a post whose spot 2.5 m in front is clear, with
-    // nothing of the town between it and the idler's head. The gate
-    // guard's and the bearded stallholder's spots of before face a door or
-    // no one since the towns were laid again.
-    for (site, template) in [
-        (
-            sites_of(SiteKind::Walled)
-                .into_iter()
-                .find(|s| s.name == "Linenleigh")
-                .unwrap(),
-            &walled,
-        ),
-        (holbrook(), &village),
-    ] {
-        let town = lay_out(&site, template, &config).unwrap();
-        let laid = build(
-            &site,
-            &town,
-            Some(template),
-            &load_kits(),
-            &|_: &str| 2.0,
-            &config,
-        )
-        .unwrap();
-        let folk = pbd_core::townsfolk::people_of(&town, template, &laid.chart, &laid.patch);
-        let blocked = |p: DVec3| laid.solids.iter().any(|b| b.holds(p.as_vec3(), 0.2, 0.25));
-        let clear = folk.iter().find_map(|p| {
-            (p.work() == Some(pbd_core::townsfolk::Work::Idle)).then_some(())?;
-            let at = p.at(0.0, radius);
-            let up = at.feet.normalize();
-            // On the side the figure is drawn facing: a capture from
-            // `feet + forward` showed a stallholder's back.
-            let stand = at.feet - at.forward * 2.5;
-            let head = at.feet + up * 1.6;
-            let eye = stand + up * 1.6;
-            let free = (0..=10).all(|k| {
-                let t = f64::from(k) / 10.0 * 0.85;
-                !blocked(eye + (head - eye) * t)
-            }) && !blocked(stand + up * 0.9);
-            free.then(|| (p.role.clone(), stand, at.forward))
-        });
-        if let Some((role, stand, look)) = clear {
-            spot(
-                &format!("the idle look: {}'s {role}", site.name),
-                stand,
-                look,
-            );
-            break;
-        }
-    }
+    // The idle look (`townsfolk` task 2.2) is shot at the merchant, who
+    // idles at his post, from the talk captures' spot 1.1 m back along the
+    // look from his face-to-face one (`capture_talk.sh`'s `STALL_FAR`). The
+    // gate guard's and the bearded stallholder's spots show a door and a
+    // back since the towns were laid again.
     let guard = folk
         .iter()
         .find(|p| p.role == "guard")

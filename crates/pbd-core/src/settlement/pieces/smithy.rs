@@ -38,6 +38,15 @@ pub const FORGE_ACROSS_M: f32 = 1.3;
 pub const FORGE_TOP_M: f32 = 1.1;
 pub const BED_SINK_M: f32 = 0.05;
 pub const HOOD_FOOT_M: f32 = 1.65;
+/// The fire's tongues on the hearth bed: where each stands off the fire's
+/// middle along and across the forge, and how tall it is, metres.
+const FIRE_TONGUES: [(f32, f32, f32); 5] = [
+    (0.0, 0.0, 0.36),
+    (0.22, 0.12, 0.24),
+    (-0.2, -0.1, 0.27),
+    (0.08, -0.2, 0.2),
+    (-0.12, 0.2, 0.22),
+];
 
 /// A frustum of four sides over a rectangle in the mockup's plan: centred on
 /// `(x, z)`, `w0` along x and `d0` along z at `y0`, `w1` by `d1` at `y1`,
@@ -277,8 +286,12 @@ fn forge(sink: &mut Sink, place: &Place, (x, z): (f32, f32), chimney_top: f32) {
         (flue.0 - 0.05, flue.1 - 0.05, chimney_top),
         (0.0, 0.0),
     );
-    let fire = place.plan(x - 0.1, z);
-    sink.flame("flame", Vec3::new(fire.x, bed, fire.y), 0.5);
+    // The fire: tongues of flame of uneven heights over the bed, not one
+    // cone (a single crossed flame read as a pale pyramid in the capture).
+    for (dx, dz, h) in FIRE_TONGUES {
+        let fire = place.plan(x - 0.1 + dx, z + dz);
+        sink.flame("flame", Vec3::new(fire.x, bed, fire.y), h);
+    }
     let c = place.plan(x, z);
     sink.solid_box(
         c.x,
