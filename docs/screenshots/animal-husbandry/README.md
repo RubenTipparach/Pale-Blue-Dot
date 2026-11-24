@@ -73,3 +73,24 @@ Chromium on SwiftShader in a cloud container (no GPU): the look, never the speed
 | `art-<today,neck,soft,carved>-<stand,graze>-<11h00,22h30>.jpg` | The four species, the 1.8 m player and the 1 m grid in each style and pose, by day and at 22:30 by the two lanterns. |
 | `art-today-graze-phone-11h00.jpg`, `art-soft-graze-phone-11h00.jpg`, `art-soft-stand-phone-22h30.jpg` | Phone width (390 px). |
 | `art-info-modal.jpg` | The tab's info modal. |
+
+## The herd in M26's blocky style (design 17, "The owner's pick")
+
+The owner picked M26's Farmstead and Hatchery animals ("make animals like this! I love this
+look", then "please go back to blocky style for animals", "DO NOT DO THE SOFT CURVY
+ANIMALS"). Fixed-step `--capture` in a Claude Code cloud container on lavapipe under
+`xvfb-run` (no GPU: the look, never the speed; frame cost not measured), 1440 x 900, the
+`fast` build, a new memory-only world, `--rain 0`. BEFORE is `claude/phase-2-1` before this
+change (design 16's lofted forms), AFTER this change; each image is one file, labelled in the
+frame. `--husbandry close-stand` and `close-graze` are capture instruments added with it: the
+`close` scene with every head held up or down to graze and looking ahead. M26's own panels are
+Chromium on SwiftShader (`docs/mockups/husbandry.html#hatch`, `#farm`).
+
+| File | Command | Shows |
+| --- | --- | --- |
+| `herd-blocky-stand-before-after-16h00.jpg` | `--husbandry close-stand --at -37.5 -84 --time 16 --pitch -14 --frames 200` | BEFORE, AFTER and M26's Hatchery tab: the hen (left), the woolback, the plodder and the horse standing; each one creature of boxes in its pixel hide, the head carried at the withers. |
+| `herd-blocky-graze-before-after-16h00.jpg` | the same with `close-graze` | Grazing: before, the face turned back under the chest; after, the neck lowered and stretched, the muzzle at the grass, the face 75 degrees down. |
+| `herd-blocky-night-before-after-03h48.jpg` | `close-stand`, `--time 3.8 --lamps 3 -6` | At 22:00 by the lamps (the held torch in front): lying and roosting, lit as the ground is. |
+| `herd-blocky-cart-plodder-before-after-16h00.jpg` | `--walk --carts --cart-close plodder --time 16 --pitch -14 --frames 200` | A plodder in the horse cart's shafts. |
+| `herd-blocky-cart-horse-before-after-16h00.jpg` | `--walk --carts --cart-close horse ...` | The horse in the shafts and a loose horse. |
+| `herd-blocky-ride-before-after-16h00.jpg` | `--walk --carts --cart-close ride --pitch -38 ...` | Riding a plodder: its back, the blanket, the neck and horns ahead. |
