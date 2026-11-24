@@ -28,7 +28,7 @@ has built them into the engine.
 - [x] 4.3 (`building::tests::the_roof_tool_roofs_a_two_by_four_house`; `two-storey-house-night.jpg`.) The roof tool's flood fill and fit. Verify: a test roofing a two-by-four house, and a capture.
 - [ ] 4.4 (Built: the Blueprint slot charts any plain template building at the aim, the wheel turns it, shift and the wheel picks which, one click fills it whole; `house-*.png`. The app test that walks in through its door is still owed.) The blueprint picker and fill, both at once and piece by piece. Verify: an app test places a cottage blueprint, fills it, and walks in through its door.
 
-- [ ] 4.5 (Orbit, pan, zoom and a build layer built as architecture mode, design B9, task 7.5; double-click to walk and the cutaway not built.) The build camera, from the towns mockup's overview: orbit by drag, pan along its heading (right-drag, WASD), zoom by the wheel, double-click to walk there, and a cutaway height that hides everything above a chosen layer. Verify: an app test for each, and a capture with the cutaway through a two-storey house.
+- [ ] 4.5 (Orbit, pan, zoom and a build layer built as architecture mode, design B9, task 7.5; double-click to walk and the cutaway not built. Left open 2026-11-24: the building planner, being built beside it on the same branch, carries M6 version 3's top-down and isometric views with their cutaway walls, so the cutaway is taken there rather than built twice; double-click to walk waits with it.) The build camera, from the towns mockup's overview: orbit by drag, pan along its heading (right-drag, WASD), zoom by the wheel, double-click to walk there, and a cutaway height that hides everything above a chosen layer. Verify: an app test for each, and a capture with the cutaway through a two-storey house.
 - [x] 4.6 (`kit-picker.jpg`: all 22 kits the game ships, not 19; the wheel steps the kit.) The palette's kit picker shows every kit side by side, as the mockup's Kits tab does. Verify: a capture of the picker with all 19 kits.
 
 ## 5. The owner's check
@@ -50,7 +50,7 @@ has built them into the engine.
 
 - [x] 6.1 A floor over lower ground stands on a fieldstone footing down to it (design 8). Verify: `building::tests::a_floor_over_lower_ground_stands_on_a_footing`, and a capture of the house on the desert's terraces.
 - [x] 6.2 A player's building casts the sun's shadow as a town's does (design 9). Verify: `builds::tests::a_plot_casts_the_suns_shadow_but_its_flames_do_not`, and a capture.
-- [ ] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`.
+- [x] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`. Retaken 2026-11-24 (lavapipe) from architecture mode, where the roof ghost a storey up stands wholly in frame; commands in the folder's README.
 
 ## 7. The owner's notes (2026-11-22; design B7 to B10)
 

@@ -1824,6 +1824,34 @@ pub fn scripted_press(
     }
 }
 
+/// A capture instrument (`townsfolk` task 11.3): `PBD_PACK=<code>:<n>,...`
+/// puts those goods in the pack on the capture's frame 100, so a capture of
+/// the trade panel has something the trader buys. Nothing reads it in play.
+pub fn scripted_pack(
+    state: Res<super::CaptureState>,
+    mut hotbar: ResMut<Hotbar>,
+    mut done: Local<bool>,
+) {
+    if *done || state.frame < 100 {
+        return;
+    }
+    *done = true;
+    let Ok(spec) = std::env::var("PBD_PACK") else {
+        return;
+    };
+    for step in spec.split(',') {
+        let Some((code, n)) = step.trim().split_once(':') else {
+            continue;
+        };
+        let (Some(item), Ok(n)) = (item_of(code, &[]), n.parse::<u16>()) else {
+            warn!("PBD_PACK: no {code}");
+            continue;
+        };
+        hotbar.0.give(item, n);
+        info!("PBD_PACK: {n} {code} in the pack");
+    }
+}
+
 pub struct TalkPlugin;
 
 impl Plugin for TalkPlugin {
@@ -1838,6 +1866,7 @@ impl Plugin for TalkPlugin {
                 (
                     use_talk,
                     forget,
+                    scripted_pack.run_if(resource_exists::<super::CaptureState>),
                     scripted_press,
                     press,
                     scroll_wheel,

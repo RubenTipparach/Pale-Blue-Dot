@@ -68,3 +68,15 @@ the thumb (a capture has no pointer drag; the mockup's
 `v13-trade-dragged-night` shows it), and the tooltip (a capture holds the
 pointer, so nothing is hovered). The thumb is 4 px wide at 1x, a thin bar
 at this scale.
+
+## Barter and the coin count (`townsfolk` 11.3, 5.2; 2026-11-24)
+
+`ONLY=barter tools/capture_talk.sh`, lavapipe, no GPU: the look only, frame
+time not measured. `PBD_PACK` (a capture instrument) puts six wheat, four
+logs and three eggs in the pack on frame 100; everything after is presses.
+Prices are design 37a's: derived values with the world's market folded in.
+
+| Shot | What it shows |
+| --- | --- |
+| `trade-basket.jpg` | Two ropes in YOU TAKE (8 coins at the selling price) and two wheat in YOU GIVE (4 at the buying price): YOU PAY 4, half the price in goods. The rows count down what is left to put in a basket (wheat x4). |
+| `coins-hotbar.jpg` | Three wheat sold in one basket, DEAL, then BACK and BYE: the coin count beside the hotbar reads 6, the pack's wheat down to 3. |
