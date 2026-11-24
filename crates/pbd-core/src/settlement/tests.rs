@@ -4461,7 +4461,15 @@ fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
             tall > smithy::EAVE_M,
             "the chimney through the roof: {tall}"
         );
-        for m in ["timber", "shingle", "stone", "iron", "flame"] {
+        for m in [
+            "timber",
+            "shingle",
+            "stone",
+            "bark",
+            smithy::ANVIL,
+            smithy::ANVIL_FACE,
+            smithy::FIRE,
+        ] {
             assert!(
                 new.meshes.get(m).is_some_and(|b| !b.positions.is_empty()),
                 "{m}"

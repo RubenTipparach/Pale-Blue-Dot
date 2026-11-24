@@ -55,6 +55,13 @@
     // laid by the metre on every face of a box; laid out by
     // tools/art/herd_hide.py from M26's hides.
     (name: "herd_hide", width: 256, height: 128, repeat_m: 0.0),
+    // `townsfolk` design 26a (the fire and the anvil redone): the forge's
+    // fire, eight 16 x 32 frames of a tongue, mapped once per tongue and
+    // stepped frame by frame, cut out round its edge; the anvil's iron and
+    // its worn face. Drawn by tools/art/forge_art.py.
+    (name: "forge_fire", width: 128, height: 32, repeat_m: 0.0, cut: true),
+    (name: "anvil", width: 32, height: 32, repeat_m: 1.0),
+    (name: "anvilface", width: 32, height: 32, repeat_m: 1.0),
     (name: "banner", width: 32, height: 32, repeat_m: 0.0),
     (name: "sandstone", width: 32, height: 32, repeat_m: 2.0),
     (name: "salt", width: 32, height: 32, repeat_m: 2.0),
