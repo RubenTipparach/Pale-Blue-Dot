@@ -14,6 +14,11 @@ SMITH_FRONT="--walk --at 29.884943 1.485554 --yaw 17.1 --pitch -14"
 SMITH_SIDE="--walk --at 29.860050 1.502882 --yaw -39.2 --pitch -8"
 MARKET="--walk --at 29.702875 9.150705 --yaw 24.2 --pitch -6"
 GUARD="--walk --at 29.112494 8.325739 --yaw -92.3 --pitch -8"
+# The forge (design 26a): from 2 m past the anvil, looking at the forge.
+FORGE="--walk --at 29.882999 1.454057 --yaw 179.2 --pitch -12"
+# The idle look (task 2.2): the first idler whose spot 2.5 m in front is
+# clear of the town, facing Linenleigh's stallholder (the printer checks it).
+IDLE="--walk --at 29.654202 9.099745 --yaw -92.7 --pitch -6"
 shot() {
   name=$1; expr=$2; shift 2
   PBD_TOWNSFOLK_EXPRESSION=$expr timeout 1500 xvfb-run -a -s "-screen 0 960x600x24" $EXE "$@" \
@@ -41,7 +46,7 @@ if [ "$ONLY" = motion ]; then
   run hammer $SMITH_SIDE
   run wipe $GOATEE
   run walk $MARKET
-  # The idle look waits for a new spot: GUARD and FULL_FRONT face no one now.
+  run idle $IDLE
   exit 0
 fi
 # The ears (design 38): the smith from the side, and the two bearded faces.
@@ -59,7 +64,8 @@ if [ "$ONLY" = beards ]; then
   exit 0
 fi
 [ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
-[ "$ONLY" = all ] && shot smith-forge-2230 "" $SMITH_SIDE --time 22.5
+[ "$ONLY" = all ] && shot smith-forge-2230 "" $FORGE --time 22.5
+[ "$ONLY" = all ] && shot forge-day "" $FORGE --time 11
 shot market-day "" $MARKET --time 11
 shot gate-guard "" $GUARD --time 11
 for e in surprised sleepy delighted worried cross thinking; do
