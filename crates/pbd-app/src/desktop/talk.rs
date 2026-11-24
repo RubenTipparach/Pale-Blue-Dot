@@ -2355,6 +2355,7 @@ mod tests {
                 kind: pbd_core::sites::SiteKind::Village,
                 name: "Ash".into(),
                 neighbours: vec![],
+                roads_to: vec![],
             },
             trader: true,
             giver: false,
