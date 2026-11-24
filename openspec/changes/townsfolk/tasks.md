@@ -18,6 +18,7 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 - [x] 3.1 Each person's circle in the settlement's moving-solid list, checked by the walker. Verify: an app test that walking straight into a working smith slides round them with no overlapping tick. Done: `walking::tests::walking_into_a_working_smith_slides_round_him`.
 - [x] 3.2 Lighting through the field's sampler. Verify: a capture of the smith at the forge at 22:30. Lit through the field (`LitByField`, `LitLikeTerrain`). The forge is built (design 26a, 2026-11-24): the template's smithy (shed, forge, anvil) cut in every village and walled town laid at layout 3, its fire a brazier lamp in the field; towns stored at layout 1 or 2 keep their pieces and lamps (`settlement::tests::a_new_town_stands_its_forge_and_an_old_one_is_as_it_was`). Shot at nightfall (20:45, `smith-forge-2045.jpg`: at 22:30 the smith is abed, `smith-forge-2230.jpg` shows the forge alone) and by day (`forge-day.jpg`), lavapipe. The fire's tongues read pale under the tonemapper at night: a look to judge on the desktop.
+- [ ] 3.2b The forge's fire and anvil redone (design 26b): one textured flame over a bed of coals, one lofted anvil with its face, horn and heel, new textures from `tools/art/forge_art.py`. Verify: looked at close up (`forge-close.jpg`) and the 26a shots retaken; settlement and towns tests pass.
 
 ## 4. The owner's check
 
