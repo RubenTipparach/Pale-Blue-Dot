@@ -937,6 +937,51 @@ faked with a light of its own.
     layout stays 3 (no world has shipped it). Captures: the two shots
     retaken and `forge-close.jpg`, the fire and the anvil close up.
 
+**26b. The forge's fire and anvil, redone (2026-11-24).** Written before
+the code. Measured in the captures of 26a (`smith-forge-2230.jpg`,
+`forge-day.jpg`): the fire is five crossed-triangle tongues
+(`Sink::flame`) in one flat unlit colour, which read as five pale cones on
+the hearth; the anvil is two frustums and a four-faced horn in the town's
+`iron` texture, which reads as a dark blob with no face, horn or heel at
+the distance a player stands. Both break "No obvious primitives" (CLAUDE.md:
+"a part that reads as a primitive stuck on is redone, not shipped"). The
+first redo of this was lost uncommitted with its container; this is done
+again from the start.
+- **The fire is one shaped, textured flame.**
+  - A bed of coals fills the hearth bed: one low, lumpy surface (a grid
+    over the bed, its heights from a fixed hash, so it is the same every
+    load), in a new `embers` texture: dark clinker with glowing orange and
+    yellow seams. Drawn unlit (it is the light), as a flame is.
+  - Over it, one flame body: three ribbons crossed at 60 degrees through
+    the fire's middle, each a strip of several rows that narrows to the top
+    and leans a little, its outline cut by a new `forgefire` texture's
+    alpha: several tongues of uneven height, a white-yellow core at the
+    root through orange to red tips, painted pixel art in the town's
+    palette. One mesh, no cone: the tongues are in the texture, so the
+    silhouette is ragged and different from every side.
+  - Drawn unlit, alpha-masked, both faces, never baked, casting nothing:
+    the flame material's rules, with a texture. The `Brazier` lamp in the
+    field still does the lighting.
+- **The anvil is one lofted anvil.** A London-pattern profile along its
+  length, sections joined into one closed surface with shared edges and a
+  bevel at the face:
+  - a foot flared on four sides, drawn in to a waist, the body widening to
+    the face;
+  - the face flat on top, a step down to the table, and a horn tapering
+    to a rounded point and curving down a little; a square heel at the
+    other end;
+  - in two new textures: `anvil`, forged iron, dark grey-blue with lighter
+    worn edges and hammer marks, and `anvilface`, the polished steel top,
+    brighter, so the face catches the forge's light.
+  - It stays a solid to the walker, the same box as before.
+- **The art** is drawn in code by `tools/art/forge_art.py` (fixed seeds,
+  the settlement palette, no outlines), written to
+  `assets/textures/settlement/{embers,forgefire,anvil,anvilface}.png` and
+  listed in the manifest.
+- **Looked at close up** before it is shown: a capture from about 1.2 m off
+  the anvil with the hearth in frame (`forge-close.jpg`), plus the 26a
+  shots retaken. Only layout-3 towns have a forge, so no save changes.
+
 **27. What other parts may use** (`pbd_app::townsfolk`):
 - `TownPerson { id: PersonId { site, index }, role }` is on the root of
   every drawn person, so a talk or trade can find who is in front of the
