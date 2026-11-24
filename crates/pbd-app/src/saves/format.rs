@@ -25,6 +25,7 @@
 //! so the line that records the hole records where the block went, and a
 //! pickup is a line of its own.
 
+use pbd_core::building::site::BuildingSetting;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
@@ -521,6 +522,11 @@ pub struct Identity {
     /// world made with tool crafting, which starts owning none.
     #[serde(default)]
     pub tools: u32,
+    /// How the world builds (`building-planner` design 11): absent in every
+    /// world made before, which reads as Free, the way those worlds were
+    /// built; a world this build makes is Planned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub building: Option<BuildingSetting>,
 }
 
 /// The `tools` a world this build makes is marked with.
@@ -536,7 +542,13 @@ impl Identity {
             keys: KEY_VERSION,
             records: BTreeMap::new(),
             tools: TOOLS_VERSION,
+            building: Some(BuildingSetting::NEW_WORLD),
         }
+    }
+
+    /// How the world builds: missing reads Free (`building-planner` 11).
+    pub fn building(&self) -> BuildingSetting {
+        BuildingSetting::of_saved(self.building)
     }
 
     /// Whether the world began with tool crafting, owning no tools.
@@ -555,6 +567,7 @@ impl Identity {
             keys,
             records: BTreeMap::new(),
             tools: 0,
+            building: None,
         }
     }
 

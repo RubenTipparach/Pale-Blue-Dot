@@ -1207,6 +1207,7 @@ thread_local! {
 
 /// Install the world's road cells, or none.
 pub fn install_cleared(cleared: Option<Cleared>) {
+    let _held = crate::settlement::ground::installing();
     *CLEARED.write().unwrap_or_else(|e| e.into_inner()) = cleared.map(std::sync::Arc::new);
     CLEARED_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }

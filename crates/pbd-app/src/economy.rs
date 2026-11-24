@@ -26,13 +26,17 @@ use crate::towns::Towns;
 use crate::ui_kit::{Localized, tr};
 use bevy::prelude::*;
 use pbd_core::economy::coins::{PURSE_ID, PURSE_KIND, PURSE_SCHEMA, Purse, Reason};
+use pbd_core::economy::derive::{Deriver, makings};
 use pbd_core::economy::goodwill::{GOODWILL_KIND, GOODWILL_SCHEMA, Goodwill};
 use pbd_core::economy::jobs::{
     Board, JOBS_ID, JOBS_KIND, JOBS_SCHEMA, Job, JobKind, JobRefused, JobsConfig, Keepers,
     TakenJobs, Town, scoped,
 };
+use pbd_core::economy::market::{
+    WORLD_MARKET_ID, WORLD_MARKET_KIND, WORLD_MARKET_SCHEMA, WorldMarket, balance,
+};
 use pbd_core::economy::trade::{
-    Deal, MARKET_KIND, MARKET_SCHEMA, Market, Refused, TradeConfig, Trader,
+    Barter, Basket, Deal, MARKET_KIND, MARKET_SCHEMA, Market, Refused, TradeConfig, Trader,
 };
 use pbd_core::economy::values::Values;
 use pbd_core::goods::Good;
@@ -43,9 +47,13 @@ use pbd_core::records::{Author, Record as StoredRecord};
 use pbd_core::sites::SiteKind;
 
 /// The values, the trade rules and the job rules, read at startup.
+/// `values` are the derived values at rest (`townsfolk` design 37a): the
+/// typed rows of raw materials, every made good worked out from the recipe
+/// book; `deriver` prices them again with the market's index.
 #[derive(Resource, Clone, Debug)]
 pub struct EconomyConfig {
     pub values: Values,
+    pub deriver: Deriver,
     pub trade: TradeConfig,
     pub jobs: JobsConfig,
 }
@@ -62,10 +70,33 @@ impl EconomyConfig {
             .unwrap_or_else(|e| panic!("{e}"))
     }
 
+    /// Parse the three files, deriving the values from the game's recipe
+    /// book (`recipes.ron` and `cooking.ron`, [`crate::config::recipe_book`]).
     pub fn parse(values: &str, trade: &str, jobs: &str) -> Result<Self, String> {
+        let (book, _) = crate::config::recipe_book();
+        Self::parse_with_book(values, trade, jobs, &book.0)
+    }
+
+    pub fn parse_with_book(
+        values: &str,
+        trade: &str,
+        jobs: &str,
+        book: &pbd_core::station::RecipeBook,
+    ) -> Result<Self, String> {
+        let base = Values::parse(values)?;
+        let trade = TradeConfig::parse(trade)?;
+        let overrides = base.overrides().to_vec();
+        let deriver = Deriver::new(
+            base,
+            makings(book),
+            trade.labour_per_s,
+            trade.craft_margin,
+            &overrides,
+        )?;
         Ok(Self {
-            values: Values::parse(values)?,
-            trade: TradeConfig::parse(trade)?,
+            values: deriver.derive().values,
+            deriver,
+            trade,
             jobs: JobsConfig::parse(jobs)?,
         })
     }
@@ -88,6 +119,16 @@ pub struct Economy {
     /// Lost villagers whose job was abandoned, to stand back at their posts
     /// (`town-missions-tree` design 9): what `special::lost_villagers` lets go.
     pub let_go: Vec<pbd_core::townsfolk::PersonId>,
+    /// The world's market as last settled (`townsfolk` design 37a), and the
+    /// world opening and game day it was settled for.
+    pub market: WorldMarket,
+    market_for: Option<(u64, u64)>,
+    /// Every town's kind, what the market's daily making and using reads;
+    /// kept by [`settle_market`] from the towns the world holds.
+    pub town_kinds: Vec<SiteKind>,
+    /// The derived values with the market's index folded in: what a trader
+    /// prices by. `None` until the market is first settled.
+    pub prices: Option<Values>,
 }
 
 /// How long a "job done" line stays up, seconds.
@@ -100,8 +141,74 @@ impl Economy {
         self.jobs = jobs_of(save);
         self.joined = Some(save.serial());
         self.notice = None;
+        self.market_for = None;
+        self.prices = None;
     }
 
+    /// Settle the world's market to `today` (design 37a): read from the save
+    /// when this opening has not been settled, stepped by the days since,
+    /// and the prices worked out again. The record to write comes back when
+    /// a day moved a row that the save holds or would now hold.
+    pub fn settle_market(
+        &mut self,
+        save: &WorldSave,
+        cfg: &EconomyConfig,
+        today: u64,
+    ) -> Option<StoredRecord> {
+        let key = (save.serial(), today);
+        if self.market_for == Some(key) {
+            return None;
+        }
+        let stored = if self.market_for.is_some_and(|(s, _)| s == save.serial()) {
+            self.market.clone()
+        } else {
+            world_market_of(save, today)
+        };
+        let kinds = &self.town_kinds;
+        let settled = stored.settled(today, &cfg.trade.market, &cfg.values, |c| {
+            balance(&cfg.trade, &cfg.values, kinds, c)
+        });
+        let write = settled.moved_from(&stored).then(|| {
+            StoredRecord::of(
+                WORLD_MARKET_KIND,
+                WORLD_MARKET_ID,
+                WORLD_MARKET_SCHEMA,
+                &settled,
+            )
+        });
+        self.market = settled;
+        self.market_for = Some(key);
+        self.reprice(cfg);
+        write
+    }
+
+    /// Work the prices out again from the market's index.
+    pub fn reprice(&mut self, cfg: &EconomyConfig) {
+        let market = &self.market;
+        self.prices = Some(cfg.deriver.priced(|c| market.index(c)).values);
+    }
+}
+
+/// Who writes a day's settle of the market: the world, never the player
+/// (`world-persistence`: every change names its author).
+pub fn market_author() -> Author {
+    Author::World {
+        process: "market".into(),
+        kind: WORLD_MARKET_KIND.into(),
+        id: WORLD_MARKET_ID,
+    }
+}
+
+/// The world's market in `save`; a world with none reads at rest, settled
+/// to `today` (an old save opens with every index at 1.0).
+pub fn world_market_of(save: &WorldSave, today: u64) -> WorldMarket {
+    save.records
+        .get(WORLD_MARKET_KIND, WORLD_MARKET_ID)
+        .and_then(|r| r.read())
+        .unwrap_or_else(|| WorldMarket::fresh(today))
+}
+
+impl Economy {
     /// Whether the open world has been read.
     pub fn joined(&self, save: &WorldSave) -> bool {
         self.joined == Some(save.serial())
@@ -264,6 +371,7 @@ impl Why {
             Why::Trade(Refused::PackFull) | Why::PackFull => "trade.pack_full",
             Why::Trade(Refused::NotWanted) => "trade.not_wanted",
             Why::Trade(Refused::NotHeld) => "trade.not_held",
+            Why::Trade(Refused::Empty) => "trade.empty",
             Why::Job(JobRefused::Taken) => "jobs.taken",
             Why::Job(JobRefused::NotDone) => "jobs.not_done",
             Why::Job(JobRefused::WrongTown) => "jobs.wrong_town",
@@ -292,11 +400,36 @@ pub struct Shop<'a> {
 }
 
 impl Shop<'_> {
-    /// The trader of `town`, at its goodwill.
+    /// Today's game day.
+    fn today(&self) -> u64 {
+        pbd_core::daylight::Clock {
+            seconds: self.now_s,
+        }
+        .day()
+    }
+
+    /// The world's market settled to today; the line to write if a day
+    /// moved it.
+    fn settle(&mut self) -> Option<StoredRecord> {
+        let today = self.today();
+        self.eco.settle_market(self.save, self.cfg, today)
+    }
+
+    /// Settle the market before a panel prices anything (design 37a).
+    pub fn ready(&mut self) {
+        if let Some(line) = self.settle()
+            && self.save.store(&market_author(), vec![line]).is_some()
+        {
+            self.save
+                .note_record_kinds(&[(WORLD_MARKET_KIND, WORLD_MARKET_SCHEMA)]);
+        }
+    }
+
+    /// The trader of `town`, at its goodwill, pricing by the market.
     pub fn trader<'b>(&'b self, town: &TownInfo) -> Trader<'b> {
         Trader {
             cfg: &self.cfg.trade,
-            values: &self.cfg.values,
+            values: self.eco.prices.as_ref().unwrap_or(&self.cfg.values),
             kind: town.kind,
             goodwill: goodwill_of(self.save, town.site).points,
             fish_ids: self.fish_ids,
@@ -319,6 +452,7 @@ impl Shop<'_> {
     }
 
     fn deal(&mut self, town: &TownInfo, code: &str, buying: bool) -> Result<Deal, Why> {
+        self.ready();
         let mut market = market_of(self.save, town.site);
         let mut purse = self.eco.purse.clone();
         let mut slots = self.slots.clone();
@@ -336,9 +470,17 @@ impl Shop<'_> {
         let mut jobs = self.eco.jobs.clone();
         let kind = if buying { Kind::Buy } else { Kind::Sell };
         let (counted, done) = jobs.record(&Happened::new(kind, scoped(town.site, code), 1));
+        let mut world = self.eco.market.clone();
+        world.traded(code, 1, !buying, &self.cfg.trade.market);
         let mut lines = vec![
             StoredRecord::of(MARKET_KIND, town.site as u64, MARKET_SCHEMA, &market),
             StoredRecord::of(GOODWILL_KIND, town.site as u64, GOODWILL_SCHEMA, &goodwill),
+            StoredRecord::of(
+                WORLD_MARKET_KIND,
+                WORLD_MARKET_ID,
+                WORLD_MARKET_SCHEMA,
+                &world,
+            ),
         ];
         if counted {
             lines.push(StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs));
@@ -349,8 +491,11 @@ impl Shop<'_> {
         self.save.note_record_kinds(&[
             (MARKET_KIND, MARKET_SCHEMA),
             (GOODWILL_KIND, GOODWILL_SCHEMA),
+            (WORLD_MARKET_KIND, WORLD_MARKET_SCHEMA),
             (JOBS_KIND, JOBS_SCHEMA),
         ]);
+        self.eco.market = world;
+        self.eco.reprice(self.cfg);
         let purse_line = StoredRecord::of(PURSE_KIND, PURSE_ID, PURSE_SCHEMA, &purse);
         if !self.save.store_with_hands(purse_line, PURSE_SCHEMA, &slots) {
             return Err(Why::Unsaved);
@@ -365,6 +510,87 @@ impl Shop<'_> {
             .push(Happened::new(kind, scoped(town.site, code), 1));
         self.note_step(town, stepped);
         Ok(deal)
+    }
+
+    /// What `basket` comes to at `town` now.
+    pub fn tally(&mut self, town: &TownInfo, basket: &Basket) -> pbd_core::economy::trade::Tally {
+        self.ready();
+        let market = self.market(town);
+        self.trader(town).tally(&market, basket)
+    }
+
+    /// Settle a basket deal at `town` (`townsfolk` design 37a, task 11.3):
+    /// goods and coins both ways, all at once. Its lines are a single
+    /// trade's: the town market, goodwill (one step a deal), the world
+    /// market and the jobs, then the purse with the pack in one line.
+    pub fn barter(&mut self, town: &TownInfo, basket: &Basket) -> Result<Barter, Why> {
+        self.ready();
+        let mut market = market_of(self.save, town.site);
+        let mut purse = self.eco.purse.clone();
+        let mut slots = self.slots.clone();
+        let barter = self
+            .trader(town)
+            .deal(&mut market, &mut purse, &mut slots, basket, self.now_s)
+            .map_err(Why::Trade)?;
+        let mut goodwill = goodwill_of(self.save, town.site);
+        let stepped = self.raise_goodwill(&mut goodwill, self.cfg.trade.goodwill.per_trade);
+        let mut jobs = self.eco.jobs.clone();
+        let mut world = self.eco.market.clone();
+        let mut happened = Vec::new();
+        let mut counted = false;
+        let mut done = Vec::new();
+        for (list, kind, sold) in [
+            (&basket.take, Kind::Buy, false),
+            (&basket.give, Kind::Sell, true),
+        ] {
+            for (code, n) in list.iter().filter(|(_, n)| *n > 0) {
+                world.traded(code, *n, sold, &self.cfg.trade.market);
+                let h = Happened::new(kind, scoped(town.site, code), *n);
+                let (c, d) = jobs.record(&h);
+                counted |= c;
+                done.extend(d);
+                happened.push(h);
+            }
+        }
+        let mut lines = vec![
+            StoredRecord::of(MARKET_KIND, town.site as u64, MARKET_SCHEMA, &market),
+            StoredRecord::of(GOODWILL_KIND, town.site as u64, GOODWILL_SCHEMA, &goodwill),
+            StoredRecord::of(
+                WORLD_MARKET_KIND,
+                WORLD_MARKET_ID,
+                WORLD_MARKET_SCHEMA,
+                &world,
+            ),
+        ];
+        if counted {
+            lines.push(StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs));
+        }
+        if self.save.store(&Author::Player(0), lines).is_none() {
+            return Err(Why::Unsaved);
+        }
+        self.save.note_record_kinds(&[
+            (MARKET_KIND, MARKET_SCHEMA),
+            (GOODWILL_KIND, GOODWILL_SCHEMA),
+            (WORLD_MARKET_KIND, WORLD_MARKET_SCHEMA),
+            (JOBS_KIND, JOBS_SCHEMA),
+        ]);
+        let purse_line = StoredRecord::of(PURSE_KIND, PURSE_ID, PURSE_SCHEMA, &purse);
+        if !self.save.store_with_hands(purse_line, PURSE_SCHEMA, &slots) {
+            return Err(Why::Unsaved);
+        }
+        match &barter.entry {
+            Some(entry) => info!("{} at {}: a basket deal", entry.log_line(), town.name),
+            None => info!("an even basket deal at {}", town.name),
+        }
+        self.eco.purse = purse;
+        self.eco.jobs = jobs;
+        self.eco.market = world;
+        self.eco.reprice(self.cfg);
+        *self.slots = slots;
+        self.notice_done(&done);
+        self.eco.raised.extend(happened);
+        self.note_step(town, stepped);
+        Ok(barter)
     }
 
     /// The jobs posted on `town`'s board today.
@@ -648,6 +874,39 @@ pub fn job_thing(job: &Job) -> Localized {
     pbd_core::economy::values::item_of(first, &[]).map_or_else(Localized::empty, Item::name)
 }
 
+/// Keep the world's market settled to today (`townsfolk` design 37a): the
+/// towns' kinds read from the towns the world holds, the market stepped at
+/// each day boundary, and its record written when a day moved a row.
+/// Waits for the towns, so a day's making and using reads every town.
+pub fn settle_market(
+    mut eco: ResMut<Economy>,
+    save: Option<ResMut<WorldSave>>,
+    towns: Res<Towns>,
+    sun: Res<crate::sky::Sun>,
+    cfg: Res<EconomyConfig>,
+) {
+    let Some(mut save) = save else {
+        return;
+    };
+    if towns.held.is_empty() || !eco.joined(&save) {
+        return;
+    }
+    if eco.town_kinds.len() != towns.held.len() {
+        eco.town_kinds = towns.held.iter().map(|h| h.site.kind).collect();
+    }
+    let today = sun.clock.day();
+    if eco.market_for == Some((save.serial(), today)) {
+        return;
+    }
+    if let Some(line) = eco.settle_market(&save, &cfg, today) {
+        if save.store(&market_author(), vec![line]).is_some() {
+            save.note_record_kinds(&[(WORLD_MARKET_KIND, WORLD_MARKET_SCHEMA)]);
+        } else {
+            warn!("the market was not saved: the save writer has failed");
+        }
+    }
+}
+
 /// The lost villager and repair jobs (`townsfolk` design 28 and 29).
 pub mod special;
 
@@ -672,6 +931,7 @@ impl Plugin for EconomyPlugin {
             .add_systems(
                 Update,
                 (
+                    settle_market.run_if(resource_exists::<crate::sky::Sun>),
                     special::lost_villagers,
                     special::repairs,
                     special::use_mend,
@@ -690,5 +950,7 @@ impl Plugin for EconomyPlugin {
     }
 }
 
+#[cfg(test)]
+mod barter_tests;
 #[cfg(test)]
 mod tests;

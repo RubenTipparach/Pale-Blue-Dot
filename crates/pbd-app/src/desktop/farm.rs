@@ -632,7 +632,7 @@ fn eye_ray(
 
 /// The logs a tree gives the axe before it falls, from the gathering's
 /// settings (absent in a still capture).
-fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
+pub(super) fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
     gather.map_or_else(
         || pbd_core::gather::GatherSettings::default().axe_logs,
         |g| g.0.axe_logs,
@@ -1028,6 +1028,11 @@ pub struct FarmLooks {
     carpenter_iron: Handle<Mesh>,
     plank_tex: Handle<StandardMaterial>,
     iron_tex: Handle<StandardMaterial>,
+    /// The drafting table's board and its sheet (`building-planner` design
+    /// 3), in the plank and the linen.
+    drafting_wood: Handle<Mesh>,
+    drafting_sheet: Handle<Mesh>,
+    linen_tex: Handle<StandardMaterial>,
 }
 
 /// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
@@ -1167,6 +1172,24 @@ pub fn make_looks(
         plank_tex: materials.add(StandardMaterial {
             base_color_texture: Some(pbd_app::towns::texture(&assets, "plank")),
             perceptual_roughness: 0.92,
+            ..default()
+        }),
+        drafting_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+            2.0,
+        )),
+        drafting_sheet: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[pbd_core::furniture::model::SHEET],
+            1.0,
+        )),
+        linen_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "linen")),
+            perceptual_roughness: 0.95,
             ..default()
         }),
         iron_tex: materials.add(StandardMaterial {
@@ -1455,6 +1478,7 @@ pub fn show(
             Material::Forge
                 | Material::Workbench
                 | Material::Carpenter
+                | Material::DraftingTable
                 | Material::Grinder
                 | Material::Mixer
         ) {
@@ -1470,8 +1494,10 @@ pub fn show(
         if column.material(layer) != edit.material || near(index, layer).is_none() {
             continue;
         }
-        let row = station::station_of(edit.material).expect("checked");
-        let working = station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s);
+        // The drafting table queues no jobs (`building-planner` design 3).
+        let working = station::station_of(edit.material).is_some_and(|row| {
+            station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s)
+        });
         wanted.insert((edit.cell, edit.layer), (index, working, edit.material));
     }
     for (_, mut view, _, children) in &mut forges {
@@ -1501,6 +1527,35 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::DraftingTable {
+            // Its board tipped to the front with a sheet on it
+            // (`building-planner` design 3), in the plank and the linen.
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|table| {
+                    table.spawn((
+                        Mesh3d(looks.drafting_wood.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
+                    ));
+                    table.spawn((
+                        Mesh3d(looks.drafting_sheet.clone()),
+                        MeshMaterial3d(looks.linen_tex.clone()),
+                    ));
+                });
+            continue;
+        }
         if material == Material::Carpenter {
             // A board laid on it, a saw across the board and a square at
             // its end (`furniture` design 1).

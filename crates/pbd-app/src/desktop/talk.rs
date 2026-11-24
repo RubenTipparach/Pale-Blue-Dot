@@ -26,6 +26,7 @@ use pbd_app::saves::WorldSave;
 use pbd_app::towns::Towns;
 use pbd_app::ui_kit::{self, KitText, Localized, Set, Tooltip, UiKit, tr};
 use pbd_core::economy::jobs::Job;
+use pbd_core::economy::trade::Basket;
 use pbd_core::economy::values::{Shelf, Values, item_of, trade_code};
 use pbd_core::inventory::Stack;
 use pbd_core::locale::tr_with;
@@ -130,6 +131,9 @@ pub struct TalkWith {
 pub struct Talking {
     pub with: Option<TalkWith>,
     pub said: Option<Localized>,
+    /// The deal being put together (`townsfolk` design 37a): what the
+    /// player takes and gives, emptied on a deal, CLEAR or leaving.
+    pub basket: Basket,
 }
 
 /// What a talk, trade or board button does.
@@ -139,8 +143,16 @@ pub enum TalkAction {
     Work,
     Bye,
     Back,
+    /// One of the trader's goods into YOU TAKE.
     Buy(String),
+    /// One of the pack's goods into YOU GIVE.
     Sell(String),
+    /// One back out of a basket: YOU TAKE (`true`) or YOU GIVE.
+    Unbasket(bool, String),
+    /// Settle the baskets.
+    Deal,
+    /// Empty both baskets.
+    Clear,
     Take(u64),
     HandIn(u64),
     /// Give a taken job up (`town-missions-tree` design 9).
@@ -163,6 +175,11 @@ pub struct CoinIcon(pub Handle<Image>);
 /// The lost villager job's own icon (`town-missions-tree` design 10).
 #[derive(Resource, Clone)]
 pub struct LostIcon(pub Handle<Image>);
+
+/// A job's row on the board, by its kind: what a capture's `take-lost`
+/// press finds.
+#[derive(Component)]
+pub struct JobRow(pub pbd_core::economy::jobs::JobKind);
 
 /// The coin count beside the hotbar.
 #[derive(Component)]
@@ -384,6 +401,7 @@ pub fn open_talk(
             giver,
         }),
         said,
+        basket: Basket::default(),
     };
     *screen = Screen::Talk;
     true
@@ -490,6 +508,27 @@ pub fn press(
         let Some(with) = talking.with.clone() else {
             continue;
         };
+        // The baskets fill and empty with nothing said (design 37a); the
+        // panel shows only what can still go in.
+        match action {
+            TalkAction::Buy(code) => {
+                talking.basket.add(code, true, 1);
+                continue;
+            }
+            TalkAction::Sell(code) => {
+                talking.basket.add(code, false, 1);
+                continue;
+            }
+            TalkAction::Unbasket(taking, code) => {
+                talking.basket.remove(code, *taking);
+                continue;
+            }
+            TalkAction::Clear => {
+                talking.basket = Basket::default();
+                continue;
+            }
+            _ => {}
+        }
         let said = match action {
             TalkAction::Trade => {
                 *screen = Screen::Trade;
@@ -511,6 +550,25 @@ pub fn press(
                 horses.0.push(with.town.site);
                 None
             }
+            TalkAction::Deal => {
+                let Some(save) = save.as_deref_mut() else {
+                    continue;
+                };
+                let mut shop = Shop {
+                    save,
+                    slots: &mut hotbar.0,
+                    eco: &mut eco,
+                    cfg: &cfg,
+                    fish_ids: &ids,
+                    now_s: sun.clock.seconds,
+                };
+                let basket = talking.basket.clone();
+                let said = settle(&mut shop, &with.town, &basket);
+                if said.1 {
+                    talking.basket = Basket::default();
+                }
+                Some(said.0)
+            }
             other => {
                 let Some(save) = save.as_deref_mut() else {
                     continue;
@@ -527,6 +585,23 @@ pub fn press(
             }
         };
         talking.said = said;
+    }
+}
+
+/// Settle `basket` at `town`: what the panel says, and whether it went.
+pub fn settle(shop: &mut Shop, town: &TownInfo, basket: &Basket) -> (Localized, bool) {
+    match shop.barter(town, basket) {
+        Ok(deal) => {
+            let owed = deal.tally.balance();
+            let coins = owed.unsigned_abs();
+            let words = match owed.cmp(&0) {
+                std::cmp::Ordering::Greater => tr_with("trade.bought", &[("coins", &coins)]),
+                std::cmp::Ordering::Less => tr_with("trade.sold", &[("coins", &coins)]),
+                std::cmp::Ordering::Equal => tr("trade.traded"),
+            };
+            (words, true)
+        }
+        Err(why) => (why.words(), false),
     }
 }
 
@@ -818,11 +893,12 @@ fn paint_trade(
     let goodwill = pbd_app::economy::goodwill_of(save, with.town.site).points;
     let trader = pbd_core::economy::trade::Trader {
         cfg: &p.cfg.trade,
-        values: &p.cfg.values,
+        values: p.eco.prices.as_ref().unwrap_or(&p.cfg.values),
         kind: with.town.kind,
         goodwill,
         fish_ids: ids,
     };
+    let basket = &p.talking.basket;
     let market = pbd_app::economy::market_of(save, with.town.site).settled(now_s, &p.cfg.trade);
     // Every good the trader sells, at its price and stock.
     let buy: Vec<Good> = trader
@@ -833,7 +909,7 @@ fn paint_trade(
             let q = trader.quote(&market, &code);
             Some(Good {
                 price: q.sell?,
-                count: q.stock,
+                count: q.stock.saturating_sub(basket.count(&code, true)),
                 item,
                 code,
             })
@@ -848,10 +924,12 @@ fn paint_trade(
         if !trader.buys(&code) || sell.iter().any(|g| g.code == code) {
             continue;
         }
-        if let Some(price) = trader.quote(&market, &code).buy {
+        let q = trader.quote(&market, &code);
+        if let Some(price) = q.buy {
+            let held = p.hotbar.0.count(stack.item).min(q.wants);
             sell.push(Good {
                 price,
-                count: p.hotbar.0.count(stack.item),
+                count: held.saturating_sub(basket.count(&code, false)),
                 item: stack.item,
                 code,
             });
@@ -869,7 +947,7 @@ fn paint_trade(
             let buy_side = Side {
                 list: List::Buy,
                 heading: tr("trade.buy"),
-                label: tr("trade.buy_one"),
+                label: tr("trade.add"),
                 act: TalkAction::Buy,
                 empty: None,
             };
@@ -877,12 +955,13 @@ fn paint_trade(
             let sell_side = Side {
                 list: List::Sell,
                 heading: tr("trade.sell"),
-                label: tr("trade.sell_one"),
+                label: tr("trade.add"),
                 act: TalkAction::Sell,
                 empty: Some(tr("trade.nothing_to_sell")),
             };
             trade_column(cols, kit, art, values, scroll, sell_side, sell);
         });
+    baskets(panel, kit, art, &trader.tally(&market, basket), basket);
     // A horse, sold by the trader (`land-transport` design 10).
     panel
         .spawn(Node {
@@ -897,6 +976,143 @@ fn paint_trade(
             button(row, kit, tr("trade.buy_one"), TalkAction::BuyHorse, 50.0);
         });
     footer(panel, kit, p, coin);
+}
+
+/// The two baskets under the columns, the coins between them, DEAL and
+/// CLEAR (design 37a, M5's Basket view).
+fn baskets(
+    panel: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    art: Art,
+    tally: &pbd_core::economy::trade::Tally,
+    basket: &Basket,
+) {
+    let (icons, images, coin, ids) = art;
+    panel
+        .spawn(Node {
+            column_gap: px(12),
+            align_items: AlignItems::FlexStart,
+            margin: UiRect::top(px(2)),
+            ..default()
+        })
+        .with_children(|cols| {
+            for (taking, heading, list, total) in [
+                (true, tr("trade.you_take"), &basket.take, tally.take),
+                (false, tr("trade.you_give"), &basket.give, tally.give),
+            ] {
+                cols.spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                    width: px(TRADE_ROW_W + BAR_GAP + scroll_list::BAR_W),
+                    flex_shrink: 0.0,
+                    ..default()
+                })
+                .with_children(|col| {
+                    menu::section(col, heading);
+                    col.spawn(Node {
+                        column_gap: px(6),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn(Node {
+                            column_gap: px(2),
+                            flex_wrap: FlexWrap::Wrap,
+                            row_gap: px(2),
+                            max_width: px(6.0 * (slots::SLOT + 2.0)),
+                            ..default()
+                        })
+                        .with_children(|wells| {
+                            let mut shown = 0;
+                            for (code, n) in list.iter().filter(|(_, n)| *n > 0) {
+                                let item = item_of(code, ids);
+                                let action = TalkAction::Unbasket(taking, code.clone());
+                                basket_well(wells, kit, item, *n, action, icons, images);
+                                shown += 1;
+                            }
+                            for _ in shown..BASKET_WELLS {
+                                icon(wells, kit, None, icons, images);
+                            }
+                        });
+                        coins(row, total, ui_kit::TITLE, coin);
+                    });
+                });
+            }
+        });
+    let owed = tally.balance();
+    panel
+        .spawn(Node {
+            column_gap: px(8),
+            align_items: AlignItems::Center,
+            margin: UiRect::top(px(2)),
+            ..default()
+        })
+        .with_children(|row| {
+            let words = match owed.cmp(&0) {
+                std::cmp::Ordering::Greater => tr("trade.you_pay"),
+                std::cmp::Ordering::Less => tr("trade.they_pay"),
+                std::cmp::Ordering::Equal => tr("trade.even"),
+            };
+            line(row, words, ui_kit::TEXT);
+            coins(row, owed.unsigned_abs(), ui_kit::TITLE, coin);
+            button(row, kit, tr("trade.deal"), TalkAction::Deal, 50.0);
+            button(row, kit, tr("trade.clear"), TalkAction::Clear, 50.0);
+        });
+}
+
+/// The empty wells a basket always shows, so it keeps its width.
+const BASKET_WELLS: usize = 4;
+
+/// A basket's well: the good and how many, a press taking one back out.
+fn basket_well(
+    wells: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    item: Option<pbd_core::inventory::Item>,
+    n: u32,
+    action: TalkAction,
+    icons: &ItemIcons,
+    images: &Assets<Image>,
+) {
+    let mut node = ImageNode {
+        color: Color::NONE,
+        ..default()
+    };
+    slots::paint_icon(&mut node, item.map(|i| Stack::new(i, 1)), icons, images);
+    wells
+        .spawn((
+            Button,
+            Node {
+                width: px(slots::SLOT),
+                height: px(slots::SLOT),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            kit.whole(Set::Stone, slots::slot_piece(false)),
+            action,
+        ))
+        .with_children(|well| {
+            well.spawn((
+                node,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(slots::ICON_AT),
+                    top: px(slots::ICON_AT),
+                    width: px(slots::ICON),
+                    height: px(slots::ICON),
+                    ..default()
+                },
+            ));
+            well.spawn((
+                KitText::new(tr_with("trade.count", &[("count", &n)]), ui_kit::TEXT)
+                    .shadow(ui_kit::INK),
+                Node {
+                    position_type: PositionType::Absolute,
+                    right: px(1),
+                    bottom: px(0),
+                    ..default()
+                },
+            ));
+        });
 }
 
 /// A good in a trade column: its code, its item, its price and how many.
@@ -1153,7 +1369,10 @@ fn trade_row(
             ..default()
         })
         .with_children(|c| coins(c, price, ui_kit::TITLE, coin));
-        button(row, kit, label, action, 40.0);
+        // None left to put in a basket: no button (design 37a).
+        if count > 0 {
+            button(row, kit, label, action, 40.0);
+        }
     });
 }
 
@@ -1337,11 +1556,14 @@ fn job_row(
     label: Localized,
 ) {
     panel
-        .spawn(Node {
-            align_items: AlignItems::Center,
-            column_gap: px(6),
-            ..default()
-        })
+        .spawn((
+            Node {
+                align_items: AlignItems::Center,
+                column_gap: px(6),
+                ..default()
+            },
+            JobRow(job.kind),
+        ))
         .with_children(|row| {
             let own = lost.filter(|_| job.kind == pbd_core::economy::jobs::JobKind::Lost);
             icon_or(row, kit, job_item(job, ids), own, icons, images);
@@ -1489,15 +1711,17 @@ pub fn talking_mouth(
 
 /// A capture instrument (`townsfolk` design 35): a `PBD_KEY_SCRIPT` step
 /// `<frame>:press:<button>` presses a talk panel's button on that capture
-/// frame, as a click on it would: `trade`, `work`, `back`, `bye`, the first
-/// `buy`, `sell`, `take` or `handin` row, or a filter tab, `<buy|sell>-<all|
+/// frame, as a click on it would: `trade`, `work`, `back`, `bye`, `deal`,
+/// `clear`, the first `buy`, `sell`, `take` or `handin` row, `take-lost` a
+/// lost villager's TAKE, or a filter tab, `<buy|sell>-<all|
 /// food|organics|raw|tools|goods>` (design 38c); `<frame>:wheel:<buy|sell|
 /// board>:<notches>` turns the wheel over that list as the wheel would
 /// (design 38b; negative is toward you, down the list). Nothing reads it in
 /// play.
 pub fn scripted_press(
     state: Res<super::CaptureState>,
-    mut buttons: Query<(&mut Interaction, &TalkAction)>,
+    mut buttons: Query<(&mut Interaction, &TalkAction, Option<&ChildOf>)>,
+    rows: Query<&JobRow>,
     mut scroll: ResMut<TalkScroll>,
     script: Local<std::sync::OnceLock<Vec<(u32, String)>>>,
     mut done: Local<std::collections::BTreeSet<usize>>,
@@ -1561,12 +1785,28 @@ pub fn scripted_press(
                         | ("bye", TalkAction::Bye)
                         | ("buy", TalkAction::Buy(_))
                         | ("sell", TalkAction::Sell(_))
+                        | ("deal", TalkAction::Deal)
+                        | ("clear", TalkAction::Clear)
                         | ("take", TalkAction::Take(_))
                         | ("handin", TalkAction::HandIn(_))
                         | ("abandon", TalkAction::Abandon(_))
                 )
         };
-        match buttons.iter_mut().find(|(_, a)| wanted(a)) {
+        // A lost villager's TAKE: the button whose row is a lost job.
+        let lost = |a: &TalkAction, parent: Option<&ChildOf>| {
+            matches!(a, TalkAction::Take(_))
+                && parent
+                    .and_then(|p| rows.get(p.parent()).ok())
+                    .is_some_and(|r| r.0 == pbd_core::economy::jobs::JobKind::Lost)
+        };
+        let found = buttons.iter_mut().find(|(_, a, parent)| {
+            if what == "take-lost" {
+                lost(a, *parent)
+            } else {
+                wanted(a)
+            }
+        });
+        match found.map(|(i, a, _)| (i, a)) {
             Some((mut interaction, action)) => {
                 info!(
                     "PBD_KEY_SCRIPT: pressed {action:?} at frame {}",
@@ -1584,6 +1824,34 @@ pub fn scripted_press(
     }
 }
 
+/// A capture instrument (`townsfolk` task 11.3): `PBD_PACK=<code>:<n>,...`
+/// puts those goods in the pack on the capture's frame 100, so a capture of
+/// the trade panel has something the trader buys. Nothing reads it in play.
+pub fn scripted_pack(
+    state: Res<super::CaptureState>,
+    mut hotbar: ResMut<Hotbar>,
+    mut done: Local<bool>,
+) {
+    if *done || state.frame < 100 {
+        return;
+    }
+    *done = true;
+    let Ok(spec) = std::env::var("PBD_PACK") else {
+        return;
+    };
+    for step in spec.split(',') {
+        let Some((code, n)) = step.trim().split_once(':') else {
+            continue;
+        };
+        let (Some(item), Ok(n)) = (item_of(code, &[]), n.parse::<u16>()) else {
+            warn!("PBD_PACK: no {code}");
+            continue;
+        };
+        hotbar.0.give(item, n);
+        info!("PBD_PACK: {n} {code} in the pack");
+    }
+}
+
 pub struct TalkPlugin;
 
 impl Plugin for TalkPlugin {
@@ -1598,6 +1866,7 @@ impl Plugin for TalkPlugin {
                 (
                     use_talk,
                     forget,
+                    scripted_pack.run_if(resource_exists::<super::CaptureState>),
                     scripted_press,
                     press,
                     scroll_wheel,

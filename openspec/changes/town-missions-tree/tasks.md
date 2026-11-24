@@ -97,9 +97,14 @@ for 4.1, their missions reading NOT YET.
 - [x] 6.2 Abandon a taken job (design 9). Verify: a test that an abandoned
       job is off the taken list, back on the board, and its lost villager or
       repair record cleared.
-- [ ] 6.3 The lost villager's icon and its map and compass marker (design
+- [x] 6.3 The lost villager's icon and its map and compass marker (design
       10). Verify: a capture of the board's lost row and of the marker.
       Built (the icon, `lost_directions` feeding the map and the compass,
       tested in `a_lamp_counts_and_an_abandoned_job_goes_back_to_the_board`);
       no capture: the owner asked for no screenshots of the testing plan's
       items now, and a lost job is posted on a board only some days.
+      Captured 2026-11-24 (lavapipe, `ONLY=lost tools/capture_talk.sh`, on
+      day 13, the first Linenleigh's board posts one): `board-lost.jpg` (the
+      row in its own icon), `lost-compass.jpg` and `lost-compass-close.png`
+      (the red pin on the compass), `lost-map.jpg` (LOST VILLAGER on the map),
+      in `docs/screenshots/town-missions-tree/`.

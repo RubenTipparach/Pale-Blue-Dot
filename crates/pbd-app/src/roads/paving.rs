@@ -420,6 +420,8 @@ pub fn marked_near(save: &WorldSave, point: Vec3, reach_m: f32) -> Vec<u32> {
 pub fn stakes(save: &WorldSave) -> Vec<u32> {
     planner::stakes(&planner::plans(&save.records))
         .into_iter()
+        // A construction site's stakes at its corners (`building-planner` 5).
+        .chain(crate::construction::site_marks(&save.records).1)
         .collect()
 }
 
@@ -427,7 +429,9 @@ pub fn stakes(save: &WorldSave) -> Vec<u32> {
 /// (design 39a and 43), and give back every key they name.
 pub fn install(save: &WorldSave, radius_m: f32) -> HashSet<u32> {
     let built = roads::built(&save.records);
-    let (marks, _) = marks(save);
+    let (mut marks, _) = marks(save);
+    // A construction site's lime line (`building-planner` design 5).
+    marks.extend(crate::construction::site_marks(&save.records).0);
     let keys: HashSet<u32> = marks.keys().chain(built.keys()).copied().collect();
     paving::install(Some(paving::Installed {
         marks: marks.into_iter().collect(),
@@ -468,7 +472,17 @@ pub fn follow_marks(
                 .records
                 .of_kind(paving::PLAN_RECORD)
                 .map(|r| r.body.len())
-                .sum::<usize>(),
+                .sum::<usize>()
+            // A site set out, changed or finished moves its lime line.
+            + save
+                .records
+                .of_kind(pbd_core::building::site::SITE_RECORD)
+                .map(|r| r.body.len())
+                .sum::<usize>()
+            + save
+                .records
+                .of_kind(pbd_core::building::PIECE_RECORD)
+                .count(),
     );
     let fresh = stamp != shown.installed_for;
     if fresh {

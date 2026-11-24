@@ -2649,3 +2649,43 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
         -guard.forward,
     );
 }
+
+/// A measurement instrument, run by hand (`town-missions-tree` task 6.3,
+/// `townsfolk` task 12.4): the first game days on which Linenleigh's board
+/// (the job giver the talk captures stand at) posts a lost villager, in the
+/// memory-only world the captures play, so a capture can be taken on one.
+#[test]
+#[ignore]
+fn print_the_days_linenleighs_board_posts_a_lost_villager() {
+    use pbd_core::economy::jobs::{Board, JobKind, Town};
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
+    let cfg = crate::economy::EconomyConfig::load();
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: crate::saves::WorldSave::memory_only().seed(),
+    };
+    let town = Town {
+        site: site.id,
+        kind: site.kind,
+        neighbours: &[],
+    };
+    let mut found = 0;
+    for day in 0..200 {
+        let jobs = board.posted(town, day, 0, &Default::default());
+        if let Some(place) = jobs.iter().position(|j| j.kind == JobKind::Lost) {
+            println!(
+                "day {day}: a lost villager, row {place} of {} on the board",
+                jobs.len()
+            );
+            found += 1;
+            if found == 5 {
+                break;
+            }
+        }
+    }
+}

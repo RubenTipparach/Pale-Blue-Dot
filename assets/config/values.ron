@@ -145,5 +145,9 @@
         ("banded-chest", 30, goods),
         ("crate", 9, goods),
         ("block:carpenter's bench", 40, goods),
+        // ---- building-planner design 3 and 6: the mallet (a log and a
+        // stone) and the drafting table (6 planks and 2 rope).
+        ("mallet", 4, goods),
+        ("block:drafting table", 22, goods),
     ],
 )

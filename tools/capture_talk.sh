@@ -35,4 +35,25 @@ if [ "$ONLY" = all -o "$ONLY" = scroll ]; then
   shot trade-scroll-partway "120:KeyF,140:press:trade,170:wheel:buy:-1" $STALL --frames 200
   shot trade-filter-food "120:KeyF,140:press:trade,170:press:buy-food" $STALL --frames 200
 fi
+# Barter (design 37a, task 11.3): two of the merchant's first good in YOU
+# TAKE and two of the pack's first good it buys in YOU GIVE, the line under
+# them saying who pays; then the deal made, and the coin count beside the
+# hotbar after it (task 5.2), the talk left with BACK and BYE.
+if [ "$ONLY" = all -o "$ONLY" = barter ]; then
+  # PBD_PACK (a capture instrument) puts goods the merchant buys in the pack.
+  PACK="wheat:6,log:4,egg:3"
+  PBD_PACK="$PACK" shot trade-basket "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL --no-readout --frames 210
+  PBD_PACK="$PACK" shot coins-hotbar "120:KeyF,140:press:trade,160:press:sell,165:press:sell,170:press:sell,175:press:deal,185:press:back,195:press:bye" $STALL --no-readout --frames 230
+fi
+# The lost villager (`town-missions-tree` task 6.3, `townsfolk` 12.4): the
+# reeve's board on a day it posts one (DAY, from `cargo test --profile fast
+# -p pbd-app --lib -- --ignored print_the_days_linenleighs_board_posts_a_lost_villager
+# --nocapture`: day 13 is the first), its own icon in the row's well; then the job taken and the
+# compass and the map marking where the villager stands.
+DAY=${DAY:-13}
+if [ "$ONLY" = all -o "$ONLY" = lost ]; then
+  shot board-lost "120:KeyF,140:press:work" $SMITH --no-readout --day "$DAY" --frames 190
+  shot lost-compass "120:KeyF,140:press:work,160:press:take-lost,170:press:back,180:press:bye" $SMITH --no-readout --day "$DAY" --frames 230
+  shot lost-map "120:KeyF,140:press:work,160:press:take-lost,170:press:back,180:press:bye,200:KeyM" $SMITH --no-readout --day "$DAY" --frames 260
+fi
 true

@@ -224,6 +224,17 @@ impl Builds {
     }
 }
 
+/// The scaffolding standing round the player's sites (`building-planner`
+/// design 6): each stand's meshes and solids, drawn and stood on with the
+/// plots. Whoever changes it bumps [`Builds::revision`].
+#[derive(Resource, Default)]
+pub struct Scaffolds(
+    pub  Vec<(
+        pbd_core::settlement::pieces::Meshes,
+        pbd_core::settlement::pieces::BuildingSolids,
+    )>,
+);
+
 /// Why a door was not hung or taken down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DoorRefused {
@@ -351,6 +362,15 @@ pub fn sync(world: &mut World) {
         drawn.push(root);
         casting.push(std::sync::Arc::new(crate::towns::casting_of(&c.meshes)));
         solids.push(c.solids);
+    }
+    // The sites' scaffolding, drawn and stood on as a plot is.
+    let stands: Vec<_> = world
+        .get_resource::<Scaffolds>()
+        .map(|s| s.0.clone())
+        .unwrap_or_default();
+    for (meshes, stand) in stands {
+        drawn.push(spawn_plot(world, &meshes, &[]));
+        solids.push(stand);
     }
     info!("BUILDS {} pieces in {} plots", pieces.len(), solids.len());
     world.insert_resource(PlayerStructures(solids));

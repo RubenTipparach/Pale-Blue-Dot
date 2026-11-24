@@ -1076,7 +1076,8 @@ pub fn take_stakes(
     }
     let config = *crate::planet::terrain_config();
     match paving::take_stake(&mut save, &mut hotbar.0, key, &config, &settings.0, &pcfg.0) {
-        Ok(_) => buttons.reset(MouseButton::Left),
+        Ok(true) => buttons.reset(MouseButton::Left),
+        Ok(false) => {}
         Err(why) => {
             // A refused take-back is spent too: the stake stays, not dug.
             buttons.reset(MouseButton::Left);

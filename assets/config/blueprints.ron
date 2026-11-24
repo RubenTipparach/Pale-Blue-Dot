@@ -1,0 +1,31 @@
+// The building planner's presets (`building-planner` design 4), read by
+// pbd_core::building::presets. Each is a footprint and a storey count at
+// three sizes (small, standard, large): `Rect(w, h)` is w cells along a row
+// and h rows, `Blob(n)` n cells in rings round the middle. Doors, windows,
+// stairs, lanterns and furniture slots are laid out by rule. A preset's `id`
+// is saved in a site's record: never rename one that has shipped. Its name is
+// `blueprint.preset.<id>` in the locale file.
+(
+    presets: [
+        (id: "hut", kit: "straw", roof: Cone, doors: 1, windows: 0, slots: [Bed],
+            sizes: [(cells: Blob(1), storeys: 1), (cells: Blob(1), storeys: 1), (cells: Rect(2, 1), storeys: 1)]),
+        (id: "cottage", kit: "timber", roof: Gable, doors: 1, windows: 3, slots: [Table, Bed, Chair],
+            sizes: [(cells: Rect(2, 1), storeys: 1), (cells: Rect(3, 1), storeys: 1), (cells: Rect(3, 2), storeys: 1)]),
+        (id: "house", kit: "stone", roof: Gable, doors: 1, windows: 3, slots: [Table, Chair, Bed, Chest],
+            sizes: [(cells: Rect(3, 1), storeys: 2), (cells: Rect(3, 2), storeys: 2), (cells: Rect(4, 2), storeys: 2)]),
+        (id: "townhouse", kit: "halftimber", roof: Gable, doors: 1, windows: 2, slots: [Table, Bed, Bed],
+            sizes: [(cells: Rect(3, 2), storeys: 2), (cells: Rect(3, 2), storeys: 3), (cells: Rect(4, 2), storeys: 3)]),
+        (id: "workshop", kit: "timber", roof: Gable, doors: 2, windows: 3, slots: [Bench, Chest],
+            sizes: [(cells: Rect(2, 2), storeys: 1), (cells: Rect(3, 2), storeys: 1), (cells: Rect(4, 2), storeys: 1)]),
+        (id: "shop", kit: "halftimber", roof: Gable, doors: 1, windows: 2, slots: [Table, Chest],
+            sizes: [(cells: Rect(3, 1), storeys: 1), (cells: Rect(3, 2), storeys: 1), (cells: Rect(4, 2), storeys: 1)]),
+        (id: "barn", kit: "timber", roof: Gable, doors: 2, windows: 5, slots: [Chest],
+            sizes: [(cells: Rect(3, 2), storeys: 1), (cells: Rect(4, 2), storeys: 1), (cells: Rect(4, 3), storeys: 1)]),
+        (id: "stable", kit: "timber", roof: Gable, doors: 2, windows: 4, slots: [Bench],
+            sizes: [(cells: Rect(3, 1), storeys: 1), (cells: Rect(4, 1), storeys: 1), (cells: Rect(4, 2), storeys: 1)]),
+        (id: "warehouse", kit: "stone", roof: Gable, doors: 2, windows: 6, slots: [Chest, Chest, Chest],
+            sizes: [(cells: Rect(3, 2), storeys: 1), (cells: Rect(4, 3), storeys: 1), (cells: Rect(5, 3), storeys: 1)]),
+        (id: "tower", kit: "stone", roof: Flat, doors: 1, windows: 2, slots: [Bed],
+            sizes: [(cells: Blob(7), storeys: 2), (cells: Rect(3, 3), storeys: 3), (cells: Rect(4, 3), storeys: 3)]),
+    ],
+)
