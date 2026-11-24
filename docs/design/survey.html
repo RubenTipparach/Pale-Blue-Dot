@@ -250,7 +250,24 @@ const PHASES = [
     { id: 'phase-3-test-logging', step: 'Logging', items: [
       { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
   ] },
-  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [], issues: [
+  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [
+      { id: 'N1', q: 'Where is the house site? The crew needs one place to build. It can be a map marker the crew shares, set when the chain starts, or wherever the first floor piece goes down.',
+        options: ['A shared map marker', 'Wherever the first floor piece is placed'], rec: 0,
+        why: 'A marker shows everyone where to go before anything is built, and a stray floor piece cannot move the site.',
+        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
+        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
+        images: [
+          { src: 'img/n1-crew-walls.jpg', alt: 'The CREW tab mid-walls: the house chain with per-player bars and the crew panel', caption: 'Raise the walls, 5 of 6: each bar is one player.' },
+        ] },
+      { id: 'N2', q: 'What does the crew get for the house chain? Every member who helped gets the reward when Light the hearth is done.',
+        options: ['The house itself, shared by the crew', 'Coins to each member', 'A tool to each member'], rec: 0,
+        why: 'The house is the goal and something the crew keeps using; coins and tools come from the town missions.',
+        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
+        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
+        images: [
+          { src: 'img/n2-crew-beam.jpg', alt: 'The CREW tab at the ridge beam: Needs two of you at once', caption: 'Set the ridge beam: needs two of you at once.' },
+        ] },
+    ], issues: [
     { id: 'phase-3b-launcher', step: 'Launcher', items: [
       { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
       { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
