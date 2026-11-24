@@ -58,9 +58,16 @@ pub struct Target {
 /// the march: the reference keeps stepping so a ray that clips the corner of
 /// an unloaded region still finds the wall past it, and it does NOT count the
 /// gap as the empty cell to place into, because nothing is known about it.
-pub fn march(
+pub fn march(eye: Vec3, direction: Vec3, at: impl FnMut(Vec3) -> Option<Sample>) -> Option<Target> {
+    march_to(eye, direction, REACH_M, at)
+}
+
+/// [`march`] out to `reach_m`: the road planner's lifted view casts from
+/// its eye as far as its ghost shows (`townsfolk` design 42n).
+pub fn march_to(
     eye: Vec3,
     direction: Vec3,
+    reach_m: f32,
     mut at: impl FnMut(Vec3) -> Option<Sample>,
 ) -> Option<Target> {
     let direction = direction.normalize_or_zero();
@@ -69,7 +76,7 @@ pub fn march(
     }
     let mut place: Option<Sample> = None;
     let mut travelled = 0.0;
-    while travelled <= REACH_M {
+    while travelled <= reach_m {
         let point = eye + direction * travelled;
         if let Some(sample) = at(point) {
             if sample.solid {

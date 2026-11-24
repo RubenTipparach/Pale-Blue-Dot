@@ -23,6 +23,7 @@ pub(super) fn harbour(site: u32) -> TownInfo {
         kind: SiteKind::Harbour,
         name: "Saltmere".into(),
         neighbours: vec![site + 1],
+        roads_to: vec![],
     }
 }
 
@@ -80,7 +81,8 @@ fn a_bot_takes_a_job_is_paid_buys_a_loaf_and_sells_three_fish() {
     let town = harbour(21);
     let job = shop(&mut app, |s| {
         let posted = s.board(&town);
-        assert!((3..=5).contains(&posted.len()));
+        // Three to five places, less a lamps job, shown only from dusk.
+        assert!((2..=5).contains(&posted.len()), "{}", posted.len());
         let fish = posted
             .into_iter()
             .find(|j| j.kind == JobKind::Fish)
@@ -493,4 +495,240 @@ fn a_repair_breaks_no_players_work_and_placing_planks_counts() {
     ));
     app.update();
     assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+}
+
+/// A stored road of the world's from `from` to `to`, `n` cells east of the
+/// shipped start, on ground at 30 m.
+fn a_road(from: u32, to: u32, n: usize) -> pbd_core::roads::Road {
+    let start = Vec3::new(0.31, 0.62, 0.72).normalize();
+    let east = Vec3::Y.cross(start).normalize();
+    let mut cells: Vec<pbd_core::roads::RoadCell> = Vec::new();
+    let mut k = 0.0;
+    while cells.len() < n {
+        let d = (start + east * (k / 4800.0)).normalize();
+        k += 1.0;
+        let key = pbd_core::roads::nearest_key(d).unwrap();
+        if cells.last().is_some_and(|c| c.key == key) {
+            continue;
+        }
+        cells.push(pbd_core::roads::RoadCell {
+            key,
+            base_m: 30,
+            kind: pbd_core::roads::Kind::Ground,
+            raised: false,
+            cut_fill: 0,
+            bed: Default::default(),
+            up: None,
+            from: None,
+        });
+    }
+    pbd_core::roads::Road {
+        from_site: from,
+        to_site: to,
+        surface: pbd_core::roads::Surface::Gravel,
+        cells,
+    }
+}
+
+/// `world/roads`, jobs on the roads (task 8.5, design 46): a town a road
+/// leaves posts a rockfall; taking it has the world drop rock on the road
+/// through the yield check; the dig's own edit (the rock back to air)
+/// counts each cell once, the road is drawn again there, and the job is
+/// handed in and paid. A town no road leaves posts none.
+#[test]
+fn a_rockfall_is_dropped_on_the_road_dug_clear_and_paid() {
+    use bevy::ecs::system::RunSystemOnce;
+    use road_jobs::{drop_rockfall, dug_clear, rockfall_of};
+    let mut app = app();
+    let cfg = config();
+    let site = 60;
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: 3,
+    };
+    assert!(cfg.jobs.posted.contains(&JobKind::Rockfall));
+    assert!(
+        board
+            .make(harbour(site).as_town(), JobKind::Rockfall, 5, 4)
+            .is_none(),
+        "no road, no rockfall"
+    );
+    let road = a_road(site, site + 1, 20);
+    {
+        let mut save = app.world_mut().resource_mut::<WorldSave>();
+        save.store(
+            &crate::roads::author(),
+            vec![pbd_core::roads::to_record(&road)],
+        )
+        .unwrap();
+    }
+    let town = TownInfo {
+        roads_to: roads_to(app.world().resource::<WorldSave>(), site),
+        ..harbour(site)
+    };
+    assert_eq!(town.roads_to, vec![site + 1]);
+    let job = board.make(town.as_town(), JobKind::Rockfall, 5, 4).unwrap();
+    let wanted = job.wanted();
+    assert!((2..=4).contains(&wanted));
+    shop(&mut app, |s| s.take(job.clone())).unwrap();
+    // The world drops it, once.
+    let laid = {
+        let mut save = app.world_mut().resource_mut::<WorldSave>();
+        drop_rockfall(&mut save, &job).expect("rock on the road")
+    };
+    assert_eq!(laid.len(), wanted as usize);
+    let fall = rockfall_of(app.world().resource::<WorldSave>(), job.id).unwrap();
+    assert!(
+        fall.cells.iter().all(
+            |(c, _)| road.cells[pbd_core::economy::road_jobs::ROCKFALL_FROM..]
+                .iter()
+                .any(|r| r.key == *c)
+        ),
+        "past the town's own cells, on the road"
+    );
+    assert!(dug_clear(app.world().resource::<WorldSave>()).is_empty());
+    // The player digs each with the dig's own edit; each counts once.
+    let carried = pbd_core::inventory::Slots::new();
+    for (n, &(cell, layer)) in fall.cells.iter().enumerate() {
+        let dig = pbd_core::edits::Edit {
+            cell,
+            layer,
+            material: pbd_core::terrain::Material::Air,
+        };
+        assert!(
+            app.world_mut()
+                .resource_mut::<WorldSave>()
+                .accept(dig, None, &carried)
+        );
+        app.world_mut()
+            .run_system_once(road_jobs::rockfalls)
+            .unwrap();
+        app.world_mut()
+            .run_system_once(road_jobs::rockfalls)
+            .unwrap();
+        app.update();
+        let counts = app.world().resource::<Economy>().jobs.counts(job.id);
+        assert_eq!(counts, vec![n as u32 + 1], "counted once");
+    }
+    // The road is the road again where its rock is gone.
+    assert_eq!(
+        dug_clear(app.world().resource::<WorldSave>()).len(),
+        fall.cells.len()
+    );
+    assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+    let paid = shop(&mut app, |s| s.hand_in(&town, job.id)).unwrap();
+    assert_eq!(app.world().resource::<Economy>().purse.coins, paid.reward);
+}
+
+/// `world/roads`, a trader walked to the next town (task 8.5, design 46):
+/// placed on the road's first cell toward the job's town; waits to be met,
+/// walks the road while the player keeps up and waits when they fall back;
+/// reaching the other town counts the job, which is handed in where it was
+/// taken.
+#[test]
+fn a_trader_leads_the_player_along_the_road_and_the_escort_is_paid() {
+    use bevy::math::DVec3;
+    use pbd_core::economy::road_jobs::lead;
+    use road_jobs::{escort_of, escort_record, place_trader, trader_point};
+    let mut app = app();
+    let cfg = config();
+    let site = 70;
+    let road = a_road(site + 1, site, 30);
+    {
+        let mut save = app.world_mut().resource_mut::<WorldSave>();
+        save.store(
+            &crate::roads::author(),
+            vec![pbd_core::roads::to_record(&road)],
+        )
+        .unwrap();
+    }
+    let town = TownInfo {
+        roads_to: roads_to(app.world().resource::<WorldSave>(), site),
+        ..harbour(site)
+    };
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: 3,
+    };
+    let job = board.make(town.as_town(), JobKind::Escort, 9, 2).unwrap();
+    assert_eq!(job.to, Some(site + 1));
+    shop(&mut app, |s| s.take(job.clone())).unwrap();
+    let roles = ["merchant", "reeve", "farmer", "smith", "fisher"];
+    let mut escort = place_trader(app.world().resource::<WorldSave>(), &job, &roles, &cfg)
+        .expect("a trader to walk with");
+    assert!(escort.person >= 2, "never the trader or the job giver");
+    assert_eq!(
+        escort.route[0],
+        road.cells.last().unwrap().key,
+        "from this town"
+    );
+    let config = *crate::planet::terrain_config();
+    let cell_m = 2.83;
+    let mut player = trader_point(&escort, &config).unwrap() + DVec3::new(30.0, 0.0, 0.0);
+    // Not met yet: waits.
+    let (a, s, _) = lead(
+        escort.along,
+        escort.started,
+        escort.route.len(),
+        cell_m,
+        30.0,
+        0.0,
+        0.1,
+    );
+    assert_eq!((a, s), (0.0, false));
+    // Met, and walked with at 1.5 m/s: on along the road.
+    let mut moved_m = 0.0;
+    for _ in 0..100 {
+        let here = trader_point(&escort, &config).unwrap();
+        player = here - (here - player).normalize() * 3.0;
+        let (a, s, _) = lead(
+            escort.along,
+            escort.started,
+            escort.route.len(),
+            cell_m,
+            (player - here).length(),
+            1.5,
+            0.1,
+        );
+        moved_m += (a - escort.along) * cell_m;
+        (escort.along, escort.started) = (a, s);
+    }
+    assert!(escort.started && moved_m > 10.0, "led {moved_m} m");
+    // Left behind: waits.
+    let before = escort.along;
+    let (a, _, m) = lead(
+        escort.along,
+        true,
+        escort.route.len(),
+        cell_m,
+        20.0,
+        0.0,
+        1.0,
+    );
+    assert!(!m && a == before);
+    // Stored, it reads back where it stopped.
+    {
+        let mut save = app.world_mut().resource_mut::<WorldSave>();
+        save.store(
+            &Author::Player(0),
+            vec![escort_record(job.id, Some(&escort))],
+        )
+        .unwrap();
+        assert_eq!(escort_of(&save, job.id), Some(escort.clone()));
+    }
+    // At the other town the game writes the count; the job is done and paid
+    // where it was taken.
+    app.world_mut().write_message(Did::new(
+        Kind::Escort,
+        pbd_core::economy::jobs::scoped(site + 1, "trader"),
+        1,
+    ));
+    app.update();
+    assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+    let paid = shop(&mut app, |s| s.hand_in(&town, job.id)).unwrap();
+    assert_eq!(paid.reward, 60, "40 coins times the board's 1.5");
 }

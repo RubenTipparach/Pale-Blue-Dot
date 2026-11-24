@@ -1843,6 +1843,161 @@ open, each is a recommendation taken (ask only with screenshots):
   load; `max_segment` (24, the cells between two stakes) is 42i's
   `max_stake_cells`.
 
+**42m. Wide roads on a slope, bridges, lamps and inserting a stake
+(2026-11-24, on the owner's "cool implement all the phase 3 stuff!";
+written before the code).** What 42l left open, each a recommendation
+taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
+- **One shared plane.** A road's plane is set by its centre line as the
+  one-wide rule sets it (design 10a): at each edge between two centre cells
+  the higher cell's ground, at a centre cell's middle the mean of its two
+  edges, a whole or a half layer at each of those points and straight
+  between. Every cell of the road, centre or lane, takes its top off that
+  plane **where the cell really is**: the middles of its sides toward the
+  cells it comes in and leaves by are placed along the centre line and the
+  plane read there. On a regular lattice a lane is exactly half a cell
+  along its centre cell; on the sphere the lattice is not exactly regular
+  (measured: a lane a third, not a half, of a cell along), and a lane read
+  off a half-cell grid met its neighbours with seams of 15 cm. Read where
+  it is, the seam is under a centimetre (`a_wide_road_up_ten_layers_is_
+  crossed_lane_to_lane_without_a_step`).
+- **A lane's top** is a lift over its whole layer and a rise over part of
+  its length, level either side (`RoadCell::bed`: `lift_mm`, `from`, `to`,
+  `rise_mm`; all nought is the plain one-wide cell). That covers the
+  one-wide slope, the half-height bed 42l found missing (a lift of up to a
+  layer), and the creases where the plane is held level past the foot and
+  the top of the climb (10b). The walker stands on it through the same
+  `Steps` floor a slope is, its foot and length cut to the part that rises,
+  and the mesh is the same fan.
+- **Fill, never cut, and the plane moved half a cell where that saves a
+  cut.** The player's road still digs nothing (42l). A lane cell whose
+  ground is under the plane's lowest point on it is filled to the plane on
+  a bed of packed earth (less than two layers: `raised` and the bed's
+  `lift_mm`); one whose ground stands over it would need a cut, and is red,
+  "Too steep across". On an even hill a lane off the centre's step is
+  part of a layer off its ground, so with the plane where the one-wide rule
+  puts it a lane can need a cut (10b's own measurement). So the planner
+  tries the plane **moved down the hill** half a cell, then a whole cell
+  (each point of the half-cell grid the higher of its two neighbours, the
+  ends of the road held where they are): the lanes then sit on their ground
+  or a little over it, and the centre cells take a bed instead. It takes
+  the least moved plane that needs fewest cuts and still climbs no faster
+  than a layer a cell. A one-wide road keeps today's plane cell for cell.
+- **Straight up a slope.** 10b's lanes share a plane only along a lattice
+  row. A wide road whose centre line turns, or zigzags across the lattice,
+  on a cell that rises or beside one, is red there, "Wide roads bend on the
+  level"; on the level it may run any way.
+- **Bridges, one rule.** A river cell deeper than a ford, and any river cell
+  after one while a bridge is carried, is bridged with a plank deck at the
+  road's height on the bank before it, for at most `max_bridge_cells` (6, a
+  new tunable in `road_planner.ron`) and only where the deck stands over the
+  water: `roads::planner::bridged`, which the world's search asks as well,
+  so the two agree (the world's `max_bridge_cells` stays 10; its routes are
+  pinned by `world_routes_are_pinned`). The water past the limit, or under a
+  deck that would be under the water, is red, "Too wide to bridge". The far
+  bank meets the deck within a layer or is red, "Too steep". A bridge cell
+  is paved with `bridge_planks` (6, new) planks and a log, its deck, posts
+  and rails at once (the world's bridge piece), and stored on its
+  `road-cell` as `deck_m`.
+- **Wide bridges.** Every lane cell beside a bridged centre cell is a
+  bridge cell at the same deck where its ground (land or a river's bed) is
+  under the deck; level with it, a road cell; over it, red. Rails run only
+  along a bridge cell's sides that have no road cell beside them, so a wide
+  bridge is railed on its outer edges and open between its lanes (10b). A
+  lane over deep water beside a centre that is not bridged is red, "Too
+  wide to bridge".
+- **Lamps built on paving.** Lamp posts stand off the road on its verge:
+  for every `lamp_spacing`th centre cell, on the cell beside the road's
+  outermost left cell most to the left that is not the road's, dry, no
+  town's, and within a layer of that road cell's ground; a three-wide road
+  also has them on its right, half a spacing on (staggered, 10b). A post is
+  the town's own street lantern (`LanternPost`, lit at dusk by the cell
+  light field like every town lamp), placed as the player's block in the
+  first air layer over its cell's ground when the road cell beside it is
+  paved, a log and a street lantern taken from the pack in the same line
+  (`WorldSave::accept`). Short of either, the cell is paved and the lamp
+  waits: the use key with the shovel on that paved cell builds it once they
+  are in the pack. A built lamp is a block like any other, and is dug like
+  one. Its ghost stands with the plan (a post in the ghost tint), and the
+  bill counts the posts not built and their logs and lanterns, and a bridge
+  cell's planks and log.
+- **Inserting a stake (42f).** Shift and a click on a road cell that is not
+  a stake drives a stake there (one from the pack) into the leg it lies on
+  and picks it up, so the road is pulled aside from that point as a moved
+  stake is: the next click sets it down where both new legs are allowed.
+  Refused, with the reason, where the leg through the new stake would
+  clash.
+- **The walker across the lanes.** Pinned by a `pbd-core` test that walks a
+  two- and a three-wide road up ten layers diagonally across every lane and
+  back, on the drawn floors, and finds no rise steeper than a slope's.
+- **The world's wide roads stay one wide.** 10b asks the world to lay its
+  walled towns' gravel roads two wide. That is a new roads version (a new
+  `road` schema for the lanes' beds), for new worlds only, with version 3
+  pinned by its digest. Left open in task 8.6; nothing in the world's
+  planning changes here.
+
+**42n. The owner's answers on the planner (survey P2, 2026-11-24).**
+- **A stronger ghost**: `ghost_opacity` 0.55, up from 0.35.
+- **A slightly aerial view** (owner: "Can we something like a slightly
+  aerial view? Let's say something like 10-20 m off the ground?"). While
+  survey stakes are in hand on foot, the eye rises to `aerial_m` (15 m, a
+  validated tunable from 5 to 30) over the player's eye and stands a little
+  behind them along the way they face, looking down at the ground ahead,
+  so the ghost and the stakes read whole. It eases up over `aerial_ease_s`
+  (0.4 s) when the stakes come into the hand and back down when they leave
+  it, never a jump cut. Only the eye's height and place ease: mouse look
+  turns the view by the frame's raw movement with no smoothing, as
+  everywhere (CLAUDE.md), and the pitch is the player's own pitch tipped
+  down by the angle that keeps the spot they aimed at from the ground
+  where it was. The walker, its collision and the reach of the shovel are
+  unchanged; only the eye moves.
+- **Picking from the lifted eye**: the aimed cell is found by the same ray
+  the view looks along, cast from the lifted eye, so a click lands on the
+  cell under the crosshair. While lifted, the ray reaches as far as the
+  ghost shows (`ghost_reach_m` from the player), since the point of the
+  lifted view is to stake what it shows; the shovel still paves only
+  within `reach_m` of the player's feet.
+
+**46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
+2026-11-24; written before the code).** Two new kinds on a town's board,
+through the board, the taken jobs, the counting and the hand-in every town
+job already goes through (design 8, 28, 29); posted only by a town a road
+of the world's leaves (`jobs::Town::roads_to`, the towns joined to it by a
+stored `road`), so neither is posted where there is no road.
+- **Rockfall (`rockfall`, `Clear`).** Taking the job has the world drop
+  rock on its road: from the road's cell `rockfall_from` (8) cells out of
+  the town, a run of the job's count (2 to 4) cells, each a stone block in
+  the first air layer over the cell's ground, proposed by the world
+  (`Author::World`, process `rockfall`, the job's id) through
+  `WorldSave::propose`, so the yield check skips any cell the player has
+  touched. The cells are stored as a `road_rockfall` record (by the job's
+  id: the town, the cells and how many are clear). The job counts a cell
+  (`Clear`, `<site>:road`) when its rock is dug: the game compares the
+  cells' edits with the record each frame and writes a `Did` for each cell
+  newly clear, then the record's count, so a reload never counts a cell
+  twice. A road cell the player dug its rockfall off is drawn and stood on
+  again: the road yields to the player's work except where that work is
+  only a rockfall's rock taken back to air. `Clear` joins the live kinds.
+- **Escort a trader (`escort`, `Escort`).** Taking the job puts a trader
+  (a person of the town rolled as the lost villager is, never its trader or
+  job giver) on the town's first road cell toward the job's town, stored
+  as a `road_escort` record (the town, the other town, who, the road's cells
+  in order and how far along them they are). The lost villager's follow
+  turned round (`follow::lead`): once the player is within `LEAD_START_M`
+  (6 m) the trader walks the road's cells at a walker's pace while the
+  player keeps within `WAIT_M` (12 m), and waits where they stand when the
+  player falls further back, facing them. Reaching the other town's
+  footprint counts the job (`Escort`, `<to>:trader`), the record is taken
+  back and the trader goes home to their post; the job is handed in at the
+  town that gave it, as a delivery is. Their place along the road is
+  written when they stop and at most once a second as they walk.
+- **Pay and counts** in `jobs.ron`: rockfall counts 2 to 4 cells at 8 coins
+  a cell, escort 1 at 40, both times the board's `pay_share`; both join
+  `posted` (the boards change, which no save stores).
+- **Tests** play each through the player's own inputs where the app tests
+  allow: the job taken from the board, the rock dug with the same edit the
+  dig makes, the walker moved along the road with the trader, the job
+  handed in and paid.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

@@ -305,11 +305,117 @@ pub fn take_stake(
     Ok(true)
 }
 
+/// Insert a stake at `key` on the leg it lies on (design 42f, 42m), a
+/// stake from the pack. `Ok(false)` where no leg runs over the cell.
+pub fn insert_stake(
+    save: &mut WorldSave,
+    slots: &mut Slots,
+    key: u32,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
+) -> Result<bool, EditRefused> {
+    let plans = planner::plans(&save.records);
+    let edited = {
+        let ground = stake_ground(config, &save.edits, &save.yields);
+        match planner::insert_stake(&plans, key, &ground, &|_| false, pcfg, rcfg.ford_depth_m) {
+            None => return Ok(false),
+            Some(e) => e.map_err(EditRefused::Clash)?,
+        }
+    };
+    commit(save, slots, edited, config, pcfg)?;
+    info!("survey stake inserted at cell {key}");
+    Ok(true)
+}
+
+/// Whether a street lantern stands on cell `key` by the player's hand: a
+/// road's lamp post built (design 42m).
+pub fn lamp_standing(save: &WorldSave, key: u32) -> bool {
+    save.edits
+        .for_cell(key)
+        .iter()
+        .any(|(_, m)| *m == pbd_core::terrain::Material::LanternPost)
+}
+
+/// The road's lamp posts beside cell `key` not yet standing: `(post cell,
+/// the layer it stands in)`, the first air layer over its ground.
+pub fn lamps_owed(
+    save: &WorldSave,
+    key: u32,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+) -> Vec<(u32, usize)> {
+    let pcfg = load_planner_cached();
+    let plans = planner::plans(&save.records);
+    let ground = stake_ground(config, &save.edits, &save.yields);
+    let mut out = Vec::new();
+    for road in plans.values().flat_map(|p| &p.roads).filter(|r| r.lamps) {
+        let laid = planner::lay(road, &ground, &|_| false, &pcfg, rcfg.ford_depth_m);
+        if !laid.iter().any(|c| c.key == key) {
+            continue;
+        }
+        for (beside, post) in planner::lamp_posts(road, &laid, &ground, &pcfg) {
+            if beside != key || lamp_standing(save, post) || out.iter().any(|(p, _)| *p == post) {
+                continue;
+            }
+            let Some(top) = roads::centre(post).map(|c| pbd_core::column::surface_m(config, c))
+            else {
+                continue;
+            };
+            if let Some(layer) = pbd_core::column::layer_at(top.floor() + 0.5) {
+                out.push((post, layer));
+            }
+        }
+    }
+    out
+}
+
+/// Build the lamp posts owed beside paved cell `key` (design 42m): each the
+/// town's street lantern, placed as the player's block, a log and a street
+/// lantern taken from the pack in the same line. The edits it made, for the
+/// terrain; refused where the pack is short.
+pub fn build_lamps(
+    save: &mut WorldSave,
+    slots: &mut Slots,
+    key: u32,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+) -> Result<Vec<pbd_core::edits::Edit>, PaveRefused> {
+    let lantern = Item::Block(pbd_core::terrain::Material::LanternPost);
+    let mut made = Vec::new();
+    for (post, layer) in lamps_owed(save, key, config, rcfg) {
+        let mut hands = slots.clone();
+        if !hands.take_item(Item::Good(Good::LOG), 1) || !hands.take_item(lantern, 1) {
+            return if made.is_empty() {
+                Err(PaveRefused::NoLamp)
+            } else {
+                Ok(made)
+            };
+        }
+        let edit = pbd_core::edits::Edit {
+            cell: post,
+            layer: layer as u16,
+            material: pbd_core::terrain::Material::LanternPost,
+        };
+        if !save.accept(edit, None, &hands) {
+            return Err(PaveRefused::Unsaved);
+        }
+        *slots = hands;
+        info!("road lamp built on cell {post} beside {key}");
+        made.push(edit);
+    }
+    Ok(made)
+}
+
 /// Why a cell was not paved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaveRefused {
     NotMarked,
     NoGravel,
+    /// A bridge cell with no planks or log in the pack.
+    NoPlanks,
+    /// A lamp post with no log or street lantern in the pack.
+    NoLamp,
     Unsaved,
 }
 
@@ -320,6 +426,8 @@ impl PaveRefused {
         match self {
             PaveRefused::NotMarked | PaveRefused::Unsaved => None,
             PaveRefused::NoGravel => Some(pbd_core::locale::tr("roads.pave.needs_gravel")),
+            PaveRefused::NoPlanks => Some(pbd_core::locale::tr("roads.pave.needs_planks")),
+            PaveRefused::NoLamp => Some(pbd_core::locale::tr("roads.lamp.needs")),
         }
     }
 }
@@ -355,13 +463,23 @@ pub fn pave(
         .ok_or(PaveRefused::NotMarked)?
     };
     let mut hands = slots.clone();
-    let cost = if cell.surface == Surface::Gravel {
-        pcfg.cost_scale.ceil() as u16
+    if cell.deck_m.is_some() {
+        // A bridge cell: its deck's planks and a log for its posts (42m).
+        let planks = (pcfg.bridge_planks as f32 * pcfg.cost_scale).ceil() as u16;
+        if !hands.take_item(Item::Good(Good::PLANKS), planks)
+            || !hands.take_item(Item::Good(Good::LOG), 1)
+        {
+            return Err(PaveRefused::NoPlanks);
+        }
     } else {
-        0
-    };
-    if cost > 0 && !hands.take_item(Item::Good(Good::GRAVEL), cost) {
-        return Err(PaveRefused::NoGravel);
+        let cost = if cell.surface == Surface::Gravel {
+            pcfg.cost_scale.ceil() as u16
+        } else {
+            0
+        };
+        if cost > 0 && !hands.take_item(Item::Good(Good::GRAVEL), cost) {
+            return Err(PaveRefused::NoGravel);
+        }
     }
     if !save.store_with_hands(
         paving::paved_record(key, &cell),
