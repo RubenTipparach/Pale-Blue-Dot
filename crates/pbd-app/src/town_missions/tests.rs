@@ -25,6 +25,7 @@ fn harbour(site: u32) -> TownInfo {
         kind: SiteKind::Harbour,
         name: "Saltmere".into(),
         neighbours: vec![site + 1],
+        roads_to: vec![],
     }
 }
 
@@ -319,6 +320,8 @@ fn the_town_tree_locks_its_recipes_until_their_missions() {
             "banded-chest",
             "closet",
             "crushed-stone",
+            // `building-planner` design 3: the house mission opens it.
+            "drafting-table",
             "grinder",
             "hand-cart",
             "horse-cart",

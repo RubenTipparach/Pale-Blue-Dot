@@ -1621,17 +1621,24 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         laid.meshes
             .iter()
             .map(|(name, buf)| {
-                let mesh = to_mesh(buf)
-                    .with_inserted_attribute(
-                        Mesh::ATTRIBUTE_UV_1,
-                        vec![UNBAKED; buf.positions.len()],
-                    )
-                    .with_inserted_attribute(
-                        Mesh::ATTRIBUTE_COLOR,
-                        vec![UNBAKED_BEFORE; buf.positions.len()],
-                    );
                 // A flame is drawn unlit and is no texture, outside as in a
-                // room (decision 7a).
+                // room (decision 7a), and is never baked: an unlit material
+                // multiplies by a vertex colour, and the bake's would black
+                // it (a smithy's forge, `townsfolk` design 26a, is the first
+                // flame outside a room).
+                let mesh = if name == FLAME {
+                    to_mesh(buf)
+                } else {
+                    to_mesh(buf)
+                        .with_inserted_attribute(
+                            Mesh::ATTRIBUTE_UV_1,
+                            vec![UNBAKED; buf.positions.len()],
+                        )
+                        .with_inserted_attribute(
+                            Mesh::ATTRIBUTE_COLOR,
+                            vec![UNBAKED_BEFORE; buf.positions.len()],
+                        )
+                };
                 let image = (name != FLAME).then(|| texture(assets, name));
                 (mesh, image, cut.contains(name))
             })

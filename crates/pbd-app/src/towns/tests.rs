@@ -568,7 +568,13 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
             started.elapsed().as_secs_f32()
         );
         assert!(footprint > 300, "{}: {footprint} cells", site.name);
-        assert_eq!(laid.solids.len(), template.buildings.len(), "{}", site.name);
+        // Every building, and from layout 3 its smithy (`townsfolk` 26a).
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.smithies.len(),
+            "{}",
+            site.name
+        );
         assert!(laid.terrace_m > config.sea_level_m, "{} is dry", site.name);
         if !site.home {
             turns.insert(record::turn(site.id));
@@ -759,8 +765,8 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
     );
     assert_eq!(
         app.world().resource::<Structures>().0.len(),
-        load_template("village").buildings.len(),
-        "the walker has its buildings"
+        load_template("village").buildings.len() + load_template("village").smithies.len(),
+        "the walker has its buildings and its smithy"
     );
     for _ in 0..70 {
         app.update();
@@ -968,8 +974,8 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         );
         assert_eq!(
             laid.solids.len(),
-            template.buildings.len() + 12 + template.masonry.len(),
-            "{}: every building, its 12 path stairs and every cell of the wall",
+            template.buildings.len() + 12 + template.smithies.len() + template.masonry.len(),
+            "{}: every building, its 12 path stairs, its smithy and every cell of the wall",
             site.name
         );
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
@@ -2576,6 +2582,41 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
     );
     let off = at.forward * 1.6 + side * 2.4;
     spot("off the smith's side", at.feet + off, -off);
+    // The forge (`townsfolk` design 26a): from 2 m past the anvil on the
+    // line from the forge through it, looking at the forge.
+    {
+        let site = holbrook();
+        let town = lay_out(&site, &village, &config).unwrap();
+        let laid = build(
+            &site,
+            &town,
+            Some(&village),
+            &load_kits(),
+            &|_: &str| 2.0,
+            &config,
+        )
+        .unwrap();
+        let smithy = &village.smithies[0];
+        let (c, r) = smithy.forge_cell(village.grid.cell_m);
+        let dir = |c: i32, r: i32| {
+            laid.patch.cells[laid.chart.cell(c, r).unwrap()]
+                .direction
+                .as_dvec3()
+        };
+        let ground = at.feet.length();
+        let (forge, anvil) = (dir(c, r) * ground, dir(c - 1, r) * ground);
+        let back = (anvil - forge).normalize();
+        let stand = anvil + back * 2.0;
+        spot("the forge, past the anvil", stand, forge - stand);
+        // And from its side, 3.5 m off the line from the anvil to the forge,
+        // so the smith (0.6 m past the anvil) and the forge are in view.
+        let middle = (forge + anvil) * 0.5;
+        let across = middle.normalize().cross(forge - anvil).normalize();
+        for (name, s) in [("left", 1.0), ("right", -1.0)] {
+            let stand = middle + across * (3.5 * s);
+            spot(&format!("the forge from its {name}"), stand, middle - stand);
+        }
+    }
     let walled = load_template("town");
     // Linenleigh, the walled town nearest Holbrook (Ashenham, the first by
     // id, stands in water on today's ground).
@@ -2638,6 +2679,11 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
             );
         }
     }
+    // The idle look (`townsfolk` task 2.2) is shot at the merchant, who
+    // idles at his post, from the talk captures' spot 1.1 m back along the
+    // look from his face-to-face one (`capture_talk.sh`'s `STALL_FAR`). The
+    // gate guard's and the bearded stallholder's spots show a door and a
+    // back since the towns were laid again.
     let guard = folk
         .iter()
         .find(|p| p.role == "guard")
@@ -2648,4 +2694,45 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
         guard.feet + guard.forward * 2.5,
         -guard.forward,
     );
+}
+
+/// A measurement instrument, run by hand (`town-missions-tree` task 6.3,
+/// `townsfolk` task 12.4): the first game days on which Linenleigh's board
+/// (the job giver the talk captures stand at) posts a lost villager, in the
+/// memory-only world the captures play, so a capture can be taken on one.
+#[test]
+#[ignore]
+fn print_the_days_linenleighs_board_posts_a_lost_villager() {
+    use pbd_core::economy::jobs::{Board, JobKind, Town};
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
+    let cfg = crate::economy::EconomyConfig::load();
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: crate::saves::WorldSave::memory_only().seed(),
+    };
+    let town = Town {
+        site: site.id,
+        kind: site.kind,
+        neighbours: &[],
+        roads_to: &[],
+    };
+    let mut found = 0;
+    for day in 0..200 {
+        let jobs = board.posted(town, day, 0, &Default::default());
+        if let Some(place) = jobs.iter().position(|j| j.kind == JobKind::Lost) {
+            println!(
+                "day {day}: a lost villager, row {place} of {} on the board",
+                jobs.len()
+            );
+            found += 1;
+            if found == 5 {
+                break;
+            }
+        }
+    }
 }

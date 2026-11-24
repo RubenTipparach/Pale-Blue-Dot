@@ -132,10 +132,20 @@ impl RoadNet {
         let mut mine = Vec::new();
         for (&key, b) in built {
             mine.push(cells.len());
+            // Every road cell beside it: a bridge's rails run only along its
+            // open sides, so a wide bridge is railed outside (design 42m).
+            let neighbours = if b.deck_m.is_some() {
+                roads::neighbours(key)
+                    .into_iter()
+                    .filter(|n| built.contains_key(n) || seen.contains(n))
+                    .collect()
+            } else {
+                Vec::new()
+            };
             cells.push(Laid {
                 cell: roads::built_cell(key, b),
                 surface: b.surface,
-                neighbours: Vec::new(),
+                neighbours,
             });
             if mine.len() == CHUNK_CELLS {
                 chunks.push(std::mem::take(&mut mine));
@@ -398,7 +408,7 @@ pub fn prepare(
     ));
     // The player's marks and road cells, for the terrain (`townsfolk`
     // design 39a and 43), before the planet is built too.
-    paving::install(&save.records, config.radius_m);
+    paving::install(save, config.radius_m);
     info!(
         "{} roads read, {} cells to lay in {} chunks, {} lamps beside them",
         stored.len(),
@@ -639,7 +649,9 @@ pub fn stand_roads(world: &mut World) {
         !gone
     });
     let yields = world.resource::<WorldSave>().yields.clone();
-    let player = |key: u32| yields.has_cell(key);
+    // A rockfall dug off a road is the road again (`townsfolk` design 46).
+    let dug_clear = crate::economy::road_jobs::dug_clear(world.resource::<WorldSave>());
+    let player = |key: u32| yields.has_cell(key) && !dug_clear.contains(&key);
     for s in &mut standing {
         if s.revision == revision {
             continue;
@@ -869,6 +881,9 @@ pub fn lay(
         from: None,
         raised: false,
         plan: None,
+        ford: false,
+        bed: Default::default(),
+        deck_m: None,
     };
     if !save.store_with_hands(
         roads::built_record(key, &cell),
@@ -888,9 +903,9 @@ pub fn lay(
 #[derive(Resource, Default)]
 pub struct RoadSay(pub Option<String>);
 
-/// The player's hands on the roads (`townsfolk` design 39 to 41):
-/// - the place button with survey stakes in the selected slot drives a
-///   stake; the stakes leaving the slot end the plan;
+/// The player's hands on the roads (`townsfolk` design 39 to 42l):
+/// - survey stakes in the selected slot make the hand the road planner
+///   ([`planner`]), which has the place button then;
 /// - the interact key with the shovel in hand paves the marked cell aimed
 ///   at with one gravel, and held, the next marked cell in reach on the
 ///   shovel's beat;
@@ -912,14 +927,18 @@ pub fn road_hands(
         Option<ResMut<WorldSave>>,
         Option<ResMut<RoadNet>>,
     ),
-    (settings, mut open, mut standing, mut say, mut work): (
+    (settings, pcfg, mut standing, mut say, mut work): (
         Res<RoadsSettings>,
-        ResMut<paving::OpenPlan>,
+        Res<paving::PlannerSettings>,
         ResMut<RoadsStanding>,
         ResMut<RoadSay>,
         MessageWriter<paving::RoadWork>,
     ),
     mut did: MessageWriter<crate::missions::Did>,
+    (mut fine, mut contact): (
+        Option<ResMut<crate::planet::PlanetFine>>,
+        Option<ResMut<crate::planet::PlanetContact>>,
+    ),
     time: Res<Time>,
     mut beat: Local<f32>,
 ) {
@@ -936,9 +955,6 @@ pub fn road_hands(
     };
     let stake = pbd_core::inventory::Item::Good(pbd_core::goods::Good::SURVEY_STAKES);
     let held = hotbar.0.held().map(|s| s.item);
-    if held != Some(stake) {
-        open.0 = None;
-    }
     if menu.is_some_and(|m| m.0) || !walking.is_some_and(|w| w.active && w.captured) {
         *beat = 0.0;
         return;
@@ -953,22 +969,7 @@ pub fn road_hands(
     let key = roads::nearest_key(point.normalize_or(Vec3::Y));
     if buttons.just_pressed(MouseButton::Right) {
         if held == Some(stake) {
-            match paving::drive_stake(&mut save, &mut hotbar.0, open.0, point, &config, &cfg) {
-                Ok(paving::Staked::Driven { plan, marked }) => {
-                    open.0 = Some(plan);
-                    work.write(paving::RoadWork::Stake);
-                    did.write(crate::missions::Did::new(Kind::Stake, "stake", 1));
-                    if marked > 0 {
-                        work.write(paving::RoadWork::Mark(marked as u32));
-                        did.write(crate::missions::Did::new(Kind::Mark, "cell", marked as u32));
-                    }
-                }
-                Ok(paving::Staked::Resumed(plan)) => open.0 = Some(plan),
-                Err(why) => {
-                    info!("STAKE refused: {why:?}");
-                    say.0 = Some(why.line().into());
-                }
-            }
+            // The road planner's.
             return;
         }
         let mine = key.is_some_and(|k| roads::built(&save.records).contains_key(&k));
@@ -994,6 +995,35 @@ pub fn road_hands(
     }
     let pressed = keys.just_pressed(KeyCode::KeyF);
     let aimed_marked = key.filter(|&k| paving::marked_near(&save, point, 1.5).contains(&k));
+    // The use key with the shovel on a paved cell whose lamp post waits
+    // for its log and lantern builds it (design 42m).
+    let mut lamps = |save: &mut WorldSave,
+                     slots: &mut pbd_core::inventory::Slots,
+                     at: u32,
+                     say: &mut RoadSay| {
+        match paving::build_lamps(save, slots, at, &config, &cfg) {
+            Ok(made) => {
+                if let (Some(f), Some(c)) = (fine.as_deref_mut(), contact.as_deref_mut()) {
+                    crate::economy::road_jobs::into_tier(&made, save, f, c);
+                }
+            }
+            Err(why) => {
+                if let Some(line) = why.line() {
+                    say.0 = Some(line.into());
+                }
+            }
+        }
+    };
+    if pressed && shovel && aimed_marked.is_none() {
+        if let Some(k) = key
+            && roads::built(&save.records).contains_key(&k)
+            && !paving::lamps_owed(&save, k, &config, &cfg).is_empty()
+        {
+            keys.clear_just_pressed(KeyCode::KeyF);
+            lamps(&mut save, &mut hotbar.0, k, &mut say);
+        }
+        return;
+    }
     if pressed {
         if aimed_marked.is_none() {
             return;
@@ -1025,7 +1055,7 @@ pub fn road_hands(
     }) else {
         return;
     };
-    match paving::pave(&mut save, &mut hotbar.0, target, &config) {
+    match paving::pave(&mut save, &mut hotbar.0, target, &config, &cfg, &pcfg.0) {
         Ok(_) => {
             work.write(paving::RoadWork::Pave);
             did.write(crate::missions::Did::new(Kind::Pave, "gravel", 1));
@@ -1036,6 +1066,9 @@ pub fn road_hands(
                 .any(|n| roads::centre(n).is_some_and(|c| ground::cleared(&config, c)));
             if beside_town {
                 did.write(crate::missions::Did::new(Kind::Pave, "joined", 1));
+            }
+            if !paving::lamps_owed(&save, target, &config, &cfg).is_empty() {
+                lamps(&mut save, &mut hotbar.0, target, &mut say);
             }
             paving::restand(&save, &mut net, &mut standing);
         }
@@ -1063,10 +1096,12 @@ pub fn take_stakes(
         Option<Res<crate::walking::WalkingReadout>>,
         Option<Res<crate::controls::MenuOpen>>,
     ),
-    (hotbar, save, settings): (
+    (hotbar, save, settings, pcfg, mut say): (
         Option<ResMut<crate::hotbar::Hotbar>>,
         Option<ResMut<WorldSave>>,
         Res<RoadsSettings>,
+        Res<paving::PlannerSettings>,
+        ResMut<RoadSay>,
     ),
 ) {
     let (Some(mut buttons), Some(aimed), Some(mut hotbar), Some(mut save)) =
@@ -1090,8 +1125,17 @@ pub fn take_stakes(
         return;
     }
     let config = *crate::planet::terrain_config();
-    if paving::take_stake(&mut save, &mut hotbar.0, key, &config, &settings.0) {
-        buttons.reset(MouseButton::Left);
+    match paving::take_stake(&mut save, &mut hotbar.0, key, &config, &settings.0, &pcfg.0) {
+        Ok(true) => buttons.reset(MouseButton::Left),
+        Ok(false) => {}
+        Err(why) => {
+            // A refused take-back is spent too: the stake stays, not dug.
+            buttons.reset(MouseButton::Left);
+            info!("STAKE take-back refused: {why:?}");
+            if let Some(line) = why.line() {
+                say.0 = Some(line.into());
+            }
+        }
     }
 }
 
@@ -1104,19 +1148,38 @@ impl Plugin for RoadsPlugin {
             .init_resource::<RoadPieces>()
             .init_resource::<RoadsStanding>()
             .init_resource::<RoadSay>()
-            .init_resource::<paving::OpenPlan>()
             .init_resource::<paving::MarksShown>()
+            .init_resource::<paving::PlannerSettings>()
+            .init_resource::<planner::Planner>()
+            .init_resource::<planner::PlannerMenu>()
+            .init_resource::<planner::PlannerAim>()
+            .init_resource::<planner::Ghost>()
+            .init_resource::<planner::PlannerLift>()
             .add_message::<paving::RoadWork>()
-            .add_systems(Startup, paving::make_looks)
+            .add_systems(
+                Startup,
+                (
+                    paving::make_looks,
+                    planner::make_ghost_looks,
+                    planner::spawn_hud,
+                ),
+            )
             .add_systems(
                 Update,
                 (
                     keep_roads,
+                    planner::ease_lift,
+                    planner::planner_menu,
+                    planner::planner_aim,
+                    planner::planner_hands,
                     road_hands,
                     stand_roads,
                     paving::stand_stakes,
                     paving::follow_marks,
                     follow_frame,
+                    planner::draw_ghost,
+                    planner::follow_ghost,
+                    planner::show_hud,
                 )
                     .chain()
                     .after(crate::towns::build_towns),
@@ -1126,6 +1189,7 @@ impl Plugin for RoadsPlugin {
 
 pub mod models;
 pub mod paving;
+pub mod planner;
 
 #[cfg(test)]
 mod tests;

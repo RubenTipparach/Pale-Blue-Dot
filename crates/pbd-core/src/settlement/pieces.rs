@@ -19,6 +19,7 @@ pub mod dressing;
 pub mod furnish;
 pub mod harbour;
 pub mod jungle;
+pub mod smithy;
 pub mod steps;
 pub mod tundra;
 

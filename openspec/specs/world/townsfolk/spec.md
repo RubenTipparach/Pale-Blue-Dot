@@ -40,3 +40,18 @@ walker slides round and never passes through.
 - **WHEN** the walker walks straight into a working smith
 - **THEN** the walker slides round them, and at no tick overlaps them
   (`walking::tests::walking_into_a_working_smith_slides_round_him`)
+
+### Requirement: A new town's smith works at a lit forge
+A village or walled town laid at layout 3 or later SHALL stand its template's
+smithy (an open shed, a forge and an anvil, solid to the walker) and burn a
+brazier lamp in the forge's cell, so the forge lights what is near it. A town
+stored at an earlier layout SHALL be cut exactly as it was, with no smithy
+and no forge lamp.
+
+#### Scenario: A new town and a saved one
+- **WHEN** a village and a walled town are laid now, and the same towns are
+  read back at layout 2
+- **THEN** the new ones carry the smithy piece and one brazier in the forge's
+  cell, and the layout-2 ones carry the same pieces, meshes and lamps as
+  their templates with no smithy
+  (`settlement::tests::a_new_town_stands_its_forge_and_an_old_one_is_as_it_was`)

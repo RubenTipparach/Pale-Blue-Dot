@@ -373,6 +373,181 @@ top down and isometric".
   The choice is remembered on the device. In the game this is the build
   camera's preview (decision 12); the planner keeps both views.
 
+## As built (2026-11-24): what the design left open
+
+The owner approved M6 for the game on 2026-11-24 ("cool implement all the
+phase 3 stuff!"). Building it needed these choices the decisions above leave
+open. Each is a recommendation taken (ask only with screenshots).
+
+- **The site record's kind is `building-site`.** `site` is already the kind
+  of a city site (`pbd_core::sites::SITE_RECORD`), and two meanings of one
+  kind would make a world's sites and its towns' sites read each other.
+  `blueprint` is free and is used as designed.
+- **The mallet is carried in the pack, not the tool slot.** The tool slot is
+  four tools in a fixed saved line (`hand <tool> <four tiers>`); a fifth
+  widens that line and every tool picker. A mallet is a good (`mallet`, one
+  to a stack) and "in hand" for decision 6 means "in the pack": F on a
+  ghost strikes when one is carried, else "Needs a mallet". Its recipe (1 log,
+  1 stone at the workbench) is open from the start: in a planned world the
+  town tree's house mission is built with it, so locking it behind that
+  mission would leave the mission unreachable. The drafting table's recipe
+  (6 planks, 2 rope) unlocks on the house mission as designed.
+- **The drafting table is a block** (`Material::DraftingTable`, code 41),
+  drawn in the workbench's wood with a sloped board on its top, set down like
+  every station; F on it opens the planner. It queues no jobs.
+- **A doorway's leaf comes with its wall.** A plan's door opening charts to
+  the wall with its doorway and a door piece (`Shape::Door`) hung in it; the
+  cost table's door row pays for both, and the leaf is placed on the wall's
+  last stroke, in the same journal line. No door is taken from the pack.
+- **Posts.** The planner has no post tool (the mockup has none); a plan keeps
+  posts only when it is adopted from a house that has them.
+- **The planner's stand-in patch** is a flat hex disc built for the check
+  (`plan::flat_patch`): exact neighbours and corners, no pentagons, its
+  ground at one layer, so build mode's rule functions run on it unchanged.
+- **The game's rules decide, not the mockup's.** Where the mockup words a
+  check its own way (a stair with no floor at its foot, an upper floor over
+  nothing), the game reports the rule that breaks (`held_up`, `landing`...)
+  with its `build.refused.*` reason. One consequence: a storey that leaves
+  part of the one below open makes that part a flat roof, and two roofs a
+  storey apart over neighbouring cells are refused (`roof_overlap`), as they
+  are in build mode.
+- **The world setting is the identity's `building` field.** Missing reads
+  Free (every world made before); a world this build makes is written
+  Planned. An older build ignores the field and plays the world as Free.
+- **The plan is drawn as a picture.** The planner's plan view, top down and
+  isometric, is painted on the CPU into one image the UI shows, redrawn only
+  when the plan, the storey, the view or the hover changes; a click is
+  mapped back through the same projection. The turnable 3D preview still
+  waits for the build camera (decision 3).
+- **Lime lines use the paving marks' bits.** A site's outline is marked as
+  a loop of cells just inside its outer walls, each cell's band running to
+  the cells before and after it on the loop, through the same `spare[2]`
+  bits and texture as a road's marks (`townsfolk` 39a). So the lime runs
+  through the outer cells' middles rather than exactly under the walls; the
+  band and the stakes go when the site is finished.
+- **What the first cut leaves out**, each said here so it is not
+  mistaken for done: the scaffold had no ladder bay (since added, "The
+  scaffold's ladder bay" below); "in the way" is a solid block or a standing plant (a tree, a cactus, a wild plant), not yet a
+  road cell or a town's footprint; a marked piece taken down with a full
+  pack is refused ("No room") rather than its goods left in a
+  crate; in a planned world build mode's palette is unchanged but every
+  slot except Blueprint, Remove and Furniture says "Build from a plan".
+- **Turning.** Charting a plan one sixth on turns it one sixth: a plan
+  turned k sixths and charted k sixths on stands on the same cells
+  (`Plan::turned`, pinned by a test at all six turns).
+- **No held-swing yet.** A stroke is F on the mallet's beat (`stroke_s`),
+  with the compass tick and the count; the first-person mallet swing waits
+  for a mallet model in `held-swing`.
+
+### The captures' faults, found and fixed (2026-11-24, second pass)
+
+The first captures (task 3.7) showed four faults. Each is a recommendation
+taken (ask only with screenshots); the retaken captures are beside the old
+in `docs/screenshots/building-planner/`.
+
+- **A cactus stood inside a set-out cottage.** The whole-site check's "in
+  the way" read `under_standing_tree`, which asks `grows_tree`. A desert
+  cactus is scenery the tree draw draws but `grows_tree` is false for it
+  (`tree_kit::grows_cactus`: it is never chopped), so it was never in the
+  way. Measured in the capture's log: every ground cell under the cottage
+  read "tree false" while a cactus stood in one. Fixed by asking what
+  stands, not what can be chopped: `flora::stands_plant` (a tree not
+  felled, or a cactus) and a wild plant not picked (`farm::wild_at`), on
+  the ground block and the storey over it. The reason is build mode's own
+  `site.refused.in_the_way`. Pinned by `flora::a_cactus_stands_in_its_cell`.
+- **Scaffolding never went up.** Measured with the capture's log (a line
+  per storey: walls built and whether scaffolding is wanted): on the real
+  desert ground the two-storey house stood half its cells at layer 208 and
+  half at 209, so in the capture's pass-by-pass striking the ground floors
+  over the low cells were held up only by a neighbour's floor, came late,
+  and the walls on them later still; meanwhile the upper floor and twelve
+  upper walls went up over the finished half. 11 of 18 ground walls stood,
+  and `wants_scaffold` asked for every wall below to be built first, so it
+  never wanted any. The rule was stricter than the requirement ("a site
+  with a buildable piece on a storey above the ground"). It now wants
+  scaffolding round a storey whose own walls are not all built once the
+  walls below are all built *or a piece of that storey already stands*;
+  pinned by `scaffolding_is_wanted_while_a_storey_is_worked_on`, which
+  strikes in both orders. The capture now strikes lowest first, one piece
+  at a time, as a player goes up. The scaffold's plot was already drawn
+  as a plot is (`builds::spawn_plot`: `LitByField` and `LitLikeTerrain` on
+  its root, the settlement set's `plank`, `poles` and `rope` textures,
+  smooth normals round the poles and hard only at the boards' edges); it
+  had simply never been spawned.
+- **The planner did not list a change before Save change** (decision 7).
+  It now shows, over Save change, the pieces the change adds, the pieces it
+  removes (ghosts dropped and built pieces marked, furniture slots not
+  counted) and, in a planned world, the goods the built ones give back at
+  `refund_share`, from the same `site::diff` that Save change applies
+  (`construction::change_of`); "No change" when the plan is the site's.
+- **The ghost glowed at night.** A ghost stays a preview the field does not
+  light (decision 5), so instead of lighting it, it is dimmed with the sun:
+  full by day, `ghost_night` (0.05, a new tunable) of it once the sun is
+  down, along the terrain's own dusk curve (`Clock::daylight`). Measured in
+  the night capture: at a first guess of 0.22 the ghost still read several
+  times the ground's brightness; 0.05 is the terrain's own ambient floor.
+  Its opacity is unchanged.
+- **The lime line was faint** under the ghost floor. The terrain's lime band
+  (`planet_surface.wgsl`, `townsfolk` 39a) is laid stronger: dust 0.94 at
+  its middle and 0.70 at its edge (was 0.82 and 0.55), gaps in a tenth of
+  its texels (was 0.18), and a little paler. It is the same band a road's
+  survey marks use, so they read stronger too.
+
+### The owner's answers on the captures (survey P3, P4, 2026-11-24)
+
+- **P3, the ghost at night.** The owner: "The night is too faint, please
+  make it glow a bit more at night". `ghost_night` goes from 0.05 to
+  0.12. Judged in 22:00 captures: at 0.2 (the first try) the ghost is the
+  brightest thing in the frame by far, its walls a flat bright cyan
+  (`game-site-night-0.2.jpg`, kept beside it); at 0.12 it is a little
+  softer and still glows plainly over the dark ground. Retaken in
+  `game-site-night.jpg`. Still bright on lavapipe: the owner judges it on
+  the desktop, and the number is one line of `building_planner.ron`.
+- **P4, the lime line.** The stronger line is kept as it is.
+
+### The scaffold's ladder bay (2026-11-24, task 3.5's note)
+
+Written before the code. Design 6 says the scaffold is "climbed by its
+ladder bay"; the first cut had none, so an upper storey's boards were
+reached only from inside the house. The walker has no climbing state (a
+ladder held and climbed hand over hand would be a new movement mode), and
+it does not need one: it walks up any flight whose risers are under
+`walking::HOLD_M` (0.35 m), on the flight's pitch line, as it climbs a
+house's stair. So the ladder bay is a **ship's ladder**: steep open treads
+between two stringers, which the walker walks up.
+
+- **Where.** Off the first bay of the scaffold's list (its order is the
+  storey's outer edges', so it is the same bay every time the scaffold is
+  cut), running straight out from the board walk's outer edge, square to
+  the wall. Its head is the board walk's outer edge; its foot is on the
+  ground the scaffold's poles stand on.
+- **Its shape.** `LADDER_RISE_M` 0.25 per tread (under `HOLD_M`), as many
+  treads as the storey's floor line needs (12 for a 3 m storey), a run of
+  `LADDER_RUN_M` 0.22 a tread, so a 3 m storey's ladder is 2.6 m out from
+  the boards, about 49 degrees: steeper than a house stair (31), as a
+  ladder is. Measured in the walker test: the walker climbs a flight's
+  pitch line at its walking pace, so on the ladder its eye rises more
+  than the 0.12 m a tick the stair tests bound (it did on every tick, at
+  0.3 m a tread too), but never a whole tread at once; the ladder's test
+  holds it under a riser a tick, with no tick in the air. `LADDER_HALF_M` 0.4 either side of its middle: wider than the
+  walker's body (0.3 m round), narrower than a bay.
+- **What the walker meets.** A `Surface::Flight` from the foot to the
+  head, its last tread level with the boards, so the walk goes from the
+  ladder onto the boards with no step. The stringers are not walls:
+  the flight's own surface is what it stands on, as on a house stair.
+- **How it is drawn.** Each tread a bevelled plank slab (the board walk's
+  `slab`); two stringers of the scaffold's `poles` texture, each one slab
+  laid along the pitch, cut square at the ground and at the boards; a rope
+  collar where each stringer meets the board walk's pole line. Smooth
+  where curved, hard at the planks' edges, as the rest of the scaffold.
+  Lit as the scaffold is (it is part of the scaffold's plot).
+- **Cost.** None extra: the ladder is part of the scaffolding, which is
+  paid by the bay (`scaffold_cost`). Recommendation taken (ask only with
+  screenshots).
+- **Pinned by** a core test that the scaffold's solids carry the flight,
+  its risers each under `HOLD_M` and its head level with the boards, and
+  an app test that the walker walks up it onto the boards with no jump.
+
 ## Risks / Trade-offs
 
 - **Two ways to build.** Free and planned worlds behave differently. Kept to

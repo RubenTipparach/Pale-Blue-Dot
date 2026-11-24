@@ -139,6 +139,9 @@ pub const GOODS: &[GoodRow] = &[
     row("chest", 4, "items/goods/chest.png"),
     row("banded-chest", 4, "items/goods/banded-chest.png"),
     row("crate", 4, "items/goods/crate.png"),
+    // ---- building-planner design 6: the mallet a site's pieces are struck
+    // with, carried in the pack.
+    row("mallet", 1, "items/goods/mallet.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -213,6 +216,8 @@ impl Good {
     pub const SURVEY_STAKES: Good = by_code_const("survey-stakes");
     // player-building: a door to hang in a doorway.
     pub const DOOR: Good = by_code_const("door");
+    // building-planner: the mallet.
+    pub const MALLET: Good = by_code_const("mallet");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {

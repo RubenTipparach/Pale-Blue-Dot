@@ -87,6 +87,13 @@ mark the site with survey stakes and lime lines in the ground's own light.
 - **THEN** the ghost is red, says "Something is in the way", and the site
   is not set out
 
+#### Scenario: A cactus in the way
+
+- **WHEN** a desert cactus, which no axe fells, or an unpicked wild plant
+  stands in a cell under the ghost's ground floor
+- **THEN** the ghost is red, says "Something is in the way", and the site
+  is not set out
+
 ### Requirement: A site is built piece by piece from the pack
 
 In a planned world, each ghost piece of a site that is held up by what is

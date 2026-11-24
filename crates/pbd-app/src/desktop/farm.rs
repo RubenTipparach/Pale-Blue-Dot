@@ -632,7 +632,7 @@ fn eye_ray(
 
 /// The logs a tree gives the axe before it falls, from the gathering's
 /// settings (absent in a still capture).
-fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
+pub(super) fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
     gather.map_or_else(
         || pbd_core::gather::GatherSettings::default().axe_logs,
         |g| g.0.axe_logs,
@@ -1028,6 +1028,11 @@ pub struct FarmLooks {
     carpenter_iron: Handle<Mesh>,
     plank_tex: Handle<StandardMaterial>,
     iron_tex: Handle<StandardMaterial>,
+    /// The drafting table's board and its sheet (`building-planner` design
+    /// 3), in the plank and the linen.
+    drafting_wood: Handle<Mesh>,
+    drafting_sheet: Handle<Mesh>,
+    linen_tex: Handle<StandardMaterial>,
 }
 
 /// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
@@ -1167,6 +1172,24 @@ pub fn make_looks(
         plank_tex: materials.add(StandardMaterial {
             base_color_texture: Some(pbd_app::towns::texture(&assets, "plank")),
             perceptual_roughness: 0.92,
+            ..default()
+        }),
+        drafting_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+            2.0,
+        )),
+        drafting_sheet: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[pbd_core::furniture::model::SHEET],
+            1.0,
+        )),
+        linen_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "linen")),
+            perceptual_roughness: 0.95,
             ..default()
         }),
         iron_tex: materials.add(StandardMaterial {
@@ -1455,6 +1478,7 @@ pub fn show(
             Material::Forge
                 | Material::Workbench
                 | Material::Carpenter
+                | Material::DraftingTable
                 | Material::Grinder
                 | Material::Mixer
         ) {
@@ -1470,8 +1494,10 @@ pub fn show(
         if column.material(layer) != edit.material || near(index, layer).is_none() {
             continue;
         }
-        let row = station::station_of(edit.material).expect("checked");
-        let working = station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s);
+        // The drafting table queues no jobs (`building-planner` design 3).
+        let working = station::station_of(edit.material).is_some_and(|row| {
+            station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s)
+        });
         wanted.insert((edit.cell, edit.layer), (index, working, edit.material));
     }
     for (_, mut view, _, children) in &mut forges {
@@ -1501,6 +1527,35 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::DraftingTable {
+            // Its board tipped to the front with a sheet on it
+            // (`building-planner` design 3), in the plank and the linen.
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|table| {
+                    table.spawn((
+                        Mesh3d(looks.drafting_wood.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
+                    ));
+                    table.spawn((
+                        Mesh3d(looks.drafting_sheet.clone()),
+                        MeshMaterial3d(looks.linen_tex.clone()),
+                    ));
+                });
+            continue;
+        }
         if material == Material::Carpenter {
             // A board laid on it, a saw across the board and a square at
             // its end (`furniture` design 1).
@@ -1733,10 +1788,11 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
-    (net, standing, roads_cfg): (
+    (net, standing, roads_cfg, planner): (
         Option<ResMut<pbd_app::roads::RoadNet>>,
         Option<ResMut<pbd_app::roads::RoadsStanding>>,
         Option<Res<pbd_app::roads::RoadsSettings>>,
+        Option<ResMut<pbd_app::roads::planner::Planner>>,
     ),
 ) {
     if *done
@@ -1977,44 +2033,160 @@ pub fn scripted(
                 info!("scripted paving: a {material:?} at cell {cell}");
             }
         }
-        // A plan staked from past them along the view, two stakes 9 m
-        // apart and a third 9 m on.
+        // A road staked from past them along the view by its two ends, as
+        // the planner's two clicks do (design 42k), its nearer cells paved.
         let config = *pbd_app::planet::terrain_config();
         let cfg = roads_cfg.map_or_else(pbd_app::roads::load_config, |r| (*r.0).clone());
-        let top_of = |key: u32| {
-            let c = pbd_core::roads::centre(key)?;
-            Some(c * (config.radius_m + pbd_core::column::surface_m(&config, c).floor()))
+        let pcfg = paving::load_planner();
+        let key_at = |fine: &PlanetFine, contact: &PlanetContact, ahead: f32, across: f32| {
+            spot(fine, contact, ahead, across).map(|(cell, _)| cell)
         };
-        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 8);
-        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 6);
-        let mut open = None;
-        for ahead_m in [metres + 4.0, metres + 13.0, metres + 22.0] {
-            let Some(point) =
-                spot(&fine, &contact, ahead_m, 0.0).and_then(|(cell, _)| top_of(cell))
-            else {
-                continue;
-            };
-            match paving::drive_stake(&mut save, &mut slots, open, point, &config, &cfg) {
-                Ok(paving::Staked::Driven { plan, marked }) => {
-                    open = Some(plan);
-                    info!("scripted paving: a stake {ahead_m:.0} m ahead, {marked} cells marked");
-                }
-                Ok(paving::Staked::Resumed(plan)) => open = Some(plan),
-                Err(why) => {
-                    warn!("scripted paving: the stake {ahead_m:.0} m ahead refused: {why:?}")
-                }
-            }
+        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 16);
+        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 12);
+        let scene = launch.road_plan.clone();
+        let wide = scene.as_deref() == Some("wide");
+        // `lamps`: a three-wide dirt road with lamps, staked, paved and its
+        // lamp posts built through the paving's own calls (design 42m).
+        let lamps = scene.as_deref() == Some("lamps");
+        let how = pbd_core::roads::planner::How {
+            width: if wide || lamps { 3 } else { 1 },
+            surface: if lamps {
+                pbd_core::roads::Surface::Dirt
+            } else {
+                pbd_core::roads::Surface::Gravel
+            },
+            lamps,
+        };
+        if lamps {
+            slots.give(Item::Good(pbd_core::goods::Good::LOG), 16);
+            slots.give(Item::Block(Material::LanternPost), 16);
         }
-        // The nearer cells paved, one gravel each.
-        if let Some(plan) = open.and_then(|id| {
-            pbd_core::roads::paving::plans(&save.records)
-                .get(&id)
-                .cloned()
-        }) {
-            for &key in plan.cells.iter().take(6) {
-                if let Err(why) = paving::pave(&mut save, &mut slots, key, &config) {
-                    warn!("scripted paving: cell {key} not paved: {why:?}");
+        let road = |save: &mut WorldSave, slots: &mut super::slots::Hotbar, a: u32, b: u32| {
+            match paving::end_road(save, slots, a, b, how, &|_| false, &config, &cfg, &pcfg) {
+                Ok((stakes, cells)) => {
+                    info!("scripted road plan: {stakes} stakes, {cells} cells");
                 }
+                Err(why) => warn!("scripted road plan: refused: {why:?}"),
+            }
+        };
+        let (start, end) = (
+            key_at(&fine, &contact, metres + 3.0, 0.0),
+            key_at(&fine, &contact, metres + 34.0, 0.0),
+        );
+        if let (Some(a), Some(b)) = (start, end) {
+            // `wide` stakes nothing: its road is the open one below, so its
+            // ghost shows which lanes the ground allows.
+            if lamps {
+                // Straight along a row of the lattice, where a wide road
+                // may climb (design 42m).
+                let b = pbd_core::roads::planner::along_row(a, b, 11).unwrap_or(b);
+                road(&mut save, &mut slots, a, b);
+                if pbd_core::roads::planner::plans(&save.records).is_empty() {
+                    // Ground no wide road takes here: one wide, lamps on.
+                    let one = pbd_core::roads::planner::How { width: 1, ..how };
+                    if let Err(why) = paving::end_road(
+                        &mut save,
+                        &mut slots,
+                        a,
+                        b,
+                        one,
+                        &|_| false,
+                        &config,
+                        &cfg,
+                        &pcfg,
+                    ) {
+                        warn!("scripted road plan: refused one wide too: {why:?}");
+                    }
+                }
+            } else if !wide {
+                road(&mut save, &mut slots, a, b);
+            }
+            let plans = pbd_core::roads::planner::plans(&save.records);
+            let first = plans.values().flat_map(|p| p.roads.first()).next().cloned();
+            match scene.as_deref() {
+                None => {
+                    if let Some(first) = &first {
+                        for &key in first.centre().iter().take(6) {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                            }
+                        }
+                    }
+                }
+                Some("lamps") => {
+                    if let Some(first) = &first {
+                        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                        let keys: Vec<u32> = pbd_core::roads::planner::lay(
+                            first,
+                            &ground,
+                            &|_| false,
+                            &pcfg,
+                            cfg.ford_depth_m,
+                        )
+                        .iter()
+                        .map(|c| c.key)
+                        .collect();
+                        drop(ground);
+                        for key in keys {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                                continue;
+                            }
+                            match paving::build_lamps(&mut save, &mut slots, key, &config, &cfg) {
+                                Ok(made) => pbd_app::economy::road_jobs::into_tier(
+                                    &made,
+                                    &save,
+                                    &mut fine,
+                                    &mut contact,
+                                ),
+                                Err(why) => warn!("scripted lamps: {why:?}"),
+                            }
+                        }
+                    }
+                }
+                Some("stake") | Some("erased") => {
+                    let mid = first.as_ref().map(|r| r.centre()[r.centre().len() / 2]);
+                    if let (Some(mid), Some(side)) =
+                        (mid, key_at(&fine, &contact, metres + 22.0, 16.0))
+                    {
+                        road(&mut save, &mut slots, mid, side);
+                        if scene.as_deref() == Some("erased")
+                            && let Err(why) = paving::erase_road(
+                                &mut save, &mut slots, side, &config, &cfg, &pcfg,
+                            )
+                        {
+                            warn!("scripted eraser: refused: {why:?}");
+                        }
+                    }
+                }
+                _ => {}
+            }
+            // Stakes in hand, and for `two` an open start, so the ghost
+            // follows the aim from it.
+            let held = (0..10).find(|&i| {
+                slots.get(i).map(|s| s.item)
+                    == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
+            });
+            if scene.is_some()
+                && let Some(i) = held
+            {
+                slots.select(i);
+            }
+            match (planner, scene.as_deref()) {
+                (Some(mut planner), Some("two")) => {
+                    planner.start = key_at(&fine, &contact, metres + 1.0, -3.0);
+                }
+                // A three-wide road open from far up the view: its ghost
+                // runs back to the aim.
+                (Some(mut planner), Some("wide")) => {
+                    planner.how = how;
+                    planner.start = Some(b);
+                }
+                _ => {}
             }
         }
         if let (Some(mut net), Some(mut standing)) = (net, standing) {

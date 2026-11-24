@@ -548,6 +548,23 @@ impl WalkingState {
             .clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
+    /// The up the look turns about: the origin's `up_at` the body, carried
+    /// from the last frame the walker read the look.
+    pub fn up(&self) -> Vec3 {
+        self.up
+    }
+
+    /// Set the look outright, heading (taken onto the tangent plane) and
+    /// pitch (clamped as any look is): the talk's turn to frame a
+    /// townsperson (`townsfolk` design 37a, framing), while a panel holds
+    /// the pointer and no mouse is read.
+    pub fn set_look(&mut self, heading: Vec3, pitch: f32) {
+        if heading.is_finite() && pitch.is_finite() {
+            self.heading = tangent_heading(heading, self.up);
+            self.pitch = pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        }
+    }
+
     fn transport_up(&mut self, up: Vec3) {
         self.heading = Quat::from_rotation_arc(self.up, up) * self.heading;
         self.heading = tangent_heading(self.heading, up);
@@ -2172,6 +2189,7 @@ pub(crate) fn follow_walker(
     mut step_ease: Local<(Option<f64>, f32)>,
     view: Option<Res<crate::build_view::BuildView>>,
     seated: Option<Res<SeatedEye>>,
+    lift: Option<Res<crate::roads::planner::PlannerLift>>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2225,6 +2243,19 @@ pub(crate) fn follow_walker(
             crate::render_origin::render_from_physics(frame, eye)
         });
         camera.rotation = state.rotation();
+        // The road planner's lifted view (`townsfolk` design 42n): the eye
+        // eased up and back, the look the player's own raw look tipped
+        // down; picking casts from this eye. Off, nothing changes.
+        if let Some(lift) = lift.as_deref().filter(|l| l.lifted())
+            && seated.as_ref().and_then(|s| s.0).is_none()
+        {
+            let forward = state.rotation() * Vec3::NEG_Z;
+            let (offset, tilt) = lift.offset(drawn_up, forward);
+            // Never past straight down.
+            let tilt = tilt.min((state.pitch + 1.55).max(0.0));
+            camera.translation += offset;
+            camera.rotation = state.rotation() * Quat::from_rotation_x(-tilt);
+        }
         // Architecture mode's camera in the walker's place (design B9);
         // off, the walker's own is written above, exactly as it was.
         if let Some(view) = view.as_deref().filter(|v| v.on)
@@ -2531,6 +2562,62 @@ mod tests {
         assert!(
             app.world().resource::<WalkingState>().captured,
             "the pointer handed back to the walker"
+        );
+    }
+
+    /// `player-building` design B11: a double-click in architecture mode
+    /// sets the walker down where the cursor came down on the ground,
+    /// facing the build camera's way, and leaves the mode; the camera is the
+    /// walker's again, at its eye over that point.
+    #[test]
+    fn a_double_click_in_architecture_mode_walks_there() {
+        use crate::build_view::{BuildView, walk_there};
+        let mut app = app();
+        for _ in 0..120 {
+            app.update();
+        }
+        let body = app.world().resource::<WalkingState>().body;
+        let origin = crate::sim_origin::origin_of(app.world());
+        let at = app.world().entity(body).get::<Position>().unwrap().0;
+        let here = origin.to_world(at).pos.as_vec3();
+        let up = here.normalize();
+        let east = Vec3::Y.cross(up).normalize_or(up.any_orthonormal_vector());
+        // Twelve metres off, on the ground there.
+        let there_dir = (here + east * 12.0).normalize();
+        let ground = app
+            .world()
+            .resource::<PlanetContact>()
+            .sample(there_dir)
+            .floor_radius;
+        let feet = there_dir * ground;
+        let mut view = BuildView::default();
+        view.enter(
+            here.as_dvec3(),
+            0,
+            east.as_dvec3(),
+            here.as_dvec3(),
+            feet.as_dvec3(),
+        );
+        let heading = view.heading;
+        app.insert_resource(view);
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        walk_there(app.world_mut(), feet, heading.as_vec3());
+        for _ in 0..30 {
+            app.update();
+        }
+        assert!(!app.world().resource::<BuildView>().on, "the mode is left");
+        let origin = crate::sim_origin::origin_of(app.world());
+        let now = app.world().entity(body).get::<Position>().unwrap().0;
+        let now = origin.to_world(now).pos.as_vec3();
+        let below = now.length() - HALF_HEIGHT - ground;
+        let along = (now.normalize() - there_dir).length() * ground;
+        assert!(along < 0.2, "stood {along} m from where it was clicked");
+        assert!(below.abs() < 0.2, "on the ground there: {below} m");
+        let (look, _) = app.world().resource::<WalkingState>().view();
+        let flat = (look - there_dir * look.dot(there_dir)).normalize();
+        assert!(
+            flat.dot(heading.as_vec3()) > 0.95,
+            "facing the camera's way"
         );
     }
 
@@ -4207,6 +4294,8 @@ mod tests {
     /// tread would jump 0.2 m), ticks in the air, and where it ended.
     struct Walk {
         jumps: u32,
+        /// The most the eye rose in a tick, metres.
+        most_rise: f32,
         airborne: u32,
         ticks: u32,
         end: Vec3,
@@ -4230,6 +4319,7 @@ mod tests {
         let f = house.frame;
         let mut walk = Walk {
             jumps: 0,
+            most_rise: 0.0,
             airborne: 0,
             ticks: 0,
             end: Vec3::ZERO,
@@ -4254,6 +4344,9 @@ mod tests {
             let e = p.length();
             if eye.is_some_and(|last| (e - last).abs() > 0.12) {
                 walk.jumps += 1;
+            }
+            if let Some(last) = eye {
+                walk.most_rise = walk.most_rise.max(e - last);
             }
             eye = Some(e);
             if !app.world().get::<GroundState>(body).unwrap().grounded {
@@ -4311,6 +4404,7 @@ mod tests {
                     kind: Kind::Ground,
                     raised: false,
                     cut_fill: 0,
+                    bed: Default::default(),
                     up,
                     from: up.and(k.checked_sub(1).map(|j| keys[j])),
                 }
@@ -4357,6 +4451,7 @@ mod tests {
             let body = app.world().resource::<WalkingState>().body;
             let mut w = Walk {
                 jumps: 0,
+                most_rise: 0.0,
                 airborne: 0,
                 ticks: 0,
                 end: Vec3::ZERO,
@@ -4525,6 +4620,75 @@ mod tests {
         assert!(down.end.y <= 0.05, "came down to {} m", down.end.y);
         assert_eq!(down.jumps, 0, "eye jumps coming down");
         assert_eq!(down.airborne, 0, "ticks in the air coming down");
+    }
+
+    /// `building-planner` design, "The scaffold's ladder bay": the walker
+    /// walks up a scaffold's ladder from the ground onto its boards, 3 m up,
+    /// with no jump and never a tick in the air, the ladder being among the
+    /// walker's structures.
+    #[test]
+    fn a_walker_climbs_the_scaffolds_ladder_bay_onto_its_boards() {
+        use pbd_core::building::scaffold::{BOARD_IN_M, BOARD_OUT_M, LADDER_RISE_M, ladder};
+        use pbd_core::settlement::pieces::{BuildingSolids, Frame, Meshes, Solid};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let up = flat.normalize();
+        let heading = up.any_orthonormal_vector();
+        let frame = Frame {
+            origin: up * terrain.sample(up).floor_radius,
+            x: heading,
+            y: up,
+            z: heading.cross(up),
+        };
+        // One bay's board walk, out along +x from a wall on x = 0.
+        let board = Solid {
+            outline: vec![
+                Vec2::new(BOARD_IN_M, -0.8),
+                Vec2::new(BOARD_OUT_M, -0.8),
+                Vec2::new(BOARD_OUT_M, 0.8),
+                Vec2::new(BOARD_IN_M, 0.8),
+            ],
+            y0: 2.94,
+            y1: 3.0,
+        };
+        let mut meshes = Meshes::new();
+        let mut surfaces = Vec::new();
+        let foot = ladder(&mut meshes, &mut surfaces, &frame, Vec2::ZERO, Vec2::X, 3.0);
+        let scaffold = BuildingSolids {
+            frame,
+            reach_m: 30.0,
+            solids: vec![board],
+            roof_plan: Vec::new(),
+            surfaces,
+            doors: Vec::new(),
+            rooms: Default::default(),
+            lights: Vec::new(),
+            top_m: 0.0,
+            furniture: Vec::new(),
+        };
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![scaffold.clone()]));
+        stand_in(&mut app, &scaffold, foot.x + 1.0, 0.0, foot.y);
+        let up = walk_house(
+            &mut app,
+            &scaffold,
+            |p| Vec2::new(-1.0, -p.y * 2.0).normalize(),
+            |l| l.y >= 3.0 - 0.05 && l.x < BOARD_OUT_M,
+            400,
+        );
+        assert!(
+            up.end.y >= 2.95 && up.end.x < BOARD_OUT_M,
+            "reached {} in {} ticks",
+            up.end,
+            up.ticks
+        );
+        // A ladder is steeper than a stair, so the eye climbs faster than the
+        // stair tests' 0.12 m a tick; it still never snaps a tread at once.
+        assert!(
+            up.most_rise < LADDER_RISE_M,
+            "the eye rose {} m in a tick",
+            up.most_rise
+        );
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
     }
 
     /// A refused move slides (`tenebris-towns` section 5): brushing a wall at

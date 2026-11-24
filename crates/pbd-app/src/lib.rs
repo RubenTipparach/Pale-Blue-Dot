@@ -20,6 +20,7 @@ pub mod coast_walk;
 pub mod compass;
 #[cfg(feature = "desktop")]
 pub mod config;
+pub mod construction;
 #[cfg(feature = "desktop")]
 pub mod controls;
 #[cfg(feature = "desktop")]

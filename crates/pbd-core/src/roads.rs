@@ -521,6 +521,53 @@ pub enum Kind {
     Bridge { deck_m: i32 },
 }
 
+/// A wide road's bed (`townsfolk` design 42m): the road top read off the
+/// road's one plane at the cell's own place, so lanes meet with no seam.
+/// Its top stands `lift_mm` over its whole layer and rises `rise_mm` between
+/// `from` and `to` thousandths of the way from its foot to its head, level
+/// either side. All nought is the plain cell: a whole-cell rise of a layer
+/// on a whole layer, every road of the world's and every one-wide road of
+/// the player's.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Bed {
+    #[serde(default)]
+    pub lift_mm: u16,
+    #[serde(default)]
+    pub from: u16,
+    #[serde(default)]
+    pub to: u16,
+    #[serde(default)]
+    pub rise_mm: u16,
+}
+
+impl Bed {
+    /// The plain cell's.
+    pub fn is_plain(&self) -> bool {
+        *self == Bed::default()
+    }
+
+    /// How far the top stands over its whole layer, m.
+    pub fn lift_m(&self) -> f32 {
+        f32::from(self.lift_mm) / 1000.0
+    }
+
+    /// Where the rise starts and ends (shares of the way from foot to
+    /// head) and how far it rises, m.
+    pub fn ramp(&self) -> (f32, f32, f32) {
+        if self.is_plain() {
+            return (0.0, 1.0, 1.0);
+        }
+        let (a, b) = (f32::from(self.from) / 1000.0, f32::from(self.to) / 1000.0);
+        (a, b.max(a + 1e-3), f32::from(self.rise_mm) / 1000.0)
+    }
+
+    /// How far the top has risen at `t` (0 at the foot, 1 at the head), m.
+    pub fn risen(&self, t: f32) -> f32 {
+        let (a, b, rise) = self.ramp();
+        ((t - a) / (b - a)).clamp(0.0, 1.0) * rise
+    }
+}
+
 /// One cell of a road, as laid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RoadCell {
@@ -535,6 +582,9 @@ pub struct RoadCell {
     /// road top (more than nought), or of cut into its ground (less), the
     /// world having dug them. Nought on every version 1 road.
     pub cut_fill: i32,
+    /// A wide road's bed (`townsfolk` design 42m): plain on every road of
+    /// the world's and every one-wide road of the player's.
+    pub bed: Bed,
     /// The neighbour the top rises a layer toward, where it slopes.
     pub up: Option<u32>,
     /// The neighbour whose side the slope starts from, at `low_m`; the side
@@ -575,13 +625,19 @@ impl RoadCell {
     /// sea radius: on the plane from the foot (low) to the head (a layer
     /// up), measured along the line between them and held level past each.
     pub fn top_at(&self, direction: Vec3) -> f32 {
-        let low = self.low_m() as f32;
+        let low = self.low_top_m();
         let Some((foot, head)) = self.slope() else {
             return low;
         };
         let along = head - foot;
         let t = (direction.normalize() - foot).dot(along) / along.length_squared().max(1e-20);
-        low + t.clamp(0.0, 1.0)
+        low + self.bed.risen(t)
+    }
+
+    /// The road top's lowest point, metres over the sea radius: `low_m`,
+    /// and its bed's lift on a wide road's bed (design 42m).
+    pub fn low_top_m(&self) -> f32 {
+        self.low_m() as f32 + self.bed.lift_m()
     }
 }
 
@@ -792,32 +848,40 @@ pub fn route(
             let Some(there) = ask(n, &mut cache) else {
                 continue;
             };
-            if there.player {
+            // The one cell rule (design 42l): never the player's work or the
+            // sea; the world crosses towns and bridges deep water.
+            if matches!(
+                check_cell(&there, false),
+                Some(Clash::InTheWay | Clash::OpenWater)
+            ) {
                 continue;
             }
             let Some(there_c) = centre(n) else { continue };
             let len = arc(here_c, there_c);
             let mut next: Vec<(State, u64)> = Vec::new();
-            match there.water {
-                Water::Sea => continue,
-                Water::River { depth_m, surface_m }
-                    if depth_m as f32 > cfg.ford_depth_m || at.run > 0 =>
-                {
-                    // Bridged: the deck is the bank's height, carried on,
-                    // and must stand over the water.
-                    let deck = if at.run > 0 { at.deck } else { here_h };
-                    if deck < surface_m || at.run + 1 > cfg.max_bridge_cells {
-                        continue;
-                    }
+            let bridge = planner::bridged(
+                there.water,
+                at.run,
+                at.deck,
+                here_h,
+                cfg.ford_depth_m,
+                cfg.max_bridge_cells,
+            );
+            match (there.water, bridge) {
+                (Water::Sea, _) => continue,
+                // Bridged (design 10a, 42m: the one rule): the deck is the
+                // bank's height, carried on, and must stand over the water.
+                (_, Some(b)) => {
+                    let Some((deck, run)) = b else { continue };
                     let s = State {
                         key: n,
-                        run: at.run + 1,
+                        run,
                         deck,
                         lift: 0,
                     };
                     next.push((s, mm(len * cfg.bridge_cost)));
                 }
-                Water::River { .. } | Water::Dry => {
+                (Water::River { .. } | Water::Dry, None) => {
                     // On the ground (a ford's ground is its bed): at most a
                     // layer from where the road stands now. On dry ground
                     // outside a town the road may stand over its ground on
@@ -834,7 +898,11 @@ pub fn route(
                     } else {
                         (0, 0)
                     };
-                    for h in here_h - 1..=here_h + 1 {
+                    let step = planner::MAX_STEP_LAYERS;
+                    for h in here_h - step..=here_h + step {
+                        if check_step(here_h, h).is_some() {
+                            continue;
+                        }
                         let lift = h - there.top_m;
                         if lift < lo || lift > hi {
                             continue;
@@ -898,7 +966,7 @@ pub fn profile(steps: &[Step]) -> Option<Vec<RoadCell>> {
             break;
         }
     }
-    if h.windows(2).any(|w| (w[0] - w[1]).abs() > 1) {
+    if h.windows(2).any(|w| check_step(w[0], w[1]).is_some()) {
         return None;
     }
     let mut out = Vec::new();
@@ -927,6 +995,7 @@ pub fn profile(steps: &[Step]) -> Option<Vec<RoadCell>> {
             kind,
             raised: raised[k],
             cut_fill: if s.deck.is_some() { 0 } else { s.lift },
+            bed: Default::default(),
             up,
             from,
         });
@@ -1198,6 +1267,7 @@ thread_local! {
 
 /// Install the world's road cells, or none.
 pub fn install_cleared(cleared: Option<Cleared>) {
+    let _held = crate::settlement::ground::installing();
     *CLEARED.write().unwrap_or_else(|e| e.into_inner()) = cleared.map(std::sync::Arc::new);
     CLEARED_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
@@ -1428,6 +1498,7 @@ pub fn from_record(record: &Record) -> Option<Road> {
                 },
                 raised,
                 cut_fill,
+                bed: Bed::default(),
                 up: (up != 0).then_some(up),
                 from: (from != 0).then_some(from),
             })
@@ -1501,6 +1572,16 @@ pub struct BuiltCell {
     /// The plan it was paved on (schema 2); `None` for design 31's cells.
     #[serde(default)]
     pub plan: Option<u64>,
+    /// Paved on a river's bed under its water, in gravel (design 42a): a
+    /// ford, drawn and wheeled as the world's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ford: bool,
+    /// A wide road's lane bed (design 42m); plain on a one-wide road.
+    #[serde(default, skip_serializing_if = "Bed::is_plain")]
+    pub bed: Bed,
+    /// A bridge's deck, metres over the sea radius (design 42m).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deck_m: Option<i32>,
 }
 
 /// A player's road cell as its record, by the cell's key.
@@ -1533,15 +1614,22 @@ pub fn built_cell(key: u32, cell: &BuiltCell) -> RoadCell {
     RoadCell {
         key,
         base_m: cell.base_m,
-        kind: Kind::Ground,
+        kind: match (cell.deck_m, cell.ford) {
+            (Some(deck_m), _) => Kind::Bridge { deck_m },
+            (None, true) => Kind::Ford,
+            (None, false) => Kind::Ground,
+        },
         raised: cell.raised,
         cut_fill: 0,
+        bed: cell.bed,
         up: cell.up,
         from: cell.from,
     }
 }
 
 pub mod paving;
+pub mod planner;
+pub use planner::{Clash, check_cell, check_step, hex_line};
 pub mod piece;
 
 #[cfg(test)]

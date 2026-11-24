@@ -1,0 +1,36 @@
+// Framing a dialog with a townsperson (`townsfolk` design 37a, framing;
+// owner, survey P1, 2026-11-24: "Move the camera so the merchant is on left,
+// and the trade UI is on the right"; and the same day: "center the character
+// between the left most edge of panel and left edge of the screen", "add
+// some lights that fade in light the character a bit", "same presentation
+// style for dialog boxes of any kind of interaction with npcs"). Read at
+// start and validated by `talk::TalkView`.
+(
+    // Seconds the look takes to turn to the townsperson (0 turns at once).
+    turn_secs: 0.25,
+    // The height the townsperson's aim point lands at, normalised screen
+    // space (-1 bottom to 1 top). Across, it lands half way between the
+    // screen's left edge and the open panel's left edge, worked out from the
+    // panel's width, the window and the UI scale.
+    frame_y: 0.0,
+    // The aim point's height over the townsperson's feet, metres: between
+    // chest and face.
+    aim_height_m: 1.2,
+    // The gap between a dialog panel and the screen's right edge, native px
+    // (times the UI scale).
+    panel_margin_px: 24.0,
+    // The light on the townsperson while a dialog is open: a carried light,
+    // lit the way a torch's is. Colour (linear RGB), a candle's warm white.
+    light_tint: (1.0, 0.78, 0.55),
+    // Its level on the field's 0..15 scale (a torch is 14).
+    light_level: 7.0,
+    // How far it reaches, metres.
+    light_reach_m: 4.0,
+    // Seconds it takes to fade in when the dialog opens, and out after.
+    light_fade_secs: 0.4,
+    // Its height over the townsperson's feet, metres: a little above the
+    // face.
+    light_rise_m: 1.75,
+    // How far out from them toward the eye, level, metres.
+    light_toward_m: 0.6,
+)

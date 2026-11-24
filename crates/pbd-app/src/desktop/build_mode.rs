@@ -128,6 +128,15 @@ pub struct BuildMode {
     pub zoom: i32,
     /// How far the right button has dragged since it went down, pixels.
     drag_px: f32,
+    /// Architecture mode's left presses (design B11): a single click places
+    /// once the double-click wait has passed; a double-click walks there.
+    clicks: pbd_app::build_view::Clicks,
+    /// A double-click asked to walk to where the cursor stands
+    /// ([`BuildMode::stand`]) this frame.
+    pub walk: bool,
+    /// Where the cursor's ray came down on a top a walker can stand on, in
+    /// architecture mode (design B11); none on a wall's side or in open air.
+    pub stand: Option<Vec3>,
     /// Where the aim last met something, planet-local: where architecture
     /// mode starts over.
     pub aim: Option<Vec3>,
@@ -137,6 +146,9 @@ pub struct BuildMode {
     /// What the ghost shows: its pieces, whether they may go, and the piece
     /// a removal aims at.
     pub ghost: Option<GhostShown>,
+    /// O was pressed: open the planner on what is aimed at
+    /// (`building-planner` design 3, read by `construction`).
+    pub plan_asked: bool,
     /// The rule a red ghost breaks, or the dependant a removal is refused
     /// for, as a locale key: for the HUD line and the log.
     pub reason: Option<String>,
@@ -196,10 +208,15 @@ pub fn take_input(
     mut hotbar: ResMut<super::slots::Hotbar>,
     mut mode: ResMut<BuildMode>,
     kits: Option<Res<TownAssets>>,
-    blueprints: Res<Blueprints>,
+    (choices, data): (
+        Option<Res<super::construction::PlanChoices>>,
+        Option<Res<pbd_app::construction::PlannerData>>,
+    ),
+    (time, windows): (Res<Time>, Query<&Window, With<PrimaryWindow>>),
 ) {
     mode.place = false;
     mode.take = false;
+    mode.walk = false;
     mode.view_toggle = false;
     mode.zoom = 0;
     let viewing = view.as_deref().is_some_and(|v| v.on);
@@ -247,6 +264,11 @@ pub fn take_input(
     if keys.just_pressed(KeyCode::KeyK) {
         mode.picker = !mode.picker;
     }
+    // O: the planner (`building-planner` design 3).
+    if keys.just_pressed(KeyCode::KeyO) {
+        mode.plan_asked = true;
+    }
+    keys.reset(KeyCode::KeyO);
     keys.reset(KeyCode::KeyK);
     keys.reset(KeyCode::KeyG);
     // Z: architecture mode (design B9), read by `drive_view`.
@@ -259,9 +281,15 @@ pub fn take_input(
         let n = kits.as_ref().map_or(1, |k| k.kits.kits.len().max(1)) as i32;
         mode.kit = (mode.kit as i32 + steps).rem_euclid(n) as usize;
     } else if steps != 0 {
-        if PALETTE[mode.slot] == Tool::Blueprint && keys.pressed(KeyCode::ShiftLeft) {
-            let n = blueprints.0.len().max(1) as i32;
+        let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        if PALETTE[mode.slot] == Tool::Blueprint && !shift {
+            // The wheel steps the plans; shift and the wheel turn the ghost
+            // (`building-planner` design 5).
+            let n = choices.as_ref().map_or(1, |c| c.0.len().max(1)) as i32;
             mode.choice = (mode.choice as i32 + steps).rem_euclid(n) as usize;
+        } else if PALETTE[mode.slot] == Tool::Blueprint {
+            let step = data.as_ref().map_or(1, |d| i32::from(d.tun.rotation_step));
+            mode.turn = (mode.turn as i32 + steps * step).rem_euclid(6) as usize;
         } else if PALETTE[mode.slot] == Tool::Furniture {
             // The wheel steps through the furniture carried.
             let n = carried_furniture(&hotbar.0).len().max(1) as i32;
@@ -273,9 +301,30 @@ pub fn take_input(
     if let Some(kits) = kits {
         mode.kit = mode.kit.min(kits.kits.kits.len().saturating_sub(1));
     }
+    if !viewing {
+        mode.clicks.clear();
+    }
     if !mode.picker {
         mode.place = buttons.just_pressed(MouseButton::Left);
         if viewing {
+            // A single click places once the double-click wait has passed;
+            // a double-click walks there (design B11).
+            use pbd_app::build_view::Click;
+            let now = time.elapsed_secs_f64();
+            let mut click = mode.clicks.wait(now);
+            if buttons.just_pressed(MouseButton::Left) {
+                let at = windows
+                    .single()
+                    .ok()
+                    .and_then(Window::cursor_position)
+                    .unwrap_or_default();
+                match mode.clicks.press(now, at) {
+                    Click::None => {}
+                    k => click = k,
+                }
+            }
+            mode.place = click == Click::Single;
+            mode.walk = click == Click::Double;
             // A right press that does not drag is a click that takes a
             // piece away; one that drags orbits the camera.
             if buttons.just_pressed(MouseButton::Right) {
@@ -320,6 +369,7 @@ pub fn drive_view(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Option<Res<PlanetRenderFrame>>,
     time: Res<Time>,
+    mut commands: Commands,
 ) {
     if view.on && !mode.on {
         view.leave();
@@ -379,6 +429,22 @@ pub fn drive_view(
     if keys.just_pressed(KeyCode::PageDown) {
         view.raise(-i32::from(STOREY));
     }
+    // End: the cutaway over the build layer (design B11).
+    if keys.just_pressed(KeyCode::End) {
+        view.cut = !view.cut;
+        info!("BUILD cutaway {}", if view.cut { "on" } else { "off" });
+    }
+    // A double-click on a top walks there (design B11).
+    if mode.walk
+        && let Some(feet) = mode.stand
+    {
+        let look = view.heading.as_vec3();
+        info!("BUILD walk there");
+        commands.queue(move |world: &mut World| {
+            pbd_app::build_view::walk_there(world, feet, look);
+        });
+        return;
+    }
     view.step(dt);
 }
 
@@ -390,7 +456,7 @@ pub struct GroundCache {
     tops: HashMap<u32, Option<u16>>,
 }
 
-fn ground_top(
+pub(super) fn ground_top(
     fine: &PlanetFine,
     save: &WorldSave,
     cache: &mut GroundCache,
@@ -439,16 +505,18 @@ fn march(
     eye: Vec3,
     look: Vec3,
     reach: f32,
+    cut: Option<pbd_app::build_view::Cutaway>,
 ) -> Option<Hit> {
     let solid = |p: Vec3| -> bool {
         super::digging::sample_at(fine, contact, p).is_some_and(|s| s.solid)
-            || builds.0.iter().any(|b| {
-                let q = b.frame.local(p);
-                b.holds_in(q, 0.0, 0.02) || {
-                    let (floor, _) = b.stand_in(q, 0.0);
-                    floor.is_some_and(|f| f > q.y - 0.12 && f <= q.y + 0.0)
-                }
-            })
+            || !cut.is_some_and(|c| c.hides(p))
+                && builds.0.iter().any(|b| {
+                    let q = b.frame.local(p);
+                    b.holds_in(q, 0.0, 0.02) || {
+                        let (floor, _) = b.stand_in(q, 0.0);
+                        floor.is_some_and(|f| f > q.y - 0.12 && f <= q.y + 0.0)
+                    }
+                })
     };
     let mut travelled = 0.0;
     let mut last = eye;
@@ -481,7 +549,7 @@ fn nearest_side(cells: &Cells, cell: u32, point: Vec3) -> Option<(usize, usize)>
 }
 
 /// A point to aim a removal at for a piece: the middle of what it is.
-fn reference(piece: &Piece) -> Option<Vec3> {
+pub(super) fn reference(piece: &Piece) -> Option<Vec3> {
     let cells = piece.shape.cells();
     let mean = cells
         .iter()
@@ -514,7 +582,6 @@ pub fn aim_and_build(
     mut builds: ResMut<Builds>,
     structures: Res<pbd_app::walking::PlayerStructures>,
     assets: Res<TownAssets>,
-    blueprints: Res<Blueprints>,
     mut note: ResMut<super::farm::FarmNote>,
     time: Res<Time>,
     (mut hotbar, view, windows): (
@@ -524,7 +591,12 @@ pub fn aim_and_build(
     ),
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
-    mut did: MessageWriter<pbd_app::missions::Did>,
+    (mut did, choices, data, mut in_hand): (
+        MessageWriter<pbd_app::missions::Did>,
+        Res<super::construction::PlanChoices>,
+        Res<pbd_app::construction::PlannerData>,
+        ResMut<super::construction::PlanInHand>,
+    ),
 ) {
     if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
@@ -564,7 +636,15 @@ pub fn aim_and_build(
         }
         None => REACH_M,
     };
-    let hit = march(&fine, &contact, &structures, eye, look, reach).or_else(|| {
+    let cut = view.cutaway();
+    let marched = march(&fine, &contact, &structures, eye, look, reach, cut);
+    // Where a double-click would stand the walker (design B11): a top the
+    // ray came down on, never a wall's side or the open air.
+    mode.stand = marched
+        .as_ref()
+        .filter(|h| view.on && h.from_above)
+        .map(|h| h.point);
+    let hit = marched.or_else(|| {
         // In open air the cursor lands on the build layer.
         plane.map(|_| Hit {
             point: eye + look * (reach - 0.01),
@@ -636,6 +716,8 @@ pub fn aim_and_build(
         )])
     };
     let mut remove = None;
+    let planned = save.identity.building() == pbd_core::building::site::BuildingSetting::Planned;
+    let mut setting_out = None;
     let candidate: Option<Vec<Piece>> = match tool {
         Tool::Wall => wall(Opening::None),
         // A door from the pack, aimed at a doorway with none (design B8);
@@ -706,13 +788,20 @@ pub fn aim_and_build(
             )]),
         },
         Tool::Blueprint => {
-            let def = blueprints
-                .0
-                .get(mode.choice.min(blueprints.0.len().saturating_sub(1)));
-            def.and_then(|def| {
-                let kit = kits.get(&def.kit)?;
-                let at = cells.index(cell)?;
-                blueprint(&patch, def, kit, at, mode.turn, storey).ok()
+            // A plan: the planner's, a preset or the player's own
+            // (`building-planner` design 5), charted on the ground here.
+            let hand = choices.0.get(mode.choice % choices.0.len().max(1)).cloned();
+            hand.and_then(|hand| {
+                let (site_patch, _, base, charted) = super::construction::chart_here(
+                    &fine, &save, &mut cache, &hand.plan, cell, mode.turn,
+                )?;
+                let pieces: Vec<Piece> = charted
+                    .iter()
+                    .map(|(_, p)| p.clone())
+                    .filter(|p| planned || !matches!(p.shape, Shape::Furniture { .. }))
+                    .collect();
+                setting_out = Some((site_patch, base, charted, hand));
+                Some(pieces)
             })
         }
         Tool::Furniture => {
@@ -779,6 +868,17 @@ pub fn aim_and_build(
             }
             None => (true, None),
         }
+    } else if let Some((site_patch, base, charted, hand)) = &setting_out {
+        // A whole plan, checked against the world (`building-planner` 5).
+        match super::construction::check_here(
+            &fine, &save, &mut cache, site_patch, charted, *base, &near, &data, &hand.plan,
+        ) {
+            Ok(()) => (true, None),
+            Err((why, _)) => (false, Some(why.key())),
+        }
+    } else if planned && !matches!(tool, Tool::Furniture) {
+        // A planned world builds from plans (`building-planner` 11).
+        (false, Some("site.planned_only".to_string()))
     } else {
         let broke: Option<Rule> = placing_order(&site, &near, &candidate).err();
         (
@@ -811,7 +911,19 @@ pub fn aim_and_build(
     }
     let is_door = |p: &Piece| matches!(p.shape, Shape::Door { .. });
     if mode.place && remove.is_none() {
-        if ok && candidate.len() == 1 && is_door(&candidate[0]) {
+        if ok
+            && planned
+            && let Some((_, base, _, hand)) = &setting_out
+        {
+            let chart = pbd_core::building::site::SiteChart {
+                origin: cell,
+                turn: mode.turn as u8,
+                base: *base,
+            };
+            if super::construction::set_out_here(&mut save, hand, chart, &mut in_hand).is_some() {
+                note.say(now, tr("site.set_out"));
+            }
+        } else if ok && candidate.len() == 1 && is_door(&candidate[0]) {
             // A door is crafted: one from the pack (design B8).
             match builds.place_door(&mut save, candidate[0].clone(), &mut hotbar.0) {
                 Ok(()) => info!("BUILD hung a door"),
@@ -1260,7 +1372,8 @@ pub fn load_blueprints(assets: Res<TownAssets>, mut blueprints: ResMut<Blueprint
 /// doorway through [`Builds::place_door`]; `open` opens them as F would;
 /// `view` raises architecture mode over the house, `view:door` over its
 /// first door from outside, with `dist:<m>`, `tilt:<degrees>` and
-/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up; `quiet` shows no
+/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up, `cut` the
+/// cutaway (design B11); `quiet` shows no
 /// ghost.
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
@@ -1507,6 +1620,11 @@ pub fn scripted(
         if let Some(y) = value("yaw") {
             view.orbit(y.to_radians(), 0.0);
         }
-        info!("PBD_BUILD_SHOT: architecture mode, layer {layer}");
+        // `cut`: the cutaway over the build layer (design B11), as End.
+        view.cut = has("cut");
+        info!(
+            "PBD_BUILD_SHOT: architecture mode, layer {layer}, cutaway {}",
+            view.cut
+        );
     }
 }

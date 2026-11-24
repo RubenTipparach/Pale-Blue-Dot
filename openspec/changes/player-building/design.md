@@ -317,7 +317,8 @@ plot's pieces, so the same pieces always cut the same way.
 
 - The build camera (task 4.5) as first planned: double-click to walk and
   the cutaway. The orbit, pan, zoom and a build layer are built as
-  architecture mode (B9).
+  architecture mode (B9); double-click to walk and the cutaway came after
+  (B11, 2026-11-24).
 - Filling a blueprint piece by piece in the game (the core test does it;
   the game fills it whole, as free building allows).
 - Building costs (decision 7: free only).
@@ -464,6 +465,54 @@ the aim.
 
 The camera's pose, its easing and the cursor's ray are in
 `pbd_app::build_view`; the walker reads only its on flag.
+
+### B11. Double-click to walk, and the cutaway (2026-11-24, task 4.5)
+
+Written before the code. The towns mockup's overview does both
+(`walkFrom`, and its "Cutaway height" slider, a clip plane at that height
+over the whole scene). In the game they are architecture mode's.
+
+- **Double-click to walk there.** A double left-click in architecture mode
+  (two presses within `DOUBLE_CLICK_S`, 0.3 s, and 6 px) on a place a
+  walker can stand (the cursor's ray came down onto the ground or a floor,
+  under the cutaway when it is on) sets the walker down there, facing the
+  way the build camera faces, and leaves architecture mode: the walker's
+  camera takes over from the walker's new pose on that frame, as B9's
+  leaving does. A ray that met a wall's side, or the build layer in open
+  air, walks nowhere. It is the mockup's `walkFrom`. In architecture mode a
+  single left click still places the ghost, but only once the double-click
+  window has passed with no second press (the click is held 0.3 s), so a
+  double-click never also places a piece. Out of architecture mode nothing
+  changes.
+- **The cutaway.** **End** in architecture mode turns it on and off (End
+  sits by Page Up and Page Down, which move the cut, and is read by
+  nothing on foot: X, the first choice, is the road planner's menu with
+  stakes in hand; `controls` gains the row, its name from the locale
+  file). While on, every field-lit thing (the towns,
+  the player's plots and sites, props, people) within `CUT_REACH_M` (40 m)
+  of the site is cut at **the build layer's floor plus `CUT_OVER_M`
+  (1.2 m)**, so a storey's floor, what stands on it and the foot of its
+  walls stay in sight, and Page Up and Page Down move the cut a storey with
+  the build layer. This is the building planner's isometric cutaway (M6
+  version 3: "the back outside walls full height and the near and inner
+  walls cut low") made 3D, not a second rule: past the cut, what stands
+  *beyond* the site from the camera keeps standing up to the storey's
+  ceiling (the floor plus a storey), so the far walls frame the room as
+  they do in the planner's view, and everything nearer the camera, and
+  everything over the storey (the roof, the storeys above), is cut. The
+  rule is one function, `build_view::Cutaway`, which the planner's painter
+  asks too (`stands_full`: an outer wall on the far side), and which
+  `field_lit.wgsl` mirrors with the same constants, pinned by a test that
+  reads the shader.
+- **What it does not cut.** The terrain (the planet's surface shader) is
+  not cut: a hill is not a storey, and a cut through the planet would show
+  its inside. Nor are the ghost and the water. The sun's shadows are cast
+  by what is cut as before, so the cut room keeps the light it had.
+- **Where it is carried.** The cut is two `vec4`s on the field-lit
+  materials' per-frame view (`FieldView::cut`, `cut_far`), zero when off,
+  so a frame with the cutaway off draws as it did.
+- **Its double-click and its cut are not saved**: the cutaway is off each
+  time architecture mode opens.
 
 ### B10. Keys: build mode on B, breeding on N
 

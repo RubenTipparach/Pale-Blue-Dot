@@ -38,35 +38,14 @@ filter change SHALL show the column from its top.
 - **THEN** only the trader's crops, fruit, fish and dishes are listed,
   from the first of them
 
-### Requirement: A deal is paid in coins, goods or both
-A trade SHALL take a basket of goods each way. The player SHALL be able to
-pay with coins, with goods valued at the trader's buying price, or with
-both, and the difference SHALL be settled in coins. The pack, the purse and
-the town's market record SHALL change together in one durable write.
+### Requirement: A talk frames the townsperson on the left and the panel on the right
+While the talk, trade or job board panel is open it SHALL sit on the right
+of the screen, and opening a talk SHALL turn the player's own look, over a
+short ease, so the townsperson stands in the left third of the frame, the
+look staying where it was turned when the talk closes. A townsperson who
+walks on while the panel is open SHALL NOT be followed.
 
-#### Scenario: Paying half in goods
-- **WHEN** the player buys a bronze pickaxe and puts fish worth half its
-  price on the other side
-- **THEN** the fish leave the pack, the pickaxe enters it, half the price
-  leaves the purse, and all three are in the same saved line
-
-### Requirement: A made good is worth more than what it is made of
-Raw materials SHALL carry a base value. A good made by a recipe SHALL be
-valued from its inputs and its labour, so it is always worth more than its
-inputs, and a dearer input SHALL make the goods made from it dearer.
-
-#### Scenario: Planks from a log
-- **WHEN** the values are worked out at start
-- **THEN** every made good is worth more than the sum of its inputs
-
-### Requirement: Prices follow a market per good
-Each good SHALL have a market index per world that rises when it is short
-across the towns, falls when it floods, and drifts back toward rest over
-game days. A town's price SHALL be the good's value times its index, the
-town's need and the player's goodwill. A world saved before the market
-SHALL open with every index at rest.
-
-#### Scenario: Flooding the fish market
-- **WHEN** the player sells many fish across the towns in one day
-- **THEN** fish fetch less everywhere that day, and the price recovers over
-  the following days of play
+#### Scenario: Talking to the merchant
+- **WHEN** the player talks to a town's merchant
+- **THEN** the merchant stands in the left third of the screen and the
+  talk panel on the right

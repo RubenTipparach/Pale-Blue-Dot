@@ -250,24 +250,7 @@ const PHASES = [
     { id: 'phase-3-test-logging', step: 'Logging', items: [
       { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
   ] },
-  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [
-      { id: 'N1', q: 'Where is the house site? The crew needs one place to build. It can be a map marker the crew shares, set when the chain starts, or wherever the first floor piece goes down.',
-        options: ['A shared map marker', 'Wherever the first floor piece is placed'], rec: 0,
-        why: 'A marker shows everyone where to go before anything is built, and a stray floor piece cannot move the site.',
-        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
-        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
-        images: [
-          { src: 'img/n1-crew-walls.jpg', alt: 'The CREW tab mid-walls: the house chain with per-player bars and the crew panel', caption: 'Raise the walls, 5 of 6: each bar is one player.' },
-        ] },
-      { id: 'N2', q: 'What does the crew get for the house chain? Every member who helped gets the reward when Light the hearth is done.',
-        options: ['The house itself, shared by the crew', 'Coins to each member', 'A tool to each member'], rec: 0,
-        why: 'The house is the goal and something the crew keeps using; coins and tools come from the town missions.',
-        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
-        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
-        images: [
-          { src: 'img/n2-crew-beam.jpg', alt: 'The CREW tab at the ridge beam: Needs two of you at once', caption: 'Set the ridge beam: needs two of you at once.' },
-        ] },
-    ], issues: [
+  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [], issues: [
     { id: 'phase-3b-launcher', step: 'Launcher', items: [
       { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
       { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
@@ -284,6 +267,11 @@ const PHASES = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-24", "phase": "3", "id": "P1", "text": "Trading stays in baskets (YOU TAKE, YOU GIVE, DEAL), as built. And \"One thing id improve is framing. Move the camera so the merchant is on left, and the trade UI is on the right\": the talk and trade panels sit on the right, and the view turns so the townsperson stands in the left of the frame. Being built.", "where": "townsfolk design 37a, task 11.3"},
+  {"date": "2026-11-24", "phase": "3", "id": "P2", "text": "The road planner's ghost is stronger, 55%. And \"Can we something like a slightly aerial view? Let's say something like 10-20 m off the ground?\": while the planner is open the camera lifts to about 15 m above you, looking down the way you face, and comes back down when it closes. Being built.", "where": "townsfolk design 42"},
+  {"date": "2026-11-24", "phase": "3", "id": "P3", "text": "\"The night is too faint, please make it glow a bit more at night\": the building site's ghost glows more after dark (ghost_night raised from 0.05). Being built.", "where": "building-planner design"},
+  {"date": "2026-11-24", "phase": "3", "id": "P4", "text": "The stronger lime line is kept. A lime line is the white powder line marked on the ground: round a building site it shows where the walls go, and the same band marks a road's planned cells.", "where": "building-planner design; townsfolk design 39a"},
+  {"date": "2026-11-24", "phase": "3b", "id": "N1, N2", "text": "The crew's house site is a shared map marker set when the chain starts; the crew's reward for the house chain is the house itself, shared by the crew. Multiplayer waits until the rest is done.", "where": "coop-missions design, open questions"},
   {"date": "2026-11-23", "phase": "1", "id": "A5", "text": "The herd's look: \"make animals like this! I love this look\", then \"please go back to blocky style for animals\" and \"DO NOT DO THE SOFT CURVY ANIMALS\", on M26's Hatchery tab. The herd is built as M26's Farmstead and Hatchery animals are: boxes sized and placed as one creature, each wearing its pixel hide, tinted by the coat. The neck is a pose only: the head at the withers standing, the muzzle at the grass grazing, the face never past vertical. None of the Art style tab's styles was taken.", "where": "animal-husbandry design 17 (The owner's pick), tasks 10.3 and 10.4"},
   {"date": "2026-11-22", "phase": "3", "id": "E1", "text": "Traders do not sell basic tools: they are made, never bought. \"we'll have a special weapons and enchanted tools that give +1 mining speed +1 yeild, stuff like that\": traders will sell special weapons and enchanted tools with bonuses (such as +1 mining speed, +1 yield), once enchantments and weapons are written up (weapons with survival, phase 4).", "where": "townsfolk design 38c (no basic tools on the Tools shelf), task 12.5, task 12.6"},
   {"date": "2026-11-22", "id": "G4, G4a", "text": "\"All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes\" for rockets. The flight stays one Newtonian integrator; the conics are the map and the planner. CLAUDE.md's flight invariant names the decision and is rewritten when it is built.", "where": "ship-tiers design, Owner answers; CLAUDE.md"},

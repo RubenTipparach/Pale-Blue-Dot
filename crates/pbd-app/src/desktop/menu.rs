@@ -58,6 +58,9 @@ pub enum Screen {
     Trade,
     /// A town's jobs, from the talk (`townsfolk` design 8).
     Board,
+    /// The building planner, opened with F at a drafting table or O in
+    /// build mode (`building-planner` design 3).
+    Planner,
 }
 
 impl Screen {
@@ -83,7 +86,8 @@ impl Screen {
             | Screen::Kitchen
             | Screen::Missions
             | Screen::Breeding
-            | Screen::Talk => Screen::Playing,
+            | Screen::Talk
+            | Screen::Planner => Screen::Playing,
             Screen::Trade | Screen::Board => Screen::Talk,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }

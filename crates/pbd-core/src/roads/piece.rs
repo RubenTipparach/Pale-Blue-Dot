@@ -110,7 +110,8 @@ pub fn cut(
     if ring.len() < 5 {
         return None;
     }
-    let low = cell.low_m() as f32;
+    // The top's lowest point: a half-height bed's half layer included.
+    let low = cell.low_top_m();
     let fr = frame(cell.key, low, radius_m)?;
     let at = |d: Vec3, h: f32| d * (radius_m + h);
     let plan = |p: Vec3| {
@@ -259,13 +260,16 @@ pub fn cut(
         Some((foot, head)) => {
             let (f, h) = (plan(at(foot, low)), plan(at(head, low)));
             let along = h - f;
+            // Only the part that rises: the whole cell, or the part of it
+            // a wide road's plane rises over (design 42m).
+            let (s0, s1, rise) = cell.bed.ramp();
             pieces::Surface::Steps {
                 outline: outline.clone(),
-                foot: f,
+                foot: f + along * s0,
                 dir: along.normalize_or_zero(),
-                full: along.length(),
+                full: along.length() * (s1 - s0),
                 base: LIFT_M,
-                rise: 1.0,
+                rise,
             }
         }
         None => pieces::Surface::Floor {
@@ -308,6 +312,7 @@ mod tests {
             kind,
             raised: false,
             cut_fill: 0,
+            bed: Default::default(),
             up,
             from: None,
         }

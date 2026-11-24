@@ -475,7 +475,7 @@ pub const INTERACT_SLOT: &str = "interact:KeyF";
 /// "board" keeps that.
 pub const BEFORE_INTERACT: [&str; 2] = ["hands:KeyE", "vehicles:KeyF"];
 
-const HANDS: [Binding; 5] = [
+const HANDS: [Binding; 6] = [
     row(&[Key::Mouse(MouseButton::Left)], " ", "use_tool"),
     row(&[Key::Mouse(MouseButton::Right)], " ", "place"),
     Binding {
@@ -488,6 +488,8 @@ const HANDS: [Binding; 5] = [
     },
     row(&[Key::Wheel], " ", "step_slots"),
     row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
+    // The road planner's menu (`townsfolk` design 42l), with stakes in hand.
+    row(&[Key::Board(KeyCode::KeyX)], " ", "road_menu"),
 ];
 
 const FLYING: [Binding; 6] = [
@@ -540,7 +542,7 @@ const RAFT: [Binding; 5] = [
 /// architecture camera (design B9), where the move keys pan it, a right drag
 /// orbits it, ctrl and the wheel zoom, and Page Up and Page Down move the
 /// build layer.
-const BUILDING: [Binding; 8] = [
+const BUILDING: [Binding; 9] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "build_mode"),
     row(&[Key::Mouse(MouseButton::Left)], " ", "build_place"),
     row(&[Key::Mouse(MouseButton::Right)], " ", "build_remove"),
@@ -552,6 +554,8 @@ const BUILDING: [Binding; 8] = [
         " / ",
         "build_layer",
     ),
+    // The cutaway over the build layer (design B11).
+    row(&[Key::Board(KeyCode::End)], " ", "build_cutaway"),
     row(&[Key::Wheel], " ", "build_zoom"),
 ];
 
@@ -1432,7 +1436,12 @@ mod tests {
         let none = KeyBinds::default();
         assert!(none.clashes(&build).is_empty());
         assert!(none.clashes(&breeding).is_empty());
-        for name in ["building:KeyZ", "building:PageUp", "building:PageDown"] {
+        for name in [
+            "building:KeyZ",
+            "building:PageUp",
+            "building:PageDown",
+            "building:End",
+        ] {
             let slot = named(name).unwrap_or_else(|| panic!("{name}"));
             assert!(none.clashes(&slot).is_empty(), "{name}");
         }

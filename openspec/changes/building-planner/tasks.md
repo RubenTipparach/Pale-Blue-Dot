@@ -31,55 +31,69 @@ for it to be built.
 
 ## 2. Core (`pbd-core`)
 
-- [ ] 2.1 `building::plan`: plan pieces in plan coordinates (design 1),
+- [x] 2.1 `building::plan`: plan pieces in plan coordinates (design 1),
       charting a plan onto a patch at an origin, a turn and a base, through
       `blueprint`'s charting; a test that every preset charts at all six
       turns to the same pieces turned.
-- [ ] 2.2 The planner's checks (design 2): `check_layout` on the plan
+- [x] 2.2 The planner's checks (design 2): `check_layout` on the plan
       charted onto a flat disc, plus `plan_size`, `storeys` and `way_in`;
       a test per rule with its reason.
-- [ ] 2.3 The whole-plan check against the world (design 5), first failure
+- [x] 2.3 The whole-plan check against the world (design 5), first failure
       named; tests for a pentagon, a slope past `max_footing`, a tree, a
       piece already in a slot.
-- [ ] 2.4 Costs (design 8): `building_costs.ron` read and validated, a
+- [x] 2.4 Costs (design 8): `building_costs.ron` read and validated, a
       plan's bill of materials, `cost_scale`; a test that every kit's
       pieces have a cost or are locked.
-- [ ] 2.5 The site diff (design 7): unchanged, new, gone, marked, kit
+- [x] 2.5 The site diff (design 7): unchanged, new, gone, marked, kit
       swapped; refunds by `refund_share`; tests for dropping a room and
       adding a storey.
-- [ ] 2.6 Records (design 9): `blueprint` and `site`, schema 1, through
+- [x] 2.6 Records (design 9): `blueprint` and `site`, schema 1, through
       `WorldSave::store`, noted in the world identity; built derived from
       piece records; a test that an old save opens unchanged and a site
       survives a restart.
-- [ ] 2.7 The world setting (design 11): missing reads Free; a test.
-- [ ] 2.8 Presets (design 4): `blueprints.ron`, three sizes each, and the
+- [x] 2.7 The world setting (design 11): missing reads Free; a test.
+- [x] 2.8 Presets (design 4): `blueprints.ron`, three sizes each, and the
       templates' plain buildings; a test that every preset passes the
       planner's checks at every size.
 
 ## 3. Game (`pbd-app`)
 
-- [ ] 3.1 The drafting table station and the mallet tool, with their
+- [x] 3.1 The drafting table station and the mallet tool, with their
       recipes and icons.
-- [ ] 3.2 The planner screen (design 3) in the stone-and-wood UI, every word
+- [x] 3.2 The planner screen (design 3) in the stone-and-wood UI, every word
       from the locale file.
-- [ ] 3.3 Setting out: the whole ghost, shift-wheel in sixths, the reason
+- [x] 3.3 Setting out: the whole ghost, shift-wheel in sixths, the reason
       line; stakes and lime lines painted into the cell tops (`townsfolk`
       39a's bits and texture).
-- [ ] 3.4 Building: the mallet's strokes on F, the compass tick, the HUD's
+- [x] 3.4 Building: the mallet's strokes on F, the compass tick, the HUD's
       count and bill; each piece a piece record with the pack.
-- [ ] 3.5 Scaffolding (design 6): poles and board walks, solid to the
+- [x] 3.5 Scaffolding (design 6): poles and board walks, solid to the
       walker, `LitByField` and `LitLikeTerrain`, put up and struck by the
-      site.
-- [ ] 3.6 Editing a site and adopting a house (design 7), the change
-      summary, marked pieces drawn with the chalk wash.
-- [ ] 3.7 Captures of each step in the game in `docs/screenshots/`.
+      site. It did not go up in the first capture: the rule wanted every
+      wall below built first (design, "The captures' faults"); it now goes
+      up once the storey can be worked on, and the capture shows it.
+- [x] 3.6 Editing a site and adopting a house (design 7), the change
+      summary, marked pieces drawn with the chalk wash. The planner lists
+      the pieces added, the pieces removed and the goods back over Save
+      change (`construction::change_of`, the same diff Save change applies).
+- [x] 3.7 Captures of each step in the game in `docs/screenshots/`.
 
 ## 4. Verification
 
-- [ ] 4.1 `cargo fmt`, clippy, `cargo test`, the locale lint,
+- [x] 4.1 `cargo fmt`, clippy, `cargo test`, the locale lint,
       `openspec validate --all`.
 - [ ] 4.2 Frame cost of a site's ghost and scaffolding, measured on the
-      owner's desktop (not in a cloud session).
+      owner's desktop (not in a cloud session). Open: built in a cloud
+      session with no GPU, so the frame cost was not measured.
 - [ ] 4.3 A gameplay demo: a bot plans a cottage from the preset, sets it
       out, gathers the planks, builds it, then adds a room mid-build
-      (CLAUDE.md, demos).
+      (CLAUDE.md, demos). Open: waits for the batch of videos.
+
+As built (2026-11-24): see design, "As built". Left out of 3.x and said
+there: the mallet is carried in the pack (no held swing yet); the
+scaffold's ladder bay came after (design, "The scaffold's ladder bay",
+2026-11-24: `the_scaffold_is_climbed_by_its_ladder_bay`,
+`walking::tests::a_walker_climbs_the_scaffolds_ladder_bay_onto_its_boards`); a road cell or a town's footprint is not yet "in the way" (a
+solid block, a standing tree, a cactus and a wild plant are); a dropped piece taken down with a
+full pack is refused rather than left in a crate; the turnable 3D preview
+waits for the build camera.

@@ -19,8 +19,8 @@ PBD_BUILD_SHOT="<plan>" PBD_WINDOW=1200x750 xvfb-run -a -s "-screen 0 1200x750x2
 | Shot | What it shows | `<plan>`, `<args>` |
 | --- | --- | --- |
 | `green-ghost.jpg` | The Wall slot (palette in the hotbar's place, the wall's icon lit), the aim snapped to the nearest cell edge: a storey-high wall ghost, green, on the ground in front. | `mode:0,at:150`, `--pitch -30 --frames 260` |
-| `red-ghost.jpg` | The Roof slot aimed at open ground: no walls close round the cell, so the ghost (a cone a storey up, at the top of the frame) is red and the line under the crosshair says WALLS MUST CLOSE ROUND THE ROOM. | `mode:4,at:100`, `--pitch -13 --frames 220` (an earlier binary) |
-| `house-1-floors.jpg`, `house-2-ground-storey.jpg`, `house-3-upper-storey.jpg`, `house-4-roofed.jpg` | A two-storey timber house (the village's six-cell Timber house as a blueprint) built piece by piece: its six floors; its ground storey's walls with their door and windows; the upper storey; and with its gable roof. | `choice:2,house:6` / `22` / `48` / `999`, `ahead:18,at:200`, `--frames 340` |
+| `red-ghost.jpg` | The Roof slot over open ground, seen from architecture mode (retaken 2026-11-24, task 6.3): no walls close round the cell, so the roof ghost, wholly in frame, is red and the line under the cursor says WALLS MUST CLOSE ROUND THE ROOM. | `mode:4,house:0,at:150,view,dist:12,tilt:35`, `--no-readout --frames 300` |
+| `house-1-floors.jpg`, `house-2-ground-storey.jpg`, `house-3-upper-storey.jpg`, `house-4-roofed.jpg` (the last retaken 2026-11-24 from architecture mode, `choice:2,house:999,ahead:18,at:200,view,quiet`, the roof whole in frame) | A two-storey timber house (the village's six-cell Timber house as a blueprint) built piece by piece: its six floors; its ground storey's walls with their door and windows; the upper storey; and with its gable roof. | `choice:2,house:6` / `22` / `48` / `999`, `ahead:18,at:200`, `--frames 340` |
 | `two-storey-house-night.jpg` | The same house whole at 22:00: its lanterns light its rooms, warm through the windows; the field lights the walls as the ground. | `choice:2,house:999,ahead:20,at:100`, `--time 22 --frames 240` |
 | `kit-picker.jpg` | K in build mode: every kit the game ships (22), each with its wall, floor and roof textures; Timber, the chosen one, lit. | `picker,kit:2,at:150`, `--pitch -10 --frames 260` |
 
@@ -38,6 +38,18 @@ only, not the frame time.
 | `architecture-night.png` | The same at 22:30: the house as dark as the ground round it, its lanterns faint at the windows. | `quiet,doors,view`, `--time 22.5` |
 | `footing-close.png` | The footing close up: the new `footing` texture under the floor where the desert falls away. | `quiet,doors,view,dist:12,tilt:18` |
 | `door-shut.png`, `door-open.png` | The door hung in the doorway, shut, then opened a quarter turn into the room: one bevelled leaf of planks with its ledges, brace, strap hinges and pull painted in, in a U frame. | `quiet,doors,view:door,dist:7,tilt:28` (and `open`) |
+
+### Double-click to walk and the cutaway (design B11, 2026-11-24)
+
+The same house (`choice:2,house:999,ahead:18,at:200,doors,view,quiet`)
+with `cut`, the cutaway End turns on in architecture mode. Lavapipe, so the
+look only. Double-click to walk is pinned by its app tests, not a shot.
+
+| Shot | What it shows | Extra plan, args |
+| --- | --- | --- |
+| `architecture-cutaway.jpg` | The cutaway at the ground storey, 11:00: the roof and the upper storey gone, the near walls cut 1.2 m over the floor, the far walls standing to the ceiling, so the floor, the stair and the doorways are in sight. The house's shadow on the ground is the whole house's: what is cut still casts. The terrain is not cut. | `cut`, `--time 11` |
+| `architecture-cutaway-night.jpg` | The same at 22:30: the room lit warm by its lantern, the ground as dark round it. | `cut`, `--time 22.5` |
+| `architecture-cutaway-upper.jpg` | The build layer a storey up (Page Up): the cut through the upper storey, its floor and the stair's well. | `cut,layer:3`, `--time 11` |
 
 What is wrong in them, and stays as a limitation for now:
 

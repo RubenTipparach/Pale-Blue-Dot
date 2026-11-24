@@ -862,6 +862,82 @@ pub fn carpenter_top() -> Vec<Poly> {
     k.polys
 }
 
+/// What stands on the drafting table (`building-planner` design 3), over
+/// its block's top at y 0: a drawing board tipped toward the front, its low
+/// edge on a lip that keeps a sheet from sliding, and the sheet itself, one
+/// form each with a bevel at the board's edge.
+pub fn drafting_top() -> Vec<Poly> {
+    let mut k = Kit::default();
+    // The board: a slab, its back raised 0.22 m, 0.84 m wide, 0.72 deep.
+    let (w, d, t) = (0.42f32, 0.36f32, 0.035f32);
+    let rise = 0.22f32;
+    let y = |z: f32| 0.04 + rise * (0.5 - z / (2.0 * d));
+    let top = |x: f32, z: f32| Vec3::new(x, y(z) + t, z);
+    let low = |x: f32, z: f32| Vec3::new(x, y(z), z);
+    let inside = Vec3::new(0.0, y(0.0) + t * 0.5, 0.0);
+    let (x0, x1, z0, z1) = (-w, w, -d, d);
+    k.face(
+        TOP,
+        vec![top(x0, z0), top(x1, z0), top(x1, z1), top(x0, z1)],
+        inside,
+    );
+    k.face(
+        TOP,
+        vec![low(x0, z0), low(x1, z0), low(x1, z1), low(x0, z1)],
+        inside,
+    );
+    k.face(
+        FRAME,
+        vec![low(x0, z0), low(x1, z0), top(x1, z0), top(x0, z0)],
+        inside,
+    );
+    k.face(
+        FRAME,
+        vec![low(x0, z1), low(x1, z1), top(x1, z1), top(x0, z1)],
+        inside,
+    );
+    k.face(
+        FRAME,
+        vec![low(x0, z0), low(x0, z1), top(x0, z1), top(x0, z0)],
+        inside,
+    );
+    k.face(
+        FRAME,
+        vec![low(x1, z0), low(x1, z1), top(x1, z1), top(x1, z0)],
+        inside,
+    );
+    // The back leg the board rests on: a block across under its high edge.
+    k.block(
+        FRAME,
+        FRAME,
+        Vec3::new(0.0, 0.0, -d + 0.06),
+        Vec3::new(2.0 * w - 0.1, y(-d + 0.06), 0.07),
+        0.01,
+    );
+    // The lip along the low edge.
+    k.block(
+        FRAME,
+        FRAME,
+        Vec3::new(0.0, y(d - 0.02) + t, d - 0.02),
+        Vec3::new(2.0 * w, 0.03, 0.035),
+        0.006,
+    );
+    // The sheet, a hair over the board, short of its edges.
+    let sheet = |x: f32, z: f32| Vec3::new(x, y(z) + t + 0.004, z);
+    let (sx, sz) = (w - 0.08, d - 0.09);
+    k.face(
+        SHEET,
+        vec![
+            sheet(-sx, -sz),
+            sheet(sx, -sz),
+            sheet(sx, sz),
+            sheet(-sx, sz),
+        ],
+        Vec3::new(0.0, -1.0, 0.0),
+    );
+    k.polys
+}
+
 /// A piece's polygons stood in a plan: its middle at `at` (x, z), on a floor
 /// at `y0`, its front along `front` (x, z).
 pub fn placed(kind: Kind, at: Vec2, y0: f32, front: Vec2) -> Vec<Poly> {

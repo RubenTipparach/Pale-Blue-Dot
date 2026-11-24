@@ -1,0 +1,25 @@
+// The road planner (`townsfolk` design 42i, 42l, 42m, 42n): read at load and
+// validated; every tunable has its unit in `RoadPlannerConfig`.
+(
+    // The owner, survey P2 (2026-11-24): a stronger ghost.
+    ghost_opacity: 0.55,
+    ghost_tint: (0.35, 0.75, 0.95),
+    refuse_tint: (0.75, 0.16, 0.12),
+    max_grade: 1,
+    max_segment: 24,
+    stake_reach_m: 6.0,
+    reach_m: 4.0,
+    ghost_reach_m: 60.0,
+    cost_scale: 1.0,
+    lamp_spacing: 6,
+    removal: mark,
+    refund_share: 1.0,
+    // The longest bridge the player builds, cells, and the planks a
+    // bridge cell takes (design 42m).
+    max_bridge_cells: 6,
+    bridge_planks: 6,
+    // The planner's lifted view (design 42n, the owner's survey P2): the
+    // eye this far over the player, m, eased in and out over this long, s.
+    aerial_m: 15.0,
+    aerial_ease_s: 0.4,
+)

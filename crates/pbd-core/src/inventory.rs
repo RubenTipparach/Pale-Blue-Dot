@@ -391,6 +391,7 @@ fn material_key(material: Material) -> &'static str {
         Material::Sticks => "block.sticks.name",
         Material::DesertSand => "block.desert_sand.name",
         Material::Carpenter => "block.carpenter.name",
+        Material::DraftingTable => "block.drafting_table.name",
         crate::flowing_water!() => "block.flowing_water.name",
     }
 }
