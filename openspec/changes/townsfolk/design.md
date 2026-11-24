@@ -1539,20 +1539,33 @@ the steepest grade, the cost scale, the lamp spacing and the share of gravel
 returned. By day and at night, when the built lamps light the road.
 
 **42k. A road by its two ends (owner, 2026-11-24: "road planner: needs to
-allow the player to click on start and end segment").** Besides staking a
-road a step at a time, **New road** (N) starts a plan by its ends: the
-first click sets the start (one stake), the second the end, and the plan
-between them is the straight hex line, with a stake added wherever a leg
-would pass `max_segment` cells, so a long road is one click. The ghost
-follows the aim from the start before the second click, with its red
-reasons (a tree, open water, too steep) on the cells that clash; a click
-on a clashing end does nothing and says why. The end may be clicked
-anywhere the aim reaches, not only within the stake reach: the player sets
-the road out by looking along it. Clicking the start again takes it back;
-Esc drops the new road. Starting a new road ends the plan in hand: its paved
-cells stay as road, its unpaved stakes come back to the pack. The stakes
-between the ends are ordinary waypoints afterwards: picked up, moved and
-added to as before. Shown in M15 version 8.
+allow the player to click on start and end segment"; then "you still have
+the plan auto start in road planner ... when entering it, you have to click
+on the ground to start a segment, and you click again to end it. that way
+you arent stuck accidentally clicking around and generating random
+segments", and "add a eraser to delete segments too").** This replaces
+design 42's open plan that every click extended:
+- **Nothing is planned on entering.** No plan is open and no ghost follows
+  the aim until the player starts a road.
+- **Two clicks make a road.** With stakes in hand, a click on the ground
+  sets a road's start (one stake); the ghost then follows the aim from it,
+  with its red reasons (a tree, open water, too steep); the next click sets
+  its end, and the road between is the straight hex line, staked wherever
+  a leg would pass `max_segment` cells. A click on a clashing end does
+  nothing and says why. Then the planner is idle again: a click elsewhere
+  starts another road, never extends this one. The end may be anywhere the
+  aim reaches.
+- **A plan is a list of roads**, each its own segment with its own width;
+  the `road-plan` record holds them as `roads`, each with its waypoints.
+- **Clicking a stake** of any road picks it up to move it, as before.
+  Clicking the start again, Esc, or changing tool drops a road that has no
+  end yet. Right-click on a stake takes it back; a road of two stakes goes
+  with it.
+- **The eraser (4)** deletes the whole road under the aim: its stakes come
+  back to the pack, and its paved cells are taken up by the removal rule
+  (marked, or given back), unless another road still runs over them.
+
+Shown in M15 version 9 (version 8 had a New road button on the old open plan).
 
 ## Risks / Trade-offs
 
