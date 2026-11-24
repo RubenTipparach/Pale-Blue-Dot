@@ -428,16 +428,25 @@ pub fn stakes(save: &WorldSave) -> Vec<u32> {
 /// Install the marks and the player's road cells for the terrain
 /// (design 39a and 43), and give back every key they name.
 pub fn install(save: &WorldSave, radius_m: f32) -> HashSet<u32> {
+    install_held(save, radius_m).0
+}
+
+/// [`install`], with the guard that keeps other installs waiting (see
+/// `pbd_core::roads::paving::install_held`).
+pub fn install_held(
+    save: &WorldSave,
+    radius_m: f32,
+) -> (HashSet<u32>, std::sync::RwLockWriteGuard<'static, ()>) {
     let built = roads::built(&save.records);
     let (mut marks, _) = marks(save);
     // A construction site's lime line (`building-planner` design 5).
     marks.extend(crate::construction::site_marks(&save.records).0);
     let keys: HashSet<u32> = marks.keys().chain(built.keys()).copied().collect();
-    paving::install(Some(paving::Installed {
+    let held = paving::install_held(Some(paving::Installed {
         marks: marks.into_iter().collect(),
         bare: roads::Cleared::new(keys.iter().copied(), radius_m),
     }));
-    keys
+    (keys, held)
 }
 
 /// The keys installed last, and whether the standing set has them yet.

@@ -535,7 +535,8 @@ fn a_plan_is_marked_and_paved_and_survives_a_reload() {
     // Tufts go at once from a paved or marked cell (design 44): the
     // terrain's word for the cell carries the road bit once installed.
     let road_bit = 1u32 << crate::planet::terrain::ROAD_BIT;
-    paving::install(&reopened, config.radius_m);
+    // Held, so another test's install cannot replace these marks mid-check.
+    let (_, _held) = paving::install_held(&reopened, config.radius_m);
     for &key in built.keys().chain(marked.keys()) {
         let c = roads::centre(key).unwrap();
         let h = pbd_core::column::surface_m(&config, c);
