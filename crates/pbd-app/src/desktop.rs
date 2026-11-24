@@ -3,6 +3,7 @@ mod boat;
 mod breeding;
 mod build_mode;
 mod compass_bar;
+mod construction;
 mod cpu_times;
 mod cracks;
 mod craft;
@@ -26,6 +27,7 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod planner;
 mod repro;
 mod scene;
 mod scroll_list;
@@ -1884,6 +1886,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::logs::LogsPlugin)
     // Furniture: seats, beds and containers (`furniture`).
     .add_plugins(furniture::plugin)
+    // The building planner and construction sites (`building-planner`).
+    .add_plugins(construction::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
     .init_resource::<pbd_app::build_view::BuildView>()

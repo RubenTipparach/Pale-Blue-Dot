@@ -232,6 +232,8 @@ pub fn stakes(save: &WorldSave) -> Vec<u32> {
     paving::plans(&save.records)
         .values()
         .flat_map(|p| p.stakes.iter().copied())
+        // A construction site's stakes at its corners (`building-planner` 5).
+        .chain(crate::construction::site_marks(&save.records).1)
         .collect()
 }
 
@@ -240,7 +242,9 @@ pub fn stakes(save: &WorldSave) -> Vec<u32> {
 pub fn install(records: &pbd_core::records::Records, radius_m: f32) -> HashSet<u32> {
     let plans: BTreeMap<u64, Plan> = paving::plans(records);
     let built = roads::built(records);
-    let marks = paving::marked(&plans, &built);
+    let mut marks = paving::marked(&plans, &built);
+    // A construction site's lime line (`building-planner` design 5).
+    marks.extend(crate::construction::site_marks(records).0);
     let keys: HashSet<u32> = marks.keys().chain(built.keys()).copied().collect();
     paving::install(Some(paving::Installed {
         marks: marks.into_iter().collect(),
@@ -281,7 +285,17 @@ pub fn follow_marks(
                 .records
                 .of_kind(paving::PLAN_RECORD)
                 .map(|r| r.body.len())
-                .sum::<usize>(),
+                .sum::<usize>()
+            // A site set out, changed or finished moves its lime line.
+            + save
+                .records
+                .of_kind(pbd_core::building::site::SITE_RECORD)
+                .map(|r| r.body.len())
+                .sum::<usize>()
+            + save
+                .records
+                .of_kind(pbd_core::building::PIECE_RECORD)
+                .count(),
     );
     let fresh = stamp != shown.installed_for;
     if fresh {

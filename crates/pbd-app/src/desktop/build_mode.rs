@@ -137,6 +137,9 @@ pub struct BuildMode {
     /// What the ghost shows: its pieces, whether they may go, and the piece
     /// a removal aims at.
     pub ghost: Option<GhostShown>,
+    /// O was pressed: open the planner on what is aimed at
+    /// (`building-planner` design 3, read by `construction`).
+    pub plan_asked: bool,
     /// The rule a red ghost breaks, or the dependant a removal is refused
     /// for, as a locale key: for the HUD line and the log.
     pub reason: Option<String>,
@@ -196,7 +199,10 @@ pub fn take_input(
     mut hotbar: ResMut<super::slots::Hotbar>,
     mut mode: ResMut<BuildMode>,
     kits: Option<Res<TownAssets>>,
-    blueprints: Res<Blueprints>,
+    (choices, data): (
+        Option<Res<super::construction::PlanChoices>>,
+        Option<Res<pbd_app::construction::PlannerData>>,
+    ),
 ) {
     mode.place = false;
     mode.take = false;
@@ -247,6 +253,11 @@ pub fn take_input(
     if keys.just_pressed(KeyCode::KeyK) {
         mode.picker = !mode.picker;
     }
+    // O: the planner (`building-planner` design 3).
+    if keys.just_pressed(KeyCode::KeyO) {
+        mode.plan_asked = true;
+    }
+    keys.reset(KeyCode::KeyO);
     keys.reset(KeyCode::KeyK);
     keys.reset(KeyCode::KeyG);
     // Z: architecture mode (design B9), read by `drive_view`.
@@ -259,9 +270,15 @@ pub fn take_input(
         let n = kits.as_ref().map_or(1, |k| k.kits.kits.len().max(1)) as i32;
         mode.kit = (mode.kit as i32 + steps).rem_euclid(n) as usize;
     } else if steps != 0 {
-        if PALETTE[mode.slot] == Tool::Blueprint && keys.pressed(KeyCode::ShiftLeft) {
-            let n = blueprints.0.len().max(1) as i32;
+        let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        if PALETTE[mode.slot] == Tool::Blueprint && !shift {
+            // The wheel steps the plans; shift and the wheel turn the ghost
+            // (`building-planner` design 5).
+            let n = choices.as_ref().map_or(1, |c| c.0.len().max(1)) as i32;
             mode.choice = (mode.choice as i32 + steps).rem_euclid(n) as usize;
+        } else if PALETTE[mode.slot] == Tool::Blueprint {
+            let step = data.as_ref().map_or(1, |d| i32::from(d.tun.rotation_step));
+            mode.turn = (mode.turn as i32 + steps * step).rem_euclid(6) as usize;
         } else if PALETTE[mode.slot] == Tool::Furniture {
             // The wheel steps through the furniture carried.
             let n = carried_furniture(&hotbar.0).len().max(1) as i32;
@@ -390,7 +407,7 @@ pub struct GroundCache {
     tops: HashMap<u32, Option<u16>>,
 }
 
-fn ground_top(
+pub(super) fn ground_top(
     fine: &PlanetFine,
     save: &WorldSave,
     cache: &mut GroundCache,
@@ -481,7 +498,7 @@ fn nearest_side(cells: &Cells, cell: u32, point: Vec3) -> Option<(usize, usize)>
 }
 
 /// A point to aim a removal at for a piece: the middle of what it is.
-fn reference(piece: &Piece) -> Option<Vec3> {
+pub(super) fn reference(piece: &Piece) -> Option<Vec3> {
     let cells = piece.shape.cells();
     let mean = cells
         .iter()
@@ -514,7 +531,6 @@ pub fn aim_and_build(
     mut builds: ResMut<Builds>,
     structures: Res<pbd_app::walking::PlayerStructures>,
     assets: Res<TownAssets>,
-    blueprints: Res<Blueprints>,
     mut note: ResMut<super::farm::FarmNote>,
     time: Res<Time>,
     (mut hotbar, view, windows): (
@@ -524,7 +540,12 @@ pub fn aim_and_build(
     ),
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
-    mut did: MessageWriter<pbd_app::missions::Did>,
+    (mut did, choices, data, mut in_hand): (
+        MessageWriter<pbd_app::missions::Did>,
+        Res<super::construction::PlanChoices>,
+        Res<pbd_app::construction::PlannerData>,
+        ResMut<super::construction::PlanInHand>,
+    ),
 ) {
     if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
@@ -636,6 +657,8 @@ pub fn aim_and_build(
         )])
     };
     let mut remove = None;
+    let planned = save.identity.building() == pbd_core::building::site::BuildingSetting::Planned;
+    let mut setting_out = None;
     let candidate: Option<Vec<Piece>> = match tool {
         Tool::Wall => wall(Opening::None),
         // A door from the pack, aimed at a doorway with none (design B8);
@@ -706,13 +729,20 @@ pub fn aim_and_build(
             )]),
         },
         Tool::Blueprint => {
-            let def = blueprints
-                .0
-                .get(mode.choice.min(blueprints.0.len().saturating_sub(1)));
-            def.and_then(|def| {
-                let kit = kits.get(&def.kit)?;
-                let at = cells.index(cell)?;
-                blueprint(&patch, def, kit, at, mode.turn, storey).ok()
+            // A plan: the planner's, a preset or the player's own
+            // (`building-planner` design 5), charted on the ground here.
+            let hand = choices.0.get(mode.choice % choices.0.len().max(1)).cloned();
+            hand.and_then(|hand| {
+                let (site_patch, _, base, charted) = super::construction::chart_here(
+                    &fine, &save, &mut cache, &hand.plan, cell, mode.turn,
+                )?;
+                let pieces: Vec<Piece> = charted
+                    .iter()
+                    .map(|(_, p)| p.clone())
+                    .filter(|p| planned || !matches!(p.shape, Shape::Furniture { .. }))
+                    .collect();
+                setting_out = Some((site_patch, base, charted, hand));
+                Some(pieces)
             })
         }
         Tool::Furniture => {
@@ -779,6 +809,17 @@ pub fn aim_and_build(
             }
             None => (true, None),
         }
+    } else if let Some((site_patch, base, charted, hand)) = &setting_out {
+        // A whole plan, checked against the world (`building-planner` 5).
+        match super::construction::check_here(
+            &fine, &save, &mut cache, site_patch, charted, *base, &near, &data, &hand.plan,
+        ) {
+            Ok(()) => (true, None),
+            Err((why, _)) => (false, Some(why.key())),
+        }
+    } else if planned && !matches!(tool, Tool::Furniture) {
+        // A planned world builds from plans (`building-planner` 11).
+        (false, Some("site.planned_only".to_string()))
     } else {
         let broke: Option<Rule> = placing_order(&site, &near, &candidate).err();
         (
@@ -811,7 +852,19 @@ pub fn aim_and_build(
     }
     let is_door = |p: &Piece| matches!(p.shape, Shape::Door { .. });
     if mode.place && remove.is_none() {
-        if ok && candidate.len() == 1 && is_door(&candidate[0]) {
+        if ok
+            && planned
+            && let Some((_, base, _, hand)) = &setting_out
+        {
+            let chart = pbd_core::building::site::SiteChart {
+                origin: cell,
+                turn: mode.turn as u8,
+                base: *base,
+            };
+            if super::construction::set_out_here(&mut save, hand, chart, &mut in_hand).is_some() {
+                note.say(now, tr("site.set_out"));
+            }
+        } else if ok && candidate.len() == 1 && is_door(&candidate[0]) {
             // A door is crafted: one from the pack (design B8).
             match builds.place_door(&mut save, candidate[0].clone(), &mut hotbar.0) {
                 Ok(()) => info!("BUILD hung a door"),

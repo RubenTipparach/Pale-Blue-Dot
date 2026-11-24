@@ -658,10 +658,12 @@ husbandry:
 interact:
   act:
     board: "Board {thing}"
+    build: "Build {thing}"
     check: "Check {thing}"
     collect: "Collect {thing}"
     drive: "Drive {thing}"
     feed: "Feed {thing}"
+    fill: "Place {thing}"
     gather: "Gather {thing}"
     get_off: "Get off {thing}"
     harvest: "Harvest {thing}"
@@ -678,6 +680,7 @@ interact:
     pick_fruit: "Pick {thing}"
     pick_glow: "Pick {thing}"
     pick_wild: "Pick wild {thing}"
+    plan: "Plan at {thing}"
     pull: "Pull {thing}"
     ride: "Ride {thing}"
     set_eggs: "Set eggs under {thing}"
@@ -686,6 +689,7 @@ interact:
     sit: "Sit on {thing}"
     step_down: "Step down from {thing}"
     take_incubator: "Take {thing}"
+    take_down: "Take down {thing}"
     take_log: "Take {thing}"
     take_up: "Take up {thing}"
     talk: "Talk to {thing}"
@@ -1308,21 +1312,74 @@ pack:
   pack: PACK
   trash: TRASH
 planner:
+  adopted: Your house
+  bill: Materials
+  bill_row: "{count} {good}, {have} in pack"
+  bill_sum: "{pieces} pieces, {strokes} strokes"
+  cancel: Cancel
+  changing: "Changing {name}"
   check:
     empty: Paint a room to start
     pass: Every check passes
     plan_size: Too big to plan
     storeys: Too many storeys
     way_in: No way in
+  checks: Checks
+  close: Close
+  default_name: "My plan {n}"
+  floor: "Floor {n}"
+  ground: Ground
   hint:
     inside_window: A window goes in an outside wall
     no_room: Paint a room here first
+  kit:
+    brick: Brick
+    halftimber: Half-timber
+    stone: Stone
+    straw: Straw
+    timber: Timber
   locked:
     bricks: Needs bricks
     clay: Needs clay
     ice: Needs ice
     marble: Needs marble
     unknown: Can't build with this
+  mine: Mine
+  mine_none: None yet
+  name: Name
+  on_floor: "Floor {n}: {reason}"
+  on_ground: "Ground: {reason}"
+  presets: Presets
+  roof:
+    cone: Cone
+    flat: Flat
+    gable: Gable
+  save: Save as mine
+  save_change: Save change
+  saved: Saved
+  set_out: Set out
+  title: Planner
+  tool:
+    door: Door
+    erase: Erase
+    lantern: Lantern
+    room: Paint the room
+    slot: Furniture slot
+    stair: Stair up
+    wall: Inside wall
+    window: Window
+  town:
+    desert: Desert house
+    harbour: Harbour house
+    jungle: Jungle house
+    tundra: Tundra house
+    village: Village house
+    walled: Town house
+  towns: Town houses
+  untitled: New plan
+  view:
+    iso: Isometric
+    top: Top down
 recipe:
   drafting-table:
     name: DRAFTING TABLE
@@ -1452,12 +1509,22 @@ scatter:
   pick_up_stone: pick up stone
   pull_fibre: pull fibre
 site:
+  have: "{have}/{count}"
+  left: "{left} of {total} left"
+  needs: "Needs {count} {good}"
+  needs_mallet: Needs a mallet
+  next: Next piece
+  planned_only: Build from a plan
   refused:
     in_the_way: Something is in the way
     pentagon: A five-sided cell
     plan: Fix the plan first
     steep: Too steep here
     taken: Something is already here
+  scaffold_needs: Needs planks and rope for the scaffolding
+  set_out: Set out
+  stroke: "{n} of {of}"
+  to_take_down: "{count} to take down"
 sites:
   fallback_name: "Site {id}"
   kind:
