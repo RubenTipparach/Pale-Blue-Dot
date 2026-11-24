@@ -31,7 +31,7 @@ for scene in two stake erased wide; do
   want "$scene" || continue
   shot "road-planner-$scene-1100" --frames 400 --paving 5 --road-plan "$scene" --pitch -24 --time 11
 done
-want two && shot road-planner-two-2230 --frames 400 --paving 5 --road-plan two --pitch -24 --time 22.5
+# want two && shot road-planner-two-2230 --frames 400 --paving 5 --road-plan two --pitch -24 --time 22.5
 # The mark's look close up (design 39a, task 13.4), by day and at 22:30.
 want marks && {
   shot mark-close-1100 --frames 400 --paving 0.5 --pitch -32 --time 11
