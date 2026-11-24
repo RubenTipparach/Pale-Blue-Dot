@@ -23,6 +23,11 @@ PR (CLAUDE.md). The PR body lists what is built and what is open.
 - Road planner (`townsfolk` 13.4, 14, design 42k/42l). Captures in
   `docs/screenshots/townsfolk/road-planner-*`.
 - Market, barter, derived values (`townsfolk` 11, 12), furniture 4.3.
+- Roads (landed a53944d4): wide roads on one plane, player bridges, lamp
+  posts built, insert a stake, road missions (rockfall, escort), P2's 55%
+  ghost and lifted planner view. Open: the world's own wide roads (new
+  roads version), captures of a slope and a bridge, ghost lamps/decks,
+  14.5's compass tick and bill test, trader map marker.
 - Talk framing v1 (P1): panel right, talker turned into the left third
   (`desktop/talk.rs`, `assets/config/talk.ron`).
 - Full suites passed at `4e55e54c`: pbd-app 700, pbd-core 852, locale 3,
@@ -34,10 +39,6 @@ Each lands on `claude/phase-2-1` when done; check `git log origin/claude/phase-2
 and `git worktree list` (`.claude/worktrees/agent-*`). A worktree whose
 HEAD is already on origin and is clean can be removed.
 
-1. Roads: wide roads on slopes (8.6), wide bridges, lamps both sides,
-   bridges on player roads, lamp posts built, insert waypoint, road
-   missions (8.5); plus survey P2: ghost 55% and an aerial camera ~15 m up
-   while the planner is open.
 2. Town/building: forge (townsfolk 3.2, design 26, new town version if
    layout moves), townsfolk 2.2 idle captures, scaffold ladder bay,
    player-building 4.5 (double-click walk, cutaway); plus survey P3: raise
