@@ -319,6 +319,65 @@ left, and the trade UI is on the right." The plan, built as written:
   the screen's middle height. The capture is
   `docs/screenshots/townsfolk-economy/trade-framed.jpg`.
 
+**37a, framing, second pass (owner, 2026-11-24, on `trade-framed.jpg`).**
+In the owner's words: "Kind of center the character between the left most
+edge of panel and left edge of the screen. Also if you can add some lights
+that fade in light the character a bit, thatd be nice". The plan:
+
+- **Centred in the open space, not a fixed third.** The townsperson's aim
+  point lands half way between the screen's left edge and the open panel's
+  left edge. With the window `W` logical px wide, the UI scale `s` and the
+  panel `w` native px wide at `panel_margin_px` `m` from the right, the
+  panel's left edge is at `W - (m + w) s`, the open space's middle at
+  `(W - (m + w) s) / 2`, and in normalised screen space
+  `x = -(m + w) s / W`. It is worked out from the real numbers at the
+  moment of framing: the panel's own width (Talk 300, Trade 490, Board 450
+  native px, one table the panels are spawned from), the camera's viewport
+  and `UiScale`. A panel wider than the screen puts the townsperson no
+  further left than -0.95. The height stays `frame_y` (0, the middle) in
+  `talk.ron`, which replaces `frame`.
+- **Re-aimed when the panel changes.** TRADE or WORK from Talk opens a
+  wider panel, so the open space's middle moves left; the look turns again
+  to the new middle with the same `turn_secs` ease, from wherever it is,
+  toward the same aim taken when the talk opened (the townsperson is still
+  not followed). BACK re-aims to Talk's middle.
+- **A light on the townsperson.** While a talk is open a soft warm light
+  burns in front of and a little above the townsperson's face, between
+  them and the camera: from their feet, `light_rise_m` (1.75 m) up and
+  `light_toward_m` (0.6 m) along the level line to the eye. It is not a
+  Bevy light: it is a carried light (`glowing-mushrooms` part B), the short
+  list the terrain, the water and the field-lit shaders already evaluate
+  per pixel with the falloff every baked lamp uses, so it lights the
+  townsperson (who is `LitByField`) and the ground round their feet exactly
+  as a torch in hand would, at night and in shade alike, with no shadow, as
+  every carried light. The list gains a reach per light (the shaders
+  already read it from `w`; every other light keeps the lamps' 16 m), so
+  this one reaches `light_reach_m` (4 m) and goes no further.
+- **Fades in and out.** Its strength rises over `light_fade_secs` (0.4 s)
+  when the talk opens and falls over the same when it closes, linear in
+  the light's colour, which the shaders take as a uniform every frame, so
+  the fade is smooth (a baked lamp could not do this; a carried light can).
+  It is placed from the townsperson's own transform each frame, after the
+  transforms are propagated, in render space, and handed to the list in the
+  planet's frame by `render_origin::local_of` (f64 before the cast); up is
+  the walker's camera's up, never a normalised planet-centred position.
+  Nothing of it is stored or saved.
+- **Modest.** `light_level` 7 on the field's 0..15 scale (a torch is 14),
+  `light_tint` a candle's warm white: it lights the face a bit; it is not a
+  spotlight. It does not count as the player's own light, so it never
+  warms the held hand.
+- **Tunables** in `talk.ron`, validated: `frame_y` inside the screen,
+  `light_tint` each channel 0 to 1, `light_level` 0 to 15, `light_reach_m`
+  0.5 to 16, `light_fade_secs` 0 to 2, `light_rise_m` 0 to 3,
+  `light_toward_m` 0 to 2.
+- **Proof.** `the_talker_lands_in_the_open_space` solves the turn for each
+  panel's width at three window sizes and scales and projects the aim point
+  to the open space's middle; `the_talk_light_burns_only_while_a_talk_is_open`
+  runs the light's system in an app and finds the light in the carried list
+  while a talk is open, rising, and gone once it has faded after the close.
+  Captures (lavapipe, no GPU): `trade-framed.jpg` retaken at a talking
+  distance of about 2.7 m, and `trade-framed-night.jpg` at 22:30.
+
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
 `towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
