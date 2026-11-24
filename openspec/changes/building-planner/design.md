@@ -428,7 +428,7 @@ open. Each is a recommendation taken (ask only with screenshots).
 - **What the first cut leaves out**, each said here so it is not
   mistaken for done: the scaffold has no ladder bay (an upper storey is
   reached by the house's own stair, which is buildable before the upper
-  walls); "in the way" is a solid block or a standing tree, not yet a
+  walls); "in the way" is a solid block or a standing plant (a tree, a cactus, a wild plant), not yet a
   road cell or a town's footprint; a marked piece taken down with a full
   pack is refused ("No room") rather than its goods left in a
   crate; in a planned world build mode's palette is unchanged but every
@@ -439,6 +439,60 @@ open. Each is a recommendation taken (ask only with screenshots).
 - **No held-swing yet.** A stroke is F on the mallet's beat (`stroke_s`),
   with the compass tick and the count; the first-person mallet swing waits
   for a mallet model in `held-swing`.
+
+### The captures' faults, found and fixed (2026-11-24, second pass)
+
+The first captures (task 3.7) showed four faults. Each is a recommendation
+taken (ask only with screenshots); the retaken captures are beside the old
+in `docs/screenshots/building-planner/`.
+
+- **A cactus stood inside a set-out cottage.** The whole-site check's "in
+  the way" read `under_standing_tree`, which asks `grows_tree`. A desert
+  cactus is scenery the tree draw draws but `grows_tree` is false for it
+  (`tree_kit::grows_cactus`: it is never chopped), so it was never in the
+  way. Measured in the capture's log: every ground cell under the cottage
+  read "tree false" while a cactus stood in one. Fixed by asking what
+  stands, not what can be chopped: `flora::stands_plant` (a tree not
+  felled, or a cactus) and a wild plant not picked (`farm::wild_at`), on
+  the ground block and the storey over it. The reason is build mode's own
+  `site.refused.in_the_way`. Pinned by `flora::a_cactus_stands_in_its_cell`.
+- **Scaffolding never went up.** Measured with the capture's log (a line
+  per storey: walls built and whether scaffolding is wanted): on the real
+  desert ground the two-storey house stood half its cells at layer 208 and
+  half at 209, so in the capture's pass-by-pass striking the ground floors
+  over the low cells were held up only by a neighbour's floor, came late,
+  and the walls on them later still; meanwhile the upper floor and twelve
+  upper walls went up over the finished half. 11 of 18 ground walls stood,
+  and `wants_scaffold` asked for every wall below to be built first, so it
+  never wanted any. The rule was stricter than the requirement ("a site
+  with a buildable piece on a storey above the ground"). It now wants
+  scaffolding round a storey whose own walls are not all built once the
+  walls below are all built *or a piece of that storey already stands*;
+  pinned by `scaffolding_is_wanted_while_a_storey_is_worked_on`, which
+  strikes in both orders. The capture now strikes lowest first, one piece
+  at a time, as a player goes up. The scaffold's plot was already drawn
+  as a plot is (`builds::spawn_plot`: `LitByField` and `LitLikeTerrain` on
+  its root, the settlement set's `plank`, `poles` and `rope` textures,
+  smooth normals round the poles and hard only at the boards' edges); it
+  had simply never been spawned.
+- **The planner did not list a change before Save change** (decision 7).
+  It now shows, over Save change, the pieces the change adds, the pieces it
+  removes (ghosts dropped and built pieces marked, furniture slots not
+  counted) and, in a planned world, the goods the built ones give back at
+  `refund_share`, from the same `site::diff` that Save change applies
+  (`construction::change_of`); "No change" when the plan is the site's.
+- **The ghost glowed at night.** A ghost stays a preview the field does not
+  light (decision 5), so instead of lighting it, it is dimmed with the sun:
+  full by day, `ghost_night` (0.05, a new tunable) of it once the sun is
+  down, along the terrain's own dusk curve (`Clock::daylight`). Measured in
+  the night capture: at a first guess of 0.22 the ghost still read several
+  times the ground's brightness; 0.05 is the terrain's own ambient floor.
+  Its opacity is unchanged.
+- **The lime line was faint** under the ghost floor. The terrain's lime band
+  (`planet_surface.wgsl`, `townsfolk` 39a) is laid stronger: dust 0.94 at
+  its middle and 0.70 at its edge (was 0.82 and 0.55), gaps in a tenth of
+  its texels (was 0.18), and a little paler. It is the same band a road's
+  survey marks use, so they read stronger too.
 
 ## Risks / Trade-offs
 

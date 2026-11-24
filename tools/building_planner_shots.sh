@@ -34,4 +34,7 @@ shot game-site-set-out "give,site:cottage,view,dist:16,tilt:50,ahead:10,at:150" 
 shot game-site-half "give,site:cottage,build:14,view,dist:16,tilt:45,ahead:10,at:150" --time 11 --frames 340
 shot game-site-scaffold "give,site:house,build:34,view,dist:20,tilt:35,ahead:10,at:150" --time 11 --frames 340
 shot game-site-change "give,site:cottage,build:22,change,view,dist:16,tilt:45,ahead:10,at:150" --time 11 --frames 340
+# The planner open over the half-built cottage with a cell taken out: the
+# change listed (pieces added and removed, goods back) before Save change.
+shot game-planner-change "give,site:cottage,build:22,edit,ahead:10,at:150" --time 11 --frames 340
 shot game-site-night "give,site:house,build:34,view,dist:20,tilt:35,ahead:10,at:150" --time 22 --frames 340

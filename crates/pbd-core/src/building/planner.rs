@@ -63,6 +63,10 @@ pub struct Tunables {
     pub ghost_tint: [f32; 3],
     /// Metres: how near the ghost and the HUD show.
     pub ghost_reach_m: f32,
+    /// 0..1: the ghost's brightness at night against the day's. A ghost is
+    /// a preview, not lit by the field (design 5), so it is dimmed with the
+    /// sun instead, never left glowing in the dark.
+    pub ghost_night: f32,
     pub strokes: Strokes,
     /// Seconds, the mallet's beat.
     pub stroke_s: f32,
@@ -89,6 +93,7 @@ impl Tunables {
         };
         unit("ghost_opacity", self.ghost_opacity)?;
         unit("ghost_waiting_opacity", self.ghost_waiting_opacity)?;
+        unit("ghost_night", self.ghost_night)?;
         unit("refund_share", self.refund_share)?;
         for c in &self.ghost_tint {
             unit("ghost_tint", *c)?;

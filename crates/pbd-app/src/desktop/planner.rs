@@ -21,7 +21,7 @@ use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Localized, Plaque, Set, UiKit, tr, tr_with};
 use pbd_core::building::plan::{Aim, Hex, Plan, PlanPiece, Tool, corner, distance, middle, step};
 use pbd_core::building::planner::{Check, Issue, check_plan, on_flat};
-use pbd_core::building::site::{BlueprintBody, Size, blueprints};
+use pbd_core::building::site::{BlueprintBody, BuildingSetting, Diff, Size, blueprints};
 use pbd_core::building::{Opening, RoofShape};
 use pbd_core::furniture::Kind;
 use pbd_core::inventory::Stack;
@@ -861,6 +861,10 @@ pub fn refresh(
         Res<Assets<Image>>,
         Option<Res<Sites>>,
     ),
+    (builds, adopting): (
+        Option<Res<pbd_app::builds::Builds>>,
+        Option<Res<super::construction::Adopting>>,
+    ),
     parts: Query<(Entity, &Part, Option<&Children>)>,
     mut hint: Query<&mut KitText, With<HintLine>>,
     screen: Res<Screen>,
@@ -1200,6 +1204,22 @@ pub fn refresh(
                 let editing = planner.editing;
                 let site_name =
                     editing.and_then(|id| sites.as_deref().and_then(|s| s.by_id.get(&id)));
+                // The change listed before it is saved (task 3.6): the
+                // pieces it adds, those it takes away, and the goods back.
+                let change = match (
+                    editing,
+                    sites.as_deref(),
+                    builds.as_deref(),
+                    adopting.as_deref(),
+                ) {
+                    (Some(id), Some(sites), Some(builds), Some(adopting)) => {
+                        super::construction::change_of(id, p, sites, adopting, builds, &data)
+                    }
+                    _ => None,
+                };
+                let planned = save
+                    .as_deref()
+                    .is_some_and(|s| super::construction::setting(s) == BuildingSetting::Planned);
                 e.with_children(|col| {
                     if let Some(site) = site_name {
                         label(
@@ -1210,6 +1230,9 @@ pub fn refresh(
                             ),
                             ui_kit::TEXT,
                         );
+                    }
+                    if let Some(d) = &change {
+                        change_lines(col, d, planned);
                     }
                     let shown_name = if planner.typing || !planner.typed.is_empty() {
                         Localized::verbatim(format!(
@@ -1291,6 +1314,52 @@ pub fn refresh(
         );
         if text.text != want {
             text.text = want;
+        }
+    }
+}
+
+/// The change's lines over Save change: the pieces added and taken away
+/// (furniture slots are not pieces), and in a planned world the goods the
+/// built ones give back; "No change" when the plan is the site's.
+fn change_lines(col: &mut ChildSpawnerCommands, d: &Diff, planned: bool) {
+    let pieces = |list: &[pbd_core::building::Piece]| {
+        list.iter()
+            .filter(|p| !matches!(p.shape, pbd_core::building::Shape::Furniture { .. }))
+            .count()
+    };
+    let added = pieces(&d.new);
+    let removed = pieces(&d.gone) + pieces(&d.marked);
+    if added == 0 && removed == 0 {
+        label(col, tr("planner.change.none"), ui_kit::TEXT_DIM);
+        return;
+    }
+    label(col, tr("planner.change.title"), ui_kit::TITLE);
+    if added > 0 {
+        label(
+            col,
+            tr_with("planner.change.added", &[("count", &added)]),
+            ui_kit::TEXT,
+        );
+    }
+    if removed > 0 {
+        label(
+            col,
+            tr_with("planner.change.removed", &[("count", &removed)]),
+            ui_kit::TEXT,
+        );
+    }
+    if planned {
+        for (good, n) in &d.refund {
+            if *n > 0 {
+                label(
+                    col,
+                    tr_with(
+                        "planner.change.back",
+                        &[("count", n), ("good", &good_name(good))],
+                    ),
+                    ui_kit::RUNE,
+                );
+            }
         }
     }
 }

@@ -30,6 +30,8 @@ pub struct PlannerData {
     pub tun: Tunables,
     pub costs: CostTable,
     pub presets: Presets,
+    /// The wild plants' rule, for what stands in a site's cells.
+    pub farm: pbd_core::farming::FarmSettings,
 }
 
 impl Default for PlannerData {
@@ -57,6 +59,7 @@ pub fn load() -> PlannerData {
         tun,
         costs,
         presets: read("blueprints.ron"),
+        farm: crate::config::farm_settings(),
     }
 }
 

@@ -160,10 +160,11 @@ pub fn setting(save: &WorldSave) -> BuildingSetting {
 }
 
 /// What the world holds round a site, for the whole-site check: whether a
-/// block is taken by a solid block or a standing tree (design 5).
+/// block is taken by a solid block or a standing plant (design 5).
 pub fn blocked(
     fine: &PlanetFine,
     save: &WorldSave,
+    farm: &pbd_core::farming::FarmSettings,
     cell: u32,
     layer: u16,
     ground: Option<u16>,
@@ -174,17 +175,42 @@ pub fn blocked(
     {
         return true;
     }
-    // A tree stands in the block over its ground, a storey of it.
+    // A plant stands in the blocks over its ground, a storey of them.
     ground.is_some_and(|g| {
-        layer >= g
-            && layer < g + STOREY
-            && super::digging::under_standing_tree(
-                fine,
-                save,
-                super::farm::axe_logs(None),
-                (cell, usize::from(g.saturating_sub(1))),
-            )
+        layer >= g && layer < g + STOREY && plant_stands(fine, save, farm, cell, g)
     })
+}
+
+/// Whether a plant stands on `cell`'s ground, whose first air layer is
+/// `ground`: a tree not felled, a cactus, or a wild plant not picked
+/// (`pbd_core::flora::stands_plant`, `farm::wild_at`). What the foliage and
+/// the wild plants draw there, so a site is never set out round one.
+pub fn plant_stands(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    farm: &pbd_core::farming::FarmSettings,
+    cell: u32,
+    ground: u16,
+) -> bool {
+    let top = usize::from(ground.saturating_sub(1));
+    let open_top = super::digging::material_of(fine, save, (cell, top))
+        .is_some_and(|m| m != Material::Air && !m.is_water())
+        && super::digging::material_of(fine, save, (cell, top + 1)) == Some(Material::Air);
+    if !open_top {
+        return false;
+    }
+    let flora = super::digging::record_of(fine, cell).is_some_and(|record| {
+        let r = &fine.set.finest_records()[record];
+        pbd_core::flora::stands_plant(
+            &pbd_app::planet::terrain_config().trees,
+            r.spare[0],
+            r.metadata[1],
+            !super::digging::tree_standing(save, super::farm::axe_logs(None), cell),
+        )
+    });
+    flora
+        || super::farm::wild_at(fine, save, &pbd_app::config::FarmConfig(*farm), cell, top)
+            .is_some()
 }
 
 /// A plan charted where it stands: the patch, the origin's index, the base
@@ -252,7 +278,16 @@ pub fn check_here(
         cells: &cells,
         ground: &ground,
     };
-    let taken = |c: u32, l: u16| blocked(fine, save, c, l, tops.get(&c).copied().flatten());
+    let taken = |c: u32, l: u16| {
+        blocked(
+            fine,
+            save,
+            &data.farm,
+            c,
+            l,
+            tops.get(&c).copied().flatten(),
+        )
+    };
     let world = World {
         site: &site,
         blocked: &taken,
@@ -418,6 +453,64 @@ fn ghost_mesh(buf: &MeshBuf) -> Mesh {
     .with_inserted_indices(bevy::mesh::Indices::U32((0..n).collect()))
 }
 
+/// A ghost's colour under `light` (1 by day, `ghost_night` at night): the
+/// blueprint tint, or the chalk wash on a piece to take down, dimmed and
+/// never more see-through.
+pub fn ghost_colour(
+    ghost: SiteGhost,
+    tun: &pbd_core::building::planner::Tunables,
+    light: f32,
+) -> Color {
+    let [r, g, b] = tun.ghost_tint;
+    let (rgb, alpha) = match ghost {
+        SiteGhost::Ready => ([r, g, b], tun.ghost_opacity),
+        SiteGhost::Waiting => ([r, g, b], tun.ghost_waiting_opacity),
+        SiteGhost::Marked => {
+            let c = Color::srgb(0.93, 0.92, 0.86).to_linear();
+            ([c.red, c.green, c.blue], 0.45)
+        }
+    };
+    Color::linear_rgba(rgb[0] * light, rgb[1] * light, rgb[2] * light, alpha)
+}
+
+/// How bright a ghost is at `daylight` (0 night to 1 day, the terrain's own
+/// dusk curve, `daylight::Clock::daylight`): full by day, `night` once the
+/// sun is down.
+pub fn ghost_light(daylight: f32, night: f32) -> f32 {
+    night + (1.0 - night) * daylight.clamp(0.0, 1.0)
+}
+
+/// Dim the ghosts with the sun (design 5): a ghost is a preview the field
+/// does not light, so at night it is dimmed rather than left glowing.
+pub fn dim_ghosts(
+    sun: Option<Res<pbd_app::sky::Sun>>,
+    data: Res<PlannerData>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<PlanetRenderFrame>>,
+    ghosts: Query<(&SiteGhost, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut shown: Local<Option<f32>>,
+) {
+    let Some(sun) = sun else {
+        return;
+    };
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+    let light = ghost_light(sun.clock.daylight(eye), data.tun.ghost_night);
+    if shown.is_some_and(|s| (s - light).abs() < 0.01) {
+        return;
+    }
+    *shown = Some(light);
+    debug!("SITE ghosts lit {light:.2}");
+    for (ghost, material) in &ghosts {
+        if let Some(m) = materials.get_mut(&material.0) {
+            m.base_color = ghost_colour(*ghost, &data.tun, light);
+        }
+    }
+}
+
 /// The ghost's meshes, made at startup hidden so their pipelines warm with
 /// the world's: a tint of the piece's own cut, never an edge drawn round it.
 pub fn spawn_ghosts(
@@ -426,21 +519,9 @@ pub fn spawn_ghosts(
     mut materials: ResMut<Assets<StandardMaterial>>,
     data: Res<PlannerData>,
 ) {
-    let [r, g, b] = data.tun.ghost_tint;
-    for (ghost, colour) in [
-        (
-            SiteGhost::Ready,
-            Color::linear_rgba(r, g, b, data.tun.ghost_opacity),
-        ),
-        (
-            SiteGhost::Waiting,
-            Color::linear_rgba(r, g, b, data.tun.ghost_waiting_opacity),
-        ),
-        // The chalk wash on a piece to take down.
-        (SiteGhost::Marked, Color::srgba(0.93, 0.92, 0.86, 0.45)),
-    ] {
+    for ghost in [SiteGhost::Ready, SiteGhost::Waiting, SiteGhost::Marked] {
         let material = materials.add(StandardMaterial {
-            base_color: colour,
+            base_color: ghost_colour(ghost, &data.tun, 1.0),
             unlit: true,
             alpha_mode: AlphaMode::Blend,
             cull_mode: None,
@@ -769,6 +850,7 @@ pub fn scaffolding(
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
     mut cut_for: Local<Option<(u64, u64)>>,
+    mut told: Local<std::collections::BTreeSet<(u64, u8)>>,
 ) {
     let Some(save) = save.as_deref_mut() else {
         return;
@@ -795,6 +877,9 @@ pub fn scaffolding(
                 give_goods(&hotbar.0, &cost)
             };
             let Some(after) = after else {
+                if told.insert((*id, s)) {
+                    info!("SITE {id} scaffolding round storey {s} wanted, short of {cost:?}");
+                }
                 // Not enough to put it up: said once a while, tried again.
                 if want && (time.elapsed_secs() % 6.0) < time.delta_secs() {
                     note.say(time.elapsed_secs(), tr("site.scaffold_needs"));
@@ -812,6 +897,8 @@ pub fn scaffolding(
                     "SITE {id} scaffolding {} round storey {s}",
                     if want { "up" } else { "down" }
                 );
+            } else if told.insert((*id, s)) {
+                warn!("SITE {id} scaffolding round storey {s}: the save refused it");
             }
         }
     }
@@ -1003,6 +1090,46 @@ pub fn apply_change(
         planner.editing = None;
         *screen = Screen::Playing;
     }
+}
+
+/// What saving `plan` over site `id` (0: the house being adopted) would do
+/// (design 7, task 3.6): the core's diff of the site's pieces against the
+/// plan charted where the site stands, for the planner to list before Save
+/// change. `None` where the site or its chart is gone.
+pub fn change_of(
+    id: u64,
+    plan: &Plan,
+    sites: &Sites,
+    adopting: &Adopting,
+    builds: &Builds,
+    data: &PlannerData,
+) -> Option<pbd_core::building::site::Diff> {
+    let (old, patch, old_charted) = if id == 0 {
+        let old = adopting.0.clone()?;
+        let (patch, charted) = chart_site(&old)?;
+        (old, patch, charted)
+    } else {
+        let s = sites.by_id.get(&id)?;
+        (s.body.clone(), s.patch.clone(), s.charted.clone())
+    };
+    let at = patch.keys.iter().position(|&k| k == old.chart.origin)?;
+    let new_charted = chart_plan(
+        &patch,
+        plan,
+        at,
+        usize::from(old.chart.turn),
+        old.chart.base,
+    )
+    .ok()?;
+    let old_pieces: Vec<Piece> = old_charted.iter().map(|(_, p)| p.clone()).collect();
+    let new_pieces: Vec<Piece> = new_charted.iter().map(|(_, p)| p.clone()).collect();
+    Some(diff(
+        &old_pieces,
+        &new_pieces,
+        &builds.pieces,
+        &data.costs,
+        &data.tun,
+    ))
 }
 
 /// O in build mode (design 3 and 7): aimed at a site, its plan in the
@@ -1337,6 +1464,7 @@ pub fn plugin(app: &mut App) {
                 draw_ghosts
                     .run_if(resource_exists::<pbd_app::towns::TownAssets>)
                     .before(pbd_app::builds::sync),
+                dim_ghosts,
                 paint_hud,
             )
                 .chain()
@@ -1360,11 +1488,14 @@ pub fn plugin(app: &mut App) {
 ///   `hover:<q>:<r>:<side>`, `upstairs`: the planner open on a preset (a
 ///   storey added with no stair for `upstairs`, to show a check);
 /// - `site:<preset>`, `turn:<n>`, `ahead:<m>`: that preset set out ahead,
-///   checked whole as build mode's click is;
+///   checked whole as build mode's click is (else the nearest cell within
+///   two rings that is clear, so the shot shows a site);
 /// - `build:<n>`: a frame later, the first `n` buildable pieces of the site
 ///   struck, each with its goods from the pack, as the mallet would;
 /// - `change`: then the site's plan with its last ground cell taken out,
 ///   saved as the planner's Save change is;
+/// - `edit`: instead, that changed plan open in the planner over the site,
+///   not saved, so its change list shows;
 /// - `view`, `dist:<m>`, `tilt:<degrees>`, `yaw:<degrees>`: architecture
 ///   mode's camera over the site.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -1513,47 +1644,66 @@ pub fn scripted(
                 preset: Some((id.clone(), size)),
             };
             let turn = num("turn", 0.0) as usize % 6;
-            match chart_here(&fine, &save, &mut cache, &hand.plan, cell, turn) {
-                Some((patch, _, base, charted)) => {
-                    for (_, p) in &charted {
-                        if let Shape::Floor { cell: c, layer } = p.shape
-                            && layer == base
-                        {
-                            let g = ground_top(&fine, &save, &mut cache, c);
-                            let tree = g.is_some_and(|g| {
-                                super::digging::under_standing_tree(
-                                    &fine,
-                                    &save,
-                                    super::farm::axe_logs(None),
-                                    (c, usize::from(g.saturating_sub(1))),
-                                )
-                            });
-                            info!(
-                                "PBD_PLAN_SHOT: floor cell {c} ground {g:?} base {base} tree {tree}"
-                            );
+            // The cell ahead first, then its neighbours out to two rings,
+            // until one is clear: a capture shows a site, never a refusal.
+            let mut tries = vec![cell];
+            if let Some(d) = pbd_core::cell_key::key_direction(cell) {
+                let patch = patch_round(d, PATCH_REACH_M);
+                let cells = Cells::new(&patch);
+                for _ in 0..2 {
+                    let ring: Vec<u32> = tries
+                        .iter()
+                        .flat_map(|&k| cells.neighbours(k).into_iter().flatten())
+                        .collect();
+                    for k in ring {
+                        if !tries.contains(&k) {
+                            tries.push(k);
                         }
-                    }
-                    let near = builds.near(target, PATCH_REACH_M);
-                    match check_here(
-                        &fine, &save, &mut cache, &patch, &charted, base, &near, &data, &hand.plan,
-                    ) {
-                        Ok(()) => {
-                            let chart = SiteChart {
-                                origin: cell,
-                                turn: turn as u8,
-                                base,
-                            };
-                            let mut none = PlanInHand::default();
-                            set_out_here(&mut save, &hand, chart, &mut none);
-                        }
-                        Err((why, hit)) => warn!(
-                            "PBD_PLAN_SHOT: refused here: {} on {} pieces",
-                            why.key(),
-                            hit.len()
-                        ),
                     }
                 }
-                None => warn!("PBD_PLAN_SHOT: the plan does not chart here"),
+            }
+            let mut set = false;
+            for origin in tries {
+                let Some((patch, _, base, charted)) =
+                    chart_here(&fine, &save, &mut cache, &hand.plan, origin, turn)
+                else {
+                    continue;
+                };
+                for (_, p) in &charted {
+                    if let Shape::Floor { cell: c, layer } = p.shape
+                        && layer == base
+                    {
+                        let g = ground_top(&fine, &save, &mut cache, c);
+                        let plant = g.is_some_and(|g| plant_stands(&fine, &save, &data.farm, c, g));
+                        info!(
+                            "PBD_PLAN_SHOT: floor cell {c} ground {g:?} base {base} plant {plant}"
+                        );
+                    }
+                }
+                let near = builds.near(target, PATCH_REACH_M);
+                match check_here(
+                    &fine, &save, &mut cache, &patch, &charted, base, &near, &data, &hand.plan,
+                ) {
+                    Ok(()) => {
+                        let chart = SiteChart {
+                            origin,
+                            turn: turn as u8,
+                            base,
+                        };
+                        let mut none = PlanInHand::default();
+                        set_out_here(&mut save, &hand, chart, &mut none);
+                        set = true;
+                        break;
+                    }
+                    Err((why, hit)) => warn!(
+                        "PBD_PLAN_SHOT: refused at {origin}: {} on {} pieces",
+                        why.key(),
+                        hit.len()
+                    ),
+                }
+            }
+            if !set {
+                warn!("PBD_PLAN_SHOT: no cell near clear for the site");
             }
         }
         if has("view") {
@@ -1590,12 +1740,12 @@ pub fn scripted(
     let n = num("build", 0.0) as usize;
     let cells = Cells::new(&site.patch);
     let mut built = 0;
-    'passes: for _ in 0..64 {
-        let mut placed_any = false;
-        for (_, piece) in &site.charted {
-            if built >= n {
-                break 'passes;
-            }
+    // Lowest first, one piece at a time, as a player goes up: the ground
+    // storey finished before the one over it.
+    let mut order: Vec<&Piece> = site.charted.iter().map(|(_, p)| p).collect();
+    order.sort_by_key(|p| p.shape.layer());
+    'passes: while built < n {
+        for &piece in &order {
             if is_built(&builds.pieces, piece) || matches!(piece.shape, Shape::Furniture { .. }) {
                 continue;
             }
@@ -1620,15 +1770,32 @@ pub fn scripted(
             if builds.place_with_hands(&mut save, piece.clone(), &after) {
                 hotbar.0 = after;
                 built += 1;
-                placed_any = true;
+                continue 'passes;
             }
         }
-        if !placed_any {
-            break;
-        }
+        break;
     }
     info!("PBD_PLAN_SHOT: struck {built} pieces of site {id}");
-    if has("change") {
+    for storey in 0..site.body.plan.storeys.len() as u8 {
+        let walls: Vec<&Piece> = site
+            .charted
+            .iter()
+            .filter(|(pp, p)| pp.storey() == storey && matches!(p.shape, Shape::Wall { .. }))
+            .map(|(_, p)| p)
+            .collect();
+        let up = walls.iter().filter(|p| is_built(&builds.pieces, p)).count();
+        info!(
+            "PBD_PLAN_SHOT: storey {storey} walls {up} of {} built, scaffolding wanted {}",
+            walls.len(),
+            pbd_core::building::site::wants_scaffold(
+                &site.charted,
+                storey,
+                &builds.pieces,
+                &data.tun
+            )
+        );
+    }
+    if has("change") || has("edit") {
         let mut p = site.body.plan.clone();
         if let Some(&last) = p.storeys[0].iter().next_back() {
             for s in &mut p.storeys {
@@ -1636,7 +1803,25 @@ pub fn scripted(
             }
             p.prune();
         }
-        change.0 = Some((id, p));
-        info!("PBD_PLAN_SHOT: the site's plan changed");
+        if has("edit") {
+            // The planner open on the site with the change drawn, not yet
+            // saved: its change list over Save change (task 3.6).
+            planner.editing = Some(id);
+            open_planner(
+                &mut planner,
+                &mut screen,
+                Some((
+                    site.body.plan.clone(),
+                    PlanName::Key(site.body.name.clone()),
+                    site.body.preset.clone(),
+                )),
+            );
+            planner.plan = p;
+            planner.revision += 1;
+            info!("PBD_PLAN_SHOT: the site's plan open, changed");
+        } else {
+            change.0 = Some((id, p));
+            info!("PBD_PLAN_SHOT: the site's plan changed");
+        }
     }
 }

@@ -12,6 +12,7 @@
     ghost_waiting_opacity: 0.15, // 0..1: a ghost waiting on others
     ghost_tint: (0.15, 0.62, 0.81), // linear RGB: blueprint cyan (#6fd0e8)
     ghost_reach_m: 40.0,         // metres: how near the ghost and the HUD show
+    ghost_night: 0.05,           // 0..1: the ghost's brightness at night against the day's
     strokes: (wall: 3, floor: 2, roof_cell: 2, stair: 4, post: 1, lantern: 1, door: 1),
     stroke_s: 0.5,               // seconds: the mallet's beat
     reach_m: 4.0,                // metres: how far F reaches a ghost

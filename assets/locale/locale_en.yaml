@@ -1318,6 +1318,16 @@ planner:
   bill_row: "{count} {good}, {have} in pack"
   bill_sum: "{pieces} pieces, {strokes} strokes"
   cancel: Cancel
+  change:
+    added:
+      one: "{count} piece added"
+      other: "{count} pieces added"
+    back: "{count} {good} back"
+    none: No change
+    removed:
+      one: "{count} piece removed"
+      other: "{count} pieces removed"
+    title: Change
   changing: "Changing {name}"
   check:
     empty: Paint a room to start

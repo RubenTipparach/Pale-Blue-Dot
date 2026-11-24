@@ -67,16 +67,15 @@ for it to be built.
       39a's bits and texture).
 - [x] 3.4 Building: the mallet's strokes on F, the compass tick, the HUD's
       count and bill; each piece a piece record with the pack.
-- [ ] 3.5 Scaffolding (design 6): poles and board walks, solid to the
+- [x] 3.5 Scaffolding (design 6): poles and board walks, solid to the
       walker, `LitByField` and `LitLikeTerrain`, put up and struck by the
-      site. Open: written and its geometry tested, but in the capture of a
-      two-storey site with its ground walls built it did not go up (see
-      `docs/screenshots/building-planner/GAME.md`); to find and fix.
-- [ ] 3.6 Editing a site and adopting a house (design 7), the change
-      summary, marked pieces drawn with the chalk wash. Built but for the
-      change summary: the planner does not yet list the new, dropped and
-      marked pieces and the goods back before Save change (the diff is
-      computed and logged on save; the HUD counts the pieces to take down).
+      site. It did not go up in the first capture: the rule wanted every
+      wall below built first (design, "The captures' faults"); it now goes
+      up once the storey can be worked on, and the capture shows it.
+- [x] 3.6 Editing a site and adopting a house (design 7), the change
+      summary, marked pieces drawn with the chalk wash. The planner lists
+      the pieces added, the pieces removed and the goods back over Save
+      change (`construction::change_of`, the same diff Save change applies).
 - [x] 3.7 Captures of each step in the game in `docs/screenshots/`.
 
 ## 4. Verification
@@ -94,6 +93,6 @@ As built (2026-11-24): see design, "As built". Left out of 3.x and said
 there: the mallet is carried in the pack (no held swing yet); the
 scaffold has no ladder bay, so an upper storey is reached by the house's
 own stair; a road cell or a town's footprint is not yet "in the way" (a
-solid block and a standing tree are); a dropped piece taken down with a
+solid block, a standing tree, a cactus and a wild plant are); a dropped piece taken down with a
 full pack is refused rather than left in a crate; the turnable 3D preview
 waits for the build camera.

@@ -270,6 +270,16 @@ pub fn grows_tree(table: &TreeTable, tree_id: u32, word: u32) -> bool {
     table.grows(tree_id, word)
 }
 
+/// Whether a plant stands up out of a finest cell's ground: a tree the axe
+/// has not felled (`tree_felled`), or a desert cactus, which is scenery and
+/// never felled (`tree_kit::grows_cactus`). What the foliage pass draws
+/// there, so a building is never set round one (`building-planner` design
+/// 5: a site's piece is refused in its cell).
+pub fn stands_plant(table: &TreeTable, tree_id: u32, word: u32, tree_felled: bool) -> bool {
+    (grows_tree(table, tree_id, word) && !tree_felled)
+        || crate::tree_kit::grows_cactus(tree_id, word)
+}
+
 // ---- Flora v2 (`flora-v2`): the per-biome looks and the plants' calendar ----
 
 /// Flower colours a biome's flower heads are drawn in, as bits of
@@ -732,6 +742,32 @@ fn litter(local: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A cactus is no tree (it is never chopped), but it stands in its cell
+    /// all the same, felled or not; a felled tree does not, and bare sand
+    /// stands nothing (`building-planner`: a plant refuses a site's piece).
+    #[test]
+    fn a_cactus_stands_in_its_cell() {
+        let desert_sand = 4 | 3 << 8;
+        let cactus = (0..10_000u32)
+            .find(|&id| crate::tree_kit::grows_cactus(id, desert_sand))
+            .expect("a cactus on the desert's sand");
+        let grass = 2 | 4 << 8;
+        for table in [TreeTable::V4, TreeTable::V10] {
+            assert!(!grows_tree(&table, cactus, desert_sand));
+            assert!(stands_plant(&table, cactus, desert_sand, false));
+            assert!(stands_plant(&table, cactus, desert_sand, true));
+            assert!((0..10_000u32).any(|id| !stands_plant(&table, id, desert_sand, false)));
+            // A town's cleared footprint stands nothing.
+            assert!(!stands_plant(&table, cactus, desert_sand | 1 << 24, false));
+            // A tree stands until it is felled.
+            let tree = (0..10_000u32)
+                .find(|&id| grows_tree(&table, id, grass))
+                .expect("a tree on grass");
+            assert!(stands_plant(&table, tree, grass, false));
+            assert!(!stands_plant(&table, tree, grass, true));
+        }
+    }
 
     /// The share that glows is the chance asked for, over any run of keys,
     /// including a run of neighbouring ones.

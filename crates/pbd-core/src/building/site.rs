@@ -441,8 +441,12 @@ pub fn scaffold_cost(bays: usize, tun: &Tunables) -> Goods {
     ]
 }
 
-/// Whether a storey wants scaffolding: it is above the ground, the walls of
-/// the storey below are all built, and its own walls are not.
+/// Whether a storey wants scaffolding (design 6): it is above the ground,
+/// its own walls are not all built, and it can be worked on: the walls of
+/// the storey below are all built, or a piece of its own already stands. A
+/// player who builds an upper floor before the last wall below it still
+/// gets scaffolding round that storey (the capture of 2026-11-24 struck in
+/// that order, and none went up).
 pub fn wants_scaffold(
     charted: &Charted,
     storey: u8,
@@ -458,7 +462,10 @@ pub fn wants_scaffold(
             .filter(|(pp, p)| pp.storey() == s && matches!(p.shape, Shape::Wall { .. }))
             .all(|(_, p)| is_built(pieces, p))
     };
-    walls_done(storey - 1) && !walls_done(storey)
+    let started = charted
+        .iter()
+        .any(|(pp, p)| pp.storey() == storey && is_built(pieces, p));
+    (walls_done(storey - 1) || started) && !walls_done(storey)
 }
 
 /// The ground storey's cells along its outside, in order round the room

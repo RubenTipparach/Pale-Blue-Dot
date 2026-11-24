@@ -19,28 +19,29 @@ debug readout at the top left is the capture's developer overlay.
 | `game-planner-checks.jpg` | A cell painted on Floor 1 over nothing: it is red, the checks say "Floor 1: Nothing holds it up" (build mode's own reason), and Set out is dead. |
 | `game-drafting-table.jpg` | The drafting table set down: the workbench's timber block with a drawing board tipped to the front and a linen sheet on it. |
 | `game-site-before.jpg`, `game-site-set-out.jpg`, `game-site-before-after.jpg` | The ground ahead before and after the cottage is set out (BEFORE \| AFTER in one frame): the whole ghost in the blueprint tint, the lime line in the outer cells' tops and the survey stakes at the corners. |
-| `game-site-half.jpg` | The cottage half built from the pack: the ground floor's walls stand in timber, the roof still a ghost; the HUD names the site, counts what is left and the goods still needed against the pack. |
-| `game-site-upper.jpg` | The two-storey house struck to its upper floor: the ground storey's walls stand in fieldstone, the upper storey's walls and roof are ghosts, the HUD counts 17 of 51 left with the stone still short. |
+| `game-site-half.jpg` | The cottage half built from the pack (retaken 2026-11-24): the ground floor's walls stand in timber, the roof still a ghost; the HUD names the site, counts what is left and the goods still needed. The cactus that stood inside it in the first take now refuses the site there, so the capture sets it out on the nearest clear cell; the cactus stands outside the wall. |
+| `game-site-scaffold.jpg` | The two-storey house struck lowest first to 34 pieces: the ground storey's fieldstone walls all stand, and scaffolding rings the upper storey (timber poles, plank walks, rope at the crossings, lit like the ground), its walls and roof still ghosts. Replaces `game-site-upper.jpg`, which had none. |
 | `game-site-change.jpg` | The cottage's plan changed after building: a cell dropped, its built pieces washed in chalk to take down. |
-| `game-site-night.jpg` | The same at 22:00: the built walls as dark as the ground, the ghost unlit. |
+| `game-planner-change.jpg` | The planner open over the half-built cottage with a cell taken out, before Save change: "Changing Cottage", then the change: 2 pieces added, 7 pieces removed, 31 planks back. |
+| `game-site-night.jpg` | The two-storey house at 22:00 with its scaffolding: the built walls and the scaffold as dark as the ground; the ghost dimmed with the sun (`ghost_night` 0.05) where it was the brightest thing in the first take. |
 
-What is wrong in them, and stays as a limitation for now:
+What was wrong in the first take, and what was done (design, "The
+captures' faults, found and fixed"):
 
-- **No scaffolding went up.** With the ground storey's walls built and the
-  upper storey's not, the site should have put scaffolding round the
-  upper storey; the capture's log has no "scaffolding up" line, so it did
-  not, and the cause is not found yet. The scaffold's geometry and cost
-  are pinned by a core test; in the game it is unseen.
-- **The ghost glows at night.** Design 5 leaves a ghost unlit by the field
-  (a preview); at 22:00 its cyan is the brightest thing in the frame. A
-  ghost dimmed with the hour is a look for the owner to judge.
-- **A cactus stands inside the cottage.** The whole-site check refuses a
-  standing tree on a block a piece takes, but the desert's cacti at this
-  spawn are not seen by it (the capture's log reports no tree under any of
-  the three ground cells), so the site was set out round one. Next: find
-  which rule draws a cactus there that `grows_tree` does not read.
-- **The lime line is faint.** It is the paving marks' band through the
-  outer cells' middles, under the ghost; at this distance it hardly reads.
+- **No scaffolding went up**: the rule wanted every ground wall built
+  first, and on this uneven ground the capture's pass-by-pass striking put
+  the upper floor and walls up before seven ground walls. Fixed in the
+  rule; the capture now also strikes lowest first.
+- **A cactus stood inside the cottage**: the check read only trees that
+  can be chopped. Fixed: a cactus or an unpicked wild plant in a piece's
+  cell refuses the site, with "Something is in the way".
+- **The ghost glowed at night**: now dimmed with the sun. It is still a
+  faint blueprint cyan at night, not lit by the field (design 5).
+- **The lime line was faint**: laid stronger in the terrain shader. It is
+  still under the ghost floor, so it reads best once the floor is built.
+
+Still as before:
+
 - The changed cottage marks its whole roof for taking down: a dropped cell
   changes the roof's cells, so the roof is a new piece and the old one is
   marked, as the diff says.

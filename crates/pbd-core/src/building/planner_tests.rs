@@ -724,3 +724,96 @@ fn shared(cells: &BTreeSet<Hex>) -> usize {
         .count()
         / 2
 }
+
+/// Design 6 and task 3.5: what decides the scaffolding is shown. A storey
+/// above the ground wants it once it can be worked on (the walls below all
+/// built, or a piece of its own standing) and until its own walls are all
+/// built; never the ground storey, never with scaffolding off. Struck in the
+/// capture's order (every buildable piece, pass after pass, so upper pieces
+/// go up before the last wall below), it still goes up.
+#[test]
+fn scaffolding_is_wanted_while_a_storey_is_worked_on() {
+    let t = tun();
+    let (patch, at) = plot();
+    let plan = presets().get("house").unwrap().plan(Size::Standard);
+    let cells = Cells::new(patch);
+    let charted = chart_plan(patch, &plan, *at, 0, GROUND).unwrap();
+    let flat = |_: u32| Some(GROUND);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let walls = |s: u8| -> Vec<Piece> {
+        charted
+            .iter()
+            .filter(|(pp, p)| pp.storey() == s && matches!(p.shape, Shape::Wall { .. }))
+            .map(|(_, p)| p.clone())
+            .collect()
+    };
+    let all_built = |b: &BTreeMap<u64, Piece>, s: u8| walls(s).iter().all(|w| is_built(b, w));
+    let mut built: BTreeMap<u64, Piece> = BTreeMap::new();
+    assert!(!wants_scaffold(&charted, 1, &built, &t));
+    // Built a piece at a time, lowest first, the way a player goes up.
+    let mut seen_up = false;
+    loop {
+        let standing: Vec<Piece> = built.values().cloned().collect();
+        let next = charted
+            .iter()
+            .filter(|(_, p)| {
+                !is_built(&built, p)
+                    && !matches!(p.shape, Shape::Furniture { .. })
+                    && super::rules::can_place(&site, &standing, p).is_ok()
+            })
+            .min_by_key(|(_, p)| p.shape.layer());
+        let Some((_, p)) = next else { break };
+        built.insert(p.id(), p.clone());
+        let want = wants_scaffold(&charted, 1, &built, &t);
+        assert_eq!(
+            want,
+            all_built(&built, 0) && !all_built(&built, 1),
+            "after {:?}",
+            p.shape
+        );
+        seen_up |= want;
+        assert!(!wants_scaffold(&charted, 0, &built, &t));
+    }
+    assert!(seen_up, "the scaffolding went up on the way");
+    assert!(all_built(&built, 1));
+    assert!(!wants_scaffold(&charted, 1, &built, &t), "and came down");
+
+    // The capture's order with one ground wall left out: every buildable
+    // piece in a pass, so the upper floor and walls stand before the last
+    // ground wall.
+    let ground_wall = walls(0)[0].clone();
+    let mut built: BTreeMap<u64, Piece> = BTreeMap::new();
+    let mut upper = false;
+    for _ in 0..3 {
+        for (pp, p) in &charted {
+            if p == &ground_wall
+                || is_built(&built, p)
+                || matches!(p.shape, Shape::Furniture { .. } | Shape::Roof { .. })
+            {
+                continue;
+            }
+            let standing: Vec<Piece> = built.values().cloned().collect();
+            if pp.storey() == 1 && matches!(p.shape, Shape::Wall { .. }) && upper {
+                // Leave the upper walls short of done.
+                continue;
+            }
+            if super::rules::can_place(&site, &standing, p).is_ok() {
+                built.insert(p.id(), p.clone());
+                upper |= pp.storey() == 1;
+            }
+        }
+    }
+    assert!(upper, "an upper piece stands");
+    assert!(!is_built(&built, &ground_wall));
+    assert!(!all_built(&built, 1));
+    assert!(wants_scaffold(&charted, 1, &built, &t));
+    // Scaffolding off: never.
+    let off = Tunables {
+        scaffold: false,
+        ..t.clone()
+    };
+    assert!(!wants_scaffold(&charted, 1, &built, &off));
+}
