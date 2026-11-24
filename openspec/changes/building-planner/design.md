@@ -373,6 +373,73 @@ top down and isometric".
   The choice is remembered on the device. In the game this is the build
   camera's preview (decision 12); the planner keeps both views.
 
+## As built (2026-11-24): what the design left open
+
+The owner approved M6 for the game on 2026-11-24 ("cool implement all the
+phase 3 stuff!"). Building it needed these choices the decisions above leave
+open. Each is a recommendation taken (ask only with screenshots).
+
+- **The site record's kind is `building-site`.** `site` is already the kind
+  of a city site (`pbd_core::sites::SITE_RECORD`), and two meanings of one
+  kind would make a world's sites and its towns' sites read each other.
+  `blueprint` is free and is used as designed.
+- **The mallet is carried in the pack, not the tool slot.** The tool slot is
+  four tools in a fixed saved line (`hand <tool> <four tiers>`); a fifth
+  widens that line and every tool picker. A mallet is a good (`mallet`, one
+  to a stack) and "in hand" for decision 6 means "in the pack": F on a
+  ghost strikes when one is carried, else "Needs a mallet". Its recipe (1 log,
+  1 stone at the workbench) is open from the start: in a planned world the
+  town tree's house mission is built with it, so locking it behind that
+  mission would leave the mission unreachable. The drafting table's recipe
+  (6 planks, 2 rope) unlocks on the house mission as designed.
+- **The drafting table is a block** (`Material::DraftingTable`, code 41),
+  drawn in the workbench's wood with a sloped board on its top, set down like
+  every station; F on it opens the planner. It queues no jobs.
+- **A doorway's leaf comes with its wall.** A plan's door opening charts to
+  the wall with its doorway and a door piece (`Shape::Door`) hung in it; the
+  cost table's door row pays for both, and the leaf is placed on the wall's
+  last stroke, in the same journal line. No door is taken from the pack.
+- **Posts.** The planner has no post tool (the mockup has none); a plan keeps
+  posts only when it is adopted from a house that has them.
+- **The planner's stand-in patch** is a flat hex disc built for the check
+  (`plan::flat_patch`): exact neighbours and corners, no pentagons, its
+  ground at one layer, so build mode's rule functions run on it unchanged.
+- **The game's rules decide, not the mockup's.** Where the mockup words a
+  check its own way (a stair with no floor at its foot, an upper floor over
+  nothing), the game reports the rule that breaks (`held_up`, `landing`...)
+  with its `build.refused.*` reason. One consequence: a storey that leaves
+  part of the one below open makes that part a flat roof, and two roofs a
+  storey apart over neighbouring cells are refused (`roof_overlap`), as they
+  are in build mode.
+- **The world setting is the identity's `building` field.** Missing reads
+  Free (every world made before); a world this build makes is written
+  Planned. An older build ignores the field and plays the world as Free.
+- **The plan is drawn as a picture.** The planner's plan view, top down and
+  isometric, is painted on the CPU into one image the UI shows, redrawn only
+  when the plan, the storey, the view or the hover changes; a click is
+  mapped back through the same projection. The turnable 3D preview still
+  waits for the build camera (decision 3).
+- **Lime lines use the paving marks' bits.** A site's outline is marked as
+  a loop of cells just inside its outer walls, each cell's band running to
+  the cells before and after it on the loop, through the same `spare[2]`
+  bits and texture as a road's marks (`townsfolk` 39a). So the lime runs
+  through the outer cells' middles rather than exactly under the walls; the
+  band and the stakes go when the site is finished.
+- **What the first cut leaves out**, each said here so it is not
+  mistaken for done: the scaffold has no ladder bay (an upper storey is
+  reached by the house's own stair, which is buildable before the upper
+  walls); "in the way" is a solid block or a standing tree, not yet a
+  road cell or a town's footprint; a marked piece taken down with a full
+  pack is refused ("No room") rather than its goods left in a
+  crate; in a planned world build mode's palette is unchanged but every
+  slot except Blueprint, Remove and Furniture says "Build from a plan".
+- **Turning.** Charting a plan one sixth on turns it one sixth: a plan
+  turned k sixths and charted k sixths on stands on the same cells
+  (`Plan::turned`, pinned by a test at all six turns).
+- **No held-swing yet.** A stroke is F on the mallet's beat (`stroke_s`),
+  with the compass tick and the count; the first-person mallet swing waits
+  for a mallet model in `held-swing`.
+
 ## Risks / Trade-offs
 
 - **Two ways to build.** Free and planned worlds behave differently. Kept to
