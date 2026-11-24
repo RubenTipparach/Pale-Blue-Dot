@@ -28,7 +28,9 @@ PR (CLAUDE.md). The PR body lists what is built and what is open.
   ghost and lifted planner view. Open: the world's own wide roads (new
   roads version), captures of a slope and a bridge, ghost lamps/decks,
   14.5's compass tick and bill test, trader map marker.
-- Talk framing v1 (P1): panel right, talker turned into the left third
+- NPC dialogs (landed 2c57b424): panel on the right, the townsperson
+  centred in the open space left of it, a warm talk light faded in through
+  the carried-light list; one presentation for Talk, Trade and Board
   (`desktop/talk.rs`, `assets/config/talk.ron`).
 - Full suites passed at `4e55e54c`: pbd-app 700, pbd-core 852, locale 3,
   openspec 234.
@@ -43,9 +45,6 @@ HEAD is already on origin and is clean can be removed.
    layout moves), townsfolk 2.2 idle captures, scaffold ladder bay,
    player-building 4.5 (double-click walk, cutaway); plus survey P3: raise
    `ghost_night` (was 0.05) so the site ghost glows more at night.
-3. Talk presentation: centre the NPC between the screen's left edge and the
-   panel's left edge; a fade-in warm light on them through the field light;
-   one shared presentation for every NPC dialog; captures by day and night.
 
 If an agent died mid-way, its uncommitted work is in its worktree; read
 its diff before deciding to finish or drop it.
