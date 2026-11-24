@@ -53,15 +53,18 @@ minutes with the smith drawn a metre off: no `LATE_PIPELINE` and no error.
 
 `ONLY=motion tools/capture_townsfolk.sh` (lavapipe; the look only): every
 4th frame of 48 from frame 150 (`PBD_CAPTURE_RUN`), each cropped to the
-person and laid out by `tools/crop_sequence.py`. The idle look is not
-here: the gate guard's and the bearded stallholder's spots in the script
-no longer face anyone since the towns were laid again, and need new spots.
+person and laid out by `tools/crop_sequence.py`. The idle look (taken
+2026-11-24) is shot at Linenleigh's merchant idling at his post, from the
+talk captures' `STALL_FAR` spot: the gate guard's and the bearded
+stallholder's old spots showed a door and a stallholder's back since the
+towns were laid again.
 
 | Sheet | What it shows |
 | --- | --- |
 | `motion-hammer-sheet.jpg` | Holbrook's smith at his post: the arm raised and brought down, then at rest. |
 | `motion-wipe-sheet.jpg` | Linenleigh's innkeeper: the hand circling as it wipes. |
 | `motion-walk-sheet.jpg` | Two of Linenleigh's people walking their paths: arms and legs swinging opposite. |
+| `motion-idle-sheet.jpg` | Linenleigh's merchant idling at his post, the player 2.7 m off: his eyes move in saccades and settle on the player, the head sways a little, and he blinks (the last two frames). |
 
 ## The road planner (`townsfolk` 14.3 to 14.7, design 42 to 42l)
 

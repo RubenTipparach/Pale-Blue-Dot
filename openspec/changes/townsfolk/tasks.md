@@ -12,7 +12,7 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 ## 2. How they look and move
 
 - [x] 2.1 The figure of M5 version 9's Faces tab (design 13a, 21; it replaces the hexagonal-prism figure of T2), one material for every person. Verify: a `--capture` a metre from a person showing the block head and the face, in `docs/screenshots/townsfolk/`.
-- [ ] 2.2 The walk swing, the work loops (hammer, wipe) and the idle look, as the mockup animates them. Verify: a capture sequence of each. Built (`townsfolk::motion`, `townsfolk::tests::the_body_walks_and_works`). Sequences taken 2026-11-24 (lavapipe, `ONLY=motion tools/capture_townsfolk.sh`): `docs/screenshots/townsfolk/motion-hammer-sheet.jpg`, `motion-wipe-sheet.jpg`, `motion-walk-sheet.jpg`. Still owed: the idle look, whose script spots (the gate guard, the bearded stallholder) face no one since the towns were laid again.
+- [x] 2.2 The walk swing, the work loops (hammer, wipe) and the idle look, as the mockup animates them. Verify: a capture sequence of each. Built (`townsfolk::motion`, `townsfolk::tests::the_body_walks_and_works`). Sequences taken 2026-11-24 (lavapipe, `ONLY=motion tools/capture_townsfolk.sh`): `docs/screenshots/townsfolk/motion-hammer-sheet.jpg`, `motion-wipe-sheet.jpg`, `motion-walk-sheet.jpg`. The idle look taken the same day at Linenleigh's merchant, from the talk captures' spot (the old gate guard and stallholder spots showed a door and a back): `motion-idle-sheet.jpg`.
 
 ## 3. Solid and lit
 
