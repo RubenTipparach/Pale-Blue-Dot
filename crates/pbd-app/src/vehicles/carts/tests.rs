@@ -408,3 +408,37 @@ fn old_animal_records_are_unchanged_by_riding() {
     let written = old.record(5).body;
     assert!(!written.contains("ridden"), "{written}");
 }
+
+/// `town-missions-tree` task 4.1, the carts' half: a horse hitched raises
+/// `hitch` (`horse`), and metres hauled raise `haul` (`cart`) and nothing
+/// for none.
+#[test]
+fn the_carts_raise_hitch_and_haul() {
+    use pbd_core::missions::Kind;
+    let mut world = world_with(WorldSave::memory_only());
+    let horse = AnimalBody {
+        sp: 3,
+        via: animal::Via::Bought,
+        ..AnimalBody::default()
+    };
+    world
+        .resource_mut::<WorldSave>()
+        .store(&Author::Player(0), vec![horse.record(9)]);
+    let e = spawn(
+        &mut world,
+        Cart::new(71, CartKind::HorseCart, at(), DVec3::X),
+    );
+    assert!(hitch_horse(&mut world, e, 9));
+    let raised: Vec<(Kind, String, u32)> = world
+        .resource_mut::<Messages<Did>>()
+        .drain()
+        .map(|d| (d.0.kind, d.0.what, d.0.count))
+        .collect();
+    assert_eq!(raised, vec![(Kind::Hitch, "horse".to_string(), 1)]);
+    let haul = missions::hauled(12).unwrap();
+    assert_eq!(
+        (haul.kind, haul.what.as_str(), haul.count),
+        (Kind::Haul, "cart", 12)
+    );
+    assert!(missions::hauled(0).is_none());
+}
