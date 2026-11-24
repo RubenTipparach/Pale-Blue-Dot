@@ -28,8 +28,8 @@ FULL_FRONT="--walk --at 29.707064 9.102589 --yaw 87.3 --pitch -6"
 ONLY=${ONLY:-all}
 # The motion (task 2.2) as capture sequences: every 4th frame of 48 from frame
 # 150 (`PBD_CAPTURE_RUN`, a capture instrument), so a contact sheet shows
-# the smith's hammer, the innkeeper's wipe, the market's walkers and the gate
-# guard's idle look; tools/contact_sheet.py lays each run out as a sheet.
+# the smith's hammer, the innkeeper's wipe and the market's walkers;
+# tools/crop_sequence.py lays each run out as a sheet.
 if [ "$ONLY" = motion ]; then
   run() {
     name=$1; shift
@@ -41,7 +41,7 @@ if [ "$ONLY" = motion ]; then
   run hammer $SMITH_SIDE
   run wipe $GOATEE
   run walk $MARKET
-  run idle $GUARD
+  # The idle look waits for a new spot: GUARD and FULL_FRONT face no one now.
   exit 0
 fi
 # The ears (design 38): the smith from the side, and the two bearded faces.

@@ -50,7 +50,7 @@ has built them into the engine.
 
 - [x] 6.1 A floor over lower ground stands on a fieldstone footing down to it (design 8). Verify: `building::tests::a_floor_over_lower_ground_stands_on_a_footing`, and a capture of the house on the desert's terraces.
 - [x] 6.2 A player's building casts the sun's shadow as a town's does (design 9). Verify: `builds::tests::a_plot_casts_the_suns_shadow_but_its_flames_do_not`, and a capture.
-- [ ] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`.
+- [x] 6.3 Retake `house-4-roofed.jpg` and `red-ghost.jpg`, the red ghost wholly in frame. Verify: in `docs/screenshots/player-building/`. Retaken 2026-11-24 (lavapipe) from architecture mode, where the roof ghost a storey up stands wholly in frame; commands in the folder's README.
 
 ## 7. The owner's notes (2026-11-22; design B7 to B10)
 
