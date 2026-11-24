@@ -1341,11 +1341,7 @@ pub fn plugin(app: &mut App) {
         .add_systems(
             Update,
             scripted
-                .run_if(
-                    resource_exists::<super::CaptureState>
-                        .and(resource_exists::<PlanetFine>)
-                        .and(pbd_app::loading::ready),
-                )
+                .run_if(resource_exists::<super::CaptureState>.and(resource_exists::<PlanetFine>))
                 .before(follow),
         );
 }
@@ -1416,12 +1412,19 @@ pub fn scripted(
     let level = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
     let ahead = num("ahead", 12.0);
     let target = eye + level * ahead;
-    let Some(cell) = contact
+    let found = contact
         .finest_cell(target.normalize())
         .and_then(|r| fine.set.finest_records().get(r).map(|c| c.key()))
-    else {
-        // The fine set is not round the eye yet: asked again next frame.
-        return;
+        .or_else(|| contact.finest_key(target.normalize()));
+    // The fine set is not round the eye yet: asked again next frame. The
+    // planner alone needs no cell.
+    let needs_cell = ["table", "site", "view", "build", "change"]
+        .iter()
+        .any(|k| has(k));
+    let cell = match found {
+        Some(c) => c,
+        None if needs_cell => return,
+        None => 0,
     };
     let size = Size::ALL[(num("size", 1.0) as usize).min(2)];
     if *done == 0 {

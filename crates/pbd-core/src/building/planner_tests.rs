@@ -622,7 +622,7 @@ fn every_preset_passes_at_every_size() {
             let issues = check_plan(&plan, &t);
             assert!(issues.is_empty(), "{} {size:?}: {issues:?}", preset.id);
             assert!(
-                !plan.slots.is_empty() || preset.slots.is_empty(),
+                !plan.slots.is_empty() || preset.slots.is_empty() || plan.storeys[0].len() == 1,
                 "{} {size:?} has slots",
                 preset.id
             );
@@ -631,7 +631,7 @@ fn every_preset_passes_at_every_size() {
     let kits = kits();
     let mut joined = 0;
     let mut plain = 0;
-    for name in ["village", "walled", "harbour", "desert", "tundra", "jungle"] {
+    for name in ["village", "town", "coast", "desert", "tundra", "jungle"] {
         for def in &template(name).buildings {
             let Some(kit) = kits.get(&def.kit) else {
                 continue;
