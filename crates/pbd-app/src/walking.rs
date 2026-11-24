@@ -2172,6 +2172,7 @@ pub(crate) fn follow_walker(
     mut step_ease: Local<(Option<f64>, f32)>,
     view: Option<Res<crate::build_view::BuildView>>,
     seated: Option<Res<SeatedEye>>,
+    lift: Option<Res<crate::roads::planner::PlannerLift>>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2225,6 +2226,19 @@ pub(crate) fn follow_walker(
             crate::render_origin::render_from_physics(frame, eye)
         });
         camera.rotation = state.rotation();
+        // The road planner's lifted view (`townsfolk` design 42n): the eye
+        // eased up and back, the look the player's own raw look tipped
+        // down; picking casts from this eye. Off, nothing changes.
+        if let Some(lift) = lift.as_deref().filter(|l| l.lifted())
+            && seated.as_ref().and_then(|s| s.0).is_none()
+        {
+            let forward = state.rotation() * Vec3::NEG_Z;
+            let (offset, tilt) = lift.offset(drawn_up, forward);
+            // Never past straight down.
+            let tilt = tilt.min((state.pitch + 1.55).max(0.0));
+            camera.translation += offset;
+            camera.rotation = state.rotation() * Quat::from_rotation_x(-tilt);
+        }
         // Architecture mode's camera in the walker's place (design B9);
         // off, the walker's own is written above, exactly as it was.
         if let Some(view) = view.as_deref().filter(|v| v.on)
@@ -4311,6 +4325,7 @@ mod tests {
                     kind: Kind::Ground,
                     raised: false,
                     cut_fill: 0,
+                    bed: Default::default(),
                     up,
                     from: up.and(k.checked_sub(1).map(|j| keys[j])),
                 }
