@@ -780,7 +780,8 @@ pub fn adopt(patch: &Patch, at: usize, base: u16, pieces: &[Piece]) -> Plan {
     let cells = PlanCells::new(patch, at, 0, 8);
     let hex = cells.by_key();
     let storey = |layer: u16| -> Option<u8> {
-        (layer >= base && (layer - base) % STOREY == 0).then(|| ((layer - base) / STOREY) as u8)
+        (layer >= base && (layer - base).is_multiple_of(STOREY))
+            .then(|| ((layer - base) / STOREY) as u8)
     };
     let side_to = |a: Hex, b: Hex| (0..6u8).find(|&d| step(a, d) == b);
     let kit = pieces
@@ -870,10 +871,8 @@ pub fn adopt(patch: &Patch, at: usize, base: u16, pieces: &[Piece]) -> Plan {
                     }
                 }
             }
-            Shape::Roof { layer, shape, .. } => {
-                if top_roof.is_none_or(|(l, _)| layer > l) {
-                    top_roof = Some((layer, shape));
-                }
+            Shape::Roof { layer, shape, .. } if top_roof.is_none_or(|(l, _)| layer > l) => {
+                top_roof = Some((layer, shape));
             }
             _ => {}
         }

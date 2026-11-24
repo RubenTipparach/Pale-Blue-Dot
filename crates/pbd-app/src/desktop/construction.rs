@@ -187,6 +187,15 @@ pub fn blocked(
     })
 }
 
+/// A plan charted where it stands: the patch, the origin's index, the base
+/// layer and the pieces.
+pub type ChartedHere = (
+    std::sync::Arc<pbd_core::settlement::chart::Patch>,
+    usize,
+    u16,
+    Vec<(PlanPiece, Piece)>,
+);
+
 /// Chart `plan` at `cell` with turn `turn` on the ground under it: the
 /// patch, the origin's index, the base layer and the charted pieces.
 pub fn chart_here(
@@ -196,12 +205,7 @@ pub fn chart_here(
     plan: &Plan,
     cell: u32,
     turn: usize,
-) -> Option<(
-    std::sync::Arc<pbd_core::settlement::chart::Patch>,
-    usize,
-    u16,
-    Vec<(PlanPiece, Piece)>,
-)> {
+) -> Option<ChartedHere> {
     let direction = pbd_core::cell_key::key_direction(cell)?;
     let patch = std::sync::Arc::new(patch_round(direction, PATCH_REACH_M));
     let at = patch.keys.iter().position(|&k| k == cell)?;
@@ -523,10 +527,10 @@ fn aimed_target(
             }
         };
         // Marked pieces come down top first.
-        if let Some(next) = pbd_core::building::site::next_down(&site.body.marked, &standing) {
-            if is_built(&builds.pieces, next) {
-                consider(next, Act::TakeDown);
-            }
+        if let Some(next) = pbd_core::building::site::next_down(&site.body.marked, &standing)
+            && is_built(&builds.pieces, next)
+        {
+            consider(next, Act::TakeDown);
         }
         if !site.body.marked.is_empty() {
             continue;
@@ -754,6 +758,7 @@ fn next_piece_near(sites: &Sites, builds: &Builds, eye: Vec3, reach_m: f32) -> O
 /// above the ground once the walls under it are built and until its own
 /// are, paid for in a planned world and given back when it comes down; and
 /// cut what stands for the walker and the draw.
+#[allow(clippy::too_many_arguments)]
 pub fn scaffolding(
     mut save: Option<ResMut<WorldSave>>,
     sites: Res<Sites>,
@@ -1362,7 +1367,7 @@ pub fn plugin(app: &mut App) {
 ///   saved as the planner's Save change is;
 /// - `view`, `dist:<m>`, `tilt:<degrees>`, `yaw:<degrees>`: architecture
 ///   mode's camera over the site.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     state: Res<super::CaptureState>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,

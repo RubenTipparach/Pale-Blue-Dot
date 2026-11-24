@@ -399,13 +399,12 @@ pub fn update(
     if let Ok(mut text) = name.single_mut() {
         let line = match compass::named_ahead(heading, &waypoints, &places) {
             Some(Named::Waypoint(i)) if i < lost.len() => compass::name_line(
-                &pbd_app::ui_kit::tr("jobs.lost_marker").to_string(),
+                &pbd_app::ui_kit::tr("jobs.lost_marker"),
                 waypoints[i].distance_m,
             ),
-            Some(Named::Waypoint(i)) if i < lost.len() + ticks => compass::name_line(
-                &pbd_app::ui_kit::tr("site.next").to_string(),
-                waypoints[i].distance_m,
-            ),
+            Some(Named::Waypoint(i)) if i < lost.len() + ticks => {
+                compass::name_line(&pbd_app::ui_kit::tr("site.next"), waypoints[i].distance_m)
+            }
             Some(Named::Waypoint(i)) => compass::name_line(
                 &read.1[i - lost.len() - ticks].label(),
                 waypoints[i].distance_m,

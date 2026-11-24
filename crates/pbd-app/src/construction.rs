@@ -207,17 +207,19 @@ pub fn give_goods(carried: &Slots, goods: &Goods) -> Option<Slots> {
     Some(after)
 }
 
+/// Each marked cell with the cells before and after it on its line, and the
+/// stakes' cells.
+pub type SiteMarks = (Vec<(u32, (Option<u32>, Option<u32>))>, Vec<u32>);
+
 /// The lime lines and survey stakes of every unfinished site (design 5):
 /// each cell along a ground storey's outside, marked from the cell before
 /// it round the room to the cell after, in the paving marks' bits
 /// (`townsfolk` 39a); and the cells the stakes stand in. A finished site
 /// has neither.
-pub fn site_marks(
-    records: &pbd_core::records::Records,
-) -> (Vec<(u32, (Option<u32>, Option<u32>))>, Vec<u32>) {
+pub fn site_marks(records: &pbd_core::records::Records) -> SiteMarks {
     use pbd_core::building::plan::PlanCells;
     use pbd_core::building::site::{outline, progress, stake_spots};
-    type Marks = (Vec<(u32, (Option<u32>, Option<u32>))>, Vec<u32>);
+    type Marks = SiteMarks;
     // Asked every frame by the stakes: worked out again only when a site
     // or a piece record changes.
     static LAST: std::sync::Mutex<Option<(u64, Marks)>> = std::sync::Mutex::new(None);

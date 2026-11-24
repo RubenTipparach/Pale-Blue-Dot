@@ -208,7 +208,7 @@ impl View {
     }
 
     /// A plan point (`x`, `z`, lifted `h`) on the image.
-    pub fn to_image(&self, x: f32, z: f32, h: f32) -> Vec2 {
+    pub fn to_image(self, x: f32, z: f32, h: f32) -> Vec2 {
         if self.iso {
             Vec2::new(
                 self.cx + (x - z) * IC * self.scale,
@@ -220,7 +220,7 @@ impl View {
     }
 
     /// An image point back on the plan's floor.
-    pub fn to_plan(&self, p: Vec2) -> (f32, f32) {
+    pub fn to_plan(self, p: Vec2) -> (f32, f32) {
         let u = (p.x - self.cx) / self.scale;
         let v = (p.y - self.cy) / self.scale;
         if !self.iso {
@@ -847,7 +847,7 @@ fn button(
 }
 
 /// Rebuild the panel's parts when the plan or the library changes.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn refresh(
     mut commands: Commands,
     kit: Res<UiKit>,
@@ -1212,7 +1212,7 @@ pub fn refresh(
                         );
                     }
                     let shown_name = if planner.typing || !planner.typed.is_empty() {
-                        Localized::verbatim(&format!(
+                        Localized::verbatim(format!(
                             "{}{}",
                             planner.typed,
                             if planner.typing { "_" } else { "" }
@@ -1523,7 +1523,7 @@ pub fn input(
 }
 
 /// A button pressed.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn press(
     mut planner: ResMut<Planner>,
     data: Res<PlannerData>,
@@ -1714,6 +1714,7 @@ pub fn forget(screen: Res<Screen>, mut planner: ResMut<Planner>) {
 }
 
 /// Open the planner on a plan.
+#[allow(clippy::type_complexity)]
 pub fn open(
     planner: &mut Planner,
     screen: &mut Screen,
