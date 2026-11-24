@@ -74,9 +74,17 @@ thread_local! {
 
 /// Install the open world's marks and bare cells, or none.
 pub fn install(installed: Option<Installed>) {
-    let _held = crate::settlement::ground::installing();
+    let _held = install_held(installed);
+}
+
+/// [`install`], keeping every other install of what the terrain reads
+/// waiting while the guard lives: for a check that reads back what it just
+/// installed while other threads install their own.
+pub fn install_held(installed: Option<Installed>) -> std::sync::RwLockWriteGuard<'static, ()> {
+    let held = crate::settlement::ground::installing();
     *INSTALLED.write().unwrap_or_else(|e| e.into_inner()) = installed.map(std::sync::Arc::new);
     GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    held
 }
 
 fn with<T>(f: impl FnOnce(Option<&Installed>) -> T) -> T {
