@@ -675,6 +675,8 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            carpenter: Handle::default(),
+            drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
             tiered: Vec::new(),

@@ -103,6 +103,7 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 - [x] 12.4 The lost-villager job gets an icon of its own (built with `town-missions-tree` 6.3, `assets/items/missions/lost-villager.png`; capture 2026-11-24 `docs/screenshots/town-missions-tree/board-lost.jpg`)
 - [x] 12.5 Traders sell tools or not, per survey E1: answered 2026-11-22, no basic tools; enchanted tools and special weapons later (design 38c). Today's game already sells none.
 - [ ] 12.6 Traders' Tools shelf: enchanted tools and special weapons with their bonuses (such as +1 mining speed, +1 yield), per survey E1. Waits for a write-up of enchantments and weapons (weapons tie to survival, phase 4, `survival-mode`). Verify: that write-up exists and names the trader's stock.
+- [x] 12.7 Framing (owner, survey P1, 2026-11-24: "Move the camera so the merchant is on left, and the trade UI is on the right"; design 37a, framing): the Talk, Trade and Board panels sit on the right, and opening a talk turns the walker's look, eased over 0.25 s, so the townsperson stands in the centre of the left third. Verify: `talk::tests::the_talker_lands_in_the_left_third`, and the capture `docs/screenshots/townsfolk-economy/trade-framed.jpg`.
 
 
 ## 13. Roads by waypoints, gravel from a grinder and a mixer (added 2026-11-22: "building roads shjould be like a way point system ... to make gravel you need a grinder and mixer")

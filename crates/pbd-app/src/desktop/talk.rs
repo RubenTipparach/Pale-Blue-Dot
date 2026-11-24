@@ -47,6 +47,144 @@ const BAR_GAP: f32 = 3.0;
 /// A board row's width.
 const BOARD_ROW_W: f32 = 390.0;
 
+/// How a talk is framed (`townsfolk` design 37a, framing; owner, survey
+/// P1, 2026-11-24: "Move the camera so the merchant is on left, and the
+/// trade UI is on the right"), from `assets/config/talk.ron`.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TalkView {
+    /// Seconds the look takes to turn to the townsperson; 0 turns at once.
+    pub turn_secs: f32,
+    /// Where the townsperson's aim point lands, normalised screen space
+    /// (x -1 left to 1 right, y -1 bottom to 1 top).
+    pub frame: (f32, f32),
+    /// The aim point's height over the townsperson's feet, metres.
+    pub aim_height_m: f32,
+    /// The gap between a talk panel and the screen's right edge, native px.
+    pub panel_margin_px: f32,
+}
+
+impl TalkView {
+    /// Parse and validate `talk.ron`'s text.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let view: Self = ron::from_str(text).map_err(|e| e.to_string())?;
+        let within = |name: &str, v: f32, lo: f32, hi: f32| {
+            (v.is_finite() && (lo..=hi).contains(&v))
+                .then_some(())
+                .ok_or(format!("{name} must be from {lo} to {hi}"))
+        };
+        within("turn_secs", view.turn_secs, 0.0, 2.0)?;
+        within("frame.0", view.frame.0, -0.95, 0.95)?;
+        within("frame.1", view.frame.1, -0.95, 0.95)?;
+        within("aim_height_m", view.aim_height_m, 0.0, 3.0)?;
+        within("panel_margin_px", view.panel_margin_px, 0.0, 200.0)?;
+        Ok(view)
+    }
+}
+
+impl Default for TalkView {
+    fn default() -> Self {
+        let path = pbd_app::paths::assets_dir().join("config/talk.ron");
+        let text =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        Self::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    }
+}
+
+/// The look's turn to frame the townsperson a talk opened with: the eye to
+/// their aim point as it was at the press (a townsperson who walks on is
+/// not followed), then the turn itself once it is solved.
+#[derive(Resource, Default, Clone, Debug, PartialEq)]
+pub struct TalkTurn {
+    /// Eye to aim point, render space, waiting to be solved.
+    aim: Option<Vec3>,
+    /// From and to, each a tangent heading and a pitch, and how far along.
+    turn: Option<((Vec3, f32), (Vec3, f32), f32)>,
+}
+
+/// The look (tangent heading, pitch) that puts the direction `to` (eye to
+/// the aim point) at `at` on screen, in normalised device coordinates, for
+/// a camera with no roll about `up` whose vertical field of view is `fov`
+/// radians and width over height `aspect`; as the walker builds its camera
+/// (`Transform::looking_to(heading * cos p + up * sin p, up)`). `None` when
+/// `to` is straight up or down, or the point cannot be put there.
+pub fn frame_look(to: Vec3, up: Vec3, fov: f32, aspect: f32, at: Vec2) -> Option<(Vec3, f32)> {
+    let d = to.try_normalize()?;
+    let up = up.try_normalize()?;
+    let half = (fov * 0.5).tan();
+    // The view-space direction that projects to `at` (forward is -z).
+    let c = Vec3::new(at.x * half * aspect, at.y * half, -1.0).normalize();
+    // Pitch: the camera pitched by p carries c to an elevation of
+    // c.y cos p - c.z sin p, which must be the target's.
+    let sin_e = d.dot(up).clamp(-1.0, 1.0);
+    let r = (c.y * c.y + c.z * c.z).sqrt();
+    if sin_e.abs() > r {
+        return None;
+    }
+    let phi = (-c.z).atan2(c.y);
+    let pitch = phi - (sin_e / r).acos();
+    // Heading: c, pitched, lies `off` to the left of the camera's forward
+    // in the tangent plane; the target's own heading is that far left.
+    let z = c.y * pitch.sin() + c.z * pitch.cos();
+    let off = (-c.x).atan2(-z);
+    let flat = (d - up * d.dot(up)).try_normalize()?;
+    Some((Quat::from_axis_angle(up, -off) * flat, pitch))
+}
+
+/// Turn the walker's look to frame the townsperson the talk opened with,
+/// eased over [`TalkView::turn_secs`]; left where it ends when the talk
+/// closes. While a talk panel is open the menu holds the pointer and no
+/// mouse is read, so this smooths no mouse look.
+pub fn turn_to_talker(
+    time: Res<Time>,
+    view: Res<TalkView>,
+    screen: Res<Screen>,
+    mut turn: ResMut<TalkTurn>,
+    cameras: Query<(&Camera, &Projection), With<Camera3d>>,
+    walker: Option<ResMut<pbd_app::walking::WalkingState>>,
+) {
+    if !matches!(*screen, Screen::Talk | Screen::Trade | Screen::Board) {
+        if *turn != TalkTurn::default() {
+            *turn = TalkTurn::default();
+        }
+        return;
+    }
+    let Some(mut walker) = walker else {
+        return;
+    };
+    if let Some(to) = turn.aim.take() {
+        let lens = cameras
+            .iter()
+            .find(|(c, _)| c.is_active)
+            .and_then(|(_, p)| match p {
+                Projection::Perspective(p) => Some((p.fov, p.aspect_ratio)),
+                _ => None,
+            });
+        let at = Vec2::new(view.frame.0, view.frame.1);
+        if let Some(target) =
+            lens.and_then(|(fov, aspect)| frame_look(to, walker.up(), fov, aspect, at))
+        {
+            turn.turn = Some((walker.view(), target, 0.0));
+        }
+    }
+    let Some((from, to, t)) = turn.turn.as_mut() else {
+        return;
+    };
+    *t = if view.turn_secs > 0.0 {
+        (*t + time.delta_secs() / view.turn_secs).min(1.0)
+    } else {
+        1.0
+    };
+    let s = *t * *t * (3.0 - 2.0 * *t);
+    let up = walker.up();
+    let angle = up.dot(from.0.cross(to.0)).atan2(from.0.dot(to.0));
+    let heading = Quat::from_axis_angle(up, angle * s) * from.0;
+    walker.set_look(heading, from.1 + (to.1 - from.1) * s);
+    if *t >= 1.0 {
+        turn.turn = None;
+    }
+}
+
 /// A list of the trade and board panels that scrolls on its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum List {
@@ -192,6 +330,7 @@ pub struct CoinNotice;
 pub fn spawn(
     mut commands: Commands,
     kit: Res<UiKit>,
+    view: Res<TalkView>,
     mut images: ResMut<Assets<Image>>,
     assets: Res<AssetServer>,
 ) {
@@ -202,8 +341,15 @@ pub fn spawn(
         (Screen::Trade, 490.0),
         (Screen::Board, 450.0),
     ] {
+        // On the right, the townsperson framed on the left (design 37a,
+        // framing): still centred top to bottom.
+        let layer = Node {
+            justify_content: JustifyContent::FlexEnd,
+            padding: UiRect::right(px(view.panel_margin_px)),
+            ..menu::layer()
+        };
         commands
-            .spawn((menu::layer(), GlobalZIndex(10), Panel(screen)))
+            .spawn((layer, GlobalZIndex(10), Panel(screen)))
             .with_children(|layer| {
                 let mut panel = layer.spawn(menu::framed(kit, Set::Stone, width));
                 match screen {
@@ -301,7 +447,7 @@ pub fn coin_hud(
 fn talker_in_reach<'a>(
     eye: &GlobalTransform,
     talkers: impl Iterator<Item = (&'a Talker, &'a GlobalTransform)>,
-) -> Option<Talker> {
+) -> Option<(Talker, Vec3)> {
     let at = eye.translation();
     let look = eye.forward().as_vec3();
     let up = eye.up().as_vec3();
@@ -310,10 +456,10 @@ fn talker_in_reach<'a>(
             let chest = g.translation() + up * 1.0;
             let to = chest - at;
             let d = to.length();
-            (d <= TALK_REACH_M && to.dot(look) >= 0.5 * d).then_some((d, t))
+            (d <= TALK_REACH_M && to.dot(look) >= 0.5 * d).then_some((d, t, g.translation()))
         })
         .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, t)| t.clone())
+        .map(|(_, t, feet)| (t.clone(), feet))
 }
 
 /// What a deal reads and writes: the rules, the purse, the save, the pack,
@@ -361,7 +507,7 @@ pub fn offer_talk(
     let Some((eye, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    if let Some(t) = talker_in_reach(eye, shown(&talkers)) {
+    if let Some((t, _)) = talker_in_reach(eye, shown(&talkers)) {
         interact.offer(Offer::new(Act::Talk, role_name(&t.role)));
     }
 }
@@ -421,6 +567,7 @@ pub fn use_talk(
     (cfg, mut eco, mut save, mut hotbar, sun, fauna, body): ShopParams,
     mut talking: ResMut<Talking>,
     folk: Option<Res<pbd_app::townsfolk::Townsfolk>>,
+    (view, mut turn): (Res<TalkView>, ResMut<TalkTurn>),
 ) {
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
@@ -438,9 +585,13 @@ pub fn use_talk(
     let Some((eye, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let Some(talker) = talker_in_reach(eye, shown(&talkers)) else {
+    let Some((talker, feet)) = talker_in_reach(eye, shown(&talkers)) else {
         return;
     };
+    // The aim point, at the press: the eye's up (the origin's at the
+    // walker) stands for the townsperson's within the talk's three metres.
+    let up = eye.up().as_vec3();
+    let aim = feet + up * view.aim_height_m - eye.translation();
     let drawn: Vec<&Talker> = talkers.iter().map(|(t, _, _)| t).collect();
     let people = roster(folk.as_deref(), &drawn, talker.site);
     let all: Vec<&Talker> = people.iter().collect();
@@ -458,7 +609,7 @@ pub fn use_talk(
         fish_ids: &ids,
         now_s: sun.clock.seconds,
     });
-    open_talk(
+    if open_talk(
         talker,
         &all,
         &towns,
@@ -466,7 +617,12 @@ pub fn use_talk(
         shop.as_mut(),
         &mut talking,
         &mut screen,
-    );
+    ) {
+        *turn = TalkTurn {
+            aim: Some(aim),
+            turn: None,
+        };
+    }
     if found {
         talking.said = Some(tr("talk.lost_found"));
     }
@@ -1859,12 +2015,15 @@ impl Plugin for TalkPlugin {
         use pbd_app::interact::InteractSet;
         app.init_resource::<Talking>()
             .init_resource::<TalkScroll>()
+            .init_resource::<TalkView>()
+            .init_resource::<TalkTurn>()
             .add_systems(PostStartup, spawn)
             .add_systems(PostUpdate, offer_talk.in_set(InteractSet::Offer))
             .add_systems(
                 Update,
                 (
                     use_talk,
+                    turn_to_talker,
                     forget,
                     scripted_pack.run_if(resource_exists::<super::CaptureState>),
                     scripted_press,
@@ -1878,5 +2037,82 @@ impl Plugin for TalkPlugin {
                 )
                     .chain(),
             );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::camera::CameraProjection;
+    const TALK_RON: &str = include_str!("../../../../assets/config/talk.ron");
+
+    /// Where `point` lands on screen, normalised, for the walker's camera
+    /// at `eye` with this look: the walker's own rotation and Bevy's own
+    /// perspective.
+    fn projected(eye: Vec3, up: Vec3, look: (Vec3, f32), lens: (f32, f32), point: Vec3) -> Vec3 {
+        let (heading, pitch) = look;
+        let camera = Transform::from_translation(eye)
+            .looking_to(heading * pitch.cos() + up * pitch.sin(), up);
+        let lens = PerspectiveProjection {
+            fov: lens.0,
+            aspect_ratio: lens.1,
+            ..default()
+        };
+        let clip = lens.get_clip_from_view() * camera.to_matrix().inverse() * point.extend(1.0);
+        clip.truncate() / clip.w
+    }
+
+    #[test]
+    fn the_talker_lands_in_the_left_third() {
+        let view = TalkView::parse(TALK_RON).unwrap();
+        let at = Vec2::new(view.frame.0, view.frame.1);
+        // The left third's centre, at the middle height.
+        assert!((at.x + 2.0 / 3.0).abs() < 1e-3 && at.y == 0.0);
+        let tilted = Vec3::new(0.3, 0.9, -0.2).normalize();
+        for up in [Vec3::Y, tilted] {
+            let side = up.any_orthonormal_vector();
+            let ahead = up.cross(side);
+            for lens in [
+                (1.0_f32, 16.0 / 10.0),
+                (70f32.to_radians(), 16.0 / 9.0),
+                (0.8, 4.0 / 3.0),
+            ] {
+                // A townsperson level, on a step below, on a step above,
+                // off to one side and behind.
+                for (along, across, rise) in [
+                    (1.6, 0.0, 0.0),
+                    (2.5, 0.8, -1.0),
+                    (2.0, -1.2, 1.0),
+                    (-2.0, 0.5, 0.0),
+                ] {
+                    let eye = Vec3::new(120.0, -40.0, 7.0);
+                    let feet = eye + ahead * along + side * across + up * (rise - 1.6);
+                    let aim = feet + up * view.aim_height_m;
+                    let look = frame_look(aim - eye, up, lens.0, lens.1, at).unwrap();
+                    let ndc = projected(eye, up, look, lens, aim);
+                    assert!(ndc.z > 0.0 && ndc.z < 1.0, "in front: {ndc}");
+                    assert!(
+                        (-1.0..-1.0 / 3.0).contains(&ndc.x),
+                        "left third: {ndc} for {up} {along} {across} {rise}"
+                    );
+                    assert!((ndc.x - at.x).abs() < 1e-3, "at the third's centre: {ndc}");
+                    assert!(ndc.y.abs() < 1e-3, "at the middle height: {ndc}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_framing_with_nowhere_to_look_is_refused() {
+        let at = Vec2::new(-2.0 / 3.0, 0.0);
+        assert!(frame_look(Vec3::Y, Vec3::Y, 1.0, 1.6, at).is_none());
+        assert!(frame_look(Vec3::ZERO, Vec3::Y, 1.0, 1.6, at).is_none());
+    }
+
+    #[test]
+    fn talk_view_refuses_a_frame_off_screen() {
+        assert!(TalkView::parse(TALK_RON).is_ok());
+        assert!(TalkView::parse(&TALK_RON.replace("-0.6667", "-1.5")).is_err());
+        assert!(TalkView::parse(&TALK_RON.replace("0.25", "-1.0")).is_err());
     }
 }

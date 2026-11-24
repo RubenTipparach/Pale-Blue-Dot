@@ -548,6 +548,23 @@ impl WalkingState {
             .clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
+    /// The up the look turns about: the origin's `up_at` the body, carried
+    /// from the last frame the walker read the look.
+    pub fn up(&self) -> Vec3 {
+        self.up
+    }
+
+    /// Set the look outright, heading (taken onto the tangent plane) and
+    /// pitch (clamped as any look is): the talk's turn to frame a
+    /// townsperson (`townsfolk` design 37a, framing), while a panel holds
+    /// the pointer and no mouse is read.
+    pub fn set_look(&mut self, heading: Vec3, pitch: f32) {
+        if heading.is_finite() && pitch.is_finite() {
+            self.heading = tangent_heading(heading, self.up);
+            self.pitch = pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        }
+    }
+
     fn transport_up(&mut self, up: Vec3) {
         self.heading = Quat::from_rotation_arc(self.up, up) * self.heading;
         self.heading = tangent_heading(self.heading, up);

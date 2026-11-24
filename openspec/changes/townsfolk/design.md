@@ -277,6 +277,48 @@ is a recommendation taken (ask only with screenshots):
 - **The scroll thumb** (task 12.2) is 6 px wide inside the 8 px track (it
   was 4), so it can be caught at 1x.
 
+**37a, framing (owner, survey P1, 2026-11-24).** The owner kept the
+baskets as built ("Baskets only, as built") and added, in their words:
+"One thing id improve is framing. Move the camera so the merchant is on
+left, and the trade UI is on the right." The plan, built as written:
+
+- **The panel sits on the right.** While Talk, Trade or Board is open, its
+  layer right-aligns the panel (`justify_content: FlexEnd`) with a margin
+  of `panel_margin_px` (24 native px, times the UI scale), still centred
+  top to bottom. The panel keeps its native width at every window size, so
+  it stays as readable as it was centred; on a window narrower than the
+  panel it overflows to the left as a centred one overflowed both ways.
+- **The view turns to the townsperson.** When the talk opens, the
+  walker's own look (heading and pitch, `WalkingState`) is turned so the
+  townsperson's aim point, `aim_height_m` (1.2 m, between chest and face)
+  over their feet, lands at `frame` in normalised screen space: (-2/3, 0),
+  the centre of the left third, level with the middle of the screen. The
+  turn is solved exactly for a camera with no roll, from the camera's own
+  vertical field of view and aspect, about the up the walker already
+  carries (the origin's `up_at` in f64); the eye-to-townsperson vector is
+  a difference of two render-space points, never a planet-centred
+  position. The look stays where it was turned when the talk closes: the
+  player has turned to face the merchant, nothing more, and no camera of
+  the talk's own exists.
+- **Eased, not cut.** The turn runs over `turn_secs` (0.25 s), smoothstep,
+  heading about up and pitch together. This does not touch the raw-look
+  rule: while a talk panel is open the menu holds the pointer and the
+  walker reads no mouse at all, so nothing smooths a mouse; once the panel
+  closes the look is raw again from wherever the turn left it. A
+  `turn_secs` of 0 turns at once.
+- **The framing is the one from when the talk opened.** A townsperson who
+  walks on while the panel is open is not followed: the aim is taken once,
+  at the press, and the turn runs to it.
+- **Tunables** are in `assets/config/talk.ron` (`TalkView`), read at start
+  and validated: `turn_secs` 0 to 2, `frame` inside the screen, the aim
+  height 0 to 3 m, the margin 0 to 200 px.
+- **Proof.** A unit test (`the_talker_lands_in_the_left_third`) solves the
+  turn for eyes and townspeople above, below and level, on a tilted up and
+  at three aspects, builds the camera the walker builds, projects the aim
+  point through Bevy's own perspective, and finds it in the left third at
+  the screen's middle height. The capture is
+  `docs/screenshots/townsfolk-economy/trade-framed.jpg`.
+
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
 `towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
