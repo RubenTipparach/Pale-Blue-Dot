@@ -35,19 +35,18 @@ PR (CLAUDE.md). The PR body lists what is built and what is open.
 - Full suites passed at `4e55e54c`: pbd-app 700, pbd-core 852, locale 3,
   openspec 234.
 
-## In flight when this was written (background worktree agents)
+## In flight
 
-Each lands on `claude/phase-2-1` when done; check `git log origin/claude/phase-2-1`
-and `git worktree list` (`.claude/worktrees/agent-*`). A worktree whose
-HEAD is already on origin and is clean can be removed.
+None: every agent has landed (head dc05edc9). Town/building landed: the
+forge (layout 3, old towns pinned), idle capture, scaffold ladder bay,
+double-click to walk and the End cutaway, ghost_night 0.12.
 
-2. Town/building: forge (townsfolk 3.2, design 26, new town version if
-   layout moves), townsfolk 2.2 idle captures, scaffold ladder bay,
-   player-building 4.5 (double-click walk, cutaway); plus survey P3: raise
-   `ghost_night` (was 0.05) so the site ghost glows more at night.
+## Known faults to fix next
 
-If an agent died mid-way, its uncommitted work is in its worktree; read
-its diff before deciding to finish or drop it.
+- The forge's fire is five pale cones: obvious primitives (CLAUDE.md "No
+  obvious primitives"). Redo as one shaped, textured flame mesh, and look
+  at it close up. The anvil reads as a dark blob.
+- Ladder bay needs a close capture.
 
 ## After they land
 
