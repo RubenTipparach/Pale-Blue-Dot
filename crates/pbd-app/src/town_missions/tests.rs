@@ -25,6 +25,7 @@ fn harbour(site: u32) -> TownInfo {
         kind: SiteKind::Harbour,
         name: "Saltmere".into(),
         neighbours: vec![site + 1],
+        roads_to: vec![],
     }
 }
 

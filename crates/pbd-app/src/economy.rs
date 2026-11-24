@@ -260,6 +260,10 @@ pub struct TownInfo {
     pub name: String,
     /// Other towns, nearest first: where a delivery may go.
     pub neighbours: Vec<u32>,
+    /// The towns a road of the world's joins to this one (`townsfolk`
+    /// design 46): where a road job goes. Filled from the save by
+    /// [`roads_to`] where a board is made.
+    pub roads_to: Vec<u32>,
 }
 
 impl TownInfo {
@@ -268,6 +272,7 @@ impl TownInfo {
             site: self.site,
             kind: self.kind,
             neighbours: &self.neighbours,
+            roads_to: &self.roads_to,
         }
     }
 }
@@ -294,7 +299,27 @@ pub fn town_info(towns: &Towns, site: u32) -> Option<TownInfo> {
             .take(DELIVERY_NEIGHBOURS)
             .map(|(_, id)| id)
             .collect(),
+        roads_to: Vec::new(),
     })
+}
+
+/// The towns a stored road of the world's joins to `site`, by site id, in
+/// the roads' order (`townsfolk` design 46).
+pub fn roads_to(save: &WorldSave, site: u32) -> Vec<u32> {
+    let mut out = Vec::new();
+    for road in pbd_core::roads::stored(&save.records) {
+        let other = if road.from_site == site {
+            road.to_site
+        } else if road.to_site == site {
+            road.from_site
+        } else {
+            continue;
+        };
+        if !road.cells.is_empty() && !out.contains(&other) {
+            out.push(other);
+        }
+    }
+    out
 }
 
 /// A town's name, by its site id: what a delivery's line names.
@@ -610,6 +635,10 @@ impl Shop<'_> {
             seconds: self.now_s,
         }
         .hour();
+        let town = TownInfo {
+            roads_to: roads_to(self.save, town.site),
+            ..town.clone()
+        };
         board
             .posted(town.as_town(), day, goodwill, &self.eco.jobs.gone())
             .into_iter()
@@ -641,6 +670,18 @@ impl Shop<'_> {
                 self.eco.let_go.push(pbd_core::townsfolk::PersonId {
                     site: lost.site,
                     index: lost.person,
+                });
+            }
+        }
+        // A road trader given up goes home (`townsfolk` design 46).
+        if job.kind == JobKind::Escort
+            && let Some(escort) = road_jobs::escort_of(self.save, job.id)
+        {
+            let home = road_jobs::escort_record(job.id, None);
+            if self.save.store(&Author::Player(0), vec![home]).is_some() {
+                self.eco.let_go.push(pbd_core::townsfolk::PersonId {
+                    site: escort.site,
+                    index: escort.person,
                 });
             }
         }
@@ -908,6 +949,7 @@ pub fn settle_market(
 }
 
 /// The lost villager and repair jobs (`townsfolk` design 28 and 29).
+pub mod road_jobs;
 pub mod special;
 
 /// The economy's config, state and counting.
@@ -934,6 +976,8 @@ impl Plugin for EconomyPlugin {
                     settle_market.run_if(resource_exists::<crate::sky::Sun>),
                     special::lost_villagers,
                     special::repairs,
+                    road_jobs::rockfalls,
+                    road_jobs::escorts,
                     special::use_mend,
                     special::use_lamp,
                 )

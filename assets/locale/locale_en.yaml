@@ -853,6 +853,7 @@ jobs:
   kind:
     cook: "Cook {count} {thing}  {have}/{count}"
     deliver: "Take a parcel to {town}  {have}/{count}"
+    escort: "Walk a trader to {town}  {have}/{count}"
     fish: "Catch {count} fish  {have}/{count}"
     gather: "Bring {count} {thing}  {have}/{count}"
     harvest: "Harvest {count} {thing}  {have}/{count}"
@@ -862,6 +863,7 @@ jobs:
     lost: "Bring a lost villager home  {have}/{count}"
     mine: "Dig {count} {thing}  {have}/{count}"
     repair: "Mend a broken wall  {have}/{count}"
+    rockfall: "Clear the rockfall off the road  {have}/{count}"
     trade: "Sell {count} goods here  {have}/{count}"
   lamp: lamp
   lost_marker: Lost villager
@@ -1503,6 +1505,9 @@ recipe:
 roads:
   bill:
     line: "Stakes {stakes}  Gravel {gravel}  {left} of {cells} left  Turns {turns}"
+    line_more: "Stakes {stakes}  Gravel {gravel}  Planks {planks}  Logs {logs}  Lanterns {lanterns}  {left} of {cells} left  Turns {turns}"
+  lamp:
+    needs: Needs a log and a street lantern
   menu:
     dirt: Dirt
     eraser: Eraser
@@ -1514,6 +1519,7 @@ roads:
   pave:
     needs_shovel: Needs a shovel
     needs_gravel: Needs gravel
+    needs_planks: Needs planks and a log
   plan:
     too_steep: Too steep
     too_wide_to_bridge: Too wide to bridge

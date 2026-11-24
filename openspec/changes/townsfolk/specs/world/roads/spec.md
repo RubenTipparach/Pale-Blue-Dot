@@ -7,24 +7,14 @@ player and laid by the world between towns. The slope, the network, cut and
 fill, the lamps near towns and the player's own road cells are built and in
 `openspec/specs/world/roads` (2026-11-22), and so are the roads marked by
 waypoints and paved with gravel from a grinder and a mixer and the sparse
-network of roads version 3 (design 39 to 41, 43 and 44, 2026-11-23); the
-road jobs are left here. The road planner's marking, record and dirt
-paving (design 42 to 42l) are built and moved there (2026-11-24); its
-bridges, its full bill against the pack and wide roads on one plane on a
-slope are left here.
+network of roads version 3 (design 39 to 41, 43 and 44, 2026-11-23). The
+road planner's marking, record and dirt paving (design 42 to 42l) are
+built and moved there (2026-11-24), and so are its wide roads on one plane,
+bridges and lamps, its lifted view and the road jobs (design 42m, 42n and
+46, 2026-11-24); its ghost of a bridge and lamp posts and its full bill
+against the pack are left here.
 
 ## ADDED Requirements
-
-### Requirement: Jobs on the roads
-
-A town's board SHALL be able to post a rockfall on a road to clear and a
-trader to walk with to the next town, and each SHALL be counted by the
-starter missions' rule.
-
-#### Scenario: A rockfall
-
-- **WHEN** the player takes a rockfall job and digs the road cell clear
-- **THEN** the job counts it, and the road is walked again
 
 ### Requirement: The road planner shows the road before it is staked
 

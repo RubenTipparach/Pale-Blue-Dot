@@ -1719,40 +1719,41 @@ open, each is a recommendation taken (ask only with screenshots):
 (2026-11-24, on the owner's "cool implement all the phase 3 stuff!";
 written before the code).** What 42l left open, each a recommendation
 taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
-- **One shared plane, measured in half layers.** A road's plane is set by
-  its centre line as the one-wide rule sets it (design 10a): at each edge
-  between two centre cells the higher cell's ground, at a centre cell's
-  middle the mean of its two edges. That puts it on a half-layer grid along
-  the road: every centre cell's middle and every edge is at a whole or a
-  half layer, and nothing between is a crease. A lane cell (the centre line
-  moved a lattice step, design 42l) sits half a cell along from its centre
-  cell, so its foot edge, middle and head edge fall on three of those
-  points: its top is read off the same plane, and there is no seam between
-  lanes by construction, as 10b asks.
-- **A lane's top is one of four shapes**, all a layer a cell at most: level,
-  a whole-cell rise (the one-wide slope), a rise over its head half only and
-  a rise over its foot half only (where the plane is held level past the
-  foot and the top of the climb, the crease 10b draws). Any of them may
-  stand **half a layer up** (`RoadCell::bed`: `half`, `rise`), the
-  half-height bed 42l found missing. The walker stands on it through the
-  same `Steps` floor a slope is (its foot and length cut to the half that
-  rises), and the mesh is the same fan: the crease runs through the cell's
-  middle and two of its corners, so no triangle straddles it.
+- **One shared plane.** A road's plane is set by its centre line as the
+  one-wide rule sets it (design 10a): at each edge between two centre cells
+  the higher cell's ground, at a centre cell's middle the mean of its two
+  edges, a whole or a half layer at each of those points and straight
+  between. Every cell of the road, centre or lane, takes its top off that
+  plane **where the cell really is**: the middles of its sides toward the
+  cells it comes in and leaves by are placed along the centre line and the
+  plane read there. On a regular lattice a lane is exactly half a cell
+  along its centre cell; on the sphere the lattice is not exactly regular
+  (measured: a lane a third, not a half, of a cell along), and a lane read
+  off a half-cell grid met its neighbours with seams of 15 cm. Read where
+  it is, the seam is under a centimetre (`a_wide_road_up_ten_layers_is_
+  crossed_lane_to_lane_without_a_step`).
+- **A lane's top** is a lift over its whole layer and a rise over part of
+  its length, level either side (`RoadCell::bed`: `lift_mm`, `from`, `to`,
+  `rise_mm`; all nought is the plain one-wide cell). That covers the
+  one-wide slope, the half-height bed 42l found missing (a lift of up to a
+  layer), and the creases where the plane is held level past the foot and
+  the top of the climb (10b). The walker stands on it through the same
+  `Steps` floor a slope is, its foot and length cut to the part that rises,
+  and the mesh is the same fan.
 - **Fill, never cut, and the plane moved half a cell where that saves a
   cut.** The player's road still digs nothing (42l). A lane cell whose
   ground is under the plane's lowest point on it is filled to the plane on
-  a bed of packed earth (half a layer to a layer and a half, `raised` and
-  `half`); one whose ground stands over it would need a cut, and is red,
-  "Too steep across". On an even hill the lanes half a cell along are always
-  half a layer off their ground, so with the plane where the one-wide rule
-  puts it one of them needs a cut a layer deep (10b's own measurement). So
-  the planner tries the plane **moved half a cell down the hill** (each
-  point the higher of its two neighbours on the half-cell grid, the ends of
-  the road held where they are): every lane then sits on its ground or
-  half a layer over it, and the centre cells take the half-layer bed
-  instead. It takes the moved plane only where it needs fewer cuts and
-  climbs no faster than a layer a cell. A one-wide road keeps today's plane
-  cell for cell.
+  a bed of packed earth (less than two layers: `raised` and the bed's
+  `lift_mm`); one whose ground stands over it would need a cut, and is red,
+  "Too steep across". On an even hill a lane off the centre's step is
+  part of a layer off its ground, so with the plane where the one-wide rule
+  puts it a lane can need a cut (10b's own measurement). So the planner
+  tries the plane **moved down the hill** half a cell, then a whole cell
+  (each point of the half-cell grid the higher of its two neighbours, the
+  ends of the road held where they are): the lanes then sit on their ground
+  or a little over it, and the centre cells take a bed instead. It takes
+  the least moved plane that needs fewest cuts and still climbs no faster
+  than a layer a cell. A one-wide road keeps today's plane cell for cell.
 - **Straight up a slope.** 10b's lanes share a plane only along a lattice
   row. A wide road whose centre line turns, or zigzags across the lattice,
   on a cell that rises or beside one, is red there, "Wide roads bend on the
@@ -1805,6 +1806,28 @@ taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
   `road` schema for the lanes' beds), for new worlds only, with version 3
   pinned by its digest. Left open in task 8.6; nothing in the world's
   planning changes here.
+
+**42n. The owner's answers on the planner (survey P2, 2026-11-24).**
+- **A stronger ghost**: `ghost_opacity` 0.55, up from 0.35.
+- **A slightly aerial view** (owner: "Can we something like a slightly
+  aerial view? Let's say something like 10-20 m off the ground?"). While
+  survey stakes are in hand on foot, the eye rises to `aerial_m` (15 m, a
+  validated tunable from 5 to 30) over the player's eye and stands a little
+  behind them along the way they face, looking down at the ground ahead,
+  so the ghost and the stakes read whole. It eases up over `aerial_ease_s`
+  (0.4 s) when the stakes come into the hand and back down when they leave
+  it, never a jump cut. Only the eye's height and place ease: mouse look
+  turns the view by the frame's raw movement with no smoothing, as
+  everywhere (CLAUDE.md), and the pitch is the player's own pitch tipped
+  down by the angle that keeps the spot they aimed at from the ground
+  where it was. The walker, its collision and the reach of the shovel are
+  unchanged; only the eye moves.
+- **Picking from the lifted eye**: the aimed cell is found by the same ray
+  the view looks along, cast from the lifted eye, so a click lands on the
+  cell under the crosshair. While lifted, the ray reaches as far as the
+  ghost shows (`ghost_reach_m` from the player), since the point of the
+  lifted view is to stake what it shows; the shovel still paves only
+  within `reach_m` of the player's feet.
 
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
