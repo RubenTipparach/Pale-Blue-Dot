@@ -592,7 +592,8 @@ fn paint_walls(c: &mut Canvas, view: &View, walls: &[&PlanPiece], px: f32) {
             }
             c
         };
-        let full = outer && nx + nz < 0.0;
+        // The cutaway's one rule, shared with architecture mode (B11).
+        let full = pbd_app::build_view::Cutaway::stands_full(outer, nx + nz < 0.0);
         let tall = if full { WALL_H } else { CUT_H };
         let face = |c: &mut Canvas, p: (f32, f32), q: (f32, f32), h0: f32, h1: f32, fill: Rgba| {
             let pts = [

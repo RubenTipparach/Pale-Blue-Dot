@@ -234,12 +234,13 @@ controls:
     boat: "the boat"
     brake: brake
     breeding: breeding
+    build_cutaway: "in architecture mode, cut away what stands over the build layer"
     build_layer: "in architecture mode, the build layer up or down"
     build_mode: "build mode: walls, floors, doors, stairs, roofs"
     build_place: "place the piece, or remove with the remove slot"
     build_remove: "remove the aimed piece"
     build_turn: "turn a stair or blueprint; with shift, the next blueprint"
-    build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag"
+    build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag; double-click to walk there"
     build_zoom: "with ctrl, zoom the architecture camera"
     camera: change the camera
     cruise: cruise

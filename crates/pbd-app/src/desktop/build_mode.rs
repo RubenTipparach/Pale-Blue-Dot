@@ -128,6 +128,15 @@ pub struct BuildMode {
     pub zoom: i32,
     /// How far the right button has dragged since it went down, pixels.
     drag_px: f32,
+    /// Architecture mode's left presses (design B11): a single click places
+    /// once the double-click wait has passed; a double-click walks there.
+    clicks: pbd_app::build_view::Clicks,
+    /// A double-click asked to walk to where the cursor stands
+    /// ([`BuildMode::stand`]) this frame.
+    pub walk: bool,
+    /// Where the cursor's ray came down on a top a walker can stand on, in
+    /// architecture mode (design B11); none on a wall's side or in open air.
+    pub stand: Option<Vec3>,
     /// Where the aim last met something, planet-local: where architecture
     /// mode starts over.
     pub aim: Option<Vec3>,
@@ -203,9 +212,11 @@ pub fn take_input(
         Option<Res<super::construction::PlanChoices>>,
         Option<Res<pbd_app::construction::PlannerData>>,
     ),
+    (time, windows): (Res<Time>, Query<&Window, With<PrimaryWindow>>),
 ) {
     mode.place = false;
     mode.take = false;
+    mode.walk = false;
     mode.view_toggle = false;
     mode.zoom = 0;
     let viewing = view.as_deref().is_some_and(|v| v.on);
@@ -290,9 +301,30 @@ pub fn take_input(
     if let Some(kits) = kits {
         mode.kit = mode.kit.min(kits.kits.kits.len().saturating_sub(1));
     }
+    if !viewing {
+        mode.clicks.clear();
+    }
     if !mode.picker {
         mode.place = buttons.just_pressed(MouseButton::Left);
         if viewing {
+            // A single click places once the double-click wait has passed;
+            // a double-click walks there (design B11).
+            use pbd_app::build_view::Click;
+            let now = time.elapsed_secs_f64();
+            let mut click = mode.clicks.wait(now);
+            if buttons.just_pressed(MouseButton::Left) {
+                let at = windows
+                    .single()
+                    .ok()
+                    .and_then(Window::cursor_position)
+                    .unwrap_or_default();
+                match mode.clicks.press(now, at) {
+                    Click::None => {}
+                    k => click = k,
+                }
+            }
+            mode.place = click == Click::Single;
+            mode.walk = click == Click::Double;
             // A right press that does not drag is a click that takes a
             // piece away; one that drags orbits the camera.
             if buttons.just_pressed(MouseButton::Right) {
@@ -337,6 +369,7 @@ pub fn drive_view(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Option<Res<PlanetRenderFrame>>,
     time: Res<Time>,
+    mut commands: Commands,
 ) {
     if view.on && !mode.on {
         view.leave();
@@ -395,6 +428,22 @@ pub fn drive_view(
     }
     if keys.just_pressed(KeyCode::PageDown) {
         view.raise(-i32::from(STOREY));
+    }
+    // End: the cutaway over the build layer (design B11).
+    if keys.just_pressed(KeyCode::End) {
+        view.cut = !view.cut;
+        info!("BUILD cutaway {}", if view.cut { "on" } else { "off" });
+    }
+    // A double-click on a top walks there (design B11).
+    if mode.walk
+        && let Some(feet) = mode.stand
+    {
+        let look = view.heading.as_vec3();
+        info!("BUILD walk there");
+        commands.queue(move |world: &mut World| {
+            pbd_app::build_view::walk_there(world, feet, look);
+        });
+        return;
     }
     view.step(dt);
 }
@@ -456,16 +505,18 @@ fn march(
     eye: Vec3,
     look: Vec3,
     reach: f32,
+    cut: Option<pbd_app::build_view::Cutaway>,
 ) -> Option<Hit> {
     let solid = |p: Vec3| -> bool {
         super::digging::sample_at(fine, contact, p).is_some_and(|s| s.solid)
-            || builds.0.iter().any(|b| {
-                let q = b.frame.local(p);
-                b.holds_in(q, 0.0, 0.02) || {
-                    let (floor, _) = b.stand_in(q, 0.0);
-                    floor.is_some_and(|f| f > q.y - 0.12 && f <= q.y + 0.0)
-                }
-            })
+            || !cut.is_some_and(|c| c.hides(p))
+                && builds.0.iter().any(|b| {
+                    let q = b.frame.local(p);
+                    b.holds_in(q, 0.0, 0.02) || {
+                        let (floor, _) = b.stand_in(q, 0.0);
+                        floor.is_some_and(|f| f > q.y - 0.12 && f <= q.y + 0.0)
+                    }
+                })
     };
     let mut travelled = 0.0;
     let mut last = eye;
@@ -585,7 +636,15 @@ pub fn aim_and_build(
         }
         None => REACH_M,
     };
-    let hit = march(&fine, &contact, &structures, eye, look, reach).or_else(|| {
+    let cut = view.cutaway();
+    let marched = march(&fine, &contact, &structures, eye, look, reach, cut);
+    // Where a double-click would stand the walker (design B11): a top the
+    // ray came down on, never a wall's side or the open air.
+    mode.stand = marched
+        .as_ref()
+        .filter(|h| view.on && h.from_above)
+        .map(|h| h.point);
+    let hit = marched.or_else(|| {
         // In open air the cursor lands on the build layer.
         plane.map(|_| Hit {
             point: eye + look * (reach - 0.01),
@@ -1313,7 +1372,8 @@ pub fn load_blueprints(assets: Res<TownAssets>, mut blueprints: ResMut<Blueprint
 /// doorway through [`Builds::place_door`]; `open` opens them as F would;
 /// `view` raises architecture mode over the house, `view:door` over its
 /// first door from outside, with `dist:<m>`, `tilt:<degrees>` and
-/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up; `quiet` shows no
+/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up, `cut` the
+/// cutaway (design B11); `quiet` shows no
 /// ghost.
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
@@ -1560,6 +1620,11 @@ pub fn scripted(
         if let Some(y) = value("yaw") {
             view.orbit(y.to_radians(), 0.0);
         }
-        info!("PBD_BUILD_SHOT: architecture mode, layer {layer}");
+        // `cut`: the cutaway over the build layer (design B11), as End.
+        view.cut = has("cut");
+        info!(
+            "PBD_BUILD_SHOT: architecture mode, layer {layer}, cutaway {}",
+            view.cut
+        );
     }
 }
