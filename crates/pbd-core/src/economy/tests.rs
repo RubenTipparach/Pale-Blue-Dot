@@ -3,7 +3,7 @@ use super::follow::{self, GAP_M};
 use super::goodwill::{GOODWILL_KIND, GOODWILL_SCHEMA, Goodwill};
 use super::jobs::{Board, Job, JobKind, JobRefused, JobsConfig, TakenJobs, Town, scoped};
 use super::trade::{MARKET_KIND, MARKET_SCHEMA, Market, Refused, TradeConfig, Trader};
-use super::values::{Shelf, Values, item_of, known_codes, trade_code};
+use super::values::{Group, Shelf, Values, item_of, known_codes, trade_code};
 use crate::daylight::DAY_S;
 use crate::goods::Good;
 use crate::inventory::{CARRIED, Item, Slots};
@@ -746,6 +746,8 @@ fn the_trade_filters_shelve_every_good_by_its_group() {
     assert_eq!(values.shelf("egg"), Some(Shelf::Food), "eaten: food");
     assert_eq!(values.shelf("milk"), Some(Shelf::Food));
     assert_eq!(values.shelf("fertile-egg"), Some(Shelf::Organics));
+    assert_eq!(values.shelf("fibre"), Some(Shelf::Organics), "not eaten");
+    assert_eq!(values.get("fibre").map(|v| v.group), Some(Group::Crop));
     assert_eq!(values.shelf("iron-ingot"), Some(Shelf::Raw));
     assert_eq!(values.shelf("stone"), Some(Shelf::Raw));
     assert_eq!(values.shelf("tool:pickaxe"), Some(Shelf::Tools));

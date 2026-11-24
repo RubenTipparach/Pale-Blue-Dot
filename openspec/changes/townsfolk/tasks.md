@@ -89,17 +89,17 @@ towns mockup is on the roadmap (the owner, 2026-09-27).
 
 ## 11. Paying with goods, derived values and the market (added 2026-11-22: "you can either pay with cash or sell goods (will need stock market to determine goods prices) raw materials dont go a smuch , butthey do relate to the goods porices in someway")
 
-- [ ] 11.1 Derived values (design 37): raw materials keep a base value in `values.ron`; every made good's value is worked out from its recipe (inputs + labour, times the craft margin) at start. Verify: a test that every made good is worth more than its inputs, and that a dearer input makes a dearer good.
-- [ ] 11.2 The market index per good per world, the `market` record, its daily drift and the towns' daily making and using. Verify: tests that selling a flood of fish lowers the fish index and it recovers over days; an old save opens with every index at 1.0.
+- [x] 11.1 Derived values (design 37): raw materials keep a base value in `values.ron`; every made good's value is worked out from its recipe (inputs + labour, times the craft margin) at start. Verify: a test that every made good is worth more than its inputs, and that a dearer input makes a dearer good. Built 2026-11-24 (design 37a): `pbd_core::economy::derive` (`Deriver`, `makings`) over the one recipe book, `labour_per_s` and `craft_margin` in `trade.ron`, `overrides` in `values.ron` (none); `EconomyConfig::values` are the derived values. Tests `every_made_good_is_worth_more_than_its_inputs`, `a_dearer_input_makes_a_dearer_good`, `an_override_keeps_a_made_goods_row`. In `openspec/specs/world/trade`.
+- [x] 11.2 The market index per good per world, the `market` record, its daily drift and the towns' daily making and using. Verify: tests that selling a flood of fish lowers the fish index and it recovers over days; an old save opens with every index at 1.0. Built 2026-11-24 (design 37a): `pbd_core::economy::market` (`WorldMarket`, `balance`, `market` in `trade.ron`), the record `market` id 0 schema 1, settled by `economy::settle_market` at each day boundary (written by the world's `market` process only when a row moved) and moved by every trade; traders price by `Deriver::priced` with the index folded in. Tests `a_flood_of_fish_lowers_the_index_and_it_recovers`, `the_towns_pull_a_lacked_good_up_and_a_made_one_down`, `an_old_save_reads_every_index_at_one_and_the_record_round_trips`, and in the game `a_world_from_before_the_market_opens_at_rest_and_writes_nothing`. In `openspec/specs/world/trade`.
 - [ ] 11.3 Barter in the trade panel: a basket each side, coins or goods or both, the difference in coins, one durable line. Verify: an app test of a deal paid half in goods; a capture of the panel. The M5 Talk tab shows it first.
-- [ ] 11.4 The phase 6 stock market (M12) reads this index; nothing of its screens here. Verify: the M12 change names `market` as its source.
+- [x] 11.4 The phase 6 stock market (M12) reads this index; nothing of its screens here. Verify: the M12 change names `market` as its source. M12 has no OpenSpec change yet; its row in `docs/mockups/mockup-work.md` and design 37a name the `market` record as its price ledger, for the change to take when it is written (2026-11-24).
 
 
 ## 12. Trade follow-ups (recommendations taken, ask only with screenshots, 2026-11-22)
 
-- [ ] 12.1 Fibre moves from the Food shelf to Organics
-- [ ] 12.2 The scroll thumb is widened past its 4 px at 1x
-- [ ] 12.3 A made good's labour is priced at 0.1 coin per second of crafting (design 37's open rate)
+- [x] 12.1 Fibre moves from the Food shelf to Organics (2026-11-24: `values::ORGANIC_CROPS`, its group and need still `crop`; `the_trade_filters_shelve_every_good_by_its_group`)
+- [x] 12.2 The scroll thumb is widened past its 4 px at 1x (2026-11-24: `scroll_list::THUMB_W`, 6 px in the 8 px track; `the_thumb_is_wide_enough_to_catch`)
+- [x] 12.3 A made good's labour is priced at 0.1 coin per second of crafting (design 37's open rate) (2026-11-24: `trade.ron`'s `labour_per_s`, read by the derivation, 11.1)
 - [ ] 12.4 The lost-villager job gets an icon of its own
 - [x] 12.5 Traders sell tools or not, per survey E1: answered 2026-11-22, no basic tools; enchanted tools and special weapons later (design 38c). Today's game already sells none.
 - [ ] 12.6 Traders' Tools shelf: enchanted tools and special weapons with their bonuses (such as +1 mining speed, +1 yield), per survey E1. Waits for a write-up of enchantments and weapons (weapons tie to survival, phase 4, `survival-mode`). Verify: that write-up exists and names the trader's stock.

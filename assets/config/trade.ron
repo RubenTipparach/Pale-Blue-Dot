@@ -50,6 +50,22 @@
     },
     // A horse, sold by the trader (land-transport design 10), in coins.
     horse_coins: 120,
+    // A made good is worth its inputs plus its labour, times the craft
+    // margin (townsfolk design 37 and 37a; pbd_core::economy::derive).
+    // Labour is coins per second of the recipe (task 12.3).
+    labour_per_s: 0.1,
+    craft_margin: 1.25,
+    // The world's market (design 37a; pbd_core::economy::market): each unit
+    // traded moves its good's index by `step`, within `low` and `high`; an
+    // index returns to rest over `rest_days` game days, and each day the
+    // towns' making and using pulls it by `town_pull` per unit of balance.
+    market: (
+        step: 0.005,
+        low: 0.5,
+        high: 2.0,
+        rest_days: 8.0,
+        town_pull: 0.02,
+    ),
     // Goodwill (design 12): what raises it, and what it is worth.
     goodwill: (
         per_trade: 1,

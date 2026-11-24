@@ -1875,11 +1875,16 @@ town_mission:
 towns:
   door: door
 trade:
+  add: "+"
   bought: "Bought for {coins}"
   buy: BUY
   buy_one: BUY
+  clear: CLEAR
   count: "x{count}"
   coins: "{coins}"
+  deal: DEAL
+  empty: Nothing in the baskets
+  even: EVEN
   not_held: You have none
   not_sold: Not for sale
   not_wanted: Not buying that
@@ -1887,7 +1892,6 @@ trade:
   pack_full: No room in the pack
   purse: PURSE
   sell: SELL
-  sell_one: SELL
   shelf:
     all: ALL
     food: Food
@@ -1898,8 +1902,13 @@ trade:
   short: Not enough coins
   sold: "Sold for {coins}"
   sold_out: Sold out
+  they_pay: THEY PAY
   title: TRADE
+  traded: Traded
   unsaved: Could not save
+  you_give: YOU GIVE
+  you_pay: YOU PAY
+  you_take: YOU TAKE
 vehicle:
   anchor:
     coming_aboard: "Coming aboard"
