@@ -49,16 +49,17 @@ fi
 # the same barter, the panel on the right and the look turned on F so the
 # merchant stands in the middle of the open space left of it, lit by the
 # talk light; from a talking distance of about 2.7 m (the spots above,
-# stepped 1.1 m back along the look). By day, at 22:30, and the reeve's
-# board at 22:30: every NPC dialog one presentation.
+# stepped 1.1 m back along the look). By day, then at nightfall (NIGHT,
+# 20.45: the latest hour the merchant keeps the stall before
+# going to bed at daylight 0.12, `furniture` design 11a, with the lamps lit)
+# for the trade and for the talk panel: every NPC dialog one presentation.
 STALL_FAR=${STALL_FAR:-"--at 29.221240 8.794353 --yaw 87.5"}
-SMITH_FAR=${SMITH_FAR:-"--at 29.534302 8.850662 --yaw 87.4"}
 if [ "$ONLY" = all -o "$ONLY" = framed ]; then
   PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL_FAR --no-readout --frames 210
 fi
 if [ "$ONLY" = all -o "$ONLY" = framed -o "$ONLY" = framed-night ]; then
-  TIME=22.5 PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed-night "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL_FAR --no-readout --frames 210
-  TIME=22.5 shot board-framed-night "120:KeyF,140:press:work" $SMITH_FAR --no-readout --frames 200
+  TIME=${NIGHT:-20.45} PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed-night "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL_FAR --no-readout --frames 210
+  TIME=${NIGHT:-20.45} shot talk-framed-night "120:KeyF" $STALL_FAR --no-readout --frames 170
 fi
 # The lost villager (`town-missions-tree` task 6.3, `townsfolk` 12.4): the
 # reeve's board on a day it posts one (DAY, from `cargo test --profile fast

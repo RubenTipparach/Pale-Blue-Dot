@@ -394,8 +394,16 @@ that fade in light the character a bit, thatd be nice". The plan:
   runs the light's system in an app and finds the light in the carried list
   while a talk is open, rising, and gone once it has faded after the close.
   Captures (lavapipe, no GPU): `trade-framed.jpg` retaken at a talking
-  distance of about 2.7 m, `trade-framed-night.jpg` at 22:30, and the
-  reeve's board, a non-trade dialog, as `board-framed-night.jpg`.
+  distance of about 2.7 m, `trade-framed-night.jpg` at nightfall, and the
+  talk panel itself, a non-trade dialog, as `talk-framed-night.jpg`. Not at
+  22:30 as first planned: from daylight 0.12 (about 20:32 at Linenleigh on
+  day 0) every townsperson but a watch goes to bed (`furniture` design 11a),
+  so at 22:30 there is no merchant at the stall to talk to. The night shots
+  are at 20:27 (`--time 20.45`), the sun about two degrees under the
+  horizon and the dusk lamps lit, the latest the merchant keeps the stall.
+  The reeve's board was tried from 2.7 m too, but stepping back from the
+  reeve puts a wall between them and the eye on today's town, so the
+  non-trade capture is the merchant's own talk panel.
 
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
