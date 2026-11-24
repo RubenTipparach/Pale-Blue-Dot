@@ -17,7 +17,9 @@ print_where_to_stand_for_the_townsfolk_shots --nocapture`.
 | Shot | Flags | What it shows |
 | --- | --- | --- |
 | `smith-face.jpg` | `--walk --at 29.884943 1.485554 --yaw 17.1 --pitch -14 --time 11` | Holbrook's smith from a metre in front of him: the block head, the crop and the beard as blocks, the button nose, the eyes with their catch-lights looking up at the player, the blush and the smile of a meeting (surprised for half a second, then happy). |
-| `smith-forge-2230.jpg` | `--walk --at 29.860050 1.502882 --yaw -39.2 --pitch -8 --time 22.5` | The smith at 22:30, lit by the lamp post beside him and the field, as the ground under him is. **Not the shot asked for**: the game has no forge yet (design 26), so nothing lights his forge side. |
+| `smith-forge-2045.jpg` | `--walk --at 29.841288 1.500769 --yaw -90.8 --pitch -10 --time 20.45` | Task 3.2, retaken 2026-11-24 with the forge built (design 26a): Holbrook's smith at his anvil at nightfall, the forge's fire a brazier lamp in the field, warming the ground, the anvil and his forge-facing side. 20:45, not 22:30: at 22:30 the smith has gone to bed (`furniture` design 11a), as the talk captures found for the merchant. |
+| `smith-forge-2230.jpg` | the same, `--time 22.5` | The forge at 22:30 with the smith abed: the fire's tongues on the hearth, the shed's posts and the ground lit warm round it as far as the field carries a brazier. |
+| `forge-day.jpg` | the same, `--time 11` | The smithy by day: the stepped stone forge with its hood into the chimney, the fire's tongues, the waisted anvil with its horn, the smith, under the shingled roof on its posts. |
 | `market-day.jpg` | `--walk --at 29.702875 9.150705 --yaw 24.2 --pitch -6 --time 11` | Linenleigh's market street by day: a stallholder at her post looking at the player, two walkers down the lane, and a townswoman in red with her braid, each with their own build, head, hair and clothes from the seed. |
 | `face-<expression>.jpg` | `PBD_TOWNSFOLK_EXPRESSION=<expression>`, as `smith-face` | The smith held in surprised, sleepy, delighted, worried, cross and thinking. |
 
