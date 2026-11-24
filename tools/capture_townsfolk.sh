@@ -68,6 +68,8 @@ fi
 [ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
 [ "$ONLY" = all ] && shot smith-forge-2230 "" $FORGE --time 22.5
 [ "$ONLY" = all ] && shot forge-day "" $FORGE --time 11
+# forge-close.jpg is smith-forge-2045 cropped to the hearth and the anvil.
+[ "$ONLY" = all ] && shot smith-forge-2045 "" $FORGE --time 20.75
 shot market-day "" $MARKET --time 11
 shot gate-guard "" $GUARD --time 11
 for e in surprised sleepy delighted worried cross thinking; do

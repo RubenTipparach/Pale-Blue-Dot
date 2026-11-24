@@ -938,7 +938,11 @@ faked with a light of its own.
     retaken and `forge-close.jpg`, the fire and the anvil close up.
 
 **26b. The forge's fire and anvil, redone (2026-11-24).** Written before
-the code. Measured in the captures of 26a (`smith-forge-2230.jpg`,
+the code. *Superseded by the redo that was built, 26a's last bullet ("The
+fire and the anvil redone"), which landed alongside this plan: one lofted
+flame crown in `forge_fire` rather than crossed ribbons, a coal bed in the
+same sheet rather than `embers`, and the anvil on a stump.* Measured in the
+captures of 26a (`smith-forge-2230.jpg`,
 `forge-day.jpg`): the fire is five crossed-triangle tongues
 (`Sink::flame`) in one flat unlit colour, which read as five pale cones on
 the hearth; the anvil is two frustums and a four-faced horn in the town's
