@@ -203,6 +203,12 @@ pub enum Act {
     /// taken (any other given back), its work done, and handed in
     /// (`mission-playthrough` design 6, "first-job").
     Job,
+    /// A town's furniture used as a player uses it: "sit" on a seat, "lie"
+    /// on a bed (then up again with F), or "loot" a store (opened with F,
+    /// its coins or one stack taken, shut). The nearest free piece in a
+    /// town; one that will not take the bot is passed over
+    /// (`mission-playthrough` design 6, "sit", "lie", "find").
+    Furniture(String),
     /// A still, when `--showcase-stills` names a directory.
     Still,
     /// Go to the nearest place of a kind (`mission-playthrough` design 5):

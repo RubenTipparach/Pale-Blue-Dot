@@ -126,6 +126,8 @@ enum Click {
     Clear,
     /// A button of the talk, trade or board panel.
     Talk(super::talk::TalkAction),
+    /// The open container's coins.
+    Coins,
 }
 
 /// One frame's inputs.
@@ -325,6 +327,10 @@ struct Bot {
     skipped_jobs: HashSet<u64>,
     /// The job whose work was last set going, and how many times.
     job_worked: Option<(u64, u32)>,
+    /// Pieces F was pressed at that did not take the bot (`Furniture`).
+    pieces_passed: HashSet<u64>,
+    /// The piece F was last pressed at, until it takes the bot.
+    piece_pressed: Option<u64>,
     started: Option<f32>,
     ended: Option<f32>,
     failed: bool,
@@ -557,6 +563,12 @@ struct Sight<'a> {
     town: Option<&'a pbd_core::missions::Progress>,
     /// The talk, trade or board panel's buttons now spawned.
     talk_buttons: Vec<super::talk::TalkAction>,
+    /// The towns' pieces: id, kind, the point to aim at, and the town's site.
+    pieces: Vec<(u64, pbd_core::furniture::Kind, Vec3, Option<u32>)>,
+    /// Whether the player sits or lies on a piece.
+    sitting: bool,
+    /// The container open under the pack: id, coins, its first filled slot.
+    store_open: Option<(u64, u64, Option<usize>)>,
     /// The town jobs taken: id, kind, how many it asks, and whether done.
     jobs: Vec<(u64, pbd_core::economy::jobs::JobKind, u32, bool)>,
     /// Aboard a craft.
@@ -2936,6 +2948,11 @@ pub struct World<'w, 's> {
     town_missions: Option<Res<'w, pbd_app::town_missions::TownMissions>>,
     /// The talk panel's buttons (`Trade`).
     talk_buttons: Query<'w, 's, &'static super::talk::TalkAction>,
+    /// The pieces in reach, the seat taken and the container open
+    /// (`Furniture`).
+    pieces: Res<'w, super::furniture::Pieces>,
+    sitting: Res<'w, super::furniture::Sitting>,
+    store_view: Res<'w, super::furniture::StoreView>,
     /// The town jobs taken (`Job`).
     economy: Option<Res<'w, pbd_app::economy::Economy>>,
     /// The townsfolk one can talk to (`Talk`).
@@ -3167,6 +3184,24 @@ pub fn drive(
             .collect(),
         town: w.town_missions.as_deref().and_then(|t| t.progress()),
         talk_buttons: w.talk_buttons.iter().cloned().collect(),
+        pieces: w
+            .pieces
+            .all
+            .iter()
+            .map(|p| {
+                let site = match &p.owner {
+                    super::furniture::Owner::Town { site, .. } => Some(*site),
+                    super::furniture::Owner::Player => None,
+                };
+                let aim = p.point(Vec3::new(0.0, p.kind.height_m().min(1.0) * 0.6, 0.0));
+                (p.id, p.kind, aim, site)
+            })
+            .collect(),
+        sitting: w.sitting.0.is_some(),
+        store_open: w.store_view.open.as_ref().map(|o| {
+            let first = o.store.slots.iter().position(|s| s.is_some());
+            (o.id, o.store.coins, first)
+        }),
         jobs: w.economy.as_deref().map_or_else(Vec::new, |e| {
             e.jobs
                 .taken
@@ -3667,13 +3702,15 @@ pub fn press_controls(
         Option<&super::mission_tree::Card>,
         Option<&super::map_screen::MapButton>,
         Option<&super::talk::TalkAction>,
+        Option<&super::furniture::StoreCoins>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt, card, legend, talk) in &mut controls
+    for (mut interaction, row, button, well, cook, cell, smelt, card, legend, talk, coins) in
+        &mut controls
     {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
@@ -3696,6 +3733,7 @@ pub fn press_controls(
                 false
             }
             Click::Talk(action) => talk.is_some_and(|t| t == action),
+            Click::Coins => coins.is_some(),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -3745,6 +3783,7 @@ fn run(
             | Act::Talk(_)
             | Act::Trade(..)
             | Act::Job
+            | Act::Furniture(_)
             | Act::Pen
             | Act::Lead(_)
             | Act::Collect(_)
@@ -3995,6 +4034,7 @@ fn run(
         Act::Talk(n) => talk(bot, *n, s, out),
         Act::Trade(sell, buy) => trade(bot, *sell, *buy, s, out),
         Act::Job => job(bot, s, out),
+        Act::Furniture(what) => furniture(bot, what, s, out),
         Act::Pen => pen(bot, s, out),
         Act::Lead(species) => lead(bot, species, s, out),
         Act::Collect(species) => collect(bot, species, s, out),
@@ -7204,6 +7244,113 @@ fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
     }
     if bot.act_s > 1800.0 {
         return Status::Fail("no job handed in in half an hour".into());
+    }
+    Status::Running
+}
+
+/// A town's furniture used as a player uses it (`Act::Furniture`): the
+/// nearest piece of the use asked for, walked to, aimed at and F pressed. A
+/// seat or bed is sat or lain on a moment and left with F; a store is
+/// opened, its coins (or else one stack) taken and shut. A piece that does
+/// not take the bot (held by a townsperson, or missed) is passed over.
+/// `count` is set once the use is done.
+fn furniture(bot: &mut Bot, what: &str, s: &Sight, out: &mut Intent) -> Status {
+    use pbd_core::furniture::Use;
+    let wants = |kind: pbd_core::furniture::Kind| match (what, kind.use_()) {
+        ("sit", Use::Seat { .. }) | ("lie", Use::Bed { .. }) | ("loot", Use::Store { .. }) => true,
+        _ => false,
+    };
+    let pressing = bot.phase_s > 0.7;
+    // Sat or lain: a moment there, a still, then up with F.
+    if s.sitting {
+        bot.piece_pressed = None;
+        if bot.count == 0 && bot.phase_s > 2.5 {
+            info!("showcase: furniture: {what} done, getting up");
+            bot.want_still = true;
+            bot.count = 1;
+            bot.phase_s = 0.0;
+        } else if bot.count == 1 && bot.phase_s > 1.0 {
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+        return Status::Running;
+    }
+    // A container open: its coins, else a stack, then shut.
+    if s.screen == Screen::Pack {
+        if let Some((id, coins, first)) = s.store_open {
+            bot.piece_pressed = None;
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            if bot.count == 0 {
+                if coins > 0 {
+                    info!("showcase: furniture: taking {coins} coins from {id}");
+                    out.click = Some(Click::Coins);
+                    bot.count = 1;
+                } else if let Some(k) = first {
+                    info!("showcase: furniture: taking slot {k} of {id}");
+                    out.click = Some(Click::Cell(super::furniture::STORE_AT + k));
+                    out.lmb_tap = true;
+                    bot.count = 1;
+                } else {
+                    info!("showcase: furniture: {id} is empty");
+                    bot.pieces_passed.insert(id);
+                    out.taps.push(KeyCode::Tab);
+                }
+            } else {
+                bot.want_still = true;
+                out.taps.push(KeyCode::Tab);
+            }
+            return Status::Running;
+        }
+    }
+    if bot.count > 0 && s.screen == Screen::Playing {
+        return Status::Done;
+    }
+    // F pressed and nothing took the bot: pass that piece over.
+    if let Some(id) = bot.piece_pressed
+        && bot.phase_s > 1.5
+    {
+        info!("showcase: furniture: {id} did not take the bot");
+        bot.pieces_passed.insert(id);
+        bot.piece_pressed = None;
+    }
+    let target = s
+        .pieces
+        .iter()
+        .filter(|(id, kind, _, site)| {
+            site.is_some() && wants(*kind) && !bot.pieces_passed.contains(id)
+        })
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((id, kind, at, _)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail(format!("no town piece to {what}"));
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.3 {
+        if bot.walk_to(s, out, at, 1.1) == Walked::Stuck {
+            info!("showcase: furniture: no way to {kind:?} {id}");
+            bot.pieces_passed.insert(id);
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at);
+        if bot.piece_pressed.is_none() && bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            info!("showcase: furniture: F at {kind:?} {id}");
+            bot.piece_pressed = Some(id);
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("did not {what} in ten minutes"));
     }
     Status::Running
 }

@@ -479,7 +479,7 @@ pressed as the pointer presses them):
 | `Stake`, `Mark`, `Pave` | the road tools in hand | mark, pave, join |
 | cart acts: set down, haul, hitch | the cart's own inputs | hand-cart, haul, horse-cart, road-trip |
 | `Build(piece, n)` in build mode (N) | the build ghost | house, furnish |
-| `Sit`, `Lie`, `Loot` | F on a piece | sit, lie, find |
+| `Furniture("sit"\|"lie"\|"loot")`: the nearest free town piece of that use, walked to, aimed at, F; a seat or bed held a moment and left with F, a store's coins (or one stack) taken and shut; a piece that does not take the bot is passed over | F on a piece | sit, lie, find |
 | `Float(n)`: logs into a river | drop on water | logs |
 
 Order: the trunk (meet, first-trade, first-job) first, since every branch

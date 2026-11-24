@@ -395,3 +395,15 @@ words in place of an item's name and count.
   old world that has been to a town.
 - Rollback: the previous build ignores `town_missions`; recipes the town tree
   locked are open again (no mission names them).
+
+### 12.1 The tree tabs (owner, 2026-11-24)
+
+"town and starter should be tabs below missions, with the buttons styled a
+little different ... if I toggle between them the ui stops rendering
+missions entirely", and "button shading also not clear which one is
+clicked". The tree rebuilt on a switch was spawned hidden, and the menu
+shows a panel only when the screen changes, so it stayed blank until the
+tab was left and opened again; it is now spawned shown while the Missions
+tab is open. The two plaques are stone (the header's are oak), in a centred
+row of their own under the header, and the shown tree's tab has an amber
+bar under it.
