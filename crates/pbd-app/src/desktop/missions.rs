@@ -193,12 +193,51 @@ pub fn show_line(
         (Without<TrackerTitleIcon>, Without<TrackerRow>),
     >,
     mut mission_icon: Local<Option<(String, Handle<Image>)>>,
+    (town, town_chain): (
+        Option<Res<pbd_app::town_missions::TownMissions>>,
+        Option<Res<pbd_app::town_missions::TownChain>>,
+    ),
 ) {
-    let mission = missions.progress.focused(&chain.0);
+    // One focus across the two trees (`town-missions-tree` design 6): a
+    // town mission picked on its tree, else the starter tree's, else the
+    // town tree's first open one.
+    let town_progress = town.as_deref().and_then(|t| t.progress());
+    let town_tree = town_chain.as_deref().map(|c| &c.0);
+    let town_focus = town_progress.zip(town_tree).and_then(|(p, c)| {
+        p.focus
+            .as_deref()
+            .and_then(|_| p.focused(c))
+            .map(|m| (m, p))
+    });
+    let mission = town_focus
+        .or_else(|| {
+            missions
+                .progress
+                .focused(&chain.0)
+                .map(|m| (m, &missions.progress))
+        })
+        .or_else(|| {
+            town_progress
+                .zip(town_tree)
+                .and_then(|(p, c)| p.focused(c).map(|m| (m, p)))
+        });
+    let (mission, progress) = match mission {
+        Some((m, p)) => (Some(m), Some(p)),
+        None => (None, None),
+    };
+    let notice = missions
+        .notice
+        .as_ref()
+        .map(|(t, _)| t.clone())
+        .or_else(|| {
+            town.as_deref()
+                .and_then(|t| t.notice.as_ref())
+                .map(|(t, _, _)| t.clone())
+        });
     let shown = settings.mission_line
         && *screen == Screen::Playing
         && walking.is_some_and(|w| w.active)
-        && (mission.is_some() || missions.notice.is_some());
+        && (mission.is_some() || notice.is_some());
     for mut visibility in &mut tracker {
         let want = if shown {
             Visibility::Inherited
@@ -219,8 +258,8 @@ pub fn show_line(
         }
     };
     // Just finished: its title alone, in the rune's colour, for a moment.
-    let (heading, colour, objectives) = match (&missions.notice, mission) {
-        (Some((done, _)), _) => (
+    let (heading, colour, objectives) = match (&notice, mission) {
+        (Some(done), _) => (
             tr_with("missions.done", &[("title", &done)]),
             ui_kit::RUNE,
             None,
@@ -255,7 +294,8 @@ pub fn show_line(
         }
     }
     let counts = objectives
-        .map(|m| missions.progress.counts(m))
+        .zip(progress)
+        .map(|(m, p)| p.counts(m))
         .unwrap_or_default();
     let objective = |k: usize| objectives.and_then(|m| m.objectives.get(k));
     for (row, mut node) in &mut rows {
@@ -577,6 +617,32 @@ pub fn scripted(world: &mut World, mut at: Local<(usize, u32)>) {
     at.0 += 1;
     info!("scripted mission step {}: {step:?}", at.0);
     raise(step, world);
+}
+
+/// `--town-focus <id>`: once the town tree is open, make that mission the
+/// one the player is on, as a pick on the tree would (a capture
+/// instrument, `town-missions-tree` design 6).
+pub fn scripted_town(
+    launch: Res<super::Launch>,
+    chain: Option<Res<pbd_app::town_missions::TownChain>>,
+    town: Option<ResMut<pbd_app::town_missions::TownMissions>>,
+    mut done: Local<bool>,
+) {
+    let (Some(id), Some(chain), Some(mut town)) = (launch.town_focus.as_deref(), chain, town)
+    else {
+        return;
+    };
+    if *done || !town.is_open() {
+        return;
+    }
+    let picked = town
+        .progress_mut()
+        .is_some_and(|p| p.focus_on(&chain.0, id));
+    if picked {
+        info!("town mission {id} is the focus");
+        town.refocused = true;
+    }
+    *done = true;
 }
 
 /// The hour a night by the lights is counted from.

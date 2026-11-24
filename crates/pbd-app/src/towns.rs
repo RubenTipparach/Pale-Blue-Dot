@@ -516,6 +516,12 @@ pub struct Towns {
     pub standing: Vec<Standing>,
     /// Towns being cut on the pool, by site (decision 5: published whole).
     cutting: Vec<(u32, Task<Result<Laid, String>>)>,
+    /// Standing towns whose record changed (a wall broken or mended,
+    /// `townsfolk` design 29), to be cut again and swapped in whole.
+    pub recut: BTreeSet<u32>,
+    /// Each standing town's chart and patch, for finding a layout cell's
+    /// place on the planet (a broken wall's gap).
+    pub charts: BTreeMap<u32, Arc<(Chart, Patch)>>,
 }
 
 impl Towns {
@@ -664,6 +670,7 @@ pub fn replace(world: &mut World, towns: Towns) {
     }
     world.insert_resource(Structures::default());
     world.insert_resource(crate::planet::shadow::TownCasters::default());
+    crate::townsfolk::on_replace(world);
     world.insert_resource(towns);
 }
 
@@ -978,7 +985,33 @@ pub fn stand_in_range(world: &mut World) {
             continue;
         };
         match result {
-            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => stand(world, &h, laid, 0.0),
+            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => {
+                // A town cut again stands in its own place at once, drawn
+                // whole, so it never blinks out (design 29).
+                let again = world
+                    .resource::<Towns>()
+                    .standing
+                    .iter()
+                    .any(|s| s.site == site);
+                if again {
+                    drop_town(world, site);
+                }
+                stand(world, &h, laid, if again { 1.0 } else { 0.0 });
+                if again {
+                    let root = world
+                        .resource_mut::<Towns>()
+                        .standing
+                        .iter_mut()
+                        .find(|s| s.site == site)
+                        .map(|s| {
+                            s.shown = 1.0;
+                            s.entity
+                        });
+                    if let Some(root) = root {
+                        show(world, root, 1.0);
+                    }
+                }
+            }
             Ok(_) => {}
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
@@ -999,6 +1032,12 @@ pub fn stand_in_range(world: &mut World) {
             let d = (h.point(radius) - at).length();
             if let Some(s) = towns.standing.iter_mut().find(|s| s.site == h.site.id) {
                 s.leaving = leaving(d, s.leaving);
+                if towns.recut.contains(&h.site.id)
+                    && !towns.cutting.iter().any(|(site, _)| *site == h.site.id)
+                {
+                    towns.recut.remove(&h.site.id);
+                    wanted_now.push(h.clone());
+                }
             } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
                 wanted_now.push(h.clone());
             }
@@ -1115,6 +1154,8 @@ fn drop_town(world: &mut World, site: u32) {
     if let Ok(e) = world.get_entity_mut(gone.entity) {
         e.despawn();
     }
+    crate::townsfolk::on_drop(world, site);
+    world.resource_mut::<Towns>().charts.remove(&site);
     if let Some(mut structures) = world.get_resource_mut::<Structures>() {
         let end = (gone.first + gone.count).min(structures.0.len());
         structures.0.drain(gone.first.min(end)..end);
@@ -1152,6 +1193,11 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     };
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
+    crate::townsfolk::on_stand(world, site.id, &held.town, &laid);
+    world
+        .resource_mut::<Towns>()
+        .charts
+        .insert(site.id, Arc::new((laid.chart.clone(), laid.patch.clone())));
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
     let dressing = match (things, off) {
@@ -1290,8 +1336,8 @@ pub struct TownDoor {
 }
 
 /// How far a door swings open, and how fast, radians a second.
-const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
-const SWING_RAD_S: f32 = 5.0;
+pub const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+pub const SWING_RAD_S: f32 = 5.0;
 /// How far from the eye E reaches for a doorway's middle, metres.
 pub const DOOR_REACH_M: f32 = 2.2;
 
@@ -1315,7 +1361,7 @@ pub fn door_states(
 }
 
 /// A triangle soup as a Bevy mesh.
-fn to_mesh(buf: &MeshBuf) -> Mesh {
+pub(crate) fn to_mesh(buf: &MeshBuf) -> Mesh {
     let count = buf.positions.len() as u32;
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -1371,6 +1417,29 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
     }
 }
 
+/// The walker's eye and look at `position` (a query point): what a door's
+/// reach is measured from, for a town's doors and a player's alike.
+pub fn eye_and_look(walking: &WalkingState, position: Vec3) -> (Vec3, Vec3) {
+    let up = position.normalize_or(Vec3::Y);
+    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
+    let (heading, pitch) = walking.view();
+    (eye, heading * pitch.cos() + up * pitch.sin())
+}
+
+/// How far a doorway's middle is from `eye`, if F reaches it: within
+/// [`DOOR_REACH_M`] and in front of the look.
+pub fn leaf_in_reach(
+    eye: Vec3,
+    look: Vec3,
+    b: &BuildingSolids,
+    d: &pbd_core::settlement::pieces::DoorLeaf,
+) -> Option<f32> {
+    let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
+    let to = middle - eye;
+    let dist = to.length();
+    (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some(dist)
+}
+
 /// The door in reach: the nearest doorway within [`DOOR_REACH_M`] of the
 /// eye and in front of it. What F opens and what the prompt names.
 fn door_in_reach<'a>(
@@ -1380,18 +1449,12 @@ fn door_in_reach<'a>(
     towns: &Towns,
     doors: impl Iterator<Item = &'a TownDoor>,
 ) -> Option<TownDoor> {
-    let up = position.normalize_or(Vec3::Y);
-    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
-    let (heading, pitch) = walking.view();
-    let look = heading * pitch.cos() + up * pitch.sin();
+    let (eye, look) = eye_and_look(walking, position);
     doors
         .filter_map(|door| {
             let b = structures.0.get(towns.index(door.site, door.building)?)?;
             let d = b.doors.get(door.door)?;
-            let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
-            let to = middle - eye;
-            let dist = to.length();
-            (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some((dist, *door))
+            leaf_in_reach(eye, look, b, d).map(|dist| (dist, *door))
         })
         .min_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, door)| door)
@@ -1526,7 +1589,7 @@ pub fn swing_doors(
 }
 
 /// A texture of the town's, sampled nearest and repeated.
-pub(crate) fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
+pub fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
     assets.load_with_settings(
         format!("textures/settlement/{name}.png"),
         |s: &mut ImageLoaderSettings| {
@@ -1683,6 +1746,27 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
             }
         }
     }
+    chunked(triangles)
+}
+
+/// What a player's plot casts (`player-building` design 9): every triangle
+/// of its meshes but its flames and what is cut out, into every cascade,
+/// chunked as a town's.
+pub fn casting_of(meshes: &Meshes) -> TownCasting {
+    let cut = cut_textures();
+    let all = crate::planet::shadow::CASCADE_COUNT as u8;
+    let triangles = meshes
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name) && name.as_str() != FLAME)
+        .flat_map(|(_, buf)| buf.positions.chunks_exact(3))
+        .map(|t| ([t[0], t[1], t[2]], all))
+        .collect();
+    chunked(triangles)
+}
+
+/// Triangles, each with how many cascades it casts into, laid out in
+/// chunks of [`CASTER_CHUNK_M`] with their bounds.
+fn chunked(triangles: Vec<([[f32; 3]; 3], u8)>) -> TownCasting {
     // By chunk: its cascades, then the cell its centroid is in. A BTreeMap,
     // so the order is the same on every run.
     type Triangle = [[f32; 3]; 3];

@@ -638,3 +638,9 @@ step (`held.light.sway`: 10 mm side to side, 8 mm bob, 0.02 rad roll) while the
 tool hand holds still. The walk's sway is now 0 in `held.ron` and the defaults
 (`side_m`, `bob_m`, `roll_rad`); the breath at rest (3 mm) stays. Applies to the
 torch and lantern too, which share the hold.
+## Owner answers (survey, 2026-11-22)
+
+- **A3: keep today's square cap.**
+- **G5: keep it faint**: a mushroom is a small light, held and planted read one value (level 3).
+- **A4: keep the warm light for now**; a colour per light is its own change later.
+- Under water a glowing mushroom keeps glowing (survey W21's note; `ocean-environments` task 21.1).

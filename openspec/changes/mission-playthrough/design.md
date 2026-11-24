@@ -459,3 +459,38 @@ bot's mark on a reef; the run's log of the mark's distance and each leg;
   before it marks;
 - this waits on B30 (`ocean-environments`) only for how often reefs are
   near, not for how it works.
+
+## 6. The town tree, played (owner, 2026-11-23: "begin testing phase 3 missions tonight")
+
+The town tree (`town-missions-tree`, 34 missions on main) is played by the
+same bot, on the same world, after the starter tree: it opens on the first
+`reach town`, so the run carries on from "Find a town". Most of its
+objectives need acts the bot does not have. Each goes in as the player
+does it, through the player's own inputs (the trade panel and the board
+pressed as the pointer presses them):
+
+| Act | Through | Missions |
+| --- | --- | --- |
+| `Talk(any)`: walk to the nearest townsperson, F, close | the Talk screen | meet |
+| `Sell(n)` / `Buy(code, n)`: Talk, the Trade tab, press a row | the Trade screen | first-trade, trade-more, horse |
+| `TakeJob(kind)` / `HandIn`: the board, a job of a kind the bot plays (fish, gather) | the Board screen | first-job, three-jobs |
+| `Deliver`, `Escort`, `Mend`, `Light` | the job's own walk and F | deliver, lost, mend, lamps |
+| `Bench` at any station by its code (grinder, mixer, carpenter) | the station panel | crush, gravel, chair, table, bed, chest |
+| `Stake`, `Mark`, `Pave` | the road tools in hand | mark, pave, join |
+| cart acts: set down, haul, hitch | the cart's own inputs | hand-cart, haul, horse-cart, road-trip |
+| `Build(piece, n)` in build mode (N) | the build ghost | house, furnish |
+| `Sit`, `Lie`, `Loot` | F on a piece | sit, lie, find |
+| `Float(n)`: logs into a river | drop on water | logs |
+
+Order: the trunk (meet, first-trade, first-job) first, since every branch
+waits on it; then carpentry and houses (stations and pieces the bot nearly
+places already), then trade and jobs, then roads and carts. Each new act
+is written into this table's row before it is built, and each stall found
+goes in section 7 of the tasks as the starter tree's did.
+
+The starter tree's last missions are played first, on the merged build: the
+fresh half of "Sea fishing" (the bot's fresh-water search fixed,
+`fishing-anywhere` design 6), the three crops, the farm meal, the feast,
+the reef, a town (with the town tree's toast, `town-missions-tree` design
+12) and the boat (a raft crafted at the bench, then boarded; the inner tube
+needs 3 leather, 6 to 8 game days of a kept animal, so it waits).

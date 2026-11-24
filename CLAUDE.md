@@ -93,6 +93,25 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## No obvious primitives (owner, 2026-11-22)
+
+**Standing instruction from the user:** "I can see obvious primitives, this
+is signof bad work ... avoid obvioud primitives" (on the townsfolk's full
+front beard: a box across the jaw and two boxes on the cheeks, stuck on the
+face). A shape in the game or a mockup is one form fitted to what it sits
+on, never boxes, cylinders or spheres placed on a surface and left to read
+as separate parts:
+- a part that grows from a body (a beard, hair, a mane, a root, a branch, a
+  cloak) is one piece shaped to the body: it follows its curves and
+  bevels, tapers into it, and has an irregular edge, never a hard rectangle
+  floating proud of it;
+- where pieces must meet, they blend: a shared edge, a bevel, a taper, or
+  the detail painted into the surface's texture instead of modelled;
+- the blocky, low-poly style is a choice of silhouette, not an excuse for
+  primitives: a block head is still one shaped head;
+- every new model is looked at close up before it is shown, and a part
+  that reads as a primitive stuck on is redone, not shipped.
+
 ## Everything in the world is lit as the terrain is (owner, 2026-11-18)
 
 **Standing instruction from the user:** "moving forward we need to apply
@@ -109,6 +128,24 @@ A new mesh in the world gets `field_light::LitByField` and
 craft, drops, props, creatures and anything held up in the world, so in a
 canyon's shade, a cave or the night it is as dark as the ground there. UI
 and inventory icons are not in the world and keep their own look.
+
+## Every model is textured (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Make sure things have textures"
+(after the carts and the horse went in as flat colour). Nothing in the world
+is a flat-coloured mesh:
+- a model uses the game's own pixel textures where one fits (the settlement
+  set's planks, boards, timber, stone, iron), sampled nearest and laid at
+  the manifest's scale so its texels match the walls beside it;
+- where none fits, a new 16 or 32 px pixel texture is drawn in the same
+  palette by a committed script in `tools/art/`, with its manifest row;
+- detail (grain, bands, hinges, a coat's shading, a mane) is painted into
+  the texture, never modelled as a stuck-on box;
+- a creature's colour variation tints its texture, it does not replace it.
+- and it is not flat-shaded (owner, the same day: "I didn't like flat
+  shaded crap"): normals are smooth across a body's curves and hard only at
+  real creases (a board's edge, a hoof), and a curved silhouette has the
+  segments to read as curved.
 
 ## Notes stay out of the game (owner, 2026-11-15)
 
@@ -406,6 +443,19 @@ wouldnt have had to do this if youhad stuck to one pr").
   unit of merging, not of review.
 - A second PR is opened only when the owner asks for one.
 
+## Multiplayer is tested on the owner's machines (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Multiplayer test should use Mac
+and laptop mining mike sessions". A multiplayer check runs between two real
+machines, the owner's Mac ("[Mac] pale-blue-dot" session) hosting and the
+laptop ("[Laptop] mining mike continue" session) joining, not two
+processes on one cloud container. The procedure is `multiplayer` design 20.
+The laptop's GPU cannot take a long run (owner, 2026-11-23: "the laptop's
+gpu cant handle the extended load"): its part is the join, the checks and
+the screenshot, then the game is closed. Anything that must run for a long
+time (soaks, presence over minutes, a demo recording) runs on the Mac or
+the desktop.
+
 ## No scheduled PR check-ins (owner, 2026-09-29)
 
 **Standing instruction from the user:** "you should never rearm pr
@@ -560,10 +610,42 @@ which wait for a request.
 - **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
   underwater overhaul (M25, `ocean-environments`).
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
-  house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20), and logging ("add logging system
+  house building (M6, M22, `player-building`), and logging ("add logging system
   to the game (in phase 3)": logs on a raft, or dropped in a river to float
   down it and stop where the water stops flowing; M34, `log-drives`).
+  With them (owner, 2026-11-21: "Townsfolk: add reqs for trading, picking up
+  custom missions, building roads ... and generate road segments between
+  some towns", "doing missions and rtrading should get you money, so we need
+  currency"): coins, a trader in every town, town missions from a board and
+  its people, and sloped dirt and gravel roads, laid by the world between
+  neighbouring towns (`townsfolk`, design 5 to 12). Started on the owner's
+  word (2026-11-21): "People approved. Build.phase 3. Do it in parallel if
+  you can".
+  And (owner, 2026-11-22: "can you add a new mission tree for phase 3? this
+  would be an entirely separate tree since phase 3 is mostly interacting
+  with the town", "building roads shjould be like a way point system, where
+  you have to mark road for pavving and then you walk up to blocks with
+  gravel and pave it. to make gravel you need a grinder and mixer", "we also
+  need to add basic carts to phase 3 as well, and horse carts too"): a town
+  mission tree of its own (`town-missions-tree`), roads marked with survey
+  stakes and paved with gravel from a grinder and a mixer (`townsfolk`
+  design 39 to 41), and hand carts and horse carts, a quarter of their speed
+  off the road (`land-transport` design 9 and 10), all built on
+  `claude/phase-2-1`. With them (owner, 2026-11-23: "update horses -
+  plodders like your carriage", "You should also be able to ride plodders
+  as well"): a tamed plodder pulls the cart as the horse does, and a
+  plodder or a horse can be ridden, pulled forward from phase 5's ridden
+  horses (`land-transport` design).
+  And (owner, 2026-11-23: "Make presets for houses and buildings too. I
+  want the player to be able to design structures and build according to
+  blue prints. That way we avoid the jankiness of free building. Buildings
+  can be modified mid builds in the building planner too. Please mock this
+  up so I can fine tune it. Add this requirement to.phase 3"): a building
+  planner at a drafting table, house and building presets the player can
+  edit and save as their own blueprints, set out in the world as a
+  construction site built piece by piece from the pack, and changed in the
+  planner mid-build (`building-planner`, mocked up in M6's Planner and Site
+  tabs). Written up, not built.
 - **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
   should be 3b"): server authority over everything stored, the server
   mediating every interaction near or far, each client building its own LOD,
@@ -573,20 +655,28 @@ which wait for a request.
   launcher that pulls the latest from itch io based on your OS", "this
   launcher should be responsible for keeping the game up to date always";
   `game-launcher`). No mockup yet.
-- **Then survival, phase 3c** (owner, 2026-11-18: "3c will add survival
+- **Then town building, civil engineering and survival, phase 4** ("the after env v2, we'll
+  down town building, civil engineerring"): towns built and grown on the grid (M15,
+  M22), and the works between buildings (bridges and the like; roads come
+  with the townsfolk); no mockup yet for the second. With them, power
+  generation's first rungs, water and wind (M20; owner, 2026-11-21: "bump
+  power gen to phase 4").
+  Survival comes in phase 4 too (owner, 2026-11-22: "bump surivival to
+  phase 4 s well"; first planned as 3c, 2026-11-18: "3c will add survival
   mode, falling from high places, dangeroous animals (we'll introduce
   predators), fighting with villagers, hunger, and oxygen - underwater can t
   breath, or in space"): a Survival mode per world beside today's calm
   Explorer, with health, fall damage, hunger, breath and suit air, hunting
-  predators, townsfolk who fight back, and a dropped pack on death
-  (`survival-mode`). No mockup yet.
-- **Then town building and civil engineering** ("the after env v2, we'll
-  down town building, civil engineerring"): towns built and grown on the grid (M15,
-  M22), and the works between buildings (roads, bridges); no mockup yet for
-  the second.
+  predators, townsfolk who fight back, tool wear, and a dropped pack on
+  death (`survival-mode`). No mockup yet.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
-  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  navigation (M23, `steer-and-sail`), ridden horses and wagons, cars, and
+  trains on their tracks (owner, 2026-11-21: "add cars and cars and carts,
+  and horses and trains (and tracks) mockups to phase 5"; mocked up in M38,
+  `land-transport`; the hand cart and the horse cart moved to phase 3 on
+  2026-11-22, above), hiring
+  workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get
   into age of flight and mass mining, oil, industrialization, advanced power
@@ -798,6 +888,10 @@ a test pins it. When the scale moves, both move in the same commit.
   local gravity falloff, Newtonian motion, configurable linear/angular limits,
   and inertial/rotational dampeners. Do not restore rocket patched conics,
   maneuver nodes, transfer-window requirements, or n-body ship simulation.
+  **Lifted for rockets by the owner (survey G4 and G4a, 2026-11-22: "All of
+  Tenebris: patched conics, sphere-of-influence hops and maneuver nodes").**
+  `ship-tiers` (design, "Owner answers") is the plan; this clause is rewritten
+  in the commit that builds it. Until then nothing in the game changes.
 - Store system coordinates and orbital time as `f64`; render and simulate
   collision in bounded local `f32` frames. Subtract the origin before casting.
   Keep frame identity explicit in poses, velocities, persistence, and uploads.

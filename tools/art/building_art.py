@@ -183,6 +183,23 @@ def icon_post():
     return sp.image()
 
 
+def icon_eraser():
+    """The planner's Erase tool: a slanted rubber with a paper sleeve."""
+    sp = Sprite(32, 32)
+    # a block laid at 45 degrees: the rubber end low left, the sleeve up right
+    def slab(t0, t1, w):
+        ax, ay, bx, by = 6 + 20 * t0, 26 - 20 * t0, 6 + 20 * t1, 26 - 20 * t1
+        nx, ny = 0.7071 * w, 0.7071 * w
+        return [(ax - nx, ay - ny), (bx - nx, by - ny), (bx + nx, by + ny), (ax + nx, ay + ny)]
+    sp.part(sp.poly(slab(0.0, 0.48, 6.5)), BRICK[1:] + ["#eab798"], "rim")          # the rubber
+    sp.part(sp.poly(slab(0.46, 1.0, 6.5)), RAMPS["blue"], "rim")   # the sleeve
+    sp.fill(sp.line([(14, 26), (24, 16)], 1) & sp.poly(slab(0.46, 1.0, 6.5)), "#fffefe")          # its stripe
+    sp.plots([(4, 29), (7, 30), (2, 27)], "#a09f91")                                # crumbs
+    sp.plot(9, 17, WHITE)
+    sp.outline()
+    return sp.image()
+
+
 # ---------- textures (32 x 32, wrapping) ----------------------------------------------------
 
 def tile(fn):
@@ -248,7 +265,7 @@ def tex_glass():
 ICONS = {
     "icon_floor": icon_floor, "icon_wall": icon_wall, "icon_roof": icon_roof, "icon_door": icon_door,
     "icon_window": icon_window, "icon_stairs": icon_stairs, "icon_lantern": icon_lantern, "icon_airlock": icon_airlock,
-    "icon_post": icon_post, "tex_metal": tex_metal, "tex_glass": tex_glass,
+    "icon_post": icon_post, "icon_eraser": icon_eraser, "tex_metal": tex_metal, "tex_glass": tex_glass,
 }
 REFS = ["armour_plating", "afterburner_kit", "emp_burst", "drop_tanks", "cluster_bombs"]
 

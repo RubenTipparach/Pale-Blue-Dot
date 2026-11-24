@@ -596,7 +596,8 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
   are 3D in the world; a dropped catch is a 2D item sprite (decision 11). Mark
   it answered in the survey.
 - **Q3. The deep fitted to the column.** `light-40m.jpg`, `light-90m.jpg`,
-  `light-140m.jpg`, `deep-day.jpg`. Recommend fitting.
+  `light-140m.jpg`, `deep-day.jpg`. Recommend fitting. In the survey as W21
+  (2026-11-21); the game builds the fitted zones provisionally until answered.
 
 ## Building it (2026-11-15)
 
@@ -3000,3 +3001,12 @@ With reef at about 10% of the sea on version 16 (B30), reef tiles round the
 eye are 40 times more common, so this cost would be met far more often.
 
 **Measured again** on the same spot after the change: see below.
+## Owner answers (survey, 2026-11-22)
+
+- **W21: fit the zones to the column** ("Fit the zones to the column: dark below 90 m"): sunlit to 40 m,
+  twilight to 90 m, midnight below. The recommendation the game builds stays, no longer provisional.
+  With it the owner wrote: "powered ligths should work underwater? mushgroom glow should work
+  underwater too". So a powered lamp and a glowing mushroom keep lighting what is near them under
+  water, held or placed, through the same cell light field as on land. A torch or campfire (an open
+  flame) does not; that part is a recommendation taken (ask only with screenshots). Written up as a
+  task; code waits for a request.

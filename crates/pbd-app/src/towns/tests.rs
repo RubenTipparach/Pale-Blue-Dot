@@ -454,8 +454,10 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let triangles = |m: &Meshes| m.values().map(|b| b.positions.len()).sum::<usize>();
     let outside = triangles(&laid.meshes);
     let inside: usize = laid.rooms.iter().map(triangles).sum();
+    // The rooms carry the furniture (`furniture` design 9), shaped and
+    // shaded smooth, so they now outweigh the shells: both are drawn.
     assert!(
-        inside > 1000 && outside > inside,
+        inside > 1000 && outside > 1000,
         "{inside} inside, {outside} outside"
     );
     let flames = laid
@@ -2518,4 +2520,132 @@ fn every_towns_path_risers_have_their_stairs() {
         };
         assert_eq!((edges, stairs), (e * towns, s * towns), "{name}");
     }
+}
+
+/// A measurement instrument, run by hand (`townsfolk` 2.1, 3.2): where to
+/// stand for the townsfolk's captures. Holbrook's smith from a metre in
+/// front of him and from three metres off his side, and the walled town's
+/// people (Linenleigh's) from beside its first stallholder, looking at the middle of the
+/// people within 20 m. Each as `--at` and `--yaw`.
+#[test]
+#[ignore]
+fn print_where_to_stand_for_the_townsfolk_shots() {
+    use bevy::math::DVec3;
+    let config = *crate::planet::terrain_config();
+    let radius = f64::from(config.radius_m);
+    let spot = |name: &str, stand: DVec3, toward: DVec3| {
+        let up = stand.normalize().as_vec3();
+        let toward = toward.as_vec3();
+        let heading = Vec3::Y.cross(up).normalize();
+        let flat = (toward - up * toward.dot(up)).normalize();
+        let angle = heading.cross(flat).dot(up).atan2(heading.dot(flat));
+        let (lat, lon) = pbd_core::geo::lat_lon(up).degrees();
+        println!(
+            "{name}: --at {lat:.6} {lon:.6} --yaw {:.1}",
+            (-angle).to_degrees()
+        );
+    };
+    let people = |site: &Site, template: &Template| {
+        let town = lay_out(site, template, &config).unwrap();
+        let laid = build(
+            site,
+            &town,
+            Some(template),
+            &load_kits(),
+            &|_: &str| 2.0,
+            &config,
+        )
+        .unwrap();
+        println!("{}: terrace {} m", site.name, laid.terrace_m);
+        pbd_core::townsfolk::people_of(&town, template, &laid.chart, &laid.patch)
+    };
+    let village = load_template("village");
+    let folk = people(&holbrook(), &village);
+    let smith = folk.iter().find(|p| p.role == "smith").unwrap();
+    let at = smith.at(0.0, radius);
+    let up = at.feet.normalize();
+    let side = up.cross(at.forward);
+    println!(
+        "the smith's feet {:.2} m over the radius",
+        at.feet.length() - radius
+    );
+    spot(
+        "a metre in front of the smith",
+        at.feet + at.forward * 1.0,
+        -at.forward,
+    );
+    let off = at.forward * 1.6 + side * 2.4;
+    spot("off the smith's side", at.feet + off, -off);
+    let walled = load_template("town");
+    // Linenleigh, the walled town nearest Holbrook (Ashenham, the first by
+    // id, stands in water on today's ground).
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
+    let folk = people(&site, &walled);
+    let first = folk
+        .iter()
+        .find(|p| p.role == "stallholder")
+        .unwrap()
+        .at(0.0, radius);
+    let near: Vec<DVec3> = folk
+        .iter()
+        .map(|p| p.at(0.0, radius).feet)
+        .filter(|f| (*f - first.feet).length() < 20.0)
+        .collect();
+    let middle = near.iter().sum::<DVec3>() / near.len() as f64;
+    let up = middle.normalize();
+    let back = (first.feet - middle) - up * (first.feet - middle).dot(up);
+    let stand = middle + back.normalize() * ((first.feet - middle).length() + 4.0);
+    println!(
+        "{} people within 20 m of {}'s first stallholder",
+        near.len(),
+        site.name
+    );
+    spot("the walled town's market", stand, middle - stand);
+    // Face to face with its trader (its merchant, first of `jobs.ron`'s
+    // trader roles) and its job giver (its reeve), 1.6 m off, for the talk,
+    // trade and board captures (`townsfolk` design 35).
+    for role in ["merchant", "reeve"] {
+        if let Some(p) = folk.iter().find(|p| p.role == role) {
+            let at = p.at(0.0, radius);
+            spot(
+                &format!("face to face with {}'s {role}", site.name),
+                at.feet + at.forward * 1.6,
+                -at.forward,
+            );
+        }
+    }
+    // Face to face with the first person at a post wearing each beard
+    // (`townsfolk` design 36), Linenleigh's or else Holbrook's, 2 m off so
+    // the head and shoulders are in view (design 36a).
+    let holbrook_folk = people(&holbrook(), &village);
+    for beard in [
+        pbd_core::townsfolk::look::Beard::Goatee,
+        pbd_core::townsfolk::look::Beard::FullFront,
+    ] {
+        if let Some(p) = folk
+            .iter()
+            .chain(&holbrook_folk)
+            .find(|p| p.look.beard == beard && p.work().is_some())
+        {
+            let at = p.at(0.0, radius);
+            spot(
+                &format!("face to face with a {beard:?} ({} {})", p.role, p.id.site),
+                at.feet + at.forward * 2.0,
+                -at.forward,
+            );
+        }
+    }
+    let guard = folk
+        .iter()
+        .find(|p| p.role == "guard")
+        .unwrap()
+        .at(0.0, radius);
+    spot(
+        "the gate guard",
+        guard.feet + guard.forward * 2.5,
+        -guard.forward,
+    );
 }

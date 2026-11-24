@@ -13,12 +13,13 @@
 use bevy::prelude::*;
 use pbd_app::drops::Drops;
 use pbd_app::held::stroke::Meets;
+use pbd_app::planet::Applied;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
-use pbd_core::column::{self, LAYERS};
+use pbd_core::column;
 use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
@@ -265,62 +266,20 @@ pub(super) fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
     fine.set.finest_index_of(cell)
 }
 
-/// What the player's hands do as part of an edit.
-///
-/// The hands are IN the transaction rather than beside it, and that is the
-/// whole reason this enum exists. The log line carries the hotbar after the
-/// edit, so the move has to be settled before the record is written: a dig
-/// recorded without the block it yielded is a world where the hole is durable
-/// and the block was never picked up.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Hands {
-    /// A dig: take what was there.
-    Take,
-    /// A place: spend one of the selected stack.
-    Spend,
-    /// A scripted edit, which has no player and no hands.
-    Empty,
-    /// A till (`farming-and-smelting` decision 2): the hands take nothing,
-    /// but the soil may turn up a seed, which floats out as a dig's block
-    /// does, on the edit's own line.
-    Till(Option<Item>),
-    /// Trade one of the selected stack for this item, on the same line: a
-    /// bucket filled or emptied (`water-flow` E11).
-    Swap(Item),
-    /// A dig that also turns up finds into the hands, on the same line: a
-    /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
-    /// of grass and loose stone out of earth (`tool-crafting` decision 2),
-    /// bait out of earth by the water (`starter-missions` G1, `dig-fixes` 2).
-    TakeFinds([Option<Item>; 3]),
-}
+/// What the player's hands do as part of an edit: a core rule's input
+/// (`pbd_core::accept`), so a server settles them the same way.
+pub use pbd_core::accept::Hands;
 
-/// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
-/// tilled soil gives dirt; a generated ore cell gives mixed ore or, in a coal
-/// seam, coal; a placed one gives ore; generated sand in a desert cell gives
-/// desert sand (`sand-tiles` design 5); everything else gives itself.
+/// What a dug block yields: the core rule ([`pbd_core::accept::yield_of`])
+/// over this world's terrain and edits.
 pub(super) fn yield_of(save: &WorldSave, was: Material, cell: u32, layer: usize) -> Item {
-    let placed = |material: Material| {
-        save.edits
-            .for_cell(cell)
-            .iter()
-            .any(|&(l, m)| usize::from(l) == layer && m == material)
-    };
-    match was {
-        Material::Tilled => Item::Block(Material::Dirt),
-        Material::Ore => pbd_core::station::ore_yield(cell, layer as u16, placed(Material::Ore)),
-        Material::Sand => {
-            let placed = placed(Material::Sand);
-            match pbd_core::cell_key::key_direction(cell) {
-                Some(direction) => Item::Block(column::dug_sand(
-                    pbd_app::planet::terrain_config(),
-                    direction,
-                    placed,
-                )),
-                None => Item::Block(Material::Sand),
-            }
-        }
-        other => Item::Block(other),
-    }
+    pbd_core::accept::yield_of(
+        pbd_app::planet::terrain_config(),
+        &save.edits,
+        was,
+        cell,
+        layer,
+    )
 }
 
 /// Everything one edit touches, which is what says these travel together: the
@@ -360,7 +319,7 @@ pub fn apply_edit(
         drops,
         now_s,
     } = world;
-    if layer == 0 || layer >= LAYERS {
+    if !pbd_core::accept::in_world(layer) {
         info!("edit refused: layer {layer} is bedrock or above the world");
         return None;
     }
@@ -395,32 +354,74 @@ pub fn apply_edit(
         );
         return None;
     };
-    if was == material {
-        info!("edit refused: cell {cell} layer {layer} is already {material:?}");
-        return None;
-    }
-    // The move is made on a COPY first. What the log records is the hotbar
-    // after the edit, and what the player keeps is that same hotbar only if
-    // the record was taken.
-    // One lamp to a column. The record carries ONE lamp layer, because a
-    // lamp is not in a run and the runs are all the shader reads, so a second
-    // one would light a cell nothing was drawn in. Refusing is better than
-    // drawing the wrong one.
-    if material.is_lamp()
-        && let Some(column) = adopting
-            .as_ref()
-            .or_else(|| fine.set.columns.column(record))
-        && pbd_app::planet::column::has_lamp(column)
-    {
-        info!("edit refused: cell {cell} already carries a lamp");
-        return None;
-    }
+    // The decision is the core's (`pbd_core::accept::edit`), made on a COPY
+    // of the hands: what the log records is the hotbar after the edit, and
+    // what the player keeps is that same hotbar only if the record was taken.
+    let lamp_in_column = adopting
+        .as_ref()
+        .or_else(|| fine.set.columns.column(record))
+        .is_some_and(pbd_app::planet::column::has_lamp);
+    let ask = pbd_core::accept::Ask {
+        cell,
+        layer,
+        material,
+        was,
+        lamp_in_column,
+        hands,
+    };
+    let taken = match pbd_core::accept::edit(ask, &slots.0, || yield_of(save, was, cell, layer)) {
+        Ok(taken) => taken,
+        Err(refused) => {
+            use pbd_core::accept::Refused;
+            match refused {
+                Refused::OutOfWorld => {
+                    info!("edit refused: layer {layer} is bedrock or above the world")
+                }
+                Refused::Unchanged => {
+                    info!("edit refused: cell {cell} layer {layer} is already {material:?}")
+                }
+                Refused::LampTaken => info!("edit refused: cell {cell} already carries a lamp"),
+                Refused::EmptySlot if hands == Hands::Spend => {
+                    info!("edit refused: nothing in the selected slot to place")
+                }
+                Refused::EmptySlot => info!("edit refused: nothing in the selected slot to use"),
+            }
+            return None;
+        }
+    };
     // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
-    // an edit that saved and could not be shown is the worse failure.
+    // an edit that saved and could not be shown is the worse failure. A
+    // client's render tier, not the world, so not the core's to decide.
     if adopting.is_some()
         && fine.set.columns.columns.len() >= pbd_app::planet::column::COLUMN_CAPACITY as usize
     {
         error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
+        return None;
+    }
+    // A game that joined another's world sends what the player tried, and
+    // shows it when the server's change comes back (`multiplayer` design 20,
+    // first cut: no prediction yet, so a refusal has nothing to undo).
+    if save.joined() {
+        use pbd_core::net::protocol::Request;
+        let layer16 = layer as u16;
+        let request = match hands {
+            Hands::Spend => Request::Place {
+                cell,
+                layer: layer16,
+                slot: slots.0.selected() as u8,
+            },
+            Hands::Take | Hands::TakeFinds(_) if material == Material::Air => Request::Dig {
+                cell,
+                layer: layer16,
+            },
+            other => {
+                info!("not sent to the host yet: {other:?} at cell {cell} layer {layer}");
+                return None;
+            }
+        };
+        if save.send_request(request) {
+            info!("sent to the host: {request:?}");
+        }
         return None;
     }
     // A chest broken (`storage-chests` design 4): what it holds floats out
@@ -458,60 +459,28 @@ pub fn apply_edit(
             }
         }
     }
-    let mut moved = slots.0.clone();
-    let mut dropped = None;
-    match hands {
-        // The dug block floats where it was cut, at the cell's centre, and
-        // the magnet brings it in (`inventory-grid` decision 4). The hands do
-        // not change here; the pickup is its own line.
-        Hands::Take | Hands::TakeFinds(_) | Hands::Till(Some(_)) => {
-            // What does not fit is not given: a find is not a block the
-            // player is owed.
-            if let Hands::TakeFinds(finds) = hands {
-                for find in finds.into_iter().flatten() {
-                    moved.give(find, 1);
-                }
-            }
-            let item = match hands {
-                Hands::Till(Some(item)) => item,
-                _ => yield_of(save, was, cell, layer),
-            };
-            let direction = fine
-                .set
-                .finest_records()
-                .get(record)
-                .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
-                .and_then(Vec3::try_normalize);
-            if let Some(direction) = direction {
-                // A till's seed comes up out of the soil, over the cell.
-                let lift = if matches!(hands, Hands::Till(_)) {
-                    1.3
-                } else {
-                    0.5
-                };
-                // The body's frame in f64 (`world-frames` 10.4).
-                let centre = direction.as_dvec3().normalize()
-                    * (f64::from(PLANET_RADIUS) + f64::from(column::layer_altitude(layer)) + lift);
-                dropped = Some(Drops::make(save, item, centre, *now_s));
-            }
-        }
-        Hands::Spend => {
-            let index = moved.selected();
-            if moved.take(index, 1) != 1 {
-                info!("edit refused: nothing in the selected slot to place");
-                return None;
-            }
-        }
-        Hands::Swap(item) => {
-            let index = moved.selected();
-            if moved.take(index, 1) != 1 {
-                info!("edit refused: nothing in the selected slot to use");
-                return None;
-            }
-            moved.give(item, 1);
-        }
-        Hands::Empty | Hands::Till(None) => {}
-    }
+    let mut moved = taken.slots;
+    let taken_floats = taken.floats;
+    // What floats out does so at the cell's centre, and the magnet brings it
+    // in (`inventory-grid` decision 4).
+    let dropped = taken_floats.and_then(|item| {
+        let direction = fine
+            .set
+            .finest_records()
+            .get(record)
+            .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
+            .and_then(Vec3::try_normalize)?;
+        // A till's seed comes up out of the soil, over the cell.
+        let lift = if matches!(hands, Hands::Till(_)) {
+            1.3
+        } else {
+            0.5
+        };
+        // The body's frame in f64 (`world-frames` 10.4).
+        let centre = direction.as_dvec3().normalize()
+            * (f64::from(PLANET_RADIUS) + f64::from(column::layer_altitude(layer)) + lift);
+        Some(Drops::make(save, item, centre, *now_s))
+    });
     // Whether what this replaces is something a player put there: its
     // removal is logged by author (the owner, 2026-11-16: "if an object a
     // user placed despawns, i need logs").
@@ -522,20 +491,41 @@ pub fn apply_edit(
             .for_cell(cell)
             .iter()
             .any(|&(l, m)| usize::from(l) == layer && m == was);
-    if !save.accept(
-        Edit {
-            cell,
-            layer: layer as u16,
-            material,
-        },
-        dropped.as_ref(),
-        &moved,
-    ) {
-        // The durable path refused it, so the world must not change either:
-        // an edit that shows and does not save is the worse of the two.
-        error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
-        return None;
-    }
+    let edit = Edit {
+        cell,
+        layer: layer as u16,
+        material,
+    };
+    // The server decides (`multiplayer` 4.2, design 18): in single player it
+    // is in process and the save is its store, so this answers now and
+    // journals the line the save always wrote. What it decides is what
+    // happens; where it differs from the prediction above, its answer wins
+    // and the difference is logged, for a playtest to find.
+    let sequenced = match save.decide_edit(edit, hands, &slots.0, dropped.as_ref()) {
+        Ok(decided) => {
+            if decided.slots != moved || decided.floats != taken_floats {
+                warn!(
+                    "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: the server's hands \
+                     differ from the prediction; the server's are kept"
+                );
+                moved = decided.slots;
+            }
+            decided.sequenced
+        }
+        Err(pbd_core::net::protocol::Refusal::NotSaved) => {
+            // The durable path refused it, so the world must not change
+            // either: an edit that shows and does not save is the worse of
+            // the two.
+            error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
+            return None;
+        }
+        Err(refusal) => {
+            warn!(
+                "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: refused as {refusal:?}"
+            );
+            return None;
+        }
+    };
     if was_placed {
         info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
     }
@@ -544,28 +534,35 @@ pub fn apply_edit(
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
-    if let Some(column) = adopting {
-        // Checked before the save took the edit, so this cannot refuse.
-        let adopted = set.adopt(record, column);
-        debug_assert!(adopted, "adoption was checked before the save");
+    // APPLY (`edit-pipeline` 5): the same call a world process's or a
+    // server's edit takes, which does not know where the edit came from.
+    // The column, its record and its neighbours', the water and the surface
+    // (`FineSet::write_layer`, the one path a landing's replay takes too),
+    // adopting the cell first if it was past the tier's edge (checked to fit
+    // before the save took it). The surface matters as much as the runs:
+    // repacking the runs and leaving the record's cap alone is the bug the
+    // owner reported as broken geometry, "a meadow over the hole and a wall
+    // across it".
+    let applied = set.apply(sequenced.edit, &save.edits);
+    if applied != Applied::Written {
+        warn!("edit at cell {cell} layer {layer} applied as {applied:?}");
+    }
+    if adopting.is_some() {
         info!("adopted cell {cell} into the tier ahead of the streaming");
     }
-    // The column, its record and its neighbours', the water and the surface
-    // (`FineSet::write_layer`, the one path a landing's replay takes too).
-    // The surface matters as much as the runs: repacking the runs and leaving
-    // the record's cap alone is the bug the owner reported as broken geometry,
-    // "a meadow over the hole and a wall across it".
-    set.write_layer(record, layer, material, &save.edits);
+    debug!(
+        "edit {} of region {:#x} applied: {applied:?}",
+        sequenced.seq, sequenced.region
+    );
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
     // lights round a corner. The reference runs a bounded incremental pass
     // because a full one costs it a second; ours costs six milliseconds, so it
-    // buys the exactness instead.
+    // buys the exactness instead. Then the sea's sheet over the tier, its
+    // shade from the light just baked.
     let repacked = started.elapsed();
-    set.columns.relight();
-    // The sea's sheet over the tier, its shade from the light just baked.
-    set.mark_sea();
+    set.finish_edits();
     let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);
@@ -621,6 +618,19 @@ pub fn shake_on_impact(
             fx.0.push(pbd_app::tree_fx::TreeFxEvent::Hit { cell: tree, by_axe });
         }
         debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
+    }
+}
+
+/// The in-process server carves its columns with the tier's own worms
+/// (`multiplayer` design 18), so the cell it decides on is the cell the
+/// player sees. Without touching the save's change ticks: nothing about the
+/// world changed.
+pub fn server_worms(
+    columns: Option<Res<pbd_app::config::ColumnSettings>>,
+    mut save: ResMut<WorldSave>,
+) {
+    if let Some(columns) = columns {
+        save.bypass_change_detection().set_worms(columns.worms());
     }
 }
 
@@ -2054,7 +2064,9 @@ mod bait_tests {
         let dir = |r: usize| Vec3::from_slice(&records[r].direction_height[..3]).normalize();
         let water_top = |r: usize| {
             let column = fine.set.columns.column(r)?;
-            (0..LAYERS).rev().find(|&l| column.material(l).is_water())
+            (0..column::LAYERS)
+                .rev()
+                .find(|&l| column.material(l).is_water())
         };
         let wet: Vec<(usize, usize)> = (0..records.len())
             .filter_map(|r| water_top(r).map(|top| (r, top)))

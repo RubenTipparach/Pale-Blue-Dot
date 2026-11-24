@@ -12,24 +12,29 @@
 
 use crate::inventory::{CARRIED, Slots, Stack};
 
-/// Slots in a hold.
+/// Slots in a boat's hold (the raft's).
 pub const HOLD: usize = 10;
+
+/// The most slots any vehicle's hold has (a horse cart's, `land-transport`
+/// design 10): what the HOLD panel can show.
+pub const HOLD_MAX: usize = 24;
 
 /// The record kind a hold is stored as, and its schema.
 pub const HOLD_KIND: &str = "hold";
 pub const HOLD_SCHEMA: u32 = 1;
 
-/// A craft's hold, or a chest's store: a run of slots of its own length
-/// ([`HOLD`] for a raft's, [`crate::chest::CHEST`] for a chest's).
+/// A vehicle's hold, or a chest's store: as many slots as it gives it (a
+/// raft's ten, a hand cart's nine, a horse cart's 24, a chest's
+/// [`crate::chest::CHEST`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hold {
     pub slots: Vec<Option<Stack>>,
 }
 
 impl Default for Hold {
-    /// A raft's hold, empty.
+    /// A boat's hold: [`HOLD`] slots.
     fn default() -> Self {
-        Self::with_len(HOLD)
+        Self::sized(HOLD)
     }
 }
 
@@ -42,16 +47,16 @@ pub enum Place {
 }
 
 impl Hold {
-    /// An empty store of `len` slots.
-    pub fn with_len(len: usize) -> Self {
+    /// An empty hold of `slots` slots, at most [`HOLD_MAX`].
+    pub fn sized(slots: usize) -> Self {
         Self {
-            slots: vec![None; len],
+            slots: vec![None; slots.min(HOLD_MAX)],
         }
     }
 
-    /// How many slots it has.
-    pub fn len(&self) -> usize {
-        self.slots.len()
+    /// Slots holding something.
+    pub fn filled(&self) -> usize {
+        self.slots.iter().flatten().count()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -85,7 +90,7 @@ fn set(slots: &mut Slots, hold: &mut Hold, at: Place, stack: Option<Stack>) {
 fn valid(hold: &Hold, at: Place) -> bool {
     match at {
         Place::Carried(i) => i < CARRIED,
-        Place::Hold(i) => i < hold.len(),
+        Place::Hold(i) => i < hold.slots.len(),
     }
 }
 
@@ -142,7 +147,7 @@ pub fn send(slots: &mut Slots, hold: &mut Hold, from: Place) {
             .chain(0..crate::inventory::SLOTS)
             .map(Place::Carried)
             .collect(),
-        Place::Carried(_) => (0..hold.len()).map(Place::Hold).collect(),
+        Place::Carried(_) => (0..hold.slots.len()).map(Place::Hold).collect(),
     };
     // Onto the same item first, then into empty slots.
     for merge in [true, false] {
@@ -237,8 +242,8 @@ mod tests {
     fn a_chest_store_moves_to_its_own_length() {
         let mut slots = Slots::new();
         slots.set(12, Some(logs(40)));
-        let mut chest = Hold::with_len(crate::chest::CHEST);
-        assert_eq!(chest.len(), 20);
+        let mut chest = Hold::sized(crate::chest::CHEST);
+        assert_eq!(chest.slots.len(), 20);
         shift(
             &mut slots,
             &mut chest,

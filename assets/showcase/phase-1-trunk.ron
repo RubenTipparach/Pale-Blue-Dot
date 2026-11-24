@@ -66,7 +66,7 @@
             caption: "A chest: make it at the bench, set it down, store soil in it",
             until: ["storage"],
             max_s: 300.0,
-            acts: [Focus("storage"), Hand("axe"), Chop(Have("log", 3)), Craft("planks", 3), Bench("chest", 1), Hand("hand"), Place("block:chest"), Store, Still],
+            acts: [Focus("storage"), Hand("axe"), Chop(Have("log", 3)), Craft("planks", 3), Bench("wood-chest", 1), Hand("hand"), Place("block:chest"), Store, Still],
         ),
         (
             caption: "The trunk is done: every branch opens",

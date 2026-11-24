@@ -334,3 +334,8 @@ The mockups' links:
 - **Software rendering.** The pages are screenshotted in a cloud container
   without a GPU (SwiftShader). The pictures show the look, not the frame
   rate.
+
+## Owner answers (survey, 2026-11-22)
+
+- **A1: the aircraft as drawn** (decision 4 stands).
+- **A2: ocean ships of whole cells, as drawn** (decision 3 stands); sloped hull pieces can still be added later without changing a saved ship.

@@ -1846,6 +1846,49 @@ pub fn glow_bits(
     (spare & !(GLOW_FLOWER_BIT | GLOW_PICKED_BIT)) | bits
 }
 
+/// Set in a finest record's `spare[2]` where the player has marked its cell
+/// for paving (`townsfolk` design 39a): the cap draws a lime band between
+/// the sides at [`MARK_SIDE_IN_SHIFT`] and [`MARK_SIDE_OUT_SHIFT`], three
+/// bits each, [`MARK_NO_SIDE`] where the plan ends on the cell's middle.
+/// `planet_surface.wgsl` reads them.
+pub const MARK_BIT: u32 = 1 << 16;
+pub const MARK_SIDE_IN_SHIFT: u32 = 17;
+pub const MARK_SIDE_OUT_SHIFT: u32 = 20;
+pub const MARK_NO_SIDE: u32 = 7;
+const MARK_MASK: u32 = 0x7f << 16;
+const _: () = assert!(
+    MARK_MASK
+        & (GLOW_PICKED_BIT | GLOW_FLOWER_BIT | DRY_SHEET_BIT | SEA_REACH_BIT | SHEET_SHADE_MASK)
+        == 0
+);
+
+/// The side of a record's cell (its `corners[side]` to `corners[side + 1]`)
+/// a neighbouring cell lies across: the side whose middle is nearest it.
+pub fn side_toward(cell: &GpuCell, neighbour: u32) -> Option<u32> {
+    let toward = pbd_core::roads::centre(neighbour)?;
+    let degree = cell.degree().min(6);
+    (0..degree)
+        .map(|side| {
+            let a = Vec3::from_slice(&cell.corners[side][..3]);
+            let b = Vec3::from_slice(&cell.corners[(side + 1) % degree][..3]);
+            (side as u32, (a + b).normalize_or_zero().dot(toward))
+        })
+        .max_by(|x, y| x.1.total_cmp(&y.1))
+        .map(|(side, _)| side)
+}
+
+/// A finest record's `spare[2]` with its mark bits for the cell `key`, from
+/// the installed marks (`pbd_core::roads::paving::mark_of`). Every other bit
+/// is kept.
+pub fn mark_bits(cell: &GpuCell, key: u32) -> u32 {
+    let spare = cell.spare[2] & !MARK_MASK;
+    let Some((before, after)) = pbd_core::roads::paving::mark_of(key) else {
+        return spare;
+    };
+    let side = |n: Option<u32>| n.and_then(|n| side_toward(cell, n)).unwrap_or(MARK_NO_SIDE);
+    spare | MARK_BIT | side(before) << MARK_SIDE_IN_SHIFT | side(after) << MARK_SIDE_OUT_SHIFT
+}
+
 /// The render codes the shader grows flowers on: its `grassy`. A test reads
 /// the shader's function and holds the two to one list.
 pub const GRASSY_CODES: [u32; 3] = [2, 3, 7];
@@ -1953,6 +1996,8 @@ pub fn build_with(
             &edits.glow,
             direction.normalize_or(Vec3::Y).angle_between(anchor) * PLANET_RADIUS,
         );
+        // A cell the player marked for paving (`townsfolk` design 39a).
+        cell.spare[2] = mark_bits(cell, key);
         if !(members_of.select)(index, direction) || members.len() >= members_of.capacity {
             cell.metadata[2] &= SKYLIGHT_MASK;
             continue;

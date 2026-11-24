@@ -1,0 +1,9 @@
+hosting on 0.0.0.0:47123
+2026-11-23T02:38:13.823282Z  INFO pbd_app::net_play: a player connected (0)
+2026-11-23T02:38:13.823326Z  INFO pbd_app::net_play: player 1 joined (0)
+2026-11-23T02:38:58.873352Z  INFO pbd_app::desktop::digging: dug Sand from cell 1328292624 layer 208 with the Bare hands in 2.00 s, fine set version 8
+2026-11-23T02:39:01.040921Z  INFO pbd_app::desktop::digging: dug Sand from cell 1328296720 layer 207 with the Bare hands in 2.00 s, fine set version 9
+2026-11-23T02:42:20.024483Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:22.192482Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:24.359173Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:26.525660Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier

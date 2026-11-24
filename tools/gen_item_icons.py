@@ -284,6 +284,183 @@ ICONS.update({
 })
 
 
+# Town jobs (`townsfolk` design 9): the parcel a delivery job hands you, brown
+# paper tied with twine; and the coin beside the hotbar (design 5), a gold
+# piece with a stamped ring. Inventory and UI icons, with the 1 px outline.
+ECONOMY = {
+    "k": "#3a2614", "p": "#b98a56", "P": "#d6a96e", "d": "#8a6238",
+    "t": "#efe3c2", "c": "#7a4f12", "g": "#d9a334", "G": "#f4cf5c", "W": "#fff3b8",
+    "o": "#a87521",
+}
+
+ICONS.update({
+    "goods/parcel": ([
+        "................", "................", "......k..k......", ".....ktkkt......",
+        "...kkkkttkkkkk..", "..kPPPPttPPPPk..", "..kPppPttPppPk..", "..kPpppttpppPk..",
+        "..kttttttttttk..", "..kpppptttpppk..", "..kppppttppppk..", "..kdppptttpddk..",
+        "..kddddttddddk..", "...kkkkkkkkkk...", "................", "................",
+    ], ECONOMY),
+    "ui/coin": ([
+        "................", "................", ".....kkkkkk.....", "....kGGGGGGk....",
+        "...kGWWggggok...", "..kGWgooooggok..", "..kGgoGGGGogok..", "..kGgoGggGogok..",
+        "..kGgoGggGogok..", "..kGgoGGGGogok..", "..kggoooooogok..", "...kggggggook...",
+        "....koooooock...", ".....kkkkkk.....", "................", "................",
+    ], ECONOMY),
+})
+
+
+# `townsfolk` design 31: gravel, a heap of crushed stone for a road.
+ROADS = {
+    "k": "#2e2a26", "w": "#e6e0d4", "l": "#c4bcae", "m": "#998f82", "d": "#6b645a",
+}
+
+ICONS.update({
+    "goods/gravel": ([
+        "................", "................", "................", "................",
+        "......kkkk......", ".....kwlmlk.....", "....kllmdmlk....", "...kwmdlwmdlk...",
+        "..klmlwmdlmwmk..", "..kdmlmdwlmdlk..", ".klwmdlmlmdwmlk.", ".kmdlwmdwlmldmk.",
+        ".kdmmdmddmdmmdk.", "..kkkkkkkkkkkk..", "................", "................",
+    ], ROADS),
+})
+
+
+# `townsfolk` design 41: crushed stone, survey stakes, and the grinder and the
+# mixer, drawn from the mission tree mockup's stand-ins (M33,
+# docs/mockups/mission-tree/items/) in one palette.
+PAVING = {
+    "k": "#2a1a10",
+    "a": "#d6d0c4",
+    "b": "#9b958a",
+    "c": "#66615a",
+    "d": "#9a6a3c",
+    "e": "#6b4626",
+    "f": "#c8955c",
+    "g": "#e05a3a",
+    "h": "#a03a26",
+    "i": "#4a525c",
+    "j": "#b8c0c8",
+    "l": "#7a8490",
+}
+
+ICONS.update({
+    "goods/crushed-stone": ([
+        "................", "................", "................", "................",
+        ".......kk.......", "......kaak......", "...kkkaabckkk...", "..kaakabcckabk..",
+        ".kaabckbcckaack.", ".kabbckkkkabbck.", "..kcckaabkkcck..", "..kkkaabbckkkk..",
+        ".kabkabbcckaabk.", "kaabckccckaabbck", "kabbcckkkabbbcck", ".kkkkk...kkkkkk.",
+    ], PAVING),
+    "goods/survey-stakes": ([
+        "...kk.......kk..", "..kdek.....kdek.", "..kfdekk..kfdekk", "..kfdeghk.kfdegh",
+        "..kgggghk.kggggh", "..kfdekk..kfdekk", "..kfdek...kfdek.", "..kfdek...kfdek.",
+        "..kfdek...kfdek.", "..kfdek...kfdek.", "..kfdek...kfdek.", "...kdek....kdek.",
+        "...kdek....kdek.", "...kek......kek.", "....k........k..", "................",
+    ], PAVING),
+    "stations/grinder": ([
+        "...kkkkkkkkkk...", "..kdffffffffdk..", "..kedffffffdek..", "...kedffffdek...",
+        "....kedffdek....", "..kkkkeddekkkk..", ".kffffffffffffk.", ".kdekkbaabkkedkk",
+        ".kdekbaccabkedij", ".kdekaccccakeijk", ".kdekbaccabkedk.", ".kdekkbbbbkkedk.",
+        ".kdekkckcckkedk.", ".kdekckcckckedk.", "keddek.kk.keddek", ".kkkk......kkkk.",
+    ], PAVING),
+    "stations/mixer": ([
+        "................", "....kkkkkkkk....", "...kllllllllk...", "..klfffffffflk..",
+        ".kjffdddddddelkk", ".kjfddddddddelij", ".kjfddddddddeijk", ".kjdddeeeeeeejk.",
+        "..kldeeeeeeelk..", "...kllllllllk...", "..kdekkkkkkedk..", "..kdekkkkkkedk..",
+        ".kdabbbbbbbbdk..", ".kdebbbbbbbedk..", ".kedddddddddek..", "..kkkkkkkkkkk...",
+    ], PAVING),
+})
+
+# land-transport design 10: the cart wheel and the two carts. The grids are
+# drawn by a few shapes (a ring of rim and iron tyre, spokes, planks, shafts)
+# and then given the 1 px ink outline of an inventory icon wherever an empty
+# pixel touches a filled one; the palette is the boats' browns, the iron
+# ingot's grey for the tyre.
+CARTS = dict(BOATS, **{"t": "#4b4a48", "s": "#c9a46a", "h": "#5a4127"})
+
+
+def _outlined(grid):
+    """Ink round the shapes: an empty pixel beside a filled one is 'k'."""
+    out = [list(row) for row in grid]
+    for y in range(16):
+        for x in range(16):
+            if grid[y][x] != ".":
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < 16 and 0 <= ny < 16 and grid[ny][nx] not in ".k":
+                    out[y][x] = "k"
+                    break
+    return ["".join(r) for r in out]
+
+
+def _wheel(grid, cx, cy, r, spokes):
+    import math
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx) % (math.pi * 2 / spokes)
+            spoke = min(a, math.pi * 2 / spokes - a) * d < 0.55
+            if d <= r and d > r - 0.9:
+                grid[y][x] = "t"
+            elif d <= r - 0.9 and d > r - 2.0:
+                grid[y][x] = "F"
+            elif d <= 1.3:
+                grid[y][x] = "h"
+            elif d <= r - 2.0 and spoke:
+                grid[y][x] = "s"
+
+
+def _fill(grid, x0, y0, x1, y1, c):
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            if 0 <= x < 16 and 0 <= y < 16:
+                grid[y][x] = c
+
+
+def _cart_icon(kind):
+    g = [["."] * 16 for _ in range(16)]
+    if kind == "wheel":
+        _wheel(g, 8.0, 8.0, 7.0, 8)
+    elif kind == "hand-cart":
+        # The bed and its low side, its handle rising to the right, the
+        # wheel under it.
+        _fill(g, 1, 6, 10, 6, "F")
+        _fill(g, 1, 4, 10, 5, "f")
+        _fill(g, 1, 3, 1, 5, "F")
+        for i, x in enumerate(range(11, 16)):
+            _fill(g, x, 5 - i // 2, x, 5 - i // 2, "f")
+        _wheel(g, 6.0, 11.0, 4.0, 6)
+    else:
+        # A longer bed with its seat, the shafts out to the right, a big
+        # wheel under it.
+        _fill(g, 1, 5, 9, 6, "f")
+        _fill(g, 1, 7, 9, 7, "F")
+        _fill(g, 1, 3, 1, 6, "F")
+        _fill(g, 8, 3, 9, 4, "F")
+        _fill(g, 10, 7, 15, 7, "f")
+        _wheel(g, 5.5, 11.0, 4.5, 8)
+    return _outlined(["".join(r) for r in g])
+
+
+ICONS.update({
+    f"goods/{name}": (_cart_icon(name), CARTS)
+    for name in ("wheel", "hand-cart", "horse-cart")
+})
+
+
+# player-building design B8: a door, planks with two iron strap hinges and a
+# ring pull, in the fence's browns (FARM) with the outline of an inventory
+# icon.
+ICONS.update({
+    "goods/door": ([
+        "................", "....kkkkkkkk....", "....kWwWWwWk....", "....kWwWWwWk....",
+        "....kiiiiwWk....", "....kWwWWwWk....", "....kWwWWwWk....", "....kWwWWwIk....",
+        "....kWwWWwik....", "....kWwWWwWk....", "....kiiiiwWk....", "....kWwWWwWk....",
+        "....kWwWWwWk....", "....kWwWWwWk....", "....kkkkkkkk....", "................",
+    ], FARM),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

@@ -498,3 +498,19 @@ The prediction cost is JavaScript on a shared cloud CPU while it also renders
 on SwiftShader; it says the integration is cheap enough to redraw while a
 handle is dragged, nothing about the game's frame time (CLAUDE.md, "Render on
 the GPU").
+
+## Owner answers (survey, 2026-11-22): all of Tenebris
+
+The owner chose **C** on both G4 and G4a: "All of Tenebris: patched conics, sphere-of-influence hops
+and maneuver nodes". That replaces the recommendation (B, then G4a's nodes on the integrated line)
+that sections 2 and 11.4 describe. What it means for this change, to be written into those sections
+before any code:
+
+- rockets fly in Tenebris's summed inverse-square field;
+- the map draws patched conics, with sphere-of-influence hops between bodies, as Tenebris does;
+- maneuver nodes are placed on the conic and flown as finite burns;
+- the flight itself stays one Newtonian integrator: the conics are the drawing and the planner,
+  never a second model that moves the ship;
+- CLAUDE.md's flight invariant names this decision and changes its clause in the commit that builds it.
+
+Code waits for a request (phase 7, nuclear and rocketry).

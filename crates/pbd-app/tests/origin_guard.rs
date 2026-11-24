@@ -8,7 +8,7 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 12] = [
+const FILES: [&str; 17] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
@@ -26,6 +26,15 @@ const FILES: [&str; 12] = [
     "crates/pbd-app/src/critters.rs",
     // `tree-punch-shake`: the dust and leaves of a hit or felled tree.
     "crates/pbd-app/src/tree_fx.rs",
+    // `townsfolk` 25: the townspeople, placed in the planet's frame in f64.
+    "crates/pbd-core/src/townsfolk.rs",
+    "crates/pbd-app/src/townsfolk.rs",
+    // `townsfolk` 28: the lost villager, stored and walked in the body's
+    // frame in f64.
+    "crates/pbd-app/src/economy/special.rs",
+    // `land-transport` 11: the carts, kept in the body's frame in f64.
+    "crates/pbd-core/src/vehicle/cart.rs",
+    "crates/pbd-app/src/vehicles/carts.rs",
 ];
 
 /// What taking up or a radius from a local position looks like.

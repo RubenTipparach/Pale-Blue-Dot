@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Hex House Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -127,20 +128,114 @@ button{font:inherit;color:inherit}
 .rec{color:var(--ok)}
 .rec b{color:var(--ok)}
 footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+
+[hidden]{display:none !important}
+/* tabs, the info modal (descriptive text lives there), the planner and the site */
+.titlerow{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.infobtn{font:600 18px/1 var(--body);width:36px;height:36px;flex:0 0 36px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--amber);cursor:pointer}
+.infobtn:hover{border-color:var(--amber)}
+.infobtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-top:6px}
+.tab{all:unset;cursor:pointer;font-family:var(--display);font-size:17px;letter-spacing:.05em;padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:4px 4px 0 0;color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--amber);border-color:var(--line);background:var(--panel-solid)}
+.tab:focus-visible{outline:2px solid var(--amber)}
+.wrap{gap:18px}
+header.top{padding-top:18px;gap:8px}
+h1{font-size:clamp(28px,4vw,42px)}
+.site .dbg{background:rgba(5,15,20,.55);padding:2px 6px;border-radius:3px}
+dialog.infomodal{width:min(820px,94vw);max-height:88vh;max-height:88dvh;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);color:var(--ink)}
+dialog.infomodal::backdrop{background:rgba(4,6,10,.74)}
+.mhead{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:var(--raise);border-bottom:1px solid var(--line);z-index:1}
+.mhead b{font:700 20px/1.2 var(--display)}
+.mhead button{font:18px var(--body);min-width:40px;min-height:40px;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:4px;cursor:pointer}
+.mnav{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 16px 0;font-size:14px}
+.mnav a{color:var(--sky)}
+.mbody{padding:4px 16px 18px;display:grid;gap:14px}
+.mbody h2{font-size:22px;margin-top:14px;scroll-margin-top:64px}
+.mbody section{scroll-margin-top:64px}
+.mbody li{margin:3px 0;max-width:80ch;color:var(--muted)}
+.mbody li b,.mbody p b{color:var(--ink)}
+.mbody p{color:var(--muted)}
+.mbody q{color:var(--ink)}
+.mbody code{font:12.5px var(--mono);color:var(--sky);overflow-wrap:anywhere}
+.mbody ul{padding-left:20px;margin:0}
+.planner{display:grid;grid-template-columns:230px minmax(0,1fr) 290px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel-solid);height:max(560px,min(calc(100vh - 190px),820px))}
+.planner .side + .stage,.planner .stage + .side{border-left:1px solid var(--line)}
+.pstage{background:#0f2433}
+.pstage canvas{cursor:pointer}
+.ptop{position:absolute;left:8px;right:8px;top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.seg.auto{display:flex;flex-wrap:wrap;gap:4px;background:rgba(10,18,24,.72);padding:3px;border-radius:5px}
+.seg.auto .btn{padding:3px 8px;font-size:13.5px}
+.seg.three3{grid-template-columns:repeat(3,1fr)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.go{border-color:rgba(143,220,154,.55);color:var(--ok)}
+.btn.go[disabled]{color:var(--muted);border-color:var(--line)}
+.pline{bottom:76px}
+.plist{display:grid;gap:4px}
+.plist button{all:unset;cursor:pointer;display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--display);font-size:14.5px;letter-spacing:.03em}
+.plist button small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:0}
+.plist button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.12);color:var(--amber)}
+.plist button:focus-visible{outline:2px solid var(--amber)}
+.plist canvas{width:44px;height:34px;display:block}
+.plist .empty{font-size:12.5px;color:var(--muted)}
+.saverow{display:grid;grid-template-columns:1fr auto;gap:6px}
+.saverow input{font:14px var(--body);background:var(--raise);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 7px;min-width:0}
+.checks,.change{display:grid;gap:4px;font-size:13px}
+.checks div,.change div{padding:4px 7px;border-radius:3px;background:var(--raise);border-left:2px solid var(--line)}
+.checks .bad{border-left-color:var(--warn);color:var(--warn)}
+.checks .warn{border-left-color:var(--amber);color:var(--amber)}
+.checks .good{border-left-color:var(--ok);color:var(--ok)}
+.change .add{border-left-color:var(--blue)}
+.change .down{border-left-color:var(--warn)}
+.change .back{border-left-color:var(--ok)}
+.bom{display:grid;gap:3px;font-size:13.5px}
+.bom .row{display:grid;grid-template-columns:32px 1fr auto auto;gap:8px;align-items:center}
+.bom img{width:32px;height:32px;image-rendering:pixelated}
+.bom .n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.bom .have{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:5ch;text-align:right}
+.bom .short{color:var(--warn)}
+.bom .sum{font-size:12.5px;color:var(--muted);margin-top:4px}
+.editbar{position:absolute;left:8px;right:8px;bottom:118px;background:rgba(40,28,10,.86);border:1px solid rgba(240,180,60,.5);color:var(--amber);font-family:var(--display);font-size:14px;letter-spacing:.04em;padding:5px 9px;border-radius:4px}
+.tune{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:12.5px;color:var(--muted);align-items:center}
+.tune input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--amber)}
+.tune output{font-family:var(--mono);color:var(--ink);font-size:12px}
+.tune .seg{grid-column:1 / -1}
+.tunebox{border:1px solid var(--line);border-radius:4px;padding:6px 8px;display:grid;gap:8px}
+.tunebox summary{cursor:pointer;font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.tunebox[open]{display:grid;gap:8px}
+select{font:14px var(--body);background:var(--raise);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 6px;width:100%}
+.site .stage{background:#0e1424}
+@media (min-width:1001px){.builder.site{height:max(560px,min(calc(100vh - 190px),820px))}}
+@media (max-width:1000px){.site .dbg{max-width:calc(100% - 110px)}.sbom .chip{font-size:11px}}
+.sbom{position:absolute;right:8px;top:6px;display:grid;gap:2px;justify-items:end;pointer-events:none}
+.sbom .chip{display:flex;gap:5px;align-items:center;font:12px var(--mono);color:#ebf7f2;text-shadow:0 1px 0 #000;background:rgba(5,15,20,.6);padding:1px 6px 1px 2px;border-radius:3px}
+.sbom .chip img{width:24px;height:24px;image-rendering:pixelated}
+.sbom .chip.short{color:#ffb3a6}
+@media (max-width:1000px){
+  .planner{grid-template-columns:1fr;height:auto;min-height:0}
+  .planner .stage{height:64vh;min-height:380px;order:-1}
+  .planner .side + .stage,.planner .stage + .side{border-left:0}
+  .planner .side{border-top:1px solid var(--line)}
+  .plist{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+}
+@media (max-width:480px){.tab{font-size:15px;padding:7px 10px}.ptop{top:6px}.seg.auto .btn{font-size:12.5px;padding:3px 6px}.editbar{bottom:126px}}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 </style>
 
 <div class="wrap">
   <header class="top">
     <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
-    <h1>Building on the hex grid</h1>
+    <div class="titlerow"><h1>Building on the hex grid</h1><button class="infobtn" id="info" aria-label="About this mockup" title="About this mockup">i</button></div>
     <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-    <p class="lede">Walls on cell edges, floors in cells, a storey every three layers: the town's own cut, put in the player's hands. Pick a piece, aim at the plot, click. The ghost is green when the town's rules accept it and red with the reason when they do not. It is night, so what you build is lit by the lanterns you place.</p>
-    <p class="note">This is the build mockup <span class="src">openspec/changes/player-building</span> asks for first (it names it <span class="src">build.html</span>), grown from the towns mockup's cut and checks, on a plot of 91 cells. It runs on <span class="src">dig-and-place</span>'s journal and <span class="src">lamps-and-lanterns</span>' lights. Everything here is <b>proposed</b>, not built behaviour. Walls, roofs, floors and ground are <b>the game's own textures</b>: the settlement set (<span class="src">assets/textures/settlement</span>) at the manifest's scale, and the terrain atlas's own tiles on hex columns 1 m a layer (the fields sheet's sward, sward-over-earth and earth; the lunar regolith sheet on the moon), with the game's trees, all sampled nearest. The hotbar is the game's (<span class="src">desktop/slots.rs</span>: ten 44 px slots), its lantern the game's own icon (<span class="src">assets/items/lights</span>), removing the game's pickaxe. <b>Mockup-only</b>, because the game has none yet: the habitat's metal panel and glass, and the piece icons, all <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/building_art.py</span>): the icons 32 px, the metal and glass 32 px tiles like the game's settlement textures, all shown at whole-number scales and sampled nearest.</p>
+    <nav class="tabs" role="tablist" aria-label="Building">
+      <button class="tab" role="tab" data-tab="planner" aria-selected="false">Planner</button>
+      <button class="tab" role="tab" data-tab="site" aria-selected="false">Site</button>
+      <button class="tab" role="tab" data-tab="builder" aria-selected="false">Free building</button>
+    </nav>
   </header>
 
-  <section aria-labelledby="b-h">
-    <div class="sec-head"><div class="eyebrow">1 &middot; Try it</div><h2 id="b-h">The builder</h2></div>
+  <section class="pane" id="pane-builder" data-pane="builder" hidden aria-label="Free building">
+    
     <div class="builder">
       <div class="stage">
         <canvas id="cv" tabindex="0" aria-label="A hex plot to build on. Click to place the selected piece."></canvas>
@@ -161,9 +256,117 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
         <div class="field"><span>Journal (newest first)</span><div class="journal" id="journal"></div></div>
       </aside>
     </div>
-    <p class="note">Lit at night as CLAUDE.md asks: every lantern you place, the town's two street lamps and each window with a lantern behind it light what is near them, wherever the camera is, each throwing a pool on the ground as the game's lamps do; the moon stays at 0.035, as dark as the game's night, so the ground between the pools reads near black. Placing or removing anything re-lights, as an edit re-lights the field in the engine. Building is free (owner, P1); costs come later and are sketched in section 3.</p>
+    
+  </section>
+  <section class="pane" id="pane-planner" data-pane="planner" hidden aria-label="Planner">
+    <div class="planner">
+      <aside class="side lib" aria-label="Presets and your blueprints">
+        <div class="field"><span>Presets</span><div class="plist" id="presets"></div></div>
+        <div class="field"><span>Size</span><div class="seg three3" id="psize"><button class="btn" data-sz="0">Small</button><button class="btn" data-sz="1" aria-pressed="true">Standard</button><button class="btn" data-sz="2">Large</button></div></div>
+        <div class="field"><span>Your blueprints</span><div class="plist" id="mine"></div></div>
+        <div class="field"><span>Save as yours</span><div class="saverow"><input id="pname" type="text" maxlength="28" aria-label="Blueprint name" placeholder="Name"><button class="btn" id="psave">Save</button></div></div>
+      </aside>
+      <div class="stage pstage">
+        <canvas id="pcv" tabindex="0" aria-label="The plan, seen from above, one storey at a time"></canvas>
+        <div class="ptop">
+          <div class="seg auto" id="storeys"></div>
+          <div class="seg auto" id="pview"></div>
+          <div class="seg auto" id="pkits"></div>
+          <div class="seg auto" id="proofs"></div>
+        </div>
+        <div class="editbar" id="editbar" hidden></div>
+        <div class="ghostline pline"><span class="pill" id="ppill">Pick a tool, click the plan</span></div>
+        <div class="hotbar" id="ptools" role="toolbar" aria-label="Planner tools"></div>
+      </div>
+      <aside class="side" aria-label="Checks and bill of materials">
+        <div class="field"><span>Checks</span><div class="checks" id="checks"></div></div>
+        <div class="field"><span>Bill of materials</span><div class="bom" id="bom"></div></div>
+        <div class="field" id="changeF" hidden><span>This change</span><div class="change" id="change"></div><div class="seg"><button class="btn go" id="csave">Save change</button><button class="btn" id="ccancel">Cancel</button></div></div>
+        <button class="btn go" id="setout">Set out in the world</button>
+        <div class="field"><span>Plan limits</span>
+          <label class="tune">Cells <output id="o-maxCells"></output><input type="range" id="t-maxCells" min="6" max="40" step="1"></label>
+          <label class="tune">Storeys <output id="o-maxStoreys"></output><input type="range" id="t-maxStoreys" min="1" max="4" step="1"></label>
+        </div>
+      </aside>
+    </div>
   </section>
 
+  <section class="pane" id="pane-site" data-pane="site" hidden aria-label="Construction site">
+    <div class="builder site">
+      <div class="stage">
+        <canvas id="scv" tabindex="0" aria-label="The construction site in the world. Click a ghost piece to build it."></canvas>
+        <div class="dbg" id="stop"></div>
+        <div class="sbom" id="sbom"></div>
+        <div class="ghostline"><span class="pill" id="spill">Turn it, then set it out</span></div>
+        <div class="hotbar" id="spack" aria-label="The pack"></div>
+      </div>
+      <aside class="side" aria-label="Site controls">
+        <div class="field"><span>Blueprint</span><select id="splan" aria-label="Blueprint"></select><div class="seg three3" id="ssize"><button class="btn" data-sz="0">Small</button><button class="btn" data-sz="1" aria-pressed="true">Standard</button><button class="btn" data-sz="2">Large</button></div><button class="btn" id="sedit">Open in the planner</button></div>
+        <div class="field" id="placeF"><span>Set out</span><div class="seg"><button class="btn" id="tl" aria-label="Turn left">&#x21BA; Turn</button><button class="btn" id="tr" aria-label="Turn right">Turn &#x21BB;</button></div><button class="btn go" id="sout">Set out here</button></div>
+        <div class="field" id="buildF" hidden><span>Build</span><div class="seg"><button class="btn go" id="bnext">Strike next</button><button class="btn" id="bauto" aria-pressed="false">Keep building</button></div><div class="seg"><button class="btn" id="bfill">Fill the pack</button><button class="btn" id="bclear">Start over</button></div></div>
+        <div class="field" id="editF" hidden><span>Change it mid-build</span><div class="seg" id="edits"></div><div class="change" id="schange"></div></div>
+        <div class="field"><span>World</span><div class="seg"><button class="btn" id="wPlan" aria-pressed="true">Planned</button><button class="btn" id="wFree" aria-pressed="false">Free</button></div></div>
+        <div class="field"><span>Time</span><div class="seg"><button class="btn" id="sNight" aria-pressed="true">22:00</button><button class="btn" id="sDay" aria-pressed="false">14:00</button></div></div>
+        <details class="tunebox" open><summary>Tune</summary>
+          <label class="tune">Ghost <output id="o-ghostOpacity"></output><input type="range" id="t-ghostOpacity" min="0.1" max="0.8" step="0.05"></label>
+          <label class="tune">Waiting ghost <output id="o-waitOpacity"></output><input type="range" id="t-waitOpacity" min="0" max="0.5" step="0.05"></label>
+          <div class="tune">Ghost colour<div class="seg three3" id="ttint"><button class="btn" data-v="cyan">Cyan</button><button class="btn" data-v="white">White</button><button class="btn" data-v="amber">Amber</button></div></div>
+          <label class="tune">Strokes a piece <output id="o-strokeScale"></output><input type="range" id="t-strokeScale" min="0.5" max="3" step="0.25"></label>
+          <label class="tune">Stroke beat <output id="o-beat"></output><input type="range" id="t-beat" min="0.25" max="1" step="0.05"></label>
+          <label class="tune">Turn step <output id="o-rotStep"></output><input type="range" id="t-rotStep" min="1" max="3" step="1"></label>
+          <label class="tune">Steepest footing <output id="o-maxFooting"></output><input type="range" id="t-maxFooting" min="0" max="4" step="1"></label>
+          <label class="tune">Cost scale <output id="o-costScale"></output><input type="range" id="t-costScale" min="0.5" max="2" step="0.25"></label>
+          <label class="tune">Goods back <output id="o-refund"></output><input type="range" id="t-refund" min="0" max="1" step="0.25"></label>
+          <div class="tune">Scaffolding<div class="seg"><button class="btn" id="tScafOn" aria-pressed="true">On</button><button class="btn" id="tScafOff" aria-pressed="false">Off</button></div></div>
+          <div class="tune">Dropped built pieces<div class="seg"><button class="btn" id="tMark" aria-pressed="true">Marked</button><button class="btn" id="tReturn" aria-pressed="false">Back at once</button></div></div>
+        </details>
+      </aside>
+    </div>
+  </section>
+
+
+</div>
+<dialog class="infomodal" id="modal" aria-labelledby="mtitle">
+  <div class="mhead"><b id="mtitle">Hex House Builder (M6)</b><button id="mclose" aria-label="Close">&#x2715;</button></div>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-planner">Planner</a><a href="#m-site">Site</a><a href="#m-tune">Tunables</a><a href="#m-free">Free building</a><a href="#p-h">Pieces</a><a href="#c-h">Checks</a><a href="#q-h">Questions</a></nav>
+  <div class="mbody">
+    <h2 id="m-about">About</h2>
+    <p>Building on the hex grid, from a plan. The owner, 2026-11-23: <q>Make presets for houses and buildings too. I want the player to be able to design structures and build according to blue prints. That way we avoid the jankiness of free building. Buildings can be modified mid builds in the building planner too. Please mock this up so I can fine tune it.</q> The OpenSpec change is <code>building-planner</code> (phase 3); it builds on <code>player-building</code>, whose build mode is the <b>Free building</b> tab. Everything on this page is proposed, not built.</p>
+    <p>Three tabs, one 3D view at a time: <b>Planner</b> (the drafting table's screen, drawn flat as the game's screen would be), <b>Site</b> (the plan set out and built in the world, in 3D) and <b>Free building</b> (today's single-piece builder). The open tab is in the link: <code>#planner</code>, <code>#site</code>, <code>#builder</code>. Only the open tab's view is made and drawn; a 3D view is made the first time its tab opens.</p>
+    <p>Sizes are the engine's: a cell is 2.833 m flat to flat, a layer 1 m, a storey 3 layers. Walls, floors, roofs and ground are the game's own textures (the settlement set and the terrain atlas, sampled nearest); the goods in the bill of materials are the game's own pack icons.</p>
+
+    <h2 id="m-planner">Planner</h2>
+    <ul>
+      <li><b>Opened</b> at a drafting table (a new station, made at the workbench) with F, or with O in build mode; aimed at a site or one of your houses, O opens that one (design 3).</li>
+      <li><b>Presets</b> on the left: straw hut, cottage, two-storey house, townhouse, workshop, shop, barn, stable, warehouse and tower, each small, standard or large. In the game the towns' own plain buildings are presets too (design 4). Pick one, change it, and <b>Save</b> it under a name: it joins <b>Your blueprints</b> and the preset is untouched.</li>
+      <li><b>Tools</b> along the bottom: <b>Room</b> paints cells on this storey (drag to paint; on a painted cell it erases) and its outside edges are walls by themselves, so a plan cannot leave a wall out by accident; <b>Wall</b> an inner wall; <b>Door</b> and <b>Window</b> on any wall (a window only outside); <b>Stair</b> on its foot cell, pointing the way you click from the cell's middle; <b>Lantern</b>; <b>Slot</b> marks a place for furniture (bed, table, chest, bench, chair: the <code>furniture</code> change's pieces, made at the carpenter's bench and placed in the slot); <b>Erase</b>. Ctrl-Z undoes.</li>
+      <li><b>Erase</b> (the rubber, 8): near a cell's rim it takes a door or window out of its wall, or an inner wall away; in the middle it takes a stair, lantern or slot, then the cell. A door, window or wall tool aimed at an outside edge from outside the room works on that edge.</li>
+      <li><b>Top down or Isometric</b> beside the storeys. Isometric stands the walls up with the near and inner ones cut low, so the floor stays in sight; every tool works in both. The page remembers the choice.</li>
+      <li><b>Storeys</b> over the plan: the storey below shows faint under the one being drawn. A stair's two cells are cut out of the floor above as its well, as in the towns.</li>
+      <li><b>Checks</b> are build mode's own rules run on the plan (design 2): a piece that breaks one is red on the plan and its reason is in the list, the same words as the red ghost in build mode. Amber is a warning that does not stop it (no door). Try painting an upper storey over nothing, or a stair with no landing.</li>
+      <li><b>Bill of materials</b>: the goods the whole plan takes in its kit (design 8, a first guess at every number), the pieces and about how long the strokes take at the mallet's beat.</li>
+      <li><b>Set out in the world</b> takes the plan to the Site tab. Opened from a site, the planner shows <b>This change</b>: the pieces it adds, the ghosts it drops, the built pieces it takes down and the goods that come back, and <b>Save change</b> applies it.</li>
+      <li>The planner's own limits (<b>Plan limits</b>): the most cells a plan holds and the most storeys, so a site always fits one plot.</li>
+    </ul>
+
+    <h2 id="m-site">Site</h2>
+    <ul>
+      <li>The plan is a ghost over a plot beside a neighbour's house at the edge of a village. <b>Turn</b> it in sixths (the turn step is tunable) and click the ground to move it. It is checked whole before it can be set out, the first failure named: too steep for a footing, a tree in the way, something already there (design 5).</li>
+      <li><b>Set out here</b> costs nothing: split-timber stakes with dyed cloth at the corners and lime dust along the walls, painted into the ground's top and lit as the ground is (as paving's marks, <code>townsfolk</code> 39a).</li>
+      <li><b>Building</b>: click a ghost, or <b>Strike next</b>, or hold <b>Keep building</b>, as the player holds F with the mallet. A piece takes its strokes on the mallet's beat and its goods come out of the pack (the row along the bottom); one it cannot pay for says what it needs. Pieces held up by what is built are full ghosts; pieces waiting on others are fainter. The count left and the goods still needed are at the top.</li>
+      <li><b>Scaffolding</b> goes up round an upper storey while its walls are built and comes down after, its planks and rope given back (design 6).</li>
+      <li><b>Change it mid-build</b>: switch the blueprint in the list, open it in the planner, or use the quick changes (another room, drop a room, a storey more, stone instead of timber). Ghosts update at once; built pieces the new plan drops are marked with a chalk wash and taken down first, giving their goods back; the list shows what came back (design 7). With <b>Back at once</b> they come down on the spot instead.</li>
+      <li><b>World: Free</b> is today's free building: a plan set out is filled whole at once and costs nothing. <b>Planned</b> is the recommendation for new worlds, with every world already made staying Free (design 11; recommendation taken, ask only with screenshots: this toggle is here to try both).</li>
+      <li>At 22:00 the site is lit by its own lamps: the work lamp by the plot, the village's street lamps, the neighbour's lanterns and windows, and every lantern you build; the moon is as dim as the game's night. 14:00 is the sun.</li>
+      <li>Nothing moves on its own: drag to turn the view, scroll or pinch to come closer, right-drag or two fingers to slide it.</li>
+    </ul>
+
+    <h2 id="m-tune">Tunables</h2>
+    <p>Each slider is one of <code>building_planner.ron</code>'s tunables (design 12): the ghost's strength and the waiting ghost's, its colour, strokes a piece (a scale on wall 3, floor 2, roof 2 a cell, stair 4, post and lantern 1), the mallet's beat, the turn step in sixths, the steepest ground a footing fills, the cost scale over the whole cost table, the share of goods back from a piece taken down, scaffolding on or off, and whether dropped built pieces are marked or come back at once. The preset sizes are the Small, Standard and Large buttons; the plan limits are on the planner. Say which values feel right and they go into the change.</p>
+    <h2 id="m-free">Free building</h2>
+    <p class="lede">Walls on cell edges, floors in cells, a storey every three layers: the town's own cut, put in the player's hands. Pick a piece, aim at the plot, click. The ghost is green when the town's rules accept it and red with the reason when they do not. It is night, so what you build is lit by the lanterns you place.</p>
+    <p class="note">This is the build mockup <span class="src">openspec/changes/player-building</span> asks for first (it names it <span class="src">build.html</span>), grown from the towns mockup's cut and checks, on a plot of 91 cells. It runs on <span class="src">dig-and-place</span>'s journal and <span class="src">lamps-and-lanterns</span>' lights. Everything here is <b>proposed</b>, not built behaviour. Walls, roofs, floors and ground are <b>the game's own textures</b>: the settlement set (<span class="src">assets/textures/settlement</span>) at the manifest's scale, and the terrain atlas's own tiles on hex columns 1 m a layer (the fields sheet's sward, sward-over-earth and earth; the lunar regolith sheet on the moon), with the game's trees, all sampled nearest. The hotbar is the game's (<span class="src">desktop/slots.rs</span>: ten 44 px slots), its lantern the game's own icon (<span class="src">assets/items/lights</span>), removing the game's pickaxe. <b>Mockup-only</b>, because the game has none yet: the habitat's metal panel and glass, and the piece icons, all <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/building_art.py</span>): the icons 32 px, the metal and glass 32 px tiles like the game's settlement textures, all shown at whole-number scales and sampled nearest.</p>
+    <p class="note">Lit at night as CLAUDE.md asks: every lantern you place, the town's two street lamps and each window with a lantern behind it light what is near them, wherever the camera is, each throwing a pool on the ground as the game's lamps do; the moon stays at 0.035, as dark as the game's night, so the ground between the pools reads near black. Placing or removing anything re-lights, as an edit re-lights the field in the engine. Building is free (owner, P1); costs come later and are sketched in section 3.</p>
   <section aria-labelledby="p-h">
     <div class="sec-head"><div class="eyebrow">2 &middot; Build pieces</div><h2 id="p-h">What snaps where</h2>
       <p class="lede">Every piece lands on the cut, so a player's house and a town's house are the same kind of thing and the walker, collision and light treat them alike. Sizes are the engine's: a cell is 2.833 m flat to flat, its edge 1.636 m, a layer 1 m.</p></div>
@@ -230,7 +433,8 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
   </section>
 
   <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Textures are the game's own wherever one exists, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>). Mockup-only, pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/building_art.py</span>): the piece icons, the habitat metal panel and glass.</footer>
-</div>
+  </div>
+</dialog>
 <div id="err" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -316,6 +520,10 @@ const KITS = {
 };
 const STOREY = 3;
 
+const BUILDER_HASH = { "#hut": "hut", "#stone-house": "stone", "#habitat": "hab" };
+// The Free building tab's builder: made when its tab first opens (one 3D view at a time).
+let BUILDER_ON = false;
+function initBuilder() {
 // ===================================================================
 // Scene
 // ===================================================================
@@ -739,6 +947,23 @@ function example(which) {
 }
 for (const b of document.querySelectorAll("[data-ex]")) b.addEventListener("click", () => example(b.dataset.ex));
 
+// ---- go ------------------------------------------------------------------------
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+let T = 0, last = performance.now();
+function frame(now) { if (TAB !== "builder") { BUILDER_ON = false; return; } const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt; placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame); }
+buildGround(); buildFixtures(); resize();
+example("stone");
+add({ kind: "floor", kit: "timber", q: -3, r: 3, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 2, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 3, s: 0 }, "player", true);
+JOURNAL.length = 0; EDIT_N = 0; log("player", "built the stone house example (16 pieces)"); log("player", "add wall (-3,3) edge 3 &middot; timber");
+setKit("timber"); relight(); setPiece("wall");
+function route() { const ex = BUILDER_HASH[location.hash]; if (ex) example(ex); }
+addEventListener("hashchange", route); route();
+{ const Q = new URLSearchParams(location.search); if (Q.get("site") === "moon") setSite("moon"); if (Q.get("t") === "day") setNight(false); if (Q.has("ex")) example(Q.get("ex")); for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k); }
+window.__build = { PIECES, add, check, example, grow, LIGHTS: () => LIGHTS };
+window.__setKit = setKit;
+window.__builderShow = () => { resize(); relight(); if (!BUILDER_ON) { BUILDER_ON = true; last = performance.now(); requestAnimationFrame(frame); } };
+}
 // ---- the sheets ----------------------------------------------------------------
 const PIECE_INFO = [
   ["icon_floor", "Floor", "in a cell, at a layer line", "Boards 0.2 m thick. On the ground it is the cell's top; upstairs it needs a wall or post under it."],
@@ -760,22 +985,7 @@ const TIERS = [
 ];
 PBD.atlasURL(PBD.SHEET.lunar, 0, 0).then(u => { REGO_URL = u; for (const el of document.querySelectorAll("[data-atlas]")) el.style.backgroundImage = `url(${u})`; });
 $("tiers").innerHTML = TIERS.map(([k, t, tx, from, txt]) => `<div class="tier"><div class="tex">${tx.map(n => n === "atlas" ? `<div data-atlas style="background-image:${REGO_URL ? `url(${REGO_URL})` : "none"}" role="img" aria-label="moon dust texture, the game's terrain atlas"></div>` : `<div style="background-image:url(building/${n}.png)" role="img" aria-label="${n.replace("game/", "").replace("tex_", "")} texture${n.startsWith("game/") ? ", the game's" : ", mockup-only"}"></div>`).join("")}</div><div class="body"><h3>${t}</h3><div class="from">${from}</div><div class="texsrc">${tx.includes("tex_metal") ? "Metal and glass mockup-only; moon dust is the game's" : "Textures: the game's own"}</div><p>${txt}</p><button class="btn" data-kit2="${k}">Build with it</button></div></div>`).join("");
-for (const b of document.querySelectorAll("[data-kit2]")) b.addEventListener("click", () => { setKit(b.dataset.kit2); $("cv").scrollIntoView({ behavior: "smooth", block: "center" }); });
+for (const b of document.querySelectorAll("[data-kit2]")) b.addEventListener("click", () => { $("modal").close(); openTab("builder"); window.__setKit(b.dataset.kit2); });
 
-// ---- go ------------------------------------------------------------------------
-function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-addEventListener("resize", resize);
-let T = 0, last = performance.now();
-function frame(now) { const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt; placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame); }
-buildGround(); buildFixtures(); resize();
-example("stone");
-add({ kind: "floor", kit: "timber", q: -3, r: 3, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 2, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 3, s: 0 }, "player", true);
-JOURNAL.length = 0; EDIT_N = 0; log("player", "built the stone house example (16 pieces)"); log("player", "add wall (-3,3) edge 3 &middot; timber");
-setKit("timber"); relight(); setPiece("wall");
-const HASH = { "#hut": "hut", "#stone-house": "stone", "#habitat": "hab" };
-function route() { const ex = HASH[location.hash]; if (ex) example(ex); }
-addEventListener("hashchange", route); route();
-{ const Q = new URLSearchParams(location.search); if (Q.get("site") === "moon") setSite("moon"); if (Q.get("t") === "day") setNight(false); if (Q.has("ex")) example(Q.get("ex")); for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k); }
-requestAnimationFrame(frame);
-window.__build = { PIECES, add, check, example, grow, LIGHTS: () => LIGHTS };
 </script>
+<script src="building/planner.js?v=2"></script>

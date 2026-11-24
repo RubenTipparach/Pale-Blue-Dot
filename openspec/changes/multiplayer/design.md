@@ -340,6 +340,382 @@ drifted silently. The region digest (decision 2) is the safety net Luanti
 lacks, so it stays. It can run at a slow rate, because resend-on-refuse
 (item 3) catches the common case first.
 
+### 16. Started early, and the order it is built in (2026-11-21)
+
+The owner, 2026-11-21: "check out the multiplayer specs for phase 3, lets
+get to work on that". So 3b starts now, ahead of phase 3's townsfolk, which
+were to come first (decision 13). Nothing in this design rested on the
+townsfolk being built; decision 13 only asks that they be written to run on
+the server when they come, and they still will be.
+
+**The region is `region-cell-keys`' region.** That change, written after
+this one, defines a region as a triangle 64 cells on a side on every body.
+On the home world (level 11) that is exactly the level-5 triangle of
+decision 1, so nothing here changes; on other bodies it keeps the checksum
+unit the same size in metres, which is the reason it was written. The
+region's id is `region-cell-keys`' 32-bit region address, and a cell in it
+is its 12-bit place. This change uses that change's address functions
+(its task 2.1) and does not wait for its save migration (2.2 to 2.4): today's
+`Edits` stay keyed by the 32-bit cell key, and a region's edits are found by
+mapping each key to its region.
+
+**The digest's sections are tagged.** Decision 2's three parts (edits,
+liquids, records) are written as tagged sections, and an empty section is
+left out. The edits section is built first; liquids join when the server
+runs the water (task 8.4) and records when they are replicated (8.2). A
+region with no liquids or records digests the same before and after those
+sections exist, so the pinned test only moves when a section with content
+is added to its fixture.
+
+**Order of work.** Pure core pieces first, each with its own tests and none
+of them visible in the game:
+1. a cell key's region and place (`region-cell-keys` 2.1);
+2. the region's canonical encoding and digest (task 3.1);
+3. the protocol's messages and their byte encoding (task 3.2);
+4. the edit's ACCEPT as a core rule (`edit-pipeline` 5; task 2.2's first
+   rule), with the table of every other writer (task 2.1);
+5. the in-process server (task 4.1) and single player talking to it (4.2).
+
+The network, the screens and other players' bodies come after those, and
+the screens wait for their mockups (tasks 5.1, 5.2).
+
+### 17. Every writer of stored state today (task 2.1, 2026-11-21)
+
+Everything that reaches the save goes through `WorldSave`
+(`crates/pbd-app/src/saves/mod.rs`): `accept` (an edit, its drop and the
+slots), `record_pick`, `record_toss`, `record_pack`, `deal_kit`,
+`record_catch`, `record_hand`, `store`, `store_with_hands`, `accept_water`,
+`propose`, `note_record_kinds`, and the whole-file `snapshot`,
+`snapshot_weather` and `snapshot_vehicles`. Paths are under
+`crates/pbd-app/src/`. "Inline" means the app decides it, not a core rule.
+
+| Stored | App writer | Trigger | Core rule (or inline) |
+| --- | --- | --- | --- |
+| Dig (Air, its drop and finds) | `desktop/digging.rs` `dig_and_place` → `apply_edit` | left mouse held | `aim::march`, `dig::Breaking`, `farming::sprouts_seed`, `GatherSettings::find`, `station::ore_yield`; refusals inline in `apply_edit` |
+| Place a block, lamp or station | `dig_and_place` → `apply_edit(Spend)` | right mouse | `aim::march`; body overlap, head room, crop in the way, one lamp a column inline |
+| Bucket take or pour | `dig_and_place` → `apply_edit(Swap)` | right mouse | `liquid::bucket` |
+| Till, and a turned-up seed | `desktop/farm.rs` `use_key` → `farm_act` → `apply_edit(Till)` | F | `farming::tillable`, `seed_turned_up`; `farm_act` itself is inline |
+| Log taken from a tree | `digging.rs` `take_log` (`store_with_hands`) | left mouse on a trunk | `GatherSettings::tree_gives`, `flora::grows_tree`; trunk ray inline |
+| Crop sown, uprooted, harvested | `farm.rs` `plant`, `uproot`, `harvest` | right mouse, dig, F | `Crop::of_seed`, `grows_in`, `Plot`, `FarmConfig::stage` |
+| Wild plant, clutter, fruit, glow mushroom picked | `farm.rs` `pick`, `gather`; `desktop/fruit.rs` `pick`; `desktop/glow_plants.rs` `pick` | F | `FarmConfig::wild_crop`, `scatter::Kind::gives`, `flora::hanging_fruit`, `flora::glow_plant_point`; each ray inline |
+| Craft, forge and campfire jobs queued and collected | `desktop/craft.rs` `queue`, `collect_hands`; `desktop/forge.rs` `work`; `desktop/kitchen.rs` `work` | a click, a timer, the panel open | `StationState::queue_for`, `queue`, `collect_into`; `cooking::concrete` |
+| Meal eaten | `kitchen.rs` `eat_held` | right mouse with a dish | `cooking` `meals(..).eat` |
+| Pack move, split, trash | `desktop/pack.rs` `press` (`record_pack`) | clicks | `Slots::shift`, `send`, `take` |
+| Toss and pickup of drops | `drops.rs` `toss`, `gather` | Q, the magnet each frame | `drops::scattered`, `drops::step` |
+| Tool in hand | `desktop/equipment.rs` `pick`, `pack_hand` | G, a click | `Equipment::hold` |
+| Starting kit | `hotbar.rs` `Hotbar::restore` | world open | `Slots::give` (frame-free already) |
+| Fish caught | `fish.rs` `land` (`record_catch`) | reel | `fishing::Angler`, `Line` |
+| Boat launched and taken up, hold contents, refund | `vehicles/launch.rs`, `vehicles/hold.rs`, `vehicles/refund.rs` | right mouse, left held, pack clicks, a timer | `vehicle::hold::send`, `shift`; `station::retired_inputs` |
+| Animal fed, tamed, products, pens, fences, incubators, eggs, pairing | `husbandry.rs` `use_on`, `feed_wild`, `settle`, `place_piece`, `take_piece`; `husbandry/breed.rs` | F, right mouse, a click, a timer | `husbandry` `Trust`, `FarmState`, `FenceBody`, `breeding::*` |
+| Births and conceptions | `breed.rs` `realise` (`propose`, a world author) | every 0.5 s near | `breeding::farm_events` |
+| Map waypoints | `desktop/map_screen.rs` `store_marks` | a click | `map::Mark::set`, `add_mark` |
+| Town doors | `towns.rs` `use_doors` | F | `settlement::record::door_record` |
+| Missions progress | `missions.rs` `count` | the other systems' messages | `missions::Progress::record`, `settle` |
+| Water flow | `water_flow.rs` `run_ticks` (`accept_water`) | the water tick | `liquid` `tick` over the resident tier's columns |
+| Beaver colonies and dams | `beaver.rs` `found`, `run` | a timer, the world clock | `Colony::new`, `beaver::catch_up` |
+| Sites and towns | `sites.rs`, `towns.rs` | world open | `sites::generate`, `settlement::lay_on` (frame-free already) |
+| Pose and clock, weather, fleet | `desktop.rs` `autosave`, `save_weather`; `vehicles.rs` `save_vehicles` | a timer, a menu, exit | inline; whole-file replaces |
+
+**What has to move for a server to run them** (task 2.2):
+1. **Picking.** Nearly every player writer starts from a camera ray
+   (`aim::march`, `tree_on_ray`, `plant_on_ray`, `fruit_on_ray`,
+   `aimed_beast`, `edge_at`, `door_in_reach`). The client sends the target
+   it picked (a cell, a record id); the server checks the target is in reach
+   and valid, and does not repeat the ray.
+2. **`apply_edit`.** It reads a column's material from the resident render
+   tier. The server reads it from a column it generates from the seed and
+   the edits, which is the same pure function.
+3. **Rules inline in the app:** `farm_act`, `apply_edit`'s refusals, the
+   husbandry `use_on` flow, and missions counted from Bevy messages (a core
+   rule returns its happenings instead).
+4. **Slots changed before the save took the change**, which a server must
+   never do: `fish::land`, husbandry's collect, `take_piece`,
+   `use_incubator`, `place_piece`, `place_incubator`, `set_eggs`,
+   `feed_wild`, `farm::uproot`, and `equipment.rs`'s `record_hand`.
+5. **Two lines that are not one change:** a craft's collect (hand, then the
+   station), a boat's launch and its take-up (fleet, then the pack).
+6. **State outside the save:** a wild animal's trust, a door's leaf, and
+   the whole-file fleet, pose and weather, which need one owner each (the
+   server; pose per player, design 10).
+
+### 18. Single player through the server, edits first (task 4.2, 2026-11-21)
+
+The server crate exists (task 4.1) and decides a dig or a place with the
+same core rule a client predicts with. Task 4.2 puts single player behind
+it. The order below keeps every save byte for byte what it is today at each
+step, which is that task's own check.
+
+**Who writes the journal.** Today `WorldSave` is both the world and its
+journal: `accept` sets the edit, numbers it and queues the line. With a
+server, the server owns the world and the journal; the client holds a copy.
+So `WorldSave` splits along that line, in this order:
+1. **`SaveJournal`**: `pbd_server::Journal` implemented over the save's
+   writer, writing exactly the line `accept` writes today (`line_of`, with
+   the drop and the slots). The server's journal is then the save's file.
+2. **`LocalServer`**, a Bevy resource holding `Server<SaveJournal>`, made
+   when a world opens, from the save's edits, clock and slots. Single player
+   is player 0 (design 10), joined with the save's install key.
+3. **The edit path moves**: `apply_edit` predicts as now (core ACCEPT on the
+   client's copy, then `FineSet::apply`), and sends the request to the
+   `LocalServer` instead of calling `save.accept`. The server decides,
+   journals, and answers in the same frame, because it is in process; the
+   client applies the server's `Change` to `save.edits` (its copy) and
+   confirms. A refusal returns the region from the snapshot and the slots
+   from the server's copy.
+4. **Every other writer** (design 17) follows the same way, one at a time,
+   as its ACCEPT reaches the core (task 2.2). Until a writer has moved it
+   keeps writing through `WorldSave` as today, on the same writer thread, so
+   lines from both paths interleave in one file in the order they happen.
+
+**What a request carries that the server cannot see.** A dig's finds (seed,
+fibre, bait) and a till's seed are rolled by the app from config the core
+does not hold yet (`GatherSettings`, `FarmConfig`). Until they move, the
+client sends the hands it settled (`Request::Edit` with the hands), and
+the in-process server takes them as asked; only a remote client is held to
+the server's own roll (task 8.7). This is the one place single player trusts
+the client, and it is the client that is the server.
+
+**The column a server reads.** The client's tier makes its rim and the
+river band solid (`planet_column.rs`), the server's columns are always
+carved. Where a cave meets a rim cell the two could read a different
+material, the server refuses, and the client's prediction is undone by the
+snapshot. It cannot lose an edit; it can refuse one that looked valid. Each
+one is logged as `SERVER_DISAGREES` with the cell, so a playtest shows
+whether it happens.
+
+**Checks for 4.2:** the same inputs make byte-identical saves before and
+after (a scripted dig run, both builds, the logs compared); the starter
+missions finish under `--capture`; an old save opens with its player as 0.
+
+### 19. Pack moves and pickups through the server (task 2.2, 4.2; 2026-11-22)
+
+The next two writers of design 17, after edits: the pack and the drops.
+Both change only the player's own slots and, for a pickup, a drop. The
+journal lines stay what they are (`pack`, `pick`), so saves do not change.
+
+**Pack moves.** The pack screen's `click` today returns the slots after a
+move. It becomes a resolver that returns the move itself, a `PackMove`:
+`Shift { from, to, count }` (put a held stack down), `Send { index }`
+(shift-click between hotbar and pack) or `Trash { index, count }` (a stack
+dropped on the trash). Applying a move is a core rule,
+`pbd_core::accept::pack`, which refuses a move from an empty slot or of
+more than the slot holds, and otherwise applies `Slots::shift`, `send` or
+`take`, the same calls the screen makes now. The server's
+`Server::pack` decides it and the store journals the slots after it (the
+`pack` line). A move that changes nothing is not sent. The protocol gains
+`Request::Pack`. The hold (a craft's cargo, `hold::store`) stays as it is
+until craft are shared (design 8's follow-up).
+
+**Pickups need the drops.** The server can only decide a pickup if it
+knows the drop: that it exists, what it holds and how many are left. Today
+the live drops are the app's (`Drops`), and the save keeps them only as
+they were at load. So the store keeps them: `WorldSave` holds the live
+drops by id, kept by the lines that already make and change them (a dig's
+drop, a toss, a pickup), and the store reads one with `Store::drop`.
+Expiry stays the app's for now: an expired drop is never asked about, and a
+load never restores one (`drops.rs`).
+
+The magnet, the pull and when a drop is close enough stay the client's
+(`drops::step`): they are motion, not stored state. When the client's step
+says a drop is picked, it asks the server, `Server::pick`, which gives the
+drop's item to the player's slots with the core's own give order and
+journals the `pick` line with what is left. A drop the store does not hold
+is refused (`Refusal::Gone`), which is what two players reaching one drop
+at once will need: the first pickup empties it and the second is refused.
+Reach is checked only for a remote player (task 8.7).
+
+**Checks:** a pack move and a pickup through the server write the same
+lines as straight through the save; a pickup of a drop that is gone is
+refused and writes nothing; two pickups of one drop give it once.
+
+### 20. Wiring two games together (tasks 6.1, 6.2; 2026-11-22)
+
+The owner, 2026-11-22: "wire it up". The rules and the server are in place
+(designs 16 to 19); this is the network between two processes, and a
+second game joining a hosted one, with nothing new on screen. The host and
+join screens and another player's body wait for their mockups (tasks 5.1,
+5.2), so this step is driven from the command line and checked with logs,
+tests and captures.
+
+**`pbd-net`, the transport (task 6.1).** A crate on `quinn` (QUIC) and the
+core's protocol, with no Bevy. It runs its own thread with its own async
+runtime, and the game talks to it through plain channels, so no frame waits
+on a socket:
+- `Host::bind(port)` listens; each connection is numbered, and its
+  messages come out as `(connection, ToServer)` and go in as
+  `(To, ToClient)`, the server's own outbox type.
+- `Client::connect(address)` gives one channel each way.
+- One reliable, ordered stream each way, each message length-prefixed
+  (`u32` little-endian, then the protocol's bytes). Presence moves to
+  unreliable datagrams with task 8.1, when there is presence to send.
+- The certificate is self-signed per run, and a client accepts any: this
+  is play on a LAN or a direct address among friends (design 14.3), and
+  the join check, not TLS, is what refuses another world. A trusted
+  certificate is a follow-up with the relay.
+
+**Joining a world you do not have (design 9, amended).** A joining player
+does not hold the host's world, so the client's `Hello` names world 0,
+"any", and the server's `Welcome` carries the world's seed, generator and
+topology. The client opens a memory-only world from them: it writes no
+save, because the world's save is the host's (design 4). A client that
+names a world still has it checked exactly, as before.
+
+**The host (task 6.2).** `--host <port>` starts single player as always,
+with its in-process server, and also binds `pbd-net`: remote players join
+the same `Server`, their requests are decided against the same store (the
+host's save), and the server's outbox is sent each frame. The host's own
+edits keep going through `decide_edit`; their `Change` now reaches the
+remote players too.
+
+**The joining client.** `--join <address:port>` connects, sends `Hello`,
+and on `Welcome` opens the world it names. Then:
+- its digs and places are predicted as now, and sent as requests instead
+  of decided locally;
+- every `Change` the server sends is applied to the client's copy of the
+  edits and to its tier through `FineSet::apply`, the one APPLY;
+- a `Refused` drops the prediction and the region's `Snapshot` that
+  follows replaces the client's copy of it.
+
+**First cut of the joined client (2026-11-22).** Three things are simpler
+than decision 4 asks, each named so it is not mistaken for done:
+- *No prediction yet.* A joined player's dig or place is sent and shows when
+  the server's `Change` comes back, rather than at once and then rolled back
+  on a refusal. A refusal then has nothing to undo. On a LAN the round trip
+  is a frame or two; prediction with its rollback is a follow-up.
+- *The pack starts as the kit on both sides.* The host joins a new remote
+  player with the starting kit, which is what the joining game deals itself,
+  so the two agree. Until the inventory message (task 8.2) a joined
+  player's pack moves and pickups stay on their own game.
+- *A remote dig floats nothing yet.* The server decides the dig, but the
+  block it would float needs a drop record the client can see (task 8.2).
+
+**Snapshots on join.** Until region subscription (task 6.3) is built, a
+joining client is sent every region that has an edit, nearest first. That
+is the whole world's edits, which is small today and is exactly what 6.3
+replaces with the regions near the player.
+
+**Not in this step:** subscription and its radii (6.3), the near and far
+rule (6.4), the digest round-robin (7.1), other players' bodies and
+presence (8.1, after mockup 5.2), and every writer of design 17 besides
+edits, pack moves and pickups: on a joined client those still change only
+the client's own slots and are not sent, which is said in the log.
+
+**Checks:** two processes on loopback join and a mismatched generator is
+refused with its plain message (6.1); a hosted game and a joined game on
+loopback in a cloud run, a dig on each (done 2026-11-22: the joined game
+took the host's three-layer hole and dug two more layers through it, and
+the host applied them).
+
+**The real test is on two machines (owner, 2026-11-23):** "Multiplayer
+test should use Mac and laptop mining mike sessions". The two-machine check
+of 6.2, and every multiplayer gate after it, runs on the owner's own
+computers through their Claude sessions, "[Mac] pale-blue-dot" and
+"[Laptop] mining mike continue", not on one cloud container's loopback:
+1. both check out the PR's branch and build `fast`;
+2. the Mac hosts: `pbd-app --world mp-test --host 47123`, and reports its
+   LAN address;
+3. the laptop joins: `pbd-app --join <mac address>:47123`;
+4. each digs and places by hand or with `--dig`; each takes a screenshot
+   showing the other's change, and the logs (`player 1 joined`, `edits from
+   the network applied`, any `SERVER_DISAGREES` or refusal) go with them;
+5. the shots and logs land in `docs/screenshots/multiplayer-two-machines/`.
+The GPUs make it real time, which the cloud's software renderer is not.
+The laptop cannot run the game for long (owner, 2026-11-23: "the laptop's
+gpu cant handle the extended load"): it joins, does its checks and its
+screenshot, and closes. A long run (a soak, a recording) puts the Mac and
+the desktop on it instead. First run, 2026-11-23: passed
+(`docs/screenshots/multiplayer-two-machines/`), then paused on the owner's
+word.
+
+### 21. A headless server and protocol bots on one Mac (2026-11-23)
+
+The owner, 2026-11-23, with the desktop busy and the laptop unable to take
+a long run: "do you think you can playtest networking on your own? ... or
+make a headless version?", then "3 headless", and "have a live mac session
+connect to a server on the mac, and spin up a headless version on the mac
+using loop back to playtest the protocol". This adds the pieces for that
+and nothing to the game.
+
+**`pbd-headless`, a crate with one binary.** It depends on `pbd-core`,
+`pbd-server` and `pbd-net` and has no Bevy, so it builds in seconds and
+runs anywhere. Three subcommands:
+- `serve --port <p> [--seed <s>] [--clock <s>] [--kit <n>]` is a
+  dedicated server: the same `Server` the host's game runs, over a
+  `MemoryStore`, ticked at `TICK_S`, with `pbd-net`'s `Host` in front. It
+  is the first cut of task 6.2's `--server`: its world lives in memory
+  and is gone when it stops; a dedicated server's save is the follow-up.
+  It logs the lines the host's game logs (`player N joined`, `left`, each
+  refusal) and, every 10 s, `SERVED` with players, requests, accepted,
+  refused and changes sent.
+- `bot --join <addr> --role <i>/<n> [--site <lat,lon>] [--stress <s>]`
+  is a joined player with no window: it sends `Hello` naming world 0, as
+  the game does, keeps its own copy of the edits from the snapshots and
+  changes, and plays a script (below) through the same `Request`s a
+  player's hands send. It checks as it goes that every request is answered
+  once and that each region's changes arrive in `seq` order with no gap,
+  and at the end that its copy of every region it holds digests the same
+  as the server's (it asks for each with `Resync` and compares `fnv1a64`
+  of the bytes with its own `Regions` digest). It prints `BOT_OK` or
+  `BOT_FAIL <why>` and exits 0 or 1, with the round-trip times (p50, p99,
+  max).
+- `soak --bots <n> [--stress <s>]` runs a server and `n` bots in one
+  process over real QUIC on loopback, and checks every bot's copy against
+  the store's. A cargo test runs a short one.
+
+**The script: a hut built by several hands.** Every bot reads the same
+site, the finest cell nearest `--site` (by default about 6 m from the
+game's default spawn, so a joined game sees it from where it stands), and
+its ring of neighbours. The hut is walls two high on the ring with one
+door left open, and a roof one layer above them over the ring and the
+centre. Each piece goes to the bot whose role is its index modulo `n`;
+each bot also tries the centre's roof block, so one is accepted and the
+rest are refused as `Unchanged`: the contention the server must order.
+Before building, each bot digs its own small pit beside the site (and
+digs the bottom twice, so a refusal on air is seen), and `--stress` then
+digs and places at random cells near the site at a player's swing rate
+for that long.
+
+**Pickups do not cross the network yet (task 8.2)**, so a remote player's
+dug block floats on no one's ground and a remote player can place only
+what it joined with. The test server therefore deals each joining player
+`--kit` stone blocks (64 by default); the host's game deals the starting
+kit, which holds none. This is a test affordance and is said in the log.
+
+**The run on the Mac.** `pbd-headless serve` on `127.0.0.1:47124`, the
+live game `pbd-app --join 127.0.0.1:47124` in its window on the GPU, then
+three bots. The game's player watches the hut go up and digs beside it;
+its log must show `edits from the network applied` and no refusal it did
+not cause, the bots must all print `BOT_OK`, and the shots and logs go in
+`docs/screenshots/multiplayer-headless/`. What one machine cannot show is
+left to the two-machine runs: a real network's loss and delay, firewalls,
+and Windows against macOS.
+
+**Found on the first run:** `--join` opened on the title screen, because
+the opening screen counted only `--world` as naming a world; CONTINUE
+there would have opened the last saved world in place of the host's. A
+joined game now opens in play, as a named world does.
+
+**And the second:** a game killed and started again rejoins as the same
+player (its install key) before the server has seen the old connection
+close. Both the host's game and the headless server sent the player's
+messages to the first connection found for them, the dead one, so the
+restarted game never had its welcome; and the old connection's close,
+some 30 s later, would have taken the player out. A rejoin now forgets
+and closes the old connection (`a_player_who_rejoins_is_served_on_the_new_connection`).
+
+**And the third:** a joining game read its welcome and dropped every
+message after it in the same batch, which is where the server's snapshots
+of the world's edits come. A game that joined after others had built saw
+none of it. The whole batch is now read before the welcome is acted on.
+
+**First run, 2026-11-23: passed** (`docs/screenshots/multiplayer-headless/`).
+Three bots built the hut in front of the live game and stressed it for
+30 s: 387 requests, all answered once, every change in order, every bot's
+copy equal to the server's; round trip p50 5-6 ms, p99 9-10 ms. The live
+game applied every change, its own dig was accepted, and restarted it
+rejoined and was sent the hut. A seven-bot soak for 60 s passed the same
+checks (1715 requests).
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

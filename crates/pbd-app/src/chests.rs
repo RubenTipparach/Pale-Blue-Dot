@@ -104,7 +104,7 @@ mod tests {
         slots.set(14, Some(Stack::new(Item::Block(Material::Stone), 99)));
         slots.set(15, Some(Stack::new(Item::Good(Good::LOG), 12)));
         let mut chest = read(&save, 700, 41);
-        assert_eq!(chest.len(), CHEST);
+        assert_eq!(chest.slots.len(), CHEST);
         assert!(chest.is_empty());
         shift(
             &mut slots,

@@ -9,6 +9,8 @@ pub mod audio;
 pub mod beaver;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod build_view;
+pub mod builds;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
 #[cfg(feature = "desktop")]
@@ -26,6 +28,8 @@ pub mod controls;
 pub mod critters;
 #[cfg(feature = "desktop")]
 pub mod drops;
+#[cfg(feature = "desktop")]
+pub mod economy;
 pub mod field_light;
 #[cfg(feature = "desktop")]
 pub mod fish;
@@ -45,12 +49,14 @@ pub mod kitchen;
 pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod locale;
+pub mod logs;
 #[cfg(feature = "desktop")]
 pub mod memory_trace;
 #[cfg(feature = "desktop")]
 pub mod missions;
 #[cfg(feature = "desktop")]
 pub mod motion_trace;
+pub mod net_play;
 pub mod sim_origin;
 pub mod step_trace;
 pub use sim_origin::SimSpace;
@@ -69,6 +75,7 @@ pub mod repro;
 pub mod river_band;
 pub mod river_fill;
 pub mod river_walk;
+pub mod roads;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
@@ -82,7 +89,9 @@ pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod tone;
 #[cfg(feature = "desktop")]
+pub mod town_missions;
 pub mod towns;
+pub mod townsfolk;
 #[cfg(feature = "desktop")]
 pub mod tree_fx;
 pub mod tree_shake;

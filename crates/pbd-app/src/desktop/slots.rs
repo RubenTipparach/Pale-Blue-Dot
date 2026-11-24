@@ -85,7 +85,10 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench => one(1., 3.),
+        Material::Workbench | Material::Carpenter => one(1., 3.),
+        // The gravel stations (`townsfolk` design 41): their blocks are the
+        // workbench's timber; their slots draw their own pictures.
+        Material::Grinder | Material::Mixer => one(1., 3.),
         // A chest (`storage-chests` design 1): the workbench's boards; its
         // slot draws its own picture.
         Material::Chest => one(1., 3.),
@@ -140,6 +143,11 @@ pub struct ItemIcons {
     pub forge: Handle<Image>,
     /// The workbench's, M3's (`tool-crafting`).
     pub workbench: Handle<Image>,
+    /// The carpenter's bench's (`furniture` design 1).
+    pub carpenter: Handle<Image>,
+    /// The grinder's and the mixer's (`townsfolk` design 41).
+    pub grinder: Handle<Image>,
+    pub mixer: Handle<Image>,
     /// A chest's (`storage-chests` design 1).
     pub chest: Handle<Image>,
     /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
@@ -218,6 +226,9 @@ pub fn load_icons(
             .collect(),
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
+        carpenter: assets.load("items/stations/carpenter.png"),
+        grinder: assets.load("items/stations/grinder.png"),
+        mixer: assets.load("items/stations/mixer.png"),
         chest: assets.load("items/stations/chest.png"),
         tiered: pbd_core::inventory::Tool::ALL
             .iter()
@@ -230,6 +241,11 @@ pub fn load_icons(
             .collect(),
     });
 }
+
+/// The hotbar row, which build mode hides while its palette stands in it
+/// (`player-building` design B5).
+#[derive(Component)]
+pub struct HotbarRow;
 
 /// Marks the slot at this index, so the update can find it without a lookup.
 #[derive(Component)]
@@ -244,8 +260,8 @@ pub struct SlotCount(pub usize);
 /// A slot, native pixels: the dressed-stone well of `slot-idle` (24 x 24)
 /// with its 16 px icon floor at 4, 4, the item PNGs' own size.
 pub const SLOT: f32 = 24.0;
-const ICON_AT: f32 = 4.0;
-const ICON: f32 = 16.0;
+pub const ICON_AT: f32 = 4.0;
+pub const ICON: f32 = 16.0;
 /// The hotbar row stands this far off the bottom of the window.
 pub const HOTBAR_BOTTOM: f32 = 10.0;
 
@@ -290,6 +306,7 @@ pub fn spawn(
                 ..default()
             },
             super::menu::InPlayHud,
+            HotbarRow,
         ))
         .with_children(|row| {
             for index in 0..SLOTS {
@@ -363,6 +380,9 @@ pub fn own_icon(item: Item, items: &ItemIcons) -> Option<Handle<Image>> {
         Item::Tool(tool) => Some(items.tool(tool)),
         Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(Material::Workbench) => Some(items.workbench.clone()),
+        Item::Block(Material::Carpenter) => Some(items.carpenter.clone()),
+        Item::Block(Material::Grinder) => Some(items.grinder.clone()),
+        Item::Block(Material::Mixer) => Some(items.mixer.clone()),
         Item::Block(Material::Chest) => Some(items.chest.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
@@ -658,6 +678,9 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            grinder: Handle::default(),
+            mixer: Handle::default(),
+            carpenter: Handle::default(),
             chest: Handle::default(),
             tiered: Vec::new(),
         };

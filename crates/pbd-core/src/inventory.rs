@@ -381,6 +381,8 @@ fn material_key(material: Material) -> &'static str {
         Material::Tilled => "block.tilled.name",
         Material::Forge => "block.forge.name",
         Material::Workbench => "block.workbench.name",
+        Material::Grinder => "block.grinder.name",
+        Material::Mixer => "block.mixer.name",
         Material::Campfire => "block.campfire.name",
         Material::ReefRock => "block.reef_rock.name",
         Material::SeaIce => "block.sea_ice.name",
@@ -389,6 +391,7 @@ fn material_key(material: Material) -> &'static str {
         Material::Sticks => "block.sticks.name",
         Material::DesertSand => "block.desert_sand.name",
         Material::Chest => "block.chest.name",
+        Material::Carpenter => "block.carpenter.name",
         crate::flowing_water!() => "block.flowing_water.name",
     }
 }

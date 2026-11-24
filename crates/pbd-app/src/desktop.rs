@@ -1,6 +1,7 @@
 mod arrival;
 mod boat;
 mod breeding;
+mod build_mode;
 mod compass_bar;
 mod cpu_times;
 mod cracks;
@@ -13,6 +14,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
@@ -27,9 +29,11 @@ mod overlay_ui;
 mod pack;
 mod repro;
 mod scene;
+mod scroll_list;
 mod showcase;
 mod slots;
 mod sounds;
+mod talk;
 mod time_ui;
 mod toasts;
 mod water;
@@ -196,6 +200,9 @@ pub struct Launch {
     /// pack's own move and save (`small-boats` design 5). A capture
     /// instrument.
     pub load_hold: bool,
+    /// `--carts` (`land-transport` 5.6): a hand cart and a hitched horse cart
+    /// set down ahead; `--cart-pull` takes the handles, `--cart-drive` the seat.
+    pub carts: Option<pbd_app::vehicles::carts::CartScript>,
     /// `--husbandry SCENE`: set a farm scene in front of the walker through
     /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
     /// animals can be photographed (`animal-husbandry` S12). A capture
@@ -391,6 +398,11 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
+    /// instrument): a grinder and a mixer that far ahead either side, and a
+    /// plan staked from beyond them along the view, its nearer half paved,
+    /// through the same paths a player's stake and shovel take.
+    pub paving: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -412,6 +424,15 @@ pub struct Launch {
     /// `--tree-hover <id>`: zoomed out, show that mission's hover card as if
     /// the pointer were on its tile (a capture instrument).
     pub tree_hover: Option<String>,
+    /// `--tree-town`: the Missions tab shows the town tree once it is open;
+    /// `--town-focus <id>`: that town mission is made the one the player is
+    /// on once it opens, as a pick on the tree would (capture instruments,
+    /// `town-missions-tree` design 6).
+    pub tree_town: bool,
+    pub town_focus: Option<String>,
+    /// `--no-readout`: no debug readout at the top left, as in a showcase
+    /// (a capture instrument).
+    pub no_readout: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -475,6 +496,12 @@ pub struct Launch {
     /// no `--world` is made by, so a repro of an older world stands on its
     /// own ground. Refused with `--world`, whose generator is its own.
     pub generator: Option<u32>,
+    /// `--host <port>` (`multiplayer` design 20): play this world and let
+    /// others join it on the network.
+    pub host: Option<u16>,
+    /// `--join <address:port>` (`multiplayer` design 20): play the world
+    /// another game hosts.
+    pub join: Option<std::net::SocketAddr>,
 }
 
 impl Launch {
@@ -520,6 +547,7 @@ impl Launch {
             cast: false,
             rod_cue: None,
             load_hold: false,
+            carts: None,
             husbandry: None,
             life: None,
             aboard: None,
@@ -548,6 +576,8 @@ impl Launch {
             showcase_stills: None,
             showcase_from: 1,
             generator: None,
+            host: None,
+            join: None,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -566,6 +596,7 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            paving: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -577,6 +608,9 @@ impl Launch {
             tree_select: None,
             tree_zoom: None,
             tree_hover: None,
+            tree_town: false,
+            town_focus: None,
+            no_readout: false,
             dig_ahead: false,
             take_trees: false,
             pick_only: false,
@@ -649,8 +683,9 @@ impl Launch {
                                 | "pack-locked"
                                 | "bench"
                                 | "bench-view"
+                                | "carpenter"
                         ),
-                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench, bench-view or carpenter"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -785,6 +820,15 @@ impl Launch {
                         result.forge = Some(metres);
                     }
                 }
+                "--paving" => {
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--paving takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.paving = Some(metres);
+                }
                 "--gather-around" => {
                     i += 1;
                     result.gather_around = Some(
@@ -836,6 +880,16 @@ impl Launch {
                     result.tree_select = Some(
                         args.get(i)
                             .expect("--tree-select takes a mission id")
+                            .clone(),
+                    );
+                }
+                "--tree-town" => result.tree_town = true,
+                "--no-readout" => result.no_readout = true,
+                "--town-focus" => {
+                    i += 1;
+                    result.town_focus = Some(
+                        args.get(i)
+                            .expect("--town-focus takes a town mission id")
                             .clone(),
                     );
                 }
@@ -917,6 +971,22 @@ impl Launch {
                         .and_then(|d| d.parse().ok())
                         .expect("--day requires a day number");
                     result.day = Some(day);
+                }
+                "--host" => {
+                    i += 1;
+                    result.host = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--host requires a port"),
+                    );
+                }
+                "--join" => {
+                    i += 1;
+                    result.join = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--join requires an address:port"),
+                    );
                 }
                 "--generator" => {
                     i += 1;
@@ -1336,6 +1406,29 @@ impl Launch {
                     });
                 }
                 "--load-hold" => result.load_hold = true,
+                "--carts" => {
+                    result.walk = true;
+                    result.carts.get_or_insert_default();
+                }
+                "--cart-pull" => result.carts.get_or_insert_default().pull = true,
+                "--cart-drive" => result.carts.get_or_insert_default().drive = true,
+                "--cart-close" => {
+                    i += 1;
+                    result.walk = true;
+                    let code = args
+                        .get(i)
+                        .expect("--cart-close requires hand, horse, plodder or ride");
+                    let script = result.carts.get_or_insert_default();
+                    script.plodder = code == "plodder";
+                    script.ride = code == "ride";
+                    script.close = if script.plodder {
+                        Some(pbd_core::vehicle::cart::CartKind::HorseCart)
+                    } else {
+                        pbd_core::vehicle::cart::CartKind::ALL
+                            .into_iter()
+                            .find(|k| k.code().starts_with(code.as_str()))
+                    };
+                }
                 "--life" => {
                     i += 1;
                     result.walk = true;
@@ -1585,6 +1678,37 @@ pub fn run(args: &[String]) {
     if let Some(version) = launch.generator {
         world.identity.generator = version;
     }
+    // Joining another's world (`multiplayer` design 20): the world is the
+    // host's, opened in memory from its welcome, before anything is built.
+    let mut joined = None;
+    if let Some(addr) = launch.join {
+        // Two minutes: a host still building its world answers when its first
+        // frame runs.
+        match pbd_app::net_play::join(addr, std::time::Duration::from_secs(120)) {
+            Ok(joining) => {
+                world = saves::WorldSave::memory_only();
+                world.identity.seed = joining.seed;
+                world.identity.generator = joining.generator;
+                world.identity.topology = joining.topology;
+                world.world_seconds = Some(joining.clock_s);
+                world.join_remote();
+                let mut early = Vec::new();
+                for message in joining.early {
+                    pbd_app::net_play::receive(joining.player, message, &mut world, &mut early);
+                }
+                eprintln!(
+                    "joined {addr} as player {} ({} edits so far)",
+                    joining.player,
+                    early.len()
+                );
+                joined = Some((joining.client, joining.player));
+            }
+            Err(why) => {
+                eprintln!("could not join {addr}: {why}");
+                std::process::exit(2);
+            }
+        }
+    }
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
     // it (`bigger-biomes` decision 6). The logger is not up yet.
@@ -1599,7 +1723,9 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some() || launch.showcase.is_some(),
+        // A joined game plays the host's world (`multiplayer` design 20):
+        // the title screen's CONTINUE would open a saved world instead.
+        launch.world.is_some() || launch.showcase.is_some() || launch.join.is_some(),
         // A recording instrument plays the world it was launched on, as a
         // capture does: the title screen would stand in front of the film.
         launch.capture.is_some() || launch.walk_river,
@@ -1755,6 +1881,52 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::compass::CompassPlugin)
     // The towns standing at their sites (`cities-in-the-world`).
     .add_plugins(pbd_app::towns::TownsPlugin)
+    // The player's buildings and build mode (`player-building`).
+    .add_plugins(pbd_app::builds::BuildsPlugin)
+    // Logs on the water (`log-drives`).
+    .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
+    .init_resource::<build_mode::BuildMode>()
+    .init_resource::<build_mode::Blueprints>()
+    .init_resource::<pbd_app::build_view::BuildView>()
+    .add_systems(Startup, build_mode::spawn_ghost)
+    .add_systems(
+        PreUpdate,
+        build_mode::take_input
+            .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys),
+    )
+    .add_systems(
+        Update,
+        (
+            build_mode::load_blueprints,
+            build_mode::drive_view,
+            build_mode::aim_and_build.run_if(
+                resource_exists::<pbd_app::planet::PlanetFine>
+                    .and(resource_exists::<pbd_app::planet::PlanetContact>),
+            ),
+            build_mode::draw_ghost,
+            build_mode::paint_ui,
+        )
+            .chain()
+            .before(pbd_app::builds::sync),
+    )
+    // `PBD_BUILD_SHOT`, a capture instrument (`player-building` captures).
+    .add_systems(
+        Update,
+        build_mode::scripted
+            .run_if(
+                resource_exists::<CaptureState>
+                    .and(resource_exists::<pbd_app::planet::PlanetFine>)
+                    .and(pbd_app::loading::ready),
+            )
+            .before(build_mode::aim_and_build),
+    )
+    // The roads between them (`townsfolk` design 10 and 11).
+    .add_plugins(pbd_app::roads::RoadsPlugin)
+    // Their people (`townsfolk`).
+    .add_plugins(pbd_app::townsfolk::TownsfolkPlugin)
     .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(
@@ -1787,6 +1959,10 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    // Coins, trade and town jobs (`townsfolk` design 5 to 12): the rules'
+    // state and counting, then the coin count and the talk, trade and
+    // board panels.
+    .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(
@@ -1800,6 +1976,8 @@ pub fn run(args: &[String]) {
                 missions::press_tabs,
                 missions::paint,
                 missions::show_line,
+                mission_tree::tree_tabs,
+                mission_tree::switch_tree,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -1808,6 +1986,8 @@ pub fn run(args: &[String]) {
             )
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::scripted_town.run_if(pbd_app::loading::ready),
+            showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
         ),
@@ -1816,6 +1996,11 @@ pub fn run(args: &[String]) {
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
     .insert_resource(world)
+    // The network, hosting or joined (`multiplayer` design 20).
+    .add_systems(
+        Update,
+        pbd_app::net_play::play.after(digging::dig_and_place),
+    )
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
@@ -1900,6 +2085,11 @@ pub fn run(args: &[String]) {
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
+    .insert_resource(if launch.tree_town {
+        mission_tree::ShownTree::Town
+    } else {
+        mission_tree::ShownTree::Starter
+    })
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
@@ -1908,6 +2098,7 @@ pub fn run(args: &[String]) {
         PostStartup,
         (
             slots::spawn,
+            build_mode::spawn_ui,
             (
                 slots::load_icons,
                 (
@@ -1998,10 +2189,12 @@ pub fn run(args: &[String]) {
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
                 pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),
@@ -2021,7 +2214,11 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
+            // A dig press on a survey stake takes it back, and is spent
+            // (`townsfolk` design 39): before the digging.
             (
+                digging::server_worms,
+                pbd_app::roads::take_stakes,
                 digging::dig_and_place,
                 cracks::show,
                 digging::shake_on_impact,
@@ -2366,6 +2563,11 @@ pub fn run(args: &[String]) {
         if launch.load_hold {
             app.add_systems(Update, load_hold_script.before(pack::find_hold));
         }
+        if let Some(script) = launch.carts {
+            app.world_mut()
+                .get_resource_or_insert_with(pbd_app::vehicles::carts::Carts::default)
+                .script = Some(script);
+        }
         if launch.fish {
             if launch.fish_play {
                 app.insert_resource(FishPlay);
@@ -2544,6 +2746,25 @@ pub fn run(args: &[String]) {
         app.insert_resource(pbd_app::loading::CaptureSwitch(beside("loading")));
         app.insert_resource(arrival::ArrivalShot(beside("arrival")));
         app.insert_resource(LeavingShot(beside("leaving")));
+    }
+    // On the network (`multiplayer` design 20): joined, or hosting.
+    if let Some((client, player)) = joined {
+        app.insert_resource(pbd_app::net_play::NetPlay::Joined {
+            client,
+            player,
+            pending: Vec::new(),
+        });
+    } else if let Some(port) = launch.host {
+        match pbd_net::Host::bind(port) {
+            Ok(host) => {
+                eprintln!("hosting on {}", host.local_addr());
+                app.insert_resource(pbd_app::net_play::NetPlay::Host {
+                    host,
+                    players: Default::default(),
+                });
+            }
+            Err(why) => eprintln!("could not host on port {port}: {why}"),
+        }
     }
     app.run();
 }

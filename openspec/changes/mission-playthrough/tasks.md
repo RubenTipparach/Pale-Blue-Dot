@@ -63,3 +63,11 @@ Stalls on the full run (`tree-run-7`, 2026-11-23), each fixed in the bot and the
 - In and out of water: swimming out after 20 s with wet feet or below the sea's level over sea floor (the sea is not in the columns), to the nearest shore, a quarter turn when 15 s bring it no nearer; ahead of "up and out", which held the walk at a wall.
 - A full pack and hotbar: junk dropped off the panels (pick up, a `Clear` click letting go every press left standing, a click on the background), in `make_room` and `select`; and a `Declutter` act at the start of the last branch's digging shots.
 - Where the run stands (2026-11-23, 16:20): 36 of 44 done on `tree-run-7`. Open: sea-fishing's fresh half, three-crops, farm-meal, feast, reef, town, boat. The bot is held 10 m down a flooded shaft by the shore, of its own digging over many retries: it swims up to the water's top, and the shaft's walls go on above it, where a block under the feet would lift it but none is set in water.
+
+## 8. The town tree (design 6)
+
+- [ ] 8.1 Finish the starter tree on the merged build: sea-fishing's fresh half, three-crops, farm-meal, feast, reef, town (the toast seen), boat (raft crafted, then boarded).
+- [ ] 8.2 `Talk`, `Sell`, `Buy`, `TakeJob`, `HandIn`: the town trunk (meet, first-trade, first-job) in `phase-3-town.ron`.
+- [ ] 8.3 Carpentry and houses: `Bench` at any station, `Build`, `Sit`, `Lie`, `Loot`.
+- [ ] 8.4 Trade and jobs: deliver, lost, mend, lamps, goodwill.
+- [ ] 8.5 Roads and carts: stake, mark, pave, join; wheels, hand cart, haul, horse, horse cart, road trip; logs.

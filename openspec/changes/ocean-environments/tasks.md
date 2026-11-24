@@ -13,7 +13,7 @@ against what it would cost.
 - [x] 1.6 A "Water sim" tab: a hex patch where a click pours a source, digs or places a block, and the water moves by Luanti's liquid rule from `docs/mockups/water-flow/liquid.js` (M28's port, now shared by both pages); play, pause, step, tick speed, reset, renewal toggle, and pond, waterfall and dam presets with a breach. Verify: a poured source spreads level by level over steps (`sim-*.jpg`); M28's presets settle as before and its from-scratch check stays at 0.
 - [x] 1.7 Fresh water on cells by the Water sim's rule on every tab, and M28 folded into the Water sim tab (design 12). Verify: as `water-flow` task 1.9.
 - [ ] 1.3 (Published 2026-11-14 at https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1 and on the tracker, per `mockup-work.md`; the survey questions, 1.4, are not yet put.) Publish the page, list it on the tracker and in `docs/mockups/mockup-work.md`, and record its link here. Verify: the page carries the tracker link under its title (it does), and the tracker lists it.
-- [ ] 1.4 Put Q1 to Q3 in the survey with their screenshots. Verify: they are in `docs/design/survey.html`.
+- [x] 1.4 (Done 2026-11-21, on the owner's "wheres the survey": Q3 asked as W21 with `light-40m`, `light-90m`, `light-140m` and `light-140m-today`; Q1 (tides, removed by the owner 2026-11-19) and Q2 (answered 2026-11-15) listed under Already decided.) Put Q1 to Q3 in the survey with their screenshots. Verify: they are in `docs/design/survey.html`.
 
 ## 2. The owner's review
 
@@ -139,3 +139,7 @@ against what it would cost.
 - [x] 21.2 Tune toward 10% of the sea (temperature floor, depth band, patch size, `reef_above`, warm water over kelp), measured each step. (Reef 9.72%, kelp 5.70%; B30's table.)
 - [x] 21.3 Generator 16 for new worlds, 15's digest pinned first.
 - [ ] 21.4 The survey, with the Sea places map (15 against 16) and a reef underwater.
+## 21. Light under water (owner, survey W21, 2026-11-22)
+
+- [ ] 21.1 Powered lamps and glowing mushrooms, held or placed, light the cells round them under water through the cell light field, as on land; open flames go out (recommendation taken, ask only with screenshots)
+- [ ] 21.2 Captures at 40, 90 and 140 m with a held lamp and a held mushroom, by day and at night

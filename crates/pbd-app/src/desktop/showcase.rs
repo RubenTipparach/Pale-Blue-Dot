@@ -2295,7 +2295,8 @@ impl Bot {
                     self.injected
                         .push_back(file::Act::Place("block:workbench".into()));
                 }
-                self.injected.push_back(file::Act::Bench("chest".into(), 1));
+                self.injected
+                    .push_back(file::Act::Bench("wood-chest".into(), 1));
                 self.injected.push_back(file::Act::Hand("hand".into()));
                 self.injected
                     .push_back(file::Act::Place("block:chest".into()));

@@ -111,7 +111,8 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 
 ///
 /// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
-/// decision 3): the foliage pass grows no tree there.
+/// decision 3) and on a road cell (`townsfolk` design 10a): the foliage
+/// pass grows no tree there.
 ///
 /// Bit [`FLOODED_BIT`] is set where the top is under the high-water line
 /// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
@@ -127,7 +128,9 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let cfg = terrain_config();
     let biome = planet_gen::biome_at(cfg, d, height);
-    let cleared = pbd_core::settlement::ground::cleared(cfg, d);
+    // A town's footprint, or a road (`townsfolk` design 10a): no tree.
+    let road = pbd_core::roads::cleared(d);
+    let cleared = pbd_core::settlement::ground::cleared(cfg, d) || road;
     let back = planet_gen::beach_back(cfg, d, height, biome);
     // A sea cell's top far off is drawn from its own sheet, as the column
     // draws it near (`ocean-environments` B24).
@@ -147,7 +150,15 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
         | u32::from(back) << pbd_core::flora::BEACH_BACK_BIT
         | u32::from(cleared) << CLEARED_BIT
         | u32::from(height < high_water_m()) << FLOODED_BIT
+        | u32::from(road || pbd_core::roads::paving::bare(d)) << ROAD_BIT
 }
+
+/// The bit of a record's material word that says a road lies on the cell
+/// (`townsfolk` design 33), or one the player marked or paved (design 44):
+/// the clutter pass grows no pixel tufts there.
+/// `planet_surface.wgsl` reads it.
+pub const ROAD_BIT: u32 = 30;
+const _: () = assert!(PLACED_SHEET_SHIFT + 4 <= ROAD_BIT);
 
 /// The bit of a record's material word that says no tree grows on it.
 /// `planet_visibility.wgsl`'s foliage pass reads it.
@@ -224,10 +235,11 @@ pub fn render_code(material: Material) -> u32 {
         Material::Forge => FORGE,
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
-        Material::Workbench => WOOD,
+        Material::Workbench | Material::Carpenter => WOOD,
+        // The gravel stations (`townsfolk` design 41): the workbench's timber.
+        Material::Grinder | Material::Mixer => WOOD,
         // A chest (`storage-chests` design 1): the workbench's wood, with an
-        // iron hasp stood on it (`farm::show`), as the word has no code to
-        // spare.
+        // iron hasp stood on it (`farm::show`).
         Material::Chest => WOOD,
         // A beaver's sticks (B25): the bark of the local trees, as the
         // workbench is drawn.

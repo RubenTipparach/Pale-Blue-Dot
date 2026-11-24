@@ -126,7 +126,7 @@ pub const CRAFT_COLUMN: f32 = 180.0;
 pub const ROW: f32 = 22.0;
 /// The rows shown before the list scrolls.
 #[allow(dead_code)]
-pub const ROWS_SHOWN: usize = 6;
+pub const ROWS_SHOWN: usize = 8;
 /// The CRAFT plaque's width, wide enough for its longest word (LOCKED), so
 /// it never grows past the row.
 pub const CRAFT_PLAQUE: f32 = 56.0;
@@ -615,10 +615,53 @@ pub fn spawn_bench(
     atlas: &Handle<Image>,
     recipes: &Recipes,
 ) {
+    spawn_station_bench(
+        layer,
+        kit,
+        atlas,
+        recipes,
+        "workbench",
+        tr("craft.workbench"),
+        None,
+    );
+}
+
+/// The carpenter's bench's panel (`furniture` design 1): the workbench's,
+/// under its own lintel, its grid the Furniture branch, every recipe made at
+/// the carpenter's and nowhere else.
+pub fn spawn_carpenter(
+    layer: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    recipes: &Recipes,
+) {
+    spawn_station_bench(
+        layer,
+        kit,
+        atlas,
+        recipes,
+        "carpenter",
+        tr("craft.carpenter"),
+        Some(tr("craft.furniture")),
+    );
+}
+
+/// A bench station's panel: its lintel, a branch's name over its grid when
+/// it has one, its recipes as wells, the recipe row, and the queue's line
+/// and bar.
+fn spawn_station_bench(
+    layer: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    recipes: &Recipes,
+    station: &'static str,
+    title: Localized,
+    branch: Option<Localized>,
+) {
     let (rock, (w, h)) = kit.rock("pack");
     let bar = kit.nine(Set::Stone, "bar");
     let fill = kit.whole(Set::Stone, "fill-progress");
-    let count = recipes.0.at("workbench").count();
+    let count = recipes.0.at(station).count();
     layer
         .spawn((
             rock,
@@ -630,10 +673,19 @@ pub fn spawn_bench(
                 display: Display::None,
                 ..default()
             },
-            super::forge::StationPanel("workbench"),
+            super::forge::StationPanel(station),
         ))
         .with_children(|panel| {
-            super::menu::lintel(panel, kit, tr("craft.workbench"));
+            super::menu::lintel(panel, kit, title);
+            if let Some(branch) = branch {
+                panel.spawn((
+                    KitText::new(branch, ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    Node {
+                        margin: UiRect::bottom(px(2)),
+                        ..default()
+                    },
+                ));
+            }
             panel
                 .spawn(Node {
                     flex_wrap: FlexWrap::Wrap,
@@ -648,13 +700,13 @@ pub fn spawn_bench(
                             kit,
                             atlas,
                             Well {
-                                station: "workbench",
+                                station,
                                 role: Role::Pick(k),
                             },
                         );
                     }
                 });
-            craft_row(panel, kit, atlas, "workbench", 3);
+            craft_row(panel, kit, atlas, station, 3);
             panel.spawn((
                 KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
@@ -748,7 +800,8 @@ pub fn press(
             (HAND_RECORD_ID, "hand")
         } else {
             let Some(cell) = at.0 else { continue };
-            (station_id(Some(cell)), "workbench")
+            let code = station_row_at(&save, cell.0, cell.1).map_or("workbench", |r| r.code);
+            (station_id(Some(cell)), code)
         };
         let Some(code) = picked(&recipes, &pick, station).map(|r| r.code.clone()) else {
             continue;
@@ -942,8 +995,12 @@ pub fn paint(
         Some((recipe, state, short || refused || locked))
     };
     let hand = view("hand");
+    // The open bench: the workbench's or the carpenter's.
+    let bench_code =
+        at.0.and_then(|(cell, layer)| station_row_at(&save, cell, layer))
+            .map_or("workbench", |r| r.code);
     let bench = if *screen == Screen::Forge {
-        view("workbench")
+        view(bench_code)
     } else {
         None
     };
@@ -1114,7 +1171,7 @@ pub fn paint(
         }
     }
     if let Some((_, state, _)) = &bench {
-        let shut = picked(&recipes, &pick, "workbench").and_then(|r| locks.locked(&r.code));
+        let shut = picked(&recipes, &pick, bench_code).and_then(|r| locks.locked(&r.code));
         let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
             _ if state.jobs.is_empty() && shut.is_some() => caps(&tr_with(
                 "craft.opens_with",
@@ -1263,9 +1320,35 @@ pub fn scripted(
         super::digging::Hands::Empty,
         cell,
         layer,
-        Material::Workbench,
+        // `--craft carpenter` (`furniture` task 3.8): the carpenter's bench.
+        if scene == "carpenter" {
+            Material::Carpenter
+        } else {
+            Material::Workbench
+        },
     );
-    info!("scripted craft: a workbench at cell {cell} layer {layer}");
+    info!("scripted craft: a station at cell {cell} layer {layer}");
+    if scene == "carpenter" {
+        slots.give(Item::Good(Good::PLANKS), 20);
+        slots.give(Item::Good(Good::WOOL), 3);
+        slots.give(Item::Good(Good::ROPE), 2);
+        let at = (cell, layer as u16);
+        queue(
+            &mut save,
+            &mut slots,
+            Some(&tools),
+            &recipes,
+            station_id(Some(at)),
+            "chair",
+            now_s - 1.0,
+            &mut note,
+            wall_s,
+        );
+        pick.bench = index_of("carpenter", "bed");
+        station_at.0 = Some(at);
+        *screen = Screen::Forge;
+        return;
+    }
     if scene != "bench" {
         return;
     }

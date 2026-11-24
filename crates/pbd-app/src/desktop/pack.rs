@@ -26,10 +26,11 @@ use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
+use pbd_core::accept::PackMove;
 use pbd_core::chest::CHEST;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
 use pbd_core::terrain::Material;
-use pbd_core::vehicle::hold::{self, Hold, Place};
+use pbd_core::vehicle::hold::{self, HOLD_MAX, Hold, Place};
 
 /// How near a raft must be, m, for the pack opened on foot to show its hold;
 /// and a chest, from the walker's centre to the chest's, for F to open it and
@@ -130,6 +131,7 @@ pub enum Click {
 ///   half of it, and a shift-click sends it between the hotbar and the pack.
 /// - A stack in hand: either click puts it down on `index` (`Slots::shift`),
 ///   and a click on the slot it came from puts it back.
+#[cfg(test)]
 pub fn click(
     slots: &Slots,
     hand: Option<Held>,
@@ -137,15 +139,30 @@ pub fn click(
     button: Click,
     shift: bool,
 ) -> (Option<Slots>, Option<Held>) {
+    let (mv, held) = resolve(slots, hand, index, button, shift);
+    let moved = mv
+        .and_then(|mv| pbd_core::accept::pack(slots, mv).ok())
+        .filter(|moved| moved != slots);
+    (moved, held)
+}
+
+/// What a click asks for: the move (`multiplayer` design 19), which the
+/// server decides, and what is in hand after. [`click`] is this with the
+/// move applied.
+pub fn resolve(
+    slots: &Slots,
+    hand: Option<Held>,
+    index: usize,
+    button: Click,
+    shift: bool,
+) -> (Option<PackMove>, Option<Held>) {
     match hand {
         None => {
             let Some(stack) = slots.get(index) else {
                 return (None, None);
             };
             if shift {
-                let mut sent = slots.clone();
-                sent.send(index);
-                return ((sent != *slots).then_some(sent), None);
+                return (Some(PackMove::Send { index }), None);
             }
             let count = match button {
                 Click::Left => stack.count,
@@ -154,11 +171,14 @@ pub fn click(
             (None, Some(Held { from: index, count }))
         }
         Some(held) if held.from == index => (None, None),
-        Some(held) => {
-            let mut moved = slots.clone();
-            moved.shift(held.from, index, held.count);
-            ((moved != *slots).then_some(moved), None)
-        }
+        Some(held) => (
+            Some(PackMove::Shift {
+                from: held.from,
+                to: index,
+                count: held.count,
+            }),
+            None,
+        ),
     }
 }
 
@@ -184,7 +204,7 @@ pub fn hold_click(
     button: Click,
     shift: bool,
 ) -> Option<Held> {
-    if index >= CARRIED + hold_now.len() {
+    if index >= CARRIED + hold_now.slots.len() {
         return hand;
     }
     let at = place_of(index);
@@ -226,11 +246,17 @@ pub fn find_hold(
     save: Res<WorldSave>,
     mut view: ResMut<HoldView>,
     frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
-    mut panels: Query<&mut Node, (With<HoldPanel>, Without<ChestPanel>)>,
+    mut panels: Query<&mut Node, (With<HoldPanel>, Without<PackCell>, Without<ChestPanel>)>,
+    (carts, cart_state, fleet, mut squares): (
+        Query<(Entity, &pbd_app::vehicles::carts::CartThing)>,
+        Option<Res<pbd_app::vehicles::carts::Carts>>,
+        Option<Res<pbd_app::vehicles::Fleet>>,
+        Query<(&PackCell, &mut Node), (Without<HoldPanel>, Without<ChestPanel>)>,
+    ),
     (fine, mut open_chest, mut chest_panels): (
         Option<Res<PlanetFine>>,
         Option<ResMut<OpenChest>>,
-        Query<&mut Node, (With<ChestPanel>, Without<HoldPanel>)>,
+        Query<&mut Node, (With<ChestPanel>, Without<HoldPanel>, Without<PackCell>)>,
     ),
 ) {
     let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
@@ -264,7 +290,34 @@ pub fn find_hold(
         }
         None => None,
     };
-    let found = if *screen != Screen::Pack || chest.is_some() {
+    // A cart's hold (`land-transport` design 10): the one in hand or under
+    // the seat, else the nearest in reach on foot, at its own size.
+    let frame_now = frame.as_deref().copied().unwrap_or_default();
+    let cart_size = |kind| fleet.as_deref().map_or(9, |f| f.specs.carts.of(kind).hold);
+    let with_cart = cart_state
+        .as_deref()
+        .and_then(|c| c.holding.or(c.seated))
+        .and_then(|e| carts.get(e).ok())
+        .or_else(|| {
+            let feet = walkers
+                .iter()
+                .next()
+                .map(|p| p.0.as_dvec3() - frame_now.physics_center())?;
+            carts
+                .iter()
+                .map(|(e, t)| (e, t, t.cart.at.distance(feet)))
+                .filter(|(_, _, d)| *d <= HOLD_REACH_M)
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+                .map(|(e, t, _)| (e, t))
+        })
+        .map(|(e, t)| (e, t.cart.id, cart_size(t.cart.kind)));
+    let found_cart = with_cart.filter(|_| *screen == Screen::Pack);
+    // An open chest comes first (`storage-chests` design 3).
+    let found = if chest.is_some() {
+        None
+    } else if let Some((e, id, _)) = found_cart {
+        Some((e, id))
+    } else if *screen != Screen::Pack {
         None
     } else if let Some(entity) = aboard.and_then(|a| a.0) {
         vehicles
@@ -296,15 +349,33 @@ pub fn find_hold(
         })
     };
     if found != view.craft || chest != view.chest {
-        view.hold = match (chest, found) {
-            (Some((cell, layer)), _) => pbd_app::chests::read(&save, cell, layer),
-            (None, Some((_, id))) => pbd_app::vehicles::hold::read(&save, id),
-            (None, None) => Hold::default(),
+        view.hold = match (chest, found, found_cart) {
+            (Some((cell, layer)), _, _) => pbd_app::chests::read(&save, cell, layer),
+            (None, Some((_, id)), Some((_, _, size))) => {
+                pbd_app::vehicles::hold::read_sized(&save, id, size)
+            }
+            (None, Some((_, id)), None) => pbd_app::vehicles::hold::read(&save, id),
+            (None, None, _) => Hold::default(),
         };
         view.craft = found;
         view.chest = chest;
     }
     let shown = |on: bool| if on { Display::Flex } else { Display::None };
+    // Only the hold's own squares show.
+    let size = view.hold.slots.len();
+    for (cell, mut node) in &mut squares {
+        if cell.0 < CARRIED {
+            continue;
+        }
+        let want = if cell.0 - CARRIED < size {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != want {
+            node.display = want;
+        }
+    }
     for mut node in &mut panels {
         let want = shown(found.is_some());
         if node.display != want {
@@ -337,13 +408,14 @@ pub fn paint_hold(
     if *screen != Screen::Pack || (view.craft.is_none() && view.chest.is_none()) {
         return;
     }
+    let hold = |i: usize| (CARRIED..super::furniture::STORE_AT).contains(&i);
     for (icon, mut node) in &mut icon_nodes {
-        if icon.0 >= CARRIED {
+        if hold(icon.0) {
             slots::paint_icon(&mut node, view.hold.get(icon.0 - CARRIED), &icons, &images);
         }
     }
     for (count, mut text) in &mut counts {
-        if count.0 < CARRIED {
+        if !hold(count.0) {
             continue;
         }
         let label = match view.hold.get(count.0 - CARRIED) {
@@ -355,7 +427,7 @@ pub fn paint_hold(
         }
     }
     for (cell, mut tip) in &mut tips {
-        if cell.0 < CARRIED {
+        if !hold(cell.0) {
             continue;
         }
         let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
@@ -588,7 +660,18 @@ pub fn spawn(
                         ))
                         .with_children(|panel| {
                             menu::lintel(panel, kit, tr("pack.hold"));
-                            slot_line(panel, kit, &atlas, CARRIED);
+                            // As many squares as the largest hold (a horse
+                            // cart's, `land-transport` design 10), in rows of
+                            // ten; a smaller hold hides the rest.
+                            for first in (CARRIED..CARRIED + HOLD_MAX).step_by(SLOTS) {
+                                slot_row(
+                                    panel,
+                                    kit,
+                                    &atlas,
+                                    first,
+                                    (CARRIED + HOLD_MAX - first).min(SLOTS),
+                                );
+                            }
                         });
                     // A chest F opened (`storage-chests` design 3), in the
                     // hold's place: its twenty slots in two rows of ten.
@@ -612,6 +695,9 @@ pub fn spawn(
                                 slot_line(panel, kit, &atlas, CARRIED + row * SLOTS);
                             }
                         });
+                    // A container's panel, beside the hold's, while one is
+                    // open (`furniture` design 11).
+                    super::furniture::spawn_panel(layer, kit, &atlas);
                 });
         });
     commands
@@ -643,6 +729,21 @@ pub fn spawn(
                 HeldCount,
             ));
         });
+}
+
+/// `count` slots in a row, from slot `first`.
+fn slot_row(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    first: usize,
+    count: usize,
+) {
+    parent.spawn(Node::default()).with_children(|line| {
+        for index in first..first + count {
+            slots::cell(line, kit, index, atlas, (Button, PackCell(index)));
+        }
+    });
 }
 
 /// Ten slots in a row, from slot `first`.
@@ -770,14 +871,20 @@ pub fn press(
     if index >= CARRIED {
         return;
     }
-    let (moved, held) = click(&hotbar.0, hand.0, index, button, shift);
-    if let Some(moved) = moved {
-        if !save.record_pack(&moved) {
-            error!("pack move BLOCKED: the save did not accept it");
-            hand.0 = None;
-            return;
+    // The move is the server's to decide (`multiplayer` design 19); one that
+    // would change nothing is not asked.
+    let (mv, held) = resolve(&hotbar.0, hand.0, index, button, shift);
+    if let Some(mv) = mv
+        && pbd_core::accept::pack(&hotbar.0, mv).is_ok_and(|moved| moved != hotbar.0)
+    {
+        match save.decide_pack(mv, &hotbar.0) {
+            Ok(moved) => hotbar.0 = moved,
+            Err(refusal) => {
+                error!("pack move BLOCKED: {refusal:?}");
+                hand.0 = None;
+                return;
+            }
         }
-        hotbar.0 = moved;
     }
     hand.0 = held;
 }
@@ -931,6 +1038,9 @@ mod tests {
             forge: Handle::default(),
             workbench: Handle::default(),
             chest: Handle::default(),
+            carpenter: Handle::default(),
+            grinder: Handle::default(),
+            mixer: Handle::default(),
             tiered: Vec::new(),
         });
         app.insert_resource(pbd_app::config::Recipes(
@@ -982,8 +1092,8 @@ mod tests {
         let n = cells.iter(world).count();
         assert_eq!(
             n,
-            PACK + SLOTS + HOLD + CHEST,
-            "and the hold's ten, shown with a raft, and a chest's twenty"
+            PACK + SLOTS + HOLD_MAX + CHEST + super::super::furniture::STORE_SQUARES,
+            "and the hold's squares, as many as a horse cart's, a chest's twenty and a town container's"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
         // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its

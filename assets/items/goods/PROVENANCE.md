@@ -96,3 +96,31 @@ one iron band and a dark iron hasp, with the 1 px outline of an inventory
 icon. In the world the chest has no outline: it is the workbench's wood block
 (`render_code`, `WOOD`) with an iron strap and hasp stood on it
 (`desktop/farm.rs`, `show`), lit as the ground is.
+
+## townsfolk design 9: the parcel, and the coin
+
+`parcel` is drawn by `tools/gen_item_icons.py` (`ECONOMY`): brown paper tied
+with a cross of twine and a bow, the 1 px outline of an inventory icon. The
+coin beside the hotbar (`assets/items/ui/coin.png`, design 5) is drawn by the
+same script: a gold piece with a stamped square ring.
+
+## player-building design B8: the door
+
+`door` is drawn by `tools/gen_item_icons.py`: a door of planks with two iron
+strap hinges on its hinge side and a ring pull, in the fence's browns and the
+lights' irons (`FARM`), with the 1 px outline of an inventory icon. The leaf
+in the world (`assets/textures/settlement/door.png`) has no outline and is
+drawn by `tools/art/door_texture.py` from the `plank`, `timber` and `iron`
+textures' own colours.
+
+## townsfolk design 31: gravel
+
+`gravel` is drawn by `tools/gen_item_icons.py` (`ROADS`): a heap of crushed
+stone in four greys, with the 1 px outline of an inventory icon.
+
+## land-transport design 10: the wheel and the carts
+
+`wheel`, `hand-cart` and `horse-cart` are drawn by `tools/gen_item_icons.py`
+(`CARTS`): a spoked wheel with its iron tyre, and the two carts side on, each
+from a few shapes in the boats' browns with the 1 px outline of an inventory
+icon.

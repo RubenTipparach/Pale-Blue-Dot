@@ -709,3 +709,8 @@ suite: `rain-stroll`, `storm`, `walk`, `far-side`, interleaved against
 - A per-column top must be kept up to date with edits (a dug hole, a placed
   block); it is derived from the same column records the walk reads, so it
   is rebuilt where they are.
+
+## Owner answers (survey, 2026-11-22)
+
+- **T15: half-size rain (0.5), the setting kept** (task 2.9).
+- **T16: half-size reflections (0.5), the setting kept** (task 2.8).

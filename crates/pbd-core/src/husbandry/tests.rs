@@ -500,6 +500,44 @@ fn herds_are_derived_from_the_seed_alone() {
     }
 }
 
+/// `land-transport` design 10 (task 5.5): the horse is appended to the end
+/// of the home roster as a bought species, and no wild herd ever rolls it:
+/// every world's herds are what they were before it, square for square and
+/// animal for animal, under several seeds.
+#[test]
+fn the_horse_is_bought_and_every_wild_herd_is_unchanged() {
+    let s = settings();
+    let roster = s.roster("home");
+    let horse = roster.iter().position(|sp| sp.id == "horse").unwrap();
+    assert_eq!(
+        horse, 3,
+        "appended after the hen, the woolback and the plodder"
+    );
+    let sp = &roster[horse];
+    assert_eq!(sp.status, crate::fauna::Status::Bought);
+    assert_eq!(sp.plan, Plan::Horse);
+    assert!(sp.keep.is_some() && sp.refusal().is_none());
+    let before = &roster[..3];
+    let radius = 4800.0;
+    let mut herds = 0;
+    for seed in [1u64, 42, 0x5eed, 987_654_321] {
+        for at in [
+            glam::Vec3::new(0.3, 0.5, 0.8),
+            glam::Vec3::new(-0.7, 0.1, 0.2),
+            glam::Vec3::new(0.0, -1.0, 0.1),
+        ] {
+            for q in herds::squares_near(at.normalize(), 1500.0, radius, &s.herds) {
+                let now = herds::herd_in(seed, q, radius, &s.herds, roster);
+                let then = herds::herd_in(seed, q, radius, &s.herds, before);
+                assert_eq!(now, then, "seed {seed}, square {q:?}");
+                herds += usize::from(now.is_some());
+                assert!(now.is_none_or(|h| h.species as usize != horse));
+            }
+        }
+    }
+    assert!(herds > 50, "{herds} herds compared");
+}
+
 // ---- 7 and 8: eggs, young and breeding (design 13) -------------------------
 
 mod breeding_tests {

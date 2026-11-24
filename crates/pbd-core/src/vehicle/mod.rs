@@ -13,12 +13,14 @@
 
 pub mod anchor;
 pub mod body;
+pub mod cart;
 pub mod foil;
 pub mod hold;
 pub mod hull;
 mod loon;
 pub mod oars;
 pub mod record;
+pub mod ride;
 pub mod spec;
 #[cfg(test)]
 mod tests;

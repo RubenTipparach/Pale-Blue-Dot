@@ -91,6 +91,17 @@ pub fn is_word(text: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
+/// A record kind's name: a word, or words joined by `_` (`town_jobs`,
+/// `lost_villager`, `town_missions`). A kind written with an underscore was
+/// read back as a damaged line before this, so those records did not come
+/// back on a reload; they do now, from the lines already written.
+pub fn is_kind(text: &str) -> bool {
+    !text.is_empty()
+        && !text.starts_with('_')
+        && !text.ends_with('_')
+        && text.split('_').all(is_word)
+}
+
 /// A line's author and the rest of it. A line with no leading token is the
 /// player's (every line before authors). `None` for a token that names
 /// nobody, which makes the line damaged, not the player's.
@@ -165,7 +176,7 @@ impl Record {
         // Every body is RON, whatever its kind, so a body that is not is a
         // line torn by a crash (or two lines run together after one), and is
         // damaged rather than a record with half a value.
-        if !is_word(kind) || ron::from_str::<ron::Value>(body).is_err() {
+        if !is_kind(kind) || ron::from_str::<ron::Value>(body).is_err() {
             return None;
         }
         Some((
@@ -299,6 +310,15 @@ impl YieldSet {
 
     pub fn has_cell(&self, cell: u32) -> bool {
         self.cells.contains(&cell)
+    }
+
+    /// Whether a player's line changed any field of a record: a world
+    /// process that leaves alone whatever the player has worked on (a
+    /// repair job's broken wall, `townsfolk` design 29) asks this first.
+    pub fn has_record(&self, kind: &str, id: u64) -> bool {
+        self.fields
+            .get(&(kind.to_string(), id))
+            .is_some_and(|f| !f.is_empty())
     }
 
     /// Whether the world may make `proposal` over `records`: every cell it

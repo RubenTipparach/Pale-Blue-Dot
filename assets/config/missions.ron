@@ -131,7 +131,7 @@
             icon: "stations/chest",
             needs: ["fire"],
             objectives: [
-                (kind: craft, what: "block:chest|recipe:chest", count: 1),
+                (kind: craft, what: "block:chest|recipe:wood-chest", count: 1),
                 (kind: place, what: "block:chest", count: 1),
                 (kind: store, what: "block:dirt|block:grass|block:dry grass|block:jungle grass|block:soil|block:sand|block:desert sand|block:stone|stone|log|planks|fibre", count: 1),
             ],

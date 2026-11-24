@@ -80,8 +80,19 @@ pub const DATA_PREFIXES: &[&str] = &[
     "map.layer.",
     // `missions.ron`: each mission's title, help and objective labels by id.
     "mission.",
+    // `town_missions.ron`: each town mission's words by id.
+    "town_mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
+    // `economy::jobs::JobKind`: each job's line by its code; the townsfolk's
+    // roles by the template's id (`desktop::talk::role_name`).
+    "jobs.kind.",
+    "talk.role.",
+    // `building::rules::Rule`, `building::Class` and the kits: build mode's
+    // reasons, pieces and kit names by id (`builds::tests`).
+    "build.refused.",
+    "build.piece.",
+    "build.kit.",
 ];
 
 /// Extensions that make a spaceless literal an asset path.
@@ -198,7 +209,7 @@ pub const DEV_SCOPES: &[(&str, &str)] = &[
         "shipyard",
     ),
     // Why a mission is not live yet: checked, logged, never shown.
-    ("crates/pbd-core/src/missions.rs", "resolve"),
+    ("crates/pbd-core/src/missions.rs", "resolve_keyed"),
     // A town template's area names, matched as data.
     (
         "crates/pbd-core/src/settlement/pieces/steps.rs",

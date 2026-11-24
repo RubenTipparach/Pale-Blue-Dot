@@ -176,6 +176,45 @@
                     ),
                 )),
             ),
+            // The horse (`land-transport` design 10): bought in town for the
+            // horse cart's shafts, never wild, so no herd rolls it. Kept like
+            // the herd on wheat, turnip and turf, and gives leather (the
+            // owner: "cows and horses should").
+            (
+                id: "horse",
+                class: Mammal,
+                status: Bought,
+                plan: Horse,
+                herd: (1, 1),
+                length_m: 2.3,
+                height_m: 1.55,
+                walk_mps: 1.5,
+                run_mps: 6.0,
+                stride_m: 1.7,
+                colours: ((0.45, 0.28, 0.16), (0.62, 0.46, 0.32), (0.16, 0.11, 0.08), (0.40, 0.25, 0.15)),
+                keep: Some((
+                    foods: [Good("wheat"), Good("turnip"), Turf],
+                    trust_gain: 34.0,
+                    space_cells: 2.0,
+                    grazing_cells: 2.0,
+                    products: [
+                        (good: "leather", amount: 1.0, period_days: 8.0, sex: None),
+                    ],
+                    coats: ["bay", "chestnut", "grey"],
+                    patterns: ["plain", "blaze"],
+                    morph: "dapple",
+                    adult_days: 20.0,
+                    male_one_in: 2,
+                    young: (
+                        stages: [
+                            (name: "foal", until_days: 10.0, size: 0.5),
+                            (name: "yearling", until_days: 20.0, size: 0.8),
+                        ],
+                        adult: ("mare", "stallion"),
+                        birth: Live(gestation_days: 10.0, litter: (1, 1)),
+                    ),
+                )),
+            ),
         ],
     },
 )

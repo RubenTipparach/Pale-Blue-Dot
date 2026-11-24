@@ -71,7 +71,19 @@ impl WalkingConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
     Town(usize),
+    /// A player's building, by its place in [`PlayerStructures`]
+    /// (`player-building`).
+    Build(usize),
+    /// A road cell standing (`townsfolk` design 10a), by its place in
+    /// [`crate::roads::RoadPieces`].
+    Road(usize),
 }
+
+/// The player's buildings' solids (`player-building` design B4), one a
+/// plot, kept by `builds` apart from the towns' [`Structures`] so neither
+/// moves the other's indices.
+#[derive(Resource, Default, Clone)]
+pub struct PlayerStructures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 
 /// Everything the walker meets that is not terrain, asked together: the
 /// towns' pieces.
@@ -84,6 +96,13 @@ pub enum Piece {
 #[derive(Clone, Copy)]
 pub(crate) struct Meets<'a> {
     pub towns: Option<&'a Structures>,
+    pub builds: Option<&'a PlayerStructures>,
+    /// The road cells standing: a road's slope is the walker's floor, as a
+    /// street step's pitch line is.
+    pub roads: Option<&'a crate::roads::RoadPieces>,
+    /// The townspeople's circles (`townsfolk` decision 25), asked after the
+    /// towns' pieces.
+    pub people: Option<&'a crate::townsfolk::TownsfolkSolids>,
     pub origin: SimOrigin,
 }
 
@@ -91,6 +110,9 @@ impl Default for Meets<'_> {
     fn default() -> Self {
         Self {
             towns: None,
+            builds: None,
+            roads: None,
+            people: None,
             origin: crate::sim_origin::SimFrame::default().0,
         }
     }
@@ -100,6 +122,9 @@ impl<'a> Meets<'a> {
     fn of(world: &'a World) -> Self {
         Self {
             towns: world.get_resource::<Structures>(),
+            builds: world.get_resource::<PlayerStructures>(),
+            roads: world.get_resource::<crate::roads::RoadPieces>(),
+            people: world.get_resource::<crate::townsfolk::TownsfolkSolids>(),
             origin: crate::sim_origin::origin_of(world),
         }
     }
@@ -108,11 +133,23 @@ impl<'a> Meets<'a> {
     /// local one (none is, since the decks went: kept for a piece that
     /// moves again).
     fn pieces(&self) -> impl Iterator<Item = (Piece, &'a BuildingSolids, Frame, bool)> + use<'a> {
-        self.towns.into_iter().flat_map(move |s| {
+        let towns = self.towns.into_iter().flat_map(move |s| {
             s.0.iter()
                 .enumerate()
                 .map(move |(n, b)| (Piece::Town(n), b, b.frame, false))
-        })
+        });
+        let builds = self.builds.into_iter().flat_map(move |s| {
+            s.0.iter()
+                .enumerate()
+                .map(move |(n, b)| (Piece::Build(n), b, b.frame, false))
+        });
+        let roads = self.roads.into_iter().flat_map(move |r| {
+            r.solids
+                .iter()
+                .enumerate()
+                .map(move |(n, b)| (Piece::Road(n), b, b.frame, false))
+        });
+        towns.chain(builds).chain(roads)
     }
 
     /// The planet point `point` in `frame`, asked in the frame's space.
@@ -156,13 +193,18 @@ impl<'a> Meets<'a> {
     /// The way out of the solid that holds a body at `centre`, along the
     /// ground: the face a refused move slides along.
     fn push_normal(&self, centre: DVec3) -> Option<Vec3> {
-        self.pieces().find_map(|(_, b, frame, local)| {
-            b.push_normal_in(
-                self.in_frame(&frame, local, centre),
-                HALF_HEIGHT,
-                BODY_RADIUS,
-            )
-        })
+        self.pieces()
+            .find_map(|(_, b, frame, local)| {
+                b.push_normal_in(
+                    self.in_frame(&frame, local, centre),
+                    HALF_HEIGHT,
+                    BODY_RADIUS,
+                )
+            })
+            .or_else(|| {
+                self.people
+                    .and_then(|p| p.push_normal(centre, HALF_HEIGHT, BODY_RADIUS))
+            })
     }
 
     /// Whether the body centred at `centre` is in a solid.
@@ -173,7 +215,9 @@ impl<'a> Meets<'a> {
                 HALF_HEIGHT,
                 BODY_RADIUS,
             )
-        })
+        }) || self
+            .people
+            .is_some_and(|p| p.holds(centre, HALF_HEIGHT, BODY_RADIUS))
     }
 
     /// The lowest solid underside over the body, a radius.
@@ -365,6 +409,15 @@ pub struct GroundState {
     pub drift: Vec3,
 }
 
+/// A cap on the walker's pace (`land-transport` design 11): a hand cart in
+/// hand holds it to the cart's own speed on the ground under its wheels,
+/// and the seat of a horse cart holds it at nought. `None` is the walker's
+/// own pace; nothing else changes how the walker moves.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub struct Pace {
+    pub cap_mps: Option<f32>,
+}
+
 #[derive(Resource)]
 pub struct WalkingState {
     pub active: bool,
@@ -447,6 +500,25 @@ impl WalkingState {
         (self.heading, self.pitch)
     }
 
+    /// The move keys this frame, as the walker reads them: x to the right,
+    /// y forward, each -1..1. A horse cart's seat drives by them
+    /// (`land-transport` design 11), so they rebind with the walker's.
+    pub fn move_axes(&self) -> Vec2 {
+        self.axes
+    }
+
+    /// Turn the look about up by `angle` (left is positive): the seat of a
+    /// turning cart carries the rider's view round with it. The mouse look
+    /// is still the raw displacement on top.
+    pub fn turn_with(&mut self, angle: f32) {
+        if angle.is_finite() && angle != 0.0 {
+            self.heading = tangent_heading(
+                Quat::from_axis_angle(self.up, angle) * self.heading,
+                self.up,
+            );
+        }
+    }
+
     /// Where [`respawn`] puts the walker: the direction this world's walker
     /// started from (for a restored world, where its pose was).
     pub fn spawn_direction(&self) -> Vec3 {
@@ -525,7 +597,9 @@ impl Plugin for WalkingPlugin {
     fn build(&self, app: &mut App) {
         crate::sim_origin::add_rebase_hook(app, rebase_walker);
         app.init_resource::<WalkingConfig>()
+            .init_resource::<Pace>()
             .init_resource::<WalkingReadout>()
+            .init_resource::<SeatedEye>()
             .init_resource::<Lift>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
@@ -1070,6 +1144,13 @@ fn turn_for_capture(config: Res<WalkingConfig>, time: Res<Time>, mut state: ResM
     }
 }
 
+/// The eye of a player sat on a seat or lain on a bed (`furniture` design
+/// 6): a planet point (f64) the camera is put at instead of the walker's
+/// eye. While it is set the walker reads no movement; the look stays free.
+/// The body is not moved, so nothing about the walker's physics changes.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+pub struct SeatedEye(pub Option<bevy::math::DVec3>);
+
 #[allow(clippy::too_many_arguments)]
 fn read_walking_input(
     keys: Option<Res<ButtonInput<KeyCode>>>,
@@ -1080,17 +1161,23 @@ fn read_walking_input(
     walkers: Query<&Position, With<Walker>>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     space: crate::SimSpace,
+    view: Option<Res<crate::build_view::BuildView>>,
+    seated: Option<Res<SeatedEye>>,
 ) {
     if !state.active {
         return;
     }
     let Some(keys) = keys else { return };
+    // Architecture mode (`player-building` design B9) holds the pointer as a
+    // menu does, and the walker reads nothing under it: its pose is kept
+    // exactly for the camera to come back to.
+    let building = view.as_deref().is_some_and(|v| v.on);
     // A menu is a second claimant on the pointer. While it holds it the walker
     // reads nothing - not the look, not the keys, and above all not the click
     // that presses a button, which would otherwise grab the mouse on its way
     // through to the world. `Escape` is the menu's key now and is consumed
     // before this system runs, so there is no arm for it here.
-    let menu_open = pointer.menu_holds(&mut state.captured);
+    let menu_open = pointer.held_by(building, &mut state.captured);
     if !menu_open && buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
         state.captured = true;
     }
@@ -1113,7 +1200,7 @@ fn read_walking_input(
     }
     state.axes = Vec2::ZERO;
     state.sprinting = false;
-    if !state.captured {
+    if !state.captured || building {
         state.jump = false;
         state.jump_held = false;
         return;
@@ -1148,6 +1235,14 @@ fn read_walking_input(
     // Keep a jump press until a physics tick consumes it, even at >60 render FPS.
     state.jump |= keys.just_pressed(KeyCode::Space);
     state.jump_held = keys.pressed(KeyCode::Space);
+    // Seated or lying: the keys get the player up (`furniture` design 6)
+    // and move nothing.
+    if seated.is_some_and(|s| s.0.is_some()) {
+        state.axes = Vec2::ZERO;
+        state.sprinting = false;
+        state.jump = false;
+        state.jump_held = false;
+    }
 }
 
 fn walk_axis_scale() -> Option<f32> {
@@ -1181,6 +1276,8 @@ fn drive_walker(
         Query<Forces, With<Walker>>,
     )>,
     meals: Option<Res<crate::kitchen::MealEffects>>,
+    roads: Option<Res<crate::roads::RoadPieces>>,
+    pace: Option<Res<Pace>>,
     space: crate::SimSpace,
 ) {
     let o = space.origin();
@@ -1238,6 +1335,17 @@ fn drive_walker(
         } else {
             config.walk_speed
         };
+        // A road under the feet (`townsfolk` design 10): gravel is walked
+        // faster.
+        if ground.grounded
+            && let Some(roads) = roads.as_deref()
+        {
+            speed *= roads.speed_at(o.query_point(position), HOLD_M);
+        }
+        // A cart in hand (`land-transport` design 11): no faster than it rolls.
+        if let Some(cap) = pace.as_deref().and_then(|p| p.cap_mps) {
+            speed = speed.min(cap.max(0.0));
+        }
         if wet.body {
             speed *= config.water_movement_mult;
             if !state.sprinting {
@@ -1720,6 +1828,9 @@ fn resolve_ground(
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    builds: Option<Res<PlayerStructures>>,
+    roads: Option<Res<crate::roads::RoadPieces>>,
+    people: Option<Res<crate::townsfolk::TownsfolkSolids>>,
     time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
@@ -1743,6 +1854,9 @@ fn resolve_ground(
     }
     let meets = Meets {
         towns: structures.as_deref(),
+        builds: builds.as_deref(),
+        roads: roads.as_deref(),
+        people: people.as_deref(),
         origin: *o,
     };
     for (mut position, mut velocity, mut ground) in &mut walkers {
@@ -2072,6 +2186,8 @@ pub(crate) fn follow_walker(
     space: crate::SimSpace,
     time: Res<Time>,
     mut step_ease: Local<(Option<f64>, f32)>,
+    view: Option<Res<crate::build_view::BuildView>>,
+    seated: Option<Res<SeatedEye>>,
 ) {
     let o = space.origin();
     readout.active = state.active;
@@ -2116,11 +2232,24 @@ pub(crate) fn follow_walker(
         // dependence on the body's angular velocity.
         // Render space: the physics-space eye less the render origin, in
         // f64 before the cast (`movement-smoothness` design 6.3).
-        let eye = body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag);
+        let eye = match seated.as_ref().and_then(|s| s.0) {
+            // Sat or lying: the seat's eye, from the planet point in f64.
+            Some(at) => o.to_local(pbd_core::world_frame::WorldPos::new(o.frame, at)),
+            None => body + drawn_up * (EYE_HEIGHT - HALF_HEIGHT - lag),
+        };
         camera.translation = frame.as_deref().map_or(eye, |frame| {
             crate::render_origin::render_from_physics(frame, eye)
         });
         camera.rotation = state.rotation();
+        // Architecture mode's camera in the walker's place (design B9);
+        // off, the walker's own is written above, exactly as it was.
+        if let Some(view) = view.as_deref().filter(|v| v.on)
+            && let Some(shown) =
+                view.shown_transform(frame.as_deref().map_or(DVec3::ZERO, |f| f.center))
+        {
+            camera.translation = shown.translation;
+            camera.rotation = shown.rotation;
+        }
     }
     let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(up).degrees();
     *readout = WalkingReadout {
@@ -2334,6 +2463,90 @@ mod tests {
         assert!(
             spawn_now.angle_between(fresh.world().resource::<WalkingState>().spawn_direction)
                 < 1e-5
+        );
+    }
+
+    /// `player-building` design B9: architecture mode puts the camera over
+    /// the site and the walker reads nothing under it, though W is held and
+    /// the mouse moves; leaving it, the camera is the walker's exactly as it
+    /// was, eye and look, on the same frame.
+    #[test]
+    fn architecture_mode_gives_the_walkers_camera_back_exactly() {
+        use crate::build_view::BuildView;
+        let mut app = app();
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        for _ in 0..180 {
+            app.update();
+        }
+        let camera = |app: &mut App| {
+            let mut q = app
+                .world_mut()
+                .query_filtered::<&Transform, With<WalkingCamera>>();
+            *q.single(app.world()).unwrap()
+        };
+        let before = camera(&mut app);
+        let view_before = app.world().resource::<WalkingState>().view();
+        let body = app.world().resource::<WalkingState>().body;
+        let at_before = app.world().entity(body).get::<Position>().unwrap().0;
+        let frame = app
+            .world()
+            .get_resource::<crate::planet::PlanetRenderFrame>()
+            .cloned();
+        let eye = crate::render_origin::local_of(frame.as_ref(), before.translation);
+        let site = eye + before.forward().as_vec3() * 8.0;
+        let mut view = BuildView::default();
+        view.enter(
+            site.as_dvec3(),
+            pbd_core::column::layer_at(site.length() - PLANET_RADIUS).unwrap_or(0) as u16,
+            before.forward().as_vec3().as_dvec3(),
+            eye.as_dvec3(),
+            site.as_dvec3(),
+        );
+        app.insert_resource(view);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        for _ in 0..90 {
+            app.world_mut()
+                .resource_mut::<AccumulatedMouseMotion>()
+                .delta = Vec2::new(30.0, 12.0);
+            app.world_mut().resource_mut::<BuildView>().step(1.0 / 60.0);
+            app.update();
+        }
+        let over = camera(&mut app);
+        assert!(
+            over.translation.distance(before.translation) > 10.0,
+            "the camera is up and back over the site"
+        );
+        assert_eq!(
+            app.world().resource::<WalkingState>().view(),
+            view_before,
+            "the walker did not turn"
+        );
+        let at = app.world().entity(body).get::<Position>().unwrap().0;
+        assert!(at.distance(at_before) < 0.01, "nor walk: {at} {at_before}");
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        app.world_mut()
+            .resource_mut::<AccumulatedMouseMotion>()
+            .delta = Vec2::ZERO;
+        app.world_mut().resource_mut::<BuildView>().leave();
+        app.update();
+        let back = camera(&mut app);
+        assert!(
+            back.translation.distance(before.translation) < 1e-3,
+            "the eye: {} against {}",
+            back.translation,
+            before.translation
+        );
+        assert!(
+            back.rotation.dot(before.rotation).abs() > 1.0 - 1e-6,
+            "the look"
+        );
+        assert!(
+            app.world().resource::<WalkingState>().captured,
+            "the pointer handed back to the walker"
         );
     }
 
@@ -2859,6 +3072,7 @@ mod tests {
             rooms: Default::default(),
             lights: Vec::new(),
             top_m: 3.0,
+            furniture: Vec::new(),
         };
         let walk = |across: f32| {
             let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
@@ -4068,6 +4282,163 @@ mod tests {
         walk
     }
 
+    /// `world/roads`, "A road slopes, never steps" (`townsfolk` task 8.2): a
+    /// road of road pieces climbing ten layers, a layer a cell, walked up
+    /// at the walking speed along its line, and down again: the feet rise
+    /// the ten layers, the eye never jumps, and never a tick in the air.
+    #[test]
+    fn a_walker_climbs_a_road_over_ten_layers_without_a_step() {
+        use pbd_core::roads::{self, Kind, RoadCell, Surface};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        // Off the test land's pentagon centre, on the same flat cell.
+        let start = (flat + flat.any_orthonormal_vector() * (25.0 / PLANET_RADIUS)).normalize();
+        let east = Vec3::Y.cross(start).normalize();
+        let mut keys = vec![roads::nearest_key(start).unwrap()];
+        while keys.len() < 13 {
+            let last = *keys.last().unwrap();
+            let c = roads::centre(last).unwrap();
+            let next = roads::neighbours(last)
+                .into_iter()
+                .max_by(|a, b| {
+                    let along = |k: u32| (roads::centre(k).unwrap() - c).normalize().dot(east);
+                    along(*a).total_cmp(&along(*b))
+                })
+                .unwrap();
+            keys.push(next);
+        }
+        // Flat for a cell, ten layers a layer a cell, flat for two: floors
+        // standing over the test land's ground, three layers clear of it.
+        let mut app = app_with_terrain_at(terrain, flat);
+        let ground_m = {
+            let body = app.world().resource::<WalkingState>().body;
+            let local = app.world().get::<Position>(body).unwrap().0;
+            let o = crate::sim_origin::origin_of(app.world());
+            o.query_point(local).length() - PLANET_RADIUS - HALF_HEIGHT
+        };
+        let base = ground_m.ceil() as i32 + 3;
+        let height = |k: usize| base + k.saturating_sub(1).min(10) as i32;
+        let cells: Vec<RoadCell> = (0..keys.len())
+            .map(|k| {
+                let up =
+                    (k + 1 < keys.len() && height(k + 1) == height(k) + 1).then(|| keys[k + 1]);
+                RoadCell {
+                    key: keys[k],
+                    base_m: height(k),
+                    kind: Kind::Ground,
+                    raised: false,
+                    cut_fill: 0,
+                    up,
+                    from: up.and(k.checked_sub(1).map(|j| keys[j])),
+                }
+            })
+            .collect();
+        let pieces: Vec<_> = cells
+            .iter()
+            .map(|c| roads::piece::cut(c, Surface::Gravel, &[], PLANET_RADIUS, &|_| 2.0).unwrap())
+            .collect();
+        let road = crate::roads::RoadPieces {
+            speed: vec![1.15; pieces.len()],
+            solids: pieces.into_iter().map(|p| p.solids).collect(),
+        };
+        let first = road.solids[0].clone();
+        let road_frames: Vec<_> = road.solids.iter().map(|b| b.frame).collect();
+        app.insert_resource(road);
+        // Captured first, and a step taken: what capturing does to the
+        // walker is done before it is stood on the road.
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.update();
+        {
+            // On the first cell's floor, placed through the origin.
+            let p = first.frame.world(Vec3::new(
+                0.0,
+                roads::piece::LIFT_M + HALF_HEIGHT + CONTACT_SKIN,
+                0.0,
+            ));
+            let local = crate::sim_origin::origin_of(app.world()).from_query_point(p);
+            let body = app.world().resource::<WalkingState>().body;
+            app.world_mut().get_mut::<Position>(body).unwrap().0 = local;
+            let mut ground = app.world_mut().get_mut::<GroundState>(body).unwrap();
+            ground.previous = local;
+            ground.grounded = true;
+        }
+        // Walk toward a planet point, in the planet's frame through the
+        // origin (the walk is long enough for the origin to move under it).
+        // From cell centre to cell centre along the road, each in turn.
+        let walk = |app: &mut App, stops: &[Vec3], done: &dyn Fn(f32) -> bool| -> Walk {
+            let mut next = 0;
+            app.world_mut().resource_mut::<WalkingState>().captured = true;
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyW);
+            let body = app.world().resource::<WalkingState>().body;
+            let mut w = Walk {
+                jumps: 0,
+                airborne: 0,
+                ticks: 0,
+                end: Vec3::ZERO,
+            };
+            let mut eye = None::<f32>;
+            for _ in 0..900 {
+                let o = crate::sim_origin::origin_of(app.world());
+                let local = app.world().get::<Position>(body).unwrap().0;
+                let p = o.query_point(local);
+                let mut l = first.frame.local(p);
+                // Feet over the road's foot, along the radius (the first cell's
+                // frame is a tangent plane, 9 cm off the sphere 30 m out).
+                l.y = p.length() - HALF_HEIGHT - PLANET_RADIUS - base as f32;
+                w.end = l;
+                if done(l.y) {
+                    break;
+                }
+                let up = p.normalize();
+                let flat = |q: Vec3| (q - p).reject_from(up);
+                while next + 1 < stops.len() && flat(stops[next]).length() < 0.4 {
+                    next += 1;
+                }
+                let dir = flat(stops[next]).normalize();
+                app.world_mut().resource_mut::<WalkingState>().face(up, dir);
+                app.update();
+                w.ticks += 1;
+                let o = crate::sim_origin::origin_of(app.world());
+                let e = o
+                    .query_point(app.world().get::<Position>(body).unwrap().0)
+                    .length();
+                if eye.is_some_and(|last| (e - last).abs() > 0.12) {
+                    w.jumps += 1;
+                }
+                eye = Some(e);
+                if !app.world().get::<GroundState>(body).unwrap().grounded {
+                    w.airborne += 1;
+                }
+            }
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .release(KeyCode::KeyW);
+            w
+        };
+        let stops: Vec<Vec3> = road_frames.iter().map(|f| f.origin).collect();
+        let up = walk(&mut app, &stops, &|y| y >= 10.0);
+        assert!(
+            up.end.y >= 10.0 && up.end.y < 11.0,
+            "climbed to {} m in {} ticks",
+            up.end.y,
+            up.ticks
+        );
+        // Ten cells of 2.4 to 3.1 m at 8 m/s, at sixty ticks a second.
+        assert!(up.ticks > 150, "walked up in {} ticks", up.ticks);
+        assert_eq!(up.jumps, 0, "eye jumps going up");
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
+        let back: Vec<Vec3> = stops.iter().rev().copied().collect();
+        let down = walk(&mut app, &back, &|y| y <= 0.1);
+        assert!(
+            down.end.y <= 0.1 && down.end.y > -0.5,
+            "came down to {} m",
+            down.end.y
+        );
+        assert_eq!(down.jumps, 0, "eye jumps coming down");
+        assert_eq!(down.airborne, 0, "ticks in the air coming down");
+    }
+
     /// Slice 2b, as `tenebris-towns` section 5 did in the mockup: up and
     /// down a Fieldstone house's newel at the walking speed, on the walk
     /// line, with no eye jump and never a tick in the air.
@@ -4206,6 +4577,7 @@ mod tests {
             rooms: Default::default(),
             lights: Vec::new(),
             top_m: 3.0,
+            furniture: Vec::new(),
         };
         let mut app = app_with_terrain_at(terrain, flat);
         app.insert_resource(Structures(vec![wall.clone()]));
@@ -4299,6 +4671,58 @@ mod tests {
         );
         let open = walk_house(&mut app, &house, move |_| -out, |l| inward(l) > 1.5, 90);
         assert!(inward(open.end) > 1.5, "went in: {} m", inward(open.end));
+    }
+
+    /// `townsfolk` task 3.1: walking straight at a working smith (his
+    /// circle 0.28 m round, a hand's breadth off the walker's line) the
+    /// walker slides round him, and at no tick overlaps him.
+    #[test]
+    fn walking_into_a_working_smith_slides_round_him() {
+        use crate::townsfolk::TownsfolkSolids;
+        use pbd_core::townsfolk::SOLID_RADIUS_M;
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let mut app = app_with_terrain_at(terrain, flat);
+        for _ in 0..30 {
+            app.update();
+        }
+        let body = app.world().resource::<WalkingState>().body;
+        let o = crate::sim_origin::origin_of(app.world());
+        let start = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+        let up = start.normalize();
+        let ahead = (DVec3::Y - up * DVec3::Y.dot(up)).normalize();
+        let side = up.cross(ahead);
+        let feet = start - up * f64::from(HALF_HEIGHT) + ahead * 3.0 + side * 0.08;
+        app.insert_resource(TownsfolkSolids(vec![feet]));
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let flat_of = |p: DVec3| {
+            let d = p - feet;
+            d - up * d.dot(up)
+        };
+        let mut closest = f64::MAX;
+        for _ in 0..120 {
+            app.world_mut()
+                .resource_mut::<WalkingState>()
+                .face(up.as_vec3(), ahead.as_vec3());
+            app.update();
+            let o = crate::sim_origin::origin_of(app.world());
+            let p = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+            closest = closest.min(flat_of(p).length());
+        }
+        let o = crate::sim_origin::origin_of(app.world());
+        let end = o.to_world(app.world().get::<Position>(body).unwrap().0).pos;
+        let reach = f64::from(SOLID_RADIUS_M + BODY_RADIUS);
+        assert!(
+            closest > reach - 0.01,
+            "into the smith to {closest} (reach {reach})"
+        );
+        assert!(
+            (end - start).dot(ahead) > 4.0,
+            "slid past him: {} m along",
+            (end - start).dot(ahead)
+        );
     }
 }
 

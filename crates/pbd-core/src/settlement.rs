@@ -141,6 +141,10 @@ pub struct Template {
     /// `NO_TREE`: built, though their area is wild.
     #[serde(default)]
     pub cleared: Vec<[i32; 2]>,
+    /// Its people (`townsfolk` design 19), as the mockup's `person()` calls
+    /// put them.
+    #[serde(default)]
+    pub people: Vec<crate::townsfolk::PersonDef>,
 }
 
 /// What a town's masonry is made of (slice 4g): its walls and merlons, and
@@ -559,6 +563,11 @@ pub struct BuildingDef {
     /// open doors.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub archways: Vec<[i32; 4]>,
+    /// `[c, r, d, storey]`: walls the world broke for a repair job
+    /// (`townsfolk` design 29), left out by the cutter until mended. Never
+    /// in a template.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub broken: Vec<[i32; 4]>,
     /// A house on piles (slice 4d): the harbour's fish huts.
     #[serde(default)]
     pub stilts: Option<Stilts>,

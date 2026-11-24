@@ -19,7 +19,7 @@ pub const CHEST_SCHEMA: u32 = 1;
 
 /// An empty chest's store.
 pub fn empty() -> Hold {
-    Hold::with_len(CHEST)
+    Hold::sized(CHEST)
 }
 
 /// A chest's record id: its cell and layer, as a station's.

@@ -375,7 +375,13 @@ pub enum MapMarker {
     /// A waypoint the player set with a right click, by its place in the
     /// list, oldest first (`starter-missions` G3).
     Mark(usize),
+    /// A taken job's lost villager, by its place in the taken jobs
+    /// (`town-missions-tree` design 10).
+    Lost(usize),
 }
+
+/// How many lost villagers the map marks at once.
+pub const LOST_MARKERS: usize = 2;
 /// The label beside a waypoint's pin, "W1" ..., by the pin's place in the
 /// list (`waypoints` decision 5).
 #[derive(Component)]
@@ -931,6 +937,31 @@ pub fn spawn(
                                     pin.spawn((
                                         MapPinLabel(k),
                                         KitText::new(Localized::empty(), ui_kit::LABEL)
+                                            .outline(ui_kit::INK),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            left: px(15),
+                                            top: px(2),
+                                            ..default()
+                                        },
+                                    ));
+                                });
+                        }
+                        for k in 0..LOST_MARKERS {
+                            markers
+                                .spawn((
+                                    MapMarker::Lost(k),
+                                    ImageNode::new(icons.pin.clone()),
+                                    hidden(Node {
+                                        position_type: PositionType::Absolute,
+                                        width: px(16),
+                                        height: px(16),
+                                        ..default()
+                                    }),
+                                ))
+                                .with_children(|pin| {
+                                    pin.spawn((
+                                        KitText::new(tr("jobs.lost_marker"), ui_kit::LABEL)
                                             .outline(ui_kit::INK),
                                         Node {
                                             position_type: PositionType::Absolute,
@@ -1903,7 +1934,10 @@ pub fn markers(
     mut readout: Query<&mut Text, With<MapReadout>>,
     mut labels: Query<(&MapPinLabel, &mut KitText)>,
     ui_scale: Option<Res<UiScale>>,
-    save: Option<Res<WorldSave>>,
+    (save, eco): (
+        Option<Res<WorldSave>>,
+        Option<Res<pbd_app::economy::Economy>>,
+    ),
 ) {
     if *screen != Screen::Map {
         return;
@@ -1922,6 +1956,10 @@ pub fn markers(
         .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
     let ship_at = ship.iter().next().map(|p| origin.query_point(p.0));
     let waypoints = save.as_deref().map(marks_of).unwrap_or_default();
+    let lost = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => pbd_app::economy::special::lost_directions(eco, save),
+        _ => Vec::new(),
+    };
     for (label, mut text) in &mut labels {
         let want = waypoints
             .get(label.0)
@@ -1954,6 +1992,10 @@ pub fn markers(
                     .map(|m| m.direction() * pbd_app::planet::PLANET_RADIUS),
                 None,
             ),
+            MapMarker::Lost(k) => (
+                lost.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
+                None,
+            ),
             MapMarker::Craft(craft) => {
                 seen_crafts.push(craft);
                 match crafts.get(craft) {
@@ -1976,7 +2018,7 @@ pub fn markers(
         };
         node.left = px(pixel.x / s - w / 2.0);
         // A pin stands on its point; the rest are centred on their place.
-        let rise = if matches!(*mark, MapMarker::Mark(_)) {
+        let rise = if matches!(*mark, MapMarker::Mark(_) | MapMarker::Lost(_)) {
             h / 2.0
         } else {
             0.0

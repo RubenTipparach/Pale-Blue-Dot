@@ -50,8 +50,14 @@ pub enum Screen {
     Kitchen,
     /// The starter missions, opened with O (`starter-missions`).
     Missions,
-    /// The herd's breeding screen, opened with B on foot (`animal-husbandry`).
+    /// The herd's breeding screen, opened with N on foot (`animal-husbandry`).
     Breeding,
+    /// Talking to a townsperson, opened with F on them (`townsfolk`).
+    Talk,
+    /// A town trader's goods, from the talk (`townsfolk` design 6).
+    Trade,
+    /// A town's jobs, from the talk (`townsfolk` design 8).
+    Board,
 }
 
 impl Screen {
@@ -76,7 +82,9 @@ impl Screen {
             | Screen::Forge
             | Screen::Kitchen
             | Screen::Missions
-            | Screen::Breeding => Screen::Playing,
+            | Screen::Breeding
+            | Screen::Talk => Screen::Playing,
+            Screen::Trade | Screen::Board => Screen::Talk,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
