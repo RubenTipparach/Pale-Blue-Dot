@@ -421,14 +421,23 @@ impl Ground {
 }
 
 static INSTALLED: RwLock<Option<Arc<Ground>>> = RwLock::new(None);
-/// Taken for writing by [`install`]; [`hold`] takes it for reading.
+/// Taken for writing by every install the terrain reads (this ground, the
+/// roads' marks and bare cells, their clearance); [`hold`] takes it for
+/// reading.
 static HOLD: RwLock<()> = RwLock::new(());
 
-/// Keep the installed ground as it is while the guard lives: an [`install`]
-/// from another thread waits for it. For a check that builds terrain twice
-/// and compares the two, which a test elsewhere in the process installing
-/// ground between the builds would make differ. Never call [`install`] on
-/// the thread holding it.
+/// Taken by an install of state the terrain reads, so it waits for a
+/// [`hold`].
+pub(crate) fn installing() -> std::sync::RwLockWriteGuard<'static, ()> {
+    HOLD.write().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Keep everything installed that the terrain reads (the towns' ground, the
+/// roads' marks, bare cells and clearance) as it is while the guard lives:
+/// an install from another thread waits for it. For a check that builds
+/// terrain twice and compares the two, which a test elsewhere in the process
+/// installing between the builds would make differ. Never install on the
+/// thread holding it.
 pub fn hold() -> std::sync::RwLockReadGuard<'static, ()> {
     HOLD.read().unwrap_or_else(|e| e.into_inner())
 }
@@ -439,7 +448,7 @@ static ANY: AtomicBool = AtomicBool::new(false);
 /// Install a world's ground, or none. The planet built before this call is
 /// on the old ground: the caller rebuilds it.
 pub fn install(ground: Option<Ground>) {
-    let _held = HOLD.write().unwrap_or_else(|e| e.into_inner());
+    let _held = installing();
     let any = ground.is_some();
     *INSTALLED.write().unwrap_or_else(|e| e.into_inner()) = ground.map(Arc::new);
     // After the write: a thread that sees the new generation takes the new
