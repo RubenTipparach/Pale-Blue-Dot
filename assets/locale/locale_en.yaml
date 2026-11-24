@@ -245,6 +245,7 @@ controls:
     place: place the held block, plant a seed, or wind the line in
     pour_water: pour water
     repro: copy the location for a bug report
+    road_menu: "with survey stakes, hold for the road planner; the wheel picks"
     rod: "with the rod: hold to cast, press to strike, hold to reel"
     roll: roll
     row: "row forward or back"
@@ -1393,16 +1394,30 @@ recipe:
   workbench:
     name: WORKBENCH
 roads:
-  mark:
-    too_far: Too far
-    too_steep: Too steep
-    water: Water in the way
-    not_ground: Can't stake here
-    staked: Already staked
+  bill:
+    line: "Stakes {stakes}  Gravel {gravel}  {left} of {cells} left  Turns {turns}"
+  menu:
+    dirt: Dirt
+    eraser: Eraser
+    gravel: Gravel
+    lamps: Lamps
+    width_1: Width 1
+    width_2: Width 2
+    width_3: Width 3
   pave:
-    not_marked: Not marked
     needs_shovel: Needs a shovel
     needs_gravel: Needs gravel
+  plan:
+    too_steep: Too steep
+    too_wide_to_bridge: Too wide to bridge
+    open_water: Open water
+    in_town: In a town
+    tree: A tree in the way
+    in_the_way: Something is in the way
+    no_stakes: No survey stakes
+    too_far: Too far
+    wide_bend: Wide roads bend on the level
+    too_steep_across: Too steep across
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"

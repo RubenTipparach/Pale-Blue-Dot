@@ -117,26 +117,31 @@ Pinned by `pbd_core::roads::tests::version_2_links_are_pinned` (versions
 
 ### Requirement: Dirt and gravel
 
-The player SHALL pave a marked cell with gravel by the interact key with the
-shovel in hand and gravel in the pack, one gravel a cell, the cell's slope
-cut by the world road's own rule from the plan's order, saved as the
-player's with the pack in the same line, and walking SHALL be faster on
-gravel than on dirt. The place button SHALL NOT lay a road. Dirt tracks
-SHALL be laid by the world only, and every road cell a save already holds,
-gravel or dirt, SHALL be kept and walked as it was.
+The player SHALL pave a marked cell by the interact key with the shovel in
+hand, one gravel a cell for a gravel road or a ford and none for a dirt
+road, the cell's slope cut by the world road's own rule from its road's
+order, saved as the player's with the pack in the same line, and walking
+SHALL be faster on gravel than on dirt. The place button SHALL NOT lay a
+road cell. Every road cell a save already holds, gravel or dirt, SHALL be
+kept and walked as it was.
 
 #### Scenario: Building a road
 
 - **WHEN** the player, shovel in hand, presses the interact key on a marked
-  cell with gravel in the pack
+  cell of a gravel road with gravel in the pack
 - **THEN** one gravel is taken, the cell is a gravel road cell saved as the
   player's, and the walker moves faster on it
 
 #### Scenario: No gravel
 
-- **WHEN** the player presses the interact key on a marked cell with no
-  gravel
+- **WHEN** the player presses the interact key on a marked cell of a gravel
+  road with no gravel
 - **THEN** nothing is taken and the cell stays marked
+
+#### Scenario: A dirt road
+
+- **WHEN** the player paves a cell of a road planned in dirt
+- **THEN** nothing is taken and the cell is a dirt road cell
 
 #### Scenario: An old player road
 
@@ -144,47 +149,73 @@ gravel or dirt, SHALL be kept and walked as it was.
   opened
 - **THEN** every one is drawn and walked as before
 
-Pinned by `pbd_core::roads::paving::tests::paving_in_any_order_gives_the_same_road`,
+Pinned by `pbd_core::roads::planner::tests::a_road_up_a_slope_never_steps_and_paves_the_same_in_any_order`,
 `pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`
-(one gravel a cell, the tufts gone at once), `gravel_is_walked_faster_than_dirt`
-and `the_player_lays_gravel_and_dirt_and_takes_them_up` (an old player road
+(one gravel a cell, the tufts gone at once),
+`a_dirt_road_is_free_and_the_eraser_gives_its_stakes_back`,
+`gravel_is_walked_faster_than_dirt` and
+`the_player_lays_gravel_and_dirt_and_takes_them_up` (an old player road
 still reads, draws and is taken up).
 
 ### Requirement: A road is marked before it is paved
 
-The player SHALL mark a road for paving by driving survey stakes as waypoints. The
-cells between two stakes SHALL be found by the world's road search, at most
-a layer apart, off the sea, out of towns and off any cell the player has
-edited unless it is a road cell, and every one SHALL be marked. A stake with
-no such way SHALL be refused with nothing taken.
+The player SHALL mark a road for paving with survey stakes in hand by two
+clicks, its start and its end. Nothing SHALL be planned before the first
+click. The road's cells SHALL be the straight line of cells between its
+stakes, the same both ways round, staked every `max_segment` cells, each
+checked by the one rule the world's roads use: no step of more than a
+layer, never the player's work, the sea, a town's footprint, water deeper
+than a ford or a cell a tree stands on. A road with a clashing cell SHALL
+be refused with nothing taken and the reason shown; only the clashing cells
+SHALL be red in its ghost. A click on a stake of any road SHALL start a new
+road from it, sharing that stake: roads are added, never replaced. The
+eraser SHALL delete a whole road, its stakes coming back to the pack but
+any another road holds.
 
-#### Scenario: Two stakes on a hillside
+#### Scenario: Two clicks on a hillside
 
-- **WHEN** the player drives a stake, then another 12 cells away up a slope
+- **WHEN** the player clicks a start, then an end 12 cells away up a slope
+  that rises a layer a cell
 - **THEN** the cells between are marked, and no two marked neighbours differ
   by more than a layer
 
+#### Scenario: A tree on one cell
+
+- **WHEN** a tree stands on one cell of the aimed line
+- **THEN** that cell alone is red with "A tree in the way", and the end
+  cannot be set until it is felled
+
 #### Scenario: Too steep
 
-- **WHEN** the only way to the aimed cell climbs two layers between cells
-- **THEN** the stake is refused, it stays in the pack, and nothing is marked
+- **WHEN** the line to the aimed cell climbs two layers between two cells
+- **THEN** the higher cell is red, the road is refused, and the stakes stay
+  in the pack
 
-Pinned by `pbd_core::roads::paving::tests::a_segment_never_steps_more_than_a_layer`,
-`a_stake_with_no_way_is_refused` and
-`taking_back_a_middle_stake_rejoins_or_splits`.
+Pinned by `pbd_core::roads::planner::tests::a_line_is_the_same_both_ways_round`,
+`each_reason_reds_only_its_own_cell`, `the_grade_reds_two_rises_too_close`,
+`roads_are_added_from_a_stake_never_replaced`,
+`the_eraser_takes_a_whole_road_and_its_stakes_back`,
+`moving_and_taking_back_stakes` and `roads::tests::world_routes_are_pinned`.
 
 ### Requirement: Marks are saved
 
-A plan's stakes and cells SHALL be a durable record of the player's, written
-with the pack in the same line, and SHALL read back cell for cell whatever
-the road search's version.
+A plan's roads (their stakes, width, surface and lamps) SHALL be a durable
+record of the player's, written with the pack in the same line, and SHALL
+read back cell for cell whatever the road search's version. A plan saved
+before roads were planned by their ends SHALL read as one road of width 1 in
+gravel over the cells it stored.
 
 #### Scenario: A plan after a reload
 
 - **WHEN** the player marks a plan, closes the game and opens the world
 - **THEN** the same cells are marked and the same stakes stand
 
-Pinned by `pbd_core::roads::paving::tests::a_plan_reads_back_cell_for_cell`
+#### Scenario: An old plan
+
+- **WHEN** a world holding a plan of stakes and searched cells is opened
+- **THEN** the same cells are marked, as one gravel road one cell wide
+
+Pinned by `pbd_core::roads::planner::tests::a_schema_1_plan_reads_as_a_width_1_gravel_plan_and_a_plan_reads_back`
 and `pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`.
 
 ### Requirement: Gravel comes from a grinder and a mixer

@@ -402,6 +402,12 @@ pub struct Launch {
     /// plan staked from beyond them along the view, its nearer half paved,
     /// through the same paths a player's stake and shovel take.
     pub paving: Option<f32>,
+    /// `--road-plan <scene>` with `--paving` (`townsfolk` 14, a capture
+    /// instrument): the road planner's scenes, `two` (a road by two
+    /// clicks, an open start whose ghost follows the aim), `stake` (a second
+    /// road from the first's stake), `erased` (that second road erased),
+    /// `wide` (a three-wide road up the view).
+    pub road_plan: Option<String>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -596,6 +602,7 @@ impl Launch {
             forge: None,
             gather_around: None,
             paving: None,
+            road_plan: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -827,6 +834,14 @@ impl Launch {
                         i += 1;
                     }
                     result.paving = Some(metres);
+                }
+                "--road-plan" => {
+                    i += 1;
+                    result.road_plan = Some(
+                        args.get(i)
+                            .expect("--road-plan takes a scene: two, stake, erased, wide")
+                            .clone(),
+                    );
                 }
                 "--gather-around" => {
                     i += 1;

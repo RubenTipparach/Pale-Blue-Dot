@@ -792,7 +792,12 @@ pub fn route(
             let Some(there) = ask(n, &mut cache) else {
                 continue;
             };
-            if there.player {
+            // The one cell rule (design 42l): never the player's work or the
+            // sea; the world crosses towns and bridges deep water.
+            if matches!(
+                check_cell(&there, false, cfg.ford_depth_m),
+                Some(Clash::InTheWay | Clash::OpenWater)
+            ) {
                 continue;
             }
             let Some(there_c) = centre(n) else { continue };
@@ -834,7 +839,11 @@ pub fn route(
                     } else {
                         (0, 0)
                     };
-                    for h in here_h - 1..=here_h + 1 {
+                    let step = planner::MAX_STEP_LAYERS;
+                    for h in here_h - step..=here_h + step {
+                        if check_step(here_h, h).is_some() {
+                            continue;
+                        }
                         let lift = h - there.top_m;
                         if lift < lo || lift > hi {
                             continue;
@@ -898,7 +907,7 @@ pub fn profile(steps: &[Step]) -> Option<Vec<RoadCell>> {
             break;
         }
     }
-    if h.windows(2).any(|w| (w[0] - w[1]).abs() > 1) {
+    if h.windows(2).any(|w| check_step(w[0], w[1]).is_some()) {
         return None;
     }
     let mut out = Vec::new();
@@ -1501,6 +1510,10 @@ pub struct BuiltCell {
     /// The plan it was paved on (schema 2); `None` for design 31's cells.
     #[serde(default)]
     pub plan: Option<u64>,
+    /// Paved on a river's bed under its water, in gravel (design 42a): a
+    /// ford, drawn and wheeled as the world's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ford: bool,
 }
 
 /// A player's road cell as its record, by the cell's key.
@@ -1533,7 +1546,7 @@ pub fn built_cell(key: u32, cell: &BuiltCell) -> RoadCell {
     RoadCell {
         key,
         base_m: cell.base_m,
-        kind: Kind::Ground,
+        kind: if cell.ford { Kind::Ford } else { Kind::Ground },
         raised: cell.raised,
         cut_fill: 0,
         up: cell.up,
@@ -1542,6 +1555,8 @@ pub fn built_cell(key: u32, cell: &BuiltCell) -> RoadCell {
 }
 
 pub mod paving;
+pub mod planner;
+pub use planner::{Clash, check_cell, check_step, hex_line};
 pub mod piece;
 
 #[cfg(test)]

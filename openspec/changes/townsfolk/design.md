@@ -1596,16 +1596,24 @@ open, each is a recommendation taken (ask only with screenshots):
   deck, posts and rails) is built. Shallow water is forded on a gravel bed,
   whatever the road's surface (42a), and a paved ford is drawn as the
   world's fords are.
-- **Lanes.** A wide road's lanes are the cells next to its centre line
-  that lie within 1.1 cell widths of the line (to the left for 2, both sides
-  for 3) and whose foot falls on the leg. A lane takes the plane of its
-  nearest centre cell: its slope rises toward its own neighbour in the
-  direction the centre rises. The player's road neither cuts nor fills yet
-  (that needs the world's digging in the paving's durable line), so a lane
-  is allowed only where its ground is on the plane's low layer, or a layer
-  under it, raised on packed earth as a dip is; otherwise "Too steep
-  across". A wide road bends only where the bend cell and its neighbours on
-  the line are level ("Wide roads bend on the level").
+- **Lanes.** A wide road's lanes are its centre line moved one lattice
+  step to its left (width 2), or to both sides (width 3): the step whose
+  cell lies most square to the road, so a lane is the centre's own line
+  beside it, cell for cell, with no gap and no cell twice, even where the
+  line zigzags across the lattice. A lane takes the height of its
+  nearest centre cell. The player's road neither cuts nor fills yet (that
+  needs the world's digging in the paving's durable line), so a lane is
+  allowed only where its ground is on that height, or a layer under it,
+  raised on packed earth as a dip is; otherwise "Too steep across". **On a
+  slope a lane is refused for now**: the row beside a sloped cell is half a
+  cell along it, so sharing design 10b's one plane needs a bed half a layer
+  high, which no road cell has yet. A lane drawn on its own slope would
+  meet its neighbour with a seam of up to half a layer, a step, which the
+  roads never have; so a wide road is built on the level, and climbs as a
+  one-wide road, until the half-layer beds are built (task 8.6 stays open
+  for them and for the world's wide roads). A wide road bends only where
+  the bend cell and its neighbours on the line are level ("Wide roads bend
+  on the level").
 - **The plan record.** `road-plan` schema 2 is `{ roads: [{ stakes,
   width, surface, lamps }] }`; its cells are re-derived from the stakes. A
   schema 1 plan reads as one road of width 1 in gravel whose cells are the

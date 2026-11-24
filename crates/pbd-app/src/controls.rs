@@ -475,7 +475,7 @@ pub const INTERACT_SLOT: &str = "interact:KeyF";
 /// "board" keeps that.
 pub const BEFORE_INTERACT: [&str; 2] = ["hands:KeyE", "vehicles:KeyF"];
 
-const HANDS: [Binding; 5] = [
+const HANDS: [Binding; 6] = [
     row(&[Key::Mouse(MouseButton::Left)], " ", "use_tool"),
     row(&[Key::Mouse(MouseButton::Right)], " ", "place"),
     Binding {
@@ -488,6 +488,8 @@ const HANDS: [Binding; 5] = [
     },
     row(&[Key::Wheel], " ", "step_slots"),
     row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
+    // The road planner's menu (`townsfolk` design 42l), with stakes in hand.
+    row(&[Key::Board(KeyCode::KeyX)], " ", "road_menu"),
 ];
 
 const FLYING: [Binding; 6] = [

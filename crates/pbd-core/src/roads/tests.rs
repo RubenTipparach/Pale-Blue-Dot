@@ -347,6 +347,7 @@ fn a_built_cell_rises_toward_the_first_neighbour_a_layer_up() {
         from: None,
         raised: false,
         plan: None,
+        ford: false,
     };
     let key = nearest_key(at(0.0, 0.0)).unwrap();
     // A schema 1 body written before `raised` and `plan` reads back.
@@ -709,7 +710,9 @@ fn world_routes_are_pinned() {
     let wall = |e: f32, n: f32| (e - 30.0).abs() < 4.0 && n.abs() < 20.0;
     let terraces = |key: u32| {
         let (e, n) = local(centre(key)?);
-        Some(dry(5 + ((e * 0.07).sin() * 2.0 + (n * 0.05).cos() * 2.0) as i32))
+        Some(dry(
+            5 + ((e * 0.07).sin() * 2.0 + (n * 0.05).cos() * 2.0) as i32
+        ))
     };
     let grounds: Vec<Box<dyn Fn(u32) -> Option<Ground> + Sync>> = vec![
         Box::new(ground_fn(wall, None)),

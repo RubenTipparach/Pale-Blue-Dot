@@ -524,6 +524,7 @@ pub fn input(
     menu: Option<Res<pbd_app::controls::MenuOpen>>,
     mut picker: super::equipment::PickerWheel,
     mut slots: ResMut<Hotbar>,
+    road_menu: Option<ResMut<pbd_app::roads::planner::PlannerMenu>>,
 ) {
     // A menu holds the keyboard, so the number row does not change what you
     // are holding while you read the bindings. The wheel is still DRAINED
@@ -567,6 +568,13 @@ pub fn input(
     // While G is held the picker has the wheel, and the slots and the zoom
     // do not see it.
     if picker.take(step) {
+        return;
+    }
+    // While X is held with stakes in hand the road planner's menu has it.
+    if let Some(mut menu) = road_menu
+        && menu.open
+    {
+        menu.step += step;
         return;
     }
     if walking && step != 0 && !held {

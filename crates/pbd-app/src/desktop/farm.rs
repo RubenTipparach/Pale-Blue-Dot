@@ -1733,10 +1733,11 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
-    (net, standing, roads_cfg): (
+    (net, standing, roads_cfg, planner): (
         Option<ResMut<pbd_app::roads::RoadNet>>,
         Option<ResMut<pbd_app::roads::RoadsStanding>>,
         Option<Res<pbd_app::roads::RoadsSettings>>,
+        Option<ResMut<pbd_app::roads::planner::Planner>>,
     ),
 ) {
     if *done
@@ -1977,44 +1978,80 @@ pub fn scripted(
                 info!("scripted paving: a {material:?} at cell {cell}");
             }
         }
-        // A plan staked from past them along the view, two stakes 9 m
-        // apart and a third 9 m on.
+        // A road staked from past them along the view by its two ends, as
+        // the planner's two clicks do (design 42k), its nearer cells paved.
         let config = *pbd_app::planet::terrain_config();
         let cfg = roads_cfg.map_or_else(pbd_app::roads::load_config, |r| (*r.0).clone());
-        let top_of = |key: u32| {
-            let c = pbd_core::roads::centre(key)?;
-            Some(c * (config.radius_m + pbd_core::column::surface_m(&config, c).floor()))
+        let pcfg = paving::load_planner();
+        let key_at = |fine: &PlanetFine, contact: &PlanetContact, ahead: f32, across: f32| {
+            spot(fine, contact, ahead, across).map(|(cell, _)| cell)
         };
-        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 8);
-        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 6);
-        let mut open = None;
-        for ahead_m in [metres + 4.0, metres + 13.0, metres + 22.0] {
-            let Some(point) =
-                spot(&fine, &contact, ahead_m, 0.0).and_then(|(cell, _)| top_of(cell))
-            else {
-                continue;
-            };
-            match paving::drive_stake(&mut save, &mut slots, open, point, &config, &cfg) {
-                Ok(paving::Staked::Driven { plan, marked }) => {
-                    open = Some(plan);
-                    info!("scripted paving: a stake {ahead_m:.0} m ahead, {marked} cells marked");
+        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 16);
+        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 12);
+        let scene = launch.road_plan.clone();
+        let wide = scene.as_deref() == Some("wide");
+        let how = pbd_core::roads::planner::How {
+            width: if wide { 3 } else { 1 },
+            ..Default::default()
+        };
+        let road = |save: &mut WorldSave, slots: &mut super::slots::Hotbar, a: u32, b: u32| {
+            match paving::end_road(save, slots, a, b, how, &|_| false, &config, &cfg, &pcfg) {
+                Ok((stakes, cells)) => {
+                    info!("scripted road plan: {stakes} stakes, {cells} cells");
                 }
-                Ok(paving::Staked::Resumed(plan)) => open = Some(plan),
-                Err(why) => {
-                    warn!("scripted paving: the stake {ahead_m:.0} m ahead refused: {why:?}")
-                }
+                Err(why) => warn!("scripted road plan: refused: {why:?}"),
             }
-        }
-        // The nearer cells paved, one gravel each.
-        if let Some(plan) = open.and_then(|id| {
-            pbd_core::roads::paving::plans(&save.records)
-                .get(&id)
-                .cloned()
-        }) {
-            for &key in plan.cells.iter().take(6) {
-                if let Err(why) = paving::pave(&mut save, &mut slots, key, &config) {
-                    warn!("scripted paving: cell {key} not paved: {why:?}");
+        };
+        let (start, end) = (
+            key_at(&fine, &contact, metres + 3.0, 0.0),
+            key_at(&fine, &contact, metres + 34.0, 0.0),
+        );
+        if let (Some(a), Some(b)) = (start, end) {
+            road(&mut save, &mut slots, a, b);
+            let plans = pbd_core::roads::planner::plans(&save.records);
+            let first = plans.values().flat_map(|p| p.roads.first()).next().cloned();
+            match scene.as_deref() {
+                None => {
+                    if let Some(first) = &first {
+                        for &key in first.centre().iter().take(6) {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                            }
+                        }
+                    }
                 }
+                Some("stake") | Some("erased") => {
+                    let mid = first.as_ref().map(|r| r.centre()[r.centre().len() / 2]);
+                    if let (Some(mid), Some(side)) =
+                        (mid, key_at(&fine, &contact, metres + 22.0, 16.0))
+                    {
+                        road(&mut save, &mut slots, mid, side);
+                        if scene.as_deref() == Some("erased")
+                            && let Err(why) = paving::erase_road(
+                                &mut save, &mut slots, side, &config, &cfg, &pcfg,
+                            )
+                        {
+                            warn!("scripted eraser: refused: {why:?}");
+                        }
+                    }
+                }
+                _ => {}
+            }
+            // Stakes in hand, and for `two` an open start, so the ghost
+            // follows the aim from it.
+            let held = (0..10).find(|&i| {
+                slots.get(i).map(|s| s.item)
+                    == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
+            });
+            if scene.is_some()
+                && let Some(i) = held
+            {
+                slots.select(i);
+            }
+            if let (Some(mut planner), Some("two")) = (planner, scene.as_deref()) {
+                planner.start = key_at(&fine, &contact, metres + 1.0, -3.0);
             }
         }
         if let (Some(mut net), Some(mut standing)) = (net, standing) {
