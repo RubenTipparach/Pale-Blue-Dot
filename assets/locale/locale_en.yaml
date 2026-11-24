@@ -13,6 +13,8 @@ arrival:
   new_world: A NEW WORLD
   welcome_back: WELCOME BACK
 block:
+  drafting_table:
+    name: drafting table
   air:
     name: air
   basalt:
@@ -77,6 +79,22 @@ block:
     name: water
   workbench:
     name: workbench
+blueprint:
+  preset:
+    barn: Barn
+    cottage: Cottage
+    house: Two-storey house
+    hut: Straw hut
+    shop: Shop
+    stable: Stable
+    tower: Tower
+    townhouse: Townhouse
+    warehouse: Warehouse
+    workshop: Workshop
+  size:
+    large: Large
+    small: Small
+    standard: Standard
 boat:
   anchor: "Anchor"
   boat: "BOAT"
@@ -677,6 +695,8 @@ interact:
 inventory:
   fish: fish
 item:
+  mallet:
+    name: mallet
   apple:
     many: apples
     name: apple
@@ -1287,7 +1307,27 @@ pack:
   hotbar: HOTBAR
   pack: PACK
   trash: TRASH
+planner:
+  check:
+    empty: Paint a room to start
+    pass: Every check passes
+    plan_size: Too big to plan
+    storeys: Too many storeys
+    way_in: No way in
+  hint:
+    inside_window: A window goes in an outside wall
+    no_room: Paint a room here first
+  locked:
+    bricks: Needs bricks
+    clay: Needs clay
+    ice: Needs ice
+    marble: Needs marble
+    unknown: Can't build with this
 recipe:
+  drafting-table:
+    name: DRAFTING TABLE
+  mallet:
+    name: MALLET
   banded-chest:
     name: BANDED CHEST
   bed:
@@ -1411,6 +1451,13 @@ saves:
 scatter:
   pick_up_stone: pick up stone
   pull_fibre: pull fibre
+site:
+  refused:
+    in_the_way: Something is in the way
+    pentagon: A five-sided cell
+    plan: Fix the plan first
+    steep: Too steep here
+    taken: Something is already here
 sites:
   fallback_name: "Site {id}"
   kind:

@@ -909,6 +909,7 @@ mod tests {
             forge: Handle::default(),
             workbench: Handle::default(),
             carpenter: Handle::default(),
+            drafting: Handle::default(),
             tiered: Vec::new(),
         });
         app.insert_resource(pbd_app::config::Recipes(

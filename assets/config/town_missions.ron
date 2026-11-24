@@ -294,6 +294,7 @@
                 (kind: build, what: "door", count: 1),
                 (kind: build, what: "roof", count: 1),
             ],
+            unlocks: ["drafting-table"],
         ),
         (
             id: "logs",

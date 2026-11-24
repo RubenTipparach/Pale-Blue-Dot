@@ -344,5 +344,22 @@
             inputs: [("planks", 3)],
             outputs: [("crate", 1)],
         ),
+        // ---- building-planner design 3 and 6: the drafting table, where a
+        // plan is drawn (unlocked by the town tree's house mission), and the
+        // mallet a site's pieces are struck with.
+        (
+            code: "drafting-table",
+            station: "workbench",
+            secs: 5.0,
+            inputs: [("planks", 6), ("rope", 2)],
+            outputs: [("block:drafting table", 1)],
+        ),
+        (
+            code: "mallet",
+            station: "workbench",
+            secs: 2.0,
+            inputs: [("log", 1), ("stone", 1)],
+            outputs: [("mallet", 1)],
+        ),
     ],
 )

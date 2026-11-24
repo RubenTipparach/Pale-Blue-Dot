@@ -85,7 +85,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench | Material::Carpenter => one(1., 3.),
+        Material::Workbench | Material::Carpenter | Material::DraftingTable => one(1., 3.),
         // The gravel stations (`townsfolk` design 41): their blocks are the
         // workbench's timber; their slots draw their own pictures.
         Material::Grinder | Material::Mixer => one(1., 3.),
@@ -142,6 +142,8 @@ pub struct ItemIcons {
     pub workbench: Handle<Image>,
     /// The carpenter's bench's (`furniture` design 1).
     pub carpenter: Handle<Image>,
+    /// The drafting table's (`building-planner` design 3).
+    pub drafting: Handle<Image>,
     /// The grinder's and the mixer's (`townsfolk` design 41).
     pub grinder: Handle<Image>,
     pub mixer: Handle<Image>,
@@ -222,6 +224,7 @@ pub fn load_icons(
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
         carpenter: assets.load("items/stations/carpenter.png"),
+        drafting: assets.load("items/stations/drafting-table.png"),
         grinder: assets.load("items/stations/grinder.png"),
         mixer: assets.load("items/stations/mixer.png"),
         tiered: pbd_core::inventory::Tool::ALL
@@ -379,6 +382,7 @@ pub fn paint_icon(
         Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(Material::Workbench) => Some(items.workbench.clone()),
         Item::Block(Material::Carpenter) => Some(items.carpenter.clone()),
+        Item::Block(Material::DraftingTable) => Some(items.drafting.clone()),
         Item::Block(Material::Grinder) => Some(items.grinder.clone()),
         Item::Block(Material::Mixer) => Some(items.mixer.clone()),
         Item::Block(material) => Material::LAMPS

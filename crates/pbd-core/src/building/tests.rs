@@ -15,7 +15,7 @@ const RADIUS_M: f32 = 300.0;
 /// sea.
 const GROUND: u16 = 150;
 
-fn kits() -> Kits {
+pub(super) fn kits() -> Kits {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../assets/config/kits.ron"
@@ -24,7 +24,7 @@ fn kits() -> Kits {
     ron::from_str(&text).expect("kits.ron parses")
 }
 
-fn template(name: &str) -> Template {
+pub(super) fn template(name: &str) -> Template {
     let path = format!(
         "{}/../../assets/settlements/v1/{name}.json",
         env!("CARGO_MANIFEST_DIR")
@@ -34,7 +34,7 @@ fn template(name: &str) -> Template {
 
 /// A patch of the level-7 sphere round a cell away from the pentagons, keyed
 /// by index; and one round a pentagon.
-fn patch_at(anchor: Vec3) -> (Patch, usize) {
+pub(super) fn patch_at(anchor: Vec3) -> (Patch, usize) {
     let cells = dual_sphere(7);
     let centre = cells
         .iter()
@@ -66,7 +66,7 @@ fn patch_at(anchor: Vec3) -> (Patch, usize) {
     (Patch { cells: local, keys }, index[centre])
 }
 
-fn plot() -> &'static (Patch, usize) {
+pub(super) fn plot() -> &'static (Patch, usize) {
     static P: OnceLock<(Patch, usize)> = OnceLock::new();
     P.get_or_init(|| patch_at(Vec3::new(0.3, 0.5, 0.8).normalize()))
 }

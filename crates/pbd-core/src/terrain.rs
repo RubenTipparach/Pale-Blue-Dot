@@ -135,6 +135,10 @@ pub enum Material {
     /// saw and a square on its top. Code 40: 30 to 39 are the paving's
     /// stations (`townsfolk` design 41).
     Carpenter = 40,
+    /// The drafting table (`building-planner` design 3): where a plan is
+    /// drawn. Solid, drawn in the workbench's wood with a sloped board on
+    /// its top. It queues no jobs: F on it opens the planner.
+    DraftingTable = 41,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -286,7 +290,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 31] = [
+    pub const ALL: [Material; 32] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -318,6 +322,7 @@ impl Material {
         Material::Grinder,
         Material::Mixer,
         Material::Carpenter,
+        Material::DraftingTable,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the
@@ -445,6 +450,7 @@ pub fn material_code(material: Material) -> u8 {
         Material::Grinder => 30,
         Material::Mixer => 31,
         Material::Carpenter => 40,
+        Material::DraftingTable => 41,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ crate::flowing_water!() => flowing as u16 as u8,
@@ -484,6 +490,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         30 => Material::Grinder,
         31 => Material::Mixer,
         40 => Material::Carpenter,
+        41 => Material::DraftingTable,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })
