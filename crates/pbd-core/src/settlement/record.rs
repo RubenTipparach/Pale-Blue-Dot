@@ -19,7 +19,7 @@ use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
     BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, desert, dressing, harbour,
-    jungle, steps, tundra,
+    jungle, smithy, steps, tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -49,11 +49,15 @@ pub const TERRACED_SCHEMA: u32 = 2;
 pub const SEA_SCHEMA: u32 = 3;
 /// The laying-out rules' version, stored with each town: a town is never
 /// rebuilt by it, and its ground is found by the rules it names.
-pub const LAYOUT_VERSION: u32 = 2;
+pub const LAYOUT_VERSION: u32 = 3;
 /// The first layout whose ground finds a direction's cell by the nearest
 /// chord (design, "Finding: a column can take its neighbour's ground"): a
 /// town stored at layout 1 keeps the dot lookup it was played with.
 pub const CHORD_LAYOUT: u32 = 2;
+/// The first layout that stands its template's smithies (`townsfolk` design
+/// 26a): a town stored at layout 1 or 2 is cut with no smithy and no forge
+/// lamp, as it was played.
+pub const FORGE_LAYOUT: u32 = 3;
 /// Rings of layout cells round the built ones that are terraced with them,
 /// so the yards between the houses are level too.
 pub const YARD_RINGS: usize = 2;
@@ -689,6 +693,18 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
                 .iter()
                 .filter_map(|f| off_grid(f.x, f.y, f.z, f.material())),
         )
+        // A smithy's forge (`townsfolk` design 26a), from layout 3: a
+        // brazier in the first layer of the forge's cell, inside its base.
+        .chain(
+            template
+                .smithies
+                .iter()
+                .filter(|_| town.layout >= FORGE_LAYOUT)
+                .filter_map(|s| {
+                    let (c, r) = s.forge_cell(cell_m);
+                    lamp(c, r, None, Material::Brazier)
+                }),
+        )
         // The jungle's lanterns, hanging off its bridges' ropes (slice 4i).
         .chain(template.bridges.iter().flat_map(|b| {
             b.lanterns
@@ -1030,6 +1046,40 @@ pub fn build_town_yielding(
             built.rooms.push(Meshes::new());
             built.lights.push(Vec::new());
             built.solids.push(c);
+        }
+    }
+    // Its smithies (`townsfolk` design 26a), from layout 3, each on its
+    // forge cell's terrace, with no rooms and no lights of its own: its fire
+    // is a lamp in the field.
+    if let Some(template) = template.filter(|_| town.layout >= FORGE_LAYOUT) {
+        let cell_m = template.grid.cell_m;
+        for s in &template.smithies {
+            let (c, r) = s.forge_cell(cell_m);
+            let floor = town
+                .cells
+                .iter()
+                .position(|t| (t.0, t.1) == (c, r))
+                .map(|i| town.terrace_of(i));
+            let piece = floor.and_then(|floor| {
+                smithy::smithy(
+                    &mut built.meshes,
+                    repeat_m,
+                    patch,
+                    &built.chart,
+                    s,
+                    cell_m,
+                    radius_m,
+                    floor,
+                )
+            });
+            match piece {
+                Some(piece) => {
+                    built.rooms.push(Meshes::new());
+                    built.lights.push(Vec::new());
+                    built.solids.push(piece);
+                }
+                None => built.dressing_skipped += 1,
+            }
         }
     }
     let Some(template) = template.filter(|t| !t.masonry.is_empty()) else {

@@ -568,7 +568,13 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
             started.elapsed().as_secs_f32()
         );
         assert!(footprint > 300, "{}: {footprint} cells", site.name);
-        assert_eq!(laid.solids.len(), template.buildings.len(), "{}", site.name);
+        // Every building, and from layout 3 its smithy (`townsfolk` 26a).
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.smithies.len(),
+            "{}",
+            site.name
+        );
         assert!(laid.terrace_m > config.sea_level_m, "{} is dry", site.name);
         if !site.home {
             turns.insert(record::turn(site.id));
@@ -759,8 +765,8 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
     );
     assert_eq!(
         app.world().resource::<Structures>().0.len(),
-        load_template("village").buildings.len(),
-        "the walker has its buildings"
+        load_template("village").buildings.len() + load_template("village").smithies.len(),
+        "the walker has its buildings and its smithy"
     );
     for _ in 0..70 {
         app.update();
@@ -968,8 +974,8 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         );
         assert_eq!(
             laid.solids.len(),
-            template.buildings.len() + 12 + template.masonry.len(),
-            "{}: every building, its 12 path stairs and every cell of the wall",
+            template.buildings.len() + 12 + template.smithies.len() + template.masonry.len(),
+            "{}: every building, its 12 path stairs, its smithy and every cell of the wall",
             site.name
         );
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);

@@ -724,6 +724,56 @@ any template (they are the mockup's dressing, not a `building()`), so task
 smith is lit by the town's lamps and the field. Recorded as a limit, not
 faked with a light of its own.
 
+**26a. The forge (2026-11-24, task 3.2).** Written before the code.
+- **Where it is.** The towns mockup builds a smithy in two towns: the
+  village (`smithyShed(26, 22)`) and the walled town (inline, cells 28 to
+  30 by 8 and 9). Each is an open shed two rows by three cells, six timber
+  posts (r 0.15 m, 3.2 m) under a shingled gable roof (pitch 0.7, timber
+  gables), a forge at the far end of its second row (a stone base 1.6 by
+  1.3 m, a hearth bed, a stone hood 1.3 by 1.0 m up to the roof), its fire
+  at `addFire(..., "forge")`, and an anvil (two iron blocks) by the smith.
+  Neither went into the templates: the export recorded `building()` and the
+  dressing, and the smithy is neither. `tools/export_town_templates.js` now
+  writes each forge as the template's `smithies`: its fire's point and the
+  cells of the area it burns in. Re-exported, every other byte of the six
+  templates is as it was (the jungle's file is kept as spliced).
+- **New towns only.** A town's pieces are derived from its template on
+  every load, so a forge read from the template would stand up in every
+  saved village and walled town, in cells a player may have built in. The
+  forge is therefore a new layout: `LAYOUT_VERSION` becomes 3
+  (`FORGE_LAYOUT`), a town laid from now on is stored at 3 and gets its
+  smithy, and a town stored at 1 or 2 is cut exactly as before, with no
+  smithy and no forge lamp. A test pins that a layout-2 town's pieces and
+  lamps are those of its template with the smithies taken out, and that
+  layout 3 adds exactly the shed and one lamp. The ground of a layout-3
+  town is a layout-2 town's (it finds its cells by chord), so the ground
+  digests stand.
+- **What is cut** (`settlement::pieces::smithy`), one piece on the forge
+  cell's terrace, in the settlement set's textures (timber, shingle, stone,
+  iron), solid to the walker where the mockup's are solid (the posts, the
+  forge, the anvil):
+  - the posts are tapered six-sided posts with smooth normals, as the
+    scaffold's are;
+  - the roof is two shingled slopes over the shed's corners with a 0.3 m
+    overhang, and timber gables, as a house's gable is;
+  - the forge is one stepped stone mass, not a box with a box on it: a
+    base, a hearth bed sunk into its top, and a hood that tapers from the
+    base's back into a chimney through the roof;
+  - the anvil is one lofted iron shape: a waisted foot, a face and a horn
+    tapering off one end.
+- **Its glow is a lamp in the voxel field.** The forge's fire is a
+  `Brazier` lamp (the brightest there is, always lit) in the first air
+  layer of the forge's cell, put in by `lamps_of` as a desert brazier is.
+  So the field carries it to everything near, by night and day: the smith
+  (`LitByField`), the shed, the ground and the houses round it, wherever
+  the camera is. The forge is centred on that cell so the brazier's own
+  drawn basket stands inside the forge's base, and only its fire shows,
+  over the hearth bed, under the hood. The game's forge sits a little off
+  the mockup's point (0.67 m, to the cell's middle): recommendation taken
+  (ask only with screenshots).
+- **The smith** keeps his post by the anvil from the template; nothing
+  about him changes. Task 3.2's capture is the smith at the forge at 22:30.
+
 **27. What other parts may use** (`pbd_app::townsfolk`):
 - `TownPerson { id: PersonId { site, index }, role }` is on the root of
   every drawn person, so a talk or trade can find who is in front of the
