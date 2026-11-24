@@ -91,8 +91,9 @@ for it to be built.
 
 As built (2026-11-24): see design, "As built". Left out of 3.x and said
 there: the mallet is carried in the pack (no held swing yet); the
-scaffold has no ladder bay, so an upper storey is reached by the house's
-own stair; a road cell or a town's footprint is not yet "in the way" (a
+scaffold's ladder bay came after (design, "The scaffold's ladder bay",
+2026-11-24: `the_scaffold_is_climbed_by_its_ladder_bay`,
+`walking::tests::a_walker_climbs_the_scaffolds_ladder_bay_onto_its_boards`); a road cell or a town's footprint is not yet "in the way" (a
 solid block, a standing tree, a cactus and a wild plant are); a dropped piece taken down with a
 full pack is refused rather than left in a crate; the turnable 3D preview
 waits for the build camera.

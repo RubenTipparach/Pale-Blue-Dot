@@ -496,10 +496,13 @@ in `docs/screenshots/building-planner/`.
 ### The owner's answers on the captures (survey P3, P4, 2026-11-24)
 
 - **P3, the ghost at night.** The owner: "The night is too faint, please
-  make it glow a bit more at night". `ghost_night` goes from 0.05 to 0.2:
-  the ghost reads as a faint blueprint glow at 22:00, not as dark as the
-  ground and not the brightest thing in the frame. Retaken in
-  `game-site-night.jpg`.
+  make it glow a bit more at night". `ghost_night` goes from 0.05 to
+  0.12. Judged in 22:00 captures: at 0.2 (the first try) the ghost is the
+  brightest thing in the frame by far, its walls a flat bright cyan
+  (`game-site-night-0.2.jpg`, kept beside it); at 0.12 it is a little
+  softer and still glows plainly over the dark ground. Retaken in
+  `game-site-night.jpg`. Still bright on lavapipe: the owner judges it on
+  the desktop, and the number is one line of `building_planner.ron`.
 - **P4, the lime line.** The stronger line is kept as it is.
 
 ### The scaffold's ladder bay (2026-11-24, task 3.5's note)
