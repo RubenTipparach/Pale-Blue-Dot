@@ -495,6 +495,12 @@ pub struct Launch {
     /// no `--world` is made by, so a repro of an older world stands on its
     /// own ground. Refused with `--world`, whose generator is its own.
     pub generator: Option<u32>,
+    /// `--host <port>` (`multiplayer` design 20): play this world and let
+    /// others join it on the network.
+    pub host: Option<u16>,
+    /// `--join <address:port>` (`multiplayer` design 20): play the world
+    /// another game hosts.
+    pub join: Option<std::net::SocketAddr>,
 }
 
 impl Launch {
@@ -569,6 +575,8 @@ impl Launch {
             showcase_stills: None,
             showcase_from: 1,
             generator: None,
+            host: None,
+            join: None,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -962,6 +970,22 @@ impl Launch {
                         .and_then(|d| d.parse().ok())
                         .expect("--day requires a day number");
                     result.day = Some(day);
+                }
+                "--host" => {
+                    i += 1;
+                    result.host = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--host requires a port"),
+                    );
+                }
+                "--join" => {
+                    i += 1;
+                    result.join = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--join requires an address:port"),
+                    );
                 }
                 "--generator" => {
                     i += 1;
@@ -1653,6 +1677,37 @@ pub fn run(args: &[String]) {
     if let Some(version) = launch.generator {
         world.identity.generator = version;
     }
+    // Joining another's world (`multiplayer` design 20): the world is the
+    // host's, opened in memory from its welcome, before anything is built.
+    let mut joined = None;
+    if let Some(addr) = launch.join {
+        // Two minutes: a host still building its world answers when its first
+        // frame runs.
+        match pbd_app::net_play::join(addr, std::time::Duration::from_secs(120)) {
+            Ok(joining) => {
+                world = saves::WorldSave::memory_only();
+                world.identity.seed = joining.seed;
+                world.identity.generator = joining.generator;
+                world.identity.topology = joining.topology;
+                world.world_seconds = Some(joining.clock_s);
+                world.join_remote();
+                let mut early = Vec::new();
+                for message in joining.early {
+                    pbd_app::net_play::receive(joining.player, message, &mut world, &mut early);
+                }
+                eprintln!(
+                    "joined {addr} as player {} ({} edits so far)",
+                    joining.player,
+                    early.len()
+                );
+                joined = Some((joining.client, joining.player));
+            }
+            Err(why) => {
+                eprintln!("could not join {addr}: {why}");
+                std::process::exit(2);
+            }
+        }
+    }
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
     // it (`bigger-biomes` decision 6). The logger is not up yet.
@@ -1667,7 +1722,9 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some() || launch.showcase.is_some(),
+        // A joined game plays the host's world (`multiplayer` design 20):
+        // the title screen's CONTINUE would open a saved world instead.
+        launch.world.is_some() || launch.showcase.is_some() || launch.join.is_some(),
         // A recording instrument plays the world it was launched on, as a
         // capture does: the title screen would stand in front of the film.
         launch.capture.is_some() || launch.walk_river,
@@ -1935,6 +1992,11 @@ pub fn run(args: &[String]) {
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
     .insert_resource(world)
+    // The network, hosting or joined (`multiplayer` design 20).
+    .add_systems(
+        Update,
+        pbd_app::net_play::play.after(digging::dig_and_place),
+    )
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
@@ -2678,6 +2740,25 @@ pub fn run(args: &[String]) {
         app.insert_resource(pbd_app::loading::CaptureSwitch(beside("loading")));
         app.insert_resource(arrival::ArrivalShot(beside("arrival")));
         app.insert_resource(LeavingShot(beside("leaving")));
+    }
+    // On the network (`multiplayer` design 20): joined, or hosting.
+    if let Some((client, player)) = joined {
+        app.insert_resource(pbd_app::net_play::NetPlay::Joined {
+            client,
+            player,
+            pending: Vec::new(),
+        });
+    } else if let Some(port) = launch.host {
+        match pbd_net::Host::bind(port) {
+            Ok(host) => {
+                eprintln!("hosting on {}", host.local_addr());
+                app.insert_resource(pbd_app::net_play::NetPlay::Host {
+                    host,
+                    players: Default::default(),
+                });
+            }
+            Err(why) => eprintln!("could not host on port {port}: {why}"),
+        }
     }
     app.run();
 }

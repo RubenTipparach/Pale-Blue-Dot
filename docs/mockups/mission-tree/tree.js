@@ -897,8 +897,10 @@
   document.querySelectorAll("[data-tree]").forEach((b) => {
     b.setAttribute("aria-selected", String(b.dataset.tree === TREE));
   });
-  if (location.hash.slice(1) !== TREE) history.replaceState(null, "", "#" + TREE);
+  // #crew is the CREW tab (crew.js), drawn over this tree: it keeps its anchor.
+  if (location.hash.slice(1) !== TREE && location.hash.slice(1) !== "crew") history.replaceState(null, "", "#" + TREE);
   window.addEventListener("hashchange", () => {
+    if (location.hash.slice(1) === "crew") return;
     const want = location.hash.slice(1) === "town" ? "town" : "starter";
     if (want !== TREE) location.reload();
   });

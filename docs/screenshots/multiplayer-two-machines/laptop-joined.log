@@ -1,0 +1,11 @@
+joined 192.168.0.76:47123 as player 1 (0 edits so far)
+2026-11-23T02:38:58.910115Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:39:01.072054Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:19.954123Z  INFO pbd_app::desktop::digging: sent to the host: Dig { cell: 1328288528, layer: 208 }
+2026-11-23T02:42:20.023292Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:22.118369Z  INFO pbd_app::desktop::digging: sent to the host: Dig { cell: 1328288528, layer: 207 }
+2026-11-23T02:42:22.201912Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:24.292068Z  INFO pbd_app::desktop::digging: sent to the host: Dig { cell: 1328288528, layer: 206 }
+2026-11-23T02:42:24.373877Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier
+2026-11-23T02:42:26.452494Z  INFO pbd_app::desktop::digging: sent to the host: Dig { cell: 1328288528, layer: 205 }
+2026-11-23T02:42:26.534658Z  INFO pbd_app::net_play: 1 of 1 edits from the network applied to the tier

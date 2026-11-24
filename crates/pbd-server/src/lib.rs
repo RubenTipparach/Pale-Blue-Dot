@@ -232,9 +232,40 @@ impl Server {
             ToClient::Welcome {
                 player: number,
                 clock_s: self.clock_s,
+                seed: self.world.versions.world,
+                generator: self.world.versions.generator,
+                topology: self.world.versions.topology,
             },
         );
         Some(number)
+    }
+
+    /// Every region with an edit, sent whole to `player`, nearest to
+    /// `near` first when it is given: what a joining player is sent until
+    /// region subscription (task 6.3) sends only the regions near them
+    /// (design 20).
+    pub fn snapshot_all(&mut self, store: &impl Store, player: u32, near: Option<Vec3>) {
+        let mut regions = store.ledger().regions().regions();
+        if let Some(near) = near {
+            let distance = |r: &u32| -> f32 {
+                pbd_core::cell_key::region::address(*r, 0)
+                    .or_else(|| pbd_core::cell_key::region::address(*r, 63 << 6))
+                    .map(|a| pbd_core::cell_key::direction(a).distance(near))
+                    .unwrap_or(f32::MAX)
+            };
+            regions.sort_by(|a, b| distance(a).total_cmp(&distance(b)));
+        }
+        for region in regions {
+            let snap = store.ledger().snapshot(region, store.edits());
+            self.send(
+                To::Player(player),
+                ToClient::Snapshot {
+                    region,
+                    seq: snap.seq,
+                    bytes: snap.bytes,
+                },
+            );
+        }
     }
 
     /// A player left.
@@ -282,6 +313,11 @@ impl Server {
             let clock_s = self.clock_s;
             self.broadcast(ToClient::Clock { clock_s });
         }
+    }
+
+    /// Whether anything is queued to send.
+    pub fn has_outbox(&self) -> bool {
+        !self.outbox.is_empty()
     }
 
     /// Everything queued to send, in order.

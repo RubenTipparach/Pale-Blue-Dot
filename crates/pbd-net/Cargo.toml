@@ -1,0 +1,18 @@
+[package]
+name = "pbd-net"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# The transport between a host and its players (`openspec/changes/multiplayer`
+# design 6 and 20): QUIC on its own thread, the core's protocol on top. No
+# Bevy: the game and a dedicated server both talk to it through channels.
+[dependencies]
+pbd-core = { path = "../pbd-core" }
+quinn = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = "0.13"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "io-util", "macros"] }
+
+[dev-dependencies]
+pbd-server = { path = "../pbd-server" }

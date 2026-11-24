@@ -617,6 +617,15 @@ impl FineSet {
         let Some(record) = self.levels[3].iter().position(|c| c.key() == edit.cell) else {
             return Applied::Beyond;
         };
+        // Already so: an edit this tier took when it was made here, coming
+        // back from the server (design 20), costs nothing.
+        if self
+            .columns
+            .column(record)
+            .is_some_and(|c| c.material(usize::from(edit.layer)) == edit.material)
+        {
+            return Applied::Unchanged;
+        }
         let mut adopted = false;
         if self.columns.column(record).is_none() {
             let Some(column) = self.adoptable(record, edits) else {
