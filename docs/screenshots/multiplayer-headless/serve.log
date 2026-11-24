@@ -1,0 +1,56 @@
+[    0.00] serve: hosting on 127.0.0.1:47124 (world in memory, seed 77)
+[    0.00] serve: each player is dealt 64 stone: pickups wait for task 8.2
+[    2.27] serve: a player connected (0)
+[    2.27] serve: player 0 joined (0): a game
+[   10.00] serve: SERVED players=1 requests=0 accepted=0 refused=0 changes_sent=0 regions=0 clock=1208s
+[   20.00] serve: SERVED players=1 requests=0 accepted=0 refused=0 changes_sent=0 regions=0 clock=1218s
+[   24.58] serve: a player connected (1)
+[   24.58] serve: player 1 joined (1): bot0
+[   24.58] serve: a player connected (3)
+[   24.58] serve: player 2 joined (3): bot1
+[   24.58] serve: a player connected (2)
+[   24.58] serve: player 3 joined (2): bot2
+[   25.54] serve: player 1: request 3 refused: Unchanged
+[   25.55] serve: player 2: request 3 refused: Unchanged
+[   25.55] serve: player 3: request 3 refused: Unchanged
+[   27.65] serve: player 3: request 9 refused: Unchanged
+[   28.92] serve: player 3: request 15 refused: Unchanged
+[   29.93] serve: player 3: request 19 refused: Unchanged
+[   30.00] serve: SERVED players=4 requests=55 accepted=49 refused=6 changes_sent=196 regions=1 clock=1228s
+[   39.23] serve: player 3: request 56 refused: Unchanged
+[   40.01] serve: SERVED players=4 requests=175 accepted=168 refused=7 changes_sent=672 regions=1 clock=1238s
+[   50.01] serve: SERVED players=4 requests=293 accepted=286 refused=7 changes_sent=1144 regions=1 clock=1248s
+[   50.53] serve: player 3: request 101 refused: Unchanged
+[   53.55] serve: player 3: request 113 refused: Unchanged
+[   57.80] serve: player 2 left (3)
+[   57.81] serve: player 3 left (2)
+[   58.20] serve: player 1 left (1)
+[   60.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1258s
+[   70.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1268s
+[   80.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1278s
+[   90.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1288s
+[  100.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1298s
+[  110.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1308s
+[  120.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1318s
+[  130.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1328s
+[  140.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1338s
+[  150.01] serve: SERVED players=1 requests=387 accepted=378 refused=9 changes_sent=1510 regions=1 clock=1348s
+[  160.02] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1358s
+[  166.96] serve: a player connected (4)
+[  166.96] serve: player 0 joined (4): a game
+[  166.96] serve: player 0 rejoined: dropped (0)
+[  170.02] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1368s
+[  180.02] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1378s
+[  190.02] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1388s
+[  200.02] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1398s
+[  210.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1408s
+[  220.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1418s
+[  230.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1428s
+[  240.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1438s
+[  241.04] serve: a player connected (5)
+[  241.04] serve: player 0 joined (5): a game
+[  241.04] serve: player 0 rejoined: dropped (4)
+[  250.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1448s
+[  260.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1458s
+[  270.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1468s
+[  280.03] serve: SERVED players=1 requests=388 accepted=379 refused=9 changes_sent=1511 regions=1 clock=1478s

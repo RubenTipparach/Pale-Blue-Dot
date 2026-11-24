@@ -138,6 +138,35 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 .qmeta a, .how a, .lede a { color: var(--brass); }
 .dec-list .d-id { font: 500 12px/1 var(--mono); color: var(--brass); margin-right: 8px; }
 .dec-list .taken { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--brass); }
+section.topic, .ki, .phase-quiet, .ki li, details.decided { scroll-margin-top: 72px; }
+.toc { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
+.toc h2 { font: 700 18px/1 var(--display); margin: 0; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc li { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--line); }
+.toc li:first-child { border-top: 0; }
+.toc a { color: var(--ink); text-decoration: none; min-height: 28px; display: inline-flex; align-items: center; }
+.toc a:hover { color: var(--brass); }
+.toc li.quiet a { color: var(--muted); }
+.toc .toc-n { font: 500 12px/1 var(--mono); color: var(--brass); }
+.toc p { margin: 0; }
+.toc p a { color: var(--brass); }
+.phase-quiet { margin: 0; color: var(--muted); font-size: 14px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.phase-quiet .tag, section.topic > h2 .tag { font: 500 13px/1 var(--mono); color: var(--brass); letter-spacing: 0.1em; }
+.ki-h { font: 700 18px/1 var(--display); margin: 6px 0 0; }
+.ki { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; display: grid; gap: 6px; }
+.ki h4 { margin: 0; font: 600 13px/1.3 var(--mono); letter-spacing: 0.04em; }
+.ki h4 a { color: var(--brass); text-decoration: none; }
+.ki ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 15px; }
+.ki li.blocking::marker { color: var(--star); }
+.ki .blk { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--star); margin-right: 8px; }
+.ki-note { margin-top: 4px; }
+.ki-note summary { cursor: pointer; font: 500 12px/1 var(--mono); color: var(--brass); padding: 6px 0; min-height: 28px; list-style: none; }
+.ki-note summary::-webkit-details-marker { display: none; }
+.ki-note textarea { min-height: 54px; font-size: 14px; }
+.ki-note .status { margin-top: 4px; }
+.ki-said { margin: 2px 0 0; font-size: 14px; color: var(--done); white-space: pre-wrap; }
+.hit { outline: 2px solid var(--brass); outline-offset: 4px; transition: outline-color 1.2s; }
+.dec-list .d-phase { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; margin-right: 8px; }
 @media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
 </style>
 
@@ -146,7 +175,7 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
     <div class="eyebrow">Owner survey · opened 2026-11-12</div>
     <h1>Pale Blue Dot Survey</h1>
     <div class="suits" aria-hidden="true"><span style="background:var(--sun)"></span><span style="background:var(--crescent)"></span><span style="background:var(--star)"></span><span style="background:var(--eagle)"></span></div>
-    <p class="lede">Open questions about the game. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p class="lede">Open questions about the game, by phase of the roadmap. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   </header>
 
   <div class="tally">
@@ -160,8 +189,15 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
     <p>Answers save as you go. Tap a chosen option again to clear it.</p>
     <p>A question comes to you only with something to look at (your rule, 2026-09-29). For anything without screenshots I take my recommendation and list it under Already decided as "recommendation taken".</p>
     <p>Your earlier answers are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn" target="_blank" rel="noopener">the first survey (a Claude Doc)</a>, kept as the record; all of them are copied under Already decided.</p>
+    <p>Each phase of the roadmap has its open questions, then its known issues: things not done yet. Add a note on any issue and I read it with your answers.</p>
     <p class="notice" id="mode" hidden></p>
   </div>
+
+  <nav class="toc" aria-label="Phases">
+    <h2>Phases</h2>
+    <ol id="toc-list"></ol>
+    <p><a href="#decided">Already decided</a></p>
+  </nav>
 
   <main id="sections" class="wrap" style="gap:36px"></main>
 
@@ -172,26 +208,95 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 </div>
 
 <script>
-// The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
-// pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
-const SECTIONS = [
-  { tag: 'E', name: 'Trade',
-    lead: 'From townsfolk (design 38c, 2026-11-22): the trade panel you approved has a tab per shelf on each side (Food, Organics, Raw materials, Tools, Goods), shown only when that side has something on it. No trader sells tools today, so the Tools tab never shows on the buy side. In-game shot rendered without a GPU; the mockup shot is M5\'s Talk and trade tab.',
-    qs: [
-      { id: 'E1', q: 'Should traders sell tools? Today no trader does, so you can only make them (stone pickaxe, axe, hoe, rod and the rest). The Tools tab shows on the sell side when you carry tools a trader will buy.',
-        options: ['No: tools are made, never bought', 'The smith sells stone tools only', 'The smith sells tools up to its town\'s best metal'], rec: 0,
-        why: 'Making your tools is the first step of the loop; a pickaxe for coins skips it. Survival\'s repair at a smith (survival-mode 11) still gives the smith a tool trade.',
-        change: 'townsfolk (design 38c)', asked: '2026-11-22',
-        link: { url: 'https://claude.ai/artifact/E2U5akkQgd5cdzPAXjrEyx#talk', label: 'Townsfolk and Peoples, the Talk and trade tab' },
+// The survey by phase, in the roadmap's order (the tracker's ROADMAP: its phase numbers and names). Each phase holds its open
+// questions (`qs`) and its known issues (`issues`): the roadmap's warnings, grouped by step, each group with an anchor the
+// tracker's roadmap links to (`#phase-3-npcs`) and each issue a stable id. Known issues are not questions: no options, not counted.
+// Answers live in the db collection `answers`, one document per question id. Every question carries the pictures it turns on
+// (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
+const PHASES = [
+  { id: 'phase-1', num: '1', name: 'The first game loop', qs: [
+      { id: 'A5', q: 'The herd\'s look. Today a grazing plodder turns its neck and face down 106 degrees together, so its face ends pointing back at its chest, 0.36 m above the grass; and every animal is a smooth 2,300-triangle form with no edges. The mockup\'s Art style tab shows the four species, a 1.8 m player and a 1 m grid in four styles, day and night. Which style should the herd take in the game? (Every style but Today has the neck fixed: the face never past vertical, the muzzle at the grass.)',
+        options: ['Today, with the neck fixed', 'Soft low-poly (about 820 triangles, planes on a curved form, hard hoof, horn and jaw, coat pixels the ground\'s size)', 'Carved blocky (bevelled block sections, about 1,100 triangles)'], rec: 1,
+        why: 'It keeps today\'s shapes and their smooth light across the curves, but its planes, creases and coarser coat pixels match the hex ground, the timber and the townsfolk, where today\'s rubber smoothness does not.',
+        change: 'animal-husbandry (design 17)', asked: '2026-11-23',
+        link: { url: 'https://claude.ai/artifact/PM7G5qGuWM5g4DN8t787EY#art', label: 'Open M26\'s Art style tab (drag to turn; Stand, Graze, Walk, Day, Night)' },
         images: [
-          { src: 'img/e1-trade-tabs.jpg', alt: 'The game\'s trade panel with the Food tab on: All, Food and Goods tabs, no Tools tab', caption: 'In the game: the buy side has no Tools tab.' },
-          { src: 'img/e1-mockup-tabs.jpg', alt: 'The mockup\'s trade panel at night with a shelf tab on each side', caption: 'The mockup: a shelf tab on each side.' },
+          { src: 'img/a5-neck-graze.jpg', alt: 'Two views of the plodder grazing: today with its head turned under its chest, and fixed with its muzzle at the grass', caption: 'Grazing, today (left: face turned back under the chest) and fixed (right).' },
+          { src: 'img/a5-today.jpg', alt: 'The herd as the game draws it today, by day', caption: 'Today, standing.' },
+          { src: 'img/a5-soft.jpg', alt: 'The herd in the soft low-poly style by day', caption: 'Soft low-poly (recommended).' },
+          { src: 'img/a5-carved.jpg', alt: 'The herd in the carved blocky style by day', caption: 'Carved blocky.' },
+          { src: 'img/a5-soft-night.jpg', alt: 'The soft low-poly herd at night by two lanterns', caption: 'Soft low-poly at 22:30, by the lanterns.' },
         ] },
-    ] },
+    ], issues: [] },
+  { id: 'phase-2', num: '2', name: 'Environment v2', qs: [], issues: [
+    { id: 'phase-2-flora', step: 'Advanced foliage and flora', items: [
+      { id: 'phase-2-flora.1', text: 'Not built yet: far tree impostors, the fungal forest, the desert palm, alien species.' } ] },
+    { id: 'phase-2-mushrooms', step: 'Glowing mushrooms and carried light', items: [
+      { id: 'phase-2-mushrooms.1', text: 'The placed torch does not match the new held one yet. A look change, so a mockup first.' } ] },
+    { id: 'phase-2-mountains', step: 'Mountain flora', items: [
+      { id: 'phase-2-mountains.1', text: 'Bilberry bushes and the snow-edge flower are stood in by the kit\'s blue and red.' },
+      { id: 'phase-2-mountains.2', text: 'Proposals, not built: tarns, cairns, bilberry as food, boulders taken only by pickaxe.' } ] },
+    { id: 'phase-2-underwater', step: 'Underwater overhaul', items: [
+      { id: 'phase-2-underwater.1', text: '28 more water creatures from the mockup (12 are in).' },
+      { id: 'phase-2-underwater.2', text: 'Beavers and otters: no splashes or chips, no felling a standing tree, no otter mud slide or fishing, no sea otter kelp wrap.' } ] },
+    { id: 'phase-2-water-flow', step: 'Water that flows', items: [
+      { id: 'phase-2-water-flow.1', text: 'The M31 splash tab (fall foot, entry, cast, wake) is not built. Mockup first.' } ] },
+    { id: 'phase-2-checks', step: 'Your checks (nothing waits on them)', items: [
+      { id: 'phase-2-checks.1', text: 'M31: froth only on faces that fall a layer or more, and the texture panning on still water too.' },
+      { id: 'phase-2-checks.2', text: 'Listen to the waterfall sounds on the Sounds page (M30).' },
+      { id: 'phase-2-checks.3', text: 'Look on your GPU: sand, mountains, the held light, the beavers and otters. Every capture so far is software-rendered.' },
+      { id: 'phase-2-checks.4', text: 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters.' },
+      { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
+  ] },
+  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
+  ], tests: [
+    { id: 'phase-3-test-npcs', step: 'NPCs', items: [
+      { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
+    { id: 'phase-3-test-missions', step: 'Town missions', items: [
+      { id: 'phase-3-test-missions.1', text: 'Screenshots of the lost villager and repair jobs, taken and handed in.' },
+      { id: 'phase-3-test-missions.2', text: 'The lost villager\'s marker on the map and the compass, and Abandon on the board.' } ] },
+    { id: 'phase-3-test-roads', step: 'Roads', items: [
+      { id: 'phase-3-test-roads.1', text: 'Screenshots from a bridge and of the road lamps at night.' } ] },
+    { id: 'phase-3-test-building', step: 'Carpentry and house building', items: [
+      { id: 'phase-3-test-building.1', text: 'A house\'s shadows clear in a screenshot, by day.' } ] },
+    { id: 'phase-3-test-logging', step: 'Logging', items: [
+      { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
+  ] },
+  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [
+      { id: 'N1', q: 'Where is the house site? The crew needs one place to build. It can be a map marker the crew shares, set when the chain starts, or wherever the first floor piece goes down.',
+        options: ['A shared map marker', 'Wherever the first floor piece is placed'], rec: 0,
+        why: 'A marker shows everyone where to go before anything is built, and a stray floor piece cannot move the site.',
+        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
+        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
+        images: [
+          { src: 'img/n1-crew-walls.jpg', alt: 'The CREW tab mid-walls: the house chain with per-player bars and the crew panel', caption: 'Raise the walls, 5 of 6: each bar is one player.' },
+        ] },
+      { id: 'N2', q: 'What does the crew get for the house chain? Every member who helped gets the reward when Light the hearth is done.',
+        options: ['The house itself, shared by the crew', 'Coins to each member', 'A tool to each member'], rec: 0,
+        why: 'The house is the goal and something the crew keeps using; coins and tools come from the town missions.',
+        change: 'coop-missions (design, open questions)', asked: '2026-11-23',
+        link: { url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev#crew', label: 'Mission Tree, the CREW tab' },
+        images: [
+          { src: 'img/n2-crew-beam.jpg', alt: 'The CREW tab at the ridge beam: Needs two of you at once', caption: 'Set the ridge beam: needs two of you at once.' },
+        ] },
+    ], issues: [
+    { id: 'phase-3b-launcher', step: 'Launcher', items: [
+      { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
+      { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
+  ] },
+  { id: 'phase-4', num: '4', name: 'Town building, civil engineering and survival', qs: [], issues: [] },
+  { id: 'phase-5', num: '5', name: 'Mass transportation', qs: [], issues: [] },
+  { id: 'phase-6', num: '6', name: 'Age of flight and industry', qs: [], issues: [] },
+  { id: 'phase-7', num: '7', name: 'Nuclear and rocketry', qs: [], issues: [] },
+  { id: 'phase-8', num: '8', name: 'Finance and space stations', qs: [], issues: [] },
+  { id: 'phase-9', num: '9', name: 'Space exploration and colonization', qs: [], issues: [] },
+  { id: 'phase-10', num: '10', name: 'Exo-industry and advanced propulsion', qs: [], issues: [] },
+  { id: 'phase-11', num: '11', name: 'Antimatter and interstellar travel', qs: [], issues: [] },
 ];
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-22", "phase": "3", "id": "E1", "text": "Traders do not sell basic tools: they are made, never bought. \"we'll have a special weapons and enchanted tools that give +1 mining speed +1 yeild, stuff like that\": traders will sell special weapons and enchanted tools with bonuses (such as +1 mining speed, +1 yield), once enchantments and weapons are written up (weapons with survival, phase 4).", "where": "townsfolk design 38c (no basic tools on the Tools shelf), task 12.5, task 12.6"},
   {"date": "2026-11-22", "id": "G4, G4a", "text": "\"All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes\" for rockets. The flight stays one Newtonian integrator; the conics are the map and the planner. CLAUDE.md's flight invariant names the decision and is rewritten when it is built.", "where": "ship-tiers design, Owner answers; CLAUDE.md"},
   {"date": "2026-11-22", "id": "W21", "text": "Deep zones fitted to the column: sunlit to 40 m, twilight to 90 m, dark below. And \"powered ligths should work underwater? mushgroom glow should work underwater too\": lamps and glowing mushrooms light under water as on land; open flames go out (recommendation taken).", "where": "ocean-environments design, task 21"},
   {"date": "2026-11-22", "id": "A3, G5, A4", "text": "Glowing mushroom: today's square cap kept, its light kept faint (level 3, held and planted alike), and warm for now; a colour per light is its own change later.", "where": "glowing-mushrooms design, Owner answers"},
@@ -275,7 +380,9 @@ const DECIDED = [
   {"date": "2026-09-26", "id": "", "text": "Every mockup is lit at night", "where": "CLAUDE.md"}
 ];
 
-const ALL_QS = SECTIONS.flatMap((s) => s.qs);
+const ALL_QS = PHASES.flatMap((p) => p.qs);
+const issueCount = (p) => p.issues.reduce((n, g) => n + g.items.length, 0);
+const testCount = (p) => (p.tests || []).reduce((n, g) => n + g.items.length, 0);
 const answers = {}; // id -> { choice: number|null, text: string }
 const cards = {};   // id -> { root, opts, textarea, status }
 let db = null;
@@ -297,11 +404,39 @@ function el(tag, attrs = {}, ...kids) {
 
 function render() {
   const root = document.getElementById('sections');
-  for (const s of SECTIONS) {
-    const sec = el('section', { class: 'topic', id: 'topic-' + s.tag },
-      el('h2', {}, el('span', { class: 'tag', text: s.tag }), s.name),
-      el('p', { text: s.lead }));
-    for (const q of s.qs) sec.append(questionCard(q));
+  const toc = document.getElementById('toc-list');
+  for (const p of PHASES) {
+    const nq = p.qs.length, ni = issueCount(p), nt = testCount(p);
+    const label = 'Phase ' + p.num + ' \u00b7 ' + p.name;
+    const counts = [nq ? nq + (nq === 1 ? ' question' : ' questions') : '', ni ? ni + (ni === 1 ? ' known issue' : ' known issues') : '', nt ? nt + ' to test' : ''].filter(Boolean).join(', ');
+    toc.append(el('li', { class: counts ? '' : 'quiet' },
+      el('a', { href: '#' + p.id, text: label }), counts ? el('span', { class: 'toc-n', text: counts }) : null));
+    if (!nq && !ni && !nt) {
+      // A phase with nothing open and no known issues is one quiet line.
+      root.append(el('p', { class: 'phase-quiet', id: p.id }, el('span', { class: 'tag', text: 'Phase ' + p.num }), p.name + ': nothing open.'));
+      continue;
+    }
+    const sec = el('section', { class: 'topic', id: p.id },
+      el('h2', {}, el('span', { class: 'tag', text: 'Phase ' + p.num }), p.name));
+    for (const q of p.qs) sec.append(questionCard(q));
+    if (ni) {
+      sec.append(el('h3', { class: 'ki-h', text: 'Known issues' }));
+      for (const g of p.issues) {
+        sec.append(el('div', { class: 'ki', id: g.id },
+          el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
+          el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-'), class: it.blocking ? 'blocking' : '' },
+            it.blocking ? el('span', { class: 'blk', text: 'Blocking' }) : null, it.text, issueNote(it.id))))));
+      }
+    }
+    // The testing plan (owner, 2026-11-22: "place this in a section called testing plan"): shots and checks owed, not bugs.
+    if (nt) {
+      sec.append(el('h3', { class: 'ki-h', text: 'Testing plan' }));
+      for (const g of p.tests) {
+        sec.append(el('div', { class: 'ki', id: g.id },
+          el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
+          el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-') }, it.text, issueNote(it.id))))));
+      }
+    }
     root.append(sec);
   }
   const list = document.getElementById('dec-list');
@@ -309,9 +444,25 @@ function render() {
     list.append(el('li', {},
       d.replaced ? el('span', { class: 'replaced', text: 'Replaced' }) : null,
       d.taken ? el('span', { class: 'taken', text: 'Recommendation taken (ask only with screenshots)' }) : null,
-      el('p', { class: 'd-text' }, d.id ? el('span', { class: 'd-id', text: d.id }) : null, d.text),
-      el('p', { class: 'd-where', text: (d.date ? d.date + '  ·  ' : '') + d.where })));
+      el('p', { class: 'd-text' }, d.phase ? el('span', { class: 'd-phase', text: 'Phase ' + d.phase }) : null, d.id ? el('span', { class: 'd-id', text: d.id }) : null, d.text),
+      el('p', { class: 'd-where', text: (d.date ? d.date + '  \u00b7  ' : '') + d.where })));
   }
+}
+
+// The page is drawn from data after load, so a link to an anchor (#phase-3-npcs) is followed once it exists, and again
+// whenever the hash changes. "Already decided" opens when the link points inside it.
+function scrollToHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!id) return;
+  const t = document.getElementById(id);
+  if (!t) return;
+  const det = t.closest('details');
+  if (det) det.open = true;
+  // Land below the sticky tally bar, whose height changes with the width.
+  t.style.scrollMarginTop = (document.querySelector('.tally').offsetHeight + 12) + 'px';
+  t.scrollIntoView({ block: 'start' });
+  t.classList.add('hit');
+  setTimeout(() => t.classList.remove('hit'), 1600);
 }
 
 function questionCard(q) {
@@ -417,9 +568,13 @@ function paint(id) {
   c.opts.forEach((b, i) => b.setAttribute('aria-pressed', String(a?.choice === i)));
   if (document.activeElement !== c.textarea) c.textarea.value = a?.text ?? '';
   c.root.classList.toggle('answered', isAnswered(a));
+  tally();
+}
+
+function tally() {
   const n = ALL_QS.filter((q) => isAnswered(answers[q.id])).length;
-  document.getElementById('count').textContent = `${n} of ${ALL_QS.length} answered`;
-  document.getElementById('meter').style.width = `${(100 * n) / ALL_QS.length}%`;
+  document.getElementById('count').textContent = ALL_QS.length ? `${n} of ${ALL_QS.length} answered` : 'No open questions';
+  document.getElementById('meter').style.width = ALL_QS.length ? `${(100 * n) / ALL_QS.length}%` : '0%';
 }
 
 function setStatus(id, text, cls = '') {
@@ -483,6 +638,7 @@ function readOnly() {
     c.textarea.readOnly = true;
     c.opts.forEach((b) => { b.disabled = true; });
   }
+  for (const n of Object.values(noteEls)) n.ta.readOnly = true;
   showMode('You can read this survey, but only its owner can answer it.');
 }
 
@@ -496,7 +652,7 @@ function showMode(text) {
 function snapshotHtml() {
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const date = new Date().toISOString().slice(0, 10);
-  const rows = SECTIONS.map((s) => `<h2>${esc(s.tag)}: ${esc(s.name)}</h2>` + s.qs.map((q) => {
+  const rows = PHASES.filter((p) => p.qs.length || p.issues.length).map((p) => `<h2>Phase ${esc(p.num)}: ${esc(p.name)}</h2>` + p.qs.map((q) => {
     const a = answers[q.id];
     const pick = a?.choice != null ? q.options[a.choice] : null;
     const note = (a?.text ?? '').trim();
@@ -507,7 +663,8 @@ function snapshotHtml() {
       + `<p class="o">Options: ${q.options.map(esc).join(' / ')}</p>`
       + `<p class="r">Recommended: ${esc(q.options[q.rec])}. ${esc(q.why)}</p>`
       + `<p class="a">Answer: ${answer}</p></div>`;
-  }).join('')).join('');
+  }).join('') + (p.issues.length ? '<h3>Known issues</h3>' + p.issues.map((g) => `<p class="h">${esc(g.step)}</p><ul>`
+      + g.items.map((it) => `<li>${it.blocking ? '<b>Blocking:</b> ' : ''}${esc(it.text)}</li>`).join('') + '</ul>').join('') : '')).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<title>Pale Blue Dot Survey (${date})</title><style>`
     + `body{font:16px/1.55 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:24px 16px;background:#f8f2e5;color:#2a2118}`
@@ -547,9 +704,50 @@ async function setupDownload() {
   });
 }
 
+// A note on a known issue (owner, 2026-11-22: "can I add notes or something?"): one per issue, saved to the db collection
+// `issue_notes` (doc id = the issue id with '.' as '-'), read back by Claude like the answers.
+const notes = {};      // doc id -> text
+const noteEls = {};    // doc id -> { box, ta, said, status }
+const noteTimers = {};
+function issueNote(issueId) {
+  const id = issueId.replace('.', '-');
+  const ta = el('textarea', { rows: '2', placeholder: 'Your note on this (optional)', 'aria-label': 'Note on ' + issueId });
+  const status = el('div', { class: 'status', 'aria-live': 'polite' });
+  const said = el('p', { class: 'ki-said' });
+  const box = el('details', { class: 'ki-note' }, el('summary', { text: 'Add a note' }), ta, status);
+  ta.addEventListener('input', () => {
+    notes[id] = ta.value; paintNote(id);
+    clearTimeout(noteTimers[id]); status.textContent = 'Editing…'; status.className = 'status';
+    noteTimers[id] = setTimeout(() => saveNote(id), 900);
+  });
+  ta.addEventListener('blur', () => { clearTimeout(noteTimers[id]); saveNote(id); });
+  noteEls[id] = { box, ta, said, status };
+  return el('div', {}, said, box);
+}
+function paintNote(id) {
+  const n = noteEls[id]; if (!n) return;
+  const t = (notes[id] ?? '').trim();
+  n.said.textContent = t ? 'Your note: ' + t : '';
+  n.box.querySelector('summary').textContent = t ? 'Edit your note' : 'Add a note';
+  if (document.activeElement !== n.ta) n.ta.value = notes[id] ?? '';
+}
+async function saveNote(id) {
+  const n = noteEls[id]; if (!n || !canWrite) return;
+  const body = { text: notes[id] ?? '', updatedAt: new Date().toISOString() };
+  if (!db) {
+    try { localStorage.setItem(LOCAL_KEY + '.notes', JSON.stringify(notes)); } catch (e) { /* storage blocked */ }
+    n.status.textContent = standalone ? 'Saved in this browser' : ''; n.status.className = 'status ok'; return;
+  }
+  n.status.textContent = 'Saving…';
+  try { await db.collection('issue_notes').doc(id).set(body); n.status.textContent = 'Saved'; n.status.className = 'status ok'; }
+  catch (e) { n.status.textContent = 'Not saved. Try again in a moment.'; n.status.className = 'status err'; }
+}
+
 async function connect() {
   if (standalone) {
     loadLocal();
+    try { Object.assign(notes, JSON.parse(localStorage.getItem(LOCAL_KEY + '.notes') || '{}')); } catch (e) { /* nothing saved */ }
+    Object.keys(noteEls).forEach(paintNote);
     ALL_QS.forEach((q) => paint(q.id));
     showMode('This copy is open outside claude.ai, so answers are kept in this browser only. Claude reads the answers on the survey page at claude.ai.');
     return;
@@ -563,6 +761,14 @@ async function connect() {
   }
   db = store;
   if (user && (await user.can('data.write')) === false) { canWrite = false; readOnly(); }
+  db.collection('issue_notes').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists || document.activeElement === noteEls[d.id]?.ta) continue;
+      const body = d.data();
+      notes[d.id] = typeof body.text === 'string' ? body.text : '';
+      paintNote(d.id);
+    }
+  }, () => {});
   db.collection('answers').onSnapshot((snap) => {
     for (const d of snap.docs) {
       if (!d.exists) continue;
@@ -576,7 +782,10 @@ async function connect() {
 
 render();
 ALL_QS.forEach((q) => paint(q.id));
+tally();
 connect();
+requestAnimationFrame(scrollToHash);
+window.addEventListener('hashchange', scrollToHash);
 setupDownload();
 </script>
 
