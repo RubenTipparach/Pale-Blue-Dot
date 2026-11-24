@@ -39,6 +39,18 @@ only, not the frame time.
 | `footing-close.png` | The footing close up: the new `footing` texture under the floor where the desert falls away. | `quiet,doors,view,dist:12,tilt:18` |
 | `door-shut.png`, `door-open.png` | The door hung in the doorway, shut, then opened a quarter turn into the room: one bevelled leaf of planks with its ledges, brace, strap hinges and pull painted in, in a U frame. | `quiet,doors,view:door,dist:7,tilt:28` (and `open`) |
 
+### Double-click to walk and the cutaway (design B11, 2026-11-24)
+
+The same house (`choice:2,house:999,ahead:18,at:200,doors,view,quiet`)
+with `cut`, the cutaway End turns on in architecture mode. Lavapipe, so the
+look only. Double-click to walk is pinned by its app tests, not a shot.
+
+| Shot | What it shows | Extra plan, args |
+| --- | --- | --- |
+| `architecture-cutaway.jpg` | The cutaway at the ground storey, 11:00: the roof and the upper storey gone, the near walls cut 1.2 m over the floor, the far walls standing to the ceiling, so the floor, the stair and the doorways are in sight. The house's shadow on the ground is the whole house's: what is cut still casts. The terrain is not cut. | `cut`, `--time 11` |
+| `architecture-cutaway-night.jpg` | The same at 22:30: the room lit warm by its lantern, the ground as dark round it. | `cut`, `--time 22.5` |
+| `architecture-cutaway-upper.jpg` | The build layer a storey up (Page Up): the cut through the upper storey, its floor and the stair's well. | `cut,layer:3`, `--time 11` |
+
 What is wrong in them, and stays as a limitation for now:
 
 - **The house stands on the highest ground under it.** On the desert's
