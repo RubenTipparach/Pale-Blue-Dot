@@ -236,7 +236,39 @@ const PHASES = [
       { id: 'phase-2-checks.4', text: 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters.' },
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
-  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
+  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [
+      { id: 'P1', q: 'Trading is now done in baskets, as in M5: add goods to YOU TAKE and YOU GIVE, then press DEAL. Buying one thing is two clicks (+ then DEAL) where it was one. Keep it that way, or add a one-click quick trade beside the baskets?',
+        options: ['Baskets only, as built', 'Baskets, plus shift-click to buy or sell one at once'], rec: 0,
+        why: 'Baskets match the approved M5 mockup and make a swap one saved deal; a quick-trade shortcut can be added later if two clicks feel slow in play.',
+        change: 'townsfolk (design 37, task 11.3)', asked: '2026-11-24',
+        images: [
+          { src: 'img/p1-trade-basket.jpg', alt: 'The trade panel with YOU TAKE and YOU GIVE baskets, DEAL and CLEAR', caption: 'Two rope taken, two wheat given: you pay 4.' },
+        ] },
+      { id: 'P2', q: 'The road planner ghost (the road you are about to stake) is drawn at 35% opacity. Over desert sand it is faint. Keep it, or make it stronger?',
+        options: ['Keep it faint (35%)', 'Stronger (55%)'], rec: 0,
+        why: 'Faint keeps the ground readable under it; it is one tunable in road_planner.ron, so it can move after you see it on your GPU.',
+        change: 'townsfolk (design 42k, 42l)', asked: '2026-11-24',
+        images: [
+          { src: 'img/p2-road-ghost.jpg', alt: 'A road staked by two clicks over desert, the ghost faint on the sand', caption: 'A road by two clicks, with its bill under the crosshair.' },
+          { src: 'img/p2-road-ghost-wide.jpg', alt: 'A three-wide road ghost from up the view, very faint', caption: 'Three wide, seen from up the road: hard to see.' },
+        ] },
+      { id: 'P3', q: 'The building site ghost (pieces still to build) is unlit so you can always see the plan. At night it is now dimmed with the dusk to a faint blue. Keep that, or light it like the ground so it is almost invisible at night?',
+        options: ['Faint blue at night, as built', 'Lit like the ground (dark at night)'], rec: 0,
+        why: 'You can still find and finish a site after dark; it no longer glows bright.',
+        change: 'building-planner (design, "The captures\' faults")', asked: '2026-11-24',
+        images: [
+          { src: 'img/p3-ghost-day.jpg', alt: 'A two-storey site by day, scaffolding up, the ghost bright blue', caption: 'By day: the ghost and the scaffolding.' },
+          { src: 'img/p3-ghost-night.jpg', alt: 'The same site at 22:00, the ghost dimmed', caption: 'At 22:00: dimmed to a faint blue.' },
+        ] },
+      { id: 'P4', q: 'The lime line round a building site was too faint, so it was made stronger. Road survey marks use the same band, so they got stronger too. Keep the stronger line?',
+        options: ['Stronger, as built', 'Back to the old strength'], rec: 0,
+        why: 'The site outline reads from a distance now; the road marks were already easy to see and stay so.',
+        change: 'building-planner; townsfolk design 39a', asked: '2026-11-24',
+        images: [
+          { src: 'img/p4-lime-site.jpg', alt: 'A half-built cottage with its lime line on the sand', caption: 'The site\'s lime line.' },
+          { src: 'img/p4-lime-road.jpg', alt: 'A marked road beside paved gravel, the lime band beyond', caption: 'A road\'s marks use the same band.' },
+        ] },
+    ], issues: [
   ], tests: [
     { id: 'phase-3-test-npcs', step: 'NPCs', items: [
       { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
