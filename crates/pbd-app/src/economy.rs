@@ -80,6 +80,14 @@ pub struct Economy {
     joined: Option<u64>,
     /// A job just done, and the seconds its line has left.
     pub notice: Option<(Localized, f32)>,
+    /// What the town did this frame that only the mission trees count
+    /// (`town-missions-tree` design 4): a talk, a sale or buy, a job handed
+    /// in, a parcel handed over, a town's goodwill reaching a step. The
+    /// taken jobs counted these already; [`crate::town_missions`] takes them.
+    pub raised: Vec<Happened>,
+    /// Lost villagers whose job was abandoned, to stand back at their posts
+    /// (`town-missions-tree` design 9): what `special::lost_villagers` lets go.
+    pub let_go: Vec<pbd_core::townsfolk::PersonId>,
 }
 
 /// How long a "job done" line stays up, seconds.
@@ -312,7 +320,7 @@ impl Shop<'_> {
 
     fn deal(&mut self, town: &TownInfo, code: &str, buying: bool) -> Result<Deal, Why> {
         let mut market = market_of(self.save, town.site);
-        let mut purse = self.eco.purse;
+        let mut purse = self.eco.purse.clone();
         let mut slots = self.slots.clone();
         let deal = {
             let trader = self.trader(town);
@@ -324,7 +332,7 @@ impl Shop<'_> {
         }
         .map_err(Why::Trade)?;
         let mut goodwill = goodwill_of(self.save, town.site);
-        goodwill.raise(self.cfg.trade.goodwill.per_trade, &self.cfg.trade.goodwill);
+        let stepped = self.raise_goodwill(&mut goodwill, self.cfg.trade.goodwill.per_trade);
         let mut jobs = self.eco.jobs.clone();
         let kind = if buying { Kind::Buy } else { Kind::Sell };
         let (counted, done) = jobs.record(&Happened::new(kind, scoped(town.site, code), 1));
@@ -352,6 +360,10 @@ impl Shop<'_> {
         self.eco.jobs = jobs;
         *self.slots = slots;
         self.notice_done(&done);
+        self.eco
+            .raised
+            .push(Happened::new(kind, scoped(town.site, code), 1));
+        self.note_step(town, stepped);
         Ok(deal)
     }
 
@@ -368,7 +380,51 @@ impl Shop<'_> {
         }
         .day();
         let goodwill = goodwill_of(self.save, town.site).points;
-        board.posted(town.as_town(), day, goodwill, &self.eco.jobs.gone())
+        let hour = pbd_core::daylight::Clock {
+            seconds: self.now_s,
+        }
+        .hour();
+        board
+            .posted(town.as_town(), day, goodwill, &self.eco.jobs.gone())
+            .into_iter()
+            .filter(|j| pbd_core::economy::jobs::shown_at(j, hour))
+            .collect()
+    }
+
+    /// Give a taken job up (`town-missions-tree` design 9): off the taken
+    /// list, back on its board, no coins and no goodwill. A delivery's
+    /// parcel leaves the pack if it is there; a lost villager's record is
+    /// cleared and they go back to their post. The jobs line first.
+    pub fn abandon(&mut self, id: u64) -> Result<Job, Why> {
+        let mut jobs = self.eco.jobs.clone();
+        let job = jobs.abandon(id).map_err(Why::Job)?;
+        let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs);
+        let mut slots = self.slots.clone();
+        if job.kind == JobKind::Deliver && slots.take_item(Item::Good(Good::PARCEL), 1) {
+            if !self.save.store_with_hands(record, JOBS_SCHEMA, &slots) {
+                return Err(Why::Unsaved);
+            }
+        } else if self.save.store(&Author::Player(0), vec![record]).is_none() {
+            return Err(Why::Unsaved);
+        }
+        if job.kind == JobKind::Lost
+            && let Some(lost) = special::lost_of(self.save, job.id)
+        {
+            let home = special::home_record(job.id);
+            if self.save.store(&Author::Player(0), vec![home]).is_some() {
+                self.eco.let_go.push(pbd_core::townsfolk::PersonId {
+                    site: lost.site,
+                    index: lost.person,
+                });
+            }
+        }
+        info!(
+            "job {} abandoned at site {}: {:?}",
+            job.id, job.site, job.kind
+        );
+        self.eco.jobs = jobs;
+        *self.slots = slots;
+        Ok(job)
     }
 
     /// Take a job from `town`'s board. A delivery hands over its parcel, so
@@ -401,12 +457,12 @@ impl Shop<'_> {
     pub fn hand_in(&mut self, town: &TownInfo, id: u64) -> Result<Job, Why> {
         let mut jobs = self.eco.jobs.clone();
         let job = jobs.hand_in(id, town.site).map_err(Why::Job)?;
-        let mut purse = self.eco.purse;
+        let mut purse = self.eco.purse.clone();
         let entry = purse
             .change(Reason::Mission, job.reward)
             .expect("an earning is never refused");
         let mut goodwill = goodwill_of(self.save, town.site);
-        goodwill.raise(self.cfg.trade.goodwill.per_job, &self.cfg.trade.goodwill);
+        let stepped = self.raise_goodwill(&mut goodwill, self.cfg.trade.goodwill.per_job);
         let lines = vec![
             StoredRecord::of(PURSE_KIND, PURSE_ID, PURSE_SCHEMA, &purse),
             StoredRecord::of(GOODWILL_KIND, town.site as u64, GOODWILL_SCHEMA, &goodwill),
@@ -423,6 +479,10 @@ impl Shop<'_> {
         info!("{} for job {} at {}", entry.log_line(), job.id, town.name);
         self.eco.purse = purse;
         self.eco.jobs = jobs;
+        self.eco
+            .raised
+            .push(Happened::new(Kind::Job, job.kind.code(), 1));
+        self.note_step(town, stepped);
         Ok(job)
     }
 
@@ -470,7 +530,38 @@ impl Shop<'_> {
         self.eco.jobs = jobs;
         *self.slots = slots;
         self.notice_done(&done);
+        self.eco.raised.push(Happened::new(
+            Kind::Deliver,
+            scoped(town.site, "parcel"),
+            handed,
+        ));
         Ok(handed)
+    }
+
+    /// A townsperson talked to: counted once a person by the mission trees.
+    pub fn talked(&mut self, talker: &Talker) {
+        self.eco.raised.push(Happened::new(
+            Kind::Talk,
+            scoped(talker.site, &talker.index.to_string()),
+            1,
+        ));
+    }
+
+    /// Raise a town's goodwill by `by`: whether it reached its next step.
+    fn raise_goodwill(&self, goodwill: &mut Goodwill, by: u32) -> bool {
+        let cfg = &self.cfg.trade.goodwill;
+        let before = cfg.level(goodwill.points);
+        goodwill.raise(by, cfg);
+        cfg.level(goodwill.points) > before
+    }
+
+    /// A town's goodwill stepped up, for the mission trees.
+    fn note_step(&mut self, town: &TownInfo, stepped: bool) {
+        if stepped {
+            self.eco
+                .raised
+                .push(Happened::new(Kind::Goodwill, scoped(town.site, "step"), 1));
+        }
     }
 
     fn notice_done(&mut self, done: &[u64]) {
@@ -568,6 +659,9 @@ impl Plugin for EconomyPlugin {
         if !app.world().contains_resource::<EconomyConfig>() {
             app.insert_resource(EconomyConfig::load());
         }
+        if !app.is_plugin_added::<crate::town_missions::TownMissionsPlugin>() {
+            app.add_plugins(crate::town_missions::TownMissionsPlugin);
+        }
         app.init_resource::<Economy>()
             .add_systems(
                 PostUpdate,
@@ -577,13 +671,19 @@ impl Plugin for EconomyPlugin {
             )
             .add_systems(
                 Update,
-                (special::lost_villagers, special::repairs, special::use_mend)
+                (
+                    special::lost_villagers,
+                    special::repairs,
+                    special::use_mend,
+                    special::use_lamp,
+                )
                     .run_if(crate::world_open)
                     .run_if(resource_exists::<Towns>),
             )
+            .init_resource::<special::LitLamps>()
             .add_systems(
                 PostUpdate,
-                special::offer_mend
+                (special::offer_mend, special::offer_lamp)
                     .in_set(crate::interact::InteractSet::Offer)
                     .run_if(resource_exists::<Towns>),
             );

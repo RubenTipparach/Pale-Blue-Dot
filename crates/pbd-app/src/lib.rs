@@ -9,6 +9,7 @@ pub mod audio;
 pub mod beaver;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod build_view;
 pub mod builds;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
@@ -86,6 +87,7 @@ pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod tone;
 #[cfg(feature = "desktop")]
+pub mod town_missions;
 pub mod towns;
 pub mod townsfolk;
 pub mod tree_shake;

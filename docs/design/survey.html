@@ -215,18 +215,6 @@ section.topic, .ki, .phase-quiet, .ki li, details.decided { scroll-margin-top: 7
 // (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
 const PHASES = [
   { id: 'phase-1', num: '1', name: 'The first game loop', qs: [
-      { id: 'A5', q: 'The herd\'s look. Today a grazing plodder turns its neck and face down 106 degrees together, so its face ends pointing back at its chest, 0.36 m above the grass; and every animal is a smooth 2,300-triangle form with no edges. The mockup\'s Art style tab shows the four species, a 1.8 m player and a 1 m grid in four styles, day and night. Which style should the herd take in the game? (Every style but Today has the neck fixed: the face never past vertical, the muzzle at the grass.)',
-        options: ['Today, with the neck fixed', 'Soft low-poly (about 820 triangles, planes on a curved form, hard hoof, horn and jaw, coat pixels the ground\'s size)', 'Carved blocky (bevelled block sections, about 1,100 triangles)'], rec: 1,
-        why: 'It keeps today\'s shapes and their smooth light across the curves, but its planes, creases and coarser coat pixels match the hex ground, the timber and the townsfolk, where today\'s rubber smoothness does not.',
-        change: 'animal-husbandry (design 17)', asked: '2026-11-23',
-        link: { url: 'https://claude.ai/artifact/PM7G5qGuWM5g4DN8t787EY#art', label: 'Open M26\'s Art style tab (drag to turn; Stand, Graze, Walk, Day, Night)' },
-        images: [
-          { src: 'img/a5-neck-graze.jpg', alt: 'Two views of the plodder grazing: today with its head turned under its chest, and fixed with its muzzle at the grass', caption: 'Grazing, today (left: face turned back under the chest) and fixed (right).' },
-          { src: 'img/a5-today.jpg', alt: 'The herd as the game draws it today, by day', caption: 'Today, standing.' },
-          { src: 'img/a5-soft.jpg', alt: 'The herd in the soft low-poly style by day', caption: 'Soft low-poly (recommended).' },
-          { src: 'img/a5-carved.jpg', alt: 'The herd in the carved blocky style by day', caption: 'Carved blocky.' },
-          { src: 'img/a5-soft-night.jpg', alt: 'The soft low-poly herd at night by two lanterns', caption: 'Soft low-poly at 22:30, by the lanterns.' },
-        ] },
     ], issues: [] },
   { id: 'phase-2', num: '2', name: 'Environment v2', qs: [], issues: [
     { id: 'phase-2-flora', step: 'Advanced foliage and flora', items: [
@@ -296,6 +284,7 @@ const PHASES = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-23", "phase": "1", "id": "A5", "text": "The herd's look: \"make animals like this! I love this look\", then \"please go back to blocky style for animals\" and \"DO NOT DO THE SOFT CURVY ANIMALS\", on M26's Hatchery tab. The herd is built as M26's Farmstead and Hatchery animals are: boxes sized and placed as one creature, each wearing its pixel hide, tinted by the coat. The neck is a pose only: the head at the withers standing, the muzzle at the grass grazing, the face never past vertical. None of the Art style tab's styles was taken.", "where": "animal-husbandry design 17 (The owner's pick), tasks 10.3 and 10.4"},
   {"date": "2026-11-22", "phase": "3", "id": "E1", "text": "Traders do not sell basic tools: they are made, never bought. \"we'll have a special weapons and enchanted tools that give +1 mining speed +1 yeild, stuff like that\": traders will sell special weapons and enchanted tools with bonuses (such as +1 mining speed, +1 yield), once enchantments and weapons are written up (weapons with survival, phase 4).", "where": "townsfolk design 38c (no basic tools on the Tools shelf), task 12.5, task 12.6"},
   {"date": "2026-11-22", "id": "G4, G4a", "text": "\"All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes\" for rockets. The flight stays one Newtonian integrator; the conics are the map and the planner. CLAUDE.md's flight invariant names the decision and is rewritten when it is built.", "where": "ship-tiers design, Owner answers; CLAUDE.md"},
   {"date": "2026-11-22", "id": "W21", "text": "Deep zones fitted to the column: sunlit to 40 m, twilight to 90 m, dark below. And \"powered ligths should work underwater? mushgroom glow should work underwater too\": lamps and glowing mushrooms light under water as on land; open flames go out (recommendation taken).", "where": "ocean-environments design, task 21"},

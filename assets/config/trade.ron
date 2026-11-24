@@ -17,6 +17,8 @@
     unsold: [
         "fish:sea_otter", "fish:seal", "fish:beaver", "fish:river_otter",
         "fish:reef_turtle", "block:mussel bed", "parcel",
+        // The carts are made, not bought (land-transport design 10).
+        "hand-cart", "horse-cart",
     ],
     // Codes no trader buys.
     unbought: ["parcel"],
@@ -46,6 +48,8 @@
         Cliff: { fish: 2.0, ore: 0.5, stone: 0.6, crop: 1.5, herd: 1.2 },
         Cave: { fish: 1.8, ore: 0.5, stone: 0.5, crop: 1.8, fruit: 1.8, light: 1.5 },
     },
+    // A horse, sold by the trader (land-transport design 10), in coins.
+    horse_coins: 120,
     // Goodwill (design 12): what raises it, and what it is worth.
     goodwill: (
         per_trade: 1,

@@ -14,6 +14,7 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
@@ -198,6 +199,9 @@ pub struct Launch {
     /// pack's own move and save (`small-boats` design 5). A capture
     /// instrument.
     pub load_hold: bool,
+    /// `--carts` (`land-transport` 5.6): a hand cart and a hitched horse cart
+    /// set down ahead; `--cart-pull` takes the handles, `--cart-drive` the seat.
+    pub carts: Option<pbd_app::vehicles::carts::CartScript>,
     /// `--husbandry SCENE`: set a farm scene in front of the walker through
     /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
     /// animals can be photographed (`animal-husbandry` S12). A capture
@@ -393,6 +397,11 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
+    /// instrument): a grinder and a mixer that far ahead either side, and a
+    /// plan staked from beyond them along the view, its nearer half paved,
+    /// through the same paths a player's stake and shovel take.
+    pub paving: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -414,6 +423,15 @@ pub struct Launch {
     /// `--tree-hover <id>`: zoomed out, show that mission's hover card as if
     /// the pointer were on its tile (a capture instrument).
     pub tree_hover: Option<String>,
+    /// `--tree-town`: the Missions tab shows the town tree once it is open;
+    /// `--town-focus <id>`: that town mission is made the one the player is
+    /// on once it opens, as a pick on the tree would (capture instruments,
+    /// `town-missions-tree` design 6).
+    pub tree_town: bool,
+    pub town_focus: Option<String>,
+    /// `--no-readout`: no debug readout at the top left, as in a showcase
+    /// (a capture instrument).
+    pub no_readout: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -528,6 +546,7 @@ impl Launch {
             cast: false,
             rod_cue: None,
             load_hold: false,
+            carts: None,
             husbandry: None,
             life: None,
             aboard: None,
@@ -576,6 +595,7 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            paving: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -587,6 +607,9 @@ impl Launch {
             tree_select: None,
             tree_zoom: None,
             tree_hover: None,
+            tree_town: false,
+            town_focus: None,
+            no_readout: false,
             dig_ahead: false,
             take_trees: false,
             pick_only: false,
@@ -659,8 +682,9 @@ impl Launch {
                                 | "pack-locked"
                                 | "bench"
                                 | "bench-view"
+                                | "carpenter"
                         ),
-                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench, bench-view or carpenter"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -795,6 +819,15 @@ impl Launch {
                         result.forge = Some(metres);
                     }
                 }
+                "--paving" => {
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--paving takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.paving = Some(metres);
+                }
                 "--gather-around" => {
                     i += 1;
                     result.gather_around = Some(
@@ -846,6 +879,16 @@ impl Launch {
                     result.tree_select = Some(
                         args.get(i)
                             .expect("--tree-select takes a mission id")
+                            .clone(),
+                    );
+                }
+                "--tree-town" => result.tree_town = true,
+                "--no-readout" => result.no_readout = true,
+                "--town-focus" => {
+                    i += 1;
+                    result.town_focus = Some(
+                        args.get(i)
+                            .expect("--town-focus takes a town mission id")
                             .clone(),
                     );
                 }
@@ -1362,6 +1405,29 @@ impl Launch {
                     });
                 }
                 "--load-hold" => result.load_hold = true,
+                "--carts" => {
+                    result.walk = true;
+                    result.carts.get_or_insert_default();
+                }
+                "--cart-pull" => result.carts.get_or_insert_default().pull = true,
+                "--cart-drive" => result.carts.get_or_insert_default().drive = true,
+                "--cart-close" => {
+                    i += 1;
+                    result.walk = true;
+                    let code = args
+                        .get(i)
+                        .expect("--cart-close requires hand, horse, plodder or ride");
+                    let script = result.carts.get_or_insert_default();
+                    script.plodder = code == "plodder";
+                    script.ride = code == "ride";
+                    script.close = if script.plodder {
+                        Some(pbd_core::vehicle::cart::CartKind::HorseCart)
+                    } else {
+                        pbd_core::vehicle::cart::CartKind::ALL
+                            .into_iter()
+                            .find(|k| k.code().starts_with(code.as_str()))
+                    };
+                }
                 "--life" => {
                     i += 1;
                     result.walk = true;
@@ -1816,8 +1882,11 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::builds::BuildsPlugin)
     // Logs on the water (`log-drives`).
     .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
+    .init_resource::<pbd_app::build_view::BuildView>()
     .add_systems(Startup, build_mode::spawn_ghost)
     .add_systems(
         PreUpdate,
@@ -1829,6 +1898,7 @@ pub fn run(args: &[String]) {
         Update,
         (
             build_mode::load_blueprints,
+            build_mode::drive_view,
             build_mode::aim_and_build.run_if(
                 resource_exists::<pbd_app::planet::PlanetFine>
                     .and(resource_exists::<pbd_app::planet::PlanetContact>),
@@ -1902,6 +1972,8 @@ pub fn run(args: &[String]) {
                 missions::press_tabs,
                 missions::paint,
                 missions::show_line,
+                mission_tree::tree_tabs,
+                mission_tree::switch_tree,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -1910,6 +1982,8 @@ pub fn run(args: &[String]) {
             )
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::scripted_town.run_if(pbd_app::loading::ready),
+            showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
         ),
@@ -2007,6 +2081,11 @@ pub fn run(args: &[String]) {
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
+    .insert_resource(if launch.tree_town {
+        mission_tree::ShownTree::Town
+    } else {
+        mission_tree::ShownTree::Starter
+    })
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
@@ -2106,10 +2185,12 @@ pub fn run(args: &[String]) {
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
                 pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),
@@ -2129,7 +2210,14 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
-            (digging::server_worms, digging::dig_and_place, cracks::show)
+            // A dig press on a survey stake takes it back, and is spent
+            // (`townsfolk` design 39): before the digging.
+            (
+                digging::server_worms,
+                pbd_app::roads::take_stakes,
+                digging::dig_and_place,
+                cracks::show,
+            )
                 .chain()
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
@@ -2468,6 +2556,11 @@ pub fn run(args: &[String]) {
         }
         if launch.load_hold {
             app.add_systems(Update, load_hold_script.before(pack::find_hold));
+        }
+        if let Some(script) = launch.carts {
+            app.world_mut()
+                .get_resource_or_insert_with(pbd_app::vehicles::carts::Carts::default)
+                .script = Some(script);
         }
         if launch.fish {
             if launch.fish_play {

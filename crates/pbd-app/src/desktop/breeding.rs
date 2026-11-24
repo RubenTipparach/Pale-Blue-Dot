@@ -2,7 +2,7 @@
 //! Breeding tab: the herd of one kept species, a sire and a dam picked from
 //! it, every young the pair can give before they are paired, and a pedigree.
 //!
-//! B opens it on foot and B or Escape closes it. It is a `menu::Screen`, so it
+//! N opens it on foot and N or Escape closes it. It is a `menu::Screen`, so it
 //! holds the pointer and the keyboard as the field guide does. Every number on
 //! it is the core's: the four values of each gene
 //! (`breeding::offspring_values`), the coat, pattern and morph odds, and
@@ -71,15 +71,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
         });
 }
 
-/// B opens the screen on foot and closes it again. `PreUpdate` after
-/// `menu::toggle`, like every key a menu owns. In a craft B is the brake or
-/// the bail, so only a walker opens it.
+/// N opens the screen on foot and closes it again (`player-building` design
+/// B10: B is build mode's). `PreUpdate` after `menu::toggle`, like every key
+/// a menu owns. Only a walker opens it.
 pub fn open(
     keys: Res<ButtonInput<KeyCode>>,
     mut screen: ResMut<Screen>,
     walking: Option<Res<WalkingReadout>>,
 ) {
-    if !keys.just_pressed(KeyCode::KeyB) {
+    if !keys.just_pressed(KeyCode::KeyN) {
         return;
     }
     match *screen {
@@ -698,7 +698,7 @@ mod tests {
     /// B on foot opens the screen and B again closes it; in a craft B is the
     /// brake and opens nothing.
     #[test]
-    fn b_opens_the_breeding_screen_on_foot_only() {
+    fn n_opens_the_breeding_screen_on_foot_only() {
         let mut app = App::new();
         app.init_resource::<ButtonInput<KeyCode>>()
             .insert_resource(Screen::Playing)
@@ -710,9 +710,9 @@ mod tests {
         let tap = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
             keys.clear();
-            keys.release(KeyCode::KeyB);
+            keys.release(KeyCode::KeyN);
             keys.clear();
-            keys.press(KeyCode::KeyB);
+            keys.press(KeyCode::KeyN);
             app.update();
         };
         tap(&mut app);

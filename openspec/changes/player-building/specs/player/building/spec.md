@@ -18,13 +18,13 @@ own icon. Leaving build mode SHALL restore the hotbar as it was.
 
 #### Scenario: Entering build mode
 
-- **WHEN** the player presses N on foot
+- **WHEN** the player presses B on foot
 - **THEN** the hotbar shows the current kit's pieces, and the held tool is put
   away
 
 #### Scenario: Leaving build mode
 
-- **WHEN** the player presses N again
+- **WHEN** the player presses B again
 - **THEN** the hotbar and the selected slot are as they were before
 
 ### Requirement: A piece snaps to the cut
@@ -62,3 +62,44 @@ once where building is free.
 - **THEN** the cottage stands with its door, stair and roof, and can be walked
   into like a town's
 
+
+### Requirement: A footing has a stone texture of its own
+
+A floor's footing SHALL be drawn in a dressed stone texture of its own,
+coloured only from the town kits' stones, sampled nearest.
+
+#### Scenario: A house on a terrace
+
+- **WHEN** a floor stands over lower ground
+- **THEN** its footing shows coursed stone blocks in the stones' palette
+
+### Requirement: A door is crafted and hung in a doorway
+
+A door SHALL be made at the workbench, SHALL be placed only in a wall's
+doorway, and SHALL open and shut with the interact key. Its state SHALL be
+kept through the durable path, and a shut door SHALL stop the walker. A
+doorway with no door SHALL stay an open doorway, in a new save and in an old
+one.
+
+#### Scenario: Hanging a door
+
+- **WHEN** the player carries a door and places it in a doorway
+- **THEN** the door hangs there shut, one door is taken from the pack, and
+  the walker cannot pass until it is opened
+
+#### Scenario: An old house
+
+- **WHEN** a world saved before doors could be made is opened
+- **THEN** its houses' doorways are open, with no door, until one is hung
+
+### Requirement: Architecture mode
+
+In build mode, one key SHALL raise a build camera over the plot, where the
+cursor places and removes pieces on the grid and the build layer moves up and
+down. Leaving it SHALL give back the walker's camera exactly as it was.
+
+#### Scenario: Back to walking
+
+- **WHEN** the player leaves architecture mode
+- **THEN** the camera is at the walker's eye with the walker's heading and
+  pitch, unchanged

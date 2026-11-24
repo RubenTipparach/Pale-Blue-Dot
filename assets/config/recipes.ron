@@ -45,13 +45,15 @@
             inputs: [("fibre", 3)],
             outputs: [("rope", 1)],
         ),
-        // ---- townsfolk design 31: loose stone crushed by hand, for a road.
+        // ---- townsfolk design 41: survey stakes, a road's waypoints, in the
+        // row the hand recipe for gravel had (`gravel` is retired: gravel
+        // comes from the mixer).
         (
-            code: "gravel",
+            code: "survey-stakes",
             station: "hand",
-            secs: 1.5,
-            inputs: [("stone", 2)],
-            outputs: [("gravel", 4)],
+            secs: 1.0,
+            inputs: [("planks", 1), ("fibre", 1)],
+            outputs: [("survey-stakes", 4)],
         ),
         (
             code: "workbench",
@@ -138,6 +140,15 @@
             inputs: [("planks", 4), ("rope", 2)],
             outputs: [("incubator", 1)],
         ),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        // (its strap hinges and pull), hung in a doorway.
+        (
+            code: "door",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 4), ("iron-ingot", 1)],
+            outputs: [("door", 1)],
+        ),
         (
             code: "bronze-pickaxe",
             station: "workbench",
@@ -198,6 +209,140 @@
             secs: 6.0,
             inputs: [("log", 6), ("rope", 4)],
             outputs: [("raft", 1)],
+        ),
+        // ---- townsfolk design 41: the grinder crushes stone; the mixer mixes
+        // crushed stone and sand into road gravel.
+        (
+            code: "grinder",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("stone", 10), ("planks", 6), ("iron-ingot", 2)],
+            outputs: [("block:grinder", 1)],
+        ),
+        (
+            code: "mixer",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("planks", 8), ("rope", 2), ("iron-ingot", 1), ("bucket", 1)],
+            outputs: [("block:mixer", 1)],
+        ),
+        (
+            code: "crushed-stone",
+            station: "grinder",
+            secs: 4.0,
+            inputs: [("stone", 2)],
+            outputs: [("crushed-stone", 3)],
+        ),
+        (
+            code: "mixed-gravel",
+            station: "mixer",
+            secs: 6.0,
+            inputs: [("crushed-stone", 3), ("block:sand", 1)],
+            outputs: [("gravel", 4)],
+        ),
+        // ---- land-transport design 10: the cart wheel (an iron tyre on a
+        // plank wheel), and the hand cart and the horse cart made from two
+        // of them, carried as goods and set down as vehicles.
+        (
+            code: "wheel",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 4), ("iron-ingot", 1)],
+            outputs: [("wheel", 1)],
+        ),
+        (
+            code: "hand-cart",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("wheel", 2), ("planks", 8), ("rope", 2)],
+            outputs: [("hand-cart", 1)],
+        ),
+        (
+            code: "horse-cart",
+            station: "workbench",
+            secs: 8.0,
+            inputs: [("wheel", 2), ("planks", 14), ("rope", 4), ("leather", 2)],
+            outputs: [("horse-cart", 1)],
+        ),
+        // ---- furniture design 1 and 2: the carpenter's bench, made at the
+        // workbench, and the Furniture branch, made at the bench and nowhere
+        // else.
+        (
+            code: "carpenter-bench",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("planks", 8), ("log", 2), ("iron-ingot", 1)],
+            outputs: [("block:carpenter's bench", 1)],
+        ),
+        (
+            code: "chair",
+            station: "carpenter",
+            secs: 3.0,
+            inputs: [("planks", 3)],
+            outputs: [("chair", 1)],
+        ),
+        (
+            code: "stool",
+            station: "carpenter",
+            secs: 2.0,
+            inputs: [("planks", 2)],
+            outputs: [("stool", 1)],
+        ),
+        (
+            code: "bench",
+            station: "carpenter",
+            secs: 3.0,
+            inputs: [("planks", 4)],
+            outputs: [("bench", 1)],
+        ),
+        (
+            code: "table",
+            station: "carpenter",
+            secs: 4.0,
+            inputs: [("planks", 5)],
+            outputs: [("table", 1)],
+        ),
+        (
+            code: "bed",
+            station: "carpenter",
+            secs: 6.0,
+            inputs: [("planks", 5), ("wool", 3)],
+            outputs: [("bed", 1)],
+        ),
+        (
+            code: "drawers",
+            station: "carpenter",
+            secs: 5.0,
+            inputs: [("planks", 6)],
+            outputs: [("drawers", 1)],
+        ),
+        (
+            code: "closet",
+            station: "carpenter",
+            secs: 6.0,
+            inputs: [("planks", 8)],
+            outputs: [("closet", 1)],
+        ),
+        (
+            code: "chest",
+            station: "carpenter",
+            secs: 4.0,
+            inputs: [("planks", 5), ("rope", 1)],
+            outputs: [("chest", 1)],
+        ),
+        (
+            code: "banded-chest",
+            station: "carpenter",
+            secs: 5.0,
+            inputs: [("planks", 5), ("iron-ingot", 2)],
+            outputs: [("banded-chest", 1)],
+        ),
+        (
+            code: "crate",
+            station: "carpenter",
+            secs: 3.0,
+            inputs: [("planks", 3)],
+            outputs: [("crate", 1)],
         ),
     ],
 )

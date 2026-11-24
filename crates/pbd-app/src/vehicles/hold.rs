@@ -13,7 +13,14 @@ use pbd_core::vehicle::hold::{HOLD, HOLD_KIND, HOLD_SCHEMA, Hold};
 /// The hold of craft `id` as the save holds it: empty if it has none, or one
 /// this build cannot read (which is kept in the save as it was).
 pub fn read(save: &WorldSave, id: u64) -> Hold {
-    let mut hold = Hold::default();
+    read_sized(save, id, HOLD)
+}
+
+/// The hold of vehicle `id`, `slots` slots big (a cart's, `land-transport`
+/// design 10). A ten-slot boat record reads as it always did.
+pub fn read_sized(save: &WorldSave, id: u64, slots: usize) -> Hold {
+    let mut hold = Hold::sized(slots);
+    let size = hold.slots.len();
     let Some(record) = save.records.get(HOLD_KIND, id) else {
         return hold;
     };
@@ -23,7 +30,7 @@ pub fn read(save: &WorldSave, id: u64) -> Hold {
     let Ok(texts) = ron::from_str::<Vec<String>>(&record.body) else {
         return hold;
     };
-    for (slot, text) in hold.slots.iter_mut().zip(texts.iter().take(HOLD)) {
+    for (slot, text) in hold.slots.iter_mut().zip(texts.iter().take(size)) {
         *slot = stack_of(text).flatten();
     }
     hold

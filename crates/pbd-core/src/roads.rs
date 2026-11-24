@@ -52,8 +52,10 @@ pub const RECORD_SCHEMA: u32 = 1;
 pub const CUT_FILL_SCHEMA: u32 = 2;
 /// The planner's version, stored in the net record: 1 climbed a layer a
 /// cell at most over the ground as it is; 2 may also cut and fill
-/// (`townsfolk` design 32). A world keeps the roads it was planned with.
-pub const NET_VERSION: u32 = 2;
+/// (`townsfolk` design 32); 3 joins each settlement to at most one other,
+/// so no network joins three (design 43). A world keeps the roads it was
+/// planned with.
+pub const NET_VERSION: u32 = 3;
 /// The level the roads are laid on: the finest, the one the player edits.
 pub const LEVEL: u8 = cell_key::LAST_LEVEL;
 
@@ -118,6 +120,112 @@ pub struct RoadsConfig {
     pub lamp_town_m: f32,
     #[serde(default)]
     pub lamp_every: u32,
+    /// Roads version 3 (`townsfolk` design 43): the most settlements one
+    /// network of the world's roads joins; nought for no limit (versions 1
+    /// and 2: each to its nearest and the walled towns to each other). Only
+    /// 2 is a rule today: each settlement joined to at most one other.
+    #[serde(default)]
+    pub max_network: u32,
+    /// A survey stake's reach (design 39): the most cells between two
+    /// stakes, and how many cells its search may look at.
+    #[serde(default = "default_stake_cells")]
+    pub max_stake_cells: u32,
+    #[serde(default = "default_stake_expanded")]
+    pub stake_expanded: usize,
+    /// Seconds between two cells paved with the interact key held (design
+    /// 40): the shovel's stroke.
+    #[serde(default = "default_pave_beat")]
+    pub pave_beat_s: f32,
+    /// How fast a wheel runs on each surface, times its road speed
+    /// (`land-transport` design 9). Only wheels read it; the walker keeps
+    /// `dirt_speed` and `gravel_speed`.
+    #[serde(default)]
+    pub wheel: WheelFactors,
+}
+
+/// What a wheel stands on (`land-transport` design 9).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WheelGround {
+    /// A gravel road cell.
+    Gravel,
+    /// A dirt road cell.
+    Dirt,
+    /// A forded road cell, under its river's water.
+    Ford,
+    /// A road's timber bridge deck.
+    Bridge,
+    /// A town's own lanes and streets (its footprint).
+    Town,
+    /// Anything else: grass, sand, snow, scree.
+    Off,
+}
+
+/// A wheel's speed on each surface, times its road speed.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WheelFactors {
+    /// A gravel road, a bridge deck or a town's lanes.
+    pub gravel: f32,
+    pub dirt: f32,
+    pub ford: f32,
+    /// Off every road (the owner: "like 1/4 speed").
+    pub off_road: f32,
+}
+
+impl Default for WheelFactors {
+    fn default() -> Self {
+        Self {
+            gravel: 1.0,
+            dirt: 0.6,
+            ford: 0.5,
+            off_road: 0.25,
+        }
+    }
+}
+
+impl WheelFactors {
+    /// The factor of one surface.
+    pub fn of(&self, ground: WheelGround) -> f32 {
+        match ground {
+            WheelGround::Gravel | WheelGround::Bridge | WheelGround::Town => self.gravel,
+            WheelGround::Dirt => self.dirt,
+            WheelGround::Ford => self.ford,
+            WheelGround::Off => self.off_road,
+        }
+    }
+}
+
+/// The factor a wheeled vehicle runs at with its wheels on `under`: the
+/// lowest of them, so a cart half off the road is slowed (design 9). No
+/// wheel down reads as off the road.
+pub fn wheel_factor(factors: &WheelFactors, under: &[WheelGround]) -> f32 {
+    under
+        .iter()
+        .map(|&g| factors.of(g))
+        .reduce(f32::min)
+        .unwrap_or(factors.off_road)
+}
+
+/// What a wheel on a road cell stands on: its kind and its surface.
+pub fn wheel_ground(kind: Kind, surface: Surface) -> WheelGround {
+    match (kind, surface) {
+        (Kind::Bridge { .. }, _) => WheelGround::Bridge,
+        (Kind::Ford, _) => WheelGround::Ford,
+        (Kind::Ground, Surface::Gravel) => WheelGround::Gravel,
+        (Kind::Ground, Surface::Dirt) => WheelGround::Dirt,
+    }
+}
+
+fn default_stake_cells() -> u32 {
+    24
+}
+
+fn default_stake_expanded() -> usize {
+    4_000
+}
+
+fn default_pave_beat() -> f32 {
+    0.45
 }
 
 impl RoadsConfig {
@@ -153,9 +261,27 @@ impl RoadsConfig {
                 return Err(format!("{name} must be zero or more"));
             }
         }
+        let w = &self.wheel;
+        for (name, v) in [
+            ("wheel.gravel", w.gravel),
+            ("wheel.dirt", w.dirt),
+            ("wheel.ford", w.ford),
+            ("wheel.off_road", w.off_road),
+        ] {
+            if !(v.is_finite() && v > 0.0 && v <= 1.0) {
+                return Err(format!("{name} must be over 0 and at most 1"));
+            }
+        }
         if self.max_fill_layers > 4 || self.max_cut_layers > 4 {
             return Err("max_fill_layers and max_cut_layers are at most 4".into());
         }
+        if !matches!(self.max_network, 0 | 2) {
+            return Err("max_network is 0 (no limit) or 2".into());
+        }
+        if self.max_stake_cells == 0 || self.stake_expanded == 0 {
+            return Err("max_stake_cells and stake_expanded must be at least one".into());
+        }
+        positive("pave_beat_s", self.pave_beat_s)?;
         Ok(())
     }
 
@@ -167,6 +293,9 @@ impl RoadsConfig {
         if version < 2 {
             cfg.max_fill_layers = 0;
             cfg.max_cut_layers = 0;
+        }
+        if version < 3 {
+            cfg.max_network = 0;
         }
         cfg
     }
@@ -202,6 +331,11 @@ impl Default for RoadsConfig {
             cut_cost_m: 25.0,
             lamp_town_m: 90.0,
             lamp_every: 5,
+            max_network: 2,
+            max_stake_cells: 24,
+            stake_expanded: 4_000,
+            pave_beat_s: 0.45,
+            wheel: WheelFactors::default(),
         }
     }
 }
@@ -476,6 +610,9 @@ pub struct Settlement {
 /// nearest within `link_m`, and each large town to its nearest large town
 /// within `large_link_m`. Pairs by site id, the lower first, in order.
 pub fn links(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Vec<(u32, u32)> {
+    if cfg.max_network == 2 {
+        return pairs(settlements, cfg, radius_m);
+    }
     let mut pairs = BTreeSet::new();
     let arc =
         |a: &Settlement, b: &Settlement| crate::sites::arc_m(a.direction, b.direction, radius_m);
@@ -503,6 +640,34 @@ pub fn links(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Ve
         }
     }
     pairs.into_iter().collect()
+}
+
+/// Roads version 3's links (`townsfolk` design 43): every pair within
+/// `link_m`, nearest first (then by site ids), taken where neither town is
+/// joined yet. Each settlement is in one pair at most.
+fn pairs(settlements: &[Settlement], cfg: &RoadsConfig, radius_m: f32) -> Vec<(u32, u32)> {
+    let mut all: Vec<(f32, u32, u32)> = Vec::new();
+    for (i, a) in settlements.iter().enumerate() {
+        for b in &settlements[i + 1..] {
+            let m = crate::sites::arc_m(a.direction, b.direction, radius_m);
+            if m <= cfg.link_m && a.site != b.site {
+                all.push((m, a.site.min(b.site), a.site.max(b.site)));
+            }
+        }
+    }
+    all.sort_by(|x, y| x.0.total_cmp(&y.0).then((x.1, x.2).cmp(&(y.1, y.2))));
+    let mut joined = BTreeSet::new();
+    let mut out = Vec::new();
+    for (_, a, b) in all {
+        if joined.contains(&a) || joined.contains(&b) {
+            continue;
+        }
+        joined.insert(a);
+        joined.insert(b);
+        out.push((a, b));
+    }
+    out.sort();
+    out
 }
 
 /// The road's surface for a link (design 10, recommendation taken): gravel
@@ -791,6 +956,10 @@ pub fn plan(
             cfg,
             radius_m,
         )?;
+        // Version 3: a road through a third town's footprint would join it.
+        if cfg.max_network == 2 && crosses_a_third(&steps, a, b, settlements, radius_m) {
+            return None;
+        }
         Some(Road {
             from_site: a,
             to_site: b,
@@ -821,7 +990,101 @@ pub fn plan(
             .collect()
     });
     done.sort_by_key(|(k, _)| *k);
-    done.into_iter().map(|(_, r)| r).collect()
+    let roads: Vec<Road> = done.into_iter().map(|(_, r)| r).collect();
+    if cfg.max_network == 2 {
+        return apart(roads);
+    }
+    roads
+}
+
+/// Whether a route enters the footprint of a settlement other than its two
+/// ends (version 3): a footprint cell whose nearest settlement is neither.
+fn crosses_a_third(
+    steps: &[Step],
+    a: u32,
+    b: u32,
+    settlements: &[Settlement],
+    radius_m: f32,
+) -> bool {
+    steps.iter().filter(|s| s.ground.town).any(|s| {
+        let Some(c) = centre(s.key) else {
+            return false;
+        };
+        settlements
+            .iter()
+            .min_by(|x, y| {
+                crate::sites::arc_m(c, x.direction, radius_m)
+                    .total_cmp(&crate::sites::arc_m(c, y.direction, radius_m))
+                    .then(x.site.cmp(&y.site))
+            })
+            .is_some_and(|n| n.site != a && n.site != b)
+    })
+}
+
+/// Version 3: the roads in link order, each left out where it shares or
+/// touches a cell of one kept before it, so no two pairs meet on the ground.
+fn apart(roads: Vec<Road>) -> Vec<Road> {
+    let mut near: BTreeSet<u32> = BTreeSet::new();
+    let mut kept = Vec::new();
+    for road in roads {
+        if road.cells.iter().any(|c| near.contains(&c.key)) {
+            continue;
+        }
+        for c in &road.cells {
+            near.insert(c.key);
+            near.extend(neighbours(c.key));
+        }
+        kept.push(road);
+    }
+    kept
+}
+
+/// The networks a set of roads makes: settlements joined by a road, or by
+/// roads whose cells share or touch, as sets of site ids. A settlement with
+/// no road is in none.
+pub fn networks(roads: &[Road]) -> Vec<BTreeSet<u32>> {
+    fn find(p: &mut [usize], i: usize) -> usize {
+        let mut i = i;
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    let mut parent: Vec<usize> = (0..roads.len()).collect();
+    let mut owner: BTreeMap<u32, usize> = BTreeMap::new();
+    let mut by_site: BTreeMap<u32, usize> = BTreeMap::new();
+    for (i, r) in roads.iter().enumerate() {
+        let mut others = Vec::new();
+        for site in [r.from_site, r.to_site] {
+            if let Some(&j) = by_site.get(&site) {
+                others.push(j);
+            }
+            by_site.insert(site, i);
+        }
+        for c in &r.cells {
+            for k in std::iter::once(c.key).chain(neighbours(c.key)) {
+                if let Some(&j) = owner.get(&k) {
+                    others.push(j);
+                }
+            }
+        }
+        for j in others {
+            let (x, y) = (find(&mut parent, i), find(&mut parent, j));
+            parent[x] = y;
+        }
+        for c in &r.cells {
+            owner.insert(c.key, i);
+        }
+    }
+    let mut sets: BTreeMap<usize, BTreeSet<u32>> = BTreeMap::new();
+    for (i, r) in roads.iter().enumerate() {
+        let root = find(&mut parent, i);
+        let set = sets.entry(root).or_default();
+        set.insert(r.from_site);
+        set.insert(r.to_site);
+    }
+    sets.into_values().collect()
 }
 
 // ---- Clearance ---------------------------------------------------------------
@@ -1231,6 +1494,13 @@ pub struct BuiltCell {
     pub base_m: i32,
     pub up: Option<u32>,
     pub from: Option<u32>,
+    /// Paved on a plan (design 40, schema 2): raised a layer on packed
+    /// earth, a dip one cell wide, as a world road's ([`RoadCell::raised`]).
+    #[serde(default)]
+    pub raised: bool,
+    /// The plan it was paved on (schema 2); `None` for design 31's cells.
+    #[serde(default)]
+    pub plan: Option<u64>,
 }
 
 /// A player's road cell as its record, by the cell's key.
@@ -1242,7 +1512,7 @@ pub fn built_record(key: u32, cell: &BuiltCell) -> Record {
 pub fn built(records: &Records) -> BTreeMap<u32, BuiltCell> {
     records
         .of_kind(ROAD_CELL_RECORD)
-        .filter(|r| r.schema == RECORD_SCHEMA)
+        .filter(|r| r.schema == RECORD_SCHEMA || r.schema == paving::PAVED_SCHEMA)
         .filter_map(|r| Some((u32::try_from(r.id).ok()?, r.read::<BuiltCell>()?)))
         .collect()
 }
@@ -1264,13 +1534,14 @@ pub fn built_cell(key: u32, cell: &BuiltCell) -> RoadCell {
         key,
         base_m: cell.base_m,
         kind: Kind::Ground,
-        raised: false,
+        raised: cell.raised,
         cut_fill: 0,
         up: cell.up,
         from: cell.from,
     }
 }
 
+pub mod paving;
 pub mod piece;
 
 #[cfg(test)]

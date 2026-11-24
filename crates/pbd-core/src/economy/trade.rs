@@ -73,6 +73,14 @@ pub struct TradeConfig {
     #[serde(default)]
     pub needs: BTreeMap<SiteKind, BTreeMap<Group, f32>>,
     pub goodwill: super::goodwill::GoodwillConfig,
+    /// What a town sells a horse for, coins (`land-transport` design 10).
+    #[serde(default = "horse_coins")]
+    pub horse_coins: u64,
+}
+
+/// A horse's price where `trade.ron` names none.
+fn horse_coins() -> u64 {
+    120
 }
 
 impl TradeConfig {
@@ -340,7 +348,7 @@ impl Trader<'_> {
         if s.give(item, 1) != 0 {
             return Err(Refused::PackFull);
         }
-        let mut p = *purse;
+        let mut p = purse.clone();
         let entry = p
             .change(Reason::Bought, price)
             .map_err(|_| Refused::Short)?;
@@ -379,7 +387,7 @@ impl Trader<'_> {
         if !s.take_item(item, 1) {
             return Err(Refused::NotHeld);
         }
-        let mut p = *purse;
+        let mut p = purse.clone();
         let entry = p.change(Reason::Sold, price).map_err(|_| Refused::Short)?;
         let lot = m.lots.entry(code.to_string()).or_default();
         lot.factor = (lot.factor * (1.0 - self.cfg.step)).max(self.cfg.low);

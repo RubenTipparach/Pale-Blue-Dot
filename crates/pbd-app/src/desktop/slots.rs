@@ -85,7 +85,10 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench => one(1., 3.),
+        Material::Workbench | Material::Carpenter => one(1., 3.),
+        // The gravel stations (`townsfolk` design 41): their blocks are the
+        // workbench's timber; their slots draw their own pictures.
+        Material::Grinder | Material::Mixer => one(1., 3.),
         // The sea's cells (`ocean-environments` B24), each its sheet's tile
         // all round, as the ground draws it.
         Material::ReefRock | Material::Basalt => one(3., 0.),
@@ -137,6 +140,11 @@ pub struct ItemIcons {
     pub forge: Handle<Image>,
     /// The workbench's, M3's (`tool-crafting`).
     pub workbench: Handle<Image>,
+    /// The carpenter's bench's (`furniture` design 1).
+    pub carpenter: Handle<Image>,
+    /// The grinder's and the mixer's (`townsfolk` design 41).
+    pub grinder: Handle<Image>,
+    pub mixer: Handle<Image>,
     /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
     /// draws as iron until it is made. The rod's three are the rod.
     pub tiered: Vec<[Handle<Image>; 3]>,
@@ -213,6 +221,9 @@ pub fn load_icons(
             .collect(),
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
+        carpenter: assets.load("items/stations/carpenter.png"),
+        grinder: assets.load("items/stations/grinder.png"),
+        mixer: assets.load("items/stations/mixer.png"),
         tiered: pbd_core::inventory::Tool::ALL
             .iter()
             .map(|tool| {
@@ -367,6 +378,9 @@ pub fn paint_icon(
         Item::Tool(tool) => Some(items.tool(tool)),
         Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(Material::Workbench) => Some(items.workbench.clone()),
+        Item::Block(Material::Carpenter) => Some(items.carpenter.clone()),
+        Item::Block(Material::Grinder) => Some(items.grinder.clone()),
+        Item::Block(Material::Mixer) => Some(items.mixer.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
             .position(|&light| light == material)
@@ -649,6 +663,8 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            grinder: Handle::default(),
+            mixer: Handle::default(),
             tiered: Vec::new(),
         };
         assert_eq!(stack_tip(None, &items), "");

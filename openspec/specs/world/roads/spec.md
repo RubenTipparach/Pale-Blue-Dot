@@ -4,7 +4,9 @@
 Road cells that slope instead of step, and the roads the world lays between
 towns. Built by `townsfolk` (design 10, 10a and 11, tasks 8.2 and 8.4);
 the player's own road building (task 8.3) is in it too, and cut and fill
-(roads version 2) and the lamps near towns (design 32 and 34).
+(roads version 2) and the lamps near towns (design 32 and 34), and the
+roads marked by survey stakes and paved with gravel from a grinder and a
+mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44).
 
 ## Requirements
 
@@ -77,11 +79,23 @@ Pinned by `pbd_core::roads::tests::a_road_near_a_town_is_lit_by_lamps_beside_it`
 
 ### Requirement: Roads join the towns
 
-The world SHALL plan roads once from the settlements and the seed, joining
-each settlement to its two nearest neighbours within 2 km and the largest
-towns to each other, and SHALL save them as records it authored. A road cell
-SHALL be laid only where the player has made no edit. A world saved before
-roads SHALL gain them when next opened, without a restart.
+The world SHALL plan roads once from the settlements and the seed and SHALL
+save them as records it authored. A world planned from now on (roads
+version 3) SHALL join each settlement to at most one other within 2 km, so
+that no network of its roads joins three or more settlements; a world
+planned by an earlier version SHALL keep the roads it has, cell for cell.
+A road cell SHALL be laid only where the player has made no edit. A world
+saved before roads SHALL gain them when next opened, without a restart.
+
+#### Scenario: A new world
+
+- **WHEN** a new world's roads are planned
+- **THEN** every network of roads joins one or two settlements
+
+#### Scenario: A world planned before
+
+- **WHEN** a world whose roads version 2 planned is opened
+- **THEN** its roads are the ones it was saved with
 
 #### Scenario: A player's house on the route
 
@@ -94,22 +108,96 @@ roads SHALL gain them when next opened, without a restart.
 - **THEN** its towns are joined by roads, and nothing the player made has
   changed
 
-Pinned by `pbd_core::roads::tests::every_settlement_reaches_its_two_nearest_within_2_km`,
+Pinned by `pbd_core::roads::tests::version_2_links_are_pinned` (versions
+1 and 2's links, taken before version 3),
+`no_network_joins_three`, `every_settlement_reaches_its_two_nearest_within_2_km`,
 `a_road_goes_round_the_players_work`, and `pbd-app`
 `roads::tests::a_road_is_never_laid_on_a_players_edit` and
 `a_save_from_before_roads_gains_them_once_in_place`.
 
 ### Requirement: Dirt and gravel
 
-The player SHALL be able to lay a dirt road cell with the shovel and a
-gravel road cell with gravel, each saved as the player's with the pack in
-the same line, and walking SHALL be faster on gravel than on dirt.
+The player SHALL pave a marked cell with gravel by the interact key with the
+shovel in hand and gravel in the pack, one gravel a cell, the cell's slope
+cut by the world road's own rule from the plan's order, saved as the
+player's with the pack in the same line, and walking SHALL be faster on
+gravel than on dirt. The place button SHALL NOT lay a road. Dirt tracks
+SHALL be laid by the world only, and every road cell a save already holds,
+gravel or dirt, SHALL be kept and walked as it was.
 
 #### Scenario: Building a road
 
-- **WHEN** the player places a gravel road cell
-- **THEN** one gravel is taken, the cell is saved as the player's, and the
-  walker moves faster on it
+- **WHEN** the player, shovel in hand, presses the interact key on a marked
+  cell with gravel in the pack
+- **THEN** one gravel is taken, the cell is a gravel road cell saved as the
+  player's, and the walker moves faster on it
 
-Pinned by `pbd-app` `roads::tests::the_player_lays_gravel_and_dirt_and_takes_them_up`
-and `gravel_is_walked_faster_than_dirt`.
+#### Scenario: No gravel
+
+- **WHEN** the player presses the interact key on a marked cell with no
+  gravel
+- **THEN** nothing is taken and the cell stays marked
+
+#### Scenario: An old player road
+
+- **WHEN** a world holding road cells the player laid by the place button is
+  opened
+- **THEN** every one is drawn and walked as before
+
+Pinned by `pbd_core::roads::paving::tests::paving_in_any_order_gives_the_same_road`,
+`pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`
+(one gravel a cell, the tufts gone at once), `gravel_is_walked_faster_than_dirt`
+and `the_player_lays_gravel_and_dirt_and_takes_them_up` (an old player road
+still reads, draws and is taken up).
+
+### Requirement: A road is marked before it is paved
+
+The player SHALL mark a road for paving by driving survey stakes as waypoints. The
+cells between two stakes SHALL be found by the world's road search, at most
+a layer apart, off the sea, out of towns and off any cell the player has
+edited unless it is a road cell, and every one SHALL be marked. A stake with
+no such way SHALL be refused with nothing taken.
+
+#### Scenario: Two stakes on a hillside
+
+- **WHEN** the player drives a stake, then another 12 cells away up a slope
+- **THEN** the cells between are marked, and no two marked neighbours differ
+  by more than a layer
+
+#### Scenario: Too steep
+
+- **WHEN** the only way to the aimed cell climbs two layers between cells
+- **THEN** the stake is refused, it stays in the pack, and nothing is marked
+
+Pinned by `pbd_core::roads::paving::tests::a_segment_never_steps_more_than_a_layer`,
+`a_stake_with_no_way_is_refused` and
+`taking_back_a_middle_stake_rejoins_or_splits`.
+
+### Requirement: Marks are saved
+
+A plan's stakes and cells SHALL be a durable record of the player's, written
+with the pack in the same line, and SHALL read back cell for cell whatever
+the road search's version.
+
+#### Scenario: A plan after a reload
+
+- **WHEN** the player marks a plan, closes the game and opens the world
+- **THEN** the same cells are marked and the same stakes stand
+
+Pinned by `pbd_core::roads::paving::tests::a_plan_reads_back_cell_for_cell`
+and `pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`.
+
+### Requirement: Gravel comes from a grinder and a mixer
+
+Gravel SHALL be made at a mixer from crushed stone and sand, and crushed
+stone at a grinder from stone; neither SHALL be made by hand. Gravel already
+held SHALL stay usable.
+
+#### Scenario: From stone to gravel
+
+- **WHEN** the player crushes 2 stone at the grinder, then mixes 3 crushed
+  stone with a block of sand at the mixer
+- **THEN** the pack holds 4 gravel, and the pack's craft list has no gravel
+  recipe
+
+Pinned by `pbd_core::station::tests::the_shipped_recipes_resolve_and_agree_with_the_defaults`.

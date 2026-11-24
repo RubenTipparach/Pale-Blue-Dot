@@ -14,12 +14,14 @@
 //! are derived from the world seed and never saved (S10).
 
 pub mod breed;
+pub mod forms;
+pub mod loft;
 pub mod rig;
 
 pub use breed::BreedingPick;
 
 use crate::config::HusbandryConfig;
-use crate::field_light::{Faded, LitByField};
+use crate::field_light::{Faded, LitByField, LitLikeTerrain};
 use crate::hotbar::Hotbar;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
 use crate::saves::WorldSave;
@@ -142,6 +144,12 @@ struct Beast {
     born: Option<f64>,
     /// A hen sitting on a clutch (E4): she rests on it.
     sitting: bool,
+    /// Held still where a capture set it (`--husbandry close`): it neither
+    /// flees nor wanders.
+    posed: bool,
+    /// Its head held where a capture set it (`--husbandry close-stand` or
+    /// `close-graze`): grazing or up, looking ahead. A capture instrument.
+    held_graze: Option<bool>,
 }
 
 impl Beast {
@@ -193,6 +201,8 @@ impl Beast {
             clock_s: 0.0,
             born: None,
             sitting: false,
+            posed: false,
+            held_graze: None,
         }
     }
 }
@@ -208,7 +218,10 @@ pub struct Farmyard {
     status: String,
     hold_s: f32,
     fences_drawn: Option<(BTreeMap<Edge, bool>, Vec<u32>, usize)>,
+    /// The herd's coat (design 16).
     material: Option<Handle<StandardMaterial>>,
+    /// Flat colour: the incubator's glass lid (M26: glass is flat).
+    flat: Option<Handle<StandardMaterial>>,
     /// The pen's textured materials in [`PEN_TEXTURES`] order, and each
     /// texture's repeat in metres (design 14).
     pen_materials: Option<([Handle<StandardMaterial>; 4], [f32; 4])>,
@@ -230,6 +243,7 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            flat: None,
             pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
@@ -266,6 +280,78 @@ impl Farmyard {
                 following: b.mode == Mode::Follow,
                 female: b.sex == Sex::F,
             })
+    }
+
+    /// The kept animals of `species` within `within_m` of `near` (local, as
+    /// a beast's feet are): their record ids and feet, nearest first. A
+    /// horse cart's shafts ask for the horse beside them (`land-transport`
+    /// design 11).
+    pub fn kept_near(&self, species: u16, near: Vec3, within_m: f32) -> Vec<(u64, Vec3)> {
+        let mut found: Vec<(u64, Vec3, f32)> = self
+            .beasts
+            .iter()
+            .filter(|b| b.species == species && !b.leaving)
+            .filter_map(|b| match b.who {
+                Who::Kept { id } => Some((id, b.pos, b.pos.distance(near))),
+                Who::Wild { .. } => None,
+            })
+            .filter(|(_, _, d)| *d <= within_m)
+            .collect();
+        found.sort_by(|a, b| a.2.total_cmp(&b.2));
+        found.into_iter().map(|(id, p, _)| (id, p)).collect()
+    }
+
+    /// Where the kept animal `id` stands (local feet) and faces, if it is
+    /// within `within_m` of `near`.
+    pub fn kept_pose(&self, id: u64, near: Vec3, within_m: f32) -> Option<(Vec3, Vec3)> {
+        self.beasts
+            .iter()
+            .find(|b| b.who == (Who::Kept { id }) && !b.leaving)
+            .filter(|b| b.pos.distance(near) <= within_m)
+            .map(|b| (b.pos, b.facing))
+    }
+
+    /// A kept animal goes into a cart's shafts: the yard stops drawing it at
+    /// once, and its sync leaves it out while a cart names it.
+    pub fn hand_over(&mut self, id: u64) {
+        for b in &mut self.beasts {
+            if b.who == (Who::Kept { id }) {
+                b.leaving = true;
+                b.shown = 0.0;
+                b.mode = Mode::Idle;
+            }
+        }
+    }
+
+    /// A kept animal comes out of a cart's shafts at `pos` (local), facing
+    /// `facing`, and follows the player a while, as a newly tamed one does.
+    /// It is taken back into the yard at once, so it never blinks out.
+    pub fn take_back(
+        &mut self,
+        id: u64,
+        record: &AnimalBody,
+        pos: Vec3,
+        up: Vec3,
+        facing: Vec3,
+        follow_s: f32,
+    ) {
+        self.beasts.retain(|b| b.who != (Who::Kept { id }));
+        let mut beast = Beast::new(
+            Who::Kept { id },
+            record.sp,
+            record.sex,
+            record.genome(),
+            pos,
+            up,
+            Range::Around(up, 6.0),
+            hash2(id, 0xbea57),
+        );
+        beast.facing = facing;
+        beast.born = Some(record.born);
+        beast.shown = 1.0;
+        beast.mode = Mode::Follow;
+        beast.mode_s = follow_s;
+        self.beasts.push(beast);
     }
 
     fn say(&mut self, text: impl Into<String>, hold_s: f32) {
@@ -492,6 +578,7 @@ fn spawn(
             .spawn((
                 Name::new("Pen prewarm template"),
                 LitByField,
+                LitLikeTerrain,
                 Faded(1.0),
                 Transform::from_xyz(0.0, -1.0e5, 0.0),
                 Visibility::Hidden,
@@ -503,13 +590,24 @@ fn spawn(
             ));
         yard.pen_materials = Some((pen, repeat));
     }
+    // The herd's coats (design 16): the `coat` strip, tinted by each
+    // animal's colours, sampled nearest.
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
+        base_color_texture: assets
+            .as_deref()
+            .map(|a| crate::towns::texture(a, "herd_hide")),
         perceptual_roughness: 0.9,
         reflectance: 0.2,
         ..default()
     });
     yard.material = Some(material.clone());
+    yard.flat = Some(materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        reflectance: 0.2,
+        ..default()
+    }));
     let mut builder = rig::Builder::default();
     if let Some(sp) = config.0.roster(pbd_core::fauna::HOME_BODY).first() {
         rig::build(
@@ -530,6 +628,7 @@ fn spawn(
         .spawn((
             Name::new("Husbandry prewarm template"),
             LitByField,
+            LitLikeTerrain,
             Faded(1.0),
             Transform::from_xyz(0.0, -1.0e5, 0.0),
             Visibility::Hidden,
@@ -543,6 +642,7 @@ fn spawn(
         Name::new("Fences"),
         FenceRoot,
         LitByField,
+        LitLikeTerrain,
         Transform::default(),
         Visibility::default(),
     ));
@@ -738,12 +838,20 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     let near = s.herds.near_m;
     let up = feet_point.normalize_or(Vec3::Y);
     let kept = record::animals(&save.records);
+    // A horse in a cart's shafts is the cart's to draw (`land-transport`
+    // design 11).
+    let hitched = pbd_core::vehicle::cart::hitched(&save.records);
     let tamed: BTreeSet<u64> = kept.iter().map(|(_, b)| b.wild).collect();
     let mut wanted: Vec<Who> = Vec::new();
     // Kept animals near.
     let pieces = record::pieces(&save.records);
     for (id, body) in &kept {
-        if body.state != record::Life::Alive || body.body != world.body.0 {
+        // An animal ridden is the ride's to draw (design 14).
+        if body.state != record::Life::Alive
+            || body.body != world.body.0
+            || hitched.contains(id)
+            || body.ridden
+        {
             continue;
         }
         let Some(home) = pbd_core::cell_key::key_direction(body.home) else {
@@ -1581,7 +1689,9 @@ fn step(
         let bird = sp.plan == Plan::Bird;
         // What it wants.
         b.mode_s -= dt;
-        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet) {
+        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet)
+            && !b.posed
+        {
             b.trust.decay(hours, &s.taming);
             let d = feet.distance(b.pos);
             let food = sp
@@ -1754,7 +1864,9 @@ fn step(
             b.head_down = (b.pecking * std::f32::consts::PI).sin() * 1.15;
         } else {
             // Grazing, head down while it stands; up to walk or look about.
-            let grazing = standing && b.glance_s > 0.6 && b.mode != Mode::Follow;
+            let grazing = b
+                .held_graze
+                .unwrap_or(standing && b.glance_s > 0.6 && b.mode != Mode::Follow);
             b.head_goal = if grazing { 1.85 } else { 0.0 };
             let chew = if grazing {
                 (b.clock_s * 5.0).sin() * 0.05
@@ -1775,6 +1887,9 @@ fn step(
             } else {
                 b.rng.range(2.0, 6.0)
             };
+        }
+        if b.held_graze.is_some() {
+            b.glance_goal = 0.0;
         }
         let rate = if bird { 14.0 } else { 3.0 };
         b.glance += (b.glance_goal - b.glance) * (dt * rate).min(1.0);
@@ -1929,6 +2044,7 @@ fn draw(
                     .spawn((
                         Name::new(sp.id.clone()),
                         LitByField,
+                        LitLikeTerrain,
                         Faded(1.0 - b.shown),
                         place,
                         Visibility::default(),
@@ -2030,7 +2146,7 @@ fn draw_fences(
     let Some(o) = origin else {
         return;
     };
-    let Some(flat) = yard.material.clone() else {
+    let Some(flat) = yard.flat.clone() else {
         return;
     };
     commands.entity(root).insert(Transform::from_translation(
@@ -2337,6 +2453,41 @@ fn script(
                     n,
                     spot + right * (2.0 + n as f32 * 1.6) + ahead * (n as f32 - 1.0) * 1.5,
                 );
+            }
+        }
+        "close" | "close-stand" | "close-graze" => {
+            // One of each species of the herd broadside a few metres ahead,
+            // held where it stands, to look at close up; `close-stand` and
+            // `close-graze` hold its head up or down to graze as well.
+            let held = match script.scene.as_str() {
+                "close-stand" => Some(false),
+                "close-graze" => Some(true),
+                _ => None,
+            };
+            for (n, (id, x, y)) in [
+                ("meadow-hen", -1.9f32, 2.4f32),
+                ("woolback", -0.6, 3.4),
+                ("plodder", 1.6, 4.6),
+                ("horse", 4.6, 5.6),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if !roster.iter().any(|s| s.id == id) {
+                    continue;
+                }
+                let k = wild(
+                    &mut yard,
+                    index(id),
+                    n as u64 + 1,
+                    feet_point + right * x + ahead * y,
+                );
+                let d = yard.beasts[k].pos.normalize();
+                yard.beasts[k].range = Range::Around(d, 0.05);
+                yard.beasts[k].facing = right;
+                yard.beasts[k].idle_s = 1.0e6;
+                yard.beasts[k].posed = true;
+                yard.beasts[k].held_graze = held;
             }
         }
         "tame" => {

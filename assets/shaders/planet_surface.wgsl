@@ -319,6 +319,15 @@ const GLOW_LIT_BIT: u32 = 0x20000000u;
 // The record bit that says a cell's glowing mushroom is picked
 // (`glowing-mushrooms` design 4): its flower slot draws nothing.
 const GLOW_PICKED_BIT: u32 = 8u;
+// A road the player has marked for paving (`townsfolk` design 39a): the
+// record's `spare.z` carries the mark bit and the two sides the lime band
+// runs between (3 bits each, 7 for none: the plan ends on this cell's
+// middle). `planet_column::MARK_*` writes them. The cap carries the band's
+// signed distance, metres, in `shade` as `MARK_SHADE + d`.
+const MARK_BIT: u32 = 0x10000u;
+const MARK_SIDE_IN_SHIFT: u32 = 17u;
+const MARK_SIDE_OUT_SHIFT: u32 = 20u;
+const MARK_SHADE: f32 = 20.0;
 // The glowing mushroom's head at night, linear RGB (`flora::GLOW_HEAD_RGB`).
 const GLOW_HEAD_RGB: vec3<f32> = vec3<f32>(0.62, 1.0, 0.88);
 // A glowing flower's head by day: pale, and cooler than the white and warm
@@ -1185,6 +1194,38 @@ fn ring_show(base: vec3<f32>) -> f32 {
 
 
 
+// The way out of a cell through its side `side`, in the cap's plane.
+fn mark_side_dir(cell: Cell, degree: u32, side: u32, axis: vec3<f32>, tangent: vec3<f32>,
+    bitangent: vec3<f32>) -> vec2<f32> {
+    let mid = normalized(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz) - axis;
+    let flat = vec2(dot(mid, tangent), dot(mid, bitangent));
+    return flat*inverseSqrt(max(dot(flat, flat), 1e-20));
+}
+
+// The signed distance, metres, of the point `q` (on the cap's plane, from
+// its centre) across the leg of the lime band nearest fan triangle `t`'s
+// outer side: the leg out through the side the plan comes in by or the one
+// it leaves by. Far (8) where neither leg faces the triangle.
+fn mark_distance(cell: Cell, degree: u32, t: u32, axis: vec3<f32>, tangent: vec3<f32>,
+    bitangent: vec3<f32>, q: vec2<f32>) -> f32 {
+    let sides = array<u32, 2>((cell.spare.z >> MARK_SIDE_IN_SHIFT) & 7u,
+        (cell.spare.z >> MARK_SIDE_OUT_SHIFT) & 7u);
+    let own = mark_side_dir(cell, degree, t, axis, tangent, bitangent);
+    var best = -0.2;
+    var d = 8.0;
+    for (var i = 0u; i < 2u; i++) {
+        if sides[i] < degree {
+            let dir = mark_side_dir(cell, degree, sides[i], axis, tangent, bitangent);
+            let k = dot(own, dir);
+            if k > best {
+                best = k;
+                d = dir.x*q.y - dir.y*q.x;
+            }
+        }
+    }
+    return clamp(d, -8.0, 8.0);
+}
+
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
     // A near tree's draw reads its species' region of the near list.
@@ -1252,6 +1293,15 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             position = ray*radius;
             let local = (ray-axis)*params.settings.x;
             uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile) + 0.5;
+        }
+        // A marked cell's lime band (`townsfolk` design 39a): each fan
+        // triangle takes the band's leg nearest its own outer side, and every
+        // vertex the signed distance across that leg's line, which is linear
+        // over the triangle, so the fragment reads the band exactly.
+        if (cell.spare.z & MARK_BIT) != 0u && triangle < degree {
+            // Back from the cap's texture coordinates to metres on its plane.
+            let here = (uv - 0.5)*(1.5*tile);
+            out_shade = MARK_SHADE + mark_distance(cell, degree, triangle, axis, tangent, bitangent, here);
         }
         // The ground the player walks on is drawn HERE rather than by the
         // column pass, so this is where a block standing on it darkens the
@@ -2107,7 +2157,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             normal = axis;
             out_shade = select(shade_hi,shade_lo,c==0u||c==1u);
         }
-        if !grown { position = axis*radius; }
+        // Nothing grows through a road (`townsfolk` design 33 and 44): the
+        // road bit of the material word clears every piece, not only the
+        // tufts, so a paved cell is not pierced by a shrub.
+        let paved = ((cell.metadata.y >> 30u) & 1u) == 1u;
+        if !grown || paved { position = axis*radius; }
     }
     // Trees and ground clutter take the field at their own cell
     // (`lamps-and-lanterns` decision 9): clutter at the air over the cap, as
@@ -3766,6 +3820,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // branch, since a derivative needs every pixel of its quad. The new wet
     // film fades rings under it and widens its lobe by it (specular AA).
     let foot = length(fwidth(input.position));
+    // A marked cap's band (`townsfolk` design 39a) is read at each texel's
+    // centre, so its edge is the tile's pixels: the gradients it needs.
+    let mark_dx = vec3(dpdx(input.uv), dpdx(input.shade));
+    let mark_dy = vec3(dpdy(input.uv), dpdy(input.shade));
     if dropped(input) { discard; }
 #ifdef TERRAIN_OFF_FLAT
     return vec4(0.5, 0.5, 0.5, 1.0);
@@ -4067,8 +4125,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // `shade` is one everywhere but down a grass blade, where the root sits at
     // the configured fraction of full light and eases to the tip. That gradient
     // is what makes a sward read as lush rather than as flat green paper.
+    // A marked cap carries its band in `shade` (design 39a), not a shade.
+    let marked = input.kind == 0u && input.shade > MARK_SHADE*0.5;
     var albedo = mix(art,far,smoothstep(180.,1400.,distance_to_camera))
-        *cell_variation*input.shade;
+        *cell_variation*select(input.shade, 1.0, marked);
     // A lamp's parts: iron, wax, and a lantern's glass while it is out, with
     // the stone tile's grain left in so they are pixel art and not paint.
     let grain = dot(art, vec3(0.299, 0.587, 0.114));
@@ -4090,6 +4150,32 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
 #ifndef TERRAIN_OFF_SEASON
         albedo = fallen_leaves(input, albedo);
 #endif
+    }
+    // The lime dust a survey marks a road with (design 39a): about 0.9 m
+    // wide along the plan's line, pale and chalky, ragged at its texels'
+    // edge, laid into the ground's own texels so its light and grain are
+    // the ground's.
+    if marked {
+        let texels = fract(input.uv)*32.0;
+        let centre = floor(texels) + 0.5;
+        let a = mark_dx.xy*32.0;
+        let b = mark_dy.xy*32.0;
+        let det = a.x*b.y - a.y*b.x;
+        var grad = vec2(0.0);
+        if abs(det) > 1e-9 {
+            grad = vec2(mark_dx.z*b.y - a.y*mark_dy.z, a.x*mark_dy.z - b.x*mark_dx.z)/det;
+        }
+        let d = abs(input.shade - MARK_SHADE + dot(grad, centre - texels));
+        let ragged = tnoise(floor(texels)/2.0, input.seed ^ 0x11e5u);
+        let half_width = 0.36 + 0.16*ragged;
+        if d < half_width {
+            let grain = dot(art, vec3(0.299, 0.587, 0.114));
+            let lime = vec3(0.80, 0.79, 0.72)*(0.72 + 0.55*grain);
+            // Thinner toward the edge, where the dust is scattered.
+            let dust = select(0.82, 0.55, d > half_width - 0.12);
+            let gap = tnoise(floor(texels), input.seed ^ 0x2a7u) < 0.18;
+            if !gap { albedo = mix(albedo, lime*cell_variation, dust); }
+        }
     }
     if input.kind == KIND_LAMP {
         var part = vec3(0.16, 0.15, 0.14);

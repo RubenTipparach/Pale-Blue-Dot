@@ -116,6 +116,29 @@ pub const GOODS: &[GoodRow] = &[
     row("parcel", 1, "items/goods/parcel.png"),
     // ---- townsfolk design 31: crushed stone, laid as a gravel road.
     row("gravel", 99, "items/goods/gravel.png"),
+    // ---- townsfolk design 41: the grinder's crushed stone, which the mixer
+    // makes gravel of, and survey stakes, a road's waypoints.
+    row("crushed-stone", 99, "items/goods/crushed-stone.png"),
+    row("survey-stakes", 32, "items/goods/survey-stakes.png"),
+    // ---- land-transport design 10: a cart wheel, and the two carts,
+    // carried until they are set down as vehicles.
+    row("wheel", 8, "items/goods/wheel.png"),
+    row("hand-cart", 1, "items/goods/hand-cart.png"),
+    row("horse-cart", 1, "items/goods/horse-cart.png"),
+    // ---- player-building design B8: a door, made at the workbench and hung
+    // in a doorway.
+    row("door", 8, "items/goods/door.png"),
+    // ---- furniture design 2: the carpenter's pieces, placed in build mode.
+    row("chair", 4, "items/goods/chair.png"),
+    row("stool", 4, "items/goods/stool.png"),
+    row("bench", 4, "items/goods/bench.png"),
+    row("table", 4, "items/goods/table.png"),
+    row("bed", 4, "items/goods/bed.png"),
+    row("drawers", 4, "items/goods/drawers.png"),
+    row("closet", 4, "items/goods/closet.png"),
+    row("chest", 4, "items/goods/chest.png"),
+    row("banded-chest", 4, "items/goods/banded-chest.png"),
+    row("crate", 4, "items/goods/crate.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -185,6 +208,11 @@ impl Good {
     pub const PARCEL: Good = by_code_const("parcel");
     // townsfolk: crushed stone for a gravel road.
     pub const GRAVEL: Good = by_code_const("gravel");
+    // townsfolk design 41: the grinder's output, and a road's waypoints.
+    pub const CRUSHED_STONE: Good = by_code_const("crushed-stone");
+    pub const SURVEY_STAKES: Good = by_code_const("survey-stakes");
+    // player-building: a door to hang in a doorway.
+    pub const DOOR: Good = by_code_const("door");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -301,6 +329,7 @@ mod tests {
             (Good::INCUBATOR, "incubator"),
             (Good::BAIT, "bait"),
             (Good::GLOWING_MUSHROOM, "glowing-mushroom"),
+            (Good::DOOR, "door"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

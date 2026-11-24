@@ -1,16 +1,24 @@
-//! Build mode (`player-building` design B5): N on foot swaps the hotbar for
+//! Build mode (`player-building` design B5, B10): B on foot swaps the hotbar for
 //! the kit's palette, the aim snaps the chosen piece to the cut, the ghost
 //! shows it green or red with the rule it breaks, a left click places it and
 //! a right click takes the aimed piece away. K opens the kit picker, where
 //! the wheel steps the kit.
+//!
+//! The Door slot places a doorway, or, aimed at a doorway with no door, hangs
+//! a door from the pack in it (design B8). Z raises architecture mode's
+//! camera over the plot (design B9, `pbd_app::build_view`): the cursor is
+//! the aim, the move keys pan, a right drag orbits, ctrl and the wheel zoom,
+//! Page Up and Page Down move the build layer a storey.
 //!
 //! The rules are the core's (`pbd_core::building::rules`), the pieces are
 //! kept by `pbd_app::builds`, and nothing here writes the save but through
 //! [`Builds::place`] and [`Builds::remove`].
 
 use super::digging::{material_of, record_of};
-use bevy::input::mouse::MouseWheel;
+use bevy::input::mouse::{AccumulatedMouseMotion, MouseWheel};
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+use pbd_app::build_view::BuildView;
 use pbd_app::builds::{Builds, PATCH_REACH_M, patch_round};
 use pbd_app::controls::MenuOpen;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
@@ -41,10 +49,13 @@ pub enum Tool {
     Lantern,
     Blueprint,
     Remove,
+    /// A piece of furniture carried in the pack (`furniture` design 5): the
+    /// eleventh slot, on the minus key.
+    Furniture,
 }
 
-/// The palette, in M6's order.
-pub const PALETTE: [Tool; 10] = [
+/// The palette, in M6's order, and the furniture after it.
+pub const PALETTE: [Tool; 11] = [
     Tool::Wall,
     Tool::Door,
     Tool::Window,
@@ -55,6 +66,7 @@ pub const PALETTE: [Tool; 10] = [
     Tool::Lantern,
     Tool::Blueprint,
     Tool::Remove,
+    Tool::Furniture,
 ];
 
 impl Tool {
@@ -71,12 +83,21 @@ impl Tool {
             Tool::Lantern => "lantern",
             Tool::Blueprint => "blueprint",
             Tool::Remove => "remove",
+            Tool::Furniture => "furniture",
         }
     }
 }
 
 /// How far the build aim reaches, metres.
 pub const REACH_M: f32 = 7.0;
+/// How far a right press may drag, pixels, and still be a click that takes
+/// a piece away rather than an orbit (architecture mode).
+pub const CLICK_SLOP_PX: f32 = 6.0;
+/// How fast the move keys pan architecture mode's camera, metres a second
+/// at its starting distance (scaled with the distance).
+pub const PAN_M_S: f32 = 12.0;
+/// A pixel of right drag turns the camera this many radians.
+pub const ORBIT_RAD_PX: f32 = 0.006;
 /// The aim's step, metres.
 const STEP_M: f32 = 0.08;
 
@@ -92,6 +113,8 @@ pub struct BuildMode {
     pub turn: usize,
     /// Which blueprint.
     pub choice: usize,
+    /// Which of the furniture carried, by its place among the kinds carried.
+    pub piece: usize,
     /// Whether the kit picker is open.
     pub picker: bool,
     /// The hotbar's selection when build mode opened, given back on leaving.
@@ -99,6 +122,18 @@ pub struct BuildMode {
     /// This frame's clicks, taken from the world's readers while building.
     place: bool,
     take: bool,
+    /// Architecture mode was asked for or left this frame (Z).
+    pub view_toggle: bool,
+    /// This frame's zoom, in wheel steps (ctrl and the wheel).
+    pub zoom: i32,
+    /// How far the right button has dragged since it went down, pixels.
+    drag_px: f32,
+    /// Where the aim last met something, planet-local: where architecture
+    /// mode starts over.
+    pub aim: Option<Vec3>,
+    /// No ghost is aimed or drawn: set only by the capture instrument
+    /// (`PBD_BUILD_SHOT`'s `quiet`), for a shot of what is built.
+    pub quiet: bool,
     /// What the ghost shows: its pieces, whether they may go, and the piece
     /// a removal aims at.
     pub ghost: Option<GhostShown>,
@@ -146,7 +181,7 @@ const DIGITS: [KeyCode; 10] = [
     KeyCode::Digit0,
 ];
 
-/// N on foot opens and closes build mode; while it is open the clicks, the
+/// B on foot opens and closes build mode; while it is open the clicks, the
 /// number row and K are build mode's, taken from every other reader before
 /// `Update` (so a click does not also dig, cast or eat).
 #[allow(clippy::too_many_arguments)]
@@ -154,6 +189,7 @@ pub fn take_input(
     mut keys: ResMut<ButtonInput<KeyCode>>,
     mut buttons: ResMut<ButtonInput<MouseButton>>,
     mut wheel: MessageReader<MouseWheel>,
+    (motion, view): (Option<Res<AccumulatedMouseMotion>>, Option<Res<BuildView>>),
     menu: Option<Res<MenuOpen>>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     aboard: Option<Res<pbd_app::vehicles::Aboard>>,
@@ -164,6 +200,9 @@ pub fn take_input(
 ) {
     mode.place = false;
     mode.take = false;
+    mode.view_toggle = false;
+    mode.zoom = 0;
+    let viewing = view.as_deref().is_some_and(|v| v.on);
     let steps: i32 = wheel
         .read()
         .map(|m| (m.y < 0.0) as i32 - (m.y > 0.0) as i32)
@@ -172,7 +211,7 @@ pub fn take_input(
     if menu.is_some_and(|m| m.0) {
         return;
     }
-    if keys.just_pressed(KeyCode::KeyN) && (on_foot || mode.on) {
+    if keys.just_pressed(KeyCode::KeyB) && (on_foot || mode.on) {
         mode.on = !mode.on;
         mode.picker = false;
         if mode.on {
@@ -200,18 +239,33 @@ pub fn take_input(
         }
         keys.reset(*key);
     }
+    // The furniture, past the digits (`furniture` design 5).
+    if keys.just_pressed(KeyCode::Minus) {
+        mode.slot = DIGITS.len();
+    }
+    keys.reset(KeyCode::Minus);
     if keys.just_pressed(KeyCode::KeyK) {
         mode.picker = !mode.picker;
     }
     keys.reset(KeyCode::KeyK);
     keys.reset(KeyCode::KeyG);
-    if steps != 0 && mode.picker {
+    // Z: architecture mode (design B9), read by `drive_view`.
+    mode.view_toggle = keys.just_pressed(KeyCode::KeyZ);
+    keys.reset(KeyCode::KeyZ);
+    let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+    if steps != 0 && viewing && ctrl {
+        mode.zoom = -steps;
+    } else if steps != 0 && mode.picker {
         let n = kits.as_ref().map_or(1, |k| k.kits.kits.len().max(1)) as i32;
         mode.kit = (mode.kit as i32 + steps).rem_euclid(n) as usize;
     } else if steps != 0 {
         if PALETTE[mode.slot] == Tool::Blueprint && keys.pressed(KeyCode::ShiftLeft) {
             let n = blueprints.0.len().max(1) as i32;
             mode.choice = (mode.choice as i32 + steps).rem_euclid(n) as usize;
+        } else if PALETTE[mode.slot] == Tool::Furniture {
+            // The wheel steps through the furniture carried.
+            let n = carried_furniture(&hotbar.0).len().max(1) as i32;
+            mode.piece = (mode.piece as i32 + steps).rem_euclid(n) as usize;
         } else {
             mode.turn = (mode.turn as i32 + steps).rem_euclid(6) as usize;
         }
@@ -221,10 +275,111 @@ pub fn take_input(
     }
     if !mode.picker {
         mode.place = buttons.just_pressed(MouseButton::Left);
-        mode.take = buttons.just_pressed(MouseButton::Right);
+        if viewing {
+            // A right press that does not drag is a click that takes a
+            // piece away; one that drags orbits the camera.
+            if buttons.just_pressed(MouseButton::Right) {
+                mode.drag_px = 0.0;
+            }
+            if buttons.pressed(MouseButton::Right) {
+                mode.drag_px += motion.as_deref().map_or(0.0, |m| m.delta.length());
+            }
+            mode.take = buttons.just_released(MouseButton::Right) && mode.drag_px <= CLICK_SLOP_PX;
+        } else {
+            mode.take = buttons.just_pressed(MouseButton::Right);
+        }
         buttons.reset(MouseButton::Left);
         buttons.reset(MouseButton::Right);
     }
+}
+
+/// The furniture carried, each kind once, in `Kind::ALL` order, with how
+/// many of it.
+pub fn carried_furniture(
+    slots: &pbd_core::inventory::Slots,
+) -> Vec<(pbd_core::furniture::Kind, u32)> {
+    pbd_core::furniture::Kind::ALL
+        .into_iter()
+        .map(|k| (k, slots.count(pbd_core::inventory::Item::Good(k.good()))))
+        .filter(|(_, n)| *n > 0)
+        .collect()
+}
+
+/// Architecture mode's camera (design B9): Z in build mode raises it over
+/// where the aim was (or ahead of the eye), and lowers it again; leaving
+/// build mode leaves it. While it is on the move keys pan it, a right drag
+/// orbits it, ctrl and the wheel zoom, and Page Up and Page Down move the
+/// build layer a storey. The camera eases toward its pose every frame.
+#[allow(clippy::too_many_arguments)]
+pub fn drive_view(
+    mode: Res<BuildMode>,
+    mut view: ResMut<BuildView>,
+    keys: Res<ButtonInput<KeyCode>>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    motion: Option<Res<AccumulatedMouseMotion>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<PlanetRenderFrame>>,
+    time: Res<Time>,
+) {
+    if view.on && !mode.on {
+        view.leave();
+        info!("BUILD view off");
+        return;
+    }
+    if mode.view_toggle && mode.on {
+        if view.on {
+            view.leave();
+            info!("BUILD view off");
+            return;
+        }
+        let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+            return;
+        };
+        let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+        let look = transform.forward().as_vec3();
+        let site = mode.aim.unwrap_or(eye + look * 8.0);
+        // The build layer: the line the site stands on.
+        let layer = column::layer_at(site.length() - PLANET_RADIUS + 0.02).unwrap_or(0) as u16;
+        view.enter(
+            site.as_dvec3(),
+            layer,
+            look.as_dvec3(),
+            eye.as_dvec3(),
+            (eye + look * 8.0).as_dvec3(),
+        );
+        info!("BUILD view on, layer {layer}");
+    }
+    if !view.on {
+        return;
+    }
+    let dt = time.delta_secs().min(0.1);
+    let axis = |plus: KeyCode, minus: KeyCode| {
+        f32::from(u8::from(keys.pressed(plus))) - f32::from(u8::from(keys.pressed(minus)))
+    };
+    let speed = PAN_M_S * view.distance / pbd_app::build_view::START_DISTANCE * dt;
+    let (right, forward) = (
+        axis(KeyCode::KeyD, KeyCode::KeyA),
+        axis(KeyCode::KeyW, KeyCode::KeyS),
+    );
+    if right != 0.0 || forward != 0.0 {
+        view.pan(right * speed, forward * speed);
+    }
+    if buttons.pressed(MouseButton::Right) {
+        let d = motion.as_deref().map_or(Vec2::ZERO, |m| m.delta);
+        if d != Vec2::ZERO && d.is_finite() {
+            view.orbit(d.x * ORBIT_RAD_PX, d.y * ORBIT_RAD_PX);
+        }
+    }
+    if mode.zoom != 0 {
+        view.zoom(mode.zoom);
+    }
+    if keys.just_pressed(KeyCode::PageUp) {
+        view.raise(i32::from(STOREY));
+    }
+    if keys.just_pressed(KeyCode::PageDown) {
+        view.raise(-i32::from(STOREY));
+    }
+    view.step(dt);
 }
 
 /// The ground's first air layer in a cell, cached for a fine set and an edit
@@ -283,6 +438,7 @@ fn march(
     builds: &pbd_app::walking::PlayerStructures,
     eye: Vec3,
     look: Vec3,
+    reach: f32,
 ) -> Option<Hit> {
     let solid = |p: Vec3| -> bool {
         super::digging::sample_at(fine, contact, p).is_some_and(|s| s.solid)
@@ -296,7 +452,7 @@ fn march(
     };
     let mut travelled = 0.0;
     let mut last = eye;
-    while travelled <= REACH_M {
+    while travelled <= reach {
         let p = eye + look * travelled;
         if solid(p) {
             let up = last.normalize_or(Vec3::Y);
@@ -337,9 +493,11 @@ fn reference(piece: &Piece) -> Option<Vec3> {
     }
     let lift = match piece.shape {
         Shape::Wall { .. } | Shape::Post { .. } | Shape::Stair { .. } => 1.5,
+        Shape::Door { .. } => 1.1,
         Shape::Lantern { .. } => 1.0,
         Shape::Roof { .. } => 1.0,
         Shape::Floor { .. } => 0.0,
+        Shape::Furniture { .. } => 0.5,
     };
     let alt = column::layer_altitude(piece.shape.layer() as usize) + lift;
     Some(mean * (PLANET_RADIUS + alt))
@@ -359,26 +517,66 @@ pub fn aim_and_build(
     blueprints: Res<Blueprints>,
     mut note: ResMut<super::farm::FarmNote>,
     time: Res<Time>,
+    (mut hotbar, view, windows): (
+        ResMut<super::slots::Hotbar>,
+        Res<BuildView>,
+        Query<&Window, With<PrimaryWindow>>,
+    ),
     mut cache: Local<GroundCache>,
     mut patch_cache: Local<Option<(u32, std::sync::Arc<pbd_core::settlement::chart::Patch>)>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
 ) {
-    if !mode.on || mode.picker {
+    if !mode.on || mode.picker || mode.quiet {
         if mode.ghost.is_some() {
             mode.ghost = None;
         }
         return;
     }
-    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+    let Some((transform, camera)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
-    let look = transform.forward().as_vec3();
-    let hit = march(&fine, &contact, &structures, eye, look);
+    // The aim: the eye's look on foot; in architecture mode the cursor's
+    // ray, no further than the build layer (design B9).
+    let (eye, look, plane) = if view.on {
+        let cursor = windows.single().ok().and_then(Window::cursor_position);
+        let Some(ray) = cursor.and_then(|c| camera.viewport_to_world(transform, c).ok()) else {
+            mode.ghost = None;
+            return;
+        };
+        let eye = pbd_app::render_origin::local_of(frame.as_deref(), ray.origin);
+        let look = ray.direction.as_vec3();
+        (eye, look, Some(view.radius() as f32))
+    } else {
+        let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+        (eye, transform.forward().as_vec3(), None)
+    };
+    let reach = match plane {
+        // Where the ray meets the build layer's sphere, from above.
+        Some(radius) => {
+            let b = eye.dot(look);
+            let c = eye.length_squared() - radius * radius;
+            let disc = b * b - c;
+            (disc >= 0.0)
+                .then(|| -b - disc.sqrt())
+                .filter(|t| *t > 0.0)
+                .unwrap_or(view.distance + 40.0)
+                .min(view.distance + 40.0)
+        }
+        None => REACH_M,
+    };
+    let hit = march(&fine, &contact, &structures, eye, look, reach).or_else(|| {
+        // In open air the cursor lands on the build layer.
+        plane.map(|_| Hit {
+            point: eye + look * (reach - 0.01),
+            from_above: true,
+        })
+    });
     let Some(hit) = hit else {
         mode.ghost = None;
         mode.reason = None;
         return;
     };
+    mode.aim = Some(hit.point);
     let Some(cell) = contact.finest_key(hit.point.normalize_or(Vec3::Y)) else {
         mode.ghost = None;
         return;
@@ -440,7 +638,23 @@ pub fn aim_and_build(
     let mut remove = None;
     let candidate: Option<Vec<Piece>> = match tool {
         Tool::Wall => wall(Opening::None),
-        Tool::Door => wall(Opening::Door),
+        // A door from the pack, aimed at a doorway with none (design B8);
+        // anywhere else the doorway.
+        Tool::Door => wall(Opening::Door).map(|pieces| {
+            let Shape::Wall { a, b, layer, .. } = pieces[0].shape else {
+                return pieces;
+            };
+            let doorway = near.iter().any(|p| {
+                matches!(p.shape, Shape::Wall { a: a2, b: b2, layer: l, opening: Opening::Door }
+                    if a2 == a && b2 == b && l == layer)
+            });
+            let door = Shape::door(a, b, layer);
+            if doorway && !near.iter().any(|p| p.shape == door) {
+                vec![Piece::new(k, door)]
+            } else {
+                pieces
+            }
+        }),
         Tool::Window => wall(Opening::Window),
         Tool::Floor => Some(vec![Piece::new(
             k,
@@ -501,6 +715,39 @@ pub fn aim_and_build(
                 blueprint(&patch, def, kit, at, mode.turn, storey).ok()
             })
         }
+        Tool::Furniture => {
+            let carried = carried_furniture(&hotbar.0);
+            match carried.get(mode.piece % carried.len().max(1)) {
+                Some(&(kind, count)) => {
+                    let side = if kind == pbd_core::furniture::Kind::Table {
+                        pbd_core::furniture::MIDDLE
+                    } else {
+                        pick.map_or(0, |(s, _)| s as u8)
+                    };
+                    note.say_for(
+                        time.elapsed_secs(),
+                        tr_with(
+                            "build.furniture_held",
+                            &[("piece", &kind.name()), ("count", &count.to_string())],
+                        ),
+                        0.25,
+                    );
+                    Some(vec![Piece::new(
+                        k,
+                        Shape::Furniture {
+                            cell,
+                            layer: storey,
+                            side,
+                            kind,
+                        },
+                    )])
+                }
+                None => {
+                    note.say_for(time.elapsed_secs(), tr("build.no_furniture"), 0.25);
+                    None
+                }
+            }
+        }
         Tool::Remove => {
             let aimed = near
                 .iter()
@@ -526,6 +773,10 @@ pub fn aim_and_build(
             .and_then(|p| dependant(&near, p))
         {
             Some(d) => (false, Some(format!("build.piece.{}", d.shape.class().id()))),
+            // A container with anything in it is emptied first.
+            None if !container_empty(&save, &near, id) => {
+                (false, Some("build.not_empty".to_string()))
+            }
             None => (true, None),
         }
     } else {
@@ -551,19 +802,59 @@ pub fn aim_and_build(
     }
     let now = time.elapsed_secs();
     if let Some(r) = &reason {
-        let text = if remove.is_some() {
+        let text = if remove.is_some() && r.starts_with("build.piece.") {
             tr_with("build.needed_by", &[("thing", &tr(r))])
         } else {
             tr(r)
         };
         note.say_for(now, text, 0.25);
     }
+    let is_door = |p: &Piece| matches!(p.shape, Shape::Door { .. });
     if mode.place && remove.is_none() {
-        if ok {
+        if ok && candidate.len() == 1 && is_door(&candidate[0]) {
+            // A door is crafted: one from the pack (design B8).
+            match builds.place_door(&mut save, candidate[0].clone(), &mut hotbar.0) {
+                Ok(()) => info!("BUILD hung a door"),
+                Err(e) => {
+                    info!("BUILD door refused: {e:?}");
+                    note.say(now, e.text());
+                }
+            }
+        } else if ok {
             let n = candidate.len();
             let ordered = placing_order(&site, &near, &candidate).unwrap_or(candidate);
-            if builds.place(&mut save, ordered) {
+            let named: Vec<&'static str> = ordered
+                .iter()
+                .map(|p| pbd_app::town_missions::build_name(&p.shape))
+                .collect();
+            // A piece of furniture is taken from the pack, in the same line
+            // as its record (`furniture` design 5).
+            let furniture = ordered.iter().find_map(|p| match p.shape {
+                Shape::Furniture { kind, .. } => Some((p.clone(), kind)),
+                _ => None,
+            });
+            let placed = match furniture {
+                Some((piece, kind)) => {
+                    let mut slots = hotbar.0.clone();
+                    slots.take_item(pbd_core::inventory::Item::Good(kind.good()), 1)
+                        && builds.place_with_hands(&mut save, piece, &slots)
+                        && {
+                            hotbar.0 = slots;
+                            true
+                        }
+                }
+                None => builds.place(&mut save, ordered),
+            };
+            if placed {
                 info!("BUILD placed {n} pieces with {}", kit.name);
+                // A house's pieces, as the town tree counts them.
+                for name in named {
+                    did.write(pbd_app::missions::Did::new(
+                        pbd_core::missions::Kind::Build,
+                        name,
+                        1,
+                    ));
+                }
             } else {
                 error!("build BLOCKED: the save did not accept the piece");
             }
@@ -575,8 +866,8 @@ pub fn aim_and_build(
         && let Some(id) = remove
     {
         if ok {
-            if builds.remove(&mut save, id) {
-                info!("BUILD removed piece {id}");
+            if let Some(piece) = near.iter().find(|p| p.id() == id) {
+                take_away(&mut builds, &mut save, piece, &mut hotbar.0, &mut note, now);
             }
         } else if let Some(r) = &reason {
             info!("BUILD refused removal: {r}");
@@ -596,13 +887,55 @@ pub fn aim_and_build(
                     let thing = tr(&format!("build.piece.{}", d.shape.class().id()));
                     note.say(now, tr_with("build.needed_by", &[("thing", &thing)]));
                 }
-                None => {
-                    if builds.remove(&mut save, p.id()) {
-                        info!("BUILD removed piece {}", p.id());
-                    }
+                None if !container_empty(&save, &near, p.id()) => {
+                    note.say(now, tr("build.not_empty"));
                 }
+                None => take_away(&mut builds, &mut save, &p, &mut hotbar.0, &mut note, now),
             }
         }
+    }
+}
+
+/// Whether piece `id` among `near` is no container, or an empty one.
+fn container_empty(save: &WorldSave, near: &[Piece], id: u64) -> bool {
+    match near.iter().find(|p| p.id() == id).map(|p| &p.shape) {
+        Some(Shape::Furniture { kind, .. }) if kind.slots().is_some() => {
+            pbd_core::furniture::store::Store::of(&save.records, id, *kind, || {
+                pbd_core::furniture::store::Store::empty(0)
+            })
+            .is_empty()
+        }
+        _ => true,
+    }
+}
+
+/// Take a piece away; a door or a piece of furniture goes back in the
+/// pack (design B8; `furniture` design 5).
+fn take_away(
+    builds: &mut Builds,
+    save: &mut WorldSave,
+    piece: &Piece,
+    carried: &mut pbd_core::inventory::Slots,
+    note: &mut super::farm::FarmNote,
+    now: f32,
+) {
+    if matches!(piece.shape, Shape::Door { .. }) {
+        match builds.remove_door(save, piece.id(), carried) {
+            Ok(()) => info!("BUILD took a door down"),
+            Err(e) => note.say(now, e.text()),
+        }
+    } else if let Shape::Furniture { kind, .. } = piece.shape {
+        // A piece of furniture back into the pack, in the same line as its
+        // removal (`furniture` design 5).
+        let mut slots = carried.clone();
+        if slots.give(pbd_core::inventory::Item::Good(kind.good()), 1) > 0 {
+            note.say(now, tr("furniture.full"));
+        } else if builds.remove_with_hands(save, piece.id(), &slots) {
+            *carried = slots;
+            info!("BUILD took up {}", kind.code());
+        }
+    } else if builds.remove(save, piece.id()) {
+        info!("BUILD removed piece {}", piece.id());
     }
 }
 
@@ -698,7 +1031,11 @@ pub fn draw_ghost(
         return;
     };
     let mut buf = MeshBuf::default();
-    for b in c.meshes.values() {
+    // A door's leaf is drawn apart from the plot (design B8): shut, here.
+    let leaves = c.solids.doors.iter().flat_map(|leaf| {
+        pbd_core::building::door::leaf_mesh(leaf, c.solids.frame, 0.0).into_values()
+    });
+    for b in c.meshes.into_values().chain(leaves) {
         buf.positions.extend(&b.positions);
         buf.normals.extend(&b.normals);
         buf.uvs.extend(&b.uvs);
@@ -918,7 +1255,13 @@ pub fn load_blueprints(assets: Res<TownAssets>, mut blueprints: ResMut<Blueprint
 /// slot, `kit:<index>`, `choice:<blueprint>`, `turn:<sixths>`, `picker`, and
 /// `house:<n>` places the first `n` pieces of the chosen blueprint
 /// `ahead:<metres>` (default 9) along the look, each through the rules and
-/// [`Builds::place`] as a click would.
+/// [`Builds::place`] as a click would. After the house (design B8, B9):
+/// `doors` puts that many doors in the pack (logged) and hangs one in each
+/// doorway through [`Builds::place_door`]; `open` opens them as F would;
+/// `view` raises architecture mode over the house, `view:door` over its
+/// first door from outside, with `dist:<m>`, `tilt:<degrees>` and
+/// `yaw:<degrees>` (an orbit), and `layer:<n>` layers up; `quiet` shows no
+/// ghost.
 #[allow(clippy::too_many_arguments)]
 pub fn scripted(
     state: Res<super::CaptureState>,
@@ -930,7 +1273,7 @@ pub fn scripted(
     mut builds: ResMut<Builds>,
     assets: Res<TownAssets>,
     blueprints: Res<Blueprints>,
-    hotbar: Res<super::slots::Hotbar>,
+    (mut hotbar, mut view): (ResMut<super::slots::Hotbar>, ResMut<BuildView>),
     mut cache: Local<GroundCache>,
     mut done: Local<bool>,
 ) {
@@ -975,6 +1318,7 @@ pub fn scripted(
                 mode.on = true;
                 mode.picker = true;
             }
+            "quiet" => mode.quiet = true,
             _ => {}
         }
     }
@@ -1073,10 +1417,96 @@ pub fn scripted(
         }
     }
     let count = placed.len();
-    if builds.place(&mut save, placed) {
+    if builds.place(&mut save, placed.clone()) {
         info!(
             "PBD_BUILD_SHOT: placed {count} pieces of {} at layer {base}",
             def.name
         );
+    }
+    let has = |key: &str| {
+        plan.split(',')
+            .any(|step| step.split(':').next() == Some(key))
+    };
+    let value = |key: &str| {
+        plan.split(',')
+            .find_map(|step| step.strip_prefix(&format!("{key}:")))
+            .and_then(|v| v.parse::<f32>().ok())
+    };
+    // Doors in each doorway, from the pack.
+    let mut doors = Vec::new();
+    if has("doors") {
+        let doorways: Vec<Piece> = placed
+            .iter()
+            .filter_map(|p| match p.shape {
+                Shape::Wall {
+                    a,
+                    b,
+                    layer,
+                    opening: Opening::Door,
+                } => Some(Piece::new(&p.kit, Shape::door(a, b, layer))),
+                _ => None,
+            })
+            .collect();
+        hotbar.0.give(
+            pbd_core::inventory::Item::Good(pbd_core::goods::Good::DOOR),
+            doorways.len() as u16,
+        );
+        info!("PBD_BUILD_SHOT: {} doors put in the pack", doorways.len());
+        for door in doorways {
+            match builds.place_door(&mut save, door.clone(), &mut hotbar.0) {
+                Ok(()) => doors.push(door),
+                Err(e) => warn!("PBD_BUILD_SHOT: door refused: {e:?}"),
+            }
+        }
+        info!("PBD_BUILD_SHOT: hung {} doors", doors.len());
+    }
+    if has("open") {
+        for door in &doors {
+            Builds::set_door(&mut save, door.id(), true);
+        }
+        // Cut again, so the leaves stand as their records say.
+        builds.revision += 1;
+        info!("PBD_BUILD_SHOT: opened {} doors", doors.len());
+    }
+    if has("view") {
+        let centre = placed
+            .iter()
+            .flat_map(|p| p.shape.cells())
+            .filter_map(pbd_core::cell_key::key_direction)
+            .fold(Vec3::ZERO, |a, d| a + d)
+            .normalize_or(target.normalize());
+        let (focus, heading) = match (plan.contains("view:door"), doors.first()) {
+            (true, Some(door)) => {
+                let mid = door
+                    .shape
+                    .cells()
+                    .iter()
+                    .filter_map(|&c| pbd_core::cell_key::key_direction(c))
+                    .fold(Vec3::ZERO, |a, d| a + d)
+                    .normalize();
+                (mid, (centre - mid).normalize_or(level))
+            }
+            _ => (centre, level),
+        };
+        let layer = base + value("layer").unwrap_or(0.0) as u16;
+        let r = PLANET_RADIUS + column::layer_altitude(layer as usize);
+        mode.on = true;
+        view.enter(
+            (focus * r).as_dvec3(),
+            layer,
+            heading.as_dvec3(),
+            eye.as_dvec3(),
+            target.as_dvec3(),
+        );
+        if let Some(d) = value("dist") {
+            view.distance = d;
+        }
+        if let Some(t) = value("tilt") {
+            view.tilt = t.to_radians();
+        }
+        if let Some(y) = value("yaw") {
+            view.orbit(y.to_radians(), 0.0);
+        }
+        info!("PBD_BUILD_SHOT: architecture mode, layer {layer}");
     }
 }

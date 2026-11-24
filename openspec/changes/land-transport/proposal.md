@@ -6,6 +6,13 @@
 trains (and tracks) mockups to phase 5". **And 2026-11-22:** "Roads and cars
 mockup?". **Approved 2026-11-22** (M38 version 1, in chat: "noth apporoved, I dont see trade panel"): phase 5 waits for the owner's request like the rest.
 
+**And 2026-11-22**, moving the carts forward: "wheeled vihecles will move
+slower without the road (like 1/4 speed), we also need to add basic carts to
+phase 3 as well, and horse carts too". The hand cart and the horse cart, and
+the speed of wheels off the road, are therefore phase 3 (design 9 and 10);
+cars, trucks, trains and track stay in phase 5, and so do the ridden horse
+and the covered wagon.
+
 Phase 5 is mass transportation (CLAUDE.md, "The first game loop", "Then mass
 transportation"): airships, sea ships, sailing and navigation, carts and
 horses, cars, and trains on their tracks. Phase 3 builds the roads they will
@@ -37,6 +44,11 @@ written before any code as CLAUDE.md requires.
   grade a train climbs and how the cells under it are cut and filled; what a
   road vehicle needs from a road cell (slope, bends, width, bridges); how
   vehicles, their animals, trains and track are saved.
+- **Phase 3's carts** (design 9, 10): a hand cart and a horse cart, built at
+  the workbench, stored as vehicle records with a hold; a horse bought at a
+  stable; wheels at a quarter of their road speed off the road, with their
+  own factors for gravel, dirt and a ford. M38 version 2 marks them phase 3
+  and adds a Road or not tab.
 - **Spec delta** `world/land-transport`: the requirements as proposed. They
   stay in this change until each is built and pinned by a test.
 

@@ -571,7 +571,7 @@ fn time_can_place_over_the_walled_towns_biggest_building() {
 }
 
 /// `player-building` design 8: a house whose ground storey stands two
-/// layers over its ground is cut with a fieldstone footing under every
+/// layers over its ground is cut with a stone footing under every
 /// ground floor, solid from the ground to the slab, and none under the
 /// upper storey's floors; on ground at its own layer it has none.
 #[test]
@@ -623,7 +623,11 @@ fn a_floor_over_lower_ground_stands_on_a_footing() {
     })
     .expect("cut");
     // One solid footing a ground floor, and none on level ground or with no
-    // ground known (the kit's own walls may be fieldstone too).
+    // ground known: its own texture (design B7), so none is drawn either.
+    assert!(
+        !level.meshes.contains_key(super::cut::FOOTING),
+        "no footing"
+    );
     assert_eq!(
         low.solids.solids.len(),
         level.solids.solids.len() + ground_floors,
@@ -641,4 +645,255 @@ fn a_floor_over_lower_ground_stands_on_a_footing() {
         floor_y > deepest + 1.5,
         "nothing under the floor on level ground"
     );
+}
+
+/// Design B8: a door hangs only in a wall's doorway, and the wall is not
+/// taken away before it. A doorway with no door (an old house's) is open: no
+/// leaf, and a body walks through it. Cut with a door, the plot has its
+/// leaf, keyed by the door's id, which stops a body while it is shut and not
+/// once it is open, and the frame round it in the wall's edge texture.
+#[test]
+fn a_door_hangs_in_a_doorway_and_stops_the_walker_while_shut() {
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let k = key(*at);
+    let other = nb(&cells, k, 0);
+    let mut house = hut(&cells, k, GROUND);
+    let door = Piece::new("timber", Shape::door(other, k, GROUND));
+    assert_eq!(door.shape, Shape::door(k, other, GROUND), "the pair sorted");
+    assert_eq!(can_place(&site, &house, &door), Err(Rule::Doorway));
+    // The wall on that edge made a doorway.
+    let edge = Shape::wall(k, other, GROUND, Opening::None).id();
+    house.retain(|p| p.id() != edge);
+    house.push(Piece::new(
+        "timber",
+        Shape::wall(k, other, GROUND, Opening::Door),
+    ));
+    let walk = |c: &super::cut::Cut| {
+        let (e0, e1) = cells.edge(k, other).unwrap();
+        let mid = ((e0 + e1) * 0.5).normalize();
+        let floor = c
+            .solids
+            .frame
+            .local(mid * (RADIUS_M + crate::column::layer_altitude(GROUND as usize)));
+        c.solids.frame.world(floor + Vec3::Y * 1.0)
+    };
+    let open_house: Vec<&Piece> = house.iter().collect();
+    let doorway = cut(&cells, k, &open_house, &kits, &|_| 2.0, RADIUS_M).unwrap();
+    assert!(doorway.solids.doors.is_empty() && doorway.door_ids.is_empty());
+    assert!(
+        !doorway.solids.holds(walk(&doorway), 0.8, 0.3),
+        "an open doorway lets a body through"
+    );
+    assert_eq!(can_place(&site, &house, &door), Ok(()));
+    house.push(door.clone());
+    let wall = house.iter().find(|p| p.id() == edge).unwrap().clone();
+    assert_eq!(
+        dependant(&house, &wall).map(Piece::id),
+        Some(door.id()),
+        "the door before the wall"
+    );
+    let all: Vec<&Piece> = house.iter().collect();
+    let hung = cut(&cells, k, &all, &kits, &|_| 2.0, RADIUS_M).unwrap();
+    assert_eq!(hung.door_ids, vec![door.id()]);
+    assert_eq!(hung.solids.doors.len(), 1);
+    assert!(!hung.solids.doors[0].open, "a door hangs shut");
+    let at_door = walk(&hung);
+    assert!(
+        hung.solids.holds(at_door, 0.8, 0.3),
+        "shut, it stops a body"
+    );
+    let mut opened = hung.solids.clone();
+    opened.doors[0].open = true;
+    assert!(!opened.holds(at_door, 0.8, 0.3), "open, it does not");
+    // The frame is in the timber kit's edge texture, more of it than the
+    // doorway alone had.
+    let edge_tris = |c: &super::cut::Cut| c.meshes.get("timber").map_or(0, |b| b.positions.len());
+    assert!(edge_tris(&hung) > edge_tris(&doorway), "the frame");
+    let leaf = super::door::leaf_mesh(&hung.solids.doors[0], hung.solids.frame, 0.4);
+    let buf = &leaf[super::door::LEAF_TEXTURE];
+    assert!(!buf.positions.is_empty() && buf.positions.len().is_multiple_of(3));
+    assert!(
+        buf.uvs
+            .iter()
+            .all(|uv| (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]))
+    );
+    // The open-or-shut record is the towns' own, past every town door's id.
+    let state = door_state_id(door.id());
+    assert!(state >= 1 << 63);
+    let town_most = crate::settlement::record::door_id(
+        crate::settlement::record::building_id(u32::MAX, u32::from(u16::MAX)),
+        15,
+    );
+    assert!(town_most < 1 << 63);
+}
+
+// ---- `furniture` design 3 and 4: furniture placed by the building rules.
+
+fn furniture(k: u32, side: u8, kind: crate::furniture::Kind) -> Piece {
+    Piece::new(
+        "timber",
+        Shape::Furniture {
+            cell: k,
+            layer: GROUND,
+            side,
+            kind,
+        },
+    )
+}
+
+/// A piece stands on the floor of a walled room; a second on its side, one
+/// that crosses it, one in a doorway or under a low floor, and one on a
+/// stair are refused with their rule.
+#[test]
+fn furniture_is_placed_by_the_building_rules() {
+    use crate::furniture::{Kind, MIDDLE};
+    let cells = Cells::new(&plot().0);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let k = key(plot().1);
+    let mut room = hut(&cells, k, GROUND);
+    let bed = furniture(k, 0, Kind::Bed);
+    assert_eq!(can_place(&site, &room, &bed), Ok(()));
+    room.push(bed);
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 3, Kind::Chest)),
+        Ok(())
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 0, Kind::Crate)),
+        Err(Rule::Slot)
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, MIDDLE, Kind::Table)),
+        Err(Rule::Overlap)
+    );
+    assert_eq!(
+        can_place(&site, &room, &furniture(k, 1, Kind::Closet)),
+        Err(Rule::Overlap)
+    );
+    // A door in side 4's wall: nothing in its way in.
+    let door = Shape::wall(k, nb(&cells, k, 4), GROUND, Opening::Door);
+    let mut doorway = hut(&cells, k, GROUND);
+    doorway.retain(|p| p.shape.slot() != door.slot());
+    doorway.push(Piece::new("timber", door.clone()));
+    assert_eq!(
+        can_place(&site, &doorway, &furniture(k, 1, Kind::Chest)),
+        Ok(())
+    );
+    assert_eq!(
+        can_place(&site, &doorway, &furniture(k, 4, Kind::Chest)),
+        Err(Rule::DoorClear)
+    );
+    // And a door is refused where a piece already stands in its way.
+    let mut blocked = hut(&cells, k, GROUND);
+    blocked.push(furniture(k, 4, Kind::Chest));
+    blocked.retain(|p| p.shape.slot() != door.slot());
+    assert_eq!(
+        can_place(&site, &blocked, &Piece::new("timber", door)),
+        Err(Rule::DoorClear)
+    );
+    // A floor a metre over a closet leaves it no headroom.
+    let low = [Piece::new(
+        "timber",
+        Shape::Floor {
+            cell: k,
+            layer: GROUND + 1,
+        },
+    )];
+    assert_eq!(
+        can_place(&site, &low, &furniture(k, 2, Kind::Closet)),
+        Err(Rule::Headroom)
+    );
+    // Nothing stands on a stair's cells.
+    let stair = [Piece::new(
+        "timber",
+        Shape::Stair {
+            foot: k,
+            head: nb(&cells, k, 1),
+            layer: GROUND,
+        },
+    )];
+    assert_eq!(
+        can_place(&site, &stair, &furniture(k, 2, Kind::Stool)),
+        Err(Rule::Clear)
+    );
+    // With nothing under it, nothing holds it up.
+    let air = Site {
+        cells: &cells,
+        ground: &|_| Some(GROUND - 5),
+    };
+    assert_eq!(
+        can_place(&air, &[], &furniture(k, 2, Kind::Stool)),
+        Err(Rule::HeldUp)
+    );
+}
+
+/// A furniture piece is a `piece` record like any other, and a piece record
+/// written before furniture reads as it did.
+#[test]
+fn furniture_is_a_piece_record_and_old_pieces_read_as_before() {
+    use crate::furniture::Kind;
+    let k = key(plot().1);
+    let old = Piece::new(
+        "timber",
+        Shape::Floor {
+            cell: k,
+            layer: GROUND,
+        },
+    );
+    let old_line = serde_json::to_string(&PieceBody {
+        piece: Some(old.clone()),
+    })
+    .unwrap();
+    // The floor's body as an older build wrote it: unchanged by this one.
+    let want = format!(
+        "{{\"piece\":{{\"kit\":\"timber\",\"shape\":{{\"Floor\":{{\"cell\":{k},\"layer\":{GROUND}}}}}}}}}"
+    );
+    assert_eq!(old_line, want);
+    let chest = furniture(k, 2, Kind::BandedChest);
+    let mut records = Records::new();
+    records.put(placed(&old));
+    records.put(placed(&chest));
+    let back = from_records(&records);
+    assert_eq!(back.get(&old.id()), Some(&old));
+    assert_eq!(back.get(&chest.id()), Some(&chest));
+    // A piece taken away is gone.
+    records.put(removed(&chest));
+    assert_eq!(from_records(&records).len(), 1);
+}
+
+/// A bed in a room is cut into its linen and wool and stands as a solid; a
+/// stool is cut but walked up to, not into.
+#[test]
+fn furniture_is_cut_with_the_room() {
+    use crate::furniture::Kind;
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let k = key(*at);
+    let mut room = hut(&cells, k, GROUND);
+    let bare_pieces: Vec<&Piece> = room.iter().collect();
+    let bare = cut(&cells, k, &bare_pieces, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    room.push(furniture(k, 0, Kind::Bed));
+    room.push(furniture(k, 3, Kind::Stool));
+    let all: Vec<&Piece> = room.iter().collect();
+    let c = cut(&cells, k, &all, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    assert!(c.meshes.contains_key("linen") && c.meshes.contains_key("wool"));
+    assert_eq!(c.solids.solids.len(), bare.solids.solids.len() + 1);
+    // The bed stands in its cell, its front a tangent.
+    let (bed_at, front) =
+        super::cut::furniture_stand(&cells, k, GROUND, 0, Kind::Bed, RADIUS_M).expect("stands");
+    let up = bed_at.normalize();
+    assert!(front.dot(up).abs() < 1e-3, "a tangent");
+    let centre = cells.cell(k).unwrap().direction.normalize() * bed_at.length();
+    let off = (bed_at - centre).length();
+    assert!((0.05..1.4).contains(&off), "{off} m from the middle");
 }

@@ -11,7 +11,8 @@
 use super::{Cells, Opening, Piece, RoofShape, STOREY, Shape};
 use crate::column::layer_altitude;
 use crate::settlement::pieces::{
-    BuildingSolids, Frame, LightKind, MeshBuf, Meshes, RoomLight, SLAB_M, Solid, Surface, WINDOW_M,
+    BuildingSolids, DoorLeaf, Frame, LightKind, MeshBuf, Meshes, RoomLight, SLAB_M, Solid, Surface,
+    WINDOW_M,
 };
 use crate::settlement::{Kit, Kits};
 use glam::{Vec2, Vec3};
@@ -30,9 +31,10 @@ pub const SILL_M: f32 = 1.0;
 pub const POST_HALF_M: f32 = 0.13;
 /// The texture an unlit flame is drawn in (the towns' `FLAME`).
 pub const FLAME: &str = "flame";
-/// A footing's stone (`player-building` design 8): the fieldstone kit's
-/// wall, under every kit's floor that stands over lower ground.
-pub const FOOTING: &str = "fieldstone";
+/// A footing's stone (`player-building` design 8, B7): coursed blocks of
+/// its own (`footing.png`, in the town kits' stones' palette), under every
+/// kit's floor that stands over lower ground.
+pub const FOOTING: &str = "footing";
 /// How far a footing runs into the ground under it, metres, so no seam
 /// shows where the two meet.
 pub const FOOTING_SINK_M: f32 = 0.1;
@@ -42,6 +44,9 @@ pub const FOOTING_SINK_M: f32 = 0.1;
 pub struct Cut {
     pub meshes: Meshes,
     pub solids: BuildingSolids,
+    /// The door piece each of `solids.doors` is, by its id, in order
+    /// (design B8): what its open-or-shut record is keyed by.
+    pub door_ids: Vec<u64>,
 }
 
 /// The tangent frame at `anchor`, its origin at the altitude of `layer`.
@@ -75,6 +80,8 @@ struct Cutter<'a> {
     surfaces: Vec<Surface>,
     roof_plan: Vec<Vec2>,
     lights: Vec<RoomLight>,
+    doors: Vec<DoorLeaf>,
+    door_ids: Vec<u64>,
     top_m: f32,
     reach_m: f32,
 }
@@ -96,7 +103,7 @@ pub fn cut(
 
 /// [`cut`] over `ground`, the first layer over the ground in a cell: a
 /// floor with no floor of the plot under it, over ground lower than it,
-/// stands on a fieldstone footing down to that ground (design 8).
+/// stands on a stone footing down to that ground (design 8).
 pub fn cut_on(
     cells: &Cells,
     anchor: u32,
@@ -131,6 +138,8 @@ pub fn cut_on(
         surfaces: Vec::new(),
         roof_plan: Vec::new(),
         lights: Vec::new(),
+        doors: Vec::new(),
+        door_ids: Vec::new(),
         top_m: 0.0,
         reach_m: 1.0,
     };
@@ -149,12 +158,74 @@ pub fn cut_on(
             solids: c.solids,
             roof_plan: c.roof_plan,
             surfaces: c.surfaces,
-            doors: Vec::new(),
+            doors: c.doors,
             rooms: Meshes::new(),
             lights: c.lights,
             top_m: c.top_m,
+            furniture: Vec::new(),
         },
+        door_ids: c.door_ids,
     })
+}
+
+/// A face's texture coordinates by its plan or its run and height, as the
+/// towns' `uvWorld`.
+fn furniture_uv(p: Vec3, n: Vec3, rep: f32) -> Vec2 {
+    let s = 1.0 / rep;
+    if n.y.abs() > 0.7 {
+        return Vec2::new(p.x * s, p.z * s);
+    }
+    let l = n.x.hypot(n.z).max(1e-6);
+    Vec2::new((p.x * -n.z + p.z * n.x) / l * s, p.y * s)
+}
+
+/// Where a piece of furniture stands in `cell`, in a plan that `plan` maps
+/// a direction into: its middle and its front (`furniture` design 3). Against
+/// side `side`, its back [`crate::furniture::BACK_M`] in from the edge's
+/// middle; in the middle, facing away from side 0.
+pub fn stand_plan(
+    cells: &Cells,
+    cell: u32,
+    side: u8,
+    kind: crate::furniture::Kind,
+    plan: impl Fn(Vec3) -> Vec2,
+) -> Option<(Vec2, Vec2)> {
+    let c = cells.cell(cell)?;
+    let centre = plan(c.direction);
+    let edge_mid = |s: usize| -> Option<Vec2> {
+        let n = cells.neighbours(cell).get(s).copied().flatten()?;
+        let (e0, e1) = cells.edge(cell, n)?;
+        Some((plan(e0) + plan(e1)) * 0.5)
+    };
+    if side >= crate::furniture::MIDDLE {
+        let m = edge_mid(0)?;
+        return Some((centre, (centre - m).normalize_or(Vec2::Y)));
+    }
+    let m = edge_mid(usize::from(side))?;
+    let inward = (centre - m).normalize_or(Vec2::Y);
+    let back = crate::furniture::BACK_M + kind.size_m().y / 2.0;
+    Some((m + inward * back, inward))
+}
+
+/// Where a piece of furniture stands on the planet: its middle on the floor
+/// (planet-centred, metres) and its front, a unit tangent there.
+pub fn furniture_stand(
+    cells: &Cells,
+    cell: u32,
+    layer: u16,
+    side: u8,
+    kind: crate::furniture::Kind,
+    radius_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let frame = frame_at(cells, cell, layer, radius_m)?;
+    let plan = |d: Vec3| {
+        let p = frame.local(d.normalize() * (radius_m + layer_altitude(layer as usize)));
+        Vec2::new(p.x, p.z)
+    };
+    let (at, front) = stand_plan(cells, cell, side, kind, plan)?;
+    let world = frame.world(Vec3::new(at.x, FLOOR_LIFT_M, at.y));
+    let f = (frame.x * front.x + frame.z * front.y).normalize_or_zero();
+    Some((world, f))
 }
 
 /// Counter-clockwise as `Surface` and `Solid` read it.
@@ -311,6 +382,13 @@ impl Cutter<'_> {
                 self.prism(&square, y0, y1, &edge, &edge, true);
             }
             Shape::Lantern { cell, layer } => self.lantern(kit, *cell, *layer),
+            Shape::Door { a, b, layer } => self.door(kit, *a, *b, *layer, shape.id()),
+            Shape::Furniture {
+                cell,
+                layer,
+                side,
+                kind,
+            } => self.furniture(*cell, *layer, *side, *kind),
             Shape::Roof {
                 cells,
                 layer,
@@ -356,6 +434,77 @@ impl Cutter<'_> {
                 }
             }
         }
+    }
+
+    /// A door hung in the doorway on the edge between `a` and `b` (design
+    /// B8): the frame, one U lining the jambs and the head through the
+    /// wall's thickness, in the wall's edge texture; and the leaf, a
+    /// [`DoorLeaf`] of the plot's, hinged on the jamb away from the room and
+    /// swinging into it, drawn apart by [`super::door::leaf_mesh`].
+    fn door(&mut self, kit: &Kit, a: u32, b: u32, layer: u16, id: u64) {
+        use super::door::{BEVEL_M, CASING_M, CASING_PROUD_M, casing_outline, extrude};
+        let (Some((e0, e1)), Some(cb)) = (self.cells.edge(a, b), self.cells.cell(b)) else {
+            return;
+        };
+        let storey = usize::from(layer.saturating_sub(self.base) / STOREY);
+        let faces = wall_of(kit, storey).clone();
+        let (p0, _) = self.plan_y(e0, layer);
+        let (p1, _) = self.plan_y(e1, layer);
+        let mid3 = (e0 + e1) * 0.5;
+        let (_, y0) = self.plan_y(mid3, layer);
+        let along = (p1 - p0).normalize_or_zero();
+        let mid = (p0 + p1) * 0.5;
+        // Out of the room: toward the cell with no floor on this storey, or
+        // toward `b`.
+        let toward_b = {
+            let (pb, _) = self.plan_y(cb.direction, layer);
+            let n = Vec2::new(-along.y, along.x);
+            if n.dot(pb - mid) >= 0.0 { n } else { -n }
+        };
+        let floored = |c: u32| self.floors.contains(&(c, layer));
+        let out = if floored(b) && !floored(a) {
+            -toward_b
+        } else {
+            toward_b
+        };
+        let (w, h) = kit.door_m;
+        let half = faces.thickness_m * 0.5;
+        // The frame: the U in the wall's plane (u along `along` from the
+        // doorway's middle, v up), through the wall and a little proud.
+        let edge = faces.edge.clone();
+        let rep = (self.repeat)(&edge).max(0.1);
+        let proud = half + CASING_PROUD_M;
+        for tri in extrude(&casing_outline(w, h), -proud, proud, BEVEL_M) {
+            let place = |q: Vec3| {
+                let plan = mid + along * q.x + out * q.z;
+                Vec3::new(plan.x, y0 + q.y, plan.y)
+            };
+            let normal = {
+                let plan = along * tri.normal.x + out * tri.normal.z;
+                Vec3::new(plan.x, tri.normal.y, plan.y)
+            };
+            let uv = tri.p.map(|q| Vec2::new((q.x + q.z) / rep, -q.y / rep));
+            self.tri(&edge, tri.p.map(place), uv, normal);
+        }
+        // The leaf: inside the casing, from the floor's top to under the
+        // head, its hinge at the inner face of the jamb.
+        let width = w - 2.0 * CASING_M - 0.02;
+        let hinge = mid - along * (width * 0.5) - out * half;
+        let floor_top = y0 + FLOOR_LIFT_M + 0.01;
+        self.doors.push(DoorLeaf {
+            index: self.doors.len(),
+            hinge,
+            along,
+            out,
+            width,
+            y0: floor_top,
+            y1: y0 + h - CASING_M - 0.01,
+            middle: mid,
+            open: false,
+        });
+        self.door_ids.push(id);
+        self.reach(p0);
+        self.reach(p1);
     }
 
     fn floor(&mut self, kit: &Kit, cell: u32, layer: u16) {
@@ -460,6 +609,55 @@ impl Cutter<'_> {
             below_m: 1.5,
             above_m: 1.7,
         });
+    }
+
+    /// A piece of furniture (`furniture` design 3): its model stood against
+    /// its side's edge, its back [`crate::furniture::BACK_M`] in from it, or
+    /// in the cell's middle; a solid unless it is a seat.
+    fn furniture(&mut self, cell: u32, layer: u16, side: u8, kind: crate::furniture::Kind) {
+        let Some(c) = self.cells.cell(cell) else {
+            return;
+        };
+        let (_, y) = self.plan_y(c.direction, layer);
+        let y = y + FLOOR_LIFT_M;
+        let plan = |d: Vec3| self.plan_y(d, layer).0;
+        let Some((at, front)) = stand_plan(self.cells, cell, side, kind, plan) else {
+            return;
+        };
+        for poly in crate::furniture::model::placed(kind, at, y, front) {
+            let n = poly.normal();
+            let rep = (self.repeat)(poly.texture).max(0.1);
+            let frame = self.frame;
+            let to_world =
+                |v: Vec3| (frame.x * v.x + frame.y * v.y + frame.z * v.z).normalize_or_zero();
+            let buf = self.buf(poly.texture);
+            // Wound outward already; each point its own normal, so the piece
+            // is shaded smooth across its curves.
+            for i in 1..poly.points.len().saturating_sub(1) {
+                for k in [0, i, i + 1] {
+                    let p = poly.points[k];
+                    let uv = match &poly.uvs {
+                        Some(uvs) => uvs[k].to_array(),
+                        None => {
+                            let t = furniture_uv(p, n, rep);
+                            [t.x, -t.y]
+                        }
+                    };
+                    buf.positions.push(frame.world(p).to_array());
+                    buf.normals.push(to_world(poly.normals[k]).to_array());
+                    buf.uvs.push(uv);
+                }
+            }
+        }
+        if kind.solid() {
+            let outline = crate::furniture::rect(at, front, kind.size_m()).to_vec();
+            self.solids.push(Solid {
+                outline: ccw(outline),
+                y0: y,
+                y1: y + kind.height_m(),
+            });
+        }
+        self.reach(at);
     }
 
     fn roof(&mut self, kit: &Kit, keys: &[u32], layer: u16, shape: RoofShape) {

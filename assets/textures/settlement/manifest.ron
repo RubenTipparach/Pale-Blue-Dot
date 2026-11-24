@@ -39,6 +39,22 @@
     (name: "boards", width: 32, height: 32, repeat_m: 2.0),
     (name: "turf", width: 32, height: 32, repeat_m: 2.0),
     (name: "fieldstone", width: 32, height: 32, repeat_m: 2.0),
+    // `player-building` design B7: a floor's footing, drawn by
+    // tools/art/footing_texture.py in the stones' palette.
+    (name: "footing", width: 32, height: 32, repeat_m: 2.0),
+    // `player-building` design B8: a player's door leaf, mapped once over
+    // each face, drawn by tools/art/door_texture.py.
+    (name: "door", width: 32, height: 64, repeat_m: 0.0),
+    // `land-transport` design 12: the animals' coats, six 32 px tiles side
+    // by side (hair, mane, hoof, feather, fleece, skin), each laid once round
+    // a lofted part and repeated along it; drawn by tools/art/coat_texture.py.
+    (name: "coat", width: 192, height: 32, repeat_m: 0.0),
+    // `animal-husbandry` design 17 (the owner's pick, M26's blocky animals):
+    // the herd's hides, a row each (horse, plodder, woolback, meadow hen) of
+    // eight 32 px tiles (body, legs, head, horns, tail, mane, snout, ears),
+    // laid by the metre on every face of a box; laid out by
+    // tools/art/herd_hide.py from M26's hides.
+    (name: "herd_hide", width: 256, height: 128, repeat_m: 0.0),
     (name: "banner", width: 32, height: 32, repeat_m: 0.0),
     (name: "sandstone", width: 32, height: 32, repeat_m: 2.0),
     (name: "salt", width: 32, height: 32, repeat_m: 2.0),
@@ -77,5 +93,11 @@
     (name: "roaddirt", width: 32, height: 32, repeat_m: 2.0),
     (name: "gravel", width: 32, height: 32, repeat_m: 2.0),
     (name: "net", width: 32, height: 32, repeat_m: 1.0, cut: true),
+    (name: "drawerfront", width: 32, height: 32, repeat_m: 0.0),
+    (name: "closetfront", width: 32, height: 64, repeat_m: 0.0),
+    (name: "chestside", width: 32, height: 32, repeat_m: 0.0),
+    (name: "chestfront", width: 32, height: 32, repeat_m: 0.0),
+    (name: "bandedside", width: 32, height: 32, repeat_m: 0.0),
+    (name: "bandedfront", width: 32, height: 32, repeat_m: 0.0),
   ],
 )

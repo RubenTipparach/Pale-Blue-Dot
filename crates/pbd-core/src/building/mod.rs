@@ -11,6 +11,7 @@
 
 pub mod blueprint;
 pub mod cut;
+pub mod door;
 pub mod rules;
 
 #[cfg(test)]
@@ -65,11 +66,25 @@ pub enum Shape {
     Post { cells: [u32; 3], layer: u16 },
     /// A lantern standing in `cell` at `layer`.
     Lantern { cell: u32, layer: u16 },
+    /// A door hung in the doorway of the wall on the edge between `a < b`,
+    /// a storey up from `layer` (design B8). Its own slot, so the wall and
+    /// its door are two records; whether it stands open is the towns' own
+    /// `door` record at [`door_state_id`].
+    Door { a: u32, b: u32, layer: u16 },
     /// Over `cells` (sorted), its eaves on the line under `layer`.
     Roof {
         cells: Vec<u32>,
         layer: u16,
         shape: RoofShape,
+    },
+    /// A piece of furniture in `cell` on `layer`, its back to the cell's side
+    /// `side` (0 to 5), or in its middle (`furniture::MIDDLE`): `furniture`
+    /// design 3.
+    Furniture {
+        cell: u32,
+        layer: u16,
+        side: u8,
+        kind: crate::furniture::Kind,
     },
 }
 
@@ -82,6 +97,8 @@ pub enum Class {
     Post,
     Lantern,
     Roof,
+    Door,
+    Furniture,
 }
 
 impl Class {
@@ -94,6 +111,8 @@ impl Class {
             Class::Post => "post",
             Class::Lantern => "lantern",
             Class::Roof => "roof",
+            Class::Door => "door",
+            Class::Furniture => "furniture",
         }
     }
 }
@@ -107,6 +126,8 @@ impl Shape {
             Shape::Post { .. } => Class::Post,
             Shape::Lantern { .. } => Class::Lantern,
             Shape::Roof { .. } => Class::Roof,
+            Shape::Door { .. } => Class::Door,
+            Shape::Furniture { .. } => Class::Furniture,
         }
     }
 
@@ -118,15 +139,19 @@ impl Shape {
             | Shape::Stair { layer, .. }
             | Shape::Post { layer, .. }
             | Shape::Lantern { layer, .. }
-            | Shape::Roof { layer, .. } => *layer,
+            | Shape::Roof { layer, .. }
+            | Shape::Door { layer, .. } => *layer,
+            Shape::Furniture { layer, .. } => *layer,
         }
     }
 
     /// Every cell it touches.
     pub fn cells(&self) -> Vec<u32> {
         match self {
-            Shape::Wall { a, b, .. } => vec![*a, *b],
-            Shape::Floor { cell, .. } | Shape::Lantern { cell, .. } => vec![*cell],
+            Shape::Wall { a, b, .. } | Shape::Door { a, b, .. } => vec![*a, *b],
+            Shape::Floor { cell, .. }
+            | Shape::Lantern { cell, .. }
+            | Shape::Furniture { cell, .. } => vec![*cell],
             Shape::Stair { foot, head, .. } => vec![*foot, *head],
             Shape::Post { cells, .. } => cells.to_vec(),
             Shape::Roof { cells, .. } => cells.clone(),
@@ -148,6 +173,10 @@ impl Shape {
             Shape::Roof { cells, layer, .. } => {
                 format!("roof:{}:{layer}", cells.first().copied().unwrap_or(0))
             }
+            Shape::Door { a, b, layer } => format!("door:{a}:{b}:{layer}"),
+            Shape::Furniture {
+                cell, layer, side, ..
+            } => format!("furniture:{cell}:{side}:{layer}"),
         }
     }
 
@@ -164,6 +193,15 @@ impl Shape {
             b: a.max(b),
             layer,
             opening,
+        }
+    }
+
+    /// A door on the edge between `a` and `b`, the pair sorted.
+    pub fn door(a: u32, b: u32, layer: u16) -> Self {
+        Shape::Door {
+            a: a.min(b),
+            b: a.max(b),
+            layer,
         }
     }
 
@@ -209,6 +247,15 @@ impl Piece {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct PieceBody {
     pub piece: Option<Piece>,
+}
+
+/// The id of a player's door's open-or-shut record (design B8): the towns'
+/// own `door` record kind (`settlement::record::door_record`), at the
+/// door piece's id with the top bit set. A town's door id is its building's
+/// record id (a site under 2^32 over a number under 2^16) times 16 and its
+/// door's number, so under 2^52, and never has that bit.
+pub fn door_state_id(piece: u64) -> u64 {
+    piece | 1 << 63
 }
 
 /// The record that places `piece`.

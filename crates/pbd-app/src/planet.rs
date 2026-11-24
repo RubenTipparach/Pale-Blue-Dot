@@ -2843,6 +2843,10 @@ mod tests {
             layer: top as u16,
             material: pbd_core::terrain::Material::Air,
         });
+        // What a launch of the dug world builds: the base reads the save's
+        // edits too, so the hole is in it, and the rebuild must match that,
+        // not the undug launch.
+        let relaunch = build_planet(near, &columns, &scatter, &save.edits);
         let mut world = World::new();
         world.insert_resource(columns);
         world.insert_resource(scatter);
@@ -2864,8 +2868,8 @@ mod tests {
         assert_eq!(base.generation, 2, "the render world must see a new base");
         assert!(
             bytemuck::cast_slice::<GpuCell, u8>(&base.cells)
-                == bytemuck::cast_slice::<GpuCell, u8>(&launch.base),
-            "the same generator rebuilds the same base records"
+                == bytemuck::cast_slice::<GpuCell, u8>(&relaunch.base),
+            "the rebuild is the base a launch of the dug world builds"
         );
         let fine = world.resource::<lod::PlanetFine>();
         assert_eq!(fine.version, 8, "the render world must see a new fine set");

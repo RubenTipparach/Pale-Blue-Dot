@@ -6,6 +6,11 @@
 //!
 //! Every placement and removal is a record through the save's durable path
 //! ([`Builds::place`], [`Builds::remove`]) before anything is drawn.
+//!
+//! A door (design B8) is a piece that also takes a door from the pack
+//! ([`Builds::place_door`]), is drawn as its own leaf ([`PlotDoor`]) swung by
+//! [`swing_plot_doors`], and is opened and shut with F ([`use_plot_doors`])
+//! through the towns' own `door` record, at `building::door_state_id`.
 
 use crate::field_light::{
     BakedField, LitByField, LitLikeTerrain, RoomLights, UNBAKED, UNBAKED_BEFORE,
@@ -15,13 +20,18 @@ use crate::saves::WorldSave;
 use crate::towns::{TownAssets, TownFlame, TownRoot};
 use crate::walking::PlayerStructures;
 use bevy::prelude::*;
-use pbd_core::building::cut::{FLAME, cut_on};
+use pbd_core::building::cut::{Cut, FLAME, cut_on};
+use pbd_core::building::door::{LEAF_TEXTURE, leaf_mesh};
 use pbd_core::building::{
-    Cells, PIECE_RECORD, PIECE_SCHEMA, PLOT_M, Piece, from_records, placed, plots, removed,
+    Cells, PIECE_RECORD, PIECE_SCHEMA, PLOT_M, Piece, door_state_id, from_records, placed, plots,
+    removed,
 };
-use pbd_core::records::Author;
+use pbd_core::goods::Good;
+use pbd_core::inventory::{CARRIED, Item, Slots};
+use pbd_core::records::{Author, Records};
 use pbd_core::settlement::Kits;
 use pbd_core::settlement::chart::Patch;
+use pbd_core::settlement::record::{DOOR_RECORD, RECORD_SCHEMA, door_open, door_record};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -78,6 +88,116 @@ impl Builds {
         true
     }
 
+    /// Place one piece with the slots after it in one line (`furniture`
+    /// design 5: a piece of furniture taken from the pack).
+    pub fn place_with_hands(
+        &mut self,
+        save: &mut WorldSave,
+        piece: Piece,
+        carried: &pbd_core::inventory::Slots,
+    ) -> bool {
+        if !save.store_with_hands(placed(&piece), PIECE_SCHEMA, carried) {
+            return false;
+        }
+        self.pieces.insert(piece.id(), piece);
+        self.revision += 1;
+        true
+    }
+
+    /// Take a piece away with the slots after it in one line (a piece of
+    /// furniture back into the pack).
+    pub fn remove_with_hands(
+        &mut self,
+        save: &mut WorldSave,
+        id: u64,
+        carried: &pbd_core::inventory::Slots,
+    ) -> bool {
+        let Some(piece) = self.pieces.get(&id).cloned() else {
+            return false;
+        };
+        if !save.store_with_hands(removed(&piece), PIECE_SCHEMA, carried) {
+            return false;
+        }
+        self.pieces.remove(&id);
+        self.revision += 1;
+        true
+    }
+
+    /// Hang a door (design B8): one door taken from `carried`, and the piece
+    /// and the slots after it stored as one line. Nothing changes when none
+    /// is carried or the save's writer has failed.
+    pub fn place_door(
+        &mut self,
+        save: &mut WorldSave,
+        piece: Piece,
+        carried: &mut Slots,
+    ) -> Result<(), DoorRefused> {
+        let door = Item::Good(Good::DOOR);
+        let Some(index) =
+            (0..CARRIED).find(|&i| carried.get(i).is_some_and(|stack| stack.item == door))
+        else {
+            return Err(DoorRefused::NoDoor);
+        };
+        let mut after = carried.clone();
+        after.take(index, 1);
+        if !save.store_with_hands(placed(&piece), PIECE_SCHEMA, &after) {
+            return Err(DoorRefused::Save);
+        }
+        *carried = after;
+        self.pieces.insert(piece.id(), piece);
+        self.revision += 1;
+        Ok(())
+    }
+
+    /// Take a door down (design B8): it is written shut, so a door hung
+    /// there later starts shut, and given back to `carried`. Refused with no
+    /// room to carry it.
+    pub fn remove_door(
+        &mut self,
+        save: &mut WorldSave,
+        id: u64,
+        carried: &mut Slots,
+    ) -> Result<(), DoorRefused> {
+        let Some(piece) = self.pieces.get(&id).cloned() else {
+            return Err(DoorRefused::Save);
+        };
+        let mut after = carried.clone();
+        if after.give(Item::Good(Good::DOOR), 1) > 0 {
+            return Err(DoorRefused::NoRoom);
+        }
+        if save
+            .store(
+                &Author::Player(0),
+                vec![door_record(door_state_id(id), false)],
+            )
+            .is_none()
+            || !save.store_with_hands(removed(&piece), PIECE_SCHEMA, &after)
+        {
+            return Err(DoorRefused::Save);
+        }
+        *carried = after;
+        self.pieces.remove(&id);
+        self.revision += 1;
+        Ok(())
+    }
+
+    /// Open or shut the door piece `id`: its record written before anything
+    /// moves. `false`, and nothing written, once the save's writer has
+    /// failed.
+    pub fn set_door(save: &mut WorldSave, id: u64, open: bool) -> bool {
+        if save
+            .store(
+                &Author::Player(0),
+                vec![door_record(door_state_id(id), open)],
+            )
+            .is_none()
+        {
+            return false;
+        }
+        save.note_record_kinds(&[(DOOR_RECORD, RECORD_SCHEMA)]);
+        true
+    }
+
     /// The pieces with a cell within `reach_m` of `direction`.
     pub fn near(&self, direction: Vec3, reach_m: f32) -> Vec<Piece> {
         let cos = (reach_m / PLANET_RADIUS).cos();
@@ -102,6 +222,58 @@ impl Builds {
             self.revision += 1;
         }
     }
+}
+
+/// Why a door was not hung or taken down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DoorRefused {
+    /// None in the pack.
+    NoDoor,
+    /// No room in the pack to take it back.
+    NoRoom,
+    /// The save's writer has failed.
+    Save,
+}
+
+impl DoorRefused {
+    /// What the line under the crosshair says.
+    pub fn text(self) -> pbd_core::locale::Localized {
+        use pbd_core::locale::tr;
+        match self {
+            DoorRefused::NoDoor => tr("build.no_door"),
+            DoorRefused::NoRoom => tr("breed.no_room_carry"),
+            DoorRefused::Save => tr("breed.save_refused"),
+        }
+    }
+}
+
+/// Every plot of `pieces` cut, each door's leaf open as `records` hold it
+/// (no record is a shut door). `ground` is the first layer over the ground
+/// in a cell, for the footings ([`ground_layer`] in the game).
+pub fn cut_plots(
+    pieces: &BTreeMap<u64, Piece>,
+    kits: &Kits,
+    repeat: &dyn Fn(&str) -> f32,
+    records: &Records,
+    ground: &dyn Fn(u32) -> Option<u16>,
+) -> Vec<Cut> {
+    let mut out = Vec::new();
+    for (anchor, ids) in plots(pieces, PLANET_RADIUS, pbd_core::cell_key::key_direction) {
+        let Some(direction) = pbd_core::cell_key::key_direction(anchor) else {
+            continue;
+        };
+        let patch = patch_round(direction, PATCH_REACH_M);
+        let cells = Cells::new(&patch);
+        let of: Vec<&Piece> = ids.iter().filter_map(|id| pieces.get(id)).collect();
+        let Some(mut cut) = cut_on(&cells, anchor, &of, kits, repeat, PLANET_RADIUS, ground) else {
+            continue;
+        };
+        for (leaf, id) in cut.solids.doors.iter_mut().zip(&cut.door_ids) {
+            leaf.open = door_open(records, door_state_id(*id));
+        }
+        out.push(cut);
+    }
+    out
 }
 
 /// The finest cells round a direction, for the rules and the cut.
@@ -163,28 +335,20 @@ pub fn sync(world: &mut World) {
     let kits = kits_in(world);
     let repeat = crate::towns::repeat_in(world);
     let pieces = world.resource::<Builds>().pieces.clone();
+    let cuts = cut_plots(
+        &pieces,
+        &kits,
+        &repeat,
+        &world.resource::<WorldSave>().records,
+        &ground_layer,
+    );
     let mut solids = Vec::new();
     let mut drawn = Vec::new();
     let mut casting = Vec::new();
-    for (anchor, ids) in plots(&pieces, PLANET_RADIUS, pbd_core::cell_key::key_direction) {
-        let Some(direction) = pbd_core::cell_key::key_direction(anchor) else {
-            continue;
-        };
-        let patch = patch_round(direction, PATCH_REACH_M);
-        let cells = Cells::new(&patch);
-        let of: Vec<&Piece> = ids.iter().filter_map(|id| pieces.get(id)).collect();
-        let Some(c) = cut_on(
-            &cells,
-            anchor,
-            &of,
-            &kits,
-            &repeat,
-            PLANET_RADIUS,
-            &ground_layer,
-        ) else {
-            continue;
-        };
-        drawn.push(spawn_plot(world, &c.meshes, &c.solids.lights));
+    for (plot, c) in cuts.into_iter().enumerate() {
+        let root = spawn_plot(world, &c.meshes, &c.solids.lights);
+        spawn_leaves(world, root, plot, &c);
+        drawn.push(root);
         casting.push(std::sync::Arc::new(crate::towns::casting_of(&c.meshes)));
         solids.push(c.solids);
     }
@@ -260,6 +424,193 @@ pub fn spawn_plot(
     root
 }
 
+/// A player's door leaf in the world (design B8): its plot and door in the
+/// walker's [`PlayerStructures`], its piece's id, and how far it has swung
+/// (0 shut, a quarter turn open).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PlotDoor {
+    pub plot: usize,
+    pub door: usize,
+    pub piece: u64,
+    pub angle: f32,
+}
+
+/// Each door leaf of a plot as its own mesh under the plot's root, so it is
+/// lit by the field as the walls round it are.
+fn spawn_leaves(world: &mut World, root: Entity, plot: usize, c: &Cut) {
+    if c.solids.doors.is_empty() {
+        return;
+    }
+    let image = crate::towns::texture(world.resource::<AssetServer>(), LEAF_TEXTURE);
+    let material = crate::towns::town_material(world, Some(image), false);
+    for (k, (leaf, &piece)) in c.solids.doors.iter().zip(&c.door_ids).enumerate() {
+        let angle = if leaf.open {
+            crate::towns::OPEN_ANGLE
+        } else {
+            0.0
+        };
+        let mesh = leaf_entity_mesh(leaf, c.solids.frame, angle);
+        let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+        let child = world
+            .spawn((
+                Name::new("Door"),
+                Mesh3d(mesh),
+                MeshMaterial3d(material.clone()),
+                Transform::default(),
+                PlotDoor {
+                    plot,
+                    door: k,
+                    piece,
+                    angle,
+                },
+            ))
+            .id();
+        world.entity_mut(root).add_child(child);
+    }
+}
+
+fn leaf_entity_mesh(
+    leaf: &pbd_core::settlement::pieces::DoorLeaf,
+    frame: pbd_core::settlement::pieces::Frame,
+    angle: f32,
+) -> Mesh {
+    let meshes = leaf_mesh(leaf, frame, angle);
+    crate::towns::to_mesh(meshes.values().next().expect("a leaf is planks"))
+}
+
+/// The player's door in reach of the walker: its plot, its door and its
+/// piece, and how far.
+fn plot_door_in_reach(
+    walking: &crate::walking::WalkingState,
+    at: Vec3,
+    structures: &PlayerStructures,
+    doors: &Query<&PlotDoor>,
+) -> Option<(f32, PlotDoor)> {
+    let (eye, look) = crate::towns::eye_and_look(walking, at);
+    doors
+        .iter()
+        .filter_map(|door| {
+            let b = structures.0.get(door.plot)?;
+            let d = b.doors.get(door.door)?;
+            crate::towns::leaf_in_reach(eye, look, b, d).map(|dist| (dist, *door))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+}
+
+/// Offer the player's door in reach to the interact key, as a town's is.
+pub fn offer_plot_doors(
+    walking: Option<Res<crate::walking::WalkingState>>,
+    walker: Query<&avian3d::prelude::Position, With<crate::walking::Walker>>,
+    structures: Res<PlayerStructures>,
+    doors: Query<&PlotDoor>,
+    mut interact: ResMut<crate::interact::Interact>,
+    space: crate::SimSpace,
+) {
+    let (Some(walking), Ok(position)) = (walking, walker.single()) else {
+        return;
+    };
+    if !walking.active {
+        return;
+    }
+    let at = space.origin().query_point(position.0);
+    let Some((_, door)) = plot_door_in_reach(&walking, at, &structures, &doors) else {
+        return;
+    };
+    let open = structures
+        .0
+        .get(door.plot)
+        .and_then(|b| b.doors.get(door.door))
+        .is_some_and(|d| d.open);
+    use crate::interact::{Act, Offer};
+    interact.offer(Offer::new(
+        if open { Act::ShutDoor } else { Act::OpenDoor },
+        pbd_core::locale::tr("towns.door"),
+    ));
+}
+
+/// F opens or shuts the player's door in reach: its record written before
+/// the leaf moves, and a save that refuses it leaves it as it was.
+#[allow(clippy::too_many_arguments)]
+pub fn use_plot_doors(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    walking: Option<Res<crate::walking::WalkingState>>,
+    walker: Query<&avian3d::prelude::Position, With<crate::walking::Walker>>,
+    mut structures: ResMut<PlayerStructures>,
+    save: Option<ResMut<WorldSave>>,
+    doors: Query<&PlotDoor>,
+    interact: Option<Res<crate::interact::Interact>>,
+    space: crate::SimSpace,
+) {
+    let (Some(keys), Some(walking)) = (keys, walking) else {
+        return;
+    };
+    if !keys.just_pressed(KeyCode::KeyF) || !walking.active {
+        return;
+    }
+    if !(walking.captured || walking.scripted) {
+        return;
+    }
+    if !crate::interact::may(interact.as_deref(), crate::interact::Reader::Doors) {
+        return;
+    }
+    let Ok(position) = walker.single() else {
+        return;
+    };
+    let at = space.origin().query_point(position.0);
+    let Some((_, door)) = plot_door_in_reach(&walking, at, &structures, &doors) else {
+        return;
+    };
+    let Some(leaf) = structures
+        .0
+        .get_mut(door.plot)
+        .and_then(|b| b.doors.get_mut(door.door))
+    else {
+        return;
+    };
+    let open = !leaf.open;
+    if let Some(mut save) = save
+        && !Builds::set_door(&mut save, door.piece, open)
+    {
+        warn!("the save refused the door; it stays as it was");
+        return;
+    }
+    leaf.open = open;
+}
+
+/// Swing each player's door toward its state, redrawing it as it goes.
+pub fn swing_plot_doors(
+    time: Res<Time>,
+    structures: Res<PlayerStructures>,
+    mut doors: Query<(&mut PlotDoor, &Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let step = crate::towns::SWING_RAD_S * time.delta_secs().max(1.0 / 60.0);
+    for (mut door, mesh) in &mut doors {
+        let Some(b) = structures.0.get(door.plot) else {
+            continue;
+        };
+        let Some(leaf) = b.doors.get(door.door) else {
+            continue;
+        };
+        let target = if leaf.open {
+            crate::towns::OPEN_ANGLE
+        } else {
+            0.0
+        };
+        if door.angle == target {
+            continue;
+        }
+        door.angle = if door.angle < target {
+            (door.angle + step).min(target)
+        } else {
+            (door.angle - step).max(target)
+        };
+        if let Some(m) = meshes.get_mut(&mesh.0) {
+            *m = leaf_entity_mesh(leaf, b.frame, door.angle);
+        }
+    }
+}
+
 /// The player's buildings: [`Builds`], kept current with the save, and
 /// [`PlayerStructures`] for the walker.
 pub struct BuildsPlugin;
@@ -268,7 +619,17 @@ impl Plugin for BuildsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Builds>()
             .init_resource::<PlayerStructures>()
-            .add_systems(Update, sync.run_if(resource_exists::<WorldSave>));
+            .add_systems(Update, sync.run_if(resource_exists::<WorldSave>))
+            .add_systems(
+                Update,
+                (use_plot_doors, swing_plot_doors).chain().after(sync),
+            )
+            .add_systems(
+                PostUpdate,
+                offer_plot_doors
+                    .in_set(crate::interact::InteractSet::Offer)
+                    .run_if(resource_exists::<crate::interact::Interact>),
+            );
     }
 }
 
@@ -305,6 +666,33 @@ mod tests {
         assert!(PLOT_CASTER_ID > 1 << 24, "past every site id");
     }
 
+    /// `player-building` design B7: the footing's texture has its manifest
+    /// row, is the town textures' 32 px, opaque, and every colour of it is
+    /// one of the town kits' stones (fieldstone, stone, rubble), so it sits
+    /// in their palette.
+    #[test]
+    fn the_footing_is_drawn_in_the_stones_palette() {
+        use pbd_core::building::cut::FOOTING;
+        let repeats = crate::towns::load_repeats();
+        assert!(repeats.get(FOOTING).is_some_and(|r| *r > 0.0), "its row");
+        let read = |name: &str| {
+            let path = crate::paths::assets_dir().join(format!("textures/settlement/{name}.png"));
+            image::open(&path)
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+                .to_rgba8()
+        };
+        let stones: std::collections::BTreeSet<[u8; 4]> = ["fieldstone", "stone", "rubble"]
+            .iter()
+            .flat_map(|n| read(n).pixels().map(|p| p.0).collect::<Vec<_>>())
+            .collect();
+        let footing = read(FOOTING);
+        assert_eq!(footing.dimensions(), (32, 32));
+        for p in footing.pixels() {
+            assert_eq!(p.0[3], 255, "opaque");
+            assert!(stones.contains(&p.0), "{:?} is not a stone's colour", p.0);
+        }
+    }
+
     /// Every reason, piece and kit build mode names by id has its words.
     #[test]
     fn every_rule_piece_and_kit_has_its_words() {
@@ -320,6 +708,7 @@ mod tests {
             Class::Post,
             Class::Lantern,
             Class::Roof,
+            Class::Door,
         ] {
             let key = format!("build.piece.{}", class.id());
             assert!(locale.get(&key).is_some(), "{key}");
@@ -343,6 +732,129 @@ mod tests {
         assert!(builds.remove(&mut save, piece.id()));
         assert!(from_records(&save.records).is_empty());
         assert!(builds.pieces.is_empty());
+    }
+
+    /// A one-cell house on the planet's real cells: its floor, five walls
+    /// and a doorway, as a world before doors (design B8) holds one.
+    fn house_with_a_doorway() -> (Vec<Piece>, u32, u32) {
+        let direction = Vec3::new(0.3, 0.5, 0.8).normalize();
+        let patch = patch_round(direction, 30.0);
+        let cells = Cells::new(&patch);
+        let k = patch.keys[patch.nearest(direction).unwrap()];
+        let layer = 160;
+        let mut pieces = vec![Piece::new("timber", Shape::Floor { cell: k, layer })];
+        let mut doorway = None;
+        for (s, n) in cells.neighbours(k).into_iter().enumerate() {
+            let n = n.expect("on the patch");
+            let opening = if s == 0 {
+                doorway = Some(n);
+                Opening::Door
+            } else {
+                Opening::None
+            };
+            pieces.push(Piece::new("timber", Shape::wall(k, n, layer, opening)));
+        }
+        (pieces, k, doorway.unwrap())
+    }
+
+    /// The cut of `pieces` as the game cuts it, for `records`' doors.
+    fn cut_of(pieces: &[Piece], records: &Records) -> Vec<Cut> {
+        let map: BTreeMap<u64, Piece> = pieces.iter().map(|p| (p.id(), p.clone())).collect();
+        cut_plots(&map, &crate::towns::load_kits(), &|_| 2.0, records, &|_| {
+            None
+        })
+    }
+
+    /// Design B8: a house saved before doors could be made comes back from
+    /// the disk with its doorway open, no leaf in it, and nothing written.
+    #[test]
+    fn an_old_house_comes_back_with_its_doorways_open() {
+        let root = std::env::temp_dir().join(format!("pbd-old-house-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = crate::saves::create(&root, "Old", 41).unwrap();
+        let (house, _, _) = house_with_a_doorway();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let mut builds = Builds::default();
+            builds.follow_save(&save);
+            assert!(builds.place(&mut save, house.clone()));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+        let back = from_records(&reopened.records);
+        assert_eq!(back.len(), house.len(), "piece for piece");
+        assert!(
+            back.values()
+                .all(|p| !matches!(p.shape, Shape::Door { .. }))
+        );
+        let cuts = cut_of(&back.into_values().collect::<Vec<_>>(), &reopened.records);
+        assert_eq!(cuts.len(), 1);
+        assert!(cuts[0].solids.doors.is_empty(), "an open doorway, no leaf");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Design B8: a door is hung from the pack, opened, kept through a
+    /// reload open, and taken down back into the pack; with no door in the
+    /// pack nothing is hung.
+    #[test]
+    fn a_door_hung_and_opened_comes_back_open() {
+        let root = std::env::temp_dir().join(format!("pbd-door-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot = crate::saves::create(&root, "Door", 43).unwrap();
+        let (house, k, out) = house_with_a_doorway();
+        let door = Piece::new("timber", Shape::door(k, out, 160));
+        let mut carried = Slots::new();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let mut builds = Builds::default();
+            builds.follow_save(&save);
+            assert!(builds.place(&mut save, house.clone()));
+            assert_eq!(
+                builds.place_door(&mut save, door.clone(), &mut carried),
+                Err(DoorRefused::NoDoor)
+            );
+            carried.give(Item::Good(Good::DOOR), 2);
+            assert_eq!(
+                builds.place_door(&mut save, door.clone(), &mut carried),
+                Ok(())
+            );
+            let shut = cut_of(
+                &builds.pieces.values().cloned().collect::<Vec<_>>(),
+                &save.records,
+            );
+            assert_eq!(shut[0].door_ids, vec![door.id()]);
+            assert!(!shut[0].solids.doors[0].open, "it hangs shut");
+            assert!(Builds::set_door(&mut save, door.id(), true));
+            save.drain();
+        }
+        let mut save = WorldSave::open(root.clone(), crate::saves::list(&root)[0].clone());
+        let back = from_records(&save.records);
+        assert_eq!(back.get(&door.id()), Some(&door), "the door is kept");
+        let cuts = cut_of(&back.values().cloned().collect::<Vec<_>>(), &save.records);
+        assert!(cuts[0].solids.doors[0].open, "and it is open");
+        let pack = save.carried.clone().expect("the slots were kept with it");
+        let doors = |slots: &Slots| {
+            slots
+                .iter()
+                .flatten()
+                .filter(|s| s.item == Item::Good(Good::DOOR))
+                .map(|s| s.count)
+                .sum::<u16>()
+        };
+        assert_eq!(doors(&pack), 1, "one door taken from two");
+        let mut builds = Builds::default();
+        builds.follow_save(&save);
+        let mut carried = pack;
+        assert_eq!(
+            builds.remove_door(&mut save, door.id(), &mut carried),
+            Ok(())
+        );
+        assert_eq!(doors(&carried), 2, "given back");
+        assert!(
+            !door_open(&save.records, door_state_id(door.id())),
+            "written shut"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Task 3.1: a room built in a world with an old log comes back from

@@ -437,6 +437,7 @@ pub(super) fn finish(sink: Sink, frame: Frame, reach_m: f32) -> BuildingSolids {
         top_m: 0.0,
         rooms: Meshes::new(),
         lights: Vec::new(),
+        furniture: Vec::new(),
     }
 }
 

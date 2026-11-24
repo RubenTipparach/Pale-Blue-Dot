@@ -38,4 +38,20 @@
     // `lamp_every`th road cell out of it.
     lamp_town_m: 90.0,
     lamp_every: 5,
+    // Roads version 3 (`townsfolk` design 43): one network of the world's
+    // roads joins at most `max_network` settlements (2: each town to one
+    // other at most). A world planned by version 1 or 2 keeps its roads.
+    max_network: 2,
+    // Survey stakes (`townsfolk` design 39): at most `max_stake_cells`
+    // cells between two stakes, found looking at most `stake_expanded`.
+    max_stake_cells: 24,
+    stake_expanded: 4000,
+    // Seconds between two cells paved with the interact key held (design
+    // 40).
+    pave_beat_s: 0.45,
+    // How fast a wheel runs on each surface, times its road speed
+    // (`land-transport` design 9): gravel, a bridge deck and a town's lanes
+    // at 1, dirt 0.6, a ford 0.5, off the road a quarter. Wheels on two
+    // surfaces take the lower. Walking is not changed.
+    wheel: (gravel: 1.0, dirt: 0.6, ford: 0.5, off_road: 0.25),
 )
