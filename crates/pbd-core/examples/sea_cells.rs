@@ -1,5 +1,5 @@
 //! A measurement instrument (`ocean-environments` design B24): where the
-//! sea's cells of generator version 14 lie on the shipped seed, so a capture
+//! sea's cells of a generator (version 14 and later; the newest by default) lie on the shipped seed, so a capture
 //! can be taken at each. Prints the first few places of reef rock, basalt,
 //! mussel beds and sea ice found on a scan of the globe, with their depth.
 //!
@@ -11,7 +11,12 @@ use pbd_core::planet_gen::{self, TerrainConfig};
 use pbd_core::terrain::Material;
 
 fn main() {
-    let cfg = TerrainConfig::TENEBRIS_V14;
+    // `GEN=<version>` picks the generator; the newest by default.
+    let cfg = std::env::var("GEN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .and_then(TerrainConfig::for_version)
+        .unwrap_or(TerrainConfig::TENEBRIS);
     let mut counts = [0usize; 4];
     let names = ["reef rock", "basalt", "mussel bed", "sea ice"];
     for lat10 in (-890..=890).step_by(3) {

@@ -2842,3 +2842,161 @@ the page should take the same, and its next version will):
 
 `no_foot_slides_in_stance` measures both: no foot down in its stance moves
 more than 1.5 mm in a frame in the walk or the bound.
+
+### B30. More reef: about a tenth of the sea (owner, 2026-11-22)
+
+The owner: "reefs should increase to 10% tweak other stuff, maybe take some
+from kelp forest, grow reef zones a bit". The reason in play: "Get a reef"
+(`starter-missions`) sends the player to a reef, and on the last measure
+(B12, version 7) reef is 0.23% of the sea, against kelp's 10.9% and open
+water's 83.1%. A bot standing on a temperate field found none within 4 km.
+
+Plan:
+1. **Measure first.** Run `examples/ocean_places.rs` on version 15, the
+   current one, for today's shares. Also count the columns whose top is reef
+   rock (`ocean::cells::top`), since the reef as a place and the rock in it
+   are not the same share.
+2. **The target:** reef about 10% of the sea by area; kelp gives up most of
+   it, and open shallows the rest. The levers, in order of how much they
+   move:
+   - the reef's temperature floor (20 C today, B12), lowered toward 18 C,
+     where real reefs stop;
+   - the reef's depth band, widened into the shelf's shallow edge;
+   - where warm water meets the kelp's depth, the reef takes the cell and
+     kelp keeps the colder water. A kelp forest in warm water is the wrong
+     way round anyway;
+   - the zones grow: the reef place's patch is made wider, and `reef_above`
+     (0.5 today) is lowered, so more of a reef's floor is rock and less is
+     sand.
+   Each step is measured with the same example until the share lands near
+   10%.
+3. **A new generator version (16), for new worlds only.** The reef changes
+   top blocks, so under "Saved games survive every change" it is a new
+   version beside 15. Version 15's config and code are not touched, and a
+   digest test of 15's ground is taken before 16 lands. `tree-run-6` and the
+   owner's worlds keep version 15 and its reefs.
+4. **The look goes to the owner.** More reef changes what a player sees, so
+   it goes to the survey with screenshots before it is the default: the map's
+   Sea places layer for 15 against 16, and a reef from underwater.
+
+Not changed: the reef's fish and turtles, which follow the reef wherever it
+is, and kelp's look.
+
+**Measured and built (2026-11-22, `claude/menu-and-crash`).** Every number
+is `examples/ocean_places.rs` on 400,000 directions of the shipped seed
+(241,720 at sea), on the desktop, `--profile fast`; the instrument now takes
+`GEN=<version>`, overrides for each lever below and `HIST=1` (the sea's area
+by depth and coldest-day temperature, and kelp by coldest day), and counts
+the reef-rock tops (`ocean::cells::top` at the floored surface).
+
+Version 15, before (B12's version 7 numbers, unchanged since):
+
+| Place | Share of the sea |
+| --- | ---: |
+| Open | 83.04% |
+| Kelp | 10.85% |
+| Coast | 3.59% |
+| Polar | 1.23% |
+| Trench | 0.75% |
+| Vent | 0.31% |
+| Reef | 0.23% |
+| Reef-rock top | 0.08% (a third of the reef) |
+
+What the histogram says: water with a coldest day of 20 C or more is 14% of
+the sea, but only 0.6% of it is 6 m deep or less, and the river-mouth
+clearance takes more than half of that. Shallow warm water is scarce on this
+planet; to reach a tenth the reef has to go deeper and take kelp's warm end.
+Kelp with a coldest day of 12 C or more is 5.3% of the sea.
+
+Each lever, in order, on 200,000 directions:
+
+| Step | Reef | Kelp | Open | Reef rock |
+| --- | ---: | ---: | ---: | ---: |
+| floor 18 C | 0.54% | 10.83% | 82.75% | 0.21% |
+| + depth 12 m | 2.11% | 10.83% | 81.18% | 1.02% |
+| + reef over kelp from 14 C | 5.07% | 7.87% | 81.18% | 2.50% |
+| + zones to 30 m (120 m field over 0.5) | 8.56% | 7.87% | 77.69% | 4.27% |
+| over kelp from 12 C, `reef_above` 0.4 | 7.26% | 5.68% | 81.18% | 5.98% |
+| + zones to 30 m | 10.75% | 5.68% | 77.69% | 8.91% |
+| zones to 25 m (taken) | 9.67% | 5.68% | 78.78% | 7.99% |
+| zones to 30 m over 0.55 | 9.31% | 5.68% | 79.13% | 7.68% |
+
+`reef_above` 0.4 made 83% of a reef rock, nearly all of it; 0.45 with the
+rock's patch widened from 7 to 10 m is taken, about two thirds.
+
+**Generator version 16** (`TENEBRIS_V16`: version 15 with
+`OceanPlaces::V16` and `SeaCells::V16`; `GENERATOR_VERSION` 16, so a new
+world is made on it). The settings:
+
+- `reef_coldest_c` 18 (20 on 15);
+- `reef_depth_m` 12 (6);
+- the reef's zones (new fields, off on 7 and 9): a 120 m field
+  (`reef_patch_m`) over 0.5 (`reef_patch_above`) lets a reef reach 25 m
+  (`reef_patch_depth_m`);
+- `reef_over_kelp_c` 12 (new; never on 7 and 9): where kelp's rule holds on
+  water whose coldest day is 12 C or warmer, the reef takes the cell, so kelp
+  keeps the colder water;
+- `SeaCells::V16`: `reef_patch_m` 10 (7), `reef_above` 0.45 (0.5).
+
+Version 16, after, on 400,000 directions:
+
+| Place | Version 15 | Version 16 |
+| --- | ---: | ---: |
+| Open | 83.04% | 78.71% |
+| Reef | 0.23% | **9.72%** |
+| Kelp | 10.85% | 5.70% |
+| Coast | 3.59% | 3.57% |
+| Polar | 1.23% | 1.23% |
+| Trench | 0.75% | 0.75% |
+| Vent | 0.31% | 0.31% |
+| Reef-rock top | 0.08% | 6.59% |
+
+The reef's 9.5 points come 5.2 from kelp and 4.3 from the open shallows.
+Where a reef's floor is not rock it is the generator's own top: sand to 4 m,
+stone under that (B24's "sand elsewhere" held only because version 15's reef
+stopped at 6 m).
+
+**Saves.** Version 15's config and code path are untouched (the new
+fields are off on `OceanPlaces::V7`/`V9`, so 15 places exactly what it did:
+its measured shares are B12's). Before 16 landed, version 15's top blocks
+(`top_digest`, 10,000 directions) and its sea places with their tops
+(`place_digest`, 100,000) were pinned (`version_15_keeps_its_top_blocks_and_its_sea_places`).
+`version_16_is_version_15_s_ground_with_more_reef` checks that only `ocean`
+and `sea_cells` differ, the ground digest is 15's, a place moves only to a
+reef (from kelp, coast or open), a top moves only on a reef, and the reef's
+share is 8 to 12% on 40,000 directions. The climate does not read the sea's
+places: `settled-g16-*` is a copy of `settled-g15-*`, as 15's was of 14's.
+
+**Not verified:** no capture of the game was taken (no game was launched),
+so neither the map's Sea places layer nor a reef underwater has been seen on
+16; the reef's pieces and life now stand on some forty times the area, and
+their frame cost there is not measured; `pbd-app`'s tests were not run.
+Step 4 (the survey with screenshots) is still owed before the owner sees 16
+as the default.
+
+### B31. The reef's sway held the main thread (measured 2026-11-22)
+
+Found by the bot's reef run with the F3 graph open (owner, 2026-11-22: "keep
+the performance tab open from now on when youre testing"). `tree15`, the
+desktop, `--profile fast`, the bot on a reef 1 m under the water:
+- 19 fps, frame p50 49 ms;
+- the main thread's p50 42 ms, the GPU's 14 ms;
+- `SEA_PLACES tiles=64 tris=585670 kelp_tris=0 swayed_verts=401304`, the
+  system's main-thread time 28 ms p50 (34 ms max, 596 samples).
+
+B20 cut the kelp to cards, and its sway with it. The reef's swaying pieces
+(soft corals, anemones, the hero piece, turf, grass and weed) are still
+geometry. Every tile within 30 m rewrites all of them on the main thread,
+one tile after another.
+
+**Change (the same look):** the tiles' bends are worked out on every core at
+once. Each mesh's position buffer is taken out, filled in parallel by the
+same wave, and put back (`bend_all`). The upload is unchanged. Moving the
+sway into the vertex shader, which would also drop the upload, is the next
+step and is written here, not built: it touches the field light's shared
+material.
+
+With reef at about 10% of the sea on version 16 (B30), reef tiles round the
+eye are 40 times more common, so this cost would be met far more often.
+
+**Measured again** on the same spot after the change: see below.

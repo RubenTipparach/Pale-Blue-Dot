@@ -16,3 +16,11 @@ Built 2026-11-16:
 - 4: `clutter::ClutterTaken` and `refresh`, the uniform's `clutter_taken`, `clutter_sunk` in the vertex shader. Test: `the_list_packs_two_cells_a_lane_with_a_byte_a_piece`; the GPU visibility test still passes with the larger uniform. `--gather-around <metres>` is a capture instrument. Captures: `docs/screenshots/gather-by-hand/` (before and after a 30 m take, and a crop of the bush gone).
 - 5: `Act::PickUp(Until)` and `phase-1-trunk.ron`'s gather shot. Not run here (a showcase's real-time limits stall on lavapipe).
 - Frame cost not measured (no GPU in a cloud container).
+
+## 9. Fibre from felling (owner, 2026-11-21)
+
+- [x] 9.1 Each log from a tree also gives one fibre when it fits (`take_log` in `desktop/digging.rs`), with its toast. Not tested in the game yet (no launch until the owner's play is done).
+
+## 10. Taking a piece is 4x quicker (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [ ] 10.1 `scatter.taken_sink_s` 0.25 s, and the sink starting on the take's frame: coded; built, tested, seen.

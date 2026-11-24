@@ -5,6 +5,10 @@
 //! id), written in one line with the player's slots, so a stack moved between
 //! the two is never half saved. What is here is the rule for a move; the app
 //! writes the line.
+//!
+//! A chest (`storage-chests` design 2) is the same store at twenty slots
+//! ([`crate::chest`]): [`Hold`] carries its own length, and the moves here
+//! serve both.
 
 use crate::inventory::{CARRIED, Slots, Stack};
 
@@ -15,10 +19,18 @@ pub const HOLD: usize = 10;
 pub const HOLD_KIND: &str = "hold";
 pub const HOLD_SCHEMA: u32 = 1;
 
-/// A craft's hold.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// A craft's hold, or a chest's store: a run of slots of its own length
+/// ([`HOLD`] for a raft's, [`crate::chest::CHEST`] for a chest's).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hold {
-    pub slots: [Option<Stack>; HOLD],
+    pub slots: Vec<Option<Stack>>,
+}
+
+impl Default for Hold {
+    /// A raft's hold, empty.
+    fn default() -> Self {
+        Self::with_len(HOLD)
+    }
 }
 
 /// A slot a move names: one of the player's (hotbar and pack, as
@@ -30,6 +42,18 @@ pub enum Place {
 }
 
 impl Hold {
+    /// An empty store of `len` slots.
+    pub fn with_len(len: usize) -> Self {
+        Self {
+            slots: vec![None; len],
+        }
+    }
+
+    /// How many slots it has.
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.slots.iter().all(Option::is_none)
     }
@@ -58,10 +82,10 @@ fn set(slots: &mut Slots, hold: &mut Hold, at: Place, stack: Option<Stack>) {
     }
 }
 
-fn valid(at: Place) -> bool {
+fn valid(hold: &Hold, at: Place) -> bool {
     match at {
         Place::Carried(i) => i < CARRIED,
-        Place::Hold(i) => i < HOLD,
+        Place::Hold(i) => i < hold.len(),
     }
 }
 
@@ -71,7 +95,7 @@ fn valid(at: Place) -> bool {
 /// different item the two swap, if the whole stack was moved; otherwise
 /// nothing happens. Nothing is ever lost or made.
 pub fn shift(slots: &mut Slots, hold: &mut Hold, from: Place, to: Place, count: u16) {
-    if from == to || !valid(from) || !valid(to) {
+    if from == to || !valid(hold, from) || !valid(hold, to) {
         return;
     }
     let Some(stack) = get(slots, hold, from) else {
@@ -118,7 +142,7 @@ pub fn send(slots: &mut Slots, hold: &mut Hold, from: Place) {
             .chain(0..crate::inventory::SLOTS)
             .map(Place::Carried)
             .collect(),
-        Place::Carried(_) => (0..HOLD).map(Place::Hold).collect(),
+        Place::Carried(_) => (0..hold.len()).map(Place::Hold).collect(),
     };
     // Onto the same item first, then into empty slots.
     for merge in [true, false] {
@@ -205,6 +229,39 @@ mod tests {
         assert_eq!(slots.get(13), Some(logs(99)));
         assert_eq!(total(&slots, &hold), 130);
         assert!(!hold.is_empty());
+    }
+
+    /// A chest's twenty-slot store takes the same moves to its last slot,
+    /// and none past it (`storage-chests` design 2).
+    #[test]
+    fn a_chest_store_moves_to_its_own_length() {
+        let mut slots = Slots::new();
+        slots.set(12, Some(logs(40)));
+        let mut chest = Hold::with_len(crate::chest::CHEST);
+        assert_eq!(chest.len(), 20);
+        shift(
+            &mut slots,
+            &mut chest,
+            Place::Carried(12),
+            Place::Hold(20),
+            40,
+        );
+        assert_eq!(slots.get(12), Some(logs(40)), "no slot 20 in a chest");
+        shift(
+            &mut slots,
+            &mut chest,
+            Place::Carried(12),
+            Place::Hold(19),
+            40,
+        );
+        assert_eq!(chest.get(19), Some(logs(40)));
+        // A shift-click from the pack fills from the chest's first slot.
+        slots.set(13, Some(Stack::new(Item::Good(Good::ROPE), 5)));
+        send(&mut slots, &mut chest, Place::Carried(13));
+        assert_eq!(chest.get(0), Some(Stack::new(Item::Good(Good::ROPE), 5)));
+        send(&mut slots, &mut chest, Place::Hold(19));
+        assert_eq!(chest.get(19), None);
+        assert_eq!(total(&slots, &chest), 40);
     }
 
     /// Shift-click sends a stack across, merging first.

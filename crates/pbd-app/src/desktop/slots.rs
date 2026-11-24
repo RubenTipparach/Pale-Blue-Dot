@@ -86,6 +86,9 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
         Material::Workbench => one(1., 3.),
+        // A chest (`storage-chests` design 1): the workbench's boards; its
+        // slot draws its own picture.
+        Material::Chest => one(1., 3.),
         // The sea's cells (`ocean-environments` B24), each its sheet's tile
         // all round, as the ground draws it.
         Material::ReefRock | Material::Basalt => one(3., 0.),
@@ -137,6 +140,8 @@ pub struct ItemIcons {
     pub forge: Handle<Image>,
     /// The workbench's, M3's (`tool-crafting`).
     pub workbench: Handle<Image>,
+    /// A chest's (`storage-chests` design 1).
+    pub chest: Handle<Image>,
     /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
     /// draws as iron until it is made. The rod's three are the rod.
     pub tiered: Vec<[Handle<Image>; 3]>,
@@ -213,6 +218,7 @@ pub fn load_icons(
             .collect(),
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
+        chest: assets.load("items/stations/chest.png"),
         tiered: pbd_core::inventory::Tool::ALL
             .iter()
             .map(|tool| {
@@ -347,6 +353,25 @@ pub fn cell(
     });
 }
 
+/// An item's own picture, whole and untinted: a fish's, a tool's, a light's,
+/// a good's, a station block's. `None` for a terrain block, which is drawn
+/// from the ground's atlas. The one table for a slot and a drop
+/// (`drop-and-trash` 5).
+pub fn own_icon(item: Item, items: &ItemIcons) -> Option<Handle<Image>> {
+    match item {
+        Item::Fish(species) => items.fish.get(species as usize).cloned(),
+        Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(Material::Forge) => Some(items.forge.clone()),
+        Item::Block(Material::Workbench) => Some(items.workbench.clone()),
+        Item::Block(Material::Chest) => Some(items.chest.clone()),
+        Item::Block(material) => Material::LAMPS
+            .iter()
+            .position(|&light| light == material)
+            .and_then(|index| items.lights.get(index).cloned()),
+        Item::Good(good) => items.goods.get(good.index()).cloned(),
+    }
+}
+
 /// Paint one icon with a stack's picture: a fish's, a tool's or a light's
 /// own, whole and untinted, or a block's tile cropped from the atlas at its
 /// tint. Nothing, or art not loaded yet, paints it clear.
@@ -356,17 +381,7 @@ pub fn paint_icon(
     items: &ItemIcons,
     images: &Assets<Image>,
 ) {
-    let own = stack.and_then(|stack| match stack.item {
-        Item::Fish(species) => items.fish.get(species as usize).cloned(),
-        Item::Tool(tool) => Some(items.tool(tool)),
-        Item::Block(Material::Forge) => Some(items.forge.clone()),
-        Item::Block(Material::Workbench) => Some(items.workbench.clone()),
-        Item::Block(material) => Material::LAMPS
-            .iter()
-            .position(|&light| light == material)
-            .and_then(|index| items.lights.get(index).cloned()),
-        Item::Good(good) => items.goods.get(good.index()).cloned(),
-    });
+    let own = stack.and_then(|stack| own_icon(stack.item, items));
     if let Some(image) = own {
         node.image = image;
         node.rect = None;
@@ -643,6 +658,7 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            chest: Handle::default(),
             tiered: Vec::new(),
         };
         assert_eq!(stack_tip(None, &items), "");

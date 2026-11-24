@@ -1036,7 +1036,7 @@ const TREE_GUST: f32 = 0.5;
 const TREE_WIND_H: f32 = 8.0;
 // `tree-punch-shake` design 3: a hit's sway at the crown, m; how fast, Hz;
 // how long it lasts, s; the leaves' share more (`tree_shake.rs`).
-const TREE_SHAKE_M: f32 = 0.12;
+const TREE_SHAKE_M: f32 = 0.24;
 const TREE_SHAKE_HZ: f32 = 9.0;
 const TREE_SHAKE_S: f32 = 0.6;
 const TREE_SHAKE_LEAF: f32 = 1.3;

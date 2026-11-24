@@ -225,6 +225,10 @@ pub fn render_code(material: Material) -> u32 {
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
         Material::Workbench => WOOD,
+        // A chest (`storage-chests` design 1): the workbench's wood, with an
+        // iron hasp stood on it (`farm::show`), as the word has no code to
+        // spare.
+        Material::Chest => WOOD,
         // A beaver's sticks (B25): the bark of the local trees, as the
         // workbench is drawn.
         Material::Sticks => WOOD,
@@ -780,6 +784,7 @@ mod tests {
         assert_eq!(render_code(Material::Tilled), TILLED);
         assert_eq!(render_code(Material::Forge), FORGE);
         assert_eq!(render_code(Material::Workbench), WOOD);
+        assert_eq!(render_code(Material::Chest), WOOD);
         assert_eq!(index(tile_of(WOOD)), 6, "the workbench is the trunk's wood");
         assert!(sheet_tile_names("fields")[6].contains("bark"));
         // The sea's cells (`ocean-environments` B24): each an existing code

@@ -7,6 +7,7 @@ use super::digging::{Aim, Block, Mining, TREE_LAYER, material_of};
 use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::audio::{Environment, Listener, Sfx, Where, hooks::named};
+use pbd_app::held::stroke::Meets;
 use pbd_app::planet::PlanetFine;
 use pbd_app::saves::WorldSave;
 use pbd_core::audio::{Family, place_cue, surface_family};
@@ -84,16 +85,28 @@ fn digging(
     }
     // The stroke's impacts land on the dig's beat; the last is the break,
     // which sounds as one.
-    for impact in impacts.read() {
-        if !impact.last
-            && let (Some(_), Some(family), Some(at)) = (state.block, state.family, state.at)
-        {
-            sfx.play(named("dig", family), Where::At(at));
-        }
-    }
+    // At the air a whoosh, at a refused block a knock (`held-swing`
+    // decision 12; stand-ins until the `sound-effects` cues are made: the
+    // cast's whoosh and the hard landing's thud).
     let hand = aimed
         .or(state.at)
         .map_or(Where::At(listener.eye + listener.forward * 1.5), Where::At);
+    for impact in impacts.read() {
+        match impact.meets {
+            Meets::Breaks => {
+                if !impact.last
+                    && let (Some(_), Some(family), Some(at)) = (state.block, state.family, state.at)
+                {
+                    sfx.play(named("dig", family), Where::At(at));
+                }
+            }
+            Meets::Air => sfx.play(
+                "cast_whoosh",
+                Where::At(listener.eye + listener.forward * 0.6),
+            ),
+            Meets::Refused => sfx.play("land_hard", aimed.map_or(hand, Where::At)),
+        }
+    }
     for pbd_app::missions::Did(happened) in did.read() {
         match happened.kind {
             Kind::Gather => {

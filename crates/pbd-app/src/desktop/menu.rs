@@ -152,10 +152,92 @@ pub enum MenuAction {
 #[derive(Component)]
 pub struct WheelScrolls;
 
-/// The wheel scrolls a panel that is taller than the screen.
+/// The worlds list's scroll area (`save-slots` 9): the rows, under the
+/// WORLDS lintel and over the NAME row.
+#[derive(Component)]
+pub struct WorldsScroll;
+
+/// The stone groove at the worlds list's right edge: shown only while the
+/// rows overflow, and pressed or dragged to scroll.
+#[derive(Component)]
+pub struct WorldsTrack;
+
+/// The oak grip in the worlds groove, as far down it as the list is
+/// scrolled.
+#[derive(Component)]
+pub struct WorldsKnob;
+
+/// The tallest the worlds list stands before it scrolls, in native pixels:
+/// ten rows, so NAME, NEW WORLD and BACK stay on a 450-pixel-high screen
+/// (`ui_kit`'s smallest) under it.
+const WORLDS_LIST_HEIGHT: f32 = 270.0;
+
+/// The worlds grip's height, native pixels (`oak/slider-knob`, 9 x 13).
+const WORLDS_KNOB_HEIGHT: f32 = 13.0;
+
+/// How far a scroll area can scroll, in logical pixels, by last frame's
+/// layout: `None` while it is not laid out (hidden by `Display::None`).
+fn scroll_room(node: &ComputedNode) -> Option<f32> {
+    (node.size.y > 0.0).then(|| {
+        (node.content_size.y - node.size.y + node.scrollbar_size.y).max(0.0)
+            * node.inverse_scale_factor
+    })
+}
+
+/// Where the worlds grip's top sits down its groove, for a list scrolled
+/// `at` of `room` logical pixels, in a groove `track` tall.
+fn knob_top(at: f32, room: f32, track: f32) -> f32 {
+    let t = if room > 0.0 {
+        (at / room).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    t * (track - WORLDS_KNOB_HEIGHT).max(0.0)
+}
+
+/// The scroll a press `y` down the groove asks for (0 at the top, 1 at the
+/// bottom): the grip's middle follows the cursor.
+fn scroll_for(y: f32, room: f32, track: f32) -> f32 {
+    let run = (track - WORLDS_KNOB_HEIGHT).max(1.0);
+    ((y * track - WORLDS_KNOB_HEIGHT / 2.0) / run).clamp(0.0, 1.0) * room
+}
+
+/// The worlds list's groove and grip, which the wheel's system also keeps.
+#[derive(SystemParam)]
+pub struct WorldsBar<'w, 's> {
+    tracks: Query<
+        'w,
+        's,
+        (
+            &'static Interaction,
+            &'static RelativeCursorPosition,
+            &'static ComputedNode,
+            &'static mut Node,
+        ),
+        (With<WorldsTrack>, Without<WorldsKnob>),
+    >,
+    knobs: Query<'w, 's, &'static mut Node, (With<WorldsKnob>, Without<WorldsTrack>)>,
+    index: Option<Res<'w, SaveIndex>>,
+}
+
+/// The wheel scrolls a panel that is taller than the screen, as far as its
+/// content goes and no further. The worlds list (`save-slots` 9) also
+/// answers its groove: a press or drag on it scrolls to the cursor, and the
+/// groove shows only while the rows overflow, its grip as far down as the
+/// list is scrolled.
+#[allow(clippy::type_complexity)]
 pub fn wheel_scroll(
     mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
-    mut panels: Query<(&mut ScrollPosition, &InheritedVisibility), With<WheelScrolls>>,
+    mut panels: Query<
+        (
+            &mut ScrollPosition,
+            &InheritedVisibility,
+            Option<&ComputedNode>,
+            Has<WorldsScroll>,
+        ),
+        With<WheelScrolls>,
+    >,
+    mut bar: WorldsBar,
 ) {
     let dy: f32 = wheel
         .read()
@@ -164,12 +246,48 @@ pub fn wheel_scroll(
             bevy::input::mouse::MouseScrollUnit::Pixel => w.y,
         })
         .sum();
-    if dy == 0.0 {
-        return;
-    }
-    for (mut at, shown) in &mut panels {
-        if shown.get() {
+    // A DELETE confirm stands in the list's place: its offset is left alone
+    // under it, so CANCEL comes back to the row it was asked from.
+    let asking = bar.index.as_ref().is_some_and(|i| i.asking.is_some());
+    for (mut at, shown, computed, worlds) in &mut panels {
+        let room = computed.and_then(scroll_room);
+        // Clamped only as the wheel turns: last frame's layout is a frame
+        // behind a list just rebuilt, and clamping to it every frame would
+        // throw away the offset a rebuild is meant to keep.
+        if dy != 0.0 && shown.get() && !(worlds && asking) {
             at.0.y = (at.0.y - dy).max(0.0);
+            if let Some(room) = room {
+                at.0.y = at.0.y.min(room);
+            }
+        }
+        if !worlds {
+            continue;
+        }
+        let room = room.unwrap_or(0.0);
+        let overflows = room > 0.0 && !asking;
+        for (interaction, cursor, track, mut node) in &mut bar.tracks {
+            let display = if overflows {
+                Display::Flex
+            } else {
+                Display::None
+            };
+            if node.display != display {
+                node.display = display;
+            }
+            let tall = track.size.y * track.inverse_scale_factor;
+            if overflows
+                && *interaction == Interaction::Pressed
+                && let Some(c) = cursor.normalized
+            {
+                // Normalised is centred on the node: -0.5 at the top.
+                at.0.y = scroll_for(c.y + 0.5, room, tall);
+            }
+            let top = px(knob_top(at.0.y, room, tall));
+            for mut knob in &mut bar.knobs {
+                if knob.top != top {
+                    knob.top = top;
+                }
+            }
         }
     }
 }
@@ -646,9 +764,15 @@ pub struct SavesPage<'w> {
     pub name: ResMut<'w, NameField>,
 }
 
-/// The part of the saves panel that is rebuilt when the list changes.
+/// The part of the saves panel that is rebuilt when the list changes: the
+/// rows, in the worlds scroll area.
 #[derive(Component)]
 pub struct SaveList;
+
+/// The fixed part under the worlds list, rebuilt with it: why the last load
+/// or delete did not happen, the name field and NEW WORLD.
+#[derive(Component)]
+pub struct SaveFoot;
 
 /// Marks a panel with the screen it belongs to.
 #[derive(Component)]
@@ -844,8 +968,19 @@ pub(super) fn framed(kit: &UiKit, set: Set, width: f32) -> impl Bundle {
 }
 
 /// The carved oak lintel over a panel, its title cut into it (design 3,
-/// accent 1): pegged on the frame's top edge.
+/// accent 1): pegged on the frame's top edge. With it, the panel's X.
 pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized) {
+    lintel_in(parent, kit, text, Set::Stone);
+}
+
+/// [`lintel`] on a timber menu (pause, settings, worlds): its X is oak, as
+/// every plaque out of play is.
+fn timber_lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized) {
+    lintel_in(parent, kit, text, Set::Oak);
+}
+
+fn lintel_in(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized, set: Set) {
+    close_x(parent, kit, set);
     parent
         .spawn(Node {
             justify_content: JustifyContent::Center,
@@ -868,6 +1003,28 @@ pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Local
             .with_children(|board| {
                 board.spawn(KitText::new(text, ui_kit::OAK_LABEL));
             });
+        });
+}
+
+/// The little X in a stone panel's top-right corner (`stone-and-wood-ui`,
+/// "an X on every stone panel"): Esc's step back, pressed. Placed on the
+/// lintel's parent, so every panel with a lintel has one.
+fn close_x(parent: &mut ChildSpawnerCommands, kit: &UiKit, set: Set) {
+    parent
+        .spawn((plaque(kit, set, 18.0), MenuAction::Back))
+        .insert(Node {
+            position_type: PositionType::Absolute,
+            top: px(-10),
+            right: px(-10),
+            min_width: px(18),
+            height: px(22),
+            padding: UiRect::new(px(6), px(6), px(8), px(0)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::FlexStart,
+            ..default()
+        })
+        .with_children(|p| {
+            p.spawn(plaque_label(set, tr("menu.close")));
         });
 }
 
@@ -945,7 +1102,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                 // their own tabs in Settings, so the panel fits every window.
                 .spawn(framed(kit, Set::Oak, 120.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, tr("menu.paused"));
+                    timber_lintel(panel, kit, tr("menu.paused"));
                     let resume = button(panel, kit, tr("menu.resume"), MenuAction::Resume);
                     panel.commands().entity(resume).insert(Plaque {
                         focus: true,
@@ -964,7 +1121,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
             layer
                 .spawn(framed(kit, Set::Oak, 324.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, tr("menu.settings"));
+                    timber_lintel(panel, kit, tr("menu.settings"));
                     // The tabs, oak, the open one capped (design 8).
                     panel
                         .spawn(Node {
@@ -1592,7 +1749,9 @@ fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, key: Localized) {
         });
 }
 
-/// The saves panel: a title, the list (rebuilt when it changes), and BACK.
+/// The saves panel: a title, the worlds in a scroll area with its groove on
+/// the right (`save-slots` 9), the name field and NEW WORLD under it (both
+/// rebuilt when the list changes), and BACK.
 fn spawn_saves(commands: &mut Commands, kit: &UiKit) {
     commands
         .spawn(timber_layer(Screen::Saves))
@@ -1600,14 +1759,63 @@ fn spawn_saves(commands: &mut Commands, kit: &UiKit) {
             layer
                 .spawn(framed(kit, Set::Oak, 280.0))
                 .with_children(|panel| {
-                    lintel(panel, kit, tr("menu.worlds"));
+                    timber_lintel(panel, kit, tr("menu.worlds"));
+                    panel
+                        .spawn(Node {
+                            column_gap: px(3),
+                            flex_shrink: 0.0,
+                            ..default()
+                        })
+                        .with_children(|well| {
+                            well.spawn((
+                                Node {
+                                    flex_direction: FlexDirection::Column,
+                                    flex_grow: 1.0,
+                                    row_gap: px(3),
+                                    max_height: px(WORLDS_LIST_HEIGHT),
+                                    overflow: Overflow::scroll_y(),
+                                    ..default()
+                                },
+                                ScrollPosition::default(),
+                                WheelScrolls,
+                                WorldsScroll,
+                                SaveList,
+                            ));
+                            well.spawn((
+                                kit.nine(Set::Stone, "slider-track"),
+                                KitPiece("slider-track".into()),
+                                Node {
+                                    width: px(8),
+                                    flex_shrink: 0.0,
+                                    display: Display::None,
+                                    ..default()
+                                },
+                                Button,
+                                RelativeCursorPosition::default(),
+                                WorldsTrack,
+                            ))
+                            .with_children(|groove| {
+                                groove.spawn((
+                                    kit.whole(Set::Oak, "slider-knob"),
+                                    Node {
+                                        position_type: PositionType::Absolute,
+                                        left: px(-1),
+                                        top: px(0),
+                                        width: px(9),
+                                        height: px(WORLDS_KNOB_HEIGHT),
+                                        ..default()
+                                    },
+                                    WorldsKnob,
+                                ));
+                            });
+                        });
                     panel.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
                             row_gap: px(3),
                             ..default()
                         },
-                        SaveList,
+                        SaveFoot,
                     ));
                     panel
                         .spawn(Node {
@@ -1640,8 +1848,24 @@ fn since(then: u64) -> String {
     }
 }
 
+/// The order the worlds are drawn in, as indices into the list: the open
+/// world first (its CONTINUE row), then the rest as the list has them. The
+/// indices themselves are what a row's button carries, so they are never
+/// renumbered.
+fn draw_order(slots: &[Slot], playing: Option<&String>) -> Vec<usize> {
+    let open = slots.iter().position(|slot| Some(&slot.id) == playing);
+    open.into_iter()
+        .chain((0..slots.len()).filter(|row| Some(*row) != open))
+        .collect()
+}
+
 /// Draw the list. Rebuilt rather than updated, because the list changes SHAPE
 /// when a world is made or deleted and a row's button carries its index.
+///
+/// Only the rows are rebuilt, inside the scroll area, whose `ScrollPosition`
+/// is the area's own and survives it: a rebuild keeps the player where they
+/// were scrolled, and a DELETE confirm, which stands in the rows' place,
+/// leaves it untouched so CANCEL returns to the row it was asked from.
 pub fn rebuild_saves(
     mut commands: Commands,
     kit: Res<UiKit>,
@@ -1649,6 +1873,7 @@ pub fn rebuild_saves(
     name: Res<NameField>,
     open: Option<Res<WorldSave>>,
     lists: Query<Entity, With<SaveList>>,
+    foots: Query<Entity, With<SaveFoot>>,
 ) {
     if !index.is_changed() {
         return;
@@ -1657,12 +1882,59 @@ pub fn rebuild_saves(
     let playing = open
         .as_ref()
         .and_then(|save| save.slot().map(|slot| slot.id.clone()));
-    for list in &lists {
-        commands.entity(list).despawn_related::<Children>();
-        commands.entity(list).with_children(|rows| {
+    let asking = index.asking.is_some_and(|row| row < index.slots.len());
+    for foot in &foots {
+        commands.entity(foot).despawn_related::<Children>();
+        if asking {
+            continue;
+        }
+        commands.entity(foot).with_children(|rows| {
             if let Some(trouble) = index.trouble.as_ref() {
                 rows.spawn(note(trouble.clone(), ui_kit::TITLE));
             }
+            rows.spawn(Node {
+                height: px(3),
+                ..default()
+            });
+            // The name for a new world, typed in the game's own box: a
+            // native prompt over the window is the thing the inherited UI
+            // rule forbids. Prefilled with the number the page would have
+            // chosen, so Enter alone still makes one.
+            rows.spawn(Node {
+                column_gap: px(4),
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|line| {
+                line.spawn(KitText::new(tr("menu.name"), ui_kit::TITLE).shadow(ui_kit::INK));
+                line.spawn((
+                    Button,
+                    kit.nine(Set::Oak, "tooltip"),
+                    KitPiece(Set::Oak.key("tooltip")),
+                    Node {
+                        flex_grow: 1.0,
+                        height: px(18),
+                        padding: UiRect::new(px(6), px(6), px(3), px(0)),
+                        ..default()
+                    },
+                    MenuAction::EditName,
+                ))
+                .with_children(|field| {
+                    field.spawn((body(name.shown(), 10.0, ui_kit::TEXT), NameText));
+                });
+            });
+            rows.spawn(Node {
+                justify_content: JustifyContent::FlexStart,
+                ..default()
+            })
+            .with_children(|line| {
+                small(line, kit, tr("menu.new_world"), MenuAction::New);
+            });
+        });
+    }
+    for list in &lists {
+        commands.entity(list).despawn_related::<Children>();
+        commands.entity(list).with_children(|rows| {
             // A delete REPLACES the list while it is pending, and says what
             // is lost rather than only asking. Tenebris's own dialog, ported
             // for its reason: a row that says "delete?" beside nine other
@@ -1705,12 +1977,16 @@ pub fn rebuild_saves(
             if index.slots.is_empty() {
                 rows.spawn(note(tr("menu.no_worlds_yet").into(), ui_kit::TEXT_DIM));
             }
-            for (row, slot) in index.slots.iter().enumerate() {
+            for row in draw_order(&index.slots, playing.as_ref()) {
+                let slot = &index.slots[row];
                 let here = Some(&slot.id) == playing.as_ref();
                 rows.spawn(Node {
                     column_gap: px(3),
                     align_items: AlignItems::Center,
                     min_height: px(24),
+                    // Rows keep their height in the scroll area: it scrolls
+                    // rather than squeezing them to fit.
+                    flex_shrink: 0.0,
                     ..default()
                 })
                 .with_children(|line| {
@@ -1737,44 +2013,6 @@ pub fn rebuild_saves(
                     small(line, kit, tr("menu.delete"), MenuAction::Ask(row));
                 });
             }
-            rows.spawn(Node {
-                height: px(3),
-                ..default()
-            });
-            // The name for a new world, typed in the game's own box: a
-            // native prompt over the window is the thing the inherited UI
-            // rule forbids. Prefilled with the number the page would have
-            // chosen, so Enter alone still makes one.
-            rows.spawn(Node {
-                column_gap: px(4),
-                align_items: AlignItems::Center,
-                ..default()
-            })
-            .with_children(|line| {
-                line.spawn(KitText::new(tr("menu.name"), ui_kit::TITLE).shadow(ui_kit::INK));
-                line.spawn((
-                    Button,
-                    kit.nine(Set::Oak, "tooltip"),
-                    KitPiece(Set::Oak.key("tooltip")),
-                    Node {
-                        flex_grow: 1.0,
-                        height: px(18),
-                        padding: UiRect::new(px(6), px(6), px(3), px(0)),
-                        ..default()
-                    },
-                    MenuAction::EditName,
-                ))
-                .with_children(|field| {
-                    field.spawn((body(name.shown(), 10.0, ui_kit::TEXT), NameText));
-                });
-            });
-            rows.spawn(Node {
-                justify_content: JustifyContent::FlexStart,
-                ..default()
-            })
-            .with_children(|line| {
-                small(line, kit, tr("menu.new_world"), MenuAction::New);
-            });
         });
     }
 }
@@ -2044,10 +2282,15 @@ pub fn paint(
     mut name: ResMut<NameField>,
     save: Option<Res<WorldSave>>,
     mut panels: Query<(&Panel, &mut Node)>,
+    mut worlds: Query<&mut ScrollPosition, With<WorldsScroll>>,
 ) {
     if screen.is_changed() {
         menu.0 = *screen != Screen::Playing;
         if *screen == Screen::Saves {
+            // Opened at the top, where the open world's CONTINUE is.
+            for mut at in &mut worlds {
+                at.0 = Vec2::ZERO;
+            }
             // Read the directory on the way IN, however the screen was
             // opened, so the list is always what is on disk right now.
             let root = save
@@ -2355,5 +2598,109 @@ mod tests {
             .map(|t| t.text.to_string())
             .collect();
         assert!(labels.contains(&"F".to_string()));
+    }
+
+    /// The worlds page (`save-slots` 9): the rows sit in the scroll area and
+    /// NAME and NEW WORLD in the fixed foot under it; a rebuild keeps the
+    /// scroll offset; a DELETE confirm stands in the rows' place without
+    /// touching it, so CANCEL comes back to the same rows.
+    #[test]
+    fn the_worlds_list_scrolls_and_keeps_its_place() {
+        let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
+        let slots: Vec<Slot> = (0..30)
+            .map(|i| Slot {
+                id: format!("w{i}"),
+                file: saves::format::WorldFile::new(format!("w{i}"), 1, 0),
+                identity: None,
+            })
+            .collect();
+        app.insert_resource(SaveIndex {
+            slots,
+            asking: None,
+            trouble: None,
+        })
+        .init_resource::<NameField>()
+        .add_systems(Startup, spawn)
+        .add_systems(Update, rebuild_saves);
+        app.update();
+        let world = app.world_mut();
+        let list = world
+            .query_filtered::<Entity, With<SaveList>>()
+            .single(world)
+            .unwrap();
+        let foot = world
+            .query_filtered::<Entity, With<SaveFoot>>()
+            .single(world)
+            .unwrap();
+        assert!(world.get::<WorldsScroll>(list).is_some());
+        let rows = |world: &World| world.get::<Children>(list).map_or(0, |c| c.len());
+        assert_eq!(rows(world), 30, "one row a world, nothing else");
+        assert!(world.get::<Children>(foot).is_some_and(|c| c.len() >= 3));
+        let name_in = |world: &mut World, root: Entity| {
+            let mut stack = vec![root];
+            while let Some(e) = stack.pop() {
+                if world.get::<NameText>(e).is_some() {
+                    return true;
+                }
+                if let Some(c) = world.get::<Children>(e) {
+                    stack.extend(c.iter());
+                }
+            }
+            false
+        };
+        assert!(name_in(world, foot) && !name_in(world, list));
+        world.get_mut::<ScrollPosition>(list).unwrap().0.y = 120.0;
+        world.resource_mut::<SaveIndex>().trouble = None;
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.get::<ScrollPosition>(list).unwrap().0.y, 120.0);
+        world.resource_mut::<SaveIndex>().asking = Some(7);
+        app.update();
+        let world = app.world_mut();
+        assert!(rows(world) < 30, "the confirm stands in the rows' place");
+        assert!(world.get::<Children>(foot).is_none_or(|c| c.is_empty()));
+        assert_eq!(world.get::<ScrollPosition>(list).unwrap().0.y, 120.0);
+        world.resource_mut::<SaveIndex>().asking = None;
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(rows(world), 30);
+        assert_eq!(world.get::<ScrollPosition>(list).unwrap().0.y, 120.0);
+    }
+
+    /// The open world is drawn first whatever its place in the list, and the
+    /// rows keep their list indices.
+    #[test]
+    fn the_open_world_is_drawn_first() {
+        let slots: Vec<Slot> = ["a", "b", "c"]
+            .iter()
+            .map(|id| Slot {
+                id: id.to_string(),
+                file: saves::format::WorldFile::new(id.to_string(), 1, 0),
+                identity: None,
+            })
+            .collect();
+        assert_eq!(draw_order(&slots, Some(&"c".to_string())), vec![2, 0, 1]);
+        assert_eq!(draw_order(&slots, None), vec![0, 1, 2]);
+    }
+
+    /// The worlds grip runs the groove's length less its own height, and a
+    /// press puts the grip's middle under the cursor.
+    #[test]
+    fn the_worlds_grip_follows_the_scroll() {
+        let track = 270.0;
+        let run = track - WORLDS_KNOB_HEIGHT;
+        assert_eq!(knob_top(0.0, 500.0, track), 0.0);
+        assert_eq!(knob_top(500.0, 500.0, track), run);
+        assert_eq!(knob_top(250.0, 500.0, track), run / 2.0);
+        assert_eq!(
+            knob_top(900.0, 500.0, track),
+            run,
+            "past the end is the end"
+        );
+        assert_eq!(knob_top(50.0, 0.0, track), 0.0);
+        assert_eq!(scroll_for(0.0, 500.0, track), 0.0);
+        assert_eq!(scroll_for(1.0, 500.0, track), 500.0);
+        assert!((scroll_for(0.5, 500.0, track) - 250.0).abs() < 1e-3);
     }
 }

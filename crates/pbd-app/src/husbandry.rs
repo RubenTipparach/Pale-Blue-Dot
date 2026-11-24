@@ -268,6 +268,19 @@ impl Farmyard {
             })
     }
 
+    /// The kept animals standing in the yard, by record id, with their feet
+    /// as planet points: where the map draws a tamed animal that is near
+    /// (`world-map` 7.1); one further off is drawn at its home cell.
+    pub fn kept(&self, origin: SimOrigin) -> impl Iterator<Item = (u64, Vec3)> + '_ {
+        self.beasts
+            .iter()
+            .filter(|b| !b.leaving)
+            .filter_map(move |b| match b.who {
+                Who::Kept { id } => Some((id, origin.query_point(b.pos))),
+                Who::Wild { .. } => None,
+            })
+    }
+
     fn say(&mut self, text: impl Into<String>, hold_s: f32) {
         self.status = text.into();
         self.hold_s = hold_s;
@@ -809,17 +822,7 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     }
     // Wild herds near, on dry grass.
     let roster: Vec<LandSpecies> = world.roster().to_vec();
-    let seed = crate::planet::terrain_config().seed;
-    for square in herds::squares_near(up, near, PLANET_RADIUS, &s.herds) {
-        let Some(herd) = herds::herd_in(seed, square, PLANET_RADIUS, &s.herds, &roster) else {
-            continue;
-        };
-        if herd.centre.angle_between(up) * PLANET_RADIUS > near + s.herds.spread_m {
-            continue;
-        }
-        if !grassy_land(&world, herd.centre) {
-            continue;
-        }
+    for herd in wild_herds_near(up, near, &s.herds, &roster, world.sea.as_deref()) {
         let east = Vec3::Y.cross(herd.centre).normalize_or(Vec3::X);
         let north = herd.centre.cross(east);
         for m in &herd.members {
@@ -859,13 +862,34 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     }
 }
 
+/// The wild herds whose centre is within `reach_m` of the direction `up`
+/// (and a herd's spread past it), on dry grass: the one rule the yard spawns
+/// its herds by (`near_m`) and the world map draws them by (`world-map` 7.1,
+/// 1.5 km), so a marker is always where a herd stands. In square order.
+pub fn wild_herds_near(
+    up: Vec3,
+    reach_m: f32,
+    settings: &pbd_core::husbandry::HerdSettings,
+    roster: &[LandSpecies],
+    sea: Option<&crate::sea::Sea>,
+) -> Vec<herds::Herd> {
+    let seed = crate::planet::terrain_config().seed;
+    let up = up.normalize_or(Vec3::Y);
+    herds::squares_near(up, reach_m, PLANET_RADIUS, settings)
+        .into_iter()
+        .filter_map(|square| herds::herd_in(seed, square, PLANET_RADIUS, settings, roster))
+        .filter(|herd| herd.centre.angle_between(up) * PLANET_RADIUS <= reach_m + settings.spread_m)
+        .filter(|herd| grassy_land(sea, herd.centre))
+        .collect()
+}
+
 /// Whether a direction is dry land topped with grass, by the generator (a
 /// herd's centre may be beyond the resident fine set).
-fn grassy_land(world: &World, d: Vec3) -> bool {
+pub fn grassy_land(sea: Option<&crate::sea::Sea>, d: Vec3) -> bool {
     if crate::planet::surface_height(d) <= 0.5 {
         return false;
     }
-    if world.sea.as_deref().is_some_and(|s| s.depth_at(d) > 0.0) {
+    if sea.is_some_and(|s| s.depth_at(d) > 0.0) {
         return false;
     }
     let config = crate::planet::terrain_config();

@@ -20,12 +20,13 @@ use crate::hex::{Hex, Voxel};
 /// by the sea and the rivers, on version 11's heights; version 14
 /// (`ocean-environments` B24) lays the sea's cells; version 15
 /// (`mountain-ground`) grasses and snows the mountains' flats, scours their
-/// crests and stands their trees to a tree line (13 was never shipped). A
-/// new world is made
+/// crests and stands their trees to a tree line (13 was never shipped);
+/// version 16 (`ocean-environments` B30) grows the reefs to about a tenth of
+/// the sea. A new world is made
 /// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 15;
+pub const GENERATOR_VERSION: u32 = 16;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the
@@ -123,6 +124,11 @@ pub enum Material {
     /// wherever it lands, as render code 1 (sand). It acts as sand in every
     /// other way ([`Material::is_sand`]).
     DesertSand = 29,
+    /// A chest (`storage-chests` design 1): a wooden box of twenty slots,
+    /// made at the workbench and set down like a station. Solid, drawn in
+    /// the local trees' wood as the workbench is, with an iron hasp stood on
+    /// it. What it holds is a record of its own (`pbd_core::chest`).
+    Chest = 30,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -274,7 +280,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 28] = [
+    pub const ALL: [Material; 29] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -303,6 +309,7 @@ impl Material {
         Material::MusselBed,
         Material::Sticks,
         Material::DesertSand,
+        Material::Chest,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the

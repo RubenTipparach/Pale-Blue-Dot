@@ -106,8 +106,20 @@ pub enum Act {
     /// Mark a place this many metres away on the map: open it with M, put
     /// the pointer on dry ground that far off, right-click, close it.
     Mark(f32),
-    /// Walk to the newest waypoint on the map.
+    /// Plan from the map (`mission-playthrough` 5.8): open it with M, pick a
+    /// layer by its legend row (`places`, `biomes`), find the pixel of a
+    /// class of its key (`reef`, `kelp_forest`, `desert`) nearest the
+    /// player, zoom in on it, right-click a mark there, close the map. The
+    /// `ToMark` after it walks there.
+    MapGoal(String, String),
+    /// Walk to the newest waypoint on the map, in legs; a mark at sea ends
+    /// at the coast, facing the water, for a `Swim`.
     ToMark,
+    /// From the coast into the water and across, swimming on the surface to
+    /// the place of a kind (`reef`: the nearest reef rock to the mark;
+    /// `mark`: the mark), then down to it, looking down for a `Dig`
+    /// (`mission-playthrough` 5.7, legs 2 to 4).
+    Swim(String),
     /// The right button once, on what is aimed at, with what is in hand
     /// (the bucket filled at the water or poured).
     Use,
@@ -163,11 +175,30 @@ pub enum Act {
     Eat(String),
     /// Open the missions tab (O) for seconds, then shut it.
     Missions(f32),
+    /// Open the pack with Tab for seconds, then shut it with Tab
+    /// (`starter-missions`, "Open your pack").
+    Pack(f32),
+    /// Walk to the nearest chest, open it with F and put one stack of the
+    /// ground's own blocks (soil, sand, stone) in it (`starter-missions`,
+    /// "A chest").
+    Store,
+    /// Open the pack and drop every stack of the ground's own blocks (soil,
+    /// sand, stone, grass) off the panels, then shut it: a full pack cleared
+    /// before a shot that needs room.
+    Declutter,
     /// Pick the mission to be on: open the tree (O), click its card, shut
     /// it (`mission-playthrough` 3.5).
     Focus(String),
     /// A still, when `--showcase-stills` names a directory.
     Still,
+    /// Go to the nearest place of a kind (`mission-playthrough` design 5):
+    /// `hot`, `temperate` or `cold` dry ground, a `reef` (swum onto) or a
+    /// `town`.
+    Seek(String),
+    /// A key pressed once, as the player presses it (`F`, `W`, ...).
+    Tap(String),
+    /// A key held for seconds.
+    Hold(String, f32),
 }
 
 /// Where the showcases live.
@@ -239,6 +270,23 @@ mod tests {
             Act::Chop(Until::Have("log".into(), 1))
         );
         assert_eq!(file.shots[1].rate, Some(200.0));
+    }
+
+    #[test]
+    fn the_map_goal_and_the_swim_parse() {
+        let file = parse(
+            r#"(goal: "x", shots: [(caption: "Reef",
+                acts: [MapGoal("places", "reef"), ToMark, Swim("reef")])])"#,
+        )
+        .unwrap();
+        assert_eq!(
+            file.shots[0].acts,
+            vec![
+                Act::MapGoal("places".into(), "reef".into()),
+                Act::ToMark,
+                Act::Swim("reef".into()),
+            ]
+        );
     }
 
     #[test]

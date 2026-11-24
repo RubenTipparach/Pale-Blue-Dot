@@ -600,6 +600,26 @@ its hide.
   the world's copy loses the outline, CLAUDE.md "No outlines in the world"),
   and that is its own step, listed as task 9.2.
 
+## 15. More wild herds (owner, 2026-11-21)
+
+The owner, watching the bot hunt for a woolback: "I'm not seeing a lot of
+cows or sheep? whats the generation algo on that, can we crank it up?", and
+on the options, "do it".
+
+Wild herds come from a grid of 160 m squares (`herds.square_m`). Each
+square holds a herd if its hash falls under `herds.chance`, and the herd is
+one of the three species (hen, woolback, plodder) only if its centre is on
+dry grass. At `chance` 0.35 that was a herd about every 270 m, and a woolback
+herd about every 500 m: the bot walked 240 m off a beach and met none.
+
+`chance` goes from 0.35 to 0.9: about 2.5 times the herds. The hash is
+unchanged, so a square that held a herd still holds the same one, the same
+species, members and seeds; only empty squares fill. Existing worlds keep
+every herd they had, and a tamed animal's wild twin stays hidden (its seed is
+the same). Wild herds are derived from the seed and never saved, so no save
+format moves. The square size stays (shrinking it would move every herd);
+it is the next step if this is not enough.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and

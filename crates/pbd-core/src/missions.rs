@@ -86,13 +86,15 @@ pub enum Kind {
     Open,
     /// A fish landed on a baited line, by its species' name (G1).
     Baited,
+    /// A stack put in a chest, by the item's name (`storage-chests` 9).
+    Store,
 }
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
     /// raises an event for (all of them, since felling, eating and the
     /// night came in with the Homestead chain).
-    pub const LIVE: [Kind; 27] = [
+    pub const LIVE: [Kind; 28] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -120,6 +122,7 @@ impl Kind {
         Kind::Travel,
         Kind::Open,
         Kind::Baited,
+        Kind::Store,
     ];
 }
 
@@ -358,11 +361,12 @@ impl Catalog {
             Kind::Waters => matches!(name, "sea" | "fresh"),
             Kind::Reach => matches!(name, "marked" | "reef" | "town"),
             Kind::Board | Kind::Travel => name == "boat",
-            Kind::Open => name == "map",
+            Kind::Open => matches!(name, "map" | "pack"),
             Kind::Eat => item(),
             Kind::Place => name.starts_with("block:") && item(),
             Kind::Till | Kind::BuildPen => false,
             Kind::Gather
+            | Kind::Store
             | Kind::Find
             | Kind::Plant
             | Kind::Harvest
@@ -744,6 +748,29 @@ impl Progress {
     /// opens (an old world joins the chain this way) and after every count.
     pub fn settle(&mut self, chain: &Chain, state: &dyn Fn(&Objective) -> u32) -> Step {
         let mut step = Step::default();
+        // A done mission's parents are done (`starter-missions`, "The first
+        // mission: open the pack"): a world from before a new root was put
+        // above its tree is not sent back to it. Quietly, with no toast.
+        loop {
+            let missing: Vec<String> = chain
+                .missions
+                .iter()
+                .filter(|m| self.done.contains(&m.id))
+                .flat_map(|m| m.needs.iter())
+                .filter(|n| {
+                    !self.done.contains(*n) && chain.get(n).is_some_and(|m| m.pending.is_none())
+                })
+                .cloned()
+                .collect();
+            if missing.is_empty() {
+                break;
+            }
+            for id in missing {
+                self.counts.remove(&id);
+                self.done.insert(id);
+            }
+            step.changed = true;
+        }
         loop {
             let mut closed = None;
             let open: Vec<Mission> = self.open(chain).cloned().collect();

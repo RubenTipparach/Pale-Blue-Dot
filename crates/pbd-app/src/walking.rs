@@ -1217,6 +1217,22 @@ fn drive_walker(
         if wet.eyes && !wading {
             ground.grounded = false;
         }
+        // MEASUREMENT (`bot-path-planner` design 7): a walker that will not
+        // move, once a second while `PBD_WALK_TRACE` is set.
+        if std::env::var_os("PBD_WALK_TRACE").is_some() && (time.elapsed_secs() % 1.0) < dt {
+            bevy::log::info!(
+                "WALK_TRACE axes {:?} jump {} grounded {} on {:?} wet body {} eyes {} vel {:?} drift {:?} climb {}",
+                state.axes,
+                state.jump,
+                ground.grounded,
+                ground.on,
+                wet.body,
+                wet.eyes,
+                velocity.0,
+                ground.drift,
+                state.climb.is_some()
+            );
+        }
         let mut speed = if state.sprinting {
             config.sprint_speed * stride
         } else {

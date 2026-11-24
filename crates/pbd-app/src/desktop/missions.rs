@@ -435,6 +435,7 @@ fn script() -> Vec<Scripted> {
         S::Gained(good("stone"), 9, Found),
     ];
     steps.extend(n(6, S::Did(Kind::Gather, "block:dirt")));
+    steps.push(S::Did(Kind::Open, "pack"));
     steps.push(S::Did(Kind::Craft, "recipe:stone-axe"));
     steps.extend(n(2, S::Did(Kind::Fell, "tree")));
     steps.extend([
@@ -447,6 +448,10 @@ fn script() -> Vec<Scripted> {
         S::Gained(Item::Tool(Tool::Shovel), 1, Made),
         S::Gained(Item::Block(Material::Campfire), 1, Made),
         S::Did(Kind::Place, "block:campfire"),
+        // The storage mission (`storage-chests` 9).
+        S::Gained(Item::Block(Material::Chest), 1, Made),
+        S::Did(Kind::Place, "block:chest"),
+        S::Did(Kind::Store, "block:dirt"),
     ]);
     steps.extend(n(20, S::Did(Kind::Place, "block:dirt")));
     steps.extend(n(2, S::Did(Kind::Craft, "recipe:torch")));
@@ -469,7 +474,7 @@ fn script() -> Vec<Scripted> {
     steps.extend(n(3, S::Did(Kind::Waters, "fresh")));
     steps.extend(n(20, S::Did(Kind::Swim, "water")));
     steps.extend([
-        S::Did(Kind::Reach, "reef"),
+        S::Did(Kind::Gather, "block:reef rock"),
         S::Did(Kind::Reach, "town"),
         S::Did(Kind::Board, "boat"),
     ]);
@@ -762,6 +767,9 @@ pub fn about_watch(
     if state.screen != Some(*screen) {
         if *screen == Screen::Map {
             did.write(Did::new(Kind::Open, "map", 1));
+        }
+        if *screen == Screen::Pack {
+            did.write(Did::new(Kind::Open, "pack", 1));
         }
         state.screen = Some(*screen);
     }

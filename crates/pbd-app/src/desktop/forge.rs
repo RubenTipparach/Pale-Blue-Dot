@@ -108,7 +108,7 @@ pub fn spawn(
                                         super::craft::LockTint(recipe.code.clone()),
                                     ))
                                     .with_children(|icon| {
-                                        icon.spawn((
+                                        let mut count = icon.spawn((
                                             KitText::new(
                                                 Localized::verbatim(super::craft::need_count(
                                                     need, n,
@@ -123,6 +123,9 @@ pub fn spawn(
                                                 ..default()
                                             },
                                         ));
+                                        if need {
+                                            count.insert(super::craft::NeedCount(it, n));
+                                        }
                                     });
                                 };
                                 for &input in &recipe.inputs {
@@ -229,7 +232,7 @@ pub fn queue(
             note.say(wall_s, tr("forge.queue_full"));
             return false;
         }
-        Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
+        Err(station::Refused::Elsewhere) => return false,
     }
     if !store(save, cell, layer, &state, &moved) {
         error!("queue BLOCKED: the save did not accept it");

@@ -629,3 +629,12 @@ code departs from the plan above, and why:
   field-lit things take the full term.
 - **The held flame is drawn at 0.75 of its texture**, under the tonemapper's
   shoulder as the placed flame is, so it reads orange rather than white.
+
+## No walking sway on the light hand (owner, 2026-11-21)
+
+The owner: "howcome glow musshroom hand is shaking when other hands arent",
+then "no shaking hands when walk". The light in the left hand swayed with each
+step (`held.light.sway`: 10 mm side to side, 8 mm bob, 0.02 rad roll) while the
+tool hand holds still. The walk's sway is now 0 in `held.ron` and the defaults
+(`side_m`, `bob_m`, `roll_rad`); the breath at rest (3 mm) stays. Applies to the
+torch and lantern too, which share the hold.

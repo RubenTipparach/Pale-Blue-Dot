@@ -136,9 +136,9 @@ impl Default for LightHold {
             },
             sway: Sway {
                 step_m: 0.75,
-                side_m: 0.010,
-                bob_m: 0.008,
-                roll_rad: 0.02,
+                side_m: 0.0,
+                bob_m: 0.0,
+                roll_rad: 0.0,
                 breathe_m: 0.003,
                 ease_hz: 6.0,
             },
@@ -792,6 +792,7 @@ pub(super) fn spawn_lights(
                     wrist: built.wrist,
                     arm,
                     dirt: None,
+                    bare: None,
                 },
                 HeldLightView {
                     kind,

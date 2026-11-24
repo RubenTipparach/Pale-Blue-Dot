@@ -21,6 +21,12 @@
             acts: [Focus("gather"), PickUp(Have("fibre", 8)), Still, PickUp(Have("stone", 9)), Dig(Mission("gather"), 2), Still],
         ),
         (
+            caption: "Open your pack with Tab",
+            until: ["pack"],
+            max_s: 30.0,
+            acts: [Focus("pack"), Pack(3.0)],
+        ),
+        (
             caption: "Craft an axe: a branch pulled from a tree, then the pack's Craft row",
             until: ["axe"],
             max_s: 90.0,
@@ -55,6 +61,12 @@
             until: ["fire"],
             max_s: 300.0,
             acts: [Focus("fire"), Hand("axe"), Chop(Have("log", 2)), Hand("shovel"), Dig(Have("stone", 5), 2), Craft("campfire", 1), Shore, Place("block:campfire"), Still],
+        ),
+        (
+            caption: "A chest: make it at the bench, set it down, store soil in it",
+            until: ["storage"],
+            max_s: 300.0,
+            acts: [Focus("storage"), Hand("axe"), Chop(Have("log", 3)), Craft("planks", 3), Bench("chest", 1), Hand("hand"), Place("block:chest"), Store, Still],
         ),
         (
             caption: "The trunk is done: every branch opens",

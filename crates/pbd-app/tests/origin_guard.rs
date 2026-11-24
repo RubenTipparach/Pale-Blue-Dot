@@ -8,7 +8,7 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 11] = [
+const FILES: [&str; 12] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
@@ -24,6 +24,8 @@ const FILES: [&str; 11] = [
     // `ocean-environments` B29: the beavers and otters drawn on the fauna's
     // creatures.
     "crates/pbd-app/src/critters.rs",
+    // `tree-punch-shake`: the dust and leaves of a hit or felled tree.
+    "crates/pbd-app/src/tree_fx.rs",
 ];
 
 /// What taking up or a radius from a local position looks like.

@@ -191,5 +191,13 @@
             inputs: [("log", 6), ("rope", 4)],
             outputs: [("raft", 1)],
         ),
+        // ---- storage-chests design 1: a chest of twenty slots.
+        (
+            code: "chest",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 8)],
+            outputs: [("block:chest", 1)],
+        ),
     ],
 )

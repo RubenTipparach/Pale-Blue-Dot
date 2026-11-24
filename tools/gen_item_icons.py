@@ -270,6 +270,20 @@ ICONS.update({
 })
 
 
+# A storage chest (`storage-chests` design 1): a box of the fence's two
+# browns, a lid over a dark seam, one iron band and a dark iron hasp at the
+# front. The 1 px ink is the icon's own (item icons keep their outline; the
+# chest in the world has none).
+ICONS.update({
+    "stations/chest": ([
+        "................", "................", "................", "..kkkkkkkkkkkk..",
+        "..kWWWWWWWWWWk..", "..kwwwwwwwwwwk..", "..kkkkkiikkkkk..", "..kWwWwiIwWwWk..",
+        "..kWwWwiiwWwWk..", "..kWwWwWwWwWwk..", "..kiiiiiiiiiik..", "..kWwWwWwWwWwk..",
+        "..kWwWwWwWwWwk..", "..kkkkkkkkkkkk..", "................", "................",
+    ], FARM),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

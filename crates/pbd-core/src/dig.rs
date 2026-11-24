@@ -70,7 +70,7 @@ impl Class {
             Material::MusselBed => Class::Dirt,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
-            Material::Workbench | Material::Sticks => Class::Wood,
+            Material::Workbench | Material::Sticks | Material::Chest => Class::Wood,
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall
@@ -147,6 +147,10 @@ pub struct DigSettings {
     /// Bare hands' speed on soft ground and placed lights, against the stone
     /// shovel's 1.0 (`tool-crafting` decision 1): a fraction, no unit.
     pub hand_speed: f32,
+    /// Bare hands' speed on a tree's trunk, for a log, against the stone
+    /// axe's 1.0 (`tree-punch-shake`, "A punched log takes twice as long"):
+    /// a fraction, no unit.
+    pub hand_log_speed: f32,
     /// Each tier's speed, stone first (M3 section 7): the matrix's time over
     /// this. A fraction, no unit; the stone tier is the matrix itself.
     pub tier_speeds: [f32; 4],
@@ -193,6 +197,7 @@ impl Default for DigSettings {
             placed: ToolTimes::new(0.1, 0.1, 0.1),
             between_s: 0.15,
             hand_speed: 0.25,
+            hand_log_speed: 0.125,
             tier_speeds: [1.0, 1.6, 2.4, 3.6],
         }
     }
@@ -231,6 +236,15 @@ impl DigSettings {
             return Err(format!(
                 "dig.hand_speed must be in (0, 1], got {}",
                 self.hand_speed
+            ));
+        }
+        if !(self.hand_log_speed.is_finite()
+            && self.hand_log_speed > 0.0
+            && self.hand_log_speed <= 1.0)
+        {
+            return Err(format!(
+                "dig.hand_log_speed must be in (0, 1], got {}",
+                self.hand_log_speed
             ));
         }
         let mut last = 0.0;
@@ -654,6 +668,11 @@ mod tests {
         assert!(bad.validate().is_err(), "a tier slower than the last");
         let bad = DigSettings {
             hand_speed: 0.0,
+            ..Default::default()
+        };
+        assert!(bad.validate().is_err());
+        let bad = DigSettings {
+            hand_log_speed: 0.0,
             ..Default::default()
         };
         assert!(bad.validate().is_err());

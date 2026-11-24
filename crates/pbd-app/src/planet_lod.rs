@@ -309,6 +309,35 @@ pub fn fill_river_cache(points: &[Vec3], corridor_m: f32) -> usize {
     seen.len()
 }
 
+/// Fill the swamp pools' memo round `center` (`swamps`, "Swamp water is not
+/// cached the way rivers are"): every fine level's cells within `radius_m`
+/// asked for their top as the ground and the records ask it, at the surface
+/// and at its floor, so a later rebuild finds a swamp's pool tests worked
+/// out. Only swamp cells run the pool test; elsewhere the top is cheap.
+/// Returns the cells asked about.
+pub fn fill_swamp_cache(center: Vec3, radius_m: f32) -> usize {
+    let cfg = super::terrain::terrain_config();
+    if cfg.swamps.is_none() {
+        return 0;
+    }
+    let mut lattice = Lattice::default();
+    let mut asked = 0;
+    for &level in &FINE_LEVELS {
+        let reach = radius_m / PLANET_RADIUS;
+        for local in lattice.cells_in_band(level, center, 0.0, reach) {
+            let d = local.cell.direction;
+            let h = surface_height(d);
+            if pbd_core::planet_gen::biome_at(cfg, d, h) != pbd_core::planet_gen::Biome::Swamp {
+                continue;
+            }
+            std::hint::black_box(pbd_core::planet_gen::top_material(cfg, d, h));
+            std::hint::black_box(pbd_core::planet_gen::top_material(cfg, d, h.floor()));
+            asked += 1;
+        }
+    }
+    asked
+}
+
 /// The base level's records from the whole-sphere dual. Owners are the cell
 /// itself: the base has no level below it to be partitioned by.
 ///
@@ -395,9 +424,22 @@ pub struct FineSet {
     /// 14): read from its cache or built, on this same task, so the water
     /// lands with its ground.
     pub river: std::sync::Arc<crate::river_band::RiverBand>,
+    /// The finest records by cell key, built on first use: a key's record
+    /// without a search of every record (2026-11-23: `material_of` and the
+    /// tree test searched the ~3900 records per call, thousands of calls a
+    /// frame in a bot's plan).
+    finest_index: std::sync::OnceLock<HashMap<u32, usize>>,
 }
 
 impl FineSet {
+    /// The finest record holding cell `key`, by the index.
+    pub fn finest_index_of(&self, key: u32) -> Option<usize> {
+        self.finest_index
+            .get_or_init(|| levels_index(&self.levels[3]))
+            .get(&key)
+            .copied()
+    }
+
     /// Per fine level, the ring its records span round the anchor, metres.
     pub fn rings(&self) -> [[f32; 2]; 4] {
         self.rings
@@ -1293,6 +1335,8 @@ pub(crate) fn generate_fine_live_on(
         edits,
     ));
     let columns = tier;
+    let finest_index = std::sync::OnceLock::new();
+    let _ = finest_index.set(levels_index(&levels[3]));
     FineSet {
         anchor,
         levels,
@@ -1306,7 +1350,18 @@ pub(crate) fn generate_fine_live_on(
         fit_m,
         columns,
         river,
+        // Built here, on the set's own task, not on the frame that first asks.
+        finest_index,
     }
+}
+
+/// The finest records by cell key.
+fn levels_index(records: &[GpuCell]) -> HashMap<u32, usize> {
+    records
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (r.key(), i))
+        .collect()
 }
 
 /// The current fine set, shared with the render world by `Arc`; the version
@@ -2108,6 +2163,7 @@ mod near_field_tests {
             fit_m: 0.0,
             columns: ColumnTier::empty(),
             river: Default::default(),
+            finest_index: Default::default(),
         }
     }
 

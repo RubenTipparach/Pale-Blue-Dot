@@ -12,6 +12,7 @@
 //! - one UI material for the live layers, which turns every pixel back into
 //!   a direction and looks up the weather overlay, the clouds and rain and
 //!   the night there (`map_live.wgsl`);
+//! - the herds and the tamed animals (`map_herds`, task group 7);
 //! - the markers: the player and heading, the ship and every craft.
 //!
 //! A capture (the clock pinned) builds what it shows in place, so its
@@ -186,7 +187,7 @@ impl MapView {
 }
 
 /// What the legend has chosen.
-#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
 pub struct MapChoice {
     /// The overlay on the base, at most one: a raster layer by its index in
     /// `MapLayers`, or a weather overlay.
@@ -195,6 +196,21 @@ pub struct MapChoice {
     pub on_globe: bool,
     pub night: bool,
     pub clouds: bool,
+    /// The herds and the tamed animals drawn (task 7.2): on until the
+    /// legend's toggle hides them.
+    pub herds: bool,
+}
+
+impl Default for MapChoice {
+    fn default() -> Self {
+        Self {
+            overlay: MapOverlay::None,
+            on_globe: false,
+            night: false,
+            clouds: false,
+            herds: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -301,6 +317,15 @@ impl Default for MapRaster {
     }
 }
 
+impl MapRaster {
+    /// The base level's texels once built or read from the cache: what the
+    /// map has drawn, which the showcase bot reads a layer's classes from
+    /// (`mission-playthrough` 5.8).
+    pub fn base_texels(&self) -> Option<Arc<Vec<Texel>>> {
+        self.base_texels.clone()
+    }
+}
+
 /// How many finer tiles are kept, about 18 MB of pixels at 333 x 333.
 const TILES_KEPT: usize = 120;
 /// How many tiles are built at once.
@@ -362,6 +387,8 @@ pub enum MapButton {
     Night,
     Clouds,
     OnGlobe,
+    /// The herds and the tamed animals (task 7.2).
+    Herds,
 }
 #[derive(Component)]
 pub struct MapReadout;
@@ -784,8 +811,18 @@ pub fn spawn(
     layers: Res<MapLayers>,
     launch: Option<Res<MapLaunch>>,
     kit: Res<UiKit>,
+    husbandry: Option<Res<pbd_app::config::HusbandryConfig>>,
 ) {
     let kit = &*kit;
+    // The legend's Herds row: each tameable species' name and colour.
+    let herd_key: Vec<(Localized, Color)> = husbandry
+        .as_deref()
+        .map(|c| {
+            super::map_herds::tameable(c.0.roster(pbd_core::fauna::HOME_BODY))
+                .map(|sp| (sp.name(), super::map_herds::species_colour(sp)))
+                .collect()
+        })
+        .unwrap_or_default();
     let base = bases.add(MapImageMaterial {
         image: Handle::default(),
         grey: grey_of(false),
@@ -872,6 +909,7 @@ pub fn spawn(
                 }
                 canvas.spawn((LiveNode, MaterialNode(material), full(), FocusPolicy::Pass));
                 canvas.spawn((super::map_sites::SiteLayer, full(), FocusPolicy::Pass));
+                canvas.spawn((super::map_herds::HerdLayer, full(), FocusPolicy::Pass));
                 canvas
                     .spawn((MarkerLayer, full(), FocusPolicy::Pass))
                     .with_children(|markers| {
@@ -934,7 +972,7 @@ pub fn spawn(
                 full(),
                 FocusPolicy::Pass,
             ));
-            legend(root, kit, &layers);
+            legend(root, kit, &layers, &herd_key);
             root.spawn((
                 kit.nine(Set::Stone, "tooltip"),
                 KitPiece("tooltip".into()),
@@ -961,7 +999,12 @@ pub fn spawn(
     commands.insert_resource(icons);
 }
 
-fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
+fn legend(
+    root: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    layers: &MapLayers,
+    herd_key: &[(Localized, Color)],
+) {
     let heading = |panel: &mut ChildSpawnerCommands, text: Localized| {
         panel.spawn((
             KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
@@ -1042,7 +1085,41 @@ fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
         panel.spawn(wrap).with_children(|row| {
             button(row, tr("map.night_side"), MapButton::Night);
             button(row, tr("map.clouds_and_rain"), MapButton::Clouds);
+            button(row, tr("map.herds"), MapButton::Herds);
         });
+        // The Herds row: a swatch and a name for each tameable species, the
+        // markers' own round dot with its rim.
+        panel
+            .spawn(Node {
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: px(6),
+                row_gap: px(1),
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|row| {
+                for (name, colour) in herd_key {
+                    row.spawn(Node {
+                        column_gap: px(3),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|line| {
+                        line.spawn((
+                            Node {
+                                width: px(super::map_herds::DOT_PX),
+                                height: px(super::map_herds::DOT_PX),
+                                border: UiRect::all(px(1)),
+                                border_radius: BorderRadius::MAX,
+                                ..default()
+                            },
+                            BorderColor::all(super::map_herds::RIM),
+                            BackgroundColor(*colour),
+                        ));
+                        line.spawn(key_text(name.clone()));
+                    });
+                }
+            });
         panel.spawn((
             MapNote,
             Text::new(""),
@@ -1233,6 +1310,7 @@ pub fn press(
             MapButton::Night => choice.night = !choice.night,
             MapButton::Clouds => choice.clouds = !choice.clouds,
             MapButton::OnGlobe => choice.on_globe = !choice.on_globe,
+            MapButton::Herds => choice.herds = !choice.herds,
         }
     }
 }
@@ -1277,6 +1355,7 @@ pub fn paint_legend(
             MapButton::Night => choice.night,
             MapButton::Clouds => choice.clouds,
             MapButton::OnGlobe => choice.on_globe,
+            MapButton::Herds => choice.herds,
         };
         if plaque.latched != on {
             plaque.latched = on;
@@ -2052,6 +2131,7 @@ impl Plugin for MapScreenPlugin {
             .init_resource::<MapLayers>()
             .init_resource::<MapLaunch>()
             .init_resource::<super::map_sites::DrawnSites>()
+            .init_resource::<super::map_herds::MapHerds>()
             .add_systems(PreStartup, |mut layers: ResMut<MapLayers>| {
                 layers.add(biomes_layer());
                 layers.add(places_layer());
@@ -2076,6 +2156,8 @@ impl Plugin for MapScreenPlugin {
                     lay_out,
                     live,
                     super::map_sites::draw_sites,
+                    super::map_herds::find_herds,
+                    super::map_herds::draw_herds,
                     markers,
                 )
                     .chain(),
@@ -2907,5 +2989,157 @@ mod tests {
             1
         );
         assert_eq!(count(&mut world, |e| e.contains::<BackgroundGradient>()), 1);
+    }
+
+    /// A map open on a herd the game would spawn (`world-map` group 7): the
+    /// herd systems and the legend's clicks, a window, the walker at the
+    /// herd's centre and the shipped husbandry settings. The herd is the
+    /// first the yard's own rule (`wild_herds_near` at its `near_m`) gives
+    /// round a spiral of directions.
+    fn herd_map() -> (App, pbd_core::husbandry::herds::Herd) {
+        use super::super::map_herds::{HerdLayer, MapHerds, draw_herds, find_herds};
+        use pbd_app::config::HusbandryConfig;
+        let config = HusbandryConfig(Default::default());
+        let roster = config.0.roster(pbd_core::fauna::HOME_BODY).to_vec();
+        let n = 4000;
+        let herd = (0..n)
+            .find_map(|i| {
+                let z = 1.0 - 2.0 * (i as f32 + 0.5) / n as f32;
+                let a = i as f32 * 2.399_963;
+                let r = (1.0 - z * z).sqrt();
+                let d = Vec3::new(r * a.cos(), z, r * a.sin());
+                pbd_app::husbandry::wild_herds_near(
+                    d,
+                    config.0.herds.near_m,
+                    &config.0.herds,
+                    &roster,
+                    None,
+                )
+                .into_iter()
+                .find(|h| roster[h.species as usize].keep.is_some())
+            })
+            .expect("a herd somewhere on the planet");
+        assert!(pbd_app::husbandry::grassy_land(None, herd.centre));
+        let mut app = App::new();
+        app.insert_resource(Screen::Map)
+            .insert_resource(MapView::at_metres_per_pixel(geo::project(herd.centre), 4.0))
+            .init_resource::<MapChoice>()
+            .init_resource::<MapHerds>()
+            .insert_resource(config)
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .add_systems(Update, (press, find_herds, draw_herds).chain());
+        app.world_mut().spawn((
+            Window {
+                resolution: (1440, 900).into(),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        app.world_mut().spawn((HerdLayer, Node::default()));
+        let feet = PLANET_RADIUS + pbd_app::planet::surface_height(herd.centre) + 1.0;
+        app.world_mut()
+            .spawn((Walker, Position(herd.centre * feet)));
+        app.update();
+        app.update();
+        (app, herd)
+    }
+
+    /// The herd markers' nodes, with where each is and whether it shows.
+    fn herd_nodes(app: &mut App) -> Vec<(super::super::map_herds::HerdMarker, Node)> {
+        let mut q = app
+            .world_mut()
+            .query::<(&super::super::map_herds::HerdMarker, &Node)>();
+        q.iter(app.world()).map(|(m, n)| (*m, n.clone())).collect()
+    }
+
+    /// A herd the game would spawn has one marker, at its centre, and a
+    /// square where the game spawns none has no marker (task 7.1).
+    #[test]
+    fn a_herd_the_game_spawns_has_a_marker_at_its_centre() {
+        use super::super::map_herds::{DOT_PX, MapHerds, REACH_M};
+        use pbd_core::husbandry::herds;
+        let (mut app, herd) = herd_map();
+        let marks = app.world().resource::<MapHerds>().marks.clone();
+        let index = marks
+            .iter()
+            .position(|m| !m.tamed && m.at.distance(herd.centre) < 1e-6)
+            .expect("the herd has a marker");
+        assert_eq!(marks[index].species, herd.species, "in its species");
+        assert_eq!(
+            marks
+                .iter()
+                .filter(|m| m.at.distance(herd.centre) < 1e-6)
+                .count(),
+            1,
+            "one marker a herd"
+        );
+        // On the screen at the herd's centre.
+        let view = app.world().resource::<MapView>().clamped(SCREEN);
+        let want = view.to_screen(geo::project(herd.centre), SCREEN) - Vec2::splat(DOT_PX / 2.0);
+        let (_, node) = herd_nodes(&mut app)
+            .into_iter()
+            .find(|(m, _)| m.0 == index)
+            .expect("its node");
+        assert_eq!(node.display, Display::Flex, "shown");
+        match (node.left, node.top) {
+            (Val::Px(x), Val::Px(y)) => assert!(
+                Vec2::new(x, y).distance(want) < 0.01,
+                "at {x}, {y}, the centre at {want}"
+            ),
+            other => panic!("placed in pixels: {other:?}"),
+        }
+        // Every square near where the game spawns no herd has no marker.
+        let config = pbd_app::config::HusbandryConfig(Default::default());
+        let s = &config.0.herds;
+        let roster = config.0.roster(pbd_core::fauna::HOME_BODY);
+        let seed = pbd_app::planet::terrain_config().seed;
+        let spawns = |square: herds::Square| {
+            herds::herd_in(seed, square, PLANET_RADIUS, s, roster)
+                .is_some_and(|h| pbd_app::husbandry::grassy_land(None, h.centre))
+        };
+        let empty: Vec<herds::Square> =
+            herds::squares_near(herd.centre, REACH_M * 0.8, PLANET_RADIUS, s)
+                .into_iter()
+                .filter(|sq| !spawns(*sq))
+                .collect();
+        assert!(!empty.is_empty(), "some square near holds no herd");
+        for mark in &marks {
+            let square = herds::square_of(mark.at, PLANET_RADIUS, s);
+            assert!(
+                !empty.contains(&square),
+                "a marker in {square:?}, where the game spawns no herd"
+            );
+        }
+    }
+
+    /// The legend's Herds toggle hides every herd marker and shows them
+    /// again (task 7.2).
+    #[test]
+    fn the_herds_toggle_hides_the_markers() {
+        let (mut app, _) = herd_map();
+        let shown = |app: &mut App| {
+            herd_nodes(app)
+                .iter()
+                .filter(|(_, n)| n.display == Display::Flex)
+                .count()
+        };
+        let all = herd_nodes(&mut app).len();
+        assert!(all > 0, "markers to hide");
+        assert_eq!(shown(&mut app), all, "on when the map opens");
+        let toggle = app
+            .world_mut()
+            .spawn((MapButton::Herds, Interaction::Pressed))
+            .id();
+        app.update();
+        assert!(!app.world().resource::<MapChoice>().herds);
+        assert_eq!(shown(&mut app), 0, "the toggle hides them");
+        *app.world_mut().get_mut::<Interaction>(toggle).unwrap() = Interaction::None;
+        app.update();
+        *app.world_mut().get_mut::<Interaction>(toggle).unwrap() = Interaction::Pressed;
+        app.update();
+        assert_eq!(shown(&mut app), all, "and shows them again");
     }
 }

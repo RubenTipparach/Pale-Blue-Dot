@@ -257,3 +257,62 @@ Once the axe has felled the tree, the ground digs and tills as any other.
 Blocks under the top, reached from a cave or a side, are not held: the roots
 are not modelled. The check is one function, `digging::under_standing_tree`,
 used by both verbs.
+
+## A made tool goes to hand; a spare goes to the pack (owner, 2026-11-22)
+
+The owner, playtesting: "when crafting items make sure the item is equipped
+automatically. If that item is already equipped then just drop in an item
+pack like normal items."
+
+Today (`station::collect_into`):
+- a made tool goes to the tool slot (`Equipment::grant`) but is not put in
+  hand. The player has to pick it with the tool picker after making it;
+- a tool the player already owns at that tier or better cannot be queued
+  ("owned at that tier", `Refused::NotBetter`). One made twice across two
+  stations is collected for nothing.
+
+Change:
+1. **A tool that is new, or better than the one owned,** goes to the tool
+   slot and into hand (`Equipment::hold`), on the frame it is collected.
+   The swing, the cast, the dig take it at once.
+2. **A tool already owned at that tier or better** may be queued. When made,
+   it goes into the pack as an item (`Item::Tool`), as any other output
+   does. Like any other output, the job waits if the pack is full.
+   Revised the same day (owner: "You can make multiple of tools. Please
+   allow that. We will be adding tool degradation in the future. So multiple
+   tools will be needed"): nothing about a tool is refused any more, neither
+   owned nor already queued. Queue three axes and the first goes to hand,
+   the other two to the pack. `Refused::NotBetter` and its note ("You
+   already have this tool") are gone.
+3. Other outputs (planks, a workbench block, a campfire) go to the pack as
+   now.
+
+Limits, written down rather than hidden:
+- a tool in the pack has no tier of its own (`Item::Tool(Tool)`). A spare
+  shows its kind's icon and, used or dropped, is the plain tool. Tiers on
+  pack tools wait for a reason to carry one (trade, a chest of spares);
+- taking a tool out of the pack into the tool slot is not part of this.
+
+Tests (`station.rs`): a made pickaxe is owned and held; a second one queues
+and lands in the pack as one `Item::Tool(Pickaxe)`; a better tier replaces
+the held one and is held.
+
+## A standing tree holds only its own block (owner, 2026-11-22)
+
+The owner, playtesting: "The tree being in the way thing should only apply to
+the block the tree is actually on. Not the whole column".
+
+Decision 3a keeps the ground a standing tree grows from from being dug or
+tilled ("Cut down the tree first"). The test (`digging::under_standing_tree`)
+asked whether the block is the column's top now: solid, with air over it.
+Dig the top block from beside the tree and the one under it becomes the top,
+and is refused in its turn, all the way down. The tree held the whole
+column.
+
+Change: the tree holds one block, the one it is rooted in: the cell's
+generated top, the layer under the record's surface height
+(`layer_at(height - 0.5)`, the same top the ground's own test reads). Every
+other layer of that column digs and tills as anywhere else, above it (a block
+placed on the root) or below it (dug from the side or from under). The root
+block stays refused while the tree stands. Cut down, the tree holds nothing,
+as before.

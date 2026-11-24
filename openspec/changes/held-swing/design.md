@@ -283,6 +283,75 @@ Nothing in the game changes until the owner approves it there.
       - The poses: the guard rests `fist_raise_m` 0.15 up and `fist_in_m`
         0.12 in from a tool's fist, lower right, the back of the hand to the
         eye; the hit lands the fist's leading edge at the crosshair's left.
+    - **The fist, version 16** (owner, 2026-11-21, with a second photo of
+      their own fist, [`ref/owner-fist-2026-11-21.jpg`](ref/owner-fist-2026-11-21.jpg):
+      "Fix hand punching tree pose. Fist needs to be like this"; and, on
+      `docs/screenshots/hand-punch/fist-reference-vs-v15.jpg`, "proposed is
+      wrong"). Version 15 above is superseded where it differs.
+      - No twist (owner, 2026-11-21, on version 16: "punch pose is good,
+        but you twisted the hand a bit, instead of punching straigt
+        forward"): `guard_twist_rad` and `twist_rad` are both 0, so the
+        fist keeps its turn from guard to hit and drives straight in.
+      - What was wrong in version 15: the hand was still the pickaxe's grip
+        with nothing in it, so the fingers ringed a handle's hollow (the
+        plug filled it) and from the eye the hand read as a long flat block
+        with the fingers poking out to the left; the wrist was a separate
+        box wider than the hand, with `bend_rad` 0.3 and `guard_cock_rad`
+        -0.2 putting a bend between hand and forearm; and with the back of
+        the hand to the eye, a right hand whose forearm comes from the lower
+        right has its little finger on top, so the thumb was out of sight
+        underneath.
+      - Which way the fist points (review of the first two version 16
+        renders): in both photos the fist punches forward INTO the view.
+        The knuckles aim mostly away from the eye, a little left and up;
+        the hand is in a handshake turn, palm to the left, thumb on top at
+        the front, back of the hand to the right and a little toward the
+        eye. The fist is left of and below the eye, so the eye sees the
+        back of the hand obliquely, the curled fingers as a silhouette down
+        the leading-left edge and the thumb's tip at the top-left. For a
+        right hand that is consistent: thumb side = fingers' way x palm
+        normal = (-Z) x (-X) = +Y. The earlier renders aimed the knuckles
+        across the view (-X): with the back to the eye that puts the little
+        finger on top (version 15's fault), and the fingers' front to the
+        eye reads as the palm side. A mirrored fist was tried and dropped:
+        it makes the right hand a left hand and reads as a wedge.
+      - The fist's own bones (`fistBones` in the mockup; for the game, a
+        `fist` grip beside the tools' in `held_tools.ron`). The back of the
+        hand, the palm's shape, the wrist, cuff and sleeve stay the approved
+        hand's (`hand-model`), with its skin, palm and back tones. The
+        fingers are re-chained from each knuckle in the plane of the back
+        and the palm, turned 92, 102 and 62 degrees at the three joints, the
+        segments 0.86, 0.95 and 0.9 of their approved lengths, so they close
+        flat into the palm with no hollow and no plug. The thumb runs from
+        its root (moved 0.6 toward the knuckles and 0.4 palm-ward so its
+        mound fills the web) along the index finger's side to a tip over the
+        index finger's middle segment at the leading edge, its nail on top.
+        The back of the hand is 0.9 tool units shorter (the wrist, cuff and
+        sleeve moved up with it), so the fist is about as long as it is
+        tall. The wrist is slimmed to the hand (0.72 of the back's width and
+        thickness, tapering 0.85 to 1.05 toward the cuff), reaches 0.7 into
+        the heel of the hand, and is one skin tone like the forearm, so
+        there is no step and no groove between them. The fist is one skin
+        tone all over (the back's tone): no paler palm, heel or finger
+        folds, as the photos show one tone along the visible side.
+      - The frame: the forearm aims from the virtual elbow, moved close in,
+        low and right (`elbow_x` 0.37, `elbow_y` -0.28, `elbow_z` -0.25; it
+        was 0.49, -0.41, -0.68), so at the hit the knuckles point about
+        (-0.6, 0.2, -0.77) in eye space: forward into the view, a little
+        left and up. At twist 0 the back of the hand faces `back_eye`
+        (1, 0.1, 0.35: to the right, a little toward the eye), square to
+        the forearm. `bend_rad`, `guard_cock_rad` and
+        `hit_cock_rad` are 0: the wrist is straight in every pose.
+      - Bigger and lower-left at the hit: `fist_raise_m` 0.1 (was 0.15),
+        `reach_m` 0.06 (was 0.27), `across_m` 0.27 (was 0.23), `rise_m` 0.04
+        (was 0.16). The fist lands nearer the eye and below and left of the
+        crosshair; the forward travel of the strike is smaller, the in and
+        up travel much the same. The beat, the stage times and the curves
+        are unchanged.
+      - Screenshots (GPU, RTX 3070, Edge headless on ANGLE d3d11):
+        `docs/screenshots/hand-punch/punch-v16-stages.jpg` (rest, top, hit,
+        recoil, by Show poses) and `fist-reference-vs-v16.jpg` (both photos
+        beside the version 16 hit).
     - **Windup** (`windup_s` 0.09, eased out): the fist draws back toward
       the chin, a little above and inside the shoulder (version 14 drew it
       toward the shoulder, which took the forearm out of view), `draw_m`
@@ -369,6 +438,16 @@ prints them:
     ),
 ```
 
+### Approved for the game (owner, 2026-11-21)
+
+On the Tools in Hand mockup's Punch tab, version 16: "punch animation looks
+good, just make sure it syncs with the tree shake, maybe add aplitude tree
+shake 2x so its a bit more obvious". That approves decisions 10 to 12 for
+the game at version 16, with two changes to the tree's shake
+(`tree-punch-shake`): it fires on each stroke's impact, in step with what is
+seen to land, and its amplitude is doubled, 12 cm at the crown to 24 cm. The
+mockup's shake is doubled to match.
+
 ### In the game, once approved
 
 - `digging.rs` writes what the click meets beside the beat: `DigBeat`
@@ -387,3 +466,56 @@ prints them:
   log; the free beat's first impact one windup, anticipation and strike
   after the press; no hold at the air; the thud's hold; no pop when what the
   click meets changes.
+
+### Built (2026-11-21): what goes where
+
+The punch and the swing on every click, ported from Tools in Hand version 16
+(`PUNCH_DEF`, `SWING_DEF`, `FIST`, `fistBones`, `fistFrame`, `applyAimed`,
+`punchKeys`, `toolKeys`, `actTimings`, `actAt`, `ActSchedule`):
+
+- **`held.ron`**: the `punch` and `swing` blocks at version 16's values
+  (`reach_m` 0.06, `across_m` 0.19, `rise_m` 0.13, the twists, cocks and
+  bend 0, the elbow at 0.37, -0.28, -0.25), validated as above, with the
+  defaults written once in `held/stroke.rs` (`PunchSettings`,
+  `SwingSettings`); the config test holds the file to them.
+- **`pbd_core::hand`**: `fist_bones` re-chains the pickaxe grip's bones into
+  the fist (`fistBones`, its `FIST` table as `FistShape::V16`, shape data
+  beside the hand's builder rather than a generated `fist` entry in
+  `held_tools.ron`, so the generator is not touched); a bone may carry its
+  own back (`out`) and `taper`, and `build_bare` builds it one skin tone with
+  no handle in the occlusion.
+- **`held/stroke.rs`**: `Meets` (`Breaks`, `Air`, `Refused`) on `DigBeat`;
+  `punch_keys`, the tools' air and thud keys, the stage times by what the
+  stroke meets, and the free beat of `stroke_target_s` from the press, the
+  first impact one windup, anticipation and strike after it. The clock eases
+  between the dig's beat and the free beat as it eases a change of block.
+  The thud's jolt is drawn on top of the pose.
+- **`held/punch.rs`**: the fist's frame and its aimed pose (`fistFrame`,
+  `applyAimed`): the holder's transform and the arm's straightening turn
+  about the wrist joint.
+- **`held.rs`**: a fifth holder, the bare fist, shown on foot with nothing
+  in the tool slot (and no light in the right hand), posed from the punch.
+  `StrokeImpact` says what the stroke met.
+- **`desktop/digging.rs`**: `DigBeat` follows the button: the dig's beat
+  while a block or a tree breaks, else a free beat with what the click meets
+  (a refused block, or under a standing tree, is `Refused`; nothing in reach,
+  water or a cell that is not a block is `Air`). It remembers the tree being
+  worked, and the tree shakes on each `StrokeImpact` while it is (the hands'
+  and every tool's), in place of `HOLD_HIT_S` and the shake on the log.
+- **`desktop/sounds.rs`**: a whoosh on each impact at the air and a knock on
+  each thud, from the same impacts (decision 12). The new cues are owed to
+  the `sound-effects` skill; until they are made the whoosh is the cast's
+  (`cast_whoosh`) and the knock the hard landing's (`land_hard`).
+- **Not built**: the captures in the game (3.6), which wait for the owner's
+  session.
+
+## The bare hand only while it punches (owner, 2026-11-22)
+
+The owner: "no need to show hand model unless punching something lol, I do
+like my screenshots to be nice and clean". The bare fist (decision 10) was
+shown whenever no tool and no light was in hand. It is now shown only while
+a punch runs: from the press (the stroke has a stage) until the fist has
+eased back to rest after the last stroke (its pose back to the rest pose
+within a millimetre and a milliradian). As built: the stroke clock reports `busy` (the button held, or the ease back to rest running), since the rest pose is the guard, not zero (seen: the hand still shown at rest). Standing, walking and looking about
+with empty hands show no hand. A tool in hand and a light in hand show as
+before.

@@ -181,3 +181,25 @@ change has that rule as: a capture with no `--world` writes to no world.
 metadata has no timestamps at all - the picker shows names only - while this
 shows when each was last played. That is not a difference to reconcile; it is
 this project having the field because a directory made it free.
+
+## The worlds list scrolls (owner, 2026-11-22)
+
+The owner, with a screenshot of WORLDS at twelve rows: "need a scroll bar
+for worlds". The list was planned as "a dozen rows", and a player who keeps
+worlds (and the bot's test worlds) passes that. At twelve the list already
+fills the panel to NAME and NEW WORLD; one more pushes them off the bottom.
+
+Plan:
+- The rows sit in a scroll area of fixed height between the WORLDS title and
+  the NAME row. NAME, NEW WORLD and BACK stay put under it, always on screen.
+- The mouse wheel scrolls it, and a scroll bar on its right edge shows where
+  the view is and can be dragged. The bar is drawn in the UI kit's frame
+  look (stone and carved wood), and only when the rows overflow.
+- The open world (CONTINUE) stays the first row, as it is.
+- Rebuilding the list on a change keeps the scroll offset, and a DELETE
+  confirm keeps its row in view.
+- If the UI kit has no scroll area yet, it gets one here, for the pack and the
+  recipe lists to use later.
+
+Check: screenshots with 12 and 30 worlds (scrolled to the top, the middle and
+the bottom), in `docs/screenshots/save-slots/`.

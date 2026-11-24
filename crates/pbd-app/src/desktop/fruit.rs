@@ -106,7 +106,7 @@ fn on_tree(
 ) -> Option<OnTree> {
     let year = sun.map_or(0.0, |s| s.clock.year_fraction());
     let cell = fruit_on_ray(fine, scatter, year, eye, look)?;
-    let record = fine.set.finest_records().iter().find(|r| r.key() == cell)?;
+    let record = &fine.set.finest_records()[fine.set.finest_index_of(cell)?];
     let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
     let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
     let biome = pbd_core::flora::tree_biome(record.metadata[1]);

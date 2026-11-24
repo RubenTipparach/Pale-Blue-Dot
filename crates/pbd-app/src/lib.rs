@@ -11,6 +11,8 @@ pub mod beaver;
 pub mod bloom;
 #[cfg(feature = "desktop")]
 pub mod carried_light;
+#[cfg(feature = "desktop")]
+pub mod chests;
 pub mod clutter;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;
@@ -81,6 +83,8 @@ pub mod sky;
 pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
+#[cfg(feature = "desktop")]
+pub mod tree_fx;
 pub mod tree_shake;
 pub mod trees_taken;
 #[cfg(feature = "desktop")]

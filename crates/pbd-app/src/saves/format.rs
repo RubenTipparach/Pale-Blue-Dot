@@ -172,6 +172,8 @@ pub fn material_code(material: Material) -> u8 {
         Material::Sticks => 28,
         // Desert sand (`sand-tiles` design 5): the next free code.
         Material::DesertSand => 29,
+        // A chest (`storage-chests` design 1): the next free code.
+        Material::Chest => 30,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ pbd_core::flowing_water!() => flowing as u16 as u8,
@@ -208,6 +210,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         27 => Material::MusselBed,
         28 => Material::Sticks,
         29 => Material::DesertSand,
+        30 => Material::Chest,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })
@@ -1112,9 +1115,12 @@ mod tests {
             Material::MusselBed,
             Material::Sticks,
             Material::DesertSand,
+            Material::Chest,
         ] {
             assert_eq!(material_of(material_code(material)), Some(material));
         }
+        // `storage-chests`: the chest takes the next code after desert sand.
+        assert_eq!(material_code(Material::Chest), 30);
         assert_eq!(material_code(Material::ReefRock), 24);
         assert_eq!(material_code(Material::Sticks), 28);
         // `sand-tiles` design 5: desert sand takes the next code, and sand

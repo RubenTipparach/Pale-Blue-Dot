@@ -31,7 +31,9 @@
     ),
     herds: (
         square_m: 160.0,
-        chance: 0.35,
+        // 0.9 (owner, 2026-11-21, "can we crank it up?"): every herd of
+        // 0.35 kept, the empty squares filled (`animal-husbandry` 15).
+        chance: 0.9,
         spread_m: 9.0,
         near_m: 150.0,
         fade_s: 1.0,
