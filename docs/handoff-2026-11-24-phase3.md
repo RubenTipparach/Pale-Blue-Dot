@@ -32,12 +32,12 @@ PR (CLAUDE.md). The PR body lists what is built and what is open.
   centred in the open space left of it, a warm talk light faded in through
   the carried-light list; one presentation for Talk, Trade and Board
   (`desktop/talk.rs`, `assets/config/talk.ron`).
-- Full suites passed at `4e55e54c`: pbd-app 700, pbd-core 852, locale 3,
+- Full suites passed at `9bd719e1`: pbd-app 708, pbd-core 861, locale 3,
   openspec 234.
 
 ## In flight
 
-None: every agent has landed (head dc05edc9). Town/building landed: the
+One agent: redoing the forge fire and anvil (below). Everything else landed (head dc05edc9). Town/building landed: the
 forge (layout 3, old towns pinned), idle capture, scaffold ladder bay,
 double-click to walk and the End cutaway, ghost_night 0.12.
 
