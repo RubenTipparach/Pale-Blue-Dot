@@ -47,21 +47,38 @@ const BAR_GAP: f32 = 3.0;
 /// A board row's width.
 const BOARD_ROW_W: f32 = 390.0;
 
-/// How a talk is framed (`townsfolk` design 37a, framing; owner, survey
-/// P1, 2026-11-24: "Move the camera so the merchant is on left, and the
-/// trade UI is on the right"), from `assets/config/talk.ron`.
+/// How a dialog with a townsperson is framed (`townsfolk` design 37a,
+/// framing; owner, survey P1, 2026-11-24: "Move the camera so the merchant
+/// is on left, and the trade UI is on the right"; and the second pass the
+/// same day: "center the character between the left most edge of panel
+/// and left edge of the screen", "add some lights that fade in light the
+/// character a bit", "same presentation style for dialog boxes of any kind
+/// of interaction with npcs"), from `assets/config/talk.ron`.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TalkView {
     /// Seconds the look takes to turn to the townsperson; 0 turns at once.
     pub turn_secs: f32,
-    /// Where the townsperson's aim point lands, normalised screen space
-    /// (x -1 left to 1 right, y -1 bottom to 1 top).
-    pub frame: (f32, f32),
+    /// The height the townsperson's aim point lands at, normalised screen
+    /// space (-1 bottom to 1 top); across, it lands in the middle of the
+    /// open space left of the panel ([`open_space_x`]).
+    pub frame_y: f32,
     /// The aim point's height over the townsperson's feet, metres.
     pub aim_height_m: f32,
     /// The gap between a talk panel and the screen's right edge, native px.
     pub panel_margin_px: f32,
+    /// The talk light's colour, linear RGB.
+    pub light_tint: [f32; 3],
+    /// Its level on the field's 0..15 scale (a torch is 14).
+    pub light_level: f32,
+    /// How far it reaches, metres.
+    pub light_reach_m: f32,
+    /// Seconds it takes to fade in, and out; 0 is at once.
+    pub light_fade_secs: f32,
+    /// Its height over the townsperson's feet, metres.
+    pub light_rise_m: f32,
+    /// How far it stands out from them toward the eye, level, metres.
+    pub light_toward_m: f32,
 }
 
 impl TalkView {
@@ -74,10 +91,17 @@ impl TalkView {
                 .ok_or(format!("{name} must be from {lo} to {hi}"))
         };
         within("turn_secs", view.turn_secs, 0.0, 2.0)?;
-        within("frame.0", view.frame.0, -0.95, 0.95)?;
-        within("frame.1", view.frame.1, -0.95, 0.95)?;
+        within("frame_y", view.frame_y, -0.95, 0.95)?;
         within("aim_height_m", view.aim_height_m, 0.0, 3.0)?;
         within("panel_margin_px", view.panel_margin_px, 0.0, 200.0)?;
+        for c in view.light_tint {
+            within("light_tint", c, 0.0, 1.0)?;
+        }
+        within("light_level", view.light_level, 0.0, 15.0)?;
+        within("light_reach_m", view.light_reach_m, 0.5, 16.0)?;
+        within("light_fade_secs", view.light_fade_secs, 0.0, 2.0)?;
+        within("light_rise_m", view.light_rise_m, 0.0, 3.0)?;
+        within("light_toward_m", view.light_toward_m, 0.0, 2.0)?;
         Ok(view)
     }
 }
@@ -91,13 +115,76 @@ impl Default for TalkView {
     }
 }
 
+/// The dialogs opened by interacting with a townsperson, and each panel's
+/// width, native px: the one table every NPC dialog's presentation reads
+/// (`townsfolk` design 37a, framing, second pass; owner: "same presentation
+/// style for dialog boxes of any kind of interaction with npcs"). A screen
+/// in it is an NPC dialog: its panel is spawned on the right with
+/// [`npc_dialog`], the look turns the townsperson into the open space left
+/// of it, and the talk light burns on them while it is open. A new NPC
+/// dialog joins this table and gets all three.
+pub fn panel_width(screen: Screen) -> Option<f32> {
+    match screen {
+        Screen::Talk => Some(300.0),
+        Screen::Trade => Some(490.0),
+        Screen::Board => Some(450.0),
+        _ => None,
+    }
+}
+
+/// Whether `screen` is a dialog with a townsperson.
+pub fn is_npc_dialog(screen: Screen) -> bool {
+    panel_width(screen).is_some()
+}
+
+/// An NPC dialog's layer and framed panel, on the right of the screen
+/// `panel_margin_px` in from its edge and centred top to bottom: the one
+/// way every NPC dialog's panel is laid out.
+pub fn npc_dialog(
+    commands: &mut Commands,
+    kit: &UiKit,
+    view: &TalkView,
+    screen: Screen,
+    body: impl Bundle,
+) {
+    let width = panel_width(screen).unwrap_or_default();
+    let layer = Node {
+        justify_content: JustifyContent::FlexEnd,
+        padding: UiRect::right(px(view.panel_margin_px)),
+        ..menu::layer()
+    };
+    commands
+        .spawn((layer, GlobalZIndex(10), Panel(screen)))
+        .with_children(|layer| {
+            layer.spawn((menu::framed(kit, Set::Stone, width), body));
+        });
+}
+
+/// Where, across, the middle of the open space between the screen's left
+/// edge and a panel's left edge falls, in normalised screen space: for a
+/// viewport `width` logical px wide, the UI scale `ui_scale`, and a panel
+/// `panel_px` native px wide `margin_px` from the right edge
+/// (`townsfolk` design 37a, framing, second pass). The panel's left edge is
+/// at `width - (margin + panel) * scale`, half that is the middle, and in
+/// -1..1 that is `-(margin + panel) * scale / width`; never further left
+/// than -0.95, on a screen the panel all but fills.
+pub fn open_space_x(width: f32, ui_scale: f32, margin_px: f32, panel_px: f32) -> f32 {
+    if width <= 0.0 {
+        return -0.95;
+    }
+    (-(margin_px + panel_px) * ui_scale / width).clamp(-0.95, 0.0)
+}
+
 /// The look's turn to frame the townsperson a talk opened with: the eye to
 /// their aim point as it was at the press (a townsperson who walks on is
-/// not followed), then the turn itself once it is solved.
+/// not followed), the panel it was last framed for, and the turn itself
+/// once it is solved.
 #[derive(Resource, Default, Clone, Debug, PartialEq)]
 pub struct TalkTurn {
-    /// Eye to aim point, render space, waiting to be solved.
+    /// Eye to aim point, render space, kept for the talk.
     aim: Option<Vec3>,
+    /// The panel the turn was solved for: a different one re-aims.
+    framed: Option<Screen>,
     /// From and to, each a tangent heading and a pitch, and how far along.
     turn: Option<((Vec3, f32), (Vec3, f32), f32)>,
 }
@@ -137,13 +224,13 @@ pub fn frame_look(to: Vec3, up: Vec3, fov: f32, aspect: f32, at: Vec2) -> Option
 /// mouse is read, so this smooths no mouse look.
 pub fn turn_to_talker(
     time: Res<Time>,
-    view: Res<TalkView>,
+    (view, ui_scale): (Res<TalkView>, Option<Res<UiScale>>),
     screen: Res<Screen>,
     mut turn: ResMut<TalkTurn>,
     cameras: Query<(&Camera, &Projection), With<Camera3d>>,
     walker: Option<ResMut<pbd_app::walking::WalkingState>>,
 ) {
-    if !matches!(*screen, Screen::Talk | Screen::Trade | Screen::Board) {
+    if !is_npc_dialog(*screen) {
         if *turn != TalkTurn::default() {
             *turn = TalkTurn::default();
         }
@@ -152,15 +239,26 @@ pub fn turn_to_talker(
     let Some(mut walker) = walker else {
         return;
     };
-    if let Some(to) = turn.aim.take() {
-        let lens = cameras
-            .iter()
-            .find(|(c, _)| c.is_active)
-            .and_then(|(_, p)| match p {
-                Projection::Perspective(p) => Some((p.fov, p.aspect_ratio)),
-                _ => None,
-            });
-        let at = Vec2::new(view.frame.0, view.frame.1);
+    // Solved when the dialog opens, and again when the panel changes
+    // width (TRADE, WORK, BACK): from wherever the look is, to the same aim.
+    if let Some(to) = turn.aim
+        && turn.framed != Some(*screen)
+        && let Some((camera, projection)) = cameras.iter().find(|(c, _)| c.is_active)
+    {
+        turn.framed = Some(*screen);
+        let lens = match projection {
+            Projection::Perspective(p) => Some((p.fov, p.aspect_ratio)),
+            _ => None,
+        };
+        let width = camera.logical_viewport_size().map_or(0.0, |s| s.x);
+        let scale = ui_scale.map_or(1.0, |s| s.0);
+        let x = open_space_x(
+            width,
+            scale,
+            view.panel_margin_px,
+            panel_width(*screen).unwrap_or(0.0),
+        );
+        let at = Vec2::new(x, view.frame_y);
         if let Some(target) =
             lens.and_then(|(fov, aspect)| frame_look(to, walker.up(), fov, aspect, at))
         {
@@ -182,6 +280,106 @@ pub fn turn_to_talker(
     walker.set_look(heading, from.1 + (to.1 - from.1) * s);
     if *t >= 1.0 {
         turn.turn = None;
+    }
+}
+
+/// The light on the townsperson an NPC dialog is with (`townsfolk` design
+/// 37a, framing, second pass): how far it has faded in (0..1) and who it is
+/// on, kept through the fade out after the dialog closes.
+#[derive(Resource, Default, Clone, Debug, PartialEq)]
+pub struct TalkGlow {
+    pub level: f32,
+    pub on: Option<(u32, u32)>,
+}
+
+/// One step of the talk light's fade: toward 1 while a dialog is open and
+/// toward 0 after, over `fade_secs` (0 at once).
+pub fn glow_step(level: f32, open: bool, dt: f32, fade_secs: f32) -> f32 {
+    let target = if open { 1.0 } else { 0.0 };
+    if fade_secs <= 0.0 {
+        return target;
+    }
+    let step = dt / fade_secs;
+    if open {
+        (level + step).min(1.0)
+    } else {
+        (level - step).max(0.0)
+    }
+}
+
+/// Where the talk light burns, render space: from the townsperson's `feet`
+/// `light_rise_m` up and `light_toward_m` along the level line to the
+/// `eye`, `up` the walker's camera's (a difference of render-space points,
+/// never a planet-centred position).
+pub fn glow_at(view: &TalkView, feet: Vec3, eye: Vec3, up: Vec3) -> Vec3 {
+    let to = eye - feet;
+    let level = (to - up * to.dot(up)).try_normalize().unwrap_or(Vec3::ZERO);
+    feet + up * view.light_rise_m + level * view.light_toward_m
+}
+
+/// The talk light: a soft warm carried light in front of and a little above
+/// the townsperson's face while an NPC dialog is open, faded in and out
+/// over `light_fade_secs`. It goes in the carried list
+/// (`carried_light::NearLights`) that the terrain, the water and every
+/// field-lit thing evaluate as they do a torch's, with its own reach, so it
+/// lights the townsperson as any lamp would, at night and in shade alike.
+/// After the transforms are propagated and before the list is gathered.
+#[allow(clippy::too_many_arguments)]
+pub fn talk_light(
+    time: Res<Time>,
+    view: Res<TalkView>,
+    screen: Res<Screen>,
+    talking: Res<Talking>,
+    mut glow: ResMut<TalkGlow>,
+    talkers: Query<(&Talker, &GlobalTransform)>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    mut near: ResMut<pbd_app::carried_light::NearLights>,
+) {
+    let with = talking
+        .with
+        .as_ref()
+        .filter(|_| is_npc_dialog(*screen))
+        .map(|w| (w.talker.site, w.talker.index));
+    if with.is_some() && glow.on != with {
+        glow.on = with;
+    }
+    let level = glow_step(
+        glow.level,
+        with.is_some(),
+        time.delta_secs(),
+        view.light_fade_secs,
+    );
+    if glow.level != level {
+        glow.level = level;
+    }
+    let light = glow.on.filter(|_| level > 0.0).and_then(|(site, index)| {
+        let (_, feet) = talkers
+            .iter()
+            .find(|(t, _)| t.site == site && t.index == index)?;
+        let (eye, _) = cameras.iter().find(|(_, c)| c.is_active)?;
+        let at = glow_at(
+            &view,
+            feet.translation(),
+            eye.translation(),
+            eye.up().as_vec3(),
+        );
+        let k = view.light_level / 14.0 * level;
+        Some((
+            pbd_core::light::Carried {
+                // In the planet's frame, subtracted in f64 before the cast.
+                at: pbd_app::render_origin::local_of(frame.as_deref(), at),
+                colour: view.light_tint.map(|c| c * k),
+            },
+            view.light_reach_m,
+        ))
+    });
+    if level <= 0.0 && glow.on.is_some() {
+        glow.on = None;
+    }
+    let next: Vec<_> = light.into_iter().collect();
+    if near.0 != next {
+        near.0 = next;
     }
 }
 
@@ -336,29 +534,11 @@ pub fn spawn(
 ) {
     commands.insert_resource(LostIcon(assets.load("items/missions/lost-villager.png")));
     let kit = &*kit;
-    for (screen, width) in [
-        (Screen::Talk, 300.0),
-        (Screen::Trade, 490.0),
-        (Screen::Board, 450.0),
-    ] {
-        // On the right, the townsperson framed on the left (design 37a,
-        // framing): still centred top to bottom.
-        let layer = Node {
-            justify_content: JustifyContent::FlexEnd,
-            padding: UiRect::right(px(view.panel_margin_px)),
-            ..menu::layer()
-        };
-        commands
-            .spawn((layer, GlobalZIndex(10), Panel(screen)))
-            .with_children(|layer| {
-                let mut panel = layer.spawn(menu::framed(kit, Set::Stone, width));
-                match screen {
-                    Screen::Talk => panel.insert(TalkBody),
-                    Screen::Trade => panel.insert(TradeBody),
-                    _ => panel.insert(BoardBody),
-                };
-            });
-    }
+    // On the right, the townsperson framed on the left (design 37a,
+    // framing): every NPC dialog laid out one way.
+    npc_dialog(&mut commands, kit, &view, Screen::Talk, TalkBody);
+    npc_dialog(&mut commands, kit, &view, Screen::Trade, TradeBody);
+    npc_dialog(&mut commands, kit, &view, Screen::Board, BoardBody);
     let coin = coin_image(&mut images);
     commands.insert_resource(CoinIcon(coin.clone()));
     commands
@@ -572,7 +752,7 @@ pub fn use_talk(
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
-    if matches!(*screen, Screen::Talk | Screen::Trade | Screen::Board) {
+    if is_npc_dialog(*screen) {
         *screen = Screen::Playing;
         return;
     }
@@ -620,6 +800,7 @@ pub fn use_talk(
     ) {
         *turn = TalkTurn {
             aim: Some(aim),
+            framed: None,
             turn: None,
         };
     }
@@ -630,10 +811,7 @@ pub fn use_talk(
 
 /// Leaving every talk panel forgets who it was with.
 pub fn forget(screen: Res<Screen>, mut talking: ResMut<Talking>, mut scroll: ResMut<TalkScroll>) {
-    if screen.is_changed()
-        && !matches!(*screen, Screen::Talk | Screen::Trade | Screen::Board)
-        && talking.with.is_some()
-    {
+    if screen.is_changed() && !is_npc_dialog(*screen) && talking.with.is_some() {
         *talking = Talking::default();
         *scroll = TalkScroll::default();
     }
@@ -2017,6 +2195,14 @@ impl Plugin for TalkPlugin {
             .init_resource::<TalkScroll>()
             .init_resource::<TalkView>()
             .init_resource::<TalkTurn>()
+            .init_resource::<TalkGlow>()
+            .init_resource::<pbd_app::carried_light::NearLights>()
+            .add_systems(
+                PostUpdate,
+                talk_light
+                    .after(bevy::transform::TransformSystems::Propagate)
+                    .before(pbd_app::carried_light::gather),
+            )
             .add_systems(PostStartup, spawn)
             .add_systems(PostUpdate, offer_talk.in_set(InteractSet::Offer))
             .add_systems(
@@ -2062,44 +2248,147 @@ mod tests {
         clip.truncate() / clip.w
     }
 
+    /// `townsfolk` design 37a, framing, second pass: for each NPC
+    /// dialog's panel, at three windows and UI scales, the townsperson's aim
+    /// point projects half way between the screen's left edge and the
+    /// panel's left edge, at the middle height.
     #[test]
-    fn the_talker_lands_in_the_left_third() {
+    fn the_talker_lands_in_the_open_space() {
         let view = TalkView::parse(TALK_RON).unwrap();
-        let at = Vec2::new(view.frame.0, view.frame.1);
-        // The left third's centre, at the middle height.
-        assert!((at.x + 2.0 / 3.0).abs() < 1e-3 && at.y == 0.0);
+        assert_eq!(view.frame_y, 0.0);
         let tilted = Vec3::new(0.3, 0.9, -0.2).normalize();
-        for up in [Vec3::Y, tilted] {
-            let side = up.any_orthonormal_vector();
-            let ahead = up.cross(side);
-            for lens in [
-                (1.0_f32, 16.0 / 10.0),
-                (70f32.to_radians(), 16.0 / 9.0),
-                (0.8, 4.0 / 3.0),
+        for screen in [Screen::Talk, Screen::Trade, Screen::Board] {
+            let panel = panel_width(screen).unwrap();
+            for (w, h, scale) in [
+                (1920.0_f32, 1080.0_f32, 2.0_f32),
+                (2560.0, 1440.0, 3.0),
+                (1280.0, 800.0, 1.0),
             ] {
-                // A townsperson level, on a step below, on a step above,
-                // off to one side and behind.
-                for (along, across, rise) in [
-                    (1.6, 0.0, 0.0),
-                    (2.5, 0.8, -1.0),
-                    (2.0, -1.2, 1.0),
-                    (-2.0, 0.5, 0.0),
-                ] {
-                    let eye = Vec3::new(120.0, -40.0, 7.0);
-                    let feet = eye + ahead * along + side * across + up * (rise - 1.6);
-                    let aim = feet + up * view.aim_height_m;
-                    let look = frame_look(aim - eye, up, lens.0, lens.1, at).unwrap();
-                    let ndc = projected(eye, up, look, lens, aim);
-                    assert!(ndc.z > 0.0 && ndc.z < 1.0, "in front: {ndc}");
-                    assert!(
-                        (-1.0..-1.0 / 3.0).contains(&ndc.x),
-                        "left third: {ndc} for {up} {along} {across} {rise}"
-                    );
-                    assert!((ndc.x - at.x).abs() < 1e-3, "at the third's centre: {ndc}");
-                    assert!(ndc.y.abs() < 1e-3, "at the middle height: {ndc}");
+                // Where the open space's middle is, in logical px, and so
+                // in normalised screen space.
+                let edge = w - (view.panel_margin_px + panel) * scale;
+                let middle = edge / 2.0;
+                let x = open_space_x(w, scale, view.panel_margin_px, panel);
+                assert!((x - (2.0 * middle / w - 1.0)).abs() < 1e-5, "{x}");
+                assert!((-1.0..0.0).contains(&x));
+                let at = Vec2::new(x, view.frame_y);
+                let lens = (1.0_f32, w / h);
+                for up in [Vec3::Y, tilted] {
+                    let side = up.any_orthonormal_vector();
+                    let ahead = up.cross(side);
+                    // A townsperson at a talking distance, level, on a step
+                    // below, on a step above, off to one side and behind.
+                    for (along, across, rise) in [
+                        (2.7, 0.0, 0.0),
+                        (2.5, 0.8, -1.0),
+                        (2.0, -1.2, 1.0),
+                        (-2.0, 0.5, 0.0),
+                    ] {
+                        let eye = Vec3::new(120.0, -40.0, 7.0);
+                        let feet = eye + ahead * along + side * across + up * (rise - 1.6);
+                        let aim = feet + up * view.aim_height_m;
+                        let look = frame_look(aim - eye, up, lens.0, lens.1, at).unwrap();
+                        let ndc = projected(eye, up, look, lens, aim);
+                        assert!(ndc.z > 0.0 && ndc.z < 1.0, "in front: {ndc}");
+                        let px = (ndc.x + 1.0) / 2.0 * w;
+                        assert!(
+                            (px - middle).abs() < 0.5,
+                            "{screen:?} {w}x{h} at {scale}: {px} px, the middle {middle}"
+                        );
+                        assert!(px > 0.0 && px < edge, "left of the panel: {px}");
+                        assert!(ndc.y.abs() < 1e-3, "at the middle height: {ndc}");
+                    }
                 }
             }
         }
+        // Each panel its own middle: the wider Trade puts it further left.
+        let x = |s| open_space_x(1920.0, 2.0, 24.0, panel_width(s).unwrap());
+        assert!(x(Screen::Trade) < x(Screen::Board) && x(Screen::Board) < x(Screen::Talk));
+        // A panel wider than the screen: no further left than -0.95.
+        assert_eq!(open_space_x(400.0, 2.0, 24.0, 490.0), -0.95);
+        // Only the townsfolk's dialogs are NPC dialogs.
+        assert!(!is_npc_dialog(Screen::Pack) && !is_npc_dialog(Screen::Missions));
+    }
+
+    /// The talk light burns on the townsperson while a dialog is open,
+    /// rising over its fade; once the dialog closes it fades out and is
+    /// gone from the carried list.
+    #[test]
+    fn the_talk_light_burns_only_while_a_talk_is_open() {
+        use pbd_app::carried_light::NearLights;
+        use pbd_app::economy::TownInfo;
+        let view = TalkView::parse(TALK_RON).unwrap();
+        let mut app = App::new();
+        app.insert_resource(view)
+            .insert_resource(Time::<()>::default())
+            .insert_resource(Screen::Playing)
+            .init_resource::<Talking>()
+            .init_resource::<TalkGlow>()
+            .init_resource::<NearLights>()
+            .add_systems(Update, talk_light);
+        let talker = Talker {
+            site: 3,
+            index: 1,
+            role: "trader".into(),
+        };
+        app.world_mut().spawn((
+            talker.clone(),
+            GlobalTransform::from_translation(Vec3::new(0.0, 0.0, -2.7)),
+        ));
+        app.world_mut().spawn((
+            Camera3d::default(),
+            GlobalTransform::from_translation(Vec3::new(0.0, 1.6, 0.0)),
+        ));
+        let step = |app: &mut App, secs: f32| {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_secs_f32(secs));
+            app.update();
+            app.world().resource::<NearLights>().0.clone()
+        };
+        assert!(step(&mut app, 0.1).is_empty(), "no light with no talk");
+        // The talk opens.
+        app.world_mut().resource_mut::<Talking>().with = Some(TalkWith {
+            talker,
+            town: TownInfo {
+                site: 3,
+                kind: pbd_core::sites::SiteKind::Village,
+                name: "Ash".into(),
+                neighbours: vec![],
+            },
+            trader: true,
+            giver: false,
+        });
+        *app.world_mut().resource_mut::<Screen>() = Screen::Talk;
+        let first = step(&mut app, 0.1);
+        assert_eq!(first.len(), 1, "lit while the talk is open");
+        let (light, reach) = first[0];
+        assert_eq!(reach, view.light_reach_m);
+        // Before the face, between the townsperson and the eye.
+        assert!((light.at.y - view.light_rise_m).abs() < 1e-4, "{light:?}");
+        assert!((light.at.z - (-2.7 + view.light_toward_m)).abs() < 1e-4);
+        let full = view.light_level / 14.0;
+        assert!(light.colour[0] > 0.0 && light.colour[0] < full * view.light_tint[0]);
+        // Risen to full over the fade, and held there through TRADE.
+        *app.world_mut().resource_mut::<Screen>() = Screen::Trade;
+        let lit = step(&mut app, 1.0);
+        assert!((lit[0].0.colour[0] - full * view.light_tint[0]).abs() < 1e-5);
+        // The talk closes: still fading out, then gone.
+        *app.world_mut().resource_mut::<Screen>() = Screen::Playing;
+        app.world_mut().resource_mut::<Talking>().with = None;
+        let fading = step(&mut app, 0.1);
+        assert_eq!(fading.len(), 1, "fading out");
+        assert!(fading[0].0.colour[0] < lit[0].0.colour[0]);
+        assert!(step(&mut app, 1.0).is_empty(), "gone after the fade");
+        assert_eq!(*app.world().resource::<TalkGlow>(), TalkGlow::default());
+    }
+
+    #[test]
+    fn the_fade_runs_to_its_end_and_stops() {
+        assert_eq!(glow_step(0.0, true, 0.2, 0.4), 0.5);
+        assert_eq!(glow_step(0.9, true, 0.2, 0.4), 1.0);
+        assert_eq!(glow_step(0.1, false, 0.2, 0.4), 0.0);
+        assert_eq!(glow_step(0.0, true, 0.0, 0.0), 1.0);
     }
 
     #[test]
@@ -2112,7 +2401,13 @@ mod tests {
     #[test]
     fn talk_view_refuses_a_frame_off_screen() {
         assert!(TalkView::parse(TALK_RON).is_ok());
-        assert!(TalkView::parse(&TALK_RON.replace("-0.6667", "-1.5")).is_err());
+        assert!(TalkView::parse(&TALK_RON.replace("frame_y: 0.0", "frame_y: -1.5")).is_err());
+        assert!(
+            TalkView::parse(&TALK_RON.replace("light_level: 7.0", "light_level: 20.0")).is_err()
+        );
+        assert!(
+            TalkView::parse(&TALK_RON.replace("light_reach_m: 4.0", "light_reach_m: 0.0")).is_err()
+        );
         assert!(TalkView::parse(&TALK_RON.replace("0.25", "-1.0")).is_err());
     }
 }

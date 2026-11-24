@@ -370,13 +370,32 @@ that fade in light the character a bit, thatd be nice". The plan:
   `light_tint` each channel 0 to 1, `light_level` 0 to 15, `light_reach_m`
   0.5 to 16, `light_fade_secs` 0 to 2, `light_rise_m` 0 to 3,
   `light_toward_m` 0 to 2.
+- **Every NPC dialog, one presentation (owner, 2026-11-24).** In the
+  owner's words: "same presentation style for dialog boxes of any kind of
+  interaction with npcs". The panel on the right, the townsperson centred
+  in the open space left of it, and the talk light on them are one
+  presentation a screen opts into, not a copy per screen: `talk.rs`'s
+  `panel_width` is the table of NPC dialogs and their widths, and a screen
+  in it is spawned by `npc_dialog` (the right-aligned layer and its framed
+  panel), framed by `turn_to_talker` and lit by `talk_light`, all three
+  reading `is_npc_dialog`. A searched list of what an NPC opens today: the
+  interact key's only NPC act is Talk (`Act::Talk`, `interact.rs`), and
+  every other NPC exchange lives inside its three panels: the trader's
+  goods and the horse for sale (Trade), the town's jobs, taking, handing in
+  and abandoning them, the town missions' board jobs and the lost villager
+  (Board, and the line said in Talk when the villager is found), the
+  parcel handed over on talking (Talk's line). The starter missions and
+  the mission tree (O) open from the keyboard with no one to talk to, so
+  they are not NPC dialogs. A new NPC dialog joins `panel_width` and gets
+  the whole presentation.
 - **Proof.** `the_talker_lands_in_the_open_space` solves the turn for each
   panel's width at three window sizes and scales and projects the aim point
   to the open space's middle; `the_talk_light_burns_only_while_a_talk_is_open`
   runs the light's system in an app and finds the light in the carried list
   while a talk is open, rising, and gone once it has faded after the close.
   Captures (lavapipe, no GPU): `trade-framed.jpg` retaken at a talking
-  distance of about 2.7 m, and `trade-framed-night.jpg` at 22:30.
+  distance of about 2.7 m, `trade-framed-night.jpg` at 22:30, and the
+  reeve's board, a non-trade dialog, as `board-framed-night.jpg`.
 
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
