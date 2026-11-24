@@ -1,66 +1,38 @@
-//! Roads the player marks and paves (`townsfolk` design 39 to 41).
-//!
-//! **A plan** is a road the player means to pave: survey stakes driven as
-//! waypoints, and the cells between each two found by the world's own road
-//! search ([`super::route`]), at most a layer apart, off water, out of towns
-//! and off the player's edits. A plan is a `road-plan` record of the
-//! player's: its stakes and its cells, in order, stored as found so no
-//! later search or road version moves it.
+//! Roads the player marks and paves (`townsfolk` design 39 to 42l): the
+//! records. The road planner ([`super::planner`]) lays a plan's roads out;
+//! here are the record kinds, the schema 1 plan an old save holds (design
+//! 39b, read as a schema 2 plan by [`super::planner::plans`]), the paved
+//! cell's record, and what the terrain draws.
 //!
 //! **Marked** is derived: a plan's cell that is not paved. **Paving** a
-//! marked cell makes it a `road-cell` of the player's in gravel, its slope
-//! the world road's ([`super::profile`]) over the plan's order, so paving in
-//! any order gives the same road.
+//! marked cell makes it a `road-cell` of the player's, its slope the world
+//! road's over the road's order, so paving in any order gives the same road.
 
-use super::{
-    BuiltCell, GroundFn, Kind, ROAD_CELL_RECORD, RoadCell, RoadsConfig, Surface, Water, centre,
-    neighbours, profile, route,
-};
+use super::{BuiltCell, ROAD_CELL_RECORD};
 use crate::records::{Record, Records};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// A plan's record kind.
 pub const PLAN_RECORD: &str = "road-plan";
-/// The plan record's schema.
+/// The schema 1 plan (design 39b): stakes and searched cells. Still read;
+/// written as schema 2 ([`super::planner::ROADS_SCHEMA`]) when edited.
 pub const PLAN_SCHEMA: u32 = 1;
 /// A `road-cell` the player paved on a plan (design 40): the surface, the
 /// plan, the two sides its slope runs between and whether it is raised.
 /// Schema 1 (design 31's cells) still reads.
 pub const PAVED_SCHEMA: u32 = 2;
 
-/// One plan: its stakes and its cells, by key, in order along the road.
-/// Every stake is one of its cells.
+/// A schema 1 plan: its stakes and its cells, by key, in order along the
+/// road. Every stake is one of its cells.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
     pub stakes: Vec<u32>,
     pub cells: Vec<u32>,
 }
 
-impl Plan {
-    /// The cells before and after `key` along the plan: the sides its mark
-    /// comes in by and leaves by. `None` at an end.
-    pub fn sides(&self, key: u32) -> Option<(Option<u32>, Option<u32>)> {
-        let k = self.cells.iter().position(|&c| c == key)?;
-        Some((
-            k.checked_sub(1).map(|j| self.cells[j]),
-            self.cells.get(k + 1).copied(),
-        ))
-    }
-}
-
-/// Every plan the records hold, by id.
-pub fn plans(records: &Records) -> BTreeMap<u64, Plan> {
-    records
-        .of_kind(PLAN_RECORD)
-        .filter(|r| r.schema == PLAN_SCHEMA)
-        .filter_map(|r| Some((r.id, r.read::<Option<Plan>>()??)))
-        .filter(|(_, p)| !p.cells.is_empty())
-        .collect()
-}
-
-/// A plan as its record; `None` is a plan taken back whole.
-pub fn plan_record(id: u64, plan: Option<&Plan>) -> Record {
+/// A schema 1 plan as its record, as design 39b wrote it (for tests of
+/// old saves).
+pub fn plan_v1_record(id: u64, plan: Option<&Plan>) -> Record {
     Record::of(PLAN_RECORD, id, PLAN_SCHEMA, &plan)
 }
 
@@ -74,367 +46,9 @@ pub fn next_plan_id(records: &Records) -> u64 {
         .unwrap_or(1)
 }
 
-/// Why a stake was not driven, or a cell not paved. Nothing is taken.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Refused {
-    /// No way within the stake's reach (`max_stake_cells`).
-    TooFar,
-    /// No way that climbs at most a layer a cell.
-    TooSteep,
-    /// Water between, or under the stake.
-    Water,
-    /// A town's footprint, or a cell the player has built on.
-    NotGround,
-    /// A stake stands there already.
-    Staked,
-    /// The cell is not marked.
-    NotMarked,
-}
-
-impl Refused {
-    /// The plain line the player reads.
-    pub fn line(self) -> crate::locale::Localized {
-        crate::locale::tr(match self {
-            Refused::TooFar => "roads.mark.too_far",
-            Refused::TooSteep => "roads.mark.too_steep",
-            Refused::Water => "roads.mark.water",
-            Refused::NotGround => "roads.mark.not_ground",
-            Refused::Staked => "roads.mark.staked",
-            Refused::NotMarked => "roads.pave.not_marked",
-        })
-    }
-}
-
-/// The stake search's own rules (design 39): no bridge (only the world
-/// bridges), no cut or fill, its own small budget.
-pub fn stake_config(cfg: &RoadsConfig) -> RoadsConfig {
-    let mut c = cfg.clone();
-    c.max_bridge_cells = 0;
-    c.max_fill_layers = 0;
-    c.max_cut_layers = 0;
-    c.max_expanded = cfg.stake_expanded.max(1);
-    c.search_weight = 1.0;
-    c
-}
-
-/// What the road search makes of a way between two waypoints: the cells a
-/// road would take, and, cell by cell along the straight line between them,
-/// every cell that stands in the way and why. The one rule a stake, and a
-/// planner's live ghost road (the owner's road planner, to come), both ask.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Way {
-    /// The cells from `from` to `to`, both included, or why there is none.
-    pub cells: Result<Vec<u32>, Refused>,
-    /// The cells on the straight line that refuse a road, in order from
-    /// `from`, with their reason: water, a town or the player's work, or a
-    /// step of more than a layer from the cell before.
-    pub clashes: Vec<(u32, Refused)>,
-}
-
-/// The way from `from` to `to` (see [`Way`]): the search of [`segment`] and
-/// the straight line's clashes.
-pub fn way(from: u32, to: u32, ground: &GroundFn, cfg: &RoadsConfig, radius_m: f32) -> Way {
-    Way {
-        cells: segment(from, to, ground, cfg, radius_m),
-        clashes: clashes(from, to, ground, radius_m),
-    }
-}
-
-/// Every cell on the straight line from `from` to `to` that refuses a road,
-/// in order, with its reason (see [`Way::clashes`]).
-pub fn clashes(from: u32, to: u32, ground: &GroundFn, radius_m: f32) -> Vec<(u32, Refused)> {
-    let (Some(a), Some(b)) = (centre(from), centre(to)) else {
-        return Vec::new();
-    };
-    // Sampled every metre, under half a cell, so no cell on the line is
-    // stepped over.
-    let n = crate::sites::arc_m(a, b, radius_m).ceil().max(1.0) as usize;
-    let mut line: Vec<u32> = Vec::new();
-    for i in 0..=n {
-        if let Some(k) = super::nearest_key(a.lerp(b, i as f32 / n as f32))
-            && line.last() != Some(&k)
-        {
-            line.push(k);
-        }
-    }
-    let mut out = Vec::new();
-    let mut before: Option<i32> = None;
-    for k in line {
-        let Some(g) = ground(k) else {
-            out.push((k, Refused::NotGround));
-            continue;
-        };
-        let why = if g.water != Water::Dry {
-            Some(Refused::Water)
-        } else if g.player || g.town {
-            Some(Refused::NotGround)
-        } else if before.is_some_and(|h| (h - g.top_m).abs() > 1) {
-            Some(Refused::TooSteep)
-        } else {
-            None
-        };
-        before = Some(g.top_m);
-        if let Some(why) = why {
-            out.push((k, why));
-        }
-    }
-    out
-}
-
-/// The cells from stake `from` to stake `to`, both included, by the road
-/// search over `ground` (which answers a town or an edited cell as the
-/// player's, so it is never crossed): at most `max_stake_cells` steps, no
-/// water.
-pub fn segment(
-    from: u32,
-    to: u32,
-    ground: &GroundFn,
-    cfg: &RoadsConfig,
-    radius_m: f32,
-) -> Result<Vec<u32>, Refused> {
-    let reach = cfg.max_stake_cells.max(1) as usize;
-    let (Some(a), Some(b)) = (centre(from), centre(to)) else {
-        return Err(Refused::NotGround);
-    };
-    // A cell's spacing is about 2.83 m; a way of `reach` steps cannot be
-    // shorter than the straight line.
-    if crate::sites::arc_m(a, b, radius_m) > reach as f32 * 2.9 {
-        return Err(Refused::TooFar);
-    }
-    let dry = |key: u32| {
-        ground(key).map(|g| {
-            let mut g = g;
-            if g.water != Water::Dry {
-                // No ford for a player's road: the search does not take it.
-                g.player = true;
-            }
-            g
-        })
-    };
-    let wet = |key: u32| ground(key).is_some_and(|g| g.water != Water::Dry);
-    if wet(to) || wet(from) {
-        return Err(Refused::Water);
-    }
-    match route(from, to, &dry, &stake_config(cfg), radius_m) {
-        Some(steps) if steps.len() - 1 <= reach => Ok(steps.into_iter().map(|s| s.key).collect()),
-        Some(_) => Err(Refused::TooFar),
-        None => {
-            // Why not: water across the straight way, or the climb.
-            let water = clashes(from, to, ground, radius_m)
-                .iter()
-                .any(|(_, why)| *why == Refused::Water);
-            Err(if water {
-                Refused::Water
-            } else {
-                Refused::TooSteep
-            })
-        }
-    }
-}
-
-/// Where a stake driven on `key` goes: the plan it continues (the open
-/// plan, or the plan whose last stake `key` is), or a new one. A new plan
-/// on a marked cell starts there: a junction.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Driven {
-    pub id: u64,
-    pub plan: Plan,
-    /// The cells it newly marks.
-    pub marked: Vec<u32>,
-}
-
-/// Drive a stake on `key` (design 39). `open` is the plan the stakes in
-/// hand are laying, if any. Pure: the caller writes the plan's record with
-/// the pack in the same line.
-pub fn drive(
-    plans: &BTreeMap<u64, Plan>,
-    next_id: u64,
-    open: Option<u64>,
-    key: u32,
-    ground: &GroundFn,
-    cfg: &RoadsConfig,
-    radius_m: f32,
-) -> Result<Driven, Refused> {
-    let g = ground(key).ok_or(Refused::NotGround)?;
-    if g.water != Water::Dry {
-        return Err(Refused::Water);
-    }
-    if g.player || g.town {
-        return Err(Refused::NotGround);
-    }
-    if plans.values().any(|p| p.stakes.contains(&key)) {
-        return Err(Refused::Staked);
-    }
-    let continuing = open.and_then(|id| Some((id, plans.get(&id)?)));
-    if let Some((id, plan)) = continuing
-        && let Some(&last) = plan.stakes.last()
-    {
-        let cells = segment(last, key, ground, cfg, radius_m)?;
-        let mut plan = plan.clone();
-        let marked: Vec<u32> = cells[1..].to_vec();
-        plan.cells.extend(&marked);
-        plan.stakes.push(key);
-        return Ok(Driven { id, plan, marked });
-    }
-    Ok(Driven {
-        id: next_id,
-        plan: Plan {
-            stakes: vec![key],
-            cells: vec![key],
-        },
-        marked: vec![key],
-    })
-}
-
-/// A plan after a stake is taken back from it (design 39): `None` for a
-/// plan with no stake left. A middle stake's neighbours are joined by a
-/// fresh search where there is a way; where there is none the plan splits,
-/// and the second part comes back to be stored under a new id.
-pub fn take_back(
-    plan: &Plan,
-    key: u32,
-    ground: &GroundFn,
-    cfg: &RoadsConfig,
-    radius_m: f32,
-) -> (Option<Plan>, Option<Plan>) {
-    let Some(s) = plan.stakes.iter().position(|&k| k == key) else {
-        return (Some(plan.clone()), None);
-    };
-    let at = |stake: u32| plan.cells.iter().position(|&c| c == stake);
-    let n = plan.stakes.len();
-    if n == 1 {
-        return (None, None);
-    }
-    if s == 0 || s == n - 1 {
-        // An end: the segment to its neighbour stake goes.
-        let mut p = plan.clone();
-        if s == 0 {
-            let cut = at(plan.stakes[1]).unwrap_or(0);
-            p.cells.drain(..cut);
-            p.stakes.remove(0);
-        } else {
-            let cut = at(plan.stakes[n - 2]).unwrap_or(p.cells.len() - 1);
-            p.cells.truncate(cut + 1);
-            p.stakes.pop();
-        }
-        return (Some(p), None);
-    }
-    let (prev, next) = (plan.stakes[s - 1], plan.stakes[s + 1]);
-    let (Some(i), Some(j)) = (at(prev), at(next)) else {
-        return (Some(plan.clone()), None);
-    };
-    let mut stakes = plan.stakes.clone();
-    stakes.remove(s);
-    if let Ok(joined) = segment(prev, next, ground, cfg, radius_m) {
-        let mut cells = plan.cells[..i].to_vec();
-        cells.extend(joined);
-        cells.extend(&plan.cells[j + 1..]);
-        return (Some(Plan { stakes, cells }), None);
-    }
-    let first = Plan {
-        stakes: plan.stakes[..s].to_vec(),
-        cells: plan.cells[..=i].to_vec(),
-    };
-    let second = Plan {
-        stakes: plan.stakes[s + 1..].to_vec(),
-        cells: plan.cells[j..].to_vec(),
-    };
-    (Some(first), Some(second))
-}
-
-/// Every marked cell (a plan's cell not yet paved) with the cells before
-/// and after it along its plan, for the mark's look (design 39a). A cell on
-/// two plans takes the first's.
-pub fn marked(
-    plans: &BTreeMap<u64, Plan>,
-    paved: &BTreeMap<u32, BuiltCell>,
-) -> BTreeMap<u32, (Option<u32>, Option<u32>)> {
-    let mut out = BTreeMap::new();
-    for plan in plans.values() {
-        for (k, &cell) in plan.cells.iter().enumerate() {
-            if paved.contains_key(&cell) || out.contains_key(&cell) {
-                continue;
-            }
-            let before = k.checked_sub(1).map(|j| plan.cells[j]);
-            let after = plan.cells.get(k + 1).copied();
-            out.insert(cell, (before, after));
-        }
-    }
-    out
-}
-
-/// The plan a marked cell is on, if any (the first, by id).
-pub fn plan_of(plans: &BTreeMap<u64, Plan>, key: u32) -> Option<(u64, &Plan)> {
-    plans
-        .iter()
-        .find(|(_, p)| p.cells.contains(&key))
-        .map(|(id, p)| (*id, p))
-}
-
-/// The paved cell `key` of plan `plan_id` (design 40): its slope the world
-/// road's, cut over the plan's whole order from `ground`, so paving the
-/// cells in any order gives the same road.
-pub fn paved_cell(
-    plan_id: u64,
-    plan: &Plan,
-    key: u32,
-    ground: &GroundFn,
-) -> Result<BuiltCell, Refused> {
-    let steps: Vec<super::Step> = plan
-        .cells
-        .iter()
-        .map(|&k| {
-            Some(super::Step {
-                key: k,
-                ground: {
-                    let mut g = ground(k)?;
-                    // Every cell of a plan is laid: a town's footprint never
-                    // is one, and the profile must not drop any.
-                    g.town = false;
-                    g
-                },
-                deck: None,
-                lift: 0,
-            })
-        })
-        .collect::<Option<_>>()
-        .ok_or(Refused::NotMarked)?;
-    let cells: Vec<RoadCell> = profile(&steps).ok_or(Refused::TooSteep)?;
-    let cell = cells
-        .into_iter()
-        .find(|c| c.key == key)
-        .ok_or(Refused::NotMarked)?;
-    Ok(BuiltCell {
-        surface: Surface::Gravel,
-        base_m: cell.base_m,
-        up: cell.up,
-        from: cell.from,
-        raised: cell.raised,
-        plan: Some(plan_id),
-    })
-}
-
 /// A paved cell as its record (schema [`PAVED_SCHEMA`]).
 pub fn paved_record(key: u32, cell: &BuiltCell) -> Record {
     Record::of(ROAD_CELL_RECORD, u64::from(key), PAVED_SCHEMA, cell)
-}
-
-/// Whether two cells are neighbours (share a side).
-pub fn touching(a: u32, b: u32) -> bool {
-    neighbours(a).contains(&b)
-}
-
-/// A built cell as the road it draws: a ground cell, raised where it is.
-pub fn drawn(key: u32, cell: &BuiltCell) -> RoadCell {
-    RoadCell {
-        key,
-        base_m: cell.base_m,
-        kind: Kind::Ground,
-        raised: cell.raised,
-        cut_fill: 0,
-        up: cell.up,
-        from: cell.from,
-    }
 }
 
 // ---- What the terrain draws (design 39a and 43) -------------------------------
@@ -489,6 +103,3 @@ pub fn mark_of(key: u32) -> Option<(Option<u32>, Option<u32>)> {
 pub fn bare(direction: glam::Vec3) -> bool {
     with(|i| i.is_some_and(|i| i.bare.on_road(direction)))
 }
-
-#[cfg(test)]
-mod tests;

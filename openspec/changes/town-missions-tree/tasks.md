@@ -62,7 +62,7 @@ for 4.1, their missions reading NOT YET.
 
 ## 4. The Roads and Carts branches (after `townsfolk` 13 and `land-transport` 5)
 
-- [ ] 4.1 `stake`, `mark`, `pave` raised by the paving; `haul`, `hitch` and
+- [x] 4.1 `stake`, `mark`, `pave` raised by the paving; `haul`, `hitch` and
       `Travel cart-road` by the carts; their missions no longer pending.
       Verify: tests per kind.
       - 2026-11-23: the Roads half (`townsfolk` design 45): `stake`
@@ -73,6 +73,13 @@ for 4.1, their missions reading NOT YET.
         objectives naming `block:grinder` and `block:mixer`. Test
         `each_town_kind_counts_from_its_event` walks the Roads branch. The
         carts' half waits.
+      - 2026-11-24: the road planner (`townsfolk` design 42l) raises them as
+        the paving did: `stake` with the count of stakes a road takes,
+        `mark` with its cells, from `pbd_app::roads::planner::planner_hands`
+        on the frame its line is written. The carts' half is raised too:
+        `hitch` (`horse`) by `vehicles::carts::hitch_horse`, `haul`
+        (`cart`, metres) and `Travel cart-road` by the carts' step; test
+        `vehicles::carts::tests::the_carts_raise_hitch_and_haul`.
 
 ## 5. The owner's check
 

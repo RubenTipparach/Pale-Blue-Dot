@@ -17,8 +17,9 @@ use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::YieldSet;
-use pbd_core::roads::paving::{self, Plan, Refused};
-use pbd_core::roads::{self, BuiltCell, Ground, RoadsConfig};
+use pbd_core::roads::paving;
+use pbd_core::roads::planner::{self, Clash, How, RoadPlannerConfig};
+use pbd_core::roads::{self, BuiltCell, Ground, RoadsConfig, Surface};
 use std::collections::{BTreeMap, HashSet};
 
 /// Something done to a road, for the missions (`town-missions-tree` design
@@ -34,16 +35,10 @@ pub enum RoadWork {
     Pave,
 }
 
-/// The plan the stakes in hand are laying: the next stake joins its last.
-/// Cleared when the stakes leave the selected slot (design 39).
-#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OpenPlan(pub Option<u64>);
-
 static NO_ROAD_CELLS: BTreeMap<u32, BuiltCell> = BTreeMap::new();
 
-/// What a stake's search asks of a cell (design 39): the world's road
-/// ground, but a town's footprint is never crossed and the player's own
-/// road cells are walked as ground.
+/// What the planner asks of a cell (design 42b): the world's road ground,
+/// the player's own road cells walked as ground.
 pub fn stake_ground<'a>(
     config: &'a TerrainConfig,
     edits: &'a Edits,
@@ -52,107 +47,262 @@ pub fn stake_ground<'a>(
     let base = super::ground_of(config, edits, yields, &NO_ROAD_CELLS);
     move |key| {
         let mut g = base(key)?;
-        if g.town {
-            g.player = true;
+        // A paved cell of the player's is a road, not their work.
+        if g.player && edits.for_cell(key).is_empty() && !yields.has_cell(key) {
+            g.player = false;
         }
         Some(g)
     }
 }
 
-/// What a stake did.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Staked {
-    /// A stake driven: the plan it is on and the cells it newly marked.
-    Driven { plan: u64, marked: usize },
-    /// Aimed at a plan's last stake: the stakes in hand go on from it, and
-    /// nothing is taken.
-    Resumed(u64),
+/// The road planner's tunables (`assets/config/road_planner.ron`).
+pub fn load_planner() -> RoadPlannerConfig {
+    let path = crate::paths::assets_dir().join("config/road_planner.ron");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let cfg: RoadPlannerConfig =
+        ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    cfg.validate()
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    cfg
 }
 
-/// Drive a survey stake into the cell whose top `point` (body-local,
-/// planet-centred metres) is on (design 39). One stake is taken from
-/// `slots`, and the plan and the pack are written in one line.
-pub fn drive_stake(
+/// The road planner's tunables, for its systems.
+#[derive(Resource, Clone)]
+pub struct PlannerSettings(pub std::sync::Arc<RoadPlannerConfig>);
+
+impl Default for PlannerSettings {
+    fn default() -> Self {
+        Self(std::sync::Arc::new(load_planner()))
+    }
+}
+
+/// Why an edit was not saved: a clash on the road, the pack, or the save.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditRefused {
+    Clash(Clash),
+    NoStakes,
+    PackFull,
+    Unsaved,
+}
+
+impl EditRefused {
+    /// The plain line the player reads, where there is one.
+    pub fn line(self) -> Option<pbd_core::locale::Localized> {
+        match self {
+            EditRefused::Clash(c) => Some(c.line()),
+            EditRefused::NoStakes => Some(pbd_core::locale::tr("roads.plan.no_stakes")),
+            EditRefused::PackFull | EditRefused::Unsaved => None,
+        }
+    }
+}
+
+/// Write the plans an edit changed, with the pack (stakes given or taken,
+/// and with the removal setting "return" the gravel of every paved cell
+/// the edit drops), in one line: the other plans' records first, the last
+/// with the pack (design 42h). Gives back the cells it took up.
+pub fn commit(
     save: &mut WorldSave,
     slots: &mut Slots,
-    open: Option<u64>,
-    point: Vec3,
+    edited: planner::Edited,
     config: &TerrainConfig,
-    cfg: &RoadsConfig,
-) -> Result<Staked, Refused> {
-    let key = roads::nearest_key(point.normalize_or(Vec3::Y)).ok_or(Refused::NotGround)?;
-    let plans = paving::plans(&save.records);
-    if let Some((&id, _)) = plans.iter().find(|(_, p)| p.stakes.last() == Some(&key)) {
-        return Ok(Staked::Resumed(id));
-    }
+    pcfg: &RoadPlannerConfig,
+) -> Result<Vec<u32>, EditRefused> {
+    let before = planner::plans(&save.records);
     let stake = Item::Good(Good::SURVEY_STAKES);
     let mut hands = slots.clone();
-    if !hands.take_item(stake, 1) {
-        return Err(Refused::NotGround);
+    if edited.stakes < 0 && !hands.take_item(stake, (-edited.stakes) as u16) {
+        return Err(EditRefused::NoStakes);
     }
-    let next = paving::next_plan_id(&save.records);
-    let driven = {
+    if edited.stakes > 0 && hands.give(stake, edited.stakes as u16) != 0 {
+        return Err(EditRefused::PackFull);
+    }
+    // Paved cells the edit drops, under "return": taken up at once.
+    let mut taken = Vec::new();
+    if pcfg.removal == planner::Removal::Return {
         let ground = stake_ground(config, &save.edits, &save.yields);
-        paving::drive(&plans, next, open, key, &ground, cfg, config.radius_m)?
-    };
-    let record = paving::plan_record(driven.id, Some(&driven.plan));
-    if !save.store_with_hands(record, paving::PLAN_SCHEMA, &hands) {
-        return Err(Refused::NotGround);
+        let built = roads::built(&save.records);
+        let was: HashSet<u32> =
+            planner::for_removal(&planner::every_cell(&before, &ground, pcfg, 1.0), &built)
+                .into_iter()
+                .collect();
+        let now = planner::for_removal(
+            &planner::every_cell(&edited.plans, &ground, pcfg, 1.0),
+            &built,
+        );
+        let mut gravel = 0.0f32;
+        for key in now.into_iter().filter(|k| !was.contains(k)) {
+            if built
+                .get(&key)
+                .is_some_and(|c| c.surface == Surface::Gravel)
+            {
+                gravel += pcfg.refund_share;
+            }
+            taken.push(key);
+        }
+        let gravel = gravel.floor() as u16;
+        if gravel > 0 && hands.give(Item::Good(Good::GRAVEL), gravel) != 0 {
+            return Err(EditRefused::PackFull);
+        }
     }
+    let ids: Vec<u64> = before
+        .keys()
+        .chain(edited.plans.keys())
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .filter(|id| before.get(id) != edited.plans.get(id))
+        .collect();
+    let mut records: Vec<_> = ids
+        .iter()
+        .map(|id| planner::plan_record(*id, edited.plans.get(id)))
+        .chain(taken.iter().map(|&k| super::taken_up_record(k)))
+        .collect();
+    let Some(last) = records.pop() else {
+        return Ok(taken);
+    };
+    if !records.is_empty()
+        && save
+            .store(&pbd_core::records::Author::Player(0), records)
+            .is_none()
+    {
+        return Err(EditRefused::Unsaved);
+    }
+    let schema = if last.kind == paving::PLAN_RECORD {
+        planner::ROADS_SCHEMA
+    } else {
+        roads::RECORD_SCHEMA
+    };
+    if !save.store_with_hands(last, schema, &hands) {
+        return Err(EditRefused::Unsaved);
+    }
+    save.note_record_kinds(&[(paving::PLAN_RECORD, planner::ROADS_SCHEMA)]);
     *slots = hands;
-    info!(
-        "survey stake at cell {key}: plan {} now {} cells",
-        driven.id,
-        driven.plan.cells.len()
-    );
-    Ok(Staked::Driven {
-        plan: driven.id,
-        marked: driven.marked.len(),
-    })
+    Ok(taken)
 }
 
-/// Take back the stake in cell `key` into the pack (design 39): the plan
-/// either side rejoined, shortened or split. `false` where no stake stands
-/// there or the pack has no room.
+/// The cell whose top `point` is on.
+pub fn key_of(point: Vec3) -> Option<u32> {
+    roads::nearest_key(point.normalize_or(Vec3::Y))
+}
+
+/// The road from `start` to `end` added to the plans (design 42k): staked
+/// every `max_segment` cells, a stake taken for each new one, written with
+/// the pack. Gives back the road's stakes and its cells.
+#[allow(clippy::too_many_arguments)]
+pub fn end_road(
+    save: &mut WorldSave,
+    slots: &mut Slots,
+    start: u32,
+    end: u32,
+    how: How,
+    tree: &planner::TreeFn,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
+) -> Result<(usize, usize), EditRefused> {
+    let plans = planner::plans(&save.records);
+    let next = paving::next_plan_id(&save.records);
+    let edited = {
+        let ground = stake_ground(config, &save.edits, &save.yields);
+        planner::add_road(
+            &plans,
+            next,
+            start,
+            end,
+            how,
+            &ground,
+            tree,
+            pcfg,
+            rcfg.ford_depth_m,
+        )
+        .map_err(EditRefused::Clash)?
+    };
+    let staked = (-edited.stakes).max(0) as usize;
+    let cells = {
+        let ground = stake_ground(config, &save.edits, &save.yields);
+        let road = edited
+            .plans
+            .values()
+            .flat_map(|p| p.roads.last())
+            .find(|r| r.stakes.first() == Some(&start) && r.stakes.last() == Some(&end));
+        road.map_or(0, |r| {
+            planner::lay(r, &ground, &|_| false, pcfg, rcfg.ford_depth_m).len()
+        })
+    };
+    commit(save, slots, edited, config, pcfg)?;
+    info!("road staked from cell {start} to {end}: {staked} stakes, {cells} cells");
+    Ok((staked, cells))
+}
+
+/// Erase the road under cell `key` (design 42k): its stakes back where no
+/// other road holds them. `false` where no road runs over it.
+pub fn erase_road(
+    save: &mut WorldSave,
+    slots: &mut Slots,
+    key: u32,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
+) -> Result<bool, EditRefused> {
+    let plans = planner::plans(&save.records);
+    let found = {
+        let ground = stake_ground(config, &save.edits, &save.yields);
+        planner::road_at(&plans, key, &ground, pcfg, rcfg.ford_depth_m)
+    };
+    let Some((id, r)) = found else {
+        return Ok(false);
+    };
+    commit(save, slots, planner::erase(&plans, id, r), config, pcfg)?;
+    info!("road {r} of plan {id} erased");
+    Ok(true)
+}
+
+/// Move the stake at `from` to `to` (design 42f), every road holding it
+/// following.
+#[allow(clippy::too_many_arguments)]
+pub fn move_stake(
+    save: &mut WorldSave,
+    slots: &mut Slots,
+    from: u32,
+    to: u32,
+    tree: &planner::TreeFn,
+    config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
+) -> Result<(), EditRefused> {
+    let plans = planner::plans(&save.records);
+    let edited = {
+        let ground = stake_ground(config, &save.edits, &save.yields);
+        planner::move_stake(&plans, from, to, &ground, tree, pcfg, rcfg.ford_depth_m)
+            .map_err(EditRefused::Clash)?
+    };
+    commit(save, slots, edited, config, pcfg)?;
+    info!("survey stake moved from cell {from} to {to}");
+    Ok(())
+}
+
+/// Take back the stake in cell `key` into the pack (design 42f): its road
+/// shortened, or its neighbours joined. `Ok(false)` where no stake stands.
 pub fn take_stake(
     save: &mut WorldSave,
     slots: &mut Slots,
     key: u32,
     config: &TerrainConfig,
-    cfg: &RoadsConfig,
-) -> bool {
-    let plans = paving::plans(&save.records);
-    let Some((&id, plan)) = plans.iter().find(|(_, p)| p.stakes.contains(&key)) else {
-        return false;
-    };
-    let mut hands = slots.clone();
-    if hands.give(Item::Good(Good::SURVEY_STAKES), 1) != 0 {
-        return false;
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
+) -> Result<bool, EditRefused> {
+    let plans = planner::plans(&save.records);
+    if planner::stake_at(&plans, key).is_none() {
+        return Ok(false);
     }
-    let (first, second) = {
+    let edited = {
         let ground = stake_ground(config, &save.edits, &save.yields);
-        paving::take_back(plan, key, &ground, cfg, config.radius_m)
+        planner::take_back(&plans, key, &ground, &|_| false, pcfg, rcfg.ford_depth_m)
+            .map_err(EditRefused::Clash)?
     };
-    if let Some(second) = second {
-        let next = paving::next_plan_id(&save.records);
-        if !save.store_with_hands(
-            paving::plan_record(next, Some(&second)),
-            paving::PLAN_SCHEMA,
-            slots,
-        ) {
-            return false;
-        }
-    }
-    if !save.store_with_hands(
-        paving::plan_record(id, first.as_ref()),
-        paving::PLAN_SCHEMA,
-        &hands,
-    ) {
-        return false;
-    }
-    *slots = hands;
-    info!("survey stake at cell {key} taken back from plan {id}");
-    true
+    commit(save, slots, edited, config, pcfg)?;
+    info!("survey stake at cell {key} taken back");
+    Ok(true)
 }
 
 /// Why a cell was not paved.
@@ -174,29 +324,45 @@ impl PaveRefused {
     }
 }
 
-/// Pave the marked cell `key` with one gravel (design 40): its slope the
-/// world road's over its plan's order, written as a `road-cell` of the
-/// player's (schema 2) with the pack in one line.
+/// Pave the marked cell `key` (design 40, 42c): its slope the world road's
+/// over its road's order, one gravel for a gravel road or a ford and none
+/// for dirt, written as a `road-cell` of the player's (schema 2) with the
+/// pack in one line.
 pub fn pave(
     save: &mut WorldSave,
     slots: &mut Slots,
     key: u32,
     config: &TerrainConfig,
+    rcfg: &RoadsConfig,
+    pcfg: &RoadPlannerConfig,
 ) -> Result<BuiltCell, PaveRefused> {
-    let plans = paving::plans(&save.records);
-    let built = roads::built(&save.records);
-    if built.contains_key(&key) {
+    let plans = planner::plans(&save.records);
+    if roads::built(&save.records).contains_key(&key) {
         return Err(PaveRefused::NotMarked);
-    }
-    let (id, plan) = paving::plan_of(&plans, key).ok_or(PaveRefused::NotMarked)?;
-    let mut hands = slots.clone();
-    if !hands.take_item(Item::Good(Good::GRAVEL), 1) {
-        return Err(PaveRefused::NoGravel);
     }
     let cell = {
         let ground = stake_ground(config, &save.edits, &save.yields);
-        paving::paved_cell(id, plan, key, &ground).map_err(|_| PaveRefused::NotMarked)?
+        let cells = planner::every_cell(&plans, &ground, pcfg, rcfg.ford_depth_m);
+        let (id, r, _) = cells.get(&key).ok_or(PaveRefused::NotMarked)?;
+        planner::paved_cell(
+            *id,
+            &plans[id].roads[*r],
+            key,
+            &ground,
+            pcfg,
+            rcfg.ford_depth_m,
+        )
+        .ok_or(PaveRefused::NotMarked)?
     };
+    let mut hands = slots.clone();
+    let cost = if cell.surface == Surface::Gravel {
+        pcfg.cost_scale.ceil() as u16
+    } else {
+        0
+    };
+    if cost > 0 && !hands.take_item(Item::Good(Good::GRAVEL), cost) {
+        return Err(PaveRefused::NoGravel);
+    }
     if !save.store_with_hands(
         paving::paved_record(key, &cell),
         paving::PAVED_SCHEMA,
@@ -205,15 +371,38 @@ pub fn pave(
         return Err(PaveRefused::Unsaved);
     }
     *slots = hands;
-    info!("road cell {key} paved in gravel on plan {id}");
+    info!(
+        "road cell {key} paved in {:?} on plan {:?}",
+        cell.surface, cell.plan
+    );
     Ok(cell)
+}
+
+/// Every marked cell (a plan's cell not paved) with its sides, and the
+/// paved cells marked for removal.
+pub fn marks(save: &WorldSave) -> (BTreeMap<u32, (Option<u32>, Option<u32>)>, Vec<u32>) {
+    let config = crate::planet::terrain_config();
+    let pcfg = load_planner_cached();
+    let plans = planner::plans(&save.records);
+    let built = roads::built(&save.records);
+    let ground = stake_ground(config, &save.edits, &save.yields);
+    let cells = planner::every_cell(&plans, &ground, &pcfg, 1.0);
+    (
+        planner::marked(&cells, &built),
+        planner::for_removal(&cells, &built),
+    )
+}
+
+/// The planner's tunables read once, for code with no system parameters.
+pub fn load_planner_cached() -> std::sync::Arc<RoadPlannerConfig> {
+    static CFG: std::sync::OnceLock<std::sync::Arc<RoadPlannerConfig>> = std::sync::OnceLock::new();
+    CFG.get_or_init(|| std::sync::Arc::new(load_planner()))
+        .clone()
 }
 
 /// The marked cells within `reach_m` of `point`, nearest first.
 pub fn marked_near(save: &WorldSave, point: Vec3, reach_m: f32) -> Vec<u32> {
-    let plans = paving::plans(&save.records);
-    let built = roads::built(&save.records);
-    let marked = paving::marked(&plans, &built);
+    let (marked, _) = marks(save);
     let d = point.normalize_or(Vec3::Y);
     let radius = point.length();
     let mut near: Vec<(f32, u32)> = marked
@@ -229,9 +418,8 @@ pub fn marked_near(save: &WorldSave, point: Vec3, reach_m: f32) -> Vec<u32> {
 
 /// Every stake standing, by cell key.
 pub fn stakes(save: &WorldSave) -> Vec<u32> {
-    paving::plans(&save.records)
-        .values()
-        .flat_map(|p| p.stakes.iter().copied())
+    planner::stakes(&planner::plans(&save.records))
+        .into_iter()
         // A construction site's stakes at its corners (`building-planner` 5).
         .chain(crate::construction::site_marks(&save.records).1)
         .collect()
@@ -239,12 +427,11 @@ pub fn stakes(save: &WorldSave) -> Vec<u32> {
 
 /// Install the marks and the player's road cells for the terrain
 /// (design 39a and 43), and give back every key they name.
-pub fn install(records: &pbd_core::records::Records, radius_m: f32) -> HashSet<u32> {
-    let plans: BTreeMap<u64, Plan> = paving::plans(records);
-    let built = roads::built(records);
-    let mut marks = paving::marked(&plans, &built);
+pub fn install(save: &WorldSave, radius_m: f32) -> HashSet<u32> {
+    let built = roads::built(&save.records);
+    let (mut marks, _) = marks(save);
     // A construction site's lime line (`building-planner` design 5).
-    marks.extend(crate::construction::site_marks(records).0);
+    marks.extend(crate::construction::site_marks(&save.records).0);
     let keys: HashSet<u32> = marks.keys().chain(built.keys()).copied().collect();
     paving::install(Some(paving::Installed {
         marks: marks.into_iter().collect(),
@@ -299,7 +486,7 @@ pub fn follow_marks(
     );
     let fresh = stamp != shown.installed_for;
     if fresh {
-        let keys = install(&save.records, crate::planet::terrain_config().radius_m);
+        let keys = install(&save, crate::planet::terrain_config().radius_m);
         shown.keys.extend(keys);
         shown.installed_for = stamp;
     }

@@ -62,3 +62,29 @@ no longer face anyone since the towns were laid again, and need new spots.
 | `motion-hammer-sheet.jpg` | Holbrook's smith at his post: the arm raised and brought down, then at rest. |
 | `motion-wipe-sheet.jpg` | Linenleigh's innkeeper: the hand circling as it wipes. |
 | `motion-walk-sheet.jpg` | Two of Linenleigh's people walking their paths: arms and legs swinging opposite. |
+
+## The road planner (`townsfolk` 14.3 to 14.7, design 42 to 42l)
+
+Fixed-step captures by `tools/capture_road_planner.sh` in the Claude Code
+cloud container: **lavapipe, no GPU**, `--profile fast`, new memory-only
+worlds at the `fields` spawn, 1440 x 900, 400 frames, JPEG. They show the
+look only: **frame time was not measured**. `--paving 5 --road-plan <scene>`
+is the capture instrument: the grinder and the mixer either side, then
+roads put in through the paths the planner's clicks take
+(`roads::paving::end_road`, `erase_road`), stakes in hand. There is no
+BEFORE: the game had no road planner (design 39's stake search is retired).
+
+| Shot | What it shows |
+| --- | --- |
+| `road-planner-two-1100.jpg` | A road by two clicks up the view, its cells under the lime band and a stake at its near end; an open start a few metres ahead, so the ghost (the gravel texture in the ghost tint, lit as the ground) runs from it to the aim; the HUD line with the bill. |
+| `road-planner-stake-1100.jpg` | A second road started from the first road's middle (a new stake there; the far peg on the right is its end), and the idle ghost: the one cell a click would start on. The bill counts both roads (22 cells). |
+| `road-planner-erased-1100.jpg` | The same after the eraser took the second road: its peg gone, its stakes back in hand (14), the bill down to the first road's 16 cells. |
+| `road-planner-wide-1100.jpg` | A three-wide road open from 34 m up the view: its ghost back to the aim, lanes red where the ground is off the centre's height ("Too steep across"). |
+| `mark-close-1100.jpg`, `mark-close-2230.jpg` | The default paving scene close up (task 13.4, design 39a): a road by two clicks, its six nearer cells paved in gravel, a peg of split timber with its dyed cloth at the start, the lime band on the unpaved cells beyond; by day, and at 22:30 as dark as the ground beside it. |
+
+The bill line is red where the pack is short: each scene gives 12 gravel,
+and its roads want more. The ghost at its shipped `ghost_opacity` (0.35)
+reads faintly over the desert sand in these frames; it is a tunable in
+`road_planner.ron`. No shot at 22:30 of the planner scenes was taken (a
+shot is about half an hour on lavapipe here).
+
