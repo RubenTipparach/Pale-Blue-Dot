@@ -76,6 +76,27 @@ pub struct TradeConfig {
     /// What a town sells a horse for, coins (`land-transport` design 10).
     #[serde(default = "horse_coins")]
     pub horse_coins: u64,
+    /// A made good's labour, coins per second of its recipe (`townsfolk`
+    /// task 12.3, design 37a).
+    #[serde(default = "labour_per_s")]
+    pub labour_per_s: f32,
+    /// What a made good is worth over its inputs and labour, as a factor
+    /// (design 37).
+    #[serde(default = "craft_margin")]
+    pub craft_margin: f32,
+    /// The world's market (design 37a).
+    #[serde(default)]
+    pub market: super::market::MarketConfig,
+}
+
+/// Labour where `trade.ron` names none: 0.1 coin a second.
+fn labour_per_s() -> f32 {
+    0.1
+}
+
+/// The craft margin where `trade.ron` names none.
+fn craft_margin() -> f32 {
+    1.25
 }
 
 /// A horse's price where `trade.ron` names none.
@@ -116,6 +137,13 @@ impl TradeConfig {
         if self.size.values().any(|s| !unit(*s)) {
             return Err("trade: a size must be positive".into());
         }
+        if !(self.labour_per_s.is_finite() && self.labour_per_s >= 0.0) {
+            return Err("trade: labour_per_s must not be negative".into());
+        }
+        if !(self.craft_margin.is_finite() && self.craft_margin > 1.0) {
+            return Err("trade: craft_margin must be above 1".into());
+        }
+        self.market.validate()?;
         self.goodwill.validate()
     }
 
@@ -208,6 +236,8 @@ pub enum Refused {
     NotWanted,
     /// The pack holds none of it.
     NotHeld,
+    /// Both baskets are empty.
+    Empty,
 }
 
 /// An accepted trade.
@@ -216,6 +246,76 @@ pub struct Deal {
     pub code: String,
     pub coins: u64,
     pub entry: Entry,
+}
+
+/// A deal of two baskets (`townsfolk` design 37): what the player takes
+/// from the trader and gives it, each a list of codes and counts. Coins
+/// make up the difference either way; with none it is barter.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Basket {
+    pub take: Vec<(String, u32)>,
+    pub give: Vec<(String, u32)>,
+}
+
+impl Basket {
+    pub fn is_empty(&self) -> bool {
+        self.take.iter().chain(&self.give).all(|(_, n)| *n == 0)
+    }
+
+    /// How many of `code` the `take` side (`taking`) or the give side holds.
+    pub fn count(&self, code: &str, taking: bool) -> u32 {
+        let side = if taking { &self.take } else { &self.give };
+        side.iter().filter(|(c, _)| c == code).map(|(_, n)| n).sum()
+    }
+
+    /// Put `n` more of `code` in a side.
+    pub fn add(&mut self, code: &str, taking: bool, n: u32) {
+        let side = if taking {
+            &mut self.take
+        } else {
+            &mut self.give
+        };
+        match side.iter_mut().find(|(c, _)| c == code) {
+            Some(row) => row.1 += n,
+            None => side.push((code.to_string(), n)),
+        }
+    }
+
+    /// Take one of `code` back out of a side.
+    pub fn remove(&mut self, code: &str, taking: bool) {
+        let side = if taking {
+            &mut self.take
+        } else {
+            &mut self.give
+        };
+        if let Some(row) = side.iter_mut().find(|(c, _)| c == code) {
+            row.1 = row.1.saturating_sub(1);
+        }
+        side.retain(|(_, n)| *n > 0);
+    }
+}
+
+/// What a basket comes to: the trader's goods at its selling price, the
+/// player's at its buying price.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Tally {
+    pub take: u64,
+    pub give: u64,
+}
+
+impl Tally {
+    /// Coins the player pays (positive) or is paid (negative).
+    pub fn balance(&self) -> i64 {
+        self.take as i64 - self.give as i64
+    }
+}
+
+/// An accepted basket deal: its tally and the purse's entry, none when the
+/// two sides were even.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Barter {
+    pub tally: Tally,
+    pub entry: Option<Entry>,
 }
 
 impl Market {
@@ -363,6 +463,102 @@ impl Trader<'_> {
             coins: price,
             entry,
         })
+    }
+
+    /// What `basket` comes to in `market` (settled already): each good the
+    /// player takes at the selling price, each it gives at the buying price.
+    /// A good the trader does not deal in counts nothing; [`Self::deal`]
+    /// refuses it.
+    pub fn tally(&self, market: &Market, basket: &Basket) -> Tally {
+        let side = |list: &[(String, u32)], sell: bool| -> u64 {
+            list.iter()
+                .map(|(code, n)| {
+                    let q = self.quote(market, code);
+                    let each = if sell { q.sell } else { q.buy };
+                    each.unwrap_or(0) * u64::from(*n)
+                })
+                .sum()
+        };
+        Tally {
+            take: side(&basket.take, true),
+            give: side(&basket.give, false),
+        }
+    }
+
+    /// Settle `basket`: the goods given leave the slots, the goods taken
+    /// enter them, the difference moves the purse, and each unit moves the
+    /// town's market as a single trade would. All of it or none of it.
+    pub fn deal(
+        &self,
+        market: &mut Market,
+        purse: &mut Purse,
+        slots: &mut Slots,
+        basket: &Basket,
+        now_s: f64,
+    ) -> Result<Barter, Refused> {
+        if basket.is_empty() {
+            return Err(Refused::Empty);
+        }
+        let mut m = market.settled(now_s, self.cfg);
+        for (code, n) in &basket.take {
+            let q = self.quote(&m, code);
+            q.sell.ok_or(Refused::NotSold)?;
+            if q.stock < *n {
+                return Err(Refused::SoldOut);
+            }
+        }
+        for (code, n) in &basket.give {
+            let q = self.quote(&m, code);
+            q.buy.ok_or(Refused::NotWanted)?;
+            if q.wants < *n {
+                return Err(Refused::NotWanted);
+            }
+        }
+        let tally = self.tally(&m, basket);
+        let mut s = slots.clone();
+        for (code, n) in &basket.give {
+            let item = item_of(code, self.fish_ids).ok_or(Refused::NotHeld)?;
+            if !s.take_item(item, *n as u16) {
+                return Err(Refused::NotHeld);
+            }
+        }
+        for (code, n) in &basket.take {
+            let item = item_of(code, self.fish_ids).ok_or(Refused::NotSold)?;
+            if s.give(item, *n as u16) != 0 {
+                return Err(Refused::PackFull);
+            }
+        }
+        let mut p = purse.clone();
+        let owed = tally.balance();
+        let entry = match owed.cmp(&0) {
+            std::cmp::Ordering::Greater => Some(
+                p.change(Reason::Bought, owed as u64)
+                    .map_err(|_| Refused::Short)?,
+            ),
+            std::cmp::Ordering::Less => Some(
+                p.change(Reason::Sold, owed.unsigned_abs())
+                    .map_err(|_| Refused::Short)?,
+            ),
+            std::cmp::Ordering::Equal => None,
+        };
+        for (code, n) in &basket.take {
+            let lot = m.lots.entry(code.clone()).or_default();
+            for _ in 0..*n {
+                lot.factor = (lot.factor * (1.0 + self.cfg.step)).min(self.cfg.high);
+            }
+            lot.sold += *n as f32;
+        }
+        for (code, n) in &basket.give {
+            let lot = m.lots.entry(code.clone()).or_default();
+            for _ in 0..*n {
+                lot.factor = (lot.factor * (1.0 - self.cfg.step)).max(self.cfg.low);
+            }
+            lot.bought += *n as f32;
+        }
+        *market = m;
+        *purse = p;
+        *slots = s;
+        Ok(Barter { tally, entry })
     }
 
     /// The player sells one `code` from the slots: the good leaves the pack,

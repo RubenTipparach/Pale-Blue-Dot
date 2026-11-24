@@ -31,6 +31,7 @@ use bevy::math::{Affine3A, DQuat, DVec3};
 use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use pbd_core::furniture::walk::{Doorway, Route};
 use pbd_core::townsfolk::face::{self, Act, Chosen, Expression, Face, FacePose, Mood, Mouth, Seen};
 use pbd_core::townsfolk::figure::{self, Figure, Part};
 use pbd_core::townsfolk::motion::{Body, Doing, Pose};
@@ -97,6 +98,10 @@ struct Live {
     /// How they rest where they are driven: on a seat or a bed
     /// (`furniture` design 7).
     posture: Option<Posture>,
+    /// A walk to a seat or bed, or back out (`furniture` design 11a).
+    walk: Option<Walk>,
+    /// The doorway they went in by, to walk out by.
+    door: Option<Doorway>,
     chosen: Chosen,
     talking: bool,
 }
@@ -110,6 +115,14 @@ pub enum Posture {
     /// On a bed whose mattress is this high, m; laid from where they are
     /// driven (the pillow) along their forward.
     Lie { top_m: f32 },
+}
+
+/// A walk under way: its route, when it set out on the town clock, and
+/// where they rest at its end (none: released to their post or path).
+struct Walk {
+    route: Route,
+    from: f64,
+    end: Option<(DVec3, DVec3, Posture)>,
 }
 
 /// One standing town's people.
@@ -229,12 +242,69 @@ impl Townsfolk {
             walking: false,
         });
         l.posture = Some(posture);
+        l.walk = None;
         true
     }
 
     /// Whether a person rests on furniture now.
     pub fn resting(&self, id: PersonId) -> Option<Posture> {
         self.live(id).and_then(|l| l.posture)
+    }
+
+    /// Walk a person along `route` (`furniture` design 11a), from now on
+    /// the town clock; at its end they rest as `end` says, or with none are
+    /// released. `door` is the doorway they walk out by later.
+    pub fn walk(
+        &mut self,
+        id: PersonId,
+        route: Route,
+        end: Option<(DVec3, DVec3, Posture)>,
+        door: Option<Doorway>,
+    ) -> bool {
+        let clock = self.clock;
+        let Some(l) = self.live_mut(id) else {
+            return false;
+        };
+        l.posture = None;
+        if door.is_some() {
+            l.door = door;
+        }
+        l.walk = Some(Walk {
+            route,
+            from: clock,
+            end,
+        });
+        true
+    }
+
+    /// Where a person rests, or is walking to rest: the feet of the place.
+    pub fn heading_to(&self, id: PersonId) -> Option<DVec3> {
+        let l = self.live(id)?;
+        if let Some(w) = &l.walk {
+            return w.end.map(|(feet, _, _)| feet);
+        }
+        l.posture.and(l.driven).map(|d| d.feet)
+    }
+
+    /// Let a resting person go (`furniture` design 11a): resting or on their
+    /// way in, they walk back out by their doorway to `post`; with no
+    /// doorway they are released at once. A person not resting is left.
+    pub fn leave(&mut self, id: PersonId, post: DVec3) -> bool {
+        let Some(l) = self.live(id) else {
+            return false;
+        };
+        let going_in = l.walk.as_ref().is_some_and(|w| w.end.is_some());
+        if l.posture.is_none() && !going_in {
+            return false;
+        }
+        let now = l.driven.map(|d| d.feet).unwrap_or(l.placed.feet);
+        match l.door {
+            Some(door) => {
+                let route = Route::out_through(now, door, post);
+                self.walk(id, route, None, None)
+            }
+            None => self.release(id),
+        }
     }
 
     /// Back to their post or path.
@@ -244,6 +314,8 @@ impl Townsfolk {
         };
         l.driven = None;
         l.posture = None;
+        l.walk = None;
+        l.door = None;
         true
     }
 
@@ -251,6 +323,44 @@ impl Townsfolk {
     pub fn drawn(&self) -> usize {
         self.slots.iter().filter(|s| s.who.is_some()).count()
     }
+}
+
+/// Move a walking person on (`furniture` design 11a): along their route
+/// by the clock, and at its end rested at the place or released.
+fn step_walk(l: &mut Live, clock: f64) {
+    let Some(w) = &l.walk else {
+        return;
+    };
+    let step = w.route.at(clock - w.from);
+    if step.arrived {
+        match w.end {
+            Some((feet, forward, posture)) => {
+                l.driven = Some(Placed {
+                    feet,
+                    forward,
+                    walking: false,
+                });
+                l.posture = Some(posture);
+            }
+            None => {
+                l.driven = None;
+                l.posture = None;
+                l.door = None;
+            }
+        }
+        l.walk = None;
+        return;
+    }
+    let forward = if step.forward == DVec3::ZERO {
+        l.forward
+    } else {
+        step.forward
+    };
+    l.driven = Some(Placed {
+        feet: step.feet,
+        forward,
+        walking: true,
+    });
 }
 
 /// A town has stood: lay its people (called from `towns::stand`).
@@ -283,6 +393,8 @@ pub fn on_stand(
                 placed,
                 driven: None,
                 posture: None,
+                walk: None,
+                door: None,
                 chosen: Chosen {
                     expression: resting,
                     focus: false,
@@ -907,6 +1019,7 @@ fn step(
     let k_turn = 1.0 - (-f64::from(dt) / TURN_S).exp();
     for town in &mut folk.towns {
         for l in &mut town.live {
+            step_walk(l, folk.clock);
             l.placed = l.driven.unwrap_or_else(|| l.person.at(folk.clock, radius));
             let up = up_of(l.placed.feet);
             l.forward = turn_toward(l.forward, l.placed.forward, up, k_turn);

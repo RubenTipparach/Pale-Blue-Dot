@@ -46,5 +46,5 @@
 
 - [ ] 4.1 Stealing (design 10), on the owner's word.
 - [ ] 4.2 Sleeping through the night, with survival's rules.
-- [ ] 4.3 Townsfolk walking to their seat or bed through the door.
+- [x] 4.3 Townsfolk walking to their seat or bed through the door. Built 2026-11-24 (design 11a): `pbd_core::furniture::walk` (`Route::in_through`, `Route::out_through`, `Doorway`), each town piece's nearest doorway (`Piece::door`), `Townsfolk::walk`, `leave` and `heading_to`; a place upstairs ends the walk inside the door. Tests `furniture::walk::tests` (`a_walk_goes_through_the_door_and_arrives`, `a_bed_upstairs_ends_the_walk_inside_the_door`) and `townsfolk::tests::others_can_set_a_face_and_drive_a_person` (walked in, seated, walked out, released).
 - [ ] 4.4 The furniture's video, with the batch (CLAUDE.md).

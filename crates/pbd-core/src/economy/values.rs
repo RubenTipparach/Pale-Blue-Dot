@@ -106,13 +106,21 @@ impl Shelf {
 /// wool and hides (owner, 2026-11-22). A fertile egg is for hatching.
 pub const HERD_FOOD: [&str; 2] = ["egg", "milk"];
 
+/// Crops that are not eaten: on the Organics shelf (`townsfolk` task
+/// 12.1). Their group, and so a town's need for them, stays `crop`.
+pub const ORGANIC_CROPS: [&str; 1] = ["fibre"];
+
 impl Values {
     /// The shelf `code` stands on; none for a code with no row. Its
-    /// group's, but for the herd's food ([`HERD_FOOD`]).
+    /// group's, but for the herd's food ([`HERD_FOOD`]) and the crops not
+    /// eaten ([`ORGANIC_CROPS`]).
     pub fn shelf(&self, code: &str) -> Option<Shelf> {
         let value = self.get(code)?;
         if HERD_FOOD.contains(&code) {
             return Some(Shelf::Food);
+        }
+        if ORGANIC_CROPS.contains(&code) {
+            return Some(Shelf::Organics);
         }
         Some(Shelf::of(value.group))
     }
@@ -137,6 +145,10 @@ impl Values {
 #[serde(deny_unknown_fields)]
 pub struct ValuesFile {
     pub values: Vec<(String, u32, Group)>,
+    /// Made goods that keep their typed row rather than a value worked out
+    /// from their recipe (`townsfolk` design 37a); none today.
+    #[serde(default)]
+    pub overrides: Vec<String>,
 }
 
 /// One item's row.
@@ -152,6 +164,8 @@ pub struct Values {
     rows: BTreeMap<String, Value>,
     /// The codes in file order.
     order: Vec<String>,
+    /// `values.ron`'s overrides: made goods that keep their row.
+    overrides: Vec<String>,
 }
 
 impl ValuesFile {
@@ -172,6 +186,12 @@ impl ValuesFile {
             }
             values.order.push(code.clone());
         }
+        for code in &self.overrides {
+            if !values.rows.contains_key(code) {
+                return Err(format!("values: override {code} has no row"));
+            }
+        }
+        values.overrides = self.overrides.clone();
         Ok(values)
     }
 }
@@ -198,6 +218,19 @@ impl Values {
 
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
+    }
+
+    /// The made goods that keep their typed row.
+    pub fn overrides(&self) -> &[String] {
+        &self.overrides
+    }
+
+    /// Set a row's coins (the derivation's result); a code with no row is
+    /// left alone.
+    pub(crate) fn set_coins(&mut self, code: &str, coins: u32) {
+        if let Some(row) = self.rows.get_mut(code) {
+            row.coins = coins;
+        }
     }
 }
 

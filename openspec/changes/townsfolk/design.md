@@ -203,6 +203,80 @@ with every index at 1.0; its `town_market` and `purse` records keep their
 meaning. Prices shown in the trade panel will move from today's hand-set
 values to derived ones, which changes no stored amount.
 
+**37a. Design 37 as it is built (2026-11-24, on "cool implement all the
+phase 3 stuff!").** Where design 37 left a detail open, each choice below
+is a recommendation taken (ask only with screenshots):
+
+- **Derivation** (`pbd_core::economy::derive`). A code that is an output
+  of no recipe in the one book (`recipes.ron` then `cooking.ron`) is raw
+  and keeps its `values.ron` row. Every other code's value is worked out
+  at start, in passes until nothing moves:
+  - a recipe's cost is the sum of its inputs' values times their counts,
+    plus its labour, `labour_per_s` (0.1 coin, task 12.3) times its `secs`,
+    times `craft_margin` (1.25); both live in `trade.ron`;
+  - a recipe with several outputs splits its cost between them in
+    proportion to their `values.ron` rows (the mixed-ore smelt's copper,
+    iron and tin);
+  - an output's value is its share over its count, rounded up to a whole
+    coin and never under 1; so the outputs of a recipe are always worth
+    more than its inputs, as rounded;
+  - a good two recipes make (a fried egg from an egg or a fertile egg)
+    takes the cheaper;
+  - a recipe's input "fish" (any fish) is valued as the cheapest fish row;
+  - **tools are not derived**: a recipe's `tool:` output is one tier of a
+    tool whose value row is tier-less, and tools are `untraded`, so a tool
+    keeps its row;
+  - a row in `values.ron` stays an override only where `overrides` names
+    its code (a new optional list in the file, empty today), so no shipped
+    row is dropped and the file stays append-only.
+  The book is fixed at start, so this is done once, then once a day with
+  the market's index folded in (below).
+- **The market** (`pbd_core::economy::market`, the stored record `market`,
+  id 0, schema 1: the day it was last settled and an index per good that
+  has moved, in a `BTreeMap` so it is written in one order).
+  - Each unit the player sells to any trader lowers that good's index by
+    `market.step` (0.005) as a share; each unit bought raises it; within
+    `market.low` and `market.high` (0.5 and 2.0).
+  - At each day boundary, every index moves back toward 1.0 by
+    `1 / market.rest_days` (8 days) of its distance, then by the towns'
+    making and using: `market.town_pull` (0.02) times the mean over every
+    town the world holds of its need for the good's group less one. So a
+    good most towns lack runs a little dear and one most towns make a
+    little cheap, at a steady point near 1.0, and a flood the player
+    sells recovers over days.
+  - Settling is lazy and deterministic: reading the record steps it day by
+    day from its last day to today (at most `market.rest_days` times 8
+    days are stepped; past that every index is at its steady point within
+    rounding). The game writes the record on a trade, and at a day
+    boundary only if a row moved by more than a thousandth.
+  - **Dear tin makes dear bronze**: the priced values a trader reads are
+    the derivation run again with each raw value times its index and each
+    made value's result times its own index, so an input's price moves the
+    goods made from it. A town's price is then that, times its need, times
+    goodwill, as design 6 and 12 already say; the town's own `town_market`
+    factor (a day's local swing) stays on top.
+  - A world with no `market` record reads every index as 1.0 and writes
+    none until a trade or a moved day.
+- **Barter in the trade panel** (task 11.3), as M5's Talk tab Basket view
+  draws it: each row's button puts one in a basket (BUY rows into YOU
+  TAKE, SELL rows into YOU GIVE), a basket's well takes one back out, the
+  line under them says YOU PAY, THEY PAY or EVEN and the coins, DEAL
+  settles and CLEAR empties both. The baskets replace the one-click buy and
+  sell: one good for coins is a basket of one. A deal is the core's
+  `Trader::deal` (all of it or none), counted in the town market, the
+  world market, goodwill (one step per deal) and the taken jobs as the
+  single trades were (each unit a buy or a sell). Its lines are the
+  existing trade's: the town market, goodwill, the world market and the
+  jobs, then the purse with the pack in one `with` line, so the pack and
+  the purse never part. The words are locale keys (`trade.you_take`,
+  `trade.you_give`, `trade.you_pay`, `trade.they_pay`, `trade.even`,
+  `trade.deal`, `trade.clear`).
+- **Fibre stands on Organics** (task 12.1): `values::shelf` puts fibre
+  there by code (`ORGANIC_CROPS`), its `crop` group, and so its towns'
+  need, unchanged.
+- **The scroll thumb** (task 12.2) is 6 px wide inside the 8 px track (it
+  was 4), so it can be caught at 1x.
+
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
 `towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road

@@ -17,7 +17,7 @@ fn fauna() -> FaunaConfig {
     FaunaConfig(ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap())
 }
 
-fn harbour(site: u32) -> TownInfo {
+pub(super) fn harbour(site: u32) -> TownInfo {
     TownInfo {
         site,
         kind: SiteKind::Harbour,
@@ -28,7 +28,7 @@ fn harbour(site: u32) -> TownInfo {
 
 /// An app counting the missions and the town jobs into a memory-only world:
 /// what the game runs, without a window.
-fn app() -> App {
+pub(super) fn app() -> App {
     let (recipes, _) = crate::config::recipe_book();
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
@@ -45,7 +45,7 @@ fn app() -> App {
 }
 
 /// Make a deal in the app's world: the shop over its resources.
-fn shop<R>(app: &mut App, f: impl FnOnce(&mut Shop) -> R) -> R {
+pub(super) fn shop<R>(app: &mut App, f: impl FnOnce(&mut Shop) -> R) -> R {
     let world = app.world_mut();
     let ids = fish_ids(world.resource::<FaunaConfig>(), pbd_core::fauna::HOME_BODY);
     let cfg = world.resource::<EconomyConfig>().clone();
