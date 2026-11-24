@@ -426,9 +426,8 @@ open. Each is a recommendation taken (ask only with screenshots).
   through the outer cells' middles rather than exactly under the walls; the
   band and the stakes go when the site is finished.
 - **What the first cut leaves out**, each said here so it is not
-  mistaken for done: the scaffold has no ladder bay (an upper storey is
-  reached by the house's own stair, which is buildable before the upper
-  walls); "in the way" is a solid block or a standing plant (a tree, a cactus, a wild plant), not yet a
+  mistaken for done: the scaffold had no ladder bay (since added, "The
+  scaffold's ladder bay" below); "in the way" is a solid block or a standing plant (a tree, a cactus, a wild plant), not yet a
   road cell or a town's footprint; a marked piece taken down with a full
   pack is refused ("No room") rather than its goods left in a
   crate; in a planned world build mode's palette is unchanged but every
@@ -493,6 +492,58 @@ in `docs/screenshots/building-planner/`.
   its middle and 0.70 at its edge (was 0.82 and 0.55), gaps in a tenth of
   its texels (was 0.18), and a little paler. It is the same band a road's
   survey marks use, so they read stronger too.
+
+### The owner's answers on the captures (survey P3, P4, 2026-11-24)
+
+- **P3, the ghost at night.** The owner: "The night is too faint, please
+  make it glow a bit more at night". `ghost_night` goes from 0.05 to 0.2:
+  the ghost reads as a faint blueprint glow at 22:00, not as dark as the
+  ground and not the brightest thing in the frame. Retaken in
+  `game-site-night.jpg`.
+- **P4, the lime line.** The stronger line is kept as it is.
+
+### The scaffold's ladder bay (2026-11-24, task 3.5's note)
+
+Written before the code. Design 6 says the scaffold is "climbed by its
+ladder bay"; the first cut had none, so an upper storey's boards were
+reached only from inside the house. The walker has no climbing state (a
+ladder held and climbed hand over hand would be a new movement mode), and
+it does not need one: it walks up any flight whose risers are under
+`walking::HOLD_M` (0.35 m), on the flight's pitch line, as it climbs a
+house's stair. So the ladder bay is a **ship's ladder**: steep open treads
+between two stringers, which the walker walks up.
+
+- **Where.** Off the first bay of the scaffold's list (its order is the
+  storey's outer edges', so it is the same bay every time the scaffold is
+  cut), running straight out from the board walk's outer edge, square to
+  the wall. Its head is the board walk's outer edge; its foot is on the
+  ground the scaffold's poles stand on.
+- **Its shape.** `LADDER_RISE_M` 0.25 per tread (under `HOLD_M`), as many
+  treads as the storey's floor line needs (12 for a 3 m storey), a run of
+  `LADDER_RUN_M` 0.22 a tread, so a 3 m storey's ladder is 2.6 m out from
+  the boards, about 49 degrees: steeper than a house stair (31), as a
+  ladder is. Measured in the walker test: the walker climbs a flight's
+  pitch line at its walking pace, so on the ladder its eye rises more
+  than the 0.12 m a tick the stair tests bound (it did on every tick, at
+  0.3 m a tread too), but never a whole tread at once; the ladder's test
+  holds it under a riser a tick, with no tick in the air. `LADDER_HALF_M` 0.4 either side of its middle: wider than the
+  walker's body (0.3 m round), narrower than a bay.
+- **What the walker meets.** A `Surface::Flight` from the foot to the
+  head, its last tread level with the boards, so the walk goes from the
+  ladder onto the boards with no step. The stringers are not walls:
+  the flight's own surface is what it stands on, as on a house stair.
+- **How it is drawn.** Each tread a bevelled plank slab (the board walk's
+  `slab`); two stringers of the scaffold's `poles` texture, each one slab
+  laid along the pitch, cut square at the ground and at the boards; a rope
+  collar where each stringer meets the board walk's pole line. Smooth
+  where curved, hard at the planks' edges, as the rest of the scaffold.
+  Lit as the scaffold is (it is part of the scaffold's plot).
+- **Cost.** None extra: the ladder is part of the scaffolding, which is
+  paid by the bay (`scaffold_cost`). Recommendation taken (ask only with
+  screenshots).
+- **Pinned by** a core test that the scaffold's solids carry the flight,
+  its risers each under `HOLD_M` and its head level with the boards, and
+  an app test that the walker walks up it onto the boards with no jump.
 
 ## Risks / Trade-offs
 

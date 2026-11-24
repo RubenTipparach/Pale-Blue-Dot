@@ -715,6 +715,83 @@ fn scaffolding_rings_the_storey() {
     assert!(!stake_spots(&plan).is_empty());
 }
 
+/// Design, "The scaffold's ladder bay": the scaffold carries one ship's
+/// ladder among the walker's surfaces, off its first bay, from the ground to
+/// the boards: every riser under the walker's hold (0.35 m), its last tread
+/// level with the boards' top, and its head at the board walk's outer edge,
+/// so the walker steps off it onto a board.
+#[test]
+fn the_scaffold_is_climbed_by_its_ladder_bay() {
+    use crate::settlement::pieces::Surface;
+    let (patch, at) = plot();
+    let plan = presets().get("house").unwrap().plan(Size::Standard);
+    let cells = Cells::new(patch);
+    let pc = PlanCells::new(patch, *at, 0, 4);
+    let bays: Vec<super::scaffold::Bay> = scaffold_bays(&plan, 1)
+        .into_iter()
+        .map(|(h, d)| super::scaffold::Bay {
+            inside: pc.key(h).unwrap(),
+            outside: pc.across(h, d).unwrap(),
+        })
+        .collect();
+    let origin = patch.keys[*at];
+    let (meshes, solids) =
+        super::scaffold::scaffold(&cells, origin, &bays, GROUND, GROUND + STOREY, 300.0).unwrap();
+    let flights: Vec<&Surface> = solids
+        .surfaces
+        .iter()
+        .filter(|s| matches!(s, Surface::Flight { .. }))
+        .collect();
+    assert_eq!(flights.len(), 1, "one ladder bay");
+    let &Surface::Flight {
+        foot,
+        dir,
+        len,
+        half_width,
+        base,
+        rise,
+        risers,
+    } = flights[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(base, 0.0, "from the ground the poles stand on");
+    assert!(rise < 0.35 && rise > 0.15, "a riser of {rise} m");
+    assert!(
+        (rise * risers as f32 - 3.0).abs() < 1e-3,
+        "up to the boards"
+    );
+    assert!(half_width > 0.3, "wider than the walker");
+    // Its head: level with the boards, and on a board's outer edge.
+    let head = foot + dir * len;
+    let mut tops = Vec::new();
+    flights[0].intervals(head - dir * 0.05, &mut tops);
+    assert!(
+        tops.iter().any(|&(_, t)| (t - 3.0).abs() < 1e-3),
+        "{tops:?}"
+    );
+    let on_board = |p: glam::Vec2| {
+        solids
+            .solids
+            .iter()
+            .any(|s| (s.y1 - 3.0).abs() < 1e-3 && s.covers(p.x, p.y, 0.0))
+    };
+    assert!(on_board(head + dir * 0.1), "a board just past its head");
+    assert!(!on_board(foot), "its foot is off the boards");
+    // The walker's solids carry it, and it is drawn in the scaffold's planks
+    // and poles, every normal finite.
+    assert!(solids.reach_m > (foot.length() - 0.5));
+    for tex in ["plank", "poles"] {
+        assert!(
+            meshes[tex]
+                .normals
+                .iter()
+                .all(|n| n.iter().all(|v| v.is_finite())),
+            "{tex}"
+        );
+    }
+}
+
 /// Edges shared by two cells of a room.
 fn shared(cells: &BTreeSet<Hex>) -> usize {
     cells

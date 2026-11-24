@@ -12,7 +12,7 @@
 use super::Cells;
 use super::cut::frame_at;
 use crate::column::layer_altitude;
-use crate::settlement::pieces::{BuildingSolids, Frame, MeshBuf, Meshes, Solid};
+use crate::settlement::pieces::{BuildingSolids, Frame, MeshBuf, Meshes, Solid, Surface};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
 
@@ -28,6 +28,17 @@ pub const POLE_FOOT_M: f32 = 0.07;
 pub const POLE_HEAD_M: f32 = 0.05;
 /// The rope collar's length along the pole, metres.
 pub const ROPE_M: f32 = 0.14;
+
+/// The ladder bay (design, "The scaffold's ladder bay"): a ship's ladder
+/// off the first bay, its treads' rise (under `walking::HOLD_M`, 0.35 m),
+/// their run, and its half width.
+pub const LADDER_RISE_M: f32 = 0.25;
+pub const LADDER_RUN_M: f32 = 0.22;
+pub const LADDER_HALF_M: f32 = 0.4;
+/// A tread's and a stringer's thickness, and a stringer's depth.
+pub const TREAD_M: f32 = 0.05;
+pub const STRINGER_W_M: f32 = 0.06;
+pub const STRINGER_D_M: f32 = 0.16;
 
 /// One bay: the outer edge it stands outside, as the two cells it divides
 /// (`inside` the storey's, `outside` beyond).
@@ -55,7 +66,8 @@ pub fn scaffold(
     let mut solids = Vec::new();
     let mut poles: BTreeMap<(i32, i32), Vec2> = BTreeMap::new();
     let mut reach = 0.0f32;
-    for bay in bays {
+    let mut surfaces = Vec::new();
+    for (n, bay) in bays.iter().enumerate() {
         let (a, b) = cells.edge(bay.inside, bay.outside)?;
         let inside = frame.plane(cells.cell(bay.inside)?.direction);
         let (pa, pb) = (frame.plane(a), frame.plane(b));
@@ -80,6 +92,11 @@ pub fn scaffold(
             y0: floor_y - BOARD_M,
             y1: floor_y,
         });
+        // The ladder bay: off the first bay, straight out from the boards.
+        if n == 0 && floor_y > LADDER_RISE_M {
+            reach = reach
+                .max(ladder(&mut meshes, &mut surfaces, &frame, mid, out, floor_y).length() + 1.0);
+        }
         // A pole at each end, outside the boards' middle line, shared with
         // the next bay round.
         for p in [pa, pb] {
@@ -130,7 +147,7 @@ pub fn scaffold(
             reach_m: reach,
             solids,
             roof_plan: Vec::new(),
-            surfaces: Vec::new(),
+            surfaces,
             doors: Vec::new(),
             rooms: Meshes::new(),
             lights: Vec::new(),
@@ -275,5 +292,145 @@ fn post(buf: &mut MeshBuf, frame: &Frame, at: Vec2, y0: f32, y1: f32, r0: f32, r
             [Vec2::ZERO, d0 * r1, d1 * r1],
             Vec3::Y,
         );
+    }
+}
+
+/// The ladder bay (design, "The scaffold's ladder bay"): a ship's ladder
+/// from the ground `out` from the board walk's outer edge at `mid` up to it,
+/// its last tread level with the boards at `floor_y`. Its treads are plank
+/// slabs and its two stringers poles laid along its pitch; what the walker
+/// stands on is its flight. Returns its foot, in plan.
+pub fn ladder(
+    meshes: &mut Meshes,
+    surfaces: &mut Vec<Surface>,
+    frame: &Frame,
+    mid: Vec2,
+    out: Vec2,
+    floor_y: f32,
+) -> Vec2 {
+    let risers = (floor_y / LADDER_RISE_M).round().max(1.0) as u32;
+    let rise = floor_y / risers as f32;
+    let len = LADDER_RUN_M * risers as f32;
+    let head = mid + out * BOARD_OUT_M;
+    let foot = head + out * len;
+    let dir = -out;
+    let across = Vec2::new(-dir.y, dir.x);
+    surfaces.push(Surface::Flight {
+        foot,
+        dir,
+        len,
+        half_width: LADDER_HALF_M,
+        base: 0.0,
+        rise,
+        risers,
+    });
+    let planks = meshes.entry("plank".into()).or_default();
+    for i in 0..risers {
+        let a = foot + dir * (LADDER_RUN_M * i as f32);
+        let b = a + dir * LADDER_RUN_M;
+        let top = rise * (i + 1) as f32;
+        let quad = [
+            a - across * LADDER_HALF_M,
+            b - across * LADDER_HALF_M,
+            b + across * LADDER_HALF_M,
+            a + across * LADDER_HALF_M,
+        ];
+        slab(planks, frame, &quad, top - TREAD_M, top);
+    }
+    // The stringers: a slab each along the pitch, from the ground at the
+    // foot to the boards' top at the head, outside the treads' ends.
+    let poles = meshes.entry("poles".into()).or_default();
+    for side in [-1.0f32, 1.0] {
+        let off = across * side * (LADDER_HALF_M + STRINGER_W_M * 0.5);
+        stringer(poles, frame, foot + off, head + off, floor_y, dir);
+    }
+    foot
+}
+
+/// A stringer from `a` on the ground to `b` at `top`: a square-cut beam of
+/// [`STRINGER_W_M`] by [`STRINGER_D_M`], its faces hard at its edges, its
+/// grain along it.
+fn stringer(buf: &mut MeshBuf, frame: &Frame, a: Vec2, b: Vec2, top: f32, dir: Vec2) {
+    let side = Vec2::new(-dir.y, dir.x) * (STRINGER_W_M * 0.5);
+    let pitch = Vec3::new(b.x - a.x, top, b.y - a.y);
+    let length = pitch.length();
+    let along = pitch / length.max(1e-3);
+    let s3 = Vec3::new(side.x, 0.0, side.y);
+    // Square to the pitch, up out of it: the beam's depth.
+    let up = s3.normalize().cross(along).normalize();
+    let up = if up.y < 0.0 { -up } else { up };
+    let lo = |p: Vec3| p - up * (STRINGER_D_M * 0.5);
+    let hi = |p: Vec3| p + up * (STRINGER_D_M * 0.5);
+    let pa = Vec3::new(a.x, STRINGER_D_M * 0.5, a.y);
+    let pb = Vec3::new(b.x, top - STRINGER_D_M * 0.5, b.y);
+    let corner = |p: Vec3, s: f32, high: bool| {
+        let q = p + s3 * s;
+        if high { hi(q) } else { lo(q) }
+    };
+    let faces = [
+        (
+            s3,
+            [
+                corner(pa, 1.0, false),
+                corner(pb, 1.0, false),
+                corner(pb, 1.0, true),
+                corner(pa, 1.0, true),
+            ],
+        ),
+        (
+            -s3,
+            [
+                corner(pa, -1.0, false),
+                corner(pb, -1.0, false),
+                corner(pb, -1.0, true),
+                corner(pa, -1.0, true),
+            ],
+        ),
+        (
+            up,
+            [
+                corner(pa, -1.0, true),
+                corner(pb, -1.0, true),
+                corner(pb, 1.0, true),
+                corner(pa, 1.0, true),
+            ],
+        ),
+        (
+            -up,
+            [
+                corner(pa, -1.0, false),
+                corner(pb, -1.0, false),
+                corner(pb, 1.0, false),
+                corner(pa, 1.0, false),
+            ],
+        ),
+        (
+            -along,
+            [
+                corner(pa, -1.0, false),
+                corner(pa, 1.0, false),
+                corner(pa, 1.0, true),
+                corner(pa, -1.0, true),
+            ],
+        ),
+        (
+            along,
+            [
+                corner(pb, -1.0, false),
+                corner(pb, 1.0, false),
+                corner(pb, 1.0, true),
+                corner(pb, -1.0, true),
+            ],
+        ),
+    ];
+    for (n, p) in faces {
+        let n = n.normalize_or_zero();
+        let uv = p.map(|q| {
+            Vec2::new(
+                (q - pa).dot(along) * 0.5,
+                (q - pa).dot(up) * 0.5 + (q - pa).dot(s3.normalize()) * 0.5,
+            )
+        });
+        quad(buf, frame, p, n, uv);
     }
 }
