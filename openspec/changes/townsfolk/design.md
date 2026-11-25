@@ -2271,6 +2271,36 @@ what the planner's ghost and the map show of it.
 - **Captures.** The ghost of the bridge from the bridge capture's spot, and
   of a road with lamps, by day.
 
+**42o, as built (2026-11-25).** As written above. Tests:
+`roads::tests::the_ghost_carries_a_bridge_s_deck_posts_and_rails_and_its_lamp_posts`
+and the escort test's marker checks
+(`economy::tests::a_trader_leads_the_player_along_the_road_and_the_escort_is_paid`).
+The capture instrument holds the planner's aim on the checked road's far
+end (`roads::planner::AimPin`, set only by `--road-plan ghost-*`), opens it
+from its near end (a bridge is laid from the bank it starts on: the other
+way round the same cells were "Too wide to bridge"), and logs its stand
+point's `--yaw` by `place::yaw_of`. Captures: `road-planner-ghost-lamps-1100.jpg`
+and its close crop. The ghost of the bridge is not captured: at the bridge
+spot the lifted eye (42n) looks down on forest canopy over the road.
+
+**Found in the captures (2026-11-25; not fixed, for the owner).**
+- **A deck awash.** `road-bridge.jpg`: where a river runs bank-full, the
+  deck (the bank's height, `LIFT_M` over it) stands at the water's surface,
+  and the river draws its ripples over the planks. The rule that a deck
+  stands over the water (`planner::bridged`) holds by a hair. Fixing it is
+  either a render change to the water under a deck, which waits for the
+  session that owns rendering, or the deck raised off its bank (a step or
+  a ramp onto every bridge, the world's included): a look change, for the
+  survey with this screenshot. Recommendation: the deck a quarter metre
+  over the water where the river is that full, its ends ramped on the
+  bank's cell, as a new road version for the world's bridges.
+- **Rails as panels.** The bridge's rails are solid timber panels a metre
+  high along each open side, as the approved roads mockup draws them
+  (`mockup-roads-bridge-11h00.jpg`). Close up they box the deck in like a
+  trough, which sits uneasily with "no obvious primitives" (2026-11-22).
+  A rail of posts and a top bar is the alternative; it is a look change
+  for the owner, with this screenshot.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town

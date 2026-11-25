@@ -93,3 +93,24 @@ reads faintly over the desert sand in these frames; it is a tunable in
 `road_planner.ron`. No shot at 22:30 of the planner scenes was taken (a
 shot is about half an hour on lavapipe here).
 
+
+## The slope, the bridge and the planner's ghost (2026-11-25, tasks 14.5 and 14.13)
+
+`tools/capture_road_planner.sh` (`ONLY=slope`, `bridge`, `ghost-lamps`):
+the instrument finds a road, logs where to stand, and a second run stands
+there facing along it. Earlier takes faced past the road: the logged
+`--yaw` was a hand-worked bearing with north and south swapped; it is now
+`place::yaw_of`. Lavapipe, no frame times.
+
+| Shot | What it shows |
+| --- | --- |
+| `road-slope.jpg` | A two-wide gravel road climbing ahead from 1.5 m behind its first stake, staked and paved through the paving's own calls: one surface across both lanes, textured and lit as the ground. |
+| `road-bridge.jpg` | A one-wide gravel road onto a plank bridge over a bank-full river, on foot from its first cell. Two findings, not fixed here (see design 42o, "Found in the captures"): the deck stands at the river's surface, so the water draws its ripples over the planks; and the rails are the approved mockup's solid timber panels, which box the deck in. |
+| `road-planner-ghost-lamps-1100.jpg` | A road with lamps open in the planner, nothing staked (`ghost-lamps`; three wide was refused on this slope, so one wide): the ghost cells up the view and the bill (2 lanterns, short in the pack, in red). |
+| `road-planner-ghost-lamps-1100-close.jpg` | That frame's ghost, cropped and scaled 3x: the lamp post's ghost on its cell beside the road, in the plan's tint; the lantern head stands behind the cactus in this take. |
+
+Not committed: the ghost of the bridge. With the stakes in hand the eye
+lifts 15 m (design 42n), and at the bridge spot the forest's canopy hides
+the road; the planner takes the road (the bill counts 30 planks and 5
+logs), and the ghost's deck, posts and rails are pinned by
+`roads::tests::the_ghost_carries_a_bridge_s_deck_posts_and_rails_and_its_lamp_posts`.
