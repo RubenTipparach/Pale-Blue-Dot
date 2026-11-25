@@ -847,3 +847,92 @@ fn the_planner_view_eases_up_with_stakes_in_hand_and_back_down() {
         .offset(Vec3::Y, Vec3::NEG_Z);
     assert_eq!((offset, tilt), (Vec3::ZERO, 0.0), "the walker's own eye");
 }
+
+/// `townsfolk` design 42d (task 14.5): the planner's bill falls by one
+/// gravel for each cell paved, and the HUD line is drawn red while the pack
+/// is short of a good it names and not once it holds enough; with the
+/// shovel in hand the compass's tick is on the nearest cell not yet paved.
+#[test]
+fn the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::roads::planner as core;
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let pcfg = paving::load_planner();
+    assert_eq!(pcfg.cost_scale, 1.0, "one gravel a cell");
+    let (a, b) = staked_ground();
+    let (ka, kb) = (paving::key_of(a).unwrap(), paving::key_of(b).unwrap());
+    let mut save = WorldSave::memory_only();
+    let mut slots = Slots::new();
+    let (stake, gravel) = (Item::Good(Good::SURVEY_STAKES), Item::Good(Good::GRAVEL));
+    slots.give(stake, 4);
+    paving::end_road(
+        &mut save,
+        &mut slots,
+        ka,
+        kb,
+        core::How::default(),
+        &|_| false,
+        &config,
+        &cfg,
+        &pcfg,
+    )
+    .unwrap();
+    let bill = |save: &WorldSave| {
+        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+        core::bill(
+            &core::plans(&save.records),
+            None,
+            &roads::built(&save.records),
+            &|_| false,
+            &ground,
+            &pcfg,
+            cfg.ford_depth_m,
+        )
+    };
+    let cells = core::plans(&save.records).values().next().unwrap().roads[0].centre();
+    let start = bill(&save);
+    assert_eq!(start.gravel as usize, cells.len());
+    assert_eq!(start.left as usize, cells.len());
+    // The HUD against a pack of `gravel` gravel.
+    let line = |b: core::Bill, gravel: u32| {
+        let mut aim = planner::PlannerAim::default();
+        aim.showing = true;
+        aim.bill = b;
+        aim.have = [4, gravel, 0, 0, 0];
+        planner::hud_line(&aim, &planner::Planner::default()).1
+    };
+    assert_eq!(
+        line(start, 0),
+        crate::ui_kit::WAYPOINT,
+        "short of gravel: red"
+    );
+    assert_eq!(line(start, start.gravel), crate::ui_kit::LABEL, "enough");
+    // The tick: the nearest cell not paved, from the road's first end.
+    let tick = |save: &WorldSave| {
+        let marked: Vec<u32> = paving::marks(save).0.into_keys().collect();
+        paving::nearest_unpaved(&marked, a, pcfg.ghost_reach_m)
+    };
+    assert_eq!(tick(&save), Some(cells[0]));
+    slots.give(gravel, 3);
+    for (n, &key) in cells.iter().take(3).enumerate() {
+        paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg).unwrap();
+        let now = bill(&save);
+        assert_eq!(now.gravel, start.gravel - 1 - n as u32, "one gravel a cell");
+        assert_eq!(now.left, start.left - 1 - n as u32);
+        assert_eq!(tick(&save), Some(cells[n + 1]), "on to the next cell");
+        assert_eq!(line(now, slots.count(gravel)), crate::ui_kit::WAYPOINT);
+    }
+    assert_eq!(slots.count(gravel), 0);
+    // None in reach from far off.
+    let far = a.normalize() * (a.length()) + a.any_orthonormal_vector() * 500.0;
+    assert_eq!(
+        paving::nearest_unpaved(
+            &paving::marks(&save).0.into_keys().collect::<Vec<_>>(),
+            far,
+            pcfg.ghost_reach_m
+        ),
+        None
+    );
+}
