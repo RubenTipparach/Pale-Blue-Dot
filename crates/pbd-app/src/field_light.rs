@@ -743,6 +743,11 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
 /// asked again only when the mesh moves, the field only when it changes.
 struct Corners {
     raw: [Vec3; 8],
+    /// Each corner's ground (its radius) and where it was asked: the
+    /// generator is asked again only once the corner has gone `GROUND_REASK_M`
+    /// from there (`memory-leak`, towns at 60 fps: asked every frame for every
+    /// moving townsperson's corners it was most of a town's frame).
+    ground: [(Vec3, f32); 8],
     points: [Vec3; 8],
     key: (usize, u64, bool),
     sky: [Vec4; 2],
@@ -773,6 +778,10 @@ impl Corners {
         )
     }
 }
+
+/// How far a mesh's corner goes before its ground is asked again, m. The
+/// ground stands in whole metres on cells 2.8 m across.
+const GROUND_REASK_M: f32 = 0.25;
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
 /// (`lamps-and-lanterns` decision 2), and write its row. A mesh that has not
@@ -875,6 +884,7 @@ fn light_from_the_field(
         let entry = cache.entry(entity).or_insert_with(|| Corners {
             // NaN is never near, so the first frame reads everything.
             raw: [Vec3::NAN; 8],
+            ground: [(Vec3::NAN, 0.0); 8],
             points: raw,
             key,
             sky: [Vec4::ONE; 2],
@@ -890,7 +900,11 @@ fn light_from_the_field(
             .all(|(a, b)| (*a - *b).abs().max_element() <= 1e-3);
         if !still {
             entry.raw = raw;
+            let mut k = 0;
+            let ground = &mut entry.ground;
             entry.points = raw.map(|mut at| {
+                let corner = k;
+                k += 1;
                 // A town's mesh spans the town, and its box, square to the
                 // render frame's axes, reaches into the ground wherever the
                 // town's up is tilted from them: at Theringford two corners
@@ -899,11 +913,15 @@ fn light_from_the_field(
                 // reads the field just over it instead: the town stands on
                 // the ground, never in it.
                 if like_terrain && let Some(up) = at.try_normalize() {
-                    let ground = PLANET_RADIUS
-                        + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
-                        + GROUND_CLEAR_M;
-                    if at.length() < ground {
-                        at = up * ground;
+                    let (asked_at, radius) = &mut ground[corner];
+                    if !(asked_at.distance(at) <= GROUND_REASK_M) {
+                        *asked_at = at;
+                        *radius = PLANET_RADIUS
+                            + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
+                            + GROUND_CLEAR_M;
+                    }
+                    if at.length() < *radius {
+                        at = up * *radius;
                     }
                 }
                 at
