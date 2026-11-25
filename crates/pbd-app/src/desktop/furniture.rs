@@ -860,13 +860,14 @@ pub fn plugin(app: &mut App) {
 #[derive(Resource)]
 struct ShotDone;
 
-/// `PBD_FURNITURE_SHOT=<room|seated|asleep|chest>[:<frame>]`: a capture
+/// `PBD_FURNITURE_SHOT=<room|seated|asleep|asleep-face|chest>[:<frame>]`: a capture
 /// instrument (`furniture` task 3.8), never read in play. At its frame
 /// (default 140), once a town's furniture stands, it puts the walker where a
 /// player would be for the shot and does what F would: `room` stands at the
 /// chair nearest a table and looks across it; `seated` sits on that chair;
 /// `asleep` stands at the foot of a bed a townsperson lies in (or the nearest
-/// bed) looking at the pillow; `chest` stands at the nearest town container
+/// bed) looking at the pillow, `asleep-face` over the pillow looking down
+/// at their face; `chest` stands at the nearest town container
 /// and opens it.
 pub fn scripted(world: &mut World) {
     let Ok(plan) = std::env::var("PBD_FURNITURE_SHOT") else {
@@ -913,7 +914,7 @@ pub fn scripted(world: &mut World) {
     let seats = &world.resource::<Seats>().0;
     let target = match mode.as_str() {
         "room" | "seated" => nearest(&|p| p.kind == Kind::Chair && has_table(p)),
-        "asleep" => nearest(&|p| {
+        "asleep" | "asleep-face" => nearest(&|p| {
             p.kind == Kind::Bed && matches!(seats.holder((p.id, 0)), Some(Who::Person { .. }))
         })
         .or_else(|| nearest(&|p| p.kind == Kind::Bed)),
@@ -928,6 +929,12 @@ pub fn scripted(world: &mut World) {
         "asleep" => (
             piece.point(Vec3::new(0.35, 1.6, 1.45)),
             piece.point(Vec3::new(0.0, 0.5, -0.55)),
+        ),
+        // Over the pillow, looking down at the sleeper's face (playtest-fixes
+        // design 5): their eyes shut.
+        "asleep-face" => (
+            piece.point(Vec3::new(0.25, 1.45, -0.05)),
+            piece.point(Vec3::new(0.0, 0.55, -0.6)),
         ),
         "chest" => (
             piece.point(Vec3::new(0.2, 1.6, 1.1)),
