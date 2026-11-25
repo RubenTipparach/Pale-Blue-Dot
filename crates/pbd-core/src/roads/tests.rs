@@ -750,3 +750,91 @@ fn world_routes_are_pinned() {
     }
     assert_eq!((cells, h), (252, 12_581_044_004_924_841_607));
 }
+
+/// The ground the roads' version pins are planned over: rolling terraces
+/// round `here` with a deep river band across them, so the roads climb,
+/// cut, fill and bridge.
+fn pinned_ground(key: u32) -> Option<Ground> {
+    let (e, n) = local(centre(key)?);
+    let mut g = dry(5 + ((e * 0.011).sin() * 3.0 + (n * 0.017).cos() * 3.0) as i32);
+    if (e - n * 0.3 - 200.0).abs() < 7.0 {
+        g.top_m -= 3;
+        g.water = Water::River {
+            depth_m: 2,
+            surface_m: g.top_m + 2,
+        };
+    }
+    Some(g)
+}
+
+/// A road net digested cell by cell (FNV-1a): each road's ends and
+/// surface, then every cell's key, ground, kind, deck, raise, cut or fill
+/// and slope.
+fn net_digest(roads: &[Road]) -> (usize, u64) {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    let mut eat = |v: i64| {
+        for byte in v.to_le_bytes() {
+            h ^= u64::from(byte);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    };
+    let mut cells = 0;
+    for r in roads {
+        eat(i64::from(r.from_site));
+        eat(i64::from(r.to_site));
+        eat(r.surface as i64);
+        for c in &r.cells {
+            cells += 1;
+            let (kind, deck) = match c.kind {
+                Kind::Ground => (0, 0),
+                Kind::Ford => (1, 0),
+                Kind::Bridge { deck_m } => (2, deck_m),
+            };
+            for v in [
+                i64::from(c.key),
+                i64::from(c.base_m),
+                kind,
+                i64::from(deck),
+                i64::from(c.raised),
+                i64::from(c.cut_fill),
+                i64::from(c.up.unwrap_or(0)),
+                i64::from(c.from.unwrap_or(0)),
+            ] {
+                eat(v);
+            }
+        }
+    }
+    (cells, h)
+}
+
+/// The settlements of the fixed layout within 1.5 km of `here`, for a
+/// plan quick enough for a test.
+fn near_layout() -> Vec<Settlement> {
+    fixed_layout()
+        .into_iter()
+        .filter(|t| {
+            let (e, n) = local(t.direction);
+            e.abs() < 1_500.0 && n.abs() < 1_500.0
+        })
+        .collect()
+}
+
+/// Roads version 3 (`townsfolk` design 43): a world it planned keeps every
+/// road cell for cell, so its cells are pinned as it shipped, before
+/// version 4 (design 43a) was added beside it.
+#[test]
+fn version_3_cells_are_pinned() {
+    let mut cfg = RoadsConfig::default().for_version(3);
+    cfg.max_expanded = 20_000;
+    let roads = plan(&near_layout(), &pinned_ground, &cfg, RADIUS, 2);
+    assert_eq!(net_digest(&roads), (916, 12_558_460_843_142_704_152));
+    // Every one a walled town: the same links in gravel, where version 4
+    // differs.
+    let walled: Vec<Settlement> = near_layout()
+        .into_iter()
+        .map(|t| Settlement { large: true, ..t })
+        .collect();
+    let roads = plan(&walled, &pinned_ground, &cfg, RADIUS, 2);
+    assert!(roads.iter().all(|r| r.surface == Surface::Gravel));
+    assert_eq!(net_digest(&roads), (916, 16_745_808_329_189_319_241));
+}
