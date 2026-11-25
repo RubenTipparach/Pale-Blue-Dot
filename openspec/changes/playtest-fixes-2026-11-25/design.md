@@ -168,9 +168,13 @@ gain their smithy, without touching anything the player built:
 
 Until the owner answers, nothing changes: old towns keep no smithy.
 
-Captures: `docs/design/img/blacksmith-old-layout.png` (a town at layout 2,
-the smith at work on bare ground) and `docs/design/img/blacksmith-layout3.png`
-(the same town laid at layout 3, the forge, anvil and shed).
+Captures (lavapipe, 11:00, the same spot by Holbrook's smith, a capture
+world laid fresh and then reopened with Holbrook's stored record set back
+to layout 2, nothing else changed):
+- `docs/design/img/blacksmith-old-layout.jpg`: layout 2, the smith at work
+  on bare ground, no shed, no anvil, no forge: the owner's report;
+- `docs/design/img/blacksmith-layout3.jpg`: layout 3, the forge, the anvil
+  and the shed round the smith.
 
 ## 7. A parcel's pick-up and drop-off
 
