@@ -1326,7 +1326,7 @@ pub fn lamps(
                 if crate::sites::arc_m(c, town.direction, radius_m) > cfg.lamp_town_m {
                     break;
                 }
-                if (k as u32 + 1) % cfg.lamp_every != 0 {
+                if !(k as u32 + 1).is_multiple_of(cfg.lamp_every) {
                     continue;
                 }
                 let left = c.cross(n - c).normalize_or_zero();
@@ -1391,8 +1391,11 @@ struct RoadBody2 {
     from: u32,
     to: u32,
     surface: Surface,
-    cells: Vec<(u32, i32, u8, i32, bool, u32, u32, i32)>,
+    cells: Vec<CellRecord>,
 }
+
+/// One road cell as it is stored, field for field (schema 2's tuple).
+type CellRecord = (u32, i32, u8, i32, bool, u32, u32, i32);
 
 /// The net record's body.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1409,7 +1412,7 @@ pub fn road_id(from_site: u32, to_site: u32) -> u64 {
 /// A road as its record: schema 1, or [`CUT_FILL_SCHEMA`] where any cell is
 /// cut or filled.
 pub fn to_record(road: &Road) -> Record {
-    let cells: Vec<(u32, i32, u8, i32, bool, u32, u32, i32)> = road
+    let cells: Vec<CellRecord> = road
         .cells
         .iter()
         .map(|c| {

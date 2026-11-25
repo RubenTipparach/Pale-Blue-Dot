@@ -1467,10 +1467,11 @@ pub fn take_back(
         }
         road.stakes.remove(s);
         road.cells = None;
-        if s > 0 && s < n - 1 {
-            if let Some((_, why)) = first_clash(&lay(road, ground, tree, cfg, ford_depth_m)) {
-                return Err(why);
-            }
+        if s > 0
+            && s < n - 1
+            && let Some((_, why)) = first_clash(&lay(road, ground, tree, cfg, ford_depth_m))
+        {
+            return Err(why);
         }
     }
     for p in after.values_mut() {

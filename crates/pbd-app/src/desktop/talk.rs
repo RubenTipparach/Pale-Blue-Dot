@@ -13,6 +13,7 @@
 //! this module only shows it and passes the presses on. Labels and plain
 //! lines only (CLAUDE.md, "Game text is plain").
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use super::scroll_list::{self, ListView};
 use super::slots::{self, Hotbar, ItemIcons};

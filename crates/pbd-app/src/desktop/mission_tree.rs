@@ -8,6 +8,7 @@
 //! a branch reads as one straight line and its side chains hang below; a
 //! card sits on its first child's row. `after` gates are never drawn.
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;

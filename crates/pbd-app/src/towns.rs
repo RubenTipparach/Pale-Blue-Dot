@@ -1242,9 +1242,10 @@ pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
 /// made from it is shared too and its meshes batch. No image is a flame;
 /// a fire's texture (the forge's coals and flame) is drawn unlit too.
 #[derive(Resource, Default)]
-pub struct TownMaterials(
-    std::collections::HashMap<(Option<AssetId<Image>>, bool, bool), Handle<StandardMaterial>>,
-);
+pub struct TownMaterials(std::collections::HashMap<MaterialKey, Handle<StandardMaterial>>);
+
+/// A town material's key: its image, whether it is cut out, whether unlit.
+type MaterialKey = (Option<AssetId<Image>>, bool, bool);
 
 /// A town texture's material, made the first time it is asked for.
 pub(crate) fn town_material(

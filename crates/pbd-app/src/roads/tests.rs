@@ -278,7 +278,7 @@ fn the_player_lays_gravel_and_dirt_and_takes_them_up() {
     // Dry ground near the start: the first of a few cells east that is.
     let dry = (0..40)
         .map(|k| (start + east * (k as f32 * 3.0 / config.radius_m)).normalize())
-        .filter_map(|d| roads::nearest_key(d))
+        .filter_map(roads::nearest_key)
         .find(|&k| {
             let c = roads::centre(k).unwrap();
             let top = pbd_core::column::surface_m(&config, c);

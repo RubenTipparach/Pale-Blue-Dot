@@ -13,6 +13,7 @@
 //! a stack in hand leaves it where it always was: nothing is ever off the
 //! slots, and nothing can be lost by a close, a crash or a full pack.
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use super::slots::{self, Hotbar, ItemIcons, SlotCell};
 use bevy::prelude::*;

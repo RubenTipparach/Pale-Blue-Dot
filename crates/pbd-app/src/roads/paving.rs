@@ -496,9 +496,12 @@ pub fn pave(
     Ok(cell)
 }
 
+/// The marked cells with their sides, and the paved cells marked for removal.
+pub type Marks = (BTreeMap<u32, (Option<u32>, Option<u32>)>, Vec<u32>);
+
 /// Every marked cell (a plan's cell not paved) with its sides, and the
 /// paved cells marked for removal.
-pub fn marks(save: &WorldSave) -> (BTreeMap<u32, (Option<u32>, Option<u32>)>, Vec<u32>) {
+pub fn marks(save: &WorldSave) -> Marks {
     let config = crate::planet::terrain_config();
     let pcfg = load_planner_cached();
     let plans = planner::plans(&save.records);

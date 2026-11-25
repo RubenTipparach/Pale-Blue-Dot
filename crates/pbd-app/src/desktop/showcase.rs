@@ -1362,7 +1362,7 @@ impl Bot {
         if block.is_none() && self.stuck_s > 1.0 {
             let looked = self
                 .aimed_cell(s)
-                .filter(|(_, l)| (feet_layer..=feet_layer + 1).contains(&(*l as usize)))
+                .filter(|(_, l)| (feet_layer..=feet_layer + 1).contains(l))
                 .and_then(|c| digging::material_of(s.fine, s.save, c))
                 .filter(|m| {
                     m != &Material::Air
@@ -1405,7 +1405,7 @@ impl Bot {
                 // with a shovel pressing nothing for minutes).
                 let hit = self
                     .aimed_cell(s)
-                    .filter(|(_, l)| (feet_layer..=feet_layer + 2).contains(&(*l as usize)));
+                    .filter(|(_, l)| (feet_layer..=feet_layer + 2).contains(l));
                 let hit_material = hit
                     .and_then(|c| digging::material_of(s.fine, s.save, c))
                     .filter(|m| {
@@ -1429,7 +1429,7 @@ impl Bot {
                 }
                 // The look held on a block in front of the planned one for a
                 // second: that block is in the way, and is dug first.
-                let on = hit.is_some_and(|(k, l)| k == key && l as usize == layer)
+                let on = hit.is_some_and(|(k, l)| k == key && l == layer)
                     || (hit_material.is_some() && (aimed || th.block_s > 1.0));
                 if (th.block_s % 2.0) < s.dt {
                     info!(
@@ -2863,17 +2863,17 @@ fn run(
             }
         },
         Act::Shore | Act::Fresh => match bot.phase {
-            0 => match {
+            0 => {
                 bot.fresh = matches!(act, Act::Fresh);
-                shore(s, bot.fresh)
-            } {
-                Some((water, stand)) => {
-                    bot.goal = Some(Goal::Point(water, stand));
-                    bot.next_phase();
-                    Status::Running
+                match shore(s, bot.fresh) {
+                    Some((water, stand)) => {
+                        bot.goal = Some(Goal::Point(water, stand));
+                        bot.next_phase();
+                        Status::Running
+                    }
+                    None => Status::Fail("no sea within 900 m".into()),
                 }
-                None => Status::Fail("no sea within 900 m".into()),
-            },
+            }
             1 => {
                 let Some(Goal::Point(_, stand)) = bot.goal else {
                     return Status::Fail("lost the shore".into());
@@ -4297,7 +4297,7 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
             // fifteen metres along the shore, as a player moves on (seen
             // 2026-11-20: two caught, then forty casts and no bite).
             if bot.tries > 0
-                && bot.tries % 12 == 0
+                && bot.tries.is_multiple_of(12)
                 && phase == Phase::Ready
                 && let Some(Goal::Point(water, stand)) = bot.goal
             {

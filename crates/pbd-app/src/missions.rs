@@ -327,6 +327,7 @@ impl RecipeLocks {
 /// A recipe whose output the world already holds (a tool owned at its tier
 /// or better, an item carried, a block placed) stays open, so a world from
 /// before the tree loses nothing (T.3).
+#[allow(clippy::too_many_arguments)]
 pub fn refresh_locks(
     chain: Res<MissionChain>,
     missions: Res<Missions>,

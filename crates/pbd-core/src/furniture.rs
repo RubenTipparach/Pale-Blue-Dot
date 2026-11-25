@@ -393,7 +393,7 @@ pub fn want(night: bool, watch: bool, sitting_post: bool, idle: bool, seed: u32)
     if night {
         return Want::Bed;
     }
-    if sitting_post || (idle && seed % 3 == 0) {
+    if sitting_post || (idle && seed.is_multiple_of(3)) {
         Want::Seat
     } else {
         Want::Nothing

@@ -276,7 +276,7 @@ pub fn loot(id: u64, trade: Trade, kind: Kind) -> Store {
     let goods = trade.goods();
     let common = Trade::Common.goods();
     for k in 0..n {
-        let from = if k == 0 || roll(&mut s) % 3 != 0 {
+        let from = if k == 0 || !roll(&mut s).is_multiple_of(3) {
             goods
         } else {
             common
@@ -287,7 +287,7 @@ pub fn loot(id: u64, trade: Trade, kind: Kind) -> Store {
         out.give(Stack::new(item, count));
     }
     let chance = if trade == Trade::Trader { 1 } else { 4 };
-    if roll(&mut s) % chance == 0 {
+    if roll(&mut s).is_multiple_of(chance) {
         out.coins = 2 + roll(&mut s) % 14;
     }
     out

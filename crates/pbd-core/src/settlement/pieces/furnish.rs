@@ -188,7 +188,7 @@ impl Layout<'_> {
             let side = ((seed + k * 3 + k / 2) % 6) as u8;
             let kind = if benches {
                 Kind::Bench
-            } else if mix(seed ^ k) % 3 == 0 {
+            } else if mix(seed ^ k).is_multiple_of(3) {
                 Kind::Stool
             } else {
                 Kind::Chair
@@ -220,14 +220,14 @@ pub(super) fn layout(plan: &Plan, def: &BuildingDef, seed: u64) -> Vec<Laid> {
     match kind {
         Use::House => {
             let ground = l.cells_by_middle(0);
-            if storeys > 1 || n > 1 {
-                if let Some(&t) = ground.iter().find(|&&i| l.doors(i, 0).is_empty()) {
-                    l.table_set(t, 0, seed, wide && mix(seed) % 2 == 0);
-                }
+            if (storeys > 1 || n > 1)
+                && let Some(&t) = ground.iter().find(|&&i| l.doors(i, 0).is_empty())
+            {
+                l.table_set(t, 0, seed, wide && mix(seed).is_multiple_of(2));
             }
             // A crate or drawers by the ground floor's walls.
             for (k, &i) in ground.iter().rev().enumerate().take(2) {
-                let piece = if (seed + k as u64) % 2 == 0 {
+                let piece = if (seed + k as u64).is_multiple_of(2) {
                     Kind::Crate
                 } else {
                     Kind::Drawers
@@ -257,7 +257,7 @@ pub(super) fn layout(plan: &Plan, def: &BuildingDef, seed: u64) -> Vec<Laid> {
                 }
             }
             {
-                let piece = if mix(seed ^ 7) % 2 == 0 {
+                let piece = if mix(seed ^ 7).is_multiple_of(2) {
                     Kind::Closet
                 } else {
                     Kind::Drawers

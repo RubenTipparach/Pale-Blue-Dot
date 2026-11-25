@@ -3611,7 +3611,7 @@ fn a_towns_layout_names_how_its_ground_finds_a_cell() {
     let (patch, _) = patch();
     let town = laid_village(&village());
     assert_eq!(town.layout, record::LAYOUT_VERSION);
-    assert!(record::LAYOUT_VERSION >= 2);
+    const { assert!(record::LAYOUT_VERSION >= 2) };
     let mut old = town.clone();
     old.layout = 1;
     let mut store = crate::records::Records::new();

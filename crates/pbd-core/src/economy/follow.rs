@@ -110,7 +110,7 @@ pub fn who(job: u64, people: usize, keepers: &[usize]) -> Option<u32> {
     if others.is_empty() {
         return None;
     }
-    let pick = others[(super::jobs::mix(job ^ 0x7768_6f) % others.len() as u64) as usize];
+    let pick = others[(super::jobs::mix(job ^ 0x0077_686f) % others.len() as u64) as usize];
     Some(pick as u32)
 }
 
