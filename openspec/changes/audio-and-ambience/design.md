@@ -670,3 +670,50 @@ The ambience beds' shore and open-water reads (the surf bed) are a 25 m to
 seabed block 1 m under the sea level, with the tide at its lowest:
 - the audio's reading is dry (it fails before: 1 m of water);
 - at the highest tide it is wet.
+
+## Master does not quiet rain and thunder (owner, 2026-11-25)
+
+**The report.** "rain and thunder specifically ignore my master slider",
+with the Sound tab at Master 0 %, Effects 100 %, Ambience 80 %. The owner's
+rule for the sliders: "master * any other slider = volume".
+
+**What the code does today (read, 2026-11-25).**
+- The rule the owner gives is the rule built: every bus's slider is a gain
+  in dB (`volume_db`, 50 % is -12 dB), and master is a gain on kira's main
+  track, so the two multiply.
+- Rain (`rain_hit_water`, the rain beds) and thunder (`thunder_*`) play
+  through that main track like every other sound. They are the only
+  streamed effects (`stream: true`); a stream plays on its voice's
+  sub-track under `effects`, under `world`. The reverb is a send track,
+  and kira 0.12 sums send tracks into the main track before its volume
+  (`backend/resources/mixer.rs`, `track/main.rs`), so the reverb tail is
+  under master too.
+- There is one audio engine (`Engine::open` has one caller) and no other
+  sound output (`bevy_audio` is off; nothing else opens cpal).
+- **The one way the sliders are not read:** `default_volumes`. A launch
+  with `--capture`, `--frame-log` or `PBD_TAKE_SOUND=1` plays every bus at
+  the default volumes (master 80 %) and ignores the Sound tab entirely,
+  so all five sliders do nothing. A playtest started with `--frame-log`
+  (the standing way to judge frame time) hears rain and thunder whatever
+  master says.
+
+So the code alone does not show a sound that skips master. Either the run
+was a `default_volumes` launch, or something in the device path does what
+the code does not say. Neither is proved yet.
+
+**The plan.**
+1. `default_volumes` only where nobody is listening: a fixed-step capture
+   and a sound take (`PBD_TAKE_SOUND=1`). `--frame-log` is a real-time run
+   someone plays, so it reads the player's sliders. Frame time does not
+   move with a bus's gain (the same voices are mixed at any level).
+2. An instrument that proves the rule: a test on the mock engine, the real
+   mixer system and the real cues, with master at 0 % and every other
+   slider at 100 %, playing a streamed thunder, the rain loop and a rain
+   bed; the output after master is silent. The meters and the tap sit
+   before the main track's volume today, so they cannot see master: the
+   test reads the renderer's own output (a test backend), and the main
+   meter moves after master.
+3. If that test passes and the owner still hears rain at master 0 % in a
+   plain launch, the next step is the owner's `--audio-log` line
+   `AUDIO volumes master=...` from that run, which says whether the slider
+   reached the mixer.

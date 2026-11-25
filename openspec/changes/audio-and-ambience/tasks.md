@@ -181,6 +181,11 @@
   Verify: a capture of the screen in `docs/screenshots/audio-and-ambience/`.
  Done 2026-11-15: a SOUND tab (the tabs narrowed to 5 px a side to
   fit six), `docs/screenshots/audio-and-ambience/settings-sound.png`.
+- [ ] 7.5 Master quiets everything (design, "Master does not quiet rain and
+  thunder"): `--frame-log` reads the player's sliders; a mock-engine test
+  plays streamed thunder, the rain loop and a rain bed at master 0 % and
+  hears silence after master.
+
 ## 8. Instruments and cost
 
 - [ ] 8.1 `--audio-log` and the bus meters (a custom kira effect writing peak
