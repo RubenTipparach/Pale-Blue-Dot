@@ -2749,6 +2749,47 @@ fn print_the_days_linenleighs_board_posts_a_lost_villager() {
     }
 }
 
+/// A measurement instrument, run by hand (playtest-fixes design 7,
+/// `townsfolk` design 47): the first game days on which Linenleigh's board
+/// posts a delivery, in the memory-only world the captures play, so a
+/// capture of a parcel's pick-up can be taken on one.
+#[test]
+#[ignore]
+fn print_the_days_linenleighs_board_posts_a_delivery() {
+    use pbd_core::economy::jobs::{Board, JobKind, Town};
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
+    let cfg = crate::economy::EconomyConfig::load();
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: crate::saves::WorldSave::memory_only().seed(),
+    };
+    let town = Town {
+        site: site.id,
+        kind: site.kind,
+        neighbours: &[1, 2, 3],
+        roads_to: &[],
+    };
+    let mut found = 0;
+    for day in 0..200 {
+        let jobs = board.posted(town, day, 0, &Default::default());
+        if let Some(place) = jobs.iter().position(|j| j.kind == JobKind::Deliver) {
+            println!(
+                "day {day}: a delivery, row {place} of {} on the board",
+                jobs.len()
+            );
+            found += 1;
+            if found == 5 {
+                break;
+            }
+        }
+    }
+}
+
 /// Every texture the settlement manifest lists is on disk at the size it
 /// lists, the forge's new ones (`townsfolk` design 26b) among them; the
 /// forge's flame is cut out and its coals are not.

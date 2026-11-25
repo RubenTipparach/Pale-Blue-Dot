@@ -32,84 +32,38 @@ If the link step fails with `undefined symbol ... .llvm.<n>`, two builds wrote
 The write-up for all of these is `openspec/changes/playtest-fixes-2026-11-25/`
 (proposal, design sections 1 to 5, tasks).
 
-## Not done: the owner's open reports, in the order to take them
+## Done after (2026-11-25, on `claude/phase-2-1`)
 
-1. **A taken job cannot be made the active mission** (owner: "I dont see a
-   place to select that job as active mission"). The tracker's "Carry a
-   parcel" is the town tree's mission of that name, not the board job.
-   Design 2 of the change has the plan:
-   - add `ShownTree::Jobs` and a third plaque, JOBS (`desktop/mission_tree.rs`,
-     the `TreeTabs` row);
-   - when shown, despawn the tree layer and list `Economy::jobs.taken`, one
-     row each, using `economy::job_line` and the reward;
-   - a TRACK plaque sets `jobs.progress.focus = Some(job.mission_id())` and
-     stores the `JOBS_KIND` record as `Shop::take` does;
-   - the tracker (`desktop/missions.rs`, `show_line`) checks that focus first.
-     A job's `Mission` has an empty title and empty labels (`Job::mission`),
-     so the tracker's title is `job_line` and its one row the job's count;
-   - a tree card's TRACK (`mission_tree.rs` around the `focus_on` calls,
-     line ~1483) clears the job focus.
-   Not started in code.
-2. **The placed torch should look like the held one** (design 4). The
-   placed torch is the terrain shader's post and cap (`planet_surface.wgsl`,
-   lamp section, `LAMP_TORCH`, `t < 30u`). Plan:
-   - draw placed torches within the clutter reach as entities from
-     `held/light.rs`'s `haft()`, `torch_head()` and flame cards, with
-     `LitByField` and `LitLikeTerrain`;
-   - stop the shader drawing a torch's post and cap.
-   Not started.
-3. **Performance degrades the longer the game runs** (owner: "i suspect it
+| What | Where | Proof |
+| --- | --- | --- |
+| A JOBS tab in the Missions screen (beside STARTER and TOWN): every taken job, its town and reward, and TRACK, which makes it the tracker's mission; a card picked on a tree, or the job handed in or given up, clears it (design 2) | `desktop/mission_tree.rs` (`ShownTree::Jobs`, `paint_jobs`, `press_track`), `desktop/missions.rs` (`tracked_job_mission`), `economy::track_job`, `TakenJobs::hand_in` | `a_tracked_job_is_the_trackers_until_a_card_is_picked`, `a_tracked_job_handed_in_is_no_longer_tracked`; `jobs-tab.jpg`, `jobs-tracker.jpg` |
+| The placed torch is the held torch: haft, head and flame, lit like the terrain, faded in and out within the clutter's reach; the shader draws no torch body; the light is unchanged (design 4) | `held/placed.rs`, `planet_surface.wgsl` lamp section | `the_placed_torch_stands_where_the_shaders_did`, `the_haft_is_not_flat_shaded`; `placed-torch-day.jpg`, `placed-torch-night.jpg`, `placed-torch-row-night.jpg` |
+| The blacksmith's station: a finding, not a bug. Smithies stand only in towns laid at layout 3 (from 2026-11-24); a town laid before keeps none, while its smith (derived) stands at work on bare ground. Recommendation and captures for the survey (design 6) | `openspec/changes/playtest-fixes-2026-11-25/design.md` 6 | `docs/design/img/blacksmith-old-layout.jpg`, `blacksmith-layout3.jpg` |
+| "Carry a parcel": the parcel waits with the posting town's trader and is handed over when you talk to them; the job's town is marked on the compass and the map ("Parcel drop-off"); the tracker reads "Get the parcel from the trader", then "Take the parcel to {town}". A save from before keeps its parcel and gains the marker (`townsfolk` design 47) | `TakenJobs::waiting`, `Shop::pick_up`, `economy::parcel_directions`, `desktop/talk.rs`, `compass_bar.rs`, `map_screen.rs` | `a_parcel_waits_until_picked_up_and_an_old_record_has_none_waiting`, `a_delivery_hands_its_parcel_to_the_other_town`, `a_parcel_taken_before_pick_ups_keeps_its_parcel_and_gains_the_marker`; `parcel-*.jpg` |
+
+Captures are in `docs/screenshots/playtest-fixes/` (lavapipe in a cloud
+session: what things look like, never how fast). They include the ones
+owed from before: the tracker on the left (every capture shows it), a
+talker held facing you (`talker-stopped.jpg`, the merchant 200 frames into a
+talk), a sleeper's shut eyes (`asleep-night.jpg`) and a wild plant picked a
+day ago, gone, and picked over two days ago, grown back (`wild-*.jpg`).
+
+## Still open
+
+1. **Performance degrades the longer the game runs** (owner: "i suspect it
    is due to data not being released"), seen at a reef at night with a torch
-   at p50 89 ms. An audit was started and lost: subagents were refused with
-   a billing error (`oauth_org_not_allowed`, "payment is past due").
+   at p50 89 ms. Taken by another session on real hardware.
    - What to look for: per-frame `meshes.add` / `images.add` whose old
      handles are kept, spawns without despawns, and collections that only
      grow.
-   - The files that create assets most: `desktop/farm.rs` (17 sites),
-     `fish.rs` (16), `desktop/map_screen.rs` (12), `fish/places.rs` (11),
-     `townsfolk.rs` (10), `critters.rs` (9), `husbandry.rs` (7),
-     `held/light.rs` and `held.rs` (6 each).
    - Measure on the desktop with `--frame-log` over a 20-minute session, and
-     log entity and asset counts (`Assets<Mesh>::len()`, `Assets<Image>::len()`,
-     the entity count) every minute. A count that only climbs is the leak.
-4. **The blacksmith has no station** (owner: "the black smith doesnt have
-   hist station"). Likely cause: smithies (posts, forge, anvil) stand only in
-   towns stored at layout 3 or later (`pbd_core::settlement::record`,
-   `FORGE_LAYOUT = 3`). A town first stood under layout 1 or 2 keeps no
-   smithy, by design, so its saves stay as played. Check the town's stored
-   `layout` in the owner's save.
-   - If it is under 3, the choice of whether old towns gain a smithy is the
-     owner's. It is a change the world makes to a stored town, so it must
-     never overwrite anything the player built. Write it up with screenshots
-     for the survey.
-   - If it is 3, the smithy's forge is missing for another reason: look at
-     `forge_cell` and the template's `smithies`.
-
-5. **"Carry a parcel" has no pick-up or drop-off place** (owner, 2026-11-25).
-   How it works today:
-   - **Pick-up.** Taking a delivery job at a board puts the parcel straight
-     in the pack (`economy::Shop::take`). There is no place to collect it.
-   - **Drop-off.** Talking to anyone in the job's town (`Job::to`) hands it
-     over (`Shop::deliver`).
-   - **Nothing shows either.** No compass or map marker points to the
-     destination, though a lost villager's job has one (`jobs.lost_marker`,
-     drawn in `desktop/compass_bar.rs` around line 402 and
-     `desktop/map_screen.rs` around line 926). The town tree's "Carry a
-     parcel" (`town_missions.ron`, `deliver`) needs such a job taken, and
-     says no more.
-
-   Recommended:
-   - **A drop-off place.** Mark the destination town's board, or a named
-     recipient there, on the compass and the map, as the lost villager's
-     marker is.
-   - **A pick-up place.** Hand the parcel over at a person in the posting
-     town (the trader or the job's giver), not into the pack on taking.
-   - **Plain text.** The tracker reads "Take the parcel to <town>", from the
-     locale file.
-
-   That changes how a delivery plays, so write it up (a `townsfolk` design
-   section) before code. A save holding a parcel job taken today keeps its
-   parcel in the pack and only gains the marker.
+     log entity and asset counts every minute. A count that only climbs is
+     the leak.
+2. **Old towns and their smithy** waits for the owner's answer in the
+   survey (design 6, with its two captures). Nothing changes until then.
+3. **The placed torch's frame cost** was not measured (no GPU here): each
+   near torch is two field-lit meshes and a flame rebuilt each frame, at
+   most 48. Run `perf_suite.py` on the desktop with a row of torches.
 
 ## Checks run here
 

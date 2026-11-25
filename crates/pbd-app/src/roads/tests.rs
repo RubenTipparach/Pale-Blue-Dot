@@ -936,3 +936,92 @@ fn the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red() {
         None
     );
 }
+
+/// `townsfolk` design 42o: the planner's ghost of a bridged cell is the
+/// bridge piece paving builds (its deck, the posts down to the bed and the
+/// rails), not a flat top; a lamp post stands in it on its cell's ground up
+/// to the lantern's height; a post already holding its lamp is not drawn.
+#[test]
+fn the_ghost_carries_a_bridge_s_deck_posts_and_rails_and_its_lamp_posts() {
+    use pbd_core::roads::planner::LaidCell;
+    use std::collections::BTreeSet;
+    let radius = crate::planet::terrain_config().radius_m;
+    let key = roads::nearest_key(Vec3::new(0.3, 0.6, 0.7)).unwrap();
+    let ahead = roads::neighbours(key)[0];
+    let cell = |deck: Option<i32>| LaidCell {
+        key,
+        centre: key,
+        lane: 0,
+        before: None,
+        after: Some(ahead),
+        low_m: 10,
+        base_m: 10,
+        raised: false,
+        ford: false,
+        deck,
+        bed: Default::default(),
+        up: None,
+        from: None,
+        clash: None,
+    };
+    let centre = roads::centre(key).unwrap() * radius;
+    let heights = |mesh: &Mesh| -> Vec<f32> {
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(p)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("positions");
+        };
+        p.iter()
+            .map(|p| (Vec3::from_array(*p) + centre).length() - radius)
+            .collect()
+    };
+    let road: BTreeSet<u32> = [key, ahead].into();
+    let flat = heights(&planner::ghost_mesh(
+        &[&cell(None)],
+        &road,
+        &[],
+        radius,
+        centre,
+    ));
+    let bridged = heights(&planner::ghost_mesh(
+        &[&cell(Some(14))],
+        &road,
+        &[],
+        radius,
+        centre,
+    ));
+    assert!(
+        bridged.len() > flat.len() * 4,
+        "the deck, posts and rails: {} vertices against the top's {}",
+        bridged.len(),
+        flat.len()
+    );
+    let low = bridged.iter().copied().fold(f32::MAX, f32::min);
+    let high = bridged.iter().copied().fold(f32::MIN, f32::max);
+    assert!(
+        low < 14.0 - roads::piece::DECK_M,
+        "posts under the deck: {low}"
+    );
+    assert!(
+        high > 14.0 + 0.5 * roads::piece::RAIL_M,
+        "rails over it: {high}"
+    );
+    // A lamp post on its ground, the lantern up to about 1.9 m.
+    let ground = |k: u32| {
+        Some(roads::Ground {
+            top_m: if k == ahead { 12 } else { 10 },
+            water: roads::Water::Dry,
+            town: false,
+            player: false,
+        })
+    };
+    let lamps = planner::ghost_lamps([ahead, key], &|k| k == key, &ground);
+    assert_eq!(lamps, vec![(ahead, 12)], "the standing lamp is not drawn");
+    let lamp = heights(&planner::ghost_mesh(&[], &road, &lamps, radius, centre));
+    assert!(!lamp.is_empty());
+    let (low, high) = lamp
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(l, h), &v| (l.min(v), h.max(v)));
+    assert!((low - 12.0).abs() < 0.05, "on its ground: {low}");
+    assert!((high - 13.9).abs() < 0.05, "the lantern's top: {high}");
+}

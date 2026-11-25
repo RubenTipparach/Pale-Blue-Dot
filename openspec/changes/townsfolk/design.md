@@ -2228,6 +2228,79 @@ taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
   lifted view is to stake what it shows; the shovel still paves only
   within `reach_m` of the player's feet.
 
+**42o. The ghost's bridges and lamp posts, and the trader on the map
+(2026-11-25; written before the code).** Three things 42a, 42m and 46 ask
+for that the game did not yet draw. Each a recommendation taken (ask only
+with screenshots): none changes a rule, a tunable or what is built, only
+what the planner's ghost and the map show of it.
+- **A bridge in the ghost.** 42a: deeper water is "shown in the ghost as a
+  deck with its posts and rails". Today a bridged cell is in the ghost as
+  a flat top at its deck's height, with nothing under it. A bridge cell of
+  the aimed road that is not refused is now cut by the same
+  `roads::piece::cut` that cuts it once paved (its deck, the posts from
+  the bed to the deck, the rails along its sides with no cell of the aimed
+  road beside them, so a wide bridge is railed outside), and every part of
+  it is drawn in the ghost's tint. The ghost then shows what paving will
+  build, from the one cutting code, never a second picture of a bridge.
+- **Lamp posts in the ghost.** 42m: "Its ghost stands with the plan (a
+  post in the ghost tint)". The aim already finds the posts
+  (`PlannerAim::lamps`); they are now drawn: on each post cell not already
+  holding its lamp (`paving::lamp_standing`), on the cell's ground, one
+  shape in the ghost tint at the street lantern's size as the world draws
+  it (a post 1.5 m high, a lantern 0.3 m across from 1.5 to 1.86 m): a
+  six-sided timber post, bevelled at its foot and swelling into the
+  lantern's housing, lofted as one piece with no part stuck on (CLAUDE.md,
+  no obvious primitives), its smooth normals from the loft. It is a
+  ghost: the tint and its opacity are the plan's, lit by the field as the
+  rest of the ghost is, and it goes with the ghost.
+- **The trader on the map.** 46 places the escort job's trader on the
+  road, and the map and the compass mark a lost villager (design 9) but
+  not them. Now each taken escort job not yet done marks its trader where
+  they stand (`road_jobs::trader_point` of the stored record, so where
+  they stopped on a reload): on the map a pin with "Trader" beside it
+  (`jobs.escort_marker`), as the lost villager's pin is, and on the
+  compass bar a pin after the lost villagers', named "Trader" with its
+  distance when faced. The record is taken back when the trader reaches
+  the other town, and the marker goes with it.
+- **Tests.** App tests: the ghost of a bridged road carries the bridge
+  piece's deck, posts and rails (more of the mesh than the cells' tops
+  alone, and reaching under the deck), and a lamp post stands in it on its
+  cell's ground up to the lantern's height; a lamp already standing is not
+  drawn. The escort test reads the trader's marker where the stored record
+  puts them, and none once the job is done.
+- **Captures.** The ghost of the bridge from the bridge capture's spot, and
+  of a road with lamps, by day.
+
+**42o, as built (2026-11-25).** As written above. Tests:
+`roads::tests::the_ghost_carries_a_bridge_s_deck_posts_and_rails_and_its_lamp_posts`
+and the escort test's marker checks
+(`economy::tests::a_trader_leads_the_player_along_the_road_and_the_escort_is_paid`).
+The capture instrument holds the planner's aim on the checked road's far
+end (`roads::planner::AimPin`, set only by `--road-plan ghost-*`), opens it
+from its near end (a bridge is laid from the bank it starts on: the other
+way round the same cells were "Too wide to bridge"), and logs its stand
+point's `--yaw` by `place::yaw_of`. Captures: `road-planner-ghost-lamps-1100.jpg`
+and its close crop. The ghost of the bridge is not captured: at the bridge
+spot the lifted eye (42n) looks down on forest canopy over the road.
+
+**Found in the captures (2026-11-25; not fixed, for the owner).**
+- **A deck awash.** `road-bridge.jpg`: where a river runs bank-full, the
+  deck (the bank's height, `LIFT_M` over it) stands at the water's surface,
+  and the river draws its ripples over the planks. The rule that a deck
+  stands over the water (`planner::bridged`) holds by a hair. Fixing it is
+  either a render change to the water under a deck, which waits for the
+  session that owns rendering, or the deck raised off its bank (a step or
+  a ramp onto every bridge, the world's included): a look change, for the
+  survey with this screenshot. Recommendation: the deck a quarter metre
+  over the water where the river is that full, its ends ramped on the
+  bank's cell, as a new road version for the world's bridges.
+- **Rails as panels.** The bridge's rails are solid timber panels a metre
+  high along each open side, as the approved roads mockup draws them
+  (`mockup-roads-bridge-11h00.jpg`). Close up they box the deck in like a
+  trough, which sits uneasily with "no obvious primitives" (2026-11-22).
+  A rail of posts and a top bar is the alternative; it is a look change
+  for the owner, with this screenshot.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town
@@ -2268,6 +2341,39 @@ stored `road`), so neither is posted where there is no road.
   allow: the job taken from the board, the rock dug with the same edit the
   dig makes, the walker moved along the road with the trader, the job
   handed in and paid.
+
+**47. A parcel's pick-up and drop-off (playtest, 2026-11-25; written
+before the code).** The owner: "Carry a parcel" has no place to pick the
+parcel up or drop it off. Today taking a delivery puts the parcel straight
+into the pack (`Shop::take`), talking to anyone in the job's town hands it
+over (`Shop::deliver`), and nothing on the compass or the map points the
+way.
+- **Pick-up.** Taking a delivery puts no parcel in the pack. The parcel
+  waits with the posting town's trader (`Keepers::trader`): talking to them
+  hands over every parcel waiting there, one pack slot each (a full pack
+  keeps it waiting, and the talk says "No room in the pack"). Where the
+  trader is the job giver too, the parcel is handed over as the job is
+  taken. The talk's line is "Here is the parcel".
+- **What is stored.** `TakenJobs` gains `waiting: BTreeSet<u64>` (serde
+  default, empty), the deliveries whose parcel is still with the trader.
+  Taking a delivery adds its id; the pick-up takes it out in the same line
+  that puts the parcel in the pack (`store_with_hands`). An abandoned
+  delivery still waiting takes nothing from the pack.
+- **Saves.** A record written before this has no `waiting`, so every
+  delivery in it reads as picked up: a parcel taken today stays in the pack
+  and is handed over as before. The schema stays 1 (a defaulted field).
+- **Drop-off.** Talking to anyone in the job's town still hands it over,
+  but only once it is picked up. A delivery picked up and not yet done
+  marks its town on the compass bar and the map, as a lost villager's job
+  marks the villager (`jobs.parcel_marker`, "Parcel drop-off"), at the
+  town's centre.
+- **The tracker** (playtest-fixes design 2) names the step: "Get the
+  parcel from the trader" while it waits, "Take the parcel to {town}"
+  after, "Hand it in at {town}" once delivered.
+- **Tests.** Taking a delivery leaves the pack as it was and the job
+  waiting; talking to the trader puts the parcel in the pack; the
+  destination's people take it only after; a record without `waiting`
+  reads every delivery as picked up, keeps its parcel and gains the marker.
 
 ## Risks / Trade-offs
 

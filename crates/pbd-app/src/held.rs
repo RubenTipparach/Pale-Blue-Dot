@@ -40,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 pub mod light;
+pub mod placed;
 pub mod punch;
 pub mod stroke;
 use stroke::{
@@ -1152,6 +1153,11 @@ impl Plugin for HeldPlugin {
                 )
                     .chain()
                     .after(crate::fish::FishSet),
+            )
+            // A placed torch drawn as the held one (playtest-fixes design 4).
+            .add_systems(
+                Update,
+                (placed::make_placed_looks, placed::show_placed).chain(),
             );
     }
 }

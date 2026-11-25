@@ -378,10 +378,20 @@ pub enum MapMarker {
     /// A taken job's lost villager, by its place in the taken jobs
     /// (`town-missions-tree` design 10).
     Lost(usize),
+    /// A picked-up parcel's town, by its place among the carried parcels
+    /// (`townsfolk` design 47).
+    Parcel(usize),
+    /// A taken escort job's trader, by its place in the taken jobs
+    /// (`townsfolk` design 42o).
+    Trader(usize),
 }
 
 /// How many lost villagers the map marks at once.
 pub const LOST_MARKERS: usize = 2;
+/// How many parcels' towns the map marks at once.
+pub const PARCEL_MARKERS: usize = 2;
+/// How many escort jobs' traders the map marks at once.
+pub const TRADER_MARKERS: usize = 2;
 /// The label beside a waypoint's pin, "W1" ..., by the pin's place in the
 /// list (`waypoints` decision 5).
 #[derive(Component)]
@@ -948,10 +958,16 @@ pub fn spawn(
                                     ));
                                 });
                         }
-                        for k in 0..LOST_MARKERS {
+                        let lost =
+                            (0..LOST_MARKERS).map(|k| (MapMarker::Lost(k), "jobs.lost_marker"));
+                        let traders = (0..TRADER_MARKERS)
+                            .map(|k| (MapMarker::Trader(k), "jobs.escort_marker"));
+                        let parcels = (0..PARCEL_MARKERS)
+                            .map(|k| (MapMarker::Parcel(k), "jobs.parcel_marker"));
+                        for (marker, label) in lost.chain(traders).chain(parcels) {
                             markers
                                 .spawn((
-                                    MapMarker::Lost(k),
+                                    marker,
                                     ImageNode::new(icons.pin.clone()),
                                     hidden(Node {
                                         position_type: PositionType::Absolute,
@@ -962,8 +978,7 @@ pub fn spawn(
                                 ))
                                 .with_children(|pin| {
                                     pin.spawn((
-                                        KitText::new(tr("jobs.lost_marker"), ui_kit::LABEL)
-                                            .outline(ui_kit::INK),
+                                        KitText::new(tr(label), ui_kit::LABEL).outline(ui_kit::INK),
                                         Node {
                                             position_type: PositionType::Absolute,
                                             left: px(15),
@@ -1919,7 +1934,7 @@ pub fn live(
 }
 
 /// The markers and the readout.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn markers(
     mut commands: Commands,
     screen: Res<Screen>,
@@ -1935,9 +1950,10 @@ pub fn markers(
     mut readout: Query<&mut Text, With<MapReadout>>,
     mut labels: Query<(&MapPinLabel, &mut KitText)>,
     ui_scale: Option<Res<UiScale>>,
-    (save, eco): (
+    (save, eco, towns): (
         Option<Res<WorldSave>>,
         Option<Res<pbd_app::economy::Economy>>,
+        Option<Res<pbd_app::towns::Towns>>,
     ),
 ) {
     if *screen != Screen::Map {
@@ -1957,8 +1973,15 @@ pub fn markers(
         .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
     let ship_at = ship.iter().next().map(|p| origin.query_point(p.0));
     let waypoints = save.as_deref().map(marks_of).unwrap_or_default();
-    let lost = match (eco.as_deref(), save.as_deref()) {
-        (Some(eco), Some(save)) => pbd_app::economy::special::lost_directions(eco, save),
+    let (lost, traders) = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => (
+            pbd_app::economy::special::lost_directions(eco, save),
+            pbd_app::economy::road_jobs::escort_directions(eco, save),
+        ),
+        _ => (Vec::new(), Vec::new()),
+    };
+    let parcels = match (eco.as_deref(), towns.as_deref()) {
+        (Some(eco), Some(towns)) => pbd_app::economy::parcel_directions(eco, towns),
         _ => Vec::new(),
     };
     for (label, mut text) in &mut labels {
@@ -1997,6 +2020,14 @@ pub fn markers(
                 lost.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
                 None,
             ),
+            MapMarker::Trader(k) => (
+                traders.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
+                None,
+            ),
+            MapMarker::Parcel(k) => (
+                parcels.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
+                None,
+            ),
             MapMarker::Craft(craft) => {
                 seen_crafts.push(craft);
                 match crafts.get(craft) {
@@ -2019,7 +2050,10 @@ pub fn markers(
         };
         node.left = px(pixel.x / s - w / 2.0);
         // A pin stands on its point; the rest are centred on their place.
-        let rise = if matches!(*mark, MapMarker::Mark(_) | MapMarker::Lost(_)) {
+        let rise = if matches!(
+            *mark,
+            MapMarker::Mark(_) | MapMarker::Lost(_) | MapMarker::Trader(_) | MapMarker::Parcel(_)
+        ) {
             h / 2.0
         } else {
             0.0

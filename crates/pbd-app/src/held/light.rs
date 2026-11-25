@@ -457,6 +457,48 @@ fn torch_head() -> Mesh {
     b.shaded().mesh()
 }
 
+/// The torch's parts for a torch placed in the world (`placed`): the haft
+/// and the head as held, and the haft's, the head's and the flame's
+/// textures.
+pub(super) fn torch_parts(
+    images: &mut Assets<Image>,
+) -> (Mesh, Mesh, Handle<Image>, Handle<Image>, Handle<Image>) {
+    (
+        haft(),
+        torch_head(),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/haft.png"),
+            images,
+        ),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/head.png"),
+            images,
+        ),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/flame.png"),
+            images,
+        ),
+    )
+}
+
+/// The held flame's three cards as a mesh: standing on `base` (from the
+/// eye) about `up`, as [`flame_cards`] lays them.
+pub(super) fn flame_mesh(base: Vec3, up: Vec3, size: f32, flick: f32, t: f32, fps: f32) -> Mesh {
+    let mut b = Build::default();
+    flame_cards(&mut b, base, up, Vec3::ZERO, size, flick, t, fps);
+    b.mesh()
+}
+
+/// Where the flame stands on the torch, in its own frame.
+pub(super) fn flame_seat() -> Vec3 {
+    FLAME_AT
+}
+
+/// The haft's foot, in the torch's own frame (the fist at nought).
+pub(super) fn haft_bottom() -> f32 {
+    HAFT_BOTTOM
+}
+
 /// The lantern's iron, hung from its bail: x along the bail, y up, the
 /// origin where the fist closes on it (the mockup's `lanternModel`).
 fn lantern_iron() -> Mesh {

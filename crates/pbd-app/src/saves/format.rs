@@ -1054,8 +1054,10 @@ mod tests {
         ] {
             assert_eq!(material_of(material_code(material)), Some(material));
         }
-        // `storage-chests`: the chest takes the next code after desert sand.
-        assert_eq!(material_code(Material::Chest), 30);
+        // `storage-chests`: the chest is 42, past the paving's stations (30
+        // to 39), the carpenter's bench (40) and the drafting table (41).
+        assert_eq!(material_code(Material::Chest), 42);
+        assert_eq!(material_code(Material::Grinder), 30);
         assert_eq!(material_code(Material::ReefRock), 24);
         assert_eq!(material_code(Material::Sticks), 28);
         // `sand-tiles` design 5: desert sand takes the next code, and sand
