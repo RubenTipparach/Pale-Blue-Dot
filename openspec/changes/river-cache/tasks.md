@@ -135,3 +135,10 @@
 - [x] A rebuild requested before the walker outruns the tier.
 - [x] The point memo capped; only river-changed values written.
 - [ ] The perf suite on the release build.
+
+## Saves never hold the frame (2026-11-23)
+
+- [x] `Memo::put` with `try_write`: never waits behind the save's read.
+- [ ] Measured on the bot's mining and farming shots: save times and the frames over 1 s, before (save 55 s, frame 1.7 s) and after.
+- [x] The save while playing every 2 minutes, and only for 5 in 100 more values than the file (`save_caches_grown_by`); the exit saves all.
+- [ ] What held a 7.1 s frame between updates while a save ran: a trace build (`--features trace`) on the bot's rest shot.

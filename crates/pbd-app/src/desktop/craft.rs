@@ -55,6 +55,35 @@ pub(super) fn need_count(need: bool, n: u16) -> String {
     }
 }
 
+/// An input's number with what is carried of it: "1/3" (owner, 2026-11-22:
+/// "Need to show x/3 stone for example for making an axe";
+/// `stone-and-wood-ui`, "What a recipe takes, against what is carried").
+pub(super) fn have_of_need(have: u32, need: u16) -> String {
+    format!("{}/{}", have, need)
+}
+
+/// An input's count on a station's list (the forge's, the kitchen's), kept
+/// as what is carried of what it takes by [`paint_need_counts`].
+#[derive(Component, Clone, Copy)]
+pub struct NeedCount(pub Item, pub u16);
+
+/// Every [`NeedCount`] from the pack and hotbar, while a station is open.
+pub fn paint_need_counts(
+    screen: Res<Screen>,
+    hotbar: Res<Hotbar>,
+    mut counts: Query<(&NeedCount, &mut KitText)>,
+) {
+    if !matches!(*screen, Screen::Forge | Screen::Kitchen) {
+        return;
+    }
+    for (need, mut text) in &mut counts {
+        let words = have_of_need(hotbar.count(need.0), need.1);
+        if text.text != words {
+            text.text = Localized::verbatim(words);
+        }
+    }
+}
+
 /// What a well shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -225,10 +254,6 @@ pub fn queue(
                     tr_with("craft.queue_full", &[("station", &recipe.station.name())])
                 },
             );
-            return false;
-        }
-        Err(station::Refused::NotBetter) => {
-            note.say(wall_s, tr("craft.have_tool"));
             return false;
         }
         Err(station::Refused::Elsewhere) => return false,
@@ -1048,7 +1073,8 @@ pub fn paint(
             tip.0 = words;
         }
         let number = match item {
-            Some((_, n, _)) => need_count(matches!(well.role, Role::Need(_)), n),
+            Some((it, n, _)) if matches!(well.role, Role::Need(_)) => have_of_need(carried(it), n),
+            Some((_, n, _)) => need_count(false, n),
             None => String::new(),
         };
         for child in children.iter() {
@@ -1383,6 +1409,8 @@ mod tests {
         assert_eq!(super::need_count(true, 3), "3");
         assert_eq!(super::need_count(false, 1), "");
         assert_eq!(super::need_count(false, 2), "2");
+        assert_eq!(super::have_of_need(1, 3), "1/3");
+        assert_eq!(super::have_of_need(0, 1), "0/1");
     }
 
     use super::*;

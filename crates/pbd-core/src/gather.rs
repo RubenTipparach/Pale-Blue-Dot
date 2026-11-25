@@ -480,7 +480,9 @@ mod tests {
         let mut bench = StationState::new(station_by_code("workbench").unwrap());
         make(&mut bench, &mut slots, "stone-pickaxe", &mut kit);
         assert_eq!(kit.tier(Tool::Pickaxe), Some(Tier::Stone));
-        assert!(kit.hold(Tool::Pickaxe));
+        // Made, and put in hand at once (`tool-crafting`, "A made tool goes
+        // to hand").
+        assert_eq!(kit.held(), Some(Tool::Pickaxe));
         assert!(
             dig.secs_by(Material::Stone, Digger::Tool(Tool::Pickaxe, Tier::Stone))
                 .is_ok(),

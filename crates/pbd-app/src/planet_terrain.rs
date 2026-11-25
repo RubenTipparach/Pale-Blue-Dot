@@ -238,6 +238,9 @@ pub fn render_code(material: Material) -> u32 {
         Material::Workbench | Material::Carpenter | Material::DraftingTable => WOOD,
         // The gravel stations (`townsfolk` design 41): the workbench's timber.
         Material::Grinder | Material::Mixer => WOOD,
+        // A chest (`storage-chests` design 1): the workbench's wood, with an
+        // iron hasp stood on it (`farm::show`).
+        Material::Chest => WOOD,
         // A beaver's sticks (B25): the bark of the local trees, as the
         // workbench is drawn.
         Material::Sticks => WOOD,
@@ -793,6 +796,7 @@ mod tests {
         assert_eq!(render_code(Material::Tilled), TILLED);
         assert_eq!(render_code(Material::Forge), FORGE);
         assert_eq!(render_code(Material::Workbench), WOOD);
+        assert_eq!(render_code(Material::Chest), WOOD);
         assert_eq!(index(tile_of(WOOD)), 6, "the workbench is the trunk's wood");
         assert!(sheet_tile_names("fields")[6].contains("bark"));
         // The sea's cells (`ocean-environments` B24): each an existing code

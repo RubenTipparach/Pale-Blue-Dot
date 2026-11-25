@@ -12,7 +12,7 @@
 //! the job is queued.
 
 use crate::goods::Good;
-use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool};
+use crate::inventory::{Equipment, Item, Slots, Tier, Tool};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,13 @@ pub const STATIONS: &[StationRow] = &[
         code: "workbench",
         material: Some(Material::Workbench),
         max_jobs: 4,
+    },
+    // `storage-chests` design 1: a store, not a maker. It takes no jobs; F
+    // opens its slots beside the pack (`pbd_core::chest`).
+    StationRow {
+        code: "chest",
+        material: Some(Material::Chest),
+        max_jobs: 0,
     },
     // `townsfolk` design 41: crushed stone, and gravel from it and sand.
     StationRow {
@@ -329,6 +336,15 @@ impl Default for RecipeFile {
                 6.0,
                 &[("log", 6), ("rope", 4)],
                 &[("raft", 1)],
+            ),
+            // `storage-chests` design 1: a chest of twenty slots (`wood-chest`:
+            // the carpenter's `chest` is the furniture piece).
+            recipe(
+                "wood-chest",
+                "workbench",
+                4.0,
+                &[("planks", 8)],
+                &[("block:chest", 1)],
             ),
             // townsfolk design 41: the gravel stations and what they make.
             recipe(
@@ -633,9 +649,6 @@ pub enum Refused {
     Full,
     /// Not this station's recipe.
     Elsewhere,
-    /// It makes a tool the player already has at that tier or better, or
-    /// one already in this queue (`tool-crafting` decision 6).
-    NotBetter,
 }
 
 impl StationState {
@@ -692,36 +705,18 @@ impl StationState {
         self.queue_for(slots, None, None, recipe, now_s)
     }
 
-    /// Queue as [`StationState::queue`], and refuse a tool that would not be
-    /// an upgrade on `equipment` or on a tool this queue already makes
-    /// (`book` names the queued jobs' recipes), before anything is taken.
+    /// Queue as [`StationState::queue`]. Any tool may be made as often as
+    /// the inputs allow, owned or queued already: the first goes to hand,
+    /// the rest to the pack, ready for when tools wear out (owner,
+    /// 2026-11-22; `tool-crafting`, "A made tool goes to hand").
     pub fn queue_for(
         &mut self,
         slots: &mut Slots,
-        equipment: Option<&Equipment>,
-        book: Option<&RecipeBook>,
+        _equipment: Option<&Equipment>,
+        _book: Option<&RecipeBook>,
         recipe: &Recipe,
         now_s: f64,
     ) -> Result<(), Refused> {
-        if let Some(equipment) = equipment {
-            for &(tool, tier) in &recipe.tools {
-                if equipment.would_take(tool, tier).is_err() {
-                    return Err(Refused::NotBetter);
-                }
-            }
-        }
-        if let Some(book) = book {
-            let queued = self
-                .jobs
-                .iter()
-                .filter_map(|job| book.get(&job.recipe))
-                .flat_map(|r| r.tools.iter().copied());
-            for (tool, tier) in queued {
-                if recipe.tools.iter().any(|&(t, k)| t == tool && k <= tier) {
-                    return Err(Refused::NotBetter);
-                }
-            }
-        }
         let row = station_by_code(&self.station).ok_or(Refused::Elsewhere)?;
         if recipe.station.code != row.code {
             return Err(Refused::Elsewhere);
@@ -769,10 +764,22 @@ impl StationState {
             let mut after = slots.clone();
             let code = &self.jobs[0].recipe;
             let fits = match (book.get(code), retired_inputs(code)) {
-                (Some(recipe), _) => recipe
-                    .outputs
-                    .iter()
-                    .all(|&(item, n)| after.give(item, n) == 0),
+                (Some(recipe), _) => {
+                    recipe
+                        .outputs
+                        .iter()
+                        .all(|&(item, n)| after.give(item, n) == 0)
+                        // A tool already owned as well or better is a spare,
+                        // and goes to the pack as any output does.
+                        && recipe.tools.iter().all(|&(tool, tier)| {
+                            match equipment.as_deref() {
+                                Some(kit) if kit.would_take(tool, tier).is_err() => {
+                                    after.give(Item::Tool(tool), 1) == 0
+                                }
+                                _ => true,
+                            }
+                        })
+                }
                 // A retired recipe gives back what it took
                 // (`retire-rowboat-and-cog` decision 3).
                 (None, Some(inputs)) => give_all(&mut after, &inputs),
@@ -787,8 +794,11 @@ impl StationState {
                 (equipment.as_deref_mut(), book.get(&self.jobs[0].recipe))
             {
                 for &(tool, tier) in &recipe.tools {
-                    // Made twice over: the better one stands.
-                    let _: Result<(), NotBetter> = equipment.grant(tool, tier);
+                    // New or better: owned and put in hand at once. Not
+                    // better: it went to the pack above.
+                    if equipment.grant(tool, tier).is_ok() {
+                        equipment.hold(tool);
+                    }
                 }
             }
             done.push(self.jobs.remove(0));
@@ -888,8 +898,16 @@ mod tests {
         assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            25,
-            "with the drafting table and the mallet (building-planner), the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), the door (player-building B8), the grinder and mixer (townsfolk design 41), the wheel and the two carts (land-transport), and the carpenter's bench (furniture design 1)"
+            26,
+            "with the drafting table and the mallet (building-planner), the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), the door (player-building B8), the grinder and mixer (townsfolk design 41), the wheel and the two carts (land-transport), the carpenter's bench (furniture design 1), and the wood chest (storage-chests)"
+        );
+        assert_eq!(
+            book.get("wood-chest").map(|r| r.outputs.clone()),
+            Some(vec![(Item::Block(Material::Chest), 1)])
+        );
+        assert_eq!(
+            station_of(Material::Chest).map(|s| (s.code, s.max_jobs)),
+            Some(("chest", 0))
         );
         assert!(book.get("rowboat").is_none(), "the rowboat is retired");
         // `townsfolk` design 41: gravel comes from the mixer, never the hand;
@@ -1068,10 +1086,10 @@ mod tests {
         assert!(HAND_RECORD_ID > record_id(u32::MAX, u16::MAX));
     }
 
-    /// A tool is refused before anything is taken when it is not an upgrade
-    /// or the queue already makes it; a collected one goes to the tool slot.
+    /// A collected tool goes to the tool slot and into hand; one already
+    /// owned is a spare in the pack, so tools can be made many times over.
     #[test]
-    fn a_tool_is_made_once_and_lands_in_the_tool_slot() {
+    fn a_tool_goes_to_hand_and_a_spare_to_the_pack() {
         let book = book();
         let pick = book.get("stone-pickaxe").unwrap();
         let mut bench = StationState::new(station_by_code("workbench").unwrap());
@@ -1083,28 +1101,27 @@ mod tests {
         bench
             .queue_for(&mut slots, Some(&kit), Some(&book), pick, 0.0)
             .unwrap();
-        let before = slots.clone();
-        assert_eq!(
-            bench.queue_for(&mut slots, Some(&kit), Some(&book), pick, 0.0),
-            Err(Refused::NotBetter),
-            "already in the queue"
-        );
-        assert_eq!(slots, before, "and nothing taken");
         let jobs = bench.collect_into(&mut slots, Some(&mut kit), &book, 10.0);
         assert_eq!(jobs.len(), 1);
         assert_eq!(kit.tier(Tool::Pickaxe), Some(Tier::Stone));
+        assert_eq!(kit.held(), Some(Tool::Pickaxe), "made, and put in hand");
         assert_eq!(slots.count(Item::Tool(Tool::Pickaxe)), 0, "not a stack");
+        // Owned already: a spare may be made, and lands in the pack.
+        slots.give(Item::Good(Good::LOOSE_STONE), 9);
+        slots.give(Item::Good(Good::PLANKS), 6);
+        slots.give(Item::Good(Good::ROPE), 3);
+        bench
+            .queue_for(&mut slots, Some(&kit), Some(&book), pick, 20.0)
+            .unwrap();
+        let jobs = bench.collect_into(&mut slots, Some(&mut kit), &book, 30.0);
+        assert_eq!(jobs.len(), 1);
         assert_eq!(
-            bench.queue_for(&mut slots, Some(&kit), Some(&book), pick, 20.0),
-            Err(Refused::NotBetter),
-            "owned at that tier"
+            slots.count(Item::Tool(Tool::Pickaxe)),
+            1,
+            "a spare, in the pack"
         );
-        // Made twice across two stations: the second is collected for nothing.
-        let mut other = StationState::new(station_by_code("workbench").unwrap());
-        other.queue(&mut slots, pick, 30.0).unwrap();
-        let jobs = other.collect_into(&mut slots, Some(&mut kit), &book, 40.0);
-        assert_eq!(jobs.len(), 1, "never stuck");
-        assert!(!other.busy());
+        assert_eq!(kit.tier(Tool::Pickaxe), Some(Tier::Stone));
+        assert!(!bench.busy());
     }
 
     /// `retire-rowboat-and-cog` decision 3: a rowboat queued at a workbench

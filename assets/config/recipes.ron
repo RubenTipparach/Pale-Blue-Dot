@@ -210,6 +210,16 @@
             inputs: [("log", 6), ("rope", 4)],
             outputs: [("raft", 1)],
         ),
+        // ---- storage-chests design 1: a chest of twenty slots, a block set
+        // down like a station. `wood-chest`: the carpenter's `chest` is the
+        // furniture piece (`furniture` design 1).
+        (
+            code: "wood-chest",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 8)],
+            outputs: [("block:chest", 1)],
+        ),
         // ---- townsfolk design 41: the grinder crushes stone; the mixer mixes
         // crushed stone and sand into road gravel.
         (

@@ -87,3 +87,9 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
     - G.3: `pbd_core::map::Mark` (`MARK_KIND` `map-mark`, `MARK_FAR_M` 200, `MARK_NEAR_M` 8); `map_screen::mark` (right click: set, move, or clear within 12 px), `mark_of`, `store_mark`, the pin (`MapMarker::Mark`), "right-click mark" on the map's key line; `missions::about_watch` counts `reach marked` off the saved mark. Tests: `a_far_mark_is_reached_within_eight_metres`, `a_right_click_sets_moves_and_clears_the_mark`, `the_mark_is_a_saved_record`. `--map-mark-east <metres>` is a capture instrument. Capture: `docs/screenshots/map-mark/mark.jpg` (lavapipe).
     - G.4: `Progress::seen`, optional in the record. Test: `a_kind_of_fish_counts_once_a_mission`, which reads a record without it.
   - G.5: `Act::Mark(metres)` and `Act::ToMark` in `desktop/showcase.rs` (the pointer moved over the open map and the right button pressed, as `Hands::pointer`), and `phase-1-about.ron` marks 230 m away and walks there. The file parses (`every_showcase_file_parses`); the run is the owner's, with herding and mining, on real hardware.
+
+## Playtest notes (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [ ] P.1 The `pack` mission after `gather`: coded; built, tested, and seen on a new world and an old one.
+- [ ] P.2 The `reef` mission is "Get a reef" (`gather block:reef rock`): coded; built, tested, seen.
+- [ ] P.3 A pack icon for the `pack` mission.

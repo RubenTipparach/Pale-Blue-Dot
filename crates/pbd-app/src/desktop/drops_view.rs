@@ -4,16 +4,17 @@
 //! top, its side tile round the six sides and its underside tile below, so a
 //! grass drop shows the sward's edge over earth, like the block it came out
 //! of (survey I4, `inventory-grid` decision 7). Its slot thumbnail is the
-//! same side tile. A light's card wears the light's own icon. The drops
+//! same side tile. Anything with a picture of its own in the pack (a fish, a
+//! tool, a light, a good, a station block) floats as a card wearing it
+//! (`drop-and-trash` 5). The drops
 //! themselves, and how they are drawn, are `pbd_app::drops`; this only names
 //! each item's picture, because the pictures live beside the slot row.
 
-use super::slots::{ATLAS_SHEETS, ATLAS_TILES, ItemIcons, block_art};
+use super::slots::{ATLAS_SHEETS, ATLAS_TILES, ItemIcons, block_art, own_icon};
 use bevy::prelude::*;
 use pbd_app::drops::{DropLooks, PrismFaces, prism};
 use pbd_app::saves::format::material_of;
 use pbd_core::inventory::Item;
-use pbd_core::terrain::Material;
 
 /// The part of the atlas a tile covers, as a UV rectangle: the tile's square,
 /// a sixty-fourth of a tile in from each edge, as the slot's crop is, so a
@@ -29,7 +30,7 @@ pub fn tile_rect(sheet: u32, tile: Vec2) -> Rect {
     Rect::from_corners(origin + inset, origin + step - inset)
 }
 
-/// Every block's and every light's look, once the icons are loaded.
+/// Every item's drop look, once the icons are loaded.
 pub fn dress(
     mut commands: Commands,
     icons: Res<ItemIcons>,
@@ -44,24 +45,42 @@ pub fn dress(
         perceptual_roughness: 0.95,
         ..default()
     });
+    let mut card = |icon: Handle<Image>| {
+        materials.add(StandardMaterial {
+            base_color_texture: Some(icon),
+            alpha_mode: AlphaMode::Mask(0.5),
+            double_sided: true,
+            cull_mode: None,
+            perceptual_roughness: 0.9,
+            ..default()
+        })
+    };
+    // Every item with a picture of its own floats as a card wearing it, the
+    // pack's own table (`drop-and-trash` 5): fish, tools, lights, goods and
+    // the station blocks.
+    let items = (0..=u8::MAX)
+        .filter_map(material_of)
+        .map(Item::Block)
+        .chain(pbd_core::goods::Good::all().map(Item::Good))
+        .chain(
+            pbd_core::inventory::Tool::ALL
+                .iter()
+                .copied()
+                .map(Item::Tool),
+        )
+        .chain((0..icons.fish.len()).map(|k| Item::Fish(k as u16)));
+    for item in items {
+        if let Some(icon) = own_icon(item, &icons) {
+            looks.cards.insert(item, card(icon));
+        }
+    }
+    // A terrain block is a prism of its ground.
     for material in (0..=u8::MAX).filter_map(material_of) {
         let item = Item::Block(material);
-        if let Some(index) = Material::LAMPS.iter().position(|&m| m == material) {
-            let Some(icon) = icons.lights.get(index) else {
-                continue;
-            };
-            looks.cards.insert(
-                item,
-                materials.add(StandardMaterial {
-                    base_color_texture: Some(icon.clone()),
-                    alpha_mode: AlphaMode::Mask(0.5),
-                    double_sided: true,
-                    cull_mode: None,
-                    perceptual_roughness: 0.9,
-                    ..default()
-                }),
-            );
-        } else if let Some(art) = block_art(material) {
+        if looks.cards.contains_key(&item) {
+            continue;
+        }
+        if let Some(art) = block_art(material) {
             let faces = PrismFaces {
                 top: tile_rect(art.sheet, art.top),
                 side: tile_rect(art.sheet, art.side),
@@ -72,24 +91,6 @@ pub fn dress(
                 .insert(item, (meshes.add(prism(faces)), atlas.clone()));
         }
     }
-    // A good's card wears its own icon, as a light's does
-    // (`farming-and-smelting`: a seed turned up by a till floats out).
-    for good in pbd_core::goods::Good::all() {
-        let Some(icon) = icons.goods.get(good.index()) else {
-            continue;
-        };
-        looks.cards.insert(
-            Item::Good(good),
-            materials.add(StandardMaterial {
-                base_color_texture: Some(icon.clone()),
-                alpha_mode: AlphaMode::Mask(0.5),
-                double_sided: true,
-                cull_mode: None,
-                perceptual_roughness: 0.9,
-                ..default()
-            }),
-        );
-    }
     commands.insert_resource(looks);
 }
 
@@ -97,6 +98,7 @@ pub fn dress(
 mod tests {
     use super::*;
     use bevy::mesh::VertexAttributeValues;
+    use pbd_core::terrain::Material;
 
     /// Every tile's rectangle lands inside the atlas and inside its own
     /// sheet, and two tiles never share a square.

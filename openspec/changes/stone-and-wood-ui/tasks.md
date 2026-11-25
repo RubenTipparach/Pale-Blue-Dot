@@ -158,3 +158,9 @@ measured.)
 - [ ] `perf_suite.py` on the owner's machine: the offers search the cells
       round the eye each frame the eye moves, else every 0.25 s (not measured
       here).
+
+## Playtest notes (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [ ] Tab closes any screen over the world, and opens the pack from it: coded; built, seen.
+- [ ] An X on every stone panel's lintel (`MenuAction::Back`): coded; built; screenshots of each panel, and its place tuned.
+- [ ] Recipe inputs show "have/need", live on the forge and kitchen too: coded; built, tested; screenshots; "9+" if crowded.

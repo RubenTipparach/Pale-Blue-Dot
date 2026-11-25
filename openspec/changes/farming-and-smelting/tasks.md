@@ -63,3 +63,7 @@
 - [x] 6.2 Before-and-after shots of a ripe wild kale in rain and in sun, in
       `docs/screenshots/farming/`.
 
+
+## Playtest notes (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md` 17)
+
+- [ ] No wild plant in a tree's cell (`farm::wild_at` and the wild plants drawn): coded; built, seen.

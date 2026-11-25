@@ -25,5 +25,9 @@
     placed: (shovel: 0.1, pickaxe: 0.1, axe: 0.1),
     between_s: 0.15,
     hand_speed: 0.25,
+    // Bare hands' speed on a tree's trunk, for a log, against the stone axe's
+    // 1.0 (owner, 2026-11-22: "double the time to punch to get a log"):
+    // 0.6 s / 0.125 = 4.8 s a log.
+    hand_log_speed: 0.125,
     tier_speeds: (1.0, 1.6, 2.4, 3.6),
 )

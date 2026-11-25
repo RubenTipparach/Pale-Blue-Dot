@@ -238,3 +238,27 @@ The owner on the mockup: "cool now implement all these".
 
 Differences from the mockup: the bend's substeps and the 24 points, above.
 Frame cost was not measured (a cloud container, no GPU).
+
+
+## The line's speckle over water (owner, 2026-11-21)
+
+The owner, with a night shot of a cast over the sea: "need to fix these weird
+fx around the line". A cloud of pale cyan dots surrounds the whole line, out
+to a few tens of pixels either side, only where the line is over water.
+
+**Finding (from the code, not yet captured):** the line is an opaque, unlit
+`LineStrip` (`fish.rs`, "Fishing line"), so it is in the scene colour the
+water reads behind it (`water.wgsl`, `scene_color`). The water bends that
+sample by up to `refraction.y` of the screen and rejects a sample of
+geometry in front of the sheet by the scene depth. A one-pixel line rarely
+covers its pixel's depth sample (MSAA sample 0, or no depth prepass for line
+topology), so the rejection misses it: water pixels round the line pick up
+the line's white through their refraction offset, tinted by the water. The
+spread matches the refraction offset's reach.
+
+**Plan:** draw the line after the water reads the scene (the transparent
+phase, `AlphaMode::Blend` at full alpha, or its own pass after the water), so
+the water never refracts it; check whether the hook and float need the same.
+Verify with a night capture of a cast over the sea before and after, the
+speckle gone and the line itself unchanged. A look fix with no player-visible
+change other than the artefact gone, so it needs no survey.

@@ -68,7 +68,13 @@ fn model() -> &'static Model {
 
 /// The hand's meshes and materials, made once a raft.
 pub struct Kit {
-    parts: Vec<(Handle<Mesh>, Handle<StandardMaterial>)>,
+    /// Each part's mesh, its material for the right hand and its material
+    /// for the left (mirrored) one.
+    parts: Vec<(
+        Handle<Mesh>,
+        Handle<StandardMaterial>,
+        Handle<StandardMaterial>,
+    )>,
 }
 
 impl Kit {
@@ -99,24 +105,32 @@ impl Kit {
                 let image = world
                     .resource_mut::<Assets<Image>>()
                     .add(crate::held::hand_image(texture));
-                let material =
-                    world
-                        .resource_mut::<Assets<StandardMaterial>>()
-                        .add(StandardMaterial {
-                            base_color_texture: Some(image),
-                            perceptual_roughness: 0.9,
-                            double_sided: true,
-                            cull_mode: None,
-                            ..default()
-                        });
-                parts.push((mesh, material));
+                let look = |double_sided: bool| StandardMaterial {
+                    base_color_texture: Some(image.clone()),
+                    perceptual_roughness: 0.9,
+                    double_sided,
+                    cull_mode: None,
+                    ..default()
+                };
+                // The left hand is the right one scaled by -1 (place): its
+                // winding is reversed, so a double-sided material takes every
+                // outside face for a back face and flips its normal, and the
+                // hand is lit inside out (owner, 2026-11-21: "I wonder if left
+                // hand has inverted normals"). Its material is single sided;
+                // the mirrored transform's normals are already right, and with
+                // no culling it still shows from every side.
+                let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
+                let right = materials.add(look(true));
+                let left = materials.add(look(false));
+                parts.push((mesh, right, left));
             }
         }
         Self { parts }
     }
 
-    /// Hang one hand under `pivot`, which [`place`] poses.
-    pub fn spawn(&self, world: &mut World, pivot: Entity) {
+    /// Hang one hand under `pivot`, which [`place`] poses; `side` < 0 is
+    /// the left (mirrored) hand.
+    pub fn spawn(&self, world: &mut World, pivot: Entity, side: f32) {
         let offset = world
             .spawn((
                 Transform::from_translation(-model().fist),
@@ -124,7 +138,8 @@ impl Kit {
             ))
             .id();
         world.entity_mut(pivot).add_child(offset);
-        for (mesh, material) in &self.parts {
+        for (mesh, right, left) in &self.parts {
+            let material = if side < 0.0 { left } else { right };
             let child = world
                 .spawn((
                     Mesh3d(mesh.clone()),

@@ -62,3 +62,40 @@ successfuly caught it".
 Captures on lavapipe in a cloud container; frame cost not measured. The
 surface read is one column lookup over the memoised bed, about what the bed
 read already costs.
+
+## 6. Swamps, lakes and rivers are fresh, whatever their height (owner, 2026-11-23)
+
+The owner: "swamps, lakes and rivers should all be fresh water" (on the
+bot's two days at "Sea fishing"'s fresh half: "posible that to code
+doesnt understand fresh vs sea water perhaps?").
+
+**How the game tells them apart.** Nothing marks water as sea or fresh; it
+is judged by height, in three places with three lines:
+- the catch, for the mission (`fish::is_fresh`): the float more than
+  0.6 m over sea level;
+- the schools (`fish::fresh_top`, design 1): the column's water more than
+  0.25 m over the sea's cells;
+- the bot's search (`showcase::fresh_shore`): over 0.6 m, and over 1.2 m
+  deep.
+
+**Measured** (`planet_gen::tests::swamps_and_rivers_are_fresh_and_the_sea_is_not`,
+generator 16, 200,000 directions): 495 swamp pools and 897 river cells, and
+none of either stands under the 0.6 m line. So the game already counts
+every swamp, lake and river as fresh, as the owner asks. What failed was
+the bot: every swamp pool is one layer deep (1 m), as are 150 of the 897
+river cells, and the bot wanted 1.2 m, so it passed every swamp for a lake
+240 to 350 m away and was lost on the way there.
+
+**The fix.**
+- The bot's `fresh_shore` takes water one layer deep (over 0.9 m); river
+  fish live from 0.2 to 0.3 m down, so a pool holds them.
+- `planet_gen::fresh_water_at(cfg, direction)` names what the generator
+  makes fresh (a river's water, a swamp's pool; never in a town), and the
+  test above holds that all of it stands over the catch's line. If a later
+  generator puts fresh water at the sea's level, the test fails, and the
+  catch and the schools must then ask `fresh_water_at` rather than the
+  height. They do not today: asked at every sea point it would cost time on
+  every float's surface read for no change.
+
+What the sea floods into a hole dug at the shore stands at the sea's level
+and stays sea. Poured water over the sea's level stays fresh.

@@ -79,6 +79,11 @@ pub struct Fishery {
     /// more readily, and a fish landed on it uses one (`starter-missions`
     /// G1).
     pub baited: bool,
+    /// Whether the fish on the line took the float in fresh water (a river
+    /// or lake over the sea's level), noted at the bite: the landed fish
+    /// counts by it, not by where it is reeled in (`starter-missions`,
+    /// "River catches counted as sea").
+    pub bit_fresh: bool,
     /// Where the angler stood this frame, local: which way the fish on the
     /// line is drawn running (`fish-behaviour`).
     pub feet: Option<Vec3>,
@@ -141,6 +146,7 @@ impl Default for Fishery {
             told_refusal: false,
             fades: HashMap::new(),
             baited: false,
+            bit_fresh: false,
             feet: None,
         }
     }
@@ -491,7 +497,7 @@ fn fish(
                 roster,
                 None,
                 None,
-                o.query_point(fishery.line.float),
+                fishery.bit_fresh,
                 false,
             );
         }
@@ -664,13 +670,18 @@ fn fish(
                     .as_deref()
                     .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
             }
+            // The float on the water as the fish takes it: which water it
+            // was caught in.
+            if let Event::Bite { .. } = event {
+                fishery.bit_fresh = is_fresh(float);
+            }
             for happened in report(
                 &mut status,
                 event,
                 roster,
                 hotbar.as_deref_mut(),
                 save.as_deref_mut(),
-                float,
+                fishery.bit_fresh,
                 fishery.baited,
             ) {
                 did.write(happened);
@@ -1335,6 +1346,12 @@ pub fn body_scale(up: Vec3, depth_m: f32, wet: impl Fn(Vec3) -> bool) -> f32 {
     (0.35 + 0.65 * size).clamp(0.35, 1.0)
 }
 
+/// Whether a float at `float_at` (planet-centred) is on fresh water: water
+/// standing above the sea's level is a river or a lake ("Off the shore").
+fn is_fresh(float_at: Vec3) -> bool {
+    float_at.length() - crate::planet::PLANET_RADIUS > 0.6
+}
+
 /// What a line event means to the player, and what a catch does to the
 /// hotbar and the save. What the starter missions count comes back: the
 /// float on water, and a fish landed (`starter-missions` design 15).
@@ -1344,7 +1361,7 @@ fn report(
     roster: &[Species],
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
-    float_at: Vec3,
+    bit_fresh: bool,
     baited: bool,
 ) -> Vec<crate::missions::Did> {
     use pbd_core::missions::Kind;
@@ -1410,7 +1427,14 @@ fn report(
                 did.push(Did::new(Kind::Species, kind, 1));
                 // The sea or fresh water: water standing above the sea's
                 // level is a river or a lake ("Off the shore").
-                let fresh = float_at.length() - crate::planet::PLANET_RADIUS > 0.6;
+                // Judged where it bit, not where it is landed: landing reels
+                // the float to the bank, off the river.
+                let fresh = bit_fresh;
+                info!(
+                    "FISH_CAUGHT {} in {} water",
+                    data_name(species),
+                    if fresh { "fresh" } else { "sea" }
+                );
                 did.push(Did::new(
                     Kind::Waters,
                     if fresh { "fresh" } else { "sea" },
@@ -2656,8 +2680,15 @@ pub(crate) mod draw {
         air: Option<Res<Air>>,
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
-        tip_now: Option<Res<crate::held::RodTipNow>>,
-        (drawn, swim, trail): (Res<DrawnFloat>, Res<DrawnSwim>, Res<CastTrail>),
+        (tip_now, drawn, swim, trail, aboard, vehicles, vehicle_cameras): (
+            Option<Res<crate::held::RodTipNow>>,
+            Res<DrawnFloat>,
+            Res<DrawnSwim>,
+            Res<CastTrail>,
+            Option<Res<crate::vehicles::Aboard>>,
+            Query<&crate::vehicles::Vehicle>,
+            Query<&GlobalTransform, With<crate::vehicles::VehicleCamera>>,
+        ),
         cameras: Query<&Transform, With<WalkingCamera>>,
         rods: Query<
             (&crate::held::Held, &Transform),
@@ -2697,7 +2728,17 @@ pub(crate) mod draw {
         >,
         mut meshes: ResMut<Assets<Mesh>>,
     ) {
-        let walking = walking.is_some_and(|w| w.active);
+        // On foot, or in a paddled boat's seat: the same rule the line is
+        // fished by (`small-boats` design 6). Drawn on foot only, the line,
+        // float and hook vanished on a raft though the cast went out (owner,
+        // 2026-11-21: "I also cant see fishing line when I fishing from the
+        // raft").
+        let aboard = aboard.as_deref().and_then(|a| a.0);
+        let afloat = aboard
+            .and_then(|e| vehicles.get(e).ok())
+            .filter(|v| v.craft.kind.paddled())
+            .map(|v| &v.craft);
+        let walking = (walking.is_some_and(|w| w.active) && aboard.is_none()) || afloat.is_some();
         let rod_out = walking && tools.held() == Some(Tool::Rod);
         let camera = cameras.iter().next();
         // The rod itself is the held tool's model (`held.rs`); this draws
@@ -2766,7 +2807,23 @@ pub(crate) mod draw {
             // The line's shape is laid in local points (`world-frames`
             // 10.1), from the drawn rod tip to the drawn float; the water is
             // asked at planet query points.
-            let tip_render = eye.transform_point(tip);
+            let tip_render = match (afloat, vehicle_cameras.iter().next()) {
+                // In a boat the rod is the paddler's: the line leaves a rod's
+                // length ahead of the seat's eye along the look, as the cast
+                // does (`angle`'s afloat camera), not the walking camera
+                // left behind on the shore.
+                (Some(craft), Some(look)) => {
+                    let eye_local = o.to_local(pbd_core::world_frame::WorldPos::new(
+                        crate::sim_origin::HOME,
+                        craft.eye(),
+                    ));
+                    let ahead = look.forward().as_vec3() * 0.9
+                        + look.right().as_vec3() * 0.25
+                        + look.up().as_vec3() * 0.2;
+                    crate::render_origin::render_from_physics(&frame, eye_local + ahead)
+                }
+                _ => eye.transform_point(tip),
+            };
             let tip_local = crate::sim_origin::local_from_render(&frame, tip_render);
             transform.translation = tip_render;
             // With a fish on the line it is taut: nearly straight at the bite

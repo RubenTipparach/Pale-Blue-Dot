@@ -1335,6 +1335,9 @@ pub struct ScatterSettings {
     /// the new through a screen-door mask, rather than switching in one frame
     /// (`detail-fade`). 0 switches at once.
     pub lod_fade_s: f32,
+    /// Seconds a piece of clutter taken by hand takes to sink into the
+    /// ground, and to rise again when it grows back (`gather-by-hand`).
+    pub taken_sink_s: f32,
     /// The share of each fine band, inward from its edge, across which the two
     /// levels cross-fade with distance through complementary dither masks
     /// (`distance-lod-fade`, Unity's LOD cross-fade width). 0 draws hard edges.
@@ -1406,6 +1409,7 @@ impl Default for ScatterSettings {
             shrub_size_m: 0.38,
             tree_fade_m: 150.,
             lod_fade_s: 1.0,
+            taken_sink_s: 0.25,
             lod_fade_width: 0.3,
             tuft_count: 6.,
             tuft_width_m: 0.8,
@@ -1446,6 +1450,9 @@ impl Validated for ScatterSettings {
         (self.lod_fade_s.is_finite() && (0.0..=5.0).contains(&self.lod_fade_s))
             .then_some(())
             .ok_or("lod_fade_s must lie within 0 and 5 seconds")?;
+        (self.taken_sink_s.is_finite() && (0.05..=5.0).contains(&self.taken_sink_s))
+            .then_some(())
+            .ok_or("taken_sink_s must lie within 0.05 and 5 seconds")?;
         (self.lod_fade_width.is_finite() && (0.0..=0.5).contains(&self.lod_fade_width))
             .then_some(())
             .ok_or("lod_fade_width must lie within 0 and 0.5 of a band")?;
@@ -1757,6 +1764,14 @@ pub fn recipe_book() -> (Recipes, KitchenConfig) {
 impl Validated for crate::held::HeldSettings {
     fn validate(&self) -> Result<(), String> {
         crate::held::HeldSettings::validate(self)
+    }
+}
+
+/// The dust and leaves of a hit or felled tree (`tree_fx.rs`).
+#[cfg(feature = "desktop")]
+impl Validated for crate::tree_fx::TreeFxSettings {
+    fn validate(&self) -> Result<(), String> {
+        crate::tree_fx::TreeFxSettings::validate(self)
     }
 }
 
@@ -2258,6 +2273,8 @@ impl Plugin for ConfigPlugin {
             .insert_resource(kitchen);
         #[cfg(feature = "desktop")]
         app.insert_resource(HeldConfig(load("held")));
+        #[cfg(feature = "desktop")]
+        app.insert_resource(load::<crate::tree_fx::TreeFxSettings>("tree_fx"));
         app.add_plugins((
             bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
@@ -2397,6 +2414,10 @@ mod tests {
             let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();
             Validated::validate(&held).unwrap();
             assert_eq!(held, Default::default());
+            let tree_fx: crate::tree_fx::TreeFxSettings =
+                ron::from_str(include_str!("../../../assets/config/tree_fx.ron")).unwrap();
+            Validated::validate(&tree_fx).unwrap();
+            assert_eq!(tree_fx, Default::default());
         }
     }
 

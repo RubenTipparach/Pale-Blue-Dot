@@ -134,17 +134,19 @@
         <li>In Proposed the hand is the proposed hand (below), and its sleeve is <code>sleeve_extra</code> tool units longer at its far end, so the arm still runs off the screen at full reach.</li>
       </ul>
 
-      <h3>Punch: bare hands, and a swing on every click (version 15)</h3>
+      <h3>Punch: bare hands, and a swing on every click (version 16)</h3>
       <p>The owner, 2026-11-19: <em>"do tools always play animations when left clicking? can you mock up hand punching stuff"</em>. Plan: <code>openspec/changes/held-swing</code>, decisions 10 to 12. Hold the mouse on the view (or press <strong>Punch</strong>) to work; <strong>At</strong> turns to the tree, the dirt, the stone outcrop or the open air; <strong>Hands / Pickaxe / Axe</strong> picks what is in hand.</p>
       <ul>
         <li><strong>Today</strong> (the game now): bare hands draw nothing at all (<code>held.rs</code> <code>stroke_tool</code> keeps the hands' beat only for the dig sounds), so punching a tree for a log (2.4&nbsp;s) or digging dirt by hand (2.0&nbsp;s) shows no arm. A tool strokes only while a block or a tree is breaking (<code>StrokeClock</code> reads the dig's <code>DigBeat</code>): at the air, or at a block it is refused on, it stands still. The tree shakes on each log and every 0.5&nbsp;s while held (<code>tree-punch-shake</code> 4).</li>
-        <li><strong>The punch</strong> (Proposed, decision 10): the approved hand of the game, posed from the pickaxe's grip as the game poses bare hands, with nothing in it and the hollow where the handle was closed. Four stages, the same as the tools': <strong>windup</strong> (<code>windup_s</code>, eased out) draws the fist back toward the chin by <code>draw_m</code>, the wrist cocked a little (<code>cock_rad</code>); <strong>anticipation</strong> (<code>anticipate_s</code>, <code>anticipate_m</code>) coils a little further and holds; the <strong>hit</strong> (<code>strike_s</code>, t³, fastest at contact) drives the fist <code>reach_m</code> forward, <code>across_m</code> in and <code>rise_m</code> up to the crosshair&rsquo;s left on a slight arc (<code>arc_m</code>), turning <code>twist_rad</code> from its guard to the upright fist, then holds <code>impact_hold_s</code>; the <strong>recoil</strong> bounces back <code>recoil_m</code> with an overshoot and eases home over <code>recover_s</code>. The fist matches the owner&rsquo;s photo of their own (version 15): a long forearm comes in from the lower right, aimed from a virtual elbow (<code>elbow_x</code>, <code>elbow_y</code>, <code>elbow_z</code>) that follows the fist by <code>elbow_follow</code>, so the sleeve stays in view through the whole stroke; the wrist is straight; the back of the hand faces the eye, with the fingers&rsquo; segments in a column on the leading edge and the thumb tucked under. <code>bend_rad</code> stands the column upright, and the cock (<code>guard_cock_rad</code>, <code>hit_cock_rad</code>) turns the fingers toward the target at the hit, the forearm keeping its line. The guard rests <code>fist_raise_m</code> up and <code>fist_in_m</code> in from a tool&rsquo;s grip, turned <code>guard_twist_rad</code>, so it is in view between punches. <code>hands_weight</code> scales the windup, the anticipation and the hold: a bare hand is lighter and quicker than a tool.</li>
-        <li><strong>On the dig's beat:</strong> a log by hand, 2.4&nbsp;s and the 0.15&nbsp;s pause, is six punches of 0.425&nbsp;s, the sixth on the log; dirt by hand, 2.0&nbsp;s, is five of 0.43&nbsp;s. The tree shakes on each punch's impact (the game's shake: 12&nbsp;cm at the crown, 9&nbsp;Hz, settling in 0.6&nbsp;s, leaves 1.3×), in place of today's half-second timer.</li>
+        <li><strong>The punch</strong> (Proposed, decision 10): the approved hand of the game closed into a fist of its own (version 16; it was the pickaxe's grip with nothing in it). Four stages, the same as the tools': <strong>windup</strong> (<code>windup_s</code>, eased out) draws the fist back toward the chin by <code>draw_m</code>, the wrist cocked a little (<code>cock_rad</code>); <strong>anticipation</strong> (<code>anticipate_s</code>, <code>anticipate_m</code>) coils a little further and holds; the <strong>hit</strong> (<code>strike_s</code>, t³, fastest at contact) drives the fist <code>reach_m</code> forward, <code>across_m</code> in and <code>rise_m</code> up to just below and left of the crosshair on a slight arc (<code>arc_m</code>), turning <code>twist_rad</code> from its guard to the upright fist, then holds <code>impact_hold_s</code>; the <strong>recoil</strong> bounces back <code>recoil_m</code> with an overshoot and eases home over <code>recover_s</code>. The fist matches the owner&rsquo;s two photos of their own: it punches forward into the view, the four fingers curled tight into the palm and seen as a column down the leading edge, the back of the hand toward the right and the eye, the thumb on top at the front, the fist about as long as it is tall; the forearm comes in from the lower right, aimed from a virtual elbow (<code>elbow_x</code>, <code>elbow_y</code>, <code>elbow_z</code>) that follows the fist by <code>elbow_follow</code>, so the sleeve stays in view through the whole stroke; the wrist is straight, slimmed to the hand and one tone with the forearm, so the heel of the hand runs into it with no step (<code>bend_rad</code>, <code>guard_cock_rad</code> and <code>hit_cock_rad</code> are 0; they can still turn the hand on the wrist, the forearm keeping its line). The guard rests <code>fist_raise_m</code> up and <code>fist_in_m</code> in from a tool&rsquo;s grip, turned <code>guard_twist_rad</code>, so it is in view between punches. <code>hands_weight</code> scales the windup, the anticipation and the hold: a bare hand is lighter and quicker than a tool.</li>
+        <li><strong>On the dig's beat:</strong> a log by hand, 2.4&nbsp;s and the 0.15&nbsp;s pause, is six punches of 0.425&nbsp;s, the sixth on the log; dirt by hand, 2.0&nbsp;s, is five of 0.43&nbsp;s. The tree shakes on each punch's impact (the game's shake: 24&nbsp;cm at the crown, twice the 12&nbsp;cm it was (owner, 2026-11-21), 9&nbsp;Hz, settling in 0.6&nbsp;s, leaves 1.3×), in place of today's half-second timer.</li>
         <li><strong>A swing on every click</strong> (decision 11): with nothing under the crosshair, or a block that will not break, the stroke still plays, at one beat of <code>stroke_target_s</code> from the press while held. <strong>Air</strong>: no hold (nothing to stop on); the hit carries through (<code>air_follow_m</code> for the fist, <code>air_follow_rad</code> down the arm's arc for a tool) over <code>air_follow_s</code>, and the recover is <code>air_recover_k</code> slower: a whiff. <strong>Refused</strong> (bare hands on stone: the game's note, "Too hard to dig by hand"): the hit stops dead and holds <code>thud_hold_s</code>, kicks back further (<code>thud_recoil_m</code>, <code>thud_recoil_rad</code>), and a short jolt runs through the hand (<code>thud_shake_m</code> at <code>thud_shake_hz</code>, over <code>thud_shake_s</code>). No cracks, nothing breaks.</li>
         <li><strong>Pickaxe and Axe</strong> on this tab show the same air and refused swings with a tool, from the approved stroke; on a block that breaks they are the strokes already in the game. Bare hands are the only digger the game refuses today (the stone tier reaches ore), so the thud is shown with the hands.</li>
         <li>Not shown: sounds (a whoosh on the air, a dull knock on a thud: <code>sound-effects</code> cues, decision 12), chips and dust. The game has no chips or hit marker, so this tab has none either.</li>
         <li><strong>Tune</strong> prints the proposed <code>punch</code> and <code>swing</code> blocks for <code>held.ron</code>.</li>
       </ul>
+      <p><strong>New in version 16</strong> (the owner, 2026-11-21, with a second photo of their fist: <em>"Fix hand punching tree pose. Fist needs to be like this"</em>): the fist is closed and punches forward. Version 15 posed the pickaxe's grip with nothing in it, so the fingers still ringed a handle and read as a flat hand poking out to the left, with a boxy wrist and a bend behind it. Now the fingers are re-chained from the knuckles in a tight curl (92&deg;, 102&deg; and 62&deg; at the three joints), the thumb lies on top at the front over the index finger, the back of the hand is 0.9 tool units shorter so the fist is about as long as it is tall, the wrist is slimmed to the hand, and the fist is one skin tone all over. The knuckles now aim forward into the view, a little left and up (the virtual elbow moved close in, low and right: <code>elbow_x</code> 0.37, <code>elbow_y</code> -0.28, <code>elbow_z</code> -0.25), with the palm to the left and the back of the hand to the right: from the eye, above and right of the fist, that shows the back of the hand, the curled fingers as a column down the leading-left edge and the thumb on top, as both photos do. The hit is lower, nearer and a little further left (<code>fist_raise_m</code> 0.1, <code>reach_m</code> 0.06, <code>across_m</code> 0.27, <code>rise_m</code> 0.04). The Hand tab's <strong>Fist</strong> shows it from any side. The beat and the stages are unchanged.</p>
+      <p><strong>Approved for the game</strong> (the owner, 2026-11-21: <em>"punch animation looks good, just make sure it syncs with the tree shake, maybe add aplitude tree shake 2x so its a bit more obvious"</em>): the tree's shake is doubled here to match the game, 24&nbsp;cm at the crown (it was 12&nbsp;cm), and in the game it fires on each punch's impact, one shake per punch, in place of the half-second timer.</p>
 
       <h3>The twelve principles, here</h3>
       <ul>
@@ -611,7 +613,7 @@ function chamferBlock(B, o) {
 // the cuff, so its stitch rows sit at its edges).
 function HandBuilder() {
   const P = [], N = [], UV = [], COL = [], K = [], PART = [], FL = [], groups = [[], [], [], [], [], []];
-  let part = -1, flush = 0;
+  let part = -1, flush = 0, oneTone = false;
   const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3(), mid = new THREE.Vector3();
   function tri(a, b, c, centre, group, colour, k, along, palm) {
     e1.subVectors(b, a); e2.subVectors(c, a); n.crossVectors(e1, e2);
@@ -623,7 +625,7 @@ function HandBuilder() {
     // block's palm island: projected on the palm's plane in the block's
     // frame (hand-model design 5.1).
     let island = null;
-    if (palm && group === HAND_PARTS.skin && n.dot(palm.dir) > 0.35) { group = palm.group; colour = palmTone(); island = palm; }
+    if (!oneTone && palm && group === HAND_PARTS.skin && n.dot(palm.dir) > 0.35) { group = palm.group; colour = palmTone(); island = palm; }
     const T = e1.subVectors(b, a).normalize(), Bt = new THREE.Vector3().crossVectors(n, T);
     for (const p of [a, b, c]) {
       groups[group].push(P.length / 3);
@@ -635,6 +637,8 @@ function HandBuilder() {
   }
   return {
     setPart(i) { part = i; },
+    // One skin tone all over (the bare fist, version 16): no palm or fold faces.
+    setOneTone(on) { oneTone = on; },
     setFlush(f) { flush = f; },
     // Baked ambient occlusion (owner, 2026-11-17: "Bake some ao"): each
     // vertex is darkened by the other bones near it and in front of it, each
@@ -675,6 +679,7 @@ function HandBuilder() {
 }
 function proposedHandGeometry(tool, sleeveExtra, only) {
   const B = HandBuilder(), parts = tool.hand;
+  B.setOneTone(!!tool.bare);
   const q = new THREE.Quaternion(...tool.rotation).normalize();
   const fistT = v3(tool.fist).sub(v3(tool.butt)).applyQuaternion(q.clone().invert()).multiplyScalar(1 / tool.scale);
   const pc = i => v3(parts[i].at);
@@ -779,7 +784,8 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
     // Turn a finger block so a flat face looks away from the handle (the
     // back of the finger), so the nail and the knuckles sit on a face.
     let out = null;
-    if (finger) {
+    if (finger && p.out) { out = v3(p.out).normalize(); u = axis.clone().cross(out).normalize(); }   // the bare fist's own (version 16)
+    else if (finger) {
       const rel = at.clone().sub(fistT); rel.addScaledVector(handleDir, -rel.dot(handleDir)).addScaledVector(axis, -rel.dot(axis));
       if (rel.lengthSq() > 1e-8) { out = rel.normalize(); u = axis.clone().cross(out).normalize(); }
     }
@@ -789,7 +795,8 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
     // the back of the hand's and the wrist's point from the block to the
     // fist, square to the handle.
     let palm = null;
-    if (HAND_LOOK.two_tone && i <= 16) {
+    // The bare fist's wrist is one tone, as the forearm it runs into (version 16).
+    if (HAND_LOOK.two_tone && i <= 16 && !(tool.bare && i === 16)) {
       if (out) palm = { dir: out.clone().negate(), group: HAND_PARTS.fold };
       else if (i === 0 || i === 16) {
         // The palm's side is where the fingertips curl to (into the palm in
@@ -828,7 +835,7 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
     const c = Math.min(w, h) * (finger ? 0.26 : 0.3);
     B.setFlush(flush);
     if (i === 0) palmMesh(B, { at, axis, h: h * 1.05, palm, colour });
-    else chamferBlock(B, { at, axis, u, w, h, len, c, group, colour, crease, uvAlong, palm, round: isThumb && distal, taper: ftaper });
+    else chamferBlock(B, { at, axis, u, w, h, len, c, group, colour, crease, uvAlong, palm, round: isThumb && distal, taper: ftaper || p.taper });
     B.setFlush(0);
     // The hem: a ring of the sleeve's cloth where it meets the cuff.
     if (i === 18) {
@@ -852,7 +859,7 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
       const r = Math.min(p.width || p.radius, p.radius);
       for (const t of [-0.33, 0, 0.33]) spheres.push({ c: at.clone().addScaledVector(ax, t * L), r, part: i });
     });
-    for (let t = -2; t <= 2; t++) spheres.push({ c: fistT.clone().addScaledVector(handleDir, t * 0.8), r: 0.55, part: -2 });
+    if (!tool.bare) for (let t = -2; t <= 2; t++) spheres.push({ c: fistT.clone().addScaledVector(handleDir, t * 0.8), r: 0.55, part: -2 });
     B.bakeAO(spheres, HAND_LOOK.ao);
   }
   const g = B.geometry();
@@ -2085,12 +2092,12 @@ views.fish = View("fish", v => {
 const PUNCH_DEF = {
   windup_s: 0.09, draw_m: 0.08, drop_m: 0.0, cock_rad: 0.05,
   anticipate_s: 0.06, anticipate_m: 0.025,
-  strike_s: 0.07, reach_m: 0.27, across_m: 0.23, rise_m: 0.16, twist_rad: 0.25, sweep_rad: 0.0, arc_m: 0.03,
+  strike_s: 0.07, reach_m: 0.06, across_m: 0.19, rise_m: 0.13, twist_rad: 0.0, sweep_rad: 0.0, arc_m: 0.03,
   impact_hold_s: 0.04,
   recoil_s: 0.07, recoil_m: 0.06, recover_s: 0.16,
   hands_weight: 0.8,
-  fist_raise_m: 0.15, fist_in_m: 0.12, guard_twist_rad: 0.25, guard_cock_rad: -0.2, hit_cock_rad: 0.0, bend_rad: 0.3,
-  elbow_x: 0.49, elbow_y: -0.41, elbow_z: -0.68, elbow_follow: 0.75,
+  fist_raise_m: 0.1, fist_in_m: 0.12, guard_twist_rad: 0.0, guard_cock_rad: 0.0, hit_cock_rad: 0.0, bend_rad: 0.0,
+  elbow_x: 0.37, elbow_y: -0.28, elbow_z: -0.25, elbow_follow: 0.75,
 };
 const PUNCH_SL = [
   ["windup_s", 0.02, 0.3, 0.005], ["draw_m", 0, 0.2, 0.005], ["drop_m", 0, 0.1, 0.005], ["cock_rad", 0, 0.8, 0.01],
@@ -2123,15 +2130,16 @@ function punchRon() {
   return lines.join("\n");
 }
 // The game's tree shake (tree_shake.rs, planet_surface.wgsl tree_shake).
-const SHAKE = { m: 0.12, hz: 9, s: 0.6, leaf: 1.3, hold_hit_s: 0.5 };
+// The crown's sway doubled, 0.12 to 0.24 m (owner, 2026-11-21, on version 16:
+// "make sure it syncs with the tree shake, maybe add aplitude tree shake 2x").
+const SHAKE = { m: 0.24, hz: 9, s: 0.6, leaf: 1.3, hold_hit_s: 0.5 };
 const shakeWave = age => { if (!(age >= 0 && age < SHAKE.s)) return 0; const k = 1 - age / SHAKE.s; return k * k * Math.sin(age * 2 * Math.PI * SHAKE.hz); };
 
 // The bare fist is posed as an arm, not a tool (version 15, after the
 // owner's photo of their own fist, 2026-11-19: "Fisty position is wrong. See
-// reference"). A vertical fist: the knuckles in a column, index on top, the
-// fingers' middle segments toward the target and the palm toward the centre
-// of the view, the back of the hand and the top of the wrist toward the eye,
-// the thumb tucked under. The wrist is straight: the forearm runs on in
+// reference"; re-posed in version 16, below). A vertical fist: the knuckles
+// in a column on the leading edge, the thumb on top at the front, the back
+// of the hand toward the eye. The wrist is straight: the forearm runs on in
 // line with the back of the hand, aimed from a virtual elbow (`elbow_*`,
 // eye space, low and to the right) through the fist, so a long forearm and
 // sleeve come in from the lower right through the whole stroke. Its twist
@@ -2143,8 +2151,87 @@ const shakeWave = age => { if (!(age >= 0 && age < SHAKE.s)) return 0; const k =
 // knuckles' way (wrist to the back of the hand), B out of the back of the
 // hand; J the wrist joint, C the fist's centre (where the handle was), W
 // the forearm's way from the wrist (toward the elbow).
+// The bare fist's own bones (version 16, after the owner's second photo,
+// 2026-11-21: "Fix hand punching tree pose. Fist needs to be like this").
+// Version 15 posed the pickaxe's grip with no handle in it: the fingers
+// still ringed a handle's hollow, so from the eye the hand read as a long
+// flat block with the fingers poking out ahead of it, and the wrist as a
+// box with a step at each end. Here the back of the hand, the wrist, cuff
+// and sleeve stay the approved hand's; the fingers are re-chained from each
+// knuckle in a tight curl in the plane of the back (D, wrist to knuckles)
+// and the palm (N): the first segment turned FIST.curl[0] off the back,
+// the middle FIST.curl[1] more (it runs back under the knuckles, the
+// fist's front column), the tip FIST.curl[2] more, tucked into the palm.
+// The thumb comes off its root along the index finger's side and lies
+// across the outside of the index and middle fingers' middle segments, so
+// it shows on top of the vertical fist. The wrist is slimmed to the back of
+// the hand's width and thickness, so the forearm runs into it with no step.
+// Lengths in the bone's own units (the grip's tool units).
+const FIST = {
+  curl: [92, 102, 62],              // degrees: knuckle, middle joint, tip joint
+  len: [0.86, 0.95, 0.9],           // of each finger segment's approved length
+  thumb_joint: [-0.9, 1.6, -1.3],  // the thumb's joint from the index knuckle: along A (toward the little finger), N (palm-ward), D
+  thumb_tip: [-0.3, 2.1, 0.1],       // its tip from the index knuckle: over the index finger's middle segment, at the leading edge
+  thumb_root: [0, 0.4, 0.6],        // the thumb's root moved (A, N, D) toward the knuckles, so its mound fills the web
+  short: 0.9,                       // the back of the hand shortened by this (the wrist and arm moved up), so the fist is about as long as it is tall
+  wrist_in: 0.7,
+  wrist_w: 0.72, wrist_h: 0.72,      // the wrist's half width (across the knuckles) and half thickness, of the back's
+  back_eye: [1, 0.1, 0.35],         // eye space: the way the back of the hand faces at twist 0 (to the right, a little toward the eye)
+};
+function fistBones(t) {
+  const P = t.hand.map(p => Object.assign({}, p)), at0 = v3(P[0].at);
+  const end = (p, near) => { const ax = v3(p.axis).normalize(), a = v3(p.at), e1 = a.clone().addScaledVector(ax, p.length / 2), e2 = a.clone().addScaledVector(ax, -p.length / 2); return e1.distanceTo(near) < e2.distanceTo(near) ? e1 : e2; };
+  const knuck = [1, 4, 7, 10].map(i => end(P[i], at0));
+  const kc = knuck.reduce((a, k) => a.add(k), new THREE.Vector3()).multiplyScalar(0.25);
+  const D = v3(P[0].axis).normalize(); if (D.dot(kc.clone().sub(at0)) < 0) D.negate();
+  const A = knuck[3].clone().sub(knuck[0]); A.addScaledVector(D, -A.dot(D)).normalize();
+  const N = [1, 4, 7, 10].reduce((a, i) => a.add(v3(P[i].axis)), new THREE.Vector3());
+  N.addScaledVector(D, -N.dot(D)).addScaledVector(A, -N.dot(A)).normalize();
+  // A direction in the curl's plane, th degrees from D toward N, and the
+  // back of a segment at that angle (outside the curl).
+  const dir = th => D.clone().multiplyScalar(Math.cos(th)).addScaledVector(N, Math.sin(th));
+  const rad = d => d * Math.PI / 180;
+  [1, 4, 7, 10].forEach((b, f) => {
+    let p = knuck[f].clone(), th = 0;
+    for (let s = 0; s < 3; s++) {
+      th += rad(FIST.curl[s]);
+      const bone = P[b + s], L = bone.length * FIST.len[s], ax = dir(th);
+      bone.at = p.clone().addScaledVector(ax, L / 2).toArray(); bone.axis = ax.toArray(); bone.length = L;
+      bone.out = dir(th - Math.PI / 2).toArray();
+      p.addScaledVector(ax, L);
+    }
+  });
+  // The thumb: root (as approved) -> joint -> tip, in three bones the
+  // mockup's chain shortens by thumb_len and joins into two.
+  // The back of the hand shortened from the wrist's end, the wrist, cuff and
+  // sleeve moved up with it, the thumb's root half as far.
+  P[0].at = at0.clone().addScaledVector(D, FIST.short / 2).toArray(); P[0].length -= FIST.short;
+  for (const i of [16, 17, 18]) P[i].at = v3(P[i].at).addScaledVector(D, FIST.short).toArray();
+  const root = end(P[13], at0.clone().addScaledVector(D, -10)).addScaledVector(D, FIST.short / 2)
+    .addScaledVector(A, FIST.thumb_root[0]).addScaledVector(N, FIST.thumb_root[1]).addScaledVector(D, FIST.thumb_root[2]);
+  const off = o => knuck[0].clone().addScaledVector(A, o[0]).addScaledVector(N, o[1]).addScaledVector(D, o[2]);
+  const J = off(FIST.thumb_joint), T = off(FIST.thumb_tip);
+  const mid = root.clone().lerp(J, 0.5), pts = [root, mid, J, T];
+  for (let s = 0; s < 3; s++) {
+    const bone = P[13 + s], a = pts[s], b = pts[s + 1], L = a.distanceTo(b), ax = b.clone().sub(a).normalize();
+    bone.length = L / HAND_SHAPE.thumb_len; bone.axis = ax.toArray();
+    bone.at = a.clone().addScaledVector(ax, bone.length / 2).toArray();
+    // The nail on the thumb's top (the index finger's side), as it lies on the fist.
+    const o = A.clone().negate().addScaledVector(N, 0.35); o.addScaledVector(ax, -o.dot(ax)).normalize();
+    bone.out = o.toArray();
+  }
+  // The wrist, slimmed to the back of the hand, its wide side across the knuckles.
+  // It reaches wrist_in further into the heel of the hand, so the two
+  // read as one piece, not a box with a groove round it.
+  { const ax = v3(P[16].axis).normalize(), toHand = Math.sign(v3(P[0].at).sub(v3(P[16].at)).dot(ax)) || 1;
+    P[16].at = v3(P[16].at).addScaledVector(ax, toHand * FIST.wrist_in / 2).toArray(); P[16].length += FIST.wrist_in; }
+  P[16].taper = [0.85, 1.05];
+  P[16].across = A.toArray(); P[16].width = (P[0].width || P[0].radius) * FIST.wrist_w; P[16].radius = P[0].radius * FIST.wrist_h * 1.4;
+  return P;
+}
+TOOL.fist = Object.assign({}, TOOL.pickaxe, { id: "fist", bare: true, hand: fistBones(TOOL.pickaxe) });
 function fistFrame() {
-  const t = TOOL.pickaxe, P = t.hand, q = new THREE.Quaternion(...t.rotation).normalize();
+  const t = TOOL.fist, P = t.hand, q = new THREE.Quaternion(...t.rotation).normalize();
   const C = v3(t.fist).sub(v3(t.butt)).applyQuaternion(q.clone().invert()).multiplyScalar(1 / t.scale);
   const A = v3(P[10].at).sub(v3(P[1].at)).normalize();
   const turn = new THREE.Quaternion().setFromAxisAngle(A, HAND_SHAPE.grip_turn);
@@ -2166,11 +2253,19 @@ function applyAimed(h, pitch, roll, shift, yaw) {
   const F = FIST0.clone().add(shift), guard = new THREE.Vector3(-PU.fist_in_m, PU.fist_raise_m, 0);
   const E = new THREE.Vector3(PU.elbow_x, PU.elbow_y, PU.elbow_z).addScaledVector(shift.clone().sub(guard), PU.elbow_follow);
   const d = F.clone().sub(E).normalize().applyAxisAngle(QY, yaw || 0);
-  // At twist 0 the back of the hand faces the eye, square to the forearm,
-  // so the knuckles' column stands across the forearm with the little finger
-  // on top and the thumb tucked under; the twist turns it about the forearm.
+  // At twist 0 the back of the hand faces FIST.back_eye (eye space: to the
+  // right, a little toward the eye), square to the forearm; the twist turns
+  // it about the forearm. Version 16: the fist punches forward INTO the view,
+  // the knuckles aimed mostly away from the eye (the elbow low and right,
+  // close in), not across it. A right hand in that handshake turn has its
+  // palm to the left, the thumb on top at the front and the back of the hand
+  // to the right; the fist sits left of and below the eye, so the eye sees
+  // the back obliquely with the curled fingers as a column down the
+  // leading-left edge and the thumb's tip at the top-left, as in both of
+  // the owner's photos. (Version 15 aimed the knuckles across the view with
+  // the back to the eye, which puts the little finger on top.)
   const Ke = d.clone();
-  const Be = F.clone().negate().addScaledVector(d, F.dot(d)).normalize().applyAxisAngle(d, PU.guard_twist_rad + roll);
+  const Be = v3(FIST.back_eye).addScaledVector(d, -v3(FIST.back_eye).dot(d)).normalize().applyAxisAngle(d, PU.guard_twist_rad + roll);
   // A as the tool frame has it (B = s K x A, so A = s B x K): a proper turn.
   const s = Math.sign(f.B.dot(f.K.clone().cross(f.A))) || 1;
   const Ae = Be.clone().cross(Ke).multiplyScalar(s).normalize();
@@ -2357,13 +2452,15 @@ views.punch = View("punch", v => {
   const sched = ActSchedule({ breakS, who: () => S.who, tier: () => 0, out: outcome });
   // The hands: the approved hand of the pickaxe's grip with no pickaxe in
   // it (as the game poses bare hands from the pickaxe's model), closed.
-  const helds = { hands: makeHeld("pickaxe"), pickaxe: makeHeld("pickaxe"), axe: makeHeld("axe") };
+  const helds = { hands: makeHeld("fist"), pickaxe: makeHeld("pickaxe"), axe: makeHeld("axe") };
   helds.hands.toolMesh.visible = false;
   for (const h of Object.values(helds)) v.cam.add(h.group);
   // The fist's hollow, where the handle would be: the closed fingers' inside,
   // a shade of the skin, so the bare fist reads solid and the gaps between
   // the fingers read as creases, as in the owner's photo (version 15).
-  {
+  // Version 16 closes the fingers tight on the palm (fistBones), so there
+  // is no hollow left to fill: the core is kept only for a grip's hand.
+  if (!TOOL.fist.bare) {
     const h = helds.hands, t = TOOL.pickaxe, P = t.hand;
     const a = v3(P[1].at).lerp(v3(P[10].at), 0.5), b = v3(P[2].at).lerp(v3(P[11].at), 0.5), c = v3(P[3].at).lerp(v3(P[12].at), 0.5);
     const centre = a.clone().add(b).add(c).multiplyScalar(1 / 3).lerp(v3(P[0].at), 0.12);
@@ -2494,7 +2591,7 @@ views.hand = View("hand", v => {
   const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 6), phong({ color: new THREE.Color("#2c3338").convertSRGBToLinear() })); ground.rotation.x = -Math.PI / 2; v.scene.add(ground);
   v.world.lantern(new THREE.Vector3(-0.75, 0, -1.25), 1.55);
   const H = {};
-  for (const id of ["pickaxe", "shovel", "axe", "rod"]) {
+  for (const id of ["pickaxe", "shovel", "axe", "rod", "fist"]) {
     const t = TOOL[id], q = new THREE.Quaternion(...t.rotation).normalize();
     const g = new THREE.Group();
     const geos = { fixed: handGeometry(t, {}), radial: handGeometry(t, { radial: true }), next: null };
@@ -2532,7 +2629,7 @@ views.hand = View("hand", v => {
   poses.addEventListener("change", () => { S.poseT = 0; wide(); });
   const setSway = on => { S.sway = on; swayBtn.setAttribute("aria-pressed", String(on)); };
   const label = () => { animBtn.textContent = S.grip === "rod" ? "Play rod" : "Play swing"; };
-  seg(v.q('[data-ctl="grip"]'), [["Pickaxe", "pickaxe"], ["Shovel", "shovel"], ["Axe", "axe"], ["Rod", "rod"]], S.grip, g => { S.grip = g; setAnim(false); label(); playerView(); });
+  seg(v.q('[data-ctl="grip"]'), [["Pickaxe", "pickaxe"], ["Shovel", "shovel"], ["Axe", "axe"], ["Rod", "rod"], ["Fist", "fist"]], S.grip, g => { S.grip = g; setAnim(false); label(); playerView(); });
   animBtn.addEventListener("click", () => setAnim(!S.anim));
   swayBtn.addEventListener("click", () => setSway(!S.sway));
   toneChk.addEventListener("change", () => { tone.on.value = toneChk.checked ? 1 : 0; });
@@ -2577,10 +2674,10 @@ views.hand = View("hand", v => {
       for (const id in H) H[id].group.visible = id === S.grip;
       const h = H[S.grip];
       let pitch = 0, roll = 0, shift = new THREE.Vector3(), stage = "", yaw = 0;
-      if (poses.checked && S.grip !== "rod") {
+      if (poses.checked && S.grip !== "rod" && S.grip !== "fist") {
         S.poseT += dt; const name = POSES[Math.floor(S.poseT / 1.2) % POSES.length], p = keyedPose(name, S.grip);
         const P = strokePose(p, p, h); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = name + " (pose)";
-      } else if (S.anim) {
+      } else if (S.anim && S.grip !== "fist") {
         S.at += sdt;
         if (S.grip === "rod") { const r = rodAt(S.at, sdt); pitch = r.pitch; roll = r.roll; shift = r.shift; stage = r.stage; }
         else { const sc = scheds[S.grip], { s, lag } = sc.state(S.at); const P = strokePose(s, lag, h); pitch = P.pitch; shift = P.shift; yaw = P.yaw; stage = s.stage || "REST"; }
@@ -2606,7 +2703,7 @@ views.hand = View("hand", v => {
           paintHand(geo, mode, lt, h.q);
         }
       }
-      h.tool.visible = toolChk.checked; h.edges.visible = edgeChk.checked;
+      h.tool.visible = toolChk.checked && S.grip !== "fist"; h.edges.visible = edgeChk.checked;
       modeTag.textContent = (isNew ? "PROPOSED HAND · " : "GAME HAND · ") + SHADES.find(s => s[1] === S.shade)[0].toUpperCase();
       stageTag.textContent = stage;
       // The camera orbits the hand's middle (drag), looking at it.
@@ -2614,7 +2711,7 @@ views.hand = View("hand", v => {
       v.cam.position.set(tw.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist, tw.y + Math.sin(orbit.pitch) * orbit.dist, tw.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist);
       v.cam.lookAt(tw);
       if (v.cam.near !== 0.01) { v.cam.near = 0.01; v.cam.updateProjectionMatrix(); }
-      stat.textContent = S.anim ? (S.grip === "rod" ? "rod-motion, the phases in turn" : `beat ${scheds[S.grip].P().toFixed(2)} s · stroke ${scheds[S.grip].T().len.toFixed(2)} s`) : "";
+      stat.textContent = S.anim && S.grip !== "fist" ? (S.grip === "rod" ? "rod-motion, the phases in turn" : `beat ${scheds[S.grip].P().toFixed(2)} s · stroke ${scheds[S.grip].T().len.toFixed(2)} s`) : "";
     },
   };
 });
@@ -2655,7 +2752,7 @@ infoDlg.addEventListener("click", e => { if (e.target === infoDlg) infoDlg.close
 refreshRon();
 setTab(tabOf(location.hash) || "dig", false);
 // For checking: the page's state, read by the screenshot script.
-window.__toolMotion = { views, NIGHT, ST, ROD, HS, SHOVEL, HAND_SHAPE, HAND_LOOK, PU, SW, advance: s => views[TAB].advance(s) };
+window.__toolMotion = { views, NIGHT, ST, ROD, HS, SHOVEL, HAND_SHAPE, HAND_LOOK, PU, SW, TOOL, THREE, FIST, advance: s => views[TAB].advance(s) };
 })();
 </script>
 </body>

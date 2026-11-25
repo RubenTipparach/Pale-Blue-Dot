@@ -1567,20 +1567,66 @@ fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
     }
 }
 
-/// Bend a swaying mesh in the surge, `bend` 0 at rest to 1 full: its
-/// positions only. Returns the vertices written.
-fn bend_mesh(mesh: &mut Mesh, still: &Sway, seconds: f32, bend: f32) -> usize {
-    // Into the positions the mesh holds (`memory-leak`): bent every frame.
-    let mut positions = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+/// One mesh to bend: its handle, its positions, its sway and its phase.
+type BendJob<'a> = (Handle<Mesh>, Vec<[f32; 3]>, &'a Sway, f32);
+
+/// Bend every tile's swaying meshes this frame asks for (`Drawn::bend_now`):
+/// each mesh's position buffer taken out, filled on every core at once, and
+/// put back (`ocean-environments` B31: 400,000 reef vertices bent one tile
+/// after another held the main thread 28 ms a frame). The same positions the
+/// one-by-one bend made, so the same look. Returns the vertices written.
+fn bend_all(drawn: &HashMap<Key, Drawn>, meshes: &mut Assets<Mesh>, seconds: f32) -> usize {
+    let mut jobs: Vec<BendJob> = Vec::new();
+    for tile in drawn.values() {
+        let pairs = [
+            (
+                tile.sway.as_ref().map(|s| &s.1),
+                &tile.still,
+                tile.bend_now.0,
+            ),
+            (tile.kelp.as_ref(), &tile.kelp_still, tile.bend_now.1),
+        ];
+        for (handle, still, bend) in pairs {
+            if let (Some(handle), Some(bend)) = (handle, bend)
+                && let Some(mesh) = meshes.get_mut(handle)
+            {
+                let buffer = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+                jobs.push((handle.clone(), buffer, still, bend));
+            }
+        }
+    }
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(8);
+    let per = jobs.len().div_ceil(threads.max(1)).max(1);
+    std::thread::scope(|scope| {
+        for chunk in jobs.chunks_mut(per) {
+            scope.spawn(move || {
+                for (_, positions, still, bend) in chunk.iter_mut() {
+                    fill_bent(positions, still, seconds, *bend);
+                }
+            });
+        }
+    });
+    let mut written = 0;
+    for (handle, positions, _, _) in jobs {
+        written += positions.len();
+        if let Some(mesh) = meshes.get_mut(&handle) {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        }
+    }
+    written
+}
+
+/// A swaying mesh's positions in the surge, into `positions` (emptied).
+fn fill_bent(positions: &mut Vec<[f32; 3]>, still: &Sway, seconds: f32, bend: f32) {
+    positions.clear();
     positions.extend((0..still.rest.len()).map(|i| {
         let h = still.height[i];
         let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
         let reach = (0.07 * h).min(0.7) * bend;
         (still.rest[i] + still.axis[i] * wave * reach).to_array()
     }));
-    let n = positions.len();
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    n
 }
 
 struct Drawn {
@@ -1599,6 +1645,9 @@ struct Drawn {
     kelp: Option<Handle<Mesh>>,
     kelp_still: Sway,
     kelp_swayed: bool,
+    /// This frame's bend for the tile's sway and its kelp, set by the fade
+    /// pass and worked out on every core after it (`bend_all`).
+    bend_now: (Option<f32>, Option<f32>),
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
@@ -1857,18 +1906,14 @@ fn tiles(
         let near = bend > 0.0;
         let local_eye = eye - drawn.anchor;
         // The surge: soft corals, anemones, grass and kelp bend, near the eye.
-        if let Some((_, handle)) = &drawn.sway
-            && (near || !drawn.swayed)
-            && let Some(mesh) = meshes.get_mut(handle)
-        {
-            swayed_verts += bend_mesh(mesh, &drawn.still, seconds, bend);
+        // Bent below, on every core at once (`bend_all`).
+        drawn.bend_now = (None, None);
+        if drawn.sway.is_some() && (near || !drawn.swayed) {
+            drawn.bend_now.0 = Some(bend);
             drawn.swayed = near;
         }
-        if let Some(handle) = &drawn.kelp
-            && (near || !drawn.kelp_swayed)
-            && let Some(mesh) = meshes.get_mut(handle)
-        {
-            swayed_verts += bend_mesh(mesh, &drawn.kelp_still, seconds, bend);
+        if drawn.kelp.is_some() && (near || !drawn.kelp_swayed) {
+            drawn.bend_now.1 = Some(bend);
             drawn.kelp_swayed = near;
         }
         // The ambient life and the plumes, while the tile is drawn: they
@@ -1905,6 +1950,7 @@ fn tiles(
             commands.entity(drawn.root).despawn();
         }
     }
+    swayed_verts += bend_all(&state.drawn, &mut meshes, seconds);
     // A measurement instrument (`ocean-environments` B20): what the sea's
     // places draw and rewrite, once a second.
     if now - state.logged_s >= 1.0 {
@@ -2126,6 +2172,7 @@ fn tiles(
             kelp,
             kelp_still: built.kelp,
             kelp_swayed: false,
+            bend_now: (None, None),
             tris,
             kelp_tris,
         },

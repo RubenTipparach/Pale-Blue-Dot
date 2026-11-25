@@ -106,8 +106,20 @@ pub enum Act {
     /// Mark a place this many metres away on the map: open it with M, put
     /// the pointer on dry ground that far off, right-click, close it.
     Mark(f32),
-    /// Walk to the newest waypoint on the map.
+    /// Plan from the map (`mission-playthrough` 5.8): open it with M, pick a
+    /// layer by its legend row (`places`, `biomes`), find the pixel of a
+    /// class of its key (`reef`, `kelp_forest`, `desert`) nearest the
+    /// player, zoom in on it, right-click a mark there, close the map. The
+    /// `ToMark` after it walks there.
+    MapGoal(String, String),
+    /// Walk to the newest waypoint on the map, in legs; a mark at sea ends
+    /// at the coast, facing the water, for a `Swim`.
     ToMark,
+    /// From the coast into the water and across, swimming on the surface to
+    /// the place of a kind (`reef`: the nearest reef rock to the mark;
+    /// `mark`: the mark), then down to it, looking down for a `Dig`
+    /// (`mission-playthrough` 5.7, legs 2 to 4).
+    Swim(String),
     /// The right button once, on what is aimed at, with what is in hand
     /// (the bucket filled at the water or poured).
     Use,
@@ -163,11 +175,50 @@ pub enum Act {
     Eat(String),
     /// Open the missions tab (O) for seconds, then shut it.
     Missions(f32),
+    /// Open the pack with Tab for seconds, then shut it with Tab
+    /// (`starter-missions`, "Open your pack").
+    Pack(f32),
+    /// Walk to the nearest chest, open it with F and put one stack of the
+    /// ground's own blocks (soil, sand, stone) in it (`starter-missions`,
+    /// "A chest").
+    Store,
+    /// Open the pack and drop every stack of the ground's own blocks (soil,
+    /// sand, stone, grass) off the panels, then shut it: a full pack cleared
+    /// before a shot that needs room.
+    Declutter,
     /// Pick the mission to be on: open the tree (O), click its card, shut
     /// it (`mission-playthrough` 3.5).
     Focus(String),
+    /// Talk to this many townsfolk, each one not talked to before: walk up
+    /// to the nearest, look at them, F, and shut the talk with F
+    /// (`mission-playthrough` design 6, the town tree's "meet").
+    Talk(u32),
+    /// At the town's trader: talk to townsfolk until one offers TRADE,
+    /// press it, sell this many goods (one press each, the first row the
+    /// trader buys), buy this many (each press the next row), and shut the
+    /// talk (`mission-playthrough` design 6, "first-trade").
+    Trade(u32, u32),
+    /// One town job, played through: townsfolk asked until one offers WORK,
+    /// the first posted job of a kind the bot plays (trade, fish, mine)
+    /// taken (any other given back), its work done, and handed in
+    /// (`mission-playthrough` design 6, "first-job").
+    Job,
+    /// A town's furniture used as a player uses it: "sit" on a seat, "lie"
+    /// on a bed (then up again with F), or "loot" a store (opened with F,
+    /// its coins or one stack taken, shut). The nearest free piece in a
+    /// town; one that will not take the bot is passed over
+    /// (`mission-playthrough` design 6, "sit", "lie", "find").
+    Furniture(String),
     /// A still, when `--showcase-stills` names a directory.
     Still,
+    /// Go to the nearest place of a kind (`mission-playthrough` design 5):
+    /// `hot`, `temperate` or `cold` dry ground, a `reef` (swum onto) or a
+    /// `town`.
+    Seek(String),
+    /// A key pressed once, as the player presses it (`F`, `W`, ...).
+    Tap(String),
+    /// A key held for seconds.
+    Hold(String, f32),
 }
 
 /// Where the showcases live.
@@ -242,6 +293,23 @@ mod tests {
     }
 
     #[test]
+    fn the_map_goal_and_the_swim_parse() {
+        let file = parse(
+            r#"(goal: "x", shots: [(caption: "Reef",
+                acts: [MapGoal("places", "reef"), ToMark, Swim("reef")])])"#,
+        )
+        .unwrap();
+        assert_eq!(
+            file.shots[0].acts,
+            vec![
+                Act::MapGoal("places".into(), "reef".into()),
+                Act::ToMark,
+                Act::Swim("reef".into()),
+            ]
+        );
+    }
+
+    #[test]
     fn a_bad_showcase_is_refused() {
         assert!(parse("(goal: \"x\", shots: [])").is_err());
         assert!(
@@ -251,11 +319,11 @@ mod tests {
     }
 
     /// Every showcase in `assets/showcase` parses, and names only missions
-    /// the chain has.
+    /// the starter tree or the town tree has.
     #[test]
     fn every_showcase_file_parses() {
-        let chain_text =
-            std::fs::read_to_string(pbd_app::config::config_dir().join("missions.ron")).unwrap();
+        let read = |f: &str| std::fs::read_to_string(pbd_app::config::config_dir().join(f));
+        let chain_text = read("missions.ron").unwrap() + &read("town_missions.ron").unwrap();
         let mut count = 0;
         for entry in std::fs::read_dir(dir()).unwrap() {
             let path = entry.unwrap().path();

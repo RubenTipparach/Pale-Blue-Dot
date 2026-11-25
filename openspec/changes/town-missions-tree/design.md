@@ -363,6 +363,20 @@ station for furniture". A sixth branch, `carpentry`, off the trunk's
 furniture names). The tree is then 34 missions paying 640 coins. M33's Town
 tab draws the branch.
 
+## 12. A toast when the tree opens (owner, 2026-11-23)
+
+The owner: "make sure that when player finds town, the "town" mission tree
+beocmes unlocked and the player gets a toast". The tree already opens on the
+first `reach town` (design 1), but nothing said so: the HUD line shows "Find
+a town" done and the tab's plaque appears, both easy to miss.
+
+When `count_town` opens the record (a town reached, or an old world that has
+been to one, on its first open with this build), it raises a flag the
+desktop reads once: one toast in the item toasts' column (`item-toasts`)
+with the town mission's lamp icon and "Town missions unlocked", shown and
+faded as an item's toast is. A toast is a row of that column with its own
+words in place of an item's name and count.
+
 ## Risks / Trade-offs
 
 - **Two trees to keep in step.** The counting, unlocks and focus are one
@@ -381,3 +395,15 @@ tab draws the branch.
   old world that has been to a town.
 - Rollback: the previous build ignores `town_missions`; recipes the town tree
   locked are open again (no mission names them).
+
+### 12.1 The tree tabs (owner, 2026-11-24)
+
+"town and starter should be tabs below missions, with the buttons styled a
+little different ... if I toggle between them the ui stops rendering
+missions entirely", and "button shading also not clear which one is
+clicked". The tree rebuilt on a switch was spawned hidden, and the menu
+shows a panel only when the screen changes, so it stayed blank until the
+tab was left and opened again; it is now spawned shown while the Missions
+tab is open. The two plaques are stone (the header's are oak), in a centred
+row of their own under the header, and the shown tree's tab has an amber
+bar under it.

@@ -1,0 +1,47 @@
+// Bark dust and falling leaves when a tree is hit or felled
+// (`tree-punch-shake`, "Dust and falling leaves"; `crates/pbd-app/src/tree_fx.rs`).
+// The code's `TreeFxSettings::default()` is the one source of defaults; this
+// file is the same set written out, and a test holds the two together.
+// Counts are particles per event; sizes metres; times seconds; speeds m/s;
+// colours linear RGB.
+(
+    // The most particles alive at once, over every burst (tens, not hundreds).
+    max_live: 64,
+    // A hit by hand (or by a tool that is not an axe): dust specks, leaves.
+    punch_dust: 4,
+    punch_leaves: 2,
+    // An axe's hit.
+    axe_dust: 7,
+    axe_leaves: 4,
+    // The fell (the last log): dust round the stump, leaves from the crown.
+    fell_dust: 18,
+    fell_leaves: 22,
+    // Dust: a speck's side, its life on a hit and on the fell, its speed out,
+    // how fast it slows (per second) and sinks (m/s^2).
+    dust_size_m: 0.06,
+    dust_life_s: 0.5,
+    fell_dust_life_s: 0.9,
+    dust_speed_mps: 1.4,
+    fell_dust_speed_mps: 2.2,
+    dust_drag: 5.0,
+    dust_gravity: 0.6,
+    // How far the dust is pulled from the bark's colour toward the dry earth.
+    dust_mix: 0.45,
+    dust_colour: (0.32, 0.25, 0.17),
+    // Leaves: a leaf's side, its falling speed, its sway either side and
+    // rate, how fast it turns over, how long it lies before fading, the fade.
+    leaf_size_m: 0.09,
+    leaf_fall_mps: 2.2,
+    leaf_sway_m: 0.35,
+    leaf_sway_hz: 0.8,
+    leaf_flip_hz: 1.6,
+    leaf_rest_s: 0.6,
+    leaf_fade_s: 0.4,
+    // The leaf colour against the species' leaf mean.
+    leaf_shade: 0.8,
+    // Where leaves let go: the crown's band over the base, and how far out,
+    // before the tree's size.
+    crown_low_m: 3.5,
+    crown_high_m: 6.0,
+    crown_radius_m: 1.4,
+)

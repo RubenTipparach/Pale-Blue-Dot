@@ -278,6 +278,33 @@ So the game does what the mockup does:
 Checked by `--capture` shots of the biome and rain overlays beside the
 mockup's, with the sea pixel's colour measured in each.
 
+## Animals on the map (owner, 2026-11-21)
+
+The owner, watching the bot hunt for a woolback: "why no animals? can you
+add ability to see animale on the map?". Wild herds come from a grid
+(`animal-husbandry` 15), are only drawn within 150 m, and only on grass, so a
+player cannot tell where to walk to find one.
+
+- **What shows:** each wild herd of the tameable species (meadow hen,
+  woolback, plodder) within 1.5 km of the player, as one marker at the herd's
+  centre, and each of the player's own tamed animals. Not every animal: a
+  herd is one marker, so the map is not covered in dots.
+- **Where from:** the same `herds::herd_in` the game spawns from, with the
+  same dry-grass check, so a marker is always where the herd is. The map's
+  "all is known" rule (M1) covers it: nothing is revealed by exploring.
+- **How it looks:** a small round marker in the species' colour (its
+  `colours` first coat) with a 1 px dark rim, smaller than the waypoint pin;
+  tamed ones get a light ring. The legend gains a "Herds" row with the three
+  species' swatches, and a toggle beside Night and Clouds to hide them.
+- **Text:** the legend's labels come from `locale_en.yaml` (`map.herds` and
+  the species names already there).
+- **Cost:** the herds are found once when the map opens and again only when
+  the player has moved 100 m, about 400 squares hashed; a few dozen markers.
+
+Recommendation taken (ask only with screenshots): the 1.5 km reach and the
+herd-per-marker rule; the owner judges the look on screenshots of the map
+with the markers on.
+
 ## Risks / Trade-offs
 
 - [The base raster takes too long to build] → Timed by the instrument

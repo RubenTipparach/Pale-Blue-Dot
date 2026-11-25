@@ -95,6 +95,9 @@ pub struct TreeTab(pub ShownTree);
 /// The two plaques' row.
 #[derive(Component)]
 pub struct TreeTabs;
+/// The bar under the shown tree's plaque.
+#[derive(Component)]
+pub struct TreeTabMark(pub ShownTree);
 
 /// One zoom level of the tree: a designed view, not a scale. The cards are
 /// always drawn at the UI kit's own scale (the tree's `UiTransform` scale is
@@ -567,16 +570,20 @@ fn body(text: &str, size: f32, colour: Color) -> impl Bundle {
 }
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>, trees: Trees, assets: Res<AssetServer>) {
-    spawn_tree(&mut commands, &kit, trees.chain(), &assets);
-    // The two trees' plaques, top left, over whichever is drawn; shown once
-    // the town tree is open.
+    spawn_tree(&mut commands, &kit, trees.chain(), &assets, false);
+    // The two trees' plaques: stone tabs in a row of their own under the
+    // oak header, over whichever is drawn; shown once the town tree is open.
+    // The shown tree's tab has a bar under it (owner, 2026-11-24: "not clear
+    // which one is clicked").
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: px(6),
-                top: px(10),
-                column_gap: px(4),
+                left: px(0),
+                top: px(42),
+                width: percent(100),
+                justify_content: JustifyContent::Center,
+                column_gap: px(8),
                 display: Display::None,
                 ..default()
             },
@@ -588,9 +595,22 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, trees: Trees, assets: Res<
                 (ShownTree::Starter, tr("mission_tree.tree.starter")),
                 (ShownTree::Town, tr("mission_tree.tree.town")),
             ] {
-                row.spawn((ui_kit::plaque(&kit, Set::Oak, 64.0), TreeTab(tree)))
+                row.spawn((ui_kit::plaque(&kit, Set::Stone, 96.0), TreeTab(tree)))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Oak, words));
+                        p.spawn(ui_kit::plaque_label(Set::Stone, words));
+                        p.spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: px(4),
+                                right: px(4),
+                                bottom: px(-6),
+                                height: px(3),
+                                display: Display::None,
+                                ..default()
+                            },
+                            BackgroundColor(ui_kit::TITLE),
+                            TreeTabMark(tree),
+                        ));
                     });
             }
         });
@@ -598,11 +618,24 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, trees: Trees, assets: Res<
 
 /// Build the tab's tree for `chain`: the cards, lines, plaques, side panel
 /// and hover cards.
-fn spawn_tree(commands: &mut Commands, kit: &UiKit, chain: &Chain, assets: &AssetServer) {
-    // `relayout` sizes and places every part for the view's level.
+fn spawn_tree(
+    commands: &mut Commands,
+    kit: &UiKit,
+    chain: &Chain,
+    assets: &AssetServer,
+    shown: bool,
+) {
+    // `relayout` sizes and places every part for the view's level. A tree
+    // rebuilt while the tab is open is shown at once: the menu shows a
+    // panel only when the screen changes, so a layer spawned hidden stayed
+    // blank (owner, 2026-11-24: "if I toggle between them the ui stops
+    // rendering missions entirely").
     commands
         .spawn((
-            menu::layer(),
+            Node {
+                display: if shown { Display::Flex } else { Display::None },
+                ..menu::layer()
+            },
             BackgroundColor(ui_kit::NIGHT),
             GlobalZIndex(11),
             Panel(Screen::Missions),
@@ -963,11 +996,13 @@ fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {
 
 /// Show the other tree: the tab's tree rebuilt for it and its view opened
 /// afresh. A world whose town tree is not open shows the starter tree.
+#[allow(clippy::too_many_arguments)] // A Bevy system.
 pub fn switch_tree(
     mut commands: Commands,
     kit: Res<UiKit>,
     assets: Res<AssetServer>,
     trees: Trees,
+    screen: Res<Screen>,
     layers: Query<Entity, With<TreeLayer>>,
     mut view: ResMut<TreeView>,
     mut built: Local<Option<ShownTree>>,
@@ -992,7 +1027,13 @@ pub fn switch_tree(
     } else {
         &trees.starter_chain.0
     };
-    spawn_tree(&mut commands, &kit, chain, &assets);
+    spawn_tree(
+        &mut commands,
+        &kit,
+        chain,
+        &assets,
+        *screen == Screen::Missions,
+    );
     *view = TreeView::default();
 }
 
@@ -1004,6 +1045,7 @@ pub fn tree_tabs(
     mut shown: ResMut<ShownTree>,
     mut row: Query<&mut Node, With<TreeTabs>>,
     mut tabs: Query<(&TreeTab, &Interaction, &mut ui_kit::Plaque)>,
+    mut marks: Query<(&TreeTabMark, &mut Node), Without<TreeTabs>>,
 ) {
     let town_open = town_chain.is_some() && town.as_deref().is_some_and(TownMissions::is_open);
     let on = *screen == Screen::Missions && town_open;
@@ -1025,6 +1067,16 @@ pub fn tree_tabs(
     }
     if let Some(tree) = pick {
         *shown = tree;
+    }
+    for (mark, mut node) in &mut marks {
+        let want = if mark.0 == *shown {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != want {
+            node.display = want;
+        }
     }
 }
 

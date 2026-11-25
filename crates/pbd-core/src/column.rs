@@ -441,6 +441,7 @@ pub fn home_biome(material: Material) -> Option<Biome> {
         | Material::DraftingTable
         | Material::Grinder
         | Material::Mixer
+        | Material::Chest
         | Material::Sticks => Biome::Fields,
         Material::JungleGrass => Biome::Jungle,
         Material::Sand => Biome::Beach,

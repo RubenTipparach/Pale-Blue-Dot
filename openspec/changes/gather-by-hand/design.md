@@ -104,6 +104,14 @@ pickable piece through `pieces`, aims and presses F.
 `phase-1-trunk.ron`'s gather shot uses it for the fibre and the stone, and
 digs only for the soil.
 
+## 9. Fibre from felling (owner, 2026-11-21)
+
+The owner: "quick fix, cutting down trees should get me fibers too". Each log
+taken from a tree, by axe or by hand, also gives one plant fibre (its bark),
+into the pack beside the log when there is room for it; a pack with room for
+the log but not the fibre still takes the log. A toast says the fibre as it
+says the log. Fibre is still gathered from the ground clutter (3) as before.
+
 ## 8. Risks
 
 - **The port drifting from the shader.** This is the reason for the GPU
@@ -112,3 +120,24 @@ digs only for the soil.
   uniform grows by 64 x 16 bytes, and the draw's added test is a loop over
   64 ids for a clutter vertex. It is not measured in a cloud container: the
   owner runs `perf_suite` on the desktop.
+
+## Taking a piece is 4x quicker (owner, 2026-11-22)
+
+The owner, playtesting: "speed up gathering rocks and fiber animation by 4x".
+
+The motion is the taken piece sinking into the ground (above). What sets its
+pace today, measured in the code:
+- the sink takes `scatter.lod_fade_s`, 1.0 s: the ground detail's own
+  dissolve time (`detail-fade`), borrowed for it;
+- the taken list is rebuilt twice a second while nothing is moving
+  (`clutter::refresh`), so a sink can begin up to 0.5 s after F.
+So a pebble is gone 1.0 to 1.5 s after F.
+
+Change:
+- a field of its own, `scatter.taken_sink_s`, 0.25 s, a quarter of today's,
+  for the sink and for the rise when a piece grows back. `lod_fade_s` stays
+  1.0 s for the ground detail it was made for.
+- the list is rebuilt on the frame the save changes, as well as while a
+  piece moves, so the sink starts on the frame of the take.
+A pebble is then gone 0.25 s after F, 4 to 6 times sooner than now. The goods
+reach the pack on the press, as before; nothing else in the rule changes.

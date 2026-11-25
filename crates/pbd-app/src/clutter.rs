@@ -147,8 +147,8 @@ pub fn sunk_bytes(taken: &Taken, day: f64, fade_days: f64) -> u32 {
     })
 }
 
-/// Rebuild the list every frame a piece is sinking or rising, and twice a
-/// second otherwise: the `clutter` records matched to the resident fine
+/// Rebuild the list every frame a piece is sinking or rising or the save
+/// changed, and twice a second otherwise: the `clutter` records matched to the resident fine
 /// set's cells, nearest the camera first.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn refresh(
@@ -167,7 +167,10 @@ pub(crate) fn refresh(
         .iter()
         .any(|(_, s)| (0..4).any(|k| !matches!((s >> (8 * k)) & 0xff, 0 | 255)));
     *wait -= time.delta_secs();
-    if *wait > 0.0 && !moving {
+    // A take changes the save: the sink starts on that frame, not up to half
+    // a second later.
+    let changed = save.as_ref().is_some_and(|s| s.is_changed());
+    if *wait > 0.0 && !moving && !changed {
         return;
     }
     *wait = 0.5;
@@ -177,7 +180,7 @@ pub(crate) fn refresh(
     let day = sun.as_ref().map_or(0.0, |s| day_of(s.clock.seconds));
     // The fade's seconds, as game days at the clock's own pace (a sped-up
     // clock fades faster, which only a captioned wait does).
-    let fade_s = scatter.as_ref().map_or(1.0, |s| s.lod_fade_s.max(0.05));
+    let fade_s = scatter.as_ref().map_or(0.25, |s| s.taken_sink_s.max(0.05));
     let fade_days = f64::from(fade_s) / f64::from(DAY_S);
     let mut by_key = std::collections::HashMap::new();
     for r in save.records.of_kind(CLUTTER_KIND) {

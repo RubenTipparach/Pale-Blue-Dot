@@ -203,11 +203,7 @@ fn run(
     let mut set = (*fine.set).clone();
     let mut wrote = 0;
     for edit in &laid {
-        let Some(record) = set
-            .finest_records()
-            .iter()
-            .position(|r| r.key() == edit.cell)
-        else {
+        let Some(record) = set.finest_index_of(edit.cell) else {
             continue;
         };
         if set.write_layer(record, usize::from(edit.layer), edit.material, &save.edits) {

@@ -2,9 +2,10 @@
 //! owner's request while the frame spikes are chased. Off by default; `F3`
 //! shows and hides it, and `--frame-graph` starts with it shown.
 //!
-//! It draws the last `BARS` frames' wall times as bars, top right: green within
-//! the 120 Hz budget, amber within 60 Hz, red past it, against dashed lines at
-//! both budgets, with the window's frame rate, median, 99th percentile and
+//! It draws the last `BARS` frames' wall times as bars, top left over every
+//! panel, on a log scale (4 ms to 1 s): green within the 120 Hz budget, amber
+//! within 60 Hz, orange within 30 Hz, red to 100 ms and white past it (a
+//! stall), against lines at 60 Hz, 30 Hz and 100 ms, with the window's frame rate, median, 99th percentile and
 //! worst frame above. The numbers are `FrameStats`, the same samples the
 //! capture's `FRAME_WALL_MS` and `--frame-log` report, so the graph and the
 //! logs cannot disagree.
@@ -25,11 +26,37 @@ use super::FrameStats;
 const BARS: usize = 240;
 const BAR_W: f32 = 0.5;
 const GRAPH_H: f32 = 50.0;
-/// The frame time at the top of the graph, ms; taller frames are clipped and
-/// drawn solid red.
-const TOP_MS: f32 = 50.0;
+/// The graph's height is a log scale from `FOOT_MS` to `TOP_MS`, so a slow
+/// run (33 ms) and a stall (1 s) are far apart (`frame-budget`, "The F3
+/// graph shows stalls apart from slow frames").
+const FOOT_MS: f32 = 4.0;
+const TOP_MS: f32 = 1000.0;
 const BUDGET_120: f32 = 1000.0 / 120.0;
 const BUDGET_60: f32 = 1000.0 / 60.0;
+const BUDGET_30: f32 = 1000.0 / 30.0;
+/// Past this a frame is a stall, drawn white.
+const STALL_MS: f32 = 100.0;
+
+/// A frame time's height on the graph, px.
+fn bar_height(ms: f32) -> f32 {
+    let t = (ms.max(FOOT_MS) / FOOT_MS).ln() / (TOP_MS / FOOT_MS).ln();
+    GRAPH_H * t.clamp(0.02, 1.0)
+}
+
+/// A frame time's colour: green, amber, orange, red, and white for a stall.
+fn bar_colour(ms: f32) -> Color {
+    if ms <= BUDGET_120 {
+        Color::srgb(0.35, 0.85, 0.35)
+    } else if ms <= BUDGET_60 {
+        Color::srgb(0.95, 0.80, 0.25)
+    } else if ms <= BUDGET_30 {
+        Color::srgb(0.98, 0.55, 0.15)
+    } else if ms <= STALL_MS {
+        Color::srgb(0.90, 0.20, 0.18)
+    } else {
+        Color::srgb(1.0, 1.0, 1.0)
+    }
+}
 
 #[derive(Component)]
 pub struct FrameGraph;
@@ -54,9 +81,12 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
     commands
         .spawn((
             FrameGraph,
+            // Top left and over every panel (owner, 2026-11-22: "its being
+            // blocked by stuff", the missions panel over it top right).
+            GlobalZIndex(1000),
             Node {
                 position_type: PositionType::Absolute,
-                right: px(4),
+                left: px(4),
                 top: px(3),
                 width: px(width + 4.0),
                 padding: UiRect::all(px(2)),
@@ -103,21 +133,17 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
                         BackgroundColor(Color::NONE),
                     ));
                 }
-                for budget in [BUDGET_120, BUDGET_60] {
+                for budget in [BUDGET_60, BUDGET_30, STALL_MS] {
                     plot.spawn((
                         Node {
                             position_type: PositionType::Absolute,
                             left: px(0),
-                            bottom: px(GRAPH_H * budget / TOP_MS),
+                            bottom: px(bar_height(budget)),
                             width: px(width),
                             height: px(1),
                             ..default()
                         },
-                        BackgroundColor(if budget < BUDGET_60 {
-                            Color::srgba(0.35, 0.85, 0.35, 0.55)
-                        } else {
-                            Color::srgba(0.95, 0.30, 0.25, 0.55)
-                        }),
+                        BackgroundColor(bar_colour(budget).with_alpha(0.5)),
                     ));
                 }
             });
@@ -295,14 +321,8 @@ pub fn update(
             continue;
         };
         let ms = ms as f32;
-        node.height = px(GRAPH_H * (ms / TOP_MS).min(1.0));
-        *colour = BackgroundColor(if ms <= BUDGET_120 {
-            Color::srgb(0.35, 0.85, 0.35)
-        } else if ms <= BUDGET_60 {
-            Color::srgb(0.95, 0.75, 0.25)
-        } else {
-            Color::srgb(0.95, 0.25, 0.20)
-        });
+        node.height = px(bar_height(ms));
+        *colour = BackgroundColor(bar_colour(ms));
     }
     if recent.is_empty() {
         return;
@@ -311,12 +331,18 @@ pub fn update(
     sorted.sort_by(f64::total_cmp);
     let at = |p: f64| sorted[((sorted.len() - 1) as f64 * p) as usize];
     let total: f64 = recent.iter().sum();
+    let stalls = recent
+        .iter()
+        .filter(|&&ms| ms > f64::from(STALL_MS))
+        .count();
     let line = format!(
-        "{:.0} fps | p50 {:.1} | p99 {:.1} | max {:.1} ms | F3",
+        "{:.0} fps | p50 {:.1} | p99 {:.1} | max {:.1} ms | {} over {} ms | F3",
         recent.len() as f64 * 1000.0 / total.max(1e-6),
         at(0.5),
         at(0.99),
-        sorted[sorted.len() - 1]
+        sorted[sorted.len() - 1],
+        stalls,
+        STALL_MS
     );
     for mut text in &mut text {
         if text.0 != line {

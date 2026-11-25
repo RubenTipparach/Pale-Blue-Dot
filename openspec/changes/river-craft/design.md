@@ -838,3 +838,18 @@ with these screenshots; until then the default pitch stays at 40 degrees.
 - The current derived from the cells (1, 2), lines between craft (3), the
   tug and barges, logs, booms and bundles (5), nets (6).
 - The frame cost: not measured (no GPU in this session).
+
+## Fixes from the owner's raft play (2026-11-21)
+
+- **The line from a raft:** "I also cant see fishing line when I fishing from
+  the raft". The cast went out from a paddled boat's seat (`small-boats`
+  design 6), but `fish::draw::tackle` drew the line, float and hook only on
+  foot. It now draws them by the same rule the line is fished by (on foot, or
+  in a paddled boat's seat), the line leaving a rod's length ahead of the
+  seat's eye along the look.
+- **The left oar hand lit inside out:** "I wonder if left hand has inverted
+  normals". The left hand is the right one scaled by -1 (`oar_hand::place`),
+  and its material was double sided: with the winding reversed, every outside
+  face read as a back face and had its normal flipped. The left hand now has
+  a single-sided material (no culling), so the mirrored transform's normals
+  light it the right way out.

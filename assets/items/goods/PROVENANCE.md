@@ -87,6 +87,16 @@ plant's low cap in the cyan its head burns with at night
 (`pbd_core::flora::GLOW_HEAD_RGB`) over the plant's pale green stalk, with the
 1 px outline of an inventory icon.
 
+## storage-chests design 1: the chest
+
+`assets/items/stations/chest.png`, the chest block's slot icon, is drawn by
+`tools/gen_item_icons.py` (`stations/chest`) from its own pixel grid in the
+fence's palette (`FARM`): a box of the two browns with a lid over a dark seam,
+one iron band and a dark iron hasp, with the 1 px outline of an inventory
+icon. In the world the chest has no outline: it is the workbench's wood block
+(`render_code`, `WOOD`) with an iron strap and hasp stood on it
+(`desktop/farm.rs`, `show`), lit as the ground is.
+
 ## townsfolk design 9: the parcel, and the coin
 
 `parcel` is drawn by `tools/gen_item_icons.py` (`ECONOMY`): brown paper tied
