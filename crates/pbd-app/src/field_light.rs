@@ -139,6 +139,10 @@ pub struct FieldView {
     /// radius, then the way beyond the site and the storey's ceiling; zeros
     /// when off.
     pub cut: [Vec4; 2],
+    /// The reef's surge (`memory-leak` design, "The reef sways on the
+    /// GPU"): x the sun clock's seconds, wrapped at an hour, read by
+    /// `sway_vertex.wgsl`.
+    pub sway: Vec4,
 }
 
 /// Bytes of a run of vec4s as WGSL lays them out in storage: packed, 16 a
@@ -176,14 +180,15 @@ impl LightRow {
 }
 
 impl FieldView {
-    const BYTES: u64 = (23 + 2 * crate::carried_light::MAX_CARRIED_LIGHTS as u64) * 16;
+    const BYTES: u64 = (24 + 2 * crate::carried_light::MAX_CARRIED_LIGHTS as u64) * 16;
     fn bytes(&self) -> Vec<u8> {
         vec4_bytes(
             [&self.centre, &self.sun, &self.model]
                 .into_iter()
                 .chain(self.sky_sh.iter())
                 .chain(self.carried.iter())
-                .chain(self.cut.iter()),
+                .chain(self.cut.iter())
+                .chain(std::iter::once(&self.sway)),
         )
     }
 }
@@ -215,6 +220,11 @@ pub struct FieldLit {
 /// The vertex stage of a mesh carrying the body-wave attributes, loaded at
 /// startup (`swim_vertex.wgsl`, and the `pbd::swim` module it imports).
 static SWIM_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
+/// The vertex stage of a mesh carrying the reef's sway attribute
+/// (`sway_vertex.wgsl`).
+static SWAY_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
+/// The vertex stage of a reef's fish cloud (`fish_vertex.wgsl`).
+static FISH_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
 
 /// Keeps the `pbd::swim` module loaded for the composer.
 #[derive(Resource)]
@@ -237,6 +247,57 @@ impl MaterialExtension for FieldLit {
         _key: bevy::pbr::MaterialExtensionKey<Self>,
     ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
         use crate::fish::bodies::{ATTRIBUTE_SWIM_AXES, ATTRIBUTE_SWIM_UP, ATTRIBUTE_SWIM_WAVE};
+        use crate::fish::places::{ATTRIBUTE_FISH, ATTRIBUTE_SWAY};
+        // A reef's fish cloud: every fish moved and animated in the vertex
+        // stage, laid once.
+        if layout.0.contains(ATTRIBUTE_FISH[0]) {
+            if descriptor
+                .vertex
+                .shader_defs
+                .contains(&"PREPASS_PIPELINE".into())
+            {
+                return Ok(());
+            }
+            let Some(shader) = FISH_VERTEX.get() else {
+                return Ok(());
+            };
+            descriptor.vertex.buffers = vec![layout.0.get_layout(&[
+                Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+                Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+                Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+                Mesh::ATTRIBUTE_COLOR.at_shader_location(5),
+                ATTRIBUTE_FISH[0].at_shader_location(14),
+                ATTRIBUTE_FISH[1].at_shader_location(15),
+                ATTRIBUTE_FISH[2].at_shader_location(16),
+                ATTRIBUTE_FISH[3].at_shader_location(17),
+            ])?];
+            descriptor.vertex.shader = shader.clone();
+            descriptor.vertex.entry_point = None;
+            return Ok(());
+        }
+        // A reef tile's swaying pieces or kelp: the surge in the vertex stage.
+        if layout.0.contains(ATTRIBUTE_SWAY) {
+            if descriptor
+                .vertex
+                .shader_defs
+                .contains(&"PREPASS_PIPELINE".into())
+            {
+                return Ok(());
+            }
+            let Some(shader) = SWAY_VERTEX.get() else {
+                return Ok(());
+            };
+            descriptor.vertex.buffers = vec![layout.0.get_layout(&[
+                Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+                Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+                Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+                Mesh::ATTRIBUTE_COLOR.at_shader_location(5),
+                ATTRIBUTE_SWAY.at_shader_location(13),
+            ])?];
+            descriptor.vertex.shader = shader.clone();
+            descriptor.vertex.entry_point = None;
+            return Ok(());
+        }
         if !layout.0.contains(ATTRIBUTE_SWIM_AXES) {
             return Ok(());
         }
@@ -512,6 +573,8 @@ impl Plugin for FieldLightPlugin {
             let vertex = assets.load("shaders/swim_vertex.wgsl");
             let module = assets.load("shaders/swim.wgsl");
             let _ = SWIM_VERTEX.set(vertex);
+            let _ = SWAY_VERTEX.set(assets.load("shaders/sway_vertex.wgsl"));
+            let _ = FISH_VERTEX.set(assets.load("shaders/fish_vertex.wgsl"));
             app.insert_resource(SwimModule(module));
         }
         app.add_plugins(MaterialPlugin::<FieldLitMaterial>::default())
@@ -746,6 +809,11 @@ fn light_from_the_field(
     let centre = frame
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
+    // The reef's surge clock, as the CPU sway read it.
+    let sway_clock = sun
+        .as_deref()
+        .map_or(now_s as f64, |s| s.clock.seconds)
+        .rem_euclid(3600.0) as f32;
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
     let rows = &mut *rows;
     rows.uploads.view = FieldView {
@@ -763,6 +831,7 @@ fn light_from_the_field(
             crate::carried_light::CarriedLights::packed,
         ),
         cut: crate::build_view::Cutaway::packed(build_view.as_deref().and_then(|v| v.cutaway())),
+        sway: Vec4::new(sway_clock, 0.0, 0.0, 0.0),
     };
     let key = match (&fine, &contact) {
         (Some(fine), Some(contact)) => (
