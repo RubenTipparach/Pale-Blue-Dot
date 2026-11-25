@@ -104,6 +104,14 @@ struct Live {
     door: Option<Doorway>,
     chosen: Chosen,
     talking: bool,
+    /// Where they stood when a talk began, and the town clock then: they
+    /// hold there, turned to the player, until it ends
+    /// (`playtest-fixes-2026-11-25` 1).
+    held: Option<(Placed, f64)>,
+    /// Seconds of the town clock spent talking: their round runs this far
+    /// behind the town's, so after a talk they go on from where they
+    /// stopped. In memory only.
+    behind: f64,
 }
 
 /// How a person rests on a piece of furniture (`furniture` design 7): their
@@ -210,6 +218,11 @@ impl Townsfolk {
             return false;
         };
         l.talking = talking;
+        let clock = self.clock;
+        let Some(l) = self.live_mut(id) else {
+            return false;
+        };
+        hold_for_talk(l, talking, clock);
         true
     }
 
@@ -325,6 +338,36 @@ impl Townsfolk {
     }
 }
 
+/// Hold a person for a talk, or let them go when it ends
+/// (`playtest-fixes-2026-11-25` 1): where they stand now, standing, from
+/// the town clock `clock`; on letting go the seconds held are added to how
+/// far their round runs behind. A person a caller drives (seated, led) is
+/// left to the caller.
+fn hold_for_talk(l: &mut Live, talking: bool, clock: f64) {
+    if talking {
+        if l.held.is_none() && l.driven.is_none() {
+            l.held = Some((
+                Placed {
+                    walking: false,
+                    ..l.placed
+                },
+                clock,
+            ));
+        }
+    } else if let Some((_, since)) = l.held.take() {
+        l.behind += (clock - since).max(0.0);
+    }
+}
+
+/// Where a person is on the town clock `clock`: where a caller drives
+/// them, else held for a talk, else their own round, run `behind` the
+/// town's.
+fn place_of(l: &Live, clock: f64, radius: f64) -> Placed {
+    l.driven
+        .or(l.held.map(|(p, _)| p))
+        .unwrap_or_else(|| l.person.at(clock - l.behind, radius))
+}
+
 /// Move a walking person on (`furniture` design 11a): along their route
 /// by the clock, and at its end rested at the place or released.
 fn step_walk(l: &mut Live, clock: f64) {
@@ -400,6 +443,8 @@ pub fn on_stand(
                     focus: false,
                 },
                 talking: false,
+                held: None,
+                behind: 0.0,
                 person,
             }
         })
@@ -1020,8 +1065,18 @@ fn step(
     for town in &mut folk.towns {
         for l in &mut town.live {
             step_walk(l, folk.clock);
-            l.placed = l.driven.unwrap_or_else(|| l.person.at(folk.clock, radius));
+            l.placed = place_of(l, folk.clock, radius);
             let up = up_of(l.placed.feet);
+            // Held for a talk: turned to the player.
+            if l.held.is_some()
+                && let Some(e) = eye
+            {
+                let to = e - l.placed.feet;
+                let flat = to - up * to.dot(up);
+                if flat.length() > 1e-3 {
+                    l.placed.forward = flat.normalize();
+                }
+            }
             l.forward = turn_toward(l.forward, l.placed.forward, up, k_turn);
             solids.0.push(l.placed.feet);
             // The mood for everyone: a meeting is not missed off screen.
