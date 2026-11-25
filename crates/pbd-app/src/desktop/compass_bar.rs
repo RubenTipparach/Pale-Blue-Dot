@@ -267,7 +267,10 @@ pub fn update(
     >,
     mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
     mut read: Local<(String, Vec<Mark>)>,
-    eco: Option<Res<pbd_app::economy::Economy>>,
+    (eco, site_tick): (
+        Option<Res<pbd_app::economy::Economy>>,
+        Option<Res<super::construction::SiteTick>>,
+    ),
 ) {
     let Ok(mut visibility) = root.single_mut() else {
         return;
@@ -369,9 +372,16 @@ pub fn update(
         _ => Vec::new(),
     };
     let lost = &lost[..lost.len().min(LOST_PINS)];
+    // The site's next piece (`building-planner` design 6), after the lost.
+    let tick: Option<Vec3> = site_tick
+        .as_deref()
+        .and_then(|t| t.0)
+        .map(|p| p.normalize_or(Vec3::Y));
+    let ticks = usize::from(tick.is_some());
     let waypoints: Vec<Place> = lost
         .iter()
         .copied()
+        .chain(tick)
         .chain(read.1.iter().map(|m| m.direction()))
         .map(|d| Place::seen(view.up, d, PLANET_RADIUS))
         .collect();
@@ -389,12 +399,16 @@ pub fn update(
     if let Ok(mut text) = name.single_mut() {
         let line = match compass::named_ahead(heading, &waypoints, &places) {
             Some(Named::Waypoint(i)) if i < lost.len() => compass::name_line(
-                &pbd_app::ui_kit::tr("jobs.lost_marker").to_string(),
+                &pbd_app::ui_kit::tr("jobs.lost_marker"),
                 waypoints[i].distance_m,
             ),
-            Some(Named::Waypoint(i)) => {
-                compass::name_line(&read.1[i - lost.len()].label(), waypoints[i].distance_m)
+            Some(Named::Waypoint(i)) if i < lost.len() + ticks => {
+                compass::name_line(&pbd_app::ui_kit::tr("site.next"), waypoints[i].distance_m)
             }
+            Some(Named::Waypoint(i)) => compass::name_line(
+                &read.1[i - lost.len() - ticks].label(),
+                waypoints[i].distance_m,
+            ),
             Some(Named::Place(i)) => compass::name_line(towns[i].0, towns[i].1.distance_m),
             None => Localized::empty(),
         };

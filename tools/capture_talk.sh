@@ -16,7 +16,7 @@ mkdir -p "$D"
 shot() {
   name=$1; keys=$2; shift 2
   PBD_KEY_SCRIPT="$keys" PBD_WINDOW=1200x750 timeout 2400 xvfb-run -a -s "-screen 0 1200x750x24" \
-    "$EXE" --walk --hold-pointer "$@" --time 11 --rain 0 --weather-at 7200 --pitch -6 \
+    "$EXE" --walk --hold-pointer "$@" --time "${TIME:-11}" --rain 0 --weather-at 7200 --pitch -6 \
     --capture "$D/$name.png" > "$D/$name.log" 2>&1
   echo "$name exit $?"
 }
@@ -34,5 +34,42 @@ if [ "$ONLY" = all -o "$ONLY" = scroll ]; then
   shot trade-scroll-top "120:KeyF,140:press:trade" $STALL --frames 190
   shot trade-scroll-partway "120:KeyF,140:press:trade,170:wheel:buy:-1" $STALL --frames 200
   shot trade-filter-food "120:KeyF,140:press:trade,170:press:buy-food" $STALL --frames 200
+fi
+# Barter (design 37a, task 11.3): two of the merchant's first good in YOU
+# TAKE and two of the pack's first good it buys in YOU GIVE, the line under
+# them saying who pays; then the deal made, and the coin count beside the
+# hotbar after it (task 5.2), the talk left with BACK and BYE.
+if [ "$ONLY" = all -o "$ONLY" = barter ]; then
+  # PBD_PACK (a capture instrument) puts goods the merchant buys in the pack.
+  PACK="wheat:6,log:4,egg:3"
+  PBD_PACK="$PACK" shot trade-basket "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL --no-readout --frames 210
+  PBD_PACK="$PACK" shot coins-hotbar "120:KeyF,140:press:trade,160:press:sell,165:press:sell,170:press:sell,175:press:deal,185:press:back,195:press:bye" $STALL --no-readout --frames 230
+fi
+# Framing (design 37a, framing, and its second pass; owner, 2026-11-24):
+# the same barter, the panel on the right and the look turned on F so the
+# merchant stands in the middle of the open space left of it, lit by the
+# talk light; from a talking distance of about 2.7 m (the spots above,
+# stepped 1.1 m back along the look). By day, then at nightfall (NIGHT,
+# 20.45: the latest hour the merchant keeps the stall before
+# going to bed at daylight 0.12, `furniture` design 11a, with the lamps lit)
+# for the trade and for the talk panel: every NPC dialog one presentation.
+STALL_FAR=${STALL_FAR:-"--at 29.221240 8.794353 --yaw 87.5"}
+if [ "$ONLY" = all -o "$ONLY" = framed ]; then
+  PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL_FAR --no-readout --frames 210
+fi
+if [ "$ONLY" = all -o "$ONLY" = framed -o "$ONLY" = framed-night ]; then
+  TIME=${NIGHT:-20.45} PBD_PACK="wheat:6,log:4,egg:3" shot trade-framed-night "120:KeyF,140:press:trade,160:press:buy,165:press:buy,170:press:sell,175:press:sell" $STALL_FAR --no-readout --frames 210
+  TIME=${NIGHT:-20.45} shot talk-framed-night "120:KeyF" $STALL_FAR --no-readout --frames 170
+fi
+# The lost villager (`town-missions-tree` task 6.3, `townsfolk` 12.4): the
+# reeve's board on a day it posts one (DAY, from `cargo test --profile fast
+# -p pbd-app --lib -- --ignored print_the_days_linenleighs_board_posts_a_lost_villager
+# --nocapture`: day 13 is the first), its own icon in the row's well; then the job taken and the
+# compass and the map marking where the villager stands.
+DAY=${DAY:-13}
+if [ "$ONLY" = all -o "$ONLY" = lost ]; then
+  shot board-lost "120:KeyF,140:press:work" $SMITH --no-readout --day "$DAY" --frames 190
+  shot lost-compass "120:KeyF,140:press:work,160:press:take-lost,170:press:back,180:press:bye" $SMITH --no-readout --day "$DAY" --frames 230
+  shot lost-map "120:KeyF,140:press:work,160:press:take-lost,170:press:back,180:press:bye,200:KeyM" $SMITH --no-readout --day "$DAY" --frames 260
 fi
 true

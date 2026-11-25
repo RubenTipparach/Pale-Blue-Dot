@@ -54,7 +54,14 @@ struct Scene {
     sky_sh: array<vec4<f32>, 18>,
     // `glowing-mushrooms`: the carried lights, two a light (`carried_light`).
     carried: array<vec4<f32>, 8>,
+    // `player-building` B11: architecture mode's cutaway, the site's up and
+    // the cut's radius, then the way beyond the site and the storey's
+    // ceiling; zero when off (`build_view::Cutaway`).
+    cut: array<vec4<f32>, 2>,
 }
+
+// How far round the site the cutaway cuts (`build_view::CUT_REACH_M`).
+const CUT_REACH_M: f32 = 40.0;
 
 // One mesh's own row.
 struct Field {
@@ -283,6 +290,21 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     if bayer4(in.position.xy) < field.fade.x {
         discard;
     }
+    // Architecture mode's cutaway (`player-building` B11): over the cut near
+    // the site, all but what stands beyond it to the storey's ceiling. Not
+    // in a prepass: what is cut casts its shadow as it did.
+#ifndef PREPASS_PIPELINE
+    if scene.cut[0].w > 0.0 {
+        let q = in.world_position.xyz - scene.centre.xyz;
+        let r = length(q);
+        let up = scene.cut[0].xyz;
+        let side = q - up * dot(q, up);
+        let far_wall = dot(side, scene.cut[1].xyz) > 0.0 && r <= scene.cut[1].w;
+        if r > scene.cut[0].w && length(side) <= CUT_REACH_M && !far_wall {
+            discard;
+        }
+    }
+#endif
     var tinted = in;
 #ifdef VERTEX_COLORS
     // A town's outside carries light in its vertex colour (the bake before

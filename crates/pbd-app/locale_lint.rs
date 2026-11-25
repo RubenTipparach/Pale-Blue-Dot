@@ -93,6 +93,25 @@ pub const DATA_PREFIXES: &[&str] = &[
     "build.refused.",
     "build.piece.",
     "build.kit.",
+    // `building-planner`: the presets and their sizes, the town houses, the
+    // planner's tools, kits and locked kits by id (`building::planner_tests`).
+    "blueprint.preset.",
+    "blueprint.size.",
+    "planner.town.",
+    "planner.tool.",
+    "planner.kit.",
+    "planner.locked.",
+    // Keys held as values and shown later: the checks' and the world's
+    // reasons (`building::planner::Check`, `site::Refusal`), the views and
+    // roofs (`desktop::planner`), and three single lines.
+    "planner.check.",
+    "planner.hint.",
+    "planner.roof.",
+    "planner.view.",
+    "site.refused.",
+    "planner.adopted",
+    "planner.saved",
+    "site.planned_only",
 ];
 
 /// Extensions that make a spaceless literal an asset path.

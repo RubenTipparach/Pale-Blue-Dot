@@ -140,7 +140,12 @@ pub enum Kind {
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
-    pub const LIVE: [Kind; 47] = [
+    /// raises an event for, `Clear` among them since the road jobs
+    /// (`townsfolk` design 46). `Stake`, `Mark` and `Pave` are raised
+    /// by the paving (`townsfolk` design 39 to 41, 45), `Haul` and `Hitch`
+    /// by the carts (`land-transport` design 11), `Sit`, `Lie` and `Loot`
+    /// by the furniture (`furniture` design 12).
+    pub const LIVE: [Kind; 48] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -174,6 +179,7 @@ impl Kind {
         Kind::Sell,
         Kind::Buy,
         Kind::Light,
+        Kind::Clear,
         Kind::Talk,
         Kind::Job,
         Kind::Goodwill,

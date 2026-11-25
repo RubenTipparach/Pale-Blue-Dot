@@ -10,10 +10,18 @@
 //! side of it, sorted, so the same edge seen from either cell is one slot.
 
 pub mod blueprint;
+pub mod costs;
 pub mod cut;
 pub mod door;
+pub mod plan;
+pub mod planner;
+pub mod presets;
 pub mod rules;
+pub mod scaffold;
+pub mod site;
 
+#[cfg(test)]
+mod planner_tests;
 #[cfg(test)]
 mod tests;
 

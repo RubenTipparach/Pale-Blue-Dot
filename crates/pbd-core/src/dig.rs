@@ -72,6 +72,7 @@ impl Class {
             Material::Ore => Class::Ore,
             Material::Workbench
             | Material::Carpenter
+            | Material::DraftingTable
             | Material::Sticks
             | Material::Grinder
             | Material::Mixer

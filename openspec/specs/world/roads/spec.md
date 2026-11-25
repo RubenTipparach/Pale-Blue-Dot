@@ -6,7 +6,9 @@ towns. Built by `townsfolk` (design 10, 10a and 11, tasks 8.2 and 8.4);
 the player's own road building (task 8.3) is in it too, and cut and fill
 (roads version 2) and the lamps near towns (design 32 and 34), and the
 roads marked by survey stakes and paved with gravel from a grinder and a
-mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44).
+mixer, and roads version 3's sparse network (design 39 to 41, 43 and 44);
+the player's wide roads on one plane, bridges and lamps, the planner's
+lifted view and the jobs on the roads (design 42m, 42n and 46).
 
 ## Requirements
 
@@ -117,26 +119,31 @@ Pinned by `pbd_core::roads::tests::version_2_links_are_pinned` (versions
 
 ### Requirement: Dirt and gravel
 
-The player SHALL pave a marked cell with gravel by the interact key with the
-shovel in hand and gravel in the pack, one gravel a cell, the cell's slope
-cut by the world road's own rule from the plan's order, saved as the
-player's with the pack in the same line, and walking SHALL be faster on
-gravel than on dirt. The place button SHALL NOT lay a road. Dirt tracks
-SHALL be laid by the world only, and every road cell a save already holds,
-gravel or dirt, SHALL be kept and walked as it was.
+The player SHALL pave a marked cell by the interact key with the shovel in
+hand, one gravel a cell for a gravel road or a ford and none for a dirt
+road, the cell's slope cut by the world road's own rule from its road's
+order, saved as the player's with the pack in the same line, and walking
+SHALL be faster on gravel than on dirt. The place button SHALL NOT lay a
+road cell. Every road cell a save already holds, gravel or dirt, SHALL be
+kept and walked as it was.
 
 #### Scenario: Building a road
 
 - **WHEN** the player, shovel in hand, presses the interact key on a marked
-  cell with gravel in the pack
+  cell of a gravel road with gravel in the pack
 - **THEN** one gravel is taken, the cell is a gravel road cell saved as the
   player's, and the walker moves faster on it
 
 #### Scenario: No gravel
 
-- **WHEN** the player presses the interact key on a marked cell with no
-  gravel
+- **WHEN** the player presses the interact key on a marked cell of a gravel
+  road with no gravel
 - **THEN** nothing is taken and the cell stays marked
+
+#### Scenario: A dirt road
+
+- **WHEN** the player paves a cell of a road planned in dirt
+- **THEN** nothing is taken and the cell is a dirt road cell
 
 #### Scenario: An old player road
 
@@ -144,47 +151,73 @@ gravel or dirt, SHALL be kept and walked as it was.
   opened
 - **THEN** every one is drawn and walked as before
 
-Pinned by `pbd_core::roads::paving::tests::paving_in_any_order_gives_the_same_road`,
+Pinned by `pbd_core::roads::planner::tests::a_road_up_a_slope_never_steps_and_paves_the_same_in_any_order`,
 `pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`
-(one gravel a cell, the tufts gone at once), `gravel_is_walked_faster_than_dirt`
-and `the_player_lays_gravel_and_dirt_and_takes_them_up` (an old player road
+(one gravel a cell, the tufts gone at once),
+`a_dirt_road_is_free_and_the_eraser_gives_its_stakes_back`,
+`gravel_is_walked_faster_than_dirt` and
+`the_player_lays_gravel_and_dirt_and_takes_them_up` (an old player road
 still reads, draws and is taken up).
 
 ### Requirement: A road is marked before it is paved
 
-The player SHALL mark a road for paving by driving survey stakes as waypoints. The
-cells between two stakes SHALL be found by the world's road search, at most
-a layer apart, off the sea, out of towns and off any cell the player has
-edited unless it is a road cell, and every one SHALL be marked. A stake with
-no such way SHALL be refused with nothing taken.
+The player SHALL mark a road for paving with survey stakes in hand by two
+clicks, its start and its end. Nothing SHALL be planned before the first
+click. The road's cells SHALL be the straight line of cells between its
+stakes, the same both ways round, staked every `max_segment` cells, each
+checked by the one rule the world's roads use: no step of more than a
+layer, never the player's work, the sea, a town's footprint, water deeper
+than a ford or a cell a tree stands on. A road with a clashing cell SHALL
+be refused with nothing taken and the reason shown; only the clashing cells
+SHALL be red in its ghost. A click on a stake of any road SHALL start a new
+road from it, sharing that stake: roads are added, never replaced. The
+eraser SHALL delete a whole road, its stakes coming back to the pack but
+any another road holds.
 
-#### Scenario: Two stakes on a hillside
+#### Scenario: Two clicks on a hillside
 
-- **WHEN** the player drives a stake, then another 12 cells away up a slope
+- **WHEN** the player clicks a start, then an end 12 cells away up a slope
+  that rises a layer a cell
 - **THEN** the cells between are marked, and no two marked neighbours differ
   by more than a layer
 
+#### Scenario: A tree on one cell
+
+- **WHEN** a tree stands on one cell of the aimed line
+- **THEN** that cell alone is red with "A tree in the way", and the end
+  cannot be set until it is felled
+
 #### Scenario: Too steep
 
-- **WHEN** the only way to the aimed cell climbs two layers between cells
-- **THEN** the stake is refused, it stays in the pack, and nothing is marked
+- **WHEN** the line to the aimed cell climbs two layers between two cells
+- **THEN** the higher cell is red, the road is refused, and the stakes stay
+  in the pack
 
-Pinned by `pbd_core::roads::paving::tests::a_segment_never_steps_more_than_a_layer`,
-`a_stake_with_no_way_is_refused` and
-`taking_back_a_middle_stake_rejoins_or_splits`.
+Pinned by `pbd_core::roads::planner::tests::a_line_is_the_same_both_ways_round`,
+`each_reason_reds_only_its_own_cell`, `the_grade_reds_two_rises_too_close`,
+`roads_are_added_from_a_stake_never_replaced`,
+`the_eraser_takes_a_whole_road_and_its_stakes_back`,
+`moving_and_taking_back_stakes` and `roads::tests::world_routes_are_pinned`.
 
 ### Requirement: Marks are saved
 
-A plan's stakes and cells SHALL be a durable record of the player's, written
-with the pack in the same line, and SHALL read back cell for cell whatever
-the road search's version.
+A plan's roads (their stakes, width, surface and lamps) SHALL be a durable
+record of the player's, written with the pack in the same line, and SHALL
+read back cell for cell whatever the road search's version. A plan saved
+before roads were planned by their ends SHALL read as one road of width 1 in
+gravel over the cells it stored.
 
 #### Scenario: A plan after a reload
 
 - **WHEN** the player marks a plan, closes the game and opens the world
 - **THEN** the same cells are marked and the same stakes stand
 
-Pinned by `pbd_core::roads::paving::tests::a_plan_reads_back_cell_for_cell`
+#### Scenario: An old plan
+
+- **WHEN** a world holding a plan of stakes and searched cells is opened
+- **THEN** the same cells are marked, as one gravel road one cell wide
+
+Pinned by `pbd_core::roads::planner::tests::a_schema_1_plan_reads_as_a_width_1_gravel_plan_and_a_plan_reads_back`
 and `pbd-app` `roads::tests::a_plan_is_marked_and_paved_and_survives_a_reload`.
 
 ### Requirement: Gravel comes from a grinder and a mixer
@@ -201,3 +234,88 @@ held SHALL stay usable.
   recipe
 
 Pinned by `pbd_core::station::tests::the_shipped_recipes_resolve_and_agree_with_the_defaults`.
+
+### Requirement: A wide road shares one plane
+
+A player's road two or three cells wide SHALL take every cell's top, centre
+and lanes alike, off one plane set by its centre line, read where each cell
+really is, so that a walker crossing from lane to lane meets no step, on the
+level and up a climb. A lane SHALL be filled to the plane on a bed of packed
+earth where its ground is under it, and SHALL be refused ("Too steep
+across") where its ground stands over it; the player's road digs nothing.
+A wide road SHALL climb only straight along a row of the lattice and bend
+only on the level.
+
+#### Scenario: Across the lanes up ten layers
+
+- **WHEN** a walker crosses a two- or three-wide road diagonally from lane to
+  lane all the way up a ten-layer climb and back
+- **THEN** no rise between two points of the way is steeper than a slope's,
+  and no seam between two cells is a centimetre high
+
+Pinned by `pbd_core::roads::planner::tests::a_wide_road_up_ten_layers_is_crossed_lane_to_lane_without_a_step`,
+`a_half_bed_is_stood_on_where_it_is_drawn` and `a_wide_road_lays_its_lanes_on_one_plane`.
+
+### Requirement: The player's roads bridge deep water
+
+A river cell on a player's road deeper than a ford SHALL be bridged by the
+same rule the world's roads use (a plank deck at the road's height on the
+near bank, carried on, standing over the water), for at most the planner's
+longest bridge; the water past that SHALL be refused ("Too wide to bridge").
+A bridge cell SHALL be paved with planks and a log. A wide bridge SHALL be
+railed only on its outer edges.
+
+#### Scenario: A river four cells wide
+
+- **WHEN** the player stakes a road across a river four cells wide
+- **THEN** the four cells are a deck at the bank's height, the bill asks for
+  their planks and logs, and the world's roads are planned exactly as before
+
+Pinned by `pbd_core::roads::planner::tests::a_river_is_bridged_by_the_worlds_rule_and_a_wide_bridge_is_railed_outside`
+and `pbd_core::roads::tests::world_routes_are_pinned`.
+
+### Requirement: A player's road with lamps is lit
+
+A player's road planned with lamps SHALL have a lamp post on its verge every
+`lamp_spacing` cells, on both sides of a three-wide road, and each SHALL be
+built as the town's street lantern, lit at dusk, when the road cell beside
+it is paved with a log and a street lantern in the pack, taken in the same
+line.
+
+#### Scenario: Paving beside a post
+
+- **WHEN** the player paves the road cell beside a lamp post with a log and
+  a street lantern in the pack
+- **THEN** a street lantern stands on the verge, the log and the lantern
+  leave the pack, and the bill no longer asks for that lamp
+
+Pinned by `pbd-app` `roads::tests::paving_beside_a_post_builds_a_street_lantern_from_the_pack`
+and `pbd_core::roads::planner::tests::lamp_posts_stand_on_the_verge_and_both_sides_of_a_three_wide_road`.
+
+### Requirement: The planner's view is lifted
+
+While survey stakes are in hand on foot, the eye SHALL ease up to the
+planner's lift (15 m by default) and back down when they leave the hand,
+never in one frame, with the look still the player's raw look.
+
+#### Scenario: Stakes in hand
+
+- **WHEN** the player selects survey stakes
+- **THEN** the eye rises to 15 m over the ease time, a little each frame,
+  and comes back down the same way when the stakes are put away
+
+Pinned by `pbd-app` `roads::tests::the_planner_view_eases_up_with_stakes_in_hand_and_back_down`.
+
+### Requirement: Jobs on the roads
+
+A town a road leaves SHALL be able to post a rockfall on its road to clear
+and a trader to walk with to the next town, and each SHALL be counted by the
+starter missions' rule.
+
+#### Scenario: A rockfall
+
+- **WHEN** the player takes a rockfall job and digs the road cell clear
+- **THEN** the job counts it, and the road is walked again
+
+Pinned by `pbd-app` `economy::tests::a_rockfall_is_dropped_on_the_road_dug_clear_and_paid`
+and `a_trader_leads_the_player_along_the_road_and_the_escort_is_paid`.

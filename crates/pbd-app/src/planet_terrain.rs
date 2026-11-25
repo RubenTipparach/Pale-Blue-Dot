@@ -235,7 +235,7 @@ pub fn render_code(material: Material) -> u32 {
         Material::Forge => FORGE,
         // `tool-crafting` decision 5: the local trees' wood, the code a
         // trunk is drawn in, so the full four-bit word need not widen.
-        Material::Workbench | Material::Carpenter => WOOD,
+        Material::Workbench | Material::Carpenter | Material::DraftingTable => WOOD,
         // The gravel stations (`townsfolk` design 41): the workbench's timber.
         Material::Grinder | Material::Mixer => WOOD,
         // A chest (`storage-chests` design 1): the workbench's wood, with an

@@ -38,6 +38,10 @@ pub enum Reader {
     Lamps,
     /// A seat, a bed or a container (`furniture` design 6, 11).
     Furniture,
+    /// The drafting table (`building-planner` design 3).
+    Planner,
+    /// A construction site's pieces (`building-planner` design 6, 7).
+    Site,
 }
 
 /// A thing F can do.
@@ -94,6 +98,14 @@ pub enum Act {
     Lie,
     /// Open drawers, a closet or a chest (`furniture` design 11).
     OpenStore,
+    /// Draw a plan at the drafting table (`building-planner` design 3).
+    Plan,
+    /// Strike a site's piece with the mallet (design 6).
+    Build,
+    /// Take a marked piece down (design 7).
+    TakeDown,
+    /// Set a piece of furniture in its slot (design 6).
+    Fill,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -112,7 +124,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 34] = [
+pub const ACTS: [Row; 38] = [
     // A cart in hand, a seat or a back taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
@@ -130,6 +142,7 @@ pub const ACTS: [Row; 34] = [
     row(Act::PickFruit, "pick_fruit", Reader::Fruit),
     row(Act::PickGlow, "pick_glow", Reader::Glow),
     row(Act::Open, "open", Reader::Farm),
+    row(Act::Plan, "plan", Reader::Planner),
     row(Act::Harvest, "harvest", Reader::Farm),
     row(Act::Check, "check", Reader::Farm),
     row(Act::PickWild, "pick_wild", Reader::Farm),
@@ -140,6 +153,9 @@ pub const ACTS: [Row; 34] = [
     row(Act::OpenStore, "open_store", Reader::Furniture),
     row(Act::Sit, "sit", Reader::Furniture),
     row(Act::Lie, "lie", Reader::Furniture),
+    row(Act::Fill, "fill", Reader::Site),
+    row(Act::TakeDown, "take_down", Reader::Site),
+    row(Act::Build, "build", Reader::Site),
     row(Act::Till, "till", Reader::Farm),
     row(Act::TakeLog, "take_log", Reader::Logs),
     row(Act::Board, "board", Reader::Boats),

@@ -145,6 +145,29 @@ pub struct Template {
     /// put them.
     #[serde(default)]
     pub people: Vec<crate::townsfolk::PersonDef>,
+    /// Its smithies (`townsfolk` design 26a): each forge's fire and the
+    /// cells of its open shed. Cut only in a town laid at
+    /// [`record::FORGE_LAYOUT`] or later.
+    #[serde(default)]
+    pub smithies: Vec<Smithy>,
+}
+
+/// A smithy (`townsfolk` design 26a), the mockup's `smithyShed`: the point
+/// its forge's fire burns at, `[x, y, z]` in the mockup's metres, and the
+/// cells of the area it stands in, the open shed over them.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Smithy {
+    pub name: String,
+    pub forge: [f32; 3],
+    pub cells: Vec<[i32; 2]>,
+}
+
+impl Smithy {
+    /// The cell the forge stands in, and the cell west of it, where the
+    /// anvil stands (the mockup's `c0 + 1`).
+    pub fn forge_cell(&self, cell_m: f32) -> (i32, i32) {
+        sea::cell_at(self.forge[0], self.forge[2], cell_m)
+    }
 }
 
 /// What a town's masonry is made of (slice 4g): its walls and merlons, and

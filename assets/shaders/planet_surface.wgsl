@@ -4170,10 +4170,13 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         let half_width = 0.36 + 0.16*ragged;
         if d < half_width {
             let grain = dot(art, vec3(0.299, 0.587, 0.114));
-            let lime = vec3(0.80, 0.79, 0.72)*(0.72 + 0.55*grain);
+            // Strong enough to read under a site's ghost (`building-planner`
+            // design 5, "As built"): it was 0.82 and 0.55 with a gap in
+            // 0.18 of its texels, and hardly showed through the ghost floor.
+            let lime = vec3(0.80, 0.79, 0.72)*(0.80 + 0.50*grain);
             // Thinner toward the edge, where the dust is scattered.
-            let dust = select(0.82, 0.55, d > half_width - 0.12);
-            let gap = tnoise(floor(texels), input.seed ^ 0x2a7u) < 0.18;
+            let dust = select(0.94, 0.70, d > half_width - 0.12);
+            let gap = tnoise(floor(texels), input.seed ^ 0x2a7u) < 0.10;
             if !gap { albedo = mix(albedo, lime*cell_variation, dust); }
         }
     }

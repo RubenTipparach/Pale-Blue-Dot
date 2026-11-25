@@ -453,6 +453,28 @@ impl Default for RecipeFile {
                 &[("banded-chest", 1)],
             ),
             recipe("crate", "carpenter", 3.0, &[("planks", 3)], &[("crate", 1)]),
+            // building-planner design 3 and 6: the drafting table and the
+            // mallet.
+            RecipeEntry {
+                code: "drafting-table".into(),
+                station: "workbench".into(),
+                secs: 5.0,
+                inputs: vec![pair("planks", 6), pair("rope", 2)],
+                outputs: vec![(
+                    format!(
+                        "block:{}",
+                        crate::inventory::material_id(Material::DraftingTable)
+                    ),
+                    1,
+                )],
+            },
+            recipe(
+                "mallet",
+                "workbench",
+                2.0,
+                &[("log", 1), ("stone", 1)],
+                &[("mallet", 1)],
+            ),
         ]);
         file
     }
@@ -876,8 +898,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            24,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), the door (player-building B8), the grinder and mixer (townsfolk design 41), the wheel and the two carts (land-transport), the carpenter's bench (furniture design 1), and the wood chest (storage-chests)"
+            26,
+            "with the drafting table and the mallet (building-planner), the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), the door (player-building B8), the grinder and mixer (townsfolk design 41), the wheel and the two carts (land-transport), the carpenter's bench (furniture design 1), and the wood chest (storage-chests)"
         );
         assert_eq!(
             book.get("wood-chest").map(|r| r.outputs.clone()),

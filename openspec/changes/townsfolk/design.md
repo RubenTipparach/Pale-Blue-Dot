@@ -203,6 +203,208 @@ with every index at 1.0; its `town_market` and `purse` records keep their
 meaning. Prices shown in the trade panel will move from today's hand-set
 values to derived ones, which changes no stored amount.
 
+**37a. Design 37 as it is built (2026-11-24, on "cool implement all the
+phase 3 stuff!").** Where design 37 left a detail open, each choice below
+is a recommendation taken (ask only with screenshots):
+
+- **Derivation** (`pbd_core::economy::derive`). A code that is an output
+  of no recipe in the one book (`recipes.ron` then `cooking.ron`) is raw
+  and keeps its `values.ron` row. Every other code's value is worked out
+  at start, in passes until nothing moves:
+  - a recipe's cost is the sum of its inputs' values times their counts,
+    plus its labour, `labour_per_s` (0.1 coin, task 12.3) times its `secs`,
+    times `craft_margin` (1.25); both live in `trade.ron`;
+  - a recipe with several outputs splits its cost between them in
+    proportion to their `values.ron` rows (the mixed-ore smelt's copper,
+    iron and tin);
+  - an output's value is its share over its count, rounded up to a whole
+    coin and never under 1; so the outputs of a recipe are always worth
+    more than its inputs, as rounded;
+  - a good two recipes make (a fried egg from an egg or a fertile egg)
+    takes the cheaper;
+  - a recipe's input "fish" (any fish) is valued as the cheapest fish row;
+  - **tools are not derived**: a recipe's `tool:` output is one tier of a
+    tool whose value row is tier-less, and tools are `untraded`, so a tool
+    keeps its row;
+  - a row in `values.ron` stays an override only where `overrides` names
+    its code (a new optional list in the file, empty today), so no shipped
+    row is dropped and the file stays append-only.
+  The book is fixed at start, so this is done once, then once a day with
+  the market's index folded in (below).
+- **The market** (`pbd_core::economy::market`, the stored record `market`,
+  id 0, schema 1: the day it was last settled and an index per good that
+  has moved, in a `BTreeMap` so it is written in one order).
+  - Each unit the player sells to any trader lowers that good's index by
+    `market.step` (0.005) as a share; each unit bought raises it; within
+    `market.low` and `market.high` (0.5 and 2.0).
+  - At each day boundary, every index moves back toward 1.0 by
+    `1 / market.rest_days` (8 days) of its distance, then by the towns'
+    making and using: `market.town_pull` (0.02) times the mean over every
+    town the world holds of its need for the good's group less one. So a
+    good most towns lack runs a little dear and one most towns make a
+    little cheap, at a steady point near 1.0, and a flood the player
+    sells recovers over days.
+  - Settling is lazy and deterministic: reading the record steps it day by
+    day from its last day to today (at most `market.rest_days` times 8
+    days are stepped; past that every index is at its steady point within
+    rounding). The game writes the record on a trade, and at a day
+    boundary only if a row moved by more than a thousandth.
+  - **Dear tin makes dear bronze**: the priced values a trader reads are
+    the derivation run again with each raw value times its index and each
+    made value's result times its own index, so an input's price moves the
+    goods made from it. A town's price is then that, times its need, times
+    goodwill, as design 6 and 12 already say; the town's own `town_market`
+    factor (a day's local swing) stays on top.
+  - A world with no `market` record reads every index as 1.0 and writes
+    none until a trade or a moved day.
+- **Barter in the trade panel** (task 11.3), as M5's Talk tab Basket view
+  draws it: each row's button puts one in a basket (BUY rows into YOU
+  TAKE, SELL rows into YOU GIVE), a basket's well takes one back out, the
+  line under them says YOU PAY, THEY PAY or EVEN and the coins, DEAL
+  settles and CLEAR empties both. The baskets replace the one-click buy and
+  sell: one good for coins is a basket of one. A deal is the core's
+  `Trader::deal` (all of it or none), counted in the town market, the
+  world market, goodwill (one step per deal) and the taken jobs as the
+  single trades were (each unit a buy or a sell). Its lines are the
+  existing trade's: the town market, goodwill, the world market and the
+  jobs, then the purse with the pack in one `with` line, so the pack and
+  the purse never part. The words are locale keys (`trade.you_take`,
+  `trade.you_give`, `trade.you_pay`, `trade.they_pay`, `trade.even`,
+  `trade.deal`, `trade.clear`).
+- **Fibre stands on Organics** (task 12.1): `values::shelf` puts fibre
+  there by code (`ORGANIC_CROPS`), its `crop` group, and so its towns'
+  need, unchanged.
+- **The scroll thumb** (task 12.2) is 6 px wide inside the 8 px track (it
+  was 4), so it can be caught at 1x.
+
+**37a, framing (owner, survey P1, 2026-11-24).** The owner kept the
+baskets as built ("Baskets only, as built") and added, in their words:
+"One thing id improve is framing. Move the camera so the merchant is on
+left, and the trade UI is on the right." The plan, built as written:
+
+- **The panel sits on the right.** While Talk, Trade or Board is open, its
+  layer right-aligns the panel (`justify_content: FlexEnd`) with a margin
+  of `panel_margin_px` (24 native px, times the UI scale), still centred
+  top to bottom. The panel keeps its native width at every window size, so
+  it stays as readable as it was centred; on a window narrower than the
+  panel it overflows to the left as a centred one overflowed both ways.
+- **The view turns to the townsperson.** When the talk opens, the
+  walker's own look (heading and pitch, `WalkingState`) is turned so the
+  townsperson's aim point, `aim_height_m` (1.2 m, between chest and face)
+  over their feet, lands at `frame` in normalised screen space: (-2/3, 0),
+  the centre of the left third, level with the middle of the screen. The
+  turn is solved exactly for a camera with no roll, from the camera's own
+  vertical field of view and aspect, about the up the walker already
+  carries (the origin's `up_at` in f64); the eye-to-townsperson vector is
+  a difference of two render-space points, never a planet-centred
+  position. The look stays where it was turned when the talk closes: the
+  player has turned to face the merchant, nothing more, and no camera of
+  the talk's own exists.
+- **Eased, not cut.** The turn runs over `turn_secs` (0.25 s), smoothstep,
+  heading about up and pitch together. This does not touch the raw-look
+  rule: while a talk panel is open the menu holds the pointer and the
+  walker reads no mouse at all, so nothing smooths a mouse; once the panel
+  closes the look is raw again from wherever the turn left it. A
+  `turn_secs` of 0 turns at once.
+- **The framing is the one from when the talk opened.** A townsperson who
+  walks on while the panel is open is not followed: the aim is taken once,
+  at the press, and the turn runs to it.
+- **Tunables** are in `assets/config/talk.ron` (`TalkView`), read at start
+  and validated: `turn_secs` 0 to 2, `frame` inside the screen, the aim
+  height 0 to 3 m, the margin 0 to 200 px.
+- **Proof.** A unit test (`the_talker_lands_in_the_left_third`) solves the
+  turn for eyes and townspeople above, below and level, on a tilted up and
+  at three aspects, builds the camera the walker builds, projects the aim
+  point through Bevy's own perspective, and finds it in the left third at
+  the screen's middle height. The capture is
+  `docs/screenshots/townsfolk-economy/trade-framed.jpg`.
+
+**37a, framing, second pass (owner, 2026-11-24, on `trade-framed.jpg`).**
+In the owner's words: "Kind of center the character between the left most
+edge of panel and left edge of the screen. Also if you can add some lights
+that fade in light the character a bit, thatd be nice". The plan:
+
+- **Centred in the open space, not a fixed third.** The townsperson's aim
+  point lands half way between the screen's left edge and the open panel's
+  left edge. With the window `W` logical px wide, the UI scale `s` and the
+  panel `w` native px wide at `panel_margin_px` `m` from the right, the
+  panel's left edge is at `W - (m + w) s`, the open space's middle at
+  `(W - (m + w) s) / 2`, and in normalised screen space
+  `x = -(m + w) s / W`. It is worked out from the real numbers at the
+  moment of framing: the panel's own width (Talk 300, Trade 490, Board 450
+  native px, one table the panels are spawned from), the camera's viewport
+  and `UiScale`. A panel wider than the screen puts the townsperson no
+  further left than -0.95. The height stays `frame_y` (0, the middle) in
+  `talk.ron`, which replaces `frame`.
+- **Re-aimed when the panel changes.** TRADE or WORK from Talk opens a
+  wider panel, so the open space's middle moves left; the look turns again
+  to the new middle with the same `turn_secs` ease, from wherever it is,
+  toward the same aim taken when the talk opened (the townsperson is still
+  not followed). BACK re-aims to Talk's middle.
+- **A light on the townsperson.** While a talk is open a soft warm light
+  burns in front of and a little above the townsperson's face, between
+  them and the camera: from their feet, `light_rise_m` (1.75 m) up and
+  `light_toward_m` (0.6 m) along the level line to the eye. It is not a
+  Bevy light: it is a carried light (`glowing-mushrooms` part B), the short
+  list the terrain, the water and the field-lit shaders already evaluate
+  per pixel with the falloff every baked lamp uses, so it lights the
+  townsperson (who is `LitByField`) and the ground round their feet exactly
+  as a torch in hand would, at night and in shade alike, with no shadow, as
+  every carried light. The list gains a reach per light (the shaders
+  already read it from `w`; every other light keeps the lamps' 16 m), so
+  this one reaches `light_reach_m` (4 m) and goes no further.
+- **Fades in and out.** Its strength rises over `light_fade_secs` (0.4 s)
+  when the talk opens and falls over the same when it closes, linear in
+  the light's colour, which the shaders take as a uniform every frame, so
+  the fade is smooth (a baked lamp could not do this; a carried light can).
+  It is placed from the townsperson's own transform each frame, after the
+  transforms are propagated, in render space, and handed to the list in the
+  planet's frame by `render_origin::local_of` (f64 before the cast); up is
+  the walker's camera's up, never a normalised planet-centred position.
+  Nothing of it is stored or saved.
+- **Modest.** `light_level` 7 on the field's 0..15 scale (a torch is 14),
+  `light_tint` a candle's warm white: it lights the face a bit; it is not a
+  spotlight. It does not count as the player's own light, so it never
+  warms the held hand.
+- **Tunables** in `talk.ron`, validated: `frame_y` inside the screen,
+  `light_tint` each channel 0 to 1, `light_level` 0 to 15, `light_reach_m`
+  0.5 to 16, `light_fade_secs` 0 to 2, `light_rise_m` 0 to 3,
+  `light_toward_m` 0 to 2.
+- **Every NPC dialog, one presentation (owner, 2026-11-24).** In the
+  owner's words: "same presentation style for dialog boxes of any kind of
+  interaction with npcs". The panel on the right, the townsperson centred
+  in the open space left of it, and the talk light on them are one
+  presentation a screen opts into, not a copy per screen: `talk.rs`'s
+  `panel_width` is the table of NPC dialogs and their widths, and a screen
+  in it is spawned by `npc_dialog` (the right-aligned layer and its framed
+  panel), framed by `turn_to_talker` and lit by `talk_light`, all three
+  reading `is_npc_dialog`. A searched list of what an NPC opens today: the
+  interact key's only NPC act is Talk (`Act::Talk`, `interact.rs`), and
+  every other NPC exchange lives inside its three panels: the trader's
+  goods and the horse for sale (Trade), the town's jobs, taking, handing in
+  and abandoning them, the town missions' board jobs and the lost villager
+  (Board, and the line said in Talk when the villager is found), the
+  parcel handed over on talking (Talk's line). The starter missions and
+  the mission tree (O) open from the keyboard with no one to talk to, so
+  they are not NPC dialogs. A new NPC dialog joins `panel_width` and gets
+  the whole presentation.
+- **Proof.** `the_talker_lands_in_the_open_space` solves the turn for each
+  panel's width at three window sizes and scales and projects the aim point
+  to the open space's middle; `the_talk_light_burns_only_while_a_talk_is_open`
+  runs the light's system in an app and finds the light in the carried list
+  while a talk is open, rising, and gone once it has faded after the close.
+  Captures (lavapipe, no GPU): `trade-framed.jpg` retaken at a talking
+  distance of about 2.7 m, `trade-framed-night.jpg` at nightfall, and the
+  talk panel itself, a non-trade dialog, as `talk-framed-night.jpg`. Not at
+  22:30 as first planned: from daylight 0.12 (about 20:32 at Linenleigh on
+  day 0) every townsperson but a watch goes to bed (`furniture` design 11a),
+  so at 22:30 there is no merchant at the stall to talk to. The night shots
+  are at 20:27 (`--time 20.45`), the sun about two degrees under the
+  horizon and the dusk lamps lit, the latest the merchant keeps the stall.
+  The reeve's board was tried from 2.7 m too, but stepping back from the
+  reeve puts a wall between them and the eye on today's town, so the
+  non-trade capture is the merchant's own talk panel.
+
 **10a. Roads as they are built (2026-11-21, on "People approved. Build.phase
 3").** The look was built in the towns mockup first (M15's Roads tab,
 `towns.html#roads`, task 8.1): a dirt track, a gravel road, a hill road
@@ -649,6 +851,56 @@ any template (they are the mockup's dressing, not a `building()`), so task
 3.2's "the side facing the forge" waits for the forge's light; at 22:30 the
 smith is lit by the town's lamps and the field. Recorded as a limit, not
 faked with a light of its own.
+
+**26a. The forge (2026-11-24, task 3.2).** Written before the code.
+- **Where it is.** The towns mockup builds a smithy in two towns: the
+  village (`smithyShed(26, 22)`) and the walled town (inline, cells 28 to
+  30 by 8 and 9). Each is an open shed two rows by three cells, six timber
+  posts (r 0.15 m, 3.2 m) under a shingled gable roof (pitch 0.7, timber
+  gables), a forge at the far end of its second row (a stone base 1.6 by
+  1.3 m, a hearth bed, a stone hood 1.3 by 1.0 m up to the roof), its fire
+  at `addFire(..., "forge")`, and an anvil (two iron blocks) by the smith.
+  Neither went into the templates: the export recorded `building()` and the
+  dressing, and the smithy is neither. `tools/export_town_templates.js` now
+  writes each forge as the template's `smithies`: its fire's point and the
+  cells of the area it burns in. Re-exported, every other byte of the six
+  templates is as it was (the jungle's file is kept as spliced).
+- **New towns only.** A town's pieces are derived from its template on
+  every load, so a forge read from the template would stand up in every
+  saved village and walled town, in cells a player may have built in. The
+  forge is therefore a new layout: `LAYOUT_VERSION` becomes 3
+  (`FORGE_LAYOUT`), a town laid from now on is stored at 3 and gets its
+  smithy, and a town stored at 1 or 2 is cut exactly as before, with no
+  smithy and no forge lamp. A test pins that a layout-2 town's pieces and
+  lamps are those of its template with the smithies taken out, and that
+  layout 3 adds exactly the shed and one lamp. The ground of a layout-3
+  town is a layout-2 town's (it finds its cells by chord), so the ground
+  digests stand.
+- **What is cut** (`settlement::pieces::smithy`), one piece on the forge
+  cell's terrace, in the settlement set's textures (timber, shingle, stone,
+  iron), solid to the walker where the mockup's are solid (the posts, the
+  forge, the anvil):
+  - the posts are tapered six-sided posts with smooth normals, as the
+    scaffold's are;
+  - the roof is two shingled slopes over the shed's corners with a 0.3 m
+    overhang, and timber gables, as a house's gable is;
+  - the forge is one stepped stone mass, not a box with a box on it: a
+    base, a hearth bed sunk into its top, and a hood that tapers from the
+    base's back into a chimney through the roof;
+  - the anvil is one lofted iron shape: a waisted foot, a face and a horn
+    tapering off one end.
+- **Its glow is a lamp in the voxel field.** The forge's fire is a
+  `Brazier` lamp (the brightest there is, always lit) in the first air
+  layer of the forge's cell, put in by `lamps_of` as a desert brazier is.
+  So the field carries it to everything near, by night and day: the smith
+  (`LitByField`), the shed, the ground and the houses round it, wherever
+  the camera is. The forge is centred on that cell so the brazier's own
+  drawn basket stands inside the forge's base, and only its fire shows,
+  over the hearth bed, under the hood. The game's forge sits a little off
+  the mockup's point (0.67 m, to the cell's middle): recommendation taken
+  (ask only with screenshots).
+- **The smith** keeps his post by the anvil from the template; nothing
+  about him changes. Task 3.2's capture is the smith at the forge at 22:30.
 
 **27. What other parts may use** (`pbd_app::townsfolk`):
 - `TownPerson { id: PersonId { site, index }, role }` is on the root of
@@ -1574,6 +1826,227 @@ design 42's open plan that every click extended:
   (marked, or given back), unless another road still runs over them.
 
 Shown in M15 version 10 (version 8 had a New road button on the old open plan; version 9 picked a stake up on a plain click).
+
+**42l. In the game (2026-11-24, on the owner's "cool implement all the
+phase 3 stuff!"; written before the code).** Where 42 to 42k leave a choice
+open, each is a recommendation taken (ask only with screenshots):
+- **The hex line is the same both ways round.** `roads::hex_line` samples
+  the great circle between the two cells every quarter metre, always from
+  the lower key to the higher (reversed after for the other way), takes the
+  nearest cell at each sample, and where two cells in a row are not
+  neighbours (the line through a corner) puts in their common neighbour of
+  lower key. This replaces 42a's "ties broken to the left of travel", which
+  would give a different line each way round.
+- **One rule for a cell and a step.** `roads::check_cell` (a planned cell's
+  ground and whether a tree stands on it) and `roads::check_step` (two
+  neighbours' heights against the steepest grade) are what `roads::route`
+  asks too: the player's edits and the sea are never entered, and no step
+  is more than a layer. The world's roads plan the same cells as before
+  (`world_routes_are_pinned`, taken before the change).
+- **Bridges are not built yet.** A river deeper than a ford is red, "Too
+  wide to bridge", whatever its width, until the player's bridge cell (its
+  deck, posts and rails) is built. Shallow water is forded on a gravel bed,
+  whatever the road's surface (42a), and a paved ford is drawn as the
+  world's fords are.
+- **Lanes.** A wide road's lanes are its centre line moved one lattice
+  step to its left (width 2), or to both sides (width 3): the step whose
+  cell lies most square to the road, so a lane is the centre's own line
+  beside it, cell for cell, with no gap and no cell twice, even where the
+  line zigzags across the lattice. A lane takes the height of its
+  nearest centre cell. The player's road neither cuts nor fills yet (that
+  needs the world's digging in the paving's durable line), so a lane is
+  allowed only where its ground is on that height, or a layer under it,
+  raised on packed earth as a dip is; otherwise "Too steep across". **On a
+  slope a lane is refused for now**: the row beside a sloped cell is half a
+  cell along it, so sharing design 10b's one plane needs a bed half a layer
+  high, which no road cell has yet. A lane drawn on its own slope would
+  meet its neighbour with a seam of up to half a layer, a step, which the
+  roads never have; so a wide road is built on the level, and climbs as a
+  one-wide road, until the half-layer beds are built (task 8.6 stays open
+  for them and for the world's wide roads). A wide road bends only where
+  the bend cell and its neighbours on the line are level ("Wide roads bend
+  on the level").
+- **The plan record.** `road-plan` schema 2 is `{ roads: [{ stakes,
+  width, surface, lamps }] }`; its cells are re-derived from the stakes. A
+  schema 1 plan reads as one road of width 1 in gravel whose cells are the
+  ones it stored (`cells`, kept on the road), so it never moves. The
+  planner writes into the plan whose stake a road starts from, else the
+  newest plan, else a new one. Paved cells stay `road-cell` records naming
+  their plan; **marked for removal is derived**: a paved cell of a plan
+  that no road of it runs over now. So it is not stored twice.
+- **The menu is X held** (with stakes in hand, on foot; F is the shovel's
+  paving key and G the tool picker). It lists width 1, 2 and 3, dirt,
+  gravel, lamps, and the eraser; the wheel moves the highlight and letting
+  X go takes it, as the G picker does. Width, surface and lamps are for the
+  next road started; a road already staked is changed by erasing it (its
+  stakes come back) and staking it again.
+- **Esc** opens the menu as ever, and drops a road with no end yet; so do
+  clicking its start again and putting the stakes away.
+- **The eraser** stays on until it is picked again in the menu or the
+  stakes leave the hand; a click erases the road under the aim.
+- **Lamps** are recorded on the road, stand in its ghost and are in its
+  bill; a lamp post is not built when its cell is paved yet (left open).
+- **The HUD** is one line under the crosshair: the red reason while the
+  aim is refused, otherwise the bill of what is still to build (stakes,
+  gravel; short goods in red) and the counts ("12 of 38 left", turns).
+- **Tunables** are `assets/config/road_planner.ron` (42i), validated at
+  load; `max_segment` (24, the cells between two stakes) is 42i's
+  `max_stake_cells`.
+
+**42m. Wide roads on a slope, bridges, lamps and inserting a stake
+(2026-11-24, on the owner's "cool implement all the phase 3 stuff!";
+written before the code).** What 42l left open, each a recommendation
+taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
+- **One shared plane.** A road's plane is set by its centre line as the
+  one-wide rule sets it (design 10a): at each edge between two centre cells
+  the higher cell's ground, at a centre cell's middle the mean of its two
+  edges, a whole or a half layer at each of those points and straight
+  between. Every cell of the road, centre or lane, takes its top off that
+  plane **where the cell really is**: the middles of its sides toward the
+  cells it comes in and leaves by are placed along the centre line and the
+  plane read there. On a regular lattice a lane is exactly half a cell
+  along its centre cell; on the sphere the lattice is not exactly regular
+  (measured: a lane a third, not a half, of a cell along), and a lane read
+  off a half-cell grid met its neighbours with seams of 15 cm. Read where
+  it is, the seam is under a centimetre (`a_wide_road_up_ten_layers_is_
+  crossed_lane_to_lane_without_a_step`).
+- **A lane's top** is a lift over its whole layer and a rise over part of
+  its length, level either side (`RoadCell::bed`: `lift_mm`, `from`, `to`,
+  `rise_mm`; all nought is the plain one-wide cell). That covers the
+  one-wide slope, the half-height bed 42l found missing (a lift of up to a
+  layer), and the creases where the plane is held level past the foot and
+  the top of the climb (10b). The walker stands on it through the same
+  `Steps` floor a slope is, its foot and length cut to the part that rises,
+  and the mesh is the same fan.
+- **Fill, never cut, and the plane moved half a cell where that saves a
+  cut.** The player's road still digs nothing (42l). A lane cell whose
+  ground is under the plane's lowest point on it is filled to the plane on
+  a bed of packed earth (less than two layers: `raised` and the bed's
+  `lift_mm`); one whose ground stands over it would need a cut, and is red,
+  "Too steep across". On an even hill a lane off the centre's step is
+  part of a layer off its ground, so with the plane where the one-wide rule
+  puts it a lane can need a cut (10b's own measurement). So the planner
+  tries the plane **moved down the hill** half a cell, then a whole cell
+  (each point of the half-cell grid the higher of its two neighbours, the
+  ends of the road held where they are): the lanes then sit on their ground
+  or a little over it, and the centre cells take a bed instead. It takes
+  the least moved plane that needs fewest cuts and still climbs no faster
+  than a layer a cell. A one-wide road keeps today's plane cell for cell.
+- **Straight up a slope.** 10b's lanes share a plane only along a lattice
+  row. A wide road whose centre line turns, or zigzags across the lattice,
+  on a cell that rises or beside one, is red there, "Wide roads bend on the
+  level"; on the level it may run any way.
+- **Bridges, one rule.** A river cell deeper than a ford, and any river cell
+  after one while a bridge is carried, is bridged with a plank deck at the
+  road's height on the bank before it, for at most `max_bridge_cells` (6, a
+  new tunable in `road_planner.ron`) and only where the deck stands over the
+  water: `roads::planner::bridged`, which the world's search asks as well,
+  so the two agree (the world's `max_bridge_cells` stays 10; its routes are
+  pinned by `world_routes_are_pinned`). The water past the limit, or under a
+  deck that would be under the water, is red, "Too wide to bridge". The far
+  bank meets the deck within a layer or is red, "Too steep". A bridge cell
+  is paved with `bridge_planks` (6, new) planks and a log, its deck, posts
+  and rails at once (the world's bridge piece), and stored on its
+  `road-cell` as `deck_m`.
+- **Wide bridges.** Every lane cell beside a bridged centre cell is a
+  bridge cell at the same deck where its ground (land or a river's bed) is
+  under the deck; level with it, a road cell; over it, red. Rails run only
+  along a bridge cell's sides that have no road cell beside them, so a wide
+  bridge is railed on its outer edges and open between its lanes (10b). A
+  lane over deep water beside a centre that is not bridged is red, "Too
+  wide to bridge".
+- **Lamps built on paving.** Lamp posts stand off the road on its verge:
+  for every `lamp_spacing`th centre cell, on the cell beside the road's
+  outermost left cell most to the left that is not the road's, dry, no
+  town's, and within a layer of that road cell's ground; a three-wide road
+  also has them on its right, half a spacing on (staggered, 10b). A post is
+  the town's own street lantern (`LanternPost`, lit at dusk by the cell
+  light field like every town lamp), placed as the player's block in the
+  first air layer over its cell's ground when the road cell beside it is
+  paved, a log and a street lantern taken from the pack in the same line
+  (`WorldSave::accept`). Short of either, the cell is paved and the lamp
+  waits: the use key with the shovel on that paved cell builds it once they
+  are in the pack. A built lamp is a block like any other, and is dug like
+  one. Its ghost stands with the plan (a post in the ghost tint), and the
+  bill counts the posts not built and their logs and lanterns, and a bridge
+  cell's planks and log.
+- **Inserting a stake (42f).** Shift and a click on a road cell that is not
+  a stake drives a stake there (one from the pack) into the leg it lies on
+  and picks it up, so the road is pulled aside from that point as a moved
+  stake is: the next click sets it down where both new legs are allowed.
+  Refused, with the reason, where the leg through the new stake would
+  clash.
+- **The walker across the lanes.** Pinned by a `pbd-core` test that walks a
+  two- and a three-wide road up ten layers diagonally across every lane and
+  back, on the drawn floors, and finds no rise steeper than a slope's.
+- **The world's wide roads stay one wide.** 10b asks the world to lay its
+  walled towns' gravel roads two wide. That is a new roads version (a new
+  `road` schema for the lanes' beds), for new worlds only, with version 3
+  pinned by its digest. Left open in task 8.6; nothing in the world's
+  planning changes here.
+
+**42n. The owner's answers on the planner (survey P2, 2026-11-24).**
+- **A stronger ghost**: `ghost_opacity` 0.55, up from 0.35.
+- **A slightly aerial view** (owner: "Can we something like a slightly
+  aerial view? Let's say something like 10-20 m off the ground?"). While
+  survey stakes are in hand on foot, the eye rises to `aerial_m` (15 m, a
+  validated tunable from 5 to 30) over the player's eye and stands a little
+  behind them along the way they face, looking down at the ground ahead,
+  so the ghost and the stakes read whole. It eases up over `aerial_ease_s`
+  (0.4 s) when the stakes come into the hand and back down when they leave
+  it, never a jump cut. Only the eye's height and place ease: mouse look
+  turns the view by the frame's raw movement with no smoothing, as
+  everywhere (CLAUDE.md), and the pitch is the player's own pitch tipped
+  down by the angle that keeps the spot they aimed at from the ground
+  where it was. The walker, its collision and the reach of the shovel are
+  unchanged; only the eye moves.
+- **Picking from the lifted eye**: the aimed cell is found by the same ray
+  the view looks along, cast from the lifted eye, so a click lands on the
+  cell under the crosshair. While lifted, the ray reaches as far as the
+  ghost shows (`ghost_reach_m` from the player), since the point of the
+  lifted view is to stake what it shows; the shovel still paves only
+  within `reach_m` of the player's feet.
+
+**46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
+2026-11-24; written before the code).** Two new kinds on a town's board,
+through the board, the taken jobs, the counting and the hand-in every town
+job already goes through (design 8, 28, 29); posted only by a town a road
+of the world's leaves (`jobs::Town::roads_to`, the towns joined to it by a
+stored `road`), so neither is posted where there is no road.
+- **Rockfall (`rockfall`, `Clear`).** Taking the job has the world drop
+  rock on its road: from the road's cell `rockfall_from` (8) cells out of
+  the town, a run of the job's count (2 to 4) cells, each a stone block in
+  the first air layer over the cell's ground, proposed by the world
+  (`Author::World`, process `rockfall`, the job's id) through
+  `WorldSave::propose`, so the yield check skips any cell the player has
+  touched. The cells are stored as a `road_rockfall` record (by the job's
+  id: the town, the cells and how many are clear). The job counts a cell
+  (`Clear`, `<site>:road`) when its rock is dug: the game compares the
+  cells' edits with the record each frame and writes a `Did` for each cell
+  newly clear, then the record's count, so a reload never counts a cell
+  twice. A road cell the player dug its rockfall off is drawn and stood on
+  again: the road yields to the player's work except where that work is
+  only a rockfall's rock taken back to air. `Clear` joins the live kinds.
+- **Escort a trader (`escort`, `Escort`).** Taking the job puts a trader
+  (a person of the town rolled as the lost villager is, never its trader or
+  job giver) on the town's first road cell toward the job's town, stored
+  as a `road_escort` record (the town, the other town, who, the road's cells
+  in order and how far along them they are). The lost villager's follow
+  turned round (`follow::lead`): once the player is within `LEAD_START_M`
+  (6 m) the trader walks the road's cells at a walker's pace while the
+  player keeps within `WAIT_M` (12 m), and waits where they stand when the
+  player falls further back, facing them. Reaching the other town's
+  footprint counts the job (`Escort`, `<to>:trader`), the record is taken
+  back and the trader goes home to their post; the job is handed in at the
+  town that gave it, as a delivery is. Their place along the road is
+  written when they stop and at most once a second as they walk.
+- **Pay and counts** in `jobs.ron`: rockfall counts 2 to 4 cells at 8 coins
+  a cell, escort 1 at 40, both times the board's `pay_share`; both join
+  `posted` (the boards change, which no save stores).
+- **Tests** play each through the player's own inputs where the app tests
+  allow: the job taken from the board, the rock dug with the same edit the
+  dig makes, the walker moved along the road with the trader, the job
+  handed in and paid.
 
 ## Risks / Trade-offs
 

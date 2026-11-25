@@ -1039,6 +1039,7 @@ mod tests {
             workbench: Handle::default(),
             chest: Handle::default(),
             carpenter: Handle::default(),
+            drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
             tiered: Vec::new(),

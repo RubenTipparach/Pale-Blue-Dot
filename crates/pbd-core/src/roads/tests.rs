@@ -347,6 +347,9 @@ fn a_built_cell_rises_toward_the_first_neighbour_a_layer_up() {
         from: None,
         raised: false,
         plan: None,
+        ford: false,
+        bed: Default::default(),
+        deck_m: None,
     };
     let key = nearest_key(at(0.0, 0.0)).unwrap();
     // A schema 1 body written before `raised` and `plan` reads back.
@@ -468,6 +471,7 @@ fn a_cut_road_is_a_schema_2_record_and_digs_its_layers() {
         kind: Kind::Ground,
         raised: false,
         cut_fill,
+        bed: Default::default(),
         up: None,
         from: None,
     };
@@ -514,6 +518,7 @@ fn a_road_near_a_town_is_lit_by_lamps_beside_it() {
                 kind: Kind::Ground,
                 raised: false,
                 cut_fill: 0,
+                bed: Default::default(),
                 up: None,
                 from: None,
             })
@@ -691,4 +696,57 @@ fn wheels_run_at_the_surface_factor_and_the_lower_one_wins() {
     let mut bad = cfg.clone();
     bad.wheel.off_road = 0.0;
     assert!(bad.validate().is_err());
+}
+
+/// The world's routes over a fixed set of grounds (a wall of the player's,
+/// a shallow and a deep river, a cliff cut and filled, rolling terraces),
+/// digested cell by cell with what each does. Taken before `route` was
+/// made to ask `check_cell` and `check_step` (`townsfolk` design 42l), so
+/// the world plans the same roads.
+#[test]
+fn world_routes_are_pinned() {
+    let cfg = RoadsConfig {
+        max_expanded: 30_000,
+        ..RoadsConfig::default()
+    };
+    let from = nearest_key(at(0.0, 0.0)).unwrap();
+    let to = nearest_key(at(60.0, 12.0)).unwrap();
+    let wall = |e: f32, n: f32| (e - 30.0).abs() < 4.0 && n.abs() < 20.0;
+    let terraces = |key: u32| {
+        let (e, n) = local(centre(key)?);
+        Some(dry(
+            5 + ((e * 0.07).sin() * 2.0 + (n * 0.05).cos() * 2.0) as i32
+        ))
+    };
+    let grounds: Vec<Box<dyn Fn(u32) -> Option<Ground> + Sync>> = vec![
+        Box::new(ground_fn(wall, None)),
+        Box::new(ground_fn(|_, _| false, Some((25.0, 8.0, 0)))),
+        Box::new(ground_fn(|_, _| false, Some((25.0, 8.0, 3)))),
+        Box::new(cliff(2)),
+        Box::new(terraces),
+    ];
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    let mut eat = |v: i64| {
+        for byte in v.to_le_bytes() {
+            h ^= u64::from(byte);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    };
+    let mut cells = 0;
+    for ground in &grounds {
+        for version in [1, 2] {
+            let steps = route(from, to, ground.as_ref(), &cfg.for_version(version), RADIUS);
+            let Some(steps) = steps else {
+                eat(-1);
+                continue;
+            };
+            for s in steps {
+                cells += 1;
+                eat(i64::from(s.key));
+                eat(i64::from(s.lift));
+                eat(i64::from(s.deck.unwrap_or(-99)));
+            }
+        }
+    }
+    assert_eq!((cells, h), (252, 12_581_044_004_924_841_607));
 }

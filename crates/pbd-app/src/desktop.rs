@@ -3,6 +3,7 @@ mod boat;
 mod breeding;
 mod build_mode;
 mod compass_bar;
+mod construction;
 mod cpu_times;
 mod cracks;
 mod craft;
@@ -27,6 +28,7 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod planner;
 mod repro;
 mod scene;
 mod scroll_list;
@@ -403,6 +405,12 @@ pub struct Launch {
     /// plan staked from beyond them along the view, its nearer half paved,
     /// through the same paths a player's stake and shovel take.
     pub paving: Option<f32>,
+    /// `--road-plan <scene>` with `--paving` (`townsfolk` 14, a capture
+    /// instrument): the road planner's scenes, `two` (a road by two
+    /// clicks, an open start whose ghost follows the aim), `stake` (a second
+    /// road from the first's stake), `erased` (that second road erased),
+    /// `wide` (a three-wide road up the view).
+    pub road_plan: Option<String>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -597,6 +605,7 @@ impl Launch {
             forge: None,
             gather_around: None,
             paving: None,
+            road_plan: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -828,6 +837,14 @@ impl Launch {
                         i += 1;
                     }
                     result.paving = Some(metres);
+                }
+                "--road-plan" => {
+                    i += 1;
+                    result.road_plan = Some(
+                        args.get(i)
+                            .expect("--road-plan takes a scene: two, stake, erased, wide, lamps")
+                            .clone(),
+                    );
                 }
                 "--gather-around" => {
                     i += 1;
@@ -1887,6 +1904,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::logs::LogsPlugin)
     // Furniture: seats, beds and containers (`furniture`).
     .add_plugins(furniture::plugin)
+    // The building planner and construction sites (`building-planner`).
+    .add_plugins(construction::plugin)
     .init_resource::<build_mode::BuildMode>()
     .init_resource::<build_mode::Blueprints>()
     .init_resource::<pbd_app::build_view::BuildView>()

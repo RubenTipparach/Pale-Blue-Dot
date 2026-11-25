@@ -85,7 +85,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench | Material::Carpenter => one(1., 3.),
+        Material::Workbench | Material::Carpenter | Material::DraftingTable => one(1., 3.),
         // The gravel stations (`townsfolk` design 41): their blocks are the
         // workbench's timber; their slots draw their own pictures.
         Material::Grinder | Material::Mixer => one(1., 3.),
@@ -145,6 +145,8 @@ pub struct ItemIcons {
     pub workbench: Handle<Image>,
     /// The carpenter's bench's (`furniture` design 1).
     pub carpenter: Handle<Image>,
+    /// The drafting table's (`building-planner` design 3).
+    pub drafting: Handle<Image>,
     /// The grinder's and the mixer's (`townsfolk` design 41).
     pub grinder: Handle<Image>,
     pub mixer: Handle<Image>,
@@ -227,6 +229,7 @@ pub fn load_icons(
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
         carpenter: assets.load("items/stations/carpenter.png"),
+        drafting: assets.load("items/stations/drafting-table.png"),
         grinder: assets.load("items/stations/grinder.png"),
         mixer: assets.load("items/stations/mixer.png"),
         chest: assets.load("items/stations/chest.png"),
@@ -381,6 +384,7 @@ pub fn own_icon(item: Item, items: &ItemIcons) -> Option<Handle<Image>> {
         Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(Material::Workbench) => Some(items.workbench.clone()),
         Item::Block(Material::Carpenter) => Some(items.carpenter.clone()),
+        Item::Block(Material::DraftingTable) => Some(items.drafting.clone()),
         Item::Block(Material::Grinder) => Some(items.grinder.clone()),
         Item::Block(Material::Mixer) => Some(items.mixer.clone()),
         Item::Block(Material::Chest) => Some(items.chest.clone()),
@@ -539,6 +543,7 @@ pub fn input(
     menu: Option<Res<pbd_app::controls::MenuOpen>>,
     mut picker: super::equipment::PickerWheel,
     mut slots: ResMut<Hotbar>,
+    road_menu: Option<ResMut<pbd_app::roads::planner::PlannerMenu>>,
 ) {
     // A menu holds the keyboard, so the number row does not change what you
     // are holding while you read the bindings. The wheel is still DRAINED
@@ -582,6 +587,13 @@ pub fn input(
     // While G is held the picker has the wheel, and the slots and the zoom
     // do not see it.
     if picker.take(step) {
+        return;
+    }
+    // While X is held with stakes in hand the road planner's menu has it.
+    if let Some(mut menu) = road_menu
+        && menu.open
+    {
+        menu.step += step;
         return;
     }
     if walking && step != 0 && !held {
@@ -678,6 +690,8 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            carpenter: Handle::default(),
+            drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
             carpenter: Handle::default(),

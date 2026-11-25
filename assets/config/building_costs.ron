@@ -1,0 +1,78 @@
+// What a piece costs to build in a planned world (`building-planner`
+// design 8), read by pbd_core::building::costs::CostTable. Goods are named
+// as recipes.ron names items. Each kit pays from its family's column; a
+// roof's row is per cell it covers; a door's row is the doorway's wall and
+// the door hung in it. `cost_scale` (building_planner.ron) scales every
+// number, rounded up, never below one. A locked kit needs a material the
+// game does not make yet: its reason is `planner.locked.<id>`. Free worlds
+// ignore this table.
+(
+    families: {
+        "straw": "straw",
+        "mud": "straw",
+        "junglehut": "straw",
+        "timber": "timber",
+        "driftwood": "timber",
+        "poles": "timber",
+        "stone": "stone",
+        "ashlar": "stone",
+        "tower": "stone",
+        "keep": "stone",
+        "whitewash": "stone",
+        "granite": "stone",
+        "sandstone": "stone",
+        "halftimber": "halftimber",
+    },
+    locked: {
+        "brick": "bricks",
+        "brickbuff": "bricks",
+        "brickdark": "bricks",
+        "clay": "clay",
+        "adobe": "clay",
+        "marble": "marble",
+        "ice": "ice",
+        "igloo": "ice",
+    },
+    costs: {
+        "straw": (
+            wall: [("fibre", 3), ("log", 1)],
+            door: [("fibre", 2), ("log", 1), ("planks", 2), ("rope", 1)],
+            window: [("fibre", 2), ("log", 1), ("planks", 1)],
+            floor: [],
+            stair: [("planks", 4)],
+            post: [("log", 1)],
+            lantern: [("block:street lantern", 1)],
+            roof: [("fibre", 3), ("log", 1)],
+        ),
+        "timber": (
+            wall: [("planks", 4)],
+            door: [("planks", 5), ("rope", 1)],
+            window: [("planks", 4)],
+            floor: [("planks", 2)],
+            stair: [("planks", 4)],
+            post: [("log", 1)],
+            lantern: [("block:street lantern", 1)],
+            roof: [("planks", 3)],
+        ),
+        "stone": (
+            wall: [("stone", 5), ("planks", 1)],
+            door: [("stone", 4), ("planks", 3), ("rope", 1)],
+            window: [("stone", 4), ("planks", 2)],
+            floor: [("stone", 3)],
+            stair: [("stone", 4)],
+            post: [("log", 1)],
+            lantern: [("block:street lantern", 1)],
+            roof: [("fibre", 3), ("log", 1)],
+        ),
+        "halftimber": (
+            wall: [("stone", 3), ("planks", 2)],
+            door: [("stone", 2), ("planks", 4), ("rope", 1)],
+            window: [("stone", 2), ("planks", 3)],
+            floor: [("stone", 3)],
+            stair: [("planks", 4)],
+            post: [("log", 1)],
+            lantern: [("block:street lantern", 1)],
+            roof: [("fibre", 3), ("log", 1)],
+        ),
+    },
+)

@@ -1698,6 +1698,12 @@ impl Validated for pbd_core::farming::FarmSettings {
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct FarmConfig(pub pbd_core::farming::FarmSettings);
 
+/// `farming.ron` read again, for what needs the wild plants outside the ECS
+/// (the building planner's whole-site check): the one file, the same rule.
+pub fn farm_settings() -> pbd_core::farming::FarmSettings {
+    load("farming")
+}
+
 impl Validated for pbd_core::station::RecipeFile {
     fn validate(&self) -> Result<(), String> {
         pbd_core::station::RecipeFile::validate(self)

@@ -13,6 +13,8 @@ arrival:
   new_world: A NEW WORLD
   welcome_back: WELCOME BACK
 block:
+  drafting_table:
+    name: drafting table
   air:
     name: air
   basalt:
@@ -79,6 +81,22 @@ block:
     name: water
   workbench:
     name: workbench
+blueprint:
+  preset:
+    barn: Barn
+    cottage: Cottage
+    house: Two-storey house
+    hut: Straw hut
+    shop: Shop
+    stable: Stable
+    tower: Tower
+    townhouse: Townhouse
+    warehouse: Warehouse
+    workshop: Workshop
+  size:
+    large: Large
+    small: Small
+    standard: Standard
 boat:
   anchor: "Anchor"
   boat: "BOAT"
@@ -218,12 +236,13 @@ controls:
     boat: "the boat"
     brake: brake
     breeding: breeding
+    build_cutaway: "in architecture mode, cut away what stands over the build layer"
     build_layer: "in architecture mode, the build layer up or down"
     build_mode: "build mode: walls, floors, doors, stairs, roofs"
     build_place: "place the piece, or remove with the remove slot"
     build_remove: "remove the aimed piece"
     build_turn: "turn a stair or blueprint; with shift, the next blueprint"
-    build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag"
+    build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag; double-click to walk there"
     build_zoom: "with ctrl, zoom the architecture camera"
     camera: change the camera
     cruise: cruise
@@ -247,6 +266,7 @@ controls:
     place: place the held block, plant a seed, or wind the line in
     pour_water: pour water
     repro: copy the location for a bug report
+    road_menu: "with survey stakes, hold for the road planner; the wheel picks"
     rod: "with the rod: hold to cast, press to strike, hold to reel"
     roll: roll
     row: "row forward or back"
@@ -642,10 +662,12 @@ husbandry:
 interact:
   act:
     board: "Board {thing}"
+    build: "Build {thing}"
     check: "Check {thing}"
     collect: "Collect {thing}"
     drive: "Drive {thing}"
     feed: "Feed {thing}"
+    fill: "Place {thing}"
     gather: "Gather {thing}"
     get_off: "Get off {thing}"
     harvest: "Harvest {thing}"
@@ -662,6 +684,7 @@ interact:
     pick_fruit: "Pick {thing}"
     pick_glow: "Pick {thing}"
     pick_wild: "Pick wild {thing}"
+    plan: "Plan at {thing}"
     pull: "Pull {thing}"
     ride: "Ride {thing}"
     set_eggs: "Set eggs under {thing}"
@@ -670,6 +693,7 @@ interact:
     sit: "Sit on {thing}"
     step_down: "Step down from {thing}"
     take_incubator: "Take {thing}"
+    take_down: "Take down {thing}"
     take_log: "Take {thing}"
     take_up: "Take up {thing}"
     talk: "Talk to {thing}"
@@ -679,6 +703,8 @@ interact:
 inventory:
   fish: fish
 item:
+  mallet:
+    name: mallet
   apple:
     many: apples
     name: apple
@@ -830,6 +856,7 @@ jobs:
   kind:
     cook: "Cook {count} {thing}  {have}/{count}"
     deliver: "Take a parcel to {town}  {have}/{count}"
+    escort: "Walk a trader to {town}  {have}/{count}"
     fish: "Catch {count} fish  {have}/{count}"
     gather: "Bring {count} {thing}  {have}/{count}"
     harvest: "Harvest {count} {thing}  {have}/{count}"
@@ -839,6 +866,7 @@ jobs:
     lost: "Bring a lost villager home  {have}/{count}"
     mine: "Dig {count} {thing}  {have}/{count}"
     repair: "Mend a broken wall  {have}/{count}"
+    rockfall: "Clear the rockfall off the road  {have}/{count}"
     trade: "Sell {count} goods here  {have}/{count}"
   lamp: lamp
   lost_marker: Lost villager
@@ -1303,7 +1331,90 @@ pack:
   hold: HOLD
   hotbar: HOTBAR
   pack: PACK
+planner:
+  adopted: Your house
+  bill: Materials
+  bill_row: "{count} {good}, {have} in pack"
+  bill_sum: "{pieces} pieces, {strokes} strokes"
+  cancel: Cancel
+  change:
+    added:
+      one: "{count} piece added"
+      other: "{count} pieces added"
+    back: "{count} {good} back"
+    none: No change
+    removed:
+      one: "{count} piece removed"
+      other: "{count} pieces removed"
+    title: Change
+  changing: "Changing {name}"
+  check:
+    empty: Paint a room to start
+    pass: Every check passes
+    plan_size: Too big to plan
+    storeys: Too many storeys
+    way_in: No way in
+  checks: Checks
+  close: Close
+  default_name: "My plan {n}"
+  floor: "Floor {n}"
+  ground: Ground
+  hint:
+    inside_window: A window goes in an outside wall
+    no_room: Paint a room here first
+  kit:
+    brick: Brick
+    halftimber: Half-timber
+    stone: Stone
+    straw: Straw
+    timber: Timber
+  locked:
+    bricks: Needs bricks
+    clay: Needs clay
+    ice: Needs ice
+    marble: Needs marble
+    unknown: Can't build with this
+  mine: Mine
+  mine_none: None yet
+  name: Name
+  on_floor: "Floor {n}: {reason}"
+  on_ground: "Ground: {reason}"
+  presets: Presets
+  roof:
+    cone: Cone
+    flat: Flat
+    gable: Gable
+  save: Save as mine
+  save_change: Save change
+  saved: Saved
+  set_out: Set out
+  title: Planner
+  tool:
+    door: Door
+    erase: Erase
+    lantern: Lantern
+    room: Paint the room
+    slot: Furniture slot
+    stair: Stair up
+    wall: Inside wall
+    window: Window
+  town:
+    desert: Desert house
+    harbour: Harbour house
+    jungle: Jungle house
+    tundra: Tundra house
+    village: Village house
+    walled: Town house
+  towns: Town houses
+  untitled: New plan
+  view:
+    iso: Isometric
+    top: Top down
 recipe:
+  drafting-table:
+    name: DRAFTING TABLE
+  mallet:
+    name: MALLET
   banded-chest:
     name: BANDED CHEST
   bed:
@@ -1411,16 +1522,34 @@ recipe:
   workbench:
     name: WORKBENCH
 roads:
-  mark:
-    too_far: Too far
-    too_steep: Too steep
-    water: Water in the way
-    not_ground: Can't stake here
-    staked: Already staked
+  bill:
+    line: "Stakes {stakes}  Gravel {gravel}  {left} of {cells} left  Turns {turns}"
+    line_more: "Stakes {stakes}  Gravel {gravel}  Planks {planks}  Logs {logs}  Lanterns {lanterns}  {left} of {cells} left  Turns {turns}"
+  lamp:
+    needs: Needs a log and a street lantern
+  menu:
+    dirt: Dirt
+    eraser: Eraser
+    gravel: Gravel
+    lamps: Lamps
+    width_1: Width 1
+    width_2: Width 2
+    width_3: Width 3
   pave:
-    not_marked: Not marked
     needs_shovel: Needs a shovel
     needs_gravel: Needs gravel
+    needs_planks: Needs planks and a log
+  plan:
+    too_steep: Too steep
+    too_wide_to_bridge: Too wide to bridge
+    open_water: Open water
+    in_town: In a town
+    tree: A tree in the way
+    in_the_way: Something is in the way
+    no_stakes: No survey stakes
+    too_far: Too far
+    wide_bend: Wide roads bend on the level
+    too_steep_across: Too steep across
 saves:
   refusal:
     generator: "terrain generator version {version}, which this build does not have"
@@ -1429,6 +1558,23 @@ saves:
 scatter:
   pick_up_stone: pick up stone
   pull_fibre: pull fibre
+site:
+  have: "{have}/{count}"
+  left: "{left} of {total} left"
+  needs: "Needs {count} {good}"
+  needs_mallet: Needs a mallet
+  next: Next piece
+  planned_only: Build from a plan
+  refused:
+    in_the_way: Something is in the way
+    pentagon: A five-sided cell
+    plan: Fix the plan first
+    steep: Too steep here
+    taken: Something is already here
+  scaffold_needs: Needs planks and rope for the scaffolding
+  set_out: Set out
+  stroke: "{n} of {of}"
+  to_take_down: "{count} to take down"
 sites:
   fallback_name: "Site {id}"
   kind:
@@ -1896,11 +2042,16 @@ town_mission:
 towns:
   door: door
 trade:
+  add: "+"
   bought: "Bought for {coins}"
   buy: BUY
   buy_one: BUY
+  clear: CLEAR
   count: "x{count}"
   coins: "{coins}"
+  deal: DEAL
+  empty: Nothing in the baskets
+  even: EVEN
   not_held: You have none
   not_sold: Not for sale
   not_wanted: Not buying that
@@ -1908,7 +2059,6 @@ trade:
   pack_full: No room in the pack
   purse: PURSE
   sell: SELL
-  sell_one: SELL
   shelf:
     all: ALL
     food: Food
@@ -1919,8 +2069,13 @@ trade:
   short: Not enough coins
   sold: "Sold for {coins}"
   sold_out: Sold out
+  they_pay: THEY PAY
   title: TRADE
+  traded: Traded
   unsaved: Could not save
+  you_give: YOU GIVE
+  you_pay: YOU PAY
+  you_take: YOU TAKE
 vehicle:
   anchor:
     coming_aboard: "Coming aboard"

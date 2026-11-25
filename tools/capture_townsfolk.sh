@@ -14,6 +14,13 @@ SMITH_FRONT="--walk --at 29.884943 1.485554 --yaw 17.1 --pitch -14"
 SMITH_SIDE="--walk --at 29.860050 1.502882 --yaw -39.2 --pitch -8"
 MARKET="--walk --at 29.702875 9.150705 --yaw 24.2 --pitch -6"
 GUARD="--walk --at 29.112494 8.325739 --yaw -92.3 --pitch -8"
+# The forge (design 26a): 3.5 m off the side of the line from the anvil to
+# the forge, the smith at the anvil and the forge in view.
+FORGE="--walk --at 29.841288 1.500769 --yaw -90.8 --pitch -10"
+# The idle look (task 2.2): Linenleigh's merchant idling at his post, from
+# capture_talk.sh's STALL_FAR (the gate guard's and the stallholder's spots
+# show a door and a back since the towns were laid again).
+IDLE="--walk --at 29.221240 8.794353 --yaw 87.5 --pitch -6"
 shot() {
   name=$1; expr=$2; shift 2
   PBD_TOWNSFOLK_EXPRESSION=$expr timeout 1500 xvfb-run -a -s "-screen 0 960x600x24" $EXE "$@" \
@@ -26,6 +33,24 @@ shot() {
 GOATEE="--walk --at 29.726465 8.515085 --yaw -4.4 --pitch -6"
 FULL_FRONT="--walk --at 29.707064 9.102589 --yaw 87.3 --pitch -6"
 ONLY=${ONLY:-all}
+# The motion (task 2.2) as capture sequences: every 4th frame of 48 from frame
+# 150 (`PBD_CAPTURE_RUN`, a capture instrument), so a contact sheet shows
+# the smith's hammer, the innkeeper's wipe and the market's walkers;
+# tools/crop_sequence.py lays each run out as a sheet.
+if [ "$ONLY" = motion ]; then
+  run() {
+    name=$1; shift
+    PBD_CAPTURE_RUN="$D/motion-$name,150,48,4" timeout 2400 xvfb-run -a -s "-screen 0 960x600x24" \
+      $EXE "$@" --rain 0 --weather-at 7200 --time 11 --capture "$D/motion-$name.png" --frames 200 \
+      > "$D/motion-$name.log" 2>&1
+    echo "motion-$name exit $?"
+  }
+  run hammer $SMITH_SIDE
+  run wipe $GOATEE
+  run walk $MARKET
+  run idle $IDLE
+  exit 0
+fi
 # The ears (design 38): the smith from the side, and the two bearded faces.
 if [ "$ONLY" = ears ]; then
   shot ears-smith-side "" $SMITH_SIDE --time 11
@@ -41,7 +66,8 @@ if [ "$ONLY" = beards ]; then
   exit 0
 fi
 [ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
-[ "$ONLY" = all ] && shot smith-forge-2230 "" $SMITH_SIDE --time 22.5
+[ "$ONLY" = all ] && shot smith-forge-2230 "" $FORGE --time 22.5
+[ "$ONLY" = all ] && shot forge-day "" $FORGE --time 11
 shot market-day "" $MARKET --time 11
 shot gate-guard "" $GUARD --time 11
 for e in surprised sleepy delighted worried cross thinking; do

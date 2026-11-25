@@ -147,9 +147,12 @@ task 9.2, played through requests as a player's hands send them.
   The order is: the piece writer behind the server, then H1 to H4 and H6,
   H7 with the crew record, then `Together` and H5.
 
-## Open questions (recommendations taken, ask only with screenshots)
+## Owner answers (survey, 2026-11-24)
 
-- The site marker: a map marker shared by the crew (recommended) against
-  the first floor piece placed. In the survey as N1, with the CREW tab.
-- Rewards: the house itself (recommended for the first chain) against
-  coins or a tool. In the survey as N2, with the CREW tab.
+- N1, the site marker: a map marker shared by the crew, set when the
+  chain starts (the recommendation, chosen in the survey).
+- N2, rewards: the house itself, shared by the crew (the recommendation,
+  chosen in the survey).
+
+Multiplayer waits until the rest of phase 3 is done (owner, 2026-11-24:
+"leave multiplayer out for now").

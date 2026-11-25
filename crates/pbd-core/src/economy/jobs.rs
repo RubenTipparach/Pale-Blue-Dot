@@ -57,10 +57,14 @@ pub enum JobKind {
     Lost,
     /// Mend a broken piece of a town building.
     Repair,
+    /// Dig a rockfall off the town's road (`townsfolk` design 46).
+    Rockfall,
+    /// Walk with a trader along the road to the next town (design 46).
+    Escort,
 }
 
 impl JobKind {
-    pub const ALL: [JobKind; 12] = [
+    pub const ALL: [JobKind; 14] = [
         JobKind::Trade,
         JobKind::Gather,
         JobKind::Hunt,
@@ -73,6 +77,8 @@ impl JobKind {
         JobKind::Lamps,
         JobKind::Lost,
         JobKind::Repair,
+        JobKind::Rockfall,
+        JobKind::Escort,
     ];
 
     /// Its name in data and in locale keys (`jobs.kind.<code>`).
@@ -90,6 +96,8 @@ impl JobKind {
             JobKind::Lamps => "lamps",
             JobKind::Lost => "lost",
             JobKind::Repair => "repair",
+            JobKind::Rockfall => "rockfall",
+            JobKind::Escort => "escort",
         }
     }
 }
@@ -274,6 +282,9 @@ pub struct Town<'a> {
     pub kind: SiteKind,
     /// Other towns a delivery may go to, nearest first.
     pub neighbours: &'a [u32],
+    /// The towns a stored road of the world's joins to this one, by site:
+    /// a road job is posted only where there is one (design 46).
+    pub roads_to: &'a [u32],
 }
 
 /// What a board is made from.
@@ -307,14 +318,17 @@ impl Board<'_> {
             mix(mix(mix(self.seed ^ 0x6a6f_6273) ^ town.site as u64) ^ ((p << 8) | place as u64));
         let id = roll.max(1);
         let signature = self.jobs.signature.get(&town.kind).copied();
-        let kind = match (place, signature) {
-            (0, Some(kind)) => kind,
-            _ => {
-                let posted = &self.jobs.posted;
-                posted[(mix(roll) % posted.len() as u64) as usize]
-            }
-        };
-        self.make(town, kind, id, mix(roll ^ 0x5eed))
+        let posted = &self.jobs.posted;
+        let first = (mix(roll) % posted.len() as u64) as usize;
+        match (place, signature) {
+            (0, Some(kind)) => self.make(town, kind, id, mix(roll ^ 0x5eed)),
+            // A kind the town cannot give (no other town to deliver to, no
+            // road for a road job) gives its place to the next posted kind.
+            _ => (0..posted.len()).find_map(|k| {
+                let kind = posted[(first + k) % posted.len()];
+                self.make(town, kind, id, mix(roll ^ 0x5eed))
+            }),
+        }
     }
 
     /// One job of a kind, its count and its thing rolled from `roll`.
@@ -414,6 +428,24 @@ impl Board<'_> {
                 String::new(),
                 None,
             ),
+            JobKind::Rockfall => {
+                town.roads_to.first()?;
+                (
+                    entry(Kind::Clear, scoped(site, "road"), count),
+                    String::new(),
+                    None,
+                )
+            }
+            JobKind::Escort => {
+                let to = *town
+                    .roads_to
+                    .get((roll % town.roads_to.len().max(1) as u64) as usize)?;
+                (
+                    entry(Kind::Escort, scoped(to, "trader"), 1),
+                    String::new(),
+                    Some(to),
+                )
+            }
         };
         let unit = self.unit_value(kind, &thing);
         let reward =

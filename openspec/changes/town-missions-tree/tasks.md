@@ -62,7 +62,7 @@ for 4.1, their missions reading NOT YET.
 
 ## 4. The Roads and Carts branches (after `townsfolk` 13 and `land-transport` 5)
 
-- [ ] 4.1 `stake`, `mark`, `pave` raised by the paving; `haul`, `hitch` and
+- [x] 4.1 `stake`, `mark`, `pave` raised by the paving; `haul`, `hitch` and
       `Travel cart-road` by the carts; their missions no longer pending.
       Verify: tests per kind.
       - 2026-11-23: the Roads half (`townsfolk` design 45): `stake`
@@ -73,6 +73,13 @@ for 4.1, their missions reading NOT YET.
         objectives naming `block:grinder` and `block:mixer`. Test
         `each_town_kind_counts_from_its_event` walks the Roads branch. The
         carts' half waits.
+      - 2026-11-24: the road planner (`townsfolk` design 42l) raises them as
+        the paving did: `stake` with the count of stakes a road takes,
+        `mark` with its cells, from `pbd_app::roads::planner::planner_hands`
+        on the frame its line is written. The carts' half is raised too:
+        `hitch` (`horse`) by `vehicles::carts::hitch_horse`, `haul`
+        (`cart`, metres) and `Travel cart-road` by the carts' step; test
+        `vehicles::carts::tests::the_carts_raise_hitch_and_haul`.
 
 ## 5. The owner's check
 
@@ -90,12 +97,17 @@ for 4.1, their missions reading NOT YET.
 - [x] 6.2 Abandon a taken job (design 9). Verify: a test that an abandoned
       job is off the taken list, back on the board, and its lost villager or
       repair record cleared.
-- [ ] 6.3 The lost villager's icon and its map and compass marker (design
+- [x] 6.3 The lost villager's icon and its map and compass marker (design
       10). Verify: a capture of the board's lost row and of the marker.
       Built (the icon, `lost_directions` feeding the map and the compass,
       tested in `a_lamp_counts_and_an_abandoned_job_goes_back_to_the_board`);
       no capture: the owner asked for no screenshots of the testing plan's
       items now, and a lost job is posted on a board only some days.
+      Captured 2026-11-24 (lavapipe, `ONLY=lost tools/capture_talk.sh`, on
+      day 13, the first Linenleigh's board posts one): `board-lost.jpg` (the
+      row in its own icon), `lost-compass.jpg` and `lost-compass-close.png`
+      (the red pin on the compass), `lost-map.jpg` (LOST VILLAGER on the map),
+      in `docs/screenshots/town-missions-tree/`.
 
 ## 7. A toast when the tree opens (design 12)
 

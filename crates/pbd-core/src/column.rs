@@ -438,6 +438,7 @@ pub fn home_biome(material: Material) -> Option<Biome> {
         | Material::Tilled
         | Material::Workbench
         | Material::Carpenter
+        | Material::DraftingTable
         | Material::Grinder
         | Material::Mixer
         | Material::Chest

@@ -475,6 +475,7 @@ pub fn surface_family(material: Material) -> Option<Family> {
         Material::Snow => Family::Snow,
         Material::Workbench
         | Material::Carpenter
+        | Material::DraftingTable
         | Material::Sticks
         | Material::Grinder
         | Material::Mixer

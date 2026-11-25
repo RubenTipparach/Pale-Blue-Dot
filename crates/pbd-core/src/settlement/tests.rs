@@ -1541,10 +1541,14 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
-    // The buildings, their path stairs (`path-stairs`), and the masonry.
+    // The buildings, their path stairs (`path-stairs`), the smithy and the
+    // masonry.
     assert_eq!(
         b.solids.len(),
-        template.buildings.len() + b.stairs.len() + template.masonry.len()
+        template.buildings.len()
+            + b.stairs.len()
+            + template.smithies.len()
+            + template.masonry.len()
     );
     assert_eq!(b.rooms.len(), b.solids.len());
     let datum = record::datum(&template);
@@ -2400,7 +2404,9 @@ fn a_walker_climbs_a_fish_huts_porch_and_goes_in() {
 #[test]
 fn a_towns_lamps_stand_over_their_cells() {
     let template = walled();
-    let town = laid_village(&template);
+    // The street lamps alone: a town laid before the forge's brazier.
+    let mut town = laid_village(&template);
+    town.layout = record::FORGE_LAYOUT - 1;
     let (patch, _) = patch();
     let (chart, ground) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
     let lamps = record::lamps_of(&town, &template, &chart, patch);
@@ -3538,6 +3544,10 @@ fn no_lamp_of_an_older_town_moves() {
     ];
     let mut checked = 0;
     for (template, town) in &towns {
+        // A town that already stands: laid before the forge (layout 3).
+        let mut town = town.clone();
+        town.layout = record::FORGE_LAYOUT - 1;
+        let town = &town;
         let natural = slope();
         let (chart, _) = record::ground_of(town, patch, RADIUS_M, move |d| natural(d).floor())
             .unwrap_or_else(|e| panic!("{e}"));
@@ -3601,7 +3611,7 @@ fn a_towns_layout_names_how_its_ground_finds_a_cell() {
     let (patch, _) = patch();
     let town = laid_village(&village());
     assert_eq!(town.layout, record::LAYOUT_VERSION);
-    assert_eq!(record::LAYOUT_VERSION, 2);
+    assert!(record::LAYOUT_VERSION >= 2);
     let mut old = town.clone();
     old.layout = 1;
     let mut store = crate::records::Records::new();
@@ -4386,5 +4396,102 @@ fn every_house_is_furnished_by_its_record() {
                 );
             }
         }
+    }
+}
+
+/// `townsfolk` design 26a: a village and a walled town laid at layout 3
+/// stand their smithy (its posts, forge and anvil, solid to the walker) and
+/// burn a brazier in the forge's cell; a town stored at layout 2 is cut
+/// exactly as its template without smithies cuts it, so a saved town keeps
+/// its pieces and lamps.
+#[test]
+fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
+    use crate::settlement::pieces::smithy;
+    use crate::terrain::Material;
+    assert_eq!(record::LAYOUT_VERSION, record::FORGE_LAYOUT);
+    let (patch, _) = patch();
+    for template in [village(), walled()] {
+        assert_eq!(template.smithies.len(), 1, "{}", template.scene);
+        let forge_def = &template.smithies[0];
+        assert_eq!(forge_def.cells.len(), 6, "two rows by three");
+        let town = laid_village(&template);
+        assert_eq!(town.layout, record::FORGE_LAYOUT);
+        let mut old = town.clone();
+        old.layout = record::FORGE_LAYOUT - 1;
+        let mut bare = template.clone();
+        bare.smithies.clear();
+        let natural = slope();
+        let cut = |t: &record::Town, tm: &Template| {
+            record::build_town(t, Some(tm), patch, &kits(), &|_: &str| 2.0, RADIUS_M, |d| {
+                natural(d).floor()
+            })
+            .unwrap_or_else(|e| panic!("{e}"))
+        };
+        let (new, was, without) = (
+            cut(&town, &template),
+            cut(&old, &template),
+            cut(&old, &bare),
+        );
+        // Layout 2: the same pieces and the same meshes as with no smithy.
+        assert_eq!(was.solids.len(), without.solids.len());
+        let counts = |b: &record::Built| -> Vec<(String, usize)> {
+            b.meshes
+                .iter()
+                .map(|(k, m)| (k.clone(), m.positions.len()))
+                .collect()
+        };
+        assert_eq!(counts(&was), counts(&without), "{}", template.scene);
+        let (chart, _) = record::ground_of(&old, patch, RADIUS_M, slope()).expect("ground");
+        assert_eq!(
+            record::lamps_of(&old, &template, &chart, patch),
+            record::lamps_of(&old, &bare, &chart, patch),
+            "no forge lamp at layout 2"
+        );
+        // Layout 3: one piece more, and one brazier, in the forge's cell.
+        assert_eq!(new.solids.len(), was.solids.len() + 1, "{}", template.scene);
+        // After the buildings, stairs and dressing, before the masonry.
+        let shed = &new.solids[new.solids.len() - template.masonry.len() - 1];
+        assert_eq!(
+            shed.solids.len(),
+            6 + 2 + 1,
+            "six posts, the forge, the anvil"
+        );
+        let tall = shed.solids.iter().map(|s| s.y1).fold(0.0f32, f32::max);
+        assert!(
+            tall > smithy::EAVE_M,
+            "the chimney through the roof: {tall}"
+        );
+        for m in ["timber", "shingle", "stone", "iron", "flame"] {
+            assert!(
+                new.meshes.get(m).is_some_and(|b| !b.positions.is_empty()),
+                "{m}"
+            );
+        }
+        let (chart, _) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
+        let lamps = record::lamps_of(&town, &template, &chart, patch);
+        let before = record::lamps_of(&old, &template, &chart, patch);
+        assert_eq!(lamps.len(), before.len() + 1);
+        let (c, r) = forge_def.forge_cell(template.grid.cell_m);
+        let forge_dir = patch.cells[chart.cell(c, r).unwrap()].direction;
+        let brazier = lamps
+            .iter()
+            .find(|l| l.material == Material::Brazier && l.direction == forge_dir)
+            .expect("a brazier in the forge's cell");
+        // The forge is centred on that cell, its base over the brazier's own
+        // drawn fire (1.04 m), so only the forge's flame shows.
+        let forge = &shed.solids[6];
+        let middle = forge.outline.iter().fold(Vec2::ZERO, |a, p| a + *p) / 4.0;
+        let at = shed.frame.world(Vec3::new(middle.x, 0.0, middle.y));
+        assert!(
+            (at.normalize() - brazier.direction).length() * RADIUS_M < 0.05,
+            "the forge stands on the brazier: {} m off, outline {:?}",
+            (at.normalize() - brazier.direction).length() * RADIUS_M,
+            forge.outline
+        );
+        assert!(forge.y1 > 1.04 && forge.y1 < 1.2, "{}", forge.y1);
+        assert!(
+            (brazier.altitude_m - (shed.frame.origin.length() - RADIUS_M)).abs() < 1e-3,
+            "on the forge's floor"
+        );
     }
 }

@@ -637,9 +637,13 @@ pub fn server_worms(
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    (cameras, frame): (
+    (cameras, frame, mut shake, planner_lift): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+        // The worked tree's shake (`tree-punch-shake`); drawn only.
+        Option<ResMut<pbd_app::tree_shake::TreeShake>>,
+        // The road planner's lifted view (`townsfolk` design 42n).
+        Option<Res<pbd_app::roads::planner::PlannerLift>>,
     ),
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
@@ -754,7 +758,15 @@ pub fn dig_and_place(
     // world should have answered.
     let mut unsampled = None;
     let mut solid_m: Option<f32> = None;
-    let target = aim::march(eye, look, |point| {
+    // From the road planner's lifted eye the ray reaches the ground the
+    // view shows, and only aims: nothing is dug from up there.
+    let lifted = planner_lift.as_deref().is_some_and(|l| l.lifted());
+    let reach = if lifted {
+        pbd_app::roads::planner::LIFTED_REACH_M
+    } else {
+        aim::REACH_M
+    };
+    let target = aim::march_to(eye, look, reach, |point| {
         let sample = sample_at(&fine, &contact, point);
         if sample.is_none() && unsampled.is_none() {
             unsampled = why_unsampled(&contact, point);
@@ -765,6 +777,14 @@ pub fn dig_and_place(
         sample
     });
     aimed.target = target;
+    if lifted {
+        if let Some(ground) = ground.as_mut() {
+            ground.0 = target.map(|t| eye + look * t.distance);
+        }
+        aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
+        return;
+    }
     // What breaks: bare hands dig soft ground (`tool-crafting` decision 1),
     // a tool at its tier; the rod nothing.
     let digger = if tools.bare_handed() {

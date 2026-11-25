@@ -1,0 +1,24 @@
+// The building planner's tunables (`building-planner` design 12): read by
+// pbd_core::building::planner::Tunables, checked by its `validate`. Units are
+// named on each line; the defaults are M6's, first guesses the owner tunes
+// in the mockup's sliders.
+(
+    max_cells: 24,               // cells: the biggest plan
+    max_radius: 4,               // cells from the origin: fits one plot
+    max_storeys: 3,              // storeys: the tallest plan
+    rotation_step: 1,            // sixths a shift-wheel turns a ghost
+    max_footing: 2,              // layers: the steepest ground a site sits on
+    ghost_opacity: 0.35,         // 0..1: a ghost that can be built now
+    ghost_waiting_opacity: 0.15, // 0..1: a ghost waiting on others
+    ghost_tint: (0.15, 0.62, 0.81), // linear RGB: blueprint cyan (#6fd0e8)
+    ghost_reach_m: 40.0,         // metres: how near the ghost and the HUD show
+    ghost_night: 0.12,           // 0..1: the ghost's brightness at night against the day's
+    strokes: (wall: 3, floor: 2, roof_cell: 2, stair: 4, post: 1, lantern: 1, door: 1),
+    stroke_s: 0.5,               // seconds: the mallet's beat
+    reach_m: 4.0,                // metres: how far F reaches a ghost
+    scaffold: true,              // scaffolding round upper storeys
+    scaffold_cost: (planks_per_bay: 2, bays_per_rope: 3), // given back when it comes down
+    removal: Mark,               // Mark or Return: dropped built pieces
+    refund_share: 1.0,           // 0..1: goods back from a piece taken down
+    cost_scale: 1.0,             // x: every cost
+)

@@ -11,6 +11,9 @@ use pbd_app::ui_kit::{self, KitPiece, Set, UiKit};
 pub const BAR_W: f32 = 8.0;
 /// The track's inset round the thumb, native px.
 pub const BAR_INSET: f32 = 2.0;
+/// The thumb's width, native px (`townsfolk` task 12.2): 6 inside the 8 px
+/// track, a px in from each side, so it can be caught at 1x (it was 4).
+pub const THUMB_W: f32 = 6.0;
 /// The shortest thumb, native px, however long the list.
 pub const MIN_THUMB: f32 = 8.0;
 
@@ -165,8 +168,8 @@ pub fn bar(
                 Button,
                 Node {
                     position_type: PositionType::Absolute,
-                    left: px(BAR_INSET),
-                    width: px(BAR_W - 2.0 * BAR_INSET),
+                    left: px((BAR_W - THUMB_W) / 2.0),
+                    width: px(THUMB_W),
                     top: px(BAR_INSET + top),
                     height: px(len),
                     ..default()
@@ -180,6 +183,12 @@ pub fn bar(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The thumb is wider than the 4 px it was, and inside its track.
+    #[test]
+    fn the_thumb_is_wide_enough_to_catch() {
+        const { assert!(THUMB_W > 4.0 && THUMB_W < BAR_W) };
+    }
 
     /// The window: the rows from the first, never past the end; clamped so
     /// it is never short at the bottom; no overflow, no bar.

@@ -134,6 +134,11 @@ pub struct FieldView {
     /// The lights players carry, two vec4s a light (`glowing-mushrooms`
     /// design 9, [`crate::carried_light::CarriedLights::packed`]).
     pub carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+    /// Architecture mode's cutaway (`player-building` design B11,
+    /// [`crate::build_view::Cutaway::packed`]): the site's up and the cut's
+    /// radius, then the way beyond the site and the storey's ceiling; zeros
+    /// when off.
+    pub cut: [Vec4; 2],
 }
 
 /// Bytes of a run of vec4s as WGSL lays them out in storage: packed, 16 a
@@ -171,13 +176,14 @@ impl LightRow {
 }
 
 impl FieldView {
-    const BYTES: u64 = (21 + 2 * crate::carried_light::MAX_CARRIED_LIGHTS as u64) * 16;
+    const BYTES: u64 = (23 + 2 * crate::carried_light::MAX_CARRIED_LIGHTS as u64) * 16;
     fn bytes(&self) -> Vec<u8> {
         vec4_bytes(
             [&self.centre, &self.sun, &self.model]
                 .into_iter()
                 .chain(self.sky_sh.iter())
-                .chain(self.carried.iter()),
+                .chain(self.carried.iter())
+                .chain(self.cut.iter()),
         )
     }
 }
@@ -733,7 +739,7 @@ fn light_from_the_field(
     mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
     frame_count: Option<Res<crate::loading::FrameCount>>,
-    time: Option<Res<Time>>,
+    (time, build_view): (Option<Res<Time>>, Option<Res<crate::build_view::BuildView>>),
 ) {
     let now_s = time.map_or(0.0, |t| t.elapsed_secs());
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
@@ -756,6 +762,7 @@ fn light_from_the_field(
             [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
             crate::carried_light::CarriedLights::packed,
         ),
+        cut: crate::build_view::Cutaway::packed(build_view.as_deref().and_then(|v| v.cutaway())),
     };
     let key = match (&fine, &contact) {
         (Some(fine), Some(contact)) => (

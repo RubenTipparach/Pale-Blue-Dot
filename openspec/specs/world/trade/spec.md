@@ -41,3 +41,48 @@ add 2% to what it pays, up to 10%.
   most
 - **THEN** each step's prices are no worse than the step before, and the
   bonus is 2% a step, 10% at the most
+
+### Requirement: A deal is paid in coins, goods or both
+A trade SHALL take a basket of goods each way (`townsfolk` design 37a). The
+player SHALL be able to pay with coins, with goods valued at the trader's
+buying price, or with both, and the difference SHALL be settled in coins
+either way. A deal SHALL be all or nothing: a purse that cannot cover the
+difference changes nothing. The pack and the purse SHALL change together in
+one durable line, after the town's and the world's market lines.
+
+#### Scenario: Paying half in goods
+- **WHEN** the player takes two loaves and puts fish worth part of their
+  price on the other side
+- **THEN** the fish leave the pack, the loaves enter it, the rest of the
+  price leaves the purse, and the pack and the purse are in the same saved
+  line
+
+### Requirement: A made good is worth more than what it is made of
+Raw materials SHALL carry a base value in `values.ron`. A good made by a
+recipe SHALL be valued at start from its inputs and its labour (0.1 coin a
+second of the recipe) times the craft margin, so the outputs of the recipe
+that prices it are worth more than its inputs, and a dearer input SHALL
+make the goods made from it dearer. A tool, and a good `values.ron`
+overrides, SHALL keep its typed value.
+
+#### Scenario: Planks from a log
+- **WHEN** the values are worked out at start
+- **THEN** every made good's recipe gives more value than it takes
+
+#### Scenario: Dear tin
+- **WHEN** tin's market index rises
+- **THEN** bronze is priced higher
+
+### Requirement: Prices follow a market per good
+Each good SHALL have a market index per world, stored as the `market`
+record, that falls as the player sells it and rises as the player buys it,
+moves each game day by the towns' making and using, and drifts back toward
+rest over game days. A trader SHALL price from the good's value with the
+index folded in, times the town's need and the player's goodwill. A world
+saved before the market SHALL open with every index at rest and write no
+market until a trade or a day moves one.
+
+#### Scenario: Flooding the fish market
+- **WHEN** the player sells many fish
+- **THEN** the fish index falls, and it rises back toward rest over the
+  following days of play

@@ -125,6 +125,7 @@ fn gravel_is_walked_faster_than_dirt() {
         kind: roads::Kind::Ground,
         raised: false,
         cut_fill: 0,
+        bed: Default::default(),
         up: None,
         from: None,
     };
@@ -414,9 +415,18 @@ fn staked_ground() -> (Vec3, Vec3) {
                 roads::nearest_key(a).unwrap(),
                 roads::nearest_key(b).unwrap(),
             );
-            if pbd_core::roads::paving::segment(ka, kb, &ground, &load_config(), config.radius_m)
-                .is_ok()
-            {
+            let road = pbd_core::roads::planner::PlanRoad::new(
+                vec![ka, kb],
+                pbd_core::roads::planner::How::default(),
+            );
+            let laid = pbd_core::roads::planner::lay(
+                &road,
+                &ground,
+                &|_| false,
+                &paving::load_planner(),
+                1.0,
+            );
+            if pbd_core::roads::planner::first_clash(&laid).is_none() {
                 return (pa, pb);
             }
         }
@@ -425,57 +435,78 @@ fn staked_ground() -> (Vec3, Vec3) {
 }
 
 /// `world/roads`, "A road is marked before it is paved", "Marks are saved"
-/// and "Dirt and gravel" (`townsfolk` design 39 to 41): two stakes mark the
-/// cells between, each marked cell is paved with one gravel, the last with
-/// none is refused with nothing taken, and the plan, the paved cells and
-/// the pack read back from the save as they were written.
+/// and "Dirt and gravel" (`townsfolk` design 39 to 42l): a road by its two
+/// ends marks the cells between, each marked cell is paved with one gravel,
+/// the last with none is refused with nothing taken, and the plan, the
+/// paved cells and the pack read back from the save as they were written.
 #[test]
 fn a_plan_is_marked_and_paved_and_survives_a_reload() {
     use pbd_core::goods::Good;
     use pbd_core::inventory::{Item, Slots};
-    use pbd_core::roads::paving as core;
+    use pbd_core::roads::planner as core;
     let config = *crate::planet::terrain_config();
     let cfg = load_config();
+    let pcfg = paving::load_planner();
     let (a, b) = staked_ground();
+    let (ka, kb) = (paving::key_of(a).unwrap(), paving::key_of(b).unwrap());
     let root = std::env::temp_dir().join(format!("pbd-paving-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let slot = crate::saves::create(&root, "Paving", 41).unwrap();
     let stake = Item::Good(Good::SURVEY_STAKES);
     let gravel = Item::Good(Good::GRAVEL);
+    let how = core::How::default();
     let (plans, built, carried, marked) = {
         let mut save = WorldSave::open(root.clone(), slot.clone());
         let mut slots = Slots::new();
         // No stake in the pack: refused, nothing written.
-        assert!(paving::drive_stake(&mut save, &mut slots, None, a, &config, &cfg).is_err());
+        assert_eq!(
+            paving::end_road(
+                &mut save,
+                &mut slots,
+                ka,
+                kb,
+                how,
+                &|_| false,
+                &config,
+                &cfg,
+                &pcfg
+            ),
+            Err(paving::EditRefused::NoStakes)
+        );
+        assert!(core::plans(&save.records).is_empty());
         slots.give(stake, 4);
-        let first = paving::drive_stake(&mut save, &mut slots, None, a, &config, &cfg).unwrap();
-        let paving::Staked::Driven { plan, .. } = first else {
-            panic!("a new plan");
-        };
-        let second =
-            paving::drive_stake(&mut save, &mut slots, Some(plan), b, &config, &cfg).unwrap();
-        let paving::Staked::Driven { marked, .. } = second else {
-            panic!("the plan goes on");
-        };
-        assert!(marked >= 3, "{marked} cells marked");
+        let (staked, cells) = paving::end_road(
+            &mut save,
+            &mut slots,
+            ka,
+            kb,
+            how,
+            &|_| false,
+            &config,
+            &cfg,
+            &pcfg,
+        )
+        .unwrap();
+        assert_eq!(staked, 2, "a stake at each end");
+        assert!(cells >= 4, "{cells} cells marked");
         assert_eq!(slots.count(stake), 2, "one stake a waypoint");
         let plans = core::plans(&save.records);
-        let cells = plans[&plan].cells.clone();
+        let cells = plans.values().next().unwrap().roads[0].centre();
         // One gravel a cell: three gravel pave three cells, then none.
         slots.give(gravel, 3);
         for (n, &key) in cells.iter().take(3).enumerate() {
-            assert!(paving::pave(&mut save, &mut slots, key, &config).is_ok());
+            assert!(paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg).is_ok());
             assert_eq!(slots.count(gravel), 2 - n as u32);
         }
         assert_eq!(
-            paving::pave(&mut save, &mut slots, cells[3], &config),
+            paving::pave(&mut save, &mut slots, cells[3], &config, &cfg, &pcfg),
             Err(paving::PaveRefused::NoGravel)
         );
         assert_eq!(slots.count(gravel), 0);
         // A cell paved twice, or one not marked, takes nothing.
         slots.give(gravel, 1);
         assert_eq!(
-            paving::pave(&mut save, &mut slots, cells[0], &config),
+            paving::pave(&mut save, &mut slots, cells[0], &config, &cfg, &pcfg),
             Err(paving::PaveRefused::NotMarked)
         );
         assert_eq!(slots.count(gravel), 1);
@@ -483,12 +514,13 @@ fn a_plan_is_marked_and_paved_and_survives_a_reload() {
         assert!(slots.take_item(gravel, 1));
         let built = roads::built(&save.records);
         assert_eq!(built.len(), 3);
+        let id = *plans.keys().next().unwrap();
         assert!(
             built
                 .values()
-                .all(|c| c.surface == Surface::Gravel && c.plan == Some(plan))
+                .all(|c| c.surface == Surface::Gravel && c.plan == Some(id))
         );
-        let marked = core::marked(&plans, &built);
+        let (marked, _) = paving::marks(&save);
         assert_eq!(marked.len(), cells.len() - 3);
         save.drain();
         (plans, built, slots, marked)
@@ -504,7 +536,8 @@ fn a_plan_is_marked_and_paved_and_survives_a_reload() {
     // Tufts go at once from a paved or marked cell (design 44): the
     // terrain's word for the cell carries the road bit once installed.
     let road_bit = 1u32 << crate::planet::terrain::ROAD_BIT;
-    paving::install(&reopened.records, config.radius_m);
+    // Held, so another test's install cannot replace these marks mid-check.
+    let (_, _held) = paving::install_held(&reopened, config.radius_m);
     for &key in built.keys().chain(marked.keys()) {
         let c = roads::centre(key).unwrap();
         let h = pbd_core::column::surface_m(&config, c);
@@ -520,4 +553,218 @@ fn a_plan_is_marked_and_paved_and_survives_a_reload() {
         );
     }
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A dirt road paves for no material (design 42c), and the eraser gives a
+/// whole road's stakes back, its paved cells marked for removal (design
+/// 42k): taking one up gives its gravel back.
+#[test]
+fn a_dirt_road_is_free_and_the_eraser_gives_its_stakes_back() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::roads::planner as core;
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let pcfg = paving::load_planner();
+    let (a, b) = staked_ground();
+    let (ka, kb) = (paving::key_of(a).unwrap(), paving::key_of(b).unwrap());
+    let root = std::env::temp_dir().join(format!("pbd-eraser-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let slot = crate::saves::create(&root, "Eraser", 41).unwrap();
+    let mut save = WorldSave::open(root.clone(), slot);
+    let mut slots = Slots::new();
+    let stake = Item::Good(Good::SURVEY_STAKES);
+    slots.give(stake, 4);
+    let dirt = core::How {
+        surface: Surface::Dirt,
+        ..core::How::default()
+    };
+    paving::end_road(
+        &mut save,
+        &mut slots,
+        ka,
+        kb,
+        dirt,
+        &|_| false,
+        &config,
+        &cfg,
+        &pcfg,
+    )
+    .unwrap();
+    let cells = core::plans(&save.records).values().next().unwrap().roads[0].centre();
+    for &key in &cells {
+        let cell = paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg).unwrap();
+        assert_eq!(cell.surface, Surface::Dirt, "dirt, for nothing");
+    }
+    assert_eq!(slots.count(Item::Good(Good::GRAVEL)), 0);
+    assert_eq!(slots.count(stake), 2);
+    assert!(paving::erase_road(&mut save, &mut slots, cells[1], &config, &cfg, &pcfg).unwrap());
+    assert_eq!(slots.count(stake), 4, "both stakes back");
+    assert!(core::plans(&save.records).is_empty());
+    let (_, removal) = paving::marks(&save);
+    assert_eq!(removal.len(), cells.len(), "every paved cell for removal");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `world/roads`, lamp posts built on paving (design 42m): paving the cell
+/// beside a post of a road with lamps places the town's street lantern on
+/// the verge as the player's block, a log and a street lantern taken from
+/// the pack; short of either, the cell is paved and the lamp waits for the
+/// use key on it.
+#[test]
+fn paving_beside_a_post_builds_a_street_lantern_from_the_pack() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::roads::planner as core;
+    use pbd_core::terrain::Material;
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let pcfg = paving::load_planner();
+    let (a, b) = staked_ground();
+    let (ka, kb) = (paving::key_of(a).unwrap(), paving::key_of(b).unwrap());
+    let root = std::env::temp_dir().join(format!("pbd-lamps-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let slot = crate::saves::create(&root, "Lamps", 41).unwrap();
+    let mut save = WorldSave::open(root.clone(), slot);
+    let mut slots = Slots::new();
+    slots.give(Item::Good(Good::SURVEY_STAKES), 4);
+    let lit = core::How {
+        surface: Surface::Dirt,
+        lamps: true,
+        ..core::How::default()
+    };
+    paving::end_road(
+        &mut save,
+        &mut slots,
+        ka,
+        kb,
+        lit,
+        &|_| false,
+        &config,
+        &cfg,
+        &pcfg,
+    )
+    .unwrap();
+    let plans = core::plans(&save.records);
+    let road = plans.values().next().unwrap().roads[0].clone();
+    let posts = {
+        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+        let laid = core::lay(&road, &ground, &|_| false, &pcfg, cfg.ford_depth_m);
+        core::lamp_posts(&road, &laid, &ground, &pcfg)
+    };
+    assert!(!posts.is_empty(), "a road with lamps has posts");
+    let (beside, post) = posts[0];
+    // Paved with nothing for the lamp: paved, and the lamp waits.
+    assert!(paving::pave(&mut save, &mut slots, beside, &config, &cfg, &pcfg).is_ok());
+    assert_eq!(
+        paving::build_lamps(&mut save, &mut slots, beside, &config, &cfg),
+        Err(paving::PaveRefused::NoLamp)
+    );
+    assert!(!paving::lamp_standing(&save, post));
+    assert_eq!(paving::lamps_owed(&save, beside, &config, &cfg).len(), 1);
+    // With a log and a street lantern, the use key builds it.
+    let lantern = Item::Block(Material::LanternPost);
+    slots.give(Item::Good(Good::LOG), 1);
+    slots.give(lantern, 1);
+    let made = paving::build_lamps(&mut save, &mut slots, beside, &config, &cfg).unwrap();
+    assert_eq!(made.len(), 1);
+    assert_eq!(
+        (made[0].cell, made[0].material),
+        (post, Material::LanternPost)
+    );
+    assert!(paving::lamp_standing(&save, post));
+    assert_eq!(slots.count(Item::Good(Good::LOG)), 0);
+    assert_eq!(slots.count(lantern), 0);
+    assert!(paving::lamps_owed(&save, beside, &config, &cfg).is_empty());
+    // It is the town's lamp: lit at dusk by the cell light field.
+    assert!(Material::LanternPost.dusk_lit());
+    // The bill no longer counts it.
+    let built = roads::built(&save.records);
+    let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+    let after = core::bill(
+        &core::plans(&save.records),
+        None,
+        &built,
+        &|k| paving::lamp_standing(&save, k),
+        &ground,
+        &pcfg,
+        cfg.ford_depth_m,
+    );
+    assert_eq!(after.lamps as usize, posts.len() - 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The owner's lifted view (design 42n, survey P2): with survey stakes in
+/// hand the eye eases up to `aerial_m` over `aerial_ease_s`, never in one
+/// frame, and comes back down when they leave the hand; the look is tipped
+/// down so the ground ahead stays in view.
+#[test]
+fn the_planner_view_eases_up_with_stakes_in_hand_and_back_down() {
+    use crate::roads::planner::{PlannerLift, ease_lift};
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::Item;
+    let pcfg = paving::load_planner();
+    assert_eq!(pcfg.aerial_m, 15.0, "the owner's 10 to 20 m, 15 by default");
+    assert_eq!(pcfg.ghost_opacity, 0.55, "the owner's stronger ghost");
+    let mut app = App::new();
+    app.add_plugins(bevy::time::TimePlugin)
+        .insert_resource(paving::PlannerSettings(std::sync::Arc::new(pcfg.clone())))
+        .init_resource::<PlannerLift>()
+        .insert_resource(crate::walking::WalkingReadout {
+            active: true,
+            ..Default::default()
+        })
+        .insert_resource(crate::hotbar::Hotbar::default())
+        .add_systems(Update, ease_lift);
+    let step = std::time::Duration::from_secs_f32(1.0 / 60.0);
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(step));
+    app.update();
+    app.update();
+    assert!(!app.world().resource::<PlannerLift>().lifted());
+    // Stakes in hand: up over the ease, a little each frame.
+    app.world_mut()
+        .resource_mut::<crate::hotbar::Hotbar>()
+        .0
+        .give(Item::Good(Good::SURVEY_STAKES), 4);
+    assert_eq!(
+        app.world()
+            .resource::<crate::hotbar::Hotbar>()
+            .0
+            .held()
+            .map(|s| s.item),
+        Some(Item::Good(Good::SURVEY_STAKES)),
+        "the stakes are in hand"
+    );
+    let mut last = 0.0f32;
+    let mut frames = 0;
+    while app.world().resource::<PlannerLift>().amount < 1.0 && frames < 200 {
+        app.update();
+        let now = app.world().resource::<PlannerLift>().eased();
+        assert!(now - last < 0.12, "no jump: {last} to {now}");
+        last = now;
+        frames += 1;
+    }
+    let secs = frames as f32 / 60.0;
+    assert!(
+        (secs - pcfg.aerial_ease_s).abs() < 0.1,
+        "eased in over {secs} s"
+    );
+    let lift = *app.world().resource::<PlannerLift>();
+    let (offset, tilt) = lift.offset(Vec3::Y, Vec3::NEG_Z);
+    assert!((offset.y - pcfg.aerial_m).abs() < 1e-3, "{offset}");
+    assert!(offset.z > 0.0, "back behind the player");
+    assert!(tilt > 0.3 && tilt < 1.2, "tipped down {tilt}");
+    // Stakes put away: back down to first person, eased too.
+    app.world_mut().resource_mut::<crate::hotbar::Hotbar>().0 = pbd_core::inventory::Slots::new();
+    let mut frames = 0;
+    while app.world().resource::<PlannerLift>().lifted() && frames < 200 {
+        app.update();
+        frames += 1;
+    }
+    assert!(frames > 10, "eased out over {frames} frames");
+    let (offset, tilt) = app
+        .world()
+        .resource::<PlannerLift>()
+        .offset(Vec3::Y, Vec3::NEG_Z);
+    assert_eq!((offset, tilt), (Vec3::ZERO, 0.0), "the walker's own eye");
 }
