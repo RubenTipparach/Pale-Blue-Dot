@@ -38,7 +38,7 @@ use pbd_core::planet_gen::{self, TerrainConfig};
 use pbd_core::records::Author;
 use pbd_core::settlement::chart::{Chart, Patch};
 use pbd_core::settlement::ground::{self, Ground, TownGround};
-use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes, RoomLight};
+use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes, RoomLight, smithy};
 use pbd_core::settlement::record::{self, Stored, Town};
 use pbd_core::settlement::sea;
 use pbd_core::settlement::{Kits, Template};
@@ -1239,10 +1239,11 @@ pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
 /// The one material a town texture is drawn with (`crab-breeze-lessons`
 /// rank 2), by its image and whether it is cut out, kept for the run: every
 /// piece, door and craft's cut in it shares it, so the field-lit material
-/// made from it is shared too and its meshes batch. No image is a flame.
+/// made from it is shared too and its meshes batch. No image is a flame;
+/// a fire's texture (the forge's coals and flame) is drawn unlit too.
 #[derive(Resource, Default)]
 pub struct TownMaterials(
-    std::collections::HashMap<(Option<AssetId<Image>>, bool), Handle<StandardMaterial>>,
+    std::collections::HashMap<(Option<AssetId<Image>>, bool, bool), Handle<StandardMaterial>>,
 );
 
 /// A town texture's material, made the first time it is asked for.
@@ -1251,7 +1252,29 @@ pub(crate) fn town_material(
     image: Option<Handle<Image>>,
     cut: bool,
 ) -> Handle<StandardMaterial> {
-    let key = (image.as_ref().map(Handle::id), cut);
+    material_of(world, image, cut, false)
+}
+
+/// The material a piece's mesh named `name` is drawn with: a fire's
+/// ([`is_fire`]) unlit, both faces, its texture cut out where it is clear
+/// if `cut`; any other a town texture's.
+pub(crate) fn piece_material(
+    world: &mut World,
+    name: &str,
+    image: Option<Handle<Image>>,
+    cut: bool,
+) -> Handle<StandardMaterial> {
+    material_of(world, image, cut, is_fire(name))
+}
+
+fn material_of(
+    world: &mut World,
+    image: Option<Handle<Image>>,
+    cut: bool,
+    unlit: bool,
+) -> Handle<StandardMaterial> {
+    let unlit = unlit || image.is_none();
+    let key = (image.as_ref().map(Handle::id), cut, unlit);
     if let Some(handle) = world
         .get_resource::<TownMaterials>()
         .and_then(|m| m.0.get(&key))
@@ -1261,6 +1284,19 @@ pub(crate) fn town_material(
     let material = world
         .resource_mut::<Assets<StandardMaterial>>()
         .add(match image {
+            // A fire's texture (design 26b): unlit, as a flame is, both
+            // faces, cut out where it is clear.
+            Some(image) if unlit => StandardMaterial {
+                base_color_texture: Some(image),
+                unlit: true,
+                cull_mode: None,
+                alpha_mode: if cut {
+                    AlphaMode::Mask(0.5)
+                } else {
+                    AlphaMode::Opaque
+                },
+                ..default()
+            },
             Some(image) => StandardMaterial {
                 base_color_texture: Some(image),
                 perceptual_roughness: 0.93,
@@ -1304,10 +1340,11 @@ pub(crate) fn spawn_meshes(
             })
             .collect()
     };
+    let cut = cut_textures();
     let mut out = Vec::new();
     for (name, mesh, image) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = town_material(world, image, false);
+        let material = piece_material(world, &name, image, is_fire(&name) && cut.contains(&name));
         let part = world
             .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
             .id();
@@ -1610,7 +1647,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Option<Handle<Image>>, bool)> = {
+    let parts: Vec<(String, Mesh, Option<Handle<Image>>, bool)> = {
         let assets = world.resource::<AssetServer>();
         let cut = cut_textures();
         // The outside takes the field vertex by vertex once baked
@@ -1625,8 +1662,9 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                 // room (decision 7a), and is never baked: an unlit material
                 // multiplies by a vertex colour, and the bake's would black
                 // it (a smithy's forge, `townsfolk` design 26a, is the first
-                // flame outside a room).
-                let mesh = if name == FLAME {
+                // flame outside a room). The forge's coals and flame
+                // (design 26b) are fire too: unlit, textured, never baked.
+                let mesh = if is_fire(name) {
                     to_mesh(buf)
                 } else {
                     to_mesh(buf)
@@ -1640,13 +1678,13 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                         )
                 };
                 let image = (name != FLAME).then(|| texture(assets, name));
-                (mesh, image, cut.contains(name))
+                (name.clone(), mesh, image, cut.contains(name))
             })
             .collect()
     };
     // Each building's rooms, apart: they take the room's own share of the
     // sky, which its doors decide (`sun-shadows` decision 7).
-    let rooms: Vec<(usize, Mesh, Option<Handle<Image>>)> = {
+    let rooms: Vec<(usize, String, Mesh, Option<Handle<Image>>)> = {
         let assets = world.resource::<AssetServer>();
         laid.rooms
             .iter()
@@ -1656,7 +1694,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                     // A flame is drawn unlit, warm, and is no texture
                     // (decision 7a).
                     let image = (name != FLAME).then(|| texture(assets, name));
-                    (b, to_mesh(buf), image)
+                    (b, name.clone(), to_mesh(buf), image)
                 })
             })
             .collect()
@@ -1673,16 +1711,16 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         .id();
     let pieces = parts
         .into_iter()
-        .map(|(mesh, image, cut)| (None, mesh, image, cut))
+        .map(|(name, mesh, image, cut)| (None, name, mesh, image, cut))
         .chain(
             rooms
                 .into_iter()
-                .map(|(b, mesh, image)| (Some(b), mesh, image, false)),
+                .map(|(b, name, mesh, image)| (Some(b), name, mesh, image, false)),
         );
-    for (room, mesh, image, cut) in pieces {
-        let flame = image.is_none();
+    for (room, name, mesh, image, cut) in pieces {
+        let flame = is_fire(&name);
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = town_material(world, image, cut);
+        let material = piece_material(world, &name, image, cut);
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
         if flame {
             child.insert(TownFlame);
@@ -1726,7 +1764,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 /// What a town casts into the sun's cascades (`sun-shadows` task 5.1): every
 /// triangle of its outside and its rooms, a floor shading the room under it,
 /// and not its doors, which swing, nor what is cut out (a net), which would
-/// cast as a solid sheet.
+/// cast as a solid sheet, nor its fire ([`is_fire`]), which is the light.
 ///
 /// Laid out in chunks of [`CASTER_CHUNK_M`] by where each triangle stands,
 /// each with its bounds, so a cascade draws only the chunks its box holds
@@ -1739,7 +1777,11 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
     let prop_cascades = dressing_cascades.min(all as usize) as u8;
     // Each triangle, and how many cascades it casts into.
     let mut triangles: Vec<([[f32; 3]; 3], u8)> = Vec::new();
-    for (name, buf) in laid.meshes.iter().filter(|(name, _)| !cut.contains(*name)) {
+    for (name, buf) in laid
+        .meshes
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name) && !is_fire(name))
+    {
         let props = laid.props.get(name).copied();
         for (i, t) in buf.positions.chunks_exact(3).enumerate() {
             let prop = props.is_some_and(|(from, to)| (from..to).contains(&(i * 3)));
@@ -1747,7 +1789,7 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
         }
     }
     for room in &laid.rooms {
-        for (_, buf) in room.iter().filter(|(name, _)| name.as_str() != FLAME) {
+        for (_, buf) in room.iter().filter(|(name, _)| !is_fire(name)) {
             for t in buf.positions.chunks_exact(3) {
                 triangles.push(([t[0], t[1], t[2]], all));
             }
@@ -1764,7 +1806,7 @@ pub fn casting_of(meshes: &Meshes) -> TownCasting {
     let all = crate::planet::shadow::CASCADE_COUNT as u8;
     let triangles = meshes
         .iter()
-        .filter(|(name, _)| !cut.contains(*name) && name.as_str() != FLAME)
+        .filter(|(name, _)| !cut.contains(*name) && !is_fire(name))
         .flat_map(|(_, buf)| buf.positions.chunks_exact(3))
         .map(|t| ([t[0], t[1], t[2]], all))
         .collect();
@@ -1817,6 +1859,13 @@ pub const FLAME: &str = "flame";
 /// shoulder, which took a brighter or paler flame to a cream cone rather
 /// than a fire.
 pub const FLAME_RGB: [f32; 3] = [0.92, 0.46, 0.12];
+
+/// Whether the pieces' mesh `name` is fire: a flame, or a forge's coals or
+/// flame body (`townsfolk` design 26b). Fire is drawn unlit, never baked,
+/// and casts nothing; the light it gives is a lamp in the field.
+pub fn is_fire(name: &str) -> bool {
+    name == FLAME || name == smithy::EMBERS || name == smithy::FORGEFIRE
+}
 
 /// The share of the sky a room takes with a door of its building open, and
 /// with all of them shut (`sun-shadows` decision 7): round the day a room is

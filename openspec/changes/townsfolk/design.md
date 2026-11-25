@@ -946,6 +946,35 @@ again from the start.
 - **Looked at close up** before it is shown: a capture from about 1.2 m off
   the anvil with the hearth in frame (`forge-close.jpg`), plus the 26a
   shots retaken. Only layout-3 towns have a forge, so no save changes.
+- **As built (2026-11-25, task 3.2b).** As written, with these
+  particulars and differences:
+  - The coals are a 10 by 7 grid over the hearth bed, 1.2 cm over it at
+    the bed's walls and heaped up to about 9 cm toward the fire's middle,
+    its triangles split on alternate diagonals; `embers` repeats every
+    metre.
+  - The flame is three ribbons of four rows, 0.56 m wide at the root and
+    0.3 m at the top, 0.47 to 0.55 m tall, each leaning 4 to 5 cm, every
+    other one mapped the other way round so the tongues differ from each
+    side; `forgefire` is 32 by 64, mapped once, `cut: true`.
+  - The anvil is one surface of two lofts joined: 13 sections along it
+    from the heel's end to the horn (twelve points round each, a bevelled
+    block blending to an ellipse along the horn), and below the body six
+    levels down through the waist to the foot, which share the body's
+    underside edge for edge; a fan closes the heel's end, the horn's point
+    and the foot. Normals are smooth across creases under 50 degrees and
+    never across the polished face's edge. It is 0.74 m tall (the walker's
+    box stays 0.72 m), shifted 3 cm along the forge's line so its heel
+    meets the end of its box (`ANVIL_SHIFT_M`); the horn reaches out past
+    the other end, as the old one's did.
+  - Not in the design: fire in the town is one rule, `towns::is_fire`
+    (`flame`, `embers`, `forgefire`): drawn unlit and both faces, never
+    baked, shown with the flames once the town is half there, and kept out
+    of the casters outside as well as in the rooms. An outside `flame` used
+    to cast; none is left outside now that the forge's tongues are gone.
+  - The anvil's palette is the settlement iron ramp, a touch cool: a
+    bluer first try read saturated blue in the shade.
+  - Captured on lavapipe (software): the look only, frame cost not
+    measured.
 
 **27. What other parts may use** (`pbd_app::townsfolk`):
 - `TownPerson { id: PersonId { site, index }, role }` is on the root of

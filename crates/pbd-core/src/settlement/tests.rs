@@ -4461,12 +4461,23 @@ fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
             tall > smithy::EAVE_M,
             "the chimney through the roof: {tall}"
         );
-        for m in ["timber", "shingle", "stone", "iron", "flame"] {
+        for m in [
+            "timber",
+            "shingle",
+            "stone",
+            smithy::EMBERS,
+            smithy::FORGEFIRE,
+            smithy::ANVIL,
+            smithy::ANVIL_FACE,
+        ] {
             assert!(
                 new.meshes.get(m).is_some_and(|b| !b.positions.is_empty()),
                 "{m}"
             );
         }
+        // Design 26b: the forge burns no crossed-blade flame of its own.
+        let flames = |b: &record::Built| b.meshes.get("flame").map_or(0, |m| m.positions.len());
+        assert_eq!(flames(&new), flames(&was), "{}", template.scene);
         let (chart, _) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
         let lamps = record::lamps_of(&town, &template, &chart, patch);
         let before = record::lamps_of(&old, &template, &chart, patch);
@@ -4493,5 +4504,139 @@ fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
             (brazier.altitude_m - (shed.frame.origin.length() - RADIUS_M)).abs() < 1e-3,
             "on the forge's floor"
         );
+    }
+}
+
+/// `townsfolk` design 26b: the forge's fire is a bed of coals in `embers`
+/// over the hearth bed and one flame body in `forgefire` standing on it,
+/// three ribbons of [`smithy::FLAME_ROWS`] rows, rooted in the coals and
+/// under the hood, over the forge.
+#[test]
+fn the_forge_burns_one_flame_over_a_bed_of_coals() {
+    use crate::settlement::pieces::smithy;
+    let (patch, _) = patch();
+    let template = village();
+    let town = laid_village(&template);
+    let natural = slope();
+    let built = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let shed = &built.solids[built.solids.len() - template.masonry.len() - 1];
+    let local = |m: &str| -> Vec<Vec3> {
+        built.meshes[m]
+            .positions
+            .iter()
+            .map(|p| shed.frame.local(Vec3::from(*p)))
+            .collect()
+    };
+    let fire = local(smithy::FORGEFIRE);
+    assert_eq!(fire.len(), 3 * smithy::FLAME_ROWS * 2 * 3, "three ribbons");
+    let coals = local(smithy::EMBERS);
+    assert!(
+        coals.len() >= 3 * 2 * 20,
+        "a grid of coals: {}",
+        coals.len()
+    );
+    let bed = smithy::FORGE_TOP_M - smithy::BED_SINK_M;
+    for p in &coals {
+        assert!(p.y > bed && p.y < bed + 0.12, "a coal at {}", p.y);
+    }
+    let low = fire.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+    let high = fire.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+    let coal_top = coals.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+    assert!(low > bed && low < coal_top, "rooted in the coals: {low}");
+    assert!(high < smithy::HOOD_FOOT_M, "under the hood: {high}");
+    // Over the forge.
+    let forge = &shed.solids[6];
+    for p in fire.iter().chain(&coals) {
+        assert!(forge.covers(p.x, p.z, 0.0), "over the forge: {p}");
+    }
+}
+
+/// `townsfolk` design 26b: the anvil is one closed surface, every edge
+/// shared by two faces wound the opposite ways, enclosing a positive
+/// volume, every face turned out; its polished face is its flat top; and
+/// it stands in its walker's box but for the horn.
+#[test]
+fn the_anvil_is_one_closed_surface_facing_out() {
+    use crate::settlement::pieces::smithy;
+    use std::collections::BTreeMap;
+    let (points, tris, face) = smithy::anvil_surface();
+    assert_eq!(tris.len(), face.len());
+    let mut edges: BTreeMap<(u32, u32), usize> = BTreeMap::new();
+    for t in &tris {
+        assert!(t[0] != t[1] && t[1] != t[2] && t[0] != t[2], "{t:?}");
+        for k in 0..3 {
+            *edges.entry((t[k], t[(k + 1) % 3])).or_default() += 1;
+        }
+    }
+    for (&(a, b), &n) in &edges {
+        assert_eq!(n, 1, "edge {a}-{b} used {n} times one way");
+        assert_eq!(edges.get(&(b, a)), Some(&1), "edge {a}-{b} is open");
+    }
+    let used: BTreeSet<u32> = tris.iter().flatten().copied().collect();
+    assert_eq!(used.len(), points.len(), "every point is on the surface");
+    let volume = smithy::signed_volume(&points, &tris);
+    assert!(volume > 0.01 && volume < 0.2, "{volume} m3");
+    // Every face turns out: a ray from just off its middle, out along its
+    // normal, crosses the surface an even number of times.
+    let crossings = |o: Vec3, d: Vec3| {
+        tris.iter()
+            .filter(|t| {
+                let [a, b, c] = t.map(|i| points[i as usize]);
+                let (e1, e2) = (b - a, c - a);
+                let p = d.cross(e2);
+                let det = e1.dot(p);
+                if det.abs() < 1e-12 {
+                    return false;
+                }
+                let s = o - a;
+                let u = s.dot(p) / det;
+                let q = s.cross(e1);
+                let v = d.dot(q) / det;
+                let t = e2.dot(q) / det;
+                u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 1e-6
+            })
+            .count()
+    };
+    let mut outward = 0;
+    for t in &tris {
+        let [a, b, c] = t.map(|i| points[i as usize]);
+        let n = (b - a).cross(c - a).normalize();
+        let o = (a + b + c) / 3.0 + n * 1e-4;
+        // Skewed a little off the normal so it misses shared edges.
+        let d = (n + Vec3::new(0.013, 0.007, 0.011)).normalize();
+        outward += usize::from(crossings(o, d) % 2 == 0);
+    }
+    assert!(
+        outward * 100 >= tris.len() * 98,
+        "{outward} of {} faces turn out",
+        tris.len()
+    );
+    // The face is the top, flat and facing up.
+    let top = points.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+    let polished: Vec<_> = tris.iter().zip(&face).filter(|(_, f)| **f).collect();
+    assert!(!polished.is_empty());
+    for (t, _) in polished {
+        let [a, b, c] = t.map(|i| points[i as usize]);
+        let n = (b - a).cross(c - a).normalize();
+        assert!(n.y > 0.99, "the face faces up: {n}");
+        assert!((a.y - top).abs() < 1e-4);
+    }
+    let bottom = points.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+    assert_eq!(bottom, 0.0, "on its foot");
+    // Within the walker's box (0.62 by 0.42 about the cell's middle, the
+    // anvil shifted along it), but for the horn, out past it toward -x.
+    for p in &points {
+        let x = p.x + smithy::ANVIL_SHIFT_M;
+        assert!(p.z.abs() <= 0.21 && x <= 0.31 + 1e-4, "{p}");
+        assert!(x >= -0.31 || p.y > 0.55, "only the horn is out: {p}");
     }
 }
