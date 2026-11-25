@@ -160,3 +160,36 @@ about 10 000 pieces over 66 tiles: the count, not the pieces, is the cost.
   particles.
 - Proof: the same reef before and after, frame time and `ambient_ms`; a
   capture of the fish clouds beside today's.
+
+## The long play: towns at 60 fps (owner, 2026-11-25)
+
+The owner: "Played the game, run around for about 15-30 minutes. This might
+have something to do with towns and NPCs", and "We should aim for 60 fps or
+higher at all times".
+
+Measured (desktop, `fast` build, `town-route`: Holbrook to Linenleigh and
+back, 518 m, 30 minutes, a fresh world): no leak. Private memory rose 2.14
+to 2.32 GB and fell back to 2.23; Bevy's meshes, images and materials held
+flat. Every frame missed 16.7 ms: p50 27.5, p99 76, 262 hitches over 100 ms.
+The main thread is the bound (28.3 ms), the GPU is not (9.2 ms).
+
+Where the main thread goes, from the game's own `SPENT` lines (over 2 ms):
+the field-lit meshes' corners (`light_from_the_field`) 7.4 ms on 49,924 of
+55,827 frames, about 6.6 ms a frame; the town bake 3.3 ms on one frame in
+ten; the audio mix about 2 ms. A Chrome trace (`--features trace`) ranks
+physics next (9 ms traced, `resolve_ground` 6.2 of it).
+
+**Cut 1, the corners on every core.** 150 to 270 meshes that move each
+frame (the townsfolk's parts) read the field at eight corners each, one
+after another. The reads are independent and read-only, so they are made on
+the compute pool, and the rows written after, as the reef's ambient life is
+(5.3a). The same samples, the same rows: the picture does not change.
+
+Tried and reverted (2026-11-25): the corners read on the compute pool made
+the pass slower (7.4 to 14.2 ms when over 2 ms; frame p50 31.6 to 33.7 ms
+over the same 5 minutes of the route). Measured after, with the read's cause
+logged: in a town about 180 to 215 meshes re-read their corners every frame
+because they **moved** (none because the field changed), 9 to 14 ms. That
+is 1,400 to 1,700 field reads at 6 to 8 µs each; the read's cost is the
+finest-cell lookup (`PlanetContact::finest_cell`). The next cut is that
+lookup, or fewer moving rows (a townsperson's parts lit as one).

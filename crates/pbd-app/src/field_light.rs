@@ -848,6 +848,9 @@ fn light_from_the_field(
     // it rewrote, each frame it passes 2 ms.
     let started = std::time::Instant::now();
     let (mut seen, mut rewritten) = (0usize, 0usize);
+    // MEASUREMENT (`memory-leak`, towns at 60 fps): corners re-read because
+    // the mesh moved, and because the field changed under a still one.
+    let (mut read_moved, mut read_relit) = (0usize, 0usize);
     // MEASUREMENT (`baked-light-ease`): still meshes whose corners a new
     // field moved this frame, and the most any corner moved.
     let mut corners_moved = (0usize, 0.0f32);
@@ -908,6 +911,11 @@ fn light_from_the_field(
         }
         if !still || entry.key != key {
             let relit = still && entry.key != key;
+            if relit {
+                read_relit += 1;
+            } else {
+                read_moved += 1;
+            }
             // What is on screen now, which a new field under a still mesh
             // blends from (`baked-light-ease` 7.6).
             let was = entry.shown(now_s);
@@ -987,7 +995,9 @@ fn light_from_the_field(
         );
     }
     crate::planet::lod::spent(
-        &format!("field corners: {seen} meshes, {rewritten} rows rewritten"),
+        &format!(
+            "field corners: {seen} meshes, {rewritten} rows rewritten, read {read_moved} moved {read_relit} relit"
+        ),
         started,
     );
 }
