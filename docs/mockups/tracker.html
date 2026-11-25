@@ -114,6 +114,12 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .st.planned { color: var(--accent); }
 .st.later { color: var(--muted); }
 .st.optional { color: var(--accent); border-style: dashed; }
+/* Seen in game: what the owner has looked at in a real run, ticked here and kept in the db collection `seen`. */
+.seen summary { cursor: pointer; font: 600 12px/1.3 var(--mono); color: var(--accent); }
+.seen.all summary { color: var(--go); }
+.seen ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.seen label { display: flex; gap: 6px; align-items: start; font-size: 13px; color: var(--muted); cursor: pointer; }
+.seen input { margin-top: 2px; accent-color: var(--go); }
 /* The shell: the index on the left, the lists on the right. Below 900 px the index is a drawer from the Index button. */
 .shell { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; align-items: start; }
 .shell > .wrap { max-width: 1040px; margin: 0; width: 100%; }
@@ -573,6 +579,47 @@ async function connect() {
       paint(d.id);
     }
   }, () => showMode('Live updates stopped. Reload the page to see the latest reviews.'));
+  Object.keys(seenBoxes).forEach(paintSeen);
+  db.collection('seen').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists || !seenBoxes[d.id]) continue;
+      const done = d.data().done;
+      if (Array.isArray(done)) { seen[d.id] = new Set(done); paintSeen(d.id); }
+    }
+  }, () => {});
+}
+
+// Seen in game: one document per step in `seen`, { done: [keys] }. A `done: true` in the data is a check seen before the
+// list existed (a capture from a run); the owner's ticks are the db's.
+const seen = {}; // step id -> Set of keys
+const seenBoxes = {}; // step id -> { list, details, boxes: { key: input } }
+function seenList(id, items) {
+  if (!items || !items.length) return null;
+  seen[id] = new Set(items.filter((i) => i.done).map((i) => i.key));
+  const boxes = {};
+  const summary = el('summary');
+  const details = el('details', { class: 'seen' }, summary, el('ul', {}, items.map((i) => {
+    const box = el('input', { type: 'checkbox', onchange: () => toggleSeen(id, i.key, box.checked) });
+    boxes[i.key] = box;
+    return el('li', {}, el('label', {}, box, el('span', { text: i.text })));
+  })));
+  seenBoxes[id] = { items, details, summary, boxes };
+  paintSeen(id);
+  return details;
+}
+function paintSeen(id) {
+  const s = seenBoxes[id];
+  const n = s.items.filter((i) => seen[id].has(i.key)).length;
+  s.summary.textContent = `Seen in game ${n}/${s.items.length}`;
+  s.details.classList.toggle('all', n === s.items.length);
+  for (const i of s.items) { s.boxes[i.key].checked = seen[id].has(i.key); s.boxes[i.key].disabled = !canWrite; }
+}
+async function toggleSeen(id, key, on) {
+  if (on) seen[id].add(key); else seen[id].delete(key);
+  paintSeen(id);
+  if (!canWrite || !db) return;
+  try { await db.collection('seen').doc(id).set({ done: [...seen[id]], updatedAt: new Date().toISOString() }); }
+  catch (e) { showMode('A tick was not saved. Try again in a moment.'); }
 }
 
 function linkCard(a, id) {
@@ -603,6 +650,15 @@ const ROADMAP = [
     { key: 'sand', title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with shells and a warmer, rippled desert sand.' },
     { key: 'mountains', title: 'Mountain flora', status: 'built', change: 'mountain-ground', refs: ['M13'], text: 'Firs to the tree line, alpine meadow, scree, lichen and snow (generator version 15).', issues: 'phase-2-mountains', nIssues: 2 },
     { key: 'underwater', title: 'Underwater overhaul', status: 'built', change: 'ocean-environments', refs: ['M25', 'M9'], text: 'Light that fades with depth, reefs, kelp, vents, rivers, marshes and 3D water life.', issues: 'phase-2-underwater', nIssues: 2 },
+    { key: 'sea-gathering', title: 'Gathering from the sea floor', status: 'built', change: 'sea-gathering', refs: ['M25'], text: 'Take corals, sponges, fans, anemones, kelp, mussels and the bed\'s crabs, lobsters, clams and octopus by hand; sell them, grind them into fertilizer, or set corals down as decoration.',
+      seen: [
+        { key: 'take', text: 'A reef piece taken by hand', done: true },
+        { key: 'regrow', text: 'A piece growing back' },
+        { key: 'animal', text: 'A sea-floor animal caught' },
+        { key: 'protected', text: 'A protected animal refused' },
+        { key: 'fertilize', text: 'A crop fertilized' },
+        { key: 'ornament', text: 'A coral set down on the sea floor' },
+      ] },
     { key: 'water-flow', title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Water that floods, spreads and falls, with mist, bubbles and rain splashes.', issues: 'phase-2-water-flow', nIssues: 1 },
     { key: 'bot-missions', title: 'Starter missions played by the bot', status: 'building', change: 'mission-playthrough', refs: ['M33'], text: 'A bot plays all 44 starter missions in one save, through the fish, water and animals of this phase. 37 done; 7 left: sea fishing (its fresh-water half), three crops, farm meal, feast, reef, town, boat.' },
     { key: 'checks', title: 'Your checks', status: 'optional', change: '', refs: [], text: 'Looks, sounds and frame cost on your machine, when you have time.', issues: 'phase-2-checks', nIssues: 5 },
@@ -708,6 +764,7 @@ function roadmap() {
           `${st.nIssues} known issue${st.nIssues === 1 ? '' : 's'}`) : null,
         st.tests && st.nTests ? el('a', { class: 'issues', href: `${SURVEY}#${st.tests}`, target: '_blank', rel: 'noopener' },
           `${st.nTests} to test`) : null,
+        seenList(`${p}-${st.key}`, st.seen),
         refs));
     });
     root.append(el('section', { class: 'phase', id: `roadmap-phase-${p}` },
