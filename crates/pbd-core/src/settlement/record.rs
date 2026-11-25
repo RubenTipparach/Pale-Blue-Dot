@@ -250,7 +250,7 @@ impl Building {
         if self.stilts.is_some() || self.raised || self.newel.is_some() || self.storeys == 0 {
             return Vec::new();
         }
-        let inside = |c: i32, r: i32| self.cells.iter().any(|x| *x == [c, r]);
+        let inside = |c: i32, r: i32| self.cells.contains(&[c, r]);
         let mut out = Vec::new();
         for &[c, r] in &self.cells {
             if self.stair_cells.contains(&[c, r]) {

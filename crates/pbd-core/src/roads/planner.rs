@@ -920,32 +920,14 @@ pub fn lay(
             }
         }
     }
-    let dirs: Vec<Vec3> = (0..n)
-        .map(|k| {
-            let a = centre(line[k.saturating_sub(1)]).unwrap_or(Vec3::Y);
-            let b = centre(line[(k + 1).min(n - 1)]).unwrap_or(Vec3::Y);
-            let up = centre(line[k]).unwrap_or(Vec3::Y);
-            let d = b - a;
-            (d - up * d.dot(up)).normalize_or_zero()
-        })
-        .collect();
+    let dirs = directions(&line);
     // A wide road bends only on the level, and climbs straight along a row
     // of the lattice (design 10b, 42m): a turn, or a hex line's zigzag, on
     // or beside a rise is red.
     if road.width > 1 {
-        let step = |a: usize, b: usize| -> Vec3 {
-            match (centre(line[a]), centre(line[b])) {
-                (Some(x), Some(y)) => (y - x).normalize_or_zero(),
-                _ => Vec3::ZERO,
-            }
-        };
-        for k in 1..n.saturating_sub(1) {
-            if h[k - 1] == h[k] && h[k] == h[k + 1] {
-                continue;
-            }
-            let bend = road.stakes.contains(&line[k]) && dirs[k - 1].dot(dirs[k + 1]) < 0.94;
-            let zigzag = step(k - 1, k).dot(step(k, k + 1)) < 0.99;
-            if bend || zigzag {
+        let bent = wide_bends(&line, &h, &dirs, &|k| road.stakes.contains(&line[k]));
+        for (k, b) in bent.into_iter().enumerate() {
+            if b {
                 clash[k].get_or_insert(Clash::WideBend);
             }
         }
@@ -980,40 +962,63 @@ pub fn lay(
         });
     }
     if road.width > 1 && n > 0 {
-        let flat = Plane::new(&line, plane(&h));
+        let width = road.width;
+        let whole = 0..n;
         let sides = Lanes {
-            width: road.width,
+            width: &|_| width,
+            segments: std::slice::from_ref(&whole),
             line: &line,
             dirs: &dirs,
             ground,
             tree,
             ford_depth_m,
         };
-        let (mut chosen, cuts) = sides.lay(&out, &flat);
-        // The plane moved half a cell down the hill at a time, at most a
-        // whole cell, where its centre cells all still take it and it saves
-        // a cut; the least moved that saves most.
-        let (mut best, mut h) = (cuts, flat.h.clone());
-        for _ in 0..2 {
-            if best == 0 {
-                break;
-            }
-            h = moved_plane(&h);
-            if !h.windows(2).all(|w| (w[1] - w[0]).abs() <= 1) {
-                break;
-            }
-            let moved = Plane::new(&line, h.clone());
-            let recut: Option<Vec<LaidCell>> =
-                out.iter().map(|c| recut_centre(c, &moved)).collect();
-            let Some(recut) = recut else { break };
-            let (lanes1, cuts1) = sides.lay(&recut, &moved);
-            if cuts1 < best {
-                best = cuts1;
-                out = recut;
-                chosen = lanes1;
-            }
+        out = sides.widen(out, &h);
+    }
+    out
+}
+
+/// Each centre cell's heading along its line: from the cell before to the
+/// cell after, in the cell's tangent plane.
+pub(crate) fn directions(line: &[u32]) -> Vec<Vec3> {
+    let n = line.len();
+    (0..n)
+        .map(|k| {
+            let a = centre(line[k.saturating_sub(1)]).unwrap_or(Vec3::Y);
+            let b = centre(line[(k + 1).min(n - 1)]).unwrap_or(Vec3::Y);
+            let up = centre(line[k]).unwrap_or(Vec3::Y);
+            let d = b - a;
+            (d - up * d.dot(up)).normalize_or_zero()
+        })
+        .collect()
+}
+
+/// Where a wide road would bend or zigzag on or beside a rise (design 10b,
+/// 42m), centre cell by centre cell, its heights `h`: a zigzag of the line
+/// across the lattice, or a turn at a cell `turn` names. One rule for the
+/// player's planner (a turn at a stake, red) and the world's wide roads
+/// (design 43a: no lanes there).
+pub(crate) fn wide_bends(
+    line: &[u32],
+    h: &[i32],
+    dirs: &[Vec3],
+    turn: &dyn Fn(usize) -> bool,
+) -> Vec<bool> {
+    let n = line.len();
+    let step = |a: usize, b: usize| -> Vec3 {
+        match (centre(line[a]), centre(line[b])) {
+            (Some(x), Some(y)) => (y - x).normalize_or_zero(),
+            _ => Vec3::ZERO,
         }
-        out.extend(chosen);
+    };
+    let mut out = vec![false; n];
+    for k in 1..n.saturating_sub(1) {
+        if h[k - 1] == h[k] && h[k] == h[k + 1] {
+            continue;
+        }
+        let bend = turn(k) && dirs[k - 1].dot(dirs[k + 1]) < 0.94;
+        let zigzag = step(k - 1, k).dot(step(k, k + 1)) < 0.99;
+        out[k] = bend || zigzag;
     }
     out
 }
@@ -1089,17 +1094,58 @@ fn translated(key: u32, face: u8, level: u8, (di, dj): (i64, i64)) -> Option<u32
     })
 }
 
-/// What a wide road's lanes are laid from.
-struct Lanes<'a> {
-    width: u8,
-    line: &'a [u32],
-    dirs: &'a [Vec3],
-    ground: &'a GroundFn<'a>,
-    tree: &'a TreeFn<'a>,
-    ford_depth_m: f32,
+/// What a wide road's lanes are laid from: one implementation for the
+/// player's planner (design 42l, 42m) and the world's wide roads (design
+/// 43a).
+pub(crate) struct Lanes<'a> {
+    /// The road's width at each centre cell: 2 lays the left lane, 3 both.
+    pub width: &'a dyn Fn(usize) -> u8,
+    /// The stretches of the centre line each laid beside by one lattice
+    /// step: the whole line for the player's road, each straight run of a
+    /// world road.
+    pub segments: &'a [std::ops::Range<usize>],
+    pub line: &'a [u32],
+    pub dirs: &'a [Vec3],
+    pub ground: &'a GroundFn<'a>,
+    pub tree: &'a TreeFn<'a>,
+    pub ford_depth_m: f32,
 }
 
 impl Lanes<'_> {
+    /// A wide road's centre cells `out` (heights `h`, design 10's profile)
+    /// with their lanes after them (design 42m): the lanes on the road's
+    /// plane, or on the plane moved half a cell down the hill at a time, at
+    /// most a whole cell, where its centre cells all still take it and it
+    /// saves a cut; the least moved that saves most. The centre cells come
+    /// back first, in order, re-read off the plane chosen.
+    pub fn widen(&self, mut out: Vec<LaidCell>, h: &[i32]) -> Vec<LaidCell> {
+        let line = self.line;
+        let flat = Plane::new(line, plane(h));
+        let (mut chosen, cuts) = self.lay(&out, &flat);
+        let (mut best, mut h) = (cuts, flat.h.clone());
+        for _ in 0..2 {
+            if best == 0 {
+                break;
+            }
+            h = moved_plane(&h);
+            if !h.windows(2).all(|w| (w[1] - w[0]).abs() <= 1) {
+                break;
+            }
+            let moved = Plane::new(line, h.clone());
+            let recut: Option<Vec<LaidCell>> =
+                out.iter().map(|c| recut_centre(c, &moved)).collect();
+            let Some(recut) = recut else { break };
+            let (lanes1, cuts1) = self.lay(&recut, &moved);
+            if cuts1 < best {
+                best = cuts1;
+                out = recut;
+                chosen = lanes1;
+            }
+        }
+        out.extend(chosen);
+        out
+    }
+
     /// A wide road's lane cells (design 42l, 42m): the centre line moved
     /// one lattice step to its left (width 2) or to both sides (width 3),
     /// the step whose cell lies most square to the road, so a lane is the
@@ -1108,27 +1154,59 @@ impl Lanes<'_> {
     /// a half-height bed where it falls half a layer over it. With how many
     /// would need a cut.
     fn lay(&self, on: &[LaidCell], p: &Plane) -> (Vec<LaidCell>, usize) {
-        let line = self.line;
-        let on_line: BTreeSet<u32> = line.iter().copied().collect();
+        let on_line: BTreeSet<u32> = self.line.iter().copied().collect();
         let mut seen = BTreeSet::new();
         let mut out = Vec::new();
         let mut cuts = 0;
+        let wide3 = (0..self.line.len()).any(|j| (self.width)(j) >= 3);
+        let sides: &[i8] = if wide3 { &[1, -1] } else { &[1] };
+        for &sign in sides {
+            for seg in self.segments {
+                self.lay_segment(
+                    on,
+                    p,
+                    seg.clone(),
+                    sign,
+                    &on_line,
+                    &mut seen,
+                    &mut out,
+                    &mut cuts,
+                );
+            }
+        }
+        (out, cuts)
+    }
+
+    /// One side's lane beside one segment of the centre line.
+    #[allow(clippy::too_many_arguments)]
+    fn lay_segment(
+        &self,
+        on: &[LaidCell],
+        p: &Plane,
+        seg: std::ops::Range<usize>,
+        sign: i8,
+        on_line: &BTreeSet<u32>,
+        seen: &mut BTreeSet<u32>,
+        out: &mut Vec<LaidCell>,
+        cuts: &mut usize,
+    ) {
+        let line = &self.line[seg.clone()];
+        let base = seg.start;
         let (Some(first), Some(last)) = (line.first(), line.last()) else {
-            return (out, cuts);
+            return;
         };
         let (Some(ca), Some(cb)) = (centre(*first), centre(*last)) else {
-            return (out, cuts);
+            return;
         };
         let Some(left) = ca.cross(cb).try_normalize() else {
-            return (out, cuts);
+            return;
         };
         let Some(addr) = crate::cell_key::unpack(*first) else {
-            return (out, cuts);
+            return;
         };
-        let sides: &[i8] = if self.width >= 3 { &[1, -1] } else { &[1] };
-        for &sign in sides {
+        {
             // The step from the first cell whose neighbour lies most to this
-            // side, on a face the whole line lies on.
+            // side, on a face the whole segment lies on.
             let pick = crate::cell_key::addresses(addr).into_iter().find_map(|fa| {
                 if !line.iter().all(|&k| on_face(k, fa.face).is_some()) {
                     return None;
@@ -1145,7 +1223,7 @@ impl Lanes<'_> {
                     .map(|(d, _)| (fa.face, fa.level, d))
             });
             let Some((face, level, step)) = pick else {
-                continue;
+                return;
             };
             let moved: Vec<Option<u32>> = line
                 .iter()
@@ -1153,10 +1231,13 @@ impl Lanes<'_> {
                 .collect();
             for (j, cell) in moved.iter().enumerate() {
                 let Some(nb) = *cell else { continue };
+                if sign < 0 && (self.width)(base + j) < 3 {
+                    continue;
+                }
                 if on_line.contains(&nb) || !seen.insert(nb) {
                     continue;
                 }
-                let centre_cell = &on[j];
+                let centre_cell = &on[base + j];
                 let g = (self.ground)(nb);
                 let deep = |g: &super::Ground| matches!(g.water, Water::River { depth_m, .. } if depth_m as f32 > self.ford_depth_m);
                 let mut clash = match g {
@@ -1165,8 +1246,8 @@ impl Lanes<'_> {
                 };
                 let top = g.map_or(centre_cell.low_m, |g| g.top_m);
                 let along = |k: Option<usize>| k.and_then(|k| moved.get(k).copied().flatten());
-                let before = along(j.checked_sub(1)).or_else(|| toward(nb, -self.dirs[j]));
-                let after = along(Some(j + 1)).or_else(|| toward(nb, self.dirs[j]));
+                let before = along(j.checked_sub(1)).or_else(|| toward(nb, -self.dirs[base + j]));
+                let after = along(Some(j + 1)).or_else(|| toward(nb, self.dirs[base + j]));
                 let Some((foot, head)) = ends(nb, before, after) else {
                     continue;
                 };
@@ -1225,7 +1306,7 @@ impl Lanes<'_> {
                         }
                         Err(why) => {
                             if why == Unfit::Cut {
-                                cuts += 1;
+                                *cuts += 1;
                             }
                             clash.get_or_insert(Clash::TooSteepAcross);
                         }
@@ -1235,7 +1316,6 @@ impl Lanes<'_> {
                 out.push(cell);
             }
         }
-        (out, cuts)
     }
 }
 
@@ -1467,10 +1547,11 @@ pub fn take_back(
         }
         road.stakes.remove(s);
         road.cells = None;
-        if s > 0 && s < n - 1 {
-            if let Some((_, why)) = first_clash(&lay(road, ground, tree, cfg, ford_depth_m)) {
-                return Err(why);
-            }
+        if s > 0
+            && s < n - 1
+            && let Some((_, why)) = first_clash(&lay(road, ground, tree, cfg, ford_depth_m))
+        {
+            return Err(why);
         }
     }
     for p in after.values_mut() {
@@ -1610,24 +1691,40 @@ pub fn lamp_posts(
                 continue;
             };
             let side = left * f32::from(sign);
-            let mut verge: Vec<(f32, u32)> = neighbours(beside.key)
-                .into_iter()
-                .filter(|m| !on_road.contains(m))
-                .filter_map(|m| Some(((centre(m)? - bc).dot(side), m)))
-                .filter(|(d, _)| *d > 0.0)
-                .collect();
-            verge.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
-            let post = verge.into_iter().find_map(|(_, m)| {
-                let g = ground(m)?;
-                (g.water == Water::Dry && !g.town && (g.top_m - beside.base_m).abs() <= 1)
-                    .then_some(m)
+            let post = verge(beside.key, bc, side, &on_road, ground, &|_, g| {
+                g.water == Water::Dry && !g.town && (g.top_m - beside.base_m).abs() <= 1
             });
-            if let Some(post) = post {
+            if let Some((post, _)) = post {
                 out.push((beside.key, post));
             }
         }
     }
     out
+}
+
+/// The verge cell a lamp post stands on beside road cell `beside` (centre
+/// `bc`), toward `side` (design 42m, 43a): its neighbour most to that side
+/// that is not the road's and that `ok` takes. One rule for the player's
+/// lamps and the world's beside a wide road.
+pub(crate) fn verge(
+    beside: u32,
+    bc: Vec3,
+    side: Vec3,
+    on_road: &BTreeSet<u32>,
+    ground: &GroundFn,
+    ok: &dyn Fn(u32, &super::Ground) -> bool,
+) -> Option<(u32, super::Ground)> {
+    let mut verge: Vec<(f32, u32)> = neighbours(beside)
+        .into_iter()
+        .filter(|m| !on_road.contains(m))
+        .filter_map(|m| Some(((centre(m)? - bc).dot(side), m)))
+        .filter(|(d, _)| *d > 0.0)
+        .collect();
+    verge.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+    verge.into_iter().find_map(|(_, m)| {
+        let g = ground(m)?;
+        ok(m, &g).then_some((m, g))
+    })
 }
 
 /// Insert a stake at `key`, a cell on a leg of a road that is not a stake

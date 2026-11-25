@@ -47,7 +47,9 @@ pub const SALT_FLOWER: u32 = 0x52;
 /// [`GLOW_PLANT_REGROW_DAYS`] after, out of sight.
 pub const GLOW_PLANT_RECORD: &str = "glow-plant";
 pub const GLOW_PLANT_SCHEMA: u32 = 1;
-pub const GLOW_PLANT_REGROW_DAYS: f64 = 8.0;
+// Two game days, as a wild plant (`playtest-fixes-2026-11-25` 3; it was 8,
+// over six hours of play).
+pub const GLOW_PLANT_REGROW_DAYS: f64 = 2.0;
 
 /// A `glow-plant` record's body.
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]

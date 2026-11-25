@@ -37,6 +37,14 @@ impl Did {
     }
 }
 
+/// A mission closed by something the player did (not one an opening world
+/// already holds): what the jingle and anything else that marks the moment
+/// listen for (design "The goals on the HUD, and a jingle").
+#[derive(Message, Clone, Debug, PartialEq, Eq)]
+pub struct MissionDone {
+    pub id: String,
+}
+
 /// The chain, resolved against this build's tables at startup.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct MissionChain(pub Chain);
@@ -171,6 +179,7 @@ pub struct Counting<'w, 's> {
     gained: MessageReader<'w, 's, Gained>,
     planted: MessageReader<'w, 's, Planted>,
     deeds: MessageReader<'w, 's, Deed>,
+    finished: MessageWriter<'w, MissionDone>,
     cooked: MessageReader<'w, 's, Cooked>,
     did: MessageReader<'w, 's, Did>,
     heard: ResMut<'w, Happenings>,
@@ -292,6 +301,7 @@ pub fn count(mut c: Counting) {
         missions.progress.focus_past(chain, id);
         let title = chain.get(id).map_or(id.as_str(), |m| m.title.as_str());
         info!("mission done: {id} ({title})");
+        c.finished.write(MissionDone { id: id.clone() });
         missions.notice = Some((title.to_string(), NOTICE_S));
     }
     if changed {
@@ -327,6 +337,7 @@ impl RecipeLocks {
 /// A recipe whose output the world already holds (a tool owned at its tier
 /// or better, an item carried, a block placed) stays open, so a world from
 /// before the tree loses nothing (T.3).
+#[allow(clippy::too_many_arguments)]
 pub fn refresh_locks(
     chain: Res<MissionChain>,
     missions: Res<Missions>,
@@ -428,6 +439,7 @@ pub struct MissionsPlugin;
 impl Plugin for MissionsPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<Did>()
+            .add_message::<MissionDone>()
             .add_message::<Gained>()
             .add_message::<Planted>()
             .add_message::<Deed>()

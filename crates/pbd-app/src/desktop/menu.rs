@@ -215,6 +215,7 @@ fn scroll_for(y: f32, room: f32, track: f32) -> f32 {
 }
 
 /// The worlds list's groove and grip, which the wheel's system also keeps.
+#[allow(clippy::type_complexity)] // Bevy system queries.
 #[derive(SystemParam)]
 pub struct WorldsBar<'w, 's> {
     tracks: Query<

@@ -480,6 +480,7 @@ fn a_cut_road_is_a_schema_2_record_and_digs_its_layers() {
         to_site: 2,
         surface: Surface::Dirt,
         cells: vec![cell(cut_fill)],
+        lanes: Vec::new(),
     };
     assert_eq!(to_record(&road(0)).schema, RECORD_SCHEMA);
     let cut = road(-2);
@@ -523,6 +524,7 @@ fn a_road_near_a_town_is_lit_by_lamps_beside_it() {
                 from: None,
             })
             .collect(),
+        lanes: Vec::new(),
     };
     let towns = [
         Settlement {
@@ -749,4 +751,299 @@ fn world_routes_are_pinned() {
         }
     }
     assert_eq!((cells, h), (252, 12_581_044_004_924_841_607));
+}
+
+/// The ground the roads' version pins are planned over: rolling terraces
+/// round `here` with a deep river band across them, so the roads climb,
+/// cut, fill and bridge.
+fn pinned_ground(key: u32) -> Option<Ground> {
+    let (e, n) = local(centre(key)?);
+    let mut g = dry(5 + ((e * 0.011).sin() * 3.0 + (n * 0.017).cos() * 3.0) as i32);
+    if (e - n * 0.3 - 200.0).abs() < 7.0 {
+        g.top_m -= 3;
+        g.water = Water::River {
+            depth_m: 2,
+            surface_m: g.top_m + 2,
+        };
+    }
+    Some(g)
+}
+
+/// A road net digested cell by cell (FNV-1a): each road's ends and
+/// surface, then every cell's key, ground, kind, deck, raise, cut or fill
+/// and slope.
+fn net_digest(roads: &[Road]) -> (usize, u64) {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    let mut eat = |v: i64| {
+        for byte in v.to_le_bytes() {
+            h ^= u64::from(byte);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    };
+    let mut cells = 0;
+    for r in roads {
+        eat(i64::from(r.from_site));
+        eat(i64::from(r.to_site));
+        eat(r.surface as i64);
+        for c in &r.cells {
+            cells += 1;
+            let (kind, deck) = match c.kind {
+                Kind::Ground => (0, 0),
+                Kind::Ford => (1, 0),
+                Kind::Bridge { deck_m } => (2, deck_m),
+            };
+            for v in [
+                i64::from(c.key),
+                i64::from(c.base_m),
+                kind,
+                i64::from(deck),
+                i64::from(c.raised),
+                i64::from(c.cut_fill),
+                i64::from(c.up.unwrap_or(0)),
+                i64::from(c.from.unwrap_or(0)),
+            ] {
+                eat(v);
+            }
+        }
+    }
+    (cells, h)
+}
+
+/// The settlements of the fixed layout within 1.5 km of `here`, for a
+/// plan quick enough for a test.
+fn near_layout() -> Vec<Settlement> {
+    fixed_layout()
+        .into_iter()
+        .filter(|t| {
+            let (e, n) = local(t.direction);
+            e.abs() < 1_500.0 && n.abs() < 1_500.0
+        })
+        .collect()
+}
+
+/// Roads version 3 (`townsfolk` design 43): a world it planned keeps every
+/// road cell for cell, so its cells are pinned as it shipped, before
+/// version 4 (design 43a) was added beside it.
+#[test]
+fn version_3_cells_are_pinned() {
+    let mut cfg = RoadsConfig::default().for_version(3);
+    cfg.max_expanded = 20_000;
+    let roads = plan(&near_layout(), &pinned_ground, &cfg, RADIUS, 2);
+    assert_eq!(net_digest(&roads), (916, 12_558_460_843_142_704_152));
+    // Every one a walled town: the same links in gravel, where version 4
+    // differs.
+    let walled: Vec<Settlement> = near_layout()
+        .into_iter()
+        .map(|t| Settlement { large: true, ..t })
+        .collect();
+    let roads = plan(&walled, &pinned_ground, &cfg, RADIUS, 2);
+    assert!(roads.iter().all(|r| r.surface == Surface::Gravel));
+    assert_eq!(net_digest(&roads), (916, 16_745_808_329_189_319_241));
+}
+
+/// Two walled towns `to` metres apart east and north of `here`, each with a
+/// footprint 18 m across its anchor, over `ground` outside them.
+fn two_walled(
+    to: (f32, f32),
+    ground: impl Fn(u32) -> Option<Ground> + Sync,
+) -> (Vec<Settlement>, impl Fn(u32) -> Option<Ground> + Sync) {
+    let towns = vec![
+        Settlement {
+            site: 1,
+            direction: at(0.0, 0.0),
+            large: true,
+        },
+        Settlement {
+            site: 2,
+            direction: at(to.0, to.1),
+            large: true,
+        },
+    ];
+    let ends = [at(0.0, 0.0), at(to.0, to.1)];
+    let g = move |key: u32| {
+        let c = centre(key)?;
+        let mut g = ground(key)?;
+        g.town = ends
+            .iter()
+            .any(|&e| crate::sites::arc_m(c, e, RADIUS) < 18.0);
+        Some(g)
+    };
+    (towns, g)
+}
+
+/// For each centre cell of a wide road, whether a cell of the road lies
+/// beside it to its left and to its right (of the way from `from_site`),
+/// or the cell there refuses a road.
+fn sides_of(road: &Road, ground: &dyn Fn(u32) -> Option<Ground>) -> Vec<(bool, bool)> {
+    let all: BTreeSet<u32> = road.every_cell().map(|c| c.key).collect();
+    let n = road.cells.len();
+    (0..n)
+        .map(|k| {
+            let key = road.cells[k].key;
+            let c = centre(key).unwrap();
+            let a = centre(road.cells[k.saturating_sub(1)].key).unwrap();
+            let b = centre(road.cells[(k + 1).min(n - 1)].key).unwrap();
+            let left = c.cross(b - a).normalize();
+            let side = |sign: f32| {
+                neighbours(key)
+                    .into_iter()
+                    .filter(|&m| (centre(m).unwrap() - c).normalize().dot(left) * sign > 0.6)
+                    .any(|m| {
+                        all.contains(&m)
+                            || ground(m).is_some_and(|g| check_cell(&g, false).is_some())
+                    })
+            };
+            (side(1.0), side(-1.0))
+        })
+        .collect()
+}
+
+/// Roads version 4 (`townsfolk` design 43a): a gravel road between two
+/// walled towns is two wide along its length where no lane is refused, and
+/// three wide for its last `gate_cells` cells at each town's gate; its
+/// record reads back lane for lane; and the same pair planned by version 3
+/// is the one-wide road it always was.
+#[test]
+fn a_gravel_road_between_walled_towns_is_two_wide_and_three_at_the_gate() {
+    let cfg = RoadsConfig::default();
+    assert_eq!((cfg.gravel_width, cfg.gate_width), (2, 3));
+    let (towns, ground) = two_walled((260.0, 70.0), |_| Some(dry(5)));
+    let roads = plan(&towns, &ground, &cfg, RADIUS, 1);
+    assert_eq!(roads.len(), 1);
+    let road = &roads[0];
+    assert_eq!(road.surface, Surface::Gravel);
+    let n = road.cells.len();
+    let gate = cfg.gate_cells as usize;
+    let sides = sides_of(road, &ground);
+    for (k, &(left, right)) in sides.iter().enumerate() {
+        assert!(left, "no left lane beside centre cell {k} of {n}");
+        if k < gate || k + gate >= n {
+            assert!(right, "no right lane beside gate cell {k} of {n}");
+        }
+    }
+    let right = road.lanes.iter().filter(|l| l.side < 0).count();
+    let left = road.lanes.iter().filter(|l| l.side > 0).count();
+    assert!(left + 4 >= n, "{left} left lane cells beside {n}");
+    assert!(
+        right > 0 && right <= 2 * gate + 2,
+        "{right} right lane cells"
+    );
+    // No lane in a town, none twice, none on the centre line.
+    let mut seen: BTreeSet<u32> = road.cells.iter().map(|c| c.key).collect();
+    for l in &road.lanes {
+        assert!(!ground(l.cell.key).unwrap().town);
+        assert!(seen.insert(l.cell.key), "{} twice", l.cell.key);
+    }
+    // Its record, schema 3, reads back.
+    let record = to_record(road);
+    assert_eq!(record.schema, LANES_SCHEMA);
+    assert_eq!(from_record(&record).as_ref(), Some(road));
+    // Version 3 plans the same centre line, one wide, in schema 1.
+    let old = plan(&towns, &ground, &cfg.for_version(3), RADIUS, 1);
+    assert!(old[0].lanes.is_empty());
+    let keys = |r: &Road| r.cells.iter().map(|c| c.key).collect::<Vec<_>>();
+    assert_eq!(keys(&old[0]), keys(road));
+    assert_eq!(to_record(&old[0]).schema, RECORD_SCHEMA);
+    // Dirt between a walled town and a village stays one wide.
+    let mut mixed = towns.clone();
+    mixed[1].large = false;
+    let dirt = plan(&mixed, &ground, &cfg, RADIUS, 1);
+    assert_eq!(dirt[0].surface, Surface::Dirt);
+    assert!(dirt[0].lanes.is_empty());
+}
+
+/// Roads version 4 (`townsfolk` design 43a, 42m): a walker crossing every
+/// lane of a world's wide road diagonally, up a hill of ten layers between
+/// two walled towns and back down the far side, finds no step: the lanes
+/// share the road's one plane, and a lane cell that could not is left out.
+#[test]
+fn a_world_wide_road_up_ten_layers_is_crossed_lane_to_lane_without_a_step() {
+    let cfg = RoadsConfig::default();
+    let a = nearest_key(at(0.0, 0.0)).unwrap();
+    let b = planner::along_row(a, nearest_key(at(300.0, 0.0)).unwrap(), 100).unwrap();
+    let (ca, cb) = (centre(a).unwrap(), centre(b).unwrap());
+    let pitch = ca.angle_between(cb) * RADIUS / 100.0;
+    let way = (cb - ca).normalize();
+    let hill = move |key: u32| {
+        let s = (centre(key)? - ca).dot(way) * RADIUS / pitch;
+        let up = ((s - 30.0).floor() as i32).clamp(0, 10);
+        let down = ((s - 60.0).floor() as i32).clamp(0, 10);
+        Some(dry(5 + up - down))
+    };
+    let (be, bn) = local(cb);
+    let (towns, ground) = two_walled((be, bn), hill);
+    let roads = plan(&towns, &ground, &cfg, RADIUS, 1);
+    assert_eq!(roads.len(), 1);
+    let road = &roads[0];
+    assert!(
+        road.lanes.len() * 2 > road.cells.len(),
+        "{} lanes",
+        road.lanes.len()
+    );
+    let top = road.cells.iter().map(|c| c.low_m()).max().unwrap();
+    assert!(top >= 14, "the road climbs the hill: {top}");
+    let mut beds = 0;
+    let cells: BTreeMap<u32, RoadCell> = road.every_cell().map(|c| (c.key, *c)).collect();
+    for c in cells.values() {
+        assert!(
+            c.low_top_m() >= c.ground_m() as f32,
+            "a lane cut at {}",
+            c.key
+        );
+        beds += usize::from(!c.bed.is_plain());
+    }
+    let height = |p: Vec3| -> Option<f32> { Some(cells.get(&nearest_key(p)?)?.top_at(p)) };
+    // Along the centre line, weaving across the lanes on its left and,
+    // where it is three wide, its right.
+    let line: Vec<Vec3> = road.cells.iter().map(|c| centre(c.key).unwrap()).collect();
+    let mut runs: Vec<Vec<(Vec3, f32)>> = vec![Vec::new()];
+    let gate = cfg.gate_cells as usize;
+    for (k, w) in line.windows(2).enumerate() {
+        let left = w[0].cross(w[1]).normalize();
+        let from = if k < gate || k + gate + 1 >= line.len() {
+            -2.6
+        } else {
+            0.0
+        };
+        for i in 0..40 {
+            let t = i as f32 / 40.0;
+            let along = w[0].lerp(w[1], t);
+            let wave = (((runs.iter().map(Vec::len).sum::<usize>()) as f32 / 120.0).fract() * 2.0
+                - 1.0)
+                .abs();
+            let off = from + (2.6 - from) * wave;
+            let p = (along + left * (off / RADIUS)).normalize();
+            match height(p) {
+                Some(h) => runs.last_mut().unwrap().push((p, h)),
+                None if !runs.last().unwrap().is_empty() => runs.push(Vec::new()),
+                None => {}
+            }
+        }
+    }
+    let on: usize = runs.iter().map(Vec::len).sum();
+    assert!(
+        on > 40 * line.len() * 2 / 3,
+        "on the road {on} of {}",
+        40 * line.len()
+    );
+    let (mut seam, mut worst, mut climbed) = (0.0f32, 0.0f32, 0.0f32);
+    for run in &runs {
+        for w in run.windows(2) {
+            seam = seam.max((w[1].1 - w[0].1).abs());
+        }
+        for w in run.windows(40) {
+            let length = crate::sites::arc_m(w[0].0, w[39].0, RADIUS).max(1e-4);
+            worst = worst.max((w[39].1 - w[0].1).abs() / length);
+        }
+        if let (Some(lo), Some(hi)) = (
+            run.iter().map(|p| p.1).reduce(f32::min),
+            run.iter().map(|p| p.1).reduce(f32::max),
+        ) {
+            climbed = climbed.max(hi - lo);
+        }
+    }
+    assert!(climbed > 9.0, "climbed {climbed}");
+    assert!(seam < 0.12, "a seam of {seam} m");
+    assert!(worst < 0.5, "the steepest is {worst} m a metre, a step");
+    assert!(beds > 0, "a lane on a bed somewhere");
 }

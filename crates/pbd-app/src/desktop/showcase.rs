@@ -1890,7 +1890,7 @@ impl Bot {
         if block.is_none() && self.stuck_s > 1.0 {
             let looked = self
                 .aimed_cell(s)
-                .filter(|(_, l)| (feet_layer..=feet_layer + 1).contains(&(*l as usize)))
+                .filter(|(_, l)| (feet_layer..=feet_layer + 1).contains(l))
                 .and_then(|c| digging::material_of(s.fine, s.save, c))
                 .filter(|m| {
                     m != &Material::Air
@@ -1933,7 +1933,7 @@ impl Bot {
                 // with a shovel pressing nothing for minutes).
                 let hit = self
                     .aimed_cell(s)
-                    .filter(|(_, l)| (feet_layer..=feet_layer + 2).contains(&(*l as usize)));
+                    .filter(|(_, l)| (feet_layer..=feet_layer + 2).contains(l));
                 let hit_material = hit
                     .and_then(|c| digging::material_of(s.fine, s.save, c))
                     .filter(|m| {
@@ -1957,7 +1957,7 @@ impl Bot {
                 }
                 // The look held on a block in front of the planned one for a
                 // second: that block is in the way, and is dug first.
-                let on = hit.is_some_and(|(k, l)| k == key && l as usize == layer)
+                let on = hit.is_some_and(|(k, l)| k == key && l == layer)
                     || (hit_material.is_some() && (aimed || th.block_s > 1.0));
                 if (th.block_s % 2.0) < s.dt {
                     info!(
@@ -3956,30 +3956,30 @@ fn run(
         },
         Act::Swim(kind) => swim(bot, kind, s, out),
         Act::Shore | Act::Fresh => match bot.phase {
-            0 => match {
+            0 => {
                 bot.fresh = matches!(act, Act::Fresh);
-                shore(s, bot.fresh)
-            } {
-                Some((water, stand)) => {
-                    bot.goal = Some(Goal::Point(water, stand));
-                    bot.next_phase();
-                    Status::Running
+                match shore(s, bot.fresh) {
+                    Some((water, stand)) => {
+                        bot.goal = Some(Goal::Point(water, stand));
+                        bot.next_phase();
+                        Status::Running
+                    }
+                    // No river or lake in the ground loaded round here: walk on
+                    // and look again, five times (2026-11-21: the fresh-water
+                    // shot failed at once on a coast with none near).
+                    None if bot.fresh && bot.fresh_walks < 5 && bot.injected.is_empty() => {
+                        bot.fresh_walks += 1;
+                        info!(
+                            "showcase: no river or lake near; walking on to look ({} of 5)",
+                            bot.fresh_walks
+                        );
+                        bot.injected.push_back(file::Act::Away(200.0));
+                        Status::Running
+                    }
+                    None if bot.fresh => Status::Fail("no river or lake found".into()),
+                    None => Status::Fail("no sea within 900 m".into()),
                 }
-                // No river or lake in the ground loaded round here: walk on
-                // and look again, five times (2026-11-21: the fresh-water
-                // shot failed at once on a coast with none near).
-                None if bot.fresh && bot.fresh_walks < 5 && bot.injected.is_empty() => {
-                    bot.fresh_walks += 1;
-                    info!(
-                        "showcase: no river or lake near; walking on to look ({} of 5)",
-                        bot.fresh_walks
-                    );
-                    bot.injected.push_back(file::Act::Away(200.0));
-                    Status::Running
-                }
-                None if bot.fresh => Status::Fail("no river or lake found".into()),
-                None => Status::Fail("no sea within 900 m".into()),
-            },
+            }
             1 => {
                 let Some(Goal::Point(_, stand)) = bot.goal else {
                     return Status::Fail("lost the shore".into());
@@ -5697,7 +5697,7 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
             // new stand (2026-11-23: eight schools in the first minute, none
             // after in fifteen, the third kind never there).
             if bot.tries > 0
-                && bot.tries % 12 == 0
+                && bot.tries.is_multiple_of(12)
                 && phase == Phase::Ready
                 && bot.injected.is_empty()
             {
@@ -6647,7 +6647,15 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
             let Some(layer) = pbd_core::column::layer_at(r.direction_height[3] - 0.5) else {
                 continue;
             };
-            if super::farm::wild_at(s.fine, s.save, s.farm, r.key(), layer).is_none()
+            if super::farm::wild_at(
+                s.fine,
+                s.save,
+                s.farm,
+                r.key(),
+                layer,
+                s.day * f64::from(pbd_core::daylight::DAY_S),
+            )
+            .is_none()
                 || digging::under_standing_tree(
                     s.fine,
                     s.save,
@@ -7256,9 +7264,11 @@ fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
 /// `count` is set once the use is done.
 fn furniture(bot: &mut Bot, what: &str, s: &Sight, out: &mut Intent) -> Status {
     use pbd_core::furniture::Use;
-    let wants = |kind: pbd_core::furniture::Kind| match (what, kind.use_()) {
-        ("sit", Use::Seat { .. }) | ("lie", Use::Bed { .. }) | ("loot", Use::Store { .. }) => true,
-        _ => false,
+    let wants = |kind: pbd_core::furniture::Kind| {
+        matches!(
+            (what, kind.use_()),
+            ("sit", Use::Seat { .. }) | ("lie", Use::Bed { .. }) | ("loot", Use::Store { .. })
+        )
     };
     let pressing = bot.phase_s > 0.7;
     // Sat or lain: a moment there, a still, then up with F.
@@ -7276,34 +7286,34 @@ fn furniture(bot: &mut Bot, what: &str, s: &Sight, out: &mut Intent) -> Status {
         return Status::Running;
     }
     // A container open: its coins, else a stack, then shut.
-    if s.screen == Screen::Pack {
-        if let Some((id, coins, first)) = s.store_open {
-            bot.piece_pressed = None;
-            if !pressing {
-                return Status::Running;
-            }
-            bot.phase_s = 0.0;
-            if bot.count == 0 {
-                if coins > 0 {
-                    info!("showcase: furniture: taking {coins} coins from {id}");
-                    out.click = Some(Click::Coins);
-                    bot.count = 1;
-                } else if let Some(k) = first {
-                    info!("showcase: furniture: taking slot {k} of {id}");
-                    out.click = Some(Click::Cell(super::furniture::STORE_AT + k));
-                    out.lmb_tap = true;
-                    bot.count = 1;
-                } else {
-                    info!("showcase: furniture: {id} is empty");
-                    bot.pieces_passed.insert(id);
-                    out.taps.push(KeyCode::Tab);
-                }
-            } else {
-                bot.want_still = true;
-                out.taps.push(KeyCode::Tab);
-            }
+    if s.screen == Screen::Pack
+        && let Some((id, coins, first)) = s.store_open
+    {
+        bot.piece_pressed = None;
+        if !pressing {
             return Status::Running;
         }
+        bot.phase_s = 0.0;
+        if bot.count == 0 {
+            if coins > 0 {
+                info!("showcase: furniture: taking {coins} coins from {id}");
+                out.click = Some(Click::Coins);
+                bot.count = 1;
+            } else if let Some(k) = first {
+                info!("showcase: furniture: taking slot {k} of {id}");
+                out.click = Some(Click::Cell(super::furniture::STORE_AT + k));
+                out.lmb_tap = true;
+                bot.count = 1;
+            } else {
+                info!("showcase: furniture: {id} is empty");
+                bot.pieces_passed.insert(id);
+                out.taps.push(KeyCode::Tab);
+            }
+        } else {
+            bot.want_still = true;
+            out.taps.push(KeyCode::Tab);
+        }
+        return Status::Running;
     }
     if bot.count > 0 && s.screen == Screen::Playing {
         return Status::Done;

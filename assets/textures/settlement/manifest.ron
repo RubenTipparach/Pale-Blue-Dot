@@ -99,5 +99,11 @@
     (name: "chestfront", width: 32, height: 32, repeat_m: 0.0),
     (name: "bandedside", width: 32, height: 32, repeat_m: 0.0),
     (name: "bandedfront", width: 32, height: 32, repeat_m: 0.0),
+    // `townsfolk` design 26b: the forge's coals, flame and anvil, drawn
+    // by tools/art/forge_art.py.
+    (name: "embers", width: 32, height: 32, repeat_m: 1.0),
+    (name: "forgefire", width: 32, height: 64, repeat_m: 0.0, cut: true),
+    (name: "anvil", width: 32, height: 32, repeat_m: 0.6),
+    (name: "anvilface", width: 32, height: 32, repeat_m: 0.6),
   ],
 )

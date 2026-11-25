@@ -216,7 +216,7 @@ fn a_state_met_mission_completes_on_open() {
     // After the campfire the trunk ends with the chest (`storage-chests` 9).
     assert_eq!(
         progress.line(&chain).as_deref(),
-        Some("A chest: make 0/1, place 0/1, store 0/1")
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
     );
 }
 
@@ -316,7 +316,7 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     // after the fire, is next.
     assert_eq!(
         read.line(&chain).as_deref(),
-        Some("A chest: make 0/1, place 0/1, store 0/1")
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
     );
 }
 
@@ -742,7 +742,7 @@ fn the_focus_is_the_one_mission_shown_and_goes_on_down_its_branch() {
     assert_eq!(progress.focused(&chain).unwrap().id, "ore");
     assert_eq!(
         progress.line(&chain).as_deref(),
-        Some("Find ore: ore 0/4, coal 0/3")
+        Some("Find ore: Dig ore 0/4, Dig coal 0/3")
     );
 }
 

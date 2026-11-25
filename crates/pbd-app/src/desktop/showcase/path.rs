@@ -3,6 +3,7 @@
 //! is its steps, each naming the blocks dug before the walker steps in.
 //! Nothing in the game's rules uses it; it is how the bot finds its way.
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use bevy::math::Vec3;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};

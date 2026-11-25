@@ -901,6 +901,124 @@ faked with a light of its own.
   (ask only with screenshots).
 - **The smith** keeps his post by the anvil from the template; nothing
   about him changes. Task 3.2's capture is the smith at the forge at 22:30.
+- **The fire and the anvil redone (2026-11-24), replaced by 26b on merge.**
+  Written before the code.
+  The first cut broke the owner's art rules, plainly in
+  `smith-forge-2045.jpg` and `forge-day.jpg`:
+  - *The fire was five pale cones* (each `Sink::flame`'s three crossed
+    blades) standing apart on the hearth: obvious primitives, untextured, one
+    flat colour. It is now **one flame form fitted to the bed**: a crown
+    lofted from an ellipse just inside the bed, tapering in as it rises, its
+    rim cut into tongues of uneven height that share one base, with a taller
+    core of fewer tongues inside it and a bed of coals under both. It is
+    drawn in a new pixel sheet, `forge_fire` (eight 16 by 32 px frames,
+    drawn by `tools/art/forge_art.py`, with its manifest row), whose ramp is
+    the terrain brazier's own two fire colours (`planet_surface.wgsl`:
+    white-gold 0.98, 0.66, 0.22 and orange 0.86, 0.28, 0.05) with a deep coal
+    red under them, red at the root to yellow at the tips, every colour kept
+    under the tonemapper's shoulder so it stays a fire at night, not a cream
+    cone. Each frame's alpha cuts the tongues' ragged edges, so the sheet
+    stepping at the held flame's 11 frames a second (`held.ron`'s
+    `flame_fps`) makes it flicker gently, as a held torch does; terrain fires
+    are still. It is unlit (it is its own light; the forge's brazier lamp
+    lights everything else) and casts nothing, as every town flame.
+  - *The anvil read as a dark blob*: two flat-shaded frustums in the
+    settlement `iron`, the darkest tile in the set, and a four-sided horn.
+    It is now **one smooth-shaded iron form**: rings of rounded section
+    lofted from a spread foot, in to a waist, out to a flat face with a hard
+    crease only at its edge, the horn lofted round off the face's end from
+    the face's own section and tapering to a point, the heel square. It
+    stands on a round elm stump (bark sides, timber end grain), so its face
+    keeps the old 0.72 m. Its sides are a new 32 px `anvil` tile and its
+    face a worn, lighter `anvilface` tile (forged iron's blue-grey, a value
+    up on `iron`, with hammer scale and wear), drawn by the same script. It
+    stays field-lit like the terrain (`LitByField`, `LitLikeTerrain` on the
+    town root).
+  - Look only: the pieces' cells, solids and lamps are unchanged and the
+    layout stays 3 (no world has shipped it). Captures: the two shots
+    retaken and `forge-close.jpg`, the fire and the anvil close up.
+
+**26b. The forge's fire and anvil, redone (2026-11-24).** Written before
+the code. *This is the redo that ships. A second redo landed on the branch
+from another session at the same time (26a's last bullet, "The fire and the
+anvil redone": a lofted flame crown in an animated `forge_fire` sheet and
+the anvil on a stump); on merging the two, this one was kept, its fire
+reading as tongues of flame and its anvil's face, horn and heel reading at
+the player's distance, with every shot retaken and the full suites green
+(recommendation taken, ask only with screenshots). The other is in the
+history at `5c99a764`; its flickering flame sheet is a follow-up to port.*
+Measured in the captures of 26a (`smith-forge-2230.jpg`,
+`forge-day.jpg`): the fire is five crossed-triangle tongues
+(`Sink::flame`) in one flat unlit colour, which read as five pale cones on
+the hearth; the anvil is two frustums and a four-faced horn in the town's
+`iron` texture, which reads as a dark blob with no face, horn or heel at
+the distance a player stands. Both break "No obvious primitives" (CLAUDE.md:
+"a part that reads as a primitive stuck on is redone, not shipped"). The
+first redo of this was lost uncommitted with its container; this is done
+again from the start.
+- **The fire is one shaped, textured flame.**
+  - A bed of coals fills the hearth bed: one low, lumpy surface (a grid
+    over the bed, its heights from a fixed hash, so it is the same every
+    load), in a new `embers` texture: dark clinker with glowing orange and
+    yellow seams. Drawn unlit (it is the light), as a flame is.
+  - Over it, one flame body: three ribbons crossed at 60 degrees through
+    the fire's middle, each a strip of several rows that narrows to the top
+    and leans a little, its outline cut by a new `forgefire` texture's
+    alpha: several tongues of uneven height, a white-yellow core at the
+    root through orange to red tips, painted pixel art in the town's
+    palette. One mesh, no cone: the tongues are in the texture, so the
+    silhouette is ragged and different from every side.
+  - Drawn unlit, alpha-masked, both faces, never baked, casting nothing:
+    the flame material's rules, with a texture. The `Brazier` lamp in the
+    field still does the lighting.
+- **The anvil is one lofted anvil.** A London-pattern profile along its
+  length, sections joined into one closed surface with shared edges and a
+  bevel at the face:
+  - a foot flared on four sides, drawn in to a waist, the body widening to
+    the face;
+  - the face flat on top, a step down to the table, and a horn tapering
+    to a rounded point and curving down a little; a square heel at the
+    other end;
+  - in two new textures: `anvil`, forged iron, dark grey-blue with lighter
+    worn edges and hammer marks, and `anvilface`, the polished steel top,
+    brighter, so the face catches the forge's light.
+  - It stays a solid to the walker, the same box as before.
+- **The art** is drawn in code by `tools/art/forge_art.py` (fixed seeds,
+  the settlement palette, no outlines), written to
+  `assets/textures/settlement/{embers,forgefire,anvil,anvilface}.png` and
+  listed in the manifest.
+- **Looked at close up** before it is shown: a capture from about 1.2 m off
+  the anvil with the hearth in frame (`forge-close.jpg`), plus the 26a
+  shots retaken. Only layout-3 towns have a forge, so no save changes.
+- **As built (2026-11-25, task 3.2b).** As written, with these
+  particulars and differences:
+  - The coals are a 10 by 7 grid over the hearth bed, 1.2 cm over it at
+    the bed's walls and heaped up to about 9 cm toward the fire's middle,
+    its triangles split on alternate diagonals; `embers` repeats every
+    metre.
+  - The flame is three ribbons of four rows, 0.56 m wide at the root and
+    0.3 m at the top, 0.47 to 0.55 m tall, each leaning 4 to 5 cm, every
+    other one mapped the other way round so the tongues differ from each
+    side; `forgefire` is 32 by 64, mapped once, `cut: true`.
+  - The anvil is one surface of two lofts joined: 13 sections along it
+    from the heel's end to the horn (twelve points round each, a bevelled
+    block blending to an ellipse along the horn), and below the body six
+    levels down through the waist to the foot, which share the body's
+    underside edge for edge; a fan closes the heel's end, the horn's point
+    and the foot. Normals are smooth across creases under 50 degrees and
+    never across the polished face's edge. It is 0.74 m tall (the walker's
+    box stays 0.72 m), shifted 3 cm along the forge's line so its heel
+    meets the end of its box (`ANVIL_SHIFT_M`); the horn reaches out past
+    the other end, as the old one's did.
+  - Not in the design: fire in the town is one rule, `towns::is_fire`
+    (`flame`, `embers`, `forgefire`): drawn unlit and both faces, never
+    baked, shown with the flames once the town is half there, and kept out
+    of the casters outside as well as in the rooms. An outside `flame` used
+    to cast; none is left outside now that the forge's tongues are gone.
+  - The anvil's palette is the settlement iron ramp, a touch cool: a
+    bluer first try read saturated blue in the shade.
+  - Captured on lavapipe (software): the look only, frame cost not
+    measured.
 
 **27. What other parts may use** (`pbd_app::townsfolk`):
 - `TownPerson { id: PersonId { site, index }, role }` is on the root of
@@ -1512,6 +1630,94 @@ connected in a network)").** Roads are now something the player builds
   only, so a new world still shows a road or two for the player to follow
   and widen.
 
+**43a. The world's own wide roads: roads version 4 (2026-11-25, task
+8.6, on the owner's "cool implement all the phase 3 stuff!" and design 10b;
+written before the code).** The player's planner lays two- and three-wide
+roads (42l, 42m); the world's own roads are still one wide.
+- **What the world lays wide.** A gravel road between two walled towns is
+  two wide; inside a large town's gate (the cells within the larger town's
+  footprint) it is three wide. Dirt roads stay one wide. The links are
+  version 3's (design 43): the same pairs, the same order, the same
+  centre line; only the lanes are added.
+- **Lanes as the player's are.** Each lane is the centre line moved one
+  lattice step to the side, on the one shared plane of 42m (the lane bed,
+  the plane moved down the hill where that saves a cut, straight climbs),
+  bends and junctions only on the level; a lane cell the planner refuses
+  ("Too steep across", a settlement's footprint outside its gate, a cell of
+  another road) is left out and the road is narrower there, never bent to
+  fit. Wide bridges railed outside, and lamps both sides of a three-wide
+  stretch, as 42m. The same code as the player's planner, not a copy.
+- **A new roads version, for worlds planned from now on.** The net record
+  says `version: 4`; `RoadsConfig` gains `gravel_width` (2) and
+  `gate_width` (3), and `for_version(3)` and below set both to 1, which is
+  the old rule. A world planned by version 1, 2 or 3 is never planned again
+  and keeps every road it has, cell for cell. Pinned before the change by a
+  count and digest of version 3's cells on a fixed layout of settlements
+  (`roads::tests::version_3_cells_are_pinned`).
+- **Verify:** a core test that a version-4 gravel link between two walled
+  towns is two wide along its length (where no lane is refused) and three
+  wide inside the large town's gate; the walker test of 42m holds on a
+  world road; a capture of a world wide road up a slope.
+- **As built (2026-11-25).** Where the plan left a choice, each is a
+  recommendation taken (ask only with screenshots):
+  - **The gate is the road's end at the town.** A world road's cells stop
+    at a town's footprint (design 10a: the town's lanes are the road
+    there), so "inside the gate" is the stretch where the road meets the
+    footprint: the last `gate_cells` (6, a new tunable beside
+    `gravel_width` and `gate_width` in `roads.ron`) centre cells at each
+    end. Both ends of a gravel road are walled towns, so both ends are
+    three wide; no road cell is laid in a footprint.
+  - **One implementation.** `planner::Lanes` takes the width at each
+    centre cell and the stretches of the centre line each laid beside by
+    one lattice step; `Lanes::widen` is the plane's choice (flat, or moved
+    down the hill half a cell at a time). The player's planner passes one
+    stretch, the whole line, so its roads lay cell for cell as before (its
+    tests unchanged). A world road's stretches are its straight runs: on
+    one face and no further than a cell's spacing off the great circle
+    between their ends, so a lane runs beside the route's own wiggle. The
+    bend rule is `planner::wide_bends`, the lamp verge `planner::verge`.
+  - **What is left out.** A lane the planner refuses (a town, the
+    player's work, "Too steep across", "Too wide to bridge"), one beside a
+    centre cell that bends or zigzags on or beside a rise, and one that is
+    or touches a cell of another road (so no two pairs meet on the ground,
+    design 43). The centre cells are re-read off the plane chosen (a bed
+    where the plane was moved), never moved.
+  - **The record.** A road with lanes or a bed is a `road` record of
+    schema 3 (`LANES_SCHEMA`): every cell with its cut or fill and its bed,
+    and the lanes with the centre cell each lies beside and its side.
+    Schema 1 and 2 records read as before. The net record says
+    `version: 4`.
+  - **In the game.** `RoadNet` lays the lanes after their road; a bridge
+    cell of a wide road is railed only on its sides with no cell of the
+    road beside it. The lamps near a town (design 34) stand beside a wide
+    road's outermost cell on its left, and on both sides of its three-wide
+    stretch.
+  - **Tests.** `roads::tests::version_3_cells_are_pinned` (taken first:
+    916 cells, in dirt and every town walled in gravel);
+    `a_gravel_road_between_walled_towns_is_two_wide_and_three_at_the_gate`
+    (flat ground: a road cell beside every centre cell on the left, and on
+    both sides of the six at each end; the schema 3 record reads back;
+    version 3 lays the same centre line one wide in schema 1; dirt stays
+    one wide); `a_world_wide_road_up_ten_layers_is_crossed_lane_to_lane_
+    without_a_step` (two walled towns along a row, a hill of ten layers up
+    and down between: seams under 3 cm, nothing steeper than 0.37 m a
+    metre, lanes on beds and never cut); in the app,
+    `a_new_world_lays_its_gravel_road_wide_and_a_version_3_world_keeps_its_own`
+    (on the start's rolling ground about half the lane cells are left out,
+    "Too steep across" or beside a bend on a rise; a save whose net record
+    says version 3 is read as it is, never planned again).
+  - **No world wide road in a new world on the shipped rules.** Walled
+    towns are placed at least `spacing_m` 2,500 m apart (`sites.ron`) and
+    version 3 links only pairs within `link_m` (2,000 m), with the walled
+    towns' long link dropped (design 43). So no two walled towns are ever
+    linked, no world road is gravel, and version 4 lays no lane on the
+    shipped seed: a new world's plan logs 8 roads, all dirt (2026-11-25).
+    The capture of a world wide road up a slope cannot be taken until a
+    walled pair is linked; that is a change to the links (design 43's
+    rule), left for the owner. The lanes' look on a slope is the player's
+    wide road's, the same pieces; that capture (`road-slope.jpg`) is still
+    owed: the takes of 2026-11-25 did not frame the road (see task 14.5).
+
 **44. Grass tufts go at once from a paved or marked cell (owner,
 2026-11-22: "ok").** A cell the player paves or marks has no pixel tufts
 from that moment, not from the world's next open (the known issue
@@ -1566,8 +1772,9 @@ build").** What the game does, and where it differs from the plan:
 - **Held paving** paves the nearest marked cell within 4 m of the aim every
   `pave_beat_s` (0.45 s) while F is held with the shovel in hand.
 - **Not yet built:** the half-strength preview of the next stake's cells,
-  the compass tick and the map's stakes, and the shovel's stroke and the
-  gravel tipping out as a cell is paved.
+  the map's stakes, and the shovel's stroke and the gravel tipping out as
+  a cell is paved. (The compass tick is built, 2026-11-25: 42d's "As
+  built".)
 - **For the town tree** (`town-missions-tree` design 4): every stake, mark
   and paving raises `pbd_app::roads::paving::RoadWork` (`Stake`,
   `Mark(cells)`, `Pave`) on the frame its line is accepted; the grinder's
@@ -1700,6 +1907,20 @@ site HUD):
   and "12 of 38 left";
 - the aim's segment shows what the next stake would add, so its cost is seen
   before it is driven.
+- **As built (2026-11-25, task 14.5).** The bill and the HUD line are
+  `planner::bill` and `planner::hud_line` (42l). The compass tick, which
+  this decision did not draw, is the building site's (`building-planner`
+  design 6), recommendation taken (ask only with screenshots): with the
+  shovel in hand on foot, the nearest marked cell not yet paved within
+  `ghost_reach_m` (60 m) is a red pin on the compass bar
+  (`roads::paving::PaveTick`, set by `pave_tick`), after the site's next
+  piece and before the player's waypoints, named "Next cell" with its
+  distance when it is the one faced (`roads.pave.next`). The marks are
+  laid out again only when the save changes. Pinned by the app test
+  `the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red`: the bill
+  falls by one gravel and one cell left for each cell paved, the line is
+  red while the pack is short of gravel and not once it holds enough, and
+  the tick moves on to the next cell as each is paved.
 
 **42e. Lamps.** With lamps on, a lamp post stands beside every
 `lamp_spacing`th cell (6) of the centre line, on the left verge, outside the

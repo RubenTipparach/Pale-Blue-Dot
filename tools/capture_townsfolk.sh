@@ -17,6 +17,8 @@ GUARD="--walk --at 29.112494 8.325739 --yaw -92.3 --pitch -8"
 # The forge (design 26a): 3.5 m off the side of the line from the anvil to
 # the forge, the smith at the anvil and the forge in view.
 FORGE="--walk --at 29.841288 1.500769 --yaw -90.8 --pitch -10"
+# Close up (design 26b): 1.2 m off the anvil's side, the hearth in frame.
+FORGE_CLOSE="--walk --at 29.868633 1.475514 --yaw -128 --pitch -30"
 # The idle look (task 2.2): Linenleigh's merchant idling at his post, from
 # capture_talk.sh's STALL_FAR (the gate guard's and the stallholder's spots
 # show a door and a back since the towns were laid again).
@@ -68,6 +70,14 @@ fi
 [ "$ONLY" = all ] && shot smith-face "" $SMITH_FRONT --time 11
 [ "$ONLY" = all ] && shot smith-forge-2230 "" $FORGE --time 22.5
 [ "$ONLY" = all ] && shot forge-day "" $FORGE --time 11
+# The forge's fire and anvil (design 26b): ONLY=forge takes just these.
+if [ "$ONLY" = forge ]; then
+  shot smith-forge-2045 "" $FORGE --time 20.45
+  shot smith-forge-2230 "" $FORGE --time 22.5
+  shot forge-day "" $FORGE --time 11
+  shot forge-close "" $FORGE_CLOSE --time 11
+  exit 0
+fi
 shot market-day "" $MARKET --time 11
 shot gate-guard "" $GUARD --time 11
 for e in surprised sleepy delighted worried cross thinking; do

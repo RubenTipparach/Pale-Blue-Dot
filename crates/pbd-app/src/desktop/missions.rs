@@ -64,7 +64,7 @@ pub const TABS: [(&str, Screen); 5] = [
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
-    // The tracker, under the compass strip at the right.
+    // The tracker, at the left under the position readout.
     let row = || Node {
         flex_direction: FlexDirection::Row,
         align_items: AlignItems::Center,
@@ -87,8 +87,11 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
             kit.nine(Set::Stone, "frame"),
             Node {
                 position_type: PositionType::Absolute,
-                right: px(6),
-                top: px(36),
+                // At the left, under the position readout's two lines
+                // (owner, 2026-11-17: "Move it to the left side of the
+                // screen").
+                left: px(6),
+                top: px(62),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexStart,
                 row_gap: px(3),
@@ -318,7 +321,18 @@ pub fn show_line(
             };
             set(
                 &mut words,
-                Localized::verbatim(format!("{} {n}/{}", o.label, o.count)),
+                // A distance counts in metres ("Swim 4/20 m").
+                if matches!(
+                    o.kind,
+                    pbd_core::missions::Kind::Swim | pbd_core::missions::Kind::Travel
+                ) {
+                    tr_with(
+                        "missions.objective_metres",
+                        &[("label", &o.label), ("count", &n), ("total", &o.count)],
+                    )
+                } else {
+                    Localized::verbatim(format!("{} {n}/{}", o.label, o.count))
+                },
                 c,
             );
         }

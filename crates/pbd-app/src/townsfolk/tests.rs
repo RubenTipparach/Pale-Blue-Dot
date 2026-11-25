@@ -119,6 +119,8 @@ fn others_can_set_a_face_and_drive_a_person() {
                 focus: false,
             },
             talking: false,
+            held: None,
+            behind: 0.0,
             person,
         }],
     });
@@ -173,4 +175,58 @@ fn others_can_set_a_face_and_drive_a_person() {
     let l = folk.live(id).unwrap();
     assert!(l.driven.is_none() && l.posture.is_none() && l.walk.is_none());
     assert!(!folk.leave(id, post), "a person not resting is left alone");
+}
+
+/// A person talked to holds where they stood, standing, for the length of
+/// the talk; let go, they go on from that place, their round as far behind
+/// the town's as the talk lasted (`playtest-fixes-2026-11-25` 1).
+#[test]
+fn a_talk_holds_a_person_and_they_go_on_from_where_they_stopped() {
+    let mut folk = Townsfolk::default();
+    let mut person = proxy_person();
+    person.id = PersonId { site: 4, index: 0 };
+    let id = person.id;
+    let radius = 100.0;
+    folk.clock = 10.0;
+    let placed = person.at(folk.clock, radius);
+    folk.towns.push(Folk {
+        site: 4,
+        live: vec![Live {
+            mood: Mood::new(Expression::Neutral),
+            face: Face::new(1, Expression::Neutral),
+            body: Body::new(1),
+            forward: placed.forward,
+            placed,
+            driven: None,
+            posture: None,
+            walk: None,
+            door: None,
+            chosen: Chosen {
+                expression: Expression::Neutral,
+                focus: false,
+            },
+            talking: false,
+            held: None,
+            behind: 0.0,
+            person: person.clone(),
+        }],
+    });
+    assert!(folk.set_talking(id, true));
+    // Held every frame the talk is open: the first call holds.
+    folk.clock = 25.0;
+    assert!(folk.set_talking(id, true));
+    let l = folk.live(id).unwrap();
+    let held = place_of(l, 40.0, radius);
+    assert_eq!(held.feet, placed.feet, "stands where the talk began");
+    assert!(!held.walking, "and does not walk");
+    folk.clock = 40.0;
+    assert!(folk.set_talking(id, false));
+    let l = folk.live(id).unwrap();
+    assert!((l.behind - 30.0).abs() < 1e-9, "thirty seconds behind");
+    assert_eq!(
+        place_of(l, 40.0, radius).feet,
+        placed.feet,
+        "goes on from the same place, no jump"
+    );
+    assert_eq!(place_of(l, 45.0, radius).feet, person.at(15.0, radius).feet);
 }

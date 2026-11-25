@@ -287,8 +287,8 @@ fn drum(
     let stops = [-1.0, -0.94, -0.6, -0.2, 0.2, 0.6, 0.94, 1.0];
     let rings: Vec<Vec<Vec3>> = stops
         .iter()
-        .map(|&t| {
-            let end = if (t as f32).abs() > 0.99 { 0.86 } else { 1.0 };
+        .map(|&t: &f32| {
+            let end = if t.abs() > 0.99 { 0.86 } else { 1.0 };
             let r = profile(t) * end;
             ring(centre + axis * (t * half), axis, Vec3::Y, r, r, sides, 0.0)
         })

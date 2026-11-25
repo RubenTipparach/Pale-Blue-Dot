@@ -17,6 +17,7 @@
 //! destroys an item. Excess goes in a chest, opened beside the pack with F
 //! in the hold panel's place, or is dropped.
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use super::slots::{self, Hotbar, ItemIcons, SlotCell};
 use bevy::prelude::*;
@@ -987,7 +988,6 @@ pub fn paint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pbd_core::vehicle::hold::HOLD;
 
     /// With a raft's hold open, a click picks a stack up out of the hold and
     /// a second puts it down in the pack, and a shift-click sends a stack of
