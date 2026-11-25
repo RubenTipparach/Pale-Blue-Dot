@@ -683,7 +683,7 @@ mod tests {
                 .iter()
                 .all(|c| c.cascades as usize == crate::planet::shadow::CASCADE_COUNT)
         );
-        assert!(PLOT_CASTER_ID > 1 << 24, "past every site id");
+        const { assert!(PLOT_CASTER_ID > 1 << 24, "past every site id") };
     }
 
     /// `player-building` design B7: the footing's texture has its manifest

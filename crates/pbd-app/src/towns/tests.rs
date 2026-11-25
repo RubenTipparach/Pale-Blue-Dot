@@ -467,11 +467,18 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
         .map(|b| b.positions.len())
         .sum::<usize>();
     assert!(flames > 0, "the hearths and sconces burn");
+    // The forge's coals and flame (`townsfolk` design 26b) cast nothing.
+    let fire_outside = laid
+        .meshes
+        .iter()
+        .filter(|(name, _)| is_fire(name))
+        .map(|(_, b)| b.positions.len())
+        .sum::<usize>();
     assert_eq!(
         casting(&laid, crate::planet::shadow::CASCADE_COUNT)
             .positions
             .len(),
-        outside + inside - flames
+        outside + inside - flames - fire_outside
     );
     // Decision 7a: a building's rooms carry its lights, a house's hearth
     // first, into their material.
@@ -2615,6 +2622,11 @@ fn print_where_to_stand_for_the_townsfolk_shots() {
         for (name, s) in [("left", 1.0), ("right", -1.0)] {
             let stand = middle + across * (3.5 * s);
             spot(&format!("the forge from its {name}"), stand, middle - stand);
+            // Close up (design 26b): 1.2 m off the anvil's side and a little
+            // back from it, looking past it to the hearth.
+            let stand = anvil + across * (1.2 * s) + back * 0.4;
+            let look = anvil + (forge - anvil) * 0.4;
+            spot(&format!("the anvil close, its {name}"), stand, look - stand);
         }
     }
     let walled = load_template("town");
@@ -2735,4 +2747,30 @@ fn print_the_days_linenleighs_board_posts_a_lost_villager() {
             }
         }
     }
+}
+
+/// Every texture the settlement manifest lists is on disk at the size it
+/// lists, the forge's new ones (`townsfolk` design 26b) among them; the
+/// forge's flame is cut out and its coals are not.
+#[test]
+fn the_settlement_textures_are_there_at_their_listed_sizes() {
+    let manifest = load_manifest();
+    for t in &manifest.textures {
+        let path = asset(&format!("textures/settlement/{}.png", t.name));
+        let (w, h) =
+            image::image_dimensions(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        assert_eq!((w, h), (t.width, t.height), "{}", t.name);
+    }
+    for name in [
+        smithy::EMBERS,
+        smithy::FORGEFIRE,
+        smithy::ANVIL,
+        smithy::ANVIL_FACE,
+    ] {
+        assert!(manifest.textures.iter().any(|t| t.name == name), "{name}");
+    }
+    assert!(cut_textures().contains(smithy::FORGEFIRE));
+    assert!(!cut_textures().contains(smithy::EMBERS));
+    assert!(is_fire(smithy::FORGEFIRE) && is_fire(smithy::EMBERS) && is_fire(FLAME));
+    assert!(!is_fire(smithy::ANVIL) && !is_fire("net"));
 }

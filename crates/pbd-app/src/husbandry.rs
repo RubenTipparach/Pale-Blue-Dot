@@ -2819,7 +2819,7 @@ const HEARTS_RISE_M: f32 = 0.6;
 const HEART_PX: (f32, f32) = (22.0, 20.0);
 
 /// Spawn the rows a feed asked for, then move and fade every row.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn hearts(
     mut commands: Commands,
     world: World,

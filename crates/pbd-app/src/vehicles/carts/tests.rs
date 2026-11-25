@@ -84,7 +84,8 @@ fn letting_go_keeps_the_cart_and_it_is_taken_again() {
     for kind in CartKind::ALL {
         let id = 60 + kind as u64;
         let e = spawn(&mut world, Cart::new(id, kind, at(), DVec3::Z));
-        let (take, leave): (fn(&mut World, Entity), fn(&mut World, Entity)) = match kind {
+        type Step = fn(&mut World, Entity);
+        let (take, leave): (Step, Step) = match kind {
             CartKind::HandCart => (take_handles, let_go),
             CartKind::HorseCart => (take_seat, step_down),
         };

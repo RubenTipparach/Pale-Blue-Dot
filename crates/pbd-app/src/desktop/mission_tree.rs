@@ -8,6 +8,7 @@
 //! a branch reads as one straight line and its side chains hang below; a
 //! card sits on its first child's row. `after` gates are never drawn.
 
+#![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
@@ -995,6 +996,7 @@ fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {
 
 /// Show the other tree: the tab's tree rebuilt for it and its view opened
 /// afresh. A world whose town tree is not open shows the starter tree.
+#[allow(clippy::too_many_arguments)] // A Bevy system.
 pub fn switch_tree(
     mut commands: Commands,
     kit: Res<UiKit>,

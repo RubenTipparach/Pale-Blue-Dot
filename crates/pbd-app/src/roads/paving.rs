@@ -496,9 +496,12 @@ pub fn pave(
     Ok(cell)
 }
 
+/// The marked cells with their sides, and the paved cells marked for removal.
+pub type Marks = (BTreeMap<u32, (Option<u32>, Option<u32>)>, Vec<u32>);
+
 /// Every marked cell (a plan's cell not paved) with its sides, and the
 /// paved cells marked for removal.
-pub fn marks(save: &WorldSave) -> (BTreeMap<u32, (Option<u32>, Option<u32>)>, Vec<u32>) {
+pub fn marks(save: &WorldSave) -> Marks {
     let config = crate::planet::terrain_config();
     let pcfg = load_planner_cached();
     let plans = planner::plans(&save.records);
@@ -509,6 +512,65 @@ pub fn marks(save: &WorldSave) -> (BTreeMap<u32, (Option<u32>, Option<u32>)>, Ve
         planner::marked(&cells, &built),
         planner::for_removal(&cells, &built),
     )
+}
+
+/// The compass's tick while paving (`townsfolk` design 42d, task 14.5): the
+/// nearest marked cell not yet paved, as a planet-local point, while the
+/// shovel is in hand on foot within the planner's `ghost_reach_m` of it.
+/// Drawn as the building site's tick is (`building-planner` design 6).
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub struct PaveTick(pub Option<Vec3>);
+
+/// The marked cell nearest `at` (a planet-local point) within `reach_m`, by
+/// distance then key.
+pub fn nearest_unpaved(marked: &[u32], at: Vec3, reach_m: f32) -> Option<u32> {
+    let radius = at.length();
+    let d = at.normalize_or(Vec3::Y);
+    marked
+        .iter()
+        .filter_map(|&k| {
+            let m = roads::centre(k)?.distance(d) * radius;
+            (m <= reach_m).then_some((m, k))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
+        .map(|(_, k)| k)
+}
+
+/// Point the compass at the next cell to pave ([`PaveTick`]). The marks are
+/// laid out again only when the save changes.
+#[allow(clippy::type_complexity)]
+pub fn pave_tick(
+    (tools, walking, save): (
+        Option<Res<crate::fish::ToolSlot>>,
+        Option<Res<crate::walking::WalkingReadout>>,
+        Option<Res<WorldSave>>,
+    ),
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    pcfg: Res<PlannerSettings>,
+    mut tick: ResMut<PaveTick>,
+    mut marked: Local<(Option<u64>, Vec<u32>)>,
+) {
+    let shovel = tools.is_some_and(|t| t.0.held() == Some(pbd_core::inventory::Tool::Shovel));
+    let on_foot = walking.is_some_and(|w| w.active);
+    let eye = cameras
+        .iter()
+        .find(|(_, c)| c.is_active)
+        .map(|(t, _)| crate::render_origin::local_of(frame.as_deref(), t.translation()));
+    let (Some(save), Some(eye), true, true) = (save, eye, shovel, on_foot) else {
+        if tick.0.is_some() {
+            tick.0 = None;
+        }
+        return;
+    };
+    if marked.0 != Some(save.serial()) {
+        *marked = (Some(save.serial()), marks(&save).0.into_keys().collect());
+    }
+    let want = nearest_unpaved(&marked.1, eye, pcfg.0.ghost_reach_m)
+        .and_then(|k| Some(roads::centre(k)? * crate::planet::terrain_config().radius_m));
+    if tick.0 != want {
+        tick.0 = want;
+    }
 }
 
 /// The planner's tunables read once, for code with no system parameters.

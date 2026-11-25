@@ -527,6 +527,7 @@ fn a_road(from: u32, to: u32, n: usize) -> pbd_core::roads::Road {
         to_site: to,
         surface: pbd_core::roads::Surface::Gravel,
         cells,
+        lanes: Vec::new(),
     }
 }
 

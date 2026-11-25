@@ -77,6 +77,7 @@ impl Logs {
 
 /// Read the logs from the save when a world is opened; step every log near
 /// the camera in its water, and write what the save must hear.
+#[allow(clippy::too_many_arguments)]
 pub fn step(
     time: Res<Time>,
     mut logs: ResMut<Logs>,

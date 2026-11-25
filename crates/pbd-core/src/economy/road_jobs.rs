@@ -135,6 +135,7 @@ mod tests {
             to_site: 2,
             surface: crate::roads::Surface::Gravel,
             cells,
+            lanes: Vec::new(),
         };
         let out = outward(&road, 2).unwrap();
         assert_eq!(out[0].key, 19);

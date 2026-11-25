@@ -105,6 +105,7 @@ impl RoadNet {
         let mut cells = Vec::new();
         let mut chunks = Vec::new();
         for road in roads {
+            let first = cells.len();
             let mut chunk: Vec<usize> = Vec::new();
             for (k, cell) in road.cells.iter().enumerate() {
                 if !seen.insert(cell.key) || built.contains_key(&cell.key) {
@@ -125,8 +126,47 @@ impl RoadNet {
                     chunks.push(std::mem::take(&mut chunk));
                 }
             }
-            if !chunk.is_empty() {
-                chunks.push(chunk);
+            // A wide road's lanes (roads version 4, `townsfolk` design
+            // 43a). On a wide road a bridge cell is railed only along its
+            // sides with no cell of the road beside them, so a wide bridge
+            // is railed outside and open between its lanes (design 42m).
+            if !road.lanes.is_empty() {
+                let mine: BTreeSet<u32> = road.every_cell().map(|c| c.key).collect();
+                let beside = |key: u32| -> Vec<u32> {
+                    roads::neighbours(key)
+                        .into_iter()
+                        .filter(|n| mine.contains(n))
+                        .collect()
+                };
+                for laid in &mut cells[first..] {
+                    if matches!(laid.cell.kind, roads::Kind::Bridge { .. }) {
+                        laid.neighbours = beside(laid.cell.key);
+                    }
+                }
+                let mut chunk: Vec<usize> = Vec::new();
+                for lane in &road.lanes {
+                    let cell = lane.cell;
+                    if !seen.insert(cell.key) || built.contains_key(&cell.key) {
+                        continue;
+                    }
+                    let neighbours = if matches!(cell.kind, roads::Kind::Bridge { .. }) {
+                        beside(cell.key)
+                    } else {
+                        Vec::new()
+                    };
+                    chunk.push(cells.len());
+                    cells.push(Laid {
+                        cell,
+                        surface: road.surface,
+                        neighbours,
+                    });
+                    if chunk.len() == CHUNK_CELLS {
+                        chunks.push(std::mem::take(&mut chunk));
+                    }
+                }
+                if !chunk.is_empty() {
+                    chunks.push(chunk);
+                }
             }
         }
         let mut mine = Vec::new();
@@ -253,22 +293,29 @@ fn log_road(road: &Road) {
     let first = |f: &dyn Fn(&RoadCell) -> bool| road.cells.iter().position(f);
     let m = spot(Some(road.cells.len() / 2));
     let c = spot(first(&|c| c.up.is_some()));
+    // A wide road's first climb with a lane beside it (design 43a).
+    let laned: BTreeSet<u32> = road.lanes.iter().map(|l| l.centre).collect();
+    let w = spot(first(&|c| c.up.is_some() && laned.contains(&c.key)));
     let bridge = first(&|c| matches!(c.kind, roads::Kind::Bridge { .. }));
     let b = spot(bridge);
     // The bank before it, at the deck's height: where to stand to walk on.
     let bank = spot(bridge.and_then(|k| k.checked_sub(1)));
     info!(
-        "road {} to {} ({:?}, {} cells): middle --at {:.5} {:.5} --yaw {:.1}; first climb --at {:.5} {:.5} --yaw {:.1}; first bridge --at {:.5} {:.5} --yaw {:.1}; its bank --at {:.5} {:.5} --yaw {:.1}",
+        "road {} to {} ({:?}, {} cells, {} lane cells): middle --at {:.5} {:.5} --yaw {:.1}; first climb --at {:.5} {:.5} --yaw {:.1}; first wide climb --at {:.5} {:.5} --yaw {:.1}; first bridge --at {:.5} {:.5} --yaw {:.1}; its bank --at {:.5} {:.5} --yaw {:.1}",
         road.from_site,
         road.to_site,
         road.surface,
         road.cells.len(),
+        road.lanes.len(),
         m[0],
         m[1],
         m[2],
         c[0],
         c[1],
         c[2],
+        w[0],
+        w[1],
+        w[2],
         b[0],
         b[1],
         b[2],
@@ -1150,6 +1197,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<RoadSay>()
             .init_resource::<paving::MarksShown>()
             .init_resource::<paving::PlannerSettings>()
+            .init_resource::<paving::PaveTick>()
             .init_resource::<planner::Planner>()
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
@@ -1173,6 +1221,7 @@ impl Plugin for RoadsPlugin {
                     planner::planner_aim,
                     planner::planner_hands,
                     road_hands,
+                    paving::pave_tick,
                     stand_roads,
                     paving::stand_stakes,
                     paving::follow_marks,

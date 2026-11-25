@@ -1567,13 +1567,16 @@ fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
     }
 }
 
+/// One mesh to bend: its handle, its positions, its sway and its phase.
+type BendJob<'a> = (Handle<Mesh>, Vec<[f32; 3]>, &'a Sway, f32);
+
 /// Bend every tile's swaying meshes this frame asks for (`Drawn::bend_now`):
 /// each mesh's position buffer taken out, filled on every core at once, and
 /// put back (`ocean-environments` B31: 400,000 reef vertices bent one tile
 /// after another held the main thread 28 ms a frame). The same positions the
 /// one-by-one bend made, so the same look. Returns the vertices written.
 fn bend_all(drawn: &HashMap<Key, Drawn>, meshes: &mut Assets<Mesh>, seconds: f32) -> usize {
-    let mut jobs: Vec<(Handle<Mesh>, Vec<[f32; 3]>, &Sway, f32)> = Vec::new();
+    let mut jobs: Vec<BendJob> = Vec::new();
     for tile in drawn.values() {
         let pairs = [
             (

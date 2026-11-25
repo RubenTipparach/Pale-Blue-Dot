@@ -42,6 +42,13 @@
     // roads joins at most `max_network` settlements (2: each town to one
     // other at most). A world planned by version 1 or 2 keeps its roads.
     max_network: 2,
+    // Roads version 4 (`townsfolk` design 43a): a gravel road between two
+    // walled towns is `gravel_width` cells wide, and `gate_width` for its
+    // `gate_cells` cells at each town's gate; dirt roads stay one wide. A
+    // world planned by version 1, 2 or 3 keeps its one-wide roads.
+    gravel_width: 2,
+    gate_width: 3,
+    gate_cells: 6,
     // Survey stakes (`townsfolk` design 39): at most `max_stake_cells`
     // cells between two stakes, found looking at most `stake_expanded`.
     max_stake_cells: 24,

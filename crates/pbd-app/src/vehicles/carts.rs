@@ -480,10 +480,10 @@ fn what_f_does(world: &mut World) -> Option<(Act, Entity, pbd_core::locale::Loca
         }
     }
     // A kept plodder or horse beside the player: ridden (design 14).
-    if let Some((d, id)) = riding::mountable(world, feet) {
-        if best.as_ref().is_none_or(|b| d < b.0) {
-            best = Some((d, Act::Ride, Entity::PLACEHOLDER, animal_name(world, id)));
-        }
+    if let Some((d, id)) = riding::mountable(world, feet)
+        && best.as_ref().is_none_or(|b| d < b.0)
+    {
+        best = Some((d, Act::Ride, Entity::PLACEHOLDER, animal_name(world, id)));
     }
     best.map(|(_, a, e, t)| (a, e, t))
 }
@@ -1134,6 +1134,7 @@ pub mod missions {
 
 /// Each frame: every cart placed where it stands, its mesh rebuilt as its
 /// wheels turn, and the horse in its shafts walked by the distance rolled.
+#[allow(clippy::too_many_arguments)]
 fn draw(
     mut commands: Commands,
     frame: Res<PlanetRenderFrame>,

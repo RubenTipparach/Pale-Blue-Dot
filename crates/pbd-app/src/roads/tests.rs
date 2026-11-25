@@ -45,6 +45,85 @@ fn a_save_from_before_roads_gains_them_once_in_place() {
     assert_eq!(again.cells, net.cells);
 }
 
+/// Roads version 4 (`townsfolk` design 43a): two walled towns on the
+/// shipped seed's start are joined by a gravel road the world lays wide,
+/// every lane of it laid with the centre line; and a world whose roads
+/// version 3 planned is read as it is, one wide, never planned again.
+#[test]
+fn a_new_world_lays_its_gravel_road_wide_and_a_version_3_world_keeps_its_own() {
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let towns: Vec<Site> = villages(150.0)
+        .into_iter()
+        .map(|s| Site {
+            kind: SiteKind::Walled,
+            ..s
+        })
+        .collect();
+    let mut save = WorldSave::memory_only();
+    let (net, _) = prepare(&mut save, &towns, &config, &cfg);
+    assert_eq!(roads::net_version(&save.records), Some(4));
+    let stored = roads::stored(&save.records);
+    assert_eq!(stored.len(), 1);
+    let road = &stored[0];
+    assert_eq!(road.surface, Surface::Gravel);
+    // On the start's rolling ground a lane off the road's plane, or beside
+    // a bend on a rise, is left out: wide where the ground allows it.
+    assert!(
+        road.lanes.len() * 3 > road.cells.len(),
+        "{} lane cells beside {}",
+        road.lanes.len(),
+        road.cells.len()
+    );
+    let laid: BTreeSet<u32> = net.cells.iter().map(|l| l.cell.key).collect();
+    assert!(road.every_cell().all(|c| laid.contains(&c.key)));
+    assert_eq!(net.cells.len(), road.every_cell().count());
+    // A world planned by version 3: its road and its net record as that
+    // version wrote them.
+    let ground = {
+        let empty = (Edits::new(), YieldSet::new(), BTreeMap::new());
+        let g = ground_of(&config, &empty.0, &empty.1, &empty.2);
+        roads::plan(
+            &settlements(&towns),
+            &g,
+            &cfg.for_version(3),
+            config.radius_m,
+            1,
+        )
+    };
+    assert!(ground[0].lanes.is_empty());
+    let mut old = WorldSave::memory_only();
+    let mut records: Vec<_> = ground.iter().map(roads::to_record).collect();
+    records.push(pbd_core::records::Record::of(
+        roads::ROAD_NET_RECORD,
+        0,
+        roads::RECORD_SCHEMA,
+        &roads::NetBody {
+            version: 3,
+            roads: ground.len() as u32,
+        },
+    ));
+    old.propose(
+        &author(),
+        Proposal {
+            edits: Vec::new(),
+            records,
+        },
+    )
+    .unwrap();
+    let before = old.records.len();
+    let (net3, seq) = prepare(&mut old, &towns, &config, &cfg);
+    assert_eq!(seq, 0, "nothing is planned again");
+    assert_eq!(old.records.len(), before);
+    assert_eq!(roads::net_version(&old.records), Some(3));
+    assert_eq!(roads::stored(&old.records), ground);
+    assert_eq!(
+        net3.cells.len(),
+        ground[0].cells.len(),
+        "one wide, cell for cell"
+    );
+}
+
 /// `world/roads`, "A player's house on the route": a cell the player
 /// changed before the plan is never on a road; one changed after it is
 /// left out when the road is cut, and the player's cell is unchanged.
@@ -278,7 +357,7 @@ fn the_player_lays_gravel_and_dirt_and_takes_them_up() {
     // Dry ground near the start: the first of a few cells east that is.
     let dry = (0..40)
         .map(|k| (start + east * (k as f32 * 3.0 / config.radius_m)).normalize())
-        .filter_map(|d| roads::nearest_key(d))
+        .filter_map(roads::nearest_key)
         .find(|&k| {
             let c = roads::centre(k).unwrap();
             let top = pbd_core::column::surface_m(&config, c);
@@ -767,4 +846,93 @@ fn the_planner_view_eases_up_with_stakes_in_hand_and_back_down() {
         .resource::<PlannerLift>()
         .offset(Vec3::Y, Vec3::NEG_Z);
     assert_eq!((offset, tilt), (Vec3::ZERO, 0.0), "the walker's own eye");
+}
+
+/// `townsfolk` design 42d (task 14.5): the planner's bill falls by one
+/// gravel for each cell paved, and the HUD line is drawn red while the pack
+/// is short of a good it names and not once it holds enough; with the
+/// shovel in hand the compass's tick is on the nearest cell not yet paved.
+#[test]
+fn the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red() {
+    use pbd_core::goods::Good;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::roads::planner as core;
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let pcfg = paving::load_planner();
+    assert_eq!(pcfg.cost_scale, 1.0, "one gravel a cell");
+    let (a, b) = staked_ground();
+    let (ka, kb) = (paving::key_of(a).unwrap(), paving::key_of(b).unwrap());
+    let mut save = WorldSave::memory_only();
+    let mut slots = Slots::new();
+    let (stake, gravel) = (Item::Good(Good::SURVEY_STAKES), Item::Good(Good::GRAVEL));
+    slots.give(stake, 4);
+    paving::end_road(
+        &mut save,
+        &mut slots,
+        ka,
+        kb,
+        core::How::default(),
+        &|_| false,
+        &config,
+        &cfg,
+        &pcfg,
+    )
+    .unwrap();
+    let bill = |save: &WorldSave| {
+        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+        core::bill(
+            &core::plans(&save.records),
+            None,
+            &roads::built(&save.records),
+            &|_| false,
+            &ground,
+            &pcfg,
+            cfg.ford_depth_m,
+        )
+    };
+    let cells = core::plans(&save.records).values().next().unwrap().roads[0].centre();
+    let start = bill(&save);
+    assert_eq!(start.gravel as usize, cells.len());
+    assert_eq!(start.left as usize, cells.len());
+    // The HUD against a pack of `gravel` gravel.
+    let line = |b: core::Bill, gravel: u32| {
+        let mut aim = planner::PlannerAim::default();
+        aim.showing = true;
+        aim.bill = b;
+        aim.have = [4, gravel, 0, 0, 0];
+        planner::hud_line(&aim, &planner::Planner::default()).1
+    };
+    assert_eq!(
+        line(start, 0),
+        crate::ui_kit::WAYPOINT,
+        "short of gravel: red"
+    );
+    assert_eq!(line(start, start.gravel), crate::ui_kit::LABEL, "enough");
+    // The tick: the nearest cell not paved, from the road's first end.
+    let tick = |save: &WorldSave| {
+        let marked: Vec<u32> = paving::marks(save).0.into_keys().collect();
+        paving::nearest_unpaved(&marked, a, pcfg.ghost_reach_m)
+    };
+    assert_eq!(tick(&save), Some(cells[0]));
+    slots.give(gravel, 3);
+    for (n, &key) in cells.iter().take(3).enumerate() {
+        paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg).unwrap();
+        let now = bill(&save);
+        assert_eq!(now.gravel, start.gravel - 1 - n as u32, "one gravel a cell");
+        assert_eq!(now.left, start.left - 1 - n as u32);
+        assert_eq!(tick(&save), Some(cells[n + 1]), "on to the next cell");
+        assert_eq!(line(now, slots.count(gravel)), crate::ui_kit::WAYPOINT);
+    }
+    assert_eq!(slots.count(gravel), 0);
+    // None in reach from far off.
+    let far = a.normalize() * (a.length()) + a.any_orthonormal_vector() * 500.0;
+    assert_eq!(
+        paving::nearest_unpaved(
+            &paving::marks(&save).0.into_keys().collect::<Vec<_>>(),
+            far,
+            pcfg.ghost_reach_m
+        ),
+        None
+    );
 }

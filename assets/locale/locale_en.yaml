@@ -1540,6 +1540,7 @@ roads:
     needs_shovel: Needs a shovel
     needs_gravel: Needs gravel
     needs_planks: Needs planks and a log
+    next: Next cell
   plan:
     too_steep: Too steep
     too_wide_to_bridge: Too wide to bridge

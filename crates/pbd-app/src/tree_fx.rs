@@ -673,7 +673,7 @@ fn run(
         b.particles.retain_mut(|p| p.step(dt, up, cfg));
         let aabb = meshes
             .get_mut(&b.mesh)
-            .and_then(|mut mesh| build_mesh(&mut mesh, &b.particles, up, right, upward, cfg));
+            .and_then(|mesh| build_mesh(mesh, &b.particles, up, right, upward, cfg));
         let Some(aabb) = aabb else {
             commands.entity(b.entity).despawn();
             meshes.remove(&b.mesh);

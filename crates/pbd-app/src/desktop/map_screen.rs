@@ -809,6 +809,7 @@ pub fn show(screen: &mut Screen, view: &mut MapView, player: &PlayerPlace) {
 }
 
 /// Build the map's screen, hidden, and its live material. `Startup`.
+#[allow(clippy::too_many_arguments)] // A Bevy system.
 pub fn spawn(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,

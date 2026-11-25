@@ -108,7 +108,7 @@ pub fn drop_rockfall(save: &mut WorldSave, job: &Job) -> Option<Vec<Edit>> {
             .filter(|c| !skip.contains(&c.key))
             .copied()
             .collect();
-        let fall = road_jobs::rockfall_cells(&usable, want, |a| pbd_core::column::layer_at(a));
+        let fall = road_jobs::rockfall_cells(&usable, want, pbd_core::column::layer_at);
         if fall.is_empty() {
             return None;
         }
