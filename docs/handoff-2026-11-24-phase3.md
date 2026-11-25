@@ -3,7 +3,14 @@
 **PR #149 was MERGED to main at 23:04.** New work goes in a NEW draft PR
 from `claude/phase-2-1` (merge origin/main in first).
 
-**Forge redo: done** (762feba5): one shaped animated flame, a shaped anvil on a stump, in PR #150. Polish left: the fire's daylight tips are light, the anvil is dark in shade; full pbd-app towns tests not re-run.
+**Forge redo: done, in PR #150** (2026-11-25, `townsfolk` 26b, task 3.2b):
+tongues of flame (`forgefire`) over a coal bed (`embers`), and one lofted
+anvil with its face, horn and heel. Two redos landed at once; 26b's was
+kept on merge (12238945), and the other (animated flame on a stump) is at
+5c99a764, its flicker a follow-up to port. Clippy 1.97's new lints fixed
+across the workspace. Full suites green before the merge (core 863, app
+709, locale 3, openspec 234); settlement, towns, locale and openspec green
+after it.
 
 Branch `claude/phase-2-1`, draft PR
 https://github.com/RubenTipparach/Pale-Blue-Dot/pull/149. One branch, one
