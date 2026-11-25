@@ -5883,6 +5883,18 @@ fn key_named(name: &str) -> Option<KeyCode> {
 /// dry ground of the climate asked.
 fn seek_target(kind: &str, s: &Sight) -> Option<Vec3> {
     use pbd_core::farming::Climate;
+    // The nearest town but the one the bot is in: walked twice, there and
+    // back between a pair that are each other's nearest (`memory-leak`,
+    // the town route; owner, 2026-11-25: "route between two towns").
+    if kind == "other-town" {
+        let near = super::missions::TOWN_NEAR_M / PLANET_RADIUS;
+        return s
+            .towns
+            .iter()
+            .copied()
+            .filter(|t| t.distance(s.up) > near)
+            .min_by(|a, b| a.distance(s.up).total_cmp(&b.distance(s.up)));
+    }
     if kind == "town" {
         return s
             .towns
@@ -6449,7 +6461,7 @@ fn leg_toward(s: &Sight, d: Vec3, max_m: f32) -> Vec3 {
 fn seek(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
     if !matches!(
         kind,
-        "hot" | "desert" | "temperate" | "cold" | "reef" | "town"
+        "hot" | "desert" | "temperate" | "cold" | "reef" | "town" | "other-town"
     ) {
         return Status::Fail(format!("no place kind {kind}"));
     }
@@ -6472,7 +6484,7 @@ fn seek(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
     let d = at.normalize_or(s.up);
     let off = d.distance(s.up) * PLANET_RADIUS;
     match kind {
-        "town" => {
+        "town" | "other-town" => {
             let leg = leg_toward(s, d, 120.0);
             if off < super::missions::TOWN_NEAR_M * 0.5
                 || (bot.walk_to(s, out, leg, super::missions::TOWN_NEAR_M * 0.5) == Walked::There
