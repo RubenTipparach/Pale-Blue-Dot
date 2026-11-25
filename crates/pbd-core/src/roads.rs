@@ -50,12 +50,17 @@ pub const RECORD_SCHEMA: u32 = 1;
 /// cell carries its cut or fill. A road with none is written in
 /// [`RECORD_SCHEMA`], as every road before it was.
 pub const CUT_FILL_SCHEMA: u32 = 2;
+/// A `road` record of a wide road (roads version 4, `townsfolk` design
+/// 43a): each cell carries its cut or fill and its bed, and the road its
+/// lanes. A road with no lane and no bed is written as before.
+pub const LANES_SCHEMA: u32 = 3;
 /// The planner's version, stored in the net record: 1 climbed a layer a
 /// cell at most over the ground as it is; 2 may also cut and fill
 /// (`townsfolk` design 32); 3 joins each settlement to at most one other,
-/// so no network joins three (design 43). A world keeps the roads it was
-/// planned with.
-pub const NET_VERSION: u32 = 3;
+/// so no network joins three (design 43); 4 lays the gravel roads between
+/// walled towns two wide, three at each town's gate (design 43a). A world
+/// keeps the roads it was planned with.
+pub const NET_VERSION: u32 = 4;
 /// The level the roads are laid on: the finest, the one the player edits.
 pub const LEVEL: u8 = cell_key::LAST_LEVEL;
 
@@ -126,6 +131,16 @@ pub struct RoadsConfig {
     /// 2 is a rule today: each settlement joined to at most one other.
     #[serde(default)]
     pub max_network: u32,
+    /// Roads version 4 (`townsfolk` design 43a): how many cells wide the
+    /// world lays a gravel road between two walled towns, and how wide its
+    /// last `gate_cells` cells at each town's gate. 1 for one wide
+    /// (versions 1 to 3); dirt roads are always one wide.
+    #[serde(default = "one_wide")]
+    pub gravel_width: u8,
+    #[serde(default = "one_wide")]
+    pub gate_width: u8,
+    #[serde(default)]
+    pub gate_cells: u32,
     /// A survey stake's reach (design 39): the most cells between two
     /// stakes, and how many cells its search may look at.
     #[serde(default = "default_stake_cells")]
@@ -216,6 +231,10 @@ pub fn wheel_ground(kind: Kind, surface: Surface) -> WheelGround {
     }
 }
 
+fn one_wide() -> u8 {
+    1
+}
+
 fn default_stake_cells() -> u32 {
     24
 }
@@ -278,6 +297,9 @@ impl RoadsConfig {
         if !matches!(self.max_network, 0 | 2) {
             return Err("max_network is 0 (no limit) or 2".into());
         }
+        if !(1..=3).contains(&self.gravel_width) || !(1..=3).contains(&self.gate_width) {
+            return Err("gravel_width and gate_width are 1 to 3 cells".into());
+        }
         if self.max_stake_cells == 0 || self.stake_expanded == 0 {
             return Err("max_stake_cells and stake_expanded must be at least one".into());
         }
@@ -296,6 +318,10 @@ impl RoadsConfig {
         }
         if version < 3 {
             cfg.max_network = 0;
+        }
+        if version < 4 {
+            cfg.gravel_width = 1;
+            cfg.gate_width = 1;
         }
         cfg
     }
@@ -332,6 +358,9 @@ impl Default for RoadsConfig {
             lamp_town_m: 90.0,
             lamp_every: 5,
             max_network: 2,
+            gravel_width: 2,
+            gate_width: 3,
+            gate_cells: 6,
             max_stake_cells: 24,
             stake_expanded: 4_000,
             pave_beat_s: 0.45,
@@ -648,8 +677,29 @@ pub struct Road {
     pub from_site: u32,
     pub to_site: u32,
     pub surface: Surface,
-    /// Its cells from `from_site` toward `to_site`, without the towns' own.
+    /// Its centre line's cells from `from_site` toward `to_site`, without
+    /// the towns' own.
     pub cells: Vec<RoadCell>,
+    /// A wide road's lane cells beside them (roads version 4, design 43a),
+    /// in the order they were laid; none on a one-wide road.
+    pub lanes: Vec<Lane>,
+}
+
+/// A lane cell of a wide world road (design 43a): the cell, the centre
+/// cell it lies beside, and on which side, 1 to the left of the way from
+/// `from_site`, -1 to the right.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Lane {
+    pub cell: RoadCell,
+    pub centre: u32,
+    pub side: i8,
+}
+
+impl Road {
+    /// Every cell of it: the centre line's, then its lanes'.
+    pub fn every_cell(&self) -> impl Iterator<Item = &RoadCell> {
+        self.cells.iter().chain(self.lanes.iter().map(|l| &l.cell))
+    }
 }
 
 /// A settlement as the planner sees it.
@@ -1034,6 +1084,7 @@ pub fn plan(
             to_site: b,
             surface: surface_of(sa, sb),
             cells: profile(&steps)?,
+            lanes: Vec::new(),
         })
     };
     let threads = threads.clamp(1, links.len().max(1));
@@ -1059,11 +1110,178 @@ pub fn plan(
             .collect()
     });
     done.sort_by_key(|(k, _)| *k);
-    let roads: Vec<Road> = done.into_iter().map(|(_, r)| r).collect();
+    let mut roads: Vec<Road> = done.into_iter().map(|(_, r)| r).collect();
     if cfg.max_network == 2 {
-        return apart(roads);
+        roads = apart(roads);
+    }
+    if cfg.gravel_width > 1 || cfg.gate_width > 1 {
+        widen(&mut roads, ground, cfg);
     }
     roads
+}
+
+/// Roads version 4 (design 43a): each gravel road's lanes, `gravel_width`
+/// wide and `gate_width` for the `gate_cells` cells at either end (each a
+/// walled town's gate), in link order. The lanes are the player's planner's
+/// ([`planner::Lanes`]): its centre line moved a lattice step to the side
+/// along each straight run of it, on the one shared plane (design 42m). A
+/// lane cell that clashes, lies beside a bend or zigzag on a rise, or is or
+/// touches a cell of another road is left out, and the road is narrower
+/// there; the centre line is never moved.
+fn widen(roads: &mut [Road], ground: &GroundFn, cfg: &RoadsConfig) {
+    let mut owner: BTreeMap<u32, usize> = BTreeMap::new();
+    for (i, r) in roads.iter().enumerate() {
+        for c in &r.cells {
+            owner.entry(c.key).or_insert(i);
+        }
+    }
+    for i in 0..roads.len() {
+        let road = &roads[i];
+        if road.surface != Surface::Gravel {
+            continue;
+        }
+        let n = road.cells.len();
+        let gate = cfg.gate_cells as usize;
+        let width = |k: usize| {
+            if k < gate || k + gate >= n {
+                cfg.gate_width
+            } else {
+                cfg.gravel_width
+            }
+        };
+        let (cells, lanes) = lanes_of(road, ground, cfg.ford_depth_m, &width);
+        let mine = |k: &u32| owner.get(k).is_none_or(|&o| o == i);
+        let lanes: Vec<Lane> = lanes
+            .into_iter()
+            .filter(|l| mine(&l.cell.key) && neighbours(l.cell.key).iter().all(mine))
+            .collect();
+        for l in &lanes {
+            owner.insert(l.cell.key, i);
+        }
+        roads[i].cells = cells;
+        roads[i].lanes = lanes;
+    }
+}
+
+/// The straight runs of a road's centre line, each on one face of the
+/// lattice and nowhere further than a cell's spacing off the great circle
+/// between its ends: where one lattice step to the side lays a lane
+/// beside it cell for cell, as between two of the player's stakes.
+fn straight_runs(line: &[u32]) -> Vec<std::ops::Range<usize>> {
+    let faces = |k: u32| -> BTreeSet<u8> {
+        cell_key::unpack(k)
+            .map(|a| cell_key::addresses(a).into_iter().map(|x| x.face).collect())
+            .unwrap_or_default()
+    };
+    let centres: Vec<Vec3> = line.iter().map(|&k| centre(k).unwrap_or(Vec3::Y)).collect();
+    let n = line.len();
+    let mut out = Vec::new();
+    let mut s = 0;
+    while s < n {
+        let mut on = faces(line[s]);
+        let mut e = s + 1;
+        while e < n {
+            let joined = neighbours(line[e - 1]).contains(&line[e]);
+            let common: BTreeSet<u8> = on.intersection(&faces(line[e])).copied().collect();
+            let spacing = centres[e - 1].angle_between(centres[e]);
+            let straight = centres[s]
+                .cross(centres[e])
+                .try_normalize()
+                .is_none_or(|normal| {
+                    centres[s..=e]
+                        .iter()
+                        .all(|c| c.dot(normal).abs() < 1.5 * spacing)
+                });
+            if !joined || common.is_empty() || !straight {
+                break;
+            }
+            on = common;
+            e += 1;
+        }
+        out.push(s..e);
+        s = e;
+    }
+    out
+}
+
+/// A world road's centre cells re-read off its plane and its lanes, by the
+/// player's planner's rule (design 42m, 43a): `width` at each centre cell.
+/// Every lane laid comes back clear of clashes and of the bends on a rise.
+fn lanes_of(
+    road: &Road,
+    ground: &GroundFn,
+    ford_depth_m: f32,
+    width: &dyn Fn(usize) -> u8,
+) -> (Vec<RoadCell>, Vec<Lane>) {
+    use planner::LaidCell;
+    let line: Vec<u32> = road.cells.iter().map(|c| c.key).collect();
+    let n = line.len();
+    if n < 2 || (0..n).all(|k| width(k) < 2) {
+        return (road.cells.clone(), Vec::new());
+    }
+    let h: Vec<i32> = road.cells.iter().map(|c| c.low_m()).collect();
+    let on: Vec<LaidCell> = road
+        .cells
+        .iter()
+        .enumerate()
+        .map(|(k, c)| LaidCell {
+            key: c.key,
+            centre: c.key,
+            lane: 0,
+            before: k.checked_sub(1).map(|j| line[j]),
+            after: line.get(k + 1).copied(),
+            low_m: c.low_m(),
+            // The ground the road stands on: its cutting's floor, or the
+            // top of its fill.
+            base_m: c.base_m + c.cut_fill,
+            raised: c.raised,
+            ford: c.kind == Kind::Ford,
+            deck: match c.kind {
+                Kind::Bridge { deck_m } => Some(deck_m),
+                _ => None,
+            },
+            bed: c.bed,
+            up: c.up,
+            from: c.from,
+            clash: None,
+        })
+        .collect();
+    let dirs = planner::directions(&line);
+    let bent = planner::wide_bends(&line, &h, &dirs, &|_| true);
+    let segments = straight_runs(&line);
+    let sides = planner::Lanes {
+        width,
+        segments: &segments,
+        line: &line,
+        dirs: &dirs,
+        ground,
+        tree: &|_| false,
+        ford_depth_m,
+    };
+    let laid = sides.widen(on, &h);
+    let index: BTreeMap<u32, usize> = line.iter().enumerate().map(|(k, &c)| (c, k)).collect();
+    let cells = road
+        .cells
+        .iter()
+        .zip(&laid[..n])
+        .map(|(c, l)| RoadCell {
+            raised: l.raised,
+            bed: l.bed,
+            up: l.up,
+            from: l.from,
+            ..*c
+        })
+        .collect();
+    let lanes = laid[n..]
+        .iter()
+        .filter(|l| l.clash.is_none() && !index.get(&l.centre).is_some_and(|&k| bent[k]))
+        .map(|l| Lane {
+            cell: l.drawn(),
+            centre: l.centre,
+            side: l.lane,
+        })
+        .collect();
+    (cells, lanes)
 }
 
 /// Whether a route enters the footprint of a settlement other than its two
@@ -1131,7 +1349,7 @@ pub fn networks(roads: &[Road]) -> Vec<BTreeSet<u32>> {
             }
             by_site.insert(site, i);
         }
-        for c in &r.cells {
+        for c in r.every_cell() {
             for k in std::iter::once(c.key).chain(neighbours(c.key)) {
                 if let Some(&j) = owner.get(&k) {
                     others.push(j);
@@ -1142,7 +1360,7 @@ pub fn networks(roads: &[Road]) -> Vec<BTreeSet<u32>> {
             let (x, y) = (find(&mut parent, i), find(&mut parent, j));
             parent[x] = y;
         }
-        for c in &r.cells {
+        for c in r.every_cell() {
             owner.insert(c.key, i);
         }
     }
@@ -1293,8 +1511,11 @@ pub fn lamp(direction: Vec3) -> Option<f32> {
 /// every `lamp_every`th cell past the town's own has a lamp on the cell
 /// beside it nearest its left (the way out of the town), the first that is
 /// dry, no road, no town's, holds no player's edit and stands within a
-/// layer of the road's ground. `(key, top of its ground)`, in road order;
-/// the same roads give the same lamps.
+/// layer of the road's ground. Beside a wide road (version 4, design 43a)
+/// the lamp stands on the verge beside its outermost cell on that side, by
+/// the player's planner's rule ([`planner::verge`]), and on both sides of a
+/// three-wide stretch. `(key, top of its ground)`, in road order; the same
+/// roads give the same lamps.
 pub fn lamps(
     roads: &[Road],
     settlements: &[Settlement],
@@ -1305,7 +1526,11 @@ pub fn lamps(
     if cfg.lamp_every == 0 {
         return Vec::new();
     }
-    let on_road: BTreeSet<u32> = roads.iter().flat_map(|r| &r.cells).map(|c| c.key).collect();
+    let on_road: BTreeSet<u32> = roads
+        .iter()
+        .flat_map(|r| r.every_cell())
+        .map(|c| c.key)
+        .collect();
     let mut taken = BTreeSet::new();
     let mut out = Vec::new();
     for road in roads {
@@ -1330,6 +1555,44 @@ pub fn lamps(
                     continue;
                 }
                 let left = c.cross(n - c).normalize_or_zero();
+                if !road.lanes.is_empty() {
+                    // Left of the way from `from_site`, as the lanes' sides.
+                    let left = if forward { left } else { -left };
+                    let sides: &[i8] = if road
+                        .lanes
+                        .iter()
+                        .any(|l| l.centre == cell.key && l.side < 0)
+                    {
+                        &[1, -1]
+                    } else {
+                        &[1]
+                    };
+                    for &sign in sides {
+                        let beside = road
+                            .lanes
+                            .iter()
+                            .find(|l| l.centre == cell.key && l.side == sign)
+                            .map_or(cell, |l| &l.cell);
+                        let Some(bc) = centre(beside.key) else {
+                            continue;
+                        };
+                        let ok = |m: u32, g: &Ground| {
+                            g.water == Water::Dry
+                                && !g.town
+                                && !g.player
+                                && (g.top_m - beside.ground_m()).abs() <= 1
+                                && !taken.contains(&m)
+                        };
+                        let side = left * f32::from(sign);
+                        if let Some((key, g)) =
+                            planner::verge(beside.key, bc, side, &on_road, ground, &ok)
+                        {
+                            taken.insert(key);
+                            out.push((key, g.top_m));
+                        }
+                    }
+                    continue;
+                }
                 let mut beside: Vec<(f32, u32)> = neighbours(cell.key)
                     .into_iter()
                     .filter(|m| !on_road.contains(m))
@@ -1397,6 +1660,78 @@ struct RoadBody2 {
 /// One road cell as it is stored, field for field (schema 2's tuple).
 type CellRecord = (u32, i32, u8, i32, bool, u32, u32, i32);
 
+/// A schema 3 road cell: schema 2's with its bed's `(lift_mm, from, to,
+/// rise_mm)` last.
+type CellRecord3 = (CellRecord, (u16, u16, u16, u16));
+
+/// A schema 3 road record's body (roads version 4, design 43a): the
+/// centre line's cells and the lanes', each lane with the centre cell it
+/// lies beside and its side.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct RoadBody3 {
+    from: u32,
+    to: u32,
+    surface: Surface,
+    cells: Vec<CellRecord3>,
+    lanes: Vec<(CellRecord3, u32, i8)>,
+}
+
+fn cell_record(c: &RoadCell) -> CellRecord {
+    let (kind, deck) = match c.kind {
+        Kind::Ground => (0, 0),
+        Kind::Ford => (1, 0),
+        Kind::Bridge { deck_m } => (2, deck_m),
+    };
+    (
+        c.key,
+        c.base_m,
+        kind,
+        deck,
+        c.raised,
+        c.up.unwrap_or(0),
+        c.from.unwrap_or(0),
+        c.cut_fill,
+    )
+}
+
+fn cell_record3(c: &RoadCell) -> CellRecord3 {
+    let b = c.bed;
+    (cell_record(c), (b.lift_mm, b.from, b.to, b.rise_mm))
+}
+
+fn cell_of(
+    (key, base_m, kind, deck, raised, up, from, cut_fill): CellRecord,
+    bed: Bed,
+) -> Option<RoadCell> {
+    Some(RoadCell {
+        key,
+        base_m,
+        kind: match kind {
+            0 => Kind::Ground,
+            1 => Kind::Ford,
+            2 => Kind::Bridge { deck_m: deck },
+            _ => return None,
+        },
+        raised,
+        cut_fill,
+        bed,
+        up: (up != 0).then_some(up),
+        from: (from != 0).then_some(from),
+    })
+}
+
+fn cell_of3((c, (lift_mm, from, to, rise_mm)): CellRecord3) -> Option<RoadCell> {
+    cell_of(
+        c,
+        Bed {
+            lift_mm,
+            from,
+            to,
+            rise_mm,
+        },
+    )
+}
+
 /// The net record's body.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NetBody {
@@ -1409,31 +1744,29 @@ pub fn road_id(from_site: u32, to_site: u32) -> u64 {
     (u64::from(from_site.min(to_site)) << 32) | u64::from(from_site.max(to_site))
 }
 
-/// A road as its record: schema 1, or [`CUT_FILL_SCHEMA`] where any cell is
-/// cut or filled.
+/// A road as its record: schema 1, [`CUT_FILL_SCHEMA`] where any cell is
+/// cut or filled, or [`LANES_SCHEMA`] where it has lanes or a bed.
 pub fn to_record(road: &Road) -> Record {
-    let cells: Vec<CellRecord> = road
-        .cells
-        .iter()
-        .map(|c| {
-            let (kind, deck) = match c.kind {
-                Kind::Ground => (0, 0),
-                Kind::Ford => (1, 0),
-                Kind::Bridge { deck_m } => (2, deck_m),
-            };
-            (
-                c.key,
-                c.base_m,
-                kind,
-                deck,
-                c.raised,
-                c.up.unwrap_or(0),
-                c.from.unwrap_or(0),
-                c.cut_fill,
-            )
-        })
-        .collect();
     let id = road_id(road.from_site, road.to_site);
+    if !road.lanes.is_empty() || road.cells.iter().any(|c| !c.bed.is_plain()) {
+        return Record::of(
+            ROAD_RECORD,
+            id,
+            LANES_SCHEMA,
+            &RoadBody3 {
+                from: road.from_site,
+                to: road.to_site,
+                surface: road.surface,
+                cells: road.cells.iter().map(cell_record3).collect(),
+                lanes: road
+                    .lanes
+                    .iter()
+                    .map(|l| (cell_record3(&l.cell), l.centre, l.side))
+                    .collect(),
+            },
+        );
+    }
+    let cells: Vec<CellRecord> = road.cells.iter().map(cell_record).collect();
     if cells.iter().any(|c| c.7 != 0) {
         return Record::of(
             ROAD_RECORD,
@@ -1463,11 +1796,35 @@ pub fn to_record(road: &Road) -> Record {
     )
 }
 
-/// A road from its record, schema 1 or 2, or `None` for one this build
+/// A road from its record, schema 1, 2 or 3, or `None` for one this build
 /// cannot read.
 pub fn from_record(record: &Record) -> Option<Road> {
     if record.kind != ROAD_RECORD {
         return None;
+    }
+    if record.schema == LANES_SCHEMA {
+        let b: RoadBody3 = record.read()?;
+        return Some(Road {
+            from_site: b.from,
+            to_site: b.to,
+            surface: b.surface,
+            cells: b
+                .cells
+                .into_iter()
+                .map(cell_of3)
+                .collect::<Option<Vec<_>>>()?,
+            lanes: b
+                .lanes
+                .into_iter()
+                .map(|(c, centre, side)| {
+                    Some(Lane {
+                        cell: cell_of3(c)?,
+                        centre,
+                        side,
+                    })
+                })
+                .collect::<Option<Vec<_>>>()?,
+        });
     }
     let body: RoadBody2 = match record.schema {
         RECORD_SCHEMA => {
@@ -1489,29 +1846,14 @@ pub fn from_record(record: &Record) -> Option<Road> {
     let cells = body
         .cells
         .into_iter()
-        .map(|(key, base_m, kind, deck, raised, up, from, cut_fill)| {
-            Some(RoadCell {
-                key,
-                base_m,
-                kind: match kind {
-                    0 => Kind::Ground,
-                    1 => Kind::Ford,
-                    2 => Kind::Bridge { deck_m: deck },
-                    _ => return None,
-                },
-                raised,
-                cut_fill,
-                bed: Bed::default(),
-                up: (up != 0).then_some(up),
-                from: (from != 0).then_some(from),
-            })
-        })
+        .map(|c| cell_of(c, Bed::default()))
         .collect::<Option<Vec<_>>>()?;
     Some(Road {
         from_site: body.from,
         to_site: body.to,
         surface: body.surface,
         cells,
+        lanes: Vec::new(),
     })
 }
 

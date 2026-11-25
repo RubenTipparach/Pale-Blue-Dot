@@ -45,6 +45,85 @@ fn a_save_from_before_roads_gains_them_once_in_place() {
     assert_eq!(again.cells, net.cells);
 }
 
+/// Roads version 4 (`townsfolk` design 43a): two walled towns on the
+/// shipped seed's start are joined by a gravel road the world lays wide,
+/// every lane of it laid with the centre line; and a world whose roads
+/// version 3 planned is read as it is, one wide, never planned again.
+#[test]
+fn a_new_world_lays_its_gravel_road_wide_and_a_version_3_world_keeps_its_own() {
+    let config = *crate::planet::terrain_config();
+    let cfg = load_config();
+    let towns: Vec<Site> = villages(150.0)
+        .into_iter()
+        .map(|s| Site {
+            kind: SiteKind::Walled,
+            ..s
+        })
+        .collect();
+    let mut save = WorldSave::memory_only();
+    let (net, _) = prepare(&mut save, &towns, &config, &cfg);
+    assert_eq!(roads::net_version(&save.records), Some(4));
+    let stored = roads::stored(&save.records);
+    assert_eq!(stored.len(), 1);
+    let road = &stored[0];
+    assert_eq!(road.surface, Surface::Gravel);
+    // On the start's rolling ground a lane off the road's plane, or beside
+    // a bend on a rise, is left out: wide where the ground allows it.
+    assert!(
+        road.lanes.len() * 3 > road.cells.len(),
+        "{} lane cells beside {}",
+        road.lanes.len(),
+        road.cells.len()
+    );
+    let laid: BTreeSet<u32> = net.cells.iter().map(|l| l.cell.key).collect();
+    assert!(road.every_cell().all(|c| laid.contains(&c.key)));
+    assert_eq!(net.cells.len(), road.every_cell().count());
+    // A world planned by version 3: its road and its net record as that
+    // version wrote them.
+    let ground = {
+        let empty = (Edits::new(), YieldSet::new(), BTreeMap::new());
+        let g = ground_of(&config, &empty.0, &empty.1, &empty.2);
+        roads::plan(
+            &settlements(&towns),
+            &g,
+            &cfg.for_version(3),
+            config.radius_m,
+            1,
+        )
+    };
+    assert!(ground[0].lanes.is_empty());
+    let mut old = WorldSave::memory_only();
+    let mut records: Vec<_> = ground.iter().map(roads::to_record).collect();
+    records.push(pbd_core::records::Record::of(
+        roads::ROAD_NET_RECORD,
+        0,
+        roads::RECORD_SCHEMA,
+        &roads::NetBody {
+            version: 3,
+            roads: ground.len() as u32,
+        },
+    ));
+    old.propose(
+        &author(),
+        Proposal {
+            edits: Vec::new(),
+            records,
+        },
+    )
+    .unwrap();
+    let before = old.records.len();
+    let (net3, seq) = prepare(&mut old, &towns, &config, &cfg);
+    assert_eq!(seq, 0, "nothing is planned again");
+    assert_eq!(old.records.len(), before);
+    assert_eq!(roads::net_version(&old.records), Some(3));
+    assert_eq!(roads::stored(&old.records), ground);
+    assert_eq!(
+        net3.cells.len(),
+        ground[0].cells.len(),
+        "one wide, cell for cell"
+    );
+}
+
 /// `world/roads`, "A player's house on the route": a cell the player
 /// changed before the plan is never on a road; one changed after it is
 /// left out when the road is cut, and the player's cell is unchanged.
