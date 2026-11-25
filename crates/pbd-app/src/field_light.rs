@@ -1188,6 +1188,10 @@ pub struct BakedField {
     bounds: Option<(Vec3, f32)>,
     /// A bake being made a slice a frame, swapped in whole when done.
     pending: Option<PendingBake>,
+    /// The ground under each vertex's bake point (its radius), asked of the
+    /// generator once: a town's outside does not move, and it is baked again
+    /// on every set that lands (`memory-leak`, towns at 60 fps).
+    ground: Vec<f32>,
     /// When the bake it carries was swapped in, seconds of the app's clock:
     /// it blends from the one before it (its vertex colour) from then
     /// (`baked-light-ease` 7.4). None before its first.
@@ -1340,21 +1344,6 @@ fn bake_town_outsides(
         fine.set.columns.light_version(),
     );
     let config = crate::planet::terrain_config();
-    let field = |at: Vec3| {
-        let Some(up) = at.try_normalize() else {
-            return (1.0, 0.0);
-        };
-        let ground = PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
-        field_at(
-            &fine,
-            &contact,
-            if at.length() < ground {
-                up * ground
-            } else {
-                at
-            },
-        )
-    };
     let started = std::time::Instant::now();
     let mut baked_vertices = 0usize;
     for (mesh, mut state) in &mut outsides {
@@ -1423,14 +1412,31 @@ fn bake_town_outsides(
         let Some(pending) = state.pending.as_mut() else {
             continue;
         };
+        if state.ground.len() != count {
+            state.ground = vec![f32::NAN; count];
+        }
+        let ground = &mut state.ground;
         while pending.done.len() < count && started.elapsed() < BAKE_BUDGET {
             let from = pending.done.len();
             let to = (from + BAKE_SLICE).min(count);
-            pending.done.extend(bake_vertices(
-                &positions[from..to],
-                &normals[from..to],
-                field,
-            ));
+            for i in from..to {
+                let at = Vec3::from(positions[i]) + Vec3::from(normals[i]) * BAKE_FRONT_M;
+                let Some(up) = at.try_normalize() else {
+                    pending.done.push([1.0, 0.0]);
+                    continue;
+                };
+                if ground[i].is_nan() {
+                    ground[i] =
+                        PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
+                }
+                let at = if at.length() < ground[i] {
+                    up * ground[i]
+                } else {
+                    at
+                };
+                let (sky, block) = field_at(&fine, &contact, at);
+                pending.done.push([sky, block]);
+            }
             baked_vertices += to - from;
         }
         if pending.done.len() == count {
