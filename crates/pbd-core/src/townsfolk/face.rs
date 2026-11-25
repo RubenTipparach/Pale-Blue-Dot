@@ -320,6 +320,12 @@ pub struct Face {
     talk_t: f32,
     talk_cell: Mouth,
     clock: f32,
+    /// Asleep (lying in a bed): lids shut, mouth closed, no glances
+    /// (`playtest-fixes-2026-11-25`; owner: "do the dudes not have their
+    /// eyes closed when they sleep?").
+    asleep: bool,
+    /// How far the sleep has closed the lids, 0..1.
+    sleep_lid: f32,
 }
 
 /// The size of a face's pieces, for the pupils' room to slide.
@@ -329,6 +335,8 @@ pub const PR: f32 = 0.048;
 pub const FSC: f32 = 1.6;
 
 const NUMK_BLEND_S: f32 = 0.08;
+/// How long the lids take to close when a face falls asleep, s.
+pub const SLEEP_CLOSE_S: f32 = 0.4;
 
 impl Face {
     pub fn new(seed: u32, expression: Expression) -> Self {
@@ -349,11 +357,19 @@ impl Face {
             talk_t: 0.0,
             talk_cell: Mouth::A,
             clock: 0.0,
+            asleep: false,
+            sleep_lid: 0.0,
         }
     }
 
     pub fn expression(&self) -> Expression {
         self.expression
+    }
+
+    /// Put the face to sleep, or wake it: asleep, the lids close over
+    /// [`SLEEP_CLOSE_S`] and the mouth shuts.
+    pub fn set_asleep(&mut self, asleep: bool) {
+        self.asleep = asleep;
     }
 
     /// One frame: `chosen` from the mood, `look` the player's eye as yaw and
@@ -468,9 +484,18 @@ impl Face {
                 ]);
             }
         }
-        let mouth = if talk { self.talk_cell } else { want.mouth };
+        let mut mouth = if talk { self.talk_cell } else { want.mouth };
         let lid_gaze = (-self.pupil[1]).max(0.0) * 0.3;
-        let lid = blink.max(self.cur.lid + lid_gaze).min(1.0);
+        // Asleep: the lids close and stay closed, the mouth shut.
+        let ks = 1.0 - (-dt / SLEEP_CLOSE_S).exp();
+        self.sleep_lid += ((if self.asleep { 1.0 } else { 0.0 }) - self.sleep_lid) * ks;
+        if self.asleep && !talk {
+            mouth = Mouth::Closed;
+        }
+        let lid = blink
+            .max(self.cur.lid + lid_gaze)
+            .max(self.sleep_lid)
+            .min(1.0);
         let brow = |s: f32| {
             FSC * (self.cur.by
                 + 0.006 * self.brow_pop

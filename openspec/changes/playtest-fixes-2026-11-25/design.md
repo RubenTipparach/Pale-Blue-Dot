@@ -85,3 +85,15 @@ a two-triangle cap at full lamp.
   its shader body.
 - A torch past the reach keeps the light it casts, as now; at that distance
   its body was under a pixel.
+
+## 5. A sleeper's eyes are shut (owner, 2026-11-25: "do the dudes not have their eyes closed when they sleep?")
+
+**Today.** A person lying in a bed (`Posture::Lie`) keeps the face of a person
+standing: it blinks, glances about and keeps its expression's lids.
+
+**Change.**
+- The face has an asleep state (`Face::set_asleep`). Asleep, the lids close
+  over 0.4 s and stay shut through blinks and glances, and the mouth is
+  closed.
+- A person lying in a bed is asleep, except while the player talks to them:
+  then they open their eyes and talk.

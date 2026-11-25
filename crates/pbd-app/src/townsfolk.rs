@@ -1215,6 +1215,9 @@ fn step(
                 v.y.atan2(Vec2::new(v.x, v.z).length()),
             ]
         });
+        // Lying in a bed is asleep, unless they are being talked to.
+        l.face
+            .set_asleep(matches!(l.posture, Some(Posture::Lie { .. })) && !l.talking);
         let face_pose = l.face.step(dt, l.chosen, look_at, l.talking);
         let doing = match l.posture {
             Some(Posture::Sit { seat_m }) => {

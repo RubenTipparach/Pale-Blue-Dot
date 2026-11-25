@@ -4,3 +4,4 @@
 - [ ] 2 Jobs: the JOBS tab, TRACK, the tracker. Verify: an app test that a tracked job is the tracker's; a capture of the tab.
 - [x] 3 Wild regrowth at two days, out of sight, for wild crops and glowing mushrooms. Verify: tests of both.
 - [ ] 4 The placed torch as the held torch. Verify: a capture of a placed torch beside the held one.
+- [x] 5 A sleeper's eyes are shut. Verify: `a_sleeping_face_keeps_its_eyes_closed`.

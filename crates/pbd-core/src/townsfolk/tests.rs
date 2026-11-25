@@ -747,3 +747,33 @@ fn the_body_walks_and_works() {
         .fold(0.0f32, f32::max);
     assert!(top > 0.25, "{top}");
 }
+
+/// A face put to sleep closes its eyes and mouth within a second and keeps
+/// them closed through its blinks and glances; talked to, it talks
+/// (`playtest-fixes-2026-11-25`).
+#[test]
+fn a_sleeping_face_keeps_its_eyes_closed() {
+    let chosen = Chosen {
+        expression: Expression::Neutral,
+        focus: false,
+    };
+    let mut face = Face::new(3, Expression::Neutral);
+    let awake = face.step(0.1, chosen, None, false);
+    assert!(awake.lid < 0.5, "awake, eyes open: {}", awake.lid);
+    face.set_asleep(true);
+    let mut pose = awake;
+    for _ in 0..60 {
+        pose = face.step(1.0 / 30.0, chosen, None, false);
+    }
+    assert!(pose.lid > 0.95, "asleep, eyes shut: {}", pose.lid);
+    assert_eq!(pose.mouth, Mouth::Closed);
+    for _ in 0..300 {
+        let p = face.step(1.0 / 30.0, chosen, None, false);
+        assert!(p.lid > 0.95, "stays shut");
+    }
+    face.set_asleep(false);
+    for _ in 0..60 {
+        pose = face.step(1.0 / 30.0, chosen, None, false);
+    }
+    assert!(pose.lid < 0.5, "woken, eyes open: {}", pose.lid);
+}
