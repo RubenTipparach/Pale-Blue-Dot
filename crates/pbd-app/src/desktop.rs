@@ -400,6 +400,11 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--pick-wild-ago <days>` (playtest-fixes design 3, a capture
+    /// instrument): once the ground round the player is in, every wild plant
+    /// within 20 m is recorded as picked that many game days ago, as a pick
+    /// writes it, so a still shows one gone and one grown back.
+    pub pick_wild_ago: Option<f64>,
     /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
     /// instrument): a grinder and a mixer that far ahead either side, and a
     /// plan staked from beyond them along the view, its nearer half paved,
@@ -438,6 +443,11 @@ pub struct Launch {
     /// `town-missions-tree` design 6).
     pub tree_town: bool,
     pub town_focus: Option<String>,
+    /// `--tree-jobs`: the Missions tab shows the taken jobs once the town
+    /// tree is open; `--track-job`: the first job taken is tracked, as its
+    /// TRACK would (capture instruments, playtest-fixes design 2).
+    pub tree_jobs: bool,
+    pub track_job: bool,
     /// `--no-readout`: no debug readout at the top left, as in a showcase
     /// (a capture instrument).
     pub no_readout: bool,
@@ -604,6 +614,7 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            pick_wild_ago: None,
             paving: None,
             road_plan: None,
             forge_panel: false,
@@ -619,6 +630,8 @@ impl Launch {
             tree_hover: None,
             tree_town: false,
             town_focus: None,
+            tree_jobs: false,
+            track_job: false,
             no_readout: false,
             dig_ahead: false,
             take_trees: false,
@@ -901,6 +914,8 @@ impl Launch {
                     );
                 }
                 "--tree-town" => result.tree_town = true,
+                "--tree-jobs" => result.tree_jobs = true,
+                "--track-job" => result.track_job = true,
                 "--no-readout" => result.no_readout = true,
                 "--town-focus" => {
                     i += 1;
@@ -926,6 +941,14 @@ impl Launch {
                         args.get(i)
                             .and_then(|n| n.parse().ok())
                             .expect("--pick-fruit takes the frame to press F on"),
+                    );
+                }
+                "--pick-wild-ago" => {
+                    i += 1;
+                    result.pick_wild_ago = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-wild-ago takes game days"),
                     );
                 }
                 "--pick-glow" => {
@@ -1997,6 +2020,8 @@ pub fn run(args: &[String]) {
                 missions::show_line,
                 mission_tree::tree_tabs,
                 mission_tree::switch_tree,
+                mission_tree::paint_jobs,
+                mission_tree::press_track,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -2006,6 +2031,9 @@ pub fn run(args: &[String]) {
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
             missions::scripted_town.run_if(pbd_app::loading::ready),
+            mission_tree::scripted_track
+                .run_if(pbd_app::loading::ready)
+                .run_if(|launch: Res<Launch>| launch.track_job),
             showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
@@ -2104,7 +2132,9 @@ pub fn run(args: &[String]) {
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
-    .insert_resource(if launch.tree_town {
+    .insert_resource(if launch.tree_jobs {
+        mission_tree::ShownTree::Jobs
+    } else if launch.tree_town {
         mission_tree::ShownTree::Town
     } else {
         mission_tree::ShownTree::Starter
@@ -2302,6 +2332,7 @@ pub fn run(args: &[String]) {
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),
+            farm::scripted_pick_wild.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted

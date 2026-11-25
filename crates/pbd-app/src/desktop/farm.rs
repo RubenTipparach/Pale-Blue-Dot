@@ -1774,6 +1774,77 @@ pub fn show(
 
 // ---------------------------------------------------------------- capture rig
 
+/// `--pick-wild-ago <days>` (playtest-fixes design 3): a capture instrument.
+/// Once the ground round the player is in, every wild plant within 20 m is
+/// recorded as picked that many game days ago, the record a pick writes, so
+/// a still shows one picked a day ago gone and one picked over two days ago
+/// grown back. The capture's save is memory-only.
+#[allow(clippy::type_complexity)]
+pub fn scripted_pick_wild(
+    launch: Res<super::Launch>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    (fine, mut save, farm, sun): (
+        Res<PlanetFine>,
+        ResMut<WorldSave>,
+        Res<FarmConfig>,
+        Res<pbd_app::sky::Sun>,
+    ),
+    mut frames: Local<u32>,
+) {
+    let Some(days) = launch.pick_wild_ago else {
+        return;
+    };
+    if *frames == u32::MAX || refresh.in_flight_s().is_some() {
+        return;
+    }
+    *frames += 1;
+    if *frames < 20 {
+        return;
+    }
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    *frames = u32::MAX;
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+    let up = eye.normalize_or(Vec3::Y);
+    let now_s = sun.clock.seconds;
+    let picked_s = now_s - days * f64::from(pbd_core::daylight::DAY_S);
+    let mut picked = 0;
+    for record in fine.set.finest_records() {
+        let at = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
+        if at.angle_between(up) * PLANET_RADIUS > 20.0 {
+            continue;
+        }
+        let cell = record.key();
+        let Some(index) = digging::record_of(&fine, cell) else {
+            continue;
+        };
+        let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
+            continue;
+        };
+        if wild_at(&fine, &save, &farm, cell, top, now_s).is_none() {
+            continue;
+        }
+        let line = StoredRecord::of(
+            WILD_KIND,
+            u64::from(cell),
+            WILD_SCHEMA,
+            &Picked { picked_s },
+        );
+        if save
+            .store(&pbd_core::records::Author::Player(0), vec![line])
+            .is_some()
+        {
+            picked += 1;
+        }
+    }
+    info!("--pick-wild-ago: {picked} wild plants picked {days} game days ago");
+}
+
 /// `--gather-around <metres>` (`gather-by-hand`): a measurement instrument
 /// for the headless captures, which have no hands. Once the ground round the
 /// player is in, every piece of clutter within `metres` is taken through

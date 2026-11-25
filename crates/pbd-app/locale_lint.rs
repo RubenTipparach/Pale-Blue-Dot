@@ -87,6 +87,7 @@ pub const DATA_PREFIXES: &[&str] = &[
     // `economy::jobs::JobKind`: each job's line by its code; the townsfolk's
     // roles by the template's id (`desktop::talk::role_name`).
     "jobs.kind.",
+    "jobs.name.",
     "talk.role.",
     // `building::rules::Rule`, `building::Class` and the kits: build mode's
     // reasons, pieces and kit names by id (`builds::tests`).

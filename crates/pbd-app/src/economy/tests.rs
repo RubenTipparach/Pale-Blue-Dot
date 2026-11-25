@@ -159,8 +159,9 @@ fn too_few_coins_change_nothing() {
     );
 }
 
-/// A delivery: the parcel is handed over on taking the job, given to the
-/// other town's people, and paid back at the giver.
+/// A delivery (`townsfolk` design 47): taking it puts nothing in the pack;
+/// the trader hands the parcel over; the other town's people take it, and
+/// only once picked up; it is paid back at the giver.
 #[test]
 fn a_delivery_hands_its_parcel_to_the_other_town() {
     let mut app = app();
@@ -176,19 +177,37 @@ fn a_delivery_hands_its_parcel_to_the_other_town() {
     let to = job.to.unwrap();
     shop(&mut app, |s| s.take(job.clone())).unwrap();
     let parcel = Item::Good(Good::PARCEL);
-    assert_eq!(
+    let in_pack = |app: &App| {
         app.world()
             .resource::<crate::hotbar::Hotbar>()
             .0
-            .count(parcel),
-        1
-    );
-    // Not counted in the wrong town.
-    assert_eq!(shop(&mut app, |s| s.deliver(&harbour(77))), Ok(0));
+            .count(parcel)
+    };
+    assert_eq!(in_pack(&app), 0, "it waits with the trader");
     let there = TownInfo {
         site: to,
         ..harbour(to)
     };
+    // Not handed over before it is picked up, nor picked up elsewhere.
+    assert_eq!(shop(&mut app, |s| s.deliver(&there)), Ok(0));
+    assert_eq!(shop(&mut app, |s| s.pick_up(&there)), Ok(0));
+    assert!(parcel_directions(app.world().resource::<Economy>(), &Towns::default()).is_empty());
+    assert_eq!(shop(&mut app, |s| s.pick_up(&town)), Ok(1));
+    assert_eq!(in_pack(&app), 1);
+    assert_eq!(shop(&mut app, |s| s.pick_up(&town)), Ok(0), "once");
+    // The pick-up is in the save.
+    assert!(!jobs_of(app.world().resource::<WorldSave>()).is_waiting(job.id));
+    assert_eq!(
+        app.world()
+            .resource::<Economy>()
+            .jobs
+            .carried()
+            .map(|j| j.id)
+            .collect::<Vec<_>>(),
+        [job.id]
+    );
+    // Not counted in the wrong town.
+    assert_eq!(shop(&mut app, |s| s.deliver(&harbour(77))), Ok(0));
     assert_eq!(shop(&mut app, |s| s.deliver(&there)), Ok(1));
     assert_eq!(
         app.world()
@@ -234,8 +253,10 @@ fn a_sale_counts_toward_a_trade_job() {
 fn every_job_kind_and_role_has_its_words() {
     let locale = pbd_core::locale::Locale::english();
     for kind in JobKind::ALL {
-        let key = format!("jobs.kind.{}", kind.code());
-        assert!(locale.get(&key).is_some(), "{key}");
+        for prefix in ["jobs.kind", "jobs.name"] {
+            let key = format!("{prefix}.{}", kind.code());
+            assert!(locale.get(&key).is_some(), "{key}");
+        }
     }
     let cfg = config();
     for role in cfg.jobs.trader_roles.iter().chain(&cfg.jobs.giver_roles) {
@@ -732,4 +753,83 @@ fn a_trader_leads_the_player_along_the_road_and_the_escort_is_paid() {
     assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
     let paid = shop(&mut app, |s| s.hand_in(&town, job.id)).unwrap();
     assert_eq!(paid.reward, 60, "40 coins times the board's 1.5");
+}
+
+/// A save holding a delivery taken before pick-ups existed (`townsfolk`
+/// design 47): its parcel is in the pack and its record has no waiting
+/// list. Opened today it keeps the parcel, gains the drop-off marker, and
+/// the parcel is handed over at the job's town as before.
+#[test]
+fn a_parcel_taken_before_pick_ups_keeps_its_parcel_and_gains_the_marker() {
+    let mut app = app();
+    let cfg = config();
+    let town = harbour(30);
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: 1,
+    };
+    let job = board.make(town.as_town(), JobKind::Deliver, 99, 5).unwrap();
+    let to = job.to.unwrap();
+    // The record as the build before wrote it: the job taken, the parcel
+    // given in the same line, and no `waiting`.
+    let mut before = pbd_core::economy::jobs::TakenJobs::default();
+    before.taken.push(job.clone());
+    let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &before);
+    assert!(!record.body.contains("waiting"), "{}", record.body);
+    let parcel = Item::Good(Good::PARCEL);
+    {
+        let world = app.world_mut();
+        let mut slots = world.resource::<crate::hotbar::Hotbar>().0.clone();
+        assert_eq!(slots.give(parcel, 1), 0);
+        let mut save = world.resource_mut::<WorldSave>();
+        assert!(save.store_with_hands(record, JOBS_SCHEMA, &slots));
+        world.resource_mut::<crate::hotbar::Hotbar>().0 = slots;
+    }
+    // The world opened: its jobs read from the save.
+    let jobs = jobs_of(app.world().resource::<WorldSave>());
+    assert!(!jobs.is_waiting(job.id), "read as picked up");
+    app.world_mut().resource_mut::<Economy>().jobs = jobs;
+    // The marker: the job's town.
+    let dir = Vec3::new(0.0, 0.6, 0.8);
+    let towns = Towns::holding(
+        vec![crate::towns::Held {
+            site: pbd_core::sites::Site {
+                id: to,
+                kind: SiteKind::Village,
+                direction: dir,
+                name: "Brindle".into(),
+                capital: false,
+                home: false,
+                pinned: false,
+                river: false,
+            },
+            town: small_town(to),
+        }],
+        Vec::new(),
+    );
+    assert_eq!(
+        parcel_directions(app.world().resource::<Economy>(), &towns),
+        [dir]
+    );
+    // The trader has nothing to hand over; the parcel stays in the pack.
+    assert_eq!(shop(&mut app, |s| s.pick_up(&town)), Ok(0));
+    let count = |app: &App| {
+        app.world()
+            .resource::<crate::hotbar::Hotbar>()
+            .0
+            .count(parcel)
+    };
+    assert_eq!(count(&app), 1);
+    let there = TownInfo {
+        site: to,
+        ..harbour(to)
+    };
+    assert_eq!(shop(&mut app, |s| s.deliver(&there)), Ok(1));
+    assert_eq!(count(&app), 0);
+    assert!(
+        parcel_directions(app.world().resource::<Economy>(), &towns).is_empty(),
+        "delivered: no marker"
+    );
 }

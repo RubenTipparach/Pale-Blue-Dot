@@ -652,10 +652,12 @@ impl Shop<'_> {
     /// cleared and they go back to their post. The jobs line first.
     pub fn abandon(&mut self, id: u64) -> Result<Job, Why> {
         let mut jobs = self.eco.jobs.clone();
+        // A parcel still with the trader was never in the pack.
+        let carried = !jobs.is_waiting(id);
         let job = jobs.abandon(id).map_err(Why::Job)?;
         let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs);
         let mut slots = self.slots.clone();
-        if job.kind == JobKind::Deliver && slots.take_item(Item::Good(Good::PARCEL), 1) {
+        if job.kind == JobKind::Deliver && carried && slots.take_item(Item::Good(Good::PARCEL), 1) {
             if !self.save.store_with_hands(record, JOBS_SCHEMA, &slots) {
                 return Err(Why::Unsaved);
             }
@@ -694,29 +696,51 @@ impl Shop<'_> {
         Ok(job)
     }
 
-    /// Take a job from `town`'s board. A delivery hands over its parcel, so
-    /// it needs room in the pack.
+    /// Take a job from `town`'s board. A delivery's parcel waits with the
+    /// town's trader until picked up (`townsfolk` design 47).
     pub fn take(&mut self, job: Job) -> Result<(), Why> {
         let mut jobs = self.eco.jobs.clone();
         jobs.take(job.clone()).map_err(Why::Job)?;
         let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs);
-        let mut slots = self.slots.clone();
-        if job.kind == JobKind::Deliver {
-            if slots.give(Item::Good(Good::PARCEL), 1) != 0 {
-                return Err(Why::PackFull);
-            }
-            if !self.save.store_with_hands(record, JOBS_SCHEMA, &slots) {
-                return Err(Why::Unsaved);
-            }
-        } else if self.save.store(&Author::Player(0), vec![record]).is_some() {
+        if self.save.store(&Author::Player(0), vec![record]).is_some() {
             self.save.note_record_kinds(&[(JOBS_KIND, JOBS_SCHEMA)]);
         } else {
             return Err(Why::Unsaved);
         }
         info!("job {} taken at site {}: {:?}", job.id, job.site, job.kind);
         self.eco.jobs = jobs;
-        *self.slots = slots;
         Ok(())
+    }
+
+    /// The parcels waiting with `town`'s trader handed to the player, one
+    /// pack slot each, in the same line as the jobs (`townsfolk` design 47).
+    /// How many; a full pack leaves them waiting.
+    pub fn pick_up(&mut self, town: &TownInfo) -> Result<u32, Why> {
+        let waiting = self.eco.jobs.waiting_at(town.site);
+        if waiting.is_empty() {
+            return Ok(0);
+        }
+        let mut jobs = self.eco.jobs.clone();
+        let mut slots = self.slots.clone();
+        let mut given = 0;
+        for id in waiting {
+            if slots.give(Item::Good(Good::PARCEL), 1) != 0 {
+                break;
+            }
+            jobs.pick_up(id);
+            given += 1;
+        }
+        if given == 0 {
+            return Err(Why::PackFull);
+        }
+        let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs);
+        if !self.save.store_with_hands(record, JOBS_SCHEMA, &slots) {
+            return Err(Why::Unsaved);
+        }
+        info!("{given} parcel(s) picked up at {}", town.name);
+        self.eco.jobs = jobs;
+        *self.slots = slots;
+        Ok(given)
     }
 
     /// Hand a done job in at `town`: its coins into the purse and the town's
@@ -764,7 +788,7 @@ impl Shop<'_> {
             .taken
             .iter()
             .filter(|j| j.kind == JobKind::Deliver && j.to == Some(town.site))
-            .filter(|j| !self.eco.jobs.is_done(j.id))
+            .filter(|j| !self.eco.jobs.is_done(j.id) && !self.eco.jobs.is_waiting(j.id))
             .map(|j| j.id)
             .collect();
         if owed.is_empty() {
@@ -885,6 +909,64 @@ pub fn count_jobs(
             warn!("town jobs not saved: the save writer has failed");
         }
     }
+}
+
+/// Make a taken job the active mission, or none (playtest-fixes design 2),
+/// and store the jobs record. Whether it moved and was stored.
+pub fn track_job(eco: &mut Economy, save: &mut WorldSave, mission: Option<String>) -> bool {
+    if eco.jobs.progress.focus == mission {
+        return false;
+    }
+    let mut jobs = eco.jobs.clone();
+    jobs.progress.focus = mission;
+    let record = StoredRecord::of(JOBS_KIND, JOBS_ID, JOBS_SCHEMA, &jobs);
+    if save.store(&Author::Player(0), vec![record]).is_none() {
+        warn!("the tracked job was not saved: the save writer has failed");
+        return false;
+    }
+    save.note_record_kinds(&[(JOBS_KIND, JOBS_SCHEMA)]);
+    eco.jobs = jobs;
+    true
+}
+
+/// The tracked job, if a taken one is.
+pub fn tracked_job(eco: &Economy) -> Option<&Job> {
+    let focus = eco.jobs.progress.focus.as_deref()?;
+    eco.jobs.taken.iter().find(|j| j.mission_id() == focus)
+}
+
+/// A taken job as the HUD tracker names it (playtest-fixes design 2): what
+/// to do next, without counts. A delivery still with the trader is to be
+/// picked up; a done job is to be handed in where it was taken.
+pub fn job_title(job: &Job, jobs: &TakenJobs, towns: &Towns) -> Localized {
+    if jobs.is_done(job.id) {
+        return tr_with(
+            "jobs.track_hand_in",
+            &[("town", &town_name(towns, job.site))],
+        );
+    }
+    if jobs.is_waiting(job.id) {
+        return tr("jobs.track_pick_up");
+    }
+    let o = &job.objectives[0];
+    let thing = job_thing(job);
+    let to = job.to.map(|t| town_name(towns, t)).unwrap_or_default();
+    tr_with(
+        &format!("jobs.name.{}", job.kind.code()),
+        &[("count", &o.count), ("thing", &thing), ("town", &to)],
+    )
+}
+
+/// Where each picked-up parcel is bound, as directions from the planet's
+/// centre: the job's town, what the compass and the map mark (`townsfolk`
+/// design 47).
+pub fn parcel_directions(eco: &Economy, towns: &Towns) -> Vec<Vec3> {
+    eco.jobs
+        .carried()
+        .filter_map(|j| j.to)
+        .filter_map(|to| towns.held.iter().find(|h| h.site.id == to))
+        .map(|h| h.site.direction)
+        .collect()
 }
 
 /// A taken job's line, as the board and the talk panel show it: what to do,

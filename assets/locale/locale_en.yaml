@@ -870,16 +870,39 @@ jobs:
     trade: "Sell {count} goods here  {have}/{count}"
   lamp: lamp
   lost_marker: Lost villager
+  name:
+    cook: "Cook {count} {thing}"
+    deliver: "Take the parcel to {town}"
+    escort: "Walk a trader to {town}"
+    fish: "Catch {count} fish"
+    gather: "Bring {count} {thing}"
+    harvest: "Harvest {count} {thing}"
+    herd: "Collect {count} {thing}"
+    hunt: "Bring {count} {thing}"
+    lamps: "Light {count} lamps at dusk"
+    lost: "Bring a lost villager home"
+    mine: "Dig {count} {thing}"
+    repair: "Mend a broken wall"
+    rockfall: "Clear the rockfall off the road"
+    trade: "Sell {count} goods here"
   no_parcel: No parcel for this town
   none: No work today
   not_done: Not done yet
   not_taken: Not taken
+  none_taken: No jobs taken
   paid: "Paid {coins} coins"
+  parcel_marker: Parcel drop-off
   posted: ON THE BOARD
+  posted_at: "From {town}"
   take: TAKE
   taken: Already taken
   taken_line: Job taken
   title: JOBS
+  track: TRACK
+  tracking: TRACKING
+  track_hand_in: "Hand it in at {town}"
+  track_pick_up: Get the parcel from the trader
+  track_row: Done
   wall: wall
   wrong_town: Hand it in where you took it
   yours: YOUR JOBS
@@ -1290,6 +1313,7 @@ mission_tree:
   open: OPEN
   opens_next: OPENS NEXT
   tree:
+    jobs: JOBS
     starter: STARTER
     town: TOWN
   unlocks: UNLOCKS
@@ -1763,6 +1787,7 @@ talk:
     ready: You're back. Here for your pay?
     trader: Want to trade?
   lost_found: I'm lost. Lead the way.
+  parcel_given: Here is the parcel.
   parcel_thanks: Thanks for the parcel.
   role:
     boatman: boatman

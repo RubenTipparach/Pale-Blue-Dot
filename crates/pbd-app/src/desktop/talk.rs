@@ -693,8 +693,18 @@ pub fn offer_talk(
     }
 }
 
-/// Open the talk with `talker`: who they are to their town, and any parcel
-/// owed there handed over.
+/// The parcels waiting with `town`'s trader handed over (`townsfolk`
+/// design 47): what the talk says, if anything was waiting.
+fn pick_up_line(shop: &mut Shop, town: &TownInfo) -> Option<Localized> {
+    match shop.pick_up(town) {
+        Ok(n) if n > 0 => Some(tr("talk.parcel_given")),
+        Ok(_) => None,
+        Err(why) => Some(why.words()),
+    }
+}
+
+/// Open the talk with `talker`: who they are to their town, any parcel owed
+/// there handed over, and any waiting with its trader picked up.
 #[allow(clippy::too_many_arguments)]
 pub fn open_talk(
     talker: Talker,
@@ -718,6 +728,10 @@ pub fn open_talk(
             Ok(n) if n > 0 => said = Some(tr("talk.parcel_thanks")),
             Err(why) => said = Some(why.words()),
             _ => {}
+        }
+        // The trader hands over the parcels waiting with them.
+        if trader {
+            said = pick_up_line(shop, &town).or(said);
         }
     }
     *talking = Talking {
@@ -916,7 +930,13 @@ pub fn press(
                     fish_ids: &ids,
                     now_s: sun.clock.seconds,
                 };
-                act(&mut shop, &with.town, other)
+                let said = act(&mut shop, &with.town, other);
+                // A delivery taken from a trader who gives the jobs too:
+                // its parcel is handed over at once (`townsfolk` design 47).
+                match (other, with.trader) {
+                    (TalkAction::Take(_), true) => pick_up_line(&mut shop, &with.town).or(said),
+                    _ => said,
+                }
             }
         };
         talking.said = said;
@@ -985,7 +1005,12 @@ fn line(parent: &mut ChildSpawnerCommands, text: Localized, colour: Color) {
 }
 
 /// A coin amount: the coin and the number.
-fn coins(parent: &mut ChildSpawnerCommands, n: u64, colour: Color, coin: &Handle<Image>) {
+pub(super) fn coins(
+    parent: &mut ChildSpawnerCommands,
+    n: u64,
+    colour: Color,
+    coin: &Handle<Image>,
+) {
     parent
         .spawn(Node {
             align_items: AlignItems::Center,
@@ -1021,7 +1046,7 @@ fn icon(
 }
 
 /// [`icon`], or an icon of its own where a job has one and no good.
-fn icon_or(
+pub(super) fn icon_or(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
     item: Option<pbd_core::inventory::Item>,
@@ -1067,7 +1092,7 @@ fn icon_or(
 /// The good a job asks for, for its well: its thing (the first of a
 /// choice), a delivery's parcel, a repair's planks (design 29 mends with
 /// them); none for a job with no good (a lost villager, lamps).
-fn job_item(job: &Job, ids: &[String]) -> Option<pbd_core::inventory::Item> {
+pub(super) fn job_item(job: &Job, ids: &[String]) -> Option<pbd_core::inventory::Item> {
     use pbd_core::economy::jobs::JobKind;
     match job.kind {
         JobKind::Deliver => return item_of("parcel", ids),
@@ -2127,16 +2152,22 @@ pub fn scripted_press(
                         | ("abandon", TalkAction::Abandon(_))
                 )
         };
-        // A lost villager's TAKE: the button whose row is a lost job.
-        let lost = |a: &TalkAction, parent: Option<&ChildOf>| {
+        // A kind's TAKE, `take-<kind>`: the button whose row is a job of
+        // that kind (`take-lost`, `take-deliver`).
+        let kind = what.strip_prefix("take-").and_then(|code| {
+            pbd_core::economy::jobs::JobKind::ALL
+                .into_iter()
+                .find(|k| k.code() == code)
+        });
+        let of_kind = |a: &TalkAction, parent: Option<&ChildOf>| {
             matches!(a, TalkAction::Take(_))
                 && parent
                     .and_then(|p| rows.get(p.parent()).ok())
-                    .is_some_and(|r| r.0 == pbd_core::economy::jobs::JobKind::Lost)
+                    .is_some_and(|r| Some(r.0) == kind)
         };
         let found = buttons.iter_mut().find(|(_, a, parent)| {
-            if what == "take-lost" {
-                lost(a, *parent)
+            if kind.is_some() {
+                of_kind(a, *parent)
             } else {
                 wanted(a)
             }

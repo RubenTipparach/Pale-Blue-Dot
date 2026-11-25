@@ -21,13 +21,15 @@ use pbd_core::locale::tr_with;
 use pbd_core::missions::{Chain, Progress, Standing};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Which of the two trees the tab shows (`town-missions-tree` design 6):
-/// the starter tree, or the town tree once it is open.
+/// What the tab shows (`town-missions-tree` design 6): the starter tree, or
+/// once the town tree is open, the town tree or the taken jobs
+/// (playtest-fixes design 2).
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ShownTree {
     #[default]
     Starter,
     Town,
+    Jobs,
 }
 
 /// The progress of a tree not yet open: nothing done.
@@ -594,6 +596,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, trees: Trees, assets: Res<
             for (tree, words) in [
                 (ShownTree::Starter, tr("mission_tree.tree.starter")),
                 (ShownTree::Town, tr("mission_tree.tree.town")),
+                (ShownTree::Jobs, tr("mission_tree.tree.jobs")),
             ] {
                 row.spawn((ui_kit::plaque(&kit, Set::Stone, 96.0), TreeTab(tree)))
                     .with_children(|p| {
@@ -1022,6 +1025,13 @@ pub fn switch_tree(
     for layer in &layers {
         commands.entity(layer).despawn();
     }
+    // The jobs take the tree's place (playtest-fixes design 2): their list
+    // is filled by `paint_jobs`.
+    if want == ShownTree::Jobs {
+        spawn_jobs(&mut commands, &kit, *screen == Screen::Missions);
+        *view = TreeView::default();
+        return;
+    }
     let chain = if want == ShownTree::Town && trees.town_open() {
         trees.chain()
     } else {
@@ -1393,8 +1403,12 @@ pub fn steer(
     keys: Res<ButtonInput<KeyCode>>,
     mut press: Local<Option<(Vec2, Option<usize>, bool)>>,
     mut spin: Local<f32>,
+    (mut eco, mut save): (
+        Option<ResMut<pbd_app::economy::Economy>>,
+        Option<ResMut<pbd_app::saves::WorldSave>>,
+    ),
 ) {
-    if *screen != Screen::Missions {
+    if *screen != Screen::Missions || *shown == ShownTree::Jobs {
         wheel.clear();
         *press = None;
         *spin = 0.0;
@@ -1530,6 +1544,12 @@ pub fn steer(
             && progress.standing(tree, m) == Standing::Open
         {
             let id = m.id.clone();
+            // A card picked on either tree is the mission now, not a job.
+            if let (Some(eco), Some(save)) = (eco.as_deref_mut(), save.as_deref_mut())
+                && eco.jobs.progress.focus.is_some()
+            {
+                pbd_app::economy::track_job(eco, save, None);
+            }
             if town_shown {
                 if let Some(t) = town.as_deref_mut()
                     && let Some(p) = t.progress_mut()
@@ -1976,4 +1996,340 @@ mod tests {
         let u2 = (at - pan2 - b.origin()) / b.pitch();
         assert!((u - u2).length() < 1e-4);
     }
+
+    /// A taken job tracked by its TRACK plaque is the tracker's, named for
+    /// it; a card picked on the tree is the mission then, and the job is
+    /// tracked no more (playtest-fixes design 2). Both are in the save.
+    #[test]
+    fn a_tracked_job_is_the_trackers_until_a_card_is_picked() {
+        use bevy::input::mouse::MouseWheel;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (recipes, _) = pbd_app::config::recipe_book();
+        app.insert_resource(recipes)
+            .insert_resource(pbd_app::config::FaunaConfig(
+                ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap(),
+            ))
+            .insert_resource(pbd_app::config::HusbandryConfig(Default::default()))
+            .insert_resource(pbd_app::saves::WorldSave::memory_only())
+            .insert_resource(pbd_app::hotbar::Hotbar::default())
+            .insert_resource(pbd_app::fish::ToolSlot(
+                pbd_core::inventory::Equipment::new_world(),
+            ))
+            .add_plugins(pbd_app::missions::MissionsPlugin)
+            .init_resource::<pbd_app::economy::Economy>()
+            .insert_resource(Screen::Missions)
+            .insert_resource(ShownTree::Starter)
+            .init_resource::<TreeView>()
+            .insert_resource(super::super::Launch::parse(&[]))
+            .init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .add_message::<MouseWheel>()
+            .add_systems(Update, (press_track, steer).chain());
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        app.update();
+        let job = pbd_core::economy::jobs::Job {
+            id: 4242,
+            site: 7,
+            kind: pbd_core::economy::jobs::JobKind::Fish,
+            objectives: vec![pbd_core::missions::ObjectiveEntry {
+                kind: pbd_core::missions::Kind::Catch,
+                what: "any".into(),
+                count: 3,
+                label: None,
+            }],
+            reward: 12,
+            to: None,
+            thing: String::new(),
+        };
+        app.world_mut()
+            .resource_mut::<pbd_app::economy::Economy>()
+            .jobs
+            .take(job.clone())
+            .unwrap();
+        // TRACK on its row.
+        let track = app
+            .world_mut()
+            .spawn((Button, Interaction::Pressed, JobTrack(job.mission_id())))
+            .id();
+        app.update();
+        app.world_mut().entity_mut(track).insert(Interaction::None);
+        let eco = app.world().resource::<pbd_app::economy::Economy>();
+        assert_eq!(eco.jobs.progress.focus, Some(job.mission_id()));
+        let stored = pbd_app::economy::jobs_of(app.world().resource::<pbd_app::saves::WorldSave>());
+        assert_eq!(stored.progress.focus, Some(job.mission_id()), "saved");
+        assert_eq!(
+            app.world().resource::<Missions>().progress.focus,
+            None,
+            "the tree's focus cleared"
+        );
+        // The tracker's line: the job's name and its row.
+        let towns = pbd_app::towns::Towns::default();
+        let shown = super::super::missions::tracked_job_mission(eco, &towns).unwrap();
+        assert_eq!(
+            shown.title,
+            tr_with("jobs.name.fish", &[("count", &3)]).into_string()
+        );
+        assert_eq!(shown.objectives.len(), 1);
+        assert_eq!(
+            shown.objectives[0].label,
+            tr("jobs.track_row").into_string()
+        );
+        assert_eq!(shown.objectives[0].count, 3);
+        // An open card picked on the starter tree.
+        let chain = app.world().resource::<MissionChain>().0.clone();
+        let progress = app.world().resource::<Missions>().progress.clone();
+        let open = chain
+            .missions
+            .iter()
+            .position(|m| progress.standing(&chain, m) == Standing::Open)
+            .unwrap();
+        let card = app
+            .world_mut()
+            .spawn((Card(open), Interaction::Pressed))
+            .id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.update();
+        {
+            let mut mouse = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            mouse.clear();
+            mouse.release(MouseButton::Left);
+        }
+        app.world_mut().entity_mut(card).insert(Interaction::None);
+        app.update();
+        let eco = app.world().resource::<pbd_app::economy::Economy>();
+        assert_eq!(eco.jobs.progress.focus, None, "the job is tracked no more");
+        assert!(super::super::missions::tracked_job_mission(eco, &towns).is_none());
+        let stored = pbd_app::economy::jobs_of(app.world().resource::<pbd_app::saves::WorldSave>());
+        assert_eq!(stored.progress.focus, None, "saved");
+        assert_eq!(
+            app.world().resource::<Missions>().progress.focus.as_deref(),
+            Some(chain.missions[open].id.as_str())
+        );
+    }
+}
+
+// ---------------------------------------------------------------- the jobs
+
+/// The jobs' layer in the tree's place (playtest-fixes design 2).
+#[derive(Component)]
+pub struct JobsLayer;
+/// The list the jobs' rows stand in, rebuilt when the jobs change.
+#[derive(Component)]
+pub struct JobsList;
+/// A job's TRACK plaque, by the job's mission id.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct JobTrack(pub String);
+
+/// The jobs list's width, native px.
+const JOBS_W: f32 = 470.0;
+
+fn spawn_jobs(commands: &mut Commands, kit: &UiKit, shown: bool) {
+    commands
+        .spawn((
+            Node {
+                display: if shown { Display::Flex } else { Display::None },
+                ..menu::layer()
+            },
+            BackgroundColor(ui_kit::NIGHT),
+            GlobalZIndex(11),
+            Panel(Screen::Missions),
+            TreeLayer,
+            JobsLayer,
+        ))
+        .with_children(|layer| {
+            layer.spawn((menu::framed(kit, Set::Stone, JOBS_W), JobsList));
+        });
+}
+
+/// What the jobs' rows paint from.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct JobsLook<'w> {
+    kit: Res<'w, UiKit>,
+    icons: Option<Res<'w, super::slots::ItemIcons>>,
+    images: Res<'w, Assets<Image>>,
+    coin: Option<Res<'w, super::talk::CoinIcon>>,
+    fauna: Res<'w, pbd_app::config::FaunaConfig>,
+    body: Res<'w, pbd_app::fish::Body>,
+}
+
+/// Fill the jobs' list from the taken jobs: rebuilt when they change, or
+/// when the list is new.
+pub fn paint_jobs(
+    mut commands: Commands,
+    eco: Option<Res<pbd_app::economy::Economy>>,
+    towns: Option<Res<pbd_app::towns::Towns>>,
+    look: JobsLook,
+    lists: Query<(Entity, Option<&Children>), With<JobsList>>,
+    added: Query<(), Added<JobsList>>,
+) {
+    let (Some(eco), Some(towns)) = (eco, towns) else {
+        return;
+    };
+    let Ok((list, children)) = lists.single() else {
+        return;
+    };
+    if !eco.is_changed() && added.is_empty() {
+        return;
+    }
+    if let Some(children) = children {
+        for child in children.iter() {
+            commands.entity(child).despawn();
+        }
+    }
+    let kit = &*look.kit;
+    let ids = pbd_app::economy::fish_ids(&look.fauna, &look.body.0);
+    let focus = eco.jobs.progress.focus.clone();
+    commands.entity(list).with_children(|list| {
+        if eco.jobs.taken.is_empty() {
+            list.spawn(KitText::new(tr("jobs.none_taken"), ui_kit::TEXT_DIM).shadow(ui_kit::INK));
+            return;
+        }
+        for job in &eco.jobs.taken {
+            let counts = eco.jobs.counts(job.id);
+            let mission = job.mission_id();
+            let tracked = focus.as_deref() == Some(mission.as_str());
+            list.spawn(Node {
+                align_items: AlignItems::Center,
+                column_gap: px(6),
+                ..default()
+            })
+            .with_children(|row| {
+                if let Some(icons) = look.icons.as_deref() {
+                    super::talk::icon_or(
+                        row,
+                        kit,
+                        super::talk::job_item(job, &ids),
+                        None,
+                        icons,
+                        &look.images,
+                    );
+                }
+                row.spawn(Node {
+                    width: px(250),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                    ..default()
+                })
+                .with_children(|words| {
+                    words.spawn(
+                        KitText::new(
+                            pbd_app::economy::job_line(job, &counts, &towns),
+                            ui_kit::TEXT,
+                        )
+                        .shadow(ui_kit::INK),
+                    );
+                    let from = pbd_app::economy::town_name(&towns, job.site);
+                    words.spawn(
+                        KitText::new(
+                            tr_with("jobs.posted_at", &[("town", &from)]),
+                            ui_kit::TEXT_DIM,
+                        )
+                        .shadow(ui_kit::INK),
+                    );
+                });
+                row.spawn(Node {
+                    width: px(40),
+                    ..default()
+                })
+                .with_children(|c| {
+                    if let Some(coin) = look.coin.as_deref() {
+                        super::talk::coins(c, job.reward, ui_kit::TITLE, &coin.0);
+                    }
+                });
+                let mut plaque = ui_kit::Plaque::new(Set::Stone);
+                plaque.latched = tracked;
+                row.spawn((
+                    ui_kit::plaque(kit, Set::Stone, 80.0),
+                    JobTrack(mission.clone()),
+                ))
+                .insert(plaque)
+                .with_children(|p| {
+                    p.spawn(ui_kit::plaque_label(
+                        Set::Stone,
+                        tr(if tracked {
+                            "jobs.tracking"
+                        } else {
+                            "jobs.track"
+                        }),
+                    ));
+                });
+            });
+        }
+    });
+}
+
+/// A TRACK pressed: that job is the active mission, the trees' focus is
+/// cleared, and the jobs record is stored; pressed on the tracked job, it
+/// is tracked no more (playtest-fixes design 2).
+pub fn press_track(
+    plaques: Query<(&Interaction, &JobTrack), Changed<Interaction>>,
+    eco: Option<ResMut<pbd_app::economy::Economy>>,
+    save: Option<ResMut<pbd_app::saves::WorldSave>>,
+    mut missions: ResMut<Missions>,
+    town: Option<ResMut<TownMissions>>,
+) {
+    let Some(pressed) = plaques
+        .iter()
+        .find(|(i, _)| **i == Interaction::Pressed)
+        .map(|(_, t)| t.0.clone())
+    else {
+        return;
+    };
+    let (Some(mut eco), Some(mut save)) = (eco, save) else {
+        return;
+    };
+    track(&mut eco, &mut save, &mut missions, town, pressed);
+}
+
+/// Make the job `mission` the active one (or none, if it already is), and
+/// clear both trees' focus so the HUD has one.
+pub fn track(
+    eco: &mut pbd_app::economy::Economy,
+    save: &mut pbd_app::saves::WorldSave,
+    missions: &mut Missions,
+    town: Option<ResMut<TownMissions>>,
+    mission: String,
+) {
+    let next = (eco.jobs.progress.focus.as_deref() != Some(mission.as_str())).then_some(mission);
+    let tracking = next.is_some();
+    if !pbd_app::economy::track_job(eco, save, next) || !tracking {
+        return;
+    }
+    if missions.progress.focus.take().is_some() {
+        missions.refocused = true;
+    }
+    if let Some(mut t) = town
+        && t.progress().is_some_and(|p| p.focus.is_some())
+    {
+        if let Some(p) = t.progress_mut() {
+            p.focus = None;
+        }
+        t.refocused = true;
+    }
+}
+
+/// `--track-job` (a capture instrument): the first taken job is tracked
+/// once there is one, as its TRACK would, once.
+pub fn scripted_track(
+    eco: Option<ResMut<pbd_app::economy::Economy>>,
+    save: Option<ResMut<pbd_app::saves::WorldSave>>,
+    mut missions: ResMut<Missions>,
+    town: Option<ResMut<TownMissions>>,
+    mut done: Local<bool>,
+) {
+    let (Some(mut eco), Some(mut save)) = (eco, save) else {
+        return;
+    };
+    if *done {
+        return;
+    }
+    let Some(first) = eco.jobs.taken.first().map(|j| j.mission_id()) else {
+        return;
+    };
+    *done = true;
+    info!("--track-job: tracking {first}");
+    track(&mut eco, &mut save, &mut missions, town, first);
 }

@@ -166,6 +166,22 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
         });
 }
 
+/// The tracked job as the tracker shows it (playtest-fixes design 2): its
+/// mission row, named, since a job's own has no title or labels; `None`
+/// when no taken job is tracked.
+pub fn tracked_job_mission(
+    eco: &pbd_app::economy::Economy,
+    towns: &pbd_app::towns::Towns,
+) -> Option<pbd_core::missions::Mission> {
+    let job = pbd_app::economy::tracked_job(eco)?;
+    let mut m = job.mission();
+    m.title = pbd_app::economy::job_title(job, &eco.jobs, towns).into_string();
+    for o in &mut m.objectives {
+        o.label = tr("jobs.track_row").into_string();
+    }
+    Some(m)
+}
+
 /// The HUD line: the current mission, or the one just done, unless the
 /// player hid it or a menu is open.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -200,7 +216,17 @@ pub fn show_line(
         Option<Res<pbd_app::town_missions::TownMissions>>,
         Option<Res<pbd_app::town_missions::TownChain>>,
     ),
+    (eco, towns): (
+        Option<Res<pbd_app::economy::Economy>>,
+        Option<Res<pbd_app::towns::Towns>>,
+    ),
 ) {
+    // A tracked job first (playtest-fixes design 2): its mission row named
+    // for the tracker, since a job's own has no title or labels.
+    let job = eco
+        .as_deref()
+        .zip(towns.as_deref())
+        .and_then(|(eco, towns)| tracked_job_mission(eco, towns).map(|m| (m, &eco.jobs.progress)));
     // One focus across the two trees (`town-missions-tree` design 6): a
     // town mission picked on its tree, else the starter tree's, else the
     // town tree's first open one.
@@ -212,7 +238,10 @@ pub fn show_line(
             .and_then(|_| p.focused(c))
             .map(|m| (m, p))
     });
-    let mission = town_focus
+    let mission = job
+        .as_ref()
+        .map(|(m, p)| (m, *p))
+        .or(town_focus)
         .or_else(|| {
             missions
                 .progress
