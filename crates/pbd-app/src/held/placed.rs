@@ -147,7 +147,8 @@ pub fn make_placed_looks(
 /// The torch's frame on the ground: its foot on the floor of its layer,
 /// standing up the cell's axis and turned about it by its seed.
 fn stand(foot: Vec3, up: Vec3, seed: f32) -> Transform {
-    let rotation = Quat::from_rotation_arc(Vec3::Y, up) * Quat::from_rotation_y(seed * 6.283);
+    let rotation =
+        Quat::from_rotation_arc(Vec3::Y, up) * Quat::from_rotation_y(seed * std::f32::consts::TAU);
     Transform::from_translation(foot).with_rotation(rotation)
 }
 
@@ -156,15 +157,19 @@ pub fn flame_at() -> Vec3 {
     (light::flame_seat() - Vec3::Y * light::haft_bottom()) * PLACED_SCALE
 }
 
+/// A torch found near the eye: its key (its direction's bits and its
+/// layer), its foot and its up, planet frame.
+pub type NearTorch = ((u32, u32, u32), Vec3, Vec3);
+
 /// The torches near the eye: every lamp spot the field lights from whose
 /// cell holds a torch, within `reach_m` of `eye` (planet frame), nearest
-/// first, at most [`MOST`]. Each as its key, its foot and its up.
+/// first, at most [`MOST`].
 pub fn near_torches(
     tier: &crate::planet::column::ColumnTier,
     eye: Vec3,
     reach_m: f32,
-) -> Vec<((u32, u32, u32), Vec3, Vec3)> {
-    let mut near: Vec<(f32, ((u32, u32, u32), Vec3, Vec3))> = tier
+) -> Vec<NearTorch> {
+    let mut near: Vec<(f32, NearTorch)> = tier
         .lamps()
         .iter()
         .filter_map(|spot| {
