@@ -25,7 +25,7 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 use pbd_core::fauna::{Environment, hash2};
 use pbd_core::ocean::places::environment;
 use pbd_core::planet_gen::TerrainConfig;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::OnceLock;
 
@@ -395,7 +395,9 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Fan, k.build());
         // An anemone: a purple foot, waving tentacles.
         g.insert(Kind::Anemone, anemone(20, 0.13, 0.22));
-        g.insert(Kind::Hero, anemone(220, 0.55, 0.5));
+        // 56 tentacles: 488 triangles, inside the owner's 500 a piece
+        // (2026-11-25; it was 220 and 1800).
+        g.insert(Kind::Hero, anemone(56, 0.55, 0.5));
         // Algae turf.
         let mut k = Kit::default();
         k.tile("veins");
@@ -1243,6 +1245,7 @@ fn floe_floats(
 
 fn build_tile(
     pieces: &[Piece],
+    packed: bool,
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
@@ -1345,7 +1348,7 @@ fn build_tile(
         }
     }
     // A cloud of anthias over one packed reef tile in two.
-    if reef.len() > 80 && hh(seed as i64, 71) < 0.5 {
+    if packed && hh(seed as i64, 71) < 0.5 {
         let (at, up) = reef[reef.len() / 2];
         out.ambient.push(Ambient::Anthias {
             at: at + up * 1.6,
@@ -1540,6 +1543,78 @@ fn frame_tangents(up: Vec3) -> (Vec3, Vec3) {
 const FADE_IN_M: f32 = 38.0;
 const FADE_OUT_M: f32 = 42.0;
 const WANT_M: f32 = 52.0;
+/// The owner's budget (2026-11-25, "each reef budget: 500 triangles, number
+/// of reefs 1000 or less"): a tile within `DETAIL_M` of the eye keeps up to
+/// `NEAR_PER_M2` reef pieces a square metre of it, one farther its largest
+/// at `FAR_PER_M2`; kelp and floes are not reef pieces and are kept. By area,
+/// not a count a tile: near a cube face's edge or corner the tiles are small
+/// and many. A whole reach stays inside `MAX_PIECES` (a test walks it, a
+/// cube corner among the places).
+const DETAIL_M: f32 = 12.0;
+const NEAR_PER_M2: f32 = 0.6;
+const FAR_PER_M2: f32 = 0.04;
+const MAX_PIECES: usize = 1000;
+const MAX_PIECE_TRIS: usize = 500;
+
+/// A tile's level of detail: 0 near, 1 far.
+fn level_at(metres: f32) -> u8 {
+    u8::from(metres > DETAIL_M)
+}
+
+/// The reef pieces a tile keeps at `level`: the largest first, up to its
+/// allowance; kelp and floes all.
+fn trim(mut pieces: Vec<Piece>, level: u8, area_m2: f32) -> Vec<Piece> {
+    let keep = allowance(level, area_m2);
+    let (mut reef, other): (Vec<Piece>, Vec<Piece>) =
+        pieces.drain(..).partition(|p| p.kind.is_some() && !p.floe);
+    reef.sort_by(|a, b| (b.scale * b.tall.max(1e-3)).total_cmp(&(a.scale * a.tall.max(1e-3))));
+    reef.truncate(keep);
+    reef.extend(other);
+    reef
+}
+
+/// The reef pieces a tile of `area_m2` keeps at `level`.
+fn allowance(level: u8, area_m2: f32) -> usize {
+    let per = if level == 0 { NEAR_PER_M2 } else { FAR_PER_M2 };
+    (area_m2 * per).round() as usize
+}
+
+/// A tile's area on the sphere, m².
+fn tile_area_m2(key: Key, radius: f32) -> f32 {
+    let unit = TILE_M / radius;
+    let (u0, v0) = (key.1 as f32 * unit, key.2 as f32 * unit);
+    let c0 = from_face(key.0, u0, v0).normalize();
+    let c1 = from_face(key.0, u0 + unit, v0).normalize();
+    let c2 = from_face(key.0, u0, v0 + unit).normalize();
+    (c1 - c0).cross(c2 - c0).length() * radius * radius
+}
+
+/// The tiles wanted round the eye and each one's level: every tile a ring
+/// of points round the eye falls in, so a cube face's edge is crossed as any
+/// other.
+fn wanted_tiles(eye_dir: Vec3, radius: f32) -> HashMap<Key, u8> {
+    let metres = |key: Key| tile_centre(key, radius).distance(eye_dir) * radius;
+    let mut wanted = HashMap::new();
+    let east = Vec3::Y.cross(eye_dir).normalize_or(Vec3::X);
+    let north = eye_dir.cross(east);
+    let step = TILE_M * 0.5;
+    let reach = (WANT_M / step).ceil() as i32;
+    for a in -reach..=reach {
+        for b in -reach..=reach {
+            let off = Vec2::new(a as f32, b as f32) * step;
+            if off.length() > WANT_M + TILE_M {
+                continue;
+            }
+            let d = (eye_dir + (east * off.x + north * off.y) / radius).normalize();
+            let key = key_of(d, radius);
+            let m = metres(key);
+            if m <= WANT_M {
+                wanted.insert(key, level_at(m));
+            }
+        }
+    }
+    wanted
+}
 const LAND_S: f32 = 0.8;
 /// Within this of the eye a tile sways, m; the sway eases out over the
 /// last `SWAY_EASE_M` (`ocean-environments` B18: it snapped to rest). Its
@@ -1588,7 +1663,9 @@ struct Drawn {
 
 #[derive(Resource, Default)]
 struct Tiles {
-    drawn: HashMap<Key, Drawn>,
+    /// Each tile at its level of detail: one fading out while its other
+    /// level fades in is two entries.
+    drawn: HashMap<(Key, u8), Drawn>,
     planning: HashMap<Key, Task<Vec<Piece>>>,
     ready: Vec<(Key, Vec<Piece>)>,
     /// Whether the world has sea places: a world switching its generator
@@ -1826,26 +1903,8 @@ fn tiles(
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
     let eye_dir = eye.normalize_or(Vec3::Y);
     let metres = |key: Key| tile_centre(key, radius).distance(eye_dir) * radius;
-    // The tiles wanted: every tile a ring of points round the eye falls in,
-    // so a cube face's edge is crossed as any other.
-    let mut wanted = HashSet::new();
-    let east = Vec3::Y.cross(eye_dir).normalize_or(Vec3::X);
-    let north = eye_dir.cross(east);
-    let step = TILE_M * 0.5;
-    let reach = (WANT_M / step).ceil() as i32;
-    for a in -reach..=reach {
-        for b in -reach..=reach {
-            let off = Vec2::new(a as f32, b as f32) * step;
-            if off.length() > WANT_M + TILE_M {
-                continue;
-            }
-            let d = (eye_dir + (east * off.x + north * off.y) / radius).normalize();
-            let key = key_of(d, radius);
-            if metres(key) <= WANT_M {
-                wanted.insert(key);
-            }
-        }
-    }
+    let wanted = wanted_tiles(eye_dir, radius);
+    let is_wanted = |key: Key, level: u8| wanted.get(&key) == Some(&level);
     // Fade every tile by its distance and its landing; drop one once it is
     // out of reach and wholly faded.
     let seconds = sun
@@ -1853,12 +1912,12 @@ fn tiles(
         .map_or(now as f64, |s| s.clock.seconds)
         .rem_euclid(3600.0) as f32;
     let mut gone = Vec::new();
-    for (key, drawn) in state.drawn.iter_mut() {
-        let m = metres(*key);
-        let fade = tile_fade(drawn.fade, m, wanted.contains(key), dt);
+    for (&(key, level), drawn) in state.drawn.iter_mut() {
+        let m = metres(key);
+        let fade = tile_fade(drawn.fade, m, is_wanted(key, level), dt);
         drawn.fade = fade;
-        if !wanted.contains(key) && fade >= 1.0 {
-            gone.push(*key);
+        if !is_wanted(key, level) && fade >= 1.0 {
+            gone.push((key, level));
             continue;
         }
         if let Ok((mut transform, mut faded)) = roots.get_mut(drawn.root) {
@@ -1968,11 +2027,11 @@ fn tiles(
             state.drawn.len(),
         );
     }
-    state.planning.retain(|k, _| wanted.contains(k));
+    state.planning.retain(|k, _| wanted.contains_key(k));
     // Plan what is new, off the main thread.
     let pool = AsyncComputeTaskPool::get();
-    for key in &wanted {
-        if state.drawn.contains_key(key)
+    for (key, level) in &wanted {
+        if state.drawn.contains_key(&(*key, *level))
             || state.planning.contains_key(key)
             || state.ready.iter().any(|(k, _)| k == key)
         {
@@ -2003,16 +2062,30 @@ fn tiles(
     let Some((key, pieces)) = state.ready.pop() else {
         return;
     };
-    if !wanted.contains(&key) {
+    let Some(&level) = wanted.get(&key) else {
+        return;
+    };
+    if state.drawn.contains_key(&(key, level)) {
         return;
     }
+    // A packed tile has its anthias whatever the budget leaves of its reef.
+    let packed = pieces
+        .iter()
+        .filter(|p| {
+            p.kind
+                .is_some_and(|k| !matches!(k, Kind::Chimney | Kind::Mat | Kind::Mussels))
+                && !p.floe
+        })
+        .count()
+        > 80;
+    let pieces = trim(pieces, level, tile_area_m2(key, radius));
     let anchor = tile_centre(key, radius) * sea.radius;
     let contact = contact.as_deref();
     let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32;
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    let built = build_tile(&pieces, anchor, bed, sea.radius, under, seed);
+    let built = build_tile(&pieces, packed, anchor, bed, sea.radius, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -2143,7 +2216,7 @@ fn tiles(
             )
         });
     state.drawn.insert(
-        key,
+        (key, level),
         Drawn {
             root,
             glow: glow_id,
@@ -2246,6 +2319,7 @@ mod tests {
         }];
         let built = build_tile(
             &pieces,
+            true,
             dir * radius,
             flat(-0.6),
             radius,
@@ -2255,6 +2329,7 @@ mod tests {
         assert!(built.floes.positions.is_empty(), "no floe on the beach");
         let built = build_tile(
             &pieces,
+            true,
             dir * radius,
             flat(4.0),
             radius,
@@ -2687,6 +2762,41 @@ mod sway_tests {
         }
         let mesh = swaying_mesh(&still);
         assert!(mesh.attribute(ATTRIBUTE_SWAY).is_some());
+    }
+
+    /// The owner's budget: no reef piece over 500 triangles.
+    #[test]
+    fn every_reef_piece_is_inside_its_triangle_budget() {
+        for (kind, shape) in library() {
+            let tris = shape.positions.len() / 3;
+            assert!(tris <= MAX_PIECE_TRIS, "{kind:?}: {tris}");
+        }
+    }
+
+    /// The owner's budget: a whole reach draws no more than 1000 reef
+    /// pieces, wherever the eye is (a cube face's middle, an edge, a corner).
+    #[test]
+    fn a_reach_draws_at_most_a_thousand_pieces() {
+        let radius = crate::planet::terrain_config().radius_m;
+        for eye in [
+            Vec3::Y,
+            Vec3::new(1.0, 1.0, 0.0).normalize(),
+            Vec3::ONE.normalize(),
+            Vec3::new(0.3, -0.8, 0.52).normalize(),
+        ] {
+            let wanted = wanted_tiles(eye, radius);
+            let near = wanted.values().filter(|l| **l == 0).count();
+            let most: usize = wanted
+                .iter()
+                .map(|(k, l)| allowance(*l, tile_area_m2(*k, radius)))
+                .sum();
+            println!(
+                "REACH {eye}: {} tiles, {near} near, {most} pieces at most",
+                wanted.len()
+            );
+            assert!(most <= MAX_PIECES, "{eye}: {most}");
+            assert!(near >= 1, "the eye's own tile is near");
+        }
     }
 
     /// The shader's distances are the ones the CPU used.
