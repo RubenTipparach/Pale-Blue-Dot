@@ -26,5 +26,8 @@
 
 - [x] 5.1 The sway in the vertex stage (`sway_vertex.wgsl`, `ATTRIBUTE_SWAY`, `FieldView::sway`); `bend_all` gone. Verify: `a_swaying_vertex_carries_its_reach_and_phase`, `the_shader_keeps_the_sway_distances`.
 - [x] 5.2 Before and after at the reef (13.096, 94.896), 11:00, standing 150 s, fast build, desktop RTX 3070, two pairs interleaved: frame p50 98 to 52 ms, p99 164-170 to 71-75 ms, main thread p50 59 to 47 ms, GPU 11 to 10 ms, memory 1.87 to 1.37 GB; the sway and half density together. What is left is the ambient life: `ambient_ms` 34-38 of the 47 ms.
-- [ ] 5.3 The ambient life and vent smoke off the per-frame CPU write.
+- [x] 5.3a The ambient life laid on every core (`ComputeTaskPool`), the meshes written after. Measured at the same reef: frame p50 52 to 40.5 ms, p99 75 to 57 ms, main thread p50 47 to 34 ms; `ambient_ms` 34-38 to 21 (wall).
+- [ ] 5.3 The reef fish as a GPU swarm (design, "The reef's fish on the GPU"): one buffer made once, a compute pass moving them, the buffer the instance buffer of one draw, the swim in the vertex stage; the anthias and clownfish leave `ambient`.
+- [ ] 5.3b The vents' plumes as GPU particles on the same pattern.
+- [ ] 5.5 The owner's budget (2026-11-25): 500 triangles a reef piece at most (the hero anemone's 1800 cut), and 1000 pieces drawn at most, nearest first. Verify: a test over `library()` and over a tile set's drawn count.
 - [ ] 5.4 Frustum culling for the reef's meshes, then instancing by piece.

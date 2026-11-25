@@ -1883,32 +1883,61 @@ fn tiles(
                 }
             }
         }
-        let local_eye = eye - drawn.anchor;
-        // The ambient life and the plumes, while the tile is drawn: they
-        // fade with it, never cut at a distance.
-        if !drawn.ambient.is_empty() {
-            let _ambient_timer = AmbientTimer(std::time::Instant::now());
-            let (mut lit, mut smoke) = (Verts::default(), Verts::default());
-            if fade < 1.0 {
-                // Depth under the sea's surface over the tile.
-                let surface = sea.radius;
-                let anchor = drawn.anchor;
-                let seen = |at: Vec3| under.albedo([1.0; 3], surface - (at + anchor).length());
-                ambient(
-                    &mut drawn.ambient,
-                    seconds,
-                    now,
-                    local_eye,
-                    &seen,
-                    &mut lit,
-                    (&mut smoke.positions, &mut smoke.colours),
-                );
+    }
+    // The ambient life and the plumes, while each tile is drawn: they fade
+    // with it, never cut at a distance. Each tile's are its own, so they are
+    // laid on every core at once (`memory-leak` 5.3: on the main thread they
+    // were 34-38 ms of a reef's frame); the meshes are written after.
+    {
+        let _ambient_timer = AmbientTimer(std::time::Instant::now());
+        let surface = sea.radius;
+        let under = &under;
+        let mut jobs: Vec<&mut Drawn> = state
+            .drawn
+            .values_mut()
+            .filter(|d| !d.ambient.is_empty())
+            .collect();
+        let pool = bevy::tasks::ComputeTaskPool::get();
+        let per = jobs.len().div_ceil(pool.thread_num().max(1)).max(1);
+        let laid = pool.scope(|scope| {
+            for chunk in jobs.chunks_mut(per) {
+                scope.spawn(async move {
+                    chunk
+                        .iter_mut()
+                        .map(|drawn| {
+                            let (mut lit, mut smoke) = (Verts::default(), Verts::default());
+                            if drawn.fade < 1.0 {
+                                let anchor = drawn.anchor;
+                                let seen = |at: Vec3| {
+                                    under.albedo([1.0; 3], surface - (at + anchor).length())
+                                };
+                                ambient(
+                                    &mut drawn.ambient,
+                                    seconds,
+                                    now,
+                                    eye - anchor,
+                                    &seen,
+                                    &mut lit,
+                                    (&mut smoke.positions, &mut smoke.colours),
+                                );
+                            }
+                            (
+                                drawn.life.1.clone(),
+                                lit,
+                                drawn.smoke.as_ref().map(|s| s.1.clone()),
+                                smoke,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                });
             }
-            if let Some(mesh) = meshes.get_mut(&drawn.life.1) {
+        });
+        for (life, lit, smoke_mesh, smoke) in laid.into_iter().flatten() {
+            if let Some(mesh) = meshes.get_mut(&life) {
                 write_mesh(mesh, lit, true);
             }
-            if let Some((_, handle)) = &drawn.smoke
-                && let Some(mesh) = meshes.get_mut(handle)
+            if let Some(handle) = smoke_mesh
+                && let Some(mesh) = meshes.get_mut(&handle)
             {
                 write_mesh(mesh, smoke, false);
             }
@@ -2611,6 +2640,21 @@ mod tests {
 #[cfg(test)]
 mod sway_tests {
     use super::*;
+
+    /// MEASUREMENT (`memory-leak` 5.4): each reef piece's triangles, against
+    /// the owner's budget of 500 a piece.
+    #[test]
+    #[ignore]
+    fn print_piece_triangles() {
+        let mut rows: Vec<_> = library()
+            .iter()
+            .map(|(k, s)| (s.positions.len() / 3, format!("{k:?}")))
+            .collect();
+        rows.sort();
+        for (t, k) in rows {
+            println!("PIECE {k} {t}");
+        }
+    }
 
     /// The GPU sway is the CPU's old `fill_bent`: the vertex moves along its
     /// axis by `sin(clock * 1.1 + phase + 0.6 h) * min(0.07 h, 0.7) * bend`.

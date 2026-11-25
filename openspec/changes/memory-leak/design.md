@@ -122,3 +122,41 @@ instrument, the share of `tiles` spent in `ambient`) is 34-38 ms of the
 swimming bodies), its clownfish and its vents' 36 puffs on the CPU each
 frame and uploads them. Each is a function of time alone, so it moves to the
 vertex stage as the sway did: laid once, moved on the GPU (task 5.3).
+
+## The reef's budget and its fish on the GPU (owner, 2026-11-25)
+
+The owner, on "is reef up to 40-60 fps? it seems still high at 19fps":
+"each reef budget: 500 triangles, number of reefs 1000 or less", "optimize
+fish and smoke stuff", "fish should be batched into the gpu and drawn like
+the swarm dudes in the swarm demo, so their impact is near zero due to the
+boid sim being on gpu", "and animation".
+
+**Where it stands.** With the ambient life on every core, the reef's frame
+is 40.5 ms p50 (25 fps), 21 ms of it the fish and plumes laid on the CPU.
+Pieces' triangles (`print_piece_triangles`, a measurement): every kind is
+7 to 244 but the hero anemone, 1800. The 1.38 M triangles in reach are
+about 10 000 pieces over 66 tiles: the count, not the pieces, is the cost.
+
+**The budget.**
+- A piece is at most 500 triangles: the hero anemone's tentacles are cut
+  to fit, and a test over `library()` holds every kind to it.
+- At most 1000 pieces are drawn. Tiles are built nearest first; each keeps
+  its pieces in order of size, and the tiles' allowance is shared out by
+  distance so the near tiles keep every piece and the far ones only their
+  largest, never more than 1000 in all. A test holds a full reach to it.
+
+**The fish on the GPU (swarm-demo's pattern, `.reference/swarm-demo`,
+`swarm_app/src/swarm.rs` and `assets/shaders/swarm.wgsl`).**
+- One storage buffer of reef fish, written once when a tile is built
+  (where, its cloud's centre and up, its kind, size and seed), freed with
+  the tile; nothing about a fish comes back to the CPU.
+- A compute pass before the cameras draw moves each fish: its cloud's orbit
+  as today's anthias and clownfish swim it, kept as the look, with the
+  boids' separation and alignment on top within a cloud.
+- The buffer is the instance buffer of one instanced draw of one body mesh
+  per kind; the vertex stage places it and bends it with `swim.wgsl`'s body
+  wave, and the field-lit fragment shades it, so it is lit as the reef is.
+- `ambient` keeps the seals; the plumes follow the same pattern as GPU
+  particles.
+- Proof: the same reef before and after, frame time and `ambient_ms`; a
+  capture of the fish clouds beside today's.
