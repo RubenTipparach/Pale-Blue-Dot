@@ -20,12 +20,13 @@ use crate::hex::{Hex, Voxel};
 /// by the sea and the rivers, on version 11's heights; version 14
 /// (`ocean-environments` B24) lays the sea's cells; version 15
 /// (`mountain-ground`) grasses and snows the mountains' flats, scours their
-/// crests and stands their trees to a tree line (13 was never shipped). A
-/// new world is made
+/// crests and stands their trees to a tree line (13 was never shipped);
+/// version 16 (`ocean-environments` B30) grows the reefs to about a tenth of
+/// the sea. A new world is made
 /// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 15;
+pub const GENERATOR_VERSION: u32 = 16;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the
@@ -139,6 +140,12 @@ pub enum Material {
     /// drawn. Solid, drawn in the workbench's wood with a sloped board on
     /// its top. It queues no jobs: F on it opens the planner.
     DraftingTable = 41,
+    /// A chest (`storage-chests` design 1): a wooden box of twenty slots,
+    /// made at the workbench and set down like a station. Solid, drawn in
+    /// the local trees' wood as the workbench is, with an iron hasp stood on
+    /// it. What it holds is a record of its own (`pbd_core::chest`). Code 42:
+    /// 30 to 39 are the paving's stations, 40 the carpenter's bench, 41 the drafting table.
+    Chest = 42,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -290,7 +297,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 32] = [
+    pub const ALL: [Material; 33] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -323,6 +330,7 @@ impl Material {
         Material::Mixer,
         Material::Carpenter,
         Material::DraftingTable,
+        Material::Chest,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the
@@ -451,6 +459,8 @@ pub fn material_code(material: Material) -> u8 {
         Material::Mixer => 31,
         Material::Carpenter => 40,
         Material::DraftingTable => 41,
+        // A chest (`storage-chests` design 1): the next free code.
+        Material::Chest => 42,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ crate::flowing_water!() => flowing as u16 as u8,
@@ -491,6 +501,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         31 => Material::Mixer,
         40 => Material::Carpenter,
         41 => Material::DraftingTable,
+        42 => Material::Chest,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })

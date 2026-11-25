@@ -1,8 +1,12 @@
-//! The tree being chopped or punched shakes (`tree-punch-shake` design 3, 4):
-//! the tree worked now and the time of its last hit, which the planet uniform
-//! carries to the near tree's vertex shader (`tree_shake` in
-//! `planet_surface.wgsl`). Each hit sets the tree swaying from its base up,
-//! a damped sway on top of the wind's that settles a little after the last.
+//! The tree being chopped or punched shakes (`tree-punch-shake` design 3,
+//! and "On the stroke's impact, and twice the size"): the tree worked now
+//! and the time of its last hit, which the planet uniform carries to the
+//! near tree's vertex shader (`tree_shake` in `planet_surface.wgsl`). A hit
+//! is each impact of the stroke in hand on the tree (`held::StrokeImpact`,
+//! `desktop/digging.rs` `shake_on_impact`), so the tree moves when the fist
+//! or the axe is seen to land. Each hit sets the tree swaying from its base
+//! up, a damped sway on top of the wind's that settles a little after the
+//! last.
 //!
 //! Drawn only: no rule reads it. The mid cards and far billboards do not
 //! shake; the worked tree is always within reach, so always the near model.
@@ -11,16 +15,16 @@ use crate::planet::PlanetFine;
 use bevy::prelude::*;
 use bevy::render::extract_resource::ExtractResource;
 
-/// How far the crown moves at the hit's peak, metres (design 3).
-pub const SHAKE_M: f32 = 0.12;
+/// How far the crown moves at the hit's peak, metres (design 3; doubled
+/// from 0.12, owner, 2026-11-21: "add aplitude tree shake 2x so its a bit
+/// more obvious").
+pub const SHAKE_M: f32 = 0.24;
 /// How fast it sways, hertz.
 pub const SHAKE_HZ: f32 = 9.0;
 /// How long a hit's sway lasts, seconds: it is still after this.
 pub const SHAKE_S: f32 = 0.6;
 /// How much more the leaves move than the wood.
 pub const SHAKE_LEAF: f32 = 1.3;
-/// While the button is held on a tree, a hit this often, seconds (design 4).
-pub const HOLD_HIT_S: f32 = 0.5;
 
 /// The tree being worked and when it was last hit.
 #[derive(Resource, Clone, Copy, Default, ExtractResource, PartialEq, Debug)]
@@ -35,12 +39,6 @@ pub struct TreeShake {
 }
 
 impl TreeShake {
-    /// Whether holding the button on `cell` at `now_s` is a hit: the first
-    /// moment on a tree, then every [`HOLD_HIT_S`].
-    pub fn due(&self, cell: u32, now_s: f32) -> bool {
-        self.cell != Some(cell) || now_s - self.hit_s >= HOLD_HIT_S
-    }
-
     /// A hit on the tree at `cell`, whose drawn id is `tree`.
     pub fn hit(&mut self, cell: u32, tree: u32, now_s: f32) {
         *self = Self {
@@ -64,10 +62,8 @@ impl TreeShake {
 /// `spare.x`, which the near tree's draw rolls on.
 pub fn tree_id(fine: &PlanetFine, cell: u32) -> Option<u32> {
     fine.set
-        .finest_records()
-        .iter()
-        .find(|r| r.key() == cell)
-        .map(|r| r.spare[0])
+        .finest_index_of(cell)
+        .map(|i| fine.set.finest_records()[i].spare[0])
 }
 
 /// The hit's sway at `age_s` after it, -1..1 of the full shake: from rest,
@@ -169,17 +165,25 @@ mod tests {
         assert!(swing(0.54) < 0.05 * swing(0.0));
     }
 
+    /// Each hit starts the sway again from rest: a hit before the last one
+    /// has settled keeps the tree moving, and another tree's hit moves the
+    /// shake to it.
     #[test]
-    fn holding_the_button_hits_every_half_second() {
+    fn each_hit_starts_the_sway_again() {
         let mut shake = TreeShake::default();
-        assert!(shake.due(5, 0.0), "the first moment on a tree is a hit");
         shake.hit(5, 9, 0.0);
-        assert!(!shake.due(5, 0.2));
-        assert!(!shake.due(5, 0.49));
-        assert!(shake.due(5, 0.5));
-        assert!(shake.due(6, 0.2), "a new tree is hit at once");
-        // A hit keeps the sway going past the settling time.
-        shake.hit(5, 9, 0.5);
-        assert_ne!(offset_m(shake.lane(), 9, 0.53, 1.0, false), 0.0);
+        shake.hit(5, 9, 0.425);
+        assert_eq!(shake.hit_s, 0.425);
+        assert_ne!(offset_m(shake.lane(), 9, 0.45, 1.0, false), 0.0);
+        assert_eq!(
+            offset_m(shake.lane(), 9, 0.425, 1.0, false),
+            0.0,
+            "from rest"
+        );
+        shake.hit(6, 10, 0.5);
+        assert_eq!(offset_m(shake.lane(), 9, 0.53, 1.0, false), 0.0);
+        assert_ne!(offset_m(shake.lane(), 10, 0.53, 1.0, false), 0.0);
+        // Twice the size it was (owner, 2026-11-21).
+        assert_eq!(SHAKE_M, 0.24);
     }
 }

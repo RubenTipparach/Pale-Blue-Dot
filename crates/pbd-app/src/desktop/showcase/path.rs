@@ -54,6 +54,10 @@ pub struct Plan {
 
 /// States expanded at most in one search.
 const MAX_EXPANDED: usize = 20_000;
+/// The most one search may take, ms: past it the nearest state reached is
+/// the leg's end, as at the cap (`bot-path-planner` 13: a plan took 1.85 s
+/// of the main thread's frame).
+const MAX_PLAN_MS: f32 = 15.0;
 /// The longest leg planned at once, m, and the margin round it.
 pub const LEG_M: f32 = 60.0;
 const MARGIN_M: f32 = 18.0;
@@ -92,6 +96,7 @@ pub fn plan(
     let mut nearest = ((start, layer), toward(start_dir));
     let mut expanded = 0;
     let mut reached = None;
+    let started = std::time::Instant::now();
     while let Some(Reverse((_, state))) = heap.pop() {
         let (a, la) = state;
         // In the goal's cell, or beside it: a station or a bank is never
@@ -101,7 +106,9 @@ pub fn plan(
             break;
         }
         expanded += 1;
-        if expanded > MAX_EXPANDED {
+        if expanded > MAX_EXPANDED
+            || (expanded % 8 == 0 && started.elapsed().as_secs_f32() * 1000.0 > MAX_PLAN_MS)
+        {
             break;
         }
         let here = best[&state];

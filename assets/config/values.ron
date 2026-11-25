@@ -149,5 +149,7 @@
         // stone) and the drafting table (6 planks and 2 rope).
         ("mallet", 4, goods),
         ("block:drafting table", 22, goods),
+        // ---- storage-chests design 1: the workbench chest (8 planks).
+        ("block:chest", 18, goods),
     ],
 )

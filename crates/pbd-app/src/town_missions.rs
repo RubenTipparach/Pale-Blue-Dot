@@ -46,6 +46,9 @@ pub struct TownMissions {
     joined: Option<u64>,
     /// The focus was picked on the tree and is to be stored.
     pub refocused: bool,
+    /// The tree has just opened: the desktop shows its toast and lowers
+    /// this (`town-missions-tree` design 12).
+    pub opened_toast: bool,
 }
 
 impl TownMissions {
@@ -147,6 +150,7 @@ pub fn count_town(mut c: TownCounting) {
         opened = true;
     }
     if opened {
+        town.opened_toast = true;
         town.record = Some(TownRecord {
             opened: day,
             progress: Progress::default(),

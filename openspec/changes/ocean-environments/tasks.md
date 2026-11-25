@@ -133,6 +133,12 @@ against what it would cost.
 - [x] 20.2 (Approved 2026-11-20, in chat, on version 5's tab: "its good enough, send it"; design B28.) The owner's approval of the motion on the tracker. Verify: the approval recorded in `docs/mockups/mockup-work.md` and on the tracker's M25 row.
 - [x] 20.3 (Built 2026-11-20 on the owner's "its good enough, send it", design B29: `crates/pbd-app/src/critters/`, `assets/config/creature_motion.ron`, `assets/models/critters/`; tests `critters::tests::*`, `fish::tests::a_beaver_is_offered_only_by_a_colony`; captures (lavapipe, no GPU) in `docs/screenshots/beavers-otters-game/`: the beaver swimming and on the bank, the river otter, a raft of sea otters; a normal launch reached READY with no LATE_PIPELINE. Owed: a beaver lit by a lamp at night (the night frame shows it as dark as the pond, not lamp-lit). Not built, written up as next steps in B29: the tufts' spring and wet spike, chips and splashes, the felling of a standing tree (so no test of the fall's hit on the stump's entry), the otter's slide and fish, the kelp wrap. Frame cost not measured: no GPU.) The rig and the curves in the game, the tunables in `assets/config/creature_motion.ron` validated with one source of defaults, the beaver's body with task 8.4. Verify: tests that pin the schedule (the gnaw's hit on its beat, the fall's hit on the stump's entry, no foot moving in stance); `--capture` before and after.
 
+## 21. More reef (B30) (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [x] 21.1 Measure the place shares and the reef-rock share on generator 15. (Reef 0.23%, reef rock 0.08%; B30.)
+- [x] 21.2 Tune toward 10% of the sea (temperature floor, depth band, patch size, `reef_above`, warm water over kelp), measured each step. (Reef 9.72%, kelp 5.70%; B30's table.)
+- [x] 21.3 Generator 16 for new worlds, 15's digest pinned first.
+- [ ] 21.4 The survey, with the Sea places map (15 against 16) and a reef underwater.
 ## 21. Light under water (owner, survey W21, 2026-11-22)
 
 - [ ] 21.1 Powered lamps and glowing mushrooms, held or placed, light the cells round them under water through the cell light field, as on land; open flames go out (recommendation taken, ask only with screenshots)

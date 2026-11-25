@@ -72,3 +72,9 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
   It is published with stills beside the approved mockup, and a note that frame cost was not measured in the cloud session. Verify: the page is linked from the PR.
 - [ ] 6.2 (Accepted on the screenshots, the owner 2026-09-28: "map looks good", quoted in `proposal.md`. Open for the video in the batch; the sync and the archive follow it and 5.4.) The owner watches the video and accepts the map. Verify: the quote is in `proposal.md`. Then sync `player/map` into `openspec/specs` with each requirement's test named, and archive.
+
+## 7. Animals on the map (owner, 2026-11-21)
+
+- [x] 7.1 (`map_herds.rs`; `pbd_app::husbandry::wild_herds_near` and `grassy_land` are now the one rule the yard spawns by and the map draws by. Found when the map opens and after 100 m. A tamed animal is drawn where the yard has it, else at its home cell. `a_herd_the_game_spawns_has_a_marker_at_its_centre`.) Wild herds within 1.5 km as one marker each, from `herds::herd_in` with the game's dry-grass check, in the species' colour; the player's tamed animals with a light ring. Verify: an app test that a herd the game would spawn has a marker at its centre and a square with none has no marker.
+- [x] 7.2 (`map.herds`; the toggle sits beside Night side and Clouds and rain, on by default, with a swatch row of the three species under it. `the_herds_toggle_hides_the_markers`.) The legend's "Herds" row and toggle, its words from `locale_en.yaml`. Verify: the locale lint passes and an app test that the toggle hides the markers.
+- [ ] 7.3 Screenshots of the map with herds on, near the player and zoomed out, for the owner. Verify: the shots are in `docs/screenshots/world-map/`.

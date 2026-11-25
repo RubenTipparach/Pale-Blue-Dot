@@ -714,3 +714,68 @@ and every block, light and tool after it is earned. `Hotbar::starting_kit` is
 an empty row, and the deal is recorded at the kit's latest version so no
 grant reaches a new world later. A saved world keeps everything it carries,
 and an old save is still dealt the grants it missed, as before.
+
+## River catches counted as sea (2026-11-22)
+
+Found by the bot on `tree-run-6`, shot 13: five eels landed from a river
+9 m above the sea, every one counted "sea", so "Fresh water 0/3" could not
+move. Logged at each catch (`FISH_CAUGHT`): the float at -0.64 m, the sea's
+level. The catch was judged where the float is when the fish is landed, and
+landing reels the float in to the bank; over the bank there is no river
+surface, so the float sits on the sea's level there. Every river catch, the
+player's as much as the bot's, counted as sea.
+
+Fix: the water is judged where the fish bit. On the bite (the float on the
+water, a fish taking it), the fishery notes whether that water stands above
+the sea's level by more than 0.6 m (the same rule as before); the catch that
+follows counts by that note. A unit test pins it.
+
+## Get a reef, not see one (owner, 2026-11-22)
+
+The owner: "'see a reef' should be more obtain a reef", "get reefs, idk
+waht to make with reefs, could be used for planting/farming or selling I
+guess", "or you could put it in an aquarium later".
+
+Today the `reef` mission's one objective is `reach reef`: swimming over a
+reef patch ticks it. It becomes `gather block:reef rock`, count 1: dive to
+a reef and mine a block of it with a pickaxe. Reef rock is already a sea
+cell (`ocean-environments` B24) that a pick digs as it digs stone, and a dug
+block lands in the pack as `block:reef rock`, so no new item or rule is
+needed. Gathering it fires the `gather` event every dug block already
+fires.
+
+- Title "Get a reef"; objective "reef rock"; help "Dive to a warm reef and
+  mine some reef rock with a pickaxe."
+- What reef rock is for later (planting, selling, an aquarium) is left to
+  those features; the mission only asks for one block.
+- `Kind::Reach` keeps "reef" in its accepted names and the swim still
+  sends it on coming onto a reef; no mission counts it now.
+- The bot's reef shot: seek a reef, take the pickaxe and dig one reef rock
+  block.
+
+## The first mission: open the pack (owner, 2026-11-22)
+
+The owner: "When making a new world very first mission should be tab to open
+pack". Everything after it (gather, craft, store) happens in or through the
+pack, and nothing tells a new player where it is.
+
+- Revised the same day (owner: "First mission must be TAB to open pack
+  after collecting resource", "It's probably best after collecting
+  resources to open tab pack to craft something"): `pack` comes right after
+  `gather`, not before it. The player opens the pack with something in it
+  to craft. One objective, `open pack`, 1. Its title is "Open your pack",
+  its objective "pack", its help "Press Tab to open your pack and craft with
+  what you gathered." `pack` needs `gather`, `axe` needs `pack`, and the
+  tree's root is still `gather`.
+- `Kind::Open` accepts "pack" as well as "map". The missions system sends
+  `Did(Open, "pack")` when the screen becomes the pack, as it sends "map"
+  for the map. Either key that opens the pack (Tab or I) counts.
+- **Old worlds.** A world whose record has `gather` or anything after it
+  done has plainly found its pack. `settle` back-fills: a done mission's
+  parents are done too, on every settle and not only in the pass that
+  closed it. So an old world never meets "Open your pack" in the middle of
+  its tree.
+- The icon is `tools/hand` until a pack icon is drawn.
+- Tests: the chain's count (44); the event script and the app's walkthrough
+  open the pack after gathering; after "Gather by hand" the line is "Open
+  your pack 0/1", then "Craft an axe 0/1".

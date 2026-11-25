@@ -36,3 +36,9 @@ crafting tools, fishing, farming, herding, cooking" (2026-11-14).
 - [x] 5.5 Captures before and after in `docs/screenshots/pack-layout/`: nothing chosen, a recipe chosen, a locked row hovered; `--craft pack-empty|pack-pick|pack-locked` are the instruments.
 
 - [ ] 3a.1 The top block under a standing tree refuses dig and till, with "Cut down the tree first"; a felled tree's ground digs (`under_standing_tree`, a test).
+
+## 6. Playtest notes (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [ ] 6.1 A made tool goes to hand; a spare to the pack; any tool can be made any number of times (`Refused::NotBetter` removed): coded; built, tested, seen.
+- [ ] 6.2 A standing tree holds only its root block: coded; built, seen; a unit test for a block under the root.
+- [ ] 6.3 (Later, with tool wear) a tier on a tool in the pack, and moving it into the tool slot.

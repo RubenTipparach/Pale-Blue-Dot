@@ -17,12 +17,29 @@ pub const FADE_S: f32 = 0.4;
 /// How many are on screen at once; the rest wait their turn.
 pub const SHOWN: usize = 10;
 
-/// One item's toast: how many came in, and how long it has been shown.
+/// A toast of words, not of an item (`town-missions-tree` design 12).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Note {
+    /// The town tree opened on reaching a town.
+    TownMissions,
+}
+
+impl Note {
+    pub fn words(self) -> Localized {
+        match self {
+            Note::TownMissions => pbd_core::locale::tr("toasts.town_missions"),
+        }
+    }
+}
+
+/// One item's toast: how many came in, and how long it has been shown. Or a
+/// toast of words: `note` says them, and `item` is only its icon.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Toast {
     pub item: Item,
     pub count: u32,
     pub age_s: f32,
+    pub note: Option<Note>,
 }
 
 impl Toast {
@@ -43,7 +60,12 @@ impl Toasts {
         if count == 0 {
             return;
         }
-        if let Some((i, toast)) = self.0.iter_mut().enumerate().find(|(_, t)| t.item == item) {
+        if let Some((i, toast)) = self
+            .0
+            .iter_mut()
+            .enumerate()
+            .find(|(_, t)| t.item == item && t.note.is_none())
+        {
             toast.count += count;
             if i < SHOWN {
                 toast.age_s = 0.0;
@@ -54,6 +76,18 @@ impl Toasts {
             item,
             count,
             age_s: 0.0,
+            note: None,
+        });
+    }
+
+    /// A toast of words with `icon`'s picture: a row of its own, never
+    /// counted into an item's.
+    pub fn announce(&mut self, note: Note, icon: Item) {
+        self.0.push(Toast {
+            item: icon,
+            count: 1,
+            age_s: 0.0,
+            note: Some(note),
         });
     }
 
@@ -142,21 +176,36 @@ pub fn spawn(
         });
 }
 
-/// The words on a toast: "Dirt x2".
+/// The words on a toast: "Dirt x2", or a note's own words.
 pub fn words(toast: &Toast) -> Localized {
+    if let Some(note) = toast.note {
+        return note.words();
+    }
     pbd_core::locale::tr_with(
         "toasts.words",
         &[("item", &toast.item.name()), ("count", &toast.count)],
     )
 }
 
-/// Count this frame's gains into the toasts and let their time run.
+/// Count this frame's gains into the toasts and let their time run; and the
+/// town tree's opening, once (`town-missions-tree` design 12).
 pub fn gather(
     time: Res<Time>,
     mut toasts: ResMut<Toasts>,
     mut gained: MessageReader<Gained>,
     mut picked: MessageReader<PickedUp>,
+    town: Option<ResMut<pbd_app::town_missions::TownMissions>>,
 ) {
+    if let Some(mut town) = town
+        && town.opened_toast
+    {
+        town.opened_toast = false;
+        info!("TOAST town missions unlocked");
+        toasts.announce(
+            Note::TownMissions,
+            Item::Block(pbd_core::terrain::Material::LanternPost),
+        );
+    }
     for g in gained.read() {
         toasts.add(g.item, u32::from(g.count));
     }
@@ -278,5 +327,19 @@ mod tests {
         t.tick(SHOW_S + FADE_S);
         assert_eq!(t.shown().len(), 2, "the two waiting come in");
         assert_eq!(t.shown()[0].age_s, 0.0, "and start their time now");
+    }
+
+    /// A note's toast keeps a row of its own beside an item's, and says its
+    /// own words (`town-missions-tree` design 12).
+    #[test]
+    fn a_note_toast_is_its_own_row() {
+        let mut toasts = Toasts::default();
+        toasts.add(DIRT, 1);
+        toasts.announce(Note::TownMissions, DIRT);
+        toasts.add(DIRT, 2);
+        assert_eq!(toasts.0.len(), 2);
+        assert_eq!(toasts.0[0].count, 3, "the item's toast counts the dirt");
+        assert_eq!(toasts.0[1].note, Some(Note::TownMissions));
+        assert_eq!(words(&toasts.0[1]), Note::TownMissions.words());
     }
 }

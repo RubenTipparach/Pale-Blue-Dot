@@ -181,7 +181,7 @@ fn icon(
         super::craft::LockTint(code.to_string()),
     ))
     .with_children(|icon| {
-        icon.spawn((
+        let mut count = icon.spawn((
             KitText::new(
                 Localized::verbatim(super::craft::need_count(need, n)),
                 ui_kit::LABEL,
@@ -194,6 +194,9 @@ fn icon(
                 ..default()
             },
         ));
+        if need {
+            count.insert(super::craft::NeedCount(it, n));
+        }
     });
 }
 
@@ -247,7 +250,7 @@ pub fn queue(
             note.say(wall_s, tr("kitchen.fire_full"));
             return false;
         }
-        Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
+        Err(station::Refused::Elsewhere) => return false,
     }
     if !store(save, cell, layer, &state, &moved) {
         error!("cook BLOCKED: the save did not accept it");

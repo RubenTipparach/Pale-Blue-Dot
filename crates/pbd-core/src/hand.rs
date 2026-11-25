@@ -101,6 +101,14 @@ pub struct Bone {
     /// hand).
     pub width: Option<f32>,
     pub across: Option<[f32; 3]>,
+    /// The back of a finger or thumb bone, where it is given rather than
+    /// found from the handle (the bare fist's own, [`fist_bones`]).
+    #[serde(default)]
+    pub out: Option<[f32; 3]>,
+    /// Its section's taper from the near end (along -axis) to the far,
+    /// where it has one (the bare fist's wrist).
+    #[serde(default)]
+    pub taper: Option<[f32; 2]>,
 }
 
 /// The bones a hand has.
@@ -129,11 +137,15 @@ impl Bone {
             .iter()
             .chain(&self.axis)
             .chain(self.across.iter().flatten())
+            .chain(self.out.iter().flatten())
+            .chain(self.taper.iter().flatten())
             .chain([self.radius, self.length, self.width()].iter())
             .all(|v| v.is_finite());
         finite
             && Vec3::from(self.axis).length() > 1e-3
             && self.across.is_none_or(|a| Vec3::from(a).length() > 1e-3)
+            && self.out.is_none_or(|a| Vec3::from(a).length() > 1e-3)
+            && self.taper.is_none_or(|t| t.iter().all(|v| *v > 0.0))
             && self.radius > 0.0
             && self.length > 0.0
             && self.width() > 0.0
@@ -678,6 +690,17 @@ pub fn wrist_joint(bones: &[Bone]) -> Vec3 {
 /// handle (tool units), its look, and the sleeve lengthened `sleeve_extra`
 /// tool units at its far end.
 pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand {
+    build_with(bones, fist, look, sleeve_extra, false)
+}
+
+/// Build the bare fist ([`fist_bones`]): one skin tone all over, no palm or
+/// fold faces, and no handle in the occlusion (`held-swing` decision 10,
+/// the fist of version 16).
+pub fn build_bare(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand {
+    build_with(bones, fist, look, sleeve_extra, true)
+}
+
+fn build_with(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32, bare: bool) -> Hand {
     assert_eq!(bones.len(), BONES, "a hand has {BONES} bones");
     let mut b = Builder::default();
     let handle = handle_dir(bones);
@@ -703,7 +726,12 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
         // A finger block turned so a flat face looks away from the handle
         // (the back of the finger), so the nail and the knuckles sit on it.
         let mut out = None;
-        if finger {
+        if finger && let Some(o) = p.out {
+            // The bare fist's own (version 16).
+            let o = Vec3::from(o).normalize();
+            u = axis.cross(o).normalize();
+            out = Some(o);
+        } else if finger {
             let mut rel = at - fist;
             rel -= handle * rel.dot(handle);
             rel -= axis * rel.dot(axis);
@@ -722,7 +750,8 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
         // hand's and the wrist's where the fingertips curl to, square to
         // the bone.
         let mut palm = None;
-        if i <= 16 {
+        // The bare fist's wrist is one tone, as the forearm it runs into.
+        if i <= 16 && !(bare && i == 16) {
             if let Some(o) = out {
                 palm = Some(Side {
                     dir: -o,
@@ -758,7 +787,7 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
             len += sleeve_extra;
         }
         // Slimmer fingers with flatter sides, each segment tapering.
-        let mut taper = None;
+        let mut taper = p.taper;
         if finger {
             w *= 0.8;
             h *= 0.84;
@@ -787,7 +816,7 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
                 axis,
                 h * 1.05,
                 dir,
-                palm.is_some(),
+                palm.is_some() && !bare,
             );
         } else {
             chamfer_block(
@@ -803,7 +832,8 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
                     group,
                     crease,
                     uv_along,
-                    palm,
+                    // One tone (the bare fist): no palm or fold faces.
+                    palm: if bare { None } else { palm },
                     round: is_thumb && distal,
                     taper,
                 },
@@ -888,7 +918,7 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
                 });
             }
         }
-        for t in -2..=2 {
+        for t in (-2..=2).filter(|_| !bare) {
             spheres.push(Sphere {
                 c: fist + handle * t as f32 * 0.8,
                 r: 0.55,
@@ -921,6 +951,129 @@ pub fn build(bones: &[Bone], fist: Vec3, look: &Look, sleeve_extra: f32) -> Hand
         mesh.part.push(b.part[i]);
     }
     built
+}
+
+/// The bare fist's shape (`held-swing` decision 10, "The fist, version
+/// 16"; the Tools in Hand mockup's `FIST` table): how the pickaxe grip's
+/// bones are re-chained into a closed fist. Lengths in the bone's own units
+/// (the grip's tool units); offsets along A (index to little finger), N
+/// (palm-ward) and D (wrist to knuckles).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FistShape {
+    /// Each finger's turn at its knuckle, middle and tip joints, degrees.
+    pub curl_deg: [f32; 3],
+    /// Each finger segment's length, a share of the approved.
+    pub len: [f32; 3],
+    /// The thumb's joint and tip from the index knuckle, and how far its
+    /// root moves from the approved, (A, N, D).
+    pub thumb_joint: [f32; 3],
+    pub thumb_tip: [f32; 3],
+    pub thumb_root: [f32; 3],
+    /// The back of the hand shortened by this, the wrist, cuff and sleeve
+    /// moved up with it.
+    pub short: f32,
+    /// How far the wrist reaches into the heel of the hand, and its half
+    /// width and half thickness, shares of the back's.
+    pub wrist_in: f32,
+    pub wrist_w: f32,
+    pub wrist_h: f32,
+    /// Eye space: the way the back of the hand faces at twist 0 (to the
+    /// right, a little toward the eye).
+    pub back_eye: [f32; 3],
+}
+
+impl FistShape {
+    /// Version 16, as the owner approved it (2026-11-21).
+    pub const V16: Self = Self {
+        curl_deg: [92.0, 102.0, 62.0],
+        len: [0.86, 0.95, 0.9],
+        thumb_joint: [-0.9, 1.6, -1.3],
+        thumb_tip: [-0.3, 2.1, 0.1],
+        thumb_root: [0.0, 0.4, 0.6],
+        short: 0.9,
+        wrist_in: 0.7,
+        wrist_w: 0.72,
+        wrist_h: 0.72,
+        back_eye: [1.0, 0.1, 0.35],
+    };
+}
+
+/// The bare fist's own bones from a grip's (the mockup's `fistBones`): the
+/// fingers re-chained from each knuckle in a tight curl in the plane of the
+/// back (D, wrist to knuckles) and the palm (N); the thumb from its root
+/// along the index finger's side to a tip over its middle segment; the back
+/// of the hand shortened and the arm moved up with it; the wrist slimmed to
+/// the back of the hand, its wide side across the knuckles.
+pub fn fist_bones(bones: &[Bone], look: &Look, f: &FistShape) -> Vec<Bone> {
+    assert_eq!(bones.len(), BONES, "a hand has {BONES} bones");
+    let mut p = bones.to_vec();
+    let at0 = p[0].at();
+    let knuck = [1, 4, 7, 10].map(|i| p[i].end_near(at0));
+    let kc = knuck.iter().copied().sum::<Vec3>() * 0.25;
+    let mut d = p[0].axis();
+    if d.dot(kc - at0) < 0.0 {
+        d = -d;
+    }
+    let a = knuck[3] - knuck[0];
+    let a = (a - d * a.dot(d)).normalize();
+    let mut n = [1, 4, 7, 10]
+        .iter()
+        .map(|&i| Vec3::from(p[i].axis))
+        .sum::<Vec3>();
+    n -= d * n.dot(d);
+    let n = (n - a * n.dot(a)).normalize();
+    // A direction in the curl's plane, th from D toward N.
+    let dir = |th: f32| d * th.cos() + n * th.sin();
+    for (finger, base) in [1, 4, 7, 10].into_iter().enumerate() {
+        let (mut at, mut th) = (knuck[finger], 0.0f32);
+        for s in 0..3 {
+            th += f.curl_deg[s].to_radians();
+            let bone = &mut p[base + s];
+            let (len, ax) = (bone.length * f.len[s], dir(th));
+            bone.at = (at + ax * len / 2.0).to_array();
+            bone.axis = ax.to_array();
+            bone.length = len;
+            bone.out = Some(dir(th - std::f32::consts::FRAC_PI_2).to_array());
+            at += ax * len;
+        }
+    }
+    // The back of the hand shortened from the wrist's end, the arm moved up
+    // with it.
+    p[0].at = (at0 + d * f.short / 2.0).to_array();
+    p[0].length -= f.short;
+    for bone in &mut p[16..=18] {
+        bone.at = (bone.at() + d * f.short).to_array();
+    }
+    let off = |o: [f32; 3]| a * o[0] + n * o[1] + d * o[2];
+    let root = p[13].end_near(at0 - d * 10.0) + d * f.short / 2.0 + off(f.thumb_root);
+    let (joint, tip) = (knuck[0] + off(f.thumb_joint), knuck[0] + off(f.thumb_tip));
+    let pts = [root, root.lerp(joint, 0.5), joint, tip];
+    for s in 0..3 {
+        let (from, to) = (pts[s], pts[s + 1]);
+        let ax = (to - from).normalize();
+        let bone = &mut p[13 + s];
+        // The builder shortens the thumb's chain by thumb_len.
+        bone.length = from.distance(to) / look.thumb_len;
+        bone.axis = ax.to_array();
+        bone.at = (from + ax * bone.length / 2.0).to_array();
+        // The nail on the thumb's top (the index finger's side).
+        let o = -a + n * 0.35;
+        bone.out = Some((o - ax * o.dot(ax)).normalize().to_array());
+    }
+    // The wrist, slimmed to the back of the hand, reaching into its heel.
+    let ax = p[16].axis();
+    let to_hand = if (p[0].at() - p[16].at()).dot(ax) < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
+    p[16].at = (p[16].at() + ax * to_hand * f.wrist_in / 2.0).to_array();
+    p[16].length += f.wrist_in;
+    p[16].taper = Some([0.85, 1.05]);
+    p[16].across = Some(a.to_array());
+    p[16].width = Some(p[0].width() * f.wrist_w);
+    p[16].radius = p[0].radius * f.wrist_h * 1.4;
+    p
 }
 
 /// How the hand is lit (`held.ron` `hand_light`): a wrapped light, so the

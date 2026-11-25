@@ -37,6 +37,11 @@ pub struct RiverFill {
     saving: Option<Arc<AtomicBool>>,
     next_look: Option<Instant>,
     next_save: Option<Instant>,
+    /// The swamp fill (`swamps`, "Swamp water is not cached the way rivers
+    /// are"): the 200 m patches filled round, and the thread at work.
+    swamp_filled: HashSet<[i32; 3]>,
+    swamp_busy: Option<Arc<AtomicBool>>,
+    next_swamp_look: Option<Instant>,
 }
 
 pub struct RiverFillPlugin;
@@ -44,7 +49,7 @@ pub struct RiverFillPlugin;
 impl Plugin for RiverFillPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RiverFill>()
-            .add_systems(Update, (fill_rivers, save_now_and_then))
+            .add_systems(Update, (fill_rivers, fill_swamps, save_now_and_then))
             .add_systems(Last, save_on_exit);
     }
 }
@@ -122,9 +127,78 @@ fn fill_rivers(
         .ok();
 }
 
+/// How far round the camera the swamp fill reaches, m, and the patch size
+/// it moves by.
+const SWAMP_FILL_M: f32 = 600.0;
+const SWAMP_PATCH_M: f32 = 200.0;
+
+/// Every two seconds, on coming into a 200 m patch not yet filled round, a
+/// thread fills the swamp pools' memo within 600 m (`fill_swamp_cache`).
+fn fill_swamps(
+    mut fill: ResMut<RiverFill>,
+    cameras: Query<&GlobalTransform, With<Camera3d>>,
+    space: crate::SimSpace,
+) {
+    let now = Instant::now();
+    if !pbd_core::river_cache::enabled()
+        || off("PBD_RIVER_FILL")
+        || terrain_config().swamps.is_none()
+        || fill.next_swamp_look.is_some_and(|t| now < t)
+    {
+        return;
+    }
+    fill.next_swamp_look = Some(now + std::time::Duration::from_secs(2));
+    if fill
+        .swamp_busy
+        .as_ref()
+        .is_some_and(|b| !b.load(Ordering::Relaxed))
+    {
+        return;
+    }
+    let Some(camera) = cameras.iter().next() else {
+        return;
+    };
+    let up = space
+        .origin()
+        .query_point(camera.translation())
+        .normalize_or(Vec3::Y);
+    let patch = (up * (PLANET_RADIUS / SWAMP_PATCH_M))
+        .round()
+        .as_ivec3()
+        .to_array();
+    if !fill.swamp_filled.insert(patch) {
+        return;
+    }
+    let done = Arc::new(AtomicBool::new(false));
+    fill.swamp_busy = Some(done.clone());
+    std::thread::Builder::new()
+        .name("swamp fill".into())
+        .spawn(move || {
+            let started = Instant::now();
+            let cells = crate::planet::lod::fill_swamp_cache(up, SWAMP_FILL_M);
+            info!(
+                "SWAMP_FILL {cells} swamp cells within {SWAMP_FILL_M:.0} m in {:.1} s",
+                started.elapsed().as_secs_f32()
+            );
+            done.store(true, Ordering::Relaxed);
+        })
+        .ok();
+}
+
+/// How often the cache is saved while playing, and the growth that a save
+/// waits for: two minutes, and five in a hundred more values than the file
+/// holds (2026-11-23: the whole file, 50 MB, every 30 s took 11 to 30 s and
+/// the frames round it stalled). The exit saves whatever has grown.
+const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(120);
+const SAVE_GROWTH: f64 = 0.05;
+
 fn save(saving: Arc<AtomicBool>) {
+    save_grown_by(saving, SAVE_GROWTH);
+}
+
+fn save_grown_by(saving: Arc<AtomicBool>, share: f64) {
     let started = Instant::now();
-    let written = pbd_core::rivers::save_caches();
+    let written = pbd_core::rivers::save_caches_grown_by(share);
     let band = crate::river_band::save();
     if band > 0 {
         info!(
@@ -146,9 +220,7 @@ fn save_now_and_then(mut fill: ResMut<RiverFill>) {
         return;
     }
     let now = Instant::now();
-    let next = *fill
-        .next_save
-        .get_or_insert(now + std::time::Duration::from_secs(30));
+    let next = *fill.next_save.get_or_insert(now + SAVE_EVERY);
     if now < next
         || fill
             .saving
@@ -157,7 +229,7 @@ fn save_now_and_then(mut fill: ResMut<RiverFill>) {
     {
         return;
     }
-    fill.next_save = Some(now + std::time::Duration::from_secs(30));
+    fill.next_save = Some(now + SAVE_EVERY);
     let saving = Arc::new(AtomicBool::new(false));
     fill.saving = Some(saving.clone());
     std::thread::Builder::new()
@@ -168,7 +240,7 @@ fn save_now_and_then(mut fill: ResMut<RiverFill>) {
 
 fn save_on_exit(mut exits: MessageReader<AppExit>) {
     if exits.read().next().is_some() {
-        save(Arc::new(AtomicBool::new(false)));
+        save_grown_by(Arc::new(AtomicBool::new(false)), 0.0);
     }
 }
 

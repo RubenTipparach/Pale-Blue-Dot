@@ -1,0 +1,36 @@
+// The town tree played (`mission-playthrough` design 6): the bot carries on
+// from the starter tree's world, where "Find a town" opened this tree, and
+// plays the town's missions through the player's own inputs. Run after
+// `phase-1-last`, on its world, from where it ended.
+//
+// The trunk first (meet, first-trade, first-job: tasks 8.2).
+(
+    goal: "Goal: the town tree, from meeting the townsfolk",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Meet the townsfolk: talk to three of them",
+            until: ["meet"],
+            max_s: 600.0,
+            acts: [Seek("town"), Talk(3), Still],
+        ),
+        (
+            caption: "A first trade: sell five goods to the town's trader, buy one",
+            until: ["first-trade"],
+            max_s: 600.0,
+            acts: [Trade(5, 1), Still],
+        ),
+        (
+            caption: "A first job from the board, worked and handed in",
+            until: ["first-job"],
+            max_s: 1800.0,
+            acts: [Job, Still],
+        ),
+        (
+            caption: "The town tree so far",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

@@ -341,3 +341,24 @@ derived from its record.
   tilled or forge cell the eye ray meets, which a door is not.
 - A crop's stage jumps with the `L` debug key (noon or midnight), as the sky
   does. That is the debug key's nature.
+
+## No wild plant in a tree's cell (owner, 2026-11-22)
+
+The owner, with a screenshot of a wild wheat growing round a birch's trunk
+("PICK WILD WHEAT" on the trunk): "plants should not grow in trees".
+
+A wild plant (decision 14) stands on one grassy cell in `wild_one_in`, by a
+hash of the cell. It never asked whether the cell grows a tree, so a plant
+and a trunk share the cell's centre. The plant's leaves come out of the bark.
+
+Change: a cell that grows a tree (`flora::grows_tree`, the same rule the
+trees are drawn by) never grows a wild plant, whether the tree stands or is
+felled. One test for both places that find wild plants: where F picks
+(`farm::wild_at`) and where they are drawn (`farm.rs`, the wild plants
+round the eye).
+
+Saves: a wild plant is derived and never saved, only its picking is. So this
+drops a plant the player never made, from cells that also hold a tree. A
+`wild` record already on such a cell is kept and read by nothing. No ground,
+block or tree moves, so it is not a generator version
+(CLAUDE.md, "Saved games survive every change").

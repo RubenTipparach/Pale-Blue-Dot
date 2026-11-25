@@ -1,0 +1,33 @@
+// The town acts played on their own, with no mission to wait for: a world
+// whose town tree already counts meet, first-trade and first-job (a bot
+// world where they were back-filled) still shows each act working
+// (`mission-playthrough` design 6). The logs say what each did: the talks,
+// the presses, the purse and the job handed in.
+(
+    goal: "Goal: talk, trade and take a job in a town",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "The night passes: the townsfolk come out in the morning",
+            rate: Some(300.0),
+            max_s: 120.0,
+            acts: [Hour(9.0)],
+        ),
+        (
+            caption: "Talk to three townsfolk",
+            max_s: 600.0,
+            acts: [Seek("town"), Talk(3), Still],
+        ),
+        (
+            caption: "Sell five goods to the trader, buy one",
+            max_s: 600.0,
+            acts: [Trade(5, 1), Still],
+        ),
+        (
+            caption: "A job from the board, worked and handed in",
+            max_s: 1800.0,
+            acts: [Job, Still],
+        ),
+    ],
+)

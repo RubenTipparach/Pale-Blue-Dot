@@ -13,6 +13,10 @@
 //!   the hit (decision 8).
 //! - The shovel tips down, slides into the dirt, tips about the blade's
 //!   point and pulls up (decision 9).
+//! - Bare hands punch, the fist of version 16 (decision 10), and every
+//!   click swings: a whiff at the air, a thud at a refused block, on a free
+//!   beat from the press (decision 11; Tools in Hand version 16, `punchKeys`,
+//!   `toolKeys`, `actTimings`, `actAt`, `ActSchedule`).
 //!
 //! Drawn only: the dig's timer is read, never fed. Eye space, metres: x
 //! right, y up, -z ahead. Pitch is about eye x, tip up and back positive.
@@ -259,12 +263,238 @@ impl ShovelSettings {
     }
 }
 
+/// The bare-hand punch (`held-swing` decision 10, the fist of version 16),
+/// in `held.punch`: the four stages of the fist's stroke and where the fist
+/// is held. Times s, angles rad, lengths m, eye space; `hands_weight` a
+/// ratio.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PunchSettings {
+    /// Windup: the fist drawn back toward the chin, dropped, the wrist
+    /// cocked.
+    pub windup_s: f32,
+    pub draw_m: f32,
+    pub drop_m: f32,
+    pub cock_rad: f32,
+    /// Anticipation: a further draw and a held coil.
+    pub anticipate_s: f32,
+    pub anticipate_m: f32,
+    /// The hit: forward, in and up to the crosshair's lower left, eased in
+    /// with t cubed, on a slight arc, turning by `twist_rad` and aimed
+    /// sideways by `sweep_rad`.
+    pub strike_s: f32,
+    pub reach_m: f32,
+    pub across_m: f32,
+    pub rise_m: f32,
+    pub twist_rad: f32,
+    pub sweep_rad: f32,
+    pub arc_m: f32,
+    /// A held frame on contact.
+    pub impact_hold_s: f32,
+    /// The recoil off the target, with an overshoot, then the recover.
+    pub recoil_s: f32,
+    pub recoil_m: f32,
+    pub recover_s: f32,
+    /// Scales the windup, the anticipation and the hold: a bare hand is
+    /// lighter and quicker than a tool.
+    pub hands_weight: f32,
+    /// The guard: the fist raised and brought in from a tool's fist, its
+    /// twist about the forearm and its cock on the wrist; the cock at the
+    /// hit; the hand's bend on the wrist about the back of the hand.
+    pub fist_raise_m: f32,
+    pub fist_in_m: f32,
+    pub guard_twist_rad: f32,
+    pub guard_cock_rad: f32,
+    pub hit_cock_rad: f32,
+    pub bend_rad: f32,
+    /// The virtual elbow the forearm aims from, eye space, m, following
+    /// `elbow_follow` of the fist's travel from the guard.
+    pub elbow_x: f32,
+    pub elbow_y: f32,
+    pub elbow_z: f32,
+    pub elbow_follow: f32,
+}
+
+impl Default for PunchSettings {
+    fn default() -> Self {
+        Self {
+            windup_s: 0.09,
+            draw_m: 0.08,
+            drop_m: 0.0,
+            cock_rad: 0.05,
+            anticipate_s: 0.06,
+            anticipate_m: 0.025,
+            strike_s: 0.07,
+            reach_m: 0.06,
+            across_m: 0.19,
+            rise_m: 0.13,
+            twist_rad: 0.0,
+            sweep_rad: 0.0,
+            arc_m: 0.03,
+            impact_hold_s: 0.04,
+            recoil_s: 0.07,
+            recoil_m: 0.06,
+            recover_s: 0.16,
+            hands_weight: 0.8,
+            fist_raise_m: 0.1,
+            fist_in_m: 0.12,
+            guard_twist_rad: 0.0,
+            guard_cock_rad: 0.0,
+            hit_cock_rad: 0.0,
+            bend_rad: 0.0,
+            elbow_x: 0.37,
+            elbow_y: -0.28,
+            elbow_z: -0.25,
+            elbow_follow: 0.75,
+        }
+    }
+}
+
+impl PunchSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        let signed = [
+            self.twist_rad,
+            self.sweep_rad,
+            self.fist_raise_m,
+            self.fist_in_m,
+            self.guard_twist_rad,
+            self.guard_cock_rad,
+            self.hit_cock_rad,
+            self.bend_rad,
+            self.elbow_x,
+            self.elbow_y,
+            self.elbow_z,
+        ];
+        let sizes = [
+            self.windup_s,
+            self.draw_m,
+            self.drop_m,
+            self.cock_rad,
+            self.anticipate_s,
+            self.anticipate_m,
+            self.strike_s,
+            self.reach_m,
+            self.across_m,
+            self.rise_m,
+            self.arc_m,
+            self.impact_hold_s,
+            self.recoil_s,
+            self.recoil_m,
+            self.recover_s,
+            self.hands_weight,
+            self.elbow_follow,
+        ];
+        if signed.iter().any(|v| !v.is_finite()) || sizes.iter().any(|v| !v.is_finite() || *v < 0.0)
+        {
+            return Err(
+                "held.punch: every value is finite, and every size, time and weight non-negative"
+                    .into(),
+            );
+        }
+        if self.strike_s <= 0.0 || self.recoil_s <= 0.0 || self.recover_s <= 0.0 {
+            return Err("held.punch: strike_s, recoil_s and recover_s are positive".into());
+        }
+        if self.elbow_follow > 1.0 {
+            return Err("held.punch: elbow_follow is 0..1".into());
+        }
+        Ok(())
+    }
+}
+
+/// A stroke at the air and at a refused block (`held-swing` decision 11),
+/// the hands' and the tools' alike, in `held.swing`. Times s, lengths m,
+/// angles rad, rates Hz; `air_recover_k` a ratio.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SwingSettings {
+    /// At the air: no hold; the hit carries through, the fist this far on,
+    /// a tool this far further down the arm's arc, over `air_follow_s`; the
+    /// recover `air_recover_k` slower.
+    pub air_follow_s: f32,
+    pub air_follow_m: f32,
+    pub air_follow_rad: f32,
+    pub air_recover_k: f32,
+    /// At a refused block (a thud): a longer hold, a bigger kick back, and a
+    /// jolt through the hand drawn on top of the pose.
+    pub thud_hold_s: f32,
+    pub thud_recoil_m: f32,
+    pub thud_recoil_rad: f32,
+    pub thud_shake_m: f32,
+    pub thud_shake_hz: f32,
+    pub thud_shake_s: f32,
+}
+
+impl Default for SwingSettings {
+    fn default() -> Self {
+        Self {
+            air_follow_s: 0.1,
+            air_follow_m: 0.07,
+            air_follow_rad: 0.3,
+            air_recover_k: 1.3,
+            thud_hold_s: 0.07,
+            thud_recoil_m: 0.05,
+            thud_recoil_rad: 0.2,
+            thud_shake_m: 0.008,
+            thud_shake_hz: 22.0,
+            thud_shake_s: 0.18,
+        }
+    }
+}
+
+impl SwingSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        let all = [
+            self.air_follow_s,
+            self.air_follow_m,
+            self.air_follow_rad,
+            self.air_recover_k,
+            self.thud_hold_s,
+            self.thud_recoil_m,
+            self.thud_recoil_rad,
+            self.thud_shake_m,
+            self.thud_shake_hz,
+            self.thud_shake_s,
+        ];
+        if all.iter().any(|v| !v.is_finite() || *v < 0.0) {
+            return Err("held.swing: every value is finite and non-negative".into());
+        }
+        if self.air_follow_s <= 0.0 || self.thud_shake_s <= 0.0 {
+            return Err("held.swing: air_follow_s and thud_shake_s are positive".into());
+        }
+        if self.air_recover_k < 1.0 {
+            return Err("held.swing: air_recover_k is at least 1".into());
+        }
+        Ok(())
+    }
+}
+
+/// Everything a stroke is drawn from: the tools' stroke, the shovel's, the
+/// punch and the swing at the air and at a refused block.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Motion {
+    pub stroke: StrokeSettings,
+    pub shovel: ShovelSettings,
+    pub punch: PunchSettings,
+    pub swing: SwingSettings,
+}
+
+/// What a click's stroke meets (`held-swing` decision 11): a block or a
+/// tree that breaks (the dig's beat), the air (nothing in reach, water, a
+/// cell that is not a block), or a block the digger is refused on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Meets {
+    #[default]
+    Breaks,
+    Air,
+    Refused,
+}
+
 /// The view's pitch the shovel's keys are set for, rad: the mockup's Dig
 /// tab looks down this far, and the entry is laid out in eye space from it.
 pub const DIG_PITCH: f32 = -0.56;
 
-/// Which stroke a tool in hand makes. Bare hands keep the beat (it times
-/// the dig sounds) but draw nothing.
+/// Which stroke a tool in hand makes. Bare hands punch (`held-swing`
+/// decision 10).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StrokeTool {
     Pickaxe,
@@ -281,6 +511,8 @@ pub enum Stage {
     Anticipation,
     Hit,
     Recoil,
+    /// At the air: the hit carrying on past where it would have landed.
+    FollowThrough,
     /// The shovel's recoil: the tip about the blade, then the pull up.
     Tip,
     PullUp,
@@ -301,6 +533,7 @@ pub struct Timings {
 }
 
 impl Timings {
+    /// A tool's stroke on a block that breaks.
     pub fn new(
         s: &StrokeSettings,
         v: &ShovelSettings,
@@ -308,14 +541,55 @@ impl Timings {
         w: f32,
         period: f32,
     ) -> Self {
-        let (mut wu, mut an, mut rv) = (s.windup_s * w, s.anticipate_s * w, s.recover_s);
-        let st = s.strike_s;
-        let ho = s.impact_hold_s * w;
-        let rc = if tool == StrokeTool::Shovel {
-            v.scoop_s
-        } else {
-            s.recoil_s
+        let m = Motion {
+            stroke: *s,
+            shovel: *v,
+            ..Motion::default()
         };
+        Self::meeting(&m, tool, w, period, Meets::Breaks)
+    }
+
+    /// The stroke by what it meets (the mockup's `actTimings`): the hands
+    /// time theirs from `punch` with `hands_weight`, a tool from `stroke`
+    /// with its weight `w`. At the air there is no hold and the recoil is
+    /// the follow-through, the recover slower; a thud holds longer. The
+    /// shovel scoops whatever it meets.
+    pub fn meeting(m: &Motion, tool: StrokeTool, w: f32, period: f32, meets: Meets) -> Self {
+        let (s, v, p, sw) = (&m.stroke, &m.shovel, &m.punch, &m.swing);
+        let (mut wu, mut an, mut rv, st, mut ho, mut rc) = if tool == StrokeTool::Hands {
+            let w = p.hands_weight;
+            (
+                p.windup_s * w,
+                p.anticipate_s * w,
+                p.recover_s,
+                p.strike_s,
+                p.impact_hold_s * w,
+                p.recoil_s,
+            )
+        } else {
+            let rc = if tool == StrokeTool::Shovel {
+                v.scoop_s
+            } else {
+                s.recoil_s
+            };
+            (
+                s.windup_s * w,
+                s.anticipate_s * w,
+                s.recover_s,
+                s.strike_s,
+                s.impact_hold_s * w,
+                rc,
+            )
+        };
+        match drawn_meets(tool, meets) {
+            Meets::Air => {
+                ho = 0.0;
+                rc = sw.air_follow_s;
+                rv *= sw.air_recover_k;
+            }
+            Meets::Refused => ho = sw.thud_hold_s,
+            Meets::Breaks => {}
+        }
         let (fixed, soft) = (st + ho + rc, wu + an + rv);
         if period > 0.0 && fixed + soft > period {
             let k = ((period - fixed) / soft).max(0.1);
@@ -340,6 +614,17 @@ impl Timings {
 
     pub fn len(&self) -> f32 {
         self.impact() + self.hold + self.recoil + self.recover
+    }
+}
+
+/// What the stroke is drawn as meeting: the shovel scoops whatever it
+/// meets (it has no whiff or thud of its own, and no digging tool is
+/// refused today).
+fn drawn_meets(tool: StrokeTool, meets: Meets) -> Meets {
+    if tool == StrokeTool::Shovel {
+        Meets::Breaks
+    } else {
+        meets
     }
 }
 
@@ -408,6 +693,57 @@ impl Beat {
     }
 }
 
+/// When the strokes come (the mockup's `ActSchedule`): on a block that
+/// breaks, the dig's beat; at the air or a refused block nothing breaks,
+/// so a free beat of `period` from the press, the first impact one windup,
+/// anticipation and strike after it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Schedule {
+    Dig(Beat),
+    Free { period: f32 },
+}
+
+impl Schedule {
+    pub fn period(&self) -> f32 {
+        match self {
+            Self::Dig(beat) => beat.period,
+            Self::Free { period } => *period,
+        }
+    }
+
+    /// The impacts in (t0, t1] of strokes whose impact comes `impact`
+    /// after their start, each with whether it is a block's last.
+    pub fn impacts(&self, t0: f32, t1: f32, impact: f32) -> Vec<(f32, bool)> {
+        match self {
+            Self::Dig(beat) => beat.impacts(t0, t1),
+            Self::Free { period } => {
+                let p = period.max(1e-3);
+                let j0 = ((t0 - impact) / p).floor().max(0.0) as i64;
+                let j1 = ((t1 - impact) / p).ceil() as i64 + 1;
+                (j0..=j1)
+                    .map(|j| j as f32 * p + impact)
+                    .filter(|t| *t > t0 && *t <= t1)
+                    .map(|t| (t, false))
+                    .collect()
+            }
+        }
+    }
+
+    fn starts(&self, t: f32, impact: f32) -> Vec<f32> {
+        match self {
+            Self::Dig(beat) => beat.starts(t, impact),
+            Self::Free { period } => {
+                if t < 0.0 {
+                    return Vec::new();
+                }
+                let p = period.max(1e-3);
+                let j = (t / p).floor() as i64;
+                ((j - 3).max(0)..=j).map(|j| j as f32 * p).collect()
+            }
+        }
+    }
+}
+
 /// The pickaxe's and the axe's pose in a stroke: the tool's forward pitch
 /// about the fist `a`, the arm's angle about the shoulder `phi` (raised
 /// positive), its stretch `ext` (m), the head's overlap past the fist `ov`
@@ -450,20 +786,28 @@ impl SpadePose {
     }
 }
 
-/// A pose in a stroke and where in it.
+/// A pose in a stroke and where in it. The fist's is its shift from the
+/// guard (eye space, m) and its turn: pitch the cock on the wrist, roll the
+/// twist about the forearm, yaw the aim sideways (the mockup's punch pose).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StrokePose {
     Arm(ArmPose),
     Spade(SpadePose),
+    Fist(HeldPose),
 }
 
 impl StrokePose {
     fn rest(tool: StrokeTool) -> Self {
-        if tool == StrokeTool::Shovel {
-            Self::Spade(SpadePose::default())
-        } else {
-            Self::Arm(ArmPose::default())
+        match tool {
+            StrokeTool::Shovel => Self::Spade(SpadePose::default()),
+            StrokeTool::Hands => Self::Fist(HeldPose::default()),
+            _ => Self::Arm(ArmPose::default()),
         }
+    }
+
+    /// Whether it is a pose of `tool`'s kind.
+    fn fits(self, tool: StrokeTool) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&Self::rest(tool))
     }
 
     /// Part of the way to rest.
@@ -471,6 +815,7 @@ impl StrokePose {
         match self {
             Self::Arm(p) => Self::Arm(p.lerp(ArmPose::default(), t)),
             Self::Spade(p) => Self::Spade(p.lerp(SpadePose::default(), t)),
+            Self::Fist(p) => Self::Fist(p.lerp(HeldPose::default(), t)),
         }
     }
 }
@@ -501,17 +846,26 @@ fn back_out(t: f32) -> f32 {
     1.0 + c3 * (t - 1.0).powi(3) + c1 * (t - 1.0).powi(2)
 }
 
-/// The four keyed poses of the pick's and the axe's chop.
+/// The keyed poses of the pick's and the axe's chop, and where the hit
+/// carries on to at the air (`over`).
 #[derive(Clone, Copy, Debug)]
 pub struct ArmKeys {
     pub top: ArmPose,
     pub coil: ArmPose,
     pub hit: ArmPose,
     pub recoil: ArmPose,
+    pub over: ArmPose,
 }
 
 pub fn arm_keys(s: &StrokeSettings) -> ArmKeys {
     let ex = s.exaggerate;
+    let hit = ArmPose {
+        a: s.strike_rad,
+        phi: -s.reach_rad,
+        ext: s.extend_m,
+        ov: s.overlap_rad,
+        yaw: s.sweep_rad,
+    };
     ArmKeys {
         top: ArmPose {
             a: -s.windup_rad * ex,
@@ -527,13 +881,7 @@ pub fn arm_keys(s: &StrokeSettings) -> ArmKeys {
             ov: 0.0,
             yaw: -0.1 * ex,
         },
-        hit: ArmPose {
-            a: s.strike_rad,
-            phi: -s.reach_rad,
-            ext: s.extend_m,
-            ov: s.overlap_rad,
-            yaw: s.sweep_rad,
-        },
+        hit,
         recoil: ArmPose {
             a: s.strike_rad - s.recoil_rad * ex,
             phi: -(s.reach_rad + s.follow_rad),
@@ -541,7 +889,97 @@ pub fn arm_keys(s: &StrokeSettings) -> ArmKeys {
             ov: 0.0,
             yaw: s.sweep_rad * 0.9,
         },
+        over: hit,
     }
+}
+
+/// A tool's keys by what it meets (the mockup's `toolKeys`): at the air the
+/// arm carries on down its arc past the hit, the tool holding nearly its
+/// angle (turning the whole holder would swing the sleeve up across the
+/// view); at a thud it kicks back further.
+pub fn arm_keys_meeting(s: &StrokeSettings, sw: &SwingSettings, meets: Meets) -> ArmKeys {
+    let ex = s.exaggerate;
+    let mut k = arm_keys(s);
+    k.over = ArmPose {
+        phi: k.hit.phi - sw.air_follow_rad * ex,
+        a: k.hit.a - sw.air_follow_rad * 0.7 * ex,
+        ..k.hit
+    };
+    if meets == Meets::Refused {
+        k.recoil.a -= sw.thud_recoil_rad * ex;
+        k.recoil.phi += sw.thud_recoil_rad * 0.4 * ex;
+    }
+    k
+}
+
+/// The punch's keyed poses (the mockup's `punchKeys`), each the fist's
+/// shift from its guard and its turn: the windup draws it back toward the
+/// chin, a little above the shoulder, and cocks the wrist; the hit drives
+/// it forward, in and up to the crosshair's lower left; the recoil bounces
+/// it back (further off a thud); at the air it carries on (`over`).
+#[derive(Clone, Copy, Debug)]
+pub struct PunchKeys {
+    pub top: HeldPose,
+    pub coil: HeldPose,
+    pub hit: HeldPose,
+    pub recoil: HeldPose,
+    pub over: HeldPose,
+}
+
+pub fn punch_keys(m: &Motion, fist0: Vec3, meets: Meets) -> PunchKeys {
+    let (s, p, sw) = (&m.stroke, &m.punch, &m.swing);
+    let ex = s.exaggerate;
+    let chin = Vec3::new(s.shoulder[0] * 0.5, s.shoulder[1] + 0.2, s.shoulder[2]);
+    let back = (chin - (fist0 + guard(p))).normalize_or_zero();
+    let at = |k: f32, drop: f32| back * k * ex - Vec3::Y * drop * ex;
+    let top = HeldPose {
+        pitch: p.cock_rad * ex,
+        roll: 0.0,
+        yaw: -0.05 * ex,
+        shift: at(p.draw_m, p.drop_m),
+    };
+    let coil = HeldPose {
+        pitch: (p.cock_rad + 0.06) * ex,
+        roll: 0.04,
+        yaw: -0.07 * ex,
+        shift: at(p.draw_m + p.anticipate_m, p.drop_m * 1.2),
+    };
+    let hit = HeldPose {
+        pitch: p.hit_cock_rad,
+        roll: -p.twist_rad,
+        yaw: p.sweep_rad,
+        shift: Vec3::new(-p.across_m, p.rise_m, -p.reach_m),
+    };
+    let thud = meets == Meets::Refused;
+    let recoil = HeldPose {
+        pitch: hit.pitch + (0.08 + if thud { 0.12 } else { 0.0 }) * ex,
+        roll: hit.roll * 0.8,
+        yaw: hit.yaw * 0.9,
+        shift: Vec3::new(
+            hit.shift.x + p.across_m * 0.1,
+            hit.shift.y - 0.01,
+            hit.shift.z + (p.recoil_m + if thud { sw.thud_recoil_m } else { 0.0 }) * ex,
+        ),
+    };
+    let f = sw.air_follow_m * ex;
+    let over = HeldPose {
+        pitch: hit.pitch - 0.12 * ex,
+        roll: hit.roll * 1.15,
+        yaw: hit.yaw * 1.2,
+        shift: hit.shift - Vec3::new(f * 0.5, f * 0.4, f),
+    };
+    PunchKeys {
+        top,
+        coil,
+        hit,
+        recoil,
+        over,
+    }
+}
+
+/// The fist's guard: where it is held from a tool's fist, eye space, m.
+pub fn guard(p: &PunchSettings) -> Vec3 {
+    Vec3::new(-p.fist_in_m, p.fist_raise_m, 0.0)
 }
 
 /// The shovel's keyed poses: the windup's top, the coil before the slide,
@@ -613,19 +1051,23 @@ pub fn spade_keys(s: &StrokeSettings, v: &ShovelSettings, fist: Vec3, tip: Vec3)
     keys
 }
 
-/// Everything a stroke needs to pose a tool: the settings, the tool, its
-/// stage times, and the shovel's keys and fist.
+/// Everything a stroke needs to pose a tool or the fist: the tool, what it
+/// meets, its stage times, the keys and the shovel's fist.
 #[derive(Clone, Copy, Debug)]
 pub struct Stroker {
     pub tool: StrokeTool,
+    pub meets: Meets,
     pub times: Timings,
     pub arm: ArmKeys,
     pub spade: SpadeKeys,
+    pub punch: PunchKeys,
     pub fist: Vec3,
+    arc_m: f32,
 }
 
 /// The tool a stroke is made with: which, its weight at its tier, and its
-/// fist and tip at rest, eye space.
+/// fist and tip at rest, eye space (bare hands: the pickaxe's, which the
+/// fist is posed from).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gear {
     pub tool: StrokeTool,
@@ -635,25 +1077,32 @@ pub struct Gear {
 }
 
 impl Stroker {
-    pub fn new(s: &StrokeSettings, v: &ShovelSettings, gear: Gear, period: f32) -> Self {
+    pub fn new(m: &Motion, gear: Gear, period: f32, meets: Meets) -> Self {
+        let drawn = drawn_meets(gear.tool, meets);
         Self {
             tool: gear.tool,
-            times: Timings::new(s, v, gear.tool, gear.weight, period),
-            arm: arm_keys(s),
-            spade: spade_keys(s, v, gear.fist, gear.tip),
+            meets: drawn,
+            times: Timings::meeting(m, gear.tool, gear.weight, period, meets),
+            arm: arm_keys_meeting(&m.stroke, &m.swing, drawn),
+            spade: spade_keys(&m.stroke, &m.shovel, gear.fist, gear.tip),
+            punch: punch_keys(m, gear.fist, drawn),
             fist: gear.fist,
+            arc_m: m.punch.arc_m,
         }
     }
 
     /// The pose `e` seconds into a stroke begun from `from`.
     pub fn at(&self, e: f32, from: StrokePose) -> StrokeAt {
-        if self.tool == StrokeTool::Shovel {
-            return self.spade_at(e);
+        match self.tool {
+            StrokeTool::Shovel => return self.spade_at(e),
+            StrokeTool::Hands => return self.punch_at(e, from),
+            _ => {}
         }
         let from = match from {
             StrokePose::Arm(p) => p,
-            StrokePose::Spade(_) => ArmPose::default(),
+            _ => ArmPose::default(),
         };
+        let air = self.meets == Meets::Air;
         let (k, t) = (&self.arm, &self.times);
         let arm = |p: ArmPose, stage| StrokeAt {
             pose: StrokePose::Arm(p),
@@ -689,18 +1138,84 @@ impl Stroker {
         e -= t.hold;
         if e < t.recoil {
             let u = e / t.recoil;
+            if air {
+                return arm(k.hit.lerp(k.over, ease_out(u)), Stage::FollowThrough);
+            }
             let mut p = k.hit.lerp(k.recoil, back_out(u));
             p.ov = k.hit.ov * (1.0 - ease_out(u));
             return arm(p, Stage::Recoil);
         }
         e -= t.recoil;
         if e < t.recover {
-            return arm(
-                k.recoil.lerp(ArmPose::default(), smooth(e / t.recover)),
-                Stage::Recoil,
-            );
+            let (end, stage) = if air {
+                (k.over, Stage::FollowThrough)
+            } else {
+                (k.recoil, Stage::Recoil)
+            };
+            return arm(end.lerp(ArmPose::default(), smooth(e / t.recover)), stage);
         }
         arm(ArmPose::default(), Stage::Rest)
+    }
+
+    /// The punch `e` seconds into it (the mockup's `actAt` for the hands):
+    /// the hit eased in with t cubed on a slight arc, turning smoothly.
+    fn punch_at(&self, e: f32, from: StrokePose) -> StrokeAt {
+        let from = match from {
+            StrokePose::Fist(p) => p,
+            _ => HeldPose::default(),
+        };
+        let air = self.meets == Meets::Air;
+        let (k, t) = (&self.punch, &self.times);
+        let fist = |p: HeldPose, stage| StrokeAt {
+            pose: StrokePose::Fist(p),
+            stage,
+            scoop: false,
+        };
+        if e < 0.0 {
+            return fist(from, Stage::Rest);
+        }
+        let mut e = e;
+        if e < t.windup {
+            return fist(from.lerp(k.top, ease_out(e / t.windup)), Stage::Windup);
+        }
+        e -= t.windup;
+        if e < t.anticipate {
+            return fist(
+                k.top.lerp(k.coil, smooth(e / (t.anticipate * 0.7))),
+                Stage::Anticipation,
+            );
+        }
+        e -= t.anticipate;
+        if e < t.strike {
+            let u = e / t.strike;
+            let u3 = u * u * u;
+            let mut p = k.coil.lerp(k.hit, u3);
+            p.shift.y += self.arc_m * (std::f32::consts::PI * u3).sin();
+            p.roll = k.coil.roll + (k.hit.roll - k.coil.roll) * smooth(u);
+            return fist(p, Stage::Hit);
+        }
+        e -= t.strike;
+        if e < t.hold {
+            return fist(k.hit, Stage::Hit);
+        }
+        e -= t.hold;
+        if e < t.recoil {
+            let u = e / t.recoil;
+            if air {
+                return fist(k.hit.lerp(k.over, ease_out(u)), Stage::FollowThrough);
+            }
+            return fist(k.hit.lerp(k.recoil, back_out(u)), Stage::Recoil);
+        }
+        e -= t.recoil;
+        if e < t.recover {
+            let (end, stage) = if air {
+                (k.over, Stage::FollowThrough)
+            } else {
+                (k.recoil, Stage::Recoil)
+            };
+            return fist(end.lerp(HeldPose::default(), smooth(e / t.recover)), stage);
+        }
+        fist(HeldPose::default(), Stage::Rest)
     }
 
     fn spade_at(&self, e: f32) -> StrokeAt {
@@ -761,11 +1276,11 @@ impl Stroker {
         spade(rest, Stage::Rest, false)
     }
 
-    /// The pose at `t` on the beat: the last stroke begun by then, begun
-    /// from wherever the one before it had the tool (the mockup's
+    /// The pose at `t` on the schedule: the last stroke begun by then,
+    /// begun from wherever the one before it had the tool (the mockup's
     /// `poseAt`).
-    pub fn on_beat(&self, beat: &Beat, t: f32) -> StrokeAt {
-        let starts = beat.starts(t, self.times.impact());
+    pub fn on_beat(&self, schedule: &Schedule, t: f32) -> StrokeAt {
+        let starts = schedule.starts(t, self.times.impact());
         let rest = StrokePose::rest(self.tool);
         let Some(&last) = starts.last() else {
             return StrokeAt {
@@ -786,18 +1301,26 @@ impl Stroker {
 /// The pose as drawn (`strokePose`): for the pick and the axe, the fist on
 /// its arc about the shoulder from `s`, the tool's pitch from the lagged
 /// arm `lag` less its own forward pitch and overlap, and the arm's swing
-/// across; for the shovel, its pitch and shift.
-pub fn drawn(s: &StrokeSettings, fist0: Vec3, now: StrokePose, lag: StrokePose) -> HeldPose {
+/// across; for the shovel, its pitch and shift; for the bare fist, its
+/// shift from the guard and its turn, the guard's cock added (the mockup's
+/// `draw` for the hands; `held::punch` aims it).
+pub fn drawn(m: &Motion, fist0: Vec3, now: StrokePose, lag: StrokePose) -> HeldPose {
+    let s = &m.stroke;
     match now {
         StrokePose::Spade(p) => HeldPose {
             pitch: p.pitch,
             shift: p.shift,
             ..default()
         },
+        StrokePose::Fist(p) => HeldPose {
+            pitch: p.pitch + m.punch.guard_cock_rad,
+            shift: p.shift + guard(&m.punch),
+            ..p
+        },
         StrokePose::Arm(p) => {
             let lag = match lag {
                 StrokePose::Arm(l) => l,
-                StrokePose::Spade(_) => p,
+                _ => p,
             };
             let shoulder = Vec3::from(s.shoulder);
             let arm = fist0 - shoulder;
@@ -815,12 +1338,14 @@ pub fn drawn(s: &StrokeSettings, fist0: Vec3, now: StrokePose, lag: StrokePose) 
     }
 }
 
-/// What the dig's rule says this frame, as the stroke reads it: whether a
-/// hold is working (a block being broken, or the pause after one), the
-/// block's break time and how far into it and its pause the hold is.
+/// What the dig's rule and the button say this frame, as the stroke reads
+/// it: whether a hold is working (the button held with a digger in hand,
+/// or the pause after a break), what the click meets, and, on a block that
+/// breaks, its break time and how far into it and its pause the hold is.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DigBeat {
     pub working: bool,
+    pub meets: Meets,
     pub break_s: f32,
     pub between_s: f32,
     /// 0..break_s while breaking, then on through the pause.
@@ -836,93 +1361,129 @@ pub struct StrokeFrame {
     /// Impacts landed this frame: each is a block's last (the break) or
     /// not.
     pub impacts: Vec<bool>,
+    /// What they met.
+    pub meets: Meets,
+    /// A stroke under way: the button held, or the tool still easing back
+    /// to rest after it (the bare hand is drawn only then, `held-swing`).
+    pub busy: bool,
 }
 
 /// The stroke's own clock, kept by the hold system: which cycle of the hold
 /// it is in, and the moves from wherever the tool was (letting go, a change
-/// of block, tool or beat) eased over `recover_s` so nothing pops.
+/// of block, tool, beat or what the click meets) eased over `recover_s` so
+/// nothing pops.
 #[derive(Clone, Debug, Default)]
 pub struct StrokeClock {
     cycle: i64,
     last: Option<(DigBeat, StrokeTool)>,
-    /// The beat's time last frame, s.
+    /// The beat's time last frame, s (the free beat's: since the press).
     t: f32,
     /// The pose and its lag last frame, to ease from.
     now: Option<(StrokePose, StrokePose)>,
     /// Letting go: easing back to rest from a pose, s since.
     release: Option<(StrokePose, StrokePose, f32)>,
-    /// Taking up again from where the tool was drawn: the pose, s since.
-    carry: Option<(HeldPose, f32)>,
+    /// Taking up again from where the tool was drawn: the pose, s since,
+    /// and whether it was the fist's.
+    carry: Option<(HeldPose, f32, bool)>,
     drawn: HeldPose,
+    drawn_hands: bool,
+    /// When the last thud landed, on the beat's time.
+    thud_at: Option<f32>,
 }
 
 impl StrokeClock {
     /// One frame of the stroke.
-    pub fn step(
-        &mut self,
-        s: &StrokeSettings,
-        v: &ShovelSettings,
-        gear: Gear,
-        dig: DigBeat,
-        dt: f32,
-    ) -> StrokeFrame {
+    pub fn step(&mut self, m: &Motion, gear: Gear, dig: DigBeat, dt: f32) -> StrokeFrame {
+        let s = &m.stroke;
         let dt = dt.clamp(0.0, 0.1);
         let mut frame = StrokeFrame::default();
         let rest = StrokePose::rest(gear.tool);
+        let hands = gear.tool == StrokeTool::Hands;
+        let recover_s = if hands {
+            m.punch.recover_s
+        } else {
+            s.recover_s
+        };
+        let mut thud = None;
         let (now, lag) = if dig.working {
             self.release = None;
-            let beat = Beat::new(s, dig.break_s, dig.between_s);
-            let stroker = Stroker::new(s, v, gear, beat.period);
-            let t0;
-            match self.last {
-                Some((was, tool))
-                    if tool == gear.tool
-                        && (was.break_s - dig.break_s).abs() < 1e-4
-                        && (was.between_s - dig.between_s).abs() < 1e-4 =>
-                {
-                    if dig.local_s + 1e-4 < was.local_s {
+            let same = self.last.filter(|(was, tool)| {
+                *tool == gear.tool
+                    && was.meets == dig.meets
+                    && (dig.meets != Meets::Breaks
+                        || ((was.break_s - dig.break_s).abs() < 1e-4
+                            && (was.between_s - dig.between_s).abs() < 1e-4))
+            });
+            let (schedule, t0, t) = if dig.meets == Meets::Breaks {
+                let beat = Beat::new(s, dig.break_s, dig.between_s);
+                let t0 = match same {
+                    Some((was, _)) if dig.local_s + 1e-4 < was.local_s => {
                         if was.local_s >= was.break_s - 1e-3 {
                             // The pause ran out and the next block began: on
                             // round the beat.
                             self.cycle += 1;
-                            t0 = self.t;
+                            self.t
                         } else {
                             // Started again mid-block (aimed elsewhere).
                             self.restart();
-                            t0 = -1e-6;
+                            -1e-6
                         }
-                    } else {
-                        t0 = self.t;
                     }
-                }
-                _ => {
+                    Some(_) => self.t,
+                    None => {
+                        self.restart();
+                        -1e-6
+                    }
+                };
+                let t = self.cycle as f32 * beat.cycle_s + dig.local_s;
+                (Schedule::Dig(beat), t0, t)
+            } else {
+                // The free beat, from the press (or from the moment the aim
+                // left what breaks).
+                let (t0, t) = if same.is_some() {
+                    (self.t, self.t + dt)
+                } else {
                     self.restart();
-                    t0 = -1e-6;
+                    self.thud_at = None;
+                    (-1e-6, 0.0)
+                };
+                let period = s.stroke_target_s;
+                (Schedule::Free { period }, t0, t)
+            };
+            let stroker = Stroker::new(m, gear, schedule.period(), dig.meets);
+            let hits = schedule.impacts(t0, t, stroker.times.impact());
+            frame.impacts = hits.iter().map(|(_, last)| *last).collect();
+            frame.meets = dig.meets;
+            if dig.meets == Meets::Refused {
+                if let Some(&(at, _)) = hits.last() {
+                    self.thud_at = Some(at);
                 }
+                thud = self.thud_at.map(|at| t - at);
             }
-            let t = self.cycle as f32 * beat.cycle_s + dig.local_s;
-            frame.impacts = beat
-                .impacts(t0, t)
-                .into_iter()
-                .map(|(_, last)| last)
-                .collect();
             self.t = t;
-            let at = stroker.on_beat(&beat, t);
-            let lagged = stroker.on_beat(&beat, (t - s.lag_s).max(0.0));
+            let at = stroker.on_beat(&schedule, t);
+            let lag_s = if hands { 0.0 } else { s.lag_s };
+            let lagged = stroker.on_beat(&schedule, (t - lag_s).max(0.0));
             frame.stage = Some(at.stage);
-            frame.scoop = at.scoop;
+            frame.scoop = at.scoop && dig.meets == Meets::Breaks;
             self.last = Some((dig, gear.tool));
             (at.pose, lagged.pose)
         } else {
+            self.thud_at = None;
             if self.last.take().is_some()
                 && let Some((now, lag)) = self.now
             {
                 self.release = Some((now, lag, 0.0));
             }
+            // A release of another kind's pose (the tool changed as the
+            // button was let go) is dropped: there is nothing to ease.
+            if self.release.is_some_and(|(now, _, _)| !now.fits(gear.tool)) {
+                self.release = None;
+            }
             match &mut self.release {
                 Some((now, lag, since)) => {
                     *since += dt;
-                    let k = smooth(*since / s.recover_s);
+                    let k = smooth(*since / recover_s);
                     let pair = (now.toward_rest(k), lag.toward_rest(k));
                     if k >= 1.0 {
                         self.release = None;
@@ -933,16 +1494,34 @@ impl StrokeClock {
             }
         };
         self.now = Some((now, lag));
-        let mut pose = drawn(s, gear.fist, now, lag);
-        if let Some((from, since)) = &mut self.carry {
+        let mut pose = drawn(m, gear.fist, now, lag);
+        // Eased from where it was drawn, unless that was the other kind
+        // (the fist against a tool): those are different models.
+        if self.carry.is_some_and(|(_, _, was)| was != hands) {
+            self.carry = None;
+        }
+        if let Some((from, since, _)) = &mut self.carry {
             *since += dt;
-            let k = smooth(*since / s.recover_s);
+            let k = smooth(*since / recover_s);
             pose = from.lerp(pose, k);
             if k >= 1.0 {
                 self.carry = None;
             }
         }
         self.drawn = pose;
+        self.drawn_hands = hands;
+        frame.busy = dig.working || self.release.is_some() || self.carry.is_some();
+        // The thud: a short jolt through the fist or the tool, on top of
+        // the pose.
+        let sw = &m.swing;
+        if let Some(ta) = thud
+            && (0.0..sw.thud_shake_s).contains(&ta)
+        {
+            let k = 1.0 - ta / sw.thud_shake_s;
+            let w = ta * std::f32::consts::TAU * sw.thud_shake_hz;
+            pose.shift.x += sw.thud_shake_m * k * k * w.sin();
+            pose.shift.y += sw.thud_shake_m * 0.6 * k * k * (w * 1.3).cos();
+        }
         frame.pose = pose;
         frame
     }
@@ -953,7 +1532,7 @@ impl StrokeClock {
         self.cycle = 0;
         self.t = 0.0;
         if self.now.is_some() && self.drawn != HeldPose::default() {
-            self.carry = Some((self.drawn, 0.0));
+            self.carry = Some((self.drawn, 0.0, self.drawn_hands));
         }
         self.release = None;
     }
@@ -979,6 +1558,10 @@ mod tests {
             fist: model.fist.into(),
             tip: model.tip.into(),
         }
+    }
+
+    fn motion() -> Motion {
+        Motion::default()
     }
 
     fn near(a: f32, b: f32, by: f32) -> bool {
@@ -1028,7 +1611,7 @@ mod tests {
     #[test]
     fn each_stage_at_its_time() {
         let (s, v) = (StrokeSettings::default(), ShovelSettings::default());
-        let pick = Stroker::new(&s, &v, gear(StrokeTool::Pickaxe), 10.0);
+        let pick = Stroker::new(&motion(), gear(StrokeTool::Pickaxe), 10.0, Meets::Breaks);
         let t = pick.times;
         assert!(near(t.windup, s.windup_s, 1e-6) && near(t.recover, s.recover_s, 1e-6));
         let rest = StrokePose::Arm(ArmPose::default());
@@ -1054,7 +1637,7 @@ mod tests {
             _ => unreachable!(),
         };
         assert!(pitch(i - 1e-4) - pitch(i - 0.1 * t.strike) > pitch(a + 0.5 * t.strike) - pitch(a));
-        let spade = Stroker::new(&s, &v, gear(StrokeTool::Shovel), 10.0);
+        let spade = Stroker::new(&motion(), gear(StrokeTool::Shovel), 10.0, Meets::Breaks);
         let t = spade.times;
         assert!(near(t.recoil, v.scoop_s, 1e-6));
         let h = t.impact() + t.hold;
@@ -1107,7 +1690,7 @@ mod tests {
         let fist = gear(StrokeTool::Pickaxe).fist;
         let shoulder = Vec3::from(s.shoulder);
         let keys = arm_keys(&s);
-        let arm = |p: ArmPose| drawn(&s, fist, StrokePose::Arm(p), StrokePose::Arm(p));
+        let arm = |p: ArmPose| drawn(&motion(), fist, StrokePose::Arm(p), StrokePose::Arm(p));
         let rest = arm(ArmPose::default());
         assert!(rest.shift.length() < 1e-6 && rest.pitch.abs() < 1e-6);
         let hit = arm(keys.hit);
@@ -1123,7 +1706,7 @@ mod tests {
         assert!(top.pitch > 0.5, "the tool raised back: {top:?}");
         // The lag: the tool's pitch follows the arm a moment behind.
         let lagged = drawn(
-            &s,
+            &motion(),
             fist,
             StrokePose::Arm(keys.hit),
             StrokePose::Arm(keys.top),
@@ -1181,9 +1764,9 @@ mod tests {
         );
         let lift = k.lift.shift - k.lever.shift;
         assert!((lift - Vec3::new(0.0, v.lift_m, v.pull_m)).length() < 1e-6);
-        let spade = Stroker::new(&s, &v, g, 10.0);
+        let spade = Stroker::new(&motion(), g, 10.0, Meets::Breaks);
         let drawn_hit = drawn(
-            &s,
+            &motion(),
             g.fist,
             spade
                 .at(
@@ -1205,6 +1788,7 @@ mod tests {
             .map(|_| {
                 let beat = DigBeat {
                     working: true,
+                    meets: Meets::Breaks,
                     break_s,
                     between_s: BETWEEN,
                     local_s: local,
@@ -1233,10 +1817,9 @@ mod tests {
         frames: &[DigBeat],
         last: &mut HeldPose,
     ) -> (f32, f32, Vec<bool>) {
-        let (s, v) = (StrokeSettings::default(), ShovelSettings::default());
         let (mut turn, mut moved, mut impacts) = (0.0f32, 0.0f32, Vec::new());
         for (i, dig) in frames.iter().enumerate() {
-            let f = clock.step(&s, &v, g, *dig, DT);
+            let f = clock.step(&motion(), g, *dig, DT);
             if i < 3 {
                 let (a, m) = change(*last, f.pose);
                 turn = turn.max(a);
@@ -1267,11 +1850,10 @@ mod tests {
         // than a third of that.
         let (mut fast_turn, mut fast_move) = (0.0f32, 0.0f32);
         {
-            let (s, v) = (StrokeSettings::default(), ShovelSettings::default());
             let mut c = StrokeClock::default();
             let mut was = HeldPose::default();
             for dig in &frames {
-                let f = c.step(&s, &v, pick, *dig, DT);
+                let f = c.step(&motion(), pick, *dig, DT);
                 let (a, m) = change(was, f.pose);
                 fast_turn = fast_turn.max(a);
                 fast_move = fast_move.max(m);
@@ -1320,5 +1902,179 @@ mod tests {
             last.pitch.abs() < 1e-5 && last.shift.length() < 1e-5,
             "{last:?}"
         );
+    }
+
+    fn hands() -> Gear {
+        Gear {
+            tool: StrokeTool::Hands,
+            ..gear(StrokeTool::Pickaxe)
+        }
+    }
+
+    /// Held on the air or a refused block from frame 0.
+    fn free(frames: usize, meets: Meets) -> Vec<DigBeat> {
+        vec![
+            DigBeat {
+                working: true,
+                meets,
+                ..Default::default()
+            };
+            frames
+        ]
+    }
+
+    /// Decision 10: a log by hand (2.4 s and the 0.15 s pause) is six
+    /// punches of 0.425 s on the dig's beat, the sixth on the log; dirt by
+    /// hand (2.0 s) five of 0.43 s, the fifth on the break. Each punch runs
+    /// windup, anticipation, hit and recoil, timed from `punch` with
+    /// `hands_weight`, and the fist is at the hit key on the impact.
+    #[test]
+    fn six_punches_per_log_by_hand() {
+        let m = motion();
+        let log = Beat::new(&m.stroke, 2.4, BETWEEN);
+        assert_eq!(log.n, 6);
+        assert!(near(log.period, 0.425, 1e-5));
+        let dirt = Beat::new(&m.stroke, 2.0, BETWEEN);
+        assert_eq!(dirt.n, 5);
+        assert!(near(dirt.period, 0.43, 1e-5));
+        let mut clock = StrokeClock::default();
+        let mut last = HeldPose::default();
+        let frames = rule((log.cycle_s / DT).round() as usize + 3, 2.4);
+        let (_, _, impacts) = run(&mut clock, hands(), &frames, &mut last);
+        assert_eq!(impacts, vec![false, false, false, false, false, true]);
+        let p = &m.punch;
+        // Unshortened (a long period); on the log's 0.425 s beat the windup,
+        // the anticipation and the recover shorten to fit.
+        let fist = Stroker::new(&m, hands(), 10.0, Meets::Breaks);
+        let fits = Stroker::new(&m, hands(), log.period, Meets::Breaks).times;
+        assert!(fits.len() <= log.period + 1e-5 && fits.strike == p.strike_s);
+        let t = fist.times;
+        assert!(near(t.windup, p.windup_s * p.hands_weight, 1e-6));
+        assert!(near(t.hold, p.impact_hold_s * p.hands_weight, 1e-6));
+        assert_eq!((t.strike, t.recoil), (p.strike_s, p.recoil_s));
+        let rest = StrokePose::Fist(HeldPose::default());
+        let stage = |e: f32| fist.at(e, rest).stage;
+        assert_eq!(stage(0.5 * t.windup), Stage::Windup);
+        assert_eq!(stage(t.windup + 0.5 * t.anticipate), Stage::Anticipation);
+        assert_eq!(stage(t.impact() - 0.01), Stage::Hit);
+        assert_eq!(stage(t.impact() + t.hold + 0.5 * t.recoil), Stage::Recoil);
+        let keys = punch_keys(&m, hands().fist, Meets::Breaks);
+        assert_eq!(
+            fist.at(t.impact() + 1e-4, rest).pose,
+            StrokePose::Fist(keys.hit)
+        );
+        // Version 16's hit: in, up and a little forward of the guard.
+        assert_eq!(keys.hit.shift, Vec3::new(-0.19, 0.13, -0.06));
+        assert_eq!((keys.hit.roll, keys.hit.yaw), (0.0, 0.0), "no twist");
+        // The windup draws back toward the chin: up and toward the eye.
+        assert!(
+            keys.top.shift.y > 0.0 && keys.top.shift.z > 0.0,
+            "{:?}",
+            keys.top
+        );
+    }
+
+    /// Decision 11: at the air the stroke runs on a free beat of
+    /// `stroke_target_s` from the press, its first impact one windup,
+    /// anticipation and strike after it, with no hold and the hit carrying
+    /// through; at a refused block it holds `thud_hold_s`, kicks back
+    /// further and jolts. Both for the hands and a tool.
+    #[test]
+    fn a_swing_on_every_click() {
+        let m = motion();
+        for g in [hands(), gear(StrokeTool::Axe)] {
+            let air = Stroker::new(&m, g, m.stroke.stroke_target_s, Meets::Air);
+            assert_eq!(air.times.hold, 0.0, "no hold at the air");
+            assert_eq!(air.times.recoil, m.swing.air_follow_s);
+            let mut clock = StrokeClock::default();
+            let mut at = Vec::new();
+            for (i, dig) in free(120, Meets::Air).iter().enumerate() {
+                let f = clock.step(&m, g, *dig, DT);
+                assert!(f.impacts.iter().all(|l| !l), "nothing breaks at the air");
+                if !f.impacts.is_empty() {
+                    assert_eq!(f.meets, Meets::Air);
+                    at.push(i as f32 * DT);
+                }
+            }
+            let first = air.times.impact();
+            assert!(near(at[0], first, DT + 1e-4), "{at:?} {first}");
+            for pair in at.windows(2) {
+                assert!(near(pair[1] - pair[0], m.stroke.stroke_target_s, DT + 1e-4));
+            }
+            // The follow-through carries past the hit.
+            let rest = StrokePose::rest(g.tool);
+            let e = air.times.impact() + 0.5 * air.times.recoil;
+            assert_eq!(air.at(e, rest).stage, Stage::FollowThrough);
+            // The thud: a longer hold, a bigger kick back, and the jolt.
+            let thud = Stroker::new(&m, g, m.stroke.stroke_target_s, Meets::Refused);
+            assert_eq!(thud.times.hold, m.swing.thud_hold_s);
+            let mut clock = StrokeClock::default();
+            let mut jolted = false;
+            let frames = free(60, Meets::Refused);
+            for dig in &frames {
+                let f = clock.step(&m, g, *dig, DT);
+                jolted |= f.meets == Meets::Refused && !f.impacts.is_empty();
+            }
+            assert!(jolted, "the thud lands");
+        }
+        // The fist kicks back further off a thud than off a log.
+        let (hit, thud) = (
+            punch_keys(&m, hands().fist, Meets::Breaks),
+            punch_keys(&m, hands().fist, Meets::Refused),
+        );
+        assert!(thud.recoil.shift.z - hit.recoil.shift.z > 0.04);
+        let (k, kt) = (
+            arm_keys_meeting(&m.stroke, &m.swing, Meets::Breaks),
+            arm_keys_meeting(&m.stroke, &m.swing, Meets::Refused),
+        );
+        assert!(kt.recoil.a < k.recoil.a, "the tool kicks back further");
+        assert!(k.over.phi < k.hit.phi, "the arm carries on down its arc");
+    }
+
+    /// No pop when what the click meets changes: the air, then the aim
+    /// onto a log, then a refused block, then letting go; and the fist's
+    /// guard at rest, eased back to after a punch.
+    #[test]
+    fn no_pop_when_what_the_click_meets_changes() {
+        let mut clock = StrokeClock::default();
+        let mut last = HeldPose::default();
+        let g = hands();
+        // The fist's steady punch: its fastest frame.
+        let (mut fast_turn, mut fast_move) = (0.0f32, 0.0f32);
+        {
+            let mut c = StrokeClock::default();
+            let mut was = HeldPose::default();
+            for (i, dig) in rule(200, 2.4).iter().enumerate() {
+                let f = c.step(&motion(), g, *dig, DT);
+                if i > 0 {
+                    let (a, mv) = change(was, f.pose);
+                    fast_turn = fast_turn.max(a);
+                    fast_move = fast_move.max(mv);
+                }
+                was = f.pose;
+            }
+        }
+        let calm =
+            |turn: f32, moved: f32| turn <= fast_turn / 2.0 + 1e-6 && moved < fast_move / 2.0;
+        run(&mut clock, g, &free(17, Meets::Air), &mut last);
+        let (turn, moved, _) = run(&mut clock, g, &rule(30, 2.4), &mut last);
+        assert!(
+            calm(turn, moved),
+            "air to a log: {turn} {moved} of {fast_turn} {fast_move}"
+        );
+        let (turn, moved, _) = run(&mut clock, g, &free(20, Meets::Refused), &mut last);
+        assert!(
+            calm(turn, moved),
+            "a log to a thud: {turn} {moved} of {fast_turn} {fast_move}"
+        );
+        let stop = [DigBeat::default(); 40];
+        let (turn, moved, _) = run(&mut clock, g, &stop, &mut last);
+        assert!(
+            calm(turn, moved),
+            "letting go: {turn} {moved} of {fast_turn} {fast_move}"
+        );
+        // At rest, the guard.
+        let guard = guard(&motion().punch);
+        assert!(last.shift.distance(guard) < 1e-5, "{last:?}");
     }
 }

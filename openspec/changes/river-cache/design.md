@@ -941,3 +941,32 @@ validation folder): the whole river from its source, day, the frame graph
 on. Real water to the horizon, the walker off the tier 4 of 175 seconds,
 and two stalls at one spot, each freed.
 
+
+## The save held the frame (measured 2026-11-23)
+
+On the bot's mining shot (`tree-run-7`, the desktop, fast build, F3 and
+`--frame-log` on) a river cache save took 55.4 s (988,296 values; it took 0.2 s
+on the swamp walks), and as it began the main thread held one frame for
+1.7 s; through the farming shot saves of 2 to 22 s lined up with main-thread
+frames of 1.7 to 25 s.
+
+The save reads each memo shard under its read lock while it copies it. A
+`put` took the shard's write lock and waited for the read; on Windows a
+waiting writer holds back new readers, so every `get` on that shard queued too,
+the main thread's among them, and the fill threads' puts starved the save.
+
+**Fix:** `Memo::put` stores only when the shard's lock is free that instant
+(`try_write`). A memo is a cache: a value not kept is worked out again on the
+next ask. Nothing waits on a memo's write lock any more; a get never waits
+behind one. Measured again on the same shot.
+
+**And the save itself is cut down.** With the lock fixed, saves still grew:
+the file is rewritten whole (49 MB, 2.6 million values) every 30 s while
+anything has grown, and on the bot's rest shot saves took 11, 30 and 26 s; a
+frame of 7.1 s, all of it between the main thread's updates (`main_between_ms`
+7064, the main schedule 23 ms), ended as the 26 s save finished. What held the
+frame there is not found (it is not the save writer's drain, which no frame
+calls); the disk written 100 MB a minute is the plain cost either way. Now a
+save while playing waits two minutes and for five in a hundred more values
+than the file holds (`rivers::save_caches_grown_by`); the exit saves whatever
+has grown. A value lost to a crash is worked out again.

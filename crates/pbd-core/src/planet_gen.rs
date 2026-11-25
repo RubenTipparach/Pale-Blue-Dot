@@ -230,7 +230,20 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V15;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V16;
+
+    /// Generator version 16 (`ocean-environments` design B30, "reefs should
+    /// increase to 10%"): version 15 with more reef. Every height, biome and
+    /// land top is version 15's; under the sea a reef stands on warm water
+    /// down to 18 C (20 C before), to 12 m deep and to 25 m in its zones,
+    /// takes kelp's warm end, and is more rock and less floor
+    /// (`OceanPlaces::V16`, `SeaCells::V16`): about a tenth of the sea where
+    /// version 15's is a quarter of a percent.
+    pub const TENEBRIS_V16: Self = Self {
+        ocean: Some(crate::ocean::places::OceanPlaces::V16),
+        sea_cells: Some(crate::ocean::cells::SeaCells::V16),
+        ..Self::TENEBRIS_V15
+    };
 
     /// Generator version 15 (`mountain-ground`, approved 2026-11-20): version
     /// 14 with the mountain ground. Every height and biome is version 14's;
@@ -433,6 +446,7 @@ impl TerrainConfig {
             12 => Some(Self::TENEBRIS_V12),
             14 => Some(Self::TENEBRIS_V14),
             15 => Some(Self::TENEBRIS_V15),
+            16 => Some(Self::TENEBRIS_V16),
             _ => None,
         }
     }
@@ -814,6 +828,23 @@ pub fn biome(cfg: &TerrainConfig, direction: Vec3) -> Biome {
     biome_at(cfg, direction, surface_altitude(cfg, direction))
 }
 
+/// Whether the generator made the water at `direction` fresh
+/// (`fishing-anywhere` design 6): a river's water stands there (its reaches
+/// and lakes), or the ground is a swamp whose top is a pool. Never in a
+/// town's footprint, whose ground stands in for the river. The open sea, and
+/// what it floods into a hole dug at the shore, are not.
+pub fn fresh_water_at(cfg: &TerrainConfig, direction: Vec3) -> bool {
+    let d = direction.normalize_or(Vec3::Y);
+    if crate::settlement::ground::top(cfg, d).is_some() {
+        return false;
+    }
+    if crate::rivers::floods(cfg, d) {
+        return true;
+    }
+    let h = surface_altitude(cfg, d);
+    biome_at(cfg, d, h) == Biome::Swamp && top_material(cfg, d, h) == Material::Water
+}
+
 /// [`biome`] with the altitude already in hand, which every column has.
 pub fn biome_at(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Biome {
     let sea = cfg.sea_level_m;
@@ -880,6 +911,32 @@ pub fn swamp_holds(
 /// `rivers::rimmed` reads six points at one width, which a hex neighbour can
 /// fall between; a pool it passes can spill.
 pub fn swamp_pool_held(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> bool {
+    // Memoized in the river cache, by its inputs' bits: a hit is the answer
+    // the rings would give (`swamps`, "Swamp water is not cached the way
+    // rivers are"). 48 height samples a miss.
+    let field = crate::rivers::field(cfg);
+    let key = [
+        direction.x.to_bits(),
+        direction.y.to_bits(),
+        direction.z.to_bits(),
+        surface_m.to_bits(),
+    ];
+    if let Some(field) = field
+        && let Some(held) = field.pool.get(&key)
+    {
+        field.hit();
+        return held;
+    }
+    let held = swamp_pool_rings(cfg, direction, surface_m);
+    if let Some(field) = field {
+        field.miss();
+        field.pool.put(key, held);
+    }
+    held
+}
+
+/// [`swamp_pool_held`] worked out: the three rings of 16.
+fn swamp_pool_rings(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> bool {
     const RINGS_M: [f32; 3] = [2.5, 2.9, 3.3];
     const MARGIN_M: f32 = 0.25;
     let d = direction.normalize_or(Vec3::Y);
@@ -1412,6 +1469,68 @@ mod tests {
         assert!(failures.is_empty(), "{}", failures.join("; "));
     }
 
+    /// Swamp pools and rivers are fresh water at any height, the open sea is
+    /// not (`fishing-anywhere` design 6, owner: "swamps, lakes and rivers
+    /// should all be fresh water").
+    #[test]
+    fn swamps_and_rivers_are_fresh_and_the_sea_is_not() {
+        let cfg = TerrainConfig::TENEBRIS;
+        let (mut pools, mut low_pools, mut rivers, mut sea) = (0, 0, 0, 0);
+        let (mut river_low, mut river_shallow) = (0, 0);
+        for d in sphere(200_000) {
+            let h = surface_altitude(&cfg, d);
+            let biome = biome_at(&cfg, d, h);
+            // A river's bed may be cut below the sea's line; its water is
+            // still a river's.
+            if biome == Biome::Ocean && !crate::rivers::floods(&cfg, d) {
+                assert!(!fresh_water_at(&cfg, d), "open sea counted fresh at {d}");
+                sea += 1;
+            } else if biome == Biome::Swamp && top_material(&cfg, d, h) == Material::Water {
+                if crate::settlement::ground::top(&cfg, d).is_none() {
+                    assert!(fresh_water_at(&cfg, d), "a swamp pool counted sea at {d}");
+                    pools += 1;
+                    if h.floor() + 1.0 - cfg.sea_level_m < 0.6 {
+                        low_pools += 1;
+                    }
+                }
+            } else if crate::rivers::floods(&cfg, d)
+                && crate::settlement::ground::top(&cfg, d).is_none()
+            {
+                assert!(fresh_water_at(&cfg, d), "a river counted sea at {d}");
+                rivers += 1;
+                // MEASUREMENT (design 6): the river's top over the sea, and
+                // its depth over its bed.
+                let w = crate::rivers::water(&cfg, d);
+                if let (Some(first), Some(last)) = (w.first(), w.last()) {
+                    let top = last.0 as f32 - cfg.sea_level_m;
+                    let depth = (last.0 - first.0 + 1) as f32;
+                    if top < 0.6 {
+                        river_low += 1;
+                    }
+                    if depth < 1.2 {
+                        river_shallow += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            pools > 0 && rivers > 0 && sea > 0,
+            "pools {pools}, rivers {rivers}, sea {sea}"
+        );
+        // The catch and the schools judge fresh water by its height
+        // (`fish::is_fresh`, `fish::fresh_top`): every pool and river the
+        // generator makes must stand over that line, or they call it sea.
+        assert_eq!(
+            low_pools + river_low,
+            0,
+            "fresh water at the sea's line: the catch would count it as sea"
+        );
+        // The pools the old height rule called sea (under 0.6 m over it).
+        eprintln!(
+            "swamp pools {pools} ({low_pools} at the sea's line), river cells {rivers} ({river_low} at the sea's line, {river_shallow} one layer deep), sea {sea}"
+        );
+    }
+
     /// A version 12 swamp is moss, pools and mud (`swamps` decision 3): every
     /// pool is held (no ground 2.9 m round it is lower), moss is the most of
     /// it and stands the willows, and there is open water and mud in it.
@@ -1523,6 +1642,95 @@ mod tests {
 
     const VERSION_14_TOP_DIGEST: u64 = 7_410_970_454_387_630_886;
 
+    /// Version 15's top blocks, as every world made on it was: taken before
+    /// version 16 landed (CLAUDE.md, "Saved games survive every change";
+    /// `ocean-environments` B30). Its ground is version 14's, which is
+    /// version 12's, pinned above. The sea's places are pinned beside it,
+    /// since version 16 moves where a reef is and not the ground.
+    #[test]
+    fn version_15_keeps_its_top_blocks_and_its_sea_places() {
+        let v15 = TerrainConfig::for_version(15).expect("version 15 is carried");
+        assert_eq!(v15, TerrainConfig::TENEBRIS_V15);
+        assert_eq!(top_digest(&v15, 10_000), VERSION_15_TOP_DIGEST);
+        assert_eq!(place_digest(&v15, 100_000), VERSION_15_PLACE_DIGEST);
+    }
+
+    const VERSION_15_TOP_DIGEST: u64 = 9_523_269_409_351_000_090;
+    const VERSION_15_PLACE_DIGEST: u64 = 7_421_527_681_910_999_136;
+
+    /// Version 16 (`ocean-environments` B30) is version 15's ground with
+    /// more reef: every altitude and biome is version 15's, only `ocean` and
+    /// `sea_cells` differ in the config, a place moves only to a reef (from
+    /// kelp, the coast or the open sea), and a top differs only on a reef of
+    /// either version. A new world is made on 16.
+    #[test]
+    fn version_16_is_version_15_s_ground_with_more_reef() {
+        use crate::fauna::Environment;
+        let v16 = TerrainConfig::for_version(16).expect("version 16 is carried");
+        assert_eq!(v16, TerrainConfig::TENEBRIS_V16);
+        assert_eq!(TerrainConfig::TENEBRIS, v16, "a new world is made on 16");
+        let v15 = TerrainConfig::TENEBRIS_V15;
+        assert_eq!(
+            TerrainConfig {
+                ocean: v15.ocean,
+                sea_cells: v15.sea_cells,
+                ..v16
+            },
+            v15
+        );
+        assert_eq!(digest(&v16, 10_000), digest(&v15, 10_000));
+        let (mut sea, mut reef15, mut reef16) = (0usize, 0usize, 0usize);
+        for d in sphere(40_000) {
+            let f = surface_altitude(&v16, d).floor();
+            let (p15, p16) = (
+                crate::ocean::places::environment_at(&v15, d, f),
+                crate::ocean::places::environment_at(&v16, d, f),
+            );
+            if p15 != p16 {
+                assert_eq!(p16, Some(Environment::Reef), "{d}: {p15:?} to {p16:?}");
+                assert!(
+                    matches!(
+                        p15,
+                        Some(Environment::Kelp | Environment::Coast | Environment::Open)
+                    ),
+                    "{d}: {p15:?}"
+                );
+            }
+            if p15 != Some(Environment::Reef) && p16 != Some(Environment::Reef) {
+                assert_eq!(top_material(&v16, d, f), top_material(&v15, d, f), "{d}");
+            }
+            if p15.is_some() {
+                sea += 1;
+                reef15 += usize::from(p15 == Some(Environment::Reef));
+                reef16 += usize::from(p16 == Some(Environment::Reef));
+            }
+        }
+        // Measured on 400,000 directions (B30): 0.23% on 15, 9.7% on 16.
+        let share = |n: usize| n as f32 / sea as f32;
+        assert!(share(reef15) < 0.01, "version 15's reef {}", share(reef15));
+        assert!(
+            (0.08..0.12).contains(&share(reef16)),
+            "version 16's reef {}",
+            share(reef16)
+        );
+    }
+
+    /// A digest of the sea's places (`ocean::places::environment_at`) and the
+    /// top cell over `n` directions, floored as the column floors them.
+    fn place_digest(cfg: &TerrainConfig, n: usize) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for d in sphere(n) {
+            let surface = surface_altitude(cfg, d).floor();
+            let place =
+                crate::ocean::places::environment_at(cfg, d, surface).map_or(0, |e| e as u64 + 1);
+            let top = top_material(cfg, d, surface) as u64;
+            for byte in (place | (top << 16)).to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        hash
+    }
+
     /// Mountain cells over the shipped body, as (direction, floored surface).
     fn mountain_cells(cfg: &TerrainConfig, n: usize) -> Vec<(Vec3, f32)> {
         sphere(n)
@@ -1536,12 +1744,11 @@ mod tests {
     /// Version 15 (`mountain-ground`) is version 14's ground with the
     /// mountain ground: every altitude and biome is version 14's, a top
     /// differs only on a Mountains cell, and only `mountains` and `trees`
-    /// differ in the config. A new world is made on 15.
+    /// differ in the config. New worlds were made on 15 until 16 (B30).
     #[test]
     fn version_15_is_version_14_s_ground_with_the_mountain_ground() {
         let v15 = TerrainConfig::for_version(15).expect("version 15 is carried");
         assert_eq!(v15, TerrainConfig::TENEBRIS_V15);
-        assert_eq!(TerrainConfig::TENEBRIS, v15, "a new world is made on 15");
         let v14 = TerrainConfig::TENEBRIS_V14;
         assert_eq!(
             TerrainConfig {

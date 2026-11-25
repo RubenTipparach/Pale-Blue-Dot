@@ -18,7 +18,7 @@
             caption: "Fishing. Make a rod",
             until: ["rod"],
             max_s: 300.0,
-            acts: [Focus("rod"), Hand("shovel"), Dig(Have("fibre", 8), 1), Craft("rope", 2), Bench("rod", 1)],
+            acts: [Focus("rod"), Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 8), 1), Craft("rope", 2), Bench("rod", 1)],
         ),
         (
             caption: "Go fishing: cast, wait for the bite, reel",

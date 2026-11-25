@@ -12,35 +12,79 @@
 //! second click is the whole move, one saved line, and closing the pack with
 //! a stack in hand leaves it where it always was: nothing is ever off the
 //! slots, and nothing can be lost by a close, a crash or a full pack.
+//!
+//! There is no trash (`storage-chests` design 5): nothing in the game
+//! destroys an item. Excess goes in a chest, opened beside the pack with F
+//! in the hold panel's place, or is dropped.
 
 #![allow(clippy::type_complexity)] // Bevy system parameters and search tables.
 use super::menu::{self, Panel, Screen};
 use super::slots::{self, Hotbar, ItemIcons, SlotCell};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use pbd_app::planet::{PLANET_RADIUS, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::accept::PackMove;
+use pbd_core::chest::CHEST;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
+use pbd_core::terrain::Material;
 use pbd_core::vehicle::hold::{self, HOLD_MAX, Hold, Place};
 
-/// How near a raft must be, m, for the pack opened on foot to show its hold.
+/// How near a raft must be, m, for the pack opened on foot to show its hold;
+/// and a chest, from the walker's centre to the chest's, for F to open it and
+/// for it to stay open (`storage-chests` design 3).
 pub const HOLD_REACH_M: f64 = 3.5;
 
 /// The raft whose hold the pack shows (`small-boats` design 5): the one
-/// aboard, or the nearest in reach on foot; and its hold as last read or
-/// written. Its slots are the pack's squares from `CARRIED` on.
+/// aboard, or the nearest in reach on foot; or the chest F opened
+/// (`storage-chests` design 3); and its store as last read or written. Its
+/// slots are the pack's squares from `CARRIED` on.
 #[derive(Resource, Default, Debug, Clone)]
 pub struct HoldView {
     pub craft: Option<(Entity, u64)>,
+    /// The open chest's cell and layer.
+    pub chest: Option<(u32, u16)>,
     pub hold: Hold,
 }
+
+/// The chest F opened (`storage-chests` design 3): its cell and layer, until
+/// the pack closes or the walker leaves its reach.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenChest(pub Option<(u32, u16)>);
 
 /// The HOLD panel under the pack's.
 #[derive(Component)]
 pub struct HoldPanel;
+
+/// A chest's panel under the pack's, in the hold panel's place: its twenty
+/// slots in two rows (`storage-chests` design 3).
+#[derive(Component)]
+pub struct ChestPanel;
+
+/// How far a chest's centre is from `walker` (the walker's centre,
+/// planet-local, f64), m: `None` if its cell is not in the fine set.
+pub fn chest_distance(
+    fine: &PlanetFine,
+    walker: bevy::math::DVec3,
+    cell: u32,
+    layer: u16,
+) -> Option<f64> {
+    let record = super::digging::record_of(fine, cell)?;
+    let direction = fine
+        .set
+        .finest_records()
+        .get(record)
+        .map(|c| Vec3::from_slice(&c.direction_height[..3]))
+        .and_then(Vec3::try_normalize)?;
+    let centre = direction.as_dvec3().normalize()
+        * (f64::from(PLANET_RADIUS)
+            + f64::from(pbd_core::column::layer_altitude(usize::from(layer)))
+            + 0.5);
+    Some(centre.distance(walker))
+}
 
 /// The row under the pack that holds the HOLD and, beside it, the boat's
 /// own panel (`boat`).
@@ -62,11 +106,6 @@ pub struct PackHand(pub Option<Held>);
 /// A square of the pack's screen, by slot index.
 #[derive(Component)]
 pub struct PackCell(pub usize);
-
-/// The pack's trash plaque: a stack put on it is destroyed
-/// (`drop-and-trash` design 3).
-#[derive(Component)]
-pub struct TrashCell;
 
 /// One of the pack screen's two panels: a click with a stack held that is
 /// on neither (the background) drops the stack (`drop-and-trash` design 3).
@@ -195,10 +234,11 @@ pub fn hold_click(
     }
 }
 
-/// Which raft's hold the pack shows, read from the save when it changes,
-/// and the HOLD panel shown with it. Aboard a raft, that raft; on foot, the
-/// nearest within [`HOLD_REACH_M`].
-#[allow(clippy::too_many_arguments)]
+/// Which raft's hold or chest the pack shows, read from the save when it
+/// changes, and the HOLD or chest panel shown with it. A chest F opened while
+/// it stands and is in reach (`storage-chests` design 3); else aboard a raft,
+/// that raft; on foot, the nearest within [`HOLD_REACH_M`].
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn find_hold(
     screen: Res<Screen>,
     aboard: Option<Res<pbd_app::vehicles::Aboard>>,
@@ -207,15 +247,50 @@ pub fn find_hold(
     save: Res<WorldSave>,
     mut view: ResMut<HoldView>,
     frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
-    mut panels: Query<&mut Node, (With<HoldPanel>, Without<PackCell>)>,
+    mut panels: Query<&mut Node, (With<HoldPanel>, Without<PackCell>, Without<ChestPanel>)>,
     (carts, cart_state, fleet, mut squares): (
         Query<(Entity, &pbd_app::vehicles::carts::CartThing)>,
         Option<Res<pbd_app::vehicles::carts::Carts>>,
         Option<Res<pbd_app::vehicles::Fleet>>,
-        Query<(&PackCell, &mut Node), Without<HoldPanel>>,
+        Query<(&PackCell, &mut Node), (Without<HoldPanel>, Without<ChestPanel>)>,
+    ),
+    (fine, mut open_chest, mut chest_panels): (
+        Option<Res<PlanetFine>>,
+        Option<ResMut<OpenChest>>,
+        Query<&mut Node, (With<ChestPanel>, Without<HoldPanel>, Without<PackCell>)>,
     ),
 ) {
     let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
+    // The chest F opened, while the pack is open, it still stands, and the
+    // walker is within reach of it; otherwise it closes.
+    let chest = match open_chest.as_deref_mut() {
+        Some(open) => {
+            if let Some((cell, layer)) = open.0 {
+                let frame = frame.as_deref().copied().unwrap_or_default();
+                let feet = walkers
+                    .iter()
+                    .next()
+                    .map(|p| p.0.as_dvec3() - frame.physics_center());
+                let stands = fine.as_deref().is_some_and(|fine| {
+                    super::digging::material_of(fine, &save, (cell, usize::from(layer)))
+                        == Some(Material::Chest)
+                });
+                let near = fine.as_deref().zip(feet).is_some_and(|(fine, feet)| {
+                    chest_distance(fine, feet, cell, layer).is_some_and(|d| d <= HOLD_REACH_M)
+                });
+                if *screen != Screen::Pack || !stands || !near {
+                    if *screen == Screen::Pack {
+                        info!(
+                            "CHEST_CLOSE cell {cell} layer {layer}: stands {stands}, near {near}"
+                        );
+                    }
+                    open.0 = None;
+                }
+            }
+            open.0
+        }
+        None => None,
+    };
     // A cart's hold (`land-transport` design 10): the one in hand or under
     // the seat, else the nearest in reach on foot, at its own size.
     let frame_now = frame.as_deref().copied().unwrap_or_default();
@@ -238,7 +313,10 @@ pub fn find_hold(
         })
         .map(|(e, t)| (e, t.cart.id, cart_size(t.cart.kind)));
     let found_cart = with_cart.filter(|_| *screen == Screen::Pack);
-    let found = if let Some((e, id, _)) = found_cart {
+    // An open chest comes first (`storage-chests` design 3).
+    let found = if chest.is_some() {
+        None
+    } else if let Some((e, id, _)) = found_cart {
         Some((e, id))
     } else if *screen != Screen::Pack {
         None
@@ -271,16 +349,19 @@ pub fn find_hold(
                 .map(|(e, id, _)| (e, id))
         })
     };
-    if found != view.craft {
-        view.hold = match (found, found_cart) {
-            (Some((_, id)), Some((_, _, size))) => {
+    if found != view.craft || chest != view.chest {
+        view.hold = match (chest, found, found_cart) {
+            (Some((cell, layer)), _, _) => pbd_app::chests::read(&save, cell, layer),
+            (None, Some((_, id)), Some((_, _, size))) => {
                 pbd_app::vehicles::hold::read_sized(&save, id, size)
             }
-            (Some((_, id)), None) => pbd_app::vehicles::hold::read(&save, id),
-            (None, _) => Hold::default(),
+            (None, Some((_, id)), None) => pbd_app::vehicles::hold::read(&save, id),
+            (None, None, _) => Hold::default(),
         };
         view.craft = found;
+        view.chest = chest;
     }
+    let shown = |on: bool| if on { Display::Flex } else { Display::None };
     // Only the hold's own squares show.
     let size = view.hold.slots.len();
     for (cell, mut node) in &mut squares {
@@ -296,12 +377,14 @@ pub fn find_hold(
             node.display = want;
         }
     }
-    let want = if found.is_some() {
-        Display::Flex
-    } else {
-        Display::None
-    };
     for mut node in &mut panels {
+        let want = shown(found.is_some());
+        if node.display != want {
+            node.display = want;
+        }
+    }
+    for mut node in &mut chest_panels {
+        let want = shown(chest.is_some());
         if node.display != want {
             node.display = want;
         }
@@ -323,7 +406,7 @@ pub fn paint_hold(
     let Some(icons) = icons else {
         return;
     };
-    if *screen != Screen::Pack || view.craft.is_none() {
+    if *screen != Screen::Pack || (view.craft.is_none() && view.chest.is_none()) {
         return;
     }
     let hold = |i: usize| (CARRIED..super::furniture::STORE_AT).contains(&i);
@@ -371,16 +454,38 @@ pub fn open(
         .and_then(|a| a.0)
         .and_then(|e| vehicles.get(e).ok())
         .is_some_and(|v| v.craft.kind.paddled());
+    // Tab: any screen open over the world closes; from the world, the pack
+    // (`stone-and-wood-ui`, "Tab closes what is open"). The title, settings
+    // and the worlds page are Esc's.
+    if keys.just_pressed(KeyCode::Tab) {
+        match *screen {
+            Screen::Playing => {
+                if afloat || walking.is_some_and(|readout| readout.active) {
+                    *screen = Screen::Pack;
+                }
+            }
+            Screen::Title | Screen::Settings | Screen::Saves => {}
+            _ => *screen = Screen::Playing,
+        }
+        return;
+    }
     // I is the pack and O the starter missions (`starter-missions` design
     // 13): each opens its own screen from the world, shuts it again, and
     // switches to it from the other.
-    let to = if keys.any_just_pressed([KeyCode::KeyI, KeyCode::Tab]) {
+    let to = if keys.just_pressed(KeyCode::KeyI) {
         Screen::Pack
     } else if keys.just_pressed(KeyCode::KeyO) {
         Screen::Missions
     } else {
         return;
     };
+    // Why a press did or did not open it (the bot's pack never opening,
+    // 2026-11-21).
+    info!(
+        "PACK_KEY to {to:?} from {:?}, walking {:?}, afloat {afloat}",
+        *screen,
+        walking.as_deref().map(|r| (r.active, r.captured))
+    );
     match *screen {
         Screen::Playing if afloat || walking.is_some_and(|readout| readout.active) => *screen = to,
         open if open == to => *screen = Screen::Playing,
@@ -505,23 +610,6 @@ pub fn spawn(
                                                     )
                                                     .shadow(ui_kit::INK),
                                                 );
-                                                // The trash, at the line's far end.
-                                                line.spawn(Node {
-                                                    flex_grow: 1.0,
-                                                    ..default()
-                                                });
-                                                line.spawn((
-                                                    ui_kit::plaque(
-                                                        kit,
-                                                        pbd_app::ui_kit::Set::Stone,
-                                                        0.0,
-                                                    ),
-                                                    TrashCell,
-                                                ))
-                                                .with_child(ui_kit::plaque_label(
-                                                    pbd_app::ui_kit::Set::Stone,
-                                                    tr("pack.trash"),
-                                                ));
                                             },
                                         );
                                         slot_line(foot, kit, &atlas, 0);
@@ -584,6 +672,28 @@ pub fn spawn(
                                     first,
                                     (CARRIED + HOLD_MAX - first).min(SLOTS),
                                 );
+                            }
+                        });
+                    // A chest F opened (`storage-chests` design 3), in the
+                    // hold's place: its twenty slots in two rows of ten.
+                    layer
+                        .spawn((
+                            kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                            PackPanel,
+                            Interaction::default(),
+                            Node {
+                                width: px(PACK_PANEL.0),
+                                padding: UiRect::all(px(RIM)),
+                                flex_direction: FlexDirection::Column,
+                                display: Display::None,
+                                ..default()
+                            },
+                            ChestPanel,
+                        ))
+                        .with_children(|panel| {
+                            menu::lintel(panel, kit, tr("pack.chest"));
+                            for row in 0..CHEST / SLOTS {
+                                slot_line(panel, kit, &atlas, CARRIED + row * SLOTS);
                             }
                         });
                     // A container's panel, beside the hold's, while one is
@@ -656,10 +766,10 @@ pub fn press(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     mut view: ResMut<HoldView>,
-    (trash, panels, mut toss): (
-        Query<&Interaction, With<TrashCell>>,
+    (panels, mut toss, mut did): (
         Query<&Interaction, With<PackPanel>>,
         ResMut<pbd_app::drops::Toss>,
+        MessageWriter<pbd_app::missions::Did>,
     ),
 ) {
     if *screen != Screen::Pack {
@@ -678,26 +788,6 @@ pub fn press(
     };
     // The square pressed, before one merely hovered (a hover left on another
     // square took the click: seen with the showcase bot, 2026-11-20).
-    // A stack held over the trash: destroyed, the slots recorded.
-    if button == Click::Left
-        && let Some(held) = hand.0
-        && held.from < CARRIED
-        && trash.iter().any(|i| *i != Interaction::None)
-    {
-        let trash = PackMove::Trash {
-            index: held.from,
-            count: held.count,
-        };
-        match save.decide_pack(trash, &hotbar.0) {
-            Ok(slots) => {
-                info!("TRASH {} from slot {}", held.count, held.from);
-                hotbar.0 = slots;
-            }
-            Err(refusal) => warn!("trash refused: {refusal:?}"),
-        }
-        hand.0 = None;
-        return;
-    }
     // A stack held and clicked on the background (no panel, slot or button
     // under the pointer): dropped in front of the player.
     if button == Click::Left
@@ -723,17 +813,55 @@ pub fn press(
         return;
     };
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    if let Some((_, id)) = view.craft
+    if (view.craft.is_some() || view.chest.is_some())
         && (index >= CARRIED || hand.0.is_some_and(|h| h.from >= CARRIED) || shift)
     {
         let mut slots = hotbar.0.clone();
         let mut held_hold = view.hold.clone();
         let held = hold_click(&mut slots, &mut held_hold, hand.0, index, button, shift);
         if slots != hotbar.0 || held_hold != view.hold {
-            if !pbd_app::vehicles::hold::store(&mut save, id, &held_hold, &slots) {
+            // A chest's move, or a raft hold's: one line with the slots.
+            let stored = match (view.chest, view.craft) {
+                (Some((cell, layer)), _) => {
+                    pbd_app::chests::store(&mut save, cell, layer, &held_hold, &slots)
+                }
+                (None, Some((_, id))) => {
+                    pbd_app::vehicles::hold::store(&mut save, id, &held_hold, &slots)
+                }
+                (None, None) => false,
+            };
+            if !stored {
                 error!("hold move BLOCKED: the save did not accept it");
                 hand.0 = None;
                 return;
+            }
+            // A stack put in a chest counts for the storage mission
+            // (`storage-chests` 9): what the chest gained, by item.
+            if view.chest.is_some() {
+                let count_of = |hold: &pbd_core::vehicle::hold::Hold, item| -> u32 {
+                    hold.slots
+                        .iter()
+                        .flatten()
+                        .filter(|st| st.item == item)
+                        .map(|st| u32::from(st.count))
+                        .sum()
+                };
+                let mut seen = Vec::new();
+                for st in held_hold.slots.iter().flatten() {
+                    if seen.contains(&st.item) {
+                        continue;
+                    }
+                    seen.push(st.item);
+                    let gained =
+                        count_of(&held_hold, st.item).saturating_sub(count_of(&view.hold, st.item));
+                    if gained > 0 {
+                        did.write(pbd_app::missions::Did::new(
+                            pbd_core::missions::Kind::Store,
+                            pbd_core::missions::item_code(st.item),
+                            gained,
+                        ));
+                    }
+                }
             }
             hotbar.0 = slots;
             view.hold = held_hold;
@@ -860,6 +988,7 @@ pub fn paint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pbd_core::vehicle::hold::HOLD;
 
     /// With a raft's hold open, a click picks a stack up out of the hold and
     /// a second puts it down in the pack, and a shift-click sends a stack of
@@ -909,6 +1038,7 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            chest: Handle::default(),
             carpenter: Handle::default(),
             drafting: Handle::default(),
             grinder: Handle::default(),
@@ -957,15 +1087,15 @@ mod tests {
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),
-            3,
-            "an oak lintel over each column, PACK and CRAFT, and over a raft's HOLD"
+            4,
+            "an oak lintel over each column, PACK and CRAFT, over a raft's HOLD and over a chest"
         );
         let mut cells = world.query_filtered::<&ImageNode, With<PackCell>>();
         let n = cells.iter(world).count();
         assert_eq!(
             n,
-            PACK + SLOTS + HOLD_MAX,
-            "and the hold's squares, as many as a horse cart's"
+            PACK + SLOTS + HOLD_MAX + CHEST + super::super::furniture::STORE_SQUARES,
+            "and the hold's squares, as many as a horse cart's, a chest's twenty and a town container's"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
         // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its
@@ -1049,6 +1179,7 @@ mod tests {
             .insert_resource(WorldSave::memory_only())
             .init_resource::<HoldView>()
             .init_resource::<pbd_app::drops::Toss>()
+            .add_message::<pbd_app::missions::Did>()
             .add_systems(Update, (open, press).chain());
         let tap_i = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

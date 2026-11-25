@@ -44,6 +44,15 @@ impl SeaCells {
         floe_above: 0.6,
         floe_depth_m: 2.0,
     };
+
+    /// Version 16's (design B30): version 14's, with the reef's rock in
+    /// wider patches (10 m) over more of the reef (over 0.45 of its field,
+    /// about two thirds of a reef's floor where 0.5 gave about a third).
+    pub const V16: Self = Self {
+        reef_patch_m: 10.0,
+        reef_above: 0.45,
+        ..Self::V14
+    };
 }
 
 const REEF_SALT: u64 = 0x2EEF_0014;

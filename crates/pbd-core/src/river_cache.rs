@@ -99,7 +99,12 @@ impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
         if self.len() >= self.cap {
             return;
         }
-        if let Ok(mut shard) = self.shard(&key).write()
+        // Only if the shard is free this instant: a memo is a cache, and a
+        // value not kept is worked out again on the next ask. A blocking
+        // write waited behind the file's save reading the shard, and readers
+        // queued behind the waiting write (2026-11-23: the main thread held
+        // 1.7 s, a save took 55 s).
+        if let Ok(mut shard) = self.shard(&key).try_write()
             && shard.insert(key, value).is_none()
         {
             self.len.fetch_add(1, Ordering::Relaxed);
@@ -148,6 +153,10 @@ pub struct RiverField {
     /// ([`crate::liquid::Cell`] as [`liquid_code`]). Kept only where the
     /// tier's rim could not reach (the app's `SETTLE_KEEP_CELLS`).
     pub settled: Memo<u32, Box<[(u16, u8)]>>,
+    /// `planet_gen::swamp_pool_held(d, surface)`: by `d`'s and the
+    /// surface's bits (`swamps`, "Swamp water is not cached the way rivers
+    /// are"). Held for the session; not in the file yet.
+    pub(crate) pool: Memo<[u32; 4], bool>,
     pub hits: AtomicU64,
     pub misses: AtomicU64,
     /// Entries in the file as last written or read.
@@ -161,6 +170,7 @@ impl RiverField {
             top: Memo::new(2_000_000),
             far: Memo::new(500_000),
             settled: Memo::new(500_000),
+            pool: Memo::new(1_000_000),
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             filed: AtomicUsize::new(0),
@@ -177,8 +187,13 @@ impl RiverField {
         ]
     }
 
+    /// How many swamp pool answers are held.
+    pub fn pools(&self) -> usize {
+        self.pool.len()
+    }
+
     fn total(&self) -> usize {
-        self.counts().iter().sum()
+        self.counts().iter().sum::<usize>() + self.pool.len()
     }
 
     pub(crate) fn hit(&self) {
@@ -244,7 +259,10 @@ pub(crate) fn dir() -> Option<PathBuf> {
 }
 
 const MAGIC: &[u8; 8] = b"PBDRIVR1";
-const FORMAT: u32 = 1;
+/// 2: the swamp pools' answers after the settled water (`swamps`, "Swamp
+/// water is not cached the way rivers are"). A format-1 file is not read; it
+/// is derived, and is made again.
+const FORMAT: u32 = 2;
 
 /// FNV-1a, for the config's digest and the file's.
 pub fn fnv(bytes: &[u8]) -> u64 {
@@ -376,9 +394,15 @@ pub(crate) fn write(
             o.0.push(code);
         }
     }
+    let pool = field.pool.entries();
+    o.u64(pool.len() as u64);
+    for (k, v) in &pool {
+        k.iter().for_each(|&x| o.u32(x));
+        o.0.push(u8::from(*v));
+    }
     let sum = fnv(&o.0);
     o.u64(sum);
-    let entries = carve.len() + top.len() + far.len() + settled.len();
+    let entries = carve.len() + top.len() + far.len() + settled.len() + pool.len();
     let held = field.total();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -476,10 +500,15 @@ pub(crate) fn read(
         }
         settled.push((key, cells.into_boxed_slice()));
     }
+    let mut pool = Vec::new();
+    for _ in 0..i.u64()? {
+        pool.push(([i.u32()?, i.u32()?, i.u32()?, i.u32()?], i.u8()? != 0));
+    }
     if !i.0.is_empty() {
         return None;
     }
-    let entries = carve.len() + top.len() + far.len() + settled.len();
+    let entries = carve.len() + top.len() + far.len() + settled.len() + pool.len();
+    pool.into_iter().for_each(|(k, v)| field.pool.put(k, v));
     carve.into_iter().for_each(|(k, v)| field.carve.put(k, v));
     top.into_iter().for_each(|(k, v)| field.top.put(k, v));
     far.into_iter().for_each(|(k, v)| field.far.put(k, v));
@@ -491,6 +520,12 @@ pub(crate) fn read(
 }
 
 /// Whether the field has grown since it was last written or read.
-pub(crate) fn grown(field: &RiverField) -> bool {
-    field.total() != field.filed.load(Ordering::Relaxed)
+/// Whether the memos hold `share` more than the file does (0.05: five in a
+/// hundred more), or the file holds nothing yet: what a save while playing
+/// waits for, so a file of millions of values is not written whole for a few
+/// new ones (2026-11-23: 50 MB every 30 s, saves of 11 to 30 s).
+pub(crate) fn grown_by(field: &RiverField, share: f64) -> bool {
+    let total = field.total();
+    let filed = field.filed.load(Ordering::Relaxed);
+    total != filed && (filed == 0 || total as f64 >= filed as f64 * (1.0 + share))
 }
