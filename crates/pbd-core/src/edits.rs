@@ -204,7 +204,7 @@ mod tests {
         edits.glow.pick(42, 10.0);
         assert_eq!(edits.revision(), 0, "a pick is not a layer edit");
         assert_eq!(edits.glow.count(), 1);
-        edits.glow.day = 12.0;
+        edits.glow.day = 10.0 + crate::flora::GLOW_PLANT_REGROW_DAYS * 0.5;
         assert!(edits.glow.stands_picked(42, 20.0));
         assert!(edits.glow.stands_picked(42, 500.0), "not yet due");
         edits.glow.day = 10.0 + crate::flora::GLOW_PLANT_REGROW_DAYS;

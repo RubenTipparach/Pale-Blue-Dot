@@ -184,17 +184,27 @@ pub fn wild_at(
     farm: &FarmConfig,
     cell: u32,
     layer: usize,
+    now_s: f64,
 ) -> Option<Crop> {
     let top = digging::material_of(fine, save, (cell, layer))?;
     let over = digging::material_of(fine, save, (cell, layer + 1))?;
     if !farming::sprouts_seed(top) || over != Material::Air {
         return None;
     }
-    if save.records.get(WILD_KIND, u64::from(cell)).is_some() {
+    if wild_picked(save, cell, now_s) {
         return None;
     }
     farm.0
         .wild_crop(save.identity.seed, cell, climate_at(fine, cell, layer))
+}
+
+/// Whether the wild plant on `cell` stands picked at world second `now_s`:
+/// picked, and not yet grown back (`playtest-fixes-2026-11-25` 3). It
+/// grows back as a new one comes up: the bush fades in.
+pub fn wild_picked(save: &WorldSave, cell: u32, now_s: f64) -> bool {
+    save.records
+        .get(WILD_KIND, u64::from(cell))
+        .is_some_and(|r| r.read::<Picked>().is_none_or(|p| !p.grown_back(now_s)))
 }
 
 /// Pick a wild plant: its seeds and one of its produce, and a record that it
@@ -388,6 +398,7 @@ pub fn plant_on_ray(
     farm: &FarmConfig,
     eye: Vec3,
     look: Vec3,
+    now_s: f64,
 ) -> Option<PlantHit> {
     let reach = pbd_core::aim::REACH_M;
     let look = look.normalize_or_zero();
@@ -449,7 +460,7 @@ pub fn plant_on_ray(
         let Some(distance) = ray_meets_upright(eye, look, base, up, WILD_SHAPE_M, reach) else {
             continue;
         };
-        if wild_at(fine, save, farm, cell, top).is_some() {
+        if wild_at(fine, save, farm, cell, top, now_s).is_some() {
             take(PlantHit {
                 cell,
                 layer: top,
@@ -554,7 +565,7 @@ pub fn farm_act(
             })
     };
     let wild_on = |cell: u32, layer: usize| {
-        wild_at(fine, save, farm, cell, layer).map(|crop| FarmAct::Wild { cell, crop })
+        wild_at(fine, save, farm, cell, layer, now_s).map(|crop| FarmAct::Wild { cell, crop })
     };
     let on_ground = aim.and_then(|target| {
         let (cell, layer) = (target.dig.cell, target.dig.layer);
@@ -677,7 +688,7 @@ pub fn offer(
     let stored = save.records.len() as u64;
     if recheck.due(eye, look, fine.version, time.delta_secs()) || *records != stored {
         *records = stored;
-        *plant = plant_on_ray(&fine, &save, &farm, eye, look);
+        *plant = plant_on_ray(&fine, &save, &farm, eye, look, sun.clock.seconds);
         *clutter = scatter.as_deref().and_then(|s| {
             pbd_app::clutter::clutter_on_ray(
                 &fine,
@@ -754,7 +765,7 @@ pub fn use_key(
     let wall_s = time.elapsed_secs();
     let now_s = sun.clock.seconds;
     let plant = eye_ray(&cameras, frame.as_deref())
-        .and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look));
+        .and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look, now_s));
     let day = pbd_app::clutter::day_of(now_s);
     let clutter = eye_ray(&cameras, frame.as_deref())
         .zip(scatter.as_deref())
@@ -1409,7 +1420,7 @@ pub fn show(
             continue;
         }
         let cell = record.key();
-        if wanted.contains_key(&cell) || save.records.get(WILD_KIND, u64::from(cell)).is_some() {
+        if wanted.contains_key(&cell) || wild_picked(&save, cell, now_s) {
             continue;
         }
         let height = column::layer_altitude(top) + 1.0;
@@ -1930,7 +1941,7 @@ pub fn scripted(
             let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
                 continue;
             };
-            if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
+            if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top, now_s) {
                 info!(
                     "scripted farm: a wild {} {d:.1} m away, {:.0} degrees right of the view",
                     crop.row().name(),
@@ -1970,7 +1981,7 @@ pub fn scripted(
                 let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
                     continue;
                 };
-                if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
+                if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top, now_s) {
                     nearest = Some((d, record.key(), crop));
                 }
             }
@@ -2307,12 +2318,12 @@ mod tests {
         let spots = grassy_spots(&fine, anchor);
         let wild = *spots
             .iter()
-            .find(|(cell, top, ..)| wild_at(&fine, &save, &farm, *cell, *top).is_some())
+            .find(|(cell, top, ..)| wild_at(&fine, &save, &farm, *cell, *top, 0.0).is_some())
             .expect("a wild plant near the fields spawn");
         let sown = *spots
             .iter()
             .find(|(cell, top, ..)| {
-                *cell != wild.0 && wild_at(&fine, &save, &farm, *cell, *top).is_none()
+                *cell != wild.0 && wild_at(&fine, &save, &farm, *cell, *top, 0.0).is_none()
             })
             .expect("a grassy cell to sow");
         let hotbar = super::super::slots::Hotbar::restore(&mut save);
@@ -2446,6 +2457,7 @@ mod tests {
                 world.resource::<FarmConfig>(),
                 eye,
                 look,
+                0.0,
             )
             .expect("the ray meets the wheat")
         };

@@ -54,9 +54,15 @@ face, so a walker keeps walking their route mid-sentence.
 **Change.**
 - Both grow back after `WILD_REGROW_DAYS` = 2 game days, about an hour and a
   half of play.
-- Both grow back out of sight, as the mushroom already does: a due pick
-  stands picked while its cell is near the camera, and is back the next
-  time the cell is built farther away.
+- The glowing mushroom keeps its out-of-sight rule: a due pick stands
+  picked while its cell is near the camera, and is back the next time the
+  cell is built farther away.
+- A wild crop's bush is a separate entity that fades in when it appears, as
+  a new plant does. So a due wild crop simply comes back and dissolves in,
+  never popping (*built differently from the plan*).
+- Laying out a building site still counts a picked wild plant as gone (it
+  has no clock to hand); a grown-back one blocks a site once the farm draws
+  it again.
 - The `wild` record keeps the time it was picked (`Picked::picked_s`, which
   it already has). No save format changes.
 
