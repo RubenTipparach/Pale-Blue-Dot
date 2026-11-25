@@ -209,8 +209,17 @@ pub fn plant_stands(
         )
     });
     flora
-        || super::farm::wild_at(fine, save, &pbd_app::config::FarmConfig(*farm), cell, top)
-            .is_some()
+        || super::farm::wild_at(
+            fine,
+            save,
+            &pbd_app::config::FarmConfig(*farm),
+            cell,
+            top,
+            // A plant picked is gone to a site; one grown back blocks it
+            // again once the farm sees it (no clock here: the picked side).
+            f64::NEG_INFINITY,
+        )
+        .is_some()
 }
 
 /// A plan charted where it stands: the patch, the origin's index, the base

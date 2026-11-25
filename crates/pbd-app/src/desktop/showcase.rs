@@ -6647,7 +6647,15 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
             let Some(layer) = pbd_core::column::layer_at(r.direction_height[3] - 0.5) else {
                 continue;
             };
-            if super::farm::wild_at(s.fine, s.save, s.farm, r.key(), layer).is_none()
+            if super::farm::wild_at(
+                s.fine,
+                s.save,
+                s.farm,
+                r.key(),
+                layer,
+                s.day * f64::from(pbd_core::daylight::DAY_S),
+            )
+            .is_none()
                 || digging::under_standing_tree(
                     s.fine,
                     s.save,

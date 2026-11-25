@@ -325,6 +325,18 @@ pub struct Picked {
     pub picked_s: f64,
 }
 
+/// Game days a picked wild plant takes to grow back
+/// (`playtest-fixes-2026-11-25` 3; owner, 2026-11-25: "after a while they
+/// should grow back").
+pub const WILD_REGROW_DAYS: f64 = 2.0;
+
+impl Picked {
+    /// Whether it has grown back by world second `now_s`.
+    pub fn grown_back(&self, now_s: f64) -> bool {
+        now_s - self.picked_s >= WILD_REGROW_DAYS * f64::from(crate::daylight::DAY_S)
+    }
+}
+
 /// The record kind a planted cell is stored as.
 pub const PLOT_KIND: &str = "plot";
 /// Its schema.
@@ -365,6 +377,17 @@ impl Plot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A picked wild plant grows back two game days on, not before
+    /// (`playtest-fixes-2026-11-25` 3).
+    #[test]
+    fn a_picked_wild_plant_grows_back_in_two_days() {
+        let day = f64::from(crate::daylight::DAY_S);
+        let p = Picked { picked_s: 100.0 };
+        assert!(!p.grown_back(100.0));
+        assert!(!p.grown_back(100.0 + 2.0 * day - 1.0));
+        assert!(p.grown_back(100.0 + 2.0 * day));
+    }
 
     const DAY: f64 = DAY_S as f64;
 

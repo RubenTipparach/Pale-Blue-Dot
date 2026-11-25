@@ -108,5 +108,5 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 ## Not recorded
 
 - Layered with our own synthesis (`tools/audio/gen_sfx.py`): `amb_cave`, `fire_ignite`, `land_hard`, `strike_hit_ground`, `thunder_crack`, `thunder_roll`, `water_enter_big`.
-- Synthesised outright: `catch_chime`, `pickup`, `stall_warn`, `ui_back`, `ui_click`, `ui_hover`, `ui_slot`, `ui_toggle`.
+- Synthesised outright: `catch_chime`, `mission_done`, `pickup`, `stall_warn`, `ui_back`, `ui_click`, `ui_hover`, `ui_slot`, `ui_toggle`.
 - Music: none yet (a music change, `music-authoring` skill).

@@ -161,7 +161,7 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     };
     assert_eq!(
         line(&app).as_deref(),
-        Some("Gather by hand: fiber 0/8, stone 0/9, soil 0/6")
+        Some("Gather by hand: Pull fiber 0/8, Pick up stones 0/9, Dig soil 0/6")
     );
     let world = app.world_mut();
     for (good, count) in [("fibre", 8), ("stone", 9)] {
@@ -174,7 +174,7 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     app.update();
     assert_eq!(
         line(&app).as_deref(),
-        Some("Gather by hand: fiber 8/8, stone 9/9, soil 0/6")
+        Some("Gather by hand: Pull fiber 8/8, Pick up stones 9/9, Dig soil 0/6")
     );
     for _ in 0..6 {
         app.world_mut()
@@ -229,7 +229,7 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     // the line names every objective (`mission-playthrough` 3.5).
     assert_eq!(
         line(&app).as_deref(),
-        Some("Dig for bait: dig bait 0/3, catch with bait 0/3")
+        Some("Dig for bait: Dig up bait 0/3, Catch fish on bait 0/3")
     );
     app.world_mut().write_message(Gained {
         item: Item::Good(Good::BAIT),
@@ -298,7 +298,7 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
         // Every mission before the ones its tools closed is done with them
         // (`starter-missions`, "The first mission: open the pack"), so the
         // trunk's chest, after the fire, is next.
-        Some("A chest: make 0/1, place 0/1, store 0/1")
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
     );
 }
 

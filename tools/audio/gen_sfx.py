@@ -413,6 +413,15 @@ def hook_jingle(r):
     return mix(lift, 0.35 * shimmer)
 
 
+@sound("mission_done", "Menu", "A mission done: one short bright ding, a struck G5 with a bell's ring over it.", peak_db=-8.0)
+def mission_done(r):
+    n = int(0.8 * SR)
+    strike = mallet(783.99, 0.8, bright=0.35, decay_s=0.5)
+    bell = ring([1567.98, 1567.98 * 2.76, 1567.98 * 5.4], [0.6, 0.3, 0.15], n, amps=[1.0, 0.3, 0.12])
+    bell *= np.minimum(1.0, np.arange(n) / (0.002 * SR))
+    return mix(strike, 0.35 * bell)
+
+
 # --- craft
 
 @sound("stall_warn", "Craft", "The Kestrel's stall warning in the cockpit: a soft two-tone chime pulsing about three times a second (loops).", peak_db=-10.0)

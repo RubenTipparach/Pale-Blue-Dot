@@ -21,6 +21,7 @@
         "cast_whoosh": (volume_db: -7.0, pitch: (0.9, 1.1), cap: 1),
         "catch_chime": (volume_db: -7.0, cap: 1, bus: Menus),
         "hook_jingle": (volume_db: -8.0, cap: 1, bus: Menus),
+        "mission_done": (volume_db: -6.0, cap: 1, bus: Menus),
         "catch_splash": (volume_db: -3.0, cap: 2, full_within_m: 4.0, audible_m: 60.0),
         "dig_dirt": (takes: 3, volume_db: -5.0, pitch: (0.94, 1.06), cap: 3, audible_m: 40.0),
         "dig_dry": (takes: 3, volume_db: -5.0, pitch: (0.94, 1.06), cap: 3, audible_m: 40.0),
