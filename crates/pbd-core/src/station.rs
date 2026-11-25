@@ -476,6 +476,22 @@ impl Default for RecipeFile {
                 &[("mallet", 1)],
             ),
         ]);
+        // sea-gathering design 6: the grinder crushes each sea piece into
+        // fertiliser, at its own yield.
+        file.recipes.extend(
+            crate::sea_gather::SeaPiece::ALL
+                .into_iter()
+                .filter_map(|piece| {
+                    let (n, out) = piece.crush()?;
+                    Some(RecipeEntry {
+                        code: piece.crush_recipe(),
+                        station: "grinder".into(),
+                        secs: 3.0,
+                        inputs: vec![pair(piece.code(), n)],
+                        outputs: vec![pair(crate::sea_gather::FERTILIZER, out)],
+                    })
+                }),
+        );
         file
     }
 }
@@ -914,7 +930,8 @@ mod tests {
         // crushed stone from the grinder. The hand recipe's code is retired.
         assert!(book.get("gravel").is_none(), "gravel by hand is retired");
         assert!(retired_inputs("gravel").is_some());
-        assert_eq!(book.at("grinder").count(), 1);
+        // Crushed stone, and each sea piece crushed (`sea-gathering` 6).
+        assert_eq!(book.at("grinder").count(), 13);
         assert_eq!(book.at("mixer").count(), 1);
         let mixed = book.get("mixed-gravel").unwrap();
         assert_eq!(mixed.station.code, "mixer");

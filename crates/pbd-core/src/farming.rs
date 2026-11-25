@@ -349,6 +349,10 @@ pub struct Plot {
     pub layer: u16,
     pub crop: Option<String>,
     pub planted_s: f64,
+    /// Whether this sowing has been fed fertiliser (`sea-gathering` design
+    /// 6). Absent in a plot written before, which reads as unfed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fed: bool,
 }
 
 impl Plot {
@@ -357,6 +361,7 @@ impl Plot {
             layer,
             crop: Some(crop.row().code.to_string()),
             planted_s,
+            fed: false,
         }
     }
 
@@ -365,12 +370,44 @@ impl Plot {
             layer,
             crop: None,
             planted_s: 0.0,
+            fed: false,
         }
     }
 
     /// The crop growing here, if one is and this build knows it.
     pub fn crop(&self) -> Option<Crop> {
         self.crop.as_deref().and_then(Crop::by_code)
+    }
+
+    /// Whether fertiliser can be used on it at `now_s`: a crop is growing,
+    /// not yet ripe, and not fed this sowing (`sea-gathering` design 6).
+    pub fn can_feed(&self, farm: &FarmSettings, now_s: f64) -> bool {
+        !self.fed
+            && self
+                .crop()
+                .is_some_and(|crop| farm.stage(crop, self.planted_s, now_s) != Stage::Ripe)
+    }
+
+    /// The plot fed at `now_s` (M8's compost, `sea-gathering` design 6): the
+    /// growth left runs half again as fast, so the sowing moves back a
+    /// third of the time left and ripens in two thirds of it; and `fed`,
+    /// for one more produce at harvest. `None` where it cannot be fed.
+    pub fn fed_at(&self, farm: &FarmSettings, now_s: f64) -> Option<Plot> {
+        if !self.can_feed(farm, now_s) {
+            return None;
+        }
+        let crop = self.crop()?;
+        let left = farm.left_s(crop, self.planted_s, now_s);
+        Some(Plot {
+            planted_s: self.planted_s - left / 3.0,
+            fed: true,
+            ..self.clone()
+        })
+    }
+
+    /// What its harvest gives of the crop's produce: one more when fed.
+    pub fn produce(&self, farm: &FarmSettings, crop: Crop) -> u16 {
+        farm.of(crop).produce + u16::from(self.fed)
     }
 }
 
@@ -514,5 +551,32 @@ mod tests {
             ..plot
         };
         assert_eq!(odd.crop(), None);
+    }
+
+    /// Fertiliser (`sea-gathering` design 6): wheat of 6 days fed on day 3
+    /// ripens 2 days later and gives one more; fed once a sowing; an old
+    /// plot body with no `fed` reads as unfed, and an unfed body writes no
+    /// `fed`, so a build without the field reads it as it did.
+    #[test]
+    fn fertiliser_speeds_the_rest_and_adds_one() {
+        let farm = FarmSettings::default();
+        let day = f64::from(DAY_S);
+        let plot = Plot::sown(3, Crop::WHEAT, 0.0);
+        let fed = plot.fed_at(&farm, 3.0 * day).expect("growing wheat feeds");
+        assert!(fed.fed);
+        assert!((farm.left_s(Crop::WHEAT, fed.planted_s, 3.0 * day) - 2.0 * day).abs() < 1e-6);
+        assert_eq!(
+            fed.produce(&farm, Crop::WHEAT),
+            plot.produce(&farm, Crop::WHEAT) + 1
+        );
+        assert_eq!(fed.fed_at(&farm, 3.5 * day), None, "once a sowing");
+        assert_eq!(plot.fed_at(&farm, 6.0 * day), None, "not once ripe");
+        assert_eq!(Plot::bare(3).fed_at(&farm, 0.0), None, "not on bare ground");
+        let old: Plot =
+            ron::from_str("(layer: 3, crop: Some(\"wheat\"), planted_s: 10.0)").unwrap();
+        assert!(!old.fed);
+        assert!(!ron::to_string(&plot).unwrap().contains("fed"));
+        let back: Plot = ron::from_str(&ron::to_string(&fed).unwrap()).unwrap();
+        assert_eq!(back, fed);
     }
 }

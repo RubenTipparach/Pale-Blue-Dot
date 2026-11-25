@@ -459,6 +459,7 @@ equipment:
   hand_tip: "{tool}: {purpose}"
   picker_hint: wheel to choose, let go of G
 farm:
+  fertilized: "{crop} fertilized"
   already_growing: Something is already growing here
   harvested: "+{produce} {crop}, +{seeds} seed"
   no_room: No room in the pack
@@ -661,6 +662,9 @@ husbandry:
   young: "{name} {stage}"
 interact:
   act:
+    fertilize: "Fertilize {thing}"
+    gather_sea: "Gather {thing}"
+    take_ornament: "Take up {thing}"
     board: "Board {thing}"
     build: "Build {thing}"
     check: "Check {thing}"
@@ -703,6 +707,38 @@ interact:
 inventory:
   fish: fish
 item:
+  staghorn-coral:
+    name: staghorn coral
+  finger-coral:
+    name: finger coral
+  brain-coral:
+    name: brain coral
+  table-coral:
+    name: table coral
+  soft-coral:
+    name: soft coral
+  tube-sponge:
+    name: tube sponge
+  barrel-sponge:
+    name: barrel sponge
+  sea-fan:
+    name: sea fan
+  sea-anemone:
+    name: sea anemone
+  sea-lettuce:
+    name: sea lettuce
+  coral-rubble:
+    name: coral rubble
+  mussels:
+    name: mussels
+  kelp:
+    name: kelp
+  fertilizer:
+    name: fertilizer
+  steamed-mussels:
+    name: steamed mussels
+  kelp-crisps:
+    name: kelp crisps
   mallet:
     name: mallet
   apple:
@@ -1437,6 +1473,34 @@ planner:
     iso: Isometric
     top: Top down
 recipe:
+  crush-staghorn-coral:
+    name: CRUSH STAGHORN CORAL
+  crush-finger-coral:
+    name: CRUSH FINGER CORAL
+  crush-brain-coral:
+    name: CRUSH BRAIN CORAL
+  crush-table-coral:
+    name: CRUSH TABLE CORAL
+  crush-soft-coral:
+    name: CRUSH SOFT CORAL
+  crush-tube-sponge:
+    name: CRUSH TUBE SPONGE
+  crush-barrel-sponge:
+    name: CRUSH BARREL SPONGE
+  crush-sea-fan:
+    name: CRUSH SEA FAN
+  crush-sea-anemone:
+    name: CRUSH SEA ANEMONE
+  crush-sea-lettuce:
+    name: CRUSH SEA LETTUCE
+  crush-coral-rubble:
+    name: CRUSH CORAL RUBBLE
+  crush-kelp:
+    name: CRUSH KELP
+  steamed-mussels:
+    name: STEAMED MUSSELS
+  kelp-crisps:
+    name: KELP CRISPS
   drafting-table:
     name: DRAFTING TABLE
   mallet:
@@ -1585,6 +1649,11 @@ saves:
 scatter:
   pick_up_stone: pick up stone
   pull_fibre: pull fibre
+sea:
+  occupied: Something already stands there
+  refusal:
+    rod: Use a rod
+  too_far: Too far away
 site:
   have: "{have}/{count}"
   left: "{left} of {total} left"

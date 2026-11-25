@@ -56,6 +56,7 @@ pub mod rivers;
 pub mod roads;
 pub mod scatter;
 pub mod sea;
+pub mod sea_gather;
 pub mod settlement;
 pub mod shadow;
 pub mod sites;

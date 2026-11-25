@@ -151,5 +151,23 @@
         ("block:drafting table", 22, goods),
         // ---- storage-chests design 1: the workbench chest (8 planks).
         ("block:chest", 18, goods),
+        // ---- sea-gathering design 5: the sea floor's pieces, fertiliser and
+        // the two sea dishes.
+        ("staghorn-coral", 5, goods),
+        ("finger-coral", 5, goods),
+        ("brain-coral", 7, goods),
+        ("table-coral", 9, goods),
+        ("soft-coral", 4, goods),
+        ("tube-sponge", 4, goods),
+        ("barrel-sponge", 6, goods),
+        ("sea-fan", 6, goods),
+        ("sea-anemone", 5, goods),
+        ("sea-lettuce", 1, crop),
+        ("coral-rubble", 1, goods),
+        ("mussels", 3, fish),
+        ("kelp", 2, crop),
+        ("fertilizer", 2, goods),
+        ("steamed-mussels", 8, dish),
+        ("kelp-crisps", 5, dish),
     ],
 )

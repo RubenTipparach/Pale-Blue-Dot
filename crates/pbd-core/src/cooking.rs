@@ -281,6 +281,9 @@ impl Default for CookingFile {
                 dish("roast-meat", Effect::Stride, 8.0),
                 // `glowing-mushrooms` design 6: eaten raw, no fire, no recipe.
                 dish("glowing-mushroom", Effect::Glow, 3.0),
+                // `sea-gathering` design 7.
+                dish("steamed-mussels", Effect::Steady, 6.0),
+                dish("kelp-crisps", Effect::Stride, 4.0),
             ],
             glow: GlowSettings::default(),
             awaited: vec!["egg".into(), "milk".into(), "raw-meat".into()],
@@ -348,6 +351,20 @@ impl Default for CookingFile {
                     3.0,
                     vec![pair("stone", 5), pair("log", 2)],
                     vec![pair("block:campfire", 1)],
+                ),
+                recipe(
+                    "steamed-mussels",
+                    "campfire",
+                    20.0,
+                    vec![pair("mussels", 3)],
+                    vec![pair("steamed-mussels", 1)],
+                ),
+                recipe(
+                    "kelp-crisps",
+                    "campfire",
+                    15.0,
+                    vec![pair("kelp", 2)],
+                    vec![pair("kelp-crisps", 2)],
                 ),
             ],
         }
@@ -649,8 +666,9 @@ mod tests {
         codes.dedup();
         assert_eq!(codes.len(), book.recipes.len());
         assert!(book.recipes.len() > n);
-        // Six dishes, and a fertile egg fried like an egg (`animal-husbandry` E3).
-        assert_eq!(book.at("campfire").count(), 7);
+        // Six dishes, a fertile egg fried like an egg (`animal-husbandry` E3),
+        // and the two sea dishes (`sea-gathering` design 7).
+        assert_eq!(book.at("campfire").count(), 9);
         let row = station_by_code("campfire").unwrap();
         assert_eq!(row.material, Some(Material::Campfire));
         assert_eq!(

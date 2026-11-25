@@ -142,6 +142,25 @@ pub const GOODS: &[GoodRow] = &[
     // ---- building-planner design 6: the mallet a site's pieces are struck
     // with, carried in the pack.
     row("mallet", 1, "items/goods/mallet.png"),
+    // ---- sea-gathering design 1: each sea-floor model is its own good, in
+    // `pbd_core::sea_gather::SeaPiece` order; the grinder's fertiliser and
+    // the campfire's two sea dishes (design 6, 7).
+    row("staghorn-coral", 16, "items/goods/staghorn-coral.png"),
+    row("finger-coral", 16, "items/goods/finger-coral.png"),
+    row("brain-coral", 16, "items/goods/brain-coral.png"),
+    row("table-coral", 16, "items/goods/table-coral.png"),
+    row("soft-coral", 16, "items/goods/soft-coral.png"),
+    row("tube-sponge", 16, "items/goods/tube-sponge.png"),
+    row("barrel-sponge", 16, "items/goods/barrel-sponge.png"),
+    row("sea-fan", 16, "items/goods/sea-fan.png"),
+    row("sea-anemone", 16, "items/goods/sea-anemone.png"),
+    row("sea-lettuce", 32, "items/goods/sea-lettuce.png"),
+    row("coral-rubble", 32, "items/goods/coral-rubble.png"),
+    row("mussels", 32, "items/goods/mussels.png"),
+    row("kelp", 32, "items/goods/kelp.png"),
+    row("fertilizer", 32, "items/goods/fertilizer.png"),
+    row("steamed-mussels", 16, "items/goods/steamed-mussels.png"),
+    row("kelp-crisps", 16, "items/goods/kelp-crisps.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -218,6 +237,8 @@ impl Good {
     pub const DOOR: Good = by_code_const("door");
     // building-planner: the mallet.
     pub const MALLET: Good = by_code_const("mallet");
+    // sea-gathering design 6.
+    pub const FERTILIZER: Good = by_code_const("fertilizer");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
