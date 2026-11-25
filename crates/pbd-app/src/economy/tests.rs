@@ -721,6 +721,18 @@ fn a_trader_leads_the_player_along_the_road_and_the_escort_is_paid() {
         .unwrap();
         assert_eq!(escort_of(&save, job.id), Some(escort.clone()));
     }
+    // The map and the compass mark the trader where the record puts them
+    // (design 42o).
+    let marked = road_jobs::escort_directions(
+        app.world().resource::<Economy>(),
+        app.world().resource::<WorldSave>(),
+    );
+    let here = trader_point(&escort, &config)
+        .unwrap()
+        .normalize()
+        .as_vec3();
+    assert_eq!(marked.len(), 1);
+    assert!(marked[0].distance(here) < 1e-6, "marked where they stand");
     // At the other town the game writes the count; the job is done and paid
     // where it was taken.
     app.world_mut().write_message(Did::new(
@@ -730,6 +742,14 @@ fn a_trader_leads_the_player_along_the_road_and_the_escort_is_paid() {
     ));
     app.update();
     assert!(app.world().resource::<Economy>().jobs.is_done(job.id));
+    assert!(
+        road_jobs::escort_directions(
+            app.world().resource::<Economy>(),
+            app.world().resource::<WorldSave>(),
+        )
+        .is_empty(),
+        "no marker once the job is done"
+    );
     let paid = shop(&mut app, |s| s.hand_in(&town, job.id)).unwrap();
     assert_eq!(paid.reward, 60, "40 coins times the board's 1.5");
 }

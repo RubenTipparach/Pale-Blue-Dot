@@ -2228,6 +2228,49 @@ taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
   lifted view is to stake what it shows; the shovel still paves only
   within `reach_m` of the player's feet.
 
+**42o. The ghost's bridges and lamp posts, and the trader on the map
+(2026-11-25; written before the code).** Three things 42a, 42m and 46 ask
+for that the game did not yet draw. Each a recommendation taken (ask only
+with screenshots): none changes a rule, a tunable or what is built, only
+what the planner's ghost and the map show of it.
+- **A bridge in the ghost.** 42a: deeper water is "shown in the ghost as a
+  deck with its posts and rails". Today a bridged cell is in the ghost as
+  a flat top at its deck's height, with nothing under it. A bridge cell of
+  the aimed road that is not refused is now cut by the same
+  `roads::piece::cut` that cuts it once paved (its deck, the posts from
+  the bed to the deck, the rails along its sides with no cell of the aimed
+  road beside them, so a wide bridge is railed outside), and every part of
+  it is drawn in the ghost's tint. The ghost then shows what paving will
+  build, from the one cutting code, never a second picture of a bridge.
+- **Lamp posts in the ghost.** 42m: "Its ghost stands with the plan (a
+  post in the ghost tint)". The aim already finds the posts
+  (`PlannerAim::lamps`); they are now drawn: on each post cell not already
+  holding its lamp (`paving::lamp_standing`), on the cell's ground, one
+  shape in the ghost tint at the street lantern's size as the world draws
+  it (a post 1.5 m high, a lantern 0.3 m across from 1.5 to 1.86 m): a
+  six-sided timber post, bevelled at its foot and swelling into the
+  lantern's housing, lofted as one piece with no part stuck on (CLAUDE.md,
+  no obvious primitives), its smooth normals from the loft. It is a
+  ghost: the tint and its opacity are the plan's, lit by the field as the
+  rest of the ghost is, and it goes with the ghost.
+- **The trader on the map.** 46 places the escort job's trader on the
+  road, and the map and the compass mark a lost villager (design 9) but
+  not them. Now each taken escort job not yet done marks its trader where
+  they stand (`road_jobs::trader_point` of the stored record, so where
+  they stopped on a reload): on the map a pin with "Trader" beside it
+  (`jobs.escort_marker`), as the lost villager's pin is, and on the
+  compass bar a pin after the lost villagers', named "Trader" with its
+  distance when faced. The record is taken back when the trader reaches
+  the other town, and the marker goes with it.
+- **Tests.** App tests: the ghost of a bridged road carries the bridge
+  piece's deck, posts and rails (more of the mesh than the cells' tops
+  alone, and reaching under the deck), and a lamp post stands in it on its
+  cell's ground up to the lantern's height; a lamp already standing is not
+  drawn. The escort test reads the trader's marker where the stored record
+  puts them, and none once the job is done.
+- **Captures.** The ghost of the bridge from the bridge capture's spot, and
+  of a road with lamps, by day.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town

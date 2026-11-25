@@ -2115,6 +2115,7 @@ pub fn scripted(
         let shot_road = launch
             .road_plan
             .as_deref()
+            .map(|s| s.strip_prefix("ghost-").unwrap_or(s))
             .is_some_and(|s| s.starts_with("slope") || s.starts_with("bridge"));
         let stations = !shot_road;
         for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
@@ -2141,14 +2142,17 @@ pub fn scripted(
         // `lamps`: a three-wide dirt road with lamps, staked, paved and its
         // lamp posts built through the paving's own calls (design 42m).
         let lamps = scene.as_deref() == Some("lamps");
+        // `ghost-lamps`: that road open in the planner from up the view,
+        // nothing staked, so its ghost stands its lamp posts (design 42o).
+        let ghost_lamps = scene.as_deref() == Some("ghost-lamps");
         let how = pbd_core::roads::planner::How {
-            width: if wide || lamps { 3 } else { 1 },
-            surface: if lamps {
+            width: if wide || lamps || ghost_lamps { 3 } else { 1 },
+            surface: if lamps || ghost_lamps {
                 pbd_core::roads::Surface::Dirt
             } else {
                 pbd_core::roads::Surface::Gravel
             },
-            lamps,
+            lamps: lamps || ghost_lamps,
         };
         if lamps {
             slots.give(Item::Good(pbd_core::goods::Good::LOG), 16);
@@ -2170,9 +2174,14 @@ pub fn scripted(
         // `slope:A:B:W` and `bridge:A:B:W` stake that road (cells A to B,
         // width W) as a first run logged it, for a second run from the
         // view it logged.
+        // `ghost-slope:A:B:W` and `ghost-bridge:A:B:W` leave that road open
+        // in the planner from its far end, nothing staked, stakes in hand, so
+        // its ghost runs back to the aim (design 42o).
         if shot_road {
             use pbd_core::roads::planner as core;
-            let name = scene.clone().unwrap_or_default();
+            let full = scene.clone().unwrap_or_default();
+            let ghost = full.starts_with("ghost-");
+            let name = full.strip_prefix("ghost-").unwrap_or(&full).to_string();
             let bridge = name.starts_with("bridge");
             let given: Vec<u32> = name
                 .split(':')
@@ -2296,15 +2305,28 @@ pub fn scripted(
                         // ground 14 m back (`--view column`).
                         for (what, back_m) in [("view", 1.5f32), ("overview", 14.0)] {
                             let back = (ca - along * (back_m / config.radius_m)).normalize();
-                            let (north, east) = pbd_core::geo::north_east(back);
-                            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
-                            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
+                            // `--yaw` as the launch reads it back
+                            // (`place::yaw_of`, its tested inverse).
+                            let yaw = pbd_app::place::yaw_of(back, along).to_degrees();
                             let (lat, lon) = pbd_core::geo::lat_lon(back).degrees();
                             info!(
                                 "scripted road {what}: --at {lat:.5} {lon:.5} --yaw {yaw:.1} --road-plan {kind}:{a}:{b}:{}",
                                 how.width
                             );
                         }
+                    }
+                    if ghost {
+                        if let Some(mut planner) = planner {
+                            planner.how = how;
+                            planner.start = Some(b);
+                        }
+                        if let Some(i) = (0..10).find(|&i| {
+                            slots.get(i).map(|s| s.item)
+                                == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
+                        }) {
+                            slots.select(i);
+                        }
+                        return;
                     }
                     match paving::end_road(
                         &mut save,
@@ -2380,7 +2402,7 @@ pub fn scripted(
                         warn!("scripted road plan: refused one wide too: {why:?}");
                     }
                 }
-            } else if !wide {
+            } else if !wide && !ghost_lamps {
                 road(&mut save, &mut slots, a, b);
             }
             let plans = pbd_core::roads::planner::plans(&save.records);
@@ -2467,6 +2489,12 @@ pub fn scripted(
                 (Some(mut planner), Some("wide")) => {
                     planner.how = how;
                     planner.start = Some(b);
+                }
+                // Along a row, where a wide road may climb, as `lamps` is.
+                (Some(mut planner), Some("ghost-lamps")) => {
+                    planner.how = how;
+                    planner.start =
+                        Some(pbd_core::roads::planner::along_row(a, b, 11).unwrap_or(b));
                 }
                 _ => {}
             }
