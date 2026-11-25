@@ -1200,6 +1200,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<planner::Planner>()
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
+            .init_resource::<planner::AimPin>()
             .init_resource::<planner::Ghost>()
             .init_resource::<planner::PlannerLift>()
             .add_message::<paving::RoadWork>()

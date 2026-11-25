@@ -1872,11 +1872,12 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
-    (net, standing, roads_cfg, planner): (
+    (net, standing, roads_cfg, planner, pin): (
         Option<ResMut<pbd_app::roads::RoadNet>>,
         Option<ResMut<pbd_app::roads::RoadsStanding>>,
         Option<Res<pbd_app::roads::RoadsSettings>>,
         Option<ResMut<pbd_app::roads::planner::Planner>>,
+        Option<ResMut<pbd_app::roads::planner::AimPin>>,
     ),
 ) {
     if *done
@@ -2117,7 +2118,7 @@ pub fn scripted(
             .as_deref()
             .map(|s| s.strip_prefix("ghost-").unwrap_or(s))
             .is_some_and(|s| s.starts_with("slope") || s.starts_with("bridge"));
-        let stations = !shot_road;
+        let stations = !shot_road && launch.road_plan.as_deref() != Some("ghost-lamps");
         for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
             if !stations {
                 continue;
@@ -2320,6 +2321,11 @@ pub fn scripted(
                             planner.how = how;
                             planner.start = Some(b);
                         }
+                        // The aim held on its near end, so the ghost is the
+                        // road checked here, wherever the eye looks.
+                        if let Some(mut pin) = pin {
+                            pin.0 = Some(a);
+                        }
                         if let Some(i) = (0..10).find(|&i| {
                             slots.get(i).map(|s| s.item)
                                 == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
@@ -2490,11 +2496,29 @@ pub fn scripted(
                     planner.how = how;
                     planner.start = Some(b);
                 }
-                // Along a row, where a wide road may climb, as `lamps` is.
+                // Along a row, where a wide road may climb, as `lamps` is:
+                // three wide where the planner lays it with no red, else
+                // one, the aim held on its near end.
                 (Some(mut planner), Some("ghost-lamps")) => {
-                    planner.how = how;
-                    planner.start =
-                        Some(pbd_core::roads::planner::along_row(a, b, 11).unwrap_or(b));
+                    use pbd_core::roads::planner as core;
+                    let b = core::along_row(a, b, 11).unwrap_or(b);
+                    let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                    let clear = |how: core::How| {
+                        let road =
+                            core::PlanRoad::new(core::stake_line(b, a, pcfg.max_segment), how);
+                        let laid = core::lay(&road, &ground, &|_| false, &pcfg, cfg.ford_depth_m);
+                        core::first_clash(&laid).is_none()
+                    };
+                    planner.how = if clear(how) {
+                        how
+                    } else {
+                        core::How { width: 1, ..how }
+                    };
+                    info!("scripted ghost lamps: width {}", planner.how.width);
+                    planner.start = Some(b);
+                    if let Some(mut pin) = pin {
+                        pin.0 = Some(a);
+                    }
                 }
                 _ => {}
             }

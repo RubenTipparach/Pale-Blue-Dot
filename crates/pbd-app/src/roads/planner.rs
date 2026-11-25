@@ -125,6 +125,12 @@ pub struct PlannerAim {
     made_for: Option<(Option<u32>, Planner, u64)>,
 }
 
+/// The cell the aim is held on, in place of the aimed ground: set only by
+/// the capture instrument (`--road-plan ghost-*`), so a shot of the ghost
+/// shows the road the instrument checked; never set in play.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct AimPin(pub Option<u32>);
+
 fn stakes_held(hotbar: &crate::hotbar::Hotbar) -> bool {
     hotbar.0.held().map(|s| s.item) == Some(Item::Good(Good::SURVEY_STAKES))
 }
@@ -233,6 +239,7 @@ pub fn planner_aim(
     pcfg: Res<PlannerSettings>,
     planner: Res<Planner>,
     mut aim: ResMut<PlannerAim>,
+    pin: Option<Res<AimPin>>,
 ) {
     let (Some(hotbar), Some(save)) = (hotbar, save) else {
         return;
@@ -246,7 +253,9 @@ pub fn planner_aim(
         }
         return;
     }
-    let key = aimed.and_then(|a| a.0).and_then(paving::key_of);
+    let key = pin
+        .and_then(|p| p.0)
+        .or_else(|| aimed.and_then(|a| a.0).and_then(paving::key_of));
     let stamp = (key, planner.clone(), save.serial());
     if aim.made_for.as_ref() == Some(&stamp) {
         return;
