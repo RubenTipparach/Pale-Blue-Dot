@@ -7919,6 +7919,10 @@ mod tests {
             .init_resource::<AccumulatedMouseMotion>()
             .init_resource::<Tally>()
             .init_resource::<PendingClick>()
+            // The showcase reads the furniture in reach (`Furniture`).
+            .init_resource::<crate::desktop::furniture::Pieces>()
+            .init_resource::<crate::desktop::furniture::Sitting>()
+            .init_resource::<crate::desktop::furniture::StoreView>()
             .init_resource::<Aim>()
             .init_resource::<digging::Mining>()
             .init_resource::<Screen>()

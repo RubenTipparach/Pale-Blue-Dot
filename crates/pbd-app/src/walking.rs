@@ -4770,6 +4770,98 @@ mod tests {
         );
     }
 
+    /// `player-building` task 4.4: the village's cottage, charted by the
+    /// blueprint slot's own `blueprint` on the real cells and filled whole,
+    /// cut as the game cuts the player's builds (`builds::cut_plots`), is
+    /// walked into through its doorway; the same walk at one of its solid
+    /// walls is stopped outside.
+    #[test]
+    fn a_cottage_blueprint_filled_is_walked_into_through_its_doorway() {
+        use pbd_core::building::blueprint::{blueprint, plain};
+        use pbd_core::building::{Opening, Piece, Shape};
+        use std::collections::{BTreeMap, BTreeSet};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let template = crate::towns::load_template("village");
+        let kits = crate::towns::load_kits();
+        let def = template
+            .buildings
+            .iter()
+            .find(|b| b.name == "Cottage")
+            .expect("the village's cottage")
+            .clone();
+        let kit = kits.get(&def.kit).expect("its kit");
+        assert!(plain(&def, kit), "a blueprint the slot offers");
+        // Off the test land's pentagon, on the same flat cell.
+        let site = (flat + flat.any_orthonormal_vector() * (25.0 / PLANET_RADIUS)).normalize();
+        let patch = crate::builds::patch_round(site, crate::builds::PATCH_REACH_M);
+        let at = patch.nearest(site).unwrap();
+        // The ground floor on the ground's first air layer, as the slot sets
+        // it over the heightfield (`build_mode::ground_top`).
+        let surface = terrain.sample(site).floor_radius - PLANET_RADIUS;
+        let base = (pbd_core::column::layer_at(surface - 0.5).unwrap() + 1) as u16;
+        let pieces = blueprint(&patch, &def, kit, at, 0, base).expect("charted");
+        let floors: BTreeSet<u32> = pieces
+            .iter()
+            .filter(|p| matches!(p.shape, Shape::Floor { .. }))
+            .flat_map(|p| p.shape.cells())
+            .collect();
+        let walls: Vec<(u32, u32, Opening)> = pieces
+            .iter()
+            .filter_map(|p| match p.shape {
+                Shape::Wall { a, b, opening, .. } if floors.contains(&a) != floors.contains(&b) => {
+                    Some(if floors.contains(&a) {
+                        (a, b, opening)
+                    } else {
+                        (b, a, opening)
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+        let door = walls
+            .iter()
+            .find(|w| w.2 == Opening::Door)
+            .copied()
+            .expect("a doorway");
+        let blank = walls
+            .iter()
+            .find(|w| w.2 == Opening::None && w.0 == door.0)
+            .copied()
+            .expect("a solid wall of the same room");
+        let map: BTreeMap<u64, Piece> = pieces.iter().map(|p| (p.id(), p.clone())).collect();
+        let records = crate::saves::WorldSave::memory_only().records;
+        let cuts = crate::builds::cut_plots(&map, &kits, &|_| 2.0, &records, &|_| Some(base));
+        assert_eq!(cuts.len(), 1, "one house");
+        let house = cuts[0].solids.clone();
+        let plan = |key: u32| {
+            let d = pbd_core::cell_key::key_direction(key).unwrap();
+            let l = house.frame.local(d * house.frame.origin.length());
+            Vec2::new(l.x, l.z)
+        };
+        let feet = surface - (house.frame.origin.length() - PLANET_RADIUS) + 0.05;
+        let walk_in = |(inside, outside, _): (u32, u32, Opening)| {
+            let (into, from) = (plan(inside), plan(outside));
+            let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
+            app.insert_resource(Structures(vec![house.clone()]));
+            stand_in(&mut app, &house, from.x, feet, from.y);
+            let w = walk_house(
+                &mut app,
+                &house,
+                move |at| (into - at).normalize_or_zero(),
+                move |l| (Vec2::new(l.x, l.z) - into).length() < 0.4,
+                240,
+            );
+            (Vec2::new(w.end.x, w.end.z) - into).length()
+        };
+        let through = walk_in(door);
+        assert!(
+            through < 0.4,
+            "in through the doorway: {through} m from the middle"
+        );
+        let stopped = walk_in(blank);
+        assert!(stopped > 1.0, "the solid wall held: {stopped} m out");
+    }
+
     /// A door (slice 2b): shut, it stops the walker at its doorway; E in
     /// reach opens it, the player's record goes to the save, and the same
     /// walk goes in.

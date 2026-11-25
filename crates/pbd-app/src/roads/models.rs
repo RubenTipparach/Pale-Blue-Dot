@@ -329,6 +329,35 @@ fn vessel(shape: &mut Shape, centre: Vec3, y0: f32, y1: f32, h0: Vec2, h1: Vec2,
     shape.loft(&rings, true, true);
 }
 
+/// A street lantern's ghost in the road planner (`townsfolk` design 42o),
+/// its foot at the origin, `y` up: a six-sided timber post bevelled at its
+/// foot, flaring at its collar into the lantern's housing and narrowing to
+/// its roof and finial, lofted as one piece at the size the world draws the
+/// street lantern (a post to 1.5 m, a lantern 0.3 m across to 1.86 m).
+pub fn ghost_lamp() -> Shape {
+    // (height, half width) up the lamp.
+    const STOPS: [(f32, f32); 11] = [
+        (0.0, 0.05),
+        (0.05, 0.07),
+        (1.38, 0.055),
+        (1.46, 0.07),
+        (1.5, 0.14),
+        (1.53, 0.15),
+        (1.7, 0.15),
+        (1.75, 0.165),
+        (1.8, 0.11),
+        (1.86, 0.04),
+        (1.9, 0.015),
+    ];
+    let rings: Vec<Vec<Vec3>> = STOPS
+        .iter()
+        .map(|&(y, r)| ring(Vec3::Y * y, Vec3::Y, Vec3::X, r, r, 6, 0.5))
+        .collect();
+    let mut shape = Shape::default();
+    shape.loft(&rings, true, true);
+    shape
+}
+
 /// A survey stake (design 39a): one tapered peg of split timber, its foot
 /// sunk under the ground's top, its head split and frayed by the mallet,
 /// 0.9 m out of the ground. `seed` varies its grain and fray.

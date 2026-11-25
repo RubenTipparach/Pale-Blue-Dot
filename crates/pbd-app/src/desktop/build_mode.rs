@@ -1628,3 +1628,81 @@ pub fn scripted(
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pbd_core::inventory::Item;
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_message::<MouseWheel>()
+            .insert_resource(pbd_app::walking::WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .insert_resource(pbd_app::vehicles::Aboard(None))
+            .init_resource::<super::super::slots::Hotbar>()
+            .init_resource::<BuildMode>()
+            .add_systems(Update, take_input);
+        app
+    }
+
+    fn press(app: &mut App, key: KeyCode) {
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.release_all();
+        keys.clear();
+        keys.press(key);
+        app.update();
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.release_all();
+        keys.clear();
+    }
+
+    /// `player-building` task 4.1 (design B5, B10): B on foot opens build
+    /// mode; while it is open the number row picks the palette, not the
+    /// hotbar; B again closes it, and the hotbar and its selection are as
+    /// they were. Aboard a craft B does not open it (it brakes there).
+    #[test]
+    fn build_mode_gives_the_hotbar_and_its_selection_back() {
+        let mut app = app();
+        {
+            let mut hotbar = app
+                .world_mut()
+                .resource_mut::<super::super::slots::Hotbar>();
+            hotbar.0.give(Item::Block(Material::Dirt), 12);
+            hotbar.0.give(Item::Good(pbd_core::goods::Good::LOG), 5);
+            hotbar.0.select(1);
+        }
+        let before: Vec<_> = {
+            let h = &app.world().resource::<super::super::slots::Hotbar>().0;
+            (0..10).map(|i| h.get(i)).collect()
+        };
+        app.update();
+        press(&mut app, KeyCode::KeyB);
+        assert!(app.world().resource::<BuildMode>().on, "B opens it");
+        press(&mut app, KeyCode::Digit4);
+        assert_eq!(app.world().resource::<BuildMode>().slot, 3, "the palette's");
+        assert_eq!(
+            app.world()
+                .resource::<super::super::slots::Hotbar>()
+                .0
+                .selected(),
+            1,
+            "the number row is build mode's while it is open"
+        );
+        press(&mut app, KeyCode::KeyB);
+        assert!(!app.world().resource::<BuildMode>().on, "B closes it");
+        let h = &app.world().resource::<super::super::slots::Hotbar>().0;
+        assert_eq!(h.selected(), 1, "the selection comes back");
+        let after: Vec<_> = (0..10).map(|i| h.get(i)).collect();
+        assert_eq!(after, before, "the slots are untouched");
+        // Aboard: B is the brake, not build mode.
+        app.insert_resource(pbd_app::vehicles::Aboard(Some(Entity::PLACEHOLDER)));
+        press(&mut app, KeyCode::KeyB);
+        assert!(!app.world().resource::<BuildMode>().on, "not aboard");
+    }
+}

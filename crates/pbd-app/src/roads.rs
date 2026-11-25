@@ -280,11 +280,10 @@ fn log_road(road: &Road) {
             if back {
                 along = -along;
             }
-            let (north, east) = pbd_core::geo::north_east(c);
-            // `--yaw` turns from the walker's default heading, which faces the
-            // other way from this bearing (measured on the capture: 0 faced west).
-            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
-            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
+            // `--yaw` as the launch reads it back (`place::yaw_of`, its
+            // tested inverse; a bearing worked here by hand turned north
+            // and south the wrong way round).
+            let yaw = crate::place::yaw_of(c, along).to_degrees();
             let (lat, lon) = pbd_core::geo::lat_lon(c).degrees();
             Some([lat, lon, yaw])
         };
@@ -1201,6 +1200,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<planner::Planner>()
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
+            .init_resource::<planner::AimPin>()
             .init_resource::<planner::Ghost>()
             .init_resource::<planner::PlannerLift>()
             .add_message::<paving::RoadWork>()

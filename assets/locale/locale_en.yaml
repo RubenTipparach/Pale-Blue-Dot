@@ -852,6 +852,7 @@ jobs:
   abandon: ABANDON
   abandoned_line: Job abandoned
   done_notice: Job done
+  escort_marker: Trader
   hand_in: HAND IN
   kind:
     cook: "Cook {count} {thing}  {have}/{count}"

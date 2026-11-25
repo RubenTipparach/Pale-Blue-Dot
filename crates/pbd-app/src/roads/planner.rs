@@ -111,8 +111,9 @@ pub struct PlannerMenu {
 pub struct PlannerAim {
     pub showing: bool,
     pub cells: Vec<LaidCell>,
-    /// Lamp posts the aim's road would stand, by the cell beside them.
-    pub lamps: Vec<u32>,
+    /// Lamp posts the aim's road would stand and that are not standing yet:
+    /// the post's cell and its ground's top, m (design 42o).
+    pub lamps: Vec<(u32, i32)>,
     pub clash: Option<Clash>,
     pub bill: Bill,
     /// What the pack holds of the bill's goods: stakes, gravel, planks,
@@ -123,6 +124,12 @@ pub struct PlannerAim {
     /// What it was made for: the aimed cell, the planner, the save's serial.
     made_for: Option<(Option<u32>, Planner, u64)>,
 }
+
+/// The cell the aim is held on, in place of the aimed ground: set only by
+/// the capture instrument (`--road-plan ghost-*`), so a shot of the ghost
+/// shows the road the instrument checked; never set in play.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct AimPin(pub Option<u32>);
 
 fn stakes_held(hotbar: &crate::hotbar::Hotbar) -> bool {
     hotbar.0.held().map(|s| s.item) == Some(Item::Good(Good::SURVEY_STAKES))
@@ -232,6 +239,7 @@ pub fn planner_aim(
     pcfg: Res<PlannerSettings>,
     planner: Res<Planner>,
     mut aim: ResMut<PlannerAim>,
+    pin: Option<Res<AimPin>>,
 ) {
     let (Some(hotbar), Some(save)) = (hotbar, save) else {
         return;
@@ -245,7 +253,9 @@ pub fn planner_aim(
         }
         return;
     }
-    let key = aimed.and_then(|a| a.0).and_then(paving::key_of);
+    let key = pin
+        .and_then(|p| p.0)
+        .or_else(|| aimed.and_then(|a| a.0).and_then(paving::key_of));
     let stamp = (key, planner.clone(), save.serial());
     if aim.made_for.as_ref() == Some(&stamp) {
         return;
@@ -284,20 +294,22 @@ pub fn planner_aim(
         // Idle: the cell a click would start on.
         roads_aimed.push(PlanRoad::new(vec![k], planner.how));
     }
+    let lit = |k: u32| super::paving::lamp_standing(&save, k);
     let mut cells = Vec::new();
     let mut lamps = Vec::new();
     for road in &roads_aimed {
         let laid = planner::lay(road, &ground, &tree, &pcfg.0, ford);
-        lamps.extend(
+        lamps.extend(ghost_lamps(
             planner::lamp_posts(road, &laid, &ground, &pcfg.0)
                 .into_iter()
                 .map(|(_, post)| post),
-        );
+            &lit,
+            &ground,
+        ));
         cells.extend(laid);
     }
     let clash = cells.iter().find_map(|c| c.clash);
     let built = roads::built(&save.records);
-    let lit = |k: u32| super::paving::lamp_standing(&save, k);
     let bill = planner::bill(
         &plans,
         roads_aimed.first().filter(|_| planner.start.is_some()),
@@ -328,6 +340,20 @@ pub fn planner_aim(
         generation: aim.generation + 1,
         made_for: Some(stamp),
     };
+}
+
+/// The lamp posts the ghost stands (design 42o): each of `posts` not
+/// holding its lamp yet, with its ground's top, m.
+pub fn ghost_lamps(
+    posts: impl IntoIterator<Item = u32>,
+    lit: &dyn Fn(u32) -> bool,
+    ground: &roads::GroundFn,
+) -> Vec<(u32, i32)> {
+    posts
+        .into_iter()
+        .filter(|&post| !lit(post))
+        .filter_map(|post| ground(post).map(|g| (post, g.top_m)))
+        .collect()
 }
 
 /// The planner's clicks (design 42k): the place button starts and ends a
@@ -635,10 +661,23 @@ pub fn make_ghost_looks(
     commands.insert_resource(looks);
 }
 
+/// How far the ghost stands over what it shows, m.
+const GHOST_LIFT_M: f32 = 0.06;
+
 /// The mesh of `cells`' road tops, lifted a little over them: each cell a
 /// fan from its centre to its corners, on the plane its slope cuts (design
-/// 10), smooth-normalled on the sphere, its gravel laid in metres.
-fn ghost_mesh(cells: &[&LaidCell], radius_m: f32, centre: Vec3) -> Mesh {
+/// 10), smooth-normalled on the sphere, its gravel laid in metres. A bridge
+/// cell not refused is the bridge piece paving builds, cut by the same
+/// `roads::piece::cut` (its deck, posts and rails, railed where no cell of
+/// `road` is beside it), and each of `lamps` (a post's cell and its
+/// ground's top, m) stands the street lantern's ghost (design 42o).
+pub fn ghost_mesh(
+    cells: &[&LaidCell],
+    road: &std::collections::BTreeSet<u32>,
+    lamps: &[(u32, i32)],
+    radius_m: f32,
+    centre: Vec3,
+) -> Mesh {
     let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
     let (east, north) = {
         let up = centre.normalize_or(Vec3::Y);
@@ -649,14 +688,34 @@ fn ghost_mesh(cells: &[&LaidCell], radius_m: f32, centre: Vec3) -> Mesh {
         let Some(c) = roads::centre(cell.key) else {
             continue;
         };
-        let road = cell.drawn();
+        let drawn = cell.drawn();
+        if cell.deck.is_some() && cell.clash.is_none() {
+            let beside: Vec<u32> = roads::neighbours(cell.key)
+                .into_iter()
+                .filter(|n| road.contains(n))
+                .collect();
+            if let Some(piece) =
+                roads::piece::cut(&drawn, Surface::Gravel, &beside, radius_m, &|_| 2.0)
+            {
+                let lift = GHOST_LIFT_M - roads::piece::LIFT_M;
+                for buf in piece.meshes.into_values() {
+                    for p in buf.positions {
+                        let p = Vec3::from_array(p);
+                        positions.push((p + p.normalize_or(c) * lift - centre).to_array());
+                    }
+                    normals.extend(buf.normals);
+                    uvs.extend(buf.uvs);
+                }
+                continue;
+            }
+        }
         let point = |d: Vec3| {
             let h = if cell.clash.is_some() {
                 cell.base_m as f32
             } else {
-                road.top_at(d)
+                drawn.top_at(d)
             };
-            d * (radius_m + h + 0.06)
+            d * (radius_m + h + GHOST_LIFT_M)
         };
         let corners = roads::corners(cell.key);
         let k = corners.len();
@@ -667,6 +726,20 @@ fn ghost_mesh(cells: &[&LaidCell], radius_m: f32, centre: Vec3) -> Mesh {
                 normals.push(d.to_array());
                 uvs.push([p.dot(east), p.dot(north)]);
             }
+        }
+    }
+    let lamp = super::models::ghost_lamp();
+    for &(key, top_m) in lamps {
+        let Some(frame) = roads::piece::frame(key, top_m as f32, radius_m) else {
+            continue;
+        };
+        for &i in &lamp.indices {
+            let i = i as usize;
+            let p = frame.world(lamp.positions[i]);
+            let n = lamp.normals[i];
+            positions.push((p - centre).to_array());
+            normals.push((frame.x * n.x + frame.y * n.y + frame.z * n.z).to_array());
+            uvs.push(lamp.uvs[i].to_array());
         }
     }
     Mesh::new(
@@ -718,13 +791,16 @@ pub fn draw_ghost(
         .first()
         .and_then(|c| roads::centre(c.key))
         .map_or(Vec3::Y * radius, |c| c * radius);
+    let road: std::collections::BTreeSet<u32> = aim.cells.iter().map(|c| c.key).collect();
     for (n, red) in [false, true].into_iter().enumerate() {
         let cells: Vec<&LaidCell> = aim
             .cells
             .iter()
             .filter(|c| c.clash.is_some() == red)
             .collect();
-        let mesh = ghost_mesh(&cells, radius, at);
+        // The lamp posts stand in the plan's tint, never the red.
+        let lamps: &[(u32, i32)] = if red { &[] } else { &aim.lamps };
+        let mesh = ghost_mesh(&cells, &road, lamps, radius, at);
         match &ghost.meshes[n] {
             Some(handle) => {
                 if let Some(m) = meshes.get_mut(handle) {
