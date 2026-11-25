@@ -1630,6 +1630,35 @@ connected in a network)").** Roads are now something the player builds
   only, so a new world still shows a road or two for the player to follow
   and widen.
 
+**43a. The world's own wide roads: roads version 4 (2026-11-25, task
+8.6, on the owner's "cool implement all the phase 3 stuff!" and design 10b;
+written before the code).** The player's planner lays two- and three-wide
+roads (42l, 42m); the world's own roads are still one wide.
+- **What the world lays wide.** A gravel road between two walled towns is
+  two wide; inside a large town's gate (the cells within the larger town's
+  footprint) it is three wide. Dirt roads stay one wide. The links are
+  version 3's (design 43): the same pairs, the same order, the same
+  centre line; only the lanes are added.
+- **Lanes as the player's are.** Each lane is the centre line moved one
+  lattice step to the side, on the one shared plane of 42m (the lane bed,
+  the plane moved down the hill where that saves a cut, straight climbs),
+  bends and junctions only on the level; a lane cell the planner refuses
+  ("Too steep across", a settlement's footprint outside its gate, a cell of
+  another road) is left out and the road is narrower there, never bent to
+  fit. Wide bridges railed outside, and lamps both sides of a three-wide
+  stretch, as 42m. The same code as the player's planner, not a copy.
+- **A new roads version, for worlds planned from now on.** The net record
+  says `version: 4`; `RoadsConfig` gains `gravel_width` (2) and
+  `gate_width` (3), and `for_version(3)` and below set both to 1, which is
+  the old rule. A world planned by version 1, 2 or 3 is never planned again
+  and keeps every road it has, cell for cell. Pinned before the change by a
+  count and digest of version 3's cells on a fixed layout of settlements
+  (`roads::tests::version_3_cells_are_pinned`).
+- **Verify:** a core test that a version-4 gravel link between two walled
+  towns is two wide along its length (where no lane is refused) and three
+  wide inside the large town's gate; the walker test of 42m holds on a
+  world road; a capture of a world wide road up a slope.
+
 **44. Grass tufts go at once from a paved or marked cell (owner,
 2026-11-22: "ok").** A cell the player paves or marks has no pixel tufts
 from that moment, not from the world's next open (the known issue
