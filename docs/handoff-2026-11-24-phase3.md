@@ -3,13 +3,7 @@
 **PR #149 was MERGED to main at 23:04.** New work goes in a NEW draft PR
 from `claude/phase-2-1` (merge origin/main in first).
 
-**Forge redo, unfinished:** uncommitted in
-`.claude/worktrees/agent-a9f361368bbac8341` (smithy.rs, settlement tests,
-manifest.ron, design 26a, new `tools/art/forge_art.py` and
-`forge_fire.png`, `anvil.png`, `anvilface.png`). Finish it: build, look at
-the fire and anvil close up, retake `smith-forge-2045.jpg`,
-`forge-day.jpg`, add `forge-close.jpg`, run settlement/towns tests, commit,
-push, open the new PR.
+**Forge redo: done** (762feba5): one shaped animated flame, a shaped anvil on a stump, in PR #150. Polish left: the fire's daylight tips are light, the anvil is dark in shade; full pbd-app towns tests not re-run.
 
 Branch `claude/phase-2-1`, draft PR
 https://github.com/RubenTipparach/Pale-Blue-Dot/pull/149. One branch, one

@@ -901,9 +901,53 @@ faked with a light of its own.
   (ask only with screenshots).
 - **The smith** keeps his post by the anvil from the template; nothing
   about him changes. Task 3.2's capture is the smith at the forge at 22:30.
+- **The fire and the anvil redone (2026-11-24), replaced by 26b on merge.**
+  Written before the code.
+  The first cut broke the owner's art rules, plainly in
+  `smith-forge-2045.jpg` and `forge-day.jpg`:
+  - *The fire was five pale cones* (each `Sink::flame`'s three crossed
+    blades) standing apart on the hearth: obvious primitives, untextured, one
+    flat colour. It is now **one flame form fitted to the bed**: a crown
+    lofted from an ellipse just inside the bed, tapering in as it rises, its
+    rim cut into tongues of uneven height that share one base, with a taller
+    core of fewer tongues inside it and a bed of coals under both. It is
+    drawn in a new pixel sheet, `forge_fire` (eight 16 by 32 px frames,
+    drawn by `tools/art/forge_art.py`, with its manifest row), whose ramp is
+    the terrain brazier's own two fire colours (`planet_surface.wgsl`:
+    white-gold 0.98, 0.66, 0.22 and orange 0.86, 0.28, 0.05) with a deep coal
+    red under them, red at the root to yellow at the tips, every colour kept
+    under the tonemapper's shoulder so it stays a fire at night, not a cream
+    cone. Each frame's alpha cuts the tongues' ragged edges, so the sheet
+    stepping at the held flame's 11 frames a second (`held.ron`'s
+    `flame_fps`) makes it flicker gently, as a held torch does; terrain fires
+    are still. It is unlit (it is its own light; the forge's brazier lamp
+    lights everything else) and casts nothing, as every town flame.
+  - *The anvil read as a dark blob*: two flat-shaded frustums in the
+    settlement `iron`, the darkest tile in the set, and a four-sided horn.
+    It is now **one smooth-shaded iron form**: rings of rounded section
+    lofted from a spread foot, in to a waist, out to a flat face with a hard
+    crease only at its edge, the horn lofted round off the face's end from
+    the face's own section and tapering to a point, the heel square. It
+    stands on a round elm stump (bark sides, timber end grain), so its face
+    keeps the old 0.72 m. Its sides are a new 32 px `anvil` tile and its
+    face a worn, lighter `anvilface` tile (forged iron's blue-grey, a value
+    up on `iron`, with hammer scale and wear), drawn by the same script. It
+    stays field-lit like the terrain (`LitByField`, `LitLikeTerrain` on the
+    town root).
+  - Look only: the pieces' cells, solids and lamps are unchanged and the
+    layout stays 3 (no world has shipped it). Captures: the two shots
+    retaken and `forge-close.jpg`, the fire and the anvil close up.
 
 **26b. The forge's fire and anvil, redone (2026-11-24).** Written before
-the code. Measured in the captures of 26a (`smith-forge-2230.jpg`,
+the code. *This is the redo that ships. A second redo landed on the branch
+from another session at the same time (26a's last bullet, "The fire and the
+anvil redone": a lofted flame crown in an animated `forge_fire` sheet and
+the anvil on a stump); on merging the two, this one was kept, its fire
+reading as tongues of flame and its anvil's face, horn and heel reading at
+the player's distance, with every shot retaken and the full suites green
+(recommendation taken, ask only with screenshots). The other is in the
+history at `5c99a764`; its flickering flame sheet is a follow-up to port.*
+Measured in the captures of 26a (`smith-forge-2230.jpg`,
 `forge-day.jpg`): the fire is five crossed-triangle tongues
 (`Sink::flame`) in one flat unlit colour, which read as five pale cones on
 the hearth; the anvil is two frustums and a four-faced horn in the town's
