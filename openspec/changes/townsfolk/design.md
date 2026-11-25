@@ -1715,8 +1715,8 @@ roads (42l, 42m); the world's own roads are still one wide.
     The capture of a world wide road up a slope cannot be taken until a
     walled pair is linked; that is a change to the links (design 43's
     rule), left for the owner. The lanes' look on a slope is the player's
-    wide road's, the same pieces (`docs/screenshots/townsfolk/road-slope.jpg`).
-
+    wide road's, the same pieces; that capture (`road-slope.jpg`) is still
+    owed: the takes of 2026-11-25 did not frame the road (see task 14.5).
 
 **44. Grass tufts go at once from a paved or marked cell (owner,
 2026-11-22: "ok").** A cell the player paves or marks has no pixel tufts
@@ -1772,8 +1772,9 @@ build").** What the game does, and where it differs from the plan:
 - **Held paving** paves the nearest marked cell within 4 m of the aim every
   `pave_beat_s` (0.45 s) while F is held with the shovel in hand.
 - **Not yet built:** the half-strength preview of the next stake's cells,
-  the compass tick and the map's stakes, and the shovel's stroke and the
-  gravel tipping out as a cell is paved.
+  the map's stakes, and the shovel's stroke and the gravel tipping out as
+  a cell is paved. (The compass tick is built, 2026-11-25: 42d's "As
+  built".)
 - **For the town tree** (`town-missions-tree` design 4): every stake, mark
   and paving raises `pbd_app::roads::paving::RoadWork` (`Stake`,
   `Mark(cells)`, `Pave`) on the frame its line is accepted; the grinder's
@@ -1906,6 +1907,20 @@ site HUD):
   and "12 of 38 left";
 - the aim's segment shows what the next stake would add, so its cost is seen
   before it is driven.
+- **As built (2026-11-25, task 14.5).** The bill and the HUD line are
+  `planner::bill` and `planner::hud_line` (42l). The compass tick, which
+  this decision did not draw, is the building site's (`building-planner`
+  design 6), recommendation taken (ask only with screenshots): with the
+  shovel in hand on foot, the nearest marked cell not yet paved within
+  `ghost_reach_m` (60 m) is a red pin on the compass bar
+  (`roads::paving::PaveTick`, set by `pave_tick`), after the site's next
+  piece and before the player's waypoints, named "Next cell" with its
+  distance when it is the one faced (`roads.pave.next`). The marks are
+  laid out again only when the save changes. Pinned by the app test
+  `the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red`: the bill
+  falls by one gravel and one cell left for each cell paved, the line is
+  red while the pack is short of gravel and not once it holds enough, and
+  the tick moves on to the next cell as each is paved.
 
 **42e. Lamps.** With lamps on, a lamp post stands beside every
 `lamp_spacing`th cell (6) of the centre line, on the left verge, outside the

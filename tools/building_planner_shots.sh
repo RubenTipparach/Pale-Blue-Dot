@@ -38,3 +38,6 @@ shot game-site-change "give,site:cottage,build:22,change,view,dist:16,tilt:45,ah
 # change listed (pieces added and removed, goods back) before Save change.
 shot game-planner-change "give,site:cottage,build:22,edit,ahead:10,at:150" --time 11 --frames 340
 shot game-site-night "give,site:house,build:34,view,dist:20,tilt:35,ahead:10,at:150" --time 22 --frames 340
+# The scaffold's ladder bay close up (design, "The scaffold's ladder bay"):
+# the same house, the view nearer and turned to the first bay's ladder.
+shot scaffold-ladder-close "give,site:house,build:34,view,dist:${LADDER_DIST:-9},tilt:${LADDER_TILT:-18},yaw:${LADDER_YAW:--30},ahead:10,at:150" --time 11 --frames 340
