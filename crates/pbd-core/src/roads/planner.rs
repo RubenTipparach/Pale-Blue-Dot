@@ -963,9 +963,10 @@ pub fn lay(
     }
     if road.width > 1 && n > 0 {
         let width = road.width;
+        let whole = 0..n;
         let sides = Lanes {
             width: &|_| width,
-            segments: &[0..n],
+            segments: std::slice::from_ref(&whole),
             line: &line,
             dirs: &dirs,
             ground,

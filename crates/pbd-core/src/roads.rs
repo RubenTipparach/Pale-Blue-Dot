@@ -1135,8 +1135,7 @@ fn widen(roads: &mut [Road], ground: &GroundFn, cfg: &RoadsConfig) {
             owner.entry(c.key).or_insert(i);
         }
     }
-    for i in 0..roads.len() {
-        let road = &roads[i];
+    for (i, road) in roads.iter_mut().enumerate() {
         if road.surface != Surface::Gravel {
             continue;
         }
@@ -1149,7 +1148,7 @@ fn widen(roads: &mut [Road], ground: &GroundFn, cfg: &RoadsConfig) {
                 cfg.gravel_width
             }
         };
-        let (cells, lanes) = lanes_of(road, ground, cfg.ford_depth_m, &width);
+        let (cells, lanes) = lanes_of(&*road, ground, cfg.ford_depth_m, &width);
         let mine = |k: &u32| owner.get(k).is_none_or(|&o| o == i);
         let lanes: Vec<Lane> = lanes
             .into_iter()
@@ -1158,8 +1157,8 @@ fn widen(roads: &mut [Road], ground: &GroundFn, cfg: &RoadsConfig) {
         for l in &lanes {
             owner.insert(l.cell.key, i);
         }
-        roads[i].cells = cells;
-        roads[i].lanes = lanes;
+        road.cells = cells;
+        road.lanes = lanes;
     }
 }
 

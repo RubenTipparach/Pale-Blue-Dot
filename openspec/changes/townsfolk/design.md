@@ -1658,6 +1658,65 @@ roads (42l, 42m); the world's own roads are still one wide.
   towns is two wide along its length (where no lane is refused) and three
   wide inside the large town's gate; the walker test of 42m holds on a
   world road; a capture of a world wide road up a slope.
+- **As built (2026-11-25).** Where the plan left a choice, each is a
+  recommendation taken (ask only with screenshots):
+  - **The gate is the road's end at the town.** A world road's cells stop
+    at a town's footprint (design 10a: the town's lanes are the road
+    there), so "inside the gate" is the stretch where the road meets the
+    footprint: the last `gate_cells` (6, a new tunable beside
+    `gravel_width` and `gate_width` in `roads.ron`) centre cells at each
+    end. Both ends of a gravel road are walled towns, so both ends are
+    three wide; no road cell is laid in a footprint.
+  - **One implementation.** `planner::Lanes` takes the width at each
+    centre cell and the stretches of the centre line each laid beside by
+    one lattice step; `Lanes::widen` is the plane's choice (flat, or moved
+    down the hill half a cell at a time). The player's planner passes one
+    stretch, the whole line, so its roads lay cell for cell as before (its
+    tests unchanged). A world road's stretches are its straight runs: on
+    one face and no further than a cell's spacing off the great circle
+    between their ends, so a lane runs beside the route's own wiggle. The
+    bend rule is `planner::wide_bends`, the lamp verge `planner::verge`.
+  - **What is left out.** A lane the planner refuses (a town, the
+    player's work, "Too steep across", "Too wide to bridge"), one beside a
+    centre cell that bends or zigzags on or beside a rise, and one that is
+    or touches a cell of another road (so no two pairs meet on the ground,
+    design 43). The centre cells are re-read off the plane chosen (a bed
+    where the plane was moved), never moved.
+  - **The record.** A road with lanes or a bed is a `road` record of
+    schema 3 (`LANES_SCHEMA`): every cell with its cut or fill and its bed,
+    and the lanes with the centre cell each lies beside and its side.
+    Schema 1 and 2 records read as before. The net record says
+    `version: 4`.
+  - **In the game.** `RoadNet` lays the lanes after their road; a bridge
+    cell of a wide road is railed only on its sides with no cell of the
+    road beside it. The lamps near a town (design 34) stand beside a wide
+    road's outermost cell on its left, and on both sides of its three-wide
+    stretch.
+  - **Tests.** `roads::tests::version_3_cells_are_pinned` (taken first:
+    916 cells, in dirt and every town walled in gravel);
+    `a_gravel_road_between_walled_towns_is_two_wide_and_three_at_the_gate`
+    (flat ground: a road cell beside every centre cell on the left, and on
+    both sides of the six at each end; the schema 3 record reads back;
+    version 3 lays the same centre line one wide in schema 1; dirt stays
+    one wide); `a_world_wide_road_up_ten_layers_is_crossed_lane_to_lane_
+    without_a_step` (two walled towns along a row, a hill of ten layers up
+    and down between: seams under 3 cm, nothing steeper than 0.37 m a
+    metre, lanes on beds and never cut); in the app,
+    `a_new_world_lays_its_gravel_road_wide_and_a_version_3_world_keeps_its_own`
+    (on the start's rolling ground about half the lane cells are left out,
+    "Too steep across" or beside a bend on a rise; a save whose net record
+    says version 3 is read as it is, never planned again).
+  - **No world wide road in a new world on the shipped rules.** Walled
+    towns are placed at least `spacing_m` 2,500 m apart (`sites.ron`) and
+    version 3 links only pairs within `link_m` (2,000 m), with the walled
+    towns' long link dropped (design 43). So no two walled towns are ever
+    linked, no world road is gravel, and version 4 lays no lane on the
+    shipped seed: a new world's plan logs 8 roads, all dirt (2026-11-25).
+    The capture of a world wide road up a slope cannot be taken until a
+    walled pair is linked; that is a change to the links (design 43's
+    rule), left for the owner. The lanes' look on a slope is the player's
+    wide road's, the same pieces (`docs/screenshots/townsfolk/road-slope.jpg`).
+
 
 **44. Grass tufts go at once from a paved or marked cell (owner,
 2026-11-22: "ok").** A cell the player paves or marks has no pixel tufts
