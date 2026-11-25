@@ -219,8 +219,9 @@ Each new item's 16 px icon is rendered from its model, not drawn apart:
   tinted the kind's first palette colour), reduces it to 16 px by area
   average snapped to the render's own colours, and adds the 1 px dark
   outline icons carry (CLAUDE.md: outlines are for UI icons only);
-- the fertiliser sack and the two dishes have no model; they are pixel
-  maps in the same script, in the goods' palette.
+- the fertiliser sack and the two dishes have no model, and kelp is a
+  card, not a model (reduced, the card read as a ladder): they are pixel
+  maps in the same script, kelp's in the card's own colours.
 
 `assets/items/goods/PROVENANCE.md` gets their rows.
 
@@ -242,3 +243,22 @@ tile once (a tile landing's cost); the aim walks the near pieces of the
 tiles within 3 m of the eye each frame (a few hundred distance tests);
 each ornament is one mesh of a few hundred triangles. The owner measures
 it on real hardware.
+
+## As built (2026-11-25, `claude/phase-2-1`)
+
+- Built as designed, in `pbd_core::sea_gather`, `fish::places` and
+  `desktop::sea_gather`; F's acts `gather_sea`, `take_ornament` and
+  `fertilize` sit in the one interact table (`Reader::Sea`, the farm's).
+- A crawler taken by hand goes through the catch's own durable write
+  (`WorldSave::record_catch`), so the field guide counts it as caught.
+- The aim for a capture: `PBD_SEA_SHOT=<code|any>:<frame>[:<held good>]`
+  (a capture instrument), used by `tools/capture_sea_gathering.sh`.
+- Captures (lavapipe, fixed step; looks only) in
+  `docs/screenshots/sea-gathering/`: `reef-before`/`reef-after` (a
+  staghorn taken at 18.816 92.682), `kelp-before`/`kelp-after` (a kelp
+  stand taken at 70.343 -3.462; its rock stays), `pack` (every new icon),
+  `ornament-night` (a brain coral set on sand at 22:30, as dark as the sand).
+- Not verified in the game: a regrowth seen happen (it needs days of world
+  time and a tile rebuilt out of sight; the rule is tested), the crawler
+  take and the protected refusal on screen, fertilising on screen (the rule
+  is tested), the ornament under water.

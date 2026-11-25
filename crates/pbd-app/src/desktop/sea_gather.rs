@@ -519,11 +519,13 @@ pub fn shot_script(
     mut count: Local<u32>,
     mut target: Local<Option<Vec3>>,
     mut arrived: Local<bool>,
+    mut given: Local<bool>,
 ) {
     let Some((want, press_at, hold)) = shot_wanted() else {
         return;
     };
     let Some(near) = near else {
+        info!("SEA_SHOT armed: {want:?}, F on frame {press_at}, holding {hold:?}");
         commands.insert_resource(places::SeaNear { want, found: None });
         return;
     };
@@ -532,9 +534,8 @@ pub fn shot_script(
     }
     state.scripted = true;
     state.captured = true;
-    if let (Some(hold), Some(slots)) = (hold, slots.as_deref_mut())
-        && slots.0.count(Item::Good(hold.good())) == 0
-    {
+    if let (Some(hold), Some(slots), false) = (hold, slots.as_deref_mut(), *given) {
+        *given = true;
         slots.0.give(Item::Good(hold.good()), 1);
         let at = (0..pbd_core::inventory::SLOTS).find(|i| {
             slots
