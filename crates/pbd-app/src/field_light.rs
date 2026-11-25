@@ -223,6 +223,8 @@ static SWIM_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::n
 /// The vertex stage of a mesh carrying the reef's sway attribute
 /// (`sway_vertex.wgsl`).
 static SWAY_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
+/// The vertex stage of a reef's fish cloud (`fish_vertex.wgsl`).
+static FISH_VERTEX: std::sync::OnceLock<Handle<Shader>> = std::sync::OnceLock::new();
 
 /// Keeps the `pbd::swim` module loaded for the composer.
 #[derive(Resource)]
@@ -245,7 +247,34 @@ impl MaterialExtension for FieldLit {
         _key: bevy::pbr::MaterialExtensionKey<Self>,
     ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
         use crate::fish::bodies::{ATTRIBUTE_SWIM_AXES, ATTRIBUTE_SWIM_UP, ATTRIBUTE_SWIM_WAVE};
-        use crate::fish::places::ATTRIBUTE_SWAY;
+        use crate::fish::places::{ATTRIBUTE_FISH, ATTRIBUTE_SWAY};
+        // A reef's fish cloud: every fish moved and animated in the vertex
+        // stage, laid once.
+        if layout.0.contains(ATTRIBUTE_FISH[0]) {
+            if descriptor
+                .vertex
+                .shader_defs
+                .contains(&"PREPASS_PIPELINE".into())
+            {
+                return Ok(());
+            }
+            let Some(shader) = FISH_VERTEX.get() else {
+                return Ok(());
+            };
+            descriptor.vertex.buffers = vec![layout.0.get_layout(&[
+                Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+                Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+                Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+                Mesh::ATTRIBUTE_COLOR.at_shader_location(5),
+                ATTRIBUTE_FISH[0].at_shader_location(14),
+                ATTRIBUTE_FISH[1].at_shader_location(15),
+                ATTRIBUTE_FISH[2].at_shader_location(16),
+                ATTRIBUTE_FISH[3].at_shader_location(17),
+            ])?];
+            descriptor.vertex.shader = shader.clone();
+            descriptor.vertex.entry_point = None;
+            return Ok(());
+        }
         // A reef tile's swaying pieces or kelp: the surge in the vertex stage.
         if layout.0.contains(ATTRIBUTE_SWAY) {
             if descriptor
@@ -545,6 +574,7 @@ impl Plugin for FieldLightPlugin {
             let module = assets.load("shaders/swim.wgsl");
             let _ = SWIM_VERTEX.set(vertex);
             let _ = SWAY_VERTEX.set(assets.load("shaders/sway_vertex.wgsl"));
+            let _ = FISH_VERTEX.set(assets.load("shaders/fish_vertex.wgsl"));
             app.insert_resource(SwimModule(module));
         }
         app.add_plugins(MaterialPlugin::<FieldLitMaterial>::default())

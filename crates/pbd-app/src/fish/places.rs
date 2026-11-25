@@ -1348,7 +1348,7 @@ fn build_tile(
         }
     }
     // A cloud of anthias over one packed reef tile in two.
-    if packed && hh(seed as i64, 71) < 0.5 {
+    if packed && !reef.is_empty() && hh(seed as i64, 71) < 0.5 {
         let (at, up) = reef[reef.len() / 2];
         out.ambient.push(Ambient::Anthias {
             at: at + up * 1.6,
@@ -1656,6 +1656,8 @@ struct Drawn {
     /// Its fade, 0 whole to 1 gone ([`tile_fade`]); it lands at 1.
     fade: f32,
     ambient: Vec<Ambient>,
+    /// Its fish clouds, drawn on the GPU (`SEA_PLACES`).
+    fish_clouds: usize,
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
@@ -1812,6 +1814,165 @@ fn swaying_mesh(still: &Sway) -> Mesh {
     let mut mesh = mesh_of(verts, true);
     mesh.insert_attribute(ATTRIBUTE_SWAY, sway_rows(still));
     mesh
+}
+
+/// A reef fish cloud's per-vertex fish (`fish_vertex.wgsl`): the vertex in
+/// its body's frame and the orbit's radius; the orbit's start, speed, bob
+/// middle and squash; the bob's reach, rate and phase and the wave's phase;
+/// the place along the body and its length.
+pub const ATTRIBUTE_FISH: [bevy::mesh::MeshVertexAttribute; 4] = [
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_0",
+        0x5eed_f15c_0001,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_1",
+        0x5eed_f15c_0002,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_2",
+        0x5eed_f15c_0003,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_3",
+        0x5eed_f15c_0004,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+];
+
+/// One fish of a cloud as `fish_vertex.wgsl` swims it: the same orbit,
+/// bob and heading the CPU's `ambient` worked out each frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Swimmer {
+    radius: f32,
+    start: f32,
+    speed: f32,
+    bob_mid: f32,
+    squash: f32,
+    bob_reach: f32,
+    bob_rate: f32,
+    bob_phase: f32,
+    wave_phase: f32,
+    len: f32,
+}
+
+impl Swimmer {
+    /// Its place and heading in the cloud's frame at `t` (x and z the
+    /// plane, y up), as the shader has them.
+    fn at(&self, t: f32) -> (Vec3, Vec3) {
+        let a = self.start + t * self.speed;
+        let h = self.bob_mid + self.bob_reach * (t * self.bob_rate + self.bob_phase).sin();
+        let centre = Vec3::new(
+            a.cos() * self.radius,
+            h,
+            -a.sin() * self.radius * self.squash,
+        );
+        let along = Vec3::new(-a.sin(), 0.0, -a.cos() * self.squash) * self.speed.signum();
+        (centre, along)
+    }
+}
+
+/// A cloud's fish: its model and each one's swim, for an anthias cloud or a
+/// pair of clownfish (the CPU's `ambient`, kept to the letter).
+fn swimmers(a: &Ambient) -> Option<(&'static str, Vec<Swimmer>)> {
+    match *a {
+        Ambient::Anthias { seed, .. } => Some((
+            "anthias",
+            (0..40u32)
+                .map(|k| {
+                    let r = |s: i64| hh(i64::from(k), i64::from(seed) ^ s);
+                    let speed = (0.25 + 0.2 * r(2)) * if r(3) < 0.5 { 1.0 } else { -1.0 };
+                    Swimmer {
+                        radius: 1.5 + 3.5 * r(1),
+                        start: r(4) * TAU,
+                        speed,
+                        bob_mid: (r(5) - 0.3) * 2.0,
+                        squash: 0.7,
+                        bob_reach: 0.3,
+                        bob_rate: 0.7,
+                        bob_phase: r(6) * 6.0,
+                        wave_phase: r(8) * TAU,
+                        len: 0.11 + 0.04 * r(7),
+                    }
+                })
+                .collect(),
+        )),
+        Ambient::Clowns { seed, .. } => Some((
+            "darter",
+            (0..2u32)
+                .map(|k| Swimmer {
+                    radius: 0.45,
+                    start: k as f32 * PI + hh(i64::from(seed), 3) * TAU,
+                    speed: 0.3,
+                    bob_mid: 0.0,
+                    squash: 1.0,
+                    bob_reach: 0.06,
+                    bob_rate: 1.3,
+                    bob_phase: k as f32,
+                    wave_phase: k as f32 * 2.0,
+                    len: 0.13,
+                })
+                .collect(),
+        )),
+        _ => None,
+    }
+}
+
+/// A fish cloud's mesh, laid once: each fish's body in its own frame (nose
+/// +x) with its swim on every vertex, and the cloud's turn into the tile
+/// (x its first tangent, y its up, z minus its second).
+fn cloud_mesh(a: &Ambient, tint: [f32; 3]) -> Option<(Mesh, Vec3, Quat)> {
+    use super::bodies::{Look, Place, emit, model_for};
+    use pbd_core::fauna::Pose;
+    let (Ambient::Anthias { at, up, .. } | Ambient::Clowns { at, up, .. }) = *a else {
+        return None;
+    };
+    let (model, fish) = swimmers(a)?;
+    let mut verts = Verts::default();
+    let mut rows: [Vec<[f32; 4]>; 4] = Default::default();
+    for (k, f) in fish.iter().enumerate() {
+        let body = model_for(model, k as u32);
+        let from = verts.positions.len();
+        emit(
+            body,
+            &Look {
+                t: 0.0,
+                phase: f.wave_phase,
+                pose: Pose::Moving,
+            },
+            &Place {
+                origin: Vec3::ZERO,
+                forward: Vec3::X,
+                up: Vec3::Y,
+                scale: f.len / body.length,
+            },
+            tint,
+            &mut verts.positions,
+            &mut verts.colours,
+            &mut verts.uvs,
+        );
+        let laid = &verts.positions[from..];
+        let (lo, hi) = laid.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+            (lo.min(p[0]), hi.max(p[0]))
+        });
+        let span = (hi - lo).max(1e-4);
+        for p in laid {
+            rows[0].push([p[0], p[1], p[2], f.radius]);
+            rows[1].push([f.start, f.speed, f.bob_mid, f.squash]);
+            rows[2].push([f.bob_reach, f.bob_rate, f.bob_phase, f.wave_phase]);
+            rows[3].push([(hi - p[0]) / span, f.len, 0.0, 0.0]);
+        }
+    }
+    let mut mesh = mesh_of(verts, true);
+    for (attribute, row) in ATTRIBUTE_FISH.into_iter().zip(rows) {
+        mesh.insert_attribute(attribute, row);
+    }
+    let (e, n) = frame_tangents(up);
+    let turn = Quat::from_mat3(&Mat3::from_cols(e, up, -n));
+    Some((mesh, at, turn))
 }
 
 fn mesh_of(verts: Verts, textured: bool) -> Mesh {
@@ -2023,8 +2184,9 @@ fn tiles(
             (ns / 1e6 / calls, amb / 1e6 / calls)
         };
         info!(
-            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} tiles_ms={tiles_ms:.3} ambient_ms={ambient_ms:.3}",
+            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} fish_clouds={} tiles_ms={tiles_ms:.3} ambient_ms={ambient_ms:.3}",
             state.drawn.len(),
+            state.drawn.values().map(|d| d.fish_clouds).sum::<usize>(),
         );
     }
     state.planning.retain(|k, _| wanted.contains_key(k));
@@ -2187,6 +2349,29 @@ fn tiles(
             .id();
         commands.entity(root).add_child(id);
     }
+    // The fish clouds: laid once, swum on the GPU (`fish_vertex.wgsl`).
+    let surface = sea.radius;
+    let mut fish_clouds = 0;
+    for a in &built.ambient {
+        let (Ambient::Anthias { at, .. } | Ambient::Clowns { at, .. }) = *a else {
+            continue;
+        };
+        let tint = under.albedo([1.0; 3], surface - (at + anchor).length());
+        if let Some((mesh, at, turn)) = cloud_mesh(a, tint) {
+            let id = commands
+                .spawn((
+                    Name::new("Reef fish"),
+                    Mesh3d(meshes.add(mesh)),
+                    MeshMaterial3d(life.0.clone()),
+                    Transform::from_translation(at).with_rotation(turn),
+                    Visibility::default(),
+                    bevy::camera::visibility::NoFrustumCulling,
+                ))
+                .id();
+            commands.entity(root).add_child(id);
+            fish_clouds += 1;
+        }
+    }
     // The ambient meshes start with one hidden triangle, so the field gives
     // them their material at once and they never need it again.
     let blank = |textured: bool| {
@@ -2224,7 +2409,13 @@ fn tiles(
             smoke,
             anchor,
             fade: 1.0,
-            ambient: built.ambient,
+            fish_clouds,
+            // The fish clouds swim on the GPU; the CPU keeps the rest.
+            ambient: built
+                .ambient
+                .into_iter()
+                .filter(|a| !matches!(a, Ambient::Anthias { .. } | Ambient::Clowns { .. }))
+                .collect(),
             tris,
             kelp_tris,
         },
@@ -2797,6 +2988,35 @@ mod sway_tests {
             assert!(most <= MAX_PIECES, "{eye}: {most}");
             assert!(near >= 1, "the eye's own tile is near");
         }
+    }
+
+    /// The GPU's fish swim where the CPU's did: the same orbit and heading.
+    #[test]
+    fn a_reef_fish_swims_its_old_orbit() {
+        let a = Ambient::Anthias {
+            at: Vec3::ZERO,
+            up: Vec3::Y,
+            seed: 7,
+        };
+        let (_, fish) = swimmers(&a).unwrap();
+        assert_eq!(fish.len(), 40);
+        let (e, n) = frame_tangents(Vec3::Y);
+        let turn = Mat3::from_cols(e, Vec3::Y, -n);
+        let t = 12.5f32;
+        for (k, f) in fish.iter().enumerate() {
+            let r = |s: i64| hh(k as i64, 7 ^ s);
+            let speed = (0.25 + 0.2 * r(2)) * if r(3) < 0.5 { 1.0 } else { -1.0 };
+            let a0 = r(4) * TAU + t * speed;
+            let radius = 1.5 + 3.5 * r(1);
+            let h = (r(5) - 0.3) * 2.0 + 0.3 * (t * 0.7 + r(6) * 6.0).sin();
+            let old = e * a0.cos() * radius + n * a0.sin() * radius * 0.7 + Vec3::Y * h;
+            let old_along = (-e * a0.sin() + n * a0.cos() * 0.7) * speed.signum();
+            let (centre, along) = f.at(t);
+            assert!((turn * centre - old).length() < 1e-3, "{k}");
+            assert!((turn * along - old_along).length() < 1e-3, "{k}");
+        }
+        let (mesh, ..) = cloud_mesh(&a, [1.0; 3]).unwrap();
+        assert!(mesh.attribute(ATTRIBUTE_FISH[3]).is_some());
     }
 
     /// The shader's distances are the ones the CPU used.
