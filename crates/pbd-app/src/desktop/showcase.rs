@@ -437,6 +437,11 @@ struct Bot {
     /// Live control (`bot-control`): paused, presses nothing; acts queued
     /// by `do`, run before the shot's own.
     paused: bool,
+    /// The player has the controls (`bot-control` design 4, Ctrl+Shift+F):
+    /// the bot reads nothing and presses nothing, not even key-ups, until
+    /// the same keys give it back, when it starts its act over from where
+    /// the player left it.
+    taken: bool,
     injected: std::collections::VecDeque<file::Act>,
     /// The shot file's last change seen, and when it was last looked at:
     /// an edit is played at once (`bot-control` hot reload).
@@ -3361,6 +3366,27 @@ pub fn drive(
         }
     }
     let bot = &mut player.bot;
+    // Ctrl+Shift+F: the player takes the controls, or gives them back.
+    let ctrl = hands
+        .keys
+        .any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
+    let shift = hands
+        .keys
+        .any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    if ctrl && shift && hands.keys.just_pressed(KeyCode::KeyF) {
+        hands.keys.clear_just_pressed(KeyCode::KeyF);
+        bot.taken = !bot.taken;
+        if bot.taken {
+            info!("BOT_CONTROL taken by the player");
+            apply(bot, &mut hands, &w, &mut pending, Intent::default());
+        } else {
+            info!("BOT_CONTROL given back to the bot");
+            bot.reset_act(&sight);
+        }
+    }
+    if bot.taken {
+        return;
+    }
     // Paused: nothing pressed, every held key up, the clocks stopped.
     if bot.paused {
         apply(bot, &mut hands, &w, &mut pending, Intent::default());

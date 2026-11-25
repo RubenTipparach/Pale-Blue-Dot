@@ -36,3 +36,15 @@ A game not running is a tool error saying so.
 Local only (`127.0.0.1`), showcase runs only, and every command acts through
 the bot, which acts only through the player's inputs: the channel sets no
 item, count, mission or world state.
+
+## 4. The player takes the controls (owner, 2026-11-25)
+
+The owner: "can you ad feature to allow player to assume control?", and
+"ctrl+shift f would be a good set of keys to do it". During any showcase
+run, Ctrl+Shift+F hands the controls to the player: the bot lets go of
+every key it holds once and then presses and releases nothing, so the
+keyboard and mouse are the player's alone. The same keys give the bot the
+controls back; it starts its current act over from wherever the player
+left it (as after a hot reload), keeping its shot and its memory. The F of
+the chord is eaten, so it does not interact. Shift+Alt+F stays the repro
+chord. Logged as `BOT_CONTROL taken by the player` and `... given back`.

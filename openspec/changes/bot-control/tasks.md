@@ -6,3 +6,4 @@
 - [x] 1.4 `tools/bot_mcp.py`, the MCP server (stdio by hand), and `.mcp.json`; protocol checked (`initialize`, `tools/list`, `tools/call`).
 - [x] 1.5 Hot reload: the shot file edited during a run is read again within a second and the current shot starts over on it, the bot keeping its memory (owner: "I dont want you to use too many tokens driving it via mcp, maybe some sort of hot reload path for the bot via mcp would be cool").
 - [ ] 1.6 Checked live on the mission playthrough.
+- [x] 1.7 Ctrl+Shift+F: the player takes the controls and gives them back (design 4).
