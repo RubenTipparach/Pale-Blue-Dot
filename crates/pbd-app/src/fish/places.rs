@@ -25,15 +25,17 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 use pbd_core::fauna::{Environment, hash2};
 use pbd_core::ocean::places::environment;
 use pbd_core::planet_gen::TerrainConfig;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::OnceLock;
 
 /// A tile's side, m (on the cube projection, so up to about 1.7 times this
 /// near a cube corner).
 const TILE_M: f32 = 12.0;
-/// The reef's lattice, m (the mockup's 0.62, opened a little for the cost).
-const REEF_STEP_M: f32 = 0.7;
+/// The reef's lattice, m (the mockup's 0.62, opened a little for the cost;
+/// then half as dense, 0.7 times the square root of two: owner, 2026-11-25,
+/// "Lower its density by 2x").
+const REEF_STEP_M: f32 = 0.99;
 
 /// What stands in one place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -393,7 +395,9 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Fan, k.build());
         // An anemone: a purple foot, waving tentacles.
         g.insert(Kind::Anemone, anemone(20, 0.13, 0.22));
-        g.insert(Kind::Hero, anemone(220, 0.55, 0.5));
+        // 56 tentacles: 488 triangles, inside the owner's 500 a piece
+        // (2026-11-25; it was 220 and 1800).
+        g.insert(Kind::Hero, anemone(56, 0.55, 0.5));
         // Algae turf.
         let mut k = Kit::default();
         k.tile("veins");
@@ -1241,6 +1245,7 @@ fn floe_floats(
 
 fn build_tile(
     pieces: &[Piece],
+    packed: bool,
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
@@ -1343,7 +1348,7 @@ fn build_tile(
         }
     }
     // A cloud of anthias over one packed reef tile in two.
-    if reef.len() > 80 && hh(seed as i64, 71) < 0.5 {
+    if packed && !reef.is_empty() && hh(seed as i64, 71) < 0.5 {
         let (at, up) = reef[reef.len() / 2];
         out.ambient.push(Ambient::Anthias {
             at: at + up * 1.6,
@@ -1538,11 +1543,86 @@ fn frame_tangents(up: Vec3) -> (Vec3, Vec3) {
 const FADE_IN_M: f32 = 38.0;
 const FADE_OUT_M: f32 = 42.0;
 const WANT_M: f32 = 52.0;
+/// The owner's budget (2026-11-25, "each reef budget: 500 triangles, number
+/// of reefs 1000 or less"): a tile within `DETAIL_M` of the eye keeps up to
+/// `NEAR_PER_M2` reef pieces a square metre of it, one farther its largest
+/// at `FAR_PER_M2`; kelp and floes are not reef pieces and are kept. By area,
+/// not a count a tile: near a cube face's edge or corner the tiles are small
+/// and many. A whole reach stays inside `MAX_PIECES` (a test walks it, a
+/// cube corner among the places).
+const DETAIL_M: f32 = 12.0;
+const NEAR_PER_M2: f32 = 0.6;
+const FAR_PER_M2: f32 = 0.04;
+const MAX_PIECES: usize = 1000;
+const MAX_PIECE_TRIS: usize = 500;
+
+/// A tile's level of detail: 0 near, 1 far.
+fn level_at(metres: f32) -> u8 {
+    u8::from(metres > DETAIL_M)
+}
+
+/// The reef pieces a tile keeps at `level`: the largest first, up to its
+/// allowance; kelp and floes all.
+fn trim(mut pieces: Vec<Piece>, level: u8, area_m2: f32) -> Vec<Piece> {
+    let keep = allowance(level, area_m2);
+    let (mut reef, other): (Vec<Piece>, Vec<Piece>) =
+        pieces.drain(..).partition(|p| p.kind.is_some() && !p.floe);
+    reef.sort_by(|a, b| (b.scale * b.tall.max(1e-3)).total_cmp(&(a.scale * a.tall.max(1e-3))));
+    reef.truncate(keep);
+    reef.extend(other);
+    reef
+}
+
+/// The reef pieces a tile of `area_m2` keeps at `level`.
+fn allowance(level: u8, area_m2: f32) -> usize {
+    let per = if level == 0 { NEAR_PER_M2 } else { FAR_PER_M2 };
+    (area_m2 * per).round() as usize
+}
+
+/// A tile's area on the sphere, m².
+fn tile_area_m2(key: Key, radius: f32) -> f32 {
+    let unit = TILE_M / radius;
+    let (u0, v0) = (key.1 as f32 * unit, key.2 as f32 * unit);
+    let c0 = from_face(key.0, u0, v0).normalize();
+    let c1 = from_face(key.0, u0 + unit, v0).normalize();
+    let c2 = from_face(key.0, u0, v0 + unit).normalize();
+    (c1 - c0).cross(c2 - c0).length() * radius * radius
+}
+
+/// The tiles wanted round the eye and each one's level: every tile a ring
+/// of points round the eye falls in, so a cube face's edge is crossed as any
+/// other.
+fn wanted_tiles(eye_dir: Vec3, radius: f32) -> HashMap<Key, u8> {
+    let metres = |key: Key| tile_centre(key, radius).distance(eye_dir) * radius;
+    let mut wanted = HashMap::new();
+    let east = Vec3::Y.cross(eye_dir).normalize_or(Vec3::X);
+    let north = eye_dir.cross(east);
+    let step = TILE_M * 0.5;
+    let reach = (WANT_M / step).ceil() as i32;
+    for a in -reach..=reach {
+        for b in -reach..=reach {
+            let off = Vec2::new(a as f32, b as f32) * step;
+            if off.length() > WANT_M + TILE_M {
+                continue;
+            }
+            let d = (eye_dir + (east * off.x + north * off.y) / radius).normalize();
+            let key = key_of(d, radius);
+            let m = metres(key);
+            if m <= WANT_M {
+                wanted.insert(key, level_at(m));
+            }
+        }
+    }
+    wanted
+}
 const LAND_S: f32 = 0.8;
 /// Within this of the eye a tile sways, m; the sway eases out over the
 /// last `SWAY_EASE_M` (`ocean-environments` B18: it snapped to rest). Its
 /// ambient life is drawn while the tile is, and fades with it.
+/// The sway itself runs in `sway_vertex.wgsl`, which keeps these two.
+#[cfg_attr(not(test), allow(dead_code))]
 const NEAR_M: f32 = 30.0;
+#[cfg_attr(not(test), allow(dead_code))]
 const SWAY_EASE_M: f32 = 4.0;
 
 /// Where a tile's fade goes from where it is, 0 whole to 1 gone: `metres`
@@ -1567,87 +1647,17 @@ fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
     }
 }
 
-/// One mesh to bend: its handle, its positions, its sway and its phase.
-type BendJob<'a> = (Handle<Mesh>, Vec<[f32; 3]>, &'a Sway, f32);
-
-/// Bend every tile's swaying meshes this frame asks for (`Drawn::bend_now`):
-/// each mesh's position buffer taken out, filled on every core at once, and
-/// put back (`ocean-environments` B31: 400,000 reef vertices bent one tile
-/// after another held the main thread 28 ms a frame). The same positions the
-/// one-by-one bend made, so the same look. Returns the vertices written.
-fn bend_all(drawn: &HashMap<Key, Drawn>, meshes: &mut Assets<Mesh>, seconds: f32) -> usize {
-    let mut jobs: Vec<BendJob> = Vec::new();
-    for tile in drawn.values() {
-        let pairs = [
-            (
-                tile.sway.as_ref().map(|s| &s.1),
-                &tile.still,
-                tile.bend_now.0,
-            ),
-            (tile.kelp.as_ref(), &tile.kelp_still, tile.bend_now.1),
-        ];
-        for (handle, still, bend) in pairs {
-            if let (Some(handle), Some(bend)) = (handle, bend)
-                && let Some(mesh) = meshes.get_mut(handle)
-            {
-                let buffer = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
-                jobs.push((handle.clone(), buffer, still, bend));
-            }
-        }
-    }
-    let threads = std::thread::available_parallelism()
-        .map_or(4, |n| n.get())
-        .min(8);
-    let per = jobs.len().div_ceil(threads.max(1)).max(1);
-    std::thread::scope(|scope| {
-        for chunk in jobs.chunks_mut(per) {
-            scope.spawn(move || {
-                for (_, positions, still, bend) in chunk.iter_mut() {
-                    fill_bent(positions, still, seconds, *bend);
-                }
-            });
-        }
-    });
-    let mut written = 0;
-    for (handle, positions, _, _) in jobs {
-        written += positions.len();
-        if let Some(mesh) = meshes.get_mut(&handle) {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        }
-    }
-    written
-}
-
-/// A swaying mesh's positions in the surge, into `positions` (emptied).
-fn fill_bent(positions: &mut Vec<[f32; 3]>, still: &Sway, seconds: f32, bend: f32) {
-    positions.clear();
-    positions.extend((0..still.rest.len()).map(|i| {
-        let h = still.height[i];
-        let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
-        let reach = (0.07 * h).min(0.7) * bend;
-        (still.rest[i] + still.axis[i] * wave * reach).to_array()
-    }));
-}
-
 struct Drawn {
     root: Entity,
     glow: Option<Entity>,
-    sway: Option<(Entity, Handle<Mesh>)>,
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
     anchor: Vec3,
     /// Its fade, 0 whole to 1 gone ([`tile_fade`]); it lands at 1.
     fade: f32,
-    still: Sway,
     ambient: Vec<Ambient>,
-    swayed: bool,
-    /// The kelp's mesh (design B20), at rest, and whether it was bent.
-    kelp: Option<Handle<Mesh>>,
-    kelp_still: Sway,
-    kelp_swayed: bool,
-    /// This frame's bend for the tile's sway and its kelp, set by the fade
-    /// pass and worked out on every core after it (`bend_all`).
-    bend_now: (Option<f32>, Option<f32>),
+    /// Its fish clouds, drawn on the GPU (`SEA_PLACES`).
+    fish_clouds: usize,
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
@@ -1655,7 +1665,9 @@ struct Drawn {
 
 #[derive(Resource, Default)]
 struct Tiles {
-    drawn: HashMap<Key, Drawn>,
+    /// Each tile at its level of detail: one fading out while its other
+    /// level fades in is two entries.
+    drawn: HashMap<(Key, u8), Drawn>,
     planning: HashMap<Key, Task<Vec<Piece>>>,
     ready: Vec<(Key, Vec<Piece>)>,
     /// Whether the world has sea places: a world switching its generator
@@ -1771,6 +1783,198 @@ fn warm_glow(
 
 /// A mesh of a part of a tile; `textured` for the pieces and the life (the
 /// water life's atlas), not for the unlit glow.
+/// A swaying vertex's surge (`sway_vertex.wgsl`): xyz its axis times its
+/// reach (`min(0.07 h, 0.7)`), w its phase with the height's share
+/// (`phase + 0.6 h`). Written once when the tile is built; the GPU moves it.
+pub const ATTRIBUTE_SWAY: bevy::mesh::MeshVertexAttribute = bevy::mesh::MeshVertexAttribute::new(
+    "Reef_Sway",
+    0x5eed_5ea_0001,
+    bevy::render::render_resource::VertexFormat::Float32x4,
+);
+
+/// The sway attribute of a tile's swaying pieces, one row a vertex.
+fn sway_rows(still: &Sway) -> Vec<[f32; 4]> {
+    (0..still.rest.len())
+        .map(|i| {
+            let h = still.height[i];
+            let reach = (0.07 * h).min(0.7);
+            let a = still.axis[i] * reach;
+            [a.x, a.y, a.z, still.phase[i] + h * 0.6]
+        })
+        .collect()
+}
+
+/// A swaying mesh: its rest pose, flat normals from it, and its sway.
+fn swaying_mesh(still: &Sway) -> Mesh {
+    let verts = Verts {
+        positions: still.rest.iter().map(|p| p.to_array()).collect(),
+        colours: still.colours.clone(),
+        uvs: still.uvs.clone(),
+    };
+    let mut mesh = mesh_of(verts, true);
+    mesh.insert_attribute(ATTRIBUTE_SWAY, sway_rows(still));
+    mesh
+}
+
+/// A reef fish cloud's per-vertex fish (`fish_vertex.wgsl`): the vertex in
+/// its body's frame and the orbit's radius; the orbit's start, speed, bob
+/// middle and squash; the bob's reach, rate and phase and the wave's phase;
+/// the place along the body and its length.
+pub const ATTRIBUTE_FISH: [bevy::mesh::MeshVertexAttribute; 4] = [
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_0",
+        0x5eed_f15c_0001,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_1",
+        0x5eed_f15c_0002,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_2",
+        0x5eed_f15c_0003,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+    bevy::mesh::MeshVertexAttribute::new(
+        "Reef_Fish_3",
+        0x5eed_f15c_0004,
+        bevy::render::render_resource::VertexFormat::Float32x4,
+    ),
+];
+
+/// One fish of a cloud as `fish_vertex.wgsl` swims it: the same orbit,
+/// bob and heading the CPU's `ambient` worked out each frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Swimmer {
+    radius: f32,
+    start: f32,
+    speed: f32,
+    bob_mid: f32,
+    squash: f32,
+    bob_reach: f32,
+    bob_rate: f32,
+    bob_phase: f32,
+    wave_phase: f32,
+    len: f32,
+}
+
+impl Swimmer {
+    /// Its place and heading in the cloud's frame at `t` (x and z the
+    /// plane, y up), as the shader has them.
+    fn at(&self, t: f32) -> (Vec3, Vec3) {
+        let a = self.start + t * self.speed;
+        let h = self.bob_mid + self.bob_reach * (t * self.bob_rate + self.bob_phase).sin();
+        let centre = Vec3::new(
+            a.cos() * self.radius,
+            h,
+            -a.sin() * self.radius * self.squash,
+        );
+        let along = Vec3::new(-a.sin(), 0.0, -a.cos() * self.squash) * self.speed.signum();
+        (centre, along)
+    }
+}
+
+/// A cloud's fish: its model and each one's swim, for an anthias cloud or a
+/// pair of clownfish (the CPU's `ambient`, kept to the letter).
+fn swimmers(a: &Ambient) -> Option<(&'static str, Vec<Swimmer>)> {
+    match *a {
+        Ambient::Anthias { seed, .. } => Some((
+            "anthias",
+            (0..40u32)
+                .map(|k| {
+                    let r = |s: i64| hh(i64::from(k), i64::from(seed) ^ s);
+                    let speed = (0.25 + 0.2 * r(2)) * if r(3) < 0.5 { 1.0 } else { -1.0 };
+                    Swimmer {
+                        radius: 1.5 + 3.5 * r(1),
+                        start: r(4) * TAU,
+                        speed,
+                        bob_mid: (r(5) - 0.3) * 2.0,
+                        squash: 0.7,
+                        bob_reach: 0.3,
+                        bob_rate: 0.7,
+                        bob_phase: r(6) * 6.0,
+                        wave_phase: r(8) * TAU,
+                        len: 0.11 + 0.04 * r(7),
+                    }
+                })
+                .collect(),
+        )),
+        Ambient::Clowns { seed, .. } => Some((
+            "darter",
+            (0..2u32)
+                .map(|k| Swimmer {
+                    radius: 0.45,
+                    start: k as f32 * PI + hh(i64::from(seed), 3) * TAU,
+                    speed: 0.3,
+                    bob_mid: 0.0,
+                    squash: 1.0,
+                    bob_reach: 0.06,
+                    bob_rate: 1.3,
+                    bob_phase: k as f32,
+                    wave_phase: k as f32 * 2.0,
+                    len: 0.13,
+                })
+                .collect(),
+        )),
+        _ => None,
+    }
+}
+
+/// A fish cloud's mesh, laid once: each fish's body in its own frame (nose
+/// +x) with its swim on every vertex, and the cloud's turn into the tile
+/// (x its first tangent, y its up, z minus its second).
+fn cloud_mesh(a: &Ambient, tint: [f32; 3]) -> Option<(Mesh, Vec3, Quat)> {
+    use super::bodies::{Look, Place, emit, model_for};
+    use pbd_core::fauna::Pose;
+    let (Ambient::Anthias { at, up, .. } | Ambient::Clowns { at, up, .. }) = *a else {
+        return None;
+    };
+    let (model, fish) = swimmers(a)?;
+    let mut verts = Verts::default();
+    let mut rows: [Vec<[f32; 4]>; 4] = Default::default();
+    for (k, f) in fish.iter().enumerate() {
+        let body = model_for(model, k as u32);
+        let from = verts.positions.len();
+        emit(
+            body,
+            &Look {
+                t: 0.0,
+                phase: f.wave_phase,
+                pose: Pose::Moving,
+            },
+            &Place {
+                origin: Vec3::ZERO,
+                forward: Vec3::X,
+                up: Vec3::Y,
+                scale: f.len / body.length,
+            },
+            tint,
+            &mut verts.positions,
+            &mut verts.colours,
+            &mut verts.uvs,
+        );
+        let laid = &verts.positions[from..];
+        let (lo, hi) = laid.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+            (lo.min(p[0]), hi.max(p[0]))
+        });
+        let span = (hi - lo).max(1e-4);
+        for p in laid {
+            rows[0].push([p[0], p[1], p[2], f.radius]);
+            rows[1].push([f.start, f.speed, f.bob_mid, f.squash]);
+            rows[2].push([f.bob_reach, f.bob_rate, f.bob_phase, f.wave_phase]);
+            rows[3].push([(hi - p[0]) / span, f.len, 0.0, 0.0]);
+        }
+    }
+    let mut mesh = mesh_of(verts, true);
+    for (attribute, row) in ATTRIBUTE_FISH.into_iter().zip(rows) {
+        mesh.insert_attribute(attribute, row);
+    }
+    let (e, n) = frame_tangents(up);
+    let turn = Quat::from_mat3(&Mat3::from_cols(e, up, -n));
+    Some((mesh, at, turn))
+}
+
 fn mesh_of(verts: Verts, textured: bool) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -1791,6 +1995,22 @@ static TILES_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 static TILES_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 struct TilesTimer(std::time::Instant);
+
+/// A measurement instrument (`memory-leak`, the reef): the share of
+/// [`tiles`] spent laying the ambient life and plumes, summed until
+/// `SEA_PLACES` reads it.
+static AMBIENT_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct AmbientTimer(std::time::Instant);
+
+impl Drop for AmbientTimer {
+    fn drop(&mut self) {
+        AMBIENT_NS.fetch_add(
+            self.0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
 
 impl Drop for TilesTimer {
     fn drop(&mut self) {
@@ -1844,26 +2064,8 @@ fn tiles(
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
     let eye_dir = eye.normalize_or(Vec3::Y);
     let metres = |key: Key| tile_centre(key, radius).distance(eye_dir) * radius;
-    // The tiles wanted: every tile a ring of points round the eye falls in,
-    // so a cube face's edge is crossed as any other.
-    let mut wanted = HashSet::new();
-    let east = Vec3::Y.cross(eye_dir).normalize_or(Vec3::X);
-    let north = eye_dir.cross(east);
-    let step = TILE_M * 0.5;
-    let reach = (WANT_M / step).ceil() as i32;
-    for a in -reach..=reach {
-        for b in -reach..=reach {
-            let off = Vec2::new(a as f32, b as f32) * step;
-            if off.length() > WANT_M + TILE_M {
-                continue;
-            }
-            let d = (eye_dir + (east * off.x + north * off.y) / radius).normalize();
-            let key = key_of(d, radius);
-            if metres(key) <= WANT_M {
-                wanted.insert(key);
-            }
-        }
-    }
+    let wanted = wanted_tiles(eye_dir, radius);
+    let is_wanted = |key: Key, level: u8| wanted.get(&key) == Some(&level);
     // Fade every tile by its distance and its landing; drop one once it is
     // out of reach and wholly faded.
     let seconds = sun
@@ -1871,13 +2073,12 @@ fn tiles(
         .map_or(now as f64, |s| s.clock.seconds)
         .rem_euclid(3600.0) as f32;
     let mut gone = Vec::new();
-    let mut swayed_verts = 0usize;
-    for (key, drawn) in state.drawn.iter_mut() {
-        let m = metres(*key);
-        let fade = tile_fade(drawn.fade, m, wanted.contains(key), dt);
+    for (&(key, level), drawn) in state.drawn.iter_mut() {
+        let m = metres(key);
+        let fade = tile_fade(drawn.fade, m, is_wanted(key, level), dt);
         drawn.fade = fade;
-        if !wanted.contains(key) && fade >= 1.0 {
-            gone.push(*key);
+        if !is_wanted(key, level) && fade >= 1.0 {
+            gone.push((key, level));
             continue;
         }
         if let Ok((mut transform, mut faded)) = roots.get_mut(drawn.root) {
@@ -1902,44 +2103,61 @@ fn tiles(
                 }
             }
         }
-        let bend = ((NEAR_M - m) / SWAY_EASE_M).clamp(0.0, 1.0);
-        let near = bend > 0.0;
-        let local_eye = eye - drawn.anchor;
-        // The surge: soft corals, anemones, grass and kelp bend, near the eye.
-        // Bent below, on every core at once (`bend_all`).
-        drawn.bend_now = (None, None);
-        if drawn.sway.is_some() && (near || !drawn.swayed) {
-            drawn.bend_now.0 = Some(bend);
-            drawn.swayed = near;
-        }
-        if drawn.kelp.is_some() && (near || !drawn.kelp_swayed) {
-            drawn.bend_now.1 = Some(bend);
-            drawn.kelp_swayed = near;
-        }
-        // The ambient life and the plumes, while the tile is drawn: they
-        // fade with it, never cut at a distance.
-        if !drawn.ambient.is_empty() {
-            let (mut lit, mut smoke) = (Verts::default(), Verts::default());
-            if fade < 1.0 {
-                // Depth under the sea's surface over the tile.
-                let surface = sea.radius;
-                let anchor = drawn.anchor;
-                let seen = |at: Vec3| under.albedo([1.0; 3], surface - (at + anchor).length());
-                ambient(
-                    &mut drawn.ambient,
-                    seconds,
-                    now,
-                    local_eye,
-                    &seen,
-                    &mut lit,
-                    (&mut smoke.positions, &mut smoke.colours),
-                );
+    }
+    // The ambient life and the plumes, while each tile is drawn: they fade
+    // with it, never cut at a distance. Each tile's are its own, so they are
+    // laid on every core at once (`memory-leak` 5.3: on the main thread they
+    // were 34-38 ms of a reef's frame); the meshes are written after.
+    {
+        let _ambient_timer = AmbientTimer(std::time::Instant::now());
+        let surface = sea.radius;
+        let under = &under;
+        let mut jobs: Vec<&mut Drawn> = state
+            .drawn
+            .values_mut()
+            .filter(|d| !d.ambient.is_empty())
+            .collect();
+        let pool = bevy::tasks::ComputeTaskPool::get();
+        let per = jobs.len().div_ceil(pool.thread_num().max(1)).max(1);
+        let laid = pool.scope(|scope| {
+            for chunk in jobs.chunks_mut(per) {
+                scope.spawn(async move {
+                    chunk
+                        .iter_mut()
+                        .map(|drawn| {
+                            let (mut lit, mut smoke) = (Verts::default(), Verts::default());
+                            if drawn.fade < 1.0 {
+                                let anchor = drawn.anchor;
+                                let seen = |at: Vec3| {
+                                    under.albedo([1.0; 3], surface - (at + anchor).length())
+                                };
+                                ambient(
+                                    &mut drawn.ambient,
+                                    seconds,
+                                    now,
+                                    eye - anchor,
+                                    &seen,
+                                    &mut lit,
+                                    (&mut smoke.positions, &mut smoke.colours),
+                                );
+                            }
+                            (
+                                drawn.life.1.clone(),
+                                lit,
+                                drawn.smoke.as_ref().map(|s| s.1.clone()),
+                                smoke,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                });
             }
-            if let Some(mesh) = meshes.get_mut(&drawn.life.1) {
+        });
+        for (life, lit, smoke_mesh, smoke) in laid.into_iter().flatten() {
+            if let Some(mesh) = meshes.get_mut(&life) {
                 write_mesh(mesh, lit, true);
             }
-            if let Some((_, handle)) = &drawn.smoke
-                && let Some(mesh) = meshes.get_mut(handle)
+            if let Some(handle) = smoke_mesh
+                && let Some(mesh) = meshes.get_mut(&handle)
             {
                 write_mesh(mesh, smoke, false);
             }
@@ -1950,7 +2168,6 @@ fn tiles(
             commands.entity(drawn.root).despawn();
         }
     }
-    swayed_verts += bend_all(&state.drawn, &mut meshes, seconds);
     // A measurement instrument (`ocean-environments` B20): what the sea's
     // places draw and rewrite, once a second.
     if now - state.logged_s >= 1.0 {
@@ -1959,21 +2176,24 @@ fn tiles(
             .drawn
             .values()
             .fold((0, 0), |(t, k), d| (t + d.tris, k + d.kelp_tris));
+        let (tiles_ms, ambient_ms) = {
+            use std::sync::atomic::Ordering::Relaxed;
+            let calls = TILES_CALLS.swap(0, Relaxed).max(1) as f64;
+            let ns = TILES_NS.swap(0, Relaxed) as f64;
+            let amb = AMBIENT_NS.swap(0, Relaxed) as f64;
+            (ns / 1e6 / calls, amb / 1e6 / calls)
+        };
         info!(
-            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} swayed_verts={swayed_verts} tiles_ms={:.3}",
+            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} fish_clouds={} tiles_ms={tiles_ms:.3} ambient_ms={ambient_ms:.3}",
             state.drawn.len(),
-            {
-                use std::sync::atomic::Ordering::Relaxed;
-                let ns = TILES_NS.swap(0, Relaxed) as f64;
-                ns / 1e6 / TILES_CALLS.swap(0, Relaxed).max(1) as f64
-            }
+            state.drawn.values().map(|d| d.fish_clouds).sum::<usize>(),
         );
     }
-    state.planning.retain(|k, _| wanted.contains(k));
+    state.planning.retain(|k, _| wanted.contains_key(k));
     // Plan what is new, off the main thread.
     let pool = AsyncComputeTaskPool::get();
-    for key in &wanted {
-        if state.drawn.contains_key(key)
+    for (key, level) in &wanted {
+        if state.drawn.contains_key(&(*key, *level))
             || state.planning.contains_key(key)
             || state.ready.iter().any(|(k, _)| k == key)
         {
@@ -2004,16 +2224,30 @@ fn tiles(
     let Some((key, pieces)) = state.ready.pop() else {
         return;
     };
-    if !wanted.contains(&key) {
+    let Some(&level) = wanted.get(&key) else {
+        return;
+    };
+    if state.drawn.contains_key(&(key, level)) {
         return;
     }
+    // A packed tile has its anthias whatever the budget leaves of its reef.
+    let packed = pieces
+        .iter()
+        .filter(|p| {
+            p.kind
+                .is_some_and(|k| !matches!(k, Kind::Chimney | Kind::Mat | Kind::Mussels))
+                && !p.floe
+        })
+        .count()
+        > 80;
+    let pieces = trim(pieces, level, tile_area_m2(key, radius));
     let anchor = tile_centre(key, radius) * sea.radius;
     let contact = contact.as_deref();
     let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32;
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    let built = build_tile(&pieces, anchor, bed, sea.radius, under, seed);
+    let built = build_tile(&pieces, packed, anchor, bed, sea.radius, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -2090,32 +2324,20 @@ fn tiles(
             "Vent glow",
         )
     });
-    let sway = (!built.sway.rest.is_empty()).then(|| {
-        let verts = Verts {
-            positions: built.sway.rest.iter().map(|p| p.to_array()).collect(),
-            colours: built.sway.colours.clone(),
-            uvs: built.sway.uvs.clone(),
-        };
-        let handle = meshes.add(mesh_of(verts, true));
-        (
-            child(
-                &mut commands,
-                handle.clone(),
-                life.0.clone(),
-                "Sea pieces (swaying)",
-            ),
-            handle,
-        )
-    });
+    // The swaying pieces and the kelp carry their sway; the GPU moves them
+    // (`sway_vertex.wgsl`), so the meshes are never written again.
+    if !built.sway.rest.is_empty() {
+        child(
+            &mut commands,
+            meshes.add(swaying_mesh(&built.sway)),
+            life.0.clone(),
+            "Sea pieces (swaying)",
+        );
+    }
     // The kelp: M25's cards, cut out, frustum culled (a tile behind the eye
     // draws none of it).
-    let kelp = (!built.kelp.rest.is_empty()).then(|| {
-        let verts = Verts {
-            positions: built.kelp.rest.iter().map(|p| p.to_array()).collect(),
-            colours: built.kelp.colours.clone(),
-            uvs: built.kelp.uvs.clone(),
-        };
-        let handle = meshes.add(mesh_of(verts, true));
+    if !built.kelp.rest.is_empty() {
+        let handle = meshes.add(swaying_mesh(&built.kelp));
         let id = commands
             .spawn((
                 Name::new("Kelp"),
@@ -2126,8 +2348,30 @@ fn tiles(
             ))
             .id();
         commands.entity(root).add_child(id);
-        handle
-    });
+    }
+    // The fish clouds: laid once, swum on the GPU (`fish_vertex.wgsl`).
+    let surface = sea.radius;
+    let mut fish_clouds = 0;
+    for a in &built.ambient {
+        let (Ambient::Anthias { at, .. } | Ambient::Clowns { at, .. }) = *a else {
+            continue;
+        };
+        let tint = under.albedo([1.0; 3], surface - (at + anchor).length());
+        if let Some((mesh, at, turn)) = cloud_mesh(a, tint) {
+            let id = commands
+                .spawn((
+                    Name::new("Reef fish"),
+                    Mesh3d(meshes.add(mesh)),
+                    MeshMaterial3d(life.0.clone()),
+                    Transform::from_translation(at).with_rotation(turn),
+                    Visibility::default(),
+                    bevy::camera::visibility::NoFrustumCulling,
+                ))
+                .id();
+            commands.entity(root).add_child(id);
+            fish_clouds += 1;
+        }
+    }
     // The ambient meshes start with one hidden triangle, so the field gives
     // them their material at once and they never need it again.
     let blank = |textured: bool| {
@@ -2157,22 +2401,21 @@ fn tiles(
             )
         });
     state.drawn.insert(
-        key,
+        (key, level),
         Drawn {
             root,
             glow: glow_id,
-            sway,
             life: (life_id, life_handle),
             smoke,
             anchor,
             fade: 1.0,
-            still: built.sway,
-            ambient: built.ambient,
-            swayed: false,
-            kelp,
-            kelp_still: built.kelp,
-            kelp_swayed: false,
-            bend_now: (None, None),
+            fish_clouds,
+            // The fish clouds swim on the GPU; the CPU keeps the rest.
+            ambient: built
+                .ambient
+                .into_iter()
+                .filter(|a| !matches!(a, Ambient::Anthias { .. } | Ambient::Clowns { .. }))
+                .collect(),
             tris,
             kelp_tris,
         },
@@ -2267,6 +2510,7 @@ mod tests {
         }];
         let built = build_tile(
             &pieces,
+            true,
             dir * radius,
             flat(-0.6),
             radius,
@@ -2276,6 +2520,7 @@ mod tests {
         assert!(built.floes.positions.is_empty(), "no floe on the beach");
         let built = build_tile(
             &pieces,
+            true,
             dir * radius,
             flat(4.0),
             radius,
@@ -2655,5 +2900,130 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod sway_tests {
+    use super::*;
+
+    /// MEASUREMENT (`memory-leak` 5.4): each reef piece's triangles, against
+    /// the owner's budget of 500 a piece.
+    #[test]
+    #[ignore]
+    fn print_piece_triangles() {
+        let mut rows: Vec<_> = library()
+            .iter()
+            .map(|(k, s)| (s.positions.len() / 3, format!("{k:?}")))
+            .collect();
+        rows.sort();
+        for (t, k) in rows {
+            println!("PIECE {k} {t}");
+        }
+    }
+
+    /// The GPU sway is the CPU's old `fill_bent`: the vertex moves along its
+    /// axis by `sin(clock * 1.1 + phase + 0.6 h) * min(0.07 h, 0.7) * bend`.
+    #[test]
+    fn a_swaying_vertex_carries_its_reach_and_phase() {
+        let still = Sway {
+            rest: vec![Vec3::ZERO, Vec3::Y, Vec3::X * 2.0],
+            colours: vec![[1.0; 4]; 3],
+            uvs: vec![[0.0; 2]; 3],
+            height: vec![0.0, 2.0, 20.0],
+            axis: vec![Vec3::X, Vec3::Z, Vec3::Y],
+            phase: vec![0.5, 1.0, 2.0],
+        };
+        let rows = sway_rows(&still);
+        assert_eq!(rows[0], [0.0, 0.0, 0.0, 0.5]);
+        assert!((rows[1][2] - 0.14).abs() < 1e-6 && (rows[1][3] - 2.2).abs() < 1e-6);
+        assert!(
+            (rows[2][1] - 0.7).abs() < 1e-6,
+            "the reach is capped at 0.7 m"
+        );
+        let clock = 7.25f32;
+        for i in 0..3 {
+            let h = still.height[i];
+            let old = still.axis[i]
+                * (clock * 1.1 + still.phase[i] + h * 0.6).sin()
+                * (0.07 * h).min(0.7);
+            let r = rows[i];
+            let new = Vec3::new(r[0], r[1], r[2]) * (clock * 1.1 + r[3]).sin();
+            assert!((old - new).length() < 1e-4, "{i}");
+        }
+        let mesh = swaying_mesh(&still);
+        assert!(mesh.attribute(ATTRIBUTE_SWAY).is_some());
+    }
+
+    /// The owner's budget: no reef piece over 500 triangles.
+    #[test]
+    fn every_reef_piece_is_inside_its_triangle_budget() {
+        for (kind, shape) in library() {
+            let tris = shape.positions.len() / 3;
+            assert!(tris <= MAX_PIECE_TRIS, "{kind:?}: {tris}");
+        }
+    }
+
+    /// The owner's budget: a whole reach draws no more than 1000 reef
+    /// pieces, wherever the eye is (a cube face's middle, an edge, a corner).
+    #[test]
+    fn a_reach_draws_at_most_a_thousand_pieces() {
+        let radius = crate::planet::terrain_config().radius_m;
+        for eye in [
+            Vec3::Y,
+            Vec3::new(1.0, 1.0, 0.0).normalize(),
+            Vec3::ONE.normalize(),
+            Vec3::new(0.3, -0.8, 0.52).normalize(),
+        ] {
+            let wanted = wanted_tiles(eye, radius);
+            let near = wanted.values().filter(|l| **l == 0).count();
+            let most: usize = wanted
+                .iter()
+                .map(|(k, l)| allowance(*l, tile_area_m2(*k, radius)))
+                .sum();
+            println!(
+                "REACH {eye}: {} tiles, {near} near, {most} pieces at most",
+                wanted.len()
+            );
+            assert!(most <= MAX_PIECES, "{eye}: {most}");
+            assert!(near >= 1, "the eye's own tile is near");
+        }
+    }
+
+    /// The GPU's fish swim where the CPU's did: the same orbit and heading.
+    #[test]
+    fn a_reef_fish_swims_its_old_orbit() {
+        let a = Ambient::Anthias {
+            at: Vec3::ZERO,
+            up: Vec3::Y,
+            seed: 7,
+        };
+        let (_, fish) = swimmers(&a).unwrap();
+        assert_eq!(fish.len(), 40);
+        let (e, n) = frame_tangents(Vec3::Y);
+        let turn = Mat3::from_cols(e, Vec3::Y, -n);
+        let t = 12.5f32;
+        for (k, f) in fish.iter().enumerate() {
+            let r = |s: i64| hh(k as i64, 7 ^ s);
+            let speed = (0.25 + 0.2 * r(2)) * if r(3) < 0.5 { 1.0 } else { -1.0 };
+            let a0 = r(4) * TAU + t * speed;
+            let radius = 1.5 + 3.5 * r(1);
+            let h = (r(5) - 0.3) * 2.0 + 0.3 * (t * 0.7 + r(6) * 6.0).sin();
+            let old = e * a0.cos() * radius + n * a0.sin() * radius * 0.7 + Vec3::Y * h;
+            let old_along = (-e * a0.sin() + n * a0.cos() * 0.7) * speed.signum();
+            let (centre, along) = f.at(t);
+            assert!((turn * centre - old).length() < 1e-3, "{k}");
+            assert!((turn * along - old_along).length() < 1e-3, "{k}");
+        }
+        let (mesh, ..) = cloud_mesh(&a, [1.0; 3]).unwrap();
+        assert!(mesh.attribute(ATTRIBUTE_FISH[3]).is_some());
+    }
+
+    /// The shader's distances are the ones the CPU used.
+    #[test]
+    fn the_shader_keeps_the_sway_distances() {
+        let wgsl = include_str!("../../../../assets/shaders/sway_vertex.wgsl");
+        assert!(wgsl.contains(&format!("const NEAR_M: f32 = {NEAR_M:.1};")));
+        assert!(wgsl.contains(&format!("const SWAY_EASE_M: f32 = {SWAY_EASE_M:.1};")));
     }
 }
