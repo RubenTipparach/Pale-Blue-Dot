@@ -2269,6 +2269,39 @@ stored `road`), so neither is posted where there is no road.
   dig makes, the walker moved along the road with the trader, the job
   handed in and paid.
 
+**47. A parcel's pick-up and drop-off (playtest, 2026-11-25; written
+before the code).** The owner: "Carry a parcel" has no place to pick the
+parcel up or drop it off. Today taking a delivery puts the parcel straight
+into the pack (`Shop::take`), talking to anyone in the job's town hands it
+over (`Shop::deliver`), and nothing on the compass or the map points the
+way.
+- **Pick-up.** Taking a delivery puts no parcel in the pack. The parcel
+  waits with the posting town's trader (`Keepers::trader`): talking to them
+  hands over every parcel waiting there, one pack slot each (a full pack
+  keeps it waiting, and the talk says "No room in the pack"). Where the
+  trader is the job giver too, the parcel is handed over as the job is
+  taken. The talk's line is "Here is the parcel".
+- **What is stored.** `TakenJobs` gains `waiting: BTreeSet<u64>` (serde
+  default, empty), the deliveries whose parcel is still with the trader.
+  Taking a delivery adds its id; the pick-up takes it out in the same line
+  that puts the parcel in the pack (`store_with_hands`). An abandoned
+  delivery still waiting takes nothing from the pack.
+- **Saves.** A record written before this has no `waiting`, so every
+  delivery in it reads as picked up: a parcel taken today stays in the pack
+  and is handed over as before. The schema stays 1 (a defaulted field).
+- **Drop-off.** Talking to anyone in the job's town still hands it over,
+  but only once it is picked up. A delivery picked up and not yet done
+  marks its town on the compass bar and the map, as a lost villager's job
+  marks the villager (`jobs.parcel_marker`, "Parcel drop-off"), at the
+  town's centre.
+- **The tracker** (playtest-fixes design 2) names the step: "Get the
+  parcel from the trader" while it waits, "Take the parcel to {town}"
+  after, "Hand it in at {town}" once delivered.
+- **Tests.** Taking a delivery leaves the pack as it was and the job
+  waiting; talking to the trader puts the parcel in the pack; the
+  destination's people take it only after; a record without `waiting`
+  reads every delivery as picked up, keeps its parcel and gains the marker.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's

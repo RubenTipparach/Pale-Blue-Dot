@@ -30,16 +30,33 @@ face, so a walker keeps walking their route mid-sentence.
 - The Missions screen has two tabs, STARTER and TOWN.
 
 **Change.**
-- **A JOBS tab** beside them lists every taken job, one row each: its name
-  (the board's own line for it), its town, its objectives with counts, and
-  its reward.
-- **TRACK.** A TRACK plaque on each row makes that job the active
-  mission, saved in `TakenJobs`'s progress focus. Tracking a mission on
-  either tree clears it.
-- **The tracker** shows the tracked job first, its title the job's line
-  and its rows its objectives.
-- **A job handed in or dropped** clears the focus, and the tracker falls
-  back to the trees.
+- **A JOBS tab** beside them (`ShownTree::Jobs`, a third plaque in the
+  `TreeTabs` row, shown with the other two once the town tree is open).
+  Shown, it takes the tree's place: the tree layer is despawned and a list
+  of `Economy::jobs.taken` stands instead, one row each: the job's item in
+  a slot well, its board line (`economy::job_line`, which carries its
+  counts), the town that posted it, its reward, and a TRACK plaque. With
+  no job taken the list says so in one line. It is rebuilt whenever the
+  jobs change.
+- **TRACK.** The plaque sets `jobs.progress.focus` to the job's
+  `mission_id()` and stores the `town_jobs` record as `Shop::take` does
+  (the player's author, the record's kind noted). It clears both trees'
+  focus, so the HUD has one. The tracked job's plaque is latched; pressing
+  it again stops tracking it. Picking an open card on either tree (the
+  `focus_on` calls in `steer`) clears the job's focus and stores it.
+- **The tracker** (`desktop/missions.rs`, `show_line`) looks at the job
+  focus first. A job's `Mission` has an empty title and empty labels
+  (`Job::mission`), so the tracker fills them: the title is the job's name
+  without counts (`jobs.track.<kind>`, "Take the parcel to {town}"), or
+  "Hand it in at {town}" once it is done; each objective's row reads
+  "Done {n}/{count}".
+- **A job handed in or abandoned** clears the focus (`TakenJobs::abandon`
+  already does; `hand_in` now does too), and the tracker falls back to the
+  trees. The focus is in the existing `town_jobs` record, so no save
+  changes.
+- **Tests.** An app test: a taken job tracked through its TRACK press is
+  the tracker's title and row; a press on a tree card clears it. A core
+  test: handing a tracked job in clears the focus.
 
 ## 3. Wild plants grow back
 
@@ -69,22 +86,44 @@ face, so a walker keeps walking their route mid-sentence.
 ## 4. The placed torch is the held torch
 
 **Today.** A placed torch is drawn in the terrain shader's column pass
-(`planet_surface.wgsl`, the lamp section): a four-sided post 0.55 m tall and
-a two-triangle cap at full lamp.
+(`planet_surface.wgsl`, the lamp section, `LAMP_TORCH`, `t < 30u`): a
+four-sided post 0.55 m tall and a two-triangle cap at full lamp, 0.16 m
+high. The held torch (`held/light.rs`) is a six-sided bark haft, a wound
+rag head and three pixel flame cards on frames of one sheet.
 
 **Change.**
-- Placed torches within the clutter's reach are drawn as entities built from
-  `held/light.rs`'s meshes: the six-sided bark haft, the wound rag head and
-  the pixel flame cards on their frames.
-  - They are lit by the field (`LitByField`, `LitLikeTerrain`).
-  - The flame flickers on the same `flicker` as the held one, seeded by the
-    cell, so no two burn in step.
-  - The model is scaled so its foot is on the floor and its head is where
-    the shader's head was. The light the torch casts does not move.
-- The shader no longer draws a torch's post and cap. Every other lamp keeps
-  its shader body.
-- A torch past the reach keeps the light it casts, as now; at that distance
-  its body was under a pixel.
+- Placed torches within the clutter's reach (`scatter.ron`'s
+  `clutter_radius_m`, 120 m) are drawn as entities built from
+  `held/light.rs`'s meshes: `haft()`, `torch_head()` and the flame cards
+  (`flame_cards`) on the flame sheet.
+  - Which torches: the column tier's lamp spots (`ColumnTier::lamps`, the
+    lamps the field lights from) whose cell holds `Material::Torch`, so a
+    torch the player placed and a torch a town stands (the tundra's) are
+    both found, from the same list the light comes from. Rebuilt when the
+    tier is re-lit or the fine set moves, and looked through four times a
+    second for the near ones.
+  - The haft and head are the held meshes with their normals made smooth
+    round the haft (the held ones are flat per face, and the owner does not
+    want flat shading in the world) and their baked shading taken out, so
+    the field shades them. Their textures are the held torch's own
+    (`assets/textures/held_light/haft.png`, `head.png`), nearest sampled.
+  - Each torch root carries `LitByField`, `LitLikeTerrain` and `Faded`,
+    and fades in and out over 0.6 s as a crop does, so nothing pops.
+  - The flame is the held flame's three cards, unlit as a lamp's flame is,
+    facing the eye about the torch's up, rebuilt each frame for the torches
+    in reach. It flickers on the held torch's `flicker`, seeded by the
+    torch's cell, so no two burn in step.
+  - The model is scaled by 1.4 so its foot is on the floor and the head is
+    where the shader's head was (0.55 to 0.71 m up); the torch is turned
+    about its up by its cell so a row of them is not all alike.
+- The shader no longer draws a torch's post and cap: its branch goes, and
+  the torch's 30 vertices are left degenerate as every unused lamp vertex
+  is. Every other lamp keeps its shader body.
+- The light the torch casts does not change: it is the field's and the
+  shader's lamp terms, which read the column record, not the drawn body.
+- A torch past the reach keeps its light, as now; at that distance its
+  body was under a pixel.
+- Nothing is saved; this is drawn only.
 
 ## 5. A sleeper's eyes are shut (owner, 2026-11-25: "do the dudes not have their eyes closed when they sleep?")
 
@@ -97,3 +136,42 @@ standing: it blinks, glances about and keeps its expression's lids.
   closed.
 - A person lying in a bed is asleep, except while the player talks to them:
   then they open their eyes and talk.
+
+## 6. The blacksmith's station (owner, 2026-11-25: "the black smith doesnt have hist station")
+
+**Finding (from the code).**
+- A smithy (its open shed, the anvil and the forge, a brazier in the field)
+  is stood only in a town whose stored record names layout 3 or later
+  (`pbd_core::settlement::record::FORGE_LAYOUT`). Layout 3 came in on
+  2026-11-24 (`f7ec99f5`, "the town forge, for towns laid from now on").
+- A town is laid once, when the world first reaches it, and keeps the
+  layout it was laid with (saves survive). Every town in a world played
+  before 2026-11-24 is at layout 1 or 2, so it has no smithy, by design.
+- The smith is a person of the template (`village.json` and `town.json`
+  both have one, at work with a hammer beside the smithy's cells). People
+  are derived, not stored, so the smith stands in every village and town,
+  old or new, at the place the smithy would be. In an old town that place
+  is bare ground: the owner's report.
+- In a town laid at layout 3 the forge stands (see the captures). So this
+  is not a bug in layout 3.
+
+**Recommendation (for the survey, with the two captures).** Old towns
+gain their smithy, without touching anything the player built:
+- a new layout, 4, that a town at 1 or 2 is moved up to in place, the
+  smithy being the only thing layout 3 added; its record is rewritten by
+  the world (`Author::World`) through the durable path;
+- the smithy's cells are checked first against the player's edits and
+  builds (the yield set), and a smithy any of whose cells the player has
+  touched is not stood, so nothing the player made is moved or covered;
+- the rest of the town (its ground, buildings and terrace) is read by the
+  rules it was laid with, so it does not move.
+
+Until the owner answers, nothing changes: old towns keep no smithy.
+
+Captures: `docs/design/img/blacksmith-old-layout.png` (a town at layout 2,
+the smith at work on bare ground) and `docs/design/img/blacksmith-layout3.png`
+(the same town laid at layout 3, the forge, anvil and shed).
+
+## 7. A parcel's pick-up and drop-off
+
+The design is `townsfolk` design 47.
