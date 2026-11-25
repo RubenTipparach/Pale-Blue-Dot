@@ -236,7 +236,30 @@ const PHASES = [
       { id: 'phase-2-checks.4', text: 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters.' },
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
-  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
+  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [
+      { id: 'P5', q: 'A town saved before forges were added (layout 2 or older) has a blacksmith but no forge: they hammer on bare ground. A new town has its forge, anvil and shed. Should old towns get their forge?',
+        options: ['Leave old towns as they are', 'Give old towns their forge, only where it touches nothing you built'], rec: 1,
+        why: 'It fixes the smith you reported without touching anything you made: a new town layout version adds the forge, and is skipped wherever its cells meet your own building.',
+        change: 'playtest-fixes (design 6)', asked: '2026-11-25',
+        images: [
+          { src: 'img/blacksmith-old-layout.jpg', alt: 'The blacksmith hammering on bare ground in an old town', caption: 'Old town (layout 2): the smith on bare ground.' },
+          { src: 'img/blacksmith-layout3.jpg', alt: 'The same spot with forge, anvil and shed', caption: 'The same spot at layout 3: forge, anvil, shed.' },
+        ] },
+      { id: 'P6', q: 'Where a river runs full to its banks, a road bridge deck sits right at the water surface, and the river draws its ripples over the planks. Raise the deck?',
+        options: ['Leave it at the water', 'Raise it about 0.25 m over full rivers, with ramped ends (new worlds and new bridges)'], rec: 1,
+        why: 'A bridge should stand clear of the water. A new road version keeps every bridge already in a save as it is.',
+        change: 'townsfolk (design 42o)', asked: '2026-11-25',
+        images: [
+          { src: 'img/p6-road-bridge.jpg', alt: 'A plank bridge seen on foot from its first cell', caption: 'Water ripples drawn across the deck.' },
+        ] },
+      { id: 'P7', q: 'The bridge rails are solid timber panels, as in the approved roads mockup. Close up they box the deck in like a trough (same picture as P6). Keep them or open them up?',
+        options: ['Keep the solid panels', 'Posts with a top rail, open between'], rec: 1,
+        why: 'Open rails let you see the river from the deck and read as a bridge rather than a channel.',
+        change: 'townsfolk (design 42o)', asked: '2026-11-25',
+        images: [
+          { src: 'img/p6-road-bridge.jpg', alt: 'The bridge rails as solid panels', caption: 'Solid panel rails either side.' },
+        ] },
+    ], issues: [
   ], tests: [
     { id: 'phase-3-test-npcs', step: 'NPCs', items: [
       { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
