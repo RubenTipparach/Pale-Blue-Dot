@@ -2309,7 +2309,7 @@ pub fn scripted(
                             // `--yaw` as the launch reads it back
                             // (`place::yaw_of`, its tested inverse).
                             let yaw = pbd_app::place::yaw_of(back, along).to_degrees();
-                            let (lat, lon) = pbd_core::geo::lat_lon(back).degrees();
+                            let (lat, lon) = pbd_app::place::at_flag(back);
                             info!(
                                 "scripted road {what}: --at {lat:.5} {lon:.5} --yaw {yaw:.1} --road-plan {kind}:{a}:{b}:{}",
                                 how.width
@@ -2317,14 +2317,16 @@ pub fn scripted(
                         }
                     }
                     if ghost {
+                        // Started from its near end and the aim held on its
+                        // far end, the way round it was checked (a bridge is
+                        // laid from the bank it starts on), so the ghost is
+                        // the road checked here, wherever the eye looks.
                         if let Some(mut planner) = planner {
                             planner.how = how;
-                            planner.start = Some(b);
+                            planner.start = Some(a);
                         }
-                        // The aim held on its near end, so the ghost is the
-                        // road checked here, wherever the eye looks.
                         if let Some(mut pin) = pin {
-                            pin.0 = Some(a);
+                            pin.0 = Some(b);
                         }
                         if let Some(i) = (0..10).find(|&i| {
                             slots.get(i).map(|s| s.item)
