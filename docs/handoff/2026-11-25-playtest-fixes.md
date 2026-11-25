@@ -85,6 +85,32 @@ The write-up for all of these is `openspec/changes/playtest-fixes-2026-11-25/`
    - If it is 3, the smithy's forge is missing for another reason: look at
      `forge_cell` and the template's `smithies`.
 
+5. **"Carry a parcel" has no pick-up or drop-off place** (owner, 2026-11-25).
+   How it works today:
+   - **Pick-up.** Taking a delivery job at a board puts the parcel straight
+     in the pack (`economy::Shop::take`). There is no place to collect it.
+   - **Drop-off.** Talking to anyone in the job's town (`Job::to`) hands it
+     over (`Shop::deliver`).
+   - **Nothing shows either.** No compass or map marker points to the
+     destination, though a lost villager's job has one (`jobs.lost_marker`,
+     drawn in `desktop/compass_bar.rs` around line 402 and
+     `desktop/map_screen.rs` around line 926). The town tree's "Carry a
+     parcel" (`town_missions.ron`, `deliver`) needs such a job taken, and
+     says no more.
+
+   Recommended:
+   - **A drop-off place.** Mark the destination town's board, or a named
+     recipient there, on the compass and the map, as the lost villager's
+     marker is.
+   - **A pick-up place.** Hand the parcel over at a person in the posting
+     town (the trader or the job's giver), not into the pack on taking.
+   - **Plain text.** The tracker reads "Take the parcel to <town>", from the
+     locale file.
+
+   That changes how a delivery plays, so write it up (a `townsfolk` design
+   section) before code. A save holding a parcel job taken today keeps its
+   parcel in the pack and only gains the marker.
+
 ## Checks run here
 
 - `cargo check -p pbd-app --all-targets`, `cargo fmt --check`,
