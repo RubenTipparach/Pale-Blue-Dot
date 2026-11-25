@@ -104,15 +104,27 @@ impl Clock {
     /// comments), which a compass calls SOUTH (`geo::COMPASS_NORTH`,
     /// `compass-bar` decision 8), so it is named as the southern hemisphere's.
     /// The compass's north has the opposite.
-    pub fn season(self) -> &'static str {
-        const SEASONS: [&str; 4] = [
-            "southern summer",
-            "southern autumn",
-            "southern winter",
-            "southern spring",
-        ];
-        let quarter = ((self.year_fraction() + 0.125) * 4.0).floor() as usize % 4;
-        SEASONS[quarter]
+    pub fn season(self) -> crate::locale::Localized {
+        crate::locale::tr(match self.quarter() {
+            0 => "daylight.season.summer",
+            1 => "daylight.season.autumn",
+            2 => "daylight.season.winter",
+            _ => "daylight.season.spring",
+        })
+    }
+
+    /// [`Clock::season`] in capitals, as the overlay's date shows it.
+    pub fn season_caps(self) -> crate::locale::Localized {
+        crate::locale::tr(match self.quarter() {
+            0 => "daylight.season_caps.summer",
+            1 => "daylight.season_caps.autumn",
+            2 => "daylight.season_caps.winter",
+            _ => "daylight.season_caps.spring",
+        })
+    }
+
+    fn quarter(self) -> usize {
+        ((self.year_fraction() + 0.125) * 4.0).floor() as usize % 4
     }
 
     /// Where the sun is in the SYSTEM frame the stars are fixed in: along the

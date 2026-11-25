@@ -14,12 +14,14 @@
 //! are derived from the world seed and never saved (S10).
 
 pub mod breed;
+pub mod forms;
+pub mod loft;
 pub mod rig;
 
 pub use breed::BreedingPick;
 
 use crate::config::HusbandryConfig;
-use crate::field_light::{Faded, LitByField};
+use crate::field_light::{Faded, LitByField, LitLikeTerrain};
 use crate::hotbar::Hotbar;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
 use crate::saves::WorldSave;
@@ -37,6 +39,7 @@ use pbd_core::husbandry::{
     Edge, Genome, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
 };
 use pbd_core::inventory::{Item, Slots};
+use pbd_core::locale::{Localized, tr, tr_with};
 use pbd_core::records::Author;
 use pbd_core::terrain::Material;
 use pbd_core::world_frame::SimOrigin;
@@ -141,6 +144,12 @@ struct Beast {
     born: Option<f64>,
     /// A hen sitting on a clutch (E4): she rests on it.
     sitting: bool,
+    /// Held still where a capture set it (`--husbandry close`): it neither
+    /// flees nor wanders.
+    posed: bool,
+    /// Its head held where a capture set it (`--husbandry close-stand` or
+    /// `close-graze`): grazing or up, looking ahead. A capture instrument.
+    held_graze: Option<bool>,
 }
 
 impl Beast {
@@ -192,6 +201,8 @@ impl Beast {
             clock_s: 0.0,
             born: None,
             sitting: false,
+            posed: false,
+            held_graze: None,
         }
     }
 }
@@ -207,13 +218,19 @@ pub struct Farmyard {
     status: String,
     hold_s: f32,
     fences_drawn: Option<(BTreeMap<Edge, bool>, Vec<u32>, usize)>,
+    /// The herd's coat (design 16).
     material: Option<Handle<StandardMaterial>>,
+    /// Flat colour: the incubator's glass lid (M26: glass is flat).
+    flat: Option<Handle<StandardMaterial>>,
     /// The pen's textured materials in [`PEN_TEXTURES`] order, and each
     /// texture's repeat in metres (design 14).
     pen_materials: Option<([Handle<StandardMaterial>; 4], [f32; 4])>,
     /// What the player did this frame, announced as messages.
     deeds: Vec<Deed>,
     gained: Vec<(Item, u16)>,
+    /// Hearts to show over an animal this frame, for a feed
+    /// (`taming-hearts`): whose, and how many.
+    hearts: Vec<(Who, u8)>,
 }
 
 impl Default for Farmyard {
@@ -226,9 +243,11 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            flat: None,
             pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
+            hearts: Vec::new(),
         }
     }
 }
@@ -261,6 +280,78 @@ impl Farmyard {
                 following: b.mode == Mode::Follow,
                 female: b.sex == Sex::F,
             })
+    }
+
+    /// The kept animals of `species` within `within_m` of `near` (local, as
+    /// a beast's feet are): their record ids and feet, nearest first. A
+    /// horse cart's shafts ask for the horse beside them (`land-transport`
+    /// design 11).
+    pub fn kept_near(&self, species: u16, near: Vec3, within_m: f32) -> Vec<(u64, Vec3)> {
+        let mut found: Vec<(u64, Vec3, f32)> = self
+            .beasts
+            .iter()
+            .filter(|b| b.species == species && !b.leaving)
+            .filter_map(|b| match b.who {
+                Who::Kept { id } => Some((id, b.pos, b.pos.distance(near))),
+                Who::Wild { .. } => None,
+            })
+            .filter(|(_, _, d)| *d <= within_m)
+            .collect();
+        found.sort_by(|a, b| a.2.total_cmp(&b.2));
+        found.into_iter().map(|(id, p, _)| (id, p)).collect()
+    }
+
+    /// Where the kept animal `id` stands (local feet) and faces, if it is
+    /// within `within_m` of `near`.
+    pub fn kept_pose(&self, id: u64, near: Vec3, within_m: f32) -> Option<(Vec3, Vec3)> {
+        self.beasts
+            .iter()
+            .find(|b| b.who == (Who::Kept { id }) && !b.leaving)
+            .filter(|b| b.pos.distance(near) <= within_m)
+            .map(|b| (b.pos, b.facing))
+    }
+
+    /// A kept animal goes into a cart's shafts: the yard stops drawing it at
+    /// once, and its sync leaves it out while a cart names it.
+    pub fn hand_over(&mut self, id: u64) {
+        for b in &mut self.beasts {
+            if b.who == (Who::Kept { id }) {
+                b.leaving = true;
+                b.shown = 0.0;
+                b.mode = Mode::Idle;
+            }
+        }
+    }
+
+    /// A kept animal comes out of a cart's shafts at `pos` (local), facing
+    /// `facing`, and follows the player a while, as a newly tamed one does.
+    /// It is taken back into the yard at once, so it never blinks out.
+    pub fn take_back(
+        &mut self,
+        id: u64,
+        record: &AnimalBody,
+        pos: Vec3,
+        up: Vec3,
+        facing: Vec3,
+        follow_s: f32,
+    ) {
+        self.beasts.retain(|b| b.who != (Who::Kept { id }));
+        let mut beast = Beast::new(
+            Who::Kept { id },
+            record.sp,
+            record.sex,
+            record.genome(),
+            pos,
+            up,
+            Range::Around(up, 6.0),
+            hash2(id, 0xbea57),
+        );
+        beast.facing = facing;
+        beast.born = Some(record.born);
+        beast.shown = 1.0;
+        beast.mode = Mode::Follow;
+        beast.mode_s = follow_s;
+        self.beasts.push(beast);
     }
 
     fn say(&mut self, text: impl Into<String>, hold_s: f32) {
@@ -302,6 +393,7 @@ impl Plugin for HusbandryPlugin {
                     draw,
                     draw_fences,
                     hud,
+                    hearts,
                 )
                     .chain()
                     .after(crate::fish::FishSet),
@@ -486,6 +578,7 @@ fn spawn(
             .spawn((
                 Name::new("Pen prewarm template"),
                 LitByField,
+                LitLikeTerrain,
                 Faded(1.0),
                 Transform::from_xyz(0.0, -1.0e5, 0.0),
                 Visibility::Hidden,
@@ -497,13 +590,24 @@ fn spawn(
             ));
         yard.pen_materials = Some((pen, repeat));
     }
+    // The herd's coats (design 16): the `coat` strip, tinted by each
+    // animal's colours, sampled nearest.
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
+        base_color_texture: assets
+            .as_deref()
+            .map(|a| crate::towns::texture(a, "herd_hide")),
         perceptual_roughness: 0.9,
         reflectance: 0.2,
         ..default()
     });
     yard.material = Some(material.clone());
+    yard.flat = Some(materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        reflectance: 0.2,
+        ..default()
+    }));
     let mut builder = rig::Builder::default();
     if let Some(sp) = config.0.roster(pbd_core::fauna::HOME_BODY).first() {
         rig::build(
@@ -524,6 +628,7 @@ fn spawn(
         .spawn((
             Name::new("Husbandry prewarm template"),
             LitByField,
+            LitLikeTerrain,
             Faded(1.0),
             Transform::from_xyz(0.0, -1.0e5, 0.0),
             Visibility::Hidden,
@@ -537,6 +642,7 @@ fn spawn(
         Name::new("Fences"),
         FenceRoot,
         LitByField,
+        LitLikeTerrain,
         Transform::default(),
         Visibility::default(),
     ));
@@ -732,12 +838,20 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     let near = s.herds.near_m;
     let up = feet_point.normalize_or(Vec3::Y);
     let kept = record::animals(&save.records);
+    // A horse in a cart's shafts is the cart's to draw (`land-transport`
+    // design 11).
+    let hitched = pbd_core::vehicle::cart::hitched(&save.records);
     let tamed: BTreeSet<u64> = kept.iter().map(|(_, b)| b.wild).collect();
     let mut wanted: Vec<Who> = Vec::new();
     // Kept animals near.
     let pieces = record::pieces(&save.records);
     for (id, body) in &kept {
-        if body.state != record::Life::Alive || body.body != world.body.0 {
+        // An animal ridden is the ride's to draw (design 14).
+        if body.state != record::Life::Alive
+            || body.body != world.body.0
+            || hitched.contains(id)
+            || body.ridden
+        {
             continue;
         }
         let Some(home) = pbd_core::cell_key::key_direction(body.home) else {
@@ -889,35 +1003,34 @@ fn offer(
         let (who, species) = (yard.beasts[k].who, yard.beasts[k].species);
         let following = yard.beasts[k].mode == Mode::Follow;
         let sp = world.roster().get(species as usize)?.clone();
-        let name = sp.name.to_lowercase();
+        let name = sp.name();
         let keep = sp.keep.as_ref();
         return match who {
-            Who::Wild { .. } => {
-                (sp.refusal().is_none() && keep.is_some()).then(|| Offer::new(Act::Feed, name))
-            }
+            Who::Wild { .. } => (sp.refusal().is_none() && keep.is_some())
+                .then(|| Offer::new(Act::Feed, name.clone())),
             Who::Kept { id } => {
                 let body = save.records.get(record::ANIMAL, id)?.read::<AnimalBody>()?;
                 let keep = keep?;
                 if held == Some(Item::Good(Good::FERTILE_EGG))
                     && matches!(keep.young.birth, pbd_core::husbandry::Birth::Eggs { .. })
                 {
-                    return Some(Offer::new(Act::SetEggs, name));
+                    return Some(Offer::new(Act::SetEggs, name.clone()));
                 }
                 let now = farm_now(world, yard, save, id, &body);
-                let waiting: Vec<&str> = keep
+                let waiting: Vec<String> = keep
                     .products
                     .iter()
                     .filter(|p| now.waiting(&p.good) > 0 && p.good().is_some())
-                    .map(|p| match p.good.as_str() {
-                        "egg" => "eggs",
-                        good => good,
-                    })
+                    .map(|p| tr(&format!("husbandry.collect.{}", p.good)).into_string())
                     .collect();
                 if !waiting.is_empty() {
-                    return Some(Offer::new(Act::Collect, waiting.join(", ")));
+                    return Some(Offer::new(
+                        Act::Collect,
+                        Localized::verbatim(waiting.join(", ")),
+                    ));
                 }
                 if held.is_some_and(|i| keep.eats(i)) {
-                    return Some(Offer::new(Act::Feed, name));
+                    return Some(Offer::new(Act::Feed, name.clone()));
                 }
                 Some(Offer::new(
                     if following { Act::LetStay } else { Act::Lead },
@@ -933,10 +1046,16 @@ fn offer(
             pbd_core::husbandry::breeding::Place::Incubator(cell),
         );
         if held == Some(Item::Good(Good::FERTILE_EGG)) {
-            return Some(Offer::new(Act::SetInIncubator, "incubator"));
+            return Some(Offer::new(
+                Act::SetInIncubator,
+                tr("husbandry.thing.incubator"),
+            ));
         }
         if holds == 0 && held.is_none() {
-            return Some(Offer::new(Act::TakeIncubator, "incubator"));
+            return Some(Offer::new(
+                Act::TakeIncubator,
+                tr("husbandry.thing.incubator"),
+            ));
         }
         if holds > 0 {
             return None;
@@ -944,7 +1063,14 @@ fn offer(
     }
     let (edge, _, _) = edge_at(world, point)?;
     let gate = *record::pieces(&save.records).get(&edge)?;
-    Some(Offer::new(Act::TakeUp, if gate { "gate" } else { "fence" }))
+    Some(Offer::new(
+        Act::TakeUp,
+        if gate {
+            tr("husbandry.thing.gate")
+        } else {
+            tr("husbandry.thing.fence")
+        },
+    ))
 }
 
 /// Offer the husbandry hands' act to the interact key.
@@ -1100,20 +1226,23 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
     let Some(sp) = roster.get(species as usize) else {
         return;
     };
-    let name = sp.name.clone();
+    let name = sp.name();
     let held = hotbar.held().map(|st| st.item);
     match who {
         Who::Wild { .. } => {
             if let Some(why) = sp.refusal() {
-                yard.say(format!("{name}: {why}"), 2.5);
+                yard.say(
+                    tr_with("husbandry.refused", &[("name", &name), ("why", &why)]),
+                    2.5,
+                );
                 return;
             }
             let keep = sp.keep.as_ref().expect("tameable");
             if !held.is_some_and(|i| keep.eats(i)) {
                 yard.say(
-                    format!(
-                        "{name} eats {}: hold some and stand still",
-                        keep.food_name()
+                    tr_with(
+                        "husbandry.eats",
+                        &[("name", &name), ("food", &keep.food_name())],
                     ),
                     2.5,
                 );
@@ -1157,21 +1286,27 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 }
                 if took > 0 {
                     yard.gained.push((Item::Good(good), took as u16));
-                    got.push(match (p.good.as_str(), took) {
-                        ("egg", 1) if good == Good::FERTILE_EGG => "a fertile egg".to_string(),
-                        ("egg", n) if good == Good::FERTILE_EGG => format!("{n} fertile eggs"),
-                        ("egg", 1) => "an egg".to_string(),
-                        ("egg", n) => format!("{n} eggs"),
-                        ("milk", 1) => "a pail of milk".to_string(),
-                        ("milk", n) => format!("{n} pails of milk"),
-                        (good, n) => format!("{n} {good}"),
-                    });
+                    let what = if good == Good::FERTILE_EGG {
+                        "fertile_egg"
+                    } else {
+                        p.good.as_str()
+                    };
+                    got.push(
+                        tr_with(&format!("husbandry.collected.{what}"), &[("count", &took)])
+                            .into_string(),
+                    );
                 }
             }
             if !got.is_empty() {
                 body.set_farm(&now);
                 store_animal(save, &body, id, Some(hotbar));
-                yard.say(format!("{name}: collected {}", got.join(", ")), 2.5);
+                yard.say(
+                    tr_with(
+                        "husbandry.collected_line",
+                        &[("name", &name), ("got", &got.join(", "))],
+                    ),
+                    2.5,
+                );
                 return;
             }
             if held.is_some_and(|i| sp.keep.as_ref().is_some_and(|k| k.eats(i))) {
@@ -1181,8 +1316,13 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 now.hand_feed(world.day(), &s.needs);
                 body.set_farm(&now);
                 store_animal(save, &body, id, Some(hotbar));
+                let who = yard.beasts[k].who;
+                yard.hearts.push((who, 5));
                 yard.say(
-                    format!("{name} is fed for {} days", s.needs.hand_feed_days),
+                    tr_with(
+                        "husbandry.fed",
+                        &[("name", &name), ("days", &s.needs.hand_feed_days)],
+                    ),
                     2.5,
                 );
                 return;
@@ -1193,7 +1333,7 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
             } else {
                 b.mode = Mode::Follow;
                 b.mode_s = s.taming.follow_s;
-                yard.say(format!("{name} follows you (F to let it stay)"), 2.5);
+                yard.say(tr_with("husbandry.follows", &[("name", &name)]), 2.5);
             }
         }
     }
@@ -1223,15 +1363,18 @@ fn feed_wild(
         return;
     }
     let factor = b.genome.trust_factor();
-    let name = sp.name.clone();
+    let name = sp.name();
     let b = &mut yard.beasts[k];
     if !b.trust.feed(keep.trust_gain, factor) {
-        let pct = b.trust.value.round();
-        // A feed that does not tame changes only the hands.
+        // A feed that does not tame changes only the hands. The hearts say
+        // how far it trusts, and it follows a while (`taming-hearts`).
         save.record_pack(hotbar);
-        b.mode = Mode::Idle;
+        b.mode = Mode::Follow;
+        b.mode_s = s.taming.wild_follow_s;
         b.head_goal = 1.2;
-        yard.say(format!("{name} eats from your hand - trust {pct}%"), 2.0);
+        let shown = (b.who, pbd_core::husbandry::taming::hearts(b.trust.value));
+        yard.hearts.push(shown);
+        yard.say(tr_with("husbandry.eats_from_hand", &[("name", &name)]), 2.0);
         return;
     }
     // Tamed: the record, at once, as the player's (decision 10).
@@ -1260,12 +1403,11 @@ fn feed_wild(
     b.who = Who::Kept { id };
     b.mode = Mode::Follow;
     b.mode_s = s.taming.follow_s;
+    yard.hearts.push((Who::Kept { id }, 5));
+    let b = &mut yard.beasts[k];
     let species = b.species;
     yard.deeds.push(Deed::Tamed { species });
-    yard.say(
-        format!("{name} trusts you and follows (F to let it stay)"),
-        3.0,
-    );
+    yard.say(tr_with("husbandry.tamed", &[("name", &name)]), 3.0);
 }
 
 /// A follower let go: it lives where it stands, in the pen there if any.
@@ -1284,7 +1426,7 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     let name = world
         .roster()
         .get(body.sp as usize)
-        .map_or("It".to_string(), |s| s.name.clone());
+        .map_or_else(|| tr("husbandry.it"), |s| s.name());
     // The farm state up to now under the old home, then the new home.
     let now = farm_now(world, yard, save, id, &body);
     body.set_farm(&now);
@@ -1320,11 +1462,11 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     match pen.as_ref().and_then(|p| pen_range(world, p)) {
         Some(range) => {
             b.range = range;
-            yard.say(format!("{name} is penned"), 2.5);
+            yard.say(tr_with("husbandry.penned", &[("name", &name)]), 2.5);
         }
         None => {
             b.range = Range::Around(world.origin().up_at(b.pos), 6.0);
-            yard.say(format!("{name} stays here, loose"), 2.5);
+            yard.say(tr_with("husbandry.loose", &[("name", &name)]), 2.5);
         }
     }
 }
@@ -1379,14 +1521,14 @@ fn place_piece(
         return false;
     };
     if point.distance(feet) > world.settings().taming.reach_m * 2.5 {
-        yard.say("Too far to set a fence", 1.5);
+        yard.say(tr("husbandry.too_far"), 1.5);
         return false;
     }
     let Some((edge, _, _)) = edge_at(world, point) else {
         return false;
     };
     if record::pieces(&save.records).contains_key(&edge) {
-        yard.say("A piece already stands there", 1.5);
+        yard.say(tr("husbandry.piece_there"), 1.5);
         return false;
     }
     note_kinds(save);
@@ -1399,7 +1541,14 @@ fn place_piece(
     {
         return false;
     }
-    yard.say(if gate { "Gate set" } else { "Fence set" }, 1.0);
+    yard.say(
+        if gate {
+            tr("husbandry.gate_set")
+        } else {
+            tr("husbandry.fence_set")
+        },
+        1.0,
+    );
     closed_pen(world, yard, save, edge);
     true
 }
@@ -1420,7 +1569,7 @@ fn take_piece(
     };
     let good = if gate { Good::GATE } else { Good::FENCE };
     if hotbar.give(Item::Good(good), 1) > 0 {
-        yard.say("No room to carry it", 1.5);
+        yard.say(tr("husbandry.no_room"), 1.5);
         return true;
     }
     let piece = FenceBody {
@@ -1430,9 +1579,9 @@ fn take_piece(
     save.store_with_hands(piece.record(edge), record::FENCE_SCHEMA, hotbar);
     yard.say(
         if gate {
-            "Gate taken up"
+            tr("husbandry.gate_taken")
         } else {
-            "Fence taken up"
+            tr("husbandry.fence_taken")
         },
         1.0,
     );
@@ -1450,7 +1599,7 @@ fn closed_pen(world: &World, yard: &mut Farmyard, save: &WorldSave, edge: Edge) 
                 cells: pen.cells.len(),
             });
             yard.say(
-                format!("A pen of {} cells, with a gate", pen.cells.len()),
+                tr_with("husbandry.pen_closed", &[("cells", &pen.cells.len())]),
                 2.0,
             );
             return;
@@ -1540,7 +1689,9 @@ fn step(
         let bird = sp.plan == Plan::Bird;
         // What it wants.
         b.mode_s -= dt;
-        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet) {
+        if let (Who::Wild { .. }, Some(feet)) = (b.who, feet)
+            && !b.posed
+        {
             b.trust.decay(hours, &s.taming);
             let d = feet.distance(b.pos);
             let food = sp
@@ -1548,7 +1699,10 @@ fn step(
                 .as_ref()
                 .is_some_and(|kp| held.is_some_and(|i| kp.eats(i)));
             let fear = taming::fear_radius(&s.taming, moving, food);
-            if d < fear && !night {
+            if b.mode == Mode::Follow {
+                // Fed from the hand: it follows a while, unafraid
+                // (`taming-hearts`).
+            } else if d < fear && !night {
                 if b.mode != Mode::Flee {
                     b.trust.spook(&s.taming);
                 }
@@ -1710,7 +1864,9 @@ fn step(
             b.head_down = (b.pecking * std::f32::consts::PI).sin() * 1.15;
         } else {
             // Grazing, head down while it stands; up to walk or look about.
-            let grazing = standing && b.glance_s > 0.6 && b.mode != Mode::Follow;
+            let grazing = b
+                .held_graze
+                .unwrap_or(standing && b.glance_s > 0.6 && b.mode != Mode::Follow);
             b.head_goal = if grazing { 1.85 } else { 0.0 };
             let chew = if grazing {
                 (b.clock_s * 5.0).sin() * 0.05
@@ -1731,6 +1887,9 @@ fn step(
             } else {
                 b.rng.range(2.0, 6.0)
             };
+        }
+        if b.held_graze.is_some() {
+            b.glance_goal = 0.0;
         }
         let rate = if bird { 14.0 } else { 3.0 };
         b.glance += (b.glance_goal - b.glance) * (dt * rate).min(1.0);
@@ -1883,8 +2042,9 @@ fn draw(
                 let handle = meshes.add(mesh);
                 let e = commands
                     .spawn((
-                        Name::new(sp.name.clone()),
+                        Name::new(sp.id.clone()),
                         LitByField,
+                        LitLikeTerrain,
                         Faded(1.0 - b.shown),
                         place,
                         Visibility::default(),
@@ -1986,7 +2146,7 @@ fn draw_fences(
     let Some(o) = origin else {
         return;
     };
-    let Some(flat) = yard.material.clone() else {
+    let Some(flat) = yard.flat.clone() else {
         return;
     };
     commands.entity(root).insert(Transform::from_translation(
@@ -2110,25 +2270,41 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
     let k = aimed_beast(world, yard)?;
     let b = &yard.beasts[k];
     let sp = world.roster().get(b.species as usize)?.clone();
-    let sex = if b.sex == Sex::M { "male" } else { "female" };
+    let sex = if b.sex == Sex::M {
+        tr("husbandry.sex.male")
+    } else {
+        tr("husbandry.sex.female")
+    };
     // A young one is named by its stage: a chick, a lamb (design 13, E1).
     let young = b
         .born
         .and_then(|born| breed::stage_now(world, b.species, b.sex, born))
         .filter(|(_, size)| *size < 1.0)
-        .map(|(name, _)| format!(" {name}"))
+        .map(|(name, _)| tr(&format!("husbandry.stage.{name}")).into_string())
         .unwrap_or_default();
-    let sitting = if b.sitting { ", sitting" } else { "" };
+    let sitting = b.sitting;
+    let name = sp.name();
+    let named = if young.is_empty() {
+        name.clone()
+    } else {
+        tr_with("husbandry.young", &[("name", &name), ("stage", &young)])
+    };
     match b.who {
         Who::Wild { .. } => Some(match (sp.refusal(), sp.keep.as_ref()) {
-            (Some(why), _) => format!("{} (wild) - {why}", sp.name),
-            (None, Some(k)) => format!(
-                "{} (wild, {sex}) - trust {:.0}% - eats {}",
-                sp.name,
-                b.trust.value,
-                k.food_name()
-            ),
-            _ => sp.name.clone(),
+            (Some(why), _) => {
+                tr_with("husbandry.wild_refused", &[("name", &name), ("why", &why)]).into_string()
+            }
+            (None, Some(k)) => tr_with(
+                "husbandry.wild",
+                &[
+                    ("name", &name),
+                    ("sex", &sex),
+                    ("trust", &format!("{:.0}", b.trust.value)),
+                    ("food", &k.food_name()),
+                ],
+            )
+            .into_string(),
+            _ => name.into_string(),
         }),
         Who::Kept { id } => {
             let save = save?;
@@ -2142,29 +2318,45 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
                 .filter(|p| p.gives(body.sex))
                 .filter_map(|p| {
                     let w = now.waiting(&p.good);
-                    (w > 0).then(|| format!("{w} {}", p.good))
+                    (w > 0).then(|| {
+                        tr_with(&format!("husbandry.waiting.{}", p.good), &[("count", &w)])
+                            .into_string()
+                    })
                 })
                 .collect();
             let c_mood = if now.sick(n) {
-                "sick".to_string()
+                tr("husbandry.mood.sick")
             } else if now.strayed(n) {
-                "strayed: feed it".to_string()
+                tr("husbandry.mood.strayed")
             } else {
-                format!("health {:.0}", now.health)
+                tr_with(
+                    "husbandry.mood.health",
+                    &[("health", &format!("{:.0}", now.health))],
+                )
             };
-            let pen = if body.pen.is_some() {
-                "penned"
-            } else {
-                "loose"
+            let state = match (body.pen.is_some(), sitting) {
+                (true, false) => tr_with("husbandry.state.penned", &[("sex", &sex)]),
+                (false, false) => tr_with("husbandry.state.loose", &[("sex", &sex)]),
+                (true, true) => tr_with("husbandry.state.penned_sitting", &[("sex", &sex)]),
+                (false, true) => tr_with("husbandry.state.loose_sitting", &[("sex", &sex)]),
             };
             Some(if waiting.is_empty() {
-                format!("{}{young} ({sex}, {pen}{sitting}) - {c_mood}", sp.name)
-            } else {
-                format!(
-                    "{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting",
-                    sp.name,
-                    waiting.join(", ")
+                tr_with(
+                    "husbandry.kept",
+                    &[("name", &named), ("state", &state), ("mood", &c_mood)],
                 )
+                .into_string()
+            } else {
+                tr_with(
+                    "husbandry.kept_waiting",
+                    &[
+                        ("name", &named),
+                        ("state", &state),
+                        ("mood", &c_mood),
+                        ("waiting", &waiting.join(", ")),
+                    ],
+                )
+                .into_string()
             })
         }
     }
@@ -2261,6 +2453,41 @@ fn script(
                     n,
                     spot + right * (2.0 + n as f32 * 1.6) + ahead * (n as f32 - 1.0) * 1.5,
                 );
+            }
+        }
+        "close" | "close-stand" | "close-graze" => {
+            // One of each species of the herd broadside a few metres ahead,
+            // held where it stands, to look at close up; `close-stand` and
+            // `close-graze` hold its head up or down to graze as well.
+            let held = match script.scene.as_str() {
+                "close-stand" => Some(false),
+                "close-graze" => Some(true),
+                _ => None,
+            };
+            for (n, (id, x, y)) in [
+                ("meadow-hen", -1.9f32, 2.4f32),
+                ("woolback", -0.6, 3.4),
+                ("plodder", 1.6, 4.6),
+                ("horse", 4.6, 5.6),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if !roster.iter().any(|s| s.id == id) {
+                    continue;
+                }
+                let k = wild(
+                    &mut yard,
+                    index(id),
+                    n as u64 + 1,
+                    feet_point + right * x + ahead * y,
+                );
+                let d = yard.beasts[k].pos.normalize();
+                yard.beasts[k].range = Range::Around(d, 0.05);
+                yard.beasts[k].facing = right;
+                yard.beasts[k].idle_s = 1.0e6;
+                yard.beasts[k].posed = true;
+                yard.beasts[k].held_graze = held;
             }
         }
         "tame" => {
@@ -2551,3 +2778,101 @@ fn place_piece_at(
 
 #[cfg(test)]
 mod tests;
+
+/// One row of hearts rising over an animal fed from the hand
+/// (`taming-hearts` design 2): a UI emote placed where the head projects.
+#[derive(Component)]
+struct HeartRow {
+    who: Who,
+    age: f32,
+    width: f32,
+}
+
+/// How long a row of hearts shows, s; how far it rises, m; one heart's
+/// size on screen, px (the 11 x 10 icon at twice its size).
+const HEARTS_S: f32 = 1.5;
+const HEARTS_RISE_M: f32 = 0.6;
+const HEART_PX: (f32, f32) = (22.0, 20.0);
+
+/// Spawn the rows a feed asked for, then move and fade every row.
+#[allow(clippy::type_complexity)]
+fn hearts(
+    mut commands: Commands,
+    world: World,
+    time: Res<Time>,
+    mut yard: ResMut<Farmyard>,
+    assets: Option<Res<AssetServer>>,
+    ui_scale: Option<Res<UiScale>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut rows: Query<(Entity, &mut HeartRow, &mut Node, &mut Visibility, &Children)>,
+    mut images: Query<&mut ImageNode>,
+) {
+    let fresh = std::mem::take(&mut yard.hearts);
+    if let Some(assets) = assets.as_deref() {
+        let heart: Handle<Image> = assets.load("ui/heart.png");
+        for (who, n) in fresh {
+            let width = HEART_PX.0 * f32::from(n) + 2.0 * f32::from(n.saturating_sub(1));
+            commands
+                .spawn((
+                    HeartRow {
+                        who,
+                        age: 0.0,
+                        width,
+                    },
+                    Node {
+                        position_type: PositionType::Absolute,
+                        column_gap: Val::Px(2.0),
+                        ..default()
+                    },
+                    Visibility::Hidden,
+                    GlobalZIndex(5),
+                ))
+                .with_children(|row| {
+                    for _ in 0..n {
+                        row.spawn((
+                            ImageNode::new(heart.clone()),
+                            Node {
+                                width: Val::Px(HEART_PX.0),
+                                height: Val::Px(HEART_PX.1),
+                                ..default()
+                            },
+                        ));
+                    }
+                });
+        }
+    }
+    let camera = cameras.iter().find(|(_, c)| c.is_active);
+    let scale = ui_scale.map_or(1.0, |s| s.0);
+    let roster = world.roster();
+    let o = world.origin();
+    let dt = time.delta_secs();
+    for (entity, mut row, mut node, mut shown, children) in &mut rows {
+        row.age += dt;
+        if row.age > HEARTS_S {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        let beast = yard.beasts.iter().find(|b| b.who == row.who);
+        let spot = beast.zip(camera).and_then(|(b, (at, camera))| {
+            let tall = roster.get(b.species as usize).map_or(0.8, |sp| sp.height_m);
+            let up = o.up_at(b.pos);
+            let head = b.pos + up * (tall + 0.25 + HEARTS_RISE_M * row.age / HEARTS_S);
+            let render = crate::render_origin::render_from_physics(&world.frame, head);
+            camera.world_to_viewport(at, render).ok()
+        });
+        let Some(px) = spot else {
+            *shown = Visibility::Hidden;
+            continue;
+        };
+        *shown = Visibility::Inherited;
+        node.left = Val::Px(px.x / scale - row.width / 2.0);
+        node.top = Val::Px(px.y / scale - HEART_PX.1);
+        // Fade over the last third.
+        let alpha = ((HEARTS_S - row.age) / (HEARTS_S / 3.0)).clamp(0.0, 1.0);
+        for child in children.iter() {
+            if let Ok(mut image) = images.get_mut(child) {
+                image.color = Color::srgba(1.0, 1.0, 1.0, alpha);
+            }
+        }
+    }
+}

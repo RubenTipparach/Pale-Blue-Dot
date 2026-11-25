@@ -66,7 +66,10 @@ fn the_defaults_validate_and_carry_the_eight_fish_then_the_water_life() {
             // The octopus, the plume worm and the seal (B9), appended.
             "octopus",
             "tube_worm",
-            "seal"
+            "seal",
+            // The beaver and the river otter (B29), appended.
+            "beaver",
+            "river_otter"
         ],
         "the roster is append-only: a saved fish is its index"
     );
@@ -87,9 +90,6 @@ fn a_species_on_two_bodies_or_without_an_entry_is_refused() {
         fauna.validate().is_err(),
         "a species leaked to a second body"
     );
-    let mut fauna = FaunaSettings::default();
-    fauna.bodies.get_mut(HOME_BODY).unwrap()[2].guide.entry = " ".into();
-    assert!(fauna.validate().is_err(), "a species with no entry");
     let mut fauna = FaunaSettings::default();
     fauna.bodies.get_mut(HOME_BODY).unwrap()[5].icon.clear();
     assert!(fauna.validate().is_err(), "a species with no icon");
@@ -437,6 +437,39 @@ fn a_school_is_a_function_of_its_seed_and_its_steps() {
     assert_eq!(run(), run());
 }
 
+/// `fish-behaviour` design 4: a free fish's swim turns no faster than
+/// `flock.turn_deg_s` from one step to the next, and its speed rises and
+/// falls with its burst-glide cycle rather than holding one value.
+#[test]
+fn a_fish_turns_no_faster_than_its_limit_and_bursts_and_glides() {
+    let water = Shore { max_depth: 8.0 };
+    let flock = FlockSettings::default();
+    let (mut school, species) = school_of("perch", at(0.0, 2.0, 14.0), 3, &water);
+    let dt = 1.0 / 30.0;
+    let limit = flock.turn_deg_s.to_radians() * dt;
+    let mut speeds = Vec::new();
+    for tick in 0..30 * 40 {
+        let was = school.velocities.clone();
+        school.step(&PLANET, dt, &species, &flock, &water, None);
+        for (a, b) in was.iter().zip(&school.velocities) {
+            let turn = a.angle_between(*b);
+            assert!(
+                turn <= limit + 1e-4,
+                "tick {tick}: turned {:.1} deg in a step",
+                turn.to_degrees()
+            );
+        }
+        speeds.push(school.velocities[0].length());
+    }
+    let (lo, hi) = speeds.iter().fold((f32::INFINITY, 0.0f32), |(lo, hi), s| {
+        (lo.min(*s), hi.max(*s))
+    });
+    assert!(
+        hi - lo > 0.3,
+        "one speed all the way: {lo:.2} to {hi:.2} m/s"
+    );
+}
+
 /// A school told of a lure turns toward it and gets there.
 #[test]
 fn a_scented_school_reaches_the_lure() {
@@ -503,7 +536,7 @@ fn only_fish_bite_and_protected_creatures_refuse_the_catch() {
         let sp = &roster[index_of(id)];
         assert_eq!(sp.status, Status::Protected, "{id}");
         assert_eq!(
-            sp.catch_refusal(),
+            sp.catch_refusal().as_deref(),
             Some("protected: it may not be caught"),
             "{id}"
         );
@@ -511,12 +544,12 @@ fn only_fish_bite_and_protected_creatures_refuse_the_catch() {
     }
     for id in ["shore_crab", "lobster", "giant_clam"] {
         assert_eq!(
-            roster[index_of(id)].catch_refusal(),
+            roster[index_of(id)].catch_refusal().as_deref(),
             Some("it is not taken on a line"),
             "{id}"
         );
     }
-    assert_eq!(roster[index_of("minnow")].catch_refusal(), None);
+    assert_eq!(roster[index_of("minnow")].catch_refusal().as_deref(), None);
 }
 
 /// A sea with a wave on it, for the floaters.
@@ -727,7 +760,10 @@ fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
     let r = roster();
     let i = index_of("seal");
     let sp = &r[i];
-    assert_eq!(sp.catch_refusal(), Some("protected: it may not be caught"));
+    assert_eq!(
+        sp.catch_refusal().as_deref(),
+        Some("protected: it may not be caught")
+    );
     let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
     let seal = school.positions[0];
     let up = seal.normalize();
@@ -887,4 +923,25 @@ fn a_school_is_drawn_between_its_steps_and_a_held_fish_at_the_lure() {
     assert_eq!(school.drawn(0, 0.3), lure);
     school.remove(0);
     assert_eq!(school.before.len(), school.positions.len());
+}
+
+/// Every species, fish and land, has its name, entry and tip in the locale
+/// file, by its id.
+#[test]
+fn every_species_has_its_words() {
+    let english = crate::locale::Locale::english();
+    let fish = FaunaSettings::default();
+    let land = crate::husbandry::HusbandrySettings::default();
+    let ids = fish
+        .bodies
+        .values()
+        .flatten()
+        .map(|s| s.id.clone())
+        .chain(land.land.values().flatten().map(|s| s.id.clone()));
+    for id in ids {
+        for part in ["name", "lower", "caps", "entry", "tip"] {
+            let key = format!("species.{id}.{part}");
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 }

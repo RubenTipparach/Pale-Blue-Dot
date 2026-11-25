@@ -1,0 +1,3 @@
+BOT_OK bot0 player=1 requests=129 accepted=128 refused={"Unchanged": 1} changes=378 regions_checked=1 rtt_ms p50=5.0 p99=8.8 max=59.0
+BOT_OK bot1 player=2 requests=129 accepted=128 refused={"Unchanged": 1} changes=377 regions_checked=1 rtt_ms p50=6.1 p99=10.1 max=64.3
+BOT_OK bot2 player=3 requests=129 accepted=122 refused={"Unchanged": 7} changes=377 regions_checked=1 rtt_ms p50=6.3 p99=10.1 max=61.7

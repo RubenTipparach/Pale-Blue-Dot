@@ -43,7 +43,7 @@
   - Built (2026-11-15), waiting on stills: `docs/mockups/waterfall.html#pour` (the Look tab is `#look`; the old `#A` to `#D` still open it) with `PBDPour` in `waterfall/waterfall.js`. A source on three 1 m terraces falls 5 layers into a pit; `liquid.js` ticks at 1 s (0.25 to 2 s). Controls: Pops (today) / Smoothed, Pour again, Stop source (so S4 shows), Pause, Step one tick, Day / Night, Rain. The mesher is the game's `liquid_mesh` (corner levels, sides over air, falling faces' froth weights) on `waterMaterial`'s `dc0c5cb` froth, with its own vertex shader. Every vertex carries its last-tick position (`aPrev`): S1 levels smoothstepped; S2 a new cell squashed onto its wettest last-tick side at a quarter height, sweeping across; S3 a cell under last tick's water grows down from its top, the foot's splash fading in at landing; S4 a dried cell squashed toward the water under it or its wettest side, hidden at the tick's end. Fronts (S2 to S4) ease linearly so a pour creeps at one speed; levels are smoothstepped. Checked: `node --check` of both scripts; headless, a pour reaches the pit floor at tick 14 with a 5-layer fall, and drains to nothing after Stop source, with every vertex finite. Not yet: stills, the tracker and `mockup-work.md`.
 - [x] 5.2 (2026-11-15, the owner on M31 version 2: "the waterfall look is pretty good, need to be a bit careful with perf on that, on my laptop it is a bit rough, so hopefulyy in game it will work well", then "I will aprpove the mockup, but with performance being the condition you need to validate".) The owner's approval of the mockup. No game code before it.
 - [ ] 5.3 (Merged into claude/env-v2 ahead of the perf condition at the owner's word, 2026-11-16: "PR #52 needs merging"; the ease sits in `sea_frame.zw` beside the river's surface in `.y`. The perf A/B is still owed and decides whether it stays.) In the game: previous heights in the mesher's lanes, the kept dried cells, the tick uniform, `vertex_flowing` easing. Verify: captures mid-tick; a launch to READY with no `LATE_PIPELINE`; THE CONDITION OF APPROVAL: a `perf_suite.py` A/B on the release build (before = claude/env-v2 without it, after = with it), interleaved, on a live pour scene and the `walk`, with no regression past the spread between repeats, reported in `docs/benchmarks/2026-11-15-water-smooth/` and published.
-- [ ] 5.4 (Built 2026-11-17 on `claude/water-despawn-smooth`; waiting for the owner on the videos. Steps 16 to 5 in both runs, worst 10.0 to 5.5 and 8.4 to 4.0; what is left is the ground's wet look and one foot's mist, listed in `docs/screenshots/water-despawn/README.md`. Drive: `water-despawn-{pour-pit,dug-channel}-{before,after}-1080p60.mp4`. A normal launch reaches READY with 118 pipelines and no LATE_PIPELINE.) (Owner, 2026-11-17: "The despawn is still step based.") Water that dries eases out too (design "Water that dries eases out too"): every lane eased, any change eased (edits and landings, not only ticks), a clock a vertex so a remesh carries what is in flight, the squash kept to its side's span. Verify: a unit test that a cell dried this tick is still drawn mid-tick with its top between the two levels and gone at the tick's end; a unit test that across a drain every triangle drawn at a tick's end is drawn at the next's start; before and after 1080p60 MP4s from capture sequences (a pour into a pit stopped and draining; a shallow dug channel emptying) on Drive, every remaining pop listed; contact sheets in `docs/screenshots/water-despawn/`; a launch to READY with no LATE_PIPELINE.
+- [ ] 5.4 (Built 2026-11-17 on `claude/water-despawn-smooth`, merged by PR #103 (`d169f52`) and on `claude/phase-2-1`; checked 2026-11-19: the write-up and both unit tests are in place; waiting for the owner on the videos. Steps 16 to 5 in both runs, worst 10.0 to 5.5 and 8.4 to 4.0; what is left is the ground's wet look and one foot's mist, listed in `docs/screenshots/water-despawn/README.md`. Drive: `water-despawn-{pour-pit,dug-channel}-{before,after}-1080p60.mp4`. A normal launch reaches READY with 118 pipelines and no LATE_PIPELINE.) (Owner, 2026-11-17: "The despawn is still step based.") Water that dries eases out too (design "Water that dries eases out too"): every lane eased, any change eased (edits and landings, not only ticks), a clock a vertex so a remesh carries what is in flight, the squash kept to its side's span. Verify: a unit test that a cell dried this tick is still drawn mid-tick with its top between the two levels and gone at the tick's end; a unit test that across a drain every triangle drawn at a tick's end is drawn at the next's start; before and after 1080p60 MP4s from capture sequences (a pour into a pit stopped and draining; a shallow dug channel emptying) on Drive, every remaining pop listed; contact sheets in `docs/screenshots/water-despawn/`; a launch to READY with no LATE_PIPELINE.
 
 ## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
 
@@ -58,11 +58,14 @@
       under the river); a launch to READY with no LATE_PIPELINE.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
-- [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
+- [x] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well (design "Rain splashes on the water").
+  - [x] 6.3.1 The write-up: the look, the order, the gates, the settings and the cost. Verify: `openspec validate --all`.
+  - [x] 6.3.2 (Built 2026-11-19: `planet_splash.rs` `top_of`/`RainTop`, classes water and sea; `water_on_a_top_is_rained_on_at_its_drawn_top`, `the_sea_is_rained_on_at_its_surface`, the shader validated single- and multisampled with `pbd::sea` spliced.) The near list keeps water columns: a river's or a pool's drawn top, the sea's mean surface with its depth; every impact on water a crown, coloured as the water, the sea's riding `sea_surface`. Verify: unit tests on a fine set with water; the shader validates with `pbd::sea` spliced.
+  - [x] 6.3.3 (Built 2026-11-19: drawn in the water's pass before the fall splash; `docs/screenshots/rain-on-water/`, lavapipe. Frame cost not measured here; the `weather-rain` 6.5 A/B covers it.) The splash draw after the water, tested against the main pass's and the water's depth in its fragment. Verify: captures of rain on a river and on the sea, before and after, in `docs/screenshots/rain-on-water/`; a launch to READY with no LATE_PIPELINE.
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
-- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo: "alright, I'm happy
+- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/1SPmrnALwj2f2x4o932J2X: "alright, I'm happy
       with this, send it yo". The game port is 6.6, with the mockup's defaults: the proposed mist rule, smooth FX,
       opacity 2, size 1.65, wall blend 1.2, droplets as single drops (no streaks, owner), speed-up 2, ripples 0.5 /
       0.9 m / 6 m, pool flow 0.1 / 6 m, Glassy lip 0.70 / 0.50 / 2.25 / green 0.25 / highlight 0. Mockup:
@@ -92,6 +95,14 @@
   - [ ] 6.6.8 (Owed: not run in this sitting; the suite has no fall scenario, a held-view command is in
         `docs/screenshots/waterfall-look/README.md`.) The frame cost: `perf_suite.py`, before and after, on the release build (owner's condition).
 
+- [x] 6.7 (Built 2026-11-17 on `claude/fall-size-rules`.) A fall's size (design "A fall's size"; owner,
+      2026-11-17: "this water is too shallow for ripples, and the mist should be 50% at this size", "less
+      particles for these shallow drops too", "no steam/mist at all for drops that are less than 1 block
+      height"): the foot's ripples gated on the pool's depth (none at 1 m, full at 2 m); no mist under a
+      1 m drop, eased in time across it; mist opacity 50% and particle counts 35% on a small fall, the
+      approved look from 4 m; the same rules in M35. Verify: unit tests for the depth gate, the mist and
+      count scales and the timed mist fade; before and after in `docs/screenshots/fall-size-rules/`.
+
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
 - [x] 7.1 (Built: the rings fade by footprint and end at `rain_detail_reach_m`; river 30.2 to 20.8 (dry 19.0), the beach's far water 42.3 to 24.8 with the near rings kept; the falls' froth not touched.) The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.
@@ -116,3 +127,16 @@
       fall_*` and its stop on walking away.
 - [ ] 8.4 (On the Sounds page, version 2, 2026-11-16; waiting for the owner's ears.) The three loops on the Sounds page for the owner to hear; the
       owner's ears approve them.
+
+## 9. The surface streaming against its arrows (design "The surface streaming against its arrows"; owner, 2026-11-17)
+
+- [x] 9.1 The measurement: `water_flow::flow_uv_audit` (each top triangle's stream as the fragment reads its
+      lane, against its cell's arrow recomputed from the top's corners; the before's frames modelled beside
+      it) and `PBD_FLOW_UV_AUDIT=1`'s `FLOW_UV_AUDIT` log. Verify: at the owner's cascade (frame 23.225,
+      -3.012) and in the unit sweep, the before's counts are the bug's.
+- [x] 9.2 The fix: a top's flow lane written in the body frame's north and east at each vertex
+      (`flow_lane`) and read back in north and east at the fragment (`flow_north_east` in `water.wgsl`),
+      not in the triangle's own face frame. Falls, the sea, the rain rings, speeds and looks untouched.
+      Verify: `every_top_triangle_streams_with_its_arrow` (no triangle over 45 degrees off its arrow,
+      everywhere in the sweep, the pentagons' directions and the frame's old switch rings among them);
+      the cascade's live count is zero; the strip in `docs/screenshots/water-flow-uv/`.

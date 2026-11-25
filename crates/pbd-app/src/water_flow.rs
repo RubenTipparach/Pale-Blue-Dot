@@ -230,6 +230,18 @@ pub fn run_ticks(
     }
     let set = Arc::new(set);
     contact.set_fine(&set);
+    if changed == 0 {
+        // Nothing moved (`cascade-perf`): the queue the ticks worked
+        // through is kept, but no cell, light or record is different, so
+        // the version stays and nothing derived from it is rebuilt: no
+        // re-upload of the whole tier to the GPU (8-10 ms on the render
+        // thread a tick on the M4 Max), no remesh, and the drawing's ease
+        // runs on undisturbed.
+        fine.set = set;
+        step.prev = None;
+        step.after = None;
+        return 0;
+    }
     let made = Arc::as_ptr(&set) as usize;
     fine.set = set;
     fine.version += 1;
@@ -250,10 +262,12 @@ pub fn run_ticks(
 
 /// Once a second, while anything is queued and no set is in flight (a set
 /// built before a tick would land without it).
+#[allow(clippy::too_many_arguments)]
 fn tick_water(
     time: Res<Time>,
     mut clock: ResMut<WaterClock>,
     mut step: ResMut<WaterStep>,
+    mut meshed: ResMut<Meshed>,
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<PlanetContact>>,
     save: Option<ResMut<WorldSave>>,
@@ -279,7 +293,16 @@ fn tick_water(
     }
     clock.since_s -= liquid::TICK_S;
     clock.since_s = clock.since_s.min(liquid::TICK_S);
+    let version = fine.version;
     let changed = run_ticks(&mut fine, &mut contact, &mut save, 1, &mut step);
+    // A tick that moved nothing keeps its version, and the mesh drawn is
+    // still the set's: it is not meshed again (`cascade-perf`).
+    if fine.version == version && meshed.version == version {
+        meshed.set = Arc::as_ptr(&fine.set) as usize;
+        if meshed.last_set.is_some() {
+            meshed.last_set = Some(fine.set.clone());
+        }
+    }
     clock.ticks += 1;
     debug!(
         "water tick {}: {changed} cells changed, {} queued",
@@ -357,7 +380,8 @@ pub struct FlowVertex {
     pub prev: Vec3,
     pub normal: Vec3,
     /// The flow in the face's tangent frame as the sea's fragment reads it.
-    /// The flow lane: a top's pan (xy) and how near a fall's lip it is (z);
+    /// The flow lane: a top's pan (xy, north and east at the vertex,
+    /// `flow_lane`) and how near a fall's lip it is (z);
     /// a face's froth weight (x) and how far under its fall's lip it is (z).
     pub flow: Vec3,
     /// The face's kind, and the sky's share at it, 0..1.
@@ -378,6 +402,24 @@ pub struct FlowVertex {
 }
 
 impl FlowVertex {
+    /// A vertex drawn where it is, not moving (`river-cache` design 14: the
+    /// river band's water, read back from its cache).
+    pub fn still(position: Vec3, normal: Vec3, flow: Vec3, kind: f32, sky: f32) -> Self {
+        Self {
+            position,
+            prev: position,
+            normal,
+            flow,
+            kind,
+            sky,
+            flags: 0,
+            prev_normal: normal,
+            prev_flow: flow,
+            prev_sky: sky,
+            start: 0.0,
+        }
+    }
+
     /// How far through its ease it is at `now` seconds since its mesh's
     /// epoch, eased as `vertex_flowing` eases it.
     fn eased(&self, now: f32) -> (f32, f32) {
@@ -526,12 +568,122 @@ pub struct LiquidMesh {
     pub pieces: Vec<PieceSpan>,
 }
 
-/// The tangent frame the sea's fragment builds off a face (`fragment` in
-/// `water.wgsl`): X, or Y where the face is near X, off the face.
-fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
+/// The frame a top's flow lane is written in and read back from: the body
+/// frame's north and east at the point itself (`geo::north_east`;
+/// `flow_north_east` in `water.wgsl`). Not the face's own tangent frame: a
+/// slanted top's triangles each have their own normal, and that frame flips
+/// from X to Y within 26 degrees of the X axis, so a triangle read its cell's
+/// flow turned or backwards (`water-flow`, "The surface streaming against
+/// its arrows").
+fn flow_frame(at: Vec3) -> (Vec3, Vec3) {
+    pbd_core::geo::north_east(at)
+}
+
+/// A top's flow at `at`, `velocity` in the body frame, as its lane's two
+/// numbers.
+fn flow_lane(at: Vec3, velocity: Vec3) -> Vec2 {
+    let (north, east) = flow_frame(at);
+    Vec2::new(velocity.dot(north), velocity.dot(east))
+}
+
+/// How the sea's fragment reads a top's flow lane back into the body frame
+/// (`fragment` in `water.wgsl`, the `advected` line): the surface's pattern
+/// streams along what this returns. `face` is the fragment's normal, `at`
+/// its body-local position.
+pub fn shader_flow_read(_face: Vec3, at: Vec3, flow: Vec2) -> Vec3 {
+    let (north, east) = flow_frame(at);
+    north * flow.x + east * flow.y
+}
+
+/// What [`flow_uv_audit`] counts: top triangles that stream, those whose
+/// stream is over 90 degrees from their cell's arrow (against it) and over
+/// 45 (off it), and the flowing tops with at least one triangle off.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FlowUvAudit {
+    pub triangles: usize,
+    pub against: usize,
+    pub off: usize,
+    pub tops: usize,
+    pub split_tops: usize,
+    /// The same triangles as the mesher and fragment had them before the
+    /// fix (the slope written in the centre's face frame, read back in the
+    /// triangle's): the measurement's before, off the same mesh.
+    pub legacy_against: usize,
+    pub legacy_off: usize,
+}
+
+/// The tangent frame the fragment built off a face before the fix, and the
+/// rain rings still do: X, or Y where the face is near X, off the face.
+fn legacy_face_frame(face: Vec3) -> (Vec3, Vec3) {
     let reference = if face.x.abs() > 0.9 { Vec3::Y } else { Vec3::X };
     let u = (reference - face * reference.dot(face)).normalize_or(Vec3::X);
     (u, face.cross(u))
+}
+
+/// A measurement instrument (`water-flow`, "The surface streaming against
+/// its arrows"): for every top triangle of `mesh`, the way the fragment
+/// streams it ([`shader_flow_read`] of its flow lane) against its cell's
+/// arrow, the downhill slope recomputed from the top's own corners exactly
+/// as `cell_pieces` takes it. Independent of how the lane is encoded.
+pub fn flow_uv_audit(mesh: &LiquidMesh) -> FlowUvAudit {
+    let mut out = FlowUvAudit::default();
+    for span in &mesh.pieces {
+        let (first, n) = (span.first as usize, span.n as usize);
+        let vs = &mesh.vertices[first..first + n];
+        if vs.is_empty() || vs[0].kind != KIND_TOP || n % 3 != 0 {
+            continue;
+        }
+        // The fan: middle, corner i, corner i + 1.
+        let middle = vs[0].position;
+        let centre = middle.normalize_or(Vec3::Y);
+        let mean = middle.length();
+        let mut gradient = Vec3::ZERO;
+        for tri in vs.chunks(3) {
+            let p = tri[1].position;
+            let offset = p.normalize_or(centre) * mean - middle;
+            let offset = offset - centre * offset.dot(centre);
+            gradient += offset * (p.length() - mean);
+        }
+        let arrow = (-gradient).normalize_or_zero();
+        if arrow == Vec3::ZERO {
+            continue;
+        }
+        let mut split = false;
+        let mut streams = false;
+        for tri in vs.chunks(3) {
+            let at = (tri[0].position + tri[1].position + tri[2].position) / 3.0;
+            let flow = (tri[0].flow + tri[1].flow + tri[2].flow) / 3.0;
+            let dir = shader_flow_read(tri[0].normal, at, flow.truncate());
+            if dir.length_squared() < 1e-8 {
+                continue;
+            }
+            streams = true;
+            out.triangles += 1;
+            let cos = dir.normalize().dot(arrow);
+            if cos < 0.0 {
+                out.against += 1;
+            }
+            if cos < std::f32::consts::FRAC_1_SQRT_2 {
+                out.off += 1;
+                split = true;
+            }
+            let (t, b) = legacy_face_frame(centre);
+            let (u, v) = legacy_face_frame(tri[0].normal.normalize_or(centre));
+            let legacy = (u * arrow.dot(t) + v * arrow.dot(b)).normalize_or_zero();
+            let cos = legacy.dot(arrow);
+            if cos < 0.0 {
+                out.legacy_against += 1;
+            }
+            if cos < std::f32::consts::FRAC_1_SQRT_2 {
+                out.legacy_off += 1;
+            }
+        }
+        if streams {
+            out.tops += 1;
+            out.split_tops += usize::from(split);
+        }
+    }
+    out
 }
 
 impl LiquidMesh {
@@ -724,9 +876,6 @@ struct CellFrame {
     /// the sheet's (`planet::column::sheet_listed`, `ocean-environments`
     /// B22): in a cave the sea reaches too, not only under sea level.
     sheet_listed: bool,
-    /// The shader's tangent frame at the centre.
-    t: Vec3,
-    b: Vec3,
 }
 
 impl CellFrame {
@@ -737,15 +886,12 @@ impl CellFrame {
         for (i, corner) in corners.iter_mut().enumerate().take(degree) {
             *corner = Vec3::from_slice(&cell.corners[i][..3]).normalize_or(centre);
         }
-        let (t, b) = shader_frame(centre);
         Self {
             degree,
             centre,
             corners,
             sides: tier.sides_of(slot),
             sheet_listed: crate::planet::column::sheet_listed(cell),
-            t,
-            b,
         }
     }
 
@@ -860,7 +1006,7 @@ fn cell_pieces(
     let flow = here.flow();
     let falling = flow.is_some_and(|(_, f)| f);
     // The sea's own top: the sheet draws it wherever it is listed, under a
-    // roof too, so a sea cave has one surface at the sheet's tided height.
+    // roof too, so a sea cave has one surface at the sheet's height.
     let sheet = here == Material::Water && layer + 1 == sea && f.sheet_listed;
     let levels = top_levels(tier, f, slot, layer);
     let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);
@@ -938,13 +1084,14 @@ fn cell_pieces(
         if let Some(out) = out.as_deref_mut() {
             out.tops += 1;
         }
-        // The waves stream along the flow, faster on a steeper top.
+        // The waves stream along the flow, faster on a steeper top: one
+        // body-frame velocity for the whole top, written at each vertex in
+        // north and east there (`flow_lane`).
         let pan = if flowing {
             let speed = PAN_K * (slope.length() / PAN_SLOPE).clamp(0.35, 1.5);
-            let dir = slope.normalize();
-            Vec2::new(dir.dot(f.t), dir.dot(f.b)) * speed / SHADER_FLOW
+            slope.normalize() * speed / SHADER_FLOW
         } else {
-            Vec2::ZERO
+            Vec3::ZERO
         };
         // How near each corner is to a fall's lip (owner, 2026-11-15:
         // "can we have the edge transition into froth?"): one at a corner on
@@ -984,7 +1131,7 @@ fn cell_pieces(
                     PieceVertex {
                         p: v,
                         n,
-                        flow: pan.extend(lip),
+                        flow: flow_lane(v, pan).extend(lip),
                         kind: KIND_TOP,
                     },
                     top_of(v),
@@ -1030,7 +1177,7 @@ fn cell_pieces(
             continue;
         }
         let normal = f.side_normal(s);
-        let edge = (z - a).normalize_or(f.t);
+        let edge = (z - a).normalize_or(centre.any_orthonormal_vector());
         // A falling cell's face is white water streaming down; a sheet's
         // edge and a source's face stand still. A fall's froth is densest at
         // its lip and its foot.
@@ -1255,7 +1402,21 @@ pub fn liquid_mesh_eased(
     finest: &[GpuCell],
     radius: f32,
 ) -> LiquidMesh {
+    liquid_mesh_from(tier, prev, finest, radius, 1)
+}
+
+/// [`liquid_mesh_eased`] over the cells at least `from_rim` cells in from
+/// the tier's rim (`river-cache` design 14): the column tier draws only the
+/// water its rim cannot have shaped, and the river band draws the rest.
+pub fn liquid_mesh_from(
+    tier: &ColumnTier,
+    prev: Option<&ColumnTier>,
+    finest: &[GpuCell],
+    radius: f32,
+    from_rim: u16,
+) -> LiquidMesh {
     let mut out = LiquidMesh::default();
+    let depth = tier.rim_depth(from_rim);
     // The tick before is eased from only when it is the same tier.
     let prev = prev
         .filter(|p| p.columns.len() == tier.columns.len() && p.water.records == tier.water.records);
@@ -1271,6 +1432,13 @@ pub fn liquid_mesh_eased(
             .collect()
     });
     for slot in 0..tier.columns.len() {
+        // The rim's water is meshed against neighbours the tier does not
+        // hold, and the rule never settles it: the river band draws those
+        // cells, meshed against their real neighbours (`river-cache` design
+        // 14).
+        if depth.get(slot).is_none_or(|&d| d < from_rim) {
+            continue;
+        }
         let Some(&record) = tier.water.records.get(slot) else {
             continue;
         };
@@ -1486,11 +1654,12 @@ fn rebuild_water(
     } else {
         None
     };
-    let mut made = liquid_mesh_eased(
+    let mut made = liquid_mesh_from(
         &fine.set.columns,
         prev.as_deref().map(|p| &p.columns),
         fine.set.finest_records(),
         PLANET_RADIUS,
+        crate::river_band::TIER_KEEP,
     );
     if step.smooth {
         // What the last mesh is drawing now, and how far its epoch is from
@@ -1520,7 +1689,21 @@ fn rebuild_water(
             started.elapsed().as_secs_f64() * 1e3
         );
     }
+    if std::env::var_os("PBD_FLOW_UV_AUDIT").is_some() {
+        let a = flow_uv_audit(&made);
+        info!(
+            "FLOW_UV_AUDIT triangles={} against={} off45={} tops={} split_tops={} \
+             legacy_against={} legacy_off45={}",
+            a.triangles, a.against, a.off, a.tops, a.split_tops, a.legacy_against, a.legacy_off
+        );
+    }
+    // The river band's water (`river-cache` design 14), built with the set
+    // on its task: still, so it is drawn as it is, after the tier's own.
+    let tier_vertices = made.vertices.len();
+    made.vertices
+        .extend_from_slice(&fine.set.river.mesh.vertices);
     flowing.lanes = Arc::new(made.lanes());
+    made.vertices.truncate(tier_vertices);
     flowing.version += 1;
     feet.0 = made.feet.clone();
     if let Ok(handle) = arrows.single()
@@ -2209,6 +2392,126 @@ mod tests {
         );
     }
 
+    /// The ring's records turned by `q`: the same seven cells anywhere on
+    /// the sphere, at any heading.
+    fn ring_cells_turned(q: Quat) -> Vec<GpuCell> {
+        let mut cells = ring_cells();
+        for cell in &mut cells {
+            let d = q * Vec3::from_slice(&cell.direction_height[..3]);
+            cell.direction_height[..3].copy_from_slice(&d.to_array());
+            for k in &mut cell.corners {
+                let c = q * Vec3::from_slice(&k[..3]);
+                k[..3].copy_from_slice(&c.to_array());
+            }
+        }
+        cells
+    }
+
+    /// Where the ring is set down for the flow audit: the owner's cascade
+    /// (frame 23.225, -3.012), the default spawn, the twelve pentagons'
+    /// directions, the frame's switch rings either side of +X and -X, and
+    /// a Fibonacci sweep of the sphere.
+    fn audit_places() -> Vec<Vec3> {
+        let at = |lat: f32, lon: f32| {
+            pbd_core::geo::direction(pbd_core::geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            })
+        };
+        let mut places = vec![
+            at(23.225, -3.012),
+            Vec3::new(0.8776, 0.4794, 0.0).normalize(),
+        ];
+        let phi = (1.0 + 5f32.sqrt()) / 2.0;
+        for (a, b) in [(1.0, phi), (-1.0, phi), (1.0, -phi), (-1.0, -phi)] {
+            places.push(Vec3::new(0.0, a, b).normalize());
+            places.push(Vec3::new(a, b, 0.0).normalize());
+            places.push(Vec3::new(b, 0.0, a).normalize());
+        }
+        for lon in (0..360).step_by(15) {
+            for x in [0.9f32, -0.9] {
+                let r = (1.0 - x * x).sqrt();
+                let a = (lon as f32).to_radians();
+                places.push(Vec3::new(x, r * a.cos(), r * a.sin()));
+            }
+        }
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        for i in 0..200 {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / 200.0;
+            let r = (1.0 - y * y).max(0.0).sqrt();
+            let a = golden * i as f32;
+            places.push(Vec3::new(a.cos() * r, y, a.sin() * r));
+        }
+        places
+    }
+
+    /// Slanted tops stream with their arrows (`water-flow`, "The surface
+    /// streaming against its arrows"): a top stepping down to a fall's lip
+    /// and one sloping gently, every way round, set down everywhere in
+    /// [`audit_places`]: no top triangle streams more than 45 degrees off
+    /// its cell's arrow.
+    #[test]
+    fn every_top_triangle_streams_with_its_arrow() {
+        let mut total = FlowUvAudit::default();
+        for (i, &place) in audit_places().iter().enumerate() {
+            let before = total;
+            for k in 0..6usize {
+                for spin in [0.0f32, 0.4, 1.1] {
+                    let q = Quat::from_rotation_arc(Vec3::Y, place) * Quat::from_rotation_y(spin);
+                    let cells = ring_cells_turned(q);
+                    for steep in [true, false] {
+                        // Downhill across side k: air there (a step down
+                        // to a lip) or water a few levels lower; a source
+                        // uphill.
+                        let down = if steep {
+                            Material::Air
+                        } else {
+                            Material::flowing(3, false)
+                        };
+                        let tier = ring(&[
+                            (0, AT, Material::flowing(6, false)),
+                            (k + 1, AT, down),
+                            ((k + 3) % 6 + 1, AT, Material::Water),
+                        ]);
+                        let made = liquid_mesh_eased(&tier, None, &cells, RADIUS);
+                        let a = flow_uv_audit(&made);
+                        total.triangles += a.triangles;
+                        total.against += a.against;
+                        total.off += a.off;
+                        total.tops += a.tops;
+                        total.split_tops += a.split_tops;
+                        total.legacy_against += a.legacy_against;
+                        total.legacy_off += a.legacy_off;
+                    }
+                }
+            }
+            if i < 2 {
+                println!(
+                    "FLOW_UV_AUDIT place {i}: {} of {} triangles against, {} off \
+                     (before the fix {} against, {} off)",
+                    total.against - before.against,
+                    total.triangles - before.triangles,
+                    total.off - before.off,
+                    total.legacy_against - before.legacy_against,
+                    total.legacy_off - before.legacy_off
+                );
+            }
+        }
+        // The audit's read is the fragment's.
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        for read in [
+            "let flow_frame = flow_north_east(radial);",
+            "(flow_frame[0]*in.flow_uv.x + flow_frame[1]*in.flow_uv.y)*time*0.35*horizontal",
+            "east = vec3<f32>(-d.z/across, 0.0, d.x/across);",
+            "return array<vec3<f32>, 2>(normalize(cross(east, d)), east);",
+        ] {
+            assert!(shader.contains(read), "{read}");
+        }
+        println!("FLOW_UV_AUDIT {total:?}");
+        assert!(total.triangles > 10_000, "{total:?}");
+        assert_eq!((total.against, total.off), (0, 0), "{total:?}");
+    }
+
     /// `lanes` and `vertex_flowing` agree on the layout: the stride, and
     /// which lane each eased value comes from (`water-flow` 5.4; a sky read
     /// from the wrong lane drew every tick's first frame unlit).
@@ -2325,7 +2628,8 @@ pub const FALL_FEET_MAX: usize = 8;
 /// The feet the water pass is told of (`water-flow` 6.6): per foot, xyz where
 /// it lands (body-local) and w its drop `D`, m; then x the pool's depth under
 /// it, m, y its seed 0..1, z its fade 0..1 (in time, as it joins or leaves the
-/// nearest eight); and how many there are.
+/// nearest eight), w its ripples' share by that depth (`ripple_depth_gain`);
+/// and how many there are.
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct FallFeetGpu {
     pub feet: [Vec4; FALL_FEET_MAX],
@@ -2402,6 +2706,46 @@ impl SplashRule {
     }
 }
 
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0).max(1e-6)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// How much of the foot's ripples a pool shows, 0..1, by its depth under the
+/// foot, m (owner, 2026-11-17: "this water is too shallow for ripples"):
+/// none at `ripple_depth_none_m` or less, faded in to full at
+/// `ripple_depth_full_m`, never a hard cut.
+pub fn ripple_depth_gain(look: &crate::config::FallLook, pool_m: f32) -> f32 {
+    smoothstep(look.ripple_depth_none_m, look.ripple_depth_full_m, pool_m)
+}
+
+/// The ramp a fall's size runs on, by its drop `D` m: `small` at
+/// `mist_small_drop_m` or less, rising smoothly to 1 at `mist_full_drop_m`.
+fn fall_size_scale(look: &crate::config::FallLook, small: f32, drop_m: f32) -> f32 {
+    small + (1.0 - small) * smoothstep(look.mist_small_drop_m, look.mist_full_drop_m, drop_m)
+}
+
+/// The share of the approved mist opacity a fall of drop `D` m shows (owner,
+/// 2026-11-17: "the mist should be 50% at this size"): `mist_small_scale` on
+/// a small fall, the approved look on a big one.
+pub fn mist_drop_scale(look: &crate::config::FallLook, drop_m: f32) -> f32 {
+    fall_size_scale(look, look.mist_small_scale, drop_m)
+}
+
+/// Whether a fall of drop `D` m mists at all (owner, 2026-11-17: "no
+/// steam/mist at all for drops that are less than 1 block height"). Under
+/// the rule before M35 every fall keeps its mist.
+pub fn mists(look: &crate::config::FallLook, drop_m: f32) -> bool {
+    look.rule != crate::config::MistRule::Proposed || drop_m >= look.mist_none_below_m
+}
+
+/// The share of the approved particle count (mist puffs, spray drops, fall
+/// droplets; the bubbles on the GPU by the same ramp) a fall of drop `D` m
+/// makes (owner, 2026-11-17: "less particles for these shallow drops too").
+pub fn particle_drop_scale(look: &crate::config::FallLook, drop_m: f32) -> f32 {
+    fall_size_scale(look, look.particles_small_scale, drop_m)
+}
+
 /// A foot's fades across frames, in time (CLAUDE.md, "a fade is a moment in
 /// time"): the splash's, as it crosses the reach, and the water's, as it
 /// joins or leaves the nearest `FALL_FEET_MAX`.
@@ -2419,6 +2763,9 @@ struct FootFade {
     /// over about a tick, so a lip lowered a layer by a drain does not
     /// resize and reseed the mist in a frame.
     drop: f32,
+    /// Whether the fall mists at all (`mist_none_below_m`), faded in time:
+    /// a fall whose drop crosses a metre eases its mist in or out.
+    mist: f32,
 }
 
 /// The time constant, s, of the splash's drop following the foot's: most
@@ -2435,6 +2782,10 @@ struct SplashState {
     order: Vec<(f32, usize)>,
     /// This frame's feet: the mesher's, and those leaving it still fading.
     feet: Vec<Foot>,
+    /// The measurement's running totals (`cascade-perf`).
+    spent_us: f64,
+    spent_frames: u32,
+    spent_s: f32,
 }
 
 /// Step `v` toward `want` (0 or 1) by `dt` over `fade_s`.
@@ -2463,6 +2814,7 @@ fn animate_splash(
     mut gpu_feet: ResMut<FallFeetGpu>,
     mut state: Local<SplashState>,
 ) {
+    let spent_from = std::time::Instant::now();
     let defaults = crate::config::FallLook::default();
     let look = water.as_deref().map_or(&defaults, |w| &w.falls);
     let Some(frame) = frame else {
@@ -2539,8 +2891,15 @@ fn animate_splash(
                 fade.splash = 0.0;
                 fade.near = 0.0;
                 fade.drop = f.drop_m;
+                fade.mist = f32::from(u8::from(mists(look, f.drop_m)));
             }
             fade.drop += (f.drop_m - fade.drop) * (dt / SPLASH_DROP_EASE_S).min(1.0);
+            fade.mist = fade_toward(
+                fade.mist,
+                f32::from(u8::from(mists(look, fade.drop))),
+                dt,
+                look.splash_fade_s,
+            );
             fade.splash = fade_toward(
                 fade.splash,
                 f32::from(u8::from(inside)),
@@ -2562,7 +2921,12 @@ fn animate_splash(
                 as f32
                 / 65535.0;
             gpu_feet.feet[k] = f.at.extend(fade.drop);
-            gpu_feet.more[k] = Vec4::new(f.pool_m, seed, fade.near * gain, 0.0);
+            gpu_feet.more[k] = Vec4::new(
+                f.pool_m,
+                seed,
+                fade.near * gain,
+                ripple_depth_gain(look, f.pool_m),
+            );
             gpu_feet.count += 1;
         }
     }
@@ -2606,10 +2970,26 @@ fn animate_splash(
         let light = (0.12 + 0.88 * day) * f.sky.max(0.15);
         let rule = SplashRule::of(look.rule, f.height, fades.drop);
         let h = rule.m;
+        // The mist by the fall's size: a small fall's puffs at a share of the
+        // approved opacity, their count and size as approved.
+        let proposed = look.rule == crate::config::MistRule::Proposed;
+        let mist_scale = if proposed {
+            mist_drop_scale(look, fades.drop)
+        } else {
+            1.0
+        };
+        // And fewer of everything on a small fall, so a river of one-layer
+        // steps is not one white speckle (owner, 2026-11-17).
+        let count_scale = if proposed {
+            particle_drop_scale(look, fades.drop)
+        } else {
+            1.0
+        };
         let seed = (foot.x * 7.0) as i32 as u32 ^ ((foot.z * 13.0) as i32 as u32).rotate_left(11);
         // Spray: drops thrown up and out, falling back under gravity, each
         // fading in over the first 15% of its flight.
-        for i in 0..rule.drops {
+        let drops = (rule.drops as f32 * count_scale).round() as u32;
+        for i in 0..drops {
             let r = |k: u32| hash01(seed, i * 8 + k);
             let period = 0.7 + 0.5 * r(0);
             let phase = (t / period + r(1)).fract();
@@ -2639,7 +3019,12 @@ fn animate_splash(
         // proposed rule, each fading in over the first fifth of its life,
         // its centre low so its body meets the pool and the wall blend
         // fades it at the waterline.
-        let puffs = (rule.puffs as f32 * look.mist_amount).round() as u32;
+        // None under a one-layer drop: not emitted once its fade is out.
+        let puffs = if fades.mist > 0.0 {
+            (rule.puffs as f32 * look.mist_amount * count_scale).round() as u32
+        } else {
+            0
+        };
         let over = Vec2::new(f.over.dot(east), f.over.dot(north));
         let open = rule.open && over.length_squared() > 0.25;
         for i in 0..puffs {
@@ -2659,7 +3044,7 @@ fn animate_splash(
                 + up * (rule.rise * s + 0.2 * size)
                 + dir * (SPLASH_EDGE_M + spread * (0.3 + phase) * r(3));
             let born = (phase / 0.2).min(1.0);
-            let alpha = rule.alpha * (1.0 - phase) * born * fade;
+            let alpha = rule.alpha * mist_scale * fades.mist * (1.0 - phase) * born * fade;
             // A continuous frame (row * 4 + 0..3): the fragment cross-fades
             // the two frames either side, so a puff never changes shape in
             // one frame.
@@ -2673,7 +3058,7 @@ fn animate_splash(
         // out, falling under gravity into the pool. More low down. One drop
         // each: no streak trails in the game (owner, 2026-11-16: "I dont want
         // them in game yet").
-        let droplets = (rule.droplets * look.droplets).round() as u32;
+        let droplets = (rule.droplets * look.droplets * count_scale).round() as u32;
         for i in 0..droplets {
             let r = |k: u32| hash01(seed ^ 0x5C3E, i * 8 + k);
             let along = r(2).powf(0.7);
@@ -2708,6 +3093,22 @@ fn animate_splash(
         lanes.clear();
     }
     splash.lanes = lanes;
+    // MEASUREMENT (`cascade-perf`): what the splash costs the main world,
+    // and how much of it there is, every two seconds at debug level.
+    state.spent_us += spent_from.elapsed().as_secs_f64() * 1e6;
+    state.spent_frames += 1;
+    state.spent_s += dt;
+    if state.spent_s >= 2.0 {
+        debug!(
+            "SPLASH_STATS feet {} ({} in reach), quads {quads}, {:.0} us a frame",
+            state.feet.len(),
+            near_rank,
+            state.spent_us / f64::from(state.spent_frames.max(1))
+        );
+        state.spent_us = 0.0;
+        state.spent_frames = 0;
+        state.spent_s = 0.0;
+    }
 }
 
 #[cfg(test)]
@@ -2732,6 +3133,61 @@ mod splash_tests {
         // two-layer fall, twelve for nine.
         assert_eq!(SplashRule::of(MistRule::Layers, 2.0, 2.4).puffs, 1);
         assert_eq!(SplashRule::of(MistRule::Layers, 9.0, 9.4).puffs, 12);
+    }
+
+    /// Ripples need depth (owner, 2026-11-17: "this water is too shallow
+    /// for ripples"): none over one layer (the stream's feet measured 1.00
+    /// m), full from two (the cascade's 3 to 5 m pools), smooth between.
+    #[test]
+    fn ripples_need_depth_and_fade_in_over_it() {
+        let look = crate::config::FallLook::default();
+        assert_eq!(ripple_depth_gain(&look, 0.4), 0.0);
+        assert_eq!(ripple_depth_gain(&look, 1.0), 0.0);
+        assert!((ripple_depth_gain(&look, 1.5) - 0.5).abs() < 1e-6);
+        assert_eq!(ripple_depth_gain(&look, 2.0), 1.0);
+        assert_eq!(ripple_depth_gain(&look, 5.0), 1.0);
+        let mut last = 0.0;
+        for i in 0..=100 {
+            let g = ripple_depth_gain(&look, 1.0 + i as f32 * 0.01);
+            assert!(g >= last && g - last < 0.02, "no hard cut at {i}");
+            last = g;
+        }
+    }
+
+    /// The mist scales with the fall (owner, 2026-11-17: "the mist should
+    /// be 50% at this size"): half the approved opacity at a one-layer step,
+    /// the approved look on a big fall, smooth between.
+    #[test]
+    fn a_small_fall_mists_at_half_and_a_big_one_as_approved() {
+        let look = crate::config::FallLook::default();
+        // The stream's one-layer steps measured D 0.1 to 0.9 m.
+        for d in [0.1, 0.9, 1.05, 1.4, 1.5] {
+            assert_eq!(mist_drop_scale(&look, d), 0.5, "D {d}");
+        }
+        // The mockup's 4 and 9-layer falls, and the cascade's 6 to 9 m.
+        for d in [4.0, 4.4, 6.6, 9.4] {
+            assert_eq!(mist_drop_scale(&look, d), 1.0, "D {d}");
+        }
+        // No mist at all under a one-layer drop.
+        assert!(!mists(&look, 0.9) && !mists(&look, 0.1));
+        assert!(mists(&look, 1.0) && mists(&look, 9.4));
+        // And fewer particles: 35% of the count on the small fall, all of
+        // it on the big one.
+        assert_eq!(particle_drop_scale(&look, 0.9), 0.35);
+        assert_eq!(particle_drop_scale(&look, 9.4), 1.0);
+        let r = SplashRule::of(crate::config::MistRule::Proposed, 1.0, 0.9);
+        let puffs = (r.puffs as f32 * particle_drop_scale(&look, 0.9)).round() as u32;
+        let drops = (r.drops as f32 * particle_drop_scale(&look, 0.9)).round() as u32;
+        assert_eq!((r.puffs, puffs), (8, 3));
+        assert_eq!((r.drops, drops), (12, 4));
+        let two = mist_drop_scale(&look, 2.4);
+        assert!(two > 0.6 && two < 0.7, "{two}");
+        let mut last = 0.5;
+        for i in 0..=250 {
+            let s = mist_drop_scale(&look, 1.5 + i as f32 * 0.01);
+            assert!(s >= last && s - last < 0.01, "no hard cut at {i}");
+            last = s;
+        }
     }
 
     /// A fall that drains away, or moves, takes its foot out of the
@@ -2796,6 +3252,79 @@ mod splash_tests {
             app.update();
         }
         assert_eq!(near(&app), None, "and gone once its fade has played");
+    }
+
+    /// A step under a metre emits no mist at all; when its drop grows past
+    /// a metre its mist eases in over the fade time, never in one frame
+    /// (owner, 2026-11-17: "no steam/mist at all for drops that are less
+    /// than 1 block height").
+    #[test]
+    fn a_sub_metre_step_has_no_mist_and_eases_it_in_past_a_metre() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(bevy::time::TimePlugin)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(1.0 / 60.0),
+            ))
+            .insert_resource(PlanetRenderFrame {
+                center: bevy::math::DVec3::ZERO,
+                origin: bevy::math::DVec3::ZERO,
+            })
+            .init_resource::<FallFeet>()
+            .init_resource::<WaterEase>()
+            .init_resource::<SplashQuads>()
+            .init_resource::<FallFeetGpu>()
+            .add_systems(Update, animate_splash);
+        app.world_mut().spawn((
+            Camera::default(),
+            Camera3d::default(),
+            GlobalTransform::from(
+                Transform::from_xyz(0.0, 1010.0, 8.0)
+                    .looking_at(Vec3::new(0.0, 1000.0, 0.0), Vec3::Y),
+            ),
+        ));
+        let foot = |drop_m: f32| Foot {
+            at: Vec3::new(0.0, 1000.0, 0.0),
+            height: 1.0,
+            sky: 1.0,
+            born: false,
+            drop_m,
+            over: Vec3::X,
+            pool_m: 1.0,
+            column: 1,
+            layer: 1,
+        };
+        // The puffs' summed alpha: a puff's cell is a frame 0..16.
+        let mist = |app: &App| {
+            let lanes = &app.world().resource::<SplashQuads>().lanes;
+            let quads = lanes.get(2..).unwrap_or(&[]);
+            let mut n = 0;
+            let mut alpha = 0.0;
+            for q in quads.chunks(SPLASH_LANES) {
+                if q[2][0] >= 0.0 {
+                    n += 1;
+                    alpha += q[1][3];
+                }
+            }
+            (n, alpha)
+        };
+        app.world_mut().resource_mut::<FallFeet>().0.push(foot(0.9));
+        for _ in 0..60 {
+            app.update();
+            assert_eq!(mist(&app).0, 0, "no puff under a metre");
+        }
+        app.world_mut().resource_mut::<FallFeet>().0[0] = foot(1.4);
+        let mut last = 0.0f32;
+        let mut seen = Vec::new();
+        for _ in 0..90 {
+            app.update();
+            seen.push(mist(&app).1);
+        }
+        for (i, &a) in seen.iter().enumerate().take(20) {
+            assert!(a < last + 0.35, "no pop at frame {i}: {last} to {a}");
+            last = a;
+        }
+        assert!(*seen.last().unwrap() > 0.0, "mists once past a metre");
     }
 
     /// A fade runs in time to its end and stops: never held part way.

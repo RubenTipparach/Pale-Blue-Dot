@@ -150,10 +150,6 @@ pub struct Laid {
     /// Its dressing things standing, and those left off its chart (task
     /// 4.2c).
     pub dressing: (usize, usize),
-    /// Its cog's ship among its solids, where the template moors it
-    /// (`sail-the-cog` design 6). The town stands it empty: the cog is a
-    /// craft (step 3, part 3).
-    pub cog: Option<usize>,
     /// Its dressing's faces in `meshes`, a run of vertices a texture
     /// (`crab-breeze-lessons` rank 5).
     pub props: BTreeMap<String, (usize, usize)>,
@@ -168,14 +164,6 @@ pub struct Laid {
 /// `depth_offset_m`), which is what boats float on.
 pub fn sheet_m(config: &TerrainConfig, water: &crate::config::WaterSettings) -> f32 {
     config.sea_level_m - water.depth_offset_m
-}
-
-/// [`sheet_m`] in a world, from its water settings or the shipped ones.
-fn sheet_in(world: &World, config: &TerrainConfig) -> f32 {
-    match world.get_resource::<crate::config::WaterSettings>() {
-        Some(water) => sheet_m(config, water),
-        None => sheet_m(config, &crate::config::WaterSettings::default()),
-    }
 }
 
 /// The patch of finest cells round a direction.
@@ -235,8 +223,7 @@ fn lay_on(
 
 /// Build a town from its definition: its ground and its pieces, cut on the
 /// cells it was laid on, and the masonry of `template`, the template it was
-/// laid from (slice 4c). `repeat_m` is how far a texture repeats, and
-/// `sheet_m` the drawn sea's surface over the radius ([`sheet_m`]).
+/// laid from (slice 4c). `repeat_m` is how far a texture repeats.
 pub fn build(
     site: &Site,
     town: &Town,
@@ -244,7 +231,6 @@ pub fn build(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
-    sheet_m: f32,
 ) -> Result<Laid, String> {
     build_yielding(
         site,
@@ -253,7 +239,6 @@ pub fn build(
         kits,
         repeat_m,
         config,
-        sheet_m,
         &BTreeSet::new(),
     )
 }
@@ -269,7 +254,6 @@ pub fn build_yielding(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
-    sheet_m: f32,
     yielded: &BTreeSet<u32>,
 ) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
@@ -280,7 +264,6 @@ pub fn build_yielding(
         kits,
         repeat_m,
         config.radius_m,
-        sheet_m,
         natural(config),
         &|k| yielded.contains(&k),
     )?;
@@ -296,7 +279,6 @@ pub fn build_yielding(
         rooms: built.rooms,
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
-        cog: built.cog,
         props: built.props,
         casting: None,
     })
@@ -534,6 +516,12 @@ pub struct Towns {
     pub standing: Vec<Standing>,
     /// Towns being cut on the pool, by site (decision 5: published whole).
     cutting: Vec<(u32, Task<Result<Laid, String>>)>,
+    /// Standing towns whose record changed (a wall broken or mended,
+    /// `townsfolk` design 29), to be cut again and swapped in whole.
+    pub recut: BTreeSet<u32>,
+    /// Each standing town's chart and patch, for finding a layout cell's
+    /// place on the planet (a broken wall's gap).
+    pub charts: BTreeMap<u32, Arc<(Chart, Patch)>>,
 }
 
 impl Towns {
@@ -682,6 +670,7 @@ pub fn replace(world: &mut World, towns: Towns) {
     }
     world.insert_resource(Structures::default());
     world.insert_resource(crate::planet::shadow::TownCasters::default());
+    crate::townsfolk::on_replace(world);
     world.insert_resource(towns);
 }
 
@@ -909,7 +898,6 @@ fn settle(world: &mut World) {
         let assets = world.resource::<TownAssets>();
         (assets.kits.clone(), assets.repeat())
     };
-    let sheet = sheet_in(world, &config);
     for h in kept {
         if (h.point(config.radius_m) - at).length() > STAND_M {
             continue;
@@ -926,7 +914,6 @@ fn settle(world: &mut World) {
             &kits,
             &repeat,
             &config,
-            sheet,
             &yielded,
         ) {
             Ok(laid) => stand(world, &h, laid, 1.0),
@@ -998,12 +985,37 @@ pub fn stand_in_range(world: &mut World) {
             continue;
         };
         match result {
-            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => stand(world, &h, laid, 0.0),
+            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => {
+                // A town cut again stands in its own place at once, drawn
+                // whole, so it never blinks out (design 29).
+                let again = world
+                    .resource::<Towns>()
+                    .standing
+                    .iter()
+                    .any(|s| s.site == site);
+                if again {
+                    drop_town(world, site);
+                }
+                stand(world, &h, laid, if again { 1.0 } else { 0.0 });
+                if again {
+                    let root = world
+                        .resource_mut::<Towns>()
+                        .standing
+                        .iter_mut()
+                        .find(|s| s.site == site)
+                        .map(|s| {
+                            s.shown = 1.0;
+                            s.entity
+                        });
+                    if let Some(root) = root {
+                        show(world, root, 1.0);
+                    }
+                }
+            }
             Ok(_) => {}
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
-    let sheet = sheet_in(world, &config);
     let dt = world
         .get_resource::<Time>()
         .map_or(1.0 / 60.0, |t| t.delta_secs());
@@ -1020,6 +1032,12 @@ pub fn stand_in_range(world: &mut World) {
             let d = (h.point(radius) - at).length();
             if let Some(s) = towns.standing.iter_mut().find(|s| s.site == h.site.id) {
                 s.leaving = leaving(d, s.leaving);
+                if towns.recut.contains(&h.site.id)
+                    && !towns.cutting.iter().any(|(site, _)| *site == h.site.id)
+                {
+                    towns.recut.remove(&h.site.id);
+                    wanted_now.push(h.clone());
+                }
             } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
                 wanted_now.push(h.clone());
             }
@@ -1062,7 +1080,6 @@ pub fn stand_in_range(world: &mut World) {
                         &kits,
                         &repeat,
                         &config,
-                        sheet,
                         &yielded,
                     )
                     .map(|mut laid| {
@@ -1137,6 +1154,8 @@ fn drop_town(world: &mut World, site: u32) {
     if let Ok(e) = world.get_entity_mut(gone.entity) {
         e.despawn();
     }
+    crate::townsfolk::on_drop(world, site);
+    world.resource_mut::<Towns>().charts.remove(&site);
     if let Some(mut structures) = world.get_resource_mut::<Structures>() {
         let end = (gone.first + gone.count).min(structures.0.len());
         structures.0.drain(gone.first.min(end)..end);
@@ -1160,22 +1179,6 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     // Each door as its save holds it: open where the player left it open,
     // shut where there is no record (slice 2b).
     let mut solids = laid.solids.clone();
-    // Its cog is a craft (`sail-the-cog` step 3, part 3), made with its
-    // boats: the ship's place among its pieces is kept, empty, so the
-    // town's numbering holds, and its gangplank stays the town's.
-    if let Some(n) = laid.cog {
-        solids[n] = BuildingSolids {
-            frame: solids[n].frame,
-            reach_m: 0.0,
-            solids: Vec::new(),
-            roof_plan: Vec::new(),
-            surfaces: Vec::new(),
-            doors: Vec::new(),
-            top_m: 0.0,
-            rooms: Meshes::new(),
-            lights: Vec::new(),
-        };
-    }
     door_states(
         &mut solids,
         site.id,
@@ -1190,16 +1193,18 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     };
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
+    crate::townsfolk::on_stand(world, site.id, &held.town, &laid);
+    world
+        .resource_mut::<Towns>()
+        .charts
+        .insert(site.id, Arc::new((laid.chart.clone(), laid.patch.clone())));
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
-    let mut dressing = match (things, off) {
+    let dressing = match (things, off) {
         (0, 0) => String::new(),
         (n, 0) => format!(", {n} dressing things"),
         (n, off) => format!(", {n} dressing things ({off} off its chart)"),
     };
-    if laid.cog.is_some() {
-        dressing.push_str(", a berth for its cog");
-    }
     info!(
         "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,
@@ -1282,8 +1287,8 @@ pub(crate) fn town_material(
 }
 
 /// A cut's faces drawn under `parent` in the towns' textures, in the
-/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: the cog a
-/// craft carries. Each mesh drawn, by its texture's name.
+/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: a craft's
+/// own cut. Each mesh drawn, by its texture's name.
 pub(crate) fn spawn_meshes(
     world: &mut World,
     parent: Entity,
@@ -1331,8 +1336,8 @@ pub struct TownDoor {
 }
 
 /// How far a door swings open, and how fast, radians a second.
-const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
-const SWING_RAD_S: f32 = 5.0;
+pub const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+pub const SWING_RAD_S: f32 = 5.0;
 /// How far from the eye E reaches for a doorway's middle, metres.
 pub const DOOR_REACH_M: f32 = 2.2;
 
@@ -1356,7 +1361,7 @@ pub fn door_states(
 }
 
 /// A triangle soup as a Bevy mesh.
-fn to_mesh(buf: &MeshBuf) -> Mesh {
+pub(crate) fn to_mesh(buf: &MeshBuf) -> Mesh {
     let count = buf.positions.len() as u32;
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -1412,6 +1417,29 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
     }
 }
 
+/// The walker's eye and look at `position` (a query point): what a door's
+/// reach is measured from, for a town's doors and a player's alike.
+pub fn eye_and_look(walking: &WalkingState, position: Vec3) -> (Vec3, Vec3) {
+    let up = position.normalize_or(Vec3::Y);
+    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
+    let (heading, pitch) = walking.view();
+    (eye, heading * pitch.cos() + up * pitch.sin())
+}
+
+/// How far a doorway's middle is from `eye`, if F reaches it: within
+/// [`DOOR_REACH_M`] and in front of the look.
+pub fn leaf_in_reach(
+    eye: Vec3,
+    look: Vec3,
+    b: &BuildingSolids,
+    d: &pbd_core::settlement::pieces::DoorLeaf,
+) -> Option<f32> {
+    let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
+    let to = middle - eye;
+    let dist = to.length();
+    (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some(dist)
+}
+
 /// The door in reach: the nearest doorway within [`DOOR_REACH_M`] of the
 /// eye and in front of it. What F opens and what the prompt names.
 fn door_in_reach<'a>(
@@ -1421,18 +1449,12 @@ fn door_in_reach<'a>(
     towns: &Towns,
     doors: impl Iterator<Item = &'a TownDoor>,
 ) -> Option<TownDoor> {
-    let up = position.normalize_or(Vec3::Y);
-    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
-    let (heading, pitch) = walking.view();
-    let look = heading * pitch.cos() + up * pitch.sin();
+    let (eye, look) = eye_and_look(walking, position);
     doors
         .filter_map(|door| {
             let b = structures.0.get(towns.index(door.site, door.building)?)?;
             let d = b.doors.get(door.door)?;
-            let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
-            let to = middle - eye;
-            let dist = to.length();
-            (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some((dist, *door))
+            leaf_in_reach(eye, look, b, d).map(|dist| (dist, *door))
         })
         .min_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, door)| door)
@@ -1467,7 +1489,7 @@ pub fn offer_doors(
     use crate::interact::{Act, Offer};
     interact.offer(Offer::new(
         if open { Act::ShutDoor } else { Act::OpenDoor },
-        "door",
+        pbd_core::locale::tr("towns.door"),
     ));
 }
 
@@ -1567,7 +1589,7 @@ pub fn swing_doors(
 }
 
 /// A texture of the town's, sampled nearest and repeated.
-pub(crate) fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
+pub fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
     assets.load_with_settings(
         format!("textures/settlement/{name}.png"),
         |s: &mut ImageLoaderSettings| {
@@ -1599,17 +1621,24 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         laid.meshes
             .iter()
             .map(|(name, buf)| {
-                let mesh = to_mesh(buf)
-                    .with_inserted_attribute(
-                        Mesh::ATTRIBUTE_UV_1,
-                        vec![UNBAKED; buf.positions.len()],
-                    )
-                    .with_inserted_attribute(
-                        Mesh::ATTRIBUTE_COLOR,
-                        vec![UNBAKED_BEFORE; buf.positions.len()],
-                    );
                 // A flame is drawn unlit and is no texture, outside as in a
-                // room (decision 7a).
+                // room (decision 7a), and is never baked: an unlit material
+                // multiplies by a vertex colour, and the bake's would black
+                // it (a smithy's forge, `townsfolk` design 26a, is the first
+                // flame outside a room).
+                let mesh = if name == FLAME {
+                    to_mesh(buf)
+                } else {
+                    to_mesh(buf)
+                        .with_inserted_attribute(
+                            Mesh::ATTRIBUTE_UV_1,
+                            vec![UNBAKED; buf.positions.len()],
+                        )
+                        .with_inserted_attribute(
+                            Mesh::ATTRIBUTE_COLOR,
+                            vec![UNBAKED_BEFORE; buf.positions.len()],
+                        )
+                };
                 let image = (name != FLAME).then(|| texture(assets, name));
                 (mesh, image, cut.contains(name))
             })
@@ -1724,6 +1753,27 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
             }
         }
     }
+    chunked(triangles)
+}
+
+/// What a player's plot casts (`player-building` design 9): every triangle
+/// of its meshes but its flames and what is cut out, into every cascade,
+/// chunked as a town's.
+pub fn casting_of(meshes: &Meshes) -> TownCasting {
+    let cut = cut_textures();
+    let all = crate::planet::shadow::CASCADE_COUNT as u8;
+    let triangles = meshes
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name) && name.as_str() != FLAME)
+        .flat_map(|(_, buf)| buf.positions.chunks_exact(3))
+        .map(|t| ([t[0], t[1], t[2]], all))
+        .collect();
+    chunked(triangles)
+}
+
+/// Triangles, each with how many cascades it casts into, laid out in
+/// chunks of [`CASTER_CHUNK_M`] with their bounds.
+fn chunked(triangles: Vec<([[f32; 3]; 3], u8)>) -> TownCasting {
     // By chunk: its cascades, then the cell its centroid is in. A BTreeMap,
     // so the order is the same on every run.
     type Triangle = [[f32; 3]; 3];

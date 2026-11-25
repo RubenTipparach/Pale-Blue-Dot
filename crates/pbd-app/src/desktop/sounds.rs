@@ -14,7 +14,11 @@ use pbd_core::missions::Kind;
 use pbd_core::terrain::Material;
 
 pub fn register(app: &mut App) {
-    app.add_systems(Update, (digging, screens));
+    // `digging` reads the tool strokes' impacts, which `HeldPlugin` registers
+    // only when there is a walker; a flight with no walker (`--tour`,
+    // `--route`) has none, and the reader would fail validation at start.
+    app.add_message::<pbd_app::held::StrokeImpact>()
+        .add_systems(Update, (digging, screens));
 }
 
 /// The material a `block:<name>` code names.
@@ -25,18 +29,17 @@ fn material_named(code: &str) -> Option<Material> {
         .find(|m| pbd_core::inventory::material_name(*m) == name)
 }
 
-/// What the dig at hand is: the block, the thirds already sounded, where it
-/// is and what it is made of.
+/// What the dig at hand is: the block, where it is and what it is made of.
 #[derive(Default)]
 struct Digging {
     block: Option<Block>,
-    thirds: u32,
     at: Option<Vec3>,
     family: Option<Family>,
 }
 
-/// A dig sounds at each third of a block's progress, a break when it comes
-/// out, a place when one is set (design section 4, Ground).
+/// A dig sounds on each impact of the tool's stroke but the last
+/// (`held-swing` 2.2), a break when the block comes out (on the last
+/// impact), a place when one is set (design section 4, Ground).
 #[allow(clippy::too_many_arguments)]
 fn digging(
     mining: Option<Res<Mining>>,
@@ -45,6 +48,7 @@ fn digging(
     save: Option<Res<WorldSave>>,
     listener: Res<Listener>,
     mut did: MessageReader<pbd_app::missions::Did>,
+    mut impacts: MessageReader<pbd_app::held::StrokeImpact>,
     mut sfx: ResMut<Sfx>,
     mut state: Local<Digging>,
 ) {
@@ -54,7 +58,7 @@ fn digging(
         .map(|t| listener.eye + listener.forward * t.distance);
     if let Some(mining) = &mining {
         match mining.progress() {
-            Some((block, progress)) => {
+            Some((block, _)) => {
                 if state.block != Some(block) {
                     let family = if block.1 == TREE_LAYER {
                         Some(Family::Wood)
@@ -68,27 +72,23 @@ fn digging(
                     };
                     *state = Digging {
                         block: Some(block),
-                        thirds: 0,
                         at: aimed.or(state.at),
                         family: family.filter(|f| f.diggable()),
                     };
                 }
-                let thirds = (progress.clamp(0.0, 1.0) * 3.0).floor() as u32;
-                // A swing at the start, and at each third.
-                let due = if state.thirds == 0 && progress > 0.0 {
-                    true
-                } else {
-                    thirds > state.thirds && thirds < 3
-                };
-                if due && let (Some(family), Some(at)) = (state.family, state.at) {
-                    sfx.play(named("dig", family), Where::At(at));
-                    state.thirds = thirds.max(1);
-                }
             }
             None => {
                 state.block = None;
-                state.thirds = 0;
             }
+        }
+    }
+    // The stroke's impacts land on the dig's beat; the last is the break,
+    // which sounds as one.
+    for impact in impacts.read() {
+        if !impact.last
+            && let (Some(_), Some(family), Some(at)) = (state.block, state.family, state.at)
+        {
+            sfx.play(named("dig", family), Where::At(at));
         }
     }
     let hand = aimed

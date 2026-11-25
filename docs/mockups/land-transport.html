@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Land Transport</title>
+<meta name="description" content="Pale Blue Dot mockup M38, version 2 (the hand cart and the horse cart moved to phase 3, and a Road or not tab): phase 5's land transport on phase 3's hex roads. Horses, carts and a wagon, an early car and a small truck, a little steam train on hex track with a grade and a station, all at the game's scale, lit at night by their own lamps.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
+<style>
+/* One screen: the header, the tab bar, one 3D view, the controls under it.
+   Tokens: the stone-and-carved-wood kit's colours (Sweaft-64), as river-craft.html.
+   The game UI has one look by day and by night, so the page commits to it in every theme. */
+:root {
+  --ink: #010000; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2;
+  --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --oak: #8a5a32; --oak-hi: #b07a46; --oak-lo: #5a3a20;
+  --rune: #84e3b5; --rune-dim: #53998b;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #010e1a; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--page-text); font: 17px/1.3 var(--body); display: flex; flex-direction: column; overflow-x: hidden; }
+a { color: var(--rune); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.top { padding-block: 6px 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; border-bottom: 1px solid var(--page-line); }
+.pbd-tracker { flex-basis: 100%; margin: 0; font: 15px/1.2 var(--body); }
+header.top h1 { font: 700 24px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+.infobtn { font: 600 18px/1 var(--body); width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; }
+.infobtn:hover { border-color: var(--rune); }
+.infobtn:focus-visible { outline: 2px solid var(--rune); outline-offset: 2px; }
+
+nav.tabs { display: flex; gap: 3px; padding-block: 6px 0; overflow-x: auto; scrollbar-width: none; }
+.tab { background: linear-gradient(var(--oak-lo), #3e2814); border: 2px solid var(--ink); border-bottom: 0; color: var(--label); font: 600 17px/1 var(--display);
+  letter-spacing: .5px; height: 38px; padding: 0 14px; cursor: pointer; white-space: nowrap; text-shadow: 0 2px 0 var(--ink); flex: none; box-shadow: inset 0 2px 0 rgba(255,255,255,.12); }
+.tab[aria-selected="true"] { background: linear-gradient(var(--oak-hi), var(--oak)); color: var(--ink); text-shadow: none; }
+.tab:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
+
+.stage { position: relative; flex: 1 1 auto; min-height: 300px; background: #000; border-top: 4px solid var(--stone-2); border-bottom: 4px solid var(--stone-2); overflow: hidden; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.stage canvas[hidden] { display: none; }
+.hud { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; }
+.chip { background: rgba(1, 14, 26, .78); border: 1px solid var(--stone-1); padding: 3px 7px 2px; font: 15px/1.1 var(--body); color: var(--text); text-shadow: 0 1px 0 var(--ink); white-space: nowrap; }
+.chip b { font-weight: 600; color: var(--label-dim); margin-right: 5px; }
+.chip.title { color: var(--title); font-weight: 600; }
+
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-block: 6px; background: var(--page-2); }
+.bar + .bar { border-top: 1px solid var(--page-line); }
+.grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.lab { font: 600 14px/1 var(--display); color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; margin-right: 2px; }
+.btn { background: linear-gradient(#4b6479, var(--stone-2)); border: 2px solid var(--ink); box-shadow: inset 0 2px 0 rgba(255,255,255,.18), inset 0 -3px 0 rgba(0,0,0,.35);
+  color: var(--label); cursor: pointer; height: 40px; min-width: 52px; padding: 0 12px; font: 18px/1 var(--body); text-shadow: 0 2px 0 var(--stone-0); white-space: nowrap; }
+.btn:hover { background: linear-gradient(#5a758c, #4a6378); }
+.btn[aria-pressed="true"] { background: linear-gradient(var(--oak-hi), var(--oak)); color: var(--ink); text-shadow: none; box-shadow: inset 0 3px 0 rgba(0,0,0,.25); }
+.btn:focus-visible { outline: 2px solid var(--rune); outline-offset: 1px; }
+select.sel { font: 17px var(--body); height: 38px; background: var(--well); color: var(--label); border: 2px solid var(--stone-2); padding: 0 6px; max-width: 220px; }
+select.sel:focus-visible { outline: 2px solid var(--rune); }
+input[type=range] { width: 160px; accent-color: var(--title); }
+output { color: var(--rune); min-width: 46px; display: inline-block; }
+
+dialog.infomodal { width: min(780px, 94vw); max-height: 88vh; max-height: 88dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
+.mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; background: var(--face); border-bottom: 2px solid var(--stone-0); z-index: 1; }
+.mhead b { font: 700 20px/1.2 var(--display); color: var(--title); }
+.mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+.mhead button:focus-visible { outline: 2px solid var(--rune); }
+.mnav { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 16px 0; font-size: 15px; }
+.mbody { padding: 4px 16px 18px; font-size: 16.5px; line-height: 1.45; }
+.mbody h2 { font: 700 20px/1.2 var(--display); color: var(--title); margin: 20px 0 6px; scroll-margin-top: 64px; }
+.mbody p, .mbody li { margin: 4px 0; max-width: 70ch; }
+.mbody ul { padding-left: 20px; margin: 4px 0; }
+.mbody q { color: var(--text); }
+.mbody code { color: var(--text-dim); font: .95em ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.tw { overflow-x: auto; }
+.mbody table { border-collapse: collapse; font-size: 15px; min-width: 420px; }
+.mbody th, .mbody td { border-top: 1px solid var(--page-line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.mbody th { color: var(--label-dim); font-weight: 600; }
+@media (max-width: 560px) { header.top h1 { font-size: 21px; } .btn { padding: 0 9px; } input[type=range] { width: 120px; } }
+</style>
+</head>
+<body>
+<header class="top wrap">
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <h1>Land Transport</h1>
+  <button class="infobtn" id="info" aria-label="About this mockup" title="About this mockup">i</button>
+</header>
+<nav class="tabs wrap" role="tablist" aria-label="Land transport">
+  <button class="tab" role="tab" data-tab="carts" aria-selected="true">Carts and horses</button>
+  <button class="tab" role="tab" data-tab="cars" aria-selected="false">Cars</button>
+  <button class="tab" role="tab" data-tab="trains" aria-selected="false">Trains and tracks</button>
+  <button class="tab" role="tab" data-tab="side" aria-selected="false">Side by side</button>
+  <button class="tab" role="tab" data-tab="offroad" aria-selected="false">Road or not</button>
+</nav>
+<div class="stage" id="stage">
+  <canvas id="cv-carts" hidden></canvas>
+  <canvas id="cv-cars" hidden></canvas>
+  <canvas id="cv-trains" hidden></canvas>
+  <canvas id="cv-side" hidden></canvas>
+  <canvas id="cv-offroad" hidden></canvas>
+  <div class="hud"><span class="chip title" id="hudTitle"></span><span class="chip" id="hudPhase"></span><span id="hudExtra" style="display:contents"></span><span class="chip"><b>Cell</b>2.833 m</span><span class="chip"><b>Layer</b>1 m</span><span class="chip"><b>Person</b>1.55 m</span><span class="chip" id="hudTime"></span></div>
+</div>
+<div class="bar wrap">
+  <div class="grp"><button class="btn" id="drive" aria-pressed="false">Drive</button><button class="btn" id="line" aria-pressed="false">Drive line</button></div>
+  <div class="grp"><span class="lab">Follow</span><select class="sel" id="follow" aria-label="Follow"></select></div>
+  <div class="grp"><span class="lab">View</span><select class="sel" id="view" aria-label="View"></select><button class="btn" id="reset">Reset</button></div>
+</div>
+<div class="bar wrap">
+  <div class="grp"><span class="lab">Time</span><button class="btn" id="day">Day</button><button class="btn" id="night">Night</button>
+    <input type="range" id="time" min="0" max="24" step="0.25" value="13" aria-label="Time of day"><output id="timeOut">13:00</output></div>
+</div>
+
+<dialog class="infomodal" id="modal" aria-labelledby="mtitle">
+  <div class="mhead"><b id="mtitle">Land Transport (M38)</b><button id="mclose" aria-label="Close">✕</button></div>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-carts">Carts</a><a href="#m-cars">Cars</a><a href="#m-trains">Trains</a><a href="#m-side">Side by side</a><a href="#m-offroad">Road or not</a><a href="#m-phase3">Phase 3</a><a href="#m-scale">Scale</a><a href="#m-engine">In the engine</a></nav>
+  <div class="mbody">
+    <h2 id="m-about">About</h2>
+    <p>Phase 5's land transport, on the roads phase 3 builds. The owner, 2026-11-21: <q>add cars and cars and carts, and horses and trains (and tracks) mockups to phase 5</q>, and 2026-11-22: <q>Roads and cars mockup?</q>. This is design only: nothing here is in the game, and phase 5 does not start until the owner asks. The OpenSpec change is <code>land-transport</code>.</p>
+    <p>The roads are townsfolk's road cells, cut the way <code>towns.html</code>'s Roads scene cuts them: a cell is 2.833 m flat to flat, a layer is 1 m, and a road cell that climbs slopes its top as one plane from the middle of the edge it is entered by to the middle of the edge it leaves by, one layer over the cell (19°). Dirt and gravel use the same pixel textures as that scene; the bridge is its timber deck on posts.</p>
+    <p>Nothing moves until you press <b>Drive</b>. Drag to turn the view, scroll or pinch to come closer, right-drag or two fingers to slide it. <b>Follow</b> keeps a vehicle in the middle without turning the view. <b>Drive line</b> draws the line the wheels follow. <b>Night</b> (or the time slider) lights each scene by its own lamps: posts by the road, the lanterns on the carts, the cars' headlamps, the engine's lamp, the coach's windows and the station's lamps; the moon is dim. The open tab is in the link (<code>#carts</code>, <code>#cars</code>, <code>#trains</code>, <code>#side</code>); only its view is made and drawn.</p>
+
+    <h2 id="m-carts">Carts and horses</h2>
+    <ul>
+      <li>A road loop of 40 cells: a level dirt track in the south, a climb of three layers up each end (three sloped cells, a layer a cell), and a gravel road over the hilltop with a timber bridge over a ravine.</li>
+      <li>A saddled horse with a rider, a horse in the shafts of a two-wheeled cart, and a horse on the pole of a four-wheeled covered wagon. A hitching rail at the west end with a horse tied to it and a lamp over it.</li>
+      <li>A cart's two wheels pitch it to its horse: the cart points from its axle to the collar, so on a climb it tilts with the horse. A wagon's front axle turns on its kingpin to follow the pole, and the body sits on both axles.</li>
+      <li>Horses walk at about 1.6 m/s and slow on a climb. A horse's legs move only while it walks; a parked cart's wheels stand still.</li>
+      <li>Every vehicle fits in one road cell, so two cannot pass on a one-cell road. Recommendation taken (ask only with screenshots): roads stay one cell wide, with a two-cell passing place every so often; the world's roads between towns get one at each lamp.</li>
+    </ul>
+
+    <h2 id="m-cars">Cars</h2>
+    <ul>
+      <li>The same loop. An early open tourer (wheelbase 2.4 m) and a small flatbed truck with crates (wheelbase 3.0 m), both on wooden-spoked or steel disc wheels.</li>
+      <li><b>The bend.</b> A road bends 60° in one cell, never sharper. A vehicle drives it as an arc from the middle of the cell before the bend to the middle of the cell after it: a radius of 4.9 m (twice the cell's 2.45 m in-cell arc), which an early car can turn. The arc passes 0.76 m inside the bend cell's centre and stays on the road cells; a 1.6 m car's inside wheel crosses the cell's inner edge by about 0.1 m, so a bend's inside neighbour must be free of walls and fences to wheel height. Two bends in neighbouring cells halve the arc (2.45 m), which carts and cars can take at walking pace. A 120° turn in one cell is not a road; it needs two bends.</li>
+      <li><b>The climb.</b> One layer a cell is 19° (a 35% grade). A horse walks it; an early car climbs it in low gear at about 60% of its speed. Steeper than a layer a cell is never a road.</li>
+      <li><b>The bridge.</b> The timber deck is the road at its own height, so a car crosses it as it crosses gravel. Recommendation taken (ask only with screenshots): bridges carry everything that fits on the road; there is no weight limit in phase 5.</li>
+      <li>Headlamps throw their light ahead of the car and light the road and the verge there; a lamp post lights the car as it passes.</li>
+    </ul>
+
+    <h2 id="m-trains">Trains and tracks</h2>
+    <ul>
+      <li><b>Straight track</b> runs from cell centre to cell centre along one of the six hex directions, 2.833 m a cell, so every straight lies on the grid.</li>
+      <li><b>A curve</b> turns 60° and starts and ends on cell centres: it goes two cells along the old heading and two along the new one, which makes a circle of radius 2·√3·2.833 = 9.81 m. Six curves close a loop. A bigger curve piece (three and three, 14.7 m) is the same rule for faster lines. A curve does not lie on cell centres between its ends; its cells are the cells its bed covers.</li>
+      <li><b>A grade.</b> A train cannot climb a layer a cell. The loop climbs one layer over six cells (1 in 17, 5.9%) on its south straight and comes down the same on the north. Half the grade runs on an embankment over the low ground and half in a cutting through the terrace.</li>
+      <li><b>The bed.</b> Track is laid on a ballast bed whose top follows the grade. Cells taller than the bed are cut down to the layer under it, and cells lower than that layer are filled up to it; the bed's sloped bank makes up the part of a layer between, as a road cell's wedge does. So the world keeps whole cells, and only the bed is sloped.</li>
+      <li><b>The station.</b> A platform is a row of cells one layer above the bed, faced in fieldstone with a timber edge that reaches to within 0.2 m of the train. A small booking hut, a bench and two lamps.</li>
+      <li>A little tank engine (metre gauge, 5.1 m) with a coach and an open wagon, 15 m in all. The coach's windows are lit at night and light the platform beside it.</li>
+    </ul>
+
+    <h2 id="m-side">Side by side</h2>
+    <p>Everything on one straight gravel road and a track beside it, at one scale, with a townsperson beside each. Drive sends them all east at their own speeds; each comes back round from the west end.</p>
+
+    <h2 id="m-offroad">Road or not</h2>
+    <p>The owner, 2026-11-22: <q>wheeled vihecles will move slower without the road (like 1/4 speed)</q>. Three lanes side by side: a gravel road, a village dirt track (the world's) and open grass. A hand cart and a horse cart on each. <b>Drive</b> sends all six east at the game's own speeds (a hand cart 6 m/s and a horse cart 9 m/s on a road) times their lane's factor, so the lanes spread apart as they go; each comes back round from the west end.</p>
+    <div class="tw"><table>
+      <tr><th>Surface</th><th>Factor</th><th>Hand cart</th><th>Horse cart</th></tr>
+      <tr><td>Gravel road, a bridge deck, a town's lanes</td><td>1.0</td><td>6 m/s</td><td>9 m/s</td></tr>
+      <tr><td>Dirt track</td><td>0.6</td><td>3.6 m/s</td><td>5.4 m/s</td></tr>
+      <tr><td>Ford</td><td>0.5</td><td>3 m/s</td><td>4.5 m/s</td></tr>
+      <tr><td>Anything else, a cell marked and not paved included</td><td>0.25</td><td>1.5 m/s</td><td>2.25 m/s</td></tr>
+    </table></div>
+    <ul>
+      <li>The quarter off the road is the owner's. Dirt at 0.6 and the ford at 0.5 are recommendations taken (ask only with screenshots).</li>
+      <li>With its wheels on two surfaces a cart takes the lower factor, so a cart half off the road is slowed. The climb's slowing (a horse to about 70% on a layer a cell) applies on top.</li>
+      <li>Walking does not change: on foot gravel is still 1.15 times the ground and dirt 1.0.</li>
+    </ul>
+
+    <h2 id="m-phase3">Phase 3: the hand cart and the horse cart</h2>
+    <p>The owner, 2026-11-22: <q>we also need to add basic carts to phase 3 as well, and horse carts too</q>. The hand cart and the horse cart (the two-wheeled cart on the Carts and horses tab) move to phase 3 with the roads they run on; the ridden horse, the covered wagon, cars, trucks and trains stay in phase 5. <code>land-transport</code> design 9 and 10.</p>
+    <ul>
+      <li><b>The hand cart</b>: two wheels, a plank bed, two handles, pulled by the player. A hold of 9 slots. Wheels (4 planks and an iron tyre each), 8 planks and 2 rope at the workbench.</li>
+      <li><b>The horse cart</b>: the horse in the shafts, the player on the seat, a lantern. A hold of 24 slots. Two wheels, 14 planks, 4 rope and 2 leather for the harness.</li>
+      <li><b>A horse is bought</b> for 120 coins from a stable keeper in the larger towns: a kept animal of a new species no wild herd rolls, so every world's wild herds stay as they are. Hitching writes the horse and the cart in one step, never half.</li>
+      <li><b>Stored as vehicles</b>: set down from the pack, a cart is a record with its place, hold and horse. Letting go or stepping down changes who is with it, never whether it exists; a loaded cart left on a road is there next session.</li>
+      <li>The town tree's Carts branch (M33's Town tab) walks a player through it: wheels, a hand cart, haul a load, buy a horse, hitch up, 500 m on the road.</li>
+    </ul>
+
+    <h2 id="m-versions">Versions</h2>
+    <ul>
+      <li><b>Version 1</b> (2026-11-22): carts and horses, cars, trains and tracks, side by side, all phase 5.</li>
+      <li><b>Version 2</b> (2026-11-22): the hand cart and the horse cart marked phase 3, a hand cart on the Carts and horses tab, and the Road or not tab.</li>
+    </ul>
+
+    <h2 id="m-scale">Scale</h2>
+    <div class="tw"><table>
+      <tr><th>Thing</th><th>Length</th><th>Width</th><th>Height</th></tr>
+      <tr><td>Townsperson (M5's block head)</td><td>-</td><td>0.46 m</td><td>1.55 m</td></tr>
+      <tr><td>Horse</td><td>2.4 m</td><td>0.55 m</td><td>1.5 m at the withers</td></tr>
+      <tr><td>Two-wheeled cart with horse</td><td>5.5 m</td><td>1.66 m</td><td>wheels 1.2 m</td></tr>
+      <tr><td>Covered wagon with horse</td><td>7.0 m</td><td>1.6 m</td><td>2.5 m</td></tr>
+      <tr><td>Early car</td><td>3.6 m</td><td>1.6 m</td><td>1.9 m</td></tr>
+      <tr><td>Small truck</td><td>4.9 m</td><td>1.9 m</td><td>2.3 m</td></tr>
+      <tr><td>Tank engine, coach, wagon</td><td>5.1 + 4.6 + 4.0 m</td><td>1.8 m</td><td>2.95 m above the rail</td></tr>
+      <tr><td>Track</td><td>-</td><td>1.0 m gauge, sleepers 1.8 m</td><td>bed 2.2 m wide</td></tr>
+    </table></div>
+
+    <h2 id="m-engine">In the engine</h2>
+    <ul>
+      <li>A road vehicle reads only the road cells: their top (flat, or the slope's plane), whether a cell is a bridge deck, and the cell's surface (dirt, gravel) for its speed and sound. It never needs a GPU readback.</li>
+      <li>A vehicle is a stored record like a boat: its ID, its pose in the body's frame (a <code>WorldPos</code>, f64), its cargo, damage and owner, and the animal in its shafts by that animal's own ID. A train is an ordered list of its cars' IDs and where it stands on its track. Track and its bed are stored edits on the durable path, made by the player like a road.</li>
+      <li>Vehicles in the world get <code>LitByField</code> and <code>LitLikeTerrain</code>, so a cart in a cutting at night is as dark as the cutting, and its lantern lights it.</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================
+// Scale and the hex grid: towns.html's, the engine's gold standard.
+// Pointy-top cells; rows run along x; odd rows shifted half a cell east.
+// Direction d's edge normal is at 60*d degrees from +x.
+// =====================================================================
+const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const par = r => ((r % 2) + 2) % 2;
+const toAx = (c, r) => [c - (r - par(r)) / 2, r];
+const toOff = (q, r) => [q + (r - par(r)) / 2, r];
+function nb(c, r, d) { const [q] = toAx(c, r); return toOff(q + DIRS[((d % 6) + 6) % 6][0], r + DIRS[((d % 6) + 6) % 6][1]); }
+const cx = (c, r) => W * (c + 0.5 * par(r));
+const cz = (c, r) => ROW * r;
+const dvec = d => [Math.cos(d * Math.PI / 3), Math.sin(d * Math.PI / 3)];
+function corner(c, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [cx(c, r) + R * Math.cos(a), cz(c, r) + R * Math.sin(a)]; }
+function edgeEnds(c, r, d) { return [corner(c, r, d), corner(c, r, d + 1)]; }
+function hexPts(c, r) { const p = []; for (let k = 0; k < 6; k++) p.push(corner(c, r, k)); return p; }
+function cellAt(x, z) {
+  const qf = (Math.sqrt(3) / 3 * x - z / 3) / R, rf = (2 / 3 * z) / R, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf), s = Math.round(sf);
+  const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return toOff(q, r);
+}
+function dirTo(c, r, c2, r2) { for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (a === c2 && b === r2) return d; } return -1; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+
+// =====================================================================
+// Pixel textures: 32 px repeats, 16 px to the metre, nearest magnification.
+// Ground, road, gravel, plank and timber are towns.html's; the rest are
+// in the same palette, muted to sit on that ground.
+// =====================================================================
+function hex2rgb(h) { return [(h >> 16) & 255, (h >> 8) & 255, h & 255]; }
+function paint(w, h, fn, seed) {
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const g = cv.getContext("2d"), img = g.createImageData(w, h), rnd = rng(seed);
+  const px = (x, y, col, f = 1, a = 255) => {
+    x = ((x % w) + w) % w; y = ((y % h) + h) % h; const i = (y * w + x) * 4;
+    img.data[i] = clamp(col[0] * f, 0, 255); img.data[i + 1] = clamp(col[1] * f, 0, 255); img.data[i + 2] = clamp(col[2] * f, 0, 255); img.data[i + 3] = a;
+  };
+  fn(px, rnd, w, h);
+  g.putImageData(img, 0, 0); return cv;
+}
+const fill = (px, rnd, w, h, col, v) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, col, 1 + (rnd() - 0.5) * v); };
+const solid = (hexc, v = 0.08) => (px, rnd, w, h) => fill(px, rnd, w, h, hex2rgb(hexc), v);
+function wheelCap(rim, spoke, hub, nSpokes, open) {
+  return (px, rnd, w, h) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = x + 0.5 - w / 2, dy = y + 0.5 - h / 2, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+      const sp = Math.abs(((a / (2 * Math.PI) * nSpokes) % 1 + 1) % 1 - 0.5) * 2 * Math.PI * d / nSpokes;
+      if (d >= 12.5) px(x, y, hex2rgb(rim), 0.92 + rnd() * 0.12);
+      else if (d < 4) px(x, y, hex2rgb(hub), d < 2 ? 0.8 : 1);
+      else if (sp > Math.PI * d / nSpokes - 1.1) px(x, y, hex2rgb(spoke), 0.95 + rnd() * 0.1);
+      else if (open) px(x, y, [0, 0, 0], 1, 0);
+      else px(x, y, hex2rgb(spoke), 0.62);
+    }
+  };
+}
+const PAINT = {
+  grass(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x5f7f3b), 0.16); for (let i = 0; i < 90; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0x7b9b47)); px(x, y + 1, hex2rgb(0x6c8c40)); } for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x4a672e)); },
+  dirt(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x7a5b3c), 0.18); for (let i = 0; i < 26; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x9a8468)); },
+  scree(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x6a6458), 0.1); for (let i = 0; i < 70; i++) { const x = rnd() * w | 0, y = rnd() * h | 0, c = hex2rgb([0x857d6e, 0x5a544a, 0x777061][rnd() * 3 | 0]); px(x, y, c); px(x + 1, y, c, 0.9); } },
+  roaddirt(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x8a6a48), 0.1);
+    for (let i = 0; i < 40; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0x9c7c56)); px(x + 1, y, hex2rgb(0x9c7c56)); }
+    for (let i = 0; i < 14; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0x6e5236 : 0xa89272));
+  },
+  gravel(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x544d43), 0.08);
+    for (let i = 0; i < 130; i++) { const x = rnd() * w | 0, y = rnd() * h | 0, col = hex2rgb([0x7d7568, 0x8a8170, 0x6c645a, 0x958a78, 0x75695a][rnd() * 5 | 0]); px(x, y, col, 1.08); px(x + 1, y, col, 1.0); if (rnd() < 0.5) px(x, y + 1, col, 0.86); }
+  },
+  ballast(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x4a4640), 0.08);
+    for (let i = 0; i < 150; i++) { const x = rnd() * w | 0, y = rnd() * h | 0, col = hex2rgb([0x77736a, 0x86807a, 0x625e57, 0x908a80][rnd() * 4 | 0]); px(x, y, col, 1.06); px(x + 1, y, col, 0.95); px(x, y + 1, col, 0.85); }
+  },
+  plank(px, rnd, w, h) { for (let b = 0; b < 5; b++) { const y0 = Math.round(b * 6.4), f = 0.85 + rnd() * 0.25, cut = rnd() * w | 0; for (let y = y0; y < y0 + 6; y++) for (let x = 0; x < w; x++) { const edge = y === y0 || x === cut; px(x, y, hex2rgb(0x8a6239), edge ? 0.55 : f * (1 + 0.1 * Math.sin((x + b * 7) * 0.9 + y) + (rnd() - 0.5) * 0.08)); } } },
+  timber(px, rnd, w, h) { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x5a3a22), 1 + 0.12 * Math.sin(x * 1.3 + Math.sin(y * 0.4) * 2) + (rnd() - 0.5) * 0.1); },
+  sleeper(px, rnd, w, h) { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x4a3526), 1 + 0.1 * Math.sin(x * 0.9 + Math.sin(y * 0.7)) + (rnd() - 0.5) * 0.12); },
+  boards(px, rnd, w, h) { for (let row = 0; row < 6; row++) { const y0 = Math.round(row * 32 / 6), y1 = Math.round((row + 1) * 32 / 6), cut = rnd() * w | 0, f = 0.85 + rnd() * 0.25; for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x7b5a39), y === y1 - 1 ? 0.5 : y === y0 ? 1.15 : x === cut ? 0.6 : f * (1 + 0.08 * Math.sin(x * 0.7 + row * 3) + (rnd() - 0.5) * 0.08)); } },
+  iron(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3f3f44), 0.2); },
+  rail(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x5a5048), 0.15); for (let x = 0; x < w; x++) { px(x, 0, hex2rgb(0x9a958e)); px(x, 16, hex2rgb(0x9a958e)); } },
+  fieldstone(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x57534b), 0.08);
+    const cols = [0x8b857a, 0x7a7267, 0x9a9385, 0x857a6c];
+    for (let i = 0; i < 16; i++) { const bx = rnd() * w, by = rnd() * h, rx = 3 + rnd() * 4, ry = 2 + rnd() * 3, col = hex2rgb(cols[rnd() * 4 | 0]); for (let y = -7; y <= 7; y++) for (let x = -8; x <= 8; x++) { const q = (x / rx) ** 2 + (y / ry) ** 2; if (q < 1) px((bx + x) | 0, (by + y) | 0, col, (y < 0 ? 1.08 : 0.95) * (1 + (rnd() - 0.5) * 0.08)); } }
+  },
+  flag(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x6d665a), 0.08);
+    for (const [y0, hh] of [[0, 12], [12, 10], [22, 10]]) { let x = (rnd() * 8) | 0; while (x < w + 8) { const ww = 9 + (rnd() * 8 | 0), f = 0.9 + rnd() * 0.2; for (let y = y0 + 1; y < y0 + hh; y++) for (let xx = x + 1; xx < x + ww; xx++) px(xx, y, hex2rgb(0xa89f8b), f * (1 + (rnd() - 0.5) * 0.08)); x += ww; } }
+  },
+  shingle(px, rnd, w, h) { for (let row = 0; row < 4; row++) { const off = (row % 2) * 4; for (let y = row * 8; y < row * 8 + 8; y++) for (let x = 0; x < w; x++) { const j = (x + off) % 8 === 0 || y === row * 8 + 7; px(x, y, hex2rgb(0x6e4b31), j ? 0.55 : (0.9 + 0.1 * Math.sin(x * 2.1 + row)) * (1 + (rnd() - 0.5) * 0.12)); } } },
+  leaves(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3f6a2c), 0.25); for (let i = 0; i < 60; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x5d8a3a)); },
+  bark(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.8 + rnd() * 0.35; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x5a4330), f * (1 + (rnd() - 0.5) * 0.15)); } },
+  // creatures and people: flat coats with a few hairs of the next tone
+  coat(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x7a4a2c), 0.08); for (let i = 0; i < 50; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x8c5834)); for (let i = 0; i < 20; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x64391f)); },
+  coatgrey(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x8f8a80), 0.08); for (let i = 0; i < 60; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x6e6a62)); },
+  coatdun(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xa58658), 0.08); for (let i = 0; i < 50; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x8e7148)); },
+  mane(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.8 + rnd() * 0.3; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x2e2119), f); } },
+  hoof: solid(0x2b2520), leather: solid(0x5c3b24, 0.12), cloth: solid(0x9a9078, 0.08),
+  skin: solid(0xc99a74, 0.05), hair: solid(0x3b2a1e, 0.1),
+  canvas(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xcfc3a3), 0.06); for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0xb9ad8e)); },
+  sack(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xa88f63), 0.1); for (let i = 0; i < 40; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x8e774f)); },
+  crate(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x8f6d44), 0.1); for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (x < 3 || x > 28 || y < 3 || y > 28 || Math.abs(x - y) < 2) px(x, y, hex2rgb(0x6c4e2e), 1); },
+  barrel(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.85 + ((x / 4 | 0) % 2) * 0.12; for (let y = 0; y < h; y++) { const hoop = (y > 4 && y < 7) || (y > 24 && y < 27); px(x, y, hoop ? hex2rgb(0x3b3b3e) : hex2rgb(0x8c5f35), hoop ? 1 : f * (x % 4 === 0 ? 0.7 : 1)); } } },
+  coal(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x26252a), 0.3); for (let i = 0; i < 40; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x4a4a52)); },
+  // paint on the machines: dull, a little worn, the ground's palette
+  green(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3e5a3a), 0.06); for (let i = 0; i < 12; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x4e6a48)); },
+  maroon(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x6e3428), 0.06); for (let i = 0; i < 12; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x80422f)); },
+  oxide(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x8a4a2e), 0.07); for (let i = 0; i < 14; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x6e3a24)); },
+  black: solid(0x2a2a2c, 0.1), brass: solid(0xa8843e, 0.1), rubber: solid(0x262422, 0.12), red: solid(0x8a3226, 0.06),
+  glass: solid(0x1d2a33, 0.05), roof: solid(0x55575a, 0.08), cream: solid(0xd8ccae, 0.05),
+  wheel: wheelCap(0x5a3a22, 0x7a5232, 0x3f3f44, 12, true),
+  wheelcar: wheelCap(0x262422, 0x8a5e34, 0xa8843e, 10, true),
+  disc: wheelCap(0x262422, 0x3f4a44, 0x2a2a2c, 6, false),
+  trainwheel: wheelCap(0x3f3f44, 0x8a3226, 0x2a2a2c, 10, false),
+};
+const TEX = {};
+function texture(name) {
+  if (TEX[name]) return TEX[name];
+  const t = new THREE.CanvasTexture(paint(32, 32, PAINT[name], 1 + Object.keys(PAINT).indexOf(name) * 977));
+  t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
+  return (TEX[name] = t);
+}
+
+// =====================================================================
+// Light. The sun (or the dim moon) with its shadows, the sky's ambient,
+// and every lamp in the scene added to every surface near it, whatever the
+// camera is looking at: up to LAMP_N lamps go to every material each frame.
+// A lamp is omni, or a cone (a headlamp). Nothing has an outline; vehicles
+// are lit exactly as the ground they stand on.
+// =====================================================================
+const LAMP_N = 24;
+const LU = {
+  uLampPos: { value: Array.from({ length: LAMP_N }, () => new THREE.Vector3(0, -999, 0)) },
+  uLampCol: { value: Array.from({ length: LAMP_N }, () => new THREE.Vector3()) },
+  uLampDir: { value: Array.from({ length: LAMP_N }, () => new THREE.Vector4(0, 0, 0, -2)) },
+  uLampRange: { value: new Array(LAMP_N).fill(12) },
+};
+function patchLamps(mat) {
+  mat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, LU);
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vLWP;")
+      .replace("#include <project_vertex>", `#include <project_vertex>
+        { vec4 lw = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          lw = instanceMatrix * lw;
+        #endif
+          vLWP = (modelMatrix * lw).xyz; }`);
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+      varying vec3 vLWP;
+      uniform vec3 uLampPos[${LAMP_N}]; uniform vec3 uLampCol[${LAMP_N}]; uniform vec4 uLampDir[${LAMP_N}]; uniform float uLampRange[${LAMP_N}];
+      vec3 lampLight(vec3 p, vec3 n) {
+        vec3 e = vec3(0.0);
+        for (int i = 0; i < ${LAMP_N}; i++) {
+          vec3 l = uLampPos[i] - p; float d = length(l); l /= max(d, 1e-4);
+          float rg = uLampRange[i];
+          float f = pow(clamp(1.0 - pow(d / rg, 4.0), 0.0, 1.0), 2.0) / (1.0 + 0.22 * d * d);
+          vec4 sd = uLampDir[i];
+          if (sd.w > -1.5) { float c = dot(-l, sd.xyz); f *= smoothstep(sd.w, sd.w + 0.14, c) * (1.0 + 0.06 * d * d); }
+          e += uLampCol[i] * f * clamp((dot(n, l) + 0.3) / 1.3, 0.0, 1.0);
+        }
+        return e;
+      }`)
+      .replace("#include <aomap_fragment>", `#include <aomap_fragment>
+        { vec3 wn = normalize(cross(dFdx(vLWP), dFdy(vLWP))); if (dot(wn, cameraPosition - vLWP) < 0.0) wn = -wn;
+          reflectedLight.indirectDiffuse += lampLight(vLWP, wn) * diffuseColor.rgb; }`);
+  };
+  mat.customProgramCacheKey = () => "lamps" + LAMP_N;
+  return mat;
+}
+const MATS = {};
+function M(name, tint, opts) {
+  const key = name + "|" + (tint || 0) + "|" + JSON.stringify(opts || {});
+  if (MATS[key]) return MATS[key];
+  const o = Object.assign({ map: texture(name), roughness: 1, metalness: 0, flatShading: true }, opts || {});
+  if (tint) o.color = new THREE.Color(tint);
+  const m = patchLamps(new THREE.MeshStandardMaterial(o));
+  if (PAINT[name] && /wheel/.test(name)) { m.alphaTest = 0.5; }
+  return (MATS[key] = m);
+}
+// lamp glass and the glows around lamps at night (the lamp itself, not the world it lights)
+const GLASS_DAY = 0x3a3226, GLASS_NIGHT = 0xffd28a;
+const glassMat = new THREE.MeshBasicMaterial({ color: GLASS_DAY });
+const redGlass = new THREE.MeshBasicMaterial({ color: 0x401010 });
+const windowMat = new THREE.MeshBasicMaterial({ color: 0x1d2a33 });
+let glowTex = null;
+function glowTexture() {
+  if (glowTex) return glowTex;
+  const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(255,210,150,0.9)"); gr.addColorStop(0.25, "rgba(255,170,90,0.35)"); gr.addColorStop(1, "rgba(255,140,60,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return (glowTex = new THREE.CanvasTexture(c));
+}
+
+// =====================================================================
+// Geometry helpers. Box faces get UVs in metres (16 px a metre).
+// =====================================================================
+function boxGeo(w, h, d) {
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
+  const sz = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * sz[f][0] / 2, uv.getY(i) * sz[f][1] / 2); }
+  return g;
+}
+function mesh(par, geo, mat) { const m = new THREE.Mesh(geo, typeof mat === "string" ? M(mat) : mat); m.castShadow = m.receiveShadow = true; par.add(m); return m; }
+function bx(par, mat, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) { const m = mesh(par, boxGeo(w, h, d), mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); return m; }
+// a cylinder along y
+function cyl(par, mat, r, h, x, y, z, n = 8, r2) { const g = new THREE.CylinderGeometry(r2 === undefined ? r : r2, r, h, n, 1); g.translate(0, h / 2, 0); const m = mesh(par, g, mat); m.position.set(x, y, z); return m; }
+// a cylinder along x (a boiler), centred
+function cylX(par, mat, r, len, x, y, z, n = 10) { const g = new THREE.CylinderGeometry(r, r, len, n, 1); g.rotateZ(Math.PI / 2); const m = mesh(par, g, mat); m.position.set(x, y, z); return m; }
+// a wheel: axis along z, tyre on the rim, the face painted (spokes cut out where it is open). Spun about z.
+function wheel(par, r, wdt, cap, tyre, x, y, z) {
+  const g = new THREE.CylinderGeometry(r, r, wdt, 14, 1); g.rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(g, [M(tyre), M(cap), M(cap)]); m.castShadow = m.receiveShadow = true;
+  m.position.set(x, y, z); par.add(m); m.userData.r = r; return m;
+}
+// one face of the world mesh: a convex polygon, wound so its normal points along `nrm`
+class Builder {
+  constructor() { this.parts = {}; }
+  face(mat, pts, nrm, uvf) {
+    const P = this.parts[mat] || (this.parts[mat] = { pos: [], uv: [] });
+    const n = [0, 0, 0]; // Newell's normal: right whichever corners repeat
+    for (let k = 0; k < pts.length; k++) { const p = pts[k], q = pts[(k + 1) % pts.length]; n[0] += (p[1] - q[1]) * (p[2] + q[2]); n[1] += (p[2] - q[2]) * (p[0] + q[0]); n[2] += (p[0] - q[0]) * (p[1] + q[1]); }
+    if (n[0] * nrm[0] + n[1] * nrm[1] + n[2] * nrm[2] < 0) pts = pts.slice().reverse();
+    for (let k = 1; k < pts.length - 1; k++) for (const p of [pts[0], pts[k], pts[k + 1]]) { P.pos.push(p[0], p[1], p[2]); P.uv.push(...uvf(p)); }
+  }
+  top(mat, pts) { this.face(mat, pts, [0, 1, 0], p => [p[0] / 2, p[2] / 2]); }
+  side(mat, pts, nrm) { const ex = -nrm[2], ez = nrm[0]; this.face(mat, pts, nrm, p => [(p[0] * ex + p[2] * ez) / 2, p[1] / 2]); }
+  build(par, opts = {}) {
+    for (const [mat, P] of Object.entries(this.parts)) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(P.pos, 3));
+      g.setAttribute("uv", new THREE.Float32BufferAttribute(P.uv, 2));
+      g.computeVertexNormals();
+      const m = new THREE.Mesh(g, opts.mat ? opts.mat(mat) : M(mat)); m.castShadow = opts.cast !== false; m.receiveShadow = true; par.add(m);
+    }
+  }
+}
+
+// =====================================================================
+// The ground: a grid of hex columns with a layer height each, road cells
+// whose top slopes one layer (townsfolk design 10, as towns.html cuts them),
+// and bridge decks over the cells under them.
+// =====================================================================
+class Grid {
+  constructor(nc, nr) {
+    this.nc = nc; this.nr = nr; const n = nc * nr;
+    this.top = new Float32Array(n); this.tm = new Array(n).fill("grass"); this.sm = new Array(n).fill("dirt");
+    this.slope = new Array(n).fill(null); this.bridge = new Array(n).fill(null); this.noTree = new Uint8Array(n); this.water = new Array(n).fill(null);
+  }
+  in(c, r) { return c >= 0 && r >= 0 && c < this.nc && r < this.nr; }
+  i(c, r) { return c + r * this.nc; }
+  fill(fn) { for (let r = 0; r < this.nr; r++) for (let c = 0; c < this.nc; c++) { const o = fn(c, r), i = this.i(c, r); this.top[i] = o.h; this.tm[i] = o.top || "grass"; this.sm[i] = o.side || "dirt"; } }
+  colTop(x, z) { const [c, r] = cellAt(x, z); return this.in(c, r) ? this.top[this.i(c, r)] : 0; }
+  // what a wheel stands on: a bridge deck, a sloped road's plane, or the column's top
+  heightAt(x, z) {
+    const [c, r] = cellAt(x, z); if (!this.in(c, r)) return 0;
+    const i = this.i(c, r);
+    if (this.bridge[i] !== null) return this.bridge[i];
+    const s = this.slope[i];
+    if (s) return s.low + clamp(((x - s.fx) * s.ux + (z - s.fz) * s.uz) / s.len, 0, 1);
+    return this.top[i];
+  }
+  edgeMid(c, r, d) { const [A, B] = edgeEnds(c, r, d); return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]; }
+  // A road cell: flat where `up` is -1, else its top a plane rising a layer from the middle of edge `from` to the middle of edge `up`.
+  roadCell(c, r, up, from, mat) {
+    const i = this.i(c, r); this.tm[i] = mat; this.noTree[i] = 1;
+    if (up < 0) return;
+    const [fx, fz] = this.edgeMid(c, r, from), [tx, tz] = this.edgeMid(c, r, up), len = Math.hypot(tx - fx, tz - fz);
+    this.slope[i] = { low: this.top[i], fx, fz, ux: (tx - fx) / len, uz: (tz - fz) / len, len };
+  }
+  // A road along `cells` (towns.html's road()): each cell flat, or sloped up toward its neighbour a layer higher. Never more than a layer a cell.
+  road(cells, matFn, closed) {
+    const n = cells.length, wrap = j => closed ? (j + n) % n : j;
+    for (let k = 0; k < n; k++) {
+      const [c, r] = cells[k], i = this.i(c, r);
+      if (this.bridge[i] !== null) continue;
+      const h = this.top[i]; let up = -1, other = -1;
+      for (const [j0, o0] of [[k + 1, k - 1], [k - 1, k + 1]]) {
+        const j = wrap(j0); if (j < 0 || j >= n) continue;
+        const [c2, r2] = cells[j];
+        if (this.bridge[this.i(c2, r2)] === null && this.top[this.i(c2, r2)] === h + 1) { up = dirTo(c, r, c2, r2); other = wrap(o0); break; }
+      }
+      let from = (up + 3) % 6;
+      if (up >= 0 && other >= 0 && other < n) { const d = dirTo(c, r, ...cells[other]); if (d >= 0 && d !== up) from = d; }
+      this.roadCell(c, r, up, from, matFn(k, c, r));
+    }
+  }
+  vertH(i, x, z) { const s = this.slope[i]; return s ? s.low + clamp(((x - s.fx) * s.ux + (z - s.fz) * s.uz) / s.len, 0, 1) : this.top[i]; }
+  buildMesh(par) {
+    const B = new Builder();
+    for (let r = 0; r < this.nr; r++) for (let c = 0; c < this.nc; c++) {
+      const i = this.i(c, r), hex = hexPts(c, r), low = this.top[i];
+      B.top(this.tm[i], hex.map(p => [p[0], this.vertH(i, p[0], p[1]), p[1]]));
+      for (let d = 0; d < 6; d++) {
+        const [A, Bp] = edgeEnds(c, r, d), [a, b] = nb(c, r, d);
+        const nt = this.in(a, b) ? this.top[this.i(a, b)] : low - 3;
+        const ha = this.vertH(i, A[0], A[1]), hb = this.vertH(i, Bp[0], Bp[1]);
+        if (ha <= nt + 1e-3 && hb <= nt + 1e-3) continue;
+        const [nx, nz] = dvec(d), base = Math.min(nt, low);
+        // the column down to its neighbour, then the road's wedge above its own top
+        if (low > nt + 1e-3) B.side(this.sm[i], [[A[0], nt, A[1]], [Bp[0], nt, Bp[1]], [Bp[0], low, Bp[1]], [A[0], low, A[1]]], [nx, 0, nz]);
+        if (ha > low + 1e-3 || hb > low + 1e-3) B.side("dirt", [[A[0], Math.max(low, base), A[1]], [Bp[0], Math.max(low, base), Bp[1]], [Bp[0], hb, Bp[1]], [A[0], ha, A[1]]], [nx, 0, nz]);
+      }
+    }
+    B.build(par);
+    // water over the cells that carry it
+    const WB = new Builder();
+    for (let r = 0; r < this.nr; r++) for (let c = 0; c < this.nc; c++) { const y = this.water[this.i(c, r)]; if (y !== null) WB.top("water", hexPts(c, r).map(p => [p[0], y, p[1]])); }
+    const wm = patchLamps(new THREE.MeshStandardMaterial({ color: 0x3a6a70, roughness: 0.6, metalness: 0, transparent: true, opacity: 0.84, flatShading: true }));
+    WB.build(par, { mat: () => wm, cast: false });
+  }
+}
+
+// =====================================================================
+// Paths: the line wheels follow. A road's runs through its cells' centres,
+// and a 60 degree bend is driven as a curve from the middle of the cell
+// before it to the middle of the cell after (radius 4.9 m), halved when the
+// next cell bends too. A track's is laid by pieces: straights centre to
+// centre, and 60 degree curves of radius 2*sqrt(3)*W that end on centres.
+// =====================================================================
+class Path {
+  constructor(pts, closed) { // pts: [{x, z, h?}]
+    this.p = pts; this.closed = closed; this.s = [0];
+    for (let k = 1; k < pts.length; k++) this.s.push(this.s[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].z - pts[k - 1].z));
+    if (closed) { const a = pts[pts.length - 1], b = pts[0]; this.L = this.s[this.s.length - 1] + Math.hypot(b.x - a.x, b.z - a.z); } else this.L = this.s[this.s.length - 1];
+  }
+  at(s) {
+    const n = this.p.length;
+    if (this.closed) s = ((s % this.L) + this.L) % this.L; else s = clamp(s, 0, this.L);
+    let lo = 0, hi = n - 1;
+    if (this.closed && s >= this.s[n - 1]) { const a = this.p[n - 1], b = this.p[0], t = (s - this.s[n - 1]) / (this.L - this.s[n - 1]); return { x: lerp(a.x, b.x, t), z: lerp(a.z, b.z, t), h: a.h === undefined ? undefined : lerp(a.h, b.h, t) }; }
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (this.s[m] <= s) lo = m; else hi = m; }
+    const a = this.p[lo], b = this.p[hi], t = (s - this.s[lo]) / Math.max(1e-6, this.s[hi] - this.s[lo]);
+    return { x: lerp(a.x, b.x, t), z: lerp(a.z, b.z, t), h: a.h === undefined ? undefined : lerp(a.h, b.h, t) };
+  }
+}
+function roadPath(cells, closed) {
+  const P = cells.map(([c, r]) => [cx(c, r), cz(c, r)]), n = P.length;
+  const get = k => P[closed ? (k + n) % n : clamp(k, 0, n - 1)];
+  const bends = P.map((p, k) => {
+    if (!closed && (k === 0 || k === n - 1)) return false;
+    const a = get(k - 1), b = get(k + 1), d1 = Math.atan2(p[1] - a[1], p[0] - a[0]), d2 = Math.atan2(b[1] - p[1], b[0] - p[0]);
+    let dd = d2 - d1; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI; return Math.abs(dd) > 0.02;
+  });
+  const out = [], push = (x, z) => { const l = out[out.length - 1]; if (!l || Math.hypot(l.x - x, l.z - z) > 0.05) out.push({ x, z }); };
+  for (let k = 0; k < n; k++) {
+    const p = P[k];
+    if (!bends[k]) { push(p[0], p[1]); continue; }
+    const a = get(k - 1), b = get(k + 1), nbBend = bends[closed ? (k + n - 1) % n : k - 1] || bends[closed ? (k + 1) % n : k + 1];
+    const t = nbBend ? 0.5 : 0.999;
+    const A = [lerp(p[0], a[0], t), lerp(p[1], a[1], t)], Bq = [lerp(p[0], b[0], t), lerp(p[1], b[1], t)];
+    for (let j = 0; j <= 16; j++) { const u = j / 16, m = 1 - u; push(m * m * A[0] + 2 * m * u * p[0] + u * u * Bq[0], m * m * A[1] + 2 * m * u * p[1] + u * u * Bq[1]); }
+  }
+  // densify
+  const dense = [];
+  for (let k = 0; k < out.length - (closed ? 0 : 1); k++) {
+    const a = out[k], b = out[(k + 1) % out.length], L = Math.hypot(b.x - a.x, b.z - a.z), m = Math.max(1, Math.ceil(L / 0.3));
+    for (let j = 0; j < m; j++) dense.push({ x: lerp(a.x, b.x, j / m), z: lerp(a.z, b.z, j / m) });
+  }
+  if (!closed) dense.push(out[out.length - 1]);
+  return new Path(dense, closed);
+}
+// cells along legs from (c, r): [[dir, n], ...]
+function walkCells(c, r, legs) { const out = [[c, r]]; for (const [d, n] of legs) for (let k = 0; k < n; k++) { [c, r] = nb(c, r, d); out.push([c, r]); } return out; }
+// A track loop laid by pieces. Returns samples {x, z, side, u (cells along the side), piece}.
+function trackLoop(c0, r0, sides, k) {
+  const rad = k * Math.sqrt(3) * W, pts = [];
+  let x = cx(c0, r0), z = cz(c0, r0), h = 0;
+  for (let si = 0; si < sides.length; si++) {
+    const [ux, uz] = dvec(h), L = sides[si] * W, m = Math.round(L / 0.25);
+    for (let j = 0; j < m; j++) pts.push({ x: x + ux * L * j / m, z: z + uz * L * j / m, side: si, u: sides[si] * j / m, curve: false });
+    x += ux * L; z += uz * L;
+    const th = h * Math.PI / 3, ccx = x + rad * Math.cos(th + Math.PI / 2), ccz = z + rad * Math.sin(th + Math.PI / 2), ma = Math.round(rad * Math.PI / 3 / 0.25);
+    for (let j = 0; j < ma; j++) { const ph = j / ma * Math.PI / 3, a = th - Math.PI / 2 + ph; pts.push({ x: ccx + rad * Math.cos(a), z: ccz + rad * Math.sin(a), side: si, u: sides[si], curve: true }); }
+    const a = th - Math.PI / 2 + Math.PI / 3; x = ccx + rad * Math.cos(a); z = ccz + rad * Math.sin(a); h = (h + 1) % 6;
+  }
+  return pts;
+}
+
+// =====================================================================
+// People and things. Every vehicle faces +x in its own frame, its origin on
+// the ground (on the rail for a train), and is placed each frame from points
+// on its path: yaw from the line between its axles, pitch from their heights.
+// =====================================================================
+const TUNICS = [0x7a6a3a, 0x4f6a8a, 0x8a4f3a, 0x5a7a4a, 0x6a5a7a, 0x8a7a5a];
+// M5's block-head townsperson, 1.55 m: legs 0.72, body 0.55, head 0.28.
+function person(tunic, pose = "stand") {
+  const g = new THREE.Group(), t = M("cloth", tunic), legs = M("cloth", 0x4a3b2c);
+  if (pose === "stand") {
+    for (const z of [-0.1, 0.1]) bx(g, legs, 0.2, 0.72, 0.18, 0, 0.36, z);
+    bx(g, t, 0.26, 0.55, 0.46, 0, 0.995, 0);
+    for (const z of [-0.3, 0.3]) bx(g, t, 0.14, 0.56, 0.14, 0, 0.98, z);
+    bx(g, "skin", 0.28, 0.28, 0.28, 0, 1.41, 0);
+  } else { // seated: the origin on the seat; "ride" straddles a saddle
+    const ride = pose === "ride";
+    for (const z of [-0.1, 0.1]) {
+      if (ride) { bx(g, legs, 0.18, 0.5, 0.17, 0.05, -0.12, z * 2.6, z * 2.2, 0, 0); }
+      else { bx(g, legs, 0.42, 0.16, 0.18, 0.2, 0.08, z); bx(g, legs, 0.16, 0.42, 0.18, 0.4, -0.13, z); }
+    }
+    bx(g, t, 0.26, 0.55, 0.46, -0.02, 0.4, 0);
+    for (const z of [-0.3, 0.3]) bx(g, t, 0.14, 0.5, 0.14, 0.12, 0.42, z, 0, 0, 0.7);
+    bx(g, "skin", 0.28, 0.28, 0.28, -0.02, 0.82, 0);
+  }
+  return g;
+}
+// A horse, 2.4 m nose to tail, 1.5 m at the withers. Legs swing only while it walks.
+function horse(coat = "coat") {
+  const g = new THREE.Group(), legs = [];
+  for (const [x, z] of [[0.6, 0.16], [0.6, -0.16], [-0.58, 0.16], [-0.58, -0.16]]) {
+    const lg = new THREE.Group(); lg.position.set(x, 0.9, z); g.add(lg);
+    bx(lg, coat, 0.15, 0.82, 0.14, 0, -0.41, 0); bx(lg, "hoof", 0.17, 0.09, 0.16, 0.01, -0.86, 0); legs.push(lg);
+  }
+  bx(g, coat, 1.5, 0.6, 0.52, 0, 1.18, 0);
+  bx(g, coat, 0.42, 0.52, 0.48, 0.78, 1.2, 0);
+  bx(g, coat, 0.36, 0.5, 0.5, -0.74, 1.22, 0);
+  bx(g, coat, 0.3, 0.78, 0.28, 1.0, 1.58, 0, 0, 0, -0.62);
+  bx(g, "mane", 0.1, 0.74, 0.08, 0.93, 1.68, 0, 0, 0, -0.62);
+  bx(g, coat, 0.56, 0.24, 0.22, 1.36, 1.82, 0, 0, 0, -0.75);
+  bx(g, "hoof", 0.12, 0.12, 0.2, 1.55, 1.6, 0, 0, 0, -0.75);
+  for (const z of [-0.07, 0.07]) bx(g, coat, 0.05, 0.13, 0.05, 1.16, 2.05, z);
+  bx(g, "mane", 0.1, 0.72, 0.12, -0.96, 1.08, 0, 0, 0, 0.32);
+  g.userData.legs = legs; g.userData.dist = 0;
+  return g;
+}
+function horseWalk(hg, ds) {
+  hg.userData.dist += ds;
+  const a = 0.36 * Math.sin(hg.userData.dist / 1.6 * 2 * Math.PI), L = hg.userData.legs;
+  L[0].rotation.z = a; L[3].rotation.z = a; L[1].rotation.z = -a; L[2].rotation.z = -a;
+}
+// a lantern: an iron cage round a glass; lights at night. Returns the glass (the point it lights from).
+function lantern(par, x, y, z, s = 1) {
+  const g = new THREE.Group(); g.position.set(x, y, z); par.add(g);
+  bx(g, "iron", 0.24 * s, 0.05 * s, 0.24 * s, 0, 0.17 * s, 0); bx(g, "iron", 0.24 * s, 0.05 * s, 0.24 * s, 0, -0.17 * s, 0);
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.29 * s, 0.18 * s), glassMat); g.add(gl);
+  return gl;
+}
+function lampPost(par, x, y, z, yaw = 0) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = yaw; par.add(g);
+  cyl(g, "timber", 0.08, 2.6, 0, 0, 0, 6); bx(g, "timber", 0.6, 0.07, 0.07, 0.25, 2.55, 0);
+  return lantern(g, 0.48, 2.25, 0);
+}
+function tree(par, x, y, z, s) {
+  cyl(par, "bark", 0.2 * s, 2.4 * s, x, y, z, 7);
+  const rn = rng((x * 31 + z * 17) | 0);
+  for (let k = 0; k < 4; k++) { const a = rn() * 6.28, d = k ? 0.75 * s : 0; bx(par, "leaves", 1.6 * s, 1.4 * s, 1.6 * s, x + Math.cos(a) * d, y + 2.2 * s + rn() * 0.8 * s, z + Math.sin(a) * d, 0, rn() * 3, 0); }
+}
+// A timber bridge cell: a plank deck whose top is the road at `y`, rails on edges the road does not cross, posts to the bed.
+function bridgeCell(par, g, c, r, y, openDirs, bed) {
+  const B = new Builder(), hex = hexPts(c, r);
+  B.top("plank", hex.map(p => [p[0], y, p[1]]));
+  for (let d = 0; d < 6; d++) { const [A, Bp] = edgeEnds(c, r, d), [nx, nz] = dvec(d); B.side("timber", [[A[0], y - 0.3, A[1]], [Bp[0], y - 0.3, Bp[1]], [Bp[0], y, Bp[1]], [A[0], y, A[1]]], [nx, 0, nz]); }
+  B.face("timber", hex.map(p => [p[0], y - 0.3, p[1]]), [0, -1, 0], p => [p[0] / 2, p[2] / 2]);
+  B.build(par);
+  for (let d = 0; d < 6; d++) {
+    if (openDirs.includes(d)) continue;
+    const [A, Bp] = edgeEnds(c, r, d), [nx, nz] = dvec(d), ang = Math.atan2(Bp[1] - A[1], Bp[0] - A[0]);
+    const mx = (A[0] + Bp[0]) / 2 - nx * 0.06, mz = (A[1] + Bp[1]) / 2 - nz * 0.06;
+    bx(par, "timber", R + 0.1, 0.09, 0.14, mx, y + 0.95, mz, 0, -ang, 0);
+    bx(par, "timber", R, 0.07, 0.07, mx, y + 0.5, mz, 0, -ang, 0);
+    cyl(par, "timber", 0.08, y + 1.0 - bed, A[0] - nx * 0.06, bed, A[1] - nz * 0.06, 6);
+  }
+  g.bridge[g.i(c, r)] = y;
+}
+
+// ---- vehicles ---------------------------------------------------------
+// Each returns {g, wheels: [mesh], lamps: [{obj, dir, cone, range, power}], place(path, s, grid)}.
+function lampSpec(obj, power = 1, range = 11, dir = null, cone = 0.8) { return { obj, power, range, dir, cone }; }
+function placeFrame(obj, p0, p1, y0, y1) { // origin at the middle, facing from p0 to p1
+  const dx = p1.x - p0.x, dz = p1.z - p0.z, d = Math.hypot(dx, dz) || 1;
+  obj.position.set((p0.x + p1.x) / 2, (y0 + y1) / 2, (p0.z + p1.z) / 2);
+  obj.rotation.order = "YZX"; obj.rotation.set(0, -Math.atan2(dz, dx), Math.atan2(y1 - y0, d));
+}
+function spin(wheels, ds) { for (const w of wheels) w.rotation.z -= ds / w.userData.r; }
+// a horse placed on the road with its own two ends
+function placeHorse(hg, path, s, grid) { const a = path.at(s - 0.6), b = path.at(s + 0.6); placeFrame(hg, a, b, grid.heightAt(a.x, a.z), grid.heightAt(b.x, b.z)); }
+
+function riderVehicle(coat, tunic) {
+  const g = new THREE.Group(), h = horse(coat); g.add(h);
+  bx(h, "leather", 0.55, 0.1, 0.56, 0.08, 1.52, 0); bx(h, "leather", 0.08, 0.5, 0.04, 0.1, 1.24, 0.28); bx(h, "leather", 0.08, 0.5, 0.04, 0.1, 1.24, -0.28);
+  const p = person(tunic, "ride"); p.position.set(0.05, 1.6, 0); h.add(p);
+  return { g, name: "Horse and rider", wheels: [], lamps: [], len: 2.4,
+    place(path, s, grid, ds) { placeHorse(h, path, s, grid); if (ds) horseWalk(h, ds); } };
+}
+function cartVehicle(coat, tunic) {
+  const g = new THREE.Group(), cart = new THREE.Group(), h = horse(coat); g.add(cart, h);
+  const wheels = [wheel(cart, 0.6, 0.1, "wheel", "iron", 0, 0.6, 0.78), wheel(cart, 0.6, 0.1, "wheel", "iron", 0, 0.6, -0.78)];
+  bx(cart, "iron", 0.08, 0.08, 1.64, 0, 0.6, 0);
+  bx(cart, "plank", 1.8, 0.08, 1.3, 0.1, 0.88, 0);
+  for (const z of [-0.65, 0.65]) bx(cart, "boards", 1.8, 0.4, 0.05, 0.1, 1.1, z);
+  bx(cart, "boards", 0.05, 0.4, 1.3, -0.8, 1.1, 0); bx(cart, "boards", 0.05, 0.4, 1.3, 1.0, 1.1, 0);
+  for (const z of [-0.42, 0.42]) bx(cart, "timber", 2.7, 0.08, 0.08, 2.3, 0.97, z, 0, 0, 0.02);
+  bx(cart, "timber", 0.12, 0.08, 1.2, 0.85, 1.32, 0);
+  const drv = person(tunic, "sit"); drv.position.set(0.82, 1.36, 0.2); cart.add(drv);
+  bx(cart, "sack", 0.5, 0.35, 0.4, -0.35, 1.1, 0.3); bx(cart, "sack", 0.5, 0.35, 0.4, -0.35, 1.1, -0.2); cyl(cart, "barrel", 0.24, 0.6, 0.25, 0.92, -0.35, 8);
+  bx(cart, "iron", 0.04, 0.5, 0.04, 1.0, 1.55, 0.62);
+  const lg = lantern(cart, 1.05, 1.68, 0.62, 0.8);
+  return { g, name: "Horse cart (phase 3)", wheels, lamps: [lampSpec(lg, 0.8, 10)], len: 5.5,
+    place(path, s, grid, ds) {
+      const a = path.at(s), hs = s + 3.05, b = path.at(hs);
+      placeHorse(h, path, hs, grid);
+      const ya = grid.heightAt(a.x, a.z), yb = grid.heightAt(b.x, b.z), dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 1;
+      cart.position.set(a.x, ya, a.z); cart.rotation.order = "YZX"; cart.rotation.set(0, -Math.atan2(dz, dx), Math.atan2(yb - ya, d));
+      if (ds) { spin(wheels, ds); horseWalk(h, ds); }
+    } };
+}
+// The hand cart (phase 3, design 10): two wheels, a plank bed with low
+// sides, two handles, pulled by a walker between them.
+function handCartVehicle(tunic) {
+  const g = new THREE.Group(), cart = new THREE.Group(); g.add(cart);
+  const wheels = [wheel(cart, 0.45, 0.08, "wheel", "iron", 0, 0.45, 0.6), wheel(cart, 0.45, 0.08, "wheel", "iron", 0, 0.45, -0.6)];
+  bx(cart, "iron", 0.06, 0.06, 1.2, 0, 0.45, 0);
+  bx(cart, "plank", 1.3, 0.07, 1.0, -0.05, 0.62, 0);
+  for (const z of [-0.5, 0.5]) bx(cart, "boards", 1.3, 0.28, 0.04, -0.05, 0.79, z);
+  bx(cart, "boards", 0.04, 0.28, 1.0, -0.7, 0.79, 0); bx(cart, "boards", 0.04, 0.28, 1.0, 0.6, 0.79, 0);
+  for (const z of [-0.33, 0.33]) bx(cart, "timber", 1.05, 0.06, 0.06, 1.1, 0.78, z, 0, 0, 0.12);
+  bx(cart, "timber", 0.06, 0.06, 0.72, 1.6, 0.85, 0);
+  bx(cart, "sack", 0.5, 0.35, 0.4, -0.3, 0.83, 0.2); bx(cart, "sack", 0.45, 0.3, 0.38, -0.25, 0.83, -0.22); cyl(cart, "barrel", 0.2, 0.5, 0.25, 0.66, 0, 8);
+  const man = person(tunic); man.position.set(1.3, 0, 0); cart.add(man);
+  return { g, name: "Hand cart (phase 3)", wheels, lamps: [], len: 2.4,
+    place(path, s, grid, ds) {
+      const a = path.at(s), b = path.at(s + 1.4), ya = grid.heightAt(a.x, a.z), yb = grid.heightAt(b.x, b.z), dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 1;
+      cart.position.set(a.x, ya, a.z); cart.rotation.order = "YZX"; cart.rotation.set(0, -Math.atan2(dz, dx), Math.atan2(yb - ya, d));
+      if (ds) spin(wheels, ds);
+    } };
+}
+function wagonVehicle(coat, tunic) {
+  const g = new THREE.Group(), body = new THREE.Group(), fore = new THREE.Group(), h = horse(coat), pole = new THREE.Group(); g.add(body, h, pole);
+  body.add(fore); fore.position.set(0.95, 0, 0);
+  const wheels = [wheel(body, 0.55, 0.1, "wheel", "iron", -0.95, 0.55, 0.75), wheel(body, 0.55, 0.1, "wheel", "iron", -0.95, 0.55, -0.75),
+    wheel(fore, 0.42, 0.1, "wheel", "iron", 0, 0.42, 0.72), wheel(fore, 0.42, 0.1, "wheel", "iron", 0, 0.42, -0.72)];
+  bx(body, "iron", 0.08, 0.08, 1.56, -0.95, 0.55, 0); bx(fore, "iron", 0.08, 0.08, 1.5, 0, 0.42, 0); bx(fore, "timber", 0.3, 0.18, 0.9, 0, 0.6, 0);
+  bx(body, "plank", 3.0, 0.08, 1.36, 0, 0.92, 0);
+  for (const z of [-0.68, 0.68]) bx(body, "boards", 3.0, 0.42, 0.05, 0, 1.15, z);
+  bx(body, "boards", 0.05, 0.42, 1.36, -1.5, 1.15, 0);
+  const cov = new THREE.CylinderGeometry(0.72, 0.72, 2.6, 10, 1, true, 0, Math.PI); cov.rotateZ(Math.PI / 2);
+  const cm = mesh(body, cov, M("canvas")); cm.position.set(-0.15, 1.3, 0); cm.material = M("canvas", 0, { side: THREE.DoubleSide });
+  bx(body, "timber", 0.3, 0.08, 1.2, 1.35, 1.32, 0);
+  const drv = person(tunic, "sit"); drv.position.set(1.32, 1.36, 0.25); body.add(drv);
+  bx(body, "iron", 0.04, 0.6, 0.04, 1.45, 1.6, -0.62);
+  const lg = lantern(body, 1.5, 1.75, -0.62, 0.8);
+  bx(pole, "timber", 1, 0.08, 0.08, 0.5, 0, 0);
+  return { g, name: "Covered wagon", wheels, lamps: [lampSpec(lg, 0.8, 10)], len: 7.0,
+    place(path, s, grid, ds) {
+      const r = path.at(s - 0.95), f = path.at(s + 0.95), hs = s + 0.95 + 2.75, hp = path.at(hs);
+      placeFrame(body, r, f, grid.heightAt(r.x, r.z), grid.heightAt(f.x, f.z));
+      placeHorse(h, path, hs, grid);
+      // the fore-carriage turns on its kingpin toward the horse, and the pole runs from it to the collar
+      const fy = grid.heightAt(f.x, f.z) + 0.6, hy = grid.heightAt(hp.x, hp.z) + 0.95;
+      const yawB = Math.atan2(f.z - r.z, f.x - r.x), yawP = Math.atan2(hp.z - f.z, hp.x - f.x);
+      let st = yawP - yawB; while (st > Math.PI) st -= 2 * Math.PI; while (st < -Math.PI) st += 2 * Math.PI;
+      fore.rotation.y = -st;
+      const P0 = new THREE.Vector3(f.x, fy, f.z), P1 = new THREE.Vector3(hp.x - Math.cos(yawP) * 0.55, hy, hp.z - Math.sin(yawP) * 0.55);
+      pole.position.copy(P0); pole.scale.set(P0.distanceTo(P1), 1, 1); pole.rotation.order = "YZX";
+      pole.rotation.set(0, -Math.atan2(P1.z - P0.z, P1.x - P0.x), Math.atan2(P1.y - P0.y, Math.hypot(P1.x - P0.x, P1.z - P0.z)));
+      if (ds) { spin(wheels, ds); horseWalk(h, ds); }
+    } };
+}
+// a four-wheeled road vehicle placed by its two axles
+function axlePlace(g, path, s, grid, wb) { const r = path.at(s - wb / 2), f = path.at(s + wb / 2); placeFrame(g, r, f, grid.heightAt(r.x, r.z), grid.heightAt(f.x, f.z)); }
+function carVehicle(tunic) {
+  const g = new THREE.Group(), body = "green";
+  const wheels = [];
+  for (const x of [-1.2, 1.2]) for (const z of [-0.68, 0.68]) wheels.push(wheel(g, 0.38, 0.12, "wheelcar", "rubber", x, 0.38, z));
+  bx(g, "black", 3.3, 0.14, 0.9, 0, 0.5, 0);
+  bx(g, body, 0.9, 0.5, 0.74, 1.22, 0.84, 0); bx(g, "brass", 0.08, 0.6, 0.72, 1.7, 0.86, 0);
+  bx(g, body, 0.18, 0.62, 1.28, 0.7, 0.92, 0);
+  bx(g, body, 1.95, 0.58, 1.28, -0.4, 0.88, 0);
+  bx(g, "leather", 0.5, 0.18, 1.1, 0.25, 1.1, 0); bx(g, "leather", 0.12, 0.45, 1.1, 0.0, 1.35, 0);
+  bx(g, "leather", 0.6, 0.18, 1.1, -0.85, 1.1, 0); bx(g, "leather", 0.12, 0.5, 1.1, -1.18, 1.38, 0);
+  bx(g, "brass", 0.04, 0.5, 1.1, 0.68, 1.45, 0);
+  for (const [x, z] of [[0.62, 0.6], [0.62, -0.6], [-1.3, 0.6], [-1.3, -0.6]]) bx(g, "black", 0.04, 0.72, 0.04, x, 1.55, z);
+  bx(g, "canvas", 2.05, 0.05, 1.3, -0.34, 1.92, 0); bx(g, "black", 2.05, 0.04, 1.32, -0.34, 1.89, 0);
+  for (const x of [-1.2, 1.2]) for (const z of [-0.7, 0.7]) bx(g, "black", 0.86, 0.04, 0.26, x, 0.83, z, 0, 0, x > 0 ? -0.15 : 0.15);
+  for (const z of [-0.74, 0.74]) bx(g, "black", 1.5, 0.04, 0.22, 0, 0.45, z);
+  wheel(g, 0.38, 0.12, "wheelcar", "rubber", -1.78, 0.9, 0).rotation.y = Math.PI / 2;
+  const drv = person(tunic, "sit"); drv.position.set(0.15, 1.18, 0.28); g.add(drv);
+  const lamps = [];
+  for (const z of [-0.45, 0.45]) { cylX(g, "brass", 0.11, 0.2, 1.62, 1.12, z, 8); const gl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.16), glassMat); gl.position.set(1.73, 1.12, z); g.add(gl); lamps.push(lampSpec(gl, 1.1, 20, new THREE.Vector3(1, -0.16, 0).normalize(), 0.84)); }
+  const tl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.08), redGlass); tl.position.set(-1.72, 0.95, 0.5); g.add(tl);
+  return { g, name: "Early car", wheels, lamps, len: 3.6, wb: 2.4,
+    place(path, s, grid, ds) { axlePlace(g, path, s, grid, 2.4); if (ds) spin(wheels, ds); } };
+}
+function truckVehicle(tunic) {
+  const g = new THREE.Group(), paintM = "oxide", wheels = [];
+  for (const x of [-1.5, 1.5]) for (const z of [-0.78, 0.78]) wheels.push(wheel(g, 0.45, 0.16, "disc", "rubber", x, 0.45, z));
+  bx(g, "black", 4.5, 0.16, 1.0, 0, 0.62, 0);
+  bx(g, paintM, 0.95, 0.62, 0.86, 1.95, 1.02, 0); bx(g, "black", 0.08, 0.72, 0.84, 2.45, 1.02, 0);
+  bx(g, paintM, 1.15, 1.25, 1.75, 0.95, 1.33, 0);
+  bx(g, "glass", 0.02, 0.48, 1.4, 1.53, 1.62, 0);
+  for (const z of [-0.88, 0.88]) bx(g, "glass", 0.6, 0.45, 0.02, 1.0, 1.62, z);
+  bx(g, "roof", 1.3, 0.07, 1.85, 0.95, 1.99, 0);
+  for (const x of [-1.5, 1.5]) for (const z of [-0.82, 0.82]) bx(g, "black", 1.0, 0.05, 0.3, x, 0.98, z, 0, 0, 0);
+  bx(g, "plank", 2.75, 0.1, 1.9, -0.9, 1.02, 0);
+  for (const z of [-0.93, 0.93]) bx(g, "boards", 2.75, 0.32, 0.05, -0.9, 1.22, z);
+  bx(g, "boards", 0.05, 0.32, 1.9, -2.26, 1.22, 0);
+  bx(g, "crate", 0.8, 0.7, 0.8, -0.1, 1.42, 0.45); bx(g, "crate", 0.8, 0.7, 0.8, -0.1, 1.42, -0.45); bx(g, "crate", 0.8, 0.7, 0.8, -1.0, 1.42, 0.45);
+  bx(g, "sack", 0.7, 0.45, 0.6, -1.0, 1.3, -0.4); cyl(g, "barrel", 0.26, 0.66, -1.8, 1.07, 0.4, 8); cyl(g, "barrel", 0.26, 0.66, -1.8, 1.07, -0.3, 8);
+  const drv = person(tunic, "sit"); drv.position.set(0.85, 1.1, 0.4); g.add(drv);
+  const lamps = [];
+  for (const z of [-0.6, 0.6]) { cylX(g, "black", 0.12, 0.2, 2.35, 1.38, z, 8); const gl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.18), glassMat); gl.position.set(2.46, 1.38, z); g.add(gl); lamps.push(lampSpec(gl, 1.1, 20, new THREE.Vector3(1, -0.16, 0).normalize(), 0.84)); }
+  const tl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.08), redGlass); tl.position.set(-2.29, 1.0, 0.7); g.add(tl);
+  return { g, name: "Small truck", wheels, lamps, len: 4.9, wb: 3.0,
+    place(path, s, grid, ds) { axlePlace(g, path, s, grid, 3.0); if (ds) spin(wheels, ds); } };
+}
+// ---- the train: a metre-gauge tank engine, a coach and an open wagon. Origin on the rail top.
+const RAIL_TOP = 0.36, GAUGE = 1.0;
+function locoCar() {
+  const g = new THREE.Group(), wheels = [];
+  for (const x of [-1.1, 0, 1.1]) for (const z of [-0.5, 0.5]) wheels.push(wheel(g, 0.42, 0.1, "trainwheel", "iron", x, 0.42, z));
+  for (const z of [-0.57, 0.57]) bx(g, "iron", 2.3, 0.06, 0.04, 0, 0.42, z);
+  bx(g, "black", 4.8, 0.3, 1.5, 0, 0.75, 0);
+  for (const x of [-2.5, 2.5]) { bx(g, "red", 0.12, 0.35, 1.7, x, 0.78, 0); for (const z of [-0.55, 0.55]) cylX(g, "iron", 0.08, 0.2, x + Math.sign(x) * 0.15, 0.78, z, 6); }
+  cylX(g, "green", 0.58, 2.6, 0.75, 1.5, 0, 12);
+  cylX(g, "black", 0.62, 0.55, 2.2, 1.5, 0, 12);
+  cyl(g, "black", 0.15, 0.85, 2.2, 1.95, 0, 8, 0.2);
+  cyl(g, "brass", 0.22, 0.45, 0.85, 1.95, 0, 8, 0.16);
+  for (const z of [-0.64, 0.64]) bx(g, "green", 2.1, 0.85, 0.36, 0.55, 1.33, z);
+  bx(g, "green", 1.45, 1.6, 1.6, -1.55, 1.7, 0);
+  for (const z of [-0.81, 0.81]) bx(g, "glass", 0.5, 0.5, 0.02, -1.35, 2.1, z);
+  bx(g, "glass", 0.02, 0.4, 0.5, -0.82, 2.15, 0.4); bx(g, "glass", 0.02, 0.4, 0.5, -0.82, 2.15, -0.4);
+  bx(g, "roof", 1.65, 0.08, 1.8, -1.55, 2.54, 0);
+  bx(g, "coal", 0.5, 0.6, 1.2, -2.25, 1.2, 0);
+  const lb = new THREE.Group(); lb.position.set(2.5, 1.55, 0); g.add(lb); bx(lb, "black", 0.18, 0.3, 0.3, 0, 0, 0);
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.18), glassMat); gl.position.set(0.1, 0, 0); lb.add(gl);
+  const drv = person(0x3a3a46); drv.position.set(-1.6, 0.9, 0.3); g.add(drv);
+  return { g, wheels, lamps: [lampSpec(gl, 1.3, 24, new THREE.Vector3(1, -0.12, 0).normalize(), 0.86)], half: 2.55, bogie: 1.1 };
+}
+function coachCar() {
+  const g = new THREE.Group(), wheels = [];
+  for (const x of [-1.5, 1.5]) { for (const dx of [-0.45, 0.45]) for (const z of [-0.5, 0.5]) wheels.push(wheel(g, 0.3, 0.08, "trainwheel", "iron", x + dx, 0.3, z)); bx(g, "black", 1.3, 0.2, 1.2, x, 0.42, 0); }
+  bx(g, "black", 4.5, 0.2, 1.5, 0, 0.6, 0);
+  bx(g, "maroon", 4.4, 1.55, 1.78, 0, 1.47, 0);
+  bx(g, "cream", 4.42, 0.1, 1.8, 0, 1.72, 0);
+  const rf = new THREE.CylinderGeometry(1.0, 1.0, 4.5, 12, 1, false, 0, Math.PI); rf.rotateZ(Math.PI / 2); rf.scale(1, 0.3, 0.95);
+  const rm = mesh(g, rf, M("roof")); rm.position.set(0, 2.24, 0);
+  for (const z of [-0.9, 0.9]) for (let k = 0; k < 4; k++) { const wn = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.02), windowMat); wn.position.set(-1.5 + k, 1.75, z); g.add(wn); }
+  for (const x of [-2.27, 2.27]) for (const z of [-0.55, 0.55]) cylX(g, "iron", 0.07, 0.15, x, 0.62, z, 6);
+  const inner = new THREE.Object3D(); inner.position.set(0, 1.6, 0); g.add(inner);
+  return { g, wheels, lamps: [lampSpec(inner, 0.55, 6)], half: 2.3, bogie: 1.5, windows: true };
+}
+function wagonCar() {
+  const g = new THREE.Group(), wheels = [];
+  for (const x of [-1.15, 1.15]) for (const z of [-0.5, 0.5]) wheels.push(wheel(g, 0.32, 0.08, "trainwheel", "iron", x, 0.32, z));
+  bx(g, "black", 3.9, 0.2, 1.4, 0, 0.6, 0);
+  bx(g, "boards", 3.8, 0.08, 1.7, 0, 0.74, 0);
+  for (const z of [-0.85, 0.85]) bx(g, "boards", 3.8, 0.8, 0.06, 0, 1.15, z);
+  for (const x of [-1.9, 1.9]) bx(g, "boards", 0.06, 0.8, 1.7, x, 1.15, 0);
+  bx(g, "sack", 0.9, 0.5, 0.7, -0.8, 1.03, 0.4); bx(g, "sack", 0.9, 0.5, 0.7, 0.4, 1.03, -0.3); bx(g, "crate", 0.8, 0.7, 0.8, 1.2, 1.13, 0.35);
+  for (const x of [-2.02, 2.02]) for (const z of [-0.55, 0.55]) cylX(g, "iron", 0.07, 0.15, x, 0.62, z, 6);
+  return { g, wheels, lamps: [], half: 2.0, bogie: 1.15 };
+}
+function trainVehicle() {
+  const cars = [locoCar(), coachCar(), wagonCar()], g = new THREE.Group();
+  for (const c of cars) g.add(c.g);
+  const off = [0]; for (let k = 1; k < cars.length; k++) off.push(off[k - 1] - cars[k - 1].half - 0.35 - cars[k].half);
+  return { g, name: "Steam train", cars, wheels: cars.flatMap(c => c.wheels), lamps: cars.flatMap(c => c.lamps), len: 15,
+    place(path, s, grid, ds) {
+      cars.forEach((c, k) => {
+        const sc = s + off[k], a = path.at(sc - c.bogie), b = path.at(sc + c.bogie);
+        placeFrame(c.g, a, b, a.h + RAIL_TOP, b.h + RAIL_TOP);
+      });
+      if (ds) spin(this.wheels, ds);
+    } };
+}
+
+// =====================================================================
+// The track: a ballast bed whose top follows the grade, the cells under it
+// cut down or filled up to the layer below the bed, the bed's bank making
+// up the rest; sleepers and two rails on top.
+// =====================================================================
+function layTrack(par, grid, pts, closed) {
+  const n = pts.length;
+  // the cells under the bed: cut to (or filled up to) the layer below it
+  const floorOf = new Map();
+  pts.forEach((p, k) => {
+    const q = pts[(k + 1) % n], hd = Math.atan2(q.z - p.z, q.x - p.x), px = -Math.sin(hd), pz = Math.cos(hd), f = Math.floor(p.h + 1e-6);
+    for (let o = -1.15; o <= 1.151; o += 0.23) { const [c, r] = cellAt(p.x + px * o, p.z + pz * o); if (!grid.in(c, r)) continue; const i = grid.i(c, r); floorOf.set(i, Math.min(floorOf.has(i) ? floorOf.get(i) : 99, f)); }
+  });
+  for (const [i, f] of floorOf) { grid.top[i] = f; grid.tm[i] = "ballast"; grid.noTree[i] = 1; }
+  // the bed: a strip with its top at the grade and its banks down to each cell's top
+  const B = new Builder(), HW = 1.1, BALLAST = 0.12;
+  const ring = pts.map((p, k) => {
+    const a = pts[(k - 1 + n) % n], b = pts[(k + 1) % n], hd = Math.atan2(b.z - a.z, b.x - a.x), px = -Math.sin(hd), pz = Math.cos(hd);
+    const top = p.h + BALLAST, ground = Math.min(grid.colTop(p.x, p.z), p.h), w2 = HW + (top - ground) * 0.75;
+    return { L: [p.x + px * HW, top, p.z + pz * HW], Rr: [p.x - px * HW, top, p.z - pz * HW], LB: [p.x + px * w2, ground - 0.02, p.z + pz * w2], RB: [p.x - px * w2, ground - 0.02, p.z - pz * w2], px, pz };
+  });
+  for (let k = 0; k < (closed ? n : n - 1); k++) {
+    const a = ring[k], b = ring[(k + 1) % n];
+    B.top("ballast", [a.L, b.L, b.Rr, a.Rr]);
+    B.face("ballast", [a.L, a.LB, b.LB, b.L], [a.px, 0.5, a.pz], p => [(p[0] + p[2]) / 2, p[1] / 2]);
+    B.face("ballast", [a.Rr, b.Rr, b.RB, a.RB], [-a.px, 0.5, -a.pz], p => [(p[0] + p[2]) / 2, p[1] / 2]);
+  }
+  B.build(par);
+  // two rails, 1 m apart, 0.12 m tall
+  const RB2 = new Builder();
+  for (const side of [-1, 1]) for (let k = 0; k < (closed ? n : n - 1); k++) {
+    const a = pts[k], b = pts[(k + 1) % n], ra = ring[k], rb = ring[(k + 1) % n], y0a = a.h + BALLAST + 0.12, y0b = b.h + BALLAST + 0.12;
+    for (const o of [side * GAUGE / 2 - 0.035, side * GAUGE / 2 + 0.035]) {
+      const A0 = [a.x + ra.px * o, y0a, a.z + ra.pz * o], A1 = [a.x + ra.px * o, y0a + 0.12, a.z + ra.pz * o], B0 = [b.x + rb.px * o, y0b, b.z + rb.pz * o], B1 = [b.x + rb.px * o, y0b + 0.12, b.z + rb.pz * o];
+      const sg = o > side * GAUGE / 2 ? 1 : -1;
+      RB2.face("rail", [A0, B0, B1, A1], [ra.px * sg, 0, ra.pz * sg], p => [(p[0] + p[2]) / 2, (p[1] - y0a) * 4]);
+    }
+    const i0 = side * GAUGE / 2 - 0.035, i1 = side * GAUGE / 2 + 0.035;
+    RB2.top("rail", [[a.x + ra.px * i0, y0a + 0.12, a.z + ra.pz * i0], [b.x + rb.px * i0, y0b + 0.12, b.z + rb.pz * i0], [b.x + rb.px * i1, y0b + 0.12, b.z + rb.pz * i1], [a.x + ra.px * i1, y0a + 0.12, a.z + ra.pz * i1]]);
+  }
+  RB2.build(par);
+  // sleepers every 0.6 m
+  const path = new Path(pts, closed), count = Math.floor(path.L / 0.6), sl = new THREE.InstancedMesh(boxGeo(0.22, 0.12, 1.8), M("sleeper"), count);
+  const o = new THREE.Object3D();
+  for (let k = 0; k < count; k++) {
+    const s = k * 0.6, a = path.at(s - 0.1), b = path.at(s + 0.1), p = path.at(s);
+    o.position.set(p.x, p.h + BALLAST + 0.06, p.z); o.rotation.order = "YZX"; o.rotation.set(0, -Math.atan2(b.z - a.z, b.x - a.x), Math.atan2(b.h - a.h, 0.2)); o.updateMatrix(); sl.setMatrixAt(k, o.matrix);
+  }
+  sl.castShadow = sl.receiveShadow = true; par.add(sl);
+  return path;
+}
+
+// =====================================================================
+// The stage: one renderer, its scene, the orbit camera and the clock. Made
+// when its tab first opens; its loop runs only while the tab is open.
+// =====================================================================
+const STATE = { hour: 13 };
+function skyAt(hour) {
+  const a = (hour - 6) / 12 * Math.PI, sy = Math.sin(a) * 0.82, sx = Math.cos(a), sun = new THREE.Vector3(sx * 0.8, sy, -0.45).normalize();
+  const night = sstep(0.08, -0.1, sun.y), dayF = sstep(-0.06, 0.28, sun.y), dusk = Math.max(0, 1 - Math.abs(sun.y) / 0.22) * (1 - night * 0.6);
+  return { sun, night, dayF, dusk };
+}
+class Stage {
+  constructor(id, canvas, def) {
+    this.id = id; this.canvas = canvas; this.def = def; this.vehicles = []; this.lampList = []; this.playing = false; this.followIdx = -1; this.lines = [];
+    const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+    r.outputEncoding = THREE.sRGBEncoding; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 700);
+    this.hemi = new THREE.HemisphereLight(0xbfd4e6, 0x6b5a3e, 0.6); this.scene.add(this.hemi);
+    this.sunL = new THREE.DirectionalLight(0xffffff, 1.4); this.sunL.castShadow = true; this.sunL.shadow.mapSize.set(2048, 2048);
+    const sb = def.shadow || { x: 0, z: 0, half: 60 }; this.sb = sb;
+    Object.assign(this.sunL.shadow.camera, { left: -sb.half, right: sb.half, top: sb.half, bottom: -sb.half, near: 1, far: 400 });
+    this.sunL.shadow.bias = -0.0006; this.sunL.shadow.normalBias = 0.03;
+    this.sunL.target.position.set(sb.x, 0, sb.z); this.scene.add(this.sunL, this.sunL.target);
+    this.scene.fog = new THREE.Fog(0x9fbad0, 80, 320);
+    // the moon and the stars, seen at night
+    const mc = document.createElement("canvas"); mc.width = mc.height = 64; const mg = mc.getContext("2d"); mg.fillStyle = "#d8dce4"; mg.beginPath(); mg.arc(32, 32, 26, 0, 7); mg.fill();
+    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(mc), fog: false, depthWrite: false })); this.moon.scale.set(14, 14, 1); this.scene.add(this.moon);
+    const sp = [], rn = rng(7); for (let k = 0; k < 500; k++) { const u = rn() * 2 - 1, th = rn() * 6.283, y = Math.abs(u) * 0.9 + 0.05, rr = Math.sqrt(1 - y * y); sp.push(Math.cos(th) * rr * 500, y * 500, Math.sin(th) * rr * 500); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xbfc8d8, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0 })); this.scene.add(this.stars);
+    this.root = new THREE.Group(); this.scene.add(this.root);
+    def.build(this);
+    this.V = Object.assign({}, def.views[0][1]);
+    // glows round every lamp
+    for (const L of this.lampList) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); s.scale.set(1.5, 1.5, 1); s.visible = false; L.obj.add(s); L.glow = s; }
+    this.lineGroup = new THREE.Group(); this.lineGroup.visible = false; this.scene.add(this.lineGroup);
+    for (const p of this.lines) {
+      const arr = []; for (let s = 0; s <= p.path.L; s += 0.4) { const q = p.path.at(s); arr.push(q.x, (q.h !== undefined ? q.h + RAIL_TOP + 0.03 : p.grid.heightAt(q.x, q.z)) + 0.06, q.z); }
+      const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+      this.lineGroup.add(new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xffe9a8, fog: false })));
+    }
+    this.placeAll(0);
+    this.bindInput(); this.resize(); this.raf = 0; this.last = 0;
+    window.addEventListener("resize", () => this.resize());
+  }
+  addLamp(obj, power = 1, range = 12, dir = null, cone = 0.8) { this.lampList.push({ obj, power, range, dir, cone }); }
+  addVehicle(v, path, grid, s0, speed, opts = {}) {
+    this.root.add(v.g); v.path = path; v.grid = grid; v.s = s0; v.speed = speed; v.wrap = opts.wrap; v.slow = opts.slow !== undefined ? opts.slow : 0.4; v.factor = opts.factor;
+    if (opts.name) v.name = opts.name;
+    for (const L of v.lamps) this.lampList.push(L);
+    this.vehicles.push(v); return v;
+  }
+  placeAll(dt) {
+    for (const v of this.vehicles) {
+      let ds = 0;
+      if (dt > 0) {
+        // slower uphill: the grade over the next metre
+        let f = 1;
+        if (v.path.at(v.s).h === undefined) { const a = v.path.at(v.s - 0.8), b = v.path.at(v.s + 0.8), gr = (v.grid.heightAt(b.x, b.z) - v.grid.heightAt(a.x, a.z)) / 1.6; f = clamp(1 - v.slow * Math.max(0, gr) / 0.35, 0.4, 1); }
+        ds = v.speed * f * (v.factor || 1) * dt; v.s += ds;
+        if (v.wrap && v.s > v.wrap[1]) v.s = v.wrap[0];
+      }
+      v.place(v.path, v.s, v.grid, ds);
+    }
+  }
+  lighting() {
+    const { sun, night, dayF, dusk } = skyAt(STATE.hour), sb = this.sb;
+    const moon = sun.clone().multiplyScalar(-1); moon.y = Math.abs(moon.y) * 0.8 + 0.25; moon.normalize();
+    const lightDir = sun.y > -0.02 ? sun : moon;
+    this.sunL.position.set(sb.x + lightDir.x * 150, lightDir.y * 150, sb.z + lightDir.z * 150);
+    const sunCol = new THREE.Color(0xfff2e0).lerp(new THREE.Color(0xffa060), dusk), moonCol = new THREE.Color(0x8796b8);
+    this.sunL.color.copy(sun.y > -0.02 ? sunCol : moonCol);
+    this.sunL.intensity = sun.y > -0.02 ? 1.45 * sstep(-0.02, 0.2, sun.y) : 0.08;
+    const skyDay = new THREE.Color(0x9fbad0), skyDusk = new THREE.Color(0xc98b62), skyNight = new THREE.Color(0x060a14);
+    const sky = skyDay.clone().lerp(skyDusk, dusk).lerp(skyNight, night);
+    this.scene.background = sky; this.scene.fog.color.copy(sky);
+    this.scene.fog.near = lerp(80, 50, night); this.scene.fog.far = lerp(320, 220, night);
+    this.hemi.color.set(0xbfd4e6).lerp(new THREE.Color(0x24304a), night); this.hemi.groundColor.set(0x6b5a3e).lerp(new THREE.Color(0x0a0a0c), night);
+    this.hemi.intensity = lerp(0.05, 0.62, dayF);
+    this.moon.position.set(this.camera.position.x + moon.x * 400, moon.y * 400, this.camera.position.z + moon.z * 400); this.moon.visible = night > 0.3;
+    this.stars.position.set(this.camera.position.x, 0, this.camera.position.z); this.stars.material.opacity = night * 0.9;
+    // lamps: on at dusk, every one of them to every material
+    const on = night, q = new THREE.Quaternion(), v = new THREE.Vector3();
+    glassMat.color.set(GLASS_DAY).lerp(new THREE.Color(GLASS_NIGHT), on); redGlass.color.set(0x401010).lerp(new THREE.Color(0xff4030), on); windowMat.color.set(0x1d2a33).lerp(new THREE.Color(0xf0c070), on);
+    for (let i = 0; i < LAMP_N; i++) {
+      const L = this.lampList[i];
+      if (!L || on < 0.02) { LU.uLampPos.value[i].set(0, -999, 0); LU.uLampCol.value[i].set(0, 0, 0); continue; }
+      L.obj.getWorldPosition(v); LU.uLampPos.value[i].copy(v);
+      const k = L.power * 2.6 * on; LU.uLampCol.value[i].set(1.0 * k, 0.64 * k, 0.33 * k); LU.uLampRange.value[i] = L.range;
+      if (L.dir) { L.obj.getWorldQuaternion(q); const d = L.dir.clone().applyQuaternion(q); LU.uLampDir.value[i].set(d.x, d.y, d.z, L.cone); } else LU.uLampDir.value[i].set(0, 0, 0, -2);
+    }
+    for (const L of this.lampList) if (L.glow) L.glow.visible = on > 0.3 && L.obj.type === "Mesh";
+  }
+  place() {
+    const V = this.V;
+    if (this.followIdx >= 0) { const v = this.vehicles[this.followIdx], p = v.path.at(v.s); V.tx = p.x; V.tz = p.z; V.ty = (p.h !== undefined ? p.h : v.grid.heightAt(p.x, p.z)) + 1; }
+    const cp = Math.cos(V.pitch);
+    this.camera.position.set(V.tx - cp * Math.cos(V.yaw) * V.dist, V.ty + Math.sin(V.pitch) * V.dist, V.tz - cp * Math.sin(V.yaw) * V.dist);
+    this.camera.lookAt(V.tx, V.ty, V.tz);
+  }
+  bindInput() {
+    const cv = this.canvas, ptrs = new Map(); let pinch0 = 0, mid0 = null, btn = 0;
+    cv.addEventListener("contextmenu", e => e.preventDefault());
+    cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); btn = e.button; ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); mid0 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; } });
+    const pan = (dx, dy) => { const V = this.V, k = V.dist * 0.0016, fx = Math.cos(V.yaw), fz = Math.sin(V.yaw); V.tx += (-fz * dx - fx * dy) * k * -1; V.tz += (fx * dx - fz * dy) * k * -1; this.followIdx = -1; syncFollow(); };
+    cv.addEventListener("pointermove", e => {
+      if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      const dx = e.clientX - px, dy = e.clientY - py;
+      if (ptrs.size === 1 && (btn === 2 || e.shiftKey)) pan(dx, dy);
+      else if (ptrs.size === 1) { this.V.yaw += dx * 0.006; this.V.pitch = clamp(this.V.pitch + dy * 0.006, 0.05, 1.45); }
+      else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; if (pinch0 > 0) this.V.dist = clamp(this.V.dist * pinch0 / d, 3, 220); pinch0 = d; if (mid0) pan(m[0] - mid0[0], m[1] - mid0[1]); mid0 = m; }
+    });
+    const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; mid0 = null; };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("wheel", e => { e.preventDefault(); this.V.dist = clamp(this.V.dist * Math.exp(e.deltaY * 0.001), 3, 220); }, { passive: false });
+  }
+  resize() {
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight; if (!w || !h) return;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  }
+  step(dt) { if (this.playing) this.placeAll(dt); }
+  draw() { this.place(); this.lighting(); this.renderer.render(this.scene, this.camera); }
+  frame(now) { this.raf = requestAnimationFrame(t => this.frame(t)); const dt = Math.min(0.1, (now - this.last) / 1000); this.last = now; this.step(dt); this.draw(); }
+  start() { if (!this.raf) { this.last = performance.now(); this.resize(); this.raf = requestAnimationFrame(t => this.frame(t)); } }
+  stop() { cancelAnimationFrame(this.raf); this.raf = 0; }
+}
+
+// =====================================================================
+// The road loop (Carts and Cars): 40 cells. A level dirt track in the south;
+// a climb of three layers at each end, a layer a cell; a gravel road over the
+// hilltop and a timber bridge over the ravine.
+// =====================================================================
+function roadWorld(st, kind) {
+  const g = new Grid(28, 21);
+  const hill = r => r <= 6 ? 1 : Math.min(4, r - 5);
+  const xg = cx(12, 13);
+  const ravine = (c, r) => r >= 11 && Math.abs(cx(c, r) - xg) < 2.2;
+  g.fill((c, r) => ravine(c, r) ? { h: 1, top: "scree", side: "scree" } : { h: hill(r), top: "grass", side: "dirt" });
+  for (let r = 0; r < g.nr; r++) for (let c = 0; c < g.nc; c++) if (ravine(c, r)) g.water[g.i(c, r)] = 1.55;
+  const cells = walkCells(6, 5, [[0, 12], [1, 4], [2, 4], [3, 12], [4, 4], [5, 3]]);
+  // the bridge over the ravine
+  for (let k = 0; k < cells.length; k++) {
+    const [c, r] = cells[k];
+    if (ravine(c, r)) { const [pc, pr] = cells[k - 1], [qc, qr] = cells[k + 1]; bridgeCell(st.root, g, c, r, 4, [dirTo(c, r, pc, pr), dirTo(c, r, qc, qr)], 1); }
+  }
+  g.road(cells, (k, c, r) => r <= 6 || (k >= 32 && r <= 8) ? "roaddirt" : "gravel", true);
+  for (const [c, r] of cells) for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (g.in(a, b)) g.noTree[g.i(a, b)] = 1; }
+  for (let r = 0; r < g.nr; r++) for (let c = 0; c < g.nc; c++) if (ravine(c, r) || ravine(c - 1, r) || ravine(c + 1, r) || (r <= 3 && c >= 3 && c <= 24) || (r >= 5 && r <= 8 && c >= 18) || Math.hypot(cx(c, r) - xg, cz(c, r) - cz(0, 13)) < 10) g.noTree[g.i(c, r)] = 1;
+  const path = roadPath(cells, true);
+  // lamps: a post at every fifth cell, outside the loop
+  const lcx = cx(12, 9), lcz = cz(0, 9);
+  cells.forEach(([c, r], k) => {
+    if (k % 5 !== 2) return;
+    const x0 = cx(c, r), z0 = cz(c, r), dx = x0 - lcx, dz = z0 - lcz, l = Math.hypot(dx, dz), x = x0 + dx / l * 1.95, z = z0 + dz / l * 1.95;
+    const [a, b] = cellAt(x, z); if (!g.in(a, b) || ravine(a, b)) return;
+    st.addLamp(lampPost(st.root, x, g.top[g.i(a, b)], z, -Math.atan2(-dz, -dx)), 1, 13);
+  });
+  // trees on the hill and in the fields
+  const rn = rng(23);
+  for (let r = 0; r < g.nr; r++) for (let c = 0; c < g.nc; c++) { const i = g.i(c, r); if (!g.noTree[i] && rn() < (r >= 9 ? 0.06 : 0.05)) tree(st.root, cx(c, r) + (rn() - 0.5), g.top[i], cz(c, r) + (rn() - 0.5), 0.9 + rn() * 0.4); }
+  // the milestone at the foot of the climb
+  bx(st.root, "fieldstone", 0.4, 0.9, 0.3, cx(18, 4), 1.45, cz(0, 4));
+  g.buildMesh(st.root);
+  st.lines.push({ path, grid: g });
+  return { g, path, cells };
+}
+const yardstick = (st, g, path, s, side, tunic, back = 0) => {
+  const p = path.at(s), a = path.at(s - 0.5), b = path.at(s + 0.5), hd = Math.atan2(b.z - a.z, b.x - a.x), px = -Math.sin(hd) * side, pz = Math.cos(hd) * side;
+  const x = p.x + px * 1.9 + Math.cos(hd) * back, z = p.z + pz * 1.9 + Math.sin(hd) * back, man = person(tunic);
+  man.position.set(x, g.colTop(x, z), z); man.rotation.y = -Math.atan2(-pz, -px); st.root.add(man); return man;
+};
+const DEFS = {
+  carts: {
+    title: "Carts and horses", phase: "Hand cart, horse cart: phase 3 · rider, wagon: phase 5", shadow: { x: 34, z: 22, half: 52 },
+    views: [["Overview", { tx: 36, ty: 2, tz: 21, yaw: 1.2, pitch: 0.62, dist: 66 }], ["Hitching rail", { tx: 23, ty: 1.4, tz: 10.6, yaw: 1.3, pitch: 0.3, dist: 11 }],
+      ["The dirt road", { tx: 38, ty: 1.5, tz: 12.3, yaw: 1.25, pitch: 0.33, dist: 15 }], ["The climb", { tx: 55.8, ty: 2.6, tz: 17.2, yaw: 2.75, pitch: 0.3, dist: 15 }]],
+    build(st) {
+      const { g, path } = roadWorld(st, "carts");
+      st.addVehicle(riderVehicle("coatdun", TUNICS[1]), path, g, 9, 1.7);
+      st.addVehicle(wagonVehicle("coatgrey", TUNICS[2]), path, g, 22, 1.7);
+      st.addVehicle(cartVehicle("coat", TUNICS[0]), path, g, 39.5, 1.7);
+      st.addVehicle(handCartVehicle(TUNICS[5]), path, g, 50, 1.7);
+      yardstick(st, g, path, 9, -1, TUNICS[3]); yardstick(st, g, path, 23, -1, TUNICS[5]); yardstick(st, g, path, 40.5, 1, TUNICS[4]);
+      // the hitching rail by the west end of the track, a horse tied to it, a lamp over it
+      const hx = cx(8, 4) - 0.6, hz = cz(0, 4) - 0.2, hy = g.top[g.i(8, 4)];
+      cyl(st.root, "timber", 0.08, 1.1, hx - 1.2, hy, hz, 6); cyl(st.root, "timber", 0.08, 1.1, hx + 1.2, hy, hz, 6);
+      bx(st.root, "timber", 2.6, 0.1, 0.1, hx, hy + 1.0, hz);
+      const ph = horse("coat"); ph.position.set(hx, hy, hz - 1.0); ph.rotation.y = -Math.PI / 2; st.root.add(ph);
+      bx(ph, "leather", 0.55, 0.1, 0.56, 0.08, 1.52, 0);
+      st.addLamp(lampPost(st.root, hx + 1.9, hy, hz + 0.1, 0), 1, 12);
+      const man = person(TUNICS[2]); man.position.set(hx + 0.5, hy, hz + 0.9); man.rotation.y = -Math.PI / 2; st.root.add(man);
+    } },
+  cars: {
+    title: "Cars", phase: "Phase 5", shadow: { x: 34, z: 22, half: 52 },
+    views: [["The climb", { tx: 55.8, ty: 2.6, tz: 17.2, yaw: 2.75, pitch: 0.3, dist: 15 }], ["The bridge", { tx: 35.4, ty: 4.4, tz: 31.9, yaw: 1.75, pitch: 0.36, dist: 15 }],
+      ["The bend", { tx: 51.5, ty: 1.4, tz: 13, yaw: 1.0, pitch: 0.8, dist: 14 }], ["Overview", { tx: 36, ty: 2, tz: 21, yaw: 1.2, pitch: 0.62, dist: 66 }]],
+    build(st) {
+      const { g, path } = roadWorld(st, "cars");
+      st.addVehicle(carVehicle(TUNICS[1]), path, g, 40.5, 5.5, { slow: 0.45 });
+      st.addVehicle(truckVehicle(TUNICS[0]), path, g, 74.2, 5.5, { slow: 0.45 });
+      yardstick(st, g, path, 41.5, 1, TUNICS[3]); yardstick(st, g, path, 79, 1, TUNICS[4]);
+    } },
+  trains: {
+    title: "Trains and tracks", phase: "Phase 5", shadow: { x: 56, z: 42, half: 64 },
+    views: [["The station", { tx: 30, ty: 2, tz: 54, yaw: -0.3, pitch: 0.3, dist: 22 }], ["The grade", { tx: 52, ty: 1.8, tz: 19.6, yaw: 1.1, pitch: 0.25, dist: 26 }],
+      ["The curve", { tx: 81, ty: 2.4, tz: 28, yaw: 2.2, pitch: 0.7, dist: 32 }], ["Overview", { tx: 56, ty: 2, tz: 40, yaw: 1.4, pitch: 0.75, dist: 105 }]],
+    build(st) {
+      const g = new Grid(42, 34), A = [11, 8], sides = [10, 5, 5, 10, 5, 5];
+      const pts = trackLoop(A[0], A[1], sides, 2);
+      const x0 = cx(A[0], A[1]) + 5 * W;
+      g.fill((c, r) => ({ h: cx(c, r) >= x0 ? 2 : 1, top: "grass", side: "dirt" }));
+      // the grade: one layer over six cells on the south and north straights; level elsewhere
+      for (const p of pts) {
+        const gr = clamp((p.u - 2) / 6, 0, 1);
+        p.h = p.side === 0 ? (p.curve ? 2 : 1 + gr) : p.side === 3 ? (p.curve ? 1 : 2 - gr) : (p.side < 3 ? 2 : 1);
+      }
+      const path = layTrack(st.root, g, pts, true);
+      // the station: a row of cells a layer above the bed beside the west straight (side 4), a timber edge, a hut, a bench, two lamps
+      const sideCells = new Set(), track = new Set();
+      for (const p of pts) { const [c, r] = cellAt(p.x, p.z); track.add(g.i(c, r)); if (p.side === 4 && !p.curve) sideCells.add(c + "," + r); }
+      let mcx = 0, mcz = 0; for (const p of pts) { mcx += p.x; mcz += p.z; } mcx /= pts.length; mcz /= pts.length;
+      const plat = [];
+      for (const key of sideCells) {
+        const [c, r] = key.split(",").map(Number);
+        for (let d = 0; d < 6; d++) {
+          const [a, b] = nb(c, r, d); if (!g.in(a, b)) continue; const i = g.i(a, b);
+          if (track.has(i) || g.tm[i] === "ballast") continue;
+          if (Math.hypot(cx(a, b) - mcx, cz(a, b) - mcz) > Math.hypot(cx(c, r) - mcx, cz(c, r) - mcz) + 1) { g.top[i] = 2; g.tm[i] = "flag"; g.sm[i] = "fieldstone"; g.noTree[i] = 1; plat.push([a, b]); }
+        }
+      }
+      // the platform's timber edge along the straight
+      const s4 = pts.filter(p => p.side === 4 && !p.curve), pa = s4[0], pb = s4[s4.length - 1];
+      const hd = Math.atan2(pb.z - pa.z, pb.x - pa.x), nx = -Math.sin(hd), nz = Math.cos(hd), out = ((pa.x - mcx) * nx + (pa.z - mcz) * nz) > 0 ? 1 : -1;
+      const len = Math.hypot(pb.x - pa.x, pb.z - pa.z), mx = (pa.x + pb.x) / 2 + nx * out * 1.35, mz = (pa.z + pb.z) / 2 + nz * out * 1.35;
+      bx(st.root, "timber", len, 0.14, 0.5, mx, 1.93, mz, 0, -hd, 0);
+      const along = (t, o, y = 2) => [pa.x + (pb.x - pa.x) * t + nx * out * o, pa.z + (pb.z - pa.z) * t + nz * out * o];
+      // the hut
+      { const [x, z] = along(0.5, 4.2), hut = new THREE.Group(); hut.position.set(x, 2, z); hut.rotation.y = -hd; st.root.add(hut);
+        bx(hut, "boards", 2.4, 2.2, 1.8, 0, 1.1, 0); bx(hut, "shingle", 2.8, 0.12, 2.3, 0, 2.3, 0, 0.0, 0, 0);
+        bx(hut, "glass", 0.6, 0.6, 0.02, 0.5, 1.4, -0.91); bx(hut, "timber", 0.8, 1.8, 0.02, -0.6, 0.9, -0.91);
+        const lw = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.58, 0.02), windowMat); lw.position.set(0.5, 1.4, -0.92); hut.add(lw); }
+      { const [x, z] = along(0.22, 2.4); const bench = new THREE.Group(); bench.position.set(x, 2, z); bench.rotation.y = -hd; st.root.add(bench); bx(bench, "timber", 1.4, 0.06, 0.4, 0, 0.45, 0); for (const dx of [-0.6, 0.6]) bx(bench, "timber", 0.06, 0.45, 0.35, dx, 0.22, 0); }
+      for (const t of [0.08, 0.92]) { const [x, z] = along(t, 2.3); st.addLamp(lampPost(st.root, x, 2, z, -Math.atan2(-nz * out, -nx * out)), 1, 13); }
+      { const [x, z] = along(0.35, 2.2), man = person(TUNICS[4]); man.position.set(x, 2, z); man.rotation.y = -Math.atan2(-nz * out, -nx * out); st.root.add(man); }
+      // lamps by the line: at the grade's foot and top, and at the far curves
+      for (const [si, u, o] of [[0, 2, -2.4], [0, 8, -2.4], [3, 2, -2.4], [3, 8, -2.4]]) {
+        const p = pts.find(q => q.side === si && !q.curve && q.u >= u), q2 = pts[pts.indexOf(p) + 1], h2 = Math.atan2(q2.z - p.z, q2.x - p.x);
+        const x = p.x - Math.sin(h2) * o, z = p.z + Math.cos(h2) * o; st.addLamp(lampPost(st.root, x, g.colTop(x, z), z, h2 + Math.PI / 2), 1, 12);
+      }
+      const rn = rng(5);
+      for (let r = 0; r < g.nr; r++) for (let c = 0; c < g.nc; c++) {
+        const i = g.i(c, r), x = cx(c, r), z = cz(c, r); if (g.noTree[i]) continue;
+        let near = 99, inside = false;
+        for (let k = 0; k < pts.length; k += 6) near = Math.min(near, Math.hypot(pts[k].x - x, pts[k].z - z));
+        for (let k = 0, j = pts.length - 1; k < pts.length; j = k++) { const a = pts[k], b = pts[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside; }
+        if (near > 7 && !inside && rn() < 0.06) tree(st.root, x + (rn() - 0.5), g.top[i], z + (rn() - 0.5), 0.9 + rn() * 0.4);
+      }
+      g.buildMesh(st.root);
+      // the train stands at the platform
+      const sStation = path.s[pts.indexOf(s4[0])] + 5 * W * 0.5 + 6;
+      st.addVehicle(trainVehicle(), path, g, sStation, 6);
+      st.lines.push({ path, grid: g });
+      // the views: the station from inside the loop, the grade side-on, the far curve
+      const smid = path.at(sStation - 3);
+      DEFS.trains.views[0][1] = { tx: smid.x + nx * out * 1.5, ty: 2.2, tz: smid.z + nz * out * 1.5, yaw: Math.atan2(-nz * out, -nx * out) - 0.55, pitch: 0.52, dist: 17 };
+      DEFS.trains.views[1][1] = { tx: x0 + 1.6, ty: 1.6, tz: cz(0, A[1]), yaw: -1.1, pitch: 0.28, dist: 14 };
+      { const p = path.at(sStation + 4), q = path.at(sStation + 4.5), h2 = Math.atan2(q.z - p.z, q.x - p.x), x = p.x + Math.sin(h2) * 2.2 * out, z = p.z - Math.cos(h2) * 2.2 * out, man = person(TUNICS[0]); man.position.set(x, g.colTop(x, z), z); st.root.add(man); }
+    } },
+  side: {
+    title: "Side by side", phase: "Carts phase 3 · the rest phase 5", shadow: { x: 52, z: 14, half: 56 },
+    views: [["Line-up", { tx: 46, ty: 1.5, tz: 13.5, yaw: -1.4, pitch: 0.26, dist: 34 }], ["Close", { tx: 30, ty: 1.5, tz: 15.5, yaw: -1.0, pitch: 0.22, dist: 15 }], ["Overview", { tx: 50, ty: 1, tz: 13, yaw: -1.57, pitch: 0.9, dist: 70 }]],
+    build(st) {
+      const g = new Grid(40, 18); g.fill(() => ({ h: 1, top: "grass", side: "dirt" }));
+      const rowR = 7, cells = []; for (let c = 0; c < g.nc; c++) cells.push([c, rowR]);
+      g.road(cells, () => "gravel", false); const path = roadPath(cells, false);
+      const tp = []; const z7 = cz(0, 4); for (let x = cx(0, 4) - 1; x <= cx(g.nc - 1, 4) + 1; x += 0.25) tp.push({ x, z: z7, h: 1 });
+      const tpath = layTrack(st.root, g, tp, false);
+      for (let c = 2; c < g.nc; c += 6) st.addLamp(lampPost(st.root, cx(c, rowR), 1, cz(0, rowR) + 1.9, -Math.PI / 2), 1, 13);
+      const end = path.L - 6, list = [[riderVehicle("coatdun", TUNICS[1]), 1.6, 18], [cartVehicle("coat", TUNICS[0]), 1.6, 25], [wagonVehicle("coatgrey", TUNICS[2]), 1.6, 36], [carVehicle(TUNICS[3]), 5.5, 48], [truckVehicle(TUNICS[4]), 5.5, 58]];
+      for (const [v, sp, s0] of list) { st.addVehicle(v, path, g, s0, sp, { wrap: [4, end] }); yardstick(st, g, path, s0 + 1, 1, TUNICS[(s0 | 0) % 6]); }
+      st.addVehicle(trainVehicle(), tpath, g, 52, 6, { wrap: [16, tpath.L - 4] });
+      { const p = tpath.at(46), man = person(TUNICS[5]); man.position.set(p.x, 1, p.z - 2.2); man.rotation.y = -Math.PI / 2; st.root.add(man); }
+      const rn = rng(9); for (let c = 0; c < g.nc; c++) for (const r of [0, 1]) if (rn() < 0.25) tree(st.root, cx(c, r), 1, cz(c, r), 0.9 + rn() * 0.3);
+      g.buildMesh(st.root);
+      st.lines.push({ path, grid: g }, { path: tpath, grid: g });
+    } },
+  offroad: {
+    title: "Road or not", phase: "Phase 3", shadow: { x: 50, z: 17, half: 56 },
+    chips: [["Gravel", "x1.0"], ["Dirt track", "x0.6"], ["Grass", "x0.25"]],
+    views: [["Three lanes", { tx: 30, ty: 1.5, tz: 17, yaw: -1.25, pitch: 0.42, dist: 34 }], ["From the west", { tx: 24, ty: 1.4, tz: 17, yaw: 0.25, pitch: 0.3, dist: 20 }], ["Overview", { tx: 50, ty: 1, tz: 17, yaw: -1.57, pitch: 0.95, dist: 66 }]],
+    build(st) {
+      const g = new Grid(38, 15); g.fill(() => ({ h: 1, top: "grass", side: "dirt" }));
+      const lanes = [[3, "gravel", "gravel", 1.0], [7, "roaddirt", "dirt track", 0.6], [11, null, "grass", 0.25]];
+      for (const [r, mat, label, f] of lanes) {
+        const cells = []; for (let c = 0; c < g.nc; c++) cells.push([c, r]);
+        if (mat) g.road(cells, () => mat, false);
+        const path = roadPath(cells, false), end = path.L - 7;
+        st.addVehicle(handCartVehicle(TUNICS[(r + 1) % 6]), path, g, 6, 6, { wrap: [4, end], factor: f, name: `Hand cart, ${label} (x${f})` });
+        st.addVehicle(cartVehicle("coat", TUNICS[r % 6]), path, g, 14, 9, { wrap: [4, end], factor: f, name: `Horse cart, ${label} (x${f})` });
+        for (let c = 3; c < g.nc; c += 7) st.addLamp(lampPost(st.root, cx(c, r), 1, cz(0, r) - 1.9, Math.PI / 2), 1, 13);
+        st.lines.push({ path, grid: g });
+      }
+      for (let c = 0; c < g.nc; c++) for (const r of [0, 14]) { const i = g.i(c, r); if (hash2(c, r) < 0.3) tree(st.root, cx(c, r), 1, cz(c, r), 0.9 + hash2(r, c) * 0.3); }
+      g.buildMesh(st.root);
+    } },
+};
+
+// =====================================================================
+// Tabs: one 3D view at a time. A tab's stage is made when it first opens,
+// and only the open tab's loop runs. The open tab is a bare #anchor.
+// =====================================================================
+const STAGES = {}; let current = null;
+const $ = id => document.getElementById(id);
+function hourText(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return String(hh % 24).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); }
+function syncFollow() { if (current) $("follow").value = String(STAGES[current].followIdx); }
+function openTab(id) {
+  if (!DEFS[id]) id = "carts";
+  for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === id));
+  for (const k of Object.keys(DEFS)) { $("cv-" + k).hidden = k !== id; if (k !== id && STAGES[k]) STAGES[k].stop(); }
+  current = id;
+  if (!STAGES[id]) STAGES[id] = new Stage(id, $("cv-" + id), DEFS[id]);
+  const st = STAGES[id];
+  $("hudTitle").textContent = DEFS[id].title;
+  $("hudPhase").textContent = DEFS[id].phase || "";
+  $("hudExtra").innerHTML = (DEFS[id].chips || []).map(([k, v]) => `<span class="chip"><b>${k}</b>${v}</span>`).join("");
+  $("view").innerHTML = DEFS[id].views.map(([n], k) => `<option value="${k}">${n}</option>`).join("");
+  $("follow").innerHTML = `<option value="-1">Free view</option>` + st.vehicles.map((v, k) => `<option value="${k}">${v.name}</option>`).join("");
+  syncFollow();
+  $("drive").setAttribute("aria-pressed", String(st.playing)); $("line").setAttribute("aria-pressed", String(st.lineGroup.visible));
+  st.start();
+  if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+}
+for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => openTab(b.dataset.tab));
+window.addEventListener("hashchange", () => openTab(location.hash.slice(1)));
+$("drive").addEventListener("click", () => { const st = STAGES[current]; st.playing = !st.playing; $("drive").setAttribute("aria-pressed", String(st.playing)); });
+$("line").addEventListener("click", () => { const st = STAGES[current]; st.lineGroup.visible = !st.lineGroup.visible; $("line").setAttribute("aria-pressed", String(st.lineGroup.visible)); });
+$("follow").addEventListener("change", e => { STAGES[current].followIdx = +e.target.value; });
+$("view").addEventListener("change", e => { const st = STAGES[current]; st.followIdx = -1; syncFollow(); Object.assign(st.V, DEFS[current].views[+e.target.value][1]); });
+$("reset").addEventListener("click", () => { const st = STAGES[current]; st.followIdx = -1; syncFollow(); Object.assign(st.V, DEFS[current].views[+$("view").value][1]); });
+function setHour(h) { STATE.hour = h; $("time").value = h; $("timeOut").textContent = hourText(h); $("hudTime").innerHTML = "<b>Time</b>" + hourText(h); }
+$("time").addEventListener("input", e => setHour(+e.target.value));
+$("day").addEventListener("click", () => setHour(13));
+$("night").addEventListener("click", () => setHour(22.5));
+// the info modal: closes with its ✕, Esc or a tap outside
+const modal = $("modal");
+$("info").addEventListener("click", () => modal.showModal());
+$("mclose").addEventListener("click", () => modal.close());
+modal.addEventListener("click", e => { if (e.target === modal) modal.close(); });
+setHour(13);
+openTab(location.hash.slice(1) || "carts");
+// for headless screenshots
+window.__lt = {
+  open: openTab, setHour, stages: STAGES,
+  view(k) { const st = STAGES[current]; st.followIdx = -1; Object.assign(st.V, DEFS[current].views[k][1]); $("view").value = k; },
+  drive(on) { const st = STAGES[current]; st.playing = on; $("drive").setAttribute("aria-pressed", String(on)); },
+  advance(sec) { const st = STAGES[current], p = st.playing; st.playing = true; for (let t = 0; t < sec; t += 1 / 60) st.step(1 / 60); st.playing = p; },
+  line(on) { STAGES[current].lineGroup.visible = on; $("line").setAttribute("aria-pressed", String(on)); },
+};
+</script>
+</body>
+</html>

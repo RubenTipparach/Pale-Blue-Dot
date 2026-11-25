@@ -12,16 +12,36 @@
 //! a reader that runs before the offers have been seen), each reader does
 //! what it always did, and the first to use the press takes it.
 
+use crate::ui_kit::{Localized, tr};
 use bevy::prelude::*;
+use pbd_core::locale::{caps, tr_with};
 
 /// Who carries an act out: the system that reads F for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Reader {
     Husbandry,
     Fruit,
+    /// The glowing mushrooms (`glowing-mushrooms` design 3).
+    Glow,
     Farm,
     Doors,
     Boats,
+    /// The townsfolk: talk, then trade and jobs (`townsfolk` design 5 to 9).
+    Talk,
+    /// A log on the water (`log-drives`).
+    Logs,
+    /// A broken town wall (`townsfolk` design 29).
+    Mend,
+    /// The carts (`land-transport` design 11).
+    Carts,
+    /// A town lamp at dusk (`town-missions-tree` design 8).
+    Lamps,
+    /// A seat, a bed or a container (`furniture` design 6, 11).
+    Furniture,
+    /// The drafting table (`building-planner` design 3).
+    Planner,
+    /// A construction site's pieces (`building-planner` design 6, 7).
+    Site,
 }
 
 /// A thing F can do.
@@ -36,6 +56,8 @@ pub enum Act {
     TakeIncubator,
     TakeUp,
     PickFruit,
+    /// Pick a glowing mushroom (`glowing-mushrooms` design 3).
+    PickGlow,
     Open,
     Harvest,
     Check,
@@ -45,7 +67,45 @@ pub enum Act {
     OpenDoor,
     ShutDoor,
     Till,
+    /// Take a log out of the water (`log-drives`).
+    TakeLog,
     Board,
+    /// Talk to a townsperson.
+    Talk,
+    /// Mend a broken town wall with planks.
+    Mend,
+    /// Let go of a hand cart's handles (`land-transport` design 11).
+    LetGo,
+    /// Step down from a horse cart's seat.
+    StepDown,
+    /// Take a hand cart's handles.
+    Pull,
+    /// Take a horse cart's seat.
+    Drive,
+    /// Put a horse in a horse cart's shafts.
+    Hitch,
+    /// Take it out of them.
+    Unhitch,
+    /// Light a town lamp at dusk, for a lamps job.
+    Light,
+    /// Mount a kept plodder or horse (`land-transport` design 14).
+    Ride,
+    /// Get off it.
+    GetOff,
+    /// Sit on a chair, a stool or a bench (`furniture` design 6).
+    Sit,
+    /// Lie down on a bed.
+    Lie,
+    /// Open drawers, a closet or a chest (`furniture` design 11).
+    OpenStore,
+    /// Draw a plan at the drafting table (`building-planner` design 3).
+    Plan,
+    /// Strike a site's piece with the mallet (design 6).
+    Build,
+    /// Take a marked piece down (design 7).
+    TakeDown,
+    /// Set a piece of furniture in its slot (design 6).
+    Fill,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -64,25 +124,47 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 18] = [
-    row(Act::Collect, "Collect", Reader::Husbandry),
-    row(Act::SetEggs, "Set eggs under", Reader::Husbandry),
-    row(Act::Feed, "Feed", Reader::Husbandry),
-    row(Act::LetStay, "Let {} stay", Reader::Husbandry),
-    row(Act::Lead, "Lead", Reader::Husbandry),
-    row(Act::SetInIncubator, "Set eggs in", Reader::Husbandry),
-    row(Act::TakeIncubator, "Take", Reader::Husbandry),
-    row(Act::TakeUp, "Take up", Reader::Husbandry),
-    row(Act::PickFruit, "Pick", Reader::Fruit),
-    row(Act::Open, "Open", Reader::Farm),
-    row(Act::Harvest, "Harvest", Reader::Farm),
-    row(Act::Check, "Check", Reader::Farm),
-    row(Act::PickWild, "Pick wild", Reader::Farm),
-    row(Act::Gather, "Gather", Reader::Farm),
-    row(Act::OpenDoor, "Open", Reader::Doors),
-    row(Act::ShutDoor, "Shut", Reader::Doors),
-    row(Act::Till, "Till", Reader::Farm),
-    row(Act::Board, "Board", Reader::Boats),
+pub const ACTS: [Row; 38] = [
+    // A cart in hand, a seat or a back taken comes first: F lets it go.
+    row(Act::LetGo, "let_go", Reader::Carts),
+    row(Act::StepDown, "step_down", Reader::Carts),
+    row(Act::GetOff, "get_off", Reader::Carts),
+    row(Act::Collect, "collect", Reader::Husbandry),
+    row(Act::SetEggs, "set_eggs", Reader::Husbandry),
+    row(Act::Feed, "feed", Reader::Husbandry),
+    // A kept plodder or horse is ridden before it is led or let stay.
+    row(Act::Ride, "ride", Reader::Carts),
+    row(Act::LetStay, "let_stay", Reader::Husbandry),
+    row(Act::Lead, "lead", Reader::Husbandry),
+    row(Act::SetInIncubator, "set_in_incubator", Reader::Husbandry),
+    row(Act::TakeIncubator, "take_incubator", Reader::Husbandry),
+    row(Act::TakeUp, "take_up", Reader::Husbandry),
+    row(Act::PickFruit, "pick_fruit", Reader::Fruit),
+    row(Act::PickGlow, "pick_glow", Reader::Glow),
+    row(Act::Open, "open", Reader::Farm),
+    row(Act::Plan, "plan", Reader::Planner),
+    row(Act::Harvest, "harvest", Reader::Farm),
+    row(Act::Check, "check", Reader::Farm),
+    row(Act::PickWild, "pick_wild", Reader::Farm),
+    row(Act::Gather, "gather", Reader::Farm),
+    row(Act::Talk, "talk", Reader::Talk),
+    row(Act::OpenDoor, "open_door", Reader::Doors),
+    row(Act::ShutDoor, "shut_door", Reader::Doors),
+    row(Act::OpenStore, "open_store", Reader::Furniture),
+    row(Act::Sit, "sit", Reader::Furniture),
+    row(Act::Lie, "lie", Reader::Furniture),
+    row(Act::Fill, "fill", Reader::Site),
+    row(Act::TakeDown, "take_down", Reader::Site),
+    row(Act::Build, "build", Reader::Site),
+    row(Act::Till, "till", Reader::Farm),
+    row(Act::TakeLog, "take_log", Reader::Logs),
+    row(Act::Board, "board", Reader::Boats),
+    row(Act::Pull, "pull", Reader::Carts),
+    row(Act::Drive, "drive", Reader::Carts),
+    row(Act::Hitch, "hitch", Reader::Carts),
+    row(Act::Unhitch, "unhitch", Reader::Carts),
+    row(Act::Mend, "mend", Reader::Mend),
+    row(Act::Light, "light", Reader::Lamps),
 ];
 
 impl Act {
@@ -105,28 +187,21 @@ impl Act {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Offer {
     pub act: Act,
-    /// What it is done to, lower case: "wheat", "hen", "workbench".
-    pub thing: String,
+    /// What it is done to: "wheat", "Yard hen", "workbench".
+    pub thing: Localized,
 }
 
 impl Offer {
-    pub fn new(act: Act, thing: impl Into<String>) -> Self {
-        Self {
-            act,
-            thing: thing.into(),
-        }
+    pub fn new(act: Act, thing: Localized) -> Self {
+        Self { act, thing }
     }
 
-    /// The prompt's words after the key: the verb and the thing.
-    pub fn words(&self) -> String {
-        let verb = self.act.row().verb;
-        if verb.contains("{}") {
-            verb.replace("{}", &self.thing)
-        } else if self.thing.is_empty() {
-            verb.to_string()
-        } else {
-            format!("{verb} {}", self.thing)
-        }
+    /// The prompt's words after the key: the verb and the thing,
+    /// `interact.act.<verb>` in the locale file.
+    pub fn words(&self) -> Localized {
+        let key = format!("interact.act.{}", self.act.row().verb);
+        let words = tr_with(&key, &[("thing", &self.thing)]);
+        Localized::verbatim(words.trim())
     }
 }
 
@@ -269,6 +344,25 @@ pub struct PromptKey;
 #[derive(Component)]
 pub struct PromptWords;
 
+/// The fishing buttons, bottom left: both mouse buttons in every phase, each
+/// with what it does now, the idle one dimmed (owner, 2026-11-18: "need to
+/// show both right and left click for fishing, and they both need to be on
+/// the left corner of the screen").
+#[derive(Component)]
+pub struct FishKeys;
+
+/// What one of the fishing buttons does now: 0 the left, 1 the right.
+#[derive(Component)]
+pub struct FishKeyWords(pub usize);
+
+/// The label on one fishing button's key glyph: 0 the left, 1 the right.
+#[derive(Component)]
+pub struct FishKeyCap(pub usize);
+
+/// A fishing button that does nothing now: grey and faded (owner,
+/// 2026-11-18: "otherwise it should appear grey and faded").
+const FADED: Color = Color::srgba(0.57, 0.6, 0.62, 0.45);
+
 /// The prompt, just under the crosshair: a stone tooltip holding the key in
 /// an oak cap and the verb and thing.
 pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
@@ -296,33 +390,153 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 ..default()
             })
             .with_children(|tip| {
-                crate::ui_kit::key_cap(tip, &kit, "F", PromptKey);
+                crate::ui_kit::key_cap(tip, &kit, tr("interact.key"), PromptKey);
                 tip.spawn((
                     Node {
                         padding: UiRect::top(px(2)),
                         ..default()
                     },
-                    KitText::new("", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
+                    KitText::new(Localized::empty(), crate::ui_kit::LABEL)
+                        .outline(crate::ui_kit::INK),
                     PromptWords,
                 ));
             });
         });
 }
 
+/// The fishing buttons, bottom left (`FishKeys`): a key glyph and its words
+/// for each mouse button, hidden until the rod is out at fishable water.
+pub fn spawn_fish_keys(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
+    use crate::ui_kit::KitText;
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(12),
+                bottom: px(12),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(4),
+                ..default()
+            },
+            Visibility::Hidden,
+            FishKeys,
+        ))
+        .with_children(|col| {
+            for (k, button) in [MouseButton::Left, MouseButton::Right]
+                .into_iter()
+                .enumerate()
+            {
+                col.spawn(Node {
+                    column_gap: px(5),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|row| {
+                    let label = crate::controls::Key::Mouse(button).label();
+                    crate::ui_kit::key_cap(row, &kit, label, FishKeyCap(k));
+                    row.spawn((
+                        Node {
+                            padding: UiRect::top(px(2)),
+                            ..default()
+                        },
+                        KitText::new(Localized::empty(), crate::ui_kit::LABEL)
+                            .outline(crate::ui_kit::INK),
+                        FishKeyWords(k),
+                    ));
+                });
+            }
+        });
+}
+
+/// Show the fishing buttons with what each does now, or hide them.
+pub fn show_fish_keys(
+    time: Res<Time>,
+    fishing: Option<Res<crate::fish::FishingStatus>>,
+    mut root: Query<&mut Visibility, With<FishKeys>>,
+    mut words: Query<(&mut crate::ui_kit::KitText, &FishKeyWords, &ChildOf), Without<FishKeyCap>>,
+    mut caps: Query<(&mut crate::ui_kit::KitText, &FishKeyCap), Without<FishKeyWords>>,
+    mut rows: Query<&mut Node, Without<FishKeyWords>>,
+) {
+    let keys = fishing.as_deref().and_then(|f| f.keys);
+    for mut visibility in &mut root {
+        let want = if keys.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+    let Some(keys) = keys else { return };
+    let bite = fishing.as_deref().is_some_and(|f| f.bite);
+    for (mut text, which, parent) in &mut words {
+        let (line, live) = keys[which.0];
+        // At the bite the left click's words turn yellow and its row shakes.
+        let alert = bite && which.0 == 0;
+        let colour = if alert {
+            crate::ui_kit::TITLE
+        } else if live {
+            crate::ui_kit::LABEL
+        } else {
+            FADED
+        };
+        let line = if line.is_empty() {
+            Localized::empty()
+        } else {
+            tr(line)
+        };
+        if text.text != line || text.colour != colour {
+            text.text = line.clone();
+            text.colour = colour;
+        }
+        if let Ok(mut row) = rows.get_mut(parent.parent()) {
+            let shake = if alert {
+                px((time.elapsed_secs() * 2.0 * std::f32::consts::PI * 18.0)
+                    .sin()
+                    .round()
+                    * 2.0)
+            } else {
+                px(0)
+            };
+            if row.left != shake {
+                row.left = shake;
+            }
+            // A button with nothing to say is not shown (the right click
+            // before the line is cast).
+            let display = if line.is_empty() {
+                Display::None
+            } else {
+                Display::Flex
+            };
+            if row.display != display {
+                row.display = display;
+            }
+        }
+    }
+    for (mut text, which) in &mut caps {
+        let colour = if keys[which.0].1 {
+            crate::ui_kit::LABEL
+        } else {
+            FADED
+        };
+        if text.colour != colour {
+            text.colour = colour;
+        }
+    }
+}
+
 /// Show `now`, or hide the prompt.
 pub fn show_prompt(
     interact: Res<Interact>,
     binds: Option<Res<crate::controls::KeyBinds>>,
-    fishing: Option<Res<crate::fish::FishingStatus>>,
     mut prompt: Query<&mut Visibility, With<Prompt>>,
     mut key_text: Query<&mut crate::ui_kit::KitText, (With<PromptKey>, Without<PromptWords>)>,
     mut words: Query<&mut crate::ui_kit::KitText, (With<PromptWords>, Without<PromptKey>)>,
 ) {
     let shown = interact.now.as_ref();
-    // With nothing to interact with, a float out shows its own button.
-    let reel = shown.is_none() && fishing.as_deref().is_some_and(|f| f.reel_prompt);
     for mut visibility in &mut prompt {
-        let want = if shown.is_some() || reel {
+        let want = if shown.is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -336,23 +550,19 @@ pub fn show_prompt(
             let none = crate::controls::KeyBinds::default();
             (
                 crate::controls::key_label(key(binds.as_deref().unwrap_or(&none))),
-                offer.words().to_uppercase(),
+                caps(&offer.words()),
             )
         }
-        None if reel => (
-            crate::controls::Key::Mouse(MouseButton::Right).label(),
-            "REEL IN".to_string(),
-        ),
         None => return,
     };
     for mut text in &mut key_text {
         if text.text != label {
-            text.text = label.to_string();
+            text.text = label.clone();
         }
     }
     for mut text in &mut words {
         if text.text != line {
-            text.text.clone_from(&line);
+            text.text = line.clone();
         }
     }
 }
@@ -360,6 +570,16 @@ pub fn show_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every act's words are in the locale file.
+    #[test]
+    fn every_act_has_its_words() {
+        let english = pbd_core::locale::Locale::english();
+        for row in &ACTS {
+            let key = format!("interact.act.{}", row.verb);
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 
     #[test]
     fn every_act_has_one_row_and_a_verb() {
@@ -374,15 +594,18 @@ mod tests {
     #[test]
     fn the_highest_offer_wins() {
         let mut i = Interact::default();
-        i.offer(Offer::new(Act::Board, "rowboat"));
-        i.offer(Offer::new(Act::Harvest, "wheat"));
-        i.offer(Offer::new(Act::Till, "grass"));
+        i.offer(Offer::new(Act::Board, Localized::verbatim("loon")));
+        i.offer(Offer::new(Act::Harvest, Localized::verbatim("wheat")));
+        i.offer(Offer::new(Act::Till, Localized::verbatim("grass")));
         i.settle(0.016, false);
-        assert_eq!(i.now, Some(Offer::new(Act::Harvest, "wheat")));
+        assert_eq!(
+            i.now,
+            Some(Offer::new(Act::Harvest, Localized::verbatim("wheat")))
+        );
         assert!(i.lets(Reader::Farm));
         assert!(!i.lets(Reader::Boats));
         assert_eq!(i.now.as_ref().unwrap().words(), "Harvest wheat");
-        i.offer(Offer::new(Act::Board, "rowboat"));
+        i.offer(Offer::new(Act::Board, Localized::verbatim("loon")));
         i.settle(0.016, false);
         assert!(i.lets(Reader::Boats), "nothing usable aimed: F boards");
     }
@@ -392,7 +615,7 @@ mod tests {
     #[test]
     fn the_prompt_holds_across_a_seam_and_goes_after() {
         let mut i = Interact::default();
-        i.offer(Offer::new(Act::Harvest, "wheat"));
+        i.offer(Offer::new(Act::Harvest, Localized::verbatim("wheat")));
         i.settle(0.016, false);
         for _ in 0..3 {
             i.settle(0.016, false);
@@ -402,7 +625,7 @@ mod tests {
             i.settle(0.016, false);
         }
         assert!(i.now.is_none(), "gone after the hold");
-        i.offer(Offer::new(Act::Open, "forge"));
+        i.offer(Offer::new(Act::Open, Localized::verbatim("forge")));
         i.settle(0.016, false);
         i.settle(0.016, true);
         assert!(i.now.is_none(), "a panel hides it at once");
@@ -413,7 +636,7 @@ mod tests {
         assert!(may(None, Reader::Farm));
         let mut i = Interact::default();
         assert!(may(Some(&i), Reader::Boats), "nothing named");
-        i.offer(Offer::new(Act::Open, "forge"));
+        i.offer(Offer::new(Act::Open, Localized::verbatim("forge")));
         i.settle(0.016, false);
         assert!(may(Some(&i), Reader::Farm));
         assert!(!may(Some(&i), Reader::Boats), "the forge, not the boat");

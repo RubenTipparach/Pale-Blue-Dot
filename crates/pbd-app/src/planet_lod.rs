@@ -263,8 +263,50 @@ pub const RIVER_WORD_NONE: u32 = 0;
 
 fn river_word(direction: Vec3, level: u8) -> u32 {
     let cell_m = 2.833 * (1u32 << (super::FINEST_LEVEL.saturating_sub(level) as u32)) as f32;
-    pbd_core::rivers::far_surface(super::terrain::terrain_config(), direction, cell_m)
+    let cfg = super::terrain::terrain_config();
+    pbd_core::rivers::far_surface(cfg, direction, cell_m)
+        .or_else(|| pbd_core::rivers::flood_top(cfg, direction))
         .map_or(RIVER_WORD_NONE, |m| m.max(0.001).to_bits())
+}
+
+/// Fill the river cache round `points` (`river-cache` design 11): every
+/// fine level's cells within `corridor_m` (and a cell) of each point, asked
+/// what a fine set asks of them (their heights and their neighbours', the
+/// far sheet's word, and at the finest level a column's water), so a later
+/// rebuild finds the river terms worked out. The cells are the lattice's own,
+/// whose directions are the same floats whatever the anchor. Returns the
+/// cells asked about.
+pub fn fill_river_cache(points: &[Vec3], corridor_m: f32) -> usize {
+    let cfg = super::terrain::terrain_config();
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return 0;
+    };
+    let map = pbd_core::rivers::map(cfg, settings);
+    let mut lattice = Lattice::default();
+    let mut seen: std::collections::HashSet<[u32; 3]> = Default::default();
+    for &p in points {
+        for &level in &FINE_LEVELS {
+            let cell_m = crate::river_fill::cell_m(level);
+            let reach = (corridor_m + cell_m) / PLANET_RADIUS;
+            for local in lattice.cells_in_band(level, p, 0.0, reach) {
+                let d = local.cell.direction;
+                if !seen.insert([level as u32, d.x.to_bits(), d.y.to_bits() ^ d.z.to_bits()])
+                    || !map.may_reach(d)
+                {
+                    continue;
+                }
+                std::hint::black_box(surface_height(d));
+                for &n in &local.neighbor_directions {
+                    std::hint::black_box(surface_height(n));
+                }
+                std::hint::black_box(river_word(d, level));
+                if level == super::FINEST_LEVEL {
+                    std::hint::black_box(pbd_core::rivers::water(cfg, d));
+                }
+            }
+        }
+    }
+    seen.len()
 }
 
 /// The base level's records from the whole-sphere dual. Owners are the cell
@@ -313,6 +355,19 @@ pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
     })
 }
 
+/// What [`FineSet::apply`] did with an edit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Applied {
+    /// Its column was written (and adopted, if it was past the edge).
+    Written,
+    /// The column already held it, or refused the layer (bedrock).
+    Unchanged,
+    /// The tier has no record for the cell: the next build reads the edits.
+    Beyond,
+    /// The cell needed adopting and the tier is full.
+    Full,
+}
+
 /// The fine levels around one anchor, with the finest level's neighbour
 /// table for the walker's contact.
 #[derive(Clone)]
@@ -349,6 +404,10 @@ pub struct FineSet {
     /// a cave, an overhang and a block to remove expressible at all. Built on
     /// this same task, because the records carry their own slots.
     pub columns: ColumnTier,
+    /// The river's final water out to the finest band (`river-cache` design
+    /// 14): read from its cache or built, on this same task, so the water
+    /// lands with its ground.
+    pub river: std::sync::Arc<crate::river_band::RiverBand>,
 }
 
 impl FineSet {
@@ -456,6 +515,8 @@ impl FineSet {
     /// a column, and again once the light is re-baked.
     pub fn mark_sea(&mut self) {
         column::mark_sea(&self.columns, &mut self.levels[3]);
+        // And where the rule's water is the sea's (`dry-holes` design 4).
+        self.columns.water.joined = self.columns.sea_joined();
     }
 
     /// The column a finest record would have if the tier adopted it now:
@@ -516,12 +577,153 @@ impl FineSet {
         // ground is: the terrain pass draws its cap from the cell record and
         // every neighbour draws its wall down to it.
         self.reconcile(record);
+        // A change to a river's flow: the river band's water within the
+        // rule's reach (and a fall's run below it) is built again by the next
+        // job with this edit in it, and cached again (`river-cache` design 14;
+        // the owner: "water rebuild is only when a player influences the flow
+        // of the river").
+        let at = Vec3::from_slice(&self.levels[3][record].direction_height[..3]);
+        if pbd_core::rivers::near(
+            super::terrain::terrain_config(),
+            at,
+            crate::river_band::EDIT_REACH_M,
+        ) {
+            crate::river_band::drop_round(
+                at,
+                crate::river_band::EDIT_REACH_M,
+                self.levels[3]
+                    .iter()
+                    .map(|c| (c.key(), Vec3::from_slice(&c.direction_height[..3]))),
+            );
+        }
         // Where the sea's sheet lies is not marked here: the sea's reach can
         // change anywhere the dig joins to it, and its shade is the light's,
         // so the caller marks the whole tier once, after the light is
         // re-baked (`mark_sea`): a pit dug below sea level is dry until the
         // sea comes in.
         true
+    }
+
+    /// APPLY (`edit-pipeline` 5): bring the tier round to one accepted edit,
+    /// whoever accepted it (this player's click, a world process, a server).
+    /// It cannot refuse: the edit is already the world's. `edits` hold it.
+    ///
+    /// A cell the tier has a column for has its layer written; a cell past
+    /// the tier's edge is adopted, as a click past the edge is; a cell the
+    /// tier does not reach at all is left to the next build, which reads
+    /// `edits`. Not the light or the sea's sheet, which the caller re-bakes
+    /// once for however many edits it applied ([`FineSet::finish_edits`]).
+    pub fn apply(&mut self, edit: pbd_core::edits::Edit, edits: &Edits) -> Applied {
+        let Some(record) = self.levels[3].iter().position(|c| c.key() == edit.cell) else {
+            return Applied::Beyond;
+        };
+        // Already so: an edit this tier took when it was made here, coming
+        // back from the server (design 20), costs nothing.
+        if self
+            .columns
+            .column(record)
+            .is_some_and(|c| c.material(usize::from(edit.layer)) == edit.material)
+        {
+            return Applied::Unchanged;
+        }
+        let mut adopted = false;
+        if self.columns.column(record).is_none() {
+            let Some(column) = self.adoptable(record, edits) else {
+                return Applied::Beyond;
+            };
+            if !self.adopt(record, column) {
+                return Applied::Full;
+            }
+            adopted = true;
+        }
+        if self.write_layer(record, usize::from(edit.layer), edit.material, edits) || adopted {
+            Applied::Written
+        } else {
+            Applied::Unchanged
+        }
+    }
+
+    /// After one or more [`FineSet::apply`]: the light re-baked and the sea's
+    /// sheet marked, once.
+    pub fn finish_edits(&mut self) {
+        self.columns.relight();
+        self.mark_sea();
+    }
+
+    /// Bring the glowing mushrooms' bits round to the picks as they stand
+    /// (`glowing-mushrooms` design 4), each cell built `from_camera_m(dir)`
+    /// metres from the camera: a pick taken since the set was built goes
+    /// out, never one in sight comes back. Only the cells the picks name are
+    /// looked at. Relights once if any burning plant went out or came back.
+    /// Returns how many records changed.
+    pub fn apply_glow_picks(
+        &mut self,
+        picks: &pbd_core::edits::GlowPicks,
+        chance: f32,
+        from_camera_m: impl Fn(Vec3) -> f32,
+    ) -> usize {
+        let wanted: std::collections::HashSet<u32> = picks.cells().into_iter().collect();
+        if wanted.is_empty() {
+            return 0;
+        }
+        let (mut changed, mut relight) = (0, false);
+        for record in 0..self.levels[3].len() {
+            let cell = &self.levels[3][record];
+            let key = cell.key();
+            if !wanted.contains(&key) {
+                continue;
+            }
+            let direction = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
+            let was = cell.spare[2];
+            // A due pick reads as grown only out of sight (`stands_picked`),
+            // so nothing comes back in front of the player.
+            let now = column::glow_bits(was, key, chance, picks, from_camera_m(direction));
+            if now == was {
+                continue;
+            }
+            self.levels[3][record].spare[2] = now;
+            relight |= self
+                .columns
+                .set_glow(record, now & column::GLOW_FLOWER_BIT != 0);
+            changed += 1;
+        }
+        if relight {
+            self.columns.relight();
+            self.mark_sea();
+        }
+        changed
+    }
+
+    /// Bring the finest records of the cells `keys` round to the installed
+    /// marks and bare cells (`townsfolk` design 39a and 43): a cell marked or
+    /// paved since the set was built has its band and loses its tufts on
+    /// the frame it is written, not on the world's next open. Only the
+    /// records the keys name are looked at. Returns how many changed.
+    pub fn apply_road_marks(&mut self, keys: &std::collections::HashSet<u32>) -> usize {
+        if keys.is_empty() {
+            return 0;
+        }
+        let road = 1u32 << super::terrain::ROAD_BIT;
+        let mut changed = 0;
+        for record in 0..self.levels[3].len() {
+            let cell = &self.levels[3][record];
+            let key = cell.key();
+            if !keys.contains(&key) {
+                continue;
+            }
+            let d = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
+            let spare = column::mark_bits(cell, key);
+            let bare = pbd_core::roads::cleared(d) || pbd_core::roads::paving::bare(d);
+            let word = (cell.metadata[1] & !road) | if bare { road } else { 0 };
+            if spare == cell.spare[2] && word == cell.metadata[1] {
+                continue;
+            }
+            let cell = &mut self.levels[3][record];
+            cell.spare[2] = spare;
+            cell.metadata[1] = word;
+            changed += 1;
+        }
+        changed
     }
 
     /// Bring a set built from the edits `built` round to the edits as they
@@ -1172,7 +1374,16 @@ pub(crate) fn generate_fine_live_on(
     // The column tier, last, because it stamps each finest record with its own
     // slot: the tier and the records it is read through are one artifact and
     // are built on one task.
-    let columns = column::build(anchor, &mut levels[3], &finest_neighbors, columns, edits);
+    let tier = column::build(anchor, &mut levels[3], &finest_neighbors, columns, edits);
+    let river = std::sync::Arc::new(crate::river_band::build(
+        anchor,
+        &levels[3],
+        &finest_neighbors,
+        &tier,
+        columns,
+        edits,
+    ));
+    let columns = tier;
     FineSet {
         anchor,
         levels,
@@ -1185,6 +1396,7 @@ pub(crate) fn generate_fine_live_on(
         width,
         fit_m,
         columns,
+        river,
     }
 }
 
@@ -1305,13 +1517,7 @@ impl NearField {
 #[derive(Resource, Default)]
 pub struct LodRefresh {
     /// The set and its contact tier, both built on the pool.
-    task: Option<
-        Task<(
-            Arc<FineSet>,
-            super::contact::PreparedFine,
-            super::bounce::SetLight,
-        )>,
-    >,
+    task: Option<Task<super::tier_gpu::Landed>>,
     /// When the in-flight task was spawned.
     started: Option<std::time::Instant>,
     /// Rebuild the tier whatever the player has or has not walked.
@@ -1340,6 +1546,30 @@ pub struct LodRefresh {
     /// compares the save's against, to replay what was accepted while it
     /// built (`edit-pipeline` 1b). The task's own copy, shared.
     built_from: Option<Arc<Edits>>,
+    /// Where the player was last frame and when: what the walker's ground
+    /// velocity is measured from (`river-cache` design 14, the tier leads a
+    /// moving walker).
+    last_seen: Option<(Vec3, std::time::Instant)>,
+    /// The player's velocity along the ground, m/s, smoothed over about a
+    /// second.
+    velocity: Vec3,
+    /// How long the last set took to build, s.
+    last_build_s: f32,
+}
+
+/// Where to anchor a set requested at `direction` for a player moving at
+/// `velocity` (m/s, along the ground) when a set takes `build_s` to build:
+/// where the player will be when it lands, at most `regen` metres ahead, so
+/// the tier is centred on the player rather than behind them (`river-cache`
+/// design 14).
+pub fn led_anchor(direction: Vec3, velocity: Vec3, build_s: f32, regen: f32) -> Vec3 {
+    let lead = velocity * build_s.max(0.0);
+    let lead = if lead.length() > regen {
+        lead.normalize_or_zero() * regen
+    } else {
+        lead
+    };
+    (direction + lead / PLANET_RADIUS).normalize_or(direction)
 }
 
 /// A built set waiting to land (`LodRefresh::held`).
@@ -1348,6 +1578,8 @@ struct Held {
     prepared: super::contact::PreparedFine,
     /// Its bounce and lamp bake, which land with it (`baked-light-ease` 7.2).
     light: super::bounce::SetLight,
+    /// Its GPU image, made on its task (`fine-set-upload` D3).
+    gpu: Arc<super::tier_gpu::TierImage>,
     /// How long its build took, seconds of wall clock.
     took: f32,
     /// When it finished, on the game clock.
@@ -1430,15 +1662,33 @@ pub fn refresh_lod(
     count: Option<Res<crate::loading::FrameCount>>,
     // `baked-light-ease` 7.2: what the set's task bakes beside it, and where
     // the landing draws it.
-    (sun, lighting, mut bounce, mut lamp_bake): (
+    (sun, lighting, mut bounce, mut lamp_bake, prepared_gpu): (
         Option<Res<crate::sky::Sun>>,
         Option<Res<crate::config::LightingSettings>>,
         ResMut<super::bounce::BounceField>,
         ResMut<super::bounce::LampBakeField>,
+        Option<ResMut<super::tier_gpu::PreparedGpu>>,
     ),
 ) {
     let player = player_position(&cameras, frame.center);
     let direction = player.and_then(|p| p.try_normalize());
+    if let Some(direction) = direction {
+        let now = std::time::Instant::now();
+        if let Some((last, at)) = refresh.last_seen {
+            let dt = now.duration_since(at).as_secs_f32();
+            if dt > 1e-4 {
+                let moved = (direction - last) * PLANET_RADIUS;
+                // Along the ground only, and a jump across a rebase or a
+                // teleport is not a velocity.
+                let along = (moved - direction * moved.dot(direction)) / dt;
+                if along.length() < 400.0 {
+                    let k = (dt / 1.0).min(1.0);
+                    refresh.velocity = refresh.velocity.lerp(along, k);
+                }
+            }
+        }
+        refresh.last_seen = Some((direction, now));
+    }
     if let Some(direction) = direction {
         let column = contact
             .finest_cell(direction)
@@ -1455,10 +1705,11 @@ pub fn refresh_lod(
         }
     }
     if let Some(task) = refresh.task.as_mut() {
-        let Some((set, prepared, light)) = block_on(poll_once(task)) else {
+        let Some((set, prepared, light, gpu)) = block_on(poll_once(task)) else {
             return;
         };
         let took = refresh.in_flight_s().unwrap_or(0.0);
+        refresh.last_build_s = took;
         refresh.task = None;
         if !LodRefresh::current(refresh.epoch, super::terrain::terrain_epoch()) {
             refresh.started = None;
@@ -1470,6 +1721,7 @@ pub fn refresh_lod(
             set,
             prepared,
             light,
+            gpu,
             took,
             built_s: time.elapsed_secs(),
         });
@@ -1488,6 +1740,7 @@ pub fn refresh_lod(
             set,
             prepared,
             light,
+            gpu,
             took,
             built_s,
         } = held;
@@ -1502,9 +1755,14 @@ pub fn refresh_lod(
         }
         let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
         info!(
-            "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
+            "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor; river band {} cells ({} read, {} built) {} vertices in {:.0} ms",
             fine.version + 1,
-            set.columns.columns.len()
+            set.columns.columns.len(),
+            set.river.cells,
+            set.river.read,
+            set.river.built,
+            set.river.mesh.vertices.len(),
+            set.river.ms
         );
         // MEASUREMENT (`baked-light-ease`): the frame a set's light goes up.
         info!(
@@ -1552,6 +1810,12 @@ pub fn refresh_lod(
             &mut bounce,
             &mut lamp_bake,
         );
+        // Its GPU image, for `tier_gpu::pack_fine_gpu` at the end of this
+        // frame: as it is, or, where edits were replayed into the set, as
+        // the base the replayed set is diffed against.
+        if let Some(mut prepared_gpu) = prepared_gpu {
+            prepared_gpu.0 = Some(gpu);
+        }
         commands.insert_resource(PlanetFine {
             set,
             version: fine.version + 1,
@@ -1575,7 +1839,24 @@ pub fn refresh_lod(
     // A rebuild the player is not waiting on waits for the atmosphere's step
     // to finish; see `advance_air`.
     let air_busy = air.is_some_and(|air| air.stepping());
-    if refresh.force || (!air_busy && fine.set.outrun(&live, moved, clear_of_all)) {
+    // INSTRUMENT (`river-cache` design 14): `PBD_HOLD_SET=<n>` builds no set
+    // after version n, so a walker can be watched outside the tier.
+    let held_set = std::env::var("PBD_HOLD_SET")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .is_some_and(|n| fine.version >= n);
+    // And early enough that it lands before the walker reaches the tier's
+    // edge: at its speed, the last set's build time on, it would be within
+    // 15 m of it (`river-cache` design 14). Past the tier there is no water
+    // physics and no live rule, so a walker who outruns it walks a river's
+    // bed under its water.
+    let reach = settings.reach_m.max(0.0);
+    let outrunning_tier = reach > 0.0
+        && moved + refresh.velocity.length() * refresh.last_build_s.max(1.0) > reach - 15.0;
+    if !held_set
+        && (refresh.force
+            || (!air_busy && (fine.set.outrun(&live, moved, clear_of_all) || outrunning_tier)))
+    {
         let threads = if refresh.force {
             build_threads()
         } else {
@@ -1610,9 +1891,14 @@ pub fn refresh_lod(
             .then(|| sun.as_ref().map(|s| s.direction()))
             .flatten();
         let bake_lamps = lighting.as_ref().is_some_and(|l| l.lamp_bake_on());
+        let reach_m = super::tier_gpu::reach_m(lighting.as_deref());
+        // Up to half the tier's reach ahead, so a set built at a walker's
+        // pace lands with the walker still well inside it.
+        let lead_m = regen.max(settings.reach_m * 0.5);
+        let anchor = led_anchor(direction, refresh.velocity, refresh.last_build_s, lead_m);
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
             let mut set = generate_fine_live(
-                direction,
+                anchor,
                 live,
                 regen,
                 &settings,
@@ -1626,7 +1912,10 @@ pub fn refresh_lod(
                 super::bounce::bake_with_set(&set.columns, set.anchor, bake_sun, bake_lamps);
             let set = Arc::new(set);
             let prepared = super::PlanetContact::prepare_fine(&set);
-            (set, prepared, light)
+            // What the GPU reads of it, packed here rather than on the
+            // render thread when it lands (`fine-set-upload` D3).
+            let gpu = Arc::new(super::tier_gpu::TierImage::build(set.clone(), reach_m));
+            (set, prepared, light, gpu)
         }));
     }
 }
@@ -1909,6 +2198,7 @@ mod near_field_tests {
             width: 0.0,
             fit_m: 0.0,
             columns: ColumnTier::empty(),
+            river: Default::default(),
         }
     }
 
@@ -2644,6 +2934,104 @@ mod tool_crafting_ground {
 mod landing_replay {
     use super::*;
 
+    /// `edit-pipeline` 5: applying a sequence of edits in order gives the
+    /// same tier whether each is applied and relit on its own or all are
+    /// applied and relit once, and the same columns as a tier built from cold
+    /// with them: the property a shared world rests on, and the one a replay
+    /// after a server's order needs.
+    #[test]
+    fn a_sequence_of_edits_applied_in_order_is_the_tier_built_with_them() {
+        use pbd_core::edits::Edit;
+        use pbd_core::terrain::Material;
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let set = generate_fine(anchor, &settings, &Edits::new());
+        let dry: Vec<usize> = (0..set.levels[3].len())
+            .filter(|&record| {
+                let slot = set.columns.slots[record];
+                slot != usize::MAX
+                    && set.columns.gpu_records()[slot].more[3] & column::RIM_BIT == 0
+                    && set.columns.column(record).is_some_and(|c| {
+                        c.surface().is_some_and(|top| {
+                            c.material(top + 1) == Material::Air
+                                && (0..pbd_core::column::LAYERS).all(|l| !c.material(l).is_water())
+                        })
+                    })
+            })
+            .step_by(131)
+            .take(8)
+            .collect();
+        assert!(dry.len() >= 6, "{}", dry.len());
+        // Digs, places on top, a lamp, and one cell dug twice and refilled.
+        let mut sequence = Vec::new();
+        for (n, &record) in dry.iter().enumerate() {
+            let cell = set.levels[3][record].key();
+            let top = set.columns.column(record).unwrap().surface().unwrap();
+            let edit = |layer: usize, material| Edit {
+                cell,
+                layer: layer as u16,
+                material,
+            };
+            match n % 3 {
+                0 => sequence.extend([edit(top, Material::Air), edit(top - 1, Material::Air)]),
+                1 => sequence.extend([
+                    edit(top + 1, Material::Stone),
+                    edit(top + 2, Material::Torch),
+                ]),
+                _ => sequence.extend([
+                    edit(top, Material::Air),
+                    edit(top, Material::Dirt),
+                    edit(top - 1, Material::Air),
+                ]),
+            }
+        }
+        let mut all = Edits::new();
+        for &edit in &sequence {
+            all.set(edit);
+        }
+        // One at a time, as clicks come.
+        let mut stepwise = set.clone();
+        let mut so_far = Edits::new();
+        for &edit in &sequence {
+            so_far.set(edit);
+            assert_eq!(stepwise.apply(edit, &so_far), Applied::Written, "{edit:?}");
+            stepwise.finish_edits();
+        }
+        // All of them, relit once, as a server's batch comes.
+        let mut batch = set.clone();
+        for &edit in &sequence {
+            batch.apply(edit, &all);
+        }
+        batch.finish_edits();
+        let bytes = |s: &FineSet| bytemuck::cast_slice::<_, u8>(s.columns.gpu_records()).to_vec();
+        assert!(bytes(&stepwise) == bytes(&batch), "the records agree");
+        // And from cold: a tier generated with the edits.
+        let cold = generate_fine(anchor, &settings, &all);
+        for record in 0..set.levels[3].len() {
+            let (Some(a), Some(b)) = (stepwise.columns.column(record), cold.columns.column(record))
+            else {
+                continue;
+            };
+            let slot = stepwise.columns.slots[record];
+            for layer in 0..pbd_core::column::LAYERS {
+                assert_eq!(
+                    a.material(layer),
+                    b.material(layer),
+                    "record {record} layer {layer}"
+                );
+                assert_eq!(
+                    stepwise.columns.light_at(slot, layer),
+                    batch.columns.light_at(slot, layer),
+                    "record {record} layer {layer} light"
+                );
+            }
+        }
+        for &record in &dry {
+            let key = set.levels[3][record].key();
+            assert!(stepwise.missing_edits(&all).iter().all(|m| m.0 != key));
+        }
+    }
+
     /// `edit-pipeline` 1b, the owner's vanished lamp (2026-11-16: "I placed a
     /// lamp but it somehow despawned"). A set is built from the edits as they
     /// stood at its request; every light and a dig are accepted while it
@@ -2834,14 +3222,14 @@ mod landing_replay {
 /// `flora-v2` 12.11: the owner's sea shore (`18.86 27.54`, "is that tree in
 /// your screenshot in the river?"). No record under the high-water line, on
 /// the column tier or beyond it, stands a tree; the same words without the
-/// bit, which is what the records were before, stood beach trees in the sea
-/// and the tide.
+/// bit, which is what the records were before, stood beach trees in the
+/// sea.
 #[cfg(test)]
 mod flooded_ground {
     use super::*;
 
     #[test]
-    fn no_tree_stands_where_the_sea_or_the_tide_covers_the_cell() {
+    fn no_tree_stands_where_the_sea_covers_the_cell() {
         let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
             lat: 18.86_f32.to_radians(),
             lon: 27.54_f32.to_radians(),
@@ -2887,5 +3275,157 @@ mod flooded_ground {
             stood_before > 0,
             "the spot stood no tree in the water before"
         );
+    }
+
+    /// `flora-v2` 12.13: on the newest generator the finest cells round
+    /// warm beaches stand acacias behind them, on their far records and on
+    /// the column tier's alike, and no tree stands on a cell under the high
+    /// water: no acacia, nor any other.
+    #[test]
+    fn beach_acacias_stand_behind_the_beach_on_the_newest_version() {
+        use pbd_core::flora::{BEACH_BACK_BIT, grows_tree, tree_biome};
+        let cfg = crate::planet::terrain_config();
+        assert!(
+            cfg.beach_back.is_some(),
+            "the newest version has a beach back"
+        );
+        let flooded = 1 << crate::planet::terrain::FLOODED_BIT;
+        let (mut spots, mut backs, mut acacias, mut under) = (0, 0, 0, 0);
+        for lat in (-30..=30).step_by(4).map(|d| d as f32) {
+            for lon in (-180..180).step_by(3).map(|d| d as f32) {
+                let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                    lat: lat.to_radians(),
+                    lon: lon.to_radians(),
+                });
+                let word = surface_code(d, surface_height(d));
+                if (word >> 8) & 0xff != 1 {
+                    continue;
+                }
+                spots += 1;
+                let cells =
+                    Lattice::default().cells_in_band(FINEST_LEVEL, d, 0.0, 30.0 / PLANET_RADIUS);
+                for local in &cells {
+                    let dir = local.cell.direction;
+                    let far = surface_code(dir, surface_height(dir));
+                    let column = pbd_core::column::generate_solid(cfg, dir);
+                    let mut finest = vec![<crate::planet::GpuCell as bytemuck::Zeroable>::zeroed()];
+                    finest[0].metadata[1] = far;
+                    crate::planet::column::reconcile_surface(&mut finest, &[], 0, &column);
+                    let near = finest[0].metadata[1];
+                    assert_eq!(
+                        (near >> BEACH_BACK_BIT) & 1,
+                        (far >> BEACH_BACK_BIT) & 1,
+                        "the tier keeps the bit"
+                    );
+                    let id = tree_id(local);
+                    for word in [far, near] {
+                        if word & flooded != 0 {
+                            under += 1;
+                            assert!(!grows_tree(&cfg.trees, id, word), "a tree in the sea");
+                        }
+                    }
+                    if (far >> BEACH_BACK_BIT) & 1 == 0 {
+                        continue;
+                    }
+                    backs += 1;
+                    assert_eq!(far & flooded, 0, "a back under the high water");
+                    if grows_tree(&cfg.trees, id, far) && grows_tree(&cfg.trees, id, near) {
+                        let p = pbd_core::tree_kit::pick(id, tree_biome(far)).unwrap();
+                        assert_eq!(p.species, pbd_core::tree_kit::Species::Acacia);
+                        acacias += 1;
+                    }
+                }
+            }
+        }
+        eprintln!(
+            "BEACH_ACACIA {spots} warm beach spots, {backs} back cells, {acacias} acacias, \
+             {under} records under the high water"
+        );
+        assert!(spots > 20 && under > 100, "{spots} spots, {under} under");
+        assert!(backs > 200, "{backs} back cells");
+        // The beach's rate, 15 in 256 (6%), on the back's grass and sand.
+        let share = acacias as f32 / backs as f32;
+        assert!(
+            (0.02..0.10).contains(&share),
+            "{acacias} acacias on {backs} backs"
+        );
+    }
+
+    /// `flora-v2` 7.8's instrument: where a beach's acacia stands above the
+    /// high water since 12.11. A one-degree sweep finds beach cells, then the
+    /// finest cells within 40 m of each are searched for one whose far record
+    /// and tier record both stand a tree on beach sand. Prints the first
+    /// few, with the eye's `--at` (lat lon); run with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore = "an instrument: prints where a beach acacia stands"]
+    fn where_a_beach_acacia_stands() {
+        let cfg = crate::planet::terrain_config();
+        let flooded = 1 << crate::planet::terrain::FLOODED_BIT;
+        let mut found = 0;
+        let (mut spots, mut dry, mut far_trees, mut near_trees) = (0, 0, 0, 0);
+        let mut highest = f32::MIN;
+        'sweep: for lat in (-50..=50).map(|d| d as f32) {
+            for lon in (-180..180).map(|d| d as f32) {
+                let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                    lat: lat.to_radians(),
+                    lon: lon.to_radians(),
+                });
+                let word = surface_code(d, surface_height(d));
+                if (word >> 8) & 0xff != 1 {
+                    continue;
+                }
+                spots += 1;
+                let cells =
+                    Lattice::default().cells_in_band(FINEST_LEVEL, d, 0.0, 40.0 / PLANET_RADIUS);
+                for local in &cells {
+                    let dir = local.cell.direction;
+                    let height = surface_height(dir);
+                    let far = surface_code(dir, height);
+                    if (far >> 8) & 0xff == 1 {
+                        highest = highest.max(height);
+                    }
+                    if pbd_core::flora::tree_biome(far) != 1 || far & flooded != 0 {
+                        continue;
+                    }
+                    dry += 1;
+                    let column = pbd_core::column::generate_solid(cfg, dir);
+                    let mut finest = vec![<crate::planet::GpuCell as bytemuck::Zeroable>::zeroed()];
+                    finest[0].metadata[1] = far;
+                    crate::planet::column::reconcile_surface(&mut finest, &[], 0, &column);
+                    let near = finest[0].metadata[1];
+                    let id = tree_id(local);
+                    far_trees += usize::from(pbd_core::flora::grows_tree(&cfg.trees, id, far));
+                    near_trees += usize::from(pbd_core::flora::grows_tree(&cfg.trees, id, near));
+                    if pbd_core::flora::grows_tree(&cfg.trees, id, far)
+                        && pbd_core::flora::grows_tree(&cfg.trees, id, near)
+                    {
+                        let at = pbd_core::geo::lat_lon(dir).degrees();
+                        println!(
+                            "BEACH_ACACIA at {:.4} {:.4}, top {height:.1} m, material {}",
+                            at.0,
+                            at.1,
+                            near & 0xff
+                        );
+                        found += 1;
+                        if found >= 6 {
+                            break 'sweep;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        println!(
+            "BEACH_ACACIA swept {spots} beach spots, {dry} dry beach cells near them, \
+             {far_trees} far and {near_trees} tier records standing a tree; the highest \
+             beach cell {highest:.2} m, the high water {:.2} m",
+            crate::planet::terrain::high_water_m()
+        );
+        // 2026-11-18: none. Every beach cell tops out at 1 m, under the high
+        // water (1.5 m), so 12.11 stands no tree on any beach (flora-v2 7.8).
+        // From the swamps' version the beach's back stands them (12.13): the
+        // dry cells behind the beach, which this sweep reads by `tree_biome`.
+        let _ = found;
     }
 }

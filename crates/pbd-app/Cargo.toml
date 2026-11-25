@@ -14,11 +14,16 @@ desktop = [
 # MEASUREMENT (`town-frame-time`): a span per system and render stage, written
 # to a Chrome trace file. Ranks where a frame's time goes; never for numbers.
 trace = ["bevy/trace_chrome", "bevy/debug"]
+# MEASUREMENT (`memory-leak`): the allocator counts allocations of 256 KiB or
+# more by call stack (`src/alloc_trace.rs`, `PBD_ALLOC_TRACE`).
+alloc-trace = []
 
 [dependencies]
 avian3d.workspace = true
 bevy.workspace = true
 pbd-core = { path = "../pbd-core" }
+pbd-server = { path = "../pbd-server" }
+pbd-net = { path = "../pbd-net" }
 bytemuck = { version = "1", features = ["derive"], optional = true }
 ron = "0.12"
 # The world map's base raster is cached on disk as a PNG (`world-map`
@@ -37,11 +42,24 @@ wgpu = { version = "27", default-features = false }
 # audio path. Bevy's own `bevy_audio` stays off.
 kira = { version = "=0.12.6", default-features = false, features = ["cpal", "ogg", "vorbis"], optional = true }
 
+[build-dependencies]
+# The locale lint runs in the build (`build.rs`, `locale_lint.rs`): every
+# `cargo build` fails on words written in code (`localization` design 4).
+pbd-core = { path = "../pbd-core" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
+
 [dev-dependencies]
 # The shipped WGSL is parsed and validated on the CPU in tests, so a shader
 # that would fail in the pipeline cache fails the suite first. The same naga
 # wgpu already carries; a test-only dependency.
 naga = { version = "27", features = ["wgsl-in"] }
+# The locale lint (`tests/locale.rs`, `localization` design 4) parses every
+# source file and needs each literal's line.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 # The sea's WGSL is RUN on a GPU adapter in a test and compared with the Rust it
 # transcribes (lavapipe in a container). The same wgpu Bevy already carries.
 wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }

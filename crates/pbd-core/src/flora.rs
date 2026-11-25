@@ -33,6 +33,65 @@ pub fn glows(key: u32, chance: f32) -> bool {
     ((h >> 8) as f32 / (1u32 << 24) as f32) < chance
 }
 
+/// The glowing mushroom's head at night, linear RGB: the cool light the cap
+/// burns with (`planet_surface.wgsl`'s `GLOW_HEAD_RGB`, generated from this),
+/// and the body glow's colour (`glowing-mushrooms` design 10).
+pub const GLOW_HEAD_RGB: [f32; 3] = [0.62, 1.0, 0.88];
+
+/// The flower slot's salt in the clutter draw (`planet_surface.wgsl`,
+/// `SALT_FLOWER`): where the glowing mushroom stands on its cell.
+pub const SALT_FLOWER: u32 = 0x52;
+
+/// A `glow-plant` record (`glowing-mushrooms` design 4): a glowing mushroom
+/// picked, by its cell's exact key. It grows back
+/// [`GLOW_PLANT_REGROW_DAYS`] after, out of sight.
+pub const GLOW_PLANT_RECORD: &str = "glow-plant";
+pub const GLOW_PLANT_SCHEMA: u32 = 1;
+pub const GLOW_PLANT_REGROW_DAYS: f64 = 8.0;
+
+/// A `glow-plant` record's body.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct GlowPicked {
+    /// The world day it was picked.
+    pub day: f64,
+}
+
+impl GlowPicked {
+    /// Whether its regrowth time has passed at `day`. A due pick still reads
+    /// as picked until its cell is built out of sight (design 4).
+    pub fn due_at(&self, day: f64) -> bool {
+        day - self.day >= GLOW_PLANT_REGROW_DAYS
+    }
+}
+
+/// Where a cell's glowing mushroom stands, as the clutter draw's flower slot
+/// places it (`planet_surface.wgsl`): its stalk's foot and the cap's top,
+/// body-local metres. `id` is the record's clutter id (`metadata.w`),
+/// `axis` the cell's unit direction, `corners` its corner rays (`degree` of
+/// them), `radius` the cap's (the body's plus the cell's height) and
+/// `height_m` the flower's (`clutter_more.x`, `scatter.ron`'s
+/// `flower_height_m`). What F is aimed at (`fruit-aim`).
+pub fn glow_plant_point(
+    id: u32,
+    axis: glam::Vec3,
+    corners: &[glam::Vec3],
+    radius: f32,
+    height_m: f32,
+) -> (glam::Vec3, glam::Vec3) {
+    use crate::scatter::roll;
+    let degree = corners.len().max(1) as u32;
+    let k = (roll(id, SALT_FLOWER + 1) * degree as f32) as u32;
+    let f0 = 0.15 + 0.60 * roll(id, SALT_FLOWER + 2);
+    let corner = corners
+        .get(k.min(degree - 1) as usize)
+        .copied()
+        .unwrap_or(axis);
+    let foot = (axis * (1.0 - f0) + corner * f0) * radius;
+    // The cap rises 3 cm over the stalk's top.
+    (foot, foot + axis * (height_m + 0.03))
+}
+
 /// The foliage pass's hash (`planet_visibility.wgsl`, `hash`): PCG's output
 /// step, which the tree roll reads the low byte of.
 pub fn shader_hash(x: u32) -> u32 {
@@ -65,6 +124,8 @@ const GRASS_CODES: u32 = 1 << 2 | 1 << 3 | 1 << 7;
 const SNOW_CODE: u32 = 1 << 6;
 /// A beach's dry sand (code 1).
 const SAND_CODE: u32 = 1 << 1;
+/// A desert's sand (code 4): the beach's sand to a beach back's trees.
+const DESERT_SAND_CODE: u32 = 1 << 4;
 
 impl TreeTable {
     /// Versions 4 to 9: the Tenebris scatter rule at its own rates
@@ -99,21 +160,39 @@ impl TreeTable {
         ],
     };
 
+    /// Version 15 (`mountain-ground` design 12): version 10's, and the
+    /// mountains' turf stands firs at 60 in 256 below the tree line, thinned
+    /// with altitude by the record's [`TREE_LINE_SHIFT`] field.
+    pub const V15: Self = Self {
+        density: [0, 15, 82, 0, 141, 67, 60, 77],
+        ..Self::V10
+    };
+
     /// Whether a finest cell stands a tree under this table: the foliage
     /// pass's rule, which reads the same numbers from the uniform
     /// ([`Self::packed`]).
     pub fn grows(&self, tree_id: u32, word: u32) -> bool {
-        // A town's cleared footprint (bit 24), or a cell water stands on at
-        // any tide ([`FLOODED_BIT`]).
+        // A town's cleared footprint (bit 24), or a cell water stands on
+        // ([`FLOODED_BIT`]).
         if (word >> 24) & 1 == 1 || (word >> FLOODED_BIT) & 1 == 1 {
             return false;
         }
         let material = word & 0xff;
-        let biome = ((word >> 8) & 0xff) as usize;
+        let biome = tree_biome(word) as usize;
         let (Some(&density), Some(&ground)) = (self.density.get(biome), self.ground.get(biome))
         else {
             return false;
         };
+        // A beach's back on the desert's sand (render code 4) is the beach's
+        // sand to its trees (design 12.13).
+        let ground = if (word >> BEACH_BACK_BIT) & 1 == 1 && ground & SAND_CODE != 0 {
+            ground | DESERT_SAND_CODE
+        } else {
+            ground
+        };
+        // The tree line (`mountain-ground` design 12): the record's thinning,
+        // nought on every world before version 15, where this is `density`.
+        let density = density * (15 - tree_line_thin(word)) / 15;
         material < 32 && (ground >> material) & 1 == 1 && shader_hash(tree_id) & 0xff < density
     }
 
@@ -131,12 +210,52 @@ impl TreeTable {
 }
 
 /// The bit of a record's material word that says water stands on the cell
-/// at some tide (`flora-v2` 12.11): the sea, the tide's reach, a river, a
-/// pool. Nothing grows there: no tree, cactus or ground clutter. Set by the
+/// (`flora-v2` 12.11): the sea, a river, a pool. Nothing grows there: no tree, cactus or ground clutter. Set by the
 /// app where it builds a record (`surface_code`, `reconcile_surface`); read
 /// by [`TreeTable::grows`] and the visibility and surface passes. A draw-time
 /// fact, never saved, so no generator version moves for it.
 pub const FLOODED_BIT: u32 = 25;
+
+/// The bit of a record's material word that says the cell is the dry
+/// ground just behind a warm beach (`flora-v2` design 12.13, generator
+/// version 12, `planet_gen::beach_back`): it stands the beach's trees, the
+/// acacia, on its own ground. Set by the app's `surface_code`; read through
+/// [`tree_biome`] here and by the visibility and surface passes. Derived
+/// from the generator, never saved.
+pub const BEACH_BACK_BIT: u32 = 16;
+
+/// Where a record's material word carries the tree line's thinning
+/// (`mountain-ground` design 12, generator version 15), four bits: how many
+/// fifteenths of its biome's density is thinned away. Nought on every world
+/// before version 15 and off the mountains. Set by the app's
+/// `surface_code` from [`crate::mountain::tree_line`]; read by
+/// [`TreeTable::grows`] and the visibility pass.
+pub const TREE_LINE_SHIFT: u32 = 17;
+/// The bit that says the tree a cell stands is krummholz, not a fir
+/// (version 15, design 12).
+pub const KRUMMHOLZ_BIT: u32 = 21;
+/// Draw-time relief on a Mountains cell, every world (`mountain-ground`
+/// design 10, 11, [`crate::mountain::relief`]): a neighbour stands 3 m over
+/// it (scree), and no neighbour is more than a metre off (a flat).
+pub const SCREE_BIT: u32 = 22;
+pub const FLAT_BIT: u32 = 23;
+
+/// A record's tree-line thinning, 0..=15.
+pub fn tree_line_thin(word: u32) -> u32 {
+    ((word >> TREE_LINE_SHIFT) & 0xf).min(15)
+}
+
+/// The biome a cell's trees are of (`flora-v2` design 12.13): the record's
+/// biome byte, or the beach's (1) on a beach back ([`BEACH_BACK_BIT`]). The
+/// density, the ground, the species and the fruit read it; everything else
+/// reads the biome byte.
+pub fn tree_biome(word: u32) -> u32 {
+    if (word >> BEACH_BACK_BIT) & 1 == 1 {
+        1
+    } else {
+        (word >> 8) & 0xff
+    }
+}
 
 /// Whether a finest cell stands a tree (`tool-crafting` decision 3) under
 /// the world's table: the foliage pass's rule (`planet_visibility.wgsl`,
@@ -149,6 +268,16 @@ pub const FLOODED_BIT: u32 = 25;
 /// partition tests the shader adds decide only what is drawn this frame.
 pub fn grows_tree(table: &TreeTable, tree_id: u32, word: u32) -> bool {
     table.grows(tree_id, word)
+}
+
+/// Whether a plant stands up out of a finest cell's ground: a tree the axe
+/// has not felled (`tree_felled`), or a desert cactus, which is scenery and
+/// never felled (`tree_kit::grows_cactus`). What the foliage pass draws
+/// there, so a building is never set round one (`building-planner` design
+/// 5: a site's piece is refused in its cell).
+pub fn stands_plant(table: &TreeTable, tree_id: u32, word: u32, tree_felled: bool) -> bool {
+    (grows_tree(table, tree_id, word) && !tree_felled)
+        || crate::tree_kit::grows_cactus(tree_id, word)
 }
 
 // ---- Flora v2 (`flora-v2`): the per-biome looks and the plants' calendar ----
@@ -229,11 +358,13 @@ pub const BIOME_FLORA: [BiomeFlora; 8] = [
         deciduous: true,
         red_caps: false,
     },
-    // Mountains: a little of each, alpine white and blue.
+    // Mountains: the alpine meadow (`mountain-ground` design 8): gentian
+    // (the kit's blue), edelweiss white, avens yellow and campion (the kit's
+    // red), sedge in the fern slot and cushions in the mushroom slot.
     BiomeFlora {
-        fern: 0.3,
-        mushroom: 0.5,
-        flowers: FLOWER_WHITE | FLOWER_BLUE,
+        fern: 0.6,
+        mushroom: 1.4,
+        flowers: FLOWER_WHITE | FLOWER_BLUE | FLOWER_YELLOW | FLOWER_RED,
         deciduous: false,
         red_caps: false,
     },
@@ -251,17 +382,18 @@ pub const BIOME_FLORA: [BiomeFlora; 8] = [
 /// `planet_gen::Biome` order (`flora-v2` design 1, 9.1). Read off the ground
 /// the tufts stand on, as the approved mockup does (`foliage.html`,
 /// `groundRamp`): the biome sheet's ground tile (0,0) in
-/// `assets/tilesets/atlas.png`, its texels sorted by luminance and cut in
+/// `assets/tilesets/atlas.png` (the mountains' alpine turf (3,2), where its
+/// grass is drawn, `mountain-ground` design 9), its texels sorted by luminance and cut in
 /// thirds, each third's commonest colour. `planet_terrain`'s atlas test
 /// recomputes this table off the committed file and fails on any difference.
 pub const TUFT_RAMPS: [[u32; 3]; 8] = [
     [0xb8cba8, 0xcbd6b0, 0xcfdab3], // ocean: seabed sand
-    [0xe0c996, 0xe2cb98, 0xe3cc98], // beach: dry shell sand
+    [0xd8bf8e, 0xe2cb98, 0xe2cb98], // beach: dry shell sand (`sand-tiles`)
     [0x617741, 0x5f7841, 0xb8c25f], // fields: pasture grass
-    [0xeac385, 0xebc586, 0xecc587], // desert: pale sand
+    [0xd39556, 0xdea464, 0xe6b373], // desert: pale sand (`sand-tiles`)
     [0x164a35, 0x194a35, 0x2f673a], // jungle: jungle grass
     [0x2b3831, 0x475230, 0x5e6634], // swamp: swamp moss
-    [0x374051, 0x374352, 0x808a94], // mountains: scree
+    [0x3a4632, 0x3a4632, 0x4b5a3b], // mountains: alpine turf (3,2) (`mountain-ground` 9)
     [0x536155, 0x637261, 0xe9eeec], // tundra: snowy moss
 ];
 
@@ -320,7 +452,7 @@ pub const BIOME_FRUIT: [u32; 8] = [
     0,               // desert: no trees
     1 << 4 | 1 << 5, // jungle: mango, papaya
     0,               // swamp
-    0,               // mountains: no trees
+    1 << 8,          // mountains: the firs' pine cones (`mountain-ground` design 12)
     1 << 8,          // tundra: pine cones
 ];
 
@@ -611,6 +743,32 @@ fn litter(local: f32) -> f32 {
 mod tests {
     use super::*;
 
+    /// A cactus is no tree (it is never chopped), but it stands in its cell
+    /// all the same, felled or not; a felled tree does not, and bare sand
+    /// stands nothing (`building-planner`: a plant refuses a site's piece).
+    #[test]
+    fn a_cactus_stands_in_its_cell() {
+        let desert_sand = 4 | 3 << 8;
+        let cactus = (0..10_000u32)
+            .find(|&id| crate::tree_kit::grows_cactus(id, desert_sand))
+            .expect("a cactus on the desert's sand");
+        let grass = 2 | 4 << 8;
+        for table in [TreeTable::V4, TreeTable::V10] {
+            assert!(!grows_tree(&table, cactus, desert_sand));
+            assert!(stands_plant(&table, cactus, desert_sand, false));
+            assert!(stands_plant(&table, cactus, desert_sand, true));
+            assert!((0..10_000u32).any(|id| !stands_plant(&table, id, desert_sand, false)));
+            // A town's cleared footprint stands nothing.
+            assert!(!stands_plant(&table, cactus, desert_sand | 1 << 24, false));
+            // A tree stands until it is felled.
+            let tree = (0..10_000u32)
+                .find(|&id| grows_tree(&table, id, grass))
+                .expect("a tree on grass");
+            assert!(stands_plant(&table, tree, grass, false));
+            assert!(!stands_plant(&table, tree, grass, true));
+        }
+    }
+
     /// The share that glows is the chance asked for, over any run of keys,
     /// including a run of neighbouring ones.
     #[test]
@@ -644,6 +802,73 @@ mod tests {
         );
     }
 
+    /// `glowing-mushrooms` design 5: once picks exist, which cells grow a
+    /// glowing mushroom is part of a world, so the hash, its salt and the
+    /// shipped chance (0.01, `column.ron`; `pbd-app`'s config test holds the
+    /// file to it) are pinned by a digest over 10,000 sample keys. A change
+    /// to any of them is made as `TreeTable` was: a per-version value in
+    /// `TerrainConfig`, the old one carried for old worlds.
+    #[test]
+    fn which_cells_glow_is_pinned() {
+        let mut digest: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut lit = 0;
+        for i in 0..10_000u32 {
+            let key = i.wrapping_mul(2_654_435_761).wrapping_add(0x1234_5678);
+            if glows(key, GLOW_CHANCE_SHIPPED) {
+                lit += 1;
+                for b in key.to_le_bytes() {
+                    digest = (digest ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+                }
+            }
+        }
+        assert_eq!(SALT, 0x6c6f_7766);
+        assert_eq!(
+            (lit, digest),
+            GLOW_DIGEST,
+            "which cells grow a glowing mushroom moved: a new generator version"
+        );
+    }
+
+    /// The shipped chance (`column.ron`'s `glow_flower_chance`).
+    const GLOW_CHANCE_SHIPPED: f32 = 0.01;
+    /// How many of the sample keys glow, and their digest.
+    const GLOW_DIGEST: (u32, u64) = (111, 2_013_441_873_274_815_809);
+
+    /// `glowing-mushrooms` design 3: what F is aimed at is where the flower
+    /// slot draws the plant. The lines `glow_plant_point` mirrors are the
+    /// shader's, and the point lies on the cap between the centre and the
+    /// chosen corner, the stalk standing along the axis.
+    #[test]
+    fn the_mushroom_to_pick_is_where_the_draw_stands_it() {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            "const SALT_FLOWER: u32 = 0x52u;",
+            "let k = u32(roll(id,SALT_FLOWER+1u)*f32(degree));",
+            "let f0 = 0.15+0.60*roll(id,SALT_FLOWER+2u);",
+            "let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;",
+            "let h = params.clutter_more.x*fade;",
+            "let top = tip+axis*0.03;",
+        ] {
+            assert!(
+                shader.contains(line),
+                "the flower slot no longer says `{line}`"
+            );
+        }
+        let axis = glam::Vec3::new(0.0, 1.0, 0.0);
+        let corners: Vec<glam::Vec3> = (0..6)
+            .map(|i| {
+                let a = i as f32 * std::f32::consts::TAU / 6.0;
+                glam::Vec3::new(a.cos() * 0.001, 1.0, a.sin() * 0.001).normalize()
+            })
+            .collect();
+        for id in [1u32, 77, 9_001, 123_456_789] {
+            let (foot, top) = glow_plant_point(id, axis, &corners, 2_400.0, 0.32);
+            assert!((foot.length() - 2_400.0).abs() < 0.01);
+            assert!(((top - foot) - axis * 0.35).length() < 1e-3);
+            assert!(foot.x.hypot(foot.z) < 2.4 * 0.76, "inside the cap");
+        }
+    }
+
     /// Nothing glows at a chance of nought, everything at one, and a key
     /// answers the same every time it is asked.
     #[test]
@@ -665,11 +890,15 @@ mod tests {
         let lines = [
             "let roll = hash(cell.spare.x) & 0xffu;",
             "let material = cell.metadata.y & 0xffu;",
-            "let biome = (cell.metadata.y >> 8u) & 0xffu;",
+            "let back = ((cell.metadata.y >> BEACH_BACK_BIT) & 1u) == 1u;",
+            "let biome = tree_biome(cell.metadata.y);",
+            "if ((word >> BEACH_BACK_BIT) & 1u) == 1u { return 1u; }",
+            "return (word >> 8u) & 0xffu;",
             "let entry = params.plant_means[min(biome, 7u)].w;",
-            "let density = (entry >> 16u) & 0xffu;",
+            "let density = tree_line_density((entry >> 16u) & 0xffu, cell.metadata.y);",
+            "return density*(15u - min((word >> TREE_LINE_SHIFT) & 0xfu, 15u))/15u;",
             "let grass = material==2u || material==3u || material==7u;",
-            "let sand = ((entry >> 24u) & 1u) == 1u && material==1u;",
+            "let sand = ((entry >> 24u) & 1u) == 1u && (material==1u || (back && material==4u));",
             "let pine = ((entry >> 25u) & 1u) == 1u && material==6u;",
             "let tree = (grass||sand||pine) && roll < density;",
             "if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }",
@@ -709,22 +938,32 @@ mod tests {
             }
             let roll = shader_hash(id) & 0xff;
             let material = word & 0xff;
-            let biome = (word >> 8) & 0xff;
+            let back = (word >> BEACH_BACK_BIT) & 1 == 1;
+            let biome = if back { 1 } else { (word >> 8) & 0xff };
             let entry = means_w[biome.min(7) as usize];
-            let density = (entry >> 16) & 0xff;
+            let density =
+                ((entry >> 16) & 0xff) * (15 - ((word >> TREE_LINE_SHIFT) & 0xf).min(15)) / 15;
             let grass = material == 2 || material == 3 || material == 7;
-            let sand = (entry >> 24) & 1 == 1 && material == 1;
+            let sand = (entry >> 24) & 1 == 1 && (material == 1 || (back && material == 4));
             let pine = (entry >> 25) & 1 == 1 && material == 6;
             (grass || sand || pine) && roll < density
         }
         // The uniform's lanes as the app packs them (the fruit in the low
         // half), against the CPU rule, for every biome and material code and
         // 10,000 cell ids, on both tables.
-        for table in [TreeTable::V4, TreeTable::V10] {
+        for table in [TreeTable::V4, TreeTable::V10, TreeTable::V15] {
             let w: [u32; 8] = std::array::from_fn(|b| BIOME_FRUIT[b] | table.packed(b));
             for biome in 0..8u32 {
                 for material in 0..16u32 {
-                    for cleared in [0, 1 << 24, 1 << FLOODED_BIT] {
+                    for cleared in [
+                        0,
+                        1 << 24,
+                        1 << FLOODED_BIT,
+                        1 << BEACH_BACK_BIT,
+                        1 << BEACH_BACK_BIT | 1 << FLOODED_BIT,
+                        7 << TREE_LINE_SHIFT,
+                        15 << TREE_LINE_SHIFT | 1 << KRUMMHOLZ_BIT,
+                    ] {
                         let word = material | biome << 8 | cleared;
                         for id in 0..10_000u32 {
                             assert_eq!(
@@ -771,6 +1010,40 @@ mod tests {
     /// and cleared bit over 10,000 cell ids. A cell's id and word are pinned
     /// by the ground digests and the cell keys, so this pins where a world's
     /// trees stand.
+    /// `mountain-ground` design 12: version 15's mountains stand trees on
+    /// their turf below the tree line and none above it, on the CPU's rule;
+    /// a version 14 range stands none, and krummholz is picked where the
+    /// record says.
+    #[test]
+    fn mountains_stand_trees_to_a_tree_line_in_version_15() {
+        let turf = 2 | 6 << 8;
+        let grows = |table: &TreeTable, word: u32| {
+            (0..20_000u32).filter(|&id| table.grows(id, word)).count()
+        };
+        assert_eq!(
+            grows(&TreeTable::V10, turf),
+            0,
+            "an old range stands no tree"
+        );
+        assert_eq!(grows(&TreeTable::V4, turf), 0);
+        let below = grows(&TreeTable::V15, turf);
+        assert!(below > 3_000, "{below}");
+        let m = crate::mountain::MountainGround::V15;
+        let word = |alt: f32| {
+            let (thin, k) = m.tree_line(alt);
+            turf | thin << TREE_LINE_SHIFT | u32::from(k) << KRUMMHOLZ_BIT
+        };
+        let at_line = grows(&TreeTable::V15, word(145.0));
+        assert!(at_line > 0 && at_line < below, "{at_line}");
+        assert_eq!(grows(&TreeTable::V15, word(160.0)), 0, "above the line");
+        assert_eq!(grows(&TreeTable::V15, word(200.0)), 0);
+        let k = crate::tree_kit::pick_word(7, word(150.0)).unwrap();
+        assert_eq!(k.species, crate::tree_kit::Species::Krummholz);
+        let fir = crate::tree_kit::pick_word(7, word(120.0)).unwrap();
+        assert_eq!(fir.species, crate::tree_kit::Species::Pine);
+        assert!((0.55..=0.85).contains(&fir.size));
+    }
+
     fn tree_digest(table: &TreeTable) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
         for biome in 0..8u32 {
@@ -821,6 +1094,46 @@ mod tests {
                 assert_eq!(grows_tree(&TreeTable::V4, id, word), before(id, word));
             }
         }
+    }
+
+    /// A beach's back (`flora-v2` 12.13, `BEACH_BACK_BIT`) stands the
+    /// beach's trees on its own ground: the fields' dry grass, the jungle's
+    /// grass and the desert's sand grow trees at the beach's rate, every one
+    /// an acacia bearing the beach's fruit, and no cactus. Without the bit
+    /// the same word is its biome's own; under the high water nothing.
+    #[test]
+    fn a_beach_back_stands_the_beach_s_acacias() {
+        use crate::tree_kit::{Species, grows_cactus, pick};
+        let table = TreeTable::V10;
+        let back = 1 << BEACH_BACK_BIT;
+        let beach_rate = (0..100_000u32)
+            .filter(|&id| grows_tree(&table, id, 2 | 1 << 8))
+            .count();
+        for (biome, material) in [(2u32, 3u32), (4, 7), (3, 4)] {
+            let word = material | biome << 8 | back;
+            assert_eq!(tree_biome(word), 1);
+            assert_eq!(tree_biome(word & !back), biome);
+            let ids: Vec<u32> = (0..100_000u32)
+                .filter(|&id| grows_tree(&table, id, word))
+                .collect();
+            assert_eq!(ids.len(), beach_rate, "biome {biome} material {material}");
+            for &id in &ids {
+                assert_eq!(pick(id, tree_biome(word)).unwrap().species, Species::Acacia);
+            }
+            assert!(!(0..10_000u32).any(|id| grows_cactus(id, word)));
+            assert!(
+                !(0..10_000u32).any(|id| grows_tree(&table, id, word | 1 << FLOODED_BIT)),
+                "a tree under the high water"
+            );
+        }
+        // The desert's sand without the bit stands cacti, not trees.
+        assert!(!(0..10_000u32).any(|id| grows_tree(&table, id, 4 | 3 << 8)));
+        assert!((0..10_000u32).any(|id| grows_cactus(id, 4 | 3 << 8)));
+        // The fields without it keep their own density.
+        let fields = (0..100_000u32)
+            .filter(|&id| grows_tree(&table, id, 3 | 2 << 8))
+            .count();
+        assert!(fields > beach_rate * 3, "{fields} against {beach_rate}");
     }
 
     const V4_TREE_DIGEST: u64 = 16_944_701_438_888_284_610;
@@ -929,9 +1242,9 @@ mod tests {
         assert!(picked.bare_at(17.9) && !picked.bare_at(18.0));
     }
 
-    /// The ground follows the trees' calendar (design 12.6): green in
-    /// summer and spring, dry through autumn and winter, frosted only in a
-    /// cold winter, never in the tropics; and the WGSL is the same numbers.
+    // The ground follows the trees' calendar (design 12.6): green in
+    // summer and spring, dry through autumn and winter, frosted only in a
+    // cold winter, never in the tropics; and the WGSL is the same numbers.
 
     /// Each fruit counted hangs somewhere on its tree (`fruit-aim`): as many
     /// points as `hanging_fruit` counts, in the crown, above the ground and

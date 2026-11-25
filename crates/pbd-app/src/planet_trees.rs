@@ -85,7 +85,7 @@ pub fn kit() -> &'static Kit {
 
 /// The near draws' vertex counts, one per species: its largest variant and
 /// the fruit.
-pub fn near_vertices() -> [u32; 8] {
+pub fn near_vertices() -> [u32; tree_kit::SPECIES.len()] {
     kit().vertex_max.map(|n| n + FRUIT_VERTICES)
 }
 
@@ -173,6 +173,13 @@ mod tests {
             constant(VISIBILITY, "CACTUS_DENSITY"),
             tree_kit::CACTUS_DENSITY
         );
+        // `flora-v2` 12.13: the beach's back bit, in both passes.
+        for source in [SURFACE, VISIBILITY] {
+            assert_eq!(
+                constant(source, "BEACH_BACK_BIT"),
+                pbd_core::flora::BEACH_BACK_BIT
+            );
+        }
     }
 
     /// Both shaders pick a tree's species with the same lines, and those

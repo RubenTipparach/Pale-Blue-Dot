@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* Layout: the game's HUD at night; one column of question cards, each with the screenshots it turns on, a sticky tally bar.
    Tokens keep the template's names (paper, brass, done) so its rules stay as written. */
@@ -10,7 +10,7 @@
   --bg: #0b1119; --paper: #131c28; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f;
   --brass: #e8b44c; --brass-soft: #3a2c12; --done: #7fcf86; --done-soft: #17301c;
   --sun: #e8b44c; --crescent: #7fcf86; --star: #f07a6a; --eagle: #7fb2f0;
-  --display: "Pixelify Sans", "Courier New", monospace;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
@@ -138,6 +138,35 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 .qmeta a, .how a, .lede a { color: var(--brass); }
 .dec-list .d-id { font: 500 12px/1 var(--mono); color: var(--brass); margin-right: 8px; }
 .dec-list .taken { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--brass); }
+section.topic, .ki, .phase-quiet, .ki li, details.decided { scroll-margin-top: 72px; }
+.toc { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
+.toc h2 { font: 700 18px/1 var(--display); margin: 0; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc li { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--line); }
+.toc li:first-child { border-top: 0; }
+.toc a { color: var(--ink); text-decoration: none; min-height: 28px; display: inline-flex; align-items: center; }
+.toc a:hover { color: var(--brass); }
+.toc li.quiet a { color: var(--muted); }
+.toc .toc-n { font: 500 12px/1 var(--mono); color: var(--brass); }
+.toc p { margin: 0; }
+.toc p a { color: var(--brass); }
+.phase-quiet { margin: 0; color: var(--muted); font-size: 14px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.phase-quiet .tag, section.topic > h2 .tag { font: 500 13px/1 var(--mono); color: var(--brass); letter-spacing: 0.1em; }
+.ki-h { font: 700 18px/1 var(--display); margin: 6px 0 0; }
+.ki { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; display: grid; gap: 6px; }
+.ki h4 { margin: 0; font: 600 13px/1.3 var(--mono); letter-spacing: 0.04em; }
+.ki h4 a { color: var(--brass); text-decoration: none; }
+.ki ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 15px; }
+.ki li.blocking::marker { color: var(--star); }
+.ki .blk { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--star); margin-right: 8px; }
+.ki-note { margin-top: 4px; }
+.ki-note summary { cursor: pointer; font: 500 12px/1 var(--mono); color: var(--brass); padding: 6px 0; min-height: 28px; list-style: none; }
+.ki-note summary::-webkit-details-marker { display: none; }
+.ki-note textarea { min-height: 54px; font-size: 14px; }
+.ki-note .status { margin-top: 4px; }
+.ki-said { margin: 2px 0 0; font-size: 14px; color: var(--done); white-space: pre-wrap; }
+.hit { outline: 2px solid var(--brass); outline-offset: 4px; transition: outline-color 1.2s; }
+.dec-list .d-phase { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; margin-right: 8px; }
 @media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
 </style>
 
@@ -146,7 +175,7 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
     <div class="eyebrow">Owner survey · opened 2026-11-12</div>
     <h1>Pale Blue Dot Survey</h1>
     <div class="suits" aria-hidden="true"><span style="background:var(--sun)"></span><span style="background:var(--crescent)"></span><span style="background:var(--star)"></span><span style="background:var(--eagle)"></span></div>
-    <p class="lede">Open questions about the game. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p class="lede">Open questions about the game, by phase of the roadmap. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   </header>
 
   <div class="tally">
@@ -160,8 +189,15 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
     <p>Answers save as you go. Tap a chosen option again to clear it.</p>
     <p>A question comes to you only with something to look at (your rule, 2026-09-29). For anything without screenshots I take my recommendation and list it under Already decided as "recommendation taken".</p>
     <p>Your earlier answers are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn" target="_blank" rel="noopener">the first survey (a Claude Doc)</a>, kept as the record; all of them are copied under Already decided.</p>
+    <p>Each phase of the roadmap has its open questions, then its known issues: things not done yet. Add a note on any issue and I read it with your answers.</p>
     <p class="notice" id="mode" hidden></p>
   </div>
+
+  <nav class="toc" aria-label="Phases">
+    <h2>Phases</h2>
+    <ol id="toc-list"></ol>
+    <p><a href="#decided">Already decided</a></p>
+  </nav>
 
   <main id="sections" class="wrap" style="gap:36px"></main>
 
@@ -172,91 +208,81 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 </div>
 
 <script>
-// The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
-// pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
-const SECTIONS = [
-  { tag: 'G', name: 'Ships and flight',
-    lead: 'From ship-tiers (2026-11-12), the mockup "Rockets and Landers" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
-    qs: [
-      { id: 'G4', q: 'How should chemical rockets meet orbits? In today\'s bounded field (full pull to 1.4 R, none past 1.8 R) a rocket reaches low orbit for 574 m/s, but orbits only fit below 8.6 km and do not close, and the moon at 26 km is a straight coast. In Tenebris\'s inverse-square field the same rocket reaches orbit for 535 m/s, ellipses close, and the moon is a 4 min 22 s arc. Either way the line ahead of the ship is the flight integrated forward, with Ap, Pe and T.',
-        options: ['A. Keep the invariant: rockets fly in today\'s bounded field', 'B. Rockets fly in Tenebris\'s orbital field, with the predicted line, no maneuver nodes; the fusion tier\'s nav computer plans', 'C. All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes'], rec: 1,
-        why: 'It is the orbital play you liked, with the part the invariant was written against (a second model of motion that has to agree with the integrator) left out; CLAUDE.md changes in one clause, in the commit that builds it.',
-        change: 'ship-tiers', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/Af9oUZTdnhRzF1UYtxqUq6#orbit', label: 'Rockets and Landers, tab 2: flip "Inverse-square (B)" and "Today\'s band (A)"; tab 3 for the course to Lantern' } },
-      { id: 'G4a', q: 'You asked for "a solar system with navigation nodes to plot flight paths and rocket burns", and the mockup\'s new Planner tab has them: click the predicted line to place a node, drag its prograde, normal and radial handles, and the line ahead moves; hold B when it comes up and the ship burns it. CLAUDE.md says "Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation", and G4\'s recommended B had no nodes. In the planner a node is a burn the integrator flies: the line is the flight itself run forward (a coasting ship ends 0 m from it), every body pulls, and nothing is solved as a conic. Flown with it: low orbit to Taper, a 600 m test moon, for 77 m/s, and home for 43 m/s.',
-        options: ['Allow nodes: finite burns planned on the integrated line and flown by hand; patched conics, sphere-of-influence solvers, transfer windows and ship-to-ship gravity stay out', 'Keep nodes out: the line, Ap/Pe and the SAS holds stay, the planner\'s nodes go (G4\'s B)', 'All of Tenebris: conics, spheres of influence and nodes (G4\'s C)'], rec: 0,
-        why: 'It is what you asked for, and it keeps what the rule was written to protect: one model of motion, so the line can never disagree with the ship. CLAUDE.md changes only on your answer, in the commit that builds it.',
-        change: 'ship-tiers (design 11.4)', asked: '2026-11-14',
-        link: { url: 'https://claude.ai/artifact/Af9oUZTdnhRzF1UYtxqUq6#plan', label: 'Rockets and Landers, the Planner tab: try "Transfer to Taper", then hold B at each node' },
-        images: [
-          { src: 'img/g4a-nodes.jpg', alt: 'Low orbit round Tenebris with three maneuver nodes to Taper, each with six coloured handles, and the line purple after the first node', caption: 'The nav computer\'s three nodes to Taper: depart, capture, round off.' },
-          { src: 'img/g4a-handles.jpg', alt: 'A maneuver node close up beside the ship: yellow prograde and retrograde handles, purple normal, cyan radial', caption: 'A node close up: drag a handle and the line ahead moves.' },
-          { src: 'img/g4a-taper.jpg', alt: 'The ship in orbit round Taper, drawn in Taper\'s frame, with Ap and Pe marked', caption: 'After flying them: in orbit round Taper, drawn in Taper\'s frame.' },
-          { src: 'img/g4a-system.jpg', alt: 'The Aubade system to scale with a departure node toward Verdance', caption: 'The Aubade system to scale, a departure for Verdance.' },
-        ] },
-    ] },
-  { tag: 'A', name: 'Art and look',
-    lead: 'From vehicle-yards (2026-11-12): the drydock (M23) and hangar (M24) mockups, linked below. Everything else on those pages and on the construction yard (M22) is taken as recommended; it is listed under Already decided. Shots rendered without a GPU.',
-    qs: [
-      { id: 'A1', q: 'How chibi should the aircraft be? As drawn, the canopy is about a third of the body, the fuselage is short and fat, the wings stubby and thick, the wheels and rotor blades oversized. The shape comes from the builder\'s 1 m cells; the chibi look is how each part is drawn, so it can be pushed either way without changing a design\'s numbers.',
-        options: ['As drawn', 'Chibbier: bigger canopies, rounder noses, even shorter wings', 'Less chibi: closer to true proportions'], rec: 0,
-        why: 'It reads as your references (the shark-mouth fighter and the utility helicopters) while every part stays a part you placed, so a design still flies by its own numbers.',
-        change: 'vehicle-yards (decision 4)', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/WUugWkXMLPRKMGVMd4w9mG', label: 'Hangar and Chibi Aircraft: the airfield and the builder' },
-        images: [
-          { src: 'img/a1-presets.jpg', alt: 'The five chibi presets: Sharky the prop fighter, Bumble the helicopter, Puffin the tiltrotor, Gull the floatplane and Dart the jet', caption: 'The five presets by day.' },
-          { src: 'img/a1-builder.jpg', alt: 'The aircraft builder with Sharky on the grid and its 3D preview', caption: 'The builder: Sharky on the grid, its preview and its numbers.' },
-        ] },
-      { id: 'A2', q: 'Ocean ships are built from whole world cells, as you asked: 2.833 m hexes, 1 m a layer. Their sides are vertical hex walls, so a bow is a stepped point, and a hull is the same to port and starboard only with an odd number of rows (3 or 5). Rails, masts and lanterns are thin pieces on the cells, as in a house.',
-        options: ['Whole cells, as drawn', 'Whole cells, plus sloped hull pieces on the bow and bilge (look only; the cell still floats whole)', 'Smaller ship cells (breaks the one-cell rule)'], rec: 0,
-        why: 'Every cell of a ship is then a cell you can stand on, break and save like the ground. Sloped pieces can be added later without changing a saved ship, so nothing is lost by starting plain.',
-        change: 'vehicle-yards (decision 3)', asked: '2026-11-12',
-        link: { url: 'https://claude.ai/artifact/K2uLF3kCJGu57tg4bk6ect', label: 'Drydock and Hex Ship Builder: the dock, the builder and the walk on deck' },
-        images: [
-          { src: 'img/a2-dock-day.jpg', alt: 'A three-masted hex-cell ship on its keel blocks in the dry dock, under the gantry crane', caption: 'The three-master in the dry dock by day.' },
-          { src: 'img/a2-afloat-night.jpg', alt: 'The ship afloat in the flooded dock at night, its lanterns lit', caption: 'Afloat in the flooded dock at night.' },
-        ] },
-    ] },
-  { tag: 'T', name: 'Tech and performance',
-    lead: 'From lighting-perf (2026-11-12), toward your "get worst case to 60". On foot in the rain the frame waits on the GPU, and the rain itself (the haze and streaks drawn over the whole screen) was 1.5 ms of it. Below, six frames from the same build, the rain drawn at full size and at half size: compare them side by side, with a slider, or as a difference.',
-    qs: [
-      { id: 'T15', q: 'Draw the rain at half size? It takes the rain from 1.49 ms to 0.45 ms of GPU, and Holbrook\'s lane in rain from 10.0 to 8.7 ms per frame (p99 20.7 to 18.6 ms). The rain is gathered on a quarter of the pixels and laid over the scene weighed by depth, so a wall\'s edge keeps no rain from behind it. By day almost every changed pixel moves by 2/255 or less; at night 17% move by more, because the rain\'s fine grain is now drawn per 2 x 2 pixels.',
-        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
-        why: 'It is the largest single cut left on foot in rain, and I cannot tell the two apart at play size. rain_render_scale in weather.ron puts the full-size rain back whenever you want it.',
-        change: 'lighting-perf (task 2.9)', asked: '2026-11-12',
-        compare: {
-          base: 'img/t15/', a: 'Full size (today)', b: 'Half size (recommended)',
-          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only rain_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, which is the game\'s own run-to-run noise.',
-          scenes: [
-            { id: 'lane-night-south', label: 'Lane, 22:00' },
-            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
-            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
-            { id: 'puddle-wall', label: 'Puddle under a wall' },
-            { id: 'town-day', label: 'Town, 10:00' },
-            { id: 'shore-300m-rain', label: 'Shore from 300 m' },
-          ] } },
-      { id: 'T16', q: 'Trace wet ground\'s reflections at half size? On foot in rain the reflections (the ray that finds the houses, the walls and the sky in a puddle) were the largest piece of the frame left: tracing one pixel in each 2 x 2 and laying the result back by depth and direction takes Holbrook\'s lane from 8.3 to 7.0 ms per frame and its worst 1% from 16.8 to 12.7 ms (at 22:00 17.3 to 13.3; the town walk 17.2 to 12.7). With it, every test route stays above 60 fps for 99% of frames. The ripples still bend the sky at full size; what the reflection shows is now per 2 x 2 pixels, so 6-26% of a rainy frame\'s pixels move, mostly at the ripples\' scale. No halo at a wall\'s foot.',
-        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
-        why: 'It is what brings the rain to 60 fps at the worst 1%, and the reflected houses read the same. reflect_render_scale in lighting.ron puts the full-size traces back whenever you want them.',
-        change: 'lighting-perf (task 2.8)', asked: '2026-11-12',
-        compare: {
-          base: 'img/t16/', a: 'Full size (today)', b: 'Half size (recommended)',
-          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only reflect_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, the game\'s own run-to-run noise (the harbour from 300 m is not repeatable even at full size).',
-          scenes: [
-            { id: 'puddle-wall', label: 'Puddle under a wall' },
-            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
-            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
-            { id: 'lane-night-south', label: 'Lane, 22:00, south' },
-            { id: 'lane-night-north', label: 'Lane, 22:00, north' },
-            { id: 'town-rain', label: 'Holbrook from 25 m' },
-            { id: 'harbour-30m', label: 'Harbour from 30 m' },
-            { id: 'harbour-300m', label: 'Harbour from 300 m' },
-          ] } },
-    ] },
+// The survey by phase, in the roadmap's order (the tracker's ROADMAP: its phase numbers and names). Each phase holds its open
+// questions (`qs`) and its known issues (`issues`): the roadmap's warnings, grouped by step, each group with an anchor the
+// tracker's roadmap links to (`#phase-3-npcs`) and each issue a stable id. Known issues are not questions: no options, not counted.
+// Answers live in the db collection `answers`, one document per question id. Every question carries the pictures it turns on
+// (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
+const PHASES = [
+  { id: 'phase-1', num: '1', name: 'The first game loop', qs: [
+    ], issues: [] },
+  { id: 'phase-2', num: '2', name: 'Environment v2', qs: [], issues: [
+    { id: 'phase-2-flora', step: 'Advanced foliage and flora', items: [
+      { id: 'phase-2-flora.1', text: 'Not built yet: far tree impostors, the fungal forest, the desert palm, alien species.' } ] },
+    { id: 'phase-2-mushrooms', step: 'Glowing mushrooms and carried light', items: [
+      { id: 'phase-2-mushrooms.1', text: 'The placed torch does not match the new held one yet. A look change, so a mockup first.' } ] },
+    { id: 'phase-2-mountains', step: 'Mountain flora', items: [
+      { id: 'phase-2-mountains.1', text: 'Bilberry bushes and the snow-edge flower are stood in by the kit\'s blue and red.' },
+      { id: 'phase-2-mountains.2', text: 'Proposals, not built: tarns, cairns, bilberry as food, boulders taken only by pickaxe.' } ] },
+    { id: 'phase-2-underwater', step: 'Underwater overhaul', items: [
+      { id: 'phase-2-underwater.1', text: '28 more water creatures from the mockup (12 are in).' },
+      { id: 'phase-2-underwater.2', text: 'Beavers and otters: no splashes or chips, no felling a standing tree, no otter mud slide or fishing, no sea otter kelp wrap.' } ] },
+    { id: 'phase-2-water-flow', step: 'Water that flows', items: [
+      { id: 'phase-2-water-flow.1', text: 'The M31 splash tab (fall foot, entry, cast, wake) is not built. Mockup first.' } ] },
+    { id: 'phase-2-checks', step: 'Your checks (nothing waits on them)', items: [
+      { id: 'phase-2-checks.1', text: 'M31: froth only on faces that fall a layer or more, and the texture panning on still water too.' },
+      { id: 'phase-2-checks.2', text: 'Listen to the waterfall sounds on the Sounds page (M30).' },
+      { id: 'phase-2-checks.3', text: 'Look on your GPU: sand, mountains, the held light, the beavers and otters. Every capture so far is software-rendered.' },
+      { id: 'phase-2-checks.4', text: 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters.' },
+      { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
+  ] },
+  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
+  ], tests: [
+    { id: 'phase-3-test-npcs', step: 'NPCs', items: [
+      { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
+    { id: 'phase-3-test-missions', step: 'Town missions', items: [
+      { id: 'phase-3-test-missions.1', text: 'Screenshots of the lost villager and repair jobs, taken and handed in.' },
+      { id: 'phase-3-test-missions.2', text: 'The lost villager\'s marker on the map and the compass, and Abandon on the board.' } ] },
+    { id: 'phase-3-test-roads', step: 'Roads', items: [
+      { id: 'phase-3-test-roads.1', text: 'Screenshots from a bridge and of the road lamps at night.' } ] },
+    { id: 'phase-3-test-building', step: 'Carpentry and house building', items: [
+      { id: 'phase-3-test-building.1', text: 'A house\'s shadows clear in a screenshot, by day.' } ] },
+    { id: 'phase-3-test-logging', step: 'Logging', items: [
+      { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
+  ] },
+  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [], issues: [
+    { id: 'phase-3b-launcher', step: 'Launcher', items: [
+      { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
+      { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
+  ] },
+  { id: 'phase-4', num: '4', name: 'Town building, civil engineering and survival', qs: [], issues: [] },
+  { id: 'phase-5', num: '5', name: 'Mass transportation', qs: [], issues: [] },
+  { id: 'phase-6', num: '6', name: 'Age of flight and industry', qs: [], issues: [] },
+  { id: 'phase-7', num: '7', name: 'Nuclear and rocketry', qs: [], issues: [] },
+  { id: 'phase-8', num: '8', name: 'Finance and space stations', qs: [], issues: [] },
+  { id: 'phase-9', num: '9', name: 'Space exploration and colonization', qs: [], issues: [] },
+  { id: 'phase-10', num: '10', name: 'Exo-industry and advanced propulsion', qs: [], issues: [] },
+  { id: 'phase-11', num: '11', name: 'Antimatter and interstellar travel', qs: [], issues: [] },
 ];
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-24", "phase": "3", "id": "P1", "text": "Trading stays in baskets (YOU TAKE, YOU GIVE, DEAL), as built. And \"One thing id improve is framing. Move the camera so the merchant is on left, and the trade UI is on the right\": the talk and trade panels sit on the right, and the view turns so the townsperson stands in the left of the frame. Being built.", "where": "townsfolk design 37a, task 11.3"},
+  {"date": "2026-11-24", "phase": "3", "id": "P2", "text": "The road planner's ghost is stronger, 55%. And \"Can we something like a slightly aerial view? Let's say something like 10-20 m off the ground?\": while the planner is open the camera lifts to about 15 m above you, looking down the way you face, and comes back down when it closes. Being built.", "where": "townsfolk design 42"},
+  {"date": "2026-11-24", "phase": "3", "id": "P3", "text": "\"The night is too faint, please make it glow a bit more at night\": the building site's ghost glows more after dark (ghost_night raised from 0.05). Being built.", "where": "building-planner design"},
+  {"date": "2026-11-24", "phase": "3", "id": "P4", "text": "The stronger lime line is kept. A lime line is the white powder line marked on the ground: round a building site it shows where the walls go, and the same band marks a road's planned cells.", "where": "building-planner design; townsfolk design 39a"},
+  {"date": "2026-11-24", "phase": "3b", "id": "N1, N2", "text": "The crew's house site is a shared map marker set when the chain starts; the crew's reward for the house chain is the house itself, shared by the crew. Multiplayer waits until the rest is done.", "where": "coop-missions design, open questions"},
+  {"date": "2026-11-23", "phase": "1", "id": "A5", "text": "The herd's look: \"make animals like this! I love this look\", then \"please go back to blocky style for animals\" and \"DO NOT DO THE SOFT CURVY ANIMALS\", on M26's Hatchery tab. The herd is built as M26's Farmstead and Hatchery animals are: boxes sized and placed as one creature, each wearing its pixel hide, tinted by the coat. The neck is a pose only: the head at the withers standing, the muzzle at the grass grazing, the face never past vertical. None of the Art style tab's styles was taken.", "where": "animal-husbandry design 17 (The owner's pick), tasks 10.3 and 10.4"},
+  {"date": "2026-11-22", "phase": "3", "id": "E1", "text": "Traders do not sell basic tools: they are made, never bought. \"we'll have a special weapons and enchanted tools that give +1 mining speed +1 yeild, stuff like that\": traders will sell special weapons and enchanted tools with bonuses (such as +1 mining speed, +1 yield), once enchantments and weapons are written up (weapons with survival, phase 4).", "where": "townsfolk design 38c (no basic tools on the Tools shelf), task 12.5, task 12.6"},
+  {"date": "2026-11-22", "id": "G4, G4a", "text": "\"All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes\" for rockets. The flight stays one Newtonian integrator; the conics are the map and the planner. CLAUDE.md's flight invariant names the decision and is rewritten when it is built.", "where": "ship-tiers design, Owner answers; CLAUDE.md"},
+  {"date": "2026-11-22", "id": "W21", "text": "Deep zones fitted to the column: sunlit to 40 m, twilight to 90 m, dark below. And \"powered ligths should work underwater? mushgroom glow should work underwater too\": lamps and glowing mushrooms light under water as on land; open flames go out (recommendation taken).", "where": "ocean-environments design, task 21"},
+  {"date": "2026-11-22", "id": "A3, G5, A4", "text": "Glowing mushroom: today's square cap kept, its light kept faint (level 3, held and planted alike), and warm for now; a colour per light is its own change later.", "where": "glowing-mushrooms design, Owner answers"},
+  {"date": "2026-11-22", "id": "A1, A2", "text": "Aircraft as drawn; ocean ships of whole cells, as drawn.", "where": "vehicle-yards decisions 3 and 4"},
+  {"date": "2026-11-22", "id": "T15, T16", "text": "Rain and wet-ground reflections drawn at half size (0.5), the settings kept.", "where": "lighting-perf tasks 2.8, 2.9"},
+  {"date": "2026-11-22", "id": "", "taken": true, "text": "Trade (ask only with screenshots): a made good's labour is priced at 0.1 coin per second of crafting; fibre moves from the Food shelf to Organics; the scroll thumb is widened past its 4 px; the 23 road links that cross the sea stay unbuilt until boats can carry them (phase 5).", "where": "townsfolk design 37, 38b, 38c, 32"},
+  {"date": "2026-11-21", "id": "M25 Q2", "text": "Animals under and on the water are 3D in the world, not pixel cards; a caught or dropped one is a 2D item picture (answered in chat, 2026-11-15). Built: fish, crabs, turtles, the beavers and otters.", "where": "ocean-environments design 11"},
+  {"date": "2026-11-21", "id": "M25 Q1", "text": "Tides: \"Remove literal tide feature\" (2026-11-19). The 3 m moon tide that was built is taken out; the sea stands at one level and keeps its waves.", "where": "no-tides; ocean-environments task 5.1"},
+  {"date": "2026-11-18", "id": "F1", "text": "\"On the dry ground just behind the beach (grass and sand above the high water), in version 11\": beach acacias move off the tide line onto the dry cells behind the beach, in generator version 11 with the swamps; version 10 worlds keep theirs.", "where": "flora-v2 12.13, task 12.13"},
   {"date": "2026-11-14", "id": "G1, W20", "text": "G1 answered in the survey on 2026-11-12: \"Make it a stone stair of 2 to 4 steps\"; then, on 2026-11-14, \"where theres a step on a path there should be staris\", which answers W20 too: every town path that steps up a riser gets a stair: stone street steps and flights in the walled towns and harbours (the north gate's 1 m riser among them), and a timber stair at each end of Marenstrand's sand bank on its pier. Built from the stored town each time it stands, so saved towns gain only their stairs; a riser you have dug or built on is left as it is.", "where": "path-stairs (proposal, design); town-gates task 3.1; pier-landfall task 1.6"},
   {"date": "2026-11-12", "id": "", "taken": true, "text": "Vehicle yards (ask only with screenshots): past the fabricator, an assembly bay hands large items over as crates in the world; a hex printer prints a building from the town's pieces one 1 m layer a pass, each layer saved as an edit by the printer; a tower crane lifts by its load chart (120 t m, 8 t hook) and refuses past it; ocean ships are hex cells in the ship's own flat frame, at least two cells in the beam, floated as seven sub-cells a cell, and a design floats out only when the helm can be walked to; aircraft are built at a hangar on a 1 m grid, mirrored, with a livery of your own (no real insignia); ships and aircraft are stored records that never change shape on their own.", "where": "vehicle-yards design, decisions 2 to 5"},
   {"date": "2026-11-12", "id": "", "taken": true, "text": "Ship tiers (ask only with screenshots): every ship is built on the 2.833 m hex cell with 1 m layers (the VAB's stacks and the shipyard's modules alike); exhaust speeds at the world's scale (chemical 600 m/s, solid 480, nuclear thermal 1,500, fusion 8,000, antimatter 60,000); spent stages break up and are not saved; freighters move on rails away from players and fly near them; starships come last, after stations, with the multi-system engine work as its own change.", "where": "ship-tiers design, section 9"},
@@ -331,7 +357,9 @@ const DECIDED = [
   {"date": "2026-09-26", "id": "", "text": "Every mockup is lit at night", "where": "CLAUDE.md"}
 ];
 
-const ALL_QS = SECTIONS.flatMap((s) => s.qs);
+const ALL_QS = PHASES.flatMap((p) => p.qs);
+const issueCount = (p) => p.issues.reduce((n, g) => n + g.items.length, 0);
+const testCount = (p) => (p.tests || []).reduce((n, g) => n + g.items.length, 0);
 const answers = {}; // id -> { choice: number|null, text: string }
 const cards = {};   // id -> { root, opts, textarea, status }
 let db = null;
@@ -353,11 +381,39 @@ function el(tag, attrs = {}, ...kids) {
 
 function render() {
   const root = document.getElementById('sections');
-  for (const s of SECTIONS) {
-    const sec = el('section', { class: 'topic', id: 'topic-' + s.tag },
-      el('h2', {}, el('span', { class: 'tag', text: s.tag }), s.name),
-      el('p', { text: s.lead }));
-    for (const q of s.qs) sec.append(questionCard(q));
+  const toc = document.getElementById('toc-list');
+  for (const p of PHASES) {
+    const nq = p.qs.length, ni = issueCount(p), nt = testCount(p);
+    const label = 'Phase ' + p.num + ' \u00b7 ' + p.name;
+    const counts = [nq ? nq + (nq === 1 ? ' question' : ' questions') : '', ni ? ni + (ni === 1 ? ' known issue' : ' known issues') : '', nt ? nt + ' to test' : ''].filter(Boolean).join(', ');
+    toc.append(el('li', { class: counts ? '' : 'quiet' },
+      el('a', { href: '#' + p.id, text: label }), counts ? el('span', { class: 'toc-n', text: counts }) : null));
+    if (!nq && !ni && !nt) {
+      // A phase with nothing open and no known issues is one quiet line.
+      root.append(el('p', { class: 'phase-quiet', id: p.id }, el('span', { class: 'tag', text: 'Phase ' + p.num }), p.name + ': nothing open.'));
+      continue;
+    }
+    const sec = el('section', { class: 'topic', id: p.id },
+      el('h2', {}, el('span', { class: 'tag', text: 'Phase ' + p.num }), p.name));
+    for (const q of p.qs) sec.append(questionCard(q));
+    if (ni) {
+      sec.append(el('h3', { class: 'ki-h', text: 'Known issues' }));
+      for (const g of p.issues) {
+        sec.append(el('div', { class: 'ki', id: g.id },
+          el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
+          el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-'), class: it.blocking ? 'blocking' : '' },
+            it.blocking ? el('span', { class: 'blk', text: 'Blocking' }) : null, it.text, issueNote(it.id))))));
+      }
+    }
+    // The testing plan (owner, 2026-11-22: "place this in a section called testing plan"): shots and checks owed, not bugs.
+    if (nt) {
+      sec.append(el('h3', { class: 'ki-h', text: 'Testing plan' }));
+      for (const g of p.tests) {
+        sec.append(el('div', { class: 'ki', id: g.id },
+          el('h4', {}, el('a', { href: '#' + g.id, text: g.step })),
+          el('ul', {}, g.items.map((it) => el('li', { id: 'issue-' + it.id.replace('.', '-') }, it.text, issueNote(it.id))))));
+      }
+    }
     root.append(sec);
   }
   const list = document.getElementById('dec-list');
@@ -365,9 +421,25 @@ function render() {
     list.append(el('li', {},
       d.replaced ? el('span', { class: 'replaced', text: 'Replaced' }) : null,
       d.taken ? el('span', { class: 'taken', text: 'Recommendation taken (ask only with screenshots)' }) : null,
-      el('p', { class: 'd-text' }, d.id ? el('span', { class: 'd-id', text: d.id }) : null, d.text),
-      el('p', { class: 'd-where', text: (d.date ? d.date + '  ·  ' : '') + d.where })));
+      el('p', { class: 'd-text' }, d.phase ? el('span', { class: 'd-phase', text: 'Phase ' + d.phase }) : null, d.id ? el('span', { class: 'd-id', text: d.id }) : null, d.text),
+      el('p', { class: 'd-where', text: (d.date ? d.date + '  \u00b7  ' : '') + d.where })));
   }
+}
+
+// The page is drawn from data after load, so a link to an anchor (#phase-3-npcs) is followed once it exists, and again
+// whenever the hash changes. "Already decided" opens when the link points inside it.
+function scrollToHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!id) return;
+  const t = document.getElementById(id);
+  if (!t) return;
+  const det = t.closest('details');
+  if (det) det.open = true;
+  // Land below the sticky tally bar, whose height changes with the width.
+  t.style.scrollMarginTop = (document.querySelector('.tally').offsetHeight + 12) + 'px';
+  t.scrollIntoView({ block: 'start' });
+  t.classList.add('hit');
+  setTimeout(() => t.classList.remove('hit'), 1600);
 }
 
 function questionCard(q) {
@@ -473,9 +545,13 @@ function paint(id) {
   c.opts.forEach((b, i) => b.setAttribute('aria-pressed', String(a?.choice === i)));
   if (document.activeElement !== c.textarea) c.textarea.value = a?.text ?? '';
   c.root.classList.toggle('answered', isAnswered(a));
+  tally();
+}
+
+function tally() {
   const n = ALL_QS.filter((q) => isAnswered(answers[q.id])).length;
-  document.getElementById('count').textContent = `${n} of ${ALL_QS.length} answered`;
-  document.getElementById('meter').style.width = `${(100 * n) / ALL_QS.length}%`;
+  document.getElementById('count').textContent = ALL_QS.length ? `${n} of ${ALL_QS.length} answered` : 'No open questions';
+  document.getElementById('meter').style.width = ALL_QS.length ? `${(100 * n) / ALL_QS.length}%` : '0%';
 }
 
 function setStatus(id, text, cls = '') {
@@ -539,6 +615,7 @@ function readOnly() {
     c.textarea.readOnly = true;
     c.opts.forEach((b) => { b.disabled = true; });
   }
+  for (const n of Object.values(noteEls)) n.ta.readOnly = true;
   showMode('You can read this survey, but only its owner can answer it.');
 }
 
@@ -552,7 +629,7 @@ function showMode(text) {
 function snapshotHtml() {
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const date = new Date().toISOString().slice(0, 10);
-  const rows = SECTIONS.map((s) => `<h2>${esc(s.tag)}: ${esc(s.name)}</h2>` + s.qs.map((q) => {
+  const rows = PHASES.filter((p) => p.qs.length || p.issues.length).map((p) => `<h2>Phase ${esc(p.num)}: ${esc(p.name)}</h2>` + p.qs.map((q) => {
     const a = answers[q.id];
     const pick = a?.choice != null ? q.options[a.choice] : null;
     const note = (a?.text ?? '').trim();
@@ -563,7 +640,8 @@ function snapshotHtml() {
       + `<p class="o">Options: ${q.options.map(esc).join(' / ')}</p>`
       + `<p class="r">Recommended: ${esc(q.options[q.rec])}. ${esc(q.why)}</p>`
       + `<p class="a">Answer: ${answer}</p></div>`;
-  }).join('')).join('');
+  }).join('') + (p.issues.length ? '<h3>Known issues</h3>' + p.issues.map((g) => `<p class="h">${esc(g.step)}</p><ul>`
+      + g.items.map((it) => `<li>${it.blocking ? '<b>Blocking:</b> ' : ''}${esc(it.text)}</li>`).join('') + '</ul>').join('') : '')).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<title>Pale Blue Dot Survey (${date})</title><style>`
     + `body{font:16px/1.55 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:24px 16px;background:#f8f2e5;color:#2a2118}`
@@ -603,9 +681,50 @@ async function setupDownload() {
   });
 }
 
+// A note on a known issue (owner, 2026-11-22: "can I add notes or something?"): one per issue, saved to the db collection
+// `issue_notes` (doc id = the issue id with '.' as '-'), read back by Claude like the answers.
+const notes = {};      // doc id -> text
+const noteEls = {};    // doc id -> { box, ta, said, status }
+const noteTimers = {};
+function issueNote(issueId) {
+  const id = issueId.replace('.', '-');
+  const ta = el('textarea', { rows: '2', placeholder: 'Your note on this (optional)', 'aria-label': 'Note on ' + issueId });
+  const status = el('div', { class: 'status', 'aria-live': 'polite' });
+  const said = el('p', { class: 'ki-said' });
+  const box = el('details', { class: 'ki-note' }, el('summary', { text: 'Add a note' }), ta, status);
+  ta.addEventListener('input', () => {
+    notes[id] = ta.value; paintNote(id);
+    clearTimeout(noteTimers[id]); status.textContent = 'Editing…'; status.className = 'status';
+    noteTimers[id] = setTimeout(() => saveNote(id), 900);
+  });
+  ta.addEventListener('blur', () => { clearTimeout(noteTimers[id]); saveNote(id); });
+  noteEls[id] = { box, ta, said, status };
+  return el('div', {}, said, box);
+}
+function paintNote(id) {
+  const n = noteEls[id]; if (!n) return;
+  const t = (notes[id] ?? '').trim();
+  n.said.textContent = t ? 'Your note: ' + t : '';
+  n.box.querySelector('summary').textContent = t ? 'Edit your note' : 'Add a note';
+  if (document.activeElement !== n.ta) n.ta.value = notes[id] ?? '';
+}
+async function saveNote(id) {
+  const n = noteEls[id]; if (!n || !canWrite) return;
+  const body = { text: notes[id] ?? '', updatedAt: new Date().toISOString() };
+  if (!db) {
+    try { localStorage.setItem(LOCAL_KEY + '.notes', JSON.stringify(notes)); } catch (e) { /* storage blocked */ }
+    n.status.textContent = standalone ? 'Saved in this browser' : ''; n.status.className = 'status ok'; return;
+  }
+  n.status.textContent = 'Saving…';
+  try { await db.collection('issue_notes').doc(id).set(body); n.status.textContent = 'Saved'; n.status.className = 'status ok'; }
+  catch (e) { n.status.textContent = 'Not saved. Try again in a moment.'; n.status.className = 'status err'; }
+}
+
 async function connect() {
   if (standalone) {
     loadLocal();
+    try { Object.assign(notes, JSON.parse(localStorage.getItem(LOCAL_KEY + '.notes') || '{}')); } catch (e) { /* nothing saved */ }
+    Object.keys(noteEls).forEach(paintNote);
     ALL_QS.forEach((q) => paint(q.id));
     showMode('This copy is open outside claude.ai, so answers are kept in this browser only. Claude reads the answers on the survey page at claude.ai.');
     return;
@@ -619,6 +738,14 @@ async function connect() {
   }
   db = store;
   if (user && (await user.can('data.write')) === false) { canWrite = false; readOnly(); }
+  db.collection('issue_notes').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists || document.activeElement === noteEls[d.id]?.ta) continue;
+      const body = d.data();
+      notes[d.id] = typeof body.text === 'string' ? body.text : '';
+      paintNote(d.id);
+    }
+  }, () => {});
   db.collection('answers').onSnapshot((snap) => {
     for (const d of snap.docs) {
       if (!d.exists) continue;
@@ -632,7 +759,10 @@ async function connect() {
 
 render();
 ALL_QS.forEach((q) => paint(q.id));
+tally();
 connect();
+requestAnimationFrame(scrollToHash);
+window.addEventListener('hashchange', scrollToHash);
 setupDownload();
 </script>
 

@@ -436,13 +436,57 @@ pub fn home_biome(material: Material) -> Option<Biome> {
         | Material::Stone
         | Material::Ore
         | Material::Tilled
-        | Material::Workbench => Biome::Fields,
+        | Material::Workbench
+        | Material::Carpenter
+        | Material::DraftingTable
+        | Material::Grinder
+        | Material::Mixer
+        | Material::Sticks => Biome::Fields,
         Material::JungleGrass => Biome::Jungle,
         Material::Sand => Biome::Beach,
+        // Desert sand (`sand-tiles` design 5): the desert sheet's top.
+        Material::DesertSand => Biome::Desert,
         Material::Rock | Material::Forge => Biome::Mountains,
         Material::Snow => Biome::Tundra,
         Material::Water | crate::flowing_water!() => Biome::Ocean,
+        // The sea's cells (`ocean-environments` B24): the ocean's, and each
+        // drawn from its own sheet ([`own_sheet`]), which no biome names.
+        Material::ReefRock | Material::SeaIce | Material::Basalt | Material::MusselBed => {
+            Biome::Ocean
+        }
     })
+}
+
+/// What a dug sand layer yields (`sand-tiles` design 5 (c)): generated sand
+/// in a cell whose biome is the desert is desert sand; generated sand
+/// anywhere else, and every placed sand, is sand. Generation is untouched:
+/// a desert's column still holds [`Material::Sand`], and the difference is
+/// made here, at the dig. Placed desert sand yields itself without asking.
+pub fn dug_sand(terrain: &TerrainConfig, direction: Vec3, placed: bool) -> Material {
+    if placed {
+        return Material::Sand;
+    }
+    let surface = surface_m(terrain, direction);
+    if planet_gen::biome_at(terrain, direction, surface) == Biome::Desert {
+        Material::DesertSand
+    } else {
+        Material::Sand
+    }
+}
+
+/// The tileset a block is ALWAYS drawn from, generated or placed, when it is
+/// not a biome's (`ocean-environments` B24): the name of its sheet. The sea's
+/// cells are drawn as an existing render code from their own sheet, as ore
+/// is drawn as stone with flecks, so the column's four-bit material word
+/// need not widen. `None` for every other block, which takes its biome's
+/// sheet where generated and [`home_biome`]'s where placed.
+pub fn own_sheet(material: Material) -> Option<&'static str> {
+    match material {
+        Material::ReefRock | Material::MusselBed => Some("ocean"),
+        Material::SeaIce => Some("frozen_wastes"),
+        Material::Basalt => Some("basalt_wastes"),
+        _ => None,
+    }
 }
 
 pub fn generate_edited(
@@ -457,8 +501,11 @@ pub fn generate_edited(
     // A river's valley and its levee are sealed rock down to well under its
     // water (`water-flow` E16): a cave opening under a river would drain it
     // into the cave, and its water would run on underground forever.
-    let sealed =
-        crate::rivers::sealed_from(terrain, direction).map(|floor| (floor, column.clone()));
+    // A version 11 swamp is sealed the same way, its top `SWAMP_SEAL_M`
+    // (`swamps` decision 3): a cave under it would drain its pools.
+    let sealed = crate::rivers::sealed_from(terrain, direction)
+        .or_else(|| swamp_sealed_from(terrain, direction))
+        .map(|floor| (floor, column.clone()));
     carve_worms(&mut column, worms, field, terrain, direction, crust);
     if let Some((floor, solid)) = sealed {
         for (index, layer) in column.layers.iter_mut().enumerate() {
@@ -469,6 +516,15 @@ pub fn generate_edited(
     }
     apply_edits(&mut column, edits);
     column
+}
+
+/// Where a version 11 swamp's ground is sealed from caves: `SWAMP_SEAL_M`
+/// under its surface. `None` off the swamp and for every earlier version.
+fn swamp_sealed_from(terrain: &TerrainConfig, direction: Vec3) -> Option<f32> {
+    terrain.swamps.as_ref()?;
+    let surface = planet_gen::surface_altitude(terrain, direction);
+    (planet_gen::biome_at(terrain, direction, surface) == Biome::Swamp)
+        .then(|| surface.floor() - planet_gen::SWAMP_SEAL_M)
 }
 
 /// How many layers under a town's ground no cave opens (survey T14,
@@ -530,6 +586,10 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
     if depth_m <= SOIL_DEPTH_M {
         return match top {
             Material::Sand => Material::Sand,
+            // A reef is built of its rock; a vent's beds lie on basalt
+            // (`ocean-environments` B24).
+            Material::ReefRock => Material::ReefRock,
+            Material::Basalt | Material::MusselBed => Material::Basalt,
             Material::Snow | Material::Rock | Material::Stone => Material::Stone,
             _ => Material::Soil,
         };
@@ -611,6 +671,14 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
             layers[i] = material;
         }
     }
+    // Sea ice standing on polar water (generator version 14,
+    // `ocean-environments` B24): one cell from the sea's level up.
+    if crate::ocean::cells::sea_ice(terrain, direction, surface_m)
+        && let Some(i) = layer_at(terrain.sea_level_m + 0.5)
+        && layers[i] == Material::Air
+    {
+        layers[i] = Material::SeaIce;
+    }
     // A town's street lamp or lantern (`cities-in-the-world` task 5.2), in
     // the air over its cell. A lamp is walked through, so it blocks no lane.
     if let Some(lamp) = crate::settlement::ground::lamp(terrain, direction)
@@ -618,6 +686,14 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
         && layers[i] == Material::Air
     {
         layers[i] = lamp.material;
+    }
+    // A lantern post beside a road near a town (`townsfolk` design 34), as
+    // a town's street lamp.
+    if let Some(altitude) = crate::roads::lamp(direction)
+        && let Some(i) = layer_at(altitude + 0.5)
+        && layers[i] == Material::Air
+    {
+        layers[i] = Material::LanternPost;
     }
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
@@ -889,7 +965,10 @@ mod tests {
             }
             let column = generate(&worms, &FIELD, &TERRAIN, d);
             let top = column.surface().expect("land has a solid layer");
-            let top_m = layer_altitude(top) + 1.0;
+            // A swamp's pool (`swamps` decision 3) stands in the top layer,
+            // the ground a layer under it: the pool's water is the top.
+            let pool = planet_gen::top_material(&TERRAIN, d, surface_m.floor()) == Material::Water;
+            let top_m = layer_altitude(top) + if pool { 2.0 } else { 1.0 };
             assert!(
                 top_m <= surface_m + 1.0,
                 "the carve never raises the ground"

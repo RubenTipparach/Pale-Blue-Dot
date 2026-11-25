@@ -82,7 +82,7 @@ template{display:none}
   <header>
     <h1>Fish Behaviour</h1>
     <button class="info" data-info="about-page" aria-label="About this mockup">i</button>
-    <p class="tracker"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a> · M37</p>
+    <p class="tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a> · M37</p>
   </header>
 
   <div class="bar tabs seg" role="tablist" aria-label="Views">
@@ -199,8 +199,13 @@ template{display:none}
     <li><b>The mouth stays on the lure and the body swings round it</b>, instead of the body's centre being glued to the lure.</li>
     <li><b>Running</b>: head away from the rod along the line, diving a little, crossing with the line's swing; tail at full beat.</li>
     <li><b>Being reeled</b>: the hook turns the head toward the rod; the fish shakes its head and rolls from side to side, flashing its flank.</li>
-    <li>Turning between the two is eased and rate-limited, so a change from run to rest is a turn, not a flip.</li>
+    <li>Turning between the two is eased and rate-limited, so a change from run to rest is a turn, not a flip. The turn rate itself builds up and dies away (at most 1200 deg/s a second, up to 300 deg/s), so a turn never starts or stops in one frame.</li>
+    <li>The head shake and the flash fade in when reeling starts and out when a run starts (0.35 s), and run on the frame&rsquo;s own clock, not the line&rsquo;s 30 Hz step. A shake turns the body about the mouth, so the mouth stays on the lure.</li>
+    <li>The float is drawn as the game now draws it (<code>DrawnFloat</code>): the line puts the float&rsquo;s swing on or off in one step when a run starts or stops, a jump of up to a metre at 9 m of line, and that jump is eased out over about a third of a second instead of carrying the fish with it.</li>
   </ul>
+  <h3>Today&rsquo;s snaps are the game&rsquo;s</h3>
+  <p>Today is the game as this mockup was first made, before <code>movement-smoothness</code>: the fish is turned along the float&rsquo;s last 30 Hz step, so it flips end for end as the float stops and starts, and the float and fish jump sideways when a run starts or stops. Those are the faults being shown, not bugs in the page. The game has since eased the float&rsquo;s jump and the fish&rsquo;s heading; Proposed includes the float easing.</p>
+  <p>The angler in the replay gives line through a run and, in a rest, reels to a tension of 0.85, then waits for 0.6 before reeling again.</p>
   <p>All draw side: <code>Line</code>'s run, tension and stamina are read, never changed.</p>
 </template>
 

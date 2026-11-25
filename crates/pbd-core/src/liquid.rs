@@ -177,6 +177,18 @@ fn offered(level: u8, falling: bool, place: usize, current: i8) -> i8 {
 /// One cell's update from its eight neighbours (`None` is off the region or
 /// a pentagon's missing side, and is neutral).
 pub fn transform(here: Cell, around: &[Option<Cell>; 8], rules: Rules) -> Outcome {
+    transform_at(here, around, rules, false)
+}
+
+/// [`transform`] for a cell that may be the sea's (`dry-holes` design 4):
+/// `sea` is true where the cell is under the sea's level and joined to the
+/// sea there. Such a cell that would be water at the top level and is not
+/// falling (it stands on something: rock, or a source) is a source: the sea
+/// has water without end, so what it feeds under its own level fills to it,
+/// as a river's reach is held at its level by its sources. Water falling
+/// into it still falls, and the rule is otherwise Luanti's: with `sea`
+/// false this is [`transform`] exactly.
+pub fn transform_at(here: Cell, around: &[Option<Cell>; 8], rules: Rules, sea: bool) -> Outcome {
     let mut out = Outcome::new();
     if here == Cell::Neutral {
         return out;
@@ -218,7 +230,9 @@ pub fn transform(here: Cell, around: &[Option<Cell>; 8], rules: Rules) -> Outcom
             }
             max
         };
-        if level >= lowest {
+        if sea && level == LEVEL_MAX as i8 && !falling {
+            Cell::Source
+        } else if level >= lowest {
             Cell::Flowing {
                 level: level as u8,
                 falling,
@@ -242,6 +256,12 @@ pub fn transform(here: Cell, around: &[Option<Cell>; 8], rules: Rules) -> Outcom
                 out.push(place);
             }
         }
+        // The sea rises: a source it made under its level looks at the cell
+        // over it, so a fall standing on the filling sea fills from its foot
+        // up, and the air over a filled layer is looked at for the next.
+        if sea && new == Cell::Source && (flows[UP] || airs[UP]) {
+            out.push(UP);
+        }
     } else {
         // This water has gone, so the flowing water it fed may follow.
         for (place, &flow) in flows.iter().enumerate() {
@@ -261,6 +281,11 @@ pub trait Grid {
     fn set(&mut self, at: u32, cell: Cell);
     /// Its eight neighbours, `None` off the region.
     fn around(&self, at: u32) -> [Option<u32>; 8];
+    /// Whether the cell is under the sea's level and joined to the sea there
+    /// ([`transform_at`]). No sea by default.
+    fn sea(&self, _at: u32) -> bool {
+        false
+    }
 }
 
 /// The cells waiting to be looked at, in the order they were queued: Luanti's
@@ -323,7 +348,7 @@ impl Queue {
             self.waiting.remove(&at);
             let ids = grid.around(at);
             let cells = ids.map(|id| id.map(|id| grid.cell(id)));
-            let outcome = transform(grid.cell(at), &cells, rules);
+            let outcome = transform_at(grid.cell(at), &cells, rules, grid.sea(at));
             if let Some(cell) = outcome.changed {
                 grid.set(at, cell);
                 changed.push((at, cell));
@@ -399,6 +424,52 @@ mod tests {
             cells[place] = Some(cell);
         }
         cells
+    }
+
+    /// `dry-holes` design 4: under the sea's level, joined to it, water fed
+    /// by a source or a fall and standing on something is the sea's own
+    /// source; water with air under it falls as it did; and off the sea the
+    /// rule is Luanti's, a lone source making flowing water only.
+    #[test]
+    fn the_sea_fills_what_it_feeds_and_falls_over_a_lip() {
+        let rules = Rules::default();
+        // Air on rock beside one source.
+        let fed = around(&[(SIDE, Cell::Source), (DOWN, Cell::Neutral)]);
+        assert_eq!(
+            transform_at(Cell::Air, &fed, rules, true).changed,
+            Some(Cell::Source)
+        );
+        assert_eq!(
+            transform_at(Cell::Air, &fed, rules, false).changed,
+            Some(F7)
+        );
+        assert_eq!(transform(Cell::Air, &fed, rules).changed, Some(F7));
+        // Over open air: it falls, sea or not.
+        let lip = around(&[(SIDE, Cell::Source), (DOWN, Cell::Air)]);
+        assert_eq!(
+            transform_at(Cell::Air, &lip, rules, true).changed,
+            Some(flowing(7, true))
+        );
+        // At a fall's foot: the fall's water fills the floor.
+        let foot = around(&[(UP, flowing(7, true)), (DOWN, Cell::Neutral)]);
+        assert_eq!(
+            transform_at(Cell::Air, &foot, rules, true).changed,
+            Some(Cell::Source)
+        );
+        // Standing on the sea's water under the fall: a source too, so the
+        // fall fills from its foot up.
+        let filling = around(&[(UP, flowing(7, true)), (DOWN, Cell::Source)]);
+        assert_eq!(
+            transform_at(flowing(7, true), &filling, rules, true).changed,
+            Some(Cell::Source)
+        );
+        // Water a level down, spreading from flowing water only, stays
+        // flowing: the sea's clause takes only what a source or a fall feeds.
+        let spread = around(&[(SIDE, F7), (DOWN, Cell::Neutral)]);
+        assert_eq!(
+            transform_at(Cell::Air, &spread, rules, true).changed,
+            Some(flowing(6, false))
+        );
     }
 
     /// E11: an empty bucket takes a source and only a source; a full one

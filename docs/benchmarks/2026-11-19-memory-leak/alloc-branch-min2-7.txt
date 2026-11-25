@@ -1,0 +1,84 @@
+  32194 allocs    9822.2 MiB (mean 0.31 MiB)
+        Ge::bevy_mesh::vertex::MeshAttributeData::core::clone::Clone::clone + 232
+        G::OBAAF_8be::world::World::resource_scope::XKqFagj_11bevy_render12render_asset35CachedExtractRend::mesh::RenderMesh::extract_render_asset::n_ + 1736
+        G::OBAAF_8be::system::function_system::FunctionSystem::commands::Commands::change_detection::params::ResMut::XKqFagj_11bevy_render9MainWorldEEuuuINvNtB2o_12rend
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::futures_lite::future::CatchUnwind::core::panic::unwind_safe::AssertUnwindSafe::NtN::G::O
+        NtCsh::futures_lite::future::Or::HVt::o_10bevy_tasks9task_poolNtB19_8TaskPool12new_internal00000INtCsjCGoVdiC99u_13async_channel4RecvuEEN::A9kWdlgT::async_execu
+   6206 allocs    1915.3 MiB (mean 0.31 MiB)
+        Ge::bevy_mesh::vertex::MeshAttributeData::core::clone::Clone::clone + 232
+        G::OBAAF_8be::world::World::resource_scope::XKqFagj_11bevy_render12render_asset35CachedExtractRend::mesh::RenderMesh::extract_render_asset::n_ + 1736
+        G::OBAAF_8be::system::function_system::FunctionSystem::commands::Commands::change_detection::params::ResMut::XKqFagj_11bevy_render9MainWorldEEuuuINvNtB2o_12rend
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::futures_lite::future::CatchUnwind::core::panic::unwind_safe::AssertUnwindSafe::NtN::G::O
+        BKTri5B3M::std::sys::thread::unix::Thread::new::thread_start + 408
+    469 allocs    1214.2 MiB (mean 2.59 MiB)
+        pbd_app::planet::lod::record + 2732
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::planet::lod::generate_fine_live_on::core::ops::function::FnOnce::call_once::vtable::d + 60
+        BKTri5B3M::std::sys::thread::unix::Thread::new::thread_start + 408
+    264 allocs     693.0 MiB (mean 2.62 MiB)
+        pbd_app::planet::lattice::Lattice::cells_in_band + 2608
+        pbd_app::planet::lod::lay_band + 296
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::planet::lod::generate_fine_live_on::b::Band::core::ops::function::FnOnce::call_once::vtable::f + 10
+        BKTri5B3M::std::sys::thread::unix::Thread::new::thread_start + 408
+      9 allocs     679.6 MiB (mean 75.52 MiB)
+        pbd_core::river_cache::write + 148
+        pbd_core::rivers::save_caches + 736
+        pbd_app::river_fill::save + 40
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::river_fill::save_now_and_then::core::ops::function::FnOnce::call_once::vtable + 84
+        BKTri5B3M::std::sys::thread::unix::Thread::new::thread_start + 408
+     99 allocs     673.9 MiB (mean 6.81 MiB)
+        pbd_app::planet::lod::generate_fine_live + 1516
+        A9kWdlgT::async_executor::AsyncCallOnDrop::pbd_app::planet::lod::refresh_lod::B5_::Executor::spawn_inner::alloc::sync::Arc::FineSet::contact::PreparedFine::boun
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::pbd_app::planet::lod::refresh_lod::BS_::Executor::spawn_inner::alloc::sync::Arc::H::Fine
+        NtCsh::futures_lite::future::Or::HVt::o_10bevy_tasks9task_poolNtB19_8TaskPool12new_internal00000INtCsjCGoVdiC99u_13async_channel4RecvuEEN::A9kWdlgT::async_execu
+        Nt::BKTri5B3M::std::thread::local::LocalKey::core::cell::RefCell::parking::Parker::task::wake::Waker::with::futures_lite::future::block_on::result::Result::u_13
+     80 allocs     461.2 MiB (mean 5.77 MiB)
+        NtN::alloc::collections::vec_deque::VecDeque::grow::pbd_core + 24
+        pbd_core::light::bake + 572
+        pbd_app::planet::column::ColumnTier::relight + 1048
+        pbd_app::planet::column::build_with + 5068
+        pbd_app::river_band::build + 2956
+      9 allocs     343.3 MiB (mean 38.15 MiB)
+        T0PsFNyuo_8pbd_core11river_cacheINtB4_4MemoAmj4_f::entries + 120
+        pbd_core::river_cache::write + 840
+        pbd_core::rivers::save_caches + 736
+        pbd_app::river_fill::save + 40
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::river_fill::save_now_and_then::core::ops::function::FnOnce::call_once::vtable + 84
+    187 allocs     336.9 MiB (mean 1.80 MiB)
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::planet::lod::generate_fine_live_on::core::ops::function::FnOnce::call_once::vtable::d + 60
+        BKTri5B3M::std::sys::thread::unix::Thread::new::thread_start + 408
+     35 allocs     267.9 MiB (mean 7.65 MiB)
+        umdL8Zl3S::kira::sound::static_sound::data::from_file::StaticSoundData::from_boxed_media_source + 712
+        umdL8Zl3S::kira::sound::static_sound::data::from_file::StaticSoundData::from_file::BKTri5B3M::std::path::Path::pbd_app + 152
+        NtC::pbd_app::audio::Playable::open + 48
+        A9kWdlgT::async_executor::AsyncCallOnDrop::pbd_app::audio::mix_frame::B5_::Executor::spawn_inner::core::result::Result::Playable::alloc::string::String::q_::fut
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::pbd_app::audio::mix_frame::BS_::Executor::spawn_inner::core::result::Result::H::Playable
+      9 allocs     219.8 MiB (mean 24.42 MiB)
+        T0PsFNyuo_8pbd_core11river_cacheINtB4_4MemoAmj3_l::entries + 108
+        pbd_core::river_cache::write + 1372
+        pbd_core::rivers::save_caches + 736
+        pbd_app::river_fill::save + 40
+        BKTri5B3M::std::thread::lifecycle::spawn_unchecked::pbd_app::river_fill::save_now_and_then::core::ops::function::FnOnce::call_once::vtable + 84
+     21 allocs     181.6 MiB (mean 8.65 MiB)
+        NtNtCskC::pbd_app::planet::lod::FineSet::core::clone::Clone::clone + 520
+        pbd_app::water_flow::run_ticks + 100
+        pbd_app::water_flow::tick_water + 392
+        G::OBAAF_8be::system::function_system::FunctionSystem::change_detection::params::Res::n2MQBvc7Y_9bevy_time4time4TimeEINtB1k_6ResMutNtNtCskCJ624Yeeli_7pbd_app10w
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::futures_lite::future::CatchUnwind::core::panic::unwind_safe::AssertUnwindSafe::NtN::G::O
+     21 allocs     181.6 MiB (mean 8.65 MiB)
+        pbd_app::planet::contact::FineTier::new + 128
+        pbd_app::water_flow::run_ticks + 1184
+        pbd_app::water_flow::tick_water + 392
+        G::OBAAF_8be::system::function_system::FunctionSystem::change_detection::params::Res::n2MQBvc7Y_9bevy_time4time4TimeEINtB1k_6ResMutNtNtCskCJ624Yeeli_7pbd_app10w
+        N::async_task::raw::RawTask::A9kWdlgT::async_executor::AsyncCallOnDrop::futures_lite::future::CatchUnwind::core::panic::unwind_safe::AssertUnwindSafe::NtN::G::O
+     66 allocs     173.2 MiB (mean 2.62 MiB)
+        NtN::alloc::collections::vec_deque::VecDeque::grow::pbd_core + 24
+        pbd_core::light::bake + 572
+        pbd_app::planet::column::ColumnTier::relight + 1048
+        pbd_app::planet::column::build_with + 5068
+        pbd_app::planet::lod::generate_fine_live + 1956
+     60 allocs     157.5 MiB (mean 2.62 MiB)
+        NtN::alloc::collections::vec_deque::VecDeque::grow::pbd_core + 24
+        pbd_core::light::bake + 572
+        pbd_app::planet::column::ColumnTier::relight + 1048
+        pbd_app::desktop::digging::apply_edit (digging.rs:463)
+        pbd_app::desktop::digging::dig_and_place (digging.rs:720)

@@ -58,3 +58,13 @@
         `LATE_PIPELINE`; `READY` before and after; a test that the map shows
         its proxies once.
 - [ ] 5.4 The step's video, for the owner's batch.
+- [x] 5.5 Decision 9: `show_unseen` never proxies a skinned mesh (code
+  written 2026-11-20; build, then a load beside a beaver colony, still owed).
+- [x] 5.6 The critters draw only after `READY`; a test forces their rigs into
+  the warm-up and pins that no skinned mesh is drawn without its skin.
+- [x] 5.7 Playtest with `PBD_FORCE_CRITTERS=1` (owner, 2026-11-21: "Playtest
+  with the critters force spawned"): one of each animal kept drawn ahead of
+  the eye, a test instrument only, while worlds are made and loaded from the
+  menu; the game must not crash. Done 2026-11-21 on the desktop: seven
+  world loads (three saves loaded, two new worlds, and the launch) each begun
+  with the three animals drawn ahead of the eye; no crash, no late pipeline.

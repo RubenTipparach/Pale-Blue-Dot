@@ -177,10 +177,11 @@ pub struct WaterSettings {
     pub emerge_dry_s: f32,
     /// Radial scroll speed of the wave field on vertical water faces.
     pub flow_uv_speed_falling: f32,
-    /// How far the tide rises and falls at one place over a day, m, from the
-    /// body's moon (`ocean-environments` design 10): 3 on Tenebris, nought
-    /// for no tide.
-    pub tide_range_m: f32,
+    /// Retired (`no-tides`): the sea's tide range, which an older
+    /// `water.ron` still names. Read and thrown away, so such a file still
+    /// loads; nothing reads it.
+    #[serde(rename = "tide_range_m")]
+    retired_tide_range_m: serde::de::IgnoredAny,
     /// How fast the wave normal and crest foam fade as the fbm's features fall
     /// under a pixel: the gradient is scaled by `1 / (1 + footprint * fade)`
     /// where footprint is the per-pixel change of the noise coordinate. Zero
@@ -238,6 +239,30 @@ pub struct FallLook {
     pub ripple_height: f32,
     pub ripple_length_m: f32,
     pub ripple_reach_m: f32,
+    /// The foot's ripples need depth (owner, 2026-11-17: "this water is too
+    /// shallow for ripples"): none where the pool under the foot is this
+    /// deep or less, m, fading in (smoothstep) to full at
+    /// `ripple_depth_full_m`. The landing cell under a fall is drawn full, so
+    /// one layer of water reads 1 m.
+    pub ripple_depth_none_m: f32,
+    pub ripple_depth_full_m: f32,
+    /// The mist scales with the fall's size (owner, 2026-11-17: "the mist
+    /// should be 50% at this size"): the puffs' opacity is this share at a
+    /// drop `D` of `mist_small_drop_m` or less, rising (smoothstep) to the
+    /// approved look at `mist_full_drop_m` and over. Proposed rule only.
+    pub mist_small_scale: f32,
+    /// No mist at all on a drop `D` under this, m (owner, 2026-11-17:
+    /// "actually no steam/mist at all for drops that are less than 1 block
+    /// height"): none emitted. A fall crossing it fades its mist in or out
+    /// over `splash_fade_s`, in time.
+    pub mist_none_below_m: f32,
+    /// And fewer particles on a small fall (owner, 2026-11-17: "less
+    /// particles for these shallow drops too"): the count of mist puffs,
+    /// spray drops, fall droplets and bubbles is this share at the small
+    /// drop, by the same ramp. Proposed rule only.
+    pub particles_small_scale: f32,
+    pub mist_small_drop_m: f32,
+    pub mist_full_drop_m: f32,
     /// The pool's flow away from the foot, a multiplier on its speed (zero:
     /// none), and how far out it reaches, m.
     pub pool_flow: f32,
@@ -278,6 +303,13 @@ impl Default for FallLook {
             ripple_height: 0.5,
             ripple_length_m: 0.9,
             ripple_reach_m: 6.0,
+            ripple_depth_none_m: 1.0,
+            ripple_depth_full_m: 2.0,
+            mist_small_scale: 0.5,
+            particles_small_scale: 0.35,
+            mist_none_below_m: 1.0,
+            mist_small_drop_m: 1.5,
+            mist_full_drop_m: 4.0,
             pool_flow: 0.1,
             pool_flow_reach_m: 6.0,
             glassy: true,
@@ -306,6 +338,9 @@ impl Validated for FallLook {
                 s.teal_churn,
                 s.fall_speed_up,
                 s.ripple_height,
+                s.ripple_depth_none_m,
+                s.mist_small_drop_m,
+                s.mist_none_below_m,
                 s.pool_flow,
                 s.edge_highlight,
             ],
@@ -326,6 +361,24 @@ impl Validated for FallLook {
             ],
         )?;
         unit("falls.glass_tint", s.glass_tint)?;
+        unit("falls.mist_small_scale", s.mist_small_scale)?;
+        unit("falls.particles_small_scale", s.particles_small_scale)?;
+        (s.ripple_depth_full_m > s.ripple_depth_none_m)
+            .then_some(())
+            .ok_or_else(|| {
+                format!(
+                    "falls.ripple_depth_full_m ({}) must exceed ripple_depth_none_m ({})",
+                    s.ripple_depth_full_m, s.ripple_depth_none_m
+                )
+            })?;
+        (s.mist_full_drop_m > s.mist_small_drop_m)
+            .then_some(())
+            .ok_or_else(|| {
+                format!(
+                    "falls.mist_full_drop_m ({}) must exceed mist_small_drop_m ({})",
+                    s.mist_full_drop_m, s.mist_small_drop_m
+                )
+            })?;
         (s.bubbles.is_finite() && (0.0..=2.0).contains(&s.bubbles))
             .then_some(())
             .ok_or_else(|| format!("falls.bubbles must be within 0..=2, got {}", s.bubbles))?;
@@ -382,7 +435,7 @@ impl Default for WaterSettings {
             partial_band_m: 0.8,
             emerge_dry_s: 2.6,
             flow_uv_speed_falling: 1.0,
-            tide_range_m: 3.0,
+            retired_tide_range_m: serde::de::IgnoredAny,
             detail_fade: 4.0,
             falls: FallLook::default(),
         }
@@ -416,7 +469,6 @@ impl Validated for WaterSettings {
                 s.partial_band_m,
                 s.emerge_dry_s,
                 s.flow_uv_speed_falling,
-                s.tide_range_m,
                 s.detail_fade,
             ],
         )?;
@@ -1606,6 +1658,14 @@ impl Validated for pbd_core::husbandry::HusbandrySettings {
     }
 }
 
+/// How the beavers and otters move (`crate::critters`), from
+/// `creature_motion.ron`.
+impl Validated for crate::critters::motion::CreatureMotion {
+    fn validate(&self) -> Result<(), String> {
+        crate::critters::motion::CreatureMotion::validate(self)
+    }
+}
+
 /// Every land species and how each is kept, loaded once.
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct HusbandryConfig(pub pbd_core::husbandry::HusbandrySettings);
@@ -1630,6 +1690,12 @@ impl Validated for pbd_core::farming::FarmSettings {
 /// The crops' days and yields (`farming.ron`), loaded once.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct FarmConfig(pub pbd_core::farming::FarmSettings);
+
+/// `farming.ron` read again, for what needs the wild plants outside the ECS
+/// (the building planner's whole-site check): the one file, the same rule.
+pub fn farm_settings() -> pbd_core::farming::FarmSettings {
+    load("farming")
+}
 
 impl Validated for pbd_core::station::RecipeFile {
     fn validate(&self) -> Result<(), String> {
@@ -1963,13 +2029,13 @@ impl Reflections {
     /// Low to high: the slider's steps.
     pub const ALL: [Self; 4] = [Self::Off, Self::Low, Self::Medium, Self::High];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Off => "OFF",
-            Self::Low => "LOW",
-            Self::Medium => "MEDIUM",
-            Self::High => "HIGH",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Off => "menu.quality.off",
+            Self::Low => "menu.quality.low",
+            Self::Medium => "menu.quality.medium",
+            Self::High => "menu.quality.high",
+        })
     }
 
     /// From a flag's word.
@@ -2003,13 +2069,13 @@ impl ShadowQuality {
     /// Low to high: the slider's steps.
     pub const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::Ultra];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Low => "LOW",
-            Self::Medium => "MEDIUM",
-            Self::High => "HIGH",
-            Self::Ultra => "ULTRA",
-        }
+    pub fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Low => "menu.quality.low",
+            Self::Medium => "menu.quality.medium",
+            Self::High => "menu.quality.high",
+            Self::Ultra => "menu.quality.ultra",
+        })
     }
 
     /// From a flag's word.
@@ -2173,11 +2239,7 @@ pub struct ConfigPlugin;
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
         let (recipes, kitchen) = recipe_book();
-        let water = load::<WaterSettings>("water");
-        // The high-water line every record reads (`flora-v2` 12.11), before
-        // any record is built.
-        crate::planet::terrain::set_high_water(&water);
-        app.insert_resource(water)
+        app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
@@ -2186,6 +2248,9 @@ impl Plugin for ConfigPlugin {
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
             .insert_resource(HusbandryConfig(load("husbandry")))
+            .insert_resource(crate::critters::CreatureMotionConfig(load(
+                "creature_motion",
+            )))
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(GatherConfig(load("gather")))
@@ -2269,9 +2334,31 @@ mod tests {
     #[cfg(feature = "desktop")]
     const HELD_RON: &str = include_str!("../../../assets/config/held.ron");
 
+    /// `no-tides` design 4: a `water.ron` from before the tide was removed
+    /// still names `tide_range_m`; it loads, and the key is ignored.
+    #[test]
+    fn an_old_water_ron_with_a_tide_still_loads() {
+        let old = WATER_RON.replacen("detail_fade:", "tide_range_m: 3.0,\n    detail_fade:", 1);
+        assert!(old.contains("tide_range_m"));
+        let water: WaterSettings = ron::from_str(&old).unwrap();
+        water.validate().unwrap();
+        assert_eq!(water, WaterSettings::default());
+    }
+
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
     /// test that says which.
+    /// `glowing-mushrooms` design 5: the shipped chance of a glowing
+    /// mushroom is the one `pbd_core::flora`'s digest pins (0.01); moving it
+    /// is a generator version, not an edit to this file.
+    #[test]
+    fn the_glowing_mushroom_chance_is_pinned() {
+        let columns: ColumnSettings =
+            ron::from_str(include_str!("../../../assets/config/column.ron")).unwrap();
+        assert_eq!(columns.glow_flower_chance, 0.01);
+        assert_eq!(ColumnSettings::default().glow_flower_chance, 0.01);
+    }
+
     #[test]
     fn shipped_files_parse_validate_and_agree_with_the_defaults() {
         let water: WaterSettings = ron::from_str(WATER_RON).unwrap();

@@ -13,6 +13,7 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
+use pbd_app::ui_kit::Localized;
 use pbd_app::ui_kit::{self, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
@@ -48,7 +49,10 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
     // (`placed-blocks-keep-material`), so the slot and the block put down are
     // one picture wherever it lands. The tiles are each sheet's layout: #0 its
     // ground, #1 that ground over the earth, #2 the earth, #3 the stone.
-    let sheet = tileset_slot(pbd_core::column::home_biome(material)?);
+    let home = pbd_core::column::home_biome(material)?;
+    // The sea's cells are drawn from a sheet of their own (B24).
+    let sheet = pbd_core::column::own_sheet(material)
+        .map_or_else(|| tileset_slot(home), pbd_app::planet::sheet_index);
     let one = |x: f32, y: f32| BlockArt {
         sheet,
         top: Vec2::new(x, y),
@@ -65,7 +69,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // Grass and dry grass are one render code: the ground draws them alike.
         Material::Grass | Material::DryGrass | Material::JungleGrass => grassy,
         Material::Soil | Material::Dirt => one(2., 0.),
-        Material::Sand | Material::Snow => one(0., 0.),
+        Material::Sand | Material::DesertSand | Material::Snow => one(0., 0.),
         Material::Stone | Material::Rock => one(3., 0.),
         Material::Ore => one(0., 1.),
         Material::Water | pbd_core::flowing_water!() => one(2., 2.),
@@ -81,7 +85,17 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench => one(1., 3.),
+        Material::Workbench | Material::Carpenter | Material::DraftingTable => one(1., 3.),
+        // The gravel stations (`townsfolk` design 41): their blocks are the
+        // workbench's timber; their slots draw their own pictures.
+        Material::Grinder | Material::Mixer => one(1., 3.),
+        // The sea's cells (`ocean-environments` B24), each its sheet's tile
+        // all round, as the ground draws it.
+        Material::ReefRock | Material::Basalt => one(3., 0.),
+        Material::SeaIce => one(2., 1.),
+        Material::MusselBed => one(3., 1.),
+        // A beaver's sticks (B25): the meadow sheet's bark.
+        Material::Sticks => one(2., 1.),
         Material::Air
         | Material::Torch
         | Material::LanternPost
@@ -126,6 +140,13 @@ pub struct ItemIcons {
     pub forge: Handle<Image>,
     /// The workbench's, M3's (`tool-crafting`).
     pub workbench: Handle<Image>,
+    /// The carpenter's bench's (`furniture` design 1).
+    pub carpenter: Handle<Image>,
+    /// The drafting table's (`building-planner` design 3).
+    pub drafting: Handle<Image>,
+    /// The grinder's and the mixer's (`townsfolk` design 41).
+    pub grinder: Handle<Image>,
+    pub mixer: Handle<Image>,
     /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
     /// draws as iron until it is made. The rod's three are the rod.
     pub tiered: Vec<[Handle<Image>; 3]>,
@@ -177,7 +198,10 @@ pub fn load_icons(
         .iter()
         .map(|species| assets.load(pbd_app::fish::species_icon(species)))
         .collect();
-    let fish_names = roster.iter().map(|species| species.name.clone()).collect();
+    let fish_names = roster
+        .iter()
+        .map(|species| species.name().into_string())
+        .collect();
     let tools = pbd_core::inventory::Tool::ALL
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
@@ -199,6 +223,10 @@ pub fn load_icons(
             .collect(),
         forge: assets.load("items/stations/forge.png"),
         workbench: assets.load("items/stations/workbench.png"),
+        carpenter: assets.load("items/stations/carpenter.png"),
+        drafting: assets.load("items/stations/drafting-table.png"),
+        grinder: assets.load("items/stations/grinder.png"),
+        mixer: assets.load("items/stations/mixer.png"),
         tiered: pbd_core::inventory::Tool::ALL
             .iter()
             .map(|tool| {
@@ -210,6 +238,11 @@ pub fn load_icons(
             .collect(),
     });
 }
+
+/// The hotbar row, which build mode hides while its palette stands in it
+/// (`player-building` design B5).
+#[derive(Component)]
+pub struct HotbarRow;
 
 /// Marks the slot at this index, so the update can find it without a lookup.
 #[derive(Component)]
@@ -224,8 +257,8 @@ pub struct SlotCount(pub usize);
 /// A slot, native pixels: the dressed-stone well of `slot-idle` (24 x 24)
 /// with its 16 px icon floor at 4, 4, the item PNGs' own size.
 pub const SLOT: f32 = 24.0;
-const ICON_AT: f32 = 4.0;
-const ICON: f32 = 16.0;
+pub const ICON_AT: f32 = 4.0;
+pub const ICON: f32 = 16.0;
 /// The hotbar row stands this far off the bottom of the window.
 pub const HOTBAR_BOTTOM: f32 = 10.0;
 
@@ -270,6 +303,7 @@ pub fn spawn(
                 ..default()
             },
             super::menu::InPlayHud,
+            HotbarRow,
         ))
         .with_children(|row| {
             for index in 0..SLOTS {
@@ -321,7 +355,7 @@ pub fn cell(
         cell.spawn((
             // In the slot's bottom-right corner, over the rim rather than the
             // icon, outlined in ink so it reads on any tile.
-            KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+            KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(1),
@@ -347,6 +381,10 @@ pub fn paint_icon(
         Item::Tool(tool) => Some(items.tool(tool)),
         Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(Material::Workbench) => Some(items.workbench.clone()),
+        Item::Block(Material::Carpenter) => Some(items.carpenter.clone()),
+        Item::Block(Material::DraftingTable) => Some(items.drafting.clone()),
+        Item::Block(Material::Grinder) => Some(items.grinder.clone()),
+        Item::Block(Material::Mixer) => Some(items.mixer.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
             .position(|&light| light == material)
@@ -392,26 +430,27 @@ pub fn paint_icon(
 
 /// What a slot's tooltip says: nothing for an empty slot; a tool's name and
 /// what it is for; a fish's species; a block's name and how many.
-pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> String {
+pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> Localized {
     let Some(stack) = stack else {
-        return String::new();
+        return Localized::empty();
     };
     let name = match stack.item {
-        Item::Tool(tool) => return format!("{}: {}", tool.name(), tool.purpose()),
+        Item::Tool(tool) => {
+            return pbd_core::locale::tr_with(
+                "slots.tool_tip",
+                &[("tool", &tool.name()), ("purpose", &tool.purpose())],
+            );
+        }
         Item::Fish(species) => items
             .fish_names
             .get(species as usize)
-            .cloned()
-            .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) | Item::Good(_) => stack.item.name().into(),
+            .map(|name| Localized::verbatim(name.clone()))
+            .unwrap_or_else(|| stack.item.name()),
+        Item::Block(_) | Item::Good(_) => stack.item.name(),
     };
-    let mut letters = name.chars();
-    let name = letters
-        .next()
-        .map(|first| first.to_uppercase().chain(letters).collect::<String>())
-        .unwrap_or_default();
+    let name = pbd_core::locale::sentence(&name);
     if stack.count > 1 {
-        format!("{name} x {}", stack.count)
+        pbd_core::locale::tr_with("slots.many", &[("name", &name), ("count", &stack.count)])
     } else {
         name
     }
@@ -472,8 +511,8 @@ pub fn update(
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;
@@ -489,6 +528,7 @@ pub fn input(
     menu: Option<Res<pbd_app::controls::MenuOpen>>,
     mut picker: super::equipment::PickerWheel,
     mut slots: ResMut<Hotbar>,
+    road_menu: Option<ResMut<pbd_app::roads::planner::PlannerMenu>>,
 ) {
     // A menu holds the keyboard, so the number row does not change what you
     // are holding while you read the bindings. The wheel is still DRAINED
@@ -532,6 +572,13 @@ pub fn input(
     // While G is held the picker has the wheel, and the slots and the zoom
     // do not see it.
     if picker.take(step) {
+        return;
+    }
+    // While X is held with stakes in hand the road planner's menu has it.
+    if let Some(mut menu) = road_menu
+        && menu.open
+    {
+        menu.step += step;
         return;
     }
     if walking && step != 0 && !held {
@@ -628,6 +675,10 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            carpenter: Handle::default(),
+            drafting: Handle::default(),
+            grinder: Handle::default(),
+            mixer: Handle::default(),
             tiered: Vec::new(),
         };
         assert_eq!(stack_tip(None, &items), "");

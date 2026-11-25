@@ -133,10 +133,7 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
         .shipyard
         .iter()
         .flat_map(|y| [(y.x, y.z), (y.planks[0], y.planks[2])]);
-    let cog = template
-        .cog
-        .iter()
-        .flat_map(super::pieces::cog::plan_points);
+    let cog = template.cog.iter().flat_map(cog_plan_points);
     for (x, z) in things.chain(yard).chain(cog) {
         for (dx, dz) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)] {
             out.insert(cell_at(x + dx, z + dz, cell_m));
@@ -144,6 +141,29 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     }
     let (nc, nr) = (template.grid.columns, template.grid.rows);
     out.retain(|&(c, r)| c >= 0 && r >= 0 && c < nc && r < nr);
+    out
+}
+
+/// The cog's hull's length and beam, m: the ship piece's (`sail-the-cog`)
+/// as it was cut until `retire-rowboat-and-cog`. The ship is no longer cut,
+/// but the cells under where it lay are laid as before, so a harbour's
+/// ground stays cell for cell what it was.
+const COG_L_M: f32 = 15.0;
+const COG_B_M: f32 = 5.0;
+
+/// Where the cog stood, as the mockup's metres its ship piece covered: its
+/// plan sampled every half metre, for the harbour's cells over the water.
+fn cog_plan_points(cog: &super::Cog) -> Vec<(f32, f32)> {
+    let (ca, sa) = (cog.heading.cos(), cog.heading.sin());
+    let mut out = Vec::new();
+    let (hl, hb) = (COG_L_M / 2.0, COG_B_M / 2.0);
+    let (nl, nb) = ((COG_L_M / 0.5) as i32, (COG_B_M / 0.5) as i32);
+    for i in 0..=nl {
+        for j in 0..=nb {
+            let (lx, lz) = (-hl + i as f32 * 0.5, -hb + j as f32 * 0.5);
+            out.push((cog.x + lx * ca - lz * sa, cog.z + lx * sa + lz * ca));
+        }
+    }
     out
 }
 

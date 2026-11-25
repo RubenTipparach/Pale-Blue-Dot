@@ -146,6 +146,14 @@ tr:last-child td{border-bottom:0}
 .cards.small{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .btnrow{display:flex;flex-wrap:wrap;gap:8px}
 .btnrow .pbtn{padding:8px 12px}
+/* the beavers and otters tab: tunables and the RON they print */
+details.tune{display:grid;gap:6px}
+.tunes{display:grid;gap:3px;max-height:340px;overflow:auto;padding-right:4px}
+.tunes .tblock{font:600 11px var(--mono);color:var(--sky);margin-top:6px}
+.tunes label{display:grid;grid-template-columns:1fr auto;gap:0 8px;font:11px var(--mono);color:var(--muted)}
+.tunes label b{color:var(--amber);font-weight:600}
+.tunes input{grid-column:1/-1;width:100%;accent-color:var(--amber)}
+textarea.ron{width:100%;min-height:200px;resize:vertical;font:11px/1.45 var(--mono);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px}
 </style>
 
 <div class="wrap">
@@ -153,7 +161,7 @@ tr:last-child td{border-bottom:0}
 <header class="top">
   <span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-14</span>
   <h1>Seas, Rivers and Marshes</h1>
-  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace;flex-basis:100%"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace;flex-basis:100%"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
   <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup: the owner's words, the idea, and which art is the game's">About</button>
   <template id="aboutTpl">
   <blockquote>"Draft up mockups for advanced ocean environments" ... "Coral reefs, clams, lobsters, crabs, bottom feeders. More marine life. Octopus, squid, tube worm thingies on vents" ... "Oh yea, rivers are important too, like beavers and dams, kelp forests, marshes" ... "And ducks" <span class="muted">(the owner, 2026-11-14)</span></blockquote>
@@ -165,7 +173,7 @@ tr:last-child td{border-bottom:0}
 
 <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
   <div class="trow sea"><span class="lab">Sea</span><button role="tab" data-tab="sea">Open sea</button><button role="tab" data-tab="coast">Coast and tide</button><button role="tab" data-tab="reef">Coral reef</button><button role="tab" data-tab="kelp">Kelp forest</button><button role="tab" data-tab="polar">Polar sea</button><button role="tab" data-tab="deep">The deep and vents</button><button role="tab" data-tab="wrecks">Trench, caves, wrecks</button></div>
-  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="marsh">Marsh and estuary</button><button role="tab" data-tab="sim">Water sim</button></div>
+  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="critters">Beavers and otters</button><button role="tab" data-tab="marsh">Marsh and estuary</button><button role="tab" data-tab="sim">Water sim</button></div>
   <div class="trow"><span class="lab">Guide</span><button role="tab" data-tab="light">How underwater looks</button><button role="tab" data-tab="life">Water life</button><button role="tab" data-tab="chart">Where they occur</button><button role="tab" data-tab="engine">In the engine</button></div>
 </nav>
 
@@ -174,6 +182,35 @@ tr:last-child td{border-bottom:0}
 <div class="tabpanel" id="tab-sim" role="tabpanel" hidden>
   <h2>Water sim <button class="info" data-help="sim" aria-label="How the water sim works">i</button></h2>
   <div class="envgrid"><div class="stage" data-scene="sim"></div><div class="side" id="simSide" aria-label="Presets and settings"></div></div>
+</div>
+
+<div class="tabpanel" id="tab-critters" role="tabpanel" hidden>
+  <h2>Beavers and otters <button class="info" data-modal="crittersTpl" data-title="Beavers and otters" aria-label="About the beavers and otters: what they do, how they move, and what is today's">i</button></h2>
+  <template id="crittersTpl">
+  <blockquote>"can you improve on beaver and otter animations?" ... "make me a mockup with those two animls running around interacting with env" <span class="muted">(the owner, 2026-11-20)</span></blockquote>
+  <p>A valley stream with a beaver pond, its stick dam and lodge, a muddy bank with an otter slide, aspens and willows, a riffle where trout hold and leap, and the stream's mouth onto a kelp-edged sea. Three animals live in it and choose what to do next on their own, by a seeded draw from what they can do where they are (<code>?seed=</code> changes it): a beaver, a river otter and a sea otter. The buttons start any action at once. The camera never moves on its own: drag to look, wheel to zoom, the views jump to a spot, and <b>Follow</b> (off until pressed) keeps one animal in the middle.</p>
+  <h3>What they do</h3>
+  <dl>
+    <dt>Beaver</dt><dd>Waddles to an aspen, rears up on its hind legs and tail with its forepaws on the trunk and gnaws: every bite a windup (the head draws back and tilts), a held beat, the snap in (chips fly, the notch deepens) and a bounce back. The tree creaks and leans a little back over the cut while the beaver drops and scrambles clear, then falls, slow at first and fastest at the ground, bounces and settles; the stump stays. It gnaws a branch off the crown, drags it in its teeth to the bank (the leafy end trailing on the ground), slides in, swims with only its head and the branch above water (the tail sculling, each part a beat behind), and pushes the branch onto the dam. It slaps the water with its tail (lift, hold, slap: a splash and rings) and dives, comes up by the bank, climbs out and shakes off, the coat dark and shiny until it dries. It also sits up on its tail to groom.</dd>
+    <dt>River otter</dt><dd>Bounds along the ridge (the back arching and stretching, hind feet together, then fore), crouches at the top of the mud slide and slides down on its belly, faster all the way, into the pond. It porpoises in arcs, dives after a trout and takes it, hops onto its rock and eats it in its forepaws a bite a beat, rolls on its back to groom, and rears up to look round, the head turning and holding.</dd>
+    <dt>Sea otter</dt><dd>Rafts on its back in the kelp. It takes its stone from under its foreleg and sets it on its chest, lifts the urchin in both forepaws, holds it, brings it down on the stone (shell bits fly) and bounces, four times, then eats and lets the shell go. It rolls belly down with a flick of the tail and dives, comes up with a new urchin and rolls back; it grooms rolling side to side, rubbing and squeezing its fur; and it sleeps wrapped in a kelp frond, paws up at its face. Its paws hold the urchin only while it forages and eats; grooming, rolling and asleep they are empty.</dd>
+  </dl>
+  <h3>How they move</h3>
+  <p>Each animal is a rig: a body with a hind and a chest part that bend at the spine, a neck and head, four legs of two bones each reaching their feet by inverse kinematics, and a tail of three parts. A gait's phase runs on the distance the animal has moved, not the clock, so a foot on the ground stays where it was put down at any speed: no sliding feet. Every strike (a bite, a slap, a crack, a push) is the animation skill's four stages: windup, anticipation (held), the hit (fastest at contact, the effect on contact) and recoil. The head and tail lag the body (overlapping action). A change of action blends from wherever the pose is, so nothing pops. All of them are flat-shaded low-poly pieces in the page's colours, no outlines, lit by the same sun, sky and lamps as the ground they stand on.</p>
+  <h3>Their bodies, fur and tufts (version 3)</h3>
+  <blockquote>"Some weird geometry poking out from middle of them. Also need textures for both. Some fur tuffs would be nice too" ... "See mining mike how we did that for the wolf" <span class="muted">(the owner, 2026-11-20, on version 2)</span></blockquote>
+  <p>Each animal is now one skin, sculpted the way Mining Mike's Ice Wolf was: bone, muscle and fur as one signed distance field round the rig's joints (the legs, paws, webbed feet, ears, the beaver's teeth and paddle all grown out of it), meshed and cut to about 2,000 triangles, and skinned to the rig's bones, so a leg grows out of the body and nothing stands out of it. Its texture is painted pixel-art fur on its own unwrap (square texels, nearest sampled, Sweaft-64 tones): a darker back, a lighter belly, face and throat, strokes along the fur; the beaver's tail bare and scaled; the sea otter's head pale. Fur tufts on the nape, cheeks, back and the base of the tail ride their bones, trail a move and settle, and clump into wet spikes from a swim until the shake. The aspens have pale bark with dark eyes; Dusk is a warm low sun. The generator is <code>tools/art/critter_sculpt.py</code>.</p>
+  <h3>Arms that move, calmer fur (version 4)</h3>
+  <blockquote>"the arms on beaver and otter should animate when they move or stand up" ... "the fur shaking is cool, but a little over the top, I would want more subtle" ... "do sea otters always need to have the urchin in hand when grooming AND sleeping?" <span class="muted">(the owner, 2026-11-20, on version 3)</span></blockquote>
+  <p>The forelegs are skinned to their own bones now (version 3 gave the forearm and the paw barely half their bone's weight, so the arms read as stiff stubs). Every rear-up has an anticipation (the body sinks, the paws press), then the forepaws leave the ground a beat after the body, wrists hanging, catch up on an arc, carry a little past their mark and settle; going back down they lead, reaching for the ground before the body lands, and the elbows give. The beaver's paws land on the aspen and grip on each bite; sitting up they come to its face and rub; the river otter draws them to its chest to look round and brings the trout to its mouth on its rock. In the walk and the bound each forepaw's wrist flexes as it lifts and opens to reach. Swimming, the beaver holds its forepaws to its chest and kicks with its hind feet; the river otter dog-paddles slowly or treading water and lays its forelegs back when it swims fast or dives. The sea otter's paws rise and fall with its breath, rub and squeeze its belly when it grooms, and hold the urchin only while it forages and eats; its stone goes back under its foreleg. The fur tufts are much quieter by default: a stiffer, better-damped spring, less sway, a smaller wet spike and a gentler shake-off (the <b>Tune</b> sliders under <code>shared</code> still reach version 3's).</p>
+  <h3>Arms that bend the way real ones do, and paddle (version 5)</h3>
+  <blockquote>"bevers cant curl their arms back up like that" ... "otter arms also cannot curl back like that" ... "it happens when they stand upright" ... "swiming animation: arms needs to work like the feet, they should be paddling around" ... "their arms needs to paddle, they look too much like they are stuck in the walk pose when they swim" <span class="muted">(the owner, 2026-11-20, on version 4)</span></blockquote>
+  <p>The joints themselves were right: each foreleg's elbow and wrist turn about the body's side-to-side axis with the same sign on both sides, the elbow swinging the forearm forward and up, the wrist curling the paw down and under. What folded the arms back was the poses. Standing up, the hands were sent to points at or behind the shoulder (in the body's own frame, so with the spine upright they went up toward the chin and the back), which bent the elbows to 160 or 180 degrees; and the wrist held the paw level with the ground, which on an upright body bends it far back over the hand. Now every animal has joint limits (the beaver's elbow 80 degrees, the river otter's 100, the sea otter's 85; the wrists 60 to 70 degrees curled under and 95 to 100 back from in line, a flat paw under an upright forearm being 90), set as sliders, and every pose, blend, overshoot and slider is clamped to them as the joints are set. Upright, the hands hang with gravity, out and down in front of the belly, the elbows partly bent and the paws curled; gnawing, they rest on the bark below the mouth; grooming, the beaver combs its belly and brings its hands to its chin. On their backs the otters' paws rest on the chest toward the chin, curled toward it. Swimming is a pose of its own: the forepaws stroke like the feet (reach forward, pull down and back, recover tucked, left and right in turn, phased against the hind kick), bigger and quicker the faster the animal swims and a gentle tread at rest; nothing of the walk is left on the legs in the water, and the bank blends from one to the other. The debug hook <code>__critters.debug</code> draws each forelimb bone's axes and holds an animal at given joint angles; <code>__critters.LIMB</code> is the largest elbow and wrist each action has reached.</p>
+  <h3>The controls</h3>
+  <p><b>Today</b> shows the animals as the page moves them now (the dam and river tabs): a rigid beaver shuttling on a sine with its feet sliding and its model swapped when it turns, a gnawer bobbing in place, a river otter swaying like a fish on a circle, a sea otter drifting on its back. <b>Proposed</b> is this write-up. <b>Slow &times;0.25</b> slows everything to judge each stage. <b>Show poses</b> freezes each animal's current action on its keyed poses in turn (windup, anticipation, hit, recoil; contact, down, passing and up for a gait). <b>Tune</b> has a slider for every tunable, in its units, and prints the <code>creature_motion.ron</code> block they make. The time of day runs from midnight to midnight: at night a lantern on the beavers' bank, the fishing camp's lamp and fire at the mouth, a boat's lantern by the kelp and the fireflies light what is near them; the moon stays dim.</p>
+  <p class="honest"><b>Proposal, not built.</b> The write-up is <code>openspec/changes/ocean-environments</code> design B28 (today's motion measured, the stages, the tunables) and task group 20. The game's animals change only after the owner approves this tab. The screenshots in <code>docs/screenshots/beaver-otter-mockup/</code> were rendered in a cloud container with no GPU (Chromium on SwiftShader): they show poses, never how smoothly it runs.</p>
+  </template>
+  <div class="envgrid"><div class="stage" data-scene="critters"></div><div class="side" id="critSide" aria-label="Actions, modes and tunables"></div></div>
 </div>
 
 <div class="tabpanel" id="tab-light" role="tabpanel" hidden>
@@ -236,6 +273,8 @@ tr:last-child td{border-bottom:0}
 <script src="ocean/creatures3d.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
 <script src="water-flow/water-look.js?v=4"></script>
+<script src="ocean/critters_mesh.js?v=5"></script>
+<script src="ocean/critters.js?v=5"></script>
 <script>
 "use strict";
 // ======================= the places =======================
@@ -313,7 +352,7 @@ const ENV = [
     where: "The swamp biome (flat land within a few metres of the sea that the rain keeps wet, 1% of land today), widened to every flat wet lowland. Estuaries where a river meets the sea; mangroves where that sea is above 20 C.",
     today: "The swamp biome, its herons, bog toads, mire lurkers and fireflies (M7's design) exist or are drawn; the pools above sea level, peat cells, mangroves and estuary are new."},
 ];
-const SCENE_IDS = ENV.map(e => e.id).concat(["sim", "light"]);
+const SCENE_IDS = ENV.map(e => e.id).concat(["sim", "light", "critters"]);
 const TABS = SCENE_IDS.concat(["life", "chart", "engine"]);
 
 // ======================= shared: params, tabs =======================
@@ -2232,7 +2271,7 @@ function buildEngine() {
 }
 
 // ======================= start =======================
-const SCENES = {sim: sceneSim, sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
+const SCENES = {critters: sceneCritters, sim: sceneSim, sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
 function makeScene(id, stage) { const W = SCENES[id](stage); return W; }
 buildPanels(); buildLife(); buildChartUI(); buildEngine();
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));

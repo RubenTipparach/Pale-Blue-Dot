@@ -1,0 +1,5 @@
+joined 127.0.0.1:47124 as player 0 (0 edits so far)
+2026-11-23T04:57:24.955278Z  INFO pbd_app::loading: READY playable 6.36 s after launch at frame 258 (world 3.73 s, warm 1.58 s, 126 pipelines)
+2026-11-23T04:57:41.855983Z  INFO pbd_app::net_play: 3 of 3 edits from the network applied to the tier
+2026-11-23T04:57:42.275891Z  INFO pbd_app::net_play: 3 of 3 edits from the network applied to the tier
+edits-from-the-network-applied lines: 303

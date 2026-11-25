@@ -1,0 +1,12 @@
+[package]
+name = "pbd-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# The world's authority (`openspec/changes/multiplayer` design 5): built on
+# the core alone. No Bevy, no rendering, no socket; the transport is
+# `pbd-net`'s, and single player talks to it through a channel.
+[dependencies]
+pbd-core = { path = "../pbd-core" }
+glam.workspace = true

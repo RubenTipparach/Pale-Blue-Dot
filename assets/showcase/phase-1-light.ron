@@ -12,14 +12,14 @@
 (
     goal: "Goal: light and building, a shelter lit at night",
     at: Some((11.5085, -25.0992)),
-    hour: 8.5,
+    hour: 10.0,
     shots: [
         (
             caption: "Light and building. Build a shelter: twenty blocks",
             until: ["build"],
             repeat: true,
             max_s: 300.0,
-            acts: [Hand("hand"), Place("block:dirt")],
+            acts: [Focus("build"), Hand("hand"), Place("block:soil")],
         ),
         (
             caption: "Make torches, and set them round it",

@@ -91,7 +91,7 @@ struct WaterView {
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`); y the
     // surface of the water the eye is in or over, a body radius: an inland
-    // water's drawn top, else the sea's tided, swelling surface at the eye
+    // water's drawn top, else the sea's surface at the eye
     // (`ocean-environments` B17, B18); z and w how far the drawing is
     // through the water's last tick, smoothstepped (the levels) and linear
     // (the fronts), both one when it is drawn as it is (`water_flow::WaterEase`).
@@ -161,10 +161,17 @@ struct WaterView {
     fall_more: vec4<f32>,
     fall_splash: vec4<f32>,
     aer_color: vec4<f32>,
+    // A fall's size: x the mist's opacity share and y the particles' count
+    // share on a small fall, z the drop m up to which a fall is small, w the
+    // drop m from which it is full (`fall_size_scale` in `water_flow.rs`).
+    fall_size: vec4<f32>,
     // The nearest feet: xyz where each lands (body-local), w its drop m;
-    // then x the pool's depth under it m, y a seed, z its fade.
+    // then x the pool's depth under it m, y a seed, z its fade, w its
+    // ripples' share by that depth (none over shallow water, faded in).
     feet: array<vec4<f32>, 8>,
     feet_more: array<vec4<f32>, 8>,
+    // `glowing-mushrooms`: the carried lights, two a light (`carried_light`).
+    carried: array<vec4<f32>, 8>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -172,7 +179,7 @@ struct WaterView {
 // The game's own water that the sheet does not draw (`water-flow` E6): four
 // lanes a vertex, triangles end to end. xyz body-local position, w the sky's
 // share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
-// still face); xy the flow in the face's tangent frame, m/s over 0.35; xyz
+// still face); xy the flow in north and east at the vertex, m/s over 0.35; xyz
 // where the vertex was the tick before, w its ease flags (1 a front, eased
 // linearly; 2 a dried piece, hidden once the tick has played).
 @group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
@@ -451,11 +458,16 @@ fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
     out.normal = safe_normal(mix(f.xyz, b.xyz, t));
     out.sky_light = mix(e.w, a.w, t);
     out.flow_uv = mix(e.xyz, c.xyz, t);
-    out.level = 0u;
+    // The river's real water is the finest level's (`river-cache` design
+    // 14): it fades out across the finest band's ring with the ground it
+    // stands on, where the coarser levels' still sheet fades in.
+    let finest = u32(view.lod.w) + 4u;
+    let band = water_band_t(safe_normal(p), finest, view.lod.xyz, view.bands, view.bands_in);
+    out.level = finest;
     out.owner_a = safe_normal(p);
     out.owner_b = out.owner_a;
     out.sea_slope = vec3<f32>(0.0);
-    out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
+    out.fade_t = vec3<f32>(band, band, 0.0);
     out.part_mark = 0u;
     out.kind = max(u32(b.w + 0.5), 1u);
     return out;
@@ -623,12 +635,12 @@ const NEAR_SHEET_M: f32 = 0.3;
 // eye is on, not by each fragment's wave height, m (B19).
 const SEA_SIDE_NEAR_M: f32 = 3.0;
 // The eye's surface is the sea's when it is within this of the sea's mean
-// sheet, m: the tide's whole range and some.
+// sheet, m: the waves' reach and some.
 const SEA_EYE_RANGE_M: f32 = 3.0;
 
 // The surface of the water the eye is in or over, as a body radius: a
 // river's or a pool's drawn top where the eye is in inland water, the sea's
-// tided surface at the eye otherwise, the eye in air included
+// surface at the eye otherwise, the eye in air included
 // (`ocean-environments` B17, B18, B21). Everything the underwater view
 // measures, depth, the waterline, the sky's exit, is measured from it. The
 // mean sphere is only the fallback for a view with no water lanes.
@@ -739,6 +751,15 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
 // ---- A fall's look (`water-flow` 6.6; M35, `waterfall-mist/mist.js`) -------
 // The most feet the fragment and the bubbles loop over (`FALL_FEET_MAX`).
 const FALL_FEET: u32 = 8u;
+// The body frame's north and east at `d` (`geo::north_east`): the frame a
+// top's flow lane is written in. At a pole, along longitude 0.
+fn flow_north_east(d: vec3<f32>) -> array<vec3<f32>, 2> {
+    let across = sqrt(d.x*d.x + d.z*d.z);
+    var east = vec3<f32>(0.0, 0.0, 1.0);
+    if (across > 1e-6) { east = vec3<f32>(-d.z/across, 0.0, d.x/across); }
+    return array<vec3<f32>, 2>(normalize(cross(east, d)), east);
+}
+
 // The falling column's radius from its foot, m, where the pool's terms start.
 const FALL_COLUMN_M: f32 = 1.25;
 
@@ -774,6 +795,29 @@ fn fall_foot_offset(i: u32, p: vec3<f32>, radial: vec3<f32>) -> vec4<f32> {
     return vec4<f32>(rel - radial*up, fade);
 }
 
+// `glowing-mushrooms` design 8: the lights players carry (`carried_light.rs`),
+// at most CARRIED_LIGHTS, two vec4s each: where (planet frame, w its reach,
+// zero ending the list), then its colour times strength. Each is a lamp's
+// windowed inverse square and N.L (`lamp_bake::falloff`) from its exact
+// position, with no shadow, times a torch's gain; the same in every shader
+// that takes it, which a test holds.
+const CARRIED_LIGHTS: u32 = 4u;
+const CARRIED_GAIN: f32 = 3.0;
+fn carried_light(lights: array<vec4<f32>, 8>, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    var sum = vec3<f32>(0.0);
+    for (var i = 0u; i < CARRIED_LIGHTS; i++) {
+        let at = lights[2u*i];
+        if at.w <= 0.0 { break; }
+        let to = at.xyz - p;
+        let d = max(length(to), 1e-3);
+        let nl = dot(n, to/d);
+        if d > at.w || nl <= 0.0 { continue; }
+        let w = max(1.0 - pow(d/at.w, 4.0), 0.0);
+        sum += lights[2u*i + 1u].rgb*(nl*w*w/(1.0 + (d/2.2)*(d/2.2))*CARRIED_GAIN);
+    }
+    return sum;
+}
+
 // The lamps near the eye on a point (`lampLight` with a wrap of one), as the
 // mist and the bubbles take them.
 fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
@@ -790,8 +834,35 @@ fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return e;
 }
 
-@fragment
-fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+// Whether the sheet or the game's water draws nothing at this pixel
+// (`cascade-perf`): every discard of `fragment` that does not hang on its
+// shading, first, so a fragment hidden behind the scene or dithered away
+// costs none of the waves, and the same test for the flowing water's depth
+// pre-pass, which leaves the shading one fragment a pixel.
+// The share of the pixel's samples the sheet is in front of (reversed Z,
+// larger nearer). The scene's colour is the resolve of those samples, so
+// this is the mask that matches it. Deciding by sample 0 alone drew the
+// sheet over the whole of an edge pixel whose sample 0 was behind it, the
+// sky through the surface laid over the held tool's share of the pixel: a
+// bright line round everything seen from under the water (owner,
+// 2026-11-20: "its where water rendering outline doesnt match the object",
+// "THE REAL FIX IS A MASK CHANEL THAT MATCHES"; `ocean-environments` B24).
+fn water_cover(in: VertexOut) -> f32 {
+    let size = textureDimensions(scene_depth);
+    let coord = clamp(vec2<i32>(in.clip.xy),vec2<i32>(0),vec2<i32>(size)-1);
+#ifdef MULTISAMPLED
+    let n = i32(textureNumSamples(scene_depth));
+    var front = 0;
+    for (var k = 0; k < n; k++) {
+        if (textureLoad(scene_depth,coord,k) <= in.clip.z + 1e-6) { front += 1; }
+    }
+    return f32(front)/f32(max(n,1));
+#else
+    return select(0.0, 1.0, textureLoad(scene_depth,coord,0) <= in.clip.z + 1e-6);
+#endif
+}
+
+fn water_hidden(in: VertexOut) -> bool {
     let radial = safe_normal(in.body_position);
     // The same partition the terrain applies, in the same pixel's dither
     // class (`distance-lod-fade`): the sheet is drawn where its owner (the
@@ -804,29 +875,52 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     if (in.part_mark != 0u) {
         let dissolve = fract(52.9829189*fract(dot(in.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
         let new_half = dissolve < view.lod_prev.w;
-        if (in.part_mark == 1u && !new_half) { discard; }
-        if (in.part_mark == 2u && new_half) { discard; }
+        if (in.part_mark == 1u && !new_half) { return true; }
+        if (in.part_mark == 2u && new_half) { return true; }
     }
     let m = water_bayer4(in.clip.xy);
-    if (in.fade_t.z > m) { discard; }
-    // The tier's water and the far river's sheet share its last 25 m by the
-    // same dither, so the one gives way to the other with no seam (design 13).
-    if (in.kind != 0u && view.column.w > 0.0) {
-        let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
-            * length(in.body_position);
-        let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
-        if (in.kind == 4u && far <= m) { discard; }
-        if (in.kind != 4u && far > m) { discard; }
-    }
+    if (in.fade_t.z > m) { return true; }
+    // A river's still sheet stands in only where the ground is a level of
+    // detail (`river-cache` design 14; the owner: "there should be no stand
+    // in sheets ... thats for orbital view, or when terrain is in LOD"):
+    // over the finest level the river's real water is drawn, by the tier and
+    // the river band, so no distance dither hands one to the other.
+    if (in.kind == 4u && in.level >= u32(view.lod.w) + 4u) { return true; }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
-        if (owner_t <= m) { discard; }
+        if (owner_t <= m) { return true; }
     }
+    // Behind the scene (the main pass's depth; reversed Z, larger nearer):
+    // hidden only where the sheet is in front of none of the pixel's samples.
+    // Where it covers some, `fragment` lays it over by that share
+    // (`ocean-environments` B24).
+    if (water_cover(in) <= 0.0) { return true; }
+    // The back of the game's water seen from dry air: the face toward the
+    // eye draws it (as `fragment` decides `below` for it).
+    if (in.kind != 0u && view.fx.y < 0.25
+        && dot(view.camera_time.xyz - in.local_position, safe_normal(in.normal)) < 0.0) {
+        return true;
+    }
+    return false;
+}
+
+// The flowing water's depth pre-pass (`cascade-perf`): its depth alone, so
+// its shading pass runs `fragment` once a pixel, for the nearest face, not
+// for every face behind it drawn first (a cascade stacks many).
+@fragment
+fn flowing_depth(in: VertexOut) {
+    if (water_hidden(in)) { discard; }
+}
+
+@fragment
+fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let radial = safe_normal(in.body_position);
+    if (water_hidden(in)) { discard; }
     let face = safe_normal(in.normal);
     let sun_direction = safe_normal(view.sun.xyz);
     let time = view.camera_time.w;
     // Tangent frame off X or Y, projected off the face, exactly as Tenebris
-    // builds it; the flow vector lives in this frame.
+    // builds it: the rain rings' frame. A top's flow is not in it.
     var tangent_u = vec3<f32>(1.0,0.0,0.0);
     if (abs(face.x) > 0.9) { tangent_u = vec3<f32>(0.0,1.0,0.0); }
     tangent_u = safe_normal(tangent_u - face*dot(tangent_u,face));
@@ -847,9 +941,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // A top of the water near a foot takes its churn, ripples and flow.
     let pool_top = in.kind <= 1u && horizontal >= 0.5 && view.fall_look.x > 0.5;
     let feet_n = min(u32(view.fall_look.x), FALL_FEET);
+    // A top's flow lane is north and east at the point (`water_flow::flow_lane`),
+    // not the face's frame: a slanted top's triangles each have their own
+    // normal, and read in theirs a triangle streamed turned or backwards
+    // (`water-flow`, "The surface streaming against its arrows").
+    let flow_frame = flow_north_east(radial);
     let advected = rest
         + radial*(time*view.deep_color.w*(1.0-horizontal)*falls)
-        - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
+        - (flow_frame[0]*in.flow_uv.x + flow_frame[1]*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
     let t = time*view.ripple.y;
     // Not Tenebris's: once the fbm's features fall under a pixel, its
@@ -929,7 +1028,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Foot ripples (M35, `uRip`): rings run out from the falling column
     // across the pool, `fall_look.w` apart at 1.3 m/s, strongest at the
     // column and gone by the reach; they tilt the normal and whiten a little
-    // on their crests near the column.
+    // on their crests near the column. Only on water deep enough for them
+    // (`feet_more.w`, the depth gate; owner, 2026-11-17: "this water is too
+    // shallow for ripples").
     var rip_foam = 0.0;
     if (pool_top && view.fall_look.z > 0.0) {
         let len = max(view.fall_look.w, 0.05);
@@ -945,7 +1046,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
             let ph = k*x - seconds*1.3*k;
             let reach = min(2.0 + 0.35*h, reach_max);
             let env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*reach_max, reach_max, x))
-                *(0.6 + 0.06*min(h, 10.0))*view.fall_look.z*o.w;
+                *(0.6 + 0.06*min(h, 10.0))*view.fall_look.z*o.w*view.feet_more[i].w;
             let slope = cos(ph)*env*0.55*(0.9/len);
             gradient += o.xyz/max(d, 1e-3)*slope*12.5*0.25;
             rip_foam = max(rip_foam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
@@ -1056,7 +1157,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         // composite draws them in front of the seabed (`ocean-environments`
         // B5): the sheet is drawn over the composite, so it carries its own.
         seen += under_water_light(view.camera_time.xyz, -look, camera_distance);
-        return vec4<f32>(seen,1.);
+        return vec4<f32>(seen,water_cover(in));
     }
     var reflected_ray = reflect(-look,normal);
     // A wall of the game's water (a fall, a sheet's edge) mirrors the sky as
@@ -1166,6 +1267,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         color = mix(color, mix(view.foam_color.rgb, sky_up, 0.4)*water_lit*1.15,
             clamp(e*e*0.6*view.fall_more.y, 0.0, 1.0));
     }
+    // The lights players carry (`glowing-mushrooms` design 9), on the water
+    // and its foam as on the ground: no shadow, as much as a lamp shows here.
+    if (view.carried[0].w > 0.0 && !below) {
+        let day = smoothstep(-0.13, 0.20, dot(radial, sun_direction));
+        let share = 1.0 - day*clamp(in.sky_light, 0.0, 1.0);
+        color += mix(albedo, view.foam_color.rgb, foam)
+            *carried_light(view.carried, in.body_position, normal)*share;
+    }
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
         *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))
@@ -1174,7 +1283,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let fogged = mix(color,fog.rgb,fog.a*clamp(in.sky_light,0.,1.));
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
-    return vec4<f32>(fogged,1.);
+    return vec4<f32>(fogged,water_cover(in));
 }
 
 // ---- The sea's screen trace (`lighting-model` L8, 10.3) ----------------------
@@ -1326,12 +1435,40 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // by the sheet from below, from the scene before this pass.
     let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky || under);
     wet *= mask;
-    var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0);
+    // And only where the terrain says water may stand over the pixel
+    // (`dry-holes` design 10): its alpha is nought on a face whose column
+    // holds no water over it, so a dry pit or cave dug under the sea's level
+    // is seen through air, not sea ("It shouldn't shade dry holes at all").
+    // With the eye under, everything is seen through water, as above.
+    if (!sky && !under) { wet *= scene.a; }
+    var color = scene.rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {
         let time = view.camera_time.w;
         let wobble = vec2<f32>(sin(time*1.3+uv.y*32.0)+0.5*sin(time*0.7+uv.x*47.0),
             cos(time*0.9+uv.x*28.0)+0.5*cos(time*1.6+uv.y*41.0));
-        color = textureSampleLevel(scene_color,scene_sampler,clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.)),0.0).rgb;
+        let suv = clamp(uv+wobble*view.fx.x*wet,vec2(0.),vec2(1.));
+        // Only from the same surface (`ocean-environments` B24): the fog
+        // below is this pixel's, so a sample taken across a silhouette put
+        // the far ground's unfogged colour round everything near as a bright
+        // rim (owner, 2026-11-19: "outlining issues when under water").
+        // Read colour and depth at the same whole pixel: the colour was
+        // filtered between pixels at the fractional offset, so at a
+        // silhouette it blended the near surface with the unfogged sky
+        // beside it and the blend took the near surface's fog, a pale line
+        // inside every edge (`ocean-environments` B24).
+        let csize = vec2<i32>(textureDimensions(scene_color));
+        let spx = clamp(vec2<i32>(suv*vec2<f32>(csize)),vec2<i32>(0),csize-1);
+        let sdepth = load_depth(suv);
+        let ssky = sdepth <= 1e-7;
+        var same = ssky == sky;
+        if (same && !sky) {
+            let sdist = length(reconstruct_local(suv,sdepth)-ray.origin);
+            same = abs(sdist-view_dist) < 0.15*view_dist+0.3;
+        }
+        if (same) {
+            color = textureLoad(scene_color,spx,0).rgb;
+        }
     }
     var travel: f32;
     if (under || straddle) {
@@ -1354,7 +1491,69 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
-    color = mix(color, mix(deep,color,exp(-extinction*travel)), wet);
+    var fogged = mix(deep,color,exp(-extinction*travel));
+#ifdef MULTISAMPLED
+    // An edge pixel's colour is the resolve of near and far samples, but the
+    // fog above is sample 0's alone, so the far share of the colour kept its
+    // unfogged brightness: a rim round the held tool (`ocean-environments`
+    // B24, the second cause). With the eye under, split such a pixel into its
+    // near and far parts, the far part's colour taken from a neighbouring
+    // pixel that is all far, and fog each part by its own distance.
+    if (under) {
+        let size = textureDimensions(scene_depth);
+        let coord = clamp(vec2<i32>(uv*vec2<f32>(size)),vec2<i32>(0),vec2<i32>(size)-1);
+        let n = i32(textureNumSamples(scene_depth));
+        var dmin = 1.0e9;
+        var dmax = 0.0;
+        for (var k = 0; k < n; k++) {
+            let d = textureLoad(scene_depth,coord,k);
+            let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+            dmin = min(dmin,dist);
+            dmax = max(dmax,dist);
+        }
+        if (dmax-dmin > 0.15*dmin+0.3) {
+            let mid = 0.5*(dmin+dmax);
+            var far_n = 0;
+            for (var k = 0; k < n; k++) {
+                let d = textureLoad(scene_depth,coord,k);
+                let dist = select(1.0e5, length(reconstruct_local(uv,d)-ray.origin), d > 1e-7);
+                if (dist > mid) { far_n += 1; }
+            }
+            let f = f32(far_n)/f32(max(n,1));
+            // The mask that matches the colour: the samples themselves. Each
+            // sample keeps its own colour and depth and the resolve averages
+            // the colours, so `1 - f` (the near samples' share) is exactly
+            // the share of this pixel's colour that is the near surface. Fog
+            // that share by the near distance and replace the far share with
+            // its own fog:
+            //   (1-f)*fog_near(obj) + f*fog_far(far)
+            //   = T_near*(raw - f*far_c) + deep*(1-f)*(1-T_near) + f*fog_far
+            // using (1-f)*obj = raw - f*far_c. Nothing divides, the pixel's
+            // own colour carries the object's detail, and only the far colour
+            // is read from a neighbour two pixels off that is all far (the
+            // sky's or the far ground's raw colour); any error in it is
+            // scaled by f*T_near.
+            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+            var far_c = raw;
+            var got_far = false;
+            let px = 2.0/vec2<f32>(size);
+            for (var o = 0; o < 8; o++) {
+                let ang = f32(o)*0.78539816;
+                let nuv = clamp(uv+vec2<f32>(round(cos(ang)),round(sin(ang)))*px,vec2(0.),vec2(1.));
+                let nd = load_depth(nuv);
+                let ndist = select(1.0e5, length(reconstruct_local(nuv,nd)-ray.origin), nd > 1e-7);
+                if (!got_far && ndist > mid) {
+                    far_c = textureSampleLevel(scene_color,scene_sampler,nuv,0.0).rgb;
+                    got_far = true;
+                }
+            }
+            let t_near = exp(-extinction*dmin);
+            let far_fog = mix(deep,far_c,exp(-extinction*dmax));
+            fogged = max(t_near*(raw-f*far_c),vec3(0.0)) + deep*(1.0-f)*(1.0-t_near) + f*far_fog;
+        }
+    }
+#endif
+    color = mix(color, fogged, wet);
     // The sheet the near plane clips, for an eye under the surface (B19):
     // a ray that crosses the surface nearer than `NEAR_SHEET_M` saw the sky
     // nearly clear and the bank above as a silhouette through the hole,
@@ -2082,7 +2281,7 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
 // The sea's horizon line (`horizon-haze` 4). A pixel whose depth says sky
 // but whose ray meets the sea's sphere looks into the gap between the sea's
-// silhouette and that sphere's tangent: the tide and the troughs take the
+// silhouette and that sphere's tangent: the sheet's offset and the troughs take the
 // sheet under the sphere, and a few rows of rays under the horizon meet no
 // sea. The cloud stops such a ray at the sphere, short of its layer, so
 // under cover the gap kept the clear dome's blue under a greyed sky: a dark
@@ -3107,7 +3306,11 @@ fn bubble_vertex(@builtin(vertex_index) vertex: u32) -> BubbleOut {
     let foot = view.feet[i];
     let more = view.feet_more[i];
     let h = max(foot.w, 0.0);
-    let count = min(u32(round((60.0 + 14.0*h)*view.fall_more.w)), BUBBLES_MAX);
+    // Fewer on a small fall (owner, 2026-11-17: "less particles for these
+    // shallow drops too"), as the CPU's splash by the same ramp.
+    let small = mix(view.fall_size.y, 1.0, smoothstep(view.fall_size.z,
+        max(view.fall_size.w, view.fall_size.z + 1e-3), h));
+    let count = min(u32(round((60.0 + 14.0*h)*view.fall_more.w*small)), BUBBLES_MAX);
     if (b >= count || more.z <= 0.0) { return out; }
     let salt = u32(more.y*65535.0)*7919u + b*4u;
     let seed = vec4<f32>(bubble_hash(salt), bubble_hash(salt + 1u), bubble_hash(salt + 2u), bubble_hash(salt + 3u));

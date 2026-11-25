@@ -8,8 +8,10 @@
 //! player reads is.
 
 use super::{Aboard, Vehicle, view::VehicleView};
+use crate::ui_kit::Localized;
 use bevy::prelude::*;
-use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
+use pbd_core::locale::{tr, tr_with};
+use pbd_core::vehicle::{Kind, Telemetry};
 use std::fmt::Write;
 
 /// The instruments behind F3: plain text, a developer's.
@@ -49,17 +51,18 @@ pub fn spawn(mut commands: Commands) {
 /// what it does), and a warning when there is one.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Lines {
-    pub title: String,
-    pub rows: Vec<(Vec<&'static str>, String)>,
-    pub warning: Option<String>,
+    pub title: Localized,
+    pub rows: Vec<(Vec<Localized>, Localized)>,
+    pub warning: Option<Localized>,
 }
 
 impl Lines {
     /// As one string: what a test reads.
     #[cfg(test)]
     pub fn text(&self) -> String {
-        let mut s = self.title.clone();
+        let mut s = self.title.to_string();
         for (keys, what) in &self.rows {
+            let keys: Vec<&str> = keys.iter().map(Localized::as_str).collect();
             let _ = write!(s, "\n{}  {what}", keys.join("/"));
         }
         if let Some(w) = &self.warning {
@@ -181,7 +184,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         })
         .with_children(|row| {
             for key in keys {
-                crate::ui_kit::key_cap(row, kit, key, ());
+                crate::ui_kit::key_cap(row, kit, key.clone(), ());
             }
             row.spawn((
                 KitText::new(what.clone(), LABEL).outline(INK),
@@ -199,7 +202,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
 }
 
 /// The key a player has on a slot (`"vehicles:KeyT"`), as its label.
-fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> &'static str {
+fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> Localized {
     let key = crate::controls::slots()
         .find(|s| s.name() == name)
         .map_or(default, |s| binds.key(&s));
@@ -217,48 +220,77 @@ const BAIL_KG: f64 = 20.0;
 /// ([`instruments`]).
 fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     let craft = &vehicle.craft;
-    let moored = match craft.mooring {
-        Some(m) if m.anchored => " - at anchor",
-        Some(_) => " - tied up",
-        None => "",
+    let craft_title = craft.kind.title();
+    let title = if craft.anchored() {
+        tr_with("vehicles.hud.at_anchor", &[("craft", &craft_title)])
+    } else if craft.anchor.is_some() {
+        let state = pbd_core::vehicle::anchor::word_lower(craft.anchor.as_ref());
+        tr_with(
+            "vehicles.hud.anchor_state",
+            &[("craft", &craft_title), ("state", &state)],
+        )
+    } else if craft.mooring.is_some() {
+        tr_with("vehicles.hud.tied_up", &[("craft", &craft_title)])
+    } else {
+        craft_title
     };
-    let mut lines = Lines {
-        title: format!("{}{moored}", craft.kind.name().to_uppercase()),
-        ..default()
-    };
+    let mut lines = Lines { title, ..default() };
     let bail = craft.bilge_kg > BAIL_KG;
-    for (keys, what) in crate::controls::caps(&craft.kind.name().to_uppercase(), binds) {
+    let group = match craft.kind {
+        Kind::Loon => "loon",
+        Kind::Tube => "inner_tube",
+        Kind::Raft => "raft",
+    };
+    let wasd = [KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD]
+        .map(crate::controls::key_label);
+    for (keys, what) in crate::controls::caps(group, binds) {
         // The bail key only while there is water to bail.
-        if what == "bail" && !bail {
+        if what == tr("controls.does.bail") && !bail {
             continue;
         }
         // Moving on W, A, S and D goes without saying (owner, 2026-11-16:
         // "we probably dont need WASD, its obvious enough"); a row the
         // player has moved to other keys is shown.
-        if keys.iter().all(|k| ["W", "A", "S", "D"].contains(k)) {
+        if keys.iter().all(|k| wasd.contains(k)) {
             continue;
         }
-        lines.rows.push((keys, what.to_string()));
+        lines.rows.push((keys, what));
     }
-    let anchor = match craft.mooring {
-        Some(m) if m.anchored => "raise the anchor",
-        Some(_) => "cast off",
-        None => "drop the anchor",
+    // One anchor per boat (`river-craft` design 4); the tube has none.
+    let out = craft.anchor.is_some() || craft.mooring.is_some_and(|m| m.anchored);
+    let anchor = if craft.has_anchor() && out {
+        Some(tr("vehicles.hud.weigh_anchor"))
+    } else if craft.mooring.is_some() {
+        Some(tr("vehicles.hud.cast_off"))
+    } else if craft.has_anchor() {
+        Some(tr("vehicles.hud.drop_anchor"))
+    } else {
+        None
     };
-    lines.rows.push((
-        vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)],
-        anchor.into(),
-    ));
+    if let Some(anchor) = anchor {
+        lines
+            .rows
+            .push((vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)], anchor));
+    }
+    // The boat's menu (design 10.2): its hold, anchor and lantern.
+    if craft.has_anchor() {
+        lines.rows.push((
+            vec![bound("vehicles:KeyC", KeyCode::KeyC, binds)],
+            tr("vehicles.hud.boat"),
+        ));
+    }
     lines.rows.push((
         vec![crate::controls::key_label(crate::interact::key(binds))],
-        "step off".into(),
+        tr("vehicles.hud.step_off"),
     ));
     lines.rows.push((
         vec![bound("vehicles:KeyV", KeyCode::KeyV, binds)],
-        "camera".into(),
+        tr("vehicles.hud.camera"),
     ));
     if bail {
-        lines.warning = Some("Water aboard: bail".into());
+        lines.warning = Some(tr("vehicles.hud.bail"));
+    } else if craft.rowing().is_some_and(|(_, r)| r.on_bed) {
+        lines.warning = Some(tr("vehicles.hud.oar_on_bed"));
     }
     lines
 }
@@ -268,138 +300,38 @@ fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
 fn instruments(vehicle: &Vehicle, seat: bool) -> String {
     let craft = &vehicle.craft;
     let mut s = String::new();
-    match (&craft.telemetry, &craft.state) {
-        (Telemetry::Tern(t), CraftState::Tern(_)) => {
-            let sail = match t.sail_state {
-                SailState::Luffing => "luffing",
-                SailState::Driving => "drawing",
-                SailState::Stalled => "stalled",
-            };
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  hull speed {:>3.0}%  heel {:>+4.0} deg",
-                t.water_speed,
-                t.speed,
-                t.hull_speed * 100.0,
-                t.heel.to_degrees()
-            );
-            let _ = writeln!(
-                s,
-                "apparent wind {:>4.1} m/s  {} {:>3.0} deg  windward VMG (ground) {:>+4.1} m/s",
-                t.apparent.length(),
-                side(t.apparent_angle),
-                t.apparent_angle.to_degrees().abs(),
-                t.upwind
-            );
-            let _ = writeln!(
-                s,
-                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg{}",
-                t.sheet * 100.0,
-                t.leeway.to_degrees(),
-                craft.bilge_kg,
-                if t.keel_down < 0.95 {
-                    format!("  KEEL UP {:.0}%, shallow", (1.0 - t.keel_down) * 100.0)
-                } else {
-                    String::new()
-                }
-            );
-            let hint = match t.sail_state {
-                SailState::Luffing => "Bear away from headwind or trim the sheet in.",
-                SailState::Stalled => "Ease the sheet to restore attached flow.",
-                SailState::Driving => "Trim for windward VMG; hike against the heel.",
-            };
-            let _ = writeln!(s, "{hint}");
-        }
-        (Telemetry::Loon(t), CraftState::Loon(_)) => {
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s",
-                t.water_speed, t.speed, t.water_drift, t.drift
-            );
-            let _ = writeln!(
-                s,
-                "strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg",
-                t.strokes_per_minute,
-                t.freeboard,
-                t.heel.to_degrees(),
-                craft.bilge_kg
-            );
-            let phase = if t.rudder_at.is_some() {
-                "stern rudder"
-            } else if t.stroke.is_some_and(|stroke| stroke.phase < 1.0) {
-                "power stroke"
-            } else if t.stroke.is_some() {
-                "recovering"
-            } else if craft.kind == Kind::Rowboat {
-                "oars resting"
-            } else if craft.kind == Kind::Tube {
-                "hands resting"
-            } else {
-                "paddle resting"
-            };
-            let _ = writeln!(
-                s,
-                "{phase} - alternate strokes to make way; rudder steers while moving."
-            );
-        }
-        (Telemetry::Cog(t), CraftState::Cog(_)) => {
-            let sail = if t.fill < 0.5 {
-                "luffing"
-            } else if t.sail.stall > 0.5 {
-                "stalled"
-            } else {
-                "drawing"
-            };
-            let _ = writeln!(
-                s,
-                "water {:>4.1} m/s  ground {:>4.1} m/s  heel {:>+4.0} deg  leeway {:>+4.1} deg",
-                t.water_speed,
-                t.speed,
-                t.heel.to_degrees(),
-                t.leeway.to_degrees()
-            );
-            let _ = writeln!(
-                s,
-                "apparent wind {:>4.1} m/s  {} {:>3.0} deg  windward VMG (ground) {:>+4.1} m/s",
-                t.apparent.length(),
-                side(t.apparent_angle),
-                t.apparent_angle.to_degrees().abs(),
-                t.upwind
-            );
-            let _ = writeln!(
-                s,
-                "yard {:>3.0} deg {}  sail {sail}  water aboard {:>4.0} kg",
-                t.yard.to_degrees().abs(),
-                if t.yard > 0.0 {
-                    "starboard arm forward"
-                } else if t.yard < 0.0 {
-                    "port arm forward"
-                } else {
-                    "square"
-                },
-                craft.bilge_kg
-            );
-            let hint = if t.fill < 0.5 {
-                "Too close: bear away, or brace the yard square to the wind."
-            } else {
-                "A square sail will not point: make way on a reach or a run."
-            };
-            let _ = writeln!(s, "{hint}");
-        }
-        _ => {}
+    if let Telemetry::Loon(t) = &craft.telemetry {
+        let _ = writeln!(
+            s,
+            "water {:>4.1} m/s  ground {:>4.1} m/s  water slip {:>+4.1} m/s  ground drift {:>+4.1} m/s",
+            t.water_speed, t.speed, t.water_drift, t.drift
+        );
+        let _ = writeln!(
+            s,
+            "strokes {:>3.0}/min  freeboard {:>4.2} m  heel {:>+4.0} deg  water aboard {:>4.0} kg",
+            t.strokes_per_minute,
+            t.freeboard,
+            t.heel.to_degrees(),
+            craft.bilge_kg
+        );
+        let phase = if t.rudder_at.is_some() {
+            "stern rudder"
+        } else if t.stroke.is_some_and(|stroke| stroke.phase < 1.0) {
+            "power stroke"
+        } else if t.stroke.is_some() {
+            "recovering"
+        } else if craft.kind == Kind::Tube {
+            "hands resting"
+        } else {
+            "paddle resting"
+        };
+        let _ = writeln!(
+            s,
+            "{phase} - alternate strokes to make way; rudder steers while moving."
+        );
     }
     let _ = write!(s, "({} view)", if seat { "seat" } else { "chase" });
     s
-}
-
-fn side(angle: f64) -> &'static str {
-    if angle.abs() < 0.5_f64.to_radians() {
-        "AHEAD"
-    } else if angle > 0.0 {
-        "STBD"
-    } else {
-        "PORT"
-    }
 }
 
 #[cfg(test)]
@@ -434,7 +366,7 @@ mod tests {
         let text = panel(&v, &Default::default()).text();
         for want in [
             "RAFT",
-            "Q/E  steer with the pole",
+            "Q/E  row the left or right oar",
             "drop the anchor",
             "step off",
             "camera",
@@ -452,7 +384,9 @@ mod tests {
         });
         let text = panel(&v, &Default::default()).text();
         assert!(
-            text.contains("at anchor") && text.contains("raise the anchor"),
+            text.contains("at anchor")
+                && text.contains("weigh the anchor")
+                && text.contains("C  the boat"),
             "{text}"
         );
         let mut loon = vehicle(Kind::Loon);

@@ -1,0 +1,81 @@
+// A town's trader (`townsfolk` design 6, 7 and 12; `pbd_core::economy::trade`).
+// Prices are a good's value (`values.ron`) times the town's need for its
+// group: 0.5 where the town makes it, 2.0 where it lacks it.
+(
+    // The trader pays 60% of what it sells for (the 40% spread,
+    // recommendation taken, ask only with screenshots).
+    buy_share: 0.6,
+    // Each sale moves the good's price 2%, within these bounds.
+    step: 0.02,
+    low: 0.5,
+    high: 2.0,
+    // Prices and stock are back at rest a game day after the last trade.
+    rest_days: 1.0,
+    // A town sells the groups it makes: a need of 0.8 or less.
+    makes_below: 0.8,
+    staples: ["flatbread"],
+    unsold: [
+        "fish:sea_otter", "fish:seal", "fish:beaver", "fish:river_otter",
+        "fish:reef_turtle", "block:mussel bed", "parcel",
+        // The carts are made, not bought (land-transport design 10).
+        "hand-cart", "horse-cart",
+    ],
+    // Codes no trader buys.
+    unbought: ["parcel"],
+    untraded: [tool],
+    // A size-1 town's stock of each good it sells, and its want of each.
+    stock: 8,
+    want: 12,
+    size: {
+        Walled: 2.0,
+        Village: 1.0,
+        Desert: 1.0,
+        Tundra: 1.0,
+        Jungle: 1.0,
+        Swamp: 1.0,
+        Harbour: 1.5,
+        Cliff: 1.0,
+        Cave: 1.0,
+    },
+    needs: {
+        Walled: { crop: 1.2, dish: 0.8, ore: 1.3, goods: 0.8, light: 0.8, herd: 1.2 },
+        Village: { crop: 0.6, seed: 0.6, herd: 0.7, ore: 1.6, fish: 1.2, dish: 1.0 },
+        Desert: { crop: 1.6, fish: 1.8, wood: 1.8, fruit: 0.7, stone: 0.6, herd: 1.3 },
+        Tundra: { wood: 1.7, crop: 1.7, fish: 0.7, herd: 0.8, fruit: 2.0 },
+        Jungle: { fruit: 0.5, wood: 0.6, ore: 1.7, herd: 1.5, fish: 1.1 },
+        Swamp: { fish: 0.7, crop: 1.4, stone: 1.6, ore: 1.6, fruit: 0.8 },
+        Harbour: { fish: 0.5, wood: 1.6, crop: 1.3, ore: 1.4, goods: 0.8 },
+        Cliff: { fish: 2.0, ore: 0.5, stone: 0.6, crop: 1.5, herd: 1.2 },
+        Cave: { fish: 1.8, ore: 0.5, stone: 0.5, crop: 1.8, fruit: 1.8, light: 1.5 },
+    },
+    // A horse, sold by the trader (land-transport design 10), in coins.
+    horse_coins: 120,
+    // A made good is worth its inputs plus its labour, times the craft
+    // margin (townsfolk design 37 and 37a; pbd_core::economy::derive).
+    // Labour is coins per second of the recipe (task 12.3).
+    labour_per_s: 0.1,
+    craft_margin: 1.25,
+    // The world's market (design 37a; pbd_core::economy::market): each unit
+    // traded moves its good's index by `step`, within `low` and `high`; an
+    // index returns to rest over `rest_days` game days, and each day the
+    // towns' making and using pulls it by `town_pull` per unit of balance.
+    market: (
+        step: 0.005,
+        low: 0.5,
+        high: 2.0,
+        rest_days: 8.0,
+        town_pull: 0.02,
+    ),
+    // Goodwill (design 12): what raises it, and what it is worth.
+    goodwill: (
+        per_trade: 1,
+        per_job: 10,
+        most: 100,
+        step: 20,
+        // Each step takes this share off what the trader asks and adds it
+        // to what it pays: 2% a step, 10% at the most.
+        bonus_per_step: 0.02,
+        // A board shows one more job at each of these steps.
+        more_jobs_at: [2, 4],
+    ),
+)

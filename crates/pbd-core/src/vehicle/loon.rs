@@ -6,6 +6,7 @@
 
 use super::foil::FoilForce;
 use super::hull::{bilge_flow, float, resist};
+use super::oars::{self, RowingState};
 use super::{
     Context, Craft, CraftState, FORWARD, Input, Kind, RIGHT, SEA_DENSITY, Telemetry, contact, v3,
     windage,
@@ -30,6 +31,9 @@ pub struct LoonState {
     last_side: f64,
     /// Strokes begun, and the world times of the recent ones.
     pub strokes: Vec<f64>,
+    /// The oars' stroke, on a kind rowed with oars (`river-craft` design
+    /// 9): the raft. Idle on every other kind.
+    pub rowing: RowingState,
 }
 
 impl Default for LoonState {
@@ -38,6 +42,7 @@ impl Default for LoonState {
             stroke: None,
             last_side: -1.0,
             strokes: Vec::new(),
+            rowing: RowingState::default(),
         }
     }
 }
@@ -67,10 +72,9 @@ pub struct LoonTelemetry {
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
     let (s, hull) = match craft.kind {
-        Kind::Rowboat => (&specs.rowboat, craft.hulls.rowboat.clone()),
         Kind::Tube => (&specs.tube, craft.hulls.tube.clone()),
         Kind::Raft => (&specs.raft, craft.hulls.raft.clone()),
-        _ => (&specs.loon, craft.hulls.loon.clone()),
+        Kind::Loon => (&specs.loon, craft.hulls.loon.clone()),
     };
     let p = &s.paddle;
     let occupied = craft.occupied;
@@ -86,11 +90,14 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         bilge_kg: bilge,
         ..
     } = craft;
-    let CraftState::Loon(st) = state else {
-        return;
-    };
+    let CraftState::Loon(st) = state;
+    let rowing = s.rowing;
 
-    // The stroke: begun when the last has recovered and a key is held.
+    // The stroke: begun when the last has recovered and a key is held. A
+    // rowed kind has its oars' clock instead (below).
+    if rowing.is_some() {
+        st.stroke = None;
+    }
     if let Some(stroke) = &mut st.stroke {
         let phase_time = if stroke.phase < 1.0 {
             p.power_s
@@ -102,7 +109,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
             st.stroke = None;
         }
     }
-    if occupied && st.stroke.is_none() {
+    if occupied && st.stroke.is_none() && rowing.is_none() {
         let begin = |side: f64, direction: f64| Stroke {
             side,
             direction,
@@ -150,7 +157,12 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let share = ((depth + 0.05) / 0.25).clamp(0.0, 1.0);
         let (_, water) = cx.water(at, depth.max(0.0));
         let blade_velocity = body.velocity_at(at) + body.axis(DVec3::Z * stroke_speed);
-        let rel = blade_velocity - water;
+        // A pole pushes on the bed, a paddle on the water.
+        let rel = if p.pole {
+            blade_velocity
+        } else {
+            blade_velocity - water
+        };
         let force = rel * (-0.5 * SEA_DENSITY * p.blade_cd as f64 * area * share * rel.length());
         body.push(force, at);
         FoilForce {
@@ -159,7 +171,18 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
             ..Default::default()
         }
     };
-    if let Some(stroke) = st.stroke.filter(|s| s.phase < 1.0) {
+    if let Some(spec) = &rowing {
+        // Two oars on one beat (`river-craft` design 9): the blades' drag
+        // through the water, read off the stroke's schedule.
+        blade = oars::row(
+            body,
+            &mut st.rowing,
+            spec,
+            occupied.then_some(input),
+            com,
+            cx,
+        );
+    } else if let Some(stroke) = st.stroke.filter(|s| s.phase < 1.0) {
         let u = stroke.phase;
         let travel = p.stroke_m as f64 * (1.0 - (std::f64::consts::PI * u).cos()) / 2.0;
         let z = if stroke.direction > 0.0 {
@@ -243,7 +266,11 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         freeboard,
         blade,
         rudder_at,
-        strokes_per_minute: st.strokes.len() as f64 * 10.0,
+        strokes_per_minute: if rowing.is_some() {
+            st.rowing.strokes.len() as f64 * 10.0
+        } else {
+            st.strokes.len() as f64 * 10.0
+        },
         displaced_m3: displaced,
         stroke: st.stroke,
     });

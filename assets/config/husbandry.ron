@@ -17,6 +17,8 @@
         spook_cost: 10.0,
         decay_per_hour: 5.0,
         follow_s: 60.0,
+        // A wild animal fed from the hand follows this long (taming-hearts).
+        wild_follow_s: 20.0,
     ),
     needs: (
         mood_per_need: 25.0,
@@ -57,7 +59,6 @@
         "home": [
             (
                 id: "meadow-hen",
-                name: "Yard hen",
                 class: Bird,
                 status: Tameable,
                 plan: Bird,
@@ -75,7 +76,9 @@
                     space_cells: 0.2,
                     grazing_cells: 0.2,
                     products: [
-                        (good: "egg", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                        // An egg every 6 in-game hours while content (hen-laying, owner
+                        // 2026-11-20).
+                        (good: "egg", amount: 1.0, period_days: 0.25, sex: Some(F)),
                     ],
                     coats: ["cream", "russet", "black"],
                     patterns: ["plain", "speckled"],
@@ -93,14 +96,9 @@
                         birth: Eggs(incubation_days: 3.0, clutch_max: 8),
                     ),
                 )),
-                guide: (
-                    entry: "A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.",
-                    tip: "Stand still with wheat seed in hand and let her come to you. Three feeds and she follows.",
-                ),
             ),
             (
                 id: "woolback",
-                name: "Woolback",
                 class: Mammal,
                 status: Tameable,
                 plan: Quadruped,
@@ -135,14 +133,9 @@
                         birth: Live(gestation_days: 5.0, litter: (1, 2)),
                     ),
                 )),
-                guide: (
-                    entry: "Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.",
-                    tip: "Four feeds of wheat or turf, standing still. Pen them on grass and they feed themselves.",
-                ),
             ),
             (
                 id: "plodder",
-                name: "Plodder",
                 class: Mammal,
                 status: Tameable,
                 plan: Quadruped,
@@ -161,6 +154,9 @@
                     grazing_cells: 2.0,
                     products: [
                         (good: "milk", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                        // Its hide, tanned (small-boats design 2e; the owner:
+                        // "cows and horses should" give leather).
+                        (good: "leather", amount: 1.0, period_days: 6.0, sex: None),
                     ],
                     coats: ["brown", "red", "dun"],
                     patterns: ["plain", "belted"],
@@ -177,10 +173,45 @@
                         birth: Live(gestation_days: 8.0, litter: (1, 1)),
                     ),
                 )),
-                guide: (
-                    entry: "The plodder is the great slow beast of the fields: two meters of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day.",
-                    tip: "Five feeds of turnip or turf. It needs two cells of grass each in its pen.",
-                ),
+            ),
+            // The horse (`land-transport` design 10): bought in town for the
+            // horse cart's shafts, never wild, so no herd rolls it. Kept like
+            // the herd on wheat, turnip and turf, and gives leather (the
+            // owner: "cows and horses should").
+            (
+                id: "horse",
+                class: Mammal,
+                status: Bought,
+                plan: Horse,
+                herd: (1, 1),
+                length_m: 2.3,
+                height_m: 1.55,
+                walk_mps: 1.5,
+                run_mps: 6.0,
+                stride_m: 1.7,
+                colours: ((0.45, 0.28, 0.16), (0.62, 0.46, 0.32), (0.16, 0.11, 0.08), (0.40, 0.25, 0.15)),
+                keep: Some((
+                    foods: [Good("wheat"), Good("turnip"), Turf],
+                    trust_gain: 34.0,
+                    space_cells: 2.0,
+                    grazing_cells: 2.0,
+                    products: [
+                        (good: "leather", amount: 1.0, period_days: 8.0, sex: None),
+                    ],
+                    coats: ["bay", "chestnut", "grey"],
+                    patterns: ["plain", "blaze"],
+                    morph: "dapple",
+                    adult_days: 20.0,
+                    male_one_in: 2,
+                    young: (
+                        stages: [
+                            (name: "foal", until_days: 10.0, size: 0.5),
+                            (name: "yearling", until_days: 20.0, size: 0.8),
+                        ],
+                        adult: ("mare", "stallion"),
+                        birth: Live(gestation_days: 10.0, litter: (1, 1)),
+                    ),
+                )),
             ),
         ],
     },

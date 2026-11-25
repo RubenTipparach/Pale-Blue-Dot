@@ -19,7 +19,7 @@
 ## 4. Verify
 - [x] 4.1 fmt, clippy clean, tests pass except `planet_gen::tests::version_4_*`/`version_5_*`, which fail the same on clean `main` on this Mac (their digests were pinned on the Windows desktop), `openspec validate --all`.
 - [x] 4.2 Stills, march above and puffs below: `docs/screenshots/2026-10-28-cloud-puffs-{orbit,surface,coast}.jpg`.
-- [x] 4.3 Benchmark march / puffs / off on the Mac: `docs/benchmarks/2026-10-28-cloud-puffs/`, https://claude.ai/artifact/W9NwxmDmwuoQsRD2UgJFmP.
+- [x] 4.3 Benchmark march / puffs / off on the Mac: `docs/benchmarks/2026-10-28-cloud-puffs/`, https://claude.ai/artifact/TbBiyMCUrTo5WvFgxczBf7.
 - [ ] 4.5 The same benchmark on the owner's desktop (RTX 3070).
 - [ ] 4.8 Distant puffs (design 3b): depth test first, horizon cull, detail by size on screen; benchmark against `puffs-v1`.
 - [ ] 4.6 The eye inside cloud under puffs (`-coast.jpg`: a light grey with a dark smear where the march draws an even fog).

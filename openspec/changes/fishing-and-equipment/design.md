@@ -4,7 +4,7 @@ Every number here is either measured in this repository, read from Tenebris
 (`tenebris-rs`, whose path and line are given), or a proposal marked as a
 tunable that goes into validated RON. The mockup
 (`docs/mockups/fishing.html`,
-<https://claude.ai/artifact/1PQXEj8bs9HSzFhGLRyxtz>) runs every mechanic
+<https://claude.ai/artifact/Gn9W8sYEPTFKdDC2R5wWqh>) runs every mechanic
 below. Where the mockup differs from what is proposed, the difference is
 stated.
 
@@ -405,10 +405,17 @@ pulled it in at the right moment, but no fish is added to my inventory".
   - Winding in, walking out of reach, or putting the rod away with a fish
     nibbling or hooked dropped it the same silent way.
 - **Fix.**
-  - The strike is either button while the float is under: a right click at
-    the bite hooks the fish, as a left click does. Before and after the bite
-    the right button still winds in. (Recommendation taken, ask only with
-    screenshots.)
+  - ~~The strike is either button while the float is under: a right click at
+    the bite hooks the fish, as a left click does.~~ Replaced 2026-11-18 by
+    the owner's own rule: "left click to hook fish, right click to cancel for
+    fishing", and on the prompt "this shouldnt show to confuse players, right
+    click should be clearly shown to cancle, and left click to hook fish".
+    The left button alone hooks the fish; the right button cancels (winds the
+    line in) whenever the line is out and not hooked, at the bite too. While
+    the float is out the prompt shows both buttons: "LEFT CLICK HOOK" and
+    "RIGHT CLICK CANCEL", and the bite's line reads "Bite! Left click". The
+    silent loss that the old rule fixed stays fixed by `Event::Lost` and the
+    prompt that names the button.
   - A new `Event::Lost { species }`, raised before `ReeledIn` when the line
     held a fish nibbling, biting or hooked; the HUD says "Wound in - the
     minnow got away". Putting the rod away or boarding with a fish on says
@@ -596,7 +603,7 @@ cold survive only as words in the field guide.
 
 ### The ranges, measured: the Fish Range Atlas
 
-<https://claude.ai/artifact/3nFWs1XJ6ywSq5cqfHpgE3> (`docs/wiki/fish-ranges/`). It has:
+<https://claude.ai/artifact/Sr32H5K9cCmkteSDytP3hj> (`docs/wiki/fish-ranges/`). It has:
 - one greyscale range map per species, in the style of a field guide: land
   grey, water paler with depth, frozen water hatched, the species' range in
   red, and the part of its range it holds only some of the year in orange;
@@ -970,3 +977,56 @@ render graph, and is left until it is seen to matter.
   under it, a felled tree, and the field guide open on a species.
 - **Limitation:** the feel of the bite and reel, and whether the schools read
   as schools on screen, can only be confirmed by the owner in game.
+
+## The hooked float moves smoothly (owner, 2026-11-18)
+
+"fish also kinda teleports around when i reel it in". Measured in
+`pbd_core::fishing::Line::step`: the float's weave across the line was
+`sin(1.7 t) · 0.12 · run`, and `run` switches between 0 and the species'
+pull at the start and end of each run, so the float jumped sideways by up
+to 0.12 · pull · line out in one tick (about 1.8 m on 10 m of line). Fix: the
+weave follows the run through a new `weave`, eased at `WEAVE_RATE` 4/s
+(settled in about half a second), and starts at 0 on the hook. The tension,
+the line out and the catch are unchanged; only where the float is drawn
+between runs moves. Pinned by `the_hooked_float_never_jumps` (under 0.1 m
+a tick at 30 ticks a second). The Tools in Hand mockup's fight uses the
+same easing.
+
+## Both buttons, bottom left (owner, 2026-11-18)
+
+"need to show both right and left click for fishing, and they both need to
+be on the left corner of the screen", then "you didnt listen to me at all
+regarding those inputs". While the rod is in hand at fishable water, the
+bottom-left corner shows both mouse buttons, every phase, each with what it
+does now; the button that does nothing in this phase is grey and faded,
+never hidden ("otherwise it should appear grey and faded"). At the bite the
+left click's row turns yellow and shakes ("when fish bites, the left click
+buton prompt should highlight yellow and vibrate"): the words in the kit's
+title gold, the row jittering 2 px side to side at 18 Hz. Outlined text and the key glyph, no box (the prompt's look, owner
+2026-11-17). The fishing buttons leave the interact prompt under the
+crosshair, which is F's again.
+
+| Phase | Left click | Right click |
+| --- | --- | --- |
+| Ready | HOLD TO CAST | (not shown) |
+| Charging | LET GO TO CAST | (not shown) |
+| Flying, Floating, Nibble | HOOK (grey) | CANCEL (grey) |
+| Bite | HOOK (yellow, shaking) | CANCEL (grey) |
+| Hooked | HOLD TO REEL | (not shown) |
+
+The right click's CANCEL is always grey, never lit, though it works while
+the line is out and not hooked (owner, 2026-11-18: "right click cancle
+doesnt need to be highlighted"), and shows only while the line is cast
+("right click doesnt show up if the line isnt cast").
+
+The line under the crosshair no longer repeats what the corner says
+(Ready's "Hold the left button to cast" and Charging's "Let go to cast"
+are dropped); the nibble, bite and fight lines stay.
+
+## A fish on the line pulls it taut (owner, 2026-11-18)
+
+"when fish biting hook, the line should have tension, I dont think the line
+in real life would slack wheren theres a fish connected to it". The drawn
+line's sag at the bite is 0.03 m (was 0.6) and through the fight 0.01 +
+0.05 × (1 − tension) m (was 0.1 + 0.5 × (1 − tension)); a line with no fish
+on keeps its 0.6 m. Drawn only.

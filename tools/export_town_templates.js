@@ -78,6 +78,7 @@ const CANOPY = new Set(["jungle"]);
       // rope bridges with their ends and lanterns.
       const canopy = CANOPY_SCENES.includes(scene);
       const kapoks = [], platforms = [], ropeBridges = [], beams = [];
+      const forges = [];
       let inKapok = null, inPit = 0;
       const innerKapok = kapok, innerDeck = deck, innerBridgeLamps = bridgeLamps, innerAddFire = addFire, innerAddSolid = addSolid;
       // eslint-disable-next-line no-global-assign
@@ -117,6 +118,8 @@ const CANOPY = new Set(["jungle"]);
       // eslint-disable-next-line no-global-assign
       addFire = function (x, y, z, s = 1, kind = "hearth") {
         if (canopy && !depth && !inPit && !inStilt) fires.push({ kind: "fire", x, y, z });
+        // A smithy's forge (`townsfolk` design 26a): where its fire burns.
+        if (kind === "forge") forges.push([x, y, z]);
         return innerAddFire(x, y, z, s, kind);
       };
       const piers = [], lanterns = [], boats = [];
@@ -467,6 +470,27 @@ const CANOPY = new Set(["jungle"]);
         }
       }
       const out = { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
+      // Its people (`townsfolk` task 1.1), as the scene's `person()` calls
+      // put them: where each stands (the mockup's metres, its feet's
+      // height), the way it faces, its role, its work or its path and pace,
+      // its tunic and whether it holds a spear.
+      const people = NPCS.map((n) => {
+        const p = { role: n.role.toLowerCase().replace(/ /g, "_"), at: [n.solid.x, n.y, n.solid.z], facing: Math.PI / 2 - n.g.rotation.y, tunic: n.g.children[2].material.color.clone().convertLinearToSRGB().getHex() };
+        if (n.path) { p.path = n.path.map((q) => q.slice()); p.speed = n.speed; }
+        else if (n.work) p.work = n.work;
+        if (n.armR.children.length > 1) p.spear = true;
+        return p;
+      });
+      if (people.length) out.people = people;
+      // Its smithies (`townsfolk` design 26a): each forge's fire, and the
+      // cells of the area it burns in, the open shed round it.
+      const smithies = forges.map(([x, y, z]) => {
+        const [c, r] = cellAt(x, z), name = AREA[idx(c, r)];
+        const cells = [];
+        for (let rr = 0; rr < NR; rr++) for (let cc = 0; cc < NC; cc++) if (AREA[idx(cc, rr)] === name) cells.push([cc, rr]);
+        return { name, forge: [x, y, z], cells };
+      });
+      if (smithies.length) out.smithies = smithies;
       if (masonry.length) out.masonry = masonry;
       if (curtains.length) {
         out.masonry = curtains.slice();

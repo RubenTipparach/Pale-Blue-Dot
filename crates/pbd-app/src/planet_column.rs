@@ -135,6 +135,39 @@ const _: () = assert!(super::terrain::DIRT < 16);
 /// every slot's materials ([`ColumnTier::gpu_placed_sheets`]).
 pub const PLACED_SHEETS_BASE: usize = COLUMN_CAPACITY as usize * MATERIAL_WORDS;
 
+/// One column's render codes, eight to a word, into `out` (`MATERIAL_WORDS`
+/// words): one slot of [`ColumnTier::gpu_materials`].
+pub(crate) fn pack_materials(column: &Column, out: &mut [u32]) {
+    out.fill(0);
+    for layer in 0..LAYERS {
+        let shift = (layer % MATERIAL_PER_WORD) * 4;
+        // As drawn: a drowned top is a bed (`flora-v2` 12.10).
+        out[layer / MATERIAL_PER_WORD] |=
+            (render_code(column.drawn_material(layer)) & 0xf) << shift;
+    }
+}
+
+/// One column's placed sheets into `out`: one slot of
+/// [`ColumnTier::gpu_placed_sheets`], zeroes for a column nobody built on
+/// and with no ore in it ([`drawn_sheet_mark`]).
+pub(crate) fn pack_placed_sheets(column: &Column, out: &mut [u32]) {
+    out.fill(0);
+    for layer in 0..LAYERS {
+        let sheet = drawn_sheet_mark(column, layer);
+        if sheet != 0 {
+            out[layer / MATERIAL_PER_WORD] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
+        }
+    }
+}
+
+/// A record as the terrain shader reads it, its reach top in `more[2]`
+/// ([`ColumnTier::gpu_records_with_reach`]).
+pub(crate) fn with_reach_top(record: &GpuColumn, top: u16) -> GpuColumn {
+    let mut out = *record;
+    out.more[2] = (record.more[2] & DEGREE_MASK) | u32::from(top) << REACH_TOP_SHIFT;
+    out
+}
+
 /// The sheet a layer is drawn from if somebody PLACED it, plus one, or
 /// nought for generated ground (`placed-blocks-keep-material`): the tileset
 /// of the block's own home ([`column::home_biome`]), never the biome it
@@ -143,10 +176,34 @@ pub fn placed_sheet(column: &Column, layer: usize) -> u32 {
     if !column.placed(layer) {
         return 0;
     }
-    column::home_biome(column.material(layer)).map_or(0, |home| tileset_slot(home) + 1)
+    let material = column.material(layer);
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
+    }
+    column::home_biome(material).map_or(0, |home| tileset_slot(home) + 1)
 }
 // Every sheet, plus one, fits its nibble, and so the record's four bits.
 const _: () = assert!(super::terrain::TILESETS.len() < 16);
+
+/// What the per-layer sheet field and the record's sheet bits carry for a
+/// layer: [`ORE_SHEET`] for ore, generated in a vein or placed (`flora-v2`
+/// design 12.12), else [`placed_sheet`]. The ore keeps the stone's render
+/// code; the mark is what the shader draws its flecks from, on the stone of
+/// the biome it stands in.
+///
+/// [`ORE_SHEET`]: super::terrain::ORE_SHEET
+pub fn drawn_sheet_mark(column: &Column, layer: usize) -> u32 {
+    let material = column.material(layer);
+    if material == Material::Ore {
+        return super::terrain::ORE_SHEET;
+    }
+    // A sea cell is drawn from its own sheet, generated or placed
+    // (`ocean-environments` B24).
+    if let Some(own) = column::own_sheet(material) {
+        return super::terrain::sheet_index(own) + 1;
+    }
+    placed_sheet(column, layer)
+}
 
 /// The columns around one anchor, and the map from a finest record to its slot.
 #[derive(Clone)]
@@ -197,6 +254,17 @@ pub struct TierWater {
     pub keys: Vec<u32>,
     /// Each slot's finest record.
     pub records: Vec<usize>,
+    /// Each slot: whether a player's edit put something other than water in
+    /// its column (dug it, or built in it). The sea's reach never runs down
+    /// through such a column's air under the sea's level (`dry-holes`
+    /// design 3). Out of range reads as not dug.
+    pub dug: Vec<bool>,
+    /// The cells under the sea's level the sea is joined to through what is
+    /// not solid, `slot * sea_layer + layer` (`dry-holes` design 4): where
+    /// the rule's water is the sea's. Empty until the tier's sea is marked
+    /// (so a build's river settle runs on the rule alone), and again after
+    /// every edit.
+    pub joined: Vec<bool>,
 }
 
 /// Layers a slot's water ids are spaced by: a cell is `slot * 512 + layer`.
@@ -235,7 +303,7 @@ fn edited_water(edits: &Edits, key: u32, layer: usize) -> bool {
 pub struct TierGrid<'a>(pub &'a mut ColumnTier);
 
 impl ColumnTier {
-    fn rim(&self, slot: usize) -> bool {
+    pub(crate) fn rim(&self, slot: usize) -> bool {
         self.records
             .get(slot)
             .is_none_or(|record| record.more[3] & RIM_BIT != 0)
@@ -345,10 +413,13 @@ impl ColumnTier {
         seeds
     }
 
-    /// An edit at a finest record's layer, for the water: the sea floods in if
-    /// the edit opened a cell to it, and the cell and its neighbours are
-    /// queued for the rule (`water-flow` decision 5). Returns the slots the
-    /// flood changed, which the caller repacks.
+    /// An edit at a finest record's layer, for the water (`dry-holes` design
+    /// 4): the cell the edit opened fills with the sea at once if the sea's
+    /// own water is over it or beside it under the sea's level, and the cell
+    /// and its neighbours are queued for the rule (`water-flow` decision 5),
+    /// which brings the sea in from there at its own pace. A column dug or
+    /// built in is marked so (design 3). Returns the slots the edit's fill
+    /// changed, which the caller repacks.
     pub fn water_after_edit(&mut self, record: usize, layer: usize, edits: &Edits) -> Vec<usize> {
         let Some(&slot) = self.slots.get(record) else {
             return Vec::new();
@@ -356,26 +427,43 @@ impl ColumnTier {
         if slot == usize::MAX || slot >= self.columns.len() {
             return Vec::new();
         }
+        if !self.columns[slot].material(layer).is_water() {
+            if self.water.dug.len() <= slot {
+                self.water.dug.resize(slot + 1, false);
+            }
+            self.water.dug[slot] = true;
+        }
         let at = water_id(slot, layer);
-        let mut seeds = Vec::new();
-        for id in std::iter::once(at).chain(self.water_around(at).into_iter().flatten()) {
+        let sea = sea_layer();
+        let around = self.water_around(at);
+        // The sea's own water: generated, under its level, not the edits'.
+        let sea_water = |id: u32| {
             let (s, l) = water_cell(id);
             let key = self.water.keys.get(s).copied().unwrap_or(u32::MAX);
-            if self.columns.get(s).map(|c| c.material(l)) == Some(Material::Water)
+            l < sea
+                && !self.rim(s)
+                && self.columns.get(s).map(|c| c.material(l)) == Some(Material::Water)
                 && !edited_water(edits, key, l)
-            {
-                seeds.push(id);
-            }
-        }
-        let flooded = if seeds.is_empty() {
-            Vec::new()
+        };
+        let opened = layer < sea
+            && !self.rim(slot)
+            && self.columns[slot].material(layer) == Material::Air
+            && around[liquid::UP..liquid::DOWN]
+                .iter()
+                .flatten()
+                .any(|&id| sea_water(id));
+        let filled = if opened {
+            // Derived, as the build's flood is: never saved, and a reload's
+            // flood fills the same cell from the same water.
+            self.columns[slot].set(layer, Material::Water);
+            vec![slot]
         } else {
-            self.flood_from(seeds)
+            Vec::new()
         };
         let mut queue = std::mem::take(&mut self.water.queue);
         queue.touch(&TierGrid(self), at);
         self.water.queue = queue;
-        flooded
+        filled
     }
 
     /// Queue every cell of the tier that holds water the edits put there, and
@@ -407,6 +495,29 @@ impl ColumnTier {
             return 0;
         }
         let sea = sea_layer();
+        // The settled water kept from earlier tiers (`river-cache` design
+        // 11), stamped where this tier's rim cannot reach and no edit is
+        // near; the rule then settles what nobody has kept yet.
+        let cache = pbd_core::rivers::field(terrain_config()).filter(|_| settle_cache_on());
+        let keep = cache.map(|_| self.settle_keepable(edits));
+        if let (Some(cache), Some(keep)) = (cache, keep.as_ref()) {
+            let mut stamped = Vec::new();
+            for (slot, _) in keep.iter().enumerate().filter(|(_, k)| **k) {
+                let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+                let Some(cells) = cache.settled.get(&key) else {
+                    continue;
+                };
+                for &(layer, code) in cells.iter() {
+                    if let Some(material) = pbd_core::river_cache::liquid_of(code).material() {
+                        self.columns[slot].set(usize::from(layer), material);
+                    }
+                }
+                stamped.push(slot);
+            }
+            for slot in stamped {
+                self.repack_slot(slot);
+            }
+        }
         let mut queue = liquid::Queue::new();
         for slot in 0..self.columns.len() {
             if self.rim(slot) {
@@ -472,8 +583,39 @@ impl ColumnTier {
         let mut slots: Vec<usize> = changed.iter().map(|&(id, _)| water_cell(id).0).collect();
         slots.sort_unstable();
         slots.dedup();
-        for slot in slots {
+        for &slot in &slots {
             self.repack_slot(slot);
+        }
+        // Keep what the rule settled, where the rim could not reach: each
+        // changed layer and the liquid it holds now, merged with what was
+        // kept there before.
+        if let (Some(cache), Some(keep)) = (cache, keep.as_ref()) {
+            let mut layers: std::collections::BTreeMap<usize, Vec<u16>> = Default::default();
+            for &(id, _) in &changed {
+                let (slot, layer) = water_cell(id);
+                if keep[slot] {
+                    layers.entry(slot).or_default().push(layer as u16);
+                }
+            }
+            for (slot, mut list) in layers {
+                let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+                if key == u32::MAX {
+                    continue;
+                }
+                if let Some(old) = cache.settled.get(&key) {
+                    list.extend(old.iter().map(|&(l, _)| l));
+                }
+                list.sort_unstable();
+                list.dedup();
+                let cells: Box<[(u16, u8)]> = list
+                    .into_iter()
+                    .filter_map(|layer| {
+                        let cell = LiquidCell::of(self.columns[slot].material(usize::from(layer)));
+                        pbd_core::river_cache::liquid_code(cell).map(|c| (layer, c))
+                    })
+                    .collect();
+                cache.settled.put(key, cells);
+            }
         }
         #[cfg(test)]
         instrument(|p| {
@@ -483,6 +625,79 @@ impl ColumnTier {
             p.settle_changed = changed.len();
         });
         changed.len()
+    }
+
+    /// Each slot's distance from the tier's rim in cells, counted to
+    /// `limit` (slots at least that far in read `limit`): what says a cell
+    /// was meshed against its real neighbours (`river-cache` design 14).
+    pub(crate) fn rim_depth(&self, limit: u16) -> Vec<u16> {
+        let n = self.columns.len();
+        let mut depth = vec![limit; n];
+        let mut front = std::collections::VecDeque::new();
+        for (s, d) in depth.iter_mut().enumerate() {
+            if self.rim(s) {
+                *d = 0;
+                front.push_back(s);
+            }
+        }
+        while let Some(s) = front.pop_front() {
+            let next = depth[s] + 1;
+            if next >= limit {
+                continue;
+            }
+            for t in self.sides_of(s).into_iter().flatten() {
+                if depth[t] > next {
+                    depth[t] = next;
+                    front.push_back(t);
+                }
+            }
+        }
+        depth
+    }
+
+    /// Which slots' settled water may be stamped from the cache and kept in
+    /// it (`river-cache` design 11): at least [`SETTLE_KEEP_CELLS`] from the
+    /// tier's rim, where the rim could not have shaped it, and as far from
+    /// any edited column, so a dug bank never meets water kept from before.
+    fn settle_keepable(&self, edits: &Edits) -> Vec<bool> {
+        let n = self.columns.len();
+        let walk = |seeds: Vec<usize>| {
+            let mut depth = vec![u16::MAX; n];
+            let mut front = std::collections::VecDeque::new();
+            for s in seeds {
+                depth[s] = 0;
+                front.push_back(s);
+            }
+            while let Some(s) = front.pop_front() {
+                let next = depth[s] + 1;
+                if usize::from(next) >= SETTLE_KEEP_CELLS {
+                    continue;
+                }
+                for t in self.sides_of(s).into_iter().flatten() {
+                    if depth[t] > next {
+                        depth[t] = next;
+                        front.push_back(t);
+                    }
+                }
+            }
+            depth
+        };
+        let rim = walk((0..n).filter(|&s| self.rim(s)).collect());
+        let edited = walk(
+            (0..n)
+                .filter(|&s| {
+                    let key = self.water.keys.get(s).copied().unwrap_or(u32::MAX);
+                    !edits.for_cell(key).is_empty()
+                })
+                .collect(),
+        );
+        (0..n)
+            .map(|s| {
+                rim[s] == u16::MAX
+                    && edited[s] == u16::MAX
+                    && self.water.keys.get(s).is_some_and(|&k| k != u32::MAX)
+            })
+            .collect()
     }
 
     /// One tick of the rule over the tier: every cell that changed, by slot,
@@ -546,6 +761,27 @@ fn instrument(f: impl FnOnce(&mut BuildPhases)) {
     });
 }
 
+/// A test turns the settle's cache off to build a tier fresh.
+#[cfg(test)]
+pub(crate) static SETTLE_CACHE_OFF: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn settle_cache_on() -> bool {
+    #[cfg(test)]
+    {
+        !SETTLE_CACHE_OFF.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+/// How many cells from a tier's rim (and from an edited column) its settled
+/// river water is kept and stamped (`river-cache` design 11): past the
+/// rule's seven-cell reach with room for a fall's run below it.
+pub const SETTLE_KEEP_CELLS: usize = 12;
+
 /// The most ticks a tier's rivers are settled for at its build: longer than
 /// any reach's sheet and any fall in it takes to settle.
 pub const RIVER_SETTLE_TICKS: usize = 2048;
@@ -566,6 +802,15 @@ impl Grid for TierGrid<'_> {
     }
     fn around(&self, at: u32) -> [Option<u32>; 8] {
         self.0.water_around(at)
+    }
+    fn sea(&self, at: u32) -> bool {
+        let (slot, layer) = water_cell(at);
+        let joined = &self.0.water.joined;
+        if joined.is_empty() {
+            return false;
+        }
+        let sea = sea_layer();
+        layer < sea && joined.get(slot * sea + layer).copied().unwrap_or(false)
     }
 }
 
@@ -675,6 +920,22 @@ impl ColumnTier {
     /// drawn side changes when this column does even though its own stack did
     /// not. Everything else in the tier is left alone, which is the whole
     /// reason an edit is not a rebuild.
+    /// Whether the cell of finest record `record` grows a burning glowing
+    /// mushroom now (`glowing-mushrooms` design 4: a pick puts it out), its
+    /// record repacked. `true` when the tier's answer changed, and the field
+    /// wants relighting.
+    pub fn set_glow(&mut self, record: usize, glowing: bool) -> bool {
+        let Some(&slot) = self.slots.get(record) else {
+            return false;
+        };
+        match self.glow.get_mut(slot) {
+            Some(was) if *was != glowing => *was = glowing,
+            _ => return false,
+        }
+        self.repack(record);
+        true
+    }
+
     pub fn repack(&mut self, record: usize) {
         let Some(&slot) = self.slots.get(record) else {
             return;
@@ -813,15 +1074,34 @@ impl ColumnTier {
     /// and stone because those are the layers the generator wrote.
     pub fn gpu_materials(&self) -> Vec<u32> {
         let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
-        for (slot, column) in self.columns.iter().enumerate() {
-            for layer in 0..LAYERS {
-                let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
-                let shift = (layer % MATERIAL_PER_WORD) * 4;
-                // As drawn: a drowned top is a bed (`flora-v2` 12.10).
-                words[word] |= (render_code(column.drawn_material(layer)) & 0xf) << shift;
-            }
+        for (column, out) in self
+            .columns
+            .iter()
+            .zip(words.chunks_exact_mut(MATERIAL_WORDS))
+        {
+            pack_materials(column, out);
         }
         words
+    }
+
+    /// One slot's light, as [`ColumnTier::gpu_light`] lays it, into `out`
+    /// (`LIGHT_WORDS` words; `fine-set-upload` D1). Four one-byte levels to
+    /// a word, low byte first, which is `u32::from_le_bytes` of the levels as
+    /// they lie: no shifting layer by layer.
+    pub(crate) fn pack_light(&self, slot: usize, out: &mut [u32]) {
+        let Some(levels) = self.light.get(slot) else {
+            out.fill(0);
+            return;
+        };
+        for (word, four) in out.iter_mut().zip(levels.chunks_exact(LIGHT_PER_WORD)) {
+            *word = u32::from_le_bytes([four[0].0, four[1].0, four[2].0, four[3].0]);
+        }
+    }
+
+    /// Each slot's unit direction (`fine-set-upload`: a layout is the same
+    /// when these are).
+    pub(crate) fn centre_dirs(&self) -> &[Vec3] {
+        &self.centres
     }
 
     /// Every layer's PLACED sheet, eight to a word, `MATERIAL_WORDS` words per
@@ -833,17 +1113,12 @@ impl ColumnTier {
     /// placed layer costs more than its zeroes.
     pub fn gpu_placed_sheets(&self) -> Vec<u32> {
         let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
-        for (slot, column) in self.columns.iter().enumerate() {
-            if !column.any_placed() {
-                continue;
-            }
-            for layer in 0..LAYERS {
-                let sheet = placed_sheet(column, layer);
-                if sheet != 0 {
-                    let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
-                    words[word] |= sheet << ((layer % MATERIAL_PER_WORD) * 4);
-                }
-            }
+        for (column, out) in self
+            .columns
+            .iter()
+            .zip(words.chunks_exact_mut(MATERIAL_WORDS))
+        {
+            pack_placed_sheets(column, out);
         }
         words
     }
@@ -865,6 +1140,9 @@ impl ColumnTier {
     /// a block is in the bound the moment its records go up.
     ///
     /// [`reach top`]: REACH_TOP_SHIFT
+    /// [`TierImage::build`](super::tier_gpu::TierImage::build) makes the
+    /// same records for the upload; this is their reference.
+    #[cfg(test)]
     pub(crate) fn gpu_records_with_reach(&self, reach_m: f32) -> Vec<GpuColumn> {
         let records = self.gpu_records();
         let rings = reach_rings(records, &self.centres, reach_m);
@@ -872,11 +1150,7 @@ impl ColumnTier {
         records
             .iter()
             .zip(tops)
-            .map(|(record, top)| {
-                let mut out = *record;
-                out.more[2] = (record.more[2] & DEGREE_MASK) | u32::from(top) << REACH_TOP_SHIFT;
-                out
-            })
+            .map(|(record, top)| with_reach_top(record, top))
             .collect()
     }
 
@@ -1068,6 +1342,7 @@ impl ColumnTier {
                 queue: liquid::Queue::new(),
                 keys: (0..n as u32).map(|i| 100 + i).collect(),
                 records: (0..n).collect(),
+                ..Default::default()
             },
         };
         tier.sides = tier.neighbor_slots();
@@ -1113,11 +1388,13 @@ pub fn reconcile_surface(
     } else {
         render_code(column.drawn_material(top))
     };
-    // And whether water stands on it at any tide (`flora-v2` 12.11): the
-    // column's own water on its top, or a top under the high tide's sheet.
+    // And whether water stands on it (`flora-v2` 12.11): the column's own
+    // water on its top, or a top under the high-water line.
     // Set or cleared, so a pool that drains grows its plants again. The code
     // above is left as it was: under the sea it is the beach's sand, which
     // stood a beach tree in the sea before this bit.
+    // An exposed ore top carries the ore mark instead (design 12.12).
+    let mark = drawn_sheet_mark(column, top);
     let flooded = column.water_over(top) || top_m < super::terrain::high_water_m();
     let flood_bit = 1 << super::terrain::FLOODED_BIT;
     let sheet_bits = 0xf << super::terrain::PLACED_SHEET_SHIFT;
@@ -1125,7 +1402,7 @@ pub fn reconcile_surface(
     finest[index].metadata[1] = word
         | code
         | if flooded { flood_bit } else { 0 }
-        | placed << super::terrain::PLACED_SHEET_SHIFT;
+        | mark << super::terrain::PLACED_SHEET_SHIFT;
     let Some(table) = neighbors.get(index).copied() else {
         return;
     };
@@ -1308,16 +1585,22 @@ const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
 /// chosen once from the cell's exact key (`pbd_core::flora::glows`).
 pub const GLOW_FLOWER_BIT: u32 = 1;
 
+/// Set in a finest record's `spare[2]` where its cell's glowing mushroom is
+/// picked (`glowing-mushrooms` design 4): the flower slot draws nothing
+/// there, so no ordinary flower grows where the mushroom was. Bit 3, the
+/// next free one (1 and 2 are the sea's).
+pub const GLOW_PICKED_BIT: u32 = 8;
+
 /// Set in a finest record's `spare[2]` where its cell's ground is under the
 /// high water and yet no sea sheet lies over it: a pit or a hollow the sea's
-/// water reaches at no tide (`volumetric-water` phase 2, `ocean-environments`
+/// water does not reach (`volumetric-water` phase 2, `ocean-environments`
 /// B22), or a river's mouth whose own top is the cell's one surface (B18).
 /// The visibility pass lists no sea sheet over it, so a sealed pocket is dry
 /// on screen as it is in the column.
 pub const DRY_SHEET_BIT: u32 = 2;
 
 /// Set in a finest record's `spare[2]` where the sea's surface reaches the
-/// cell at some tide (`ocean-environments` B22, [`ColumnTier::sea_reach`]):
+/// cell (`ocean-environments` B22, [`ColumnTier::sea_reach`]):
 /// the sheet is listed over it whatever its ground's or roof's height.
 pub const SEA_REACH_BIT: u32 = 4;
 
@@ -1327,6 +1610,10 @@ pub const SEA_REACH_BIT: u32 = 4;
 /// under a roof, as the mesher's water there was.
 pub const SHEET_SHADE_SHIFT: u32 = 8;
 const SHEET_SHADE_MASK: u32 = 0xf << SHEET_SHADE_SHIFT;
+// Each of `spare[2]`'s flags has its own bit.
+const _: () = assert!(
+    GLOW_PICKED_BIT & (GLOW_FLOWER_BIT | DRY_SHEET_BIT | SEA_REACH_BIT | SHEET_SHADE_MASK) == 0
+);
 
 /// Whether the sea's sheet is drawn over a finest record: the visibility
 /// pass's listing (`planet_visibility.wgsl`), for the readers on the CPU that
@@ -1369,8 +1656,8 @@ pub fn mark_sea(tier: &ColumnTier, finest: &mut [GpuCell]) {
             top.is_water() && top != Material::Water
         };
         let reached = reach.get(slot).copied().unwrap_or(false) && !river_over && !flowing_top;
-        // Dry: under the high water, and the sea's surface reaches it at no
-        // tide (a pit or a hollow nothing joins to the sea), unless its
+        // Dry: under the high water, and the sea's surface does not reach it
+        // (a pit or a hollow nothing joins to the sea), unless its
         // column holds water at the sea's top (a pool somebody poured), or
         // a river stands over it.
         let dry = sea > 0
@@ -1395,11 +1682,13 @@ pub fn mark_sea(tier: &ColumnTier, finest: &mut [GpuCell]) {
 }
 
 impl ColumnTier {
-    /// Which slots the sea's surface reaches at some tide (`ocean-environments`
-    /// B22): a walk from the open sea (a column holding the sea's water at
-    /// its top layer, open air over it, its record under sea level) through
-    /// every layer that is not solid, up to the high water's, across the
-    /// sides and up and down. A pit behind a beach the tide overtops, and a
+    /// Which slots the sea's surface reaches (`ocean-environments` B22): a
+    /// walk from the open sea (a column holding the sea's water at its top
+    /// layer, open air over it, its record under sea level) through every
+    /// layer that is not solid, up to the high water's and never short of the
+    /// first layer over the sea's level (the waves' margin; `no-tides`),
+    /// across the sides and up and down. A pit behind a beach at the sea's
+    /// level, and a
     /// cavern under a bank opening onto the sea, are reached; a hollow inland
     /// that joins no water is not. The rim is walked like any column: its
     /// water is the sea's.
@@ -1417,28 +1706,20 @@ impl ColumnTier {
         let mut open: std::collections::VecDeque<(usize, usize)> = Default::default();
         // Air, or water under the sea's level: a river's or a pool's water
         // over it is its own, and the sea's surface does not run through it.
+        // Not the air under the sea's level in a column a player dug or
+        // built in (`dry-holes` design 3): a dug hole is the sea's only where
+        // the sea's water has flowed into it, never because the sea's air
+        // over ground beside it joins it.
+        let dug = |slot: usize| self.water.dug.get(slot).copied().unwrap_or(false);
         let passable = |slot: usize, layer: usize| {
             let m = self.columns[slot].material(layer);
-            layer >= 1 && (m == Material::Air || (m.is_water() && layer < sea))
+            layer >= 1
+                && ((m == Material::Air && (layer >= sea || !dug(slot)))
+                    || (m.is_water() && layer < sea))
         };
-        for slot in 0..n {
-            let column = &self.columns[slot];
-            let under_sea = self
-                .water
-                .records
-                .get(slot)
-                .and_then(|_| column.surface())
-                .is_none_or(|top| {
-                    column::layer_altitude(top) + 1.0 <= terrain_config().sea_level_m
-                });
-            if column.material(sea - 1) == Material::Water
-                && !column.solid(sea)
-                && !column.material(sea).is_water()
-                && under_sea
-            {
-                seen[slot * band + sea - 1] = true;
-                open.push_back((slot, sea - 1));
-            }
+        for slot in self.open_sea() {
+            seen[slot * band + sea - 1] = true;
+            open.push_back((slot, sea - 1));
         }
         while let Some((slot, layer)) = open.pop_front() {
             reached[slot] = true;
@@ -1456,13 +1737,156 @@ impl ColumnTier {
                 visit(side, layer, &mut open);
             }
         }
+        // A dug column the walk met only over the sea's level (the air over a
+        // beach beside it) is the sea's where its top layer under the
+        // sea's level is the sea's water or solid; with air there, it is a
+        // dry hole, or one the sea is still flowing into.
+        for (slot, reach) in reached.iter_mut().enumerate() {
+            if *reach && dug(slot) && self.columns[slot].material(sea - 1) == Material::Air {
+                *reach = false;
+            }
+        }
         reached
+    }
+
+    /// The open sea's columns: the sea's water at its top layer with open air
+    /// over it, under sea level. Where the sea's reach and its joined walk
+    /// start.
+    fn open_sea(&self) -> Vec<usize> {
+        let sea = sea_layer();
+        if sea == 0 {
+            return Vec::new();
+        }
+        (0..self.columns.len())
+            .filter(|&slot| {
+                let column = &self.columns[slot];
+                let under_sea = self
+                    .water
+                    .records
+                    .get(slot)
+                    .and_then(|_| column.surface())
+                    .is_none_or(|top| {
+                        column::layer_altitude(top) + 1.0 <= terrain_config().sea_level_m
+                    });
+                column.material(sea - 1) == Material::Water
+                    && !column.solid(sea)
+                    && !column.material(sea).is_water()
+                    && under_sea
+            })
+            .collect()
+    }
+
+    /// Which cells under the sea's level the sea is joined to (`dry-holes`
+    /// design 4): a walk from the open sea's top layer through every cell
+    /// under the sea's level that is not solid (air or water), across the
+    /// sides and up and down. Indexed `slot * sea_layer + layer`. Where the
+    /// rule's water is the sea's ([`liquid::transform_at`]): a pit whose wall
+    /// is breached is joined, so the sea fills it; a sealed pit is not, so a
+    /// bucket poured into it stays the bucket's. A function of the solids
+    /// alone, so the water the rule moves never changes it.
+    pub fn sea_joined(&self) -> Vec<bool> {
+        let sea = sea_layer();
+        let n = self.columns.len();
+        let mut joined = vec![false; n * sea];
+        if sea == 0 || n == 0 {
+            return joined;
+        }
+        let mut open: std::collections::VecDeque<(usize, usize)> = Default::default();
+        for slot in self.open_sea() {
+            joined[slot * sea + sea - 1] = true;
+            open.push_back((slot, sea - 1));
+        }
+        while let Some((slot, layer)) = open.pop_front() {
+            let mut visit = |s: usize, l: usize, open: &mut std::collections::VecDeque<_>| {
+                if l >= 1
+                    && l < sea
+                    && !joined[s * sea + l]
+                    && !self.rim(s)
+                    && !self.columns[s].solid(l)
+                {
+                    joined[s * sea + l] = true;
+                    open.push_back((s, l));
+                }
+            };
+            visit(slot, layer + 1, &mut open);
+            visit(slot, layer.saturating_sub(1), &mut open);
+            for side in self.sides_of(slot).into_iter().flatten() {
+                visit(side, layer, &mut open);
+            }
+        }
+        joined
     }
 }
 
 /// Whether a record's cell grows a glowing flower.
 fn glows(cell: &GpuCell) -> bool {
     cell.spare[2] & GLOW_FLOWER_BIT != 0
+}
+
+/// A finest record's `spare[2]` with its glowing-flower bits for the cell
+/// `key`, built `from_camera_m` metres from the camera: [`GLOW_FLOWER_BIT`]
+/// where it grows one and no pick stands, [`GLOW_PICKED_BIT`] where a pick
+/// stands (`glowing-mushrooms` design 4). Every other bit is kept.
+pub fn glow_bits(
+    spare: u32,
+    key: u32,
+    chance: f32,
+    picks: &pbd_core::edits::GlowPicks,
+    from_camera_m: f32,
+) -> u32 {
+    let grows = key != crate::planet::NO_KEY && flora::glows(key, chance);
+    let picked = grows && picks.stands_picked(key, from_camera_m);
+    let bits = if picked {
+        GLOW_PICKED_BIT
+    } else if grows {
+        GLOW_FLOWER_BIT
+    } else {
+        0
+    };
+    (spare & !(GLOW_FLOWER_BIT | GLOW_PICKED_BIT)) | bits
+}
+
+/// Set in a finest record's `spare[2]` where the player has marked its cell
+/// for paving (`townsfolk` design 39a): the cap draws a lime band between
+/// the sides at [`MARK_SIDE_IN_SHIFT`] and [`MARK_SIDE_OUT_SHIFT`], three
+/// bits each, [`MARK_NO_SIDE`] where the plan ends on the cell's middle.
+/// `planet_surface.wgsl` reads them.
+pub const MARK_BIT: u32 = 1 << 16;
+pub const MARK_SIDE_IN_SHIFT: u32 = 17;
+pub const MARK_SIDE_OUT_SHIFT: u32 = 20;
+pub const MARK_NO_SIDE: u32 = 7;
+const MARK_MASK: u32 = 0x7f << 16;
+const _: () = assert!(
+    MARK_MASK
+        & (GLOW_PICKED_BIT | GLOW_FLOWER_BIT | DRY_SHEET_BIT | SEA_REACH_BIT | SHEET_SHADE_MASK)
+        == 0
+);
+
+/// The side of a record's cell (its `corners[side]` to `corners[side + 1]`)
+/// a neighbouring cell lies across: the side whose middle is nearest it.
+pub fn side_toward(cell: &GpuCell, neighbour: u32) -> Option<u32> {
+    let toward = pbd_core::roads::centre(neighbour)?;
+    let degree = cell.degree().min(6);
+    (0..degree)
+        .map(|side| {
+            let a = Vec3::from_slice(&cell.corners[side][..3]);
+            let b = Vec3::from_slice(&cell.corners[(side + 1) % degree][..3]);
+            (side as u32, (a + b).normalize_or_zero().dot(toward))
+        })
+        .max_by(|x, y| x.1.total_cmp(&y.1))
+        .map(|(side, _)| side)
+}
+
+/// A finest record's `spare[2]` with its mark bits for the cell `key`, from
+/// the installed marks (`pbd_core::roads::paving::mark_of`). Every other bit
+/// is kept.
+pub fn mark_bits(cell: &GpuCell, key: u32) -> u32 {
+    let spare = cell.spare[2] & !MARK_MASK;
+    let Some((before, after)) = pbd_core::roads::paving::mark_of(key) else {
+        return spare;
+    };
+    let side = |n: Option<u32>| n.and_then(|n| side_toward(cell, n)).unwrap_or(MARK_NO_SIDE);
+    spare | MARK_BIT | side(before) << MARK_SIDE_IN_SHIFT | side(after) << MARK_SIDE_OUT_SHIFT
 }
 
 /// The render codes the shader grows flowers on: its `grassy`. A test reads
@@ -1500,6 +1924,50 @@ pub fn build(
     edits: &Edits,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
+    let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
+    build_with(
+        anchor,
+        finest,
+        neighbors,
+        settings,
+        edits,
+        &Members {
+            worms_m: settings.reach_m.max(0.),
+            select: &|_, direction: Vec3| direction.dot(anchor) > reach,
+            capacity: COLUMN_CAPACITY as usize,
+            light: true,
+        },
+    )
+}
+
+/// Which finest cells a tier is built over, and how (`river-cache` design
+/// 14): the column tier takes every cell within its reach and is lit; the
+/// river band takes a river's cells out to the finest band, and needs no
+/// caves (a river's valley is sealed from them) but its light, which its
+/// water's faces are shaded by.
+pub struct Members<'a> {
+    /// How far round the anchor caves are gathered from, m.
+    pub worms_m: f32,
+    /// Whether the finest record at an index, at a direction, is a member.
+    pub select: &'a dyn Fn(usize, Vec3) -> bool,
+    /// The most members.
+    pub capacity: usize,
+    /// Whether the tier is lit (`relight`).
+    pub light: bool,
+}
+
+/// [`build`] over the chosen members. The records' slot bits are written as
+/// the column tier's are: a caller building anything but the column tier
+/// passes a copy of the records.
+pub fn build_with(
+    anchor: Vec3,
+    finest: &mut [GpuCell],
+    neighbors: &[[u32; 6]],
+    settings: &ColumnSettings,
+    edits: &Edits,
+    members_of: &Members,
+) -> ColumnTier {
+    let anchor = anchor.normalize_or(Vec3::Y);
     // No finest level (the player is too high for it to be live): no column
     // to build, and no worms to gather for them.
     if finest.is_empty() {
@@ -1510,20 +1978,27 @@ pub fn build(
     // built it. This is the regional pre-pass the design said worms need,
     // done at the one place columns are built in bulk.
     let field = settings.worms();
-    let region = worms::gather(&field, terrain_config(), anchor, settings.reach_m.max(0.));
-    let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
+    let region = worms::gather(&field, terrain_config(), anchor, members_of.worms_m);
     let mut slots = vec![usize::MAX; finest.len()];
     let mut members = Vec::new();
     for (index, cell) in finest.iter_mut().enumerate() {
         // Whether the cell grows a glowing flower, decided here once from its
         // key, for every finest cell: the shader grows the flower wherever
-        // the bit is, and the bake lights the ones in the tier.
+        // the bit is, and the bake lights the ones in the tier. A picked one
+        // (`glowing-mushrooms` design 4) is neither drawn nor lit, and its
+        // cell grows no other flower in its place while the pick stands.
         let key = cell.key();
-        let glowing =
-            key != crate::planet::NO_KEY && flora::glows(key, settings.glow_flower_chance);
-        cell.spare[2] = (cell.spare[2] & !GLOW_FLOWER_BIT) | glowing as u32;
         let direction = Vec3::from_slice(&cell.direction_height[..3]);
-        if direction.dot(anchor) <= reach || members.len() >= COLUMN_CAPACITY as usize {
+        cell.spare[2] = glow_bits(
+            cell.spare[2],
+            key,
+            settings.glow_flower_chance,
+            &edits.glow,
+            direction.normalize_or(Vec3::Y).angle_between(anchor) * PLANET_RADIUS,
+        );
+        // A cell the player marked for paving (`townsfolk` design 39a).
+        cell.spare[2] = mark_bits(cell, key);
+        if !(members_of.select)(index, direction) || members.len() >= members_of.capacity {
             cell.metadata[2] &= SKYLIGHT_MASK;
             continue;
         }
@@ -1576,7 +2051,10 @@ pub fn build(
         // by the rule above and takes its edits too - a wall you dug in is
         // still a wall you dug in when the tier moves and it becomes the rim.
         let made = &edits.for_cell(cell.key());
-        let column = if rim {
+        // No caves where none are gathered (the river band, `worms_m` 0): a
+        // river's valley is sealed from them, and a column is then the same
+        // whatever anchor built it.
+        let column = if rim || members_of.worms_m <= 0.0 {
             column::generate_edited_solid(terrain_config(), direction, made)
         } else {
             column::generate_edited(&region, &field, terrain_config(), direction, made)
@@ -1619,7 +2097,12 @@ pub fn build(
         // put out does not grow back through it and whatever stands on it
         // (`edit-pipeline`, the owner's vanished lamp, 2026-11-16).
         let edited = !edits.for_cell(finest[index].key()).is_empty();
-        if top_m >= finest[index].direction_height[3] && !edited {
+        // A floe of sea ice (generator version 14, `ocean-environments` B24)
+        // is the one generated top that stands over the record: it floats
+        // on the sea, which the height field's record is the bed under. The
+        // record takes its top, so its cap is drawn and the walls follow.
+        let floe = column.material(top) == pbd_core::terrain::Material::SeaIce;
+        if top_m >= finest[index].direction_height[3] && !edited && !floe {
             continue;
         }
         reconcile_surface(finest, neighbors, index, column);
@@ -1639,6 +2122,17 @@ pub fn build(
             queue: liquid::Queue::new(),
             keys: members.iter().map(|&i| finest[i].key()).collect(),
             records: members.clone(),
+            // A column the save digs or builds in (`dry-holes` design 3).
+            dug: members
+                .iter()
+                .map(|&i| {
+                    edits
+                        .for_cell(finest[i].key())
+                        .iter()
+                        .any(|&(_, m)| !m.is_water())
+                })
+                .collect(),
+            joined: Vec::new(),
         },
     };
     // The sea floods what a carve or an edit opened onto it (`volumetric-water`
@@ -1678,7 +2172,9 @@ pub fn build(
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.
-    tier.relight();
+    if members_of.light {
+        tier.relight();
+    }
     #[cfg(test)]
     {
         let ms = phase.elapsed().as_secs_f64() * 1000.;
@@ -1687,6 +2183,9 @@ pub fn build(
     // And where the sea's sheet lies, from the sea's reach and the light
     // (`ocean-environments` B22): none over a pit the sea has not reached.
     mark_sea(&tier, finest);
+    // And where the rule's water is the sea's (`dry-holes` design 4), after
+    // the rivers have settled by the rule alone.
+    tier.water.joined = tier.sea_joined();
     tier
 }
 
@@ -1723,7 +2222,6 @@ pub fn mouth_of(cell: &GpuCell, runs: &[column::Run]) -> Option<(f32, f32, usize
 
 /// The slot a cell record carries, or `None`. What the shaders read off the
 /// same word, written here so a test can hold the two together.
-#[cfg(test)]
 pub(crate) fn slot_of(cell: &GpuCell) -> Option<u32> {
     // Zero is what a record is born with, so it is what "no column" means and
     // nothing has to be cleared to say it.
@@ -2973,6 +3471,88 @@ mod tests {
     /// same box lifted into the open air reads the sky, and a point off the
     /// tier reads the open sky.
     #[test]
+    fn a_picked_glowing_mushroom_is_neither_drawn_nor_lit() {
+        // `glowing-mushrooms` 2.3: a pick, saved and read back, makes the
+        // build mark its cell picked (no plant, no other flower) and adds no
+        // emitter there at night; the resident set takes a pick at once.
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let mut set = lod::generate_fine(anchor, &settings, &Edits::new());
+        set.columns.set_dusk(true);
+        let lit_slot = |set: &lod::FineSet, slot: usize| {
+            set.columns
+                .emitters()
+                .iter()
+                .any(|e| e.level == flora::GLOW_FLOWER_LEVEL && e.column == slot as u32)
+        };
+        let (index, slot) = (0..set.finest_records().len())
+            .filter(|&i| glows(&set.finest_records()[i]) && set.columns.slots[i] != usize::MAX)
+            .map(|i| (i, set.columns.slots[i]))
+            .find(|&(_, slot)| lit_slot(&set, slot))
+            .expect("a burning glowing mushroom in the tier");
+        let key = set.finest_records()[index].key();
+        // Saved, and read back from the disk.
+        let root = std::env::temp_dir().join(format!("pbd-glow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let slot_file = crate::saves::create(&root, "Glow", 31).unwrap();
+        {
+            let mut save = crate::saves::WorldSave::open(root.clone(), slot_file);
+            let mut slots = pbd_core::inventory::Slots::new();
+            slots.give(
+                pbd_core::inventory::Item::Good(pbd_core::goods::Good::GLOWING_MUSHROOM),
+                1,
+            );
+            let line = pbd_core::records::Record::of(
+                flora::GLOW_PLANT_RECORD,
+                u64::from(key),
+                flora::GLOW_PLANT_SCHEMA,
+                &flora::GlowPicked { day: 3.0 },
+            );
+            assert!(save.store_with_hands(line, flora::GLOW_PLANT_SCHEMA, &slots));
+            assert_eq!(save.edits.glow.picked_on(key), Some(3.0));
+            save.drain();
+        }
+        let listed = crate::saves::list(&root);
+        let reopened = crate::saves::WorldSave::open(root.clone(), listed[0].clone());
+        let _ = std::fs::remove_dir_all(&root);
+        let mut edits = reopened.edits.clone();
+        assert_eq!(
+            edits.glow.picked_on(key),
+            Some(3.0),
+            "the pick survives a reload"
+        );
+        edits.glow.day = 4.0;
+        edits.glow.far_m = 120.0;
+        // Built with the pick.
+        let mut picked = lod::generate_fine(anchor, &settings, &edits);
+        picked.columns.set_dusk(true);
+        let cell = &picked.finest_records()[index];
+        assert_eq!(cell.key(), key);
+        assert_eq!(cell.spare[2] & GLOW_FLOWER_BIT, 0, "no plant");
+        assert_ne!(
+            cell.spare[2] & GLOW_PICKED_BIT,
+            0,
+            "and no flower in its place"
+        );
+        assert!(!lit_slot(&picked, picked.columns.slots[index]), "no light");
+        // The resident set, built before the pick, takes it at once.
+        let changed = set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 0.0);
+        assert_eq!(changed, 1);
+        assert!(!lit_slot(&set, slot));
+        // Due and in front of the player, it stays picked; out of sight it grows.
+        edits.glow.day = 3.0 + flora::GLOW_PLANT_REGROW_DAYS;
+        assert_eq!(
+            set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 20.0),
+            0
+        );
+        assert_eq!(
+            set.apply_glow_picks(&edits.glow, settings.glow_flower_chance, |_| 500.0),
+            1
+        );
+        assert!(lit_slot(&set, slot), "grown back out of sight");
+    }
+
+    #[test]
     fn a_sealed_cave_gives_eight_dark_corners_and_the_open_air_the_sky() {
         let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
         let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
@@ -3221,6 +3801,7 @@ mod water_tier_tests {
                 queue: liquid::Queue::new(),
                 keys: (0..N as u32).map(|i| 100 + i).collect(),
                 records: (0..N).collect(),
+                ..Default::default()
             },
         };
         tier.sides = tier.neighbor_slots();
@@ -3281,7 +3862,7 @@ mod water_tier_tests {
     }
 
     /// `ocean-environments` B22, the owner's caverns beside the sea: a pit
-    /// behind a beach the tide overtops and a cavern opening off it under a
+    /// behind a beach at the sea's level and a cavern opening off it under a
     /// bank are reached by the sea's surface, so the sheet lies over both
     /// and the mesher leaves the sea's top to it; a pit inland that joins no
     /// water is not, and no sheet lies over it, though its ground is as low.
@@ -3338,15 +3919,19 @@ mod water_tier_tests {
         assert_eq!(mesh.tops, 0, "no second surface under the sheet");
     }
 
-    /// An edit's flood: digging the rock between the flooded tunnel and the
-    /// pocket lets the sea in, at once.
+    /// An edit into the sea (`dry-holes` design 4): digging the rock between
+    /// the flooded tunnel and the pocket fills the opened cell from the sea at
+    /// once, and the rule brings the sea on into the pocket, a cell a tick,
+    /// to the same water the old flood made at once, never climbing past the
+    /// hole it came through.
     #[test]
-    fn digging_through_to_the_sea_floods_on_the_edit() {
+    fn digging_through_to_the_sea_lets_it_flow_in() {
         let mut tier = line();
         carve(&mut tier, 5..=7, BED + 5..=BED + 7);
         carve(&mut tier, 9..=10, BED + 5..=BED + 7);
         let seeds = tier.sea_seeds(&Edits::new());
         tier.flood_from(seeds);
+        tier.water.joined = tier.sea_joined();
         let mut edits = Edits::new();
         edits.set(Edit {
             cell: 108,
@@ -3354,15 +3939,245 @@ mod water_tier_tests {
             material: Material::Air,
         });
         tier.columns[8].set(BED + 6, Material::Air);
-        let flooded = tier.water_after_edit(8, BED + 6, &edits);
-        assert_eq!(flooded, vec![8, 9, 10]);
-        assert_eq!(tier.columns[10].material(BED + 5), Material::Water);
+        let filled = tier.water_after_edit(8, BED + 6, &edits);
+        assert_eq!(filled, vec![8], "the opened cell, from the sea beside it");
+        assert_eq!(tier.columns[8].material(BED + 6), Material::Water);
         assert_eq!(
-            tier.columns[10].material(BED + 7),
+            tier.columns[9].material(BED + 6),
             Material::Air,
-            "the flood does not climb past the hole it came through"
+            "the pocket is not filled by the edit"
         );
         assert!(!tier.water.queue.is_empty(), "and the edit is queued");
+        // The edit's caller marks the sea after it (`FineSet::mark_sea`).
+        tier.water.joined = tier.sea_joined();
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 50 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+            if ticks == 1 {
+                assert!(
+                    tier.columns[10].material(BED + 6) != Material::Water,
+                    "the far end is not reached on the first tick"
+                );
+            }
+        }
+        for slot in 9..=10 {
+            for layer in BED + 5..=BED + 7 {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    if layer == BED + 7 {
+                        Material::Air
+                    } else {
+                        Material::Water
+                    },
+                    "slot {slot} layer {layer}: the sea to the hole's height, no higher"
+                );
+            }
+        }
+    }
+
+    /// Dig `layers` out of `slot`'s column, top down, through the edit's
+    /// water path, as `FineSet::write_layer` does, then mark the sea as the
+    /// edit's caller does.
+    fn dig(
+        tier: &mut ColumnTier,
+        edits: &mut Edits,
+        slot: usize,
+        layers: std::ops::RangeInclusive<usize>,
+    ) {
+        for layer in layers.rev() {
+            edits.set(Edit {
+                cell: 100 + slot as u32,
+                layer: layer as u16,
+                material: Material::Air,
+            });
+            tier.columns[slot].set(layer, Material::Air);
+            tier.water_after_edit(slot, layer, edits);
+            tier.water.joined = tier.sea_joined();
+        }
+    }
+
+    /// The records of the line, their heights the columns' tops, marked for
+    /// the sea's sheet as a build or an edit marks them.
+    fn marked(tier: &mut ColumnTier) -> Vec<GpuCell> {
+        tier.relight();
+        let mut finest: Vec<GpuCell> = (0..N)
+            .map(|slot| {
+                let mut cell = GpuCell::zeroed();
+                cell.direction_height[3] = tier.columns[slot]
+                    .surface()
+                    .map_or(-100.0, |top| column::layer_altitude(top) + 1.0);
+                cell
+            })
+            .collect();
+        mark_sea(tier, &mut finest);
+        finest
+    }
+
+    fn settle(tier: &mut ColumnTier) -> usize {
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 200 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        ticks
+    }
+
+    /// `dry-holes` (the owner, 2026-11-18: "We should be able to dig holes
+    /// below water line and not have it filled with water too"): a pit dug
+    /// from the land beside a beach at the sea's level, its floor four
+    /// layers under the sea's, joins no water. It stays air after the rule
+    /// has run, the sea's reach does not take it, no sheet is listed over it
+    /// and it is marked dry; the same hollow made by the generator (no edit)
+    /// is still under the sea's sheet (`ocean-environments` B22).
+    #[test]
+    fn a_pit_dug_below_the_sea_beside_a_beach_stays_dry() {
+        let sea = sea_layer();
+        let mut tier = line();
+        // Column 5 a beach whose sand tops out at the sea's level, the air
+        // over it the sea's reach; 6 and 7 dug from the land to four layers
+        // under the sea's level.
+        carve(&mut tier, 5..=5, sea..=LAND);
+        let generated = {
+            let mut t = tier.clone();
+            carve(&mut t, 6..=7, sea - 4..=LAND);
+            t
+        };
+        let mut edits = Edits::new();
+        for slot in 6..=7 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        assert!(tier.water.dug[6] && tier.water.dug[7] && !tier.water.dug[5]);
+        settle(&mut tier);
+        for slot in 6..=7 {
+            for layer in sea - 4..=LAND {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    Material::Air,
+                    "slot {slot} layer {layer} stays dry"
+                );
+            }
+        }
+        let reach = tier.sea_reach();
+        assert!(reach[5], "the beach is the sea's reach");
+        assert!(!reach[6] && !reach[7], "the dug pit is not");
+        let finest = marked(&mut tier);
+        for (slot, cell) in finest.iter().enumerate().take(8).skip(6) {
+            assert!(!sheet_listed(cell), "no sheet over the pit {slot}");
+            assert!(cell.spare[2] & DRY_SHEET_BIT != 0, "dry {slot}");
+        }
+        assert!(sheet_listed(&finest[5]), "the sea's sheet over the beach");
+        // The generator's own hollow there keeps B22's sheet.
+        let mut generated = generated;
+        let finest = marked(&mut generated);
+        assert!(sheet_listed(&finest[6]) && sheet_listed(&finest[7]));
+    }
+
+    /// `dry-holes` design 4: a pit dug behind a wall is dry; breaching the
+    /// wall at the sea's top layer lets the sea in. It pours over the lip as
+    /// falling water first, then fills the pit from its floor up to the sea's
+    /// level and no higher, and only then is the sea's sheet listed over it.
+    #[test]
+    fn a_breached_pit_fills_from_the_sea_over_its_lip() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=7 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        settle(&mut tier);
+        assert_eq!(tier.columns[6].material(sea - 4), Material::Air, "dry");
+        // The wall, column 5, cut down to the sea's top layer.
+        dig(&mut tier, &mut edits, 5, sea - 1..=LAND);
+        assert_eq!(
+            tier.columns[5].material(sea - 1),
+            Material::Water,
+            "the breach fills from the sea beside it"
+        );
+        tier.tick_water(liquid::LOOP_MAX);
+        assert_eq!(
+            tier.columns[6].material(sea - 1).flow(),
+            Some((7, true)),
+            "the sea falls over the lip"
+        );
+        // Part way: the pit's top layer is not yet the sea's, so no sheet.
+        tier.tick_water(liquid::LOOP_MAX);
+        let finest = marked(&mut tier);
+        assert!(!sheet_listed(&finest[7]), "no sheet while it fills");
+        let ticks = settle(&mut tier);
+        assert!(ticks > 2, "it fills over ticks, not at once");
+        for slot in 6..=7 {
+            for layer in sea - 4..sea {
+                assert_eq!(
+                    tier.columns[slot].material(layer),
+                    Material::Water,
+                    "slot {slot} layer {layer}: the sea's"
+                );
+            }
+            assert_eq!(tier.columns[slot].material(sea), Material::Air, "no higher");
+        }
+        let finest = marked(&mut tier);
+        assert!(sheet_listed(&finest[6]) && sheet_listed(&finest[7]));
+    }
+
+    /// `dry-holes` design 4: a channel two layers deep dug inland from the
+    /// shore, then opened to the sea, fills along its length by the rule,
+    /// a cell every tick or two, to the sea's level.
+    #[test]
+    fn a_channel_cut_from_the_shore_fills_along_it() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=10 {
+            dig(&mut tier, &mut edits, slot, sea - 2..=LAND);
+        }
+        // The dry channel, its queue run out, as the game's ticks leave it.
+        settle(&mut tier);
+        dig(&mut tier, &mut edits, 5, sea - 2..=LAND);
+        assert_eq!(tier.columns[5].material(sea - 2), Material::Water);
+        assert_ne!(tier.columns[7].material(sea - 2), Material::Water);
+        let mut ticks = 0;
+        while tier.columns[10].material(sea - 2) != Material::Water && ticks < 100 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        assert!(
+            (5..=12).contains(&ticks),
+            "five cells in {ticks} ticks: the rule's pace"
+        );
+        settle(&mut tier);
+        for slot in 5..=10 {
+            assert_eq!(tier.columns[slot].material(sea - 1), Material::Water);
+            assert_eq!(tier.columns[slot].material(sea - 2), Material::Water);
+            assert_eq!(tier.columns[slot].material(sea), Material::Air);
+        }
+        assert_eq!(tier.columns[11].material(sea - 2), Material::Stone, "rim");
+    }
+
+    /// `dry-holes` design 4: a source poured into a sealed pit under the
+    /// sea's level is the bucket's, not the sea's: it runs by Luanti's rule
+    /// and makes no new source.
+    #[test]
+    fn a_bucket_in_a_sealed_pit_under_the_sea_is_not_the_sea() {
+        let sea = sea_layer();
+        let mut tier = line();
+        let mut edits = Edits::new();
+        for slot in 6..=9 {
+            dig(&mut tier, &mut edits, slot, sea - 4..=LAND);
+        }
+        let floor = sea - 4;
+        edits.set(Edit {
+            cell: 106,
+            layer: floor as u16,
+            material: Material::Water,
+        });
+        tier.columns[6].set(floor, Material::Water);
+        tier.water_after_edit(6, floor, &edits);
+        tier.water.joined = tier.sea_joined();
+        settle(&mut tier);
+        assert_eq!(tier.columns[7].material(floor), Material::Flow7);
+        assert_eq!(tier.columns[8].material(floor), Material::Flow6);
+        assert_eq!(tier.columns[6].material(floor + 1), Material::Air);
     }
 
     /// A poured source on land runs by the rule over the tier, a level less
@@ -3454,6 +4269,45 @@ mod river_tier_tests {
         for anchor in falls() {
             a_tier_s_rivers_are_what_the_rule_keeps(anchor);
         }
+    }
+
+    /// The settled water kept from one tier and stamped by the next is the
+    /// water that tier settles fresh (`river-cache` design 11): a tier 40 m
+    /// on from one already built, cold and stamped, cell for cell.
+    #[test]
+    fn a_stamped_tier_s_rivers_are_the_fresh_ones() {
+        use std::sync::atomic::Ordering;
+        let mut stamped_any = 0;
+        for anchor in falls() {
+            let east = Vec3::Y.cross(anchor).normalize_or(Vec3::X);
+            let on = (anchor + east * (40.0 / PLANET_RADIUS)).normalize();
+            SETTLE_CACHE_OFF.store(true, Ordering::Relaxed);
+            let fresh = lod::generate_fine(on, &ColumnSettings::default(), &Edits::new()).columns;
+            SETTLE_CACHE_OFF.store(false, Ordering::Relaxed);
+            let _ = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+            let stamped = lod::generate_fine(on, &ColumnSettings::default(), &Edits::new()).columns;
+            assert_eq!(fresh.columns.len(), stamped.columns.len());
+            let cache = pbd_core::rivers::field(terrain_config()).expect("the cache");
+            stamped_any += stamped
+                .water
+                .keys
+                .iter()
+                .filter(|k| cache.settled.get(k).is_some())
+                .count();
+            let differ: Vec<(usize, usize)> = (0..fresh.columns.len())
+                .flat_map(|slot| (0..LAYERS).map(move |layer| (slot, layer)))
+                .filter(|&(slot, layer)| {
+                    fresh.columns[slot].material(layer) != stamped.columns[slot].material(layer)
+                })
+                .collect();
+            assert!(
+                differ.is_empty(),
+                "{} cells differ, first {:?}",
+                differ.len(),
+                &differ[..differ.len().min(6)]
+            );
+        }
+        assert!(stamped_any > 0, "no tier found kept water to stamp");
     }
 
     fn a_tier_s_rivers_are_what_the_rule_keeps(anchor: Vec3) {
@@ -3611,6 +4465,26 @@ mod river_cost {
             let started = Instant::now();
             let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
             let whole = ms(started);
+            // The same set again, 40 m on: a rebuild over ground the first
+            // set's job already asked about (`river-cache` design 11: what
+            // the cache saves a walker's next rebuild).
+            let east = Vec3::Y.cross(anchor).normalize_or(Vec3::X);
+            let on = (anchor + east * (40.0 / PLANET_RADIUS)).normalize();
+            let started = Instant::now();
+            std::hint::black_box(lod::generate_fine(
+                on,
+                &ColumnSettings::default(),
+                &Edits::new(),
+            ));
+            eprintln!(
+                "{name}: the next set 40 m on {:.0} ms (the first {whole:.0} ms), cache {}",
+                ms(started),
+                if pbd_core::river_cache::enabled() {
+                    "on"
+                } else {
+                    "off"
+                }
+            );
             // Every fine record's altitude, with the river terms and without.
             let records: Vec<Vec3> = set
                 .levels
@@ -3856,7 +4730,15 @@ mod placed_block_tests {
                 // The column the tier builds holds it, placed.
                 assert_eq!(built.material(layer), m, "{what}: stored");
                 assert!(built.placed(layer), "{what}: placed");
-                let sheet = tileset_slot(column::home_biome(m).unwrap()) + 1;
+                // Ore carries the ore mark, not its home sheet (design 12.12).
+                // A sea cell, its own sheet (`ocean-environments` B24).
+                let sheet = if m == Material::Ore {
+                    super::super::terrain::ORE_SHEET
+                } else if let Some(own) = column::own_sheet(m) {
+                    super::super::terrain::sheet_index(own) + 1
+                } else {
+                    tileset_slot(column::home_biome(m).unwrap()) + 1
+                };
                 // The column pass draws it in its own code, from its own sheet.
                 let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
                 let codes = tier.gpu_materials();
@@ -3898,14 +4780,112 @@ mod placed_block_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A column of version 10's land that holds ore within 14 m of its top.
+    fn ore_ground() -> (Vec3, Column, usize) {
+        let cfg = terrain_config();
+        let d = find(|d, c| {
+            let top = c.surface().unwrap();
+            column::surface_m(cfg, d) > cfg.sea_level_m + 2.0
+                && !c.water_over(top)
+                && (top.saturating_sub(14)..top).any(|l| c.material(l) == Material::Ore)
+        });
+        let column = column::generate_solid(terrain_config(), d);
+        let top = column.surface().unwrap();
+        let ore = (top.saturating_sub(14)..top)
+            .rev()
+            .find(|&l| column.material(l) == Material::Ore)
+            .unwrap();
+        (d, column, ore)
+    }
+
+    /// Design 12.12: a generated ore layer packs the ore mark (15) in the
+    /// per-layer sheets and keeps the stone's render code; stone beside it
+    /// packs nought; no sheet plus one reaches the mark.
+    #[test]
+    fn generated_ore_carries_the_ore_mark_and_the_stone_s_code() {
+        use super::super::terrain::ORE_SHEET;
+        let (_, column, ore) = ore_ground();
+        let tier = ColumnTier::for_tests(vec![column.clone()], &[[NO_NEIGHBOR; 6]]);
+        let codes = tier.gpu_materials();
+        let sheets = tier.gpu_placed_sheets();
+        assert_eq!(nibble(&sheets, ore), ORE_SHEET);
+        assert_eq!(nibble(&codes, ore), render_code(Material::Stone));
+        assert_eq!(drawn_sheet_mark(&column, ore), ORE_SHEET);
+        assert_eq!(placed_sheet(&column, ore), 0, "nobody placed it");
+        let stone = (0..LAYERS)
+            .find(|&l| column.material(l) == Material::Stone)
+            .unwrap();
+        assert_eq!(nibble(&sheets, stone), 0);
+        assert_eq!(nibble(&codes, stone), render_code(Material::Stone));
+    }
+
+    /// Design 12.12: an ore top laid bare by digging carries the mark in its
+    /// record's sheet bits, keeps the stone's code and its cell's biome; a
+    /// placed ore block carries it too, and placed stone still its own sheet.
+    #[test]
+    fn dug_and_placed_ore_carry_the_ore_mark() {
+        use super::super::terrain::{ORE_SHEET, PLACED_SHEET_SHIFT};
+        let (d, generated, ore) = ore_ground();
+        let mut dug = generated.clone();
+        let top = dug.surface().unwrap();
+        for layer in ore + 1..=top {
+            assert!(dug.place(layer, Material::Air));
+        }
+        assert_eq!(dug.surface(), Some(ore));
+        let height = super::super::terrain::surface_height(d);
+        let word = super::super::terrain::surface_code(d, height);
+        let mut finest = vec![<GpuCell as Zeroable>::zeroed()];
+        finest[0].metadata[1] = word;
+        reconcile_surface(&mut finest, &[], 0, &dug);
+        let record = finest[0].metadata[1];
+        assert_eq!(
+            record >> PLACED_SHEET_SHIFT & 0xf,
+            ORE_SHEET,
+            "the cap's mark"
+        );
+        assert_eq!(
+            record & 0xff,
+            render_code(Material::Stone),
+            "the cap's code"
+        );
+        assert_eq!(record & 0xff00, word & 0xff00, "the cell's biome stays");
+
+        // A block of ore placed on the dug top, and stone on that.
+        let mut built = dug.clone();
+        assert!(built.place(ore + 1, Material::Ore));
+        assert!(built.place(ore + 2, Material::Stone));
+        let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
+        let sheets = tier.gpu_placed_sheets();
+        assert_eq!(nibble(&sheets, ore + 1), ORE_SHEET, "placed ore");
+        assert_eq!(
+            nibble(&sheets, ore + 2),
+            tileset_slot(column::home_biome(Material::Stone).unwrap()) + 1,
+            "placed stone keeps its own sheet"
+        );
+        assert_eq!(nibble(&sheets, ore + 3), 0, "air");
+    }
+
     /// Ground nobody touched is drawn as it was: its record carries no
-    /// placed sheet, and its column's layers none.
+    /// placed sheet, and its column's layers none but the ore mark on its
+    /// ore (design 12.12).
     #[test]
     fn untouched_ground_takes_its_biomes_sheet() {
         for (name, d) in grounds() {
             let column = column::generate_solid(terrain_config(), d);
             let tier = ColumnTier::for_tests(vec![column.clone()], &[[NO_NEIGHBOR; 6]]);
-            assert!(tier.gpu_placed_sheets().iter().all(|&w| w == 0), "{name}");
+            let sheets = tier.gpu_placed_sheets();
+            for layer in 0..LAYERS {
+                let ore = column.material(layer) == Material::Ore;
+                assert_eq!(
+                    nibble(&sheets, layer),
+                    if ore {
+                        super::super::terrain::ORE_SHEET
+                    } else {
+                        0
+                    },
+                    "{name}, layer {layer}"
+                );
+            }
             let height = super::super::terrain::surface_height(d);
             let word = super::super::terrain::surface_code(d, height);
             let mut finest = vec![<GpuCell as Zeroable>::zeroed()];

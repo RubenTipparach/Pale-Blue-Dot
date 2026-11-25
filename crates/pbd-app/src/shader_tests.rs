@@ -29,11 +29,18 @@ fn validated_entry_points(label: &str, source: &str) -> Vec<String> {
         .collect()
 }
 
-/// `planet_surface.wgsl` as Bevy's composer hands it to naga: its import of
-/// the cloud module replaced by that module's own items. The terrain imports
-/// only functions and names nothing it does not also define, so splicing the
-/// module whole is the composition.
+/// `planet_surface.wgsl` as Bevy's composer hands it to naga for the draw
+/// pipeline: its import of the cloud module replaced by that module's own
+/// items, and no shader defs set. The terrain imports only functions and
+/// names nothing it does not also define, so splicing the module whole is the
+/// composition.
 pub(crate) fn planet_surface_source() -> String {
+    planet_surface_with(&[])
+}
+
+/// The terrain shader with the shader defs `defs` set, as a variant's
+/// pipeline compiles it.
+fn planet_surface_with(defs: &[&str]) -> String {
     let surface = include_str!("../../../assets/shaders/planet_surface.wgsl");
     let clouds: String = include_str!("../../../assets/shaders/clouds.wgsl")
         .lines()
@@ -50,9 +57,10 @@ pub(crate) fn planet_surface_source() -> String {
         surface.contains(shadow),
         "planet_surface.wgsl's shadow import moved; update the splice"
     );
-    surface
+    let spliced = surface
         .replacen(import, &clouds, 1)
-        .replacen(shadow, &sun_shadow_source(), 1)
+        .replacen(shadow, &sun_shadow_source(), 1);
+    resolve_defs(&spliced, defs)
 }
 
 /// `sun_shadow.wgsl` as naga reads it: the module's items, without the
@@ -80,8 +88,44 @@ fn the_sea_module_compiles() {
     validated_entry_points("sea.wgsl", &sea_source());
 }
 
+/// A shader's `#ifdef`/`#ifndef`/`#else`/`#endif` resolved as Bevy's
+/// preprocessor resolves them for the shader defs `defs`: the branches not
+/// taken dropped and the directive lines blanked, so line numbers keep. The
+/// terrain's shadow caster and its `TERRAIN_OFF_*` instruments carry these,
+/// and naga reads none of them: without this every check that parsed the
+/// terrain stopped at the first `#ifdef SHADOW_CASTER`.
+pub(crate) fn resolve_defs(source: &str, defs: &[&str]) -> String {
+    let mut taking: Vec<bool> = Vec::new();
+    let mut out = Vec::new();
+    for line in source.lines() {
+        let directive = line.trim_start();
+        let name = |prefix: &str| directive.strip_prefix(prefix).map(str::trim);
+        if let Some(def) = name("#ifdef ") {
+            taking.push(defs.contains(&def));
+        } else if let Some(def) = name("#ifndef ") {
+            taking.push(!defs.contains(&def));
+        } else if directive.starts_with("#else") {
+            let last = taking.last_mut().expect("an #else outside any #ifdef");
+            *last = !*last;
+        } else if directive.starts_with("#endif") {
+            taking.pop().expect("an #endif outside any #ifdef");
+        } else {
+            out.push(if taking.iter().all(|&t| t) { line } else { "" });
+            continue;
+        }
+        out.push("");
+    }
+    assert!(taking.is_empty(), "an #ifdef with no #endif");
+    out.join("\n")
+}
+
 #[test]
 fn the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names() {
+    // The shadow caster's variant compiles too.
+    validated_entry_points(
+        "planet_surface.wgsl (SHADOW_CASTER)",
+        &planet_surface_with(&["SHADOW_CASTER"]),
+    );
     let entries = validated_entry_points("planet_surface.wgsl", &planet_surface_source());
     for entry in [
         "vertex",
@@ -353,7 +397,7 @@ fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
 
 /// `horizon-haze` 4, the sea's horizon line: from inside the shell, a ray
 /// that meets the solid sphere is one the sea should have covered, and where
-/// the tided sheet dips under that sphere it does not. The dome draws the
+/// the sheet's offset and its troughs dip under that sphere it does not. The dome draws the
 /// horizon's air there, the ray just over the sphere's tangent, instead of a
 /// sliver of air cut at the hit, which was a dark line along the horizon.
 /// From outside, the cut stays: the column over the ground needs it.
@@ -416,7 +460,16 @@ fn the_clouds_and_the_rain_tell_the_horizon_gap_from_the_sea() {
     let rust = include_str!("planet_water.rs");
     assert_eq!(rust.matches("(20, texture_depth_2d())").count(), 4);
     assert_eq!(rust.matches("(20, &water.depth)").count(), 4);
-    assert!(rust.contains("store: if splash_on || bubbles_on || clouds_on || water.rain_needed {"));
+    // The sheet's depth is stored whenever the clouds or the rain will read
+    // it (other readers, such as the rain splashes on the water, may join
+    // the condition, which rustfmt then splits over lines).
+    let store = rust
+        .find("store: if splash_on")
+        .map(|at| &rust[at..])
+        .and_then(|s| s.find('{').map(|end| s[..end].to_string()))
+        .expect("the sheet's depth store condition");
+    assert!(store.contains("clouds_on"), "{store}");
+    assert!(store.contains("water.rain_needed"), "{store}");
 }
 
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
@@ -656,6 +709,8 @@ fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
     for entry in [
         "vertex",
         "fragment",
+        "vertex_flowing",
+        "flowing_depth",
         "compose",
         "lens",
         "lens_mist_pass",
@@ -674,6 +729,44 @@ fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
             "water.wgsl declares {entries:?}, and a water pipeline asks for `{entry}`"
         );
     }
+}
+
+/// `cascade-perf`: the flowing water's depth pre-pass discards exactly what
+/// its shading does before any shading (one function for both), so the
+/// shading, testing against that depth and writing none, draws the same
+/// nearest face as when it wrote its own; and no discard is left in
+/// `fragment` that the pre-pass does not make, bar the ones it repeats.
+#[test]
+fn the_flowing_water_s_depth_pre_pass_hides_what_its_shading_hides() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let depth = wgsl_fn_body(&src, "flowing_depth");
+    assert!(
+        depth.contains("if (water_hidden(in)) { discard; }"),
+        "{depth}"
+    );
+    let fragment = wgsl_fn_body(&src, "fragment");
+    let first = fragment.find("discard").expect("a discard");
+    let call = fragment
+        .find("if (water_hidden(in)) { discard; }")
+        .expect("the shared test");
+    assert!(call < first + 40, "a discard before the shared test");
+    // What `fragment` still discards later is the shared test's own
+    // conditions over again (the scene in front, the back of a face from
+    // dry air): nothing the pre-pass would have kept.
+    let later: Vec<&str> = fragment[call + 40..]
+        .lines()
+        .filter(|l| l.contains("discard"))
+        .map(str::trim)
+        .collect();
+    assert_eq!(
+        later,
+        [
+            "if (own_depth > in.clip.z + 1e-6) { discard; }",
+            "if (below && view.fx.y < 0.25) { discard; }"
+        ]
+    );
+    let cpu = include_str!("planet_water.rs");
+    assert!(cpu.contains("depth_write_enabled: matches!(pass, Pass::Cap | Pass::FlowingDepth),"));
 }
 
 /// `rain-under-water`: the rain is in the air. From a camera under the sea
@@ -699,6 +792,50 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
     assert!(
         gate.contains("&& state <= 0.75"),
         "the rain passes run under the sea"
+    );
+}
+
+/// `dry-holes` design 10 (owner, 2026-11-19: "It shouldn't shade dry holes
+/// at all"): a terrain face whose column holds no water over it writes
+/// nought to the scene's alpha, every other one writes one, and the water's
+/// compose takes a pixel for wet (the sea's murk and wobble) only as far as
+/// that alpha says, for an eye not under the water. A pit dug under the
+/// sea's level was taken for sea by the compose's sphere test alone. The
+/// half-size reflections' compose adds colour only, so the alpha survives it.
+#[test]
+fn a_dry_face_is_not_seen_through_the_sea() {
+    let surface = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    assert!(surface.contains("var<private> water_over: f32 = 1.0;"));
+    let terrain = wgsl_fn_body(&surface, "shade_terrain");
+    let decided = terrain
+        .find("if input.slot != 0u && water_depth <= 0. { water_over = 0.0; }")
+        .expect("the column's dry answer is not written");
+    let depth = terrain
+        .find("let water_depth = max(water_surface - length(input.position), 0.);")
+        .expect("the submerged branch's depth is gone");
+    assert!(depth < decided, "decided before the column's depth");
+    let finish = wgsl_fn_body(&surface, "finish");
+    assert!(finish.contains("return vec4(color, water_over);"));
+    assert!(finish.contains("return vec4(color,water_over);"));
+    assert!(
+        !finish.contains("return vec4(color,1.)") && !finish.contains("return vec4(color, 1.0)"),
+        "a terrain colour ignores the column"
+    );
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let compose = wgsl_fn_body(&water, "compose");
+    let masked = compose.find("wet *= mask;").unwrap();
+    let gated = compose
+        .find("if (!sky && !under) { wet *= scene.a; }")
+        .expect("the compose wets a dry face");
+    let used = compose.find("if (wet > 0.0 && view.fx.x > 0.0)").unwrap();
+    assert!(
+        masked < gated && gated < used,
+        "gated before the wobble and murk"
+    );
+    let reflect = include_str!("planet_reflect.rs");
+    assert!(
+        reflect.contains("write_mask: ColorWrites::COLOR,"),
+        "the reflections' compose writes the alpha"
     );
 }
 
@@ -1035,5 +1172,35 @@ fn the_underwater_shafts_are_sampled_by_their_reach_not_the_scene() {
     assert!(
         !shafts.contains("min(dist"),
         "the shafts' march is spread over the scene's distance again"
+    );
+}
+
+/// `swim.wgsl` (`fish-behaviour` design 8): the body wave module validates
+/// as naga reads it, and `swim_vertex.wgsl` imports what it defines.
+#[test]
+fn the_body_wave_module_compiles_and_the_school_vertex_stage_imports_it() {
+    let module: String = include_str!("../../../assets/shaders/swim.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    validated_entry_points("swim.wgsl", &module);
+    let vertex = include_str!("../../../assets/shaders/swim_vertex.wgsl");
+    assert!(vertex.contains("#import pbd::swim::{SwimRow, swim_body}"));
+    assert!(module.contains("fn swim_body(") && module.contains("struct SwimRow"));
+    // The attributes it reads are the ones `FieldLit::specialize` lays out.
+    for location in [
+        "@location(10) swim_axes",
+        "@location(11) swim_wave",
+        "@location(12) swim_up",
+    ] {
+        assert!(
+            vertex.contains(location),
+            "swim_vertex.wgsl lost `{location}`"
+        );
+    }
+    assert!(
+        vertex.contains("@binding(106)"),
+        "the table's binding moved"
     );
 }

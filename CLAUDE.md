@@ -93,6 +93,60 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## No obvious primitives (owner, 2026-11-22)
+
+**Standing instruction from the user:** "I can see obvious primitives, this
+is signof bad work ... avoid obvioud primitives" (on the townsfolk's full
+front beard: a box across the jaw and two boxes on the cheeks, stuck on the
+face). A shape in the game or a mockup is one form fitted to what it sits
+on, never boxes, cylinders or spheres placed on a surface and left to read
+as separate parts:
+- a part that grows from a body (a beard, hair, a mane, a root, a branch, a
+  cloak) is one piece shaped to the body: it follows its curves and
+  bevels, tapers into it, and has an irregular edge, never a hard rectangle
+  floating proud of it;
+- where pieces must meet, they blend: a shared edge, a bevel, a taper, or
+  the detail painted into the surface's texture instead of modelled;
+- the blocky, low-poly style is a choice of silhouette, not an excuse for
+  primitives: a block head is still one shaped head;
+- every new model is looked at close up before it is shown, and a part
+  that reads as a primitive stuck on is redone, not shipped.
+
+## Everything in the world is lit as the terrain is (owner, 2026-11-18)
+
+**Standing instruction from the user:** "moving forward we need to apply
+proper lighting to stuff" (after the raft, and before it the dropped items,
+glowed in the shade: "they shouldnt be glowing like that").
+
+Anything placed in the 3D world is lit the way the ground under it is:
+- the terrain's own sun, with its shadows;
+- the cell light field (sky and lamps);
+- never Bevy's own unshadowed sun.
+
+A new mesh in the world gets `field_light::LitByField` and
+`field_light::LitLikeTerrain` on its root when it is spawned. That covers
+craft, drops, props, creatures and anything held up in the world, so in a
+canyon's shade, a cave or the night it is as dark as the ground there. UI
+and inventory icons are not in the world and keep their own look.
+
+## Every model is textured (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Make sure things have textures"
+(after the carts and the horse went in as flat colour). Nothing in the world
+is a flat-coloured mesh:
+- a model uses the game's own pixel textures where one fits (the settlement
+  set's planks, boards, timber, stone, iron), sampled nearest and laid at
+  the manifest's scale so its texels match the walls beside it;
+- where none fits, a new 16 or 32 px pixel texture is drawn in the same
+  palette by a committed script in `tools/art/`, with its manifest row;
+- detail (grain, bands, hinges, a coat's shading, a mane) is painted into
+  the texture, never modelled as a stuck-on box;
+- a creature's colour variation tints its texture, it does not replace it.
+- and it is not flat-shaded (owner, the same day: "I didn't like flat
+  shaded crap"): normals are smooth across a body's curves and hard only at
+  real creases (a board's edge, a hoof), and a curved silhouette has the
+  segments to read as curved.
+
 ## Notes stay out of the game (owner, 2026-11-15)
 
 **Standing instruction from the user:** "notes belong in mockups and chats,
@@ -157,6 +211,35 @@ Text the player reads in the game is short and plain, the way a game says it:
 - not riddles, inverted or literary phrasing, or colons that explain;
 - when a note adds nothing, show none.
 
+## No text in code: every word from the locale file (owner, 2026-11-20)
+
+**Standing instruction from the user:** "make it a hard lint rule or
+something to strictly prevent hard coded text in game. dictionary look ups
+and configs are fine, but I want all strings to be put in a locale_en.yaml
+file, so if we want to port the entire game to to other languages its easy
+to do". Every word the player reads comes from `assets/locale/locale_en.yaml`
+by key (`openspec/changes/localization`):
+- code shows text only through `tr("key")` or `tr_with("key", args)`; the UI
+  kit takes a `Localized`, so a string literal handed to it does not compile;
+- data files (missions, recipes, items, species) hold ids, and their names
+  and descriptions are keys in the locale file; numbers, tunables and paths
+  stay in their configs;
+- placeholders are named (`{count}`), plurals are `one`/`other` forms, and
+  case lives in the text (no `to_uppercase()` on shown text);
+- the lint is in the build ("it belongs in the build step"): `build.rs` runs
+  `crates/pbd-app/locale_lint.rs`, so every `cargo build` fails on a literal
+  with words outside logs, panics, tests, paths, ids and keys, on a key
+  missing from or unused in the file, and on mismatched placeholders
+  (`cargo test -p pbd-app --test locale` runs the same rules). Its baseline
+  of text from before the rule is gone: there are no exceptions. A false
+  positive is fixed in the lint's rules, never excepted;
+- `tools/locale/` has the same check without a build (`locale_lint.py`),
+  key extraction (`locale_extract.py`) and a translator's coverage report
+  (`locale_coverage.py`).
+
+Developer overlays behind a key (the F3 graph, the debug readout) are marked
+`//! locale: dev` and are exempt; they are tools, not the game's text.
+
 ## Waterfalls are designed in a mockup first (owner, 2026-11-15)
 
 **Standing instruction from the user:** "make mockups from now on for how
@@ -169,6 +252,16 @@ the game's own shader terms, beside the game's current look. The game's
 code changes only after the owner approves the mockup. Until then the game
 keeps the fall look the owner pointed to on 2026-11-15 ("go back to these
 shaders"): the blotched froth of `water.wgsl` at `dc0c5cb`.
+
+## Update the existing artifact (owner, 2026-11-19)
+
+**Standing instruction from the user:** "update existing artifacts where
+applicable". New work on something an artifact already covers goes into that
+artifact as a new tab, section or version, republished to its same link.
+- A new mockup page is only for a subject no existing page covers.
+- Find the page on the tracker first; its link and version go in
+  `docs/mockups/mockup-work.md` and the tracker's row.
+- The same goes for guides, gate pages, benchmark pages and the survey.
 
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
@@ -272,7 +365,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL (`docs/design/survey.html`),
+https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9 (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -294,8 +387,8 @@ with its screenshots.
 
 **Standing instruction from the user** (the same message): every Pale Blue
 Dot artifact is listed on one master page, the mockup tracker,
-https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`).
-The playtest bug list is https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou
+https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA (`docs/mockups/tracker.html`).
+The playtest bug list is https://claude.ai/artifact/7WA7dq9PM5bC2CtxpwGBtB
 (`docs/design/bug-list.html`). These links are the owner's account since
 2026-11-16 ("When the owner changes accounts" in the `mockup-tracker` skill).
 Its sections are Game mockups (each approved by the owner for build, then for
@@ -333,6 +426,35 @@ in it, outlives every change to how worlds are made:
 - Engine limits that grow (the column tier's layers, say) grow so old saves
   stay valid: a saved edit is indexed from `column::BASE_M`, which does not
   move.
+
+## One pull request, not many (owner, 2026-11-18)
+
+**Standing instruction from the user:** "add to claude md to maintain a
+single pr and not worry about breaking up features, that is a human habbit,
+not suitable for you" (after seven parallel PRs conflicted at merge: "you
+wouldnt have had to do this if youhad stuck to one pr").
+- Work in hand goes on one branch and one open PR at a time. New asks,
+  fixes and features are added to it as further commits; do not split them
+  into separate PRs by feature.
+- Agents working in parallel still use their own worktrees, but each lands
+  its commits on that one branch as it finishes, and conflicts are resolved
+  there, not at merge time.
+- Commits stay readable (one topic each, with its write-up); the PR is the
+  unit of merging, not of review.
+- A second PR is opened only when the owner asks for one.
+
+## Multiplayer is tested on the owner's machines (owner, 2026-11-23)
+
+**Standing instruction from the user:** "Multiplayer test should use Mac
+and laptop mining mike sessions". A multiplayer check runs between two real
+machines, the owner's Mac ("[Mac] pale-blue-dot" session) hosting and the
+laptop ("[Laptop] mining mike continue" session) joining, not two
+processes on one cloud container. The procedure is `multiplayer` design 20.
+The laptop's GPU cannot take a long run (owner, 2026-11-23: "the laptop's
+gpu cant handle the extended load"): its part is the join, the checks and
+the screenshot, then the game is closed. Anything that must run for a long
+time (soaks, presence over minutes, a demo recording) runs on the Mac or
+the desktop.
 
 ## No scheduled PR check-ins (owner, 2026-09-29)
 
@@ -472,15 +594,73 @@ which wait for a request.
 - **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
   underwater overhaul (M25, `ocean-environments`).
 - **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
-  house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20).
-- **Then town building and civil engineering** ("the after env v2, we'll
+  house building (M6, M22, `player-building`), and logging ("add logging system
+  to the game (in phase 3)": logs on a raft, or dropped in a river to float
+  down it and stop where the water stops flowing; M34, `log-drives`).
+  With them (owner, 2026-11-21: "Townsfolk: add reqs for trading, picking up
+  custom missions, building roads ... and generate road segments between
+  some towns", "doing missions and rtrading should get you money, so we need
+  currency"): coins, a trader in every town, town missions from a board and
+  its people, and sloped dirt and gravel roads, laid by the world between
+  neighbouring towns (`townsfolk`, design 5 to 12). Started on the owner's
+  word (2026-11-21): "People approved. Build.phase 3. Do it in parallel if
+  you can".
+  And (owner, 2026-11-22: "can you add a new mission tree for phase 3? this
+  would be an entirely separate tree since phase 3 is mostly interacting
+  with the town", "building roads shjould be like a way point system, where
+  you have to mark road for pavving and then you walk up to blocks with
+  gravel and pave it. to make gravel you need a grinder and mixer", "we also
+  need to add basic carts to phase 3 as well, and horse carts too"): a town
+  mission tree of its own (`town-missions-tree`), roads marked with survey
+  stakes and paved with gravel from a grinder and a mixer (`townsfolk`
+  design 39 to 41), and hand carts and horse carts, a quarter of their speed
+  off the road (`land-transport` design 9 and 10), all built on
+  `claude/phase-2-1`. With them (owner, 2026-11-23: "update horses -
+  plodders like your carriage", "You should also be able to ride plodders
+  as well"): a tamed plodder pulls the cart as the horse does, and a
+  plodder or a horse can be ridden, pulled forward from phase 5's ridden
+  horses (`land-transport` design).
+  And (owner, 2026-11-23: "Make presets for houses and buildings too. I
+  want the player to be able to design structures and build according to
+  blue prints. That way we avoid the jankiness of free building. Buildings
+  can be modified mid builds in the building planner too. Please mock this
+  up so I can fine tune it. Add this requirement to.phase 3"): a building
+  planner at a drafting table, house and building presets the player can
+  edit and save as their own blueprints, set out in the world as a
+  construction site built piece by piece from the pack, and changed in the
+  planner mid-build (`building-planner`, mocked up in M6's Planner and Site
+  tabs). Written up, not built.
+- **Then multiplayer, phase 3b** (owner, 2026-11-18: "I think multiplayer
+  should be 3b"): server authority over everything stored, the server
+  mediating every interaction near or far, each client building its own LOD,
+  and per-region checksums that make a client re-fetch a region that does not
+  match (`multiplayer`). With it, a self-contained launcher per OS that keeps
+  the game up to date from itch.io (owner: "as part of 3b is a self contained
+  launcher that pulls the latest from itch io based on your OS", "this
+  launcher should be responsible for keeping the game up to date always";
+  `game-launcher`). No mockup yet.
+- **Then town building, civil engineering and survival, phase 4** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
-  M22), and the works between buildings (roads, bridges); no mockup yet for
-  the second.
+  M22), and the works between buildings (bridges and the like; roads come
+  with the townsfolk); no mockup yet for the second. With them, power
+  generation's first rungs, water and wind (M20; owner, 2026-11-21: "bump
+  power gen to phase 4").
+  Survival comes in phase 4 too (owner, 2026-11-22: "bump surivival to
+  phase 4 s well"; first planned as 3c, 2026-11-18: "3c will add survival
+  mode, falling from high places, dangeroous animals (we'll introduce
+  predators), fighting with villagers, hunger, and oxygen - underwater can t
+  breath, or in space"): a Survival mode per world beside today's calm
+  Explorer, with health, fall damage, hunger, breath and suit air, hunting
+  predators, townsfolk who fight back, tool wear, and a dropped pack on
+  death (`survival-mode`). No mockup yet.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
-  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  navigation (M23, `steer-and-sail`), ridden horses and wagons, cars, and
+  trains on their tracks (owner, 2026-11-21: "add cars and cars and carts,
+  and horses and trains (and tracks) mockups to phase 5"; mocked up in M38,
+  `land-transport`; the hand cart and the horse cart moved to phase 3 on
+  2026-11-22, above), hiring
+  workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
 - **Then the age of flight and industry** ("after mass transit we'll get
   into age of flight and mass mining, oil, industrialization, advanced power
@@ -587,37 +767,41 @@ baseline, a regression, a cost that moved) - regenerate the page with
 `tools/perf_report_html.py <run dir> --notes <report.md> --out
 docs/benchmarks/<date>-<name>/report.html`, check it in, and republish the
 artifact so the owner's link shows the latest: the baseline page is
-https://claude.ai/artifact/8YhrUTuqtTByNepg9UKFEd (update it with that URL;
+https://claude.ai/artifact/EpH7ncfGEZwmVqZAj8AcJF (update it with that URL;
 a new baseline may get its own page, linked from here). The `cloud-close-up`
-before-and-after page is https://claude.ai/artifact/QjRaKRRunUyhUQj4a2FEDA.
-The `detail-fade` one is https://claude.ai/artifact/UCBFii7A4VFLyvHn63WDaN.
+before-and-after page is https://claude.ai/artifact/4wtXNsTG4Nn68HFD2zdprA.
+The `detail-fade` one is https://claude.ai/artifact/CUbEJx9FTCEioPQeH7NzgJ.
 The `town-frame-time` A/B (a town walk, main against the branch) is
-https://claude.ai/artifact/Y6piR4LxxRaAoLdYLHxakL.
+https://claude.ai/artifact/6Fpf2J6CBj3frPuamobp7Z.
 The `cloud-puffs` march-against-puffs page (an M4 Max Mac, not the desktop) is
-https://claude.ai/artifact/W9NwxmDmwuoQsRD2UgJFmP.
+https://claude.ai/artifact/TbBiyMCUrTo5WvFgxczBf7.
 The `rain-shells` volume-against-shells page (the same Mac) is
-https://claude.ai/artifact/TtLkRYScSY4j8NssGMYtqE.
+https://claude.ai/artifact/HZCWkFZhP7wxVioP1F9iLf.
 The `lighting-model` today-against-new page (the same Mac; the full
 sitting of 2026-10-29, `docs/benchmarks/2026-10-29-lighting-full/`) is
-https://claude.ai/artifact/Vt9PqBQoHg5UkVEHzga2Ns.
+https://claude.ai/artifact/1dJus67qTpusARH9NnwpDr.
 The `puff-frustum-cull` + `wet-near-detail` before-and-after page (the same
-Mac) is https://claude.ai/artifact/BxzRGCWsDbKvGZiLP9beY3.
+Mac) is https://claude.ai/artifact/6NXGt8Hmkvh9ATpgCW1ACe.
 The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
-is https://claude.ai/artifact/GPcLRxsF7KjkfifVFJ1C6r.
+is https://claude.ai/artifact/15fKGPpXQhM5eUhvRCJg42.
 The `lighting-perf` close (main's lighting, `f15a647`, against the branch
 after 2.8's half-size reflections: every scenario inside 16.7 ms at p99;
 `docs/benchmarks/2026-11-12-worst-case-60/`) is
-https://claude.ai/artifact/GdAq364GxwbZcsTiJSnQUq.
+https://claude.ai/artifact/X2DcwHBfAw6nzB9mQJp2sk.
 The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
 branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
-https://claude.ai/artifact/Mytd1vV76J9UqSBfkQv6QQ.
+https://claude.ai/artifact/V3wNXcyxuhppzGckaRWkAw.
 The one-part-off breakdown (where the frame goes, the same Mac) is
-https://claude.ai/artifact/G23GqozWQUZG6g5vAWb5sE.
+https://claude.ai/artifact/X7epG3KF28YGpHq8KVcB3L.
+The `cascade-perf` page (the owner's desert river cascade on the Mac: where
+the frame goes, the same-picture cuts, and the A/B still owed on an unlocked
+machine; `docs/benchmarks/2026-11-17-cascade-perf/`) is
+https://claude.ai/artifact/7tt2bWmjsMv6dUNrXKxUHH.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 
@@ -688,6 +872,10 @@ a test pins it. When the scale moves, both move in the same commit.
   local gravity falloff, Newtonian motion, configurable linear/angular limits,
   and inertial/rotational dampeners. Do not restore rocket patched conics,
   maneuver nodes, transfer-window requirements, or n-body ship simulation.
+  **Lifted for rockets by the owner (survey G4 and G4a, 2026-11-22: "All of
+  Tenebris: patched conics, sphere-of-influence hops and maneuver nodes").**
+  `ship-tiers` (design, "Owner answers") is the plan; this clause is rewritten
+  in the commit that builds it. Until then nothing in the game changes.
 - Store system coordinates and orbital time as `f64`; render and simulate
   collision in bounded local `f32` frames. Subtract the origin before casting.
   Keep frame identity explicit in poses, velocities, persistence, and uploads.

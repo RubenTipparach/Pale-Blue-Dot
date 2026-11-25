@@ -251,6 +251,8 @@ def main() -> None:
             ps = [abs(pitch(r)) for r in held]
             report.append(f"fish at the lure, nose out of level: max {max(ps):.1f} deg; "
                           f"frames over 30 deg {sum(1 for x in ps if x > 30)} of {len(ps)}")
+    if "mouth_lure_m" in rows[0]:
+        report.extend(behaviour(rows))
     if "line_vx" in rows[0]:
         gaps = []
         for r in rows:
@@ -311,6 +313,87 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(out, dpi=90)
     print(f"wrote {out}")
+
+
+def behaviour(rows: list[dict]) -> list[str]:
+    """`fish-behaviour`: the fish the line works, frame by frame, by the
+    line's phase. Flips: frames its forward turns over 20 deg, or its up
+    (its roll, with the turn) over 20 deg. Pops: frames it moves faster than
+    5 m/s (local, the same fish both frames; no fish here swims that fast),
+    and the move on the frame a nibble starts and the one after. At the dips: the nearest its drawn mouth comes to the drawn lure
+    in each nibble's dip (the last 0.12 s of a nibble's timer)."""
+    def angle(a: tuple, b: tuple) -> float:
+        na, nb = math.hypot(*a), math.hypot(*b)
+        if not (na > 0 and nb > 0) or math.isnan(na) or math.isnan(nb):
+            return math.nan
+        d = sum(x * y for x, y in zip(a, b)) / (na * nb)
+        return math.degrees(math.acos(max(-1.0, min(1.0, d))))
+    out = []
+    phases = ["Floating", "Nibble", "Bite", "Hooked"]
+    turn = {p: [] for p in phases}
+    roll = {p: [] for p in phases}
+    step = {p: [] for p in phases}
+    nibble_start = []
+    for i in range(1, len(rows)):
+        r, p = rows[i], rows[i - 1]
+        if not r["fish_key"] or r["fish_key"] != p["fish_key"]:
+            continue
+        ph = r["phase"]
+        if ph not in turn:
+            continue
+        # Only the fish the line works while it does (its key stays the
+        # line's target from interest to landing).
+        if r.get("targeted", 1) < 0.5 or p.get("targeted", 1) < 0.5:
+            continue
+        f = angle((r["fish_fx"], r["fish_fy"], r["fish_fz"]), (p["fish_fx"], p["fish_fy"], p["fish_fz"]))
+        u = angle((r["fish_ux"], r["fish_uy"], r["fish_uz"]), (p["fish_ux"], p["fish_uy"], p["fish_uz"]))
+        d = math.dist((r["fish_lx"], r["fish_ly"], r["fish_lz"]), (p["fish_lx"], p["fish_ly"], p["fish_lz"]))
+        dt = r["dt_s"] if r["dt_s"] > 0 else math.nan
+        if not math.isnan(f):
+            turn[ph].append((f, f / dt))
+        if not math.isnan(u):
+            roll[ph].append((u, u / dt))
+        if not math.isnan(d) and d < 2.0 and r["dt_s"] > 0:
+            step[ph].append((d, d / r["dt_s"]))
+            if ph == "Nibble" and (p["phase"] == "Floating" or (i > 1 and rows[i - 2]["phase"] == "Floating")):
+                nibble_start.append(d)
+    for ph in phases:
+        t, u, s = turn[ph], roll[ph], step[ph]
+        if not t:
+            continue
+        # Per frame, and as a rate: a hitch of a slow frame turns a fish
+        # further in it at the same rate. Over 1000 deg/s is past every limit
+        # (the peck's 900).
+        out.append(f"line fish, {ph}: frames {len(t)}; forward turn max {max(x[0] for x in t):.1f} deg, "
+                   f"over 20 deg {sum(1 for x in t if x[0] > 20)}, over 1000 deg/s "
+                   f"{sum(1 for x in t if x[1] > 1000)}; up turn max {max((x[0] for x in u), default=0):.1f} deg, "
+                   f"over 20 deg {sum(1 for x in u if x[0] > 20)}, over 1000 deg/s "
+                   f"{sum(1 for x in u if x[1] > 1000)}; move max "
+                   f"{100 * max((x[0] for x in s), default=0):.1f} cm; pops (over 5 m/s) "
+                   f"{sum(1 for x in s if x[1] > 5.0)}")
+    if nibble_start:
+        out.append("line fish, move on the frame the nibble starts: "
+                   + ", ".join(f"{100 * d:.1f} cm" for d in nibble_start))
+    # Each nibble's dip: the frames of a nibble whose timer is under 0.12 s,
+    # cut where the timer jumps up (a new nibble).
+    dips, cur = [], []
+    for i, r in enumerate(rows):
+        dip = r["phase"] == "Nibble" and r["timer"] < 0.12
+        if dip and cur and r["timer"] > rows[i - 1]["timer"] + 1e-4:
+            dips.append(cur)
+            cur = []
+        if dip:
+            cur.append(r["mouth_lure_m"])
+        elif cur:
+            dips.append(cur)
+            cur = []
+    if cur:
+        dips.append(cur)
+    if dips:
+        near = [min((x for x in d if not math.isnan(x)), default=math.nan) for d in dips]
+        out.append("line fish, nearest mouth to lure in each nibble's dip: "
+                   + ", ".join(f"{100 * x:.1f} cm" for x in near))
+    return out
 
 
 if __name__ == "__main__":

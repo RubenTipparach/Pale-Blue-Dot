@@ -27,7 +27,9 @@ use pbd_app::fish::ToolSlot;
 use pbd_app::hotbar::{Gained, How};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, Tooltip, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_core::inventory::{Item, Stack, Tier};
+use pbd_core::locale::{caps, tr_with};
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{
     self, HAND_RECORD_ID, Recipe, STATION_KIND, STATION_SCHEMA, StationRow, StationState,
@@ -94,7 +96,8 @@ pub const CRAFT_COLUMN: f32 = 180.0;
 /// A recipe row's height: the stone plaque's own (`button-idle`, 22 px).
 pub const ROW: f32 = 22.0;
 /// The rows shown before the list scrolls.
-pub const ROWS_SHOWN: usize = 6;
+#[allow(dead_code)]
+pub const ROWS_SHOWN: usize = 8;
 /// The CRAFT plaque's width, wide enough for its longest word (LOCKED), so
 /// it never grows past the row.
 pub const CRAFT_PLAQUE: f32 = 56.0;
@@ -104,6 +107,16 @@ pub const CRAFT_PLAQUE: f32 = 56.0;
 pub struct BenchLine;
 #[derive(Component)]
 pub struct BenchFill;
+/// The bar under the pack's craft row: the hands' running job
+/// (`mission-playthrough` 4.4; the pack had only the plaque's number).
+#[derive(Component)]
+pub struct HandFill;
+
+/// The hands' bar's track: shown only while the hands are making something
+/// (owner, 2026-11-20, on the empty track: "the hell is this bar underneath
+/// crafting area?").
+#[derive(Component)]
+pub struct HandBar;
 
 /// A station's queue record id: a cell's station, or the hands'.
 pub fn station_id(at: Option<(u32, u16)>) -> u64 {
@@ -155,18 +168,17 @@ fn shown(recipe: &Recipe) -> Option<(Item, u16, Option<Tier>)> {
 /// What a recipe's row says: its name, and the count it makes ("X4") at the
 /// row's end. A name that already ends in its count ("TORCH X2") gives it
 /// to the count rather than saying it twice.
-fn row_words(recipe: &Recipe) -> (String, String) {
+fn row_words(recipe: &Recipe) -> (Localized, Localized) {
     match shown(recipe) {
         Some((_, n, _)) if n > 1 => {
-            let count = format!("X{n}");
-            let name = recipe
-                .name
+            let count = tr_with("craft.count", &[("count", &n)]);
+            let full = recipe.name();
+            let name = full
                 .strip_suffix(&format!(" {count}"))
-                .unwrap_or(&recipe.name)
-                .to_string();
+                .map_or_else(|| full.clone(), Localized::verbatim);
             (name, count)
         }
-        _ => (recipe.name.clone(), String::new()),
+        _ => (recipe.name(), Localized::empty()),
     }
 }
 
@@ -198,22 +210,25 @@ pub fn queue(
     ) {
         Ok(()) => {}
         Err(station::Refused::Short) => {
-            note.say(wall_s, format!("Not enough for {}", recipe.name));
+            note.say(
+                wall_s,
+                tr_with("craft.not_enough", &[("recipe", &recipe.name())]),
+            );
             return false;
         }
         Err(station::Refused::Full) => {
             note.say(
                 wall_s,
                 if recipe.station.material.is_none() {
-                    "Your hands are busy".to_string()
+                    tr("craft.hands_busy")
                 } else {
-                    format!("The {}'s queue is full", recipe.station.name)
+                    tr_with("craft.queue_full", &[("station", &recipe.station.name())])
                 },
             );
             return false;
         }
         Err(station::Refused::NotBetter) => {
-            note.say(wall_s, "You already have this tool");
+            note.say(wall_s, tr("craft.have_tool"));
             return false;
         }
         Err(station::Refused::Elsewhere) => return false,
@@ -297,8 +312,11 @@ pub fn collect(
             });
         }
         let what = match recipe.tools.first() {
-            Some(&(tool, tier)) => format!("{} made", pbd_core::inventory::tool_title(tool, tier)),
-            None => format!("{} done", recipe.name),
+            Some(&(tool, tier)) => tr_with(
+                "craft.made",
+                &[("thing", &pbd_core::inventory::tool_title(tool, tier))],
+            ),
+            None => tr_with("craft.done", &[("recipe", &recipe.name())]),
         };
         note.say(wall_s, what);
     }
@@ -340,7 +358,7 @@ fn well(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, w
                 WellIcon,
             ));
             cell.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(1),
@@ -381,7 +399,7 @@ fn craft_row(
                     },
                 );
             }
-            row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
+            row.spawn(KitText::new(Localized::verbatim("→"), ui_kit::TEXT).shadow(ui_kit::INK));
             well(
                 row,
                 kit,
@@ -401,7 +419,7 @@ fn craft_row(
             ))
             .with_children(|p| {
                 p.spawn((
-                    ui_kit::plaque_label(Set::Stone, "CRAFT"),
+                    ui_kit::plaque_label(Set::Stone, tr("craft.craft")),
                     CraftLabel(station),
                 ));
             });
@@ -424,17 +442,20 @@ pub fn spawn_pack_craft(
             width: px(CRAFT_COLUMN),
             flex_shrink: 0.0,
             flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::SpaceBetween,
+            row_gap: px(4),
             ..default()
         })
         .with_children(|column| {
             column
                 .spawn(Node {
                     flex_direction: FlexDirection::Column,
+                    // Never shorter than its list: a scroll box may shrink to
+                    // nothing, and the craft row then slid up over the rows.
+                    flex_shrink: 0.0,
                     ..default()
                 })
                 .with_children(|top| {
-                    super::menu::lintel(top, kit, "CRAFT");
+                    super::menu::lintel(top, kit, tr("craft.title"));
                     // Six rows show; a longer list scrolls with the wheel.
                     top.spawn((
                         Node {
@@ -442,7 +463,11 @@ pub fn spawn_pack_craft(
                             row_gap: px(1),
                             // A scroll box has no height of its own: it is
                             // set to the rows it shows.
+                            // Every recipe shows (`mission-playthrough` 4.4: its
+                            // own panel, as tall as its list). The rows are
+                            // placed in it, so it is given its height.
                             height: px(list_height(hand.len())),
+                            min_height: px(list_height(hand.len())),
                             flex_shrink: 0.0,
                             overflow: Overflow::scroll_y(),
                             ..default()
@@ -456,7 +481,46 @@ pub fn spawn_pack_craft(
                         }
                     });
                 });
-            craft_row(column, kit, atlas, "hand", needs);
+            // The chosen recipe's row and the hands' bar, placed under the
+            // list at its own height (`mission-playthrough` 4.4): left to
+            // the column's flow, the row was drawn over the recipes.
+            column
+                .spawn(Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(5.0 + list_height(hand.len()) + 6.0),
+                    width: percent(100),
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                })
+                .with_children(|foot| {
+                    craft_row(foot, kit, atlas, "hand", needs);
+                    // The hands' running job, as the workbench shows its own.
+                    foot.spawn((
+                        HandBar,
+                        Visibility::Hidden,
+                        kit.nine(Set::Stone, "bar"),
+                        Node {
+                            width: percent(100),
+                            height: px(10),
+                            flex_shrink: 0.0,
+                            margin: UiRect::top(px(4)),
+                            padding: UiRect::new(px(5), px(5), px(3), px(4)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|bar| {
+                        bar.spawn((
+                            kit.whole(Set::Stone, "fill-progress"),
+                            Node {
+                                width: percent(0),
+                                height: percent(100),
+                                ..default()
+                            },
+                            HandFill,
+                        ));
+                    });
+                });
         });
 }
 
@@ -509,12 +573,12 @@ fn recipe_row(
             },
             RowIcon(k),
         ));
-        row.spawn(ui_kit::plaque_label(Set::Stone, &name));
+        row.spawn(ui_kit::plaque_label(Set::Stone, name));
         row.spawn(Node {
             flex_grow: 1.0,
             ..default()
         });
-        row.spawn(ui_kit::plaque_label(Set::Stone, &count));
+        row.spawn(ui_kit::plaque_label(Set::Stone, count));
     });
 }
 
@@ -526,10 +590,53 @@ pub fn spawn_bench(
     atlas: &Handle<Image>,
     recipes: &Recipes,
 ) {
+    spawn_station_bench(
+        layer,
+        kit,
+        atlas,
+        recipes,
+        "workbench",
+        tr("craft.workbench"),
+        None,
+    );
+}
+
+/// The carpenter's bench's panel (`furniture` design 1): the workbench's,
+/// under its own lintel, its grid the Furniture branch, every recipe made at
+/// the carpenter's and nowhere else.
+pub fn spawn_carpenter(
+    layer: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    recipes: &Recipes,
+) {
+    spawn_station_bench(
+        layer,
+        kit,
+        atlas,
+        recipes,
+        "carpenter",
+        tr("craft.carpenter"),
+        Some(tr("craft.furniture")),
+    );
+}
+
+/// A bench station's panel: its lintel, a branch's name over its grid when
+/// it has one, its recipes as wells, the recipe row, and the queue's line
+/// and bar.
+fn spawn_station_bench(
+    layer: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    recipes: &Recipes,
+    station: &'static str,
+    title: Localized,
+    branch: Option<Localized>,
+) {
     let (rock, (w, h)) = kit.rock("pack");
     let bar = kit.nine(Set::Stone, "bar");
     let fill = kit.whole(Set::Stone, "fill-progress");
-    let count = recipes.0.at("workbench").count();
+    let count = recipes.0.at(station).count();
     layer
         .spawn((
             rock,
@@ -541,10 +648,19 @@ pub fn spawn_bench(
                 display: Display::None,
                 ..default()
             },
-            super::forge::StationPanel("workbench"),
+            super::forge::StationPanel(station),
         ))
         .with_children(|panel| {
-            super::menu::lintel(panel, kit, "WORKBENCH");
+            super::menu::lintel(panel, kit, title);
+            if let Some(branch) = branch {
+                panel.spawn((
+                    KitText::new(branch, ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    Node {
+                        margin: UiRect::bottom(px(2)),
+                        ..default()
+                    },
+                ));
+            }
             panel
                 .spawn(Node {
                     flex_wrap: FlexWrap::Wrap,
@@ -559,15 +675,15 @@ pub fn spawn_bench(
                             kit,
                             atlas,
                             Well {
-                                station: "workbench",
+                                station,
                                 role: Role::Pick(k),
                             },
                         );
                     }
                 });
-            craft_row(panel, kit, atlas, "workbench", 3);
+            craft_row(panel, kit, atlas, station, 3);
             panel.spawn((
-                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::new(px(0), px(0), px(4), px(3)),
                     ..default()
@@ -639,7 +755,10 @@ pub fn press(
             continue;
         };
         match locks.locked(&recipe.code) {
-            Some(opens) => note.say(time.elapsed_secs(), format!("Opens with: {opens}")),
+            Some(opens) => note.say(
+                time.elapsed_secs(),
+                tr_with("craft.opens_with", &[("mission", &opens)]),
+            ),
             None => pick.hand = Some(row.0),
         }
     }
@@ -656,7 +775,8 @@ pub fn press(
             (HAND_RECORD_ID, "hand")
         } else {
             let Some(cell) = at.0 else { continue };
-            (station_id(Some(cell)), "workbench")
+            let code = station_row_at(&save, cell.0, cell.1).map_or("workbench", |r| r.code);
+            (station_id(Some(cell)), code)
         };
         let Some(code) = picked(&recipes, &pick, station).map(|r| r.code.clone()) else {
             continue;
@@ -664,7 +784,10 @@ pub fn press(
         // Locked by the mission tree (`starter-missions` T.1): it says
         // which mission opens it.
         if let Some(opens) = locks.locked(&code) {
-            note.say(time.elapsed_secs(), format!("Opens with: {opens}"));
+            note.say(
+                time.elapsed_secs(),
+                tr_with("craft.opens_with", &[("mission", &opens)]),
+            );
             continue;
         }
         queue(
@@ -768,7 +891,7 @@ pub fn paint_locks(
     for (line, mut text, mut node) in &mut lines {
         let words = locks
             .locked(&line.0)
-            .map(|m| format!("OPENS WITH: {}", m.to_uppercase()));
+            .map(|m| caps(&tr_with("craft.opens_with", &[("mission", &m)])));
         let display = if words.is_some() {
             Display::Flex
         } else {
@@ -814,7 +937,9 @@ pub fn paint(
     ),
     mut bench_line: (
         Query<&mut KitText, (With<BenchLine>, Without<WellCount>, Without<CraftLabel>)>,
-        Query<&mut Node, With<BenchFill>>,
+        Query<&mut Node, (With<BenchFill>, Without<HandFill>)>,
+        Query<&mut Node, (With<HandFill>, Without<BenchFill>)>,
+        Query<&mut Visibility, With<HandBar>>,
     ),
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
@@ -845,8 +970,12 @@ pub fn paint(
         Some((recipe, state, short || refused || locked))
     };
     let hand = view("hand");
+    // The open bench: the workbench's or the carpenter's.
+    let bench_code =
+        at.0.and_then(|(cell, layer)| station_row_at(&save, cell, layer))
+            .map_or("workbench", |r| r.code);
     let bench = if *screen == Screen::Forge {
-        view("workbench")
+        view(bench_code)
     } else {
         None
     };
@@ -897,17 +1026,23 @@ pub fn paint(
         }
         .and_then(|r| locks.locked(&r.code));
         let words = match (well.role, item) {
-            (Role::Pick(_) | Role::Result, Some(_)) if shut.is_some() => {
-                format!("Opens with: {}", shut.unwrap_or_default())
-            }
-            (_, None) => String::new(),
-            (Role::Need(_), Some((item, n, _))) => {
-                format!("{}: need {n}, have {}", item.name(), carried(item))
-            }
+            (Role::Pick(_) | Role::Result, Some(_)) if shut.is_some() => tr_with(
+                "craft.opens_with",
+                &[("mission", &shut.unwrap_or_default())],
+            ),
+            (_, None) => Localized::empty(),
+            (Role::Need(_), Some((item, n, _))) => tr_with(
+                "craft.need_have",
+                &[
+                    ("item", &item.name()),
+                    ("need", &n),
+                    ("have", &carried(item)),
+                ],
+            ),
             (_, Some((Item::Tool(tool), _, Some(tier)))) => {
                 pbd_core::inventory::tool_title(tool, tier)
             }
-            (_, Some((item, _, _))) => item.name().to_string(),
+            (_, Some((item, _, _))) => item.name(),
         };
         if tip.0 != words {
             tip.0 = words;
@@ -926,7 +1061,7 @@ pub fn paint(
             if let Ok(mut text) = counts.get_mut(child)
                 && text.text != number
             {
-                text.text.clone_from(&number);
+                text.text = Localized::verbatim(number.clone());
             }
         }
     }
@@ -939,12 +1074,16 @@ pub fn paint(
     // The hands' plaque counts a running job up; a locked recipe's says so.
     for (label, mut text) in &mut labels {
         let want = match of(label.0) {
-            Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => "LOCKED".to_string(),
+            Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => tr("craft.locked"),
+            // The bar under the row shows how far; the word says what a press
+            // does now: queue another, with how many already wait.
             Some((_, state, _)) if label.0 == "hand" && state.busy() => {
-                let p = state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
-                format!("{:.0}%", (p * 100.0).min(99.0))
+                match state.jobs.len() - 1 {
+                    0 => tr("craft.queue"),
+                    n => tr_with("craft.queue_more", &[("count", &n)]),
+                }
             }
-            _ => "CRAFT".to_string(),
+            _ => tr("craft.craft"),
         };
         if text.text != want {
             text.text = want;
@@ -963,7 +1102,9 @@ pub fn paint(
             plaque.disabled = shut.is_some();
             plaque.focus = chosen;
         }
-        let words = shut.map(|m| format!("Opens with: {m}")).unwrap_or_default();
+        let words = shut
+            .map(|m| tr_with("craft.opens_with", &[("mission", &m)]))
+            .unwrap_or_default();
         if tip.0 != words {
             tip.0 = words;
         }
@@ -983,26 +1124,49 @@ pub fn paint(
             }
         }
     }
-    let (line, fill) = &mut bench_line;
+    let (line, fill, hand_fill, hand_bar) = &mut bench_line;
+    // The hands' bar: the head job's share done, empty when idle.
+    let hand_state = state_of(&save, HAND_RECORD_ID, pbd_core::station::hand());
+    let done = hand_state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
+    let want = percent(if hand_state.busy() { done * 100.0 } else { 0.0 });
+    for mut node in hand_fill.iter_mut() {
+        if node.width != want {
+            node.width = want;
+        }
+    }
+    let shown = if hand_state.busy() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in hand_bar.iter_mut() {
+        if *visibility != shown {
+            *visibility = shown;
+        }
+    }
     if let Some((_, state, _)) = &bench {
-        let shut = picked(&recipes, &pick, "workbench").and_then(|r| locks.locked(&r.code));
+        let shut = picked(&recipes, &pick, bench_code).and_then(|r| locks.locked(&r.code));
         let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
-            _ if state.jobs.is_empty() && shut.is_some() => {
-                format!("OPENS WITH: {}", shut.unwrap_or_default().to_uppercase())
-            }
+            _ if state.jobs.is_empty() && shut.is_some() => caps(&tr_with(
+                "craft.opens_with",
+                &[("mission", &shut.unwrap_or_default())],
+            )),
             Some(recipe) => {
                 let waiting = state.jobs.len() - 1;
                 if waiting > 0 {
-                    format!("{}  +{waiting} WAITING", recipe.name)
+                    tr_with(
+                        "craft.waiting",
+                        &[("recipe", &recipe.name()), ("waiting", &waiting)],
+                    )
                 } else {
-                    recipe.name.clone()
+                    recipe.name()
                 }
             }
-            None => "PICK A RECIPE".into(),
+            None => tr("craft.pick"),
         };
         for mut words in line.iter_mut() {
             if words.text != text {
-                words.text.clone_from(&text);
+                words.text = text.clone();
             }
         }
         let want = percent(state.head_progress(&recipes.0, now_s).unwrap_or(0.0) * 100.0);
@@ -1130,9 +1294,35 @@ pub fn scripted(
         super::digging::Hands::Empty,
         cell,
         layer,
-        Material::Workbench,
+        // `--craft carpenter` (`furniture` task 3.8): the carpenter's bench.
+        if scene == "carpenter" {
+            Material::Carpenter
+        } else {
+            Material::Workbench
+        },
     );
-    info!("scripted craft: a workbench at cell {cell} layer {layer}");
+    info!("scripted craft: a station at cell {cell} layer {layer}");
+    if scene == "carpenter" {
+        slots.give(Item::Good(Good::PLANKS), 20);
+        slots.give(Item::Good(Good::WOOL), 3);
+        slots.give(Item::Good(Good::ROPE), 2);
+        let at = (cell, layer as u16);
+        queue(
+            &mut save,
+            &mut slots,
+            Some(&tools),
+            &recipes,
+            station_id(Some(at)),
+            "chair",
+            now_s - 1.0,
+            &mut note,
+            wall_s,
+        );
+        pick.bench = index_of("carpenter", "bed");
+        station_at.0 = Some(at);
+        *screen = Screen::Forge;
+        return;
+    }
     if scene != "bench" {
         return;
     }
@@ -1210,7 +1400,10 @@ mod tests {
     #[test]
     fn a_row_names_its_recipe_and_counts_once() {
         let recipes = book();
-        let words = |code: &str| row_words(recipes.0.get(code).unwrap());
+        let words = |code: &str| {
+            let (name, count) = row_words(recipes.0.get(code).unwrap());
+            (name.into_string(), count.into_string())
+        };
         assert_eq!(words("torch"), ("TORCH".into(), "X2".into()));
         assert_eq!(words("planks"), ("PLANKS".into(), "X4".into()));
         assert_eq!(words("workbench"), ("WORKBENCH".into(), String::new()));
@@ -1225,14 +1418,11 @@ mod tests {
         let mut app = App::new();
         ui_kit::install_bare(&mut app);
         let kit = app.world().resource::<UiKit>();
-        let (_, (_, h)) = kit.rock("pack-wide");
         let recipes = book();
         let hand = recipes.0.at("hand").count();
+        // Its own panel now, as tall as it needs (`mission-playthrough`
+        // 4.4): every recipe shows without scrolling.
         assert!(hand <= ROWS_SHOWN, "{hand} hand recipes: the list scrolls");
-        // The lintel's flow (16 tall, pulled up 15, 4 under), the list, the
-        // craft row's margin and its wells.
-        let column = 1.0 + 4.0 + list_height(hand) + 3.0 + slots::SLOT;
-        assert!(column <= h as f32 - 28.0, "{column} px in {h}");
         let needs = recipes.0.at("hand").map(|r| r.inputs.len()).max().unwrap() as f32;
         let arrow = kit.font.width("→") as f32;
         let row = needs * slots::SLOT + arrow + slots::SLOT + CRAFT_PLAQUE + 3.0 * (needs + 2.0);

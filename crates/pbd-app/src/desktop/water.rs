@@ -243,6 +243,23 @@ fn dig_pit(world: &mut Edited, from: Vec3, depth: u32) -> usize {
             .filter(|&&n| n != u32::MAX)
             .map(|&n| n as usize),
     );
+    // `PBD_PIT_SEA_LAST=1` (a capture instrument, `dry-holes`): the cells
+    // with the sea's water beside them are dug last, so the pit is dug dry
+    // and then opened to the sea, which flows in over the next ticks.
+    if std::env::var("PBD_PIT_SEA_LAST").is_ok_and(|v| v == "1") {
+        let sea = pbd_app::planet::column::sea_layer();
+        let set = &world.fine.set;
+        let beside_sea = |record: usize| {
+            set.finest_neighbors[record].iter().any(|&n| {
+                n != u32::MAX
+                    && set
+                        .columns
+                        .column(n as usize)
+                        .is_some_and(|c| sea > 0 && c.material(sea - 1) == Material::Water)
+            })
+        };
+        cells.sort_by_key(|&record| beside_sea(record));
+    }
     let mut dug = 0;
     for record in cells {
         let Some(key) = world.fine.set.finest_records().get(record).map(|c| c.key()) else {

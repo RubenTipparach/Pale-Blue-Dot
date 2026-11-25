@@ -31,7 +31,7 @@ What reads as unnatural today, from the video and the code (design 1):
   game's behaviour, ported constant for constant, beside a proposed one, in
   three tabs (At the lure, Swimming, Hooked), Today / Proposed / Split, 1x to
   1/4x, day and night, with every proposed value on a slider with its unit.
-  https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz (version 2, with the Body wave tab).
+  https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2 (version 2, with the Body wave tab).
 - **Proposed** (design 2 to 4), for the game once approved:
   - the fish at the lure comes in on a curve, slows, hovers a body length off
     and pecks: darts in so its mouth meets the lure as the float dips, shakes
@@ -58,8 +58,8 @@ What reads as unnatural today, from the video and the code (design 1):
 
 ## Status
 
-Drafted 2026-11-17. **M37 approved for the game by the owner, 2026-11-17: "New fish behavior approved"** (versions 1 and 2: the lure, swimming, hooked and body-wave proposals). No game code
-is written for it until the owner asks.
+Drafted 2026-11-17. **M37 approved for the game by the owner, 2026-11-17: "New fish behavior approved"** (versions 1 and 2: the lure, swimming, hooked and body-wave proposals). Version 3 (the hooked snap) and "good implement", 2026-11-17: built on
+`claude/fish-behaviour` (design 9).
 
 ## Capabilities
 

@@ -120,6 +120,9 @@ pub enum Act {
     Chop(Until),
     /// Dig fresh ground ahead, `depth` blocks down a cell, until.
     Dig(Until, u32),
+    /// Cut a stair down into the ground ahead with the tool in hand, level
+    /// `depth` layers down, until (a player mining for stone and ore).
+    Mine(Until, u32),
     /// The pack's Craft panel: a recipe, this many times.
     Craft(String, u32),
     /// Set a block or a station down on the ground ahead.
@@ -130,6 +133,9 @@ pub enum Act {
     Cook(String, u32),
     /// Walk to the sea's edge and face the water.
     Shore,
+    /// Walk to a river's or a lake's edge (water above the sea's level) and
+    /// face it; the `Fish` after it fishes there.
+    Fresh,
     /// Go to the sea's edge, cast, wait for the bite, reel, until.
     Fish(Until),
     /// Till this many cells of a field with the shovel.
@@ -157,6 +163,9 @@ pub enum Act {
     Eat(String),
     /// Open the missions tab (O) for seconds, then shut it.
     Missions(f32),
+    /// Pick the mission to be on: open the tree (O), click its card, shut
+    /// it (`mission-playthrough` 3.5).
+    Focus(String),
     /// A still, when `--showcase-stills` names a directory.
     Still,
 }

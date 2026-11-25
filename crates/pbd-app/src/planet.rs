@@ -33,6 +33,8 @@ pub mod splash;
 mod ssr;
 #[path = "planet_terrain.rs"]
 pub(crate) mod terrain;
+#[path = "planet_tier_gpu.rs"]
+pub(crate) mod tier_gpu;
 #[path = "planet_topology.rs"]
 pub(crate) mod topology;
 #[path = "planet_trees.rs"]
@@ -46,11 +48,13 @@ mod water;
 pub mod weather_maps;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
+pub use lod::{
+    Applied, BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m,
+};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, generator_version,
-    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
-    terrain_config, terrain_epoch, terrain_radius, tileset_slot,
+    nearest_ground_near, river_channel, sheet_index, snow_slot, surface_code, surface_height,
+    switch_generator, terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{
     EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
@@ -136,10 +140,12 @@ pub(crate) fn clutter_first_vertex() -> u32 {
 /// "shader global binding 3 is not available", which names the binding and not
 /// the draw that outgrew it.
 ///
-/// Then eight more, the near trees, one per species (`flora-v2` design
+/// Then nine more, the near trees, one per species (`flora-v2` design
 /// 10.5), whose vertex counts and first vertices the CPU writes once when
 /// the buffer is made (`near_args`) and the cull only counts instances into.
-pub(crate) const INDIRECT_BYTES: u64 = 13 * 16;
+pub(crate) const INDIRECT_BYTES: u64 = (5 + NEAR_SPECIES) * 16;
+/// The near draws: one per species, krummholz the ninth (`mountain-ground`).
+pub(crate) const NEAR_SPECIES: u64 = pbd_core::tree_kit::SPECIES.len() as u64;
 /// Where the near draws' arguments start in the indirect buffer.
 pub(crate) const NEAR_ARGS_OFFSET: u64 = 5 * 16;
 
@@ -154,7 +160,7 @@ pub(crate) fn near_args() -> Vec<u32> {
         .collect()
 }
 /// Bytes of the near-tree list: a region of `NEAR_CAP` entries per species.
-pub(crate) const NEAR_LIST_BYTES: u64 = 8 * trees::NEAR_CAP as u64 * 4;
+pub(crate) const NEAR_LIST_BYTES: u64 = NEAR_SPECIES * trees::NEAR_CAP as u64 * 4;
 
 /// Vertices per column instance: a cave ceiling fan and a cave floor fan per
 /// run, then one flank quad per side per run per stretch of the NEIGHBOUR's
@@ -332,6 +338,8 @@ impl Plugin for PlanetPlugin {
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
+            // Its packed image, made in the same frame (`fine-set-upload`).
+            ExtractResourcePlugin::<tier_gpu::FineGpu>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
             // The sun moves now, so the render world needs this frame's, not
             // the one the pipeline was built with.
@@ -355,9 +363,20 @@ impl Plugin for PlanetPlugin {
         .add_plugins(ExtractResourcePlugin::<crate::clutter::ClutterTaken>::default())
         .init_resource::<crate::clutter::ClutterTaken>()
         .add_systems(Update, crate::clutter::refresh)
+        // And the tree being chopped or punched, which shakes
+        // (`tree-punch-shake`).
+        .add_plugins(ExtractResourcePlugin::<crate::tree_shake::TreeShake>::default())
+        .init_resource::<crate::tree_shake::TreeShake>()
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
+        // The fine set's GPU image, after everything that makes a version
+        // (`fine-set-upload` D2).
+        .init_resource::<tier_gpu::PreparedGpu>()
+        .add_systems(
+            Last,
+            tier_gpu::pack_fine_gpu.before(crate::settings::PacingSet),
+        )
         // After the landing, which publishes the set's own bakes
         // (`baked-light-ease` 7.2): a bake begun before it would be of the
         // set it replaced.
@@ -861,6 +880,12 @@ struct PlanetParams {
     // `gather-by-hand`: the cells with a piece a hand took, two a lane, each
     // its clutter id and a sink byte a piece (`clutter::ClutterTaken`).
     clutter_taken: [UVec4; crate::clutter::TAKEN_CELLS / 2],
+    // `tree-punch-shake`: x the worked tree's id, y its last hit's time as
+    // bits, z one once a tree is hit, w spare (`tree_shake::TreeShake`).
+    shake: UVec4,
+    // `glowing-mushrooms` design 8: the lights players carry, two vec4s a
+    // light (`carried_light::CarriedLights::packed`).
+    carried: [Vec4; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1294,6 +1319,17 @@ fn fine_region(base_count: u32, half: u32, k: usize) -> u64 {
         + (u64::from(half) * u64::from(FINE_REGIONS) + k as u64) * u64::from(lod::FINE_CAPACITY)
 }
 
+/// The delta an upload may write (`fine-set-upload` D4): only one made from
+/// the version the GPU holds, and never into the other half a dissolve
+/// lands in, which holds an older set.
+fn delta_on_base(
+    delta: Option<&tier_gpu::Delta>,
+    uploaded: u64,
+    how: Landing,
+) -> Option<&tier_gpu::Delta> {
+    delta.filter(|d| d.base == uploaded && how != Landing::Dissolve)
+}
+
 /// What a fine set's upload does to the two halves (`two-set-dissolve`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Landing {
@@ -1458,9 +1494,10 @@ fn upload_planet(
 
 /// Rewrite the fine regions when a new fine set has landed. Each level's
 /// records go at its own offset; the count is what the compute pass reads.
-// Nine parameters: the seven it had, the dissolve's length, which says
+// Nine parameters: the six it had, the dissolve's length, which says
 // whether a landing would cut a running dissolve short (`two-set-dissolve`),
-// and the dusk relight's version, whose light blends in (`baked-light-ease`).
+// the dusk relight's version, whose light blends in (`baked-light-ease`),
+// and the set's packed image (`fine-set-upload`).
 #[allow(clippy::too_many_arguments)]
 fn upload_fine(
     fine: Option<Res<lod::PlanetFine>>,
@@ -1469,9 +1506,9 @@ fn upload_fine(
     bounce: Option<Res<bounce::BounceField>>,
     lamps: Option<Res<bounce::LampBakeField>>,
     clock: Res<PlanetClock>,
-    lighting: Option<Res<crate::config::LightingSettings>>,
     scatter: Option<Res<crate::config::ScatterSettings>>,
     relight: Option<Res<lod::DuskRelight>>,
+    gpu: Option<Res<tier_gpu::FineGpu>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1509,6 +1546,13 @@ fn upload_fine(
     if planet.uploaded == fine.version {
         return;
     }
+    // Only with its own image (`fine-set-upload` D4): made in the frame the
+    // version was, so this waits only if something made a version after
+    // `pack_fine_gpu` ran, and then draws the set it has, whole, for a frame.
+    let Some(gpu) = gpu.filter(|g| g.version == fine.version) else {
+        debug!("fine set version {} waits for its image", fine.version);
+        return;
+    };
     let follows = planet.uploaded.checked_add(1) == Some(fine.version);
     let timer = std::time::Instant::now();
     let old = planet.lod;
@@ -1536,68 +1580,76 @@ fn upload_fine(
         planet.counts_prev = planet.counts;
         planet.half = 1 - planet.half;
     }
+    // The image of this version, made off the render thread
+    // (`fine-set-upload`): written as it is, or only what changed since the
+    // version the GPU holds. The light goes up with the records that decide
+    // what it lights, and the materials with them (a face drawn from a stale
+    // layer is a placed stone wearing the earth that was there before), all
+    // in this one call: no frame draws half of a version.
+    //
+    // A dusk or dawn relight of the set drawn until now goes into the other
+    // half and is blended in from this one (`baked-light-ease` 7.3);
+    // anything else overwrites the newest half and is whole at once.
+    let image = &gpu.image;
+    let delta = delta_on_base(gpu.delta.as_deref(), planet.uploaded, how);
+    let (half, blending) = light_half(
+        planet.light_new,
+        relight.is_some_and(|r| r.version == fine.version),
+        follows,
+        planet
+            .light_anchor
+            .is_some_and(|a| a.distance(fine.set.anchor) < 1e-3),
+    );
+    let light_whole = half != planet.light_new;
     let stride = size_of::<GpuCell>() as u64;
-    for (k, level) in fine.set.levels.iter().enumerate() {
-        let offset = fine_region(planet.base_count, planet.half, k) * stride;
-        if !level.is_empty() {
-            queue.write_buffer(
+    let (base_count, cells_half) = (planet.base_count, planet.half);
+    let mut bytes = [0usize; 6];
+    let mut writes = 0usize;
+    tier_gpu::tier_writes(image, delta, light_whole, |target, at, data| {
+        let (buffer, offset, part) = match target {
+            tier_gpu::Target::Level(k) => (
                 &planet.cells,
-                offset,
-                bytemuck::cast_slice(level.as_slice()),
-            );
-        }
+                fine_region(base_count, cells_half, k) * stride + at,
+                0,
+            ),
+            tier_gpu::Target::Records => (&planet.columns, at, 1),
+            tier_gpu::Target::Light => {
+                (&planet.light, (half * LIGHT_HALF_WORDS * 4) as u64 + at, 2)
+            }
+            tier_gpu::Target::Materials => (&planet.materials, at, 3),
+            tier_gpu::Target::Sheets => (
+                &planet.materials,
+                (column::PLACED_SHEETS_BASE * 4) as u64 + at,
+                4,
+            ),
+            tier_gpu::Target::Centres => (&planet.centres, at, 5),
+        };
+        queue.write_buffer(buffer, offset, data);
+        bytes[part] += data.len();
+        writes += 1;
+    });
+    for (k, level) in fine.set.levels.iter().enumerate() {
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
-    // With each column's reach top, which ends a reflected ray's walk once
-    // it has risen past everything it could still meet (`lighting-perf` 2.1).
-    let reach_m = lighting.map_or_else(
-        || crate::config::LightingSettings::default().reflection_reach_m,
-        |l| l.reflection_reach_m,
-    );
-    let records = fine.set.columns.gpu_records_with_reach(reach_m);
-    if !records.is_empty() {
-        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(&records));
-        // The light goes up with the records that decide what it lights. Two
-        // uploads a frame apart would draw one frame of the new geometry lit
-        // by the old world.
-        //
-        // A dusk or dawn relight of the set drawn until now goes into the
-        // other half and is blended in from this one (`baked-light-ease`
-        // 7.3); anything else overwrites the newest half and is whole at once.
-        let light = fine.set.columns.gpu_light();
-        let (half, blending) = light_half(
-            planet.light_new,
-            relight.is_some_and(|r| r.version == fine.version),
-            follows,
-            planet
-                .light_anchor
-                .is_some_and(|a| a.distance(fine.set.anchor) < 1e-3),
-        );
-        let words = &light[..light.len().min(LIGHT_HALF_WORDS)];
-        queue.write_buffer(
-            &planet.light,
-            (half * LIGHT_HALF_WORDS * 4) as u64,
-            bytemuck::cast_slice(words),
-        );
+    if !image.records.is_empty() {
         planet.light_new = half;
         planet.light_blending = blending;
         planet.light_from_s = clock.0;
         planet.light_anchor = Some(fine.set.anchor);
-        // And the materials, for the same reason: a face drawn from a stale
-        // layer is a placed stone wearing the earth that was there before.
-        let materials = fine.set.columns.gpu_materials();
-        queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
-        // And which of those layers somebody placed, so a placed block is
-        // drawn as itself (`placed-blocks-keep-material`).
-        let sheets = fine.set.columns.gpu_placed_sheets();
-        queue.write_buffer(
-            &planet.materials,
-            (column::PLACED_SHEETS_BASE * 4) as u64,
-            bytemuck::cast_slice(&sheets),
-        );
-        let centres = fine.set.columns.gpu_centres();
-        queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
+    // MEASUREMENT (`cascade-perf`, `fine-set-upload`): what went up, at debug
+    // level.
+    debug!(
+        "UPLOAD_PARTS {} in {:.2} ms, {writes} writes: levels {} records {} light {} materials {} sheets {} centres {} KiB",
+        if delta.is_some() { "delta" } else { "whole" },
+        timer.elapsed().as_secs_f64() * 1e3,
+        bytes[0] / 1024,
+        bytes[1] / 1024,
+        bytes[2] / 1024,
+        bytes[3] / 1024,
+        bytes[4] / 1024,
+        bytes[5] / 1024,
+    );
     planet.uploaded = fine.version;
     match how {
         // The partition is the one a running dissolve dissolves into: it runs
@@ -1814,12 +1866,14 @@ pub(crate) struct Tunables<'w> {
     maps: Res<'w, weather_maps::WeatherMapsNow>,
     /// The night side's far lights (`night-lights-from-space`).
     far: Option<Res<'w, crate::night_lights::FarLights>>,
-    /// The sea now, for the tide (`ocean-environments` 5.1).
-    sea_now: Option<Res<'w, crate::sea::SeaNow>>,
     /// The trees felled and picked near the camera (`flora-v2` 12.5).
     taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
     /// The ground clutter taken near the camera (`gather-by-hand`).
     clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
+    /// The tree being chopped or punched (`tree-punch-shake`).
+    shake: Option<Res<'w, crate::tree_shake::TreeShake>>,
+    /// The lights players carry (`glowing-mushrooms`).
+    carried: Option<Res<'w, crate::carried_light::CarriedLights>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1840,15 +1894,6 @@ fn prepare_views(
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let water_settings = &tunables.water;
-    let (tide_here, sheet_reach) = tunables.sea_now.as_deref().map_or((0.0, 0.0), |now| {
-        let range = now.gpu.tide.w;
-        let reach = if range > 0.0 {
-            pbd_core::sea::tide_high_m(range) - water_settings.depth_offset_m + 1.0
-        } else {
-            0.0
-        };
-        (now.tide_here, reach.max(0.0))
-    });
     let weather_settings = &tunables.weather;
     let scatter = &tunables.scatter;
     let columns = &tunables.columns;
@@ -1955,10 +2000,9 @@ fn prepare_views(
             // only reader is that light, and the sea radius in w.
             water_absorption: Vec3::from_array(water_settings.downwell_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
-            // w: the tide at the camera, m, which lifts or lowers the sea's
-            // tint on the ground with the drawn sheet (`ocean-environments`
-            // 5.1). The tide moves by centimetres over a view.
-            water_deep: Vec3::from_array(water_settings.deep_color).extend(tide_here),
+            // w spare (it was the tide at the camera, which `no-tides`
+            // removed).
+            water_deep: Vec3::from_array(water_settings.deep_color).extend(0.0),
             weather: Vec4::new(
                 weather.wetness,
                 // The rain's rings and sheen are water's: none in snow.
@@ -2079,10 +2123,11 @@ fn prepare_views(
                 water_settings.caustic_cell_m,
                 water_settings.caustic_fade_m,
                 // The visibility pass lists the sea sheet over every cell
-                // whose ground is under this height (m over sea level): the
-                // highest the tide brings the sheet, so at high water it runs
-                // on over the beach and never stands as a lip (B7).
-                sheet_reach,
+                // whose ground is under this height, m over the radius: the
+                // high-water line, the CPU's own (`planet::column::sheet_listed`),
+                // so the sheet runs on to the shore and never stands as a lip
+                // (B7, `no-tides`).
+                crate::planet::terrain::high_water_m(),
             ),
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,
@@ -2170,6 +2215,14 @@ fn prepare_views(
             felled,
             picked,
             clutter_taken,
+            shake: tunables
+                .shake
+                .as_deref()
+                .map_or(UVec4::ZERO, crate::tree_shake::TreeShake::lane),
+            carried: tunables.carried.as_deref().map_or(
+                [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
+                crate::carried_light::CarriedLights::packed,
+            ),
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`
@@ -2381,21 +2434,40 @@ fn draw_terrain<'w>(
 ) {
     pass.set_bind_group(1, &maps.bind_group, &[]);
     pass.set_bind_group(2, receiver, &[]);
-    pass.set_bind_group(0, &view.draw_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 0);
-    pass.set_bind_group(0, &view.foliage_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 16);
-    // The near trees, one draw per species (`flora-v2` design 10.5).
-    pass.set_bind_group(0, &view.near_bind_group, &[]);
-    for s in 0..8 {
-        pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+    let skip = terrain_skip();
+    if !skip.contains("ground") {
+        pass.set_bind_group(0, &view.draw_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 0);
     }
-    pass.set_bind_group(0, &view.clutter_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 48);
+    if !skip.contains("trees") {
+        pass.set_bind_group(0, &view.foliage_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 16);
+    }
+    // The near trees, one draw per species (`flora-v2` design 10.5).
+    if !skip.contains("near") {
+        pass.set_bind_group(0, &view.near_bind_group, &[]);
+        for s in 0..NEAR_SPECIES {
+            pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+        }
+    }
+    if !skip.contains("clutter") {
+        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 48);
+    }
     // The inside of the world, last: everything before it is the surface,
     // and a cave face is only ever seen through a hole in that surface.
-    pass.set_bind_group(0, &view.column_bind_group, &[]);
-    pass.draw_indirect(&view.indirect, 64);
+    if !skip.contains("column") {
+        pass.set_bind_group(0, &view.column_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 64);
+    }
+}
+
+/// A pricing instrument (`play-frame-budget`): `PBD_TERRAIN_SKIP=ground,trees,
+/// near,clutter,column` leaves those draws out of the terrain pass, so a
+/// sitting can price each draw's share on the same replay.
+fn terrain_skip() -> &'static str {
+    static SKIP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SKIP.get_or_init(|| std::env::var("PBD_TERRAIN_SKIP").unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -2550,6 +2622,19 @@ impl render_graph::Node for PlanetComputeNode {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_delta_is_used_only_on_its_base() {
+        let delta = tier_gpu::Delta {
+            base: 7,
+            ..Default::default()
+        };
+        assert!(delta_on_base(Some(&delta), 7, Landing::InPlace).is_some());
+        assert!(delta_on_base(Some(&delta), 6, Landing::InPlace).is_none());
+        assert!(delta_on_base(Some(&delta), 7, Landing::Dissolve).is_none());
+        assert!(delta_on_base(Some(&delta), 0, Landing::AtOnce).is_none());
+        assert!(delta_on_base(None, 7, Landing::InPlace).is_none());
+    }
+
     use super::*;
 
     /// `flora-v2` 13.3: a fade is a moment in time, never a place. A still
@@ -2740,6 +2825,10 @@ mod tests {
         let columns = crate::config::ColumnSettings::default();
         let scatter = crate::config::ScatterSettings::default();
         let mut save = crate::saves::WorldSave::memory_only();
+        // What the terrain reads (the towns' ground, the roads' marks and
+        // clearance) stays as it is through both builds: another test
+        // installing between them would make them differ.
+        let _ground = pbd_core::settlement::ground::hold();
         let launch = build_planet(near, &columns, &scatter, &save.edits);
         // One hole dug in the opened world, at the top of the first column
         // the launch built: the rebuilt planet must carry it.
@@ -2758,6 +2847,10 @@ mod tests {
             layer: top as u16,
             material: pbd_core::terrain::Material::Air,
         });
+        // What a launch of the dug world builds: the base reads the save's
+        // edits too, so the hole is in it, and the rebuild must match that,
+        // not the undug launch.
+        let relaunch = build_planet(near, &columns, &scatter, &save.edits);
         let mut world = World::new();
         world.insert_resource(columns);
         world.insert_resource(scatter);
@@ -2779,8 +2872,8 @@ mod tests {
         assert_eq!(base.generation, 2, "the render world must see a new base");
         assert!(
             bytemuck::cast_slice::<GpuCell, u8>(&base.cells)
-                == bytemuck::cast_slice::<GpuCell, u8>(&launch.base),
-            "the same generator rebuilds the same base records"
+                == bytemuck::cast_slice::<GpuCell, u8>(&relaunch.base),
+            "the rebuild is the base a launch of the dug world builds"
         );
         let fine = world.resource::<lod::PlanetFine>();
         assert_eq!(fine.version, 8, "the render world must see a new fine set");
@@ -2833,7 +2926,7 @@ pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
 }
 
 /// A pricing instrument (`play-frame-budget`), not a setting:
-/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night` compiles those parts
+/// `PBD_TERRAIN_OFF=flat,shadow,cloud,bounce,lamp,night,texture,season,fog,wet` compiles those parts
 /// out of the terrain's fragment shader, so a sitting can price each by what
 /// it saves on the same view. `flat` returns a grey after the cut-out test:
 /// what is left is the vertex shader, the raster and the depth test.

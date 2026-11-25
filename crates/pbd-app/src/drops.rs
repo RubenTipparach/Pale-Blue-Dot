@@ -38,7 +38,9 @@ pub struct DropsSet;
 impl Plugin for DropsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Drops>()
-            .add_systems(Update, (gather, draw).chain().in_set(DropsSet));
+            .init_resource::<Toss>()
+            .add_message::<crate::hotbar::PickedUp>()
+            .add_systems(Update, (toss, gather, draw).chain().in_set(DropsSet));
     }
 }
 
@@ -72,6 +74,92 @@ impl Drops {
     }
 }
 
+/// A stack to drop this frame (`drop-and-trash`): the slot and how many,
+/// asked by Q or by a stack dragged off the pack.
+#[derive(Resource, Default, Debug)]
+pub struct Toss(pub Option<(usize, u16)>);
+
+/// How far ahead a dropped stack lands, m: past the magnet
+/// ([`drops::MAGNET_M`]), so it is not pulled straight back.
+pub const TOSS_AHEAD_M: f64 = 3.2;
+
+/// Drop the stack [`Toss`] asks for: the drop made ahead of the chest along
+/// the look's level heading, written with the slots after it, then the
+/// slots and the live drops changed (the durable path first).
+#[allow(clippy::too_many_arguments)]
+pub fn toss(
+    sun: Res<Sun>,
+    mut asked: ResMut<Toss>,
+    walkers: Query<&Transform, With<Walker>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut drops: ResMut<Drops>,
+    mut hotbar: ResMut<Hotbar>,
+    mut save: ResMut<WorldSave>,
+    space: crate::SimSpace,
+    // Logs thrown over water float (`log-drives`).
+    water: (
+        Option<Res<crate::planet::PlanetContact>>,
+        Option<ResMut<crate::logs::Logs>>,
+    ),
+) {
+    let Some((slot, count)) = asked.0.take() else {
+        return;
+    };
+    let Some(walker) = walkers.iter().next() else {
+        return;
+    };
+    let Some(stack) = hotbar.0.get(slot) else {
+        return;
+    };
+    let count = count.min(stack.count);
+    if count == 0 {
+        return;
+    }
+    let chest = chest(&space.origin(), walker.translation);
+    let up = chest.normalize_or(bevy::math::DVec3::Y);
+    let look = cameras
+        .iter()
+        .find(|(_, camera)| camera.is_active)
+        .map(|(at, _)| at.forward().as_vec3().as_dvec3())
+        .unwrap_or(bevy::math::DVec3::X);
+    let level = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
+    // A log over water goes in as a floating log, one a press.
+    if let (Some(contact), Some(mut logs)) = water
+        && crate::logs::throw_in(
+            &mut save,
+            &mut logs,
+            &mut hotbar,
+            &contact,
+            slot,
+            chest + level * TOSS_AHEAD_M,
+            up.cross(level),
+        )
+    {
+        return;
+    }
+    let mut drop = Drops::make(
+        &save,
+        stack.item,
+        chest + level * TOSS_AHEAD_M,
+        sun.clock.seconds,
+    );
+    drop.count = count;
+    let mut slots = hotbar.0.clone();
+    if slots.take(slot, count) != count {
+        return;
+    }
+    if !save.record_toss(&drop, &slots) {
+        error!(
+            "toss BLOCKED: the save did not accept the drop of {count} {:?}",
+            drop.item
+        );
+        return;
+    }
+    info!("TOSS {count} {:?} as drop {}", drop.item, drop.id);
+    hotbar.0 = slots;
+    drops.live.push(drop);
+}
+
 /// The walker's chest, from its local (physics) body centre: where a drop is
 /// pulled to, a point in the body's frame in f64 (`world-frames` 10.4).
 pub fn chest(origin: &pbd_core::world_frame::SimOrigin, walker: Vec3) -> DVec3 {
@@ -96,6 +184,7 @@ pub fn gather(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     space: crate::SimSpace,
+    mut picked: MessageWriter<crate::hotbar::PickedUp>,
 ) {
     let now = sun.clock.seconds;
     drops.live.retain(|drop| !drop.expired(now));
@@ -124,12 +213,32 @@ pub fn gather(
         let mut slots = hotbar.0.clone();
         match drops::step(&mut moved, chest, dt, &mut slots) {
             Moved::Picked { taken } => {
-                if !save.record_pick(moved.id, moved.count, &slots) {
-                    error!("pickup BLOCKED: the save did not accept drop {}", moved.id);
-                    continue;
+                // The magnet brought it in; whether it is picked up, and how
+                // many, is the server's (`multiplayer` design 19), from the
+                // slots as they stood. Its answer is the one kept.
+                let (decided, left) = match save.decide_pick(drop.id, &hotbar.0) {
+                    Ok(decided) => decided,
+                    Err(refusal) => {
+                        error!("pickup BLOCKED: drop {}: {refusal:?}", drop.id);
+                        continue;
+                    }
+                };
+                if decided != slots || left != moved.count {
+                    warn!(
+                        "SERVER_DISAGREES drop {}: the server left {left} where the magnet left {}",
+                        drop.id, moved.count
+                    );
+                    slots = decided;
+                    moved.count = left;
                 }
                 debug!("picked up {taken} of {:?} (drop {})", moved.item, moved.id);
                 hotbar.0 = slots;
+                if taken > 0 {
+                    picked.write(crate::hotbar::PickedUp {
+                        item: moved.item,
+                        count: taken,
+                    });
+                }
                 *drop = moved;
                 if drop.count == 0 {
                     gone.push(index);
@@ -328,6 +437,9 @@ fn draw(
             Name::new(format!("drop {}", drop.id)),
             DropView(drop.id),
             crate::field_light::LitByField,
+            // Lit as the terrain is: its own sun and shadows, not Bevy's
+            // (`drop-lighting`).
+            crate::field_light::LitLikeTerrain,
             Mesh3d(mesh),
             MeshMaterial3d(material),
             pose(drop, centre, t, card, eye),
@@ -355,6 +467,7 @@ mod tests {
             .insert_resource(Drops { live: drops })
             .insert_resource(slots)
             .insert_resource(WorldSave::memory_only())
+            .add_message::<crate::hotbar::PickedUp>()
             .add_systems(Update, gather);
         app.world_mut().spawn((
             Walker,
@@ -373,6 +486,15 @@ mod tests {
         }
     }
 
+    /// Drops floating in the world: the app's and the save's, as their lines
+    /// would have made them (the server picks against the save's).
+    fn seed(app: &mut App, drops: Vec<ItemDrop>) {
+        app.world_mut()
+            .resource_mut::<WorldSave>()
+            .hold_drops(&drops);
+        app.world_mut().resource_mut::<Drops>().live = drops;
+    }
+
     fn now(app: &App) -> f64 {
         app.world().resource::<Sun>().clock.seconds
     }
@@ -383,7 +505,7 @@ mod tests {
     fn a_drop_by_the_walker_is_picked_up() {
         let mut app = app(vec![], Hotbar::default());
         let t = now(&app);
-        app.world_mut().resource_mut::<Drops>().live = vec![dirt(0, FEET + Vec3::X * 0.5, t)];
+        seed(&mut app, vec![dirt(0, FEET + Vec3::X * 0.5, t)]);
         app.update();
         assert!(app.world().resource::<Drops>().live.is_empty());
         let slots = &app.world().resource::<Hotbar>().0;
@@ -403,7 +525,7 @@ mod tests {
         let mut app = app(vec![], full);
         let t = now(&app);
         let at = FEET + Vec3::X * 0.5;
-        app.world_mut().resource_mut::<Drops>().live = vec![dirt(3, at, t)];
+        seed(&mut app, vec![dirt(3, at, t)]);
         for _ in 0..3 {
             app.update();
         }
@@ -530,7 +652,7 @@ mod tests {
         let start = feet + up.as_dvec3() * 0.8 + DVec3::from(up.any_orthonormal_vector()) * 2.2;
         let mut drop = dirt(5, Vec3::ZERO, t);
         drop.position = start;
-        app.world_mut().resource_mut::<Drops>().live = vec![drop];
+        seed(&mut app, vec![drop]);
         // The first frame's time step is zero.
         for _ in 0..3 {
             std::thread::sleep(std::time::Duration::from_millis(5));

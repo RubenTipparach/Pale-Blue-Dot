@@ -1320,3 +1320,264 @@ rolls as the mockup's does. In a cascade of side-by-side falls the wall blend
 fades each puff against the neighbouring sheets, so the mist reads thinner
 than the mockup's single fall; narrowing the blend there would change the
 approved look and is the owner's to ask for.
+
+## The surface streaming against its arrows (owner, 2026-11-17)
+
+The owner, with the flow arrows on (F5) over a cascade of one-layer steps at
+frame 23.225, -3.012 (map 23.2255S 3.012W): "detected some uv going against
+the direction of the arrow", "its easy to see on waterfalls", and "where you
+have slanted water blocks, the uv splits to per triangle".
+
+**What the arrow and the surface each read.** The arrow is the cell's
+downhill slope (`cell_pieces`, `along = slope.normalize()`), drawn in the
+body frame: it cannot be wrong about the cell. The surface streams by the
+top's flow lane, two numbers: the mesher writes the slope in the tangent
+frame of the cell's *centre* (`shader_frame(centre)`), and the fragment
+rebuilds a frame to read them back from the *triangle's own normal*
+(`tangent_u` off X, or off Y where `|face.x| > 0.9`, projected off `face`).
+On a flat top the two frames agree to a hundredth of a degree. On a slanted
+top every triangle is lit by its own slope (up to ~35 degrees off the
+centre on a step), so each triangle reads the same two numbers in its own
+frame: the per-triangle split the owner saw. Where the frame is
+ill-conditioned it reverses: within about 26 degrees of the body's +X or -X
+axis the reference flips from X to Y, and a tilted triangle lands on the
+other side of the flip from its centre. There `X - n(n.X)` and
+`Y - n(n.Y)` are nearly opposite (at the owner's spot, n = (0.918, 0.394,
+-0.048), they are 180 degrees apart to within 4 degrees), so that triangle
+streams backwards. The owner's cascade sits at |x| = 0.918, 2.6 degrees from
+the flip; the default spawn, (0.878, 0.479, 0), at 1.3 degrees on the other
+side. Both are inside the band where the X-projected axis is short and a
+small tilt swings it round.
+
+The falling faces themselves do not read the flow lane: they stream along
+the body radial, down, for both the waves (`advected`, `fall_c`) and the
+froth's streaks, and the fall arrows point down the face (`-centre`). The
+waterfalls show it because a step's top is the most slanted water there is
+and each one leads straight into a fall, and the lip's froth band and
+Glassy band sit on those slanted tops.
+
+**The fbm's own drift is not the cause.** `fbm3` moves each octave at a
+fixed body-frame velocity, about 0.38 to 0.43 m per shader second at
+`ripple_scale` 1.5; the slowest top streams at 0.56 (`PAN_K` x 0.35), so on
+a top the drift can turn the pattern by up to about 50 degrees but never
+reverse it, and on a fall face (1 m/s and speeding up) by about 25 degrees.
+It is the sea's own look and is left alone.
+
+**Measurement (an instrument, no behaviour change).** `water_flow::flow_uv_audit`
+mirrors the fragment's read of a top's flow lane: for every top triangle it
+decodes the lane in the frame the fragment builds and compares it with the
+cell's arrow. A triangle disagrees where the two are more than 90 degrees
+apart (against the arrow) and is off where more than 45. `PBD_FLOW_UV_AUDIT=1`
+logs `FLOW_UV_AUDIT` from the live mesh each rebuild; a unit test runs it on
+slanted cells placed round the sphere, the owner's spot and the pentagon
+neighbourhoods among them.
+
+**Fix.** One frame for both ends that does not depend on a triangle's
+normal and has no flip: the body frame's north and east (`geo::north_east`)
+at the point itself. The mesher writes each top vertex's flow in north and
+east at that vertex's own direction; the fragment reads it back in north and
+east at the fragment's direction, so every triangle of a cell reads the
+cell's own slope and the lane interpolates smoothly. Its only singularity is
+the two poles, where north and east turn round within a cell; a cell within
+a few metres of a pole may still read its flow rotated, and none is at a
+river the owner has shown. The fall faces, the sea sheet (no flow) and the
+rain rings (which keep the face's own frame, as they are round) are not
+touched. Speeds, the lip's froth and every fall look are as they are.
+
+Not changed: each cell still streams at its own slope's speed, so where two
+cells of different slope meet, their patterns slide past each other along
+the shared edge as before. Making the field continuous across cells needs
+the flow blended at the corners and a two-phase reset (the pool's
+method) to keep it from shearing, which changes how the river looks; that
+is the owner's to ask for, in a mockup.
+
+**Measured (2026-11-17, the Mac).** The live mesh at the owner's cascade
+(`PBD_FLOW_UV_AUDIT=1`, a throwaway world): before, 1048 of 2946 top
+triangles streamed against their arrows (35.6 %), every one of them more than
+90 degrees off, on 491 tops; after, 0 against and 0 off by more than 45
+degrees. The unit sweep (`every_top_triangle_streams_with_its_arrow`: a
+stepped top and a gently sloped one, six ways round and three spins, at the
+owner's spot, the default spawn, the twelve pentagon directions, 48 points on
+the old switch rings and 200 over the sphere; 84,888 triangles): before,
+5299 against and 9885 off by more than 45 degrees, with 4114 of 14,148 tops
+split between triangles; at the owner's spot alone 155 of 324 against; after,
+none. The "before" is the old encode and read modelled on the same mesh
+(`legacy_*` in the audit), checked against the old code itself: the sweep run
+on `origin/main` with the audit gave the same 155 and 81 at the two named
+spots. The fix is two extra lines a fragment on the game's water and one
+`north_east` a top vertex in the mesher; frame time was not measured
+(`perf_suite.py` has no river scenario, and the read replaces one frame with
+another of the same cost).
+
+## A fall's size: ripples need depth, small falls mist less (6.7; owner, 2026-11-17)
+
+The owner, on a screenshot of a shallow desert stream stepping down a layer
+with mist puffs all along it and big faint rings at the feet: "this water is
+too shallow for ripples, and the mist should be 50% at this size"; then, on a
+long cascade of one-layer steps (near 23.2255S 3.012W) speckled white at
+every lip: "less particles for these shallow drops too"; then "actually no
+steam/mist at all for drops that are less than 1 block height". The owner's
+own words are the approval for exactly this change (CLAUDE.md, "Waterfalls
+are designed in a mockup first"); M35 carries the same rules so the mockup
+and the game agree.
+
+**Measured** (a temporary `animate_splash` log of the feet near the eye,
+removed before commit; `--capture`, the Mac):
+
+| Scene | Feet | `h` | `D`, m | Pool under the foot, m |
+| --- | --- | --- | --- | --- |
+| One-layer pit (`--pit 1 --pour 1`, the spawn) | stream steps | 1 | 0.10 to 0.89 | 1.00 |
+| the same | two-layer steps | 2 | 1.22 to 1.79 | 1.00 to 2.00 |
+| Jungle cascade (`--at 11.33992 4.76730`) | tall falls | 4 to 9 | 3.77 to 8.81 | 1.00 to 5.00 |
+| the same | one-layer steps | 1 | 0.88 to 0.91 | 1.00 |
+
+The landing cell under a fall is drawn full (water stands on it), so a foot
+over one layer of water reads exactly 1.00 m: one layer is the most water a
+one-layer step can stand in. A stream's one-layer step drops under a metre
+(`D` is lip water to landing water, and the stream's own surface sits below
+each cell's top). The ripples' only driver was `fall_look.z` (height 0.5)
+times the foot's fade, on every top within 6 m of any of the nearest eight
+feet at its level: depth never entered.
+
+**The rules.** All in `water.ron` `falls`, validated, in metres:
+- **Ripples need depth.** The rings' envelope is multiplied by
+  `smoothstep(ripple_depth_none_m 1.0, ripple_depth_full_m 2.0, pool)`: none
+  over one layer (the stream, a pit's one-layer pool), half at 1.5 m, full
+  from two layers (the cascade's 3 to 5 m pools, M35's 3.35 m). The CPU puts
+  the share in `feet_more.w`; the fragment multiplies the rings by it (their
+  crest foam with them). Never a hard cut: a smoothstep, and a pool filling
+  changes `pool_m` a layer at a time but the foot's fade carries it.
+- **No mist under a metre.** A drop `D` under `mist_none_below_m` 1.0 emits no
+  mist puffs at all (not faded: none). The foot keeps a mist presence faded in
+  time over `splash_fade_s` (0.6 s) toward "mists" or not, reading the foot's
+  eased `D`: a fall whose drop crosses a metre (a level changing) eases its
+  puffs in or out, then emits none once the fade is out. The spray drops and
+  fall droplets are not steam and stay, at the reduced count below.
+- **Small falls mist at half.** From a metre up the puffs' opacity is
+  `0.5 + 0.5 smoothstep(mist_small_drop_m 1.5, mist_full_drop_m 4.0, D)`
+  times the approved opacity: 50% for a fall up to 1.5 m, 65% at M35's
+  2-layer 2.4 m, the approved look from 4 m (M35's 4 and 9-layer falls, the
+  cascade's tall falls). Opacity, not count, carries the "50%": at a small
+  fall the count is already the rule's floor (8), and the count is cut
+  separately below.
+- **Fewer particles on small falls.** Every count (mist puffs, spray drops,
+  fall droplets, and the bubbles on the GPU) is multiplied by
+  `0.35 + 0.65 smoothstep(1.5, 4.0, D)` (`particles_small_scale` 0.35): 35%
+  of today's on a small fall, all of it from 4 m. A one-layer step goes from
+  8 puffs, 12 spray drops, 6 to 8 droplets and 73 bubbles to (no puffs under
+  a metre, 3 from a metre) 4 spray drops, 2 to 3 droplets and 25 bubbles.
+- The rule before M35 (`rule: Layers`) is left as it was. The bubbles' ramp
+  reads a new `fall_size` lane of `WaterView` (x the mist share, y the count
+  share, z and w the two drops).
+
+**Seen** (`docs/screenshots/fall-size-rules/`, before and after, the HUD
+cropped): the river cascade at 23.2255S 3.012W, white at every lip before,
+clear after with one faint puff at its one step of a metre or more; the
+one-layer pit, puffs and rings gone; the tall pit fall (`D` 9.8 m), its mist
+unchanged; the jungle cascade's deep pool, its rings unchanged.
+
+**Not changed:** the approved look of any fall of 4 m or more, the reach and
+its fade, the wall blend, saves (nothing here is stored). The frame cost can
+only fall (fewer quads and bubbles, one multiply in the rings); not measured.
+
+## Rain splashes on the water (6.3; owner, 2026-11-19: "Build rest of phase 2")
+
+The plan above (item 3) says the rain splashes of `weather-rain` 6.4 land on
+water too, as the M32 crown on the water's surface. This is how. It is not a
+falling-water look: no froth, lip, fall foot, splash or mist term of a fall
+is touched, and nothing is drawn on a vertical face (E12). The tide is gone
+(`no-tides`): the sea's mean level is one number.
+
+**Measured (read off the code, 2026-11-19, `claude/phase-2-1` at
+`30e9c3a`).**
+- **No splash on any water.** `planet_splash.rs` builds the near column list
+  from each column's topmost solid layer and drops the column where water
+  stands on it (`top_of`: `column.material(top + 1).is_water()`), and a cell
+  off the column tier whose ground is under sea level (`height < 0`). So a
+  river, a pond, a poured pool and the sea get no droplets; they get only the
+  rings the water's fragment draws (`rain_rings`, faded by footprint, 7.1).
+- **A ground splash in front of water is erased.** The splash draw runs
+  between the terrain and `Node3d::MainTransparentPass`, before
+  `WaterCompositeLabel`. It writes no depth, and the water composite paints
+  over every pixel whose main-pass depth is behind the water's surface. A
+  droplet on a bank seen against the river behind it is painted over, as the
+  fall spray was before 6.1. This is the open item "Water splash FX weak +
+  hidden in front of water; rain ground splash missing" (see "The old item"
+  below).
+
+**The look.** The approved M32 crown, on the water:
+- every impact on water is a crown (six droplets thrown out in a ring, the
+  late central jet, a lower droplet), at the crown's approved sizes and
+  speeds (`splash_size_m.x`, `.w`, `splash_up_mps`, `splash_out_mps`) and
+  its full share (`splash_keep.x`), since all of it is standing water;
+- coloured as the water it came from: the water's deep colour
+  (`water_deep`) mixed toward the sky it mirrors, under the same sky, sun and
+  lamps as the ground's droplets, so it is dark at night but by the lamps,
+  and lit like the terrain;
+- on a river, a pond or a poured pool the impact stands on the drawn top
+  (`water_flow::drawn_top_m`: the corner levels the mesher draws, so a
+  sloped or part-full top is met where it is drawn); on the sea, on the
+  waved sheet: the shader evaluates `pbd::sea`'s `sea_surface` at the impact
+  with the same table, depth and band filter the sheet's vertices use, so a
+  crown rides the swell instead of floating over a trough or sinking under a
+  crest;
+- the rings the water already draws are the crown's footprint, as the
+  puddle's rings are on the ground;
+- out to the same reach as the rings and the ground's droplets
+  (`rain_detail_reach_m`, 20 m, faded over the last 4 m).
+
+**Drawn after the water.** The whole splash draw (ground and water) moves
+from before the transparent pass to the water's own pass, after the water
+and before the fall splash (6.1), whose soft mist must not be painted over by a droplet behind it, the clouds, the rain volume and the lens, so the
+rain fog and the drops on the lens still lie over it. Its pipeline keeps its
+own shader and group layout (`planet_splash.rs`); it has no depth
+attachment and tests in its fragment, as the fall splash does: a droplet
+behind the main pass's depth (terrain in front) or behind the water's own
+depth (a surface in front of it, or the eye under a pool) is discarded. So
+a crown over a river shows, a ground splash in front of the river shows, and
+from under a pool the surface overhead hides the crowns on it. The water's
+depth is kept for this pass (`StoreOp::Store`) whenever splashes draw.
+
+**Gates, unchanged.** Rain, liquid, the altitude gate, not from under the
+sea, tops only, none under a roof, the reach. A water column's top is open to
+the sky by construction, as a ground top is.
+
+**What the player's settings turn off.** None, as for the ground's
+splashes: there is no splash setting. RAIN SHADOW is the rain volume and its
+fog (CLAUDE.md, "What the owner means by rain shadow"); these droplets are
+not part of it and stay when it is off. `PBD_PASS_OFF=splash` (the existing
+instrument) still skips them, and with them the fall splash;
+`PBD_PASS_OFF=rain_splash` skips the rain splashes alone.
+
+**Cost (an estimate; not measurable in a cloud session).**
+- The instance count is still `columns x 48 slots x 8 droplets`, capped by
+  `MAX_COLUMNS` (512). Water columns were dropped from the list and now
+  count: over a river or the sea the list holds about the same ~220 columns
+  as over land, so the ceiling does not move, and over land nothing changes.
+- More of the lanes are alive over water (every impact a crown, 8 droplets,
+  keep 1.0, against the ground's mix of 4 to 8 at 0.5 to 1.0): about 1.5 to 2
+  times the live droplets of a meadow, still the 0.2 to 0.3 M blended pixels
+  the M32 estimate allowed.
+- A sea impact runs `sea_surface` once per droplet vertex (four per droplet,
+  only for lanes that fire): 72 wave components at most, the same loop the
+  sheet runs per vertex.
+- Two depth loads per droplet fragment, in place of the hardware depth test.
+- The list is still rebuilt only on a cell crossing or a fine-set change; the
+  sea's waves cost no upload (the table is the water pass's, uploaded per
+  frame already). The `weather-rain` 6.5 A/B (`storm`, `rain-stroll`, 0.25 ms
+  p50 budget) covers this draw; a sea scenario in rain would price the crowns
+  on the swell. Neither can be run here (lavapipe, no GPU).
+
+### The old item: "Water splash FX weak + hidden in front of water; rain ground splash missing"
+
+Checked against this branch (2026-11-19):
+- **Rain ground splash missing:** no longer true. `weather-rain` 6.4 is in
+  this branch (`planet_splash.rs`, `rain_splash.wgsl`); its 6.5 perf A/B is
+  still owed on the owner's machines.
+- **Hidden in front of water:** still true for the rain splashes (above);
+  fixed here by drawing them after the water. The fall spray and mist were
+  fixed by 6.1. The near shower's streaks (`weather.rs`, a CPU mesh in the
+  transparent pass) are still painted over where water is behind them; they
+  are rain, not a splash, and stay as they are here.
+- **Weak:** the fall foot's splash is M31's (6.4, the Splash tab; the
+  waterfall rule) and is not touched.

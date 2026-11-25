@@ -100,3 +100,30 @@ started from. A player who wants to build a town needs the town's own pieces.
 - **Performance:** a placement check covers the pieces within a few cells of
   the ghost, run each frame while the ghost moves. It is small, but it cannot
   be measured in a cloud session (CLAUDE.md).
+
+## Started (owner, 2026-11-21)
+
+**The owner, 2026-11-21: "People approved. Build.phase 3. Do it in parallel
+if you can".** That is taken as the start of this change, as it is of every
+step of phase 3 (CLAUDE.md, "The first game loop": carpentry and house
+building with the townsfolk).
+
+Said honestly: M6, the Hex House Builder (`docs/mockups/building.html`,
+https://claude.ai/artifact/6kd3oRFMMtZ1d4FCjMiAYt), is the build mockup task
+group 1 asks for, and it was **drafted, not separately approved** (tracker:
+"Drafted (2026-11-12)"). Nobody recorded an approval of its feel. The gate
+in task 1.3 is recorded as passed on the owner's "Build phase 3" alone, and
+nothing more is read into it. The open questions the gate was to settle
+(the key, the palette's layout, aim-snap or grid cursor) take M6's answers
+where they still fit: M6's palette order and aim-snap. The key is N, not
+B: B opens the breeding screen on foot now (design B5). Recommendations
+taken, ask only with screenshots.
+
+## The owner's notes (2026-11-22)
+
+On the survey's known issues for this step, then "continue build": on "The
+stone footing has no texture yet", "add one"; on "No build camera; doors are
+open doorways", "need to craft door, add crafting camera \"architecture
+mode\""; on "Build mode is on N (B opens breeding)", "fix it". Design B7 to
+B10 and task group 7: a footing texture, crafted doors hung in doorways,
+architecture mode, and build mode on B with breeding on N.

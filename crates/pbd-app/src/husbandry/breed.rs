@@ -10,6 +10,7 @@
 use super::*;
 use pbd_core::husbandry::breeding::{self, BroodBody, Fitness, IncubatorBody, Place};
 use pbd_core::husbandry::{Birth, Keeping};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::records::Proposal;
 
 /// What the breeding screen has chosen: the species tab, the sire and the
@@ -163,9 +164,9 @@ pub(super) fn realise(world: &World, yard: &mut Farmyard, save: &mut WorldSave) 
                 if young > 0 {
                     yard.say(
                         if young == 1 {
-                            "A young one was born".to_string()
+                            tr("breed.young_one_was_born").to_string()
                         } else {
-                            format!("{young} young were born")
+                            tr_with("breed.young_were_born", &[("young", &young)]).to_string()
                         },
                         3.0,
                     );
@@ -300,15 +301,15 @@ pub(super) fn set_under_hen(
     };
     let day = world.day();
     if body.sex != Sex::F {
-        yard.say("Only a hen sits on eggs", 2.0);
+        yard.say(tr("breed.only_hen_sits_eggs"), 2.0);
         return true;
     }
     if day < body.born + f64::from(keep.young.adult_at()) {
-        yard.say("She is too young to sit", 2.0);
+        yard.say(tr("breed.she_too_young_sit"), 2.0);
         return true;
     }
     if sitting(&save.records, id) {
-        yard.say("She is already sitting", 2.0);
+        yard.say(tr("breed.she_already_sitting"), 2.0);
         return true;
     }
     // Her tally re-based up to now, so the clutch costs only what she would
@@ -332,7 +333,10 @@ pub(super) fn set_under_hen(
                 Birth::Live { .. } => 0.0,
             };
             yard.say(
-                format!("She goes broody on {n} eggs: they hatch in {days:.0} days"),
+                tr_with(
+                    "breed.broody",
+                    &[("n", &n), ("days", &format!("{days:.0}"))],
+                ),
                 3.0,
             );
         }
@@ -361,14 +365,14 @@ pub(super) fn place_incubator(
         return false;
     };
     if point.distance(feet) > world.settings().taming.reach_m * 2.5 {
-        yard.say("Too far to set it", 1.5);
+        yard.say(tr("breed.too_far_set"), 1.5);
         return false;
     }
     let Some((_, cell)) = world.cell(point) else {
         return false;
     };
     if breeding::incubators(&save.records).contains(&cell) {
-        yard.say("An incubator already stands there", 1.5);
+        yard.say(tr("breed.incubator_already_stands_there"), 1.5);
         return false;
     }
     let piece = IncubatorBody {
@@ -382,9 +386,9 @@ pub(super) fn place_incubator(
     yard.fences_drawn = None;
     yard.say(
         if lamp_near(world, cell) {
-            "Incubator set beside a lamp"
+            tr("breed.incubator_set_beside_lamp")
         } else {
-            "Incubator set: it needs a lamp beside it"
+            tr("breed.incubator_set_needs_lamp_beside")
         },
         2.0,
     );
@@ -409,25 +413,28 @@ pub(super) fn use_incubator(
         .is_some_and(|s| s.item == Item::Good(Good::FERTILE_EGG));
     if fertile {
         if !lamp_near(world, cell) {
-            yard.say("It needs a lamp beside it", 2.0);
+            yard.say(tr("breed.needs_lamp_beside"), 2.0);
             return true;
         }
         let room = u32::from(world.settings().breeding.incubator_eggs).saturating_sub(holds);
         match set_eggs(world, hotbar, save, Place::Incubator(cell), room, None) {
-            Ok(n) => yard.say(format!("{n} eggs set in the incubator"), 2.5),
+            Ok(n) => yard.say(tr_with("breed.eggs_set_incubator", &[("n", &n)]), 2.5),
             Err(why) => yard.say(why, 2.0),
         }
         return true;
     }
     if holds > 0 {
-        yard.say(format!("The incubator holds {holds} eggs"), 2.0);
+        yard.say(
+            tr_with("breed.incubator_holds_eggs", &[("holds", &holds)]),
+            2.0,
+        );
         return true;
     }
     if hotbar.held().is_some() {
         return false;
     }
     if hotbar.give(Item::Good(Good::INCUBATOR), 1) > 0 {
-        yard.say("No room to carry it", 1.5);
+        yard.say(tr("breed.no_room_carry"), 1.5);
         return true;
     }
     let piece = IncubatorBody {
@@ -435,7 +442,7 @@ pub(super) fn use_incubator(
     };
     save.store_with_hands(piece.record(cell), breeding::INCUBATOR_SCHEMA, hotbar);
     yard.fences_drawn = None;
-    yard.say("Incubator taken up", 1.0);
+    yard.say(tr("breed.incubator_taken_up"), 1.0);
     true
 }
 
@@ -455,14 +462,15 @@ pub(super) fn describe_incubator(world: &World, save: &WorldSave, point: Vec3) -
         .filter(|d| *d > world.day())
         .reduce(f64::min);
     Some(match (holds, lamp, due) {
-        (0, false, _) => "Incubator - needs a lamp beside it".to_string(),
-        (0, true, _) => "Incubator - set fertile eggs in it".to_string(),
-        (n, false, _) => format!("Incubator - {n} eggs - the lamp is out"),
-        (n, true, Some(d)) => format!(
-            "Incubator - {n} eggs - hatching in {:.1} days",
-            d - world.day()
-        ),
-        (n, true, None) => format!("Incubator - {n} eggs"),
+        (0, false, _) => tr("breed.incubator_needs_lamp_beside").to_string(),
+        (0, true, _) => tr("breed.incubator_set_fertile_eggs").to_string(),
+        (n, false, _) => tr_with("breed.incubator_eggs_lamp_out", &[("n", &n)]).to_string(),
+        (n, true, Some(d)) => tr_with(
+            "breed.incubator_hatching",
+            &[("n", &n), ("days", &format!("{:.1}", d - world.day()))],
+        )
+        .to_string(),
+        (n, true, None) => tr_with("breed.incubator_eggs", &[("n", &n)]).to_string(),
     })
 }
 
@@ -522,15 +530,15 @@ pub fn pair(save: &mut WorldSave, dam: u64, sire: u64) -> String {
         .get(record::ANIMAL, dam)
         .and_then(|r| r.read::<AnimalBody>())
     else {
-        return "No such dam".into();
+        return tr("breed.no_such_dam").into();
     };
     if body.mate == Some(sire) {
-        return "Already paired".into();
+        return tr("breed.already_paired").into();
     }
     body.mate = Some(sire);
     match save.store(&Author::Player(0), vec![body.record(dam)]) {
-        Some(_) => "Paired: they will mate at the next morning check".into(),
-        None => "The save refused it".into(),
+        Some(_) => tr("breed.paired_they_will_mate_next").into(),
+        None => tr("breed.save_refused").into(),
     }
 }
 
@@ -599,7 +607,7 @@ pub(super) fn run_content(
     }
     note_kinds(save);
     super::note_kinds(save);
-    yard.say(format!("{born} born"), 1.0);
+    yard.say(tr_with("breed.born", &[("born", &born)]), 1.0);
     born
 }
 

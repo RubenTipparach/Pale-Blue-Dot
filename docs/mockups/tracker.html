@@ -1,8 +1,9 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Pale Blue Dot Mockups</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /* Layout: the game's HUD turned into a review board. Each mockup is a hotbar-style slot card with its two approvals;
    guides and misc pages are smaller slots. Dark first, like the game at night; a daylight variant for light viewers. */
@@ -11,7 +12,7 @@
   --bevel-hi: #3b5170; --bevel-lo: #060a10;
   --accent: #e8b44c; --accent-soft: #3a2c12;
   --done: #7fcf86; --done-soft: #17301c; --go: #7fb2f0; --go-soft: #15263c; --warn: #f07a6a;
-  --display: "Pixelify Sans", "Courier New", monospace;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: dark;
 }
@@ -113,49 +114,142 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .st.building { color: var(--done); background: var(--done-soft); }
 .st.planned { color: var(--accent); }
 .st.later { color: var(--muted); }
+.st.optional { color: var(--accent); border-style: dashed; }
+/* The shell: the index on the left, the lists on the right. Below 900 px the index is a drawer from the Index button. */
+.shell { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; align-items: start; }
+.shell > .wrap { max-width: 1040px; margin: 0; width: 100%; }
+.index {
+  position: sticky; top: 0; max-height: 100vh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 28px 4px 24px 0; font: 500 13px/1.35 var(--mono);
+}
+.index-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.index-head b { font: 700 18px/1 var(--display); }
+.index .x { display: none; }
+.index details { margin: 0; }
+.index summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.index summary::-webkit-details-marker { display: none; }
+.index summary::before { content: ""; width: 0; height: 0; border-left: 5px solid var(--muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; flex: none; transition: transform 0.15s; }
+.index details[open] > summary::before { transform: rotate(90deg); }
+.index a { color: var(--muted); text-decoration: none; display: block; padding: 4px 6px; border-left: 2px solid transparent; min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.index a:hover { color: var(--ink); }
+.index a.in { color: var(--ink); }
+.index a.cur { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+.index a:focus-visible, .index summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.index .ix-sec { border-top: 1px solid var(--line); padding: 6px 0; }
+.index .ix-sec-a { font: 700 15px/1.2 var(--display); color: var(--ink); }
+.index .ix-list { list-style: none; margin: 0; padding: 0 0 0 12px; display: grid; }
+.index .ix-phase-a { color: var(--ink); }
+.index-btn, .backdrop { display: none; }
+.title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.info-btn, .x {
+  font: 700 16px/1 var(--display); color: var(--accent); background: var(--panel); border: 1px solid var(--line);
+  width: 40px; height: 40px; border-radius: 50%; cursor: pointer; flex: none;
+}
+.x { border-radius: 0; color: var(--ink); }
+.info-btn:hover, .x:hover { border-color: var(--accent); }
+.toplinks { margin: 0; font-size: 13px; }
+.toplinks a, a.issues { color: var(--accent); }
+a.issues { font: 600 12px/1.3 var(--mono); justify-self: start; border-left: 2px solid var(--accent); padding: 2px 0 2px 8px; text-decoration: none; }
+a.issues:hover { text-decoration: underline; }
+.phase-h .when.done { color: var(--go); background: var(--go-soft); }
+.sect, .phase, .step, .group-h, .slot { scroll-margin-top: 16px; }
+.hit { outline: 2px solid var(--accent); outline-offset: 3px; }
+dialog.info {
+  background: var(--panel); color: var(--ink); border: 2px solid var(--line); padding: 18px 20px; max-width: min(620px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); overflow: auto; font: 400 14px/1.55 var(--mono);
+}
+dialog.info::backdrop { background: rgb(0 0 0 / 0.55); }
+dialog.info h2 { font: 700 22px/1.1 var(--display); margin: 0; }
+dialog.info h3 { font: 700 16px/1.2 var(--display); margin: 16px 0 4px; }
+dialog.info p { margin: 6px 0; }
+dialog.info ul { margin: 6px 0; padding-left: 18px; }
+.info-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+@media (max-width: 899px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .index {
+    position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(320px, 86vw); max-height: none; height: 100%;
+    background: var(--panel); border-right: 2px solid var(--line); padding: max(16px, env(safe-area-inset-top, 0px)) 12px 24px 14px;
+    transform: translateX(-105%); transition: transform 0.2s; visibility: hidden;
+  }
+  .index.open { transform: none; visibility: visible; }
+  .index .x { display: inline-block; }
+  .backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 25; background: rgb(0 0 0 / 0.5); }
+  .index-btn {
+    display: inline-flex; align-items: center; position: fixed; z-index: 20; left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: max(16px, env(safe-area-inset-bottom, 0px)); min-height: 44px; padding: 0 16px;
+    font: 600 14px/1 var(--mono); color: var(--bg); background: var(--accent); border: 0; cursor: pointer;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) { .index, .index summary::before { transition: none; } }
 </style>
 
-<div class="wrap">
-  <header class="top">
-    <div class="hudline"><b>PALE BLUE DOT</b> &middot; mockup reviews &middot; hex 2.833 m &middot; layer 1.000 m</div>
-    <h1>Mockup Tracker</h1>
-    <p class="lede">Every Pale Blue Dot page in one place: the game mockups with their approvals, the guides, and everything else (benchmark reports, gate pages, surveys). A mockup is approved for build first, then for the game. Nothing goes into the game without both.</p>
-    <ul class="stages" aria-label="Stages">
-      <li><span class="chip listed">Listed</span> not built yet</li>
-      <li><span class="chip drafted">Drafted</span> published, waiting on you</li>
-      <li><span class="chip build">Approved for build</span></li>
-      <li><span class="chip impl">Approved for game</span></li>
-    </ul>
-    <p class="notice" id="mode" hidden></p>
-  </header>
+<button class="index-btn" id="index-btn" type="button" aria-controls="index" aria-expanded="false">Index</button>
+<div class="backdrop" id="backdrop" hidden></div>
 
-  <section class="sect" aria-labelledby="s-roadmap">
-    <header><h2 id="s-roadmap">Roadmap</h2><span class="count" id="n-roadmap"></span>
-      <p class="sd">What the game is built toward, in order. Each step links the mockups that show it.</p></header>
-    <div class="phases" id="roadmap"></div>
-  </section>
+<div class="shell">
+  <nav class="index" id="index" aria-label="Index">
+    <div class="index-head"><b>Index</b><button class="x" id="index-close" type="button" aria-label="Close the index">&#10005;</button></div>
+    <div id="index-body"></div>
+  </nav>
 
-  <section class="sect" aria-labelledby="s-mockups">
-    <header><h2 id="s-mockups">Game mockups</h2><span class="count" id="n-mockups"></span>
-      <p class="sd">Each mockup with its stage, its two approvals and your notes. Tick "Approved for build" first; "Approved for game" opens after it.</p></header>
-    <h3 class="group-h">November 2026</h3>
-    <div class="grid" id="list-new"></div>
-    <h3 class="group-h">Earlier mockups</h3>
-    <div class="grid" id="list-old"></div>
-  </section>
+  <div class="wrap">
+    <header class="top">
+      <div class="hudline"><b>PALE BLUE DOT</b> &middot; mockup reviews &middot; hex 2.833 m &middot; layer 1.000 m</div>
+      <div class="title-row"><h1>Mockup Tracker</h1><button class="info-btn" id="info-btn" type="button" aria-haspopup="dialog" aria-label="About this page">i</button></div>
+      <ul class="stages" aria-label="Stages">
+        <li><span class="chip listed">Listed</span></li>
+        <li><span class="chip drafted">Drafted</span></li>
+        <li><span class="chip build">Approved for build</span></li>
+        <li><span class="chip impl">Approved for game</span></li>
+      </ul>
+      <p class="toplinks"><a href="https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9" target="_blank" rel="noopener">The survey</a></p>
+      <p class="notice" id="mode" hidden></p>
+    </header>
 
-  <section class="sect" aria-labelledby="s-guides">
-    <header><h2 id="s-guides">Guides</h2><span class="count" id="n-guides"></span>
-      <p class="sd">Reference pages to read and point at.</p></header>
-    <div class="links" id="guides"></div>
-  </section>
+    <section class="sect" id="roadmap" aria-labelledby="s-roadmap">
+      <header><h2 id="s-roadmap">Roadmap</h2><span class="count" id="n-roadmap"></span></header>
+      <div class="phases" id="roadmap-list"></div>
+    </section>
 
-  <section class="sect" aria-labelledby="s-misc">
-    <header><h2 id="s-misc">Misc</h2><span class="count" id="n-misc"></span>
-      <p class="sd">Everything else published for Pale Blue Dot: the surveys, benchmark reports and gate pages, newest first.</p></header>
-    <div class="links" id="misc"></div>
-  </section>
+    <section class="sect" id="mockups" aria-labelledby="s-mockups">
+      <header><h2 id="s-mockups">Game mockups</h2><span class="count" id="n-mockups"></span></header>
+      <h3 class="group-h" id="mockups-new">November 2026</h3>
+      <div class="grid" id="list-new"></div>
+      <h3 class="group-h" id="mockups-old">Earlier mockups</h3>
+      <div class="grid" id="list-old"></div>
+    </section>
+
+    <section class="sect" id="guides" aria-labelledby="s-guides">
+      <header><h2 id="s-guides">Guides</h2><span class="count" id="n-guides"></span></header>
+      <div class="links" id="guides-list"></div>
+    </section>
+
+    <section class="sect" id="misc" aria-labelledby="s-misc">
+      <header><h2 id="s-misc">Misc</h2><span class="count" id="n-misc"></span></header>
+      <div class="links" id="misc-list"></div>
+    </section>
+  </div>
 </div>
+
+<dialog class="info" id="info" aria-labelledby="info-h">
+  <div class="info-head"><h2 id="info-h">About the tracker</h2><button class="x" id="info-close" type="button" aria-label="Close">&#10005;</button></div>
+  <p>Every Pale Blue Dot page in one place: the roadmap, the game mockups with their approvals, the guides, and everything else (benchmark reports, gate pages, surveys).</p>
+  <p>A mockup is approved for build first, then for the game. Nothing goes into the game without both.</p>
+  <ul>
+    <li><b>Listed</b>: not built yet.</li>
+    <li><b>Drafted</b>: published, waiting on you.</li>
+    <li><b>Approved for build</b>, then <b>Approved for game</b>: tick them on a mockup's card. The game approval opens after the build one.</li>
+  </ul>
+  <h3>Roadmap</h3>
+  <p>What the game is built toward, in order. Each step links the mockups that show it and its OpenSpec change. A step's known issues (what is not done yet) are in the survey, under its phase; the link on the step opens them.</p>
+  <h3>Game mockups</h3>
+  <p>Each mockup with its stage, its two approvals and your notes.</p>
+  <h3>Guides and Misc</h3>
+  <p>Guides are reference pages to read and point at. Misc is everything else published for Pale Blue Dot, newest first.</p>
+  <h3>The index</h3>
+  <p>The index on the left jumps to any section, phase, step or mockup; every entry is a link you can share (for example <code>#roadmap-phase-3-npcs</code>). On a phone it opens from the Index button.</p>
+</dialog>
 
 <script>
 // The mockups, in the order of docs/mockups/mockup-work.md. Reviews live in the db collection `reviews`, one document per id.
@@ -163,53 +257,53 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 // on this page overrides it.
 const MOCKUPS = [
   { id: 'M1', batch: 'new', title: 'The Aubade System', change: '', page: 'docs/mockups/planets.html',
-    url: 'https://claude.ai/artifact/8af8Ptmnk85Df5Z7fHBYbf', published: '2026-11-13',
+    url: 'https://claude.ai/artifact/886HVbdaYBJkuBBhaWX3zs', published: '2026-11-13',
     summary: 'Aubade, home system: Tenebris (the home world) and its sister planet Sequoia, with Tenebris\'s other bodies and the system\'s own; gas giants you cannot land on, worked by airship above a hydrogen sea; two neighbours, Tallow and Gemel, on a star map. Every body on the same hex cell.' },
   { id: 'M2', batch: 'new', title: 'Aubade Transit', change: 'interplanetary-travel', page: 'docs/mockups/travel.html',
-    url: 'https://claude.ai/artifact/2Dx7NDZkPCEQNsJgFKyEvL', published: '2026-11-14', version: 4,
+    url: 'https://claude.ai/artifact/TX9xkpGP3yCVbi1oNQW3hL', published: '2026-11-14', version: 4,
     summary: 'Travel between worlds on M21\'s rockets: fly to the launch field, launch at night, reach orbit, transfer, land on Lantern. Routes and delta-v by tier; gas giants orbited, never landed on. Star lanes to Tallow and Gemel.' },
   { id: 'M3', batch: 'new', title: 'Forge and Fabricator', change: '', page: 'docs/mockups/crafting.html',
-    url: 'https://claude.ai/artifact/SbqjJReUi6hMU1CGkisqbg', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/VMAfuKJKRa3oVTsqLUf6QJ', published: '2026-11-12',
     summary: 'Crafting: what a dig gives you, which station turns it into what, and the recipe sheet up to ship modules.' },
   { id: 'M4', batch: 'new', title: 'Shipyard and Ship Builder', change: '', page: 'docs/mockups/ship-crafting.html',
-    url: 'https://claude.ai/artifact/9zhqTWtaKXS7YENoMem5ei', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/2BvFnY8FrTMSpaVhTy7mYi', published: '2026-11-12',
     summary: 'Ships built from modules on a grid; mass, thrust and turn rate follow from the parts and fly by the game\'s own limits.' },
-  { id: 'M5', batch: 'new', title: 'Townsfolk and Peoples', change: 'townsfolk (extends it)', page: 'docs/mockups/npcs.html',
-    url: 'https://claude.ai/artifact/5aJfbfT7LgVuKpmEPhAZrv', published: '2026-11-13',
-    summary: 'Who lives in the towns, their day on world time, and how you talk, trade and fall out with them.' },
+  { id: 'M5', batch: 'new', title: 'Townsfolk and Peoples', change: 'townsfolk (extends it)', recorded: 'impl', recordedNote: 'Trade panel and job board approved in chat (owner, 2026-11-22: "noth apporoved, I dont see trade panel"), on the game\'s captures; version 12\'s Talk tab shows them as the game draws them, real icons in the pack\'s slot wells, and the basket deal of design 37. Faces tab (version 9) approved for the game in chat (owner, 2026-11-21): "People approved. Build.phase 3. Do it in parallel if you can". Phase 3 is being built on claude/phase-2-1. Version 13: the trade columns and the board scroll in windows of seven rows with a stone scroll bar, and each trade column filters by shelf (design 38b, 38c; the plan approved, 2026-11-22: "approved"; the version 13 trade shots: "looks good"). Trade panel, scroll bars and filters approved for the game (owner, 2026-11-22: "approved trading ui").', page: 'docs/mockups/npcs.html',
+    url: 'https://claude.ai/artifact/E2U5akkQgd5cdzPAXjrEyx', published: '2026-11-22', version: 13,
+    summary: 'Who lives in the towns, their day on world time, and how you talk, trade and fall out with them. Version 8 (2026-11-21, drafted): a Faces tab for the owner\'s "Design new and friendly looking NPCs ... Think of like kerbal space program": today\'s hex figure beside a proposed friendly townsperson (about 3 heads tall, six-sided pieces), a layered face with ten expressions, blink, gaze and talk running, a seeded crowd and a night patch lit by its lamps (townsfolk design 13 to 18); the game waits for your approval. Version 9 (2026-11-21, drafted), on your notes on version 8: blocky heads, taller than wide (0.5 by 0.6 m), with hair and hats as blocks to fit, a face about 1.6 times bigger filling the block\'s front, and a First person button at the game\'s own eye (1.6 m, a 60 degree field of view, WASD and drag) to feel the townsfolk\'s height. Version 10 (2026-11-22): every figure on the page is the new townsperson (the square, the lineup), and beards are on the face\'s front only, a goatee or a full front beard, in the game too. Version 11 (2026-11-22): each beard is one shaped shell over the face\'s front and bevels, edged in stubble, not boxes.' },
   { id: 'M6', batch: 'new', title: 'Hex House Builder', change: 'player-building', page: 'docs/mockups/building.html',
-    url: 'https://claude.ai/artifact/SWgY1ooB8f1nk8rhkoEnCm', published: '2026-11-12',
-    summary: 'Walls on cell edges, floors in cells, a storey every three layers; a ghost that says why a piece will not fit.' },
+    url: 'https://claude.ai/artifact/6kd3oRFMMtZ1d4FCjMiAYt', published: '2026-11-24', version: 3,
+    summary: 'Walls on cell edges, floors in cells, a storey every three layers; a ghost that says why a piece will not fit. Version 2 (2026-11-23, drafted): the building planner (building-planner): a Planner tab (#planner) at the drafting table with house and building presets to edit and save as blueprints, and a Site tab (#site) where the blueprint is set out in the world and built piece by piece, changed in the planner mid-build; a tree blocks only its own block. Version 3 (2026-11-24): an eraser tool, outside edges clickable from outside, and a Top down / Isometric toggle (cutaway walls).' },
   { id: 'M7', batch: 'new', title: 'Herds, Hunters and Glowmoths', change: '', page: 'docs/mockups/animals.html',
-    url: 'https://claude.ai/artifact/QQSF6emzmzeK9Hej4p9nv3', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/PggmMRks5tn2BYtRyWmXKC', published: '2026-11-12',
     summary: 'Animals biome by biome: grazers, hunters, night creatures, what can be tamed and what each drops.' },
   { id: 'M8', batch: 'new', title: 'Furrows and Greenhouses', change: '', page: 'docs/mockups/farming.html',
-    url: 'https://claude.ai/artifact/M2LQYN69c7YtLvQJp9fQQ7', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/6zwqaNH8V9iveqcfBYRYdy', published: '2026-11-12',
     summary: 'Till a cell, plant for the climate, water and harvest; greenhouses grow anything anywhere, pens hold tamed animals.' },
   { id: 'M9', batch: 'new', title: 'Fish Lab and Aquariums', change: 'fishing-and-equipment (extends it)', page: 'docs/mockups/fish.html',
-    url: 'https://claude.ai/artifact/Ay54k8LEf4sdteFpZkeSsG', published: '2026-11-15', version: 6,
+    url: 'https://claude.ai/artifact/L1HnKS2h13jTJTooFYqzmW', published: '2026-11-15', version: 6,
     summary: 'The library of everything underwater: every fish from a species and a seed, every reef, kelp, vent and ice piece and water creature in the game\'s own models and textures; tanks to keep them in.' },
   { id: 'M10', batch: 'new', title: 'Stations and Outposts', change: '', page: 'docs/mockups/stations.html',
-    url: 'https://claude.ai/artifact/Rrf9Da4tPFJkpejGJrzHB8', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/PanGjYYteSKRv89eqSWJmN', published: '2026-11-12',
     summary: 'The stations Meridian, Kessler and Gatehouse: their modules, docking, and life in sunlight and in the planet\'s shadow.' },
   { id: 'M11', batch: 'new', title: 'The Long Fall: Games and Jobs', change: '', page: 'docs/mockups/minigames.html',
-    url: 'https://claude.ai/artifact/R7453rhoQ2iJxEH3fJaYZv', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/UWbARSGG5f6eDgMmHABFpz', published: '2026-11-12',
     summary: 'A station bar, casino and job board: an ore-sorter shift, contracts and five playable games, each showing its odds.' },
   { id: 'M12', batch: 'new', title: 'Exchange Terminal', change: '', page: 'docs/mockups/market.html',
-    url: 'https://claude.ai/artifact/6nCcnt9gLFhcksg72pfjRZ', published: '2026-11-12',
+    url: 'https://claude.ai/artifact/SfeHHhTZzTShuFeNHeS8fS', published: '2026-11-12',
     summary: 'Each station\'s stock of eight goods sets its prices; haulers chase the gaps, events widen them, five companies trade.' },
-  { id: 'M13', batch: 'new', title: 'Foliage Detail Playground', change: 'flora-v2', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/foliage.html',
-    url: 'https://claude.ai/artifact/P4jA4m4MAMSFnWS4cc9Pb1', published: '2026-11-12',
-    summary: 'Ground cover on a hex patch: pick a biome, tune the layers, scrub the clock into night.' },
+  { id: 'M13', batch: 'new', title: 'Foliage Detail Playground', change: 'flora-v2, sand-tiles, mountain-ground', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2. Sand tab (v4) and Mountains tab (v6) approved for the game in chat (owner, 2026-11-20): "approve sand and mountains, and rivers"; built on claude/phase-2-1 (sand-tiles; mountain-ground as generator version 15; PR 133 merged, captures in PR 135).', page: 'docs/mockups/foliage.html',
+    url: 'https://claude.ai/artifact/W9ZYCsxz7d8FCp2gCrmmvs', published: '2026-11-12', version: 6,
+    summary: 'Ground cover on a hex patch: pick a biome, tune the layers, scrub the clock into night. Version 2 adds the Glow and carried light tab (glowing-mushrooms, drafted): pick the glowing mushrooms the game grows, eat one to glow, and hold a torch, lantern or mushroom to light the ground, compared with today. Version 3, on your notes ("no need for shadow caster from my light source, please improve torch look"): the carried light casts no shadow, so it reaches through the wall; a torch that burns (a wrapped, charred head and a flickering pixel flame with embers, its light flickering with it) in the approved hand with an idle sway; the lantern and mushroom in the same hand; and the game\'s placed torch beside a matching one. Version 4 adds the Sand tab (sand-tiles, drafted), on your "redo sand texture ... weird blue shells ... desert sand and beach sand should be different": a beach and a desert, today\'s tiles beside the redrawn ones (shells and no blue on the beach, a warmer rippled desert sand), by day and at night. Version 5 adds the Mountains tab (mountain-ground, drafted), on your "add more stuff to the mountain biomes": a mountainside from firs through krummholz at the tree line and an alpine meadow of flowers, cushions and low shrubs to scree, lichen-spotted cliffs in varied rock and the snow line, today beside new, by day and at night, with a snow-line slider. Version 6, on your notes on it: the streaked scree fixed, and the plants are the playground\'s own foliage kit.' },
   { id: 'M14', batch: 'old', title: 'Pale Blue Dot Lighting', change: 'lighting-model', page: 'docs/mockups/lighting.html',
-    url: 'https://claude.ai/artifact/PR6epQcL3YtE8UWRsmc9zg', published: '2026-10-29',
+    url: 'https://claude.ai/artifact/SYxYGeMvtPwqXi7AHHJDTF', published: '2026-10-29',
     summary: 'The lighting model: the game\'s light today beside the new one, by day and at night.' },
   { id: 'M15', batch: 'old', title: 'Tenebris Towns', change: 'tenebris-towns', page: 'docs/mockups/towns.html',
-    url: 'https://claude.ai/artifact/B5FqbGTTMsznmUiP4rSLUv', published: '2026-09-30',
-    recordedNote: 'Every feature of it is on the roadmap (survey, 2026-09-27); the towns in the game are built from it.',
-    summary: 'A walled market town on the hex grid, lit by its own lamps at night: the reference for the towns in the game.' },
+    url: 'https://claude.ai/artifact/5kpyRd9sqcTqheTSzoShgR', published: '2026-11-24', version: 10,
+    recordedNote: 'Every feature of it is on the roadmap (survey, 2026-09-27); the towns in the game are built from it. The Roads tab approved (owner, 2026-11-22: "roads look great"); roads two and three cells wide asked for next.',
+    summary: 'A walled market town on the hex grid, lit by its own lamps at night: the reference for the towns in the game. Version 2 (2026-11-21): a Roads scene (#roads, townsfolk 8.1): sloped road cells in dirt and gravel, a hill road climbing ten layers without a step, a ford and a timber bridge, by day and lit at night; the description in an info modal. Version 3 (2026-11-22): a Wide roads scene (#wideroads), roads two and three cells wide beside a one-wide one, climbing on one shared slope with no step between lanes, bends, a junction and wide bridges, lit at night. Version 4 (2026-11-22, drafted): a Paving scene (#paving, townsfolk design 39 to 41), a road marked with survey stakes (a lime band painted along each marked cell, a stake at each waypoint) beside a paved run of gravel, the next stake\'s cells at half strength, and the grinder and the mixer that make gravel, by day and lit at night. Version 5 (2026-11-23, drafted): a Road planner scene (#roadplanner, townsfolk design 42), a road planned by walking it in first person: stakes as waypoints, a ghost of the whole road, red only on the cells that clash, a width, surface and lamps menu, a bill, paving with the shovel and changes mid-build, by day and lit at night. Version 6 (2026-11-23, drafted): a Furniture scene (#furniture, furniture task 1.2): a furnished timber house by day and lit at night by its hearth, candles and sconces, the carpenter\'s ten pieces close up on a showroom floor (the game\'s own models), sitting at the table, lying in bed, a townsperson asleep, and a town chest\'s panel to take its loot from.' },
   { id: 'M16', batch: 'old', title: 'Tenebris World Map', change: 'world-map, city-sites', page: 'docs/mockups/world-map.html',
-    url: 'https://claude.ai/artifact/V6hhxR5fov5XGWVFD2s2Eq', published: '2026-09-29', recorded: 'build',
+    url: 'https://claude.ai/artifact/8X3Zqzg4o5BhGaTa22bmJf', published: '2026-09-29', recorded: 'build',
     recordedNote: 'Approved: "good approve" (survey M6, 2026-09-27); the 55 city sites "approve" (C4, C5, 2026-09-29). The in-game map is built from it.',
     summary: 'The whole planet as a flat map with towns, weather overlays and the 55 city sites, finer as you zoom in.' },
   { id: 'M17', batch: 'old', title: 'Hex Tool Bench', change: 'hex-held-tools (archived), held-swing', page: 'docs/mockups/held-tools.html',
@@ -217,99 +311,106 @@ const MOCKUPS = [
     recordedNote: 'The tools: approved ("Perfect") and built in the game, hex-held-tools, archived 2026-09-26. The STRIKE chop (held-swing, 2026-11-17) is judged in M36, Tools in Hand.',
     summary: 'The pickaxe, axe, shovel and rod in the hand, and the chop: today\'s beside the STRIKE swing timed to the dig.' },
   { id: 'M18', batch: 'old', title: 'Rod, Shovel and School', change: 'fishing-and-equipment', page: 'docs/mockups/fishing.html',
-    url: 'https://claude.ai/artifact/1PQXEj8bs9HSzFhGLRyxtz', published: '2026-09-24',
+    url: 'https://claude.ai/artifact/Gn9W8sYEPTFKdDC2R5wWqh', published: '2026-09-24',
     summary: 'Every fishing mechanic running: casting, the bite, schools and digging for bait. Fixed daylight.' },
   { id: 'M19', batch: 'old', title: 'Kestrel, Tern and Loon', change: 'vehicles, vehicle-models', page: 'docs/mockups/vehicles.html',
-    url: 'https://claude.ai/artifact/AbkZFGps6XzcwhfbAYPwDk', published: '2026-09-24', recorded: 'impl',
-    recordedNote: 'Approved, and the Rust port is built: the sea, the gusts, the three craft, boarding and saving (vehicles design). Kestrel retired (owner, 2026-11-14, retire-kestrel): the game keeps the Tern and the Loon.',
+    url: 'https://claude.ai/artifact/BwSmUeHtFrqEwHP8DVUk9u', published: '2026-09-24', recorded: 'impl',
+    recordedNote: 'Approved, and the Rust port is built: the sea, the gusts, the three craft, boarding and saving (vehicles design). Kestrel retired (owner, 2026-11-14, retire-kestrel), Tern retired (owner, 2026-11-17, retire-tern): the game keeps the Loon.',
     summary: 'The three craft on the sea and in the gusts, boarded and left where you parked them.' },
   { id: 'M20', batch: 'new', title: 'Pits, Plants and Power', change: 'industry-tiers', page: 'docs/mockups/industry.html',
-    url: 'https://claude.ai/artifact/FUwKjVy7eaLZKCTeEH8kVK', published: '2026-11-14', version: 6,
+    url: 'https://claude.ai/artifact/JSsYHdcAh1Luhn9poMhGWC', published: '2026-11-14', version: 6,
     summary: 'A strip mine cut in hex layers by five tiers (hired townsfolk, excavator, quarry frame, bucket-wheel, drone hive), ore to plate, ether mining, oil with a drilling rig and an offshore platform that is a rig and a power plant in one, the power ladder from coal to a Dyson swarm, and a transport yard of wires, pipes, belts, pneumatic tubes and a hex-built freighter carrying hex cargo pods, hired or automated.' },
   { id: 'M21', batch: 'new', title: 'Rockets and Landers', change: 'ship-tiers', page: 'docs/mockups/ship-tiers.html',
-    url: 'https://claude.ai/artifact/Af9oUZTdnhRzF1UYtxqUq6', published: '2026-11-14', version: 3,
+    url: 'https://claude.ai/artifact/LehpNoszMuPLvryYhLeqsV', published: '2026-11-14', version: 3,
     summary: 'Hex-cell rockets up to 25 m across with decks you walk, flown to orbit in both gravity fields; a 2.4 km launch field with Pad B and a walk view; a planner tab with Taper (a 600 m test moon), the Aubade system and maneuver nodes on the integrated line (asked as G4a); fusion courses and freighters; antimatter landers. No warp.' },
   { id: 'M22', batch: 'new', title: 'Cranes and Printers', change: 'vehicle-yards', page: 'docs/mockups/construction.html',
-    url: 'https://claude.ai/artifact/42o1sitc2KvFvVCpfQyHSv', published: '2026-11-13', version: 3,
+    url: 'https://claude.ai/artifact/5sn7jHG2And3p5G18tyngJ', published: '2026-11-13', version: 3,
     summary: 'Three ways to build: a treadwheel crane and timber scaffold for old houses, a tower crane for new ones, and a printer for small homes and parts.' },
   { id: 'M23', batch: 'new', title: 'Drydock and Hex Ship Builder', change: 'vehicle-yards', page: 'docs/mockups/drydock.html',
-    url: 'https://claude.ai/artifact/K2uLF3kCJGu57tg4bk6ect', published: '2026-11-16', version: 8,
+    url: 'https://claude.ai/artifact/YC3SViwisspS7kfu4BhMkE', published: '2026-11-16', version: 8,
     summary: 'A drydock and hex-cell ships from rowing to battery; walk her deck, and sail to waypoints with a GPS that coaches the helm and the sail.' },
   { id: 'M24', batch: 'new', title: 'Hangar and Chibi Aircraft', change: 'vehicle-yards', page: 'docs/mockups/hangar.html',
-    url: 'https://claude.ai/artifact/WUugWkXMLPRKMGVMd4w9mG', published: '2026-11-13', version: 9,
+    url: 'https://claude.ai/artifact/Jcb3oo89Vb8puHfaBUBWAm', published: '2026-11-13', version: 9,
     summary: 'Chibi planes, helicopters, VTOLs and airships on a painted 1 m grid, then fly them easily over kilometres of hex hills, towns and sea, crashing into what is solid.' },
-  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/ocean.html',
-    url: 'https://claude.ai/artifact/1vWj3uLNoqYh7vgguNjKai', published: '2026-11-14', version: 1,
-    summary: 'Reefs, kelp, polar ice, deep vents and wrecks; a river from source to mouth, a beaver dam going up over 40 days, a marsh full of ducks; 61 species of water life. Its river, dam and marsh water run on Luanti\'s liquid rule, and its Water sim tab is the playable sim (M28 folded in, 2026-11-15).' },
-  { id: 'M26', batch: 'new', title: 'Pens, Nests and Pedigrees', change: 'animal-husbandry', page: 'docs/mockups/husbandry.html',
-    url: 'https://claude.ai/artifact/RuC2dK1SikwQ7tyXWbne1J', published: '2026-11-14', version: 1,
-    summary: 'The animal kingdom across every world (98 species), taming a wild herd, a working farmstead by day and night, eggs hatching, and breeding with genomes and pedigrees.' },
+  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2. Version 2 (2026-11-20, drafted, the game waits): the Beavers and otters tab, on your "improve on beaver and otter animations". Version 3 (2026-11-20, drafted): on your notes on it, each animal one sculpted skin (Mining Mike\'s wolf method), pixel-art fur, fur tufts that spike when wet, aspen bark and a warm dusk. Version 4 (2026-11-20, drafted): on your notes on it, the forelegs move in every action (rear-ups with anticipation and a settle, paws reaching down to sit, strides, paddling), calmer fur tufts by default, and the sea otter\'s paws empty except while it forages and eats. Version 5 (2026-11-20, drafted): on your notes on it, the forelimbs kept within a real animal\'s range (joint limits per animal, upright hands hanging in front of the belly, paws on the chest on the back), and every swimmer paddles with its forepaws. Version 5 approved for the game (2026-11-20, in chat): "its good enough, send it"; built in the game and merged to main (PR 141; ocean-environments 20.3 with 8.4, design B29): the beaver by its colony\'s pond, the river otter and the sea otter in their sculpted, skinned, furred bodies with the tab\'s motion. Captures in docs/screenshots/beavers-otters-game/ (software-rendered).', page: 'docs/mockups/ocean.html',
+    url: 'https://claude.ai/artifact/Ky4u9ybCSUm31t72NRMAA1', published: '2026-11-20', version: 5,
+    summary: 'Reefs, kelp, ice, vents and wrecks; a river, a beaver dam and a marsh; 61 water species; the Water sim; and a Beavers and otters tab where a furred beaver and two otters live on their own.' },
+  { id: 'M26', batch: 'new', title: 'Pens, Nests and Pedigrees', change: 'animal-husbandry', recorded: 'impl', recordedNote: 'The Farmstead and Hatchery tabs\' blocky animals approved for the game in chat (owner, 2026-11-23: "make animals like this! I love this look", then "please go back to blocky style for animals", "DO NOT DO THE SOFT CURVY ANIMALS", on the Hatchery tab; survey A5). The game\'s herd is built as they are on claude/phase-2-1. The Art style tab\'s styles were not taken.', page: 'docs/mockups/husbandry.html',
+    url: 'https://claude.ai/artifact/PM7G5qGuWM5g4DN8t787EY', published: '2026-11-23', version: 2,
+    summary: 'The animal kingdom across every world (98 species), taming a wild herd, a working farmstead by day and night, eggs hatching, and breeding with genomes and pedigrees. Version 2 adds an Art style tab: the game\'s horse, plodder, woolback and hen today, with the grazing neck fixed, and as soft low-poly or carved blocky forms, to pick the herd\'s style.' },
   { id: 'M27', batch: 'new', title: 'Hearth and Kitchen', change: 'cooking', page: 'docs/mockups/cooking.html',
-    url: 'https://claude.ai/artifact/FSzNd9iJoTZUks2rNvRW4R', published: '2026-11-14', version: 2,
+    url: 'https://claude.ai/artifact/V6YCUfUeDNnMeinHzztYnR', published: '2026-11-14', version: 2,
     summary: 'Cooking: a kitchen yard, bakery, inn kitchen and ship galley lit at night; a cook panel; 104 recipes (bread, pizza, pasta, noodles, stir fry, meats, fish, calamari, shrimp) from field, ranch and sea to plate; 12 new crops.' },
   { id: 'M28', batch: 'new', title: 'Water That Flows', change: 'water-flow', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/water-flow.html',
-    url: 'https://claude.ai/artifact/3jCWBJYacgu5eqjwz6vux2', published: '2026-11-14', version: 1,
+    url: 'https://claude.ai/artifact/ArmJpi8G1DNLUrKmkcPdNH', published: '2026-11-14', version: 1,
     summary: 'Merged into M25 (owner, 2026-11-15): the sim, its patch and its presets are M25\'s Water sim tab; this page points there. Luanti\'s liquid rule ported to the hex grid (LGPL-2.1-or-later).' },
   { id: 'M29', batch: 'new', title: 'Stone and Timber', change: 'stone-and-wood-ui', page: 'docs/mockups/ui.html',
-    url: 'https://claude.ai/artifact/P2KRZ5FuSwVCy2U3seCHHU', published: '2026-11-14', version: 1,
+    url: 'https://claude.ai/artifact/SaTz8zK8KkpqPCyxyeeGLL', published: '2026-11-14', version: 1,
     summary: 'The game UI in rough rock, dressed stone and carved oak, pixel art at whole-number scales: the kit in every state, the HUD by day and night, pack, pause and settings, map, stations, dialogue and loading, before and after.' },
   { id: 'M30', batch: 'new', title: 'Pale Blue Dot Sounds', change: 'audio-and-ambience', page: 'docs/mockups/sounds.html',
-    url: 'https://claude.ai/artifact/39Zs5Q6ja1sGwQvCMANshJ', published: '2026-11-14', version: 2,
+    url: 'https://claude.ai/artifact/CSHRtowusCStAxQbrATrHJ', published: '2026-11-14', version: 2,
     summary: 'Every planned sound and ambience bed with a play button: steps and digs by surface, water, fishing, craft, thunder, fire, night, menus. Keep or send back each.' },
   { id: 'M31', batch: 'new', title: 'Waterfall Look', change: 'water-flow', page: 'docs/mockups/waterfall.html',
-    url: 'https://claude.ai/artifact/R29tnUCPw5mnJ7uC2hwzTR', published: '2026-11-15', version: 2,
+    url: 'https://claude.ai/artifact/JprGVi6zooFPxYUL1pfUSk', published: '2026-11-15', version: 2,
     summary: 'The fall look decided before the game (A today, B stretched, C lean, D lip froth), and a live pour that pops as today or eases between ticks.' },
   { id: 'M32', batch: 'new', title: 'Rain Splashes', change: 'weather-rain', page: 'docs/mockups/rain-splashes.html',
-    url: 'https://claude.ai/artifact/PRtdnwAzXzS7JX5RYbcAPB', published: '2026-11-15', version: 1,
+    url: 'https://claude.ai/artifact/QCeBF7hGuyBncS7tHSzbHV', published: '2026-11-15', version: 1,
     summary: 'Where rain lands: crowns on puddles and spray on wet ground, GPU particles beside today\'s rain, by day and lit at night.' },
-  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions', page: 'docs/mockups/mission-tree.html',
-    url: 'https://claude.ai/artifact/V1yL4DmywiEhC7Pv3AKjfY', published: '2026-11-16', version: 4,
-    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them.' },
-  { id: 'M34', batch: 'new', title: 'River Craft', change: 'river-craft', page: 'docs/mockups/river-craft.html',
-    url: 'https://claude.ai/artifact/93iZ1pBszzY8u6gmWZFRyJ', published: '2026-11-16', version: 2,
-    summary: 'A playable river: a raft and an inner tube on the flow, a tug towing barges, a log drive with a boom, a net boat and anchoring.' },
-  { id: 'M35', batch: 'new', title: 'Waterfall mist and bubbles', change: 'water-flow', page: 'docs/mockups/waterfall-mist.html (claude/fall-splash-order)',
-    url: 'https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo', published: '2026-11-16', version: 1,
-    summary: 'The fall\'s mist and bubbles decided before the game: the game today, the draw order fixed, and new mist and bubbles with sliders for amount and size.' },
-  { id: 'M36', batch: 'new', title: 'Tools in Hand', change: 'held-swing, rod-motion', page: 'docs/mockups/tool-motion.html',
-    url: 'https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX', published: '2026-11-17', version: 5,
+  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions, town-missions-tree, coop-missions', recorded: 'impl', recordedNote: 'The starter tree approved for the game (owner, 2026-11-15, version 3: "that tree is better, I approve", "implement in game"). The Town tab (version 5, the town tree) approved in chat (owner, 2026-11-22, after opening it: "Ok approved"); built on claude/phase-2-1, its Roads and Carts reading not yet until they are built.', page: 'docs/mockups/mission-tree.html',
+    url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev', published: '2026-11-23', version: 7,
+    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them. Version 5 (2026-11-22, drafted): a Town tab (#town), phase 3\'s town tree of its own (town-missions-tree): a trunk and five branches (trade, jobs, roads, carts, houses and logs), 25 missions paying 525 coins, opened on first reaching a town; the starter tree on its own tab (#starter). Version 6 (2026-11-23, drafted): the Town tab\'s Carpentry branch (furniture design 12), nine missions paying 115 coins: the carpenter\'s bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest, with the game\'s own furniture icons. Version 7 (2026-11-23, drafted): a Crew tab (#crew), crew missions for multiplayer (coop-missions): a house raised by three players, each player\'s share shown.' },
+  { id: 'M34', batch: 'new', title: 'River Craft', change: 'river-craft', recorded: 'impl', recordedNote: 'Approved for the game (owner, 2026-11-19, at version 6), and asked to be built (owner, 2026-11-20, in chat: "approve sand and mountains, and rivers"). Built on claude/phase-2-1 (PR 133 merged, captures in PR 135): rowing with two oars, the one anchor, the boat\'s menu (C), the raft\'s lantern at night and the tube rider. The tug, logs and nets wait. Open: in first person the oar grips sit at the frame\'s edges with the 60-degree view.', page: 'docs/mockups/river-craft.html',
+    url: 'https://claude.ai/artifact/GZTZJ4Vg1bSbg4SH2rYY97', published: '2026-11-16', version: 6,
+    summary: 'A playable river: a raft and an inner tube on the flow, a tug towing barges, a log drive with a boom, a net boat and anchoring. Version 3: the Rowing tab, today\'s raft stroke beside proposed oars (five stages on one beat, splash and swirls, first-person hands) and the raft\'s own lantern lit at night. Version 4: oars only (no pole, on the Raft tab too), the stroke smoothed with no clipping, first-person hands only in first person; the tube rider sits back and paddles with no lantern; a set anchor holds the boat. Version 5: the anchor\'s rope stops paying out at the bed. Version 6: the boat\'s menu (Boat, C) on the Anchor, Raft and Rowing tabs, with the hold beside the pack, the anchor\'s drop or weigh and rope length, and the lantern; one anchor per boat.' },
+  { id: 'M35', batch: 'new', title: 'Waterfall mist and bubbles', change: 'water-flow', recorded: 'impl', recordedNote: 'Approved for the game (owner, 2026-11-16): "alright, I\'m happy with this, send it yo", at version 22; built. Version 23: the owner\'s fall-size rules, as in the game: no mist under a 1 m drop, small falls at half opacity and fewer particles, ripples only on deep pools.', page: 'docs/mockups/waterfall-mist.html',
+    url: 'https://claude.ai/artifact/1SPmrnALwj2f2x4o932J2X', published: '2026-11-17', version: 23,
+    summary: 'The fall\'s mist, spray and bubbles: the draw order fixed, new mist and bubbles, five falls by height, with sliders.' },
+  { id: 'M36', batch: 'new', title: 'Tools in Hand', change: 'held-swing, rod-motion, hand-model', recorded: 'impl', recordedNote: 'Approved for the game in chat (owner, 2026-11-17): "tools in hand approved, implment", at version 8; built in the game. Version 10\'s hand looks good (owner). Versions 9 to 13 (the new hand, the low shovel arm, the rod\'s flex, the cast\'s line, the fishing buttons) built in the game on claude/peaceful-thompson-fyoxgt, PR 120; your look in the game is next. Version 14 (2026-11-19, drafted, the game waits): the Punch tab, bare hands punching a tree, dirt, the air and refused stone, and a swing on every click (held-swing decisions 10 to 12). Version 15 (2026-11-19, drafted): the fist re-posed to your photo, a long forearm from the lower right, the wrist straight, the back of the hand to the eye, the hit at the crosshair\'s left. Version 16 (2026-11-21, drafted): the fist closed and punching forward into the view, matched to your second photo, the thumb on top, the fingers a column on the leading edge, one skin tone. Approved for the game (owner, 2026-11-21: "punch animation looks good, just make sure it syncs with the tree shake, maybe add aplitude tree shake 2x"); built in the game, the tree shake on each punch and twice the size; your look in the game is next.', page: 'docs/mockups/tool-motion.html',
+    url: 'https://claude.ai/artifact/CwwZtbNGjZSVtjivQAMuzL', published: '2026-11-17', version: 13,
     summary: 'Digging, chopping and fishing in first person: today\'s motion against the proposed strike and rod motion, by day and by lantern, with sliders.' },
   { id: 'M37', batch: 'new', title: 'Fish Behaviour', change: 'fish-behaviour', page: 'docs/mockups/fish-behaviour.html',
-    url: 'https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz', published: '2026-11-17', version: 2,
+    url: 'https://claude.ai/artifact/6s47EX9mvDnLoWhQuqPHC2', published: '2026-11-17', version: 3,
     summary: 'A fish coming to the lure, swimming and fighting the line, and its body wave: the game today beside a natural approach, pecks timed to the float, a take, banking, and a shader wave head to tail.' },
+  { id: 'M38', batch: 'new', title: 'Land Transport', change: 'land-transport', recorded: 'build', recordedNote: 'Approved in chat (owner, 2026-11-22: "noth apporoved"). Phase 5 waits for a request.', page: 'docs/mockups/land-transport.html',
+    url: 'https://claude.ai/artifact/QzXe3qAL1esNJCFPHy2bDi', published: '2026-11-22', version: 2,
+    summary: 'Phase 5 on the hex roads: a ridden horse, a cart and a covered wagon, an early car and a small truck, and a steam train on hex track with a grade and a station, by day and lit at night. Version 2 (2026-11-22, drafted): the hand cart (new) and the horse cart marked phase 3 (land-transport design 9, 10), and a Road or not tab (#offroad) driving both carts on gravel, a dirt track and grass at 1.0, 0.6 and a quarter of their road speed.' },
 ];
 
 // Every other published artifact, by section, newest first.
 const GUIDES = [
-  { title: 'Fish Range Atlas', page: 'docs/wiki/fish-ranges/index.html', url: 'https://claude.ai/artifact/3nFWs1XJ6ywSq5cqfHpgE3',
+  { title: 'Multiplayer Architecture', page: 'docs/design/multiplayer-architecture.html', url: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw',
+    published: '2026-11-18', summary: 'Phase 3b drawn out: one server, region streams near and far, a dig from click to everyone, checksums and resync, and what we take from Luanti.' },
+  { title: 'Fish Range Atlas', page: 'docs/wiki/fish-ranges/index.html', url: 'https://claude.ai/artifact/Sr32H5K9cCmkteSDytP3hj',
     published: '2026-09-24', summary: 'One range map per fish species, field-guide style, measured off the climate.' },
 ];
 const MISC = [
-  { title: 'Tools in Hand Videos', kind: 'Gate page', page: 'docs/videos/tool-motion/index.html', url: 'https://claude.ai/artifact/1WEmNQzutBwakLrzNWkA3A',
+  { title: 'Desert Cascade Frame', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-17-cascade-perf/report.html', url: 'https://claude.ai/artifact/7tt2bWmjsMv6dUNrXKxUHH',
+    published: '2026-11-17', summary: 'Where the frame goes at your desert river cascade: GPU-bound standing, upload spikes walking; the same-picture cuts made, and the A/B still owed on an unlocked machine.' },
+  { title: 'Tools in Hand Videos', kind: 'Gate page', page: 'docs/videos/tool-motion/index.html', url: 'https://claude.ai/artifact/RqSFt5CwxHKwLQmsA9zoNj',
     published: '2026-11-17', summary: 'A captioned montage and a clip each for dig, chop, fish and the hand: today against proposed, with the raised cast.' },
-  { title: 'Phase 1 and 2 Checklist', kind: 'Checklist', page: 'docs/design/phase-checklist.html', url: 'https://claude.ai/artifact/GqNAz3ghghL2Mhi1xTigSW',
+  { title: 'Phase 1 and 2 Checklist', kind: 'Checklist', page: 'docs/design/phase-checklist.html', url: 'https://claude.ai/artifact/4CfgeUZmJR17JMv1HBg9dW',
     published: '2026-11-15', summary: 'What is built and what is not for phase 1 (the game loop) and phase 2 (environment v2).' },
-  { title: 'Playtest Bug List', kind: 'Bug list', page: 'docs/design/bug-list.html', url: 'https://claude.ai/artifact/2n1nH4qvNFKztTpdVTixou',
+  { title: 'Playtest Bug List', kind: 'Bug list', page: 'docs/design/bug-list.html', url: 'https://claude.ai/artifact/7WA7dq9PM5bC2CtxpwGBtB',
     published: '2026-11-16', summary: 'Every bug from the env v2 playtest: your words, the fix and its PR, with your shot beside before and after.' },
-  { title: 'Worst Case 60', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-worst-case-60/report.html', url: 'https://claude.ai/artifact/GdAq364GxwbZcsTiJSnQUq',
+  { title: 'Worst Case 60', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-worst-case-60/report.html', url: 'https://claude.ai/artifact/X2DcwHBfAw6nzB9mQJp2sk',
     published: '2026-11-12', summary: 'The lighting on main against the lighting-perf branch on the desktop: every scenario now inside 16.7 ms at p99, rain and night included.' },
-  { title: 'Lighting perf checkpoint', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-perf/report.html', url: 'https://claude.ai/artifact/Mytd1vV76J9UqSBfkQv6QQ',
+  { title: 'Lighting perf checkpoint', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-perf/report.html', url: 'https://claude.ai/artifact/V3wNXcyxuhppzGckaRWkAw',
     published: '2026-11-12', summary: 'Main\'s lighting, the branch before and the branch now on the desktop: every scenario, at night, with vsync, and the slow frames.' },
-  { title: 'Owner Survey', kind: 'Survey', page: 'docs/design/survey.html', url: 'https://claude.ai/artifact/Vj1GuwLrhJnXJBTbHo6EyL',
+  { title: 'Owner Survey', kind: 'Survey', page: 'docs/design/survey.html', url: 'https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9',
     published: '2026-11-12', summary: 'Open questions for you, each with its screenshots and a recommendation; a blank answer accepts it.' },
-  { title: 'Lighting model cost (RTX 3070)', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-model-clean/report.html', url: 'https://claude.ai/artifact/GPcLRxsF7KjkfifVFJ1C6r',
+  { title: 'Lighting model cost (RTX 3070)', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-model-clean/report.html', url: 'https://claude.ai/artifact/15fKGPpXQhM5eUhvRCJg42',
     published: '2026-11-12', summary: 'The new lighting against main on the desktop, by part and at night, on a quiet machine.' },
-  { title: 'Puff cull and rain detail', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-cull-wet/report.html', url: 'https://claude.ai/artifact/BxzRGCWsDbKvGZiLP9beY3',
+  { title: 'Puff cull and rain detail', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-cull-wet/report.html', url: 'https://claude.ai/artifact/6NXGt8Hmkvh9ATpgCW1ACe',
     published: '2026-10-29', summary: 'puff-frustum-cull and wet-near-detail, before and after, on the M4 Max Mac.' },
-  { title: 'Where the frame goes', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-breakdown/report.html', url: 'https://claude.ai/artifact/G23GqozWQUZG6g5vAWb5sE',
+  { title: 'Where the frame goes', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-breakdown/report.html', url: 'https://claude.ai/artifact/X7epG3KF28YGpHq8KVcB3L',
     published: '2026-10-29', summary: 'Each part switched off in turn (clouds, rain passes, lighting, reflections) to see what it costs.' },
-  { title: 'Lighting: today against new', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-lighting-full/report.html', url: 'https://claude.ai/artifact/Vt9PqBQoHg5UkVEHzga2Ns',
+  { title: 'Lighting: today against new', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-lighting-full/report.html', url: 'https://claude.ai/artifact/1dJus67qTpusARH9NnwpDr',
     published: '2026-10-29', summary: 'The full sitting of the lighting-model change on the Mac.' },
-  { title: 'Rain shells', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-rain-shells/report.html', url: 'https://claude.ai/artifact/TtLkRYScSY4j8NssGMYtqE',
+  { title: 'Rain shells', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-rain-shells/report.html', url: 'https://claude.ai/artifact/HZCWkFZhP7wxVioP1F9iLf',
     published: '2026-10-28', summary: 'Rain as a volume against rain as shells, on the Mac.' },
-  { title: 'Cloud puffs', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-cloud-puffs/report.html', url: 'https://claude.ai/artifact/W9NwxmDmwuoQsRD2UgJFmP',
+  { title: 'Cloud puffs', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-cloud-puffs/report.html', url: 'https://claude.ai/artifact/TbBiyMCUrTo5WvFgxczBf7',
     published: '2026-10-28', summary: 'Marched clouds against puffs against none, on the Mac.' },
-  { title: 'Town frame time', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-08-town-frame-time/report.html', url: 'https://claude.ai/artifact/Y6piR4LxxRaAoLdYLHxakL',
+  { title: 'Town frame time', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-08-town-frame-time/report.html', url: 'https://claude.ai/artifact/6Fpf2J6CBj3frPuamobp7Z',
     published: '2026-10-08', summary: 'A walk through a town, main against the town-frame-time branch.' },
   { title: 'Caves in town ground (T14)', kind: 'Question page', page: '', url: 'https://claude.ai/artifact/RriyuLo9EEZ1gTzGq58A2r',
     published: '2026-10-01', summary: 'Holbrook\'s lane with a cave mouth in it; answered "crust" on 2026-10-01. Still on the old account: no page in the repo to republish.' },
@@ -323,11 +424,11 @@ const MISC = [
     published: '2026-09-27', summary: 'The gate video: a dug cell, its far twin left alone, a reload and the ground unchanged. Still on the old account: no page in the repo to republish.' },
   { title: 'Tenebris Cities: Owner Survey (earlier)', kind: 'Survey', page: '', url: 'https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn',
     published: '2026-10-08', summary: 'The Claude Doc survey used until November 2026, kept as the record of your earlier answers. Still on the old account: no page in the repo to republish.' },
-  { title: 'Detail fade', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-detail-fade/report.html', url: 'https://claude.ai/artifact/UCBFii7A4VFLyvHn63WDaN',
+  { title: 'Detail fade', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-detail-fade/report.html', url: 'https://claude.ai/artifact/CUbEJx9FTCEioPQeH7NzgJ',
     published: '2026-09-25', summary: 'detail-fade, before and after.' },
-  { title: 'Cloud close-up', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-cloud-close-up/report.html', url: 'https://claude.ai/artifact/QjRaKRRunUyhUQj4a2FEDA',
+  { title: 'Cloud close-up', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-cloud-close-up/report.html', url: 'https://claude.ai/artifact/4wtXNsTG4Nn68HFD2zdprA',
     published: '2026-09-25', summary: 'cloud-close-up, before and after, on the branch build.' },
-  { title: 'Baseline', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-baseline/report.html', url: 'https://claude.ai/artifact/8YhrUTuqtTByNepg9UKFEd',
+  { title: 'Baseline', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-baseline/report.html', url: 'https://claude.ai/artifact/EpH7ncfGEZwmVqZAj8AcJF',
     published: '2026-09-25', summary: 'The first baseline of the performance suite: clouds, storm, far side and walk.' },
 ];
 
@@ -475,114 +576,240 @@ async function connect() {
   }, () => showMode('Live updates stopped. Reload the page to see the latest reviews.'));
 }
 
-function linkCard(a) {
-  return el('article', { class: 'slot' },
+function linkCard(a, id) {
+  return el('article', { class: 'slot', id },
     el('div', { class: 'head' }, a.kind ? el('span', { class: 'mid', text: a.kind }) : null, el('h3', { text: a.title })),
     el('p', { class: 'summary', text: a.summary }),
     el('p', { class: 'meta', text: `${a.page ? a.page + '  ·  ' : ''}published ${a.published}` }),
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, finance and space stations, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
-// `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
+// The roadmap (CLAUDE.md, "The first game loop"): phases in order, each step one short line. `key` makes the step's stable
+// anchor (#roadmap-phase-3-npcs); `refs` are mockup ids; `change` is the OpenSpec change. Status: built, building, planned
+// (written up), later (not started), optional. A step's known issues live in the survey, by phase: `issues` is the anchor of
+// its group there and `nIssues` the number of items in it (kept by hand; the survey's PHASES is the list).
+const SURVEY = 'https://claude.ai/artifact/HvNgkEFwnJkadM3Y3ELqi9';
 const ROADMAP = [
-  { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next. Merged to main (PR #37); its last fixes and the audio in PR #41.', steps: [
-    { title: 'Crafting tools', status: 'built', change: 'tool-crafting', refs: ['M3'], text: 'Dig by hand, planks, rope and a workbench, stone tools, then bronze and iron from the forge. On the phase-1 branch.' },
-    { title: 'Fishing', status: 'built', change: 'fishing-and-equipment', refs: ['M18', 'M9'], text: 'Casting, the bite, schools and bait; the fish lab later.' },
-    { title: 'Farming', status: 'built', change: 'farming-and-smelting', refs: ['M8'], text: 'Seeds from grass and wild plants; till, plant, grow on world time, harvest; the forge smelts ore. On the phase-1 branch.' },
-    { title: 'Herding', status: 'built', change: 'animal-husbandry', refs: ['M26', 'M7'], text: 'Tame by feeding, pens of fence, eggs, milk and wool. On the phase-1 branch.' },
-    { title: 'Cooking', status: 'built', change: 'cooking', refs: ['M27'], text: 'A campfire that cooks fish, crops and eggs into dishes that give effects. On the phase-1 branch; oven and pot later.' },
-    { title: 'Starter missions', status: 'built', change: 'starter-missions', refs: [], text: 'Nineteen missions through the loop, from gathering by hand to a farm meal, with a HUD line and a Missions tab (O). On the phase-1 branch.' },
+  { title: 'The first game loop', when: 'done', note: 'Built and merged.', steps: [
+    { key: 'crafting', title: 'Crafting tools', status: 'built', change: 'tool-crafting', refs: ['M3'], text: 'Dig by hand, planks, rope and a workbench, then stone, bronze and iron tools.' },
+    { key: 'fishing', title: 'Fishing', status: 'built', change: 'fishing-and-equipment', refs: ['M18', 'M9'], text: 'Casting, the bite, schools and bait.' },
+    { key: 'farming', title: 'Farming', status: 'built', change: 'farming-and-smelting', refs: ['M8'], text: 'Seeds from grass and wild plants; till, plant, grow and harvest; the forge smelts ore.' },
+    { key: 'herding', title: 'Herding', status: 'built', change: 'animal-husbandry', refs: ['M26', 'M7'], text: 'Tame by feeding; pens, eggs, milk and wool.' },
+    { key: 'cooking', title: 'Cooking', status: 'built', change: 'cooking', refs: ['M27'], text: 'A campfire that cooks fish, crops and eggs into dishes.' },
+    { key: 'missions', title: 'Starter missions', status: 'built', change: 'starter-missions', refs: ['M33'], text: 'Nineteen missions through the loop, with a HUD line and a Missions tab (O).' },
   ] },
-  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
-    { title: 'Advanced foliage and flora', status: 'building', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
-    { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.' },
-    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25', 'M31'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.' },
+  { title: 'Environment v2', when: 'done', note: 'Built and merged.', steps: [
+    { key: 'flora', title: 'Advanced foliage and flora', status: 'built', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, clutter by biome, seasons, fallen leaves and wild fruit.', issues: 'phase-2-flora', nIssues: 1 },
+    { key: 'mushrooms', title: 'Glowing mushrooms and carried light', status: 'built', change: 'glowing-mushrooms', refs: ['M13'], text: 'Glowing mushrooms to pick and eat, and a torch, lantern or mushroom to carry for light.', issues: 'phase-2-mushrooms', nIssues: 1 },
+    { key: 'sand', title: 'Sand', status: 'built', change: 'sand-tiles', refs: ['M13'], text: 'Beach sand with shells and a warmer, rippled desert sand.' },
+    { key: 'mountains', title: 'Mountain flora', status: 'built', change: 'mountain-ground', refs: ['M13'], text: 'Firs to the tree line, alpine meadow, scree, lichen and snow (generator version 15).', issues: 'phase-2-mountains', nIssues: 2 },
+    { key: 'underwater', title: 'Underwater overhaul', status: 'built', change: 'ocean-environments', refs: ['M25', 'M9'], text: 'Light that fades with depth, reefs, kelp, vents, rivers, marshes and 3D water life.', issues: 'phase-2-underwater', nIssues: 2 },
+    { key: 'water-flow', title: 'Water that flows', status: 'built', change: 'water-flow', refs: ['M28', 'M25', 'M31', 'M35'], text: 'Water that floods, spreads and falls, with mist, bubbles and rain splashes.', issues: 'phase-2-water-flow', nIssues: 1 },
+    { key: 'checks', title: 'Your checks', status: 'optional', change: '', refs: [], text: 'Looks, sounds and frame cost on your machine, when you have time.', issues: 'phase-2-checks', nIssues: 5 },
   ] },
-  { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
-    { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
-    { title: 'Missions', status: 'later', change: '', refs: ['M11'], text: 'Jobs and contracts from the townsfolk.' },
-    { title: 'Carpentry and house building', status: 'later', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid; cranes and scaffold.' },
-    { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
+  { title: 'Townsfolk', when: 'next', note: 'Built and merged (PR #145); the town tree, paving and carts written up 2026-11-22, not built.', steps: [
+    { key: 'npcs', title: 'NPCs', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, and talking to them.', issues: 'phase-3-npcs', nIssues: 0, tests: 'phase-3-test-npcs', nTests: 1 },
+    { key: 'trade', title: 'Coins and trade', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'Coins, a trader in every town, and prices that follow what the town makes and needs.', issues: 'phase-3-trade', nIssues: 0 },
+    { key: 'missions', title: 'Town missions', status: 'built', change: 'townsfolk', refs: ['M5'], text: 'Jobs from a town\'s board and its people, paid in coins.', issues: 'phase-3-missions', nIssues: 0, tests: 'phase-3-test-missions', nTests: 2 },
+    { key: 'roads', title: 'Roads', status: 'built', change: 'townsfolk', refs: ['M15'], text: 'Sloped dirt and gravel roads, laid by you and by the world between towns.', issues: 'phase-3-roads', nIssues: 0, tests: 'phase-3-test-roads', nTests: 1 },
+    { key: 'building', title: 'Carpentry and house building', status: 'built', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid.', issues: 'phase-3-building', nIssues: 0, tests: 'phase-3-test-building', nTests: 1 },
+    { key: 'planner', title: 'Building planner and blueprints', status: 'planned', change: 'building-planner', refs: ['M6'], text: 'Design a house at a drafting table or pick a preset, set it out as a construction site and build it piece by piece from the pack; change the plan mid-build.', nIssues: 0 },
+    { key: 'logging', title: 'Logging', status: 'built', change: 'log-drives', refs: ['M34'], text: 'Logs on a raft, or floated down a river until the water stops.', issues: 'phase-3-logging', nIssues: 0, tests: 'phase-3-test-logging', nTests: 1 },
+    { key: 'town-tree', title: 'Town mission tree', status: 'built', change: 'town-missions-tree', refs: ['M33'], text: 'A mission tree of its own for the town: people, trade, jobs, roads, carts, a house and logs, paid in coins. In the game; the roads and carts read not yet until they are built.' },
+    { key: 'furniture', title: 'Furniture', status: 'built', change: 'furniture', refs: ['M15', 'M33'], text: 'A carpenter\'s bench and ten pieces of furniture; sitting, lying down and storage; town houses furnished, their chests holding loot to take; a Carpentry branch of the town tree.' },
+    { key: 'gravel', title: 'Grinder, mixer and gravel', status: 'built', change: 'townsfolk', refs: ['M15'], text: 'A grinder crushes stone and a mixer makes gravel from it and sand.' },
+    { key: 'paving', title: 'Marking and paving roads', status: 'building', change: 'townsfolk', refs: ['M15'], text: 'Mark a road with survey stakes, then pave each marked cell with the shovel and gravel.' },
+    { key: 'road-planner', title: 'Road planner', status: 'planned', change: 'townsfolk', refs: ['M15'], text: 'Walk the road and drive stakes; a ghost shows the road, its bill and what is in the way.' },
+    { key: 'carts', title: 'Hand carts and horse carts', status: 'built', change: 'land-transport', refs: ['M38'], text: 'Carts with a hold, a horse bought from a town trader; a quarter of the speed off the road. In the game on claude/phase-2-1 (2026-11-23), not yet played by the owner.' },
   ] },
-  { title: 'Town building and civil engineering', when: 'later', note: 'After the townsfolk. Not started.', steps: [
-    { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },
-    { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: roads, bridges and the like. No mockup yet.' },
+  { title: 'Multiplayer', num: '3b', when: 'now', note: 'Being built on main.', steps: [
+    { key: 'authority', title: 'One authority', status: 'building', change: 'multiplayer', refs: [], doc: 'https://claude.ai/artifact/5mdzNwp9i9g3eRky7zoAhw', text: 'The server holds every edit, item, crop and animal; single player runs the same server.' },
+    { key: 'regions', title: 'Regions near each player', status: 'planned', change: 'multiplayer', refs: [], text: 'Each player streams the regions near them and builds their own detail.' },
+    { key: 'checksums', title: 'Checksums and resync', status: 'building', change: 'multiplayer', refs: [], text: 'Each region has a digest; a copy that differs is fetched again.' },
+    { key: 'together', title: 'Playing together', status: 'planned', change: 'multiplayer', refs: [], text: 'Host and join, other players in the world, trades and chat.' },
+    { key: 'launcher', title: 'Launcher', status: 'planned', change: 'game-launcher', refs: [], text: 'One small download per OS that keeps the game current from itch.', issues: 'phase-3b-launcher', nIssues: 2 },
   ] },
-  { title: 'Mass transportation', when: 'later', note: 'After civil engineering. Not started.', steps: [
-    { title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
-    { title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS that coaches the helm.' },
-    { title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods between places for you.' },
-    { title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Basic belts, water carried in channels, and track for carts.' },
+  { title: 'Town building, civil engineering and survival', when: 'later', note: 'After multiplayer.', steps: [
+    { key: 'town-building', title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid.' },
+    { key: 'civil', title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'Bridges, cuttings, walls and the other works between buildings.' },
+    { key: 'power', title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'Water wheels and windmills.' },
+    { key: 'survival', title: 'Survival mode', status: 'planned', change: 'survival-mode', refs: [], text: 'A Survival mode per world beside Explorer: health, death and a dropped pack.' },
+    { key: 'falls', title: 'Falls, hunger and air', status: 'planned', change: 'survival-mode', refs: [], text: 'Fall damage, hunger, breath under water and suit air.' },
+    { key: 'predators', title: 'Predators', status: 'planned', change: 'survival-mode', refs: ['M7', 'M26'], text: 'Predators that stalk, warn, attack and flee.' },
+    { key: 'wear', title: 'Tool wear', status: 'planned', change: 'survival-mode', refs: [], text: 'Tools wear and break, and are mended at the workbench or a smith.' },
+    { key: 'fighting', title: 'Fighting townsfolk', status: 'planned', change: 'survival-mode', refs: ['M5'], text: 'Strike a villager and the guards come.' },
   ] },
-  { title: 'Age of flight and industry', when: 'later', note: 'After mass transportation. Not started.', steps: [
-    { title: 'Age of flight', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Planes, helicopters and VTOLs built in the hangar and flown over the world.' },
-    { title: 'Mass mining', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Strip mines cut in hex layers, crews, quarry frames and excavators.' },
-    { title: 'Oil', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'From field and offshore platform to the refinery, by tanker.' },
-    { title: 'Industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M3'], text: 'Ore to plate in plants and fabricators, past the forge.' },
-    { title: 'Advanced power generation', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Up the power ladder past water and wind: coal and oil.' },
+  { title: 'Mass transportation', when: 'later', note: 'After phase 4.', steps: [
+    { key: 'airships', title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
+    { key: 'sea-ships', title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS for the helm.' },
+    { key: 'cars', title: 'Cars', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Cars and trucks on the roads, and the ridden horse and covered wagon beside them.' },
+    { key: 'trains', title: 'Trains and tracks', status: 'later', change: 'land-transport', refs: ['M38'], text: 'Track on the hex grid, stations, and trains between towns.' },
+    { key: 'haulers', title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods for you.' },
+    { key: 'conveyors', title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Belts, water in channels, and track for carts.' },
   ] },
-  { title: 'Nuclear and rocketry', when: 'later', note: 'After the age of flight and industry. Not started.', steps: [
-    { title: 'Nuclear', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'The fission plant, its cooling tower and containment dome built of hex cells.' },
-    { title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Hex-cell rockets with decks you walk, flown to orbit and back.' },
+  { title: 'Age of flight and industry', when: 'later', note: 'After phase 5.', steps: [
+    { key: 'flight', title: 'Age of flight', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Planes, helicopters and VTOLs from the hangar.' },
+    { key: 'mining', title: 'Mass mining', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Strip mines in hex layers, crews, quarry frames and excavators.' },
+    { key: 'oil', title: 'Oil', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Oil field and offshore platform to the refinery, by tanker.' },
+    { key: 'industry', title: 'Industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M3'], text: 'Ore to plate in plants and fabricators.' },
+    { key: 'power', title: 'Advanced power generation', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Coal and oil power.' },
   ] },
-  { title: 'Finance and space stations', when: 'later', note: 'After rocketry. Not started.', steps: [
-    { title: 'Stock market', status: 'later', change: '', refs: ['M12'], text: 'Companies whose shares trade on the exchange, priced by what they make and sell.' },
-    { title: 'Space trading posts', status: 'later', change: '', refs: ['M10', 'M12'], text: 'Stations in orbit that buy and sell, each with its own stock and prices.' },
-    { title: 'Space casinos', status: 'later', change: '', refs: ['M11'], text: 'The station bar and casino: games that show their odds, and jobs.' },
+  { title: 'Nuclear and rocketry', when: 'later', note: 'After phase 6.', steps: [
+    { key: 'nuclear', title: 'Nuclear', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'The fission plant, its cooling tower and dome in hex cells.' },
+    { key: 'rocketry', title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Hex-cell rockets with decks you walk, to orbit and back.' },
   ] },
-  { title: 'Space exploration and colonization', when: 'later', note: 'After finance and space stations. Not started.', steps: [
-    { title: 'Space exploration', status: 'later', change: 'interplanetary-travel', refs: ['M1', 'M2'], text: 'The other worlds and moons of the system, reached by rocket.' },
-    { title: 'Space tourism', status: 'later', change: '', refs: ['M10', 'M2'], text: 'Passengers flown to orbit, the stations and the other worlds for the view.' },
-    { title: 'Colonization', status: 'later', change: '', refs: ['M10'], text: 'Settling other worlds: outposts, stations and bases off the home planet.' },
+  { title: 'Finance and space stations', when: 'later', note: 'After phase 7.', steps: [
+    { key: 'stocks', title: 'Stock market', status: 'later', change: '', refs: ['M12'], text: 'Company shares priced by what the companies make and sell.' },
+    { key: 'trading-posts', title: 'Space trading posts', status: 'later', change: '', refs: ['M10', 'M12'], text: 'Stations in orbit that buy and sell at their own prices.' },
+    { key: 'casinos', title: 'Space casinos', status: 'later', change: '', refs: ['M11'], text: 'The station bar and casino, its games and jobs.' },
   ] },
-  { title: 'Exo-industry and advanced propulsion', when: 'later', note: 'After colonization. Not started.', steps: [
-    { title: 'Exo-industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M10'], text: 'Industry off the home planet: mining and plants on moons, asteroids and stations.' },
-    { title: 'Advanced rocket engines', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Past chemical rockets: fusion drives.' },
-    { title: 'Space freighters', status: 'later', change: 'ship-tiers', refs: ['M21', 'M12'], text: 'Freighters hauling goods between worlds and stations, for the markets.' },
-    { title: 'Particle colliders', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'A collider behind a basalt berm, making the antimatter cells that late engines and power run on.' },
+  { title: 'Space exploration and colonization', when: 'later', note: 'After phase 8.', steps: [
+    { key: 'exploration', title: 'Space exploration', status: 'later', change: 'interplanetary-travel', refs: ['M1', 'M2'], text: 'The system\'s other worlds and moons, by rocket.' },
+    { key: 'tourism', title: 'Space tourism', status: 'later', change: '', refs: ['M10', 'M2'], text: 'Passengers flown to orbit, the stations and other worlds.' },
+    { key: 'colonization', title: 'Colonization', status: 'later', change: '', refs: ['M10'], text: 'Outposts, stations and bases off the home planet.' },
   ] },
-  { title: 'Antimatter and interstellar travel', when: 'later', note: 'After exo-industry. Not started.', steps: [
-    { title: 'Antimatter', status: 'later', change: 'industry-tiers', refs: ['M20', 'M21'], text: 'Antimatter cells as power and as fuel: the antimatter plant and antimatter landers.' },
-    { title: 'Interstellar travel', status: 'later', change: 'star-systems', refs: ['M1', 'M2'], text: 'Leaving the home system for other stars, by star lanes rather than a warp drive.' },
+  { title: 'Exo-industry and advanced propulsion', when: 'later', note: 'After phase 9.', steps: [
+    { key: 'exo-industry', title: 'Exo-industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M10'], text: 'Mining and plants on moons, asteroids and stations.' },
+    { key: 'engines', title: 'Advanced rocket engines', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Fusion drives.' },
+    { key: 'freighters', title: 'Space freighters', status: 'later', change: 'ship-tiers', refs: ['M21', 'M12'], text: 'Freighters hauling goods between worlds and stations.' },
+    { key: 'colliders', title: 'Particle colliders', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'A collider that makes antimatter cells.' },
+  ] },
+  { title: 'Antimatter and interstellar travel', when: 'later', note: 'After phase 10.', steps: [
+    { key: 'antimatter', title: 'Antimatter', status: 'later', change: 'industry-tiers', refs: ['M20', 'M21'], text: 'Antimatter cells as power and fuel, and antimatter landers.' },
+    { key: 'interstellar', title: 'Interstellar travel', status: 'later', change: 'star-systems', refs: ['M1', 'M2'], text: 'Other stars by star lanes, not a warp drive.' },
   ] },
 ];
-const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };
+const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started', optional: 'Optional' };
+const WHEN = { done: 'Done', now: 'Now', next: 'Next', later: 'Later' };
+// Phase numbers: 1, 2, 3, then a phase with its own `num` (3b) between, then 4 onward.
+ROADMAP.reduce((pn, ph) => { ph.n = ph.num || String(pn + 1); return ph.num ? pn : pn + 1; }, 0);
+
 function roadmap() {
-  const root = document.getElementById('roadmap');
+  const root = document.getElementById('roadmap-list');
   let n = 0;
-  ROADMAP.forEach((ph, k) => {
-    const p = k + 1;
+  ROADMAP.forEach((ph) => {
+    const p = ph.n;
     const list = el('ol', { class: 'steps' });
     ph.steps.forEach((st, j) => {
-      const i = j + 1;
       n++;
       const refs = el('div', { class: 'refs' });
       for (const id of st.refs) {
         const m = MOCKUPS.find((x) => x.id === id);
         if (m) refs.append(m.url ? el('a', { href: m.url, target: '_blank', rel: 'noopener', title: m.title, text: id }) : el('span', { text: id }));
       }
-      if (!st.refs.length) refs.append(el('span', { text: 'no mockup yet' }));
+      if (st.doc) refs.append(el('a', { href: st.doc, target: '_blank', rel: 'noopener', text: 'guide' }));
+      if (!st.refs.length && !st.doc) refs.append(el('span', { text: 'no mockup yet' }));
       if (st.change) refs.append(el('span', { text: st.change }));
-      list.append(el('li', { class: 'step' },
-        el('div', { class: 'top', 'data-n': `${p}.${i}` }, el('b', { text: st.title })),
+      list.append(el('li', { class: 'step', id: `roadmap-phase-${p}-${st.key}` },
+        el('div', { class: 'top', 'data-n': `${p}.${j + 1}` }, el('b', { text: st.title })),
         el('span', { class: `st ${st.status}`, text: STATUS[st.status] }),
-        el('p', { text: st.text }), refs));
+        el('p', { text: st.text }),
+        st.issues && st.nIssues ? el('a', { class: 'issues', href: `${SURVEY}#${st.issues}`, target: '_blank', rel: 'noopener' },
+          `${st.nIssues} known issue${st.nIssues === 1 ? '' : 's'}`) : null,
+        st.tests && st.nTests ? el('a', { class: 'issues', href: `${SURVEY}#${st.tests}`, target: '_blank', rel: 'noopener' },
+          `${st.nTests} to test`) : null,
+        refs));
     });
-    root.append(el('div', { class: 'phase', id: `phase-${p}` },
-      el('div', { class: 'phase-h' }, el('span', { class: 'pnum', text: `Phase ${p}` }), el('h3', { text: ph.title }), el('span', { class: `when ${ph.when}`, text: ({ now: 'Now', next: 'Next', later: 'Later' })[ph.when] }), el('p', { text: ph.note })),
+    root.append(el('section', { class: 'phase', id: `roadmap-phase-${p}` },
+      el('div', { class: 'phase-h' }, el('span', { class: 'pnum', text: `Phase ${p}` }), el('h3', { text: ph.title }),
+        el('span', { class: `when ${ph.when}`, text: WHEN[ph.when] }), ph.note ? el('p', { text: ph.note }) : null),
       list));
   });
   document.getElementById('n-roadmap').textContent = `${n} steps`;
 }
 
+// The index on the left (owner, 2026-11-22: "organize mockup tracker into sections ... some sort of index thing on the left
+// to navigate around"): sections, the roadmap's phases and steps, and the mockups, each a link to a stable anchor
+// (#roadmap, #roadmap-phase-3, #roadmap-phase-3-npcs, #mockups, #mockups-new, #card-M5, #guides, #misc). It is only for
+// jumping: it never opens, closes or highlights as the page scrolls (owner, 2026-11-22: "it shouldnt change based on where
+// I scroll, its just there for me to jump around"). On a phone the index is a drawer opened from the Index button.
+const spy = []; // { id, link } in page order
+function buildIndex() {
+  const body = document.getElementById('index-body');
+  const link = (id, text, cls = '') => {
+    const a = el('a', { href: '#' + id, class: cls, 'data-for': id, text });
+    spy.push({ id, link: a });
+    return a;
+  };
+  const group = (id, text, kids, cls, open = false) => {
+    const d = el('details', { class: cls }, el('summary', {}, link(id, text, cls + '-a')), kids);
+    d.open = open;
+    return d;
+  };
+  const cardLinks = (batch) => el('ul', { class: 'ix-list' }, MOCKUPS.filter((m) => m.batch === batch)
+    .map((m) => el('li', {}, link(`card-${m.id}`, `${m.id} ${m.title}`))));
+  body.append(
+    group('roadmap', 'Roadmap', el('ul', { class: 'ix-list' }, ROADMAP.map((ph) => {
+      const pid = `roadmap-phase-${ph.n}`;
+      return el('li', {}, group(pid, `${ph.n}. ${ph.title}`,
+        el('ul', { class: 'ix-list' }, ph.steps.map((st) => el('li', {}, link(`${pid}-${st.key}`, st.title)))), 'ix-phase'));
+    })), 'ix-sec', true),
+    group('mockups', 'Game mockups', el('ul', { class: 'ix-list' },
+      el('li', {}, group('mockups-new', 'November 2026', cardLinks('new'), 'ix-phase')),
+      el('li', {}, group('mockups-old', 'Earlier mockups', cardLinks('old'), 'ix-phase'))), 'ix-sec'),
+    group('guides', 'Guides', el('ul', { class: 'ix-list' }, GUIDES.map((a, i) => el('li', {}, link(`guide-${i + 1}`, a.title)))), 'ix-sec'),
+    group('misc', 'Misc', el('ul', { class: 'ix-list' }, MISC.map((a, i) => el('li', {}, link(`misc-${i + 1}`, a.title)))), 'ix-sec'));
+  // Page order, so the last target scrolled past is the one being read.
+  const order = new Map([...document.querySelectorAll('[id]')].map((n, i) => [n.id, i]));
+  spy.sort((x, y) => (order.get(x.id) ?? 0) - (order.get(y.id) ?? 0));
+  body.addEventListener('click', (e) => { if (e.target.closest('a') && narrow()) drawer(false); });
+  window.addEventListener('resize', () => { if (!narrow()) drawer(false); });
+}
+
+const narrow = () => window.matchMedia('(max-width: 899px)').matches;
+function drawer(open) {
+  const nav = document.getElementById('index');
+  nav.classList.toggle('open', open);
+  document.getElementById('backdrop').hidden = !open;
+  document.getElementById('index-btn').setAttribute('aria-expanded', String(open));
+  if (open) document.getElementById('index-close').focus();
+}
+document.getElementById('index-btn').addEventListener('click', () => drawer(true));
+document.getElementById('index-close').addEventListener('click', () => drawer(false));
+document.getElementById('backdrop').addEventListener('click', () => drawer(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('index').classList.contains('open')) drawer(false); });
+
+// The info modal: what the page is and how to use it, out of the way of the lists.
+const info = document.getElementById('info');
+document.getElementById('info-btn').addEventListener('click', () => info.showModal());
+document.getElementById('info-close').addEventListener('click', () => info.close());
+info.addEventListener('click', (e) => { if (e.target === info) info.close(); });
+
+// The page is drawn from data after load, so a link to an anchor is followed once the anchor exists, and again whenever
+// the hash changes. The roadmap's old anchors (#phase-3) lead to the new ones (#roadmap-phase-3).
+// One main section on the page at a time (owner, 2026-11-22: "instead of the main sections being all on one page, they
+// shouldnt show unless I select them in teh index"): the one holding the link's target, or the roadmap with no link.
+function showSection(sec) {
+  document.querySelectorAll('section.sect').forEach((s) => { s.hidden = s !== sec; });
+}
+function scrollToHash() {
+  let id = decodeURIComponent(location.hash.slice(1));
+  if (!id) { showSection(document.getElementById('roadmap')); return; }
+  if (/^phase-/.test(id)) id = 'roadmap-' + id;
+  // Steps that moved keep their old links: phase 5's carts went to phase 3 (owner, 2026-11-22).
+  const MOVED = { 'roadmap-phase-5-carts': 'roadmap-phase-3-carts' };
+  if (MOVED[id]) id = MOVED[id];
+  const t = document.getElementById(id);
+  if (!t) { showSection(document.getElementById('roadmap')); return; }
+  showSection(t.closest('section.sect') || document.getElementById('roadmap'));
+  t.scrollIntoView({ block: 'start' });
+  t.classList.add('hit');
+  setTimeout(() => t.classList.remove('hit'), 1600);
+}
+
 MOCKUPS.forEach((m) => document.getElementById(m.batch === 'new' ? 'list-new' : 'list-old').append(card(m)));
-GUIDES.forEach((a) => document.getElementById('guides').append(linkCard(a)));
-MISC.forEach((a) => document.getElementById('misc').append(linkCard(a)));
+GUIDES.forEach((a, i) => document.getElementById('guides-list').append(linkCard(a, `guide-${i + 1}`)));
+MISC.forEach((a, i) => document.getElementById('misc-list').append(linkCard(a, `misc-${i + 1}`)));
 document.getElementById('n-mockups').textContent = `${MOCKUPS.length} mockups`;
 document.getElementById('n-guides').textContent = `${GUIDES.length} guide${GUIDES.length === 1 ? '' : 's'}`;
 document.getElementById('n-misc').textContent = `${MISC.length} pages`;
 MOCKUPS.forEach((m) => paint(m.id));
 roadmap();
+buildIndex();
 connect();
+requestAnimationFrame(scrollToHash);
+window.addEventListener('hashchange', scrollToHash);
 </script>
+
+
+</body></html>

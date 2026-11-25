@@ -12,16 +12,18 @@
 
 use bevy::prelude::*;
 use pbd_app::drops::Drops;
+use pbd_app::planet::Applied;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
-use pbd_core::column::{self, LAYERS};
+use pbd_core::column;
 use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
 
@@ -98,9 +100,66 @@ pub(super) fn material_of(
     }
 }
 
+/// Whether ground dug at `block` is by the water, for bait (`dig-fixes` 2):
+/// the core's one rule ([`pbd_core::gather::GatherSettings::by_water`]) over
+/// the fine set's neighbour table and its columns. A record past the tier's
+/// edge answers from the column the edit path would adopt for it, which
+/// carries the river and the sea as the tier's do.
+pub(super) fn by_water(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    gather: &pbd_core::gather::GatherSettings,
+    (cell, layer): Block,
+) -> bool {
+    let Some(record) = record_of(fine, cell) else {
+        return false;
+    };
+    let neighbours = &fine.set.finest_neighbors;
+    let mut rim: Vec<(usize, Option<pbd_core::column::Column>)> = Vec::new();
+    gather.by_water(
+        record,
+        layer,
+        |r| {
+            neighbours
+                .get(r)
+                .into_iter()
+                .flatten()
+                .filter(|&&n| n != u32::MAX)
+                .map(|&n| n as usize)
+                .collect::<Vec<_>>()
+        },
+        |r, l| {
+            if let Some(column) = fine.set.columns.column(r) {
+                return Some(column.material(l));
+            }
+            let at = match rim.iter().position(|(k, _)| *k == r) {
+                Some(at) => at,
+                None => {
+                    rim.push((r, fine.set.adoptable(r, &save.edits)));
+                    rim.len() - 1
+                }
+            };
+            rim[at].1.as_ref().map(|column| column.material(l))
+        },
+    )
+}
+
 /// Whether a tree has been felled: the axe has taken all its logs.
 pub(super) fn tree_felled(taken: u16, axe_logs: u16) -> bool {
     taken >= axe_logs
+}
+
+/// Whether the tree of `cell` (one that grows a tree) still stands: its
+/// `tree` record has given fewer than `axe_logs`. What the rooted ground
+/// and the ray's tree test both read (`dig-fixes` 1).
+pub(super) fn tree_standing(save: &WorldSave, axe_logs: u16, cell: u32) -> bool {
+    use pbd_core::gather::{TREE_KIND, TreeTaken};
+    let taken = save
+        .records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .map_or(0, |t| t.logs);
+    !tree_felled(taken, axe_logs)
 }
 
 /// Whether `block` is the ground a standing tree grows from: its cell grows a
@@ -113,7 +172,6 @@ pub(super) fn under_standing_tree(
     axe_logs: u16,
     (cell, layer): Block,
 ) -> bool {
-    use pbd_core::gather::{TREE_KIND, TreeTaken};
     let Some(record) = record_of(fine, cell) else {
         return false;
     };
@@ -125,12 +183,7 @@ pub(super) fn under_standing_tree(
     ) {
         return false;
     }
-    let taken = save
-        .records
-        .get(TREE_KIND, u64::from(cell))
-        .and_then(|r| r.read::<TreeTaken>())
-        .map_or(0, |t| t.logs);
-    if tree_felled(taken, axe_logs) {
+    if !tree_standing(save, axe_logs, cell) {
         return false;
     }
     material_of(fine, save, (cell, layer)).is_some_and(|m| m != Material::Air && !m.is_water())
@@ -206,51 +259,20 @@ pub(super) fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
         .position(|record| record.key() == cell)
 }
 
-/// What the player's hands do as part of an edit.
-///
-/// The hands are IN the transaction rather than beside it, and that is the
-/// whole reason this enum exists. The log line carries the hotbar after the
-/// edit, so the move has to be settled before the record is written: a dig
-/// recorded without the block it yielded is a world where the hole is durable
-/// and the block was never picked up.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Hands {
-    /// A dig: take what was there.
-    Take,
-    /// A place: spend one of the selected stack.
-    Spend,
-    /// A scripted edit, which has no player and no hands.
-    Empty,
-    /// A till (`farming-and-smelting` decision 2): the hands take nothing,
-    /// but the soil may turn up a seed, which floats out as a dig's block
-    /// does, on the edit's own line.
-    Till(Option<Item>),
-    /// Trade one of the selected stack for this item, on the same line: a
-    /// bucket filled or emptied (`water-flow` E11).
-    Swap(Item),
-    /// A dig that also turns up finds into the hands, on the same line: a
-    /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
-    /// of grass and loose stone out of earth (`tool-crafting` decision 2),
-    /// bait out of wet ground at the shore (`starter-missions` G1).
-    TakeFinds([Option<Item>; 3]),
-}
+/// What the player's hands do as part of an edit: a core rule's input
+/// (`pbd_core::accept`), so a server settles them the same way.
+pub use pbd_core::accept::Hands;
 
-/// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
-/// tilled soil gives dirt; a generated ore cell gives mixed ore or, in a coal
-/// seam, coal; a placed one gives ore; everything else gives itself.
+/// What a dug block yields: the core rule ([`pbd_core::accept::yield_of`])
+/// over this world's terrain and edits.
 pub(super) fn yield_of(save: &WorldSave, was: Material, cell: u32, layer: usize) -> Item {
-    match was {
-        Material::Tilled => Item::Block(Material::Dirt),
-        Material::Ore => {
-            let placed = save
-                .edits
-                .for_cell(cell)
-                .iter()
-                .any(|&(l, m)| usize::from(l) == layer && m == Material::Ore);
-            pbd_core::station::ore_yield(cell, layer as u16, placed)
-        }
-        other => Item::Block(other),
-    }
+    pbd_core::accept::yield_of(
+        pbd_app::planet::terrain_config(),
+        &save.edits,
+        was,
+        cell,
+        layer,
+    )
 }
 
 /// Everything one edit touches, which is what says these travel together: the
@@ -290,7 +312,7 @@ pub fn apply_edit(
         drops,
         now_s,
     } = world;
-    if layer == 0 || layer >= LAYERS {
+    if !pbd_core::accept::in_world(layer) {
         info!("edit refused: layer {layer} is bedrock or above the world");
         return None;
     }
@@ -325,88 +347,98 @@ pub fn apply_edit(
         );
         return None;
     };
-    if was == material {
-        info!("edit refused: cell {cell} layer {layer} is already {material:?}");
-        return None;
-    }
-    // The move is made on a COPY first. What the log records is the hotbar
-    // after the edit, and what the player keeps is that same hotbar only if
-    // the record was taken.
-    // One lamp to a column. The record carries ONE lamp layer, because a
-    // lamp is not in a run and the runs are all the shader reads, so a second
-    // one would light a cell nothing was drawn in. Refusing is better than
-    // drawing the wrong one.
-    if material.is_lamp()
-        && let Some(column) = adopting
-            .as_ref()
-            .or_else(|| fine.set.columns.column(record))
-        && pbd_app::planet::column::has_lamp(column)
-    {
-        info!("edit refused: cell {cell} already carries a lamp");
-        return None;
-    }
+    // The decision is the core's (`pbd_core::accept::edit`), made on a COPY
+    // of the hands: what the log records is the hotbar after the edit, and
+    // what the player keeps is that same hotbar only if the record was taken.
+    let lamp_in_column = adopting
+        .as_ref()
+        .or_else(|| fine.set.columns.column(record))
+        .is_some_and(pbd_app::planet::column::has_lamp);
+    let ask = pbd_core::accept::Ask {
+        cell,
+        layer,
+        material,
+        was,
+        lamp_in_column,
+        hands,
+    };
+    let taken = match pbd_core::accept::edit(ask, &slots.0, || yield_of(save, was, cell, layer)) {
+        Ok(taken) => taken,
+        Err(refused) => {
+            use pbd_core::accept::Refused;
+            match refused {
+                Refused::OutOfWorld => {
+                    info!("edit refused: layer {layer} is bedrock or above the world")
+                }
+                Refused::Unchanged => {
+                    info!("edit refused: cell {cell} layer {layer} is already {material:?}")
+                }
+                Refused::LampTaken => info!("edit refused: cell {cell} already carries a lamp"),
+                Refused::EmptySlot if hands == Hands::Spend => {
+                    info!("edit refused: nothing in the selected slot to place")
+                }
+                Refused::EmptySlot => info!("edit refused: nothing in the selected slot to use"),
+            }
+            return None;
+        }
+    };
     // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
-    // an edit that saved and could not be shown is the worse failure.
+    // an edit that saved and could not be shown is the worse failure. A
+    // client's render tier, not the world, so not the core's to decide.
     if adopting.is_some()
         && fine.set.columns.columns.len() >= pbd_app::planet::column::COLUMN_CAPACITY as usize
     {
         error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
         return None;
     }
-    let mut moved = slots.0.clone();
-    let mut dropped = None;
-    match hands {
-        // The dug block floats where it was cut, at the cell's centre, and
-        // the magnet brings it in (`inventory-grid` decision 4). The hands do
-        // not change here; the pickup is its own line.
-        Hands::Take | Hands::TakeFinds(_) | Hands::Till(Some(_)) => {
-            // What does not fit is not given: a find is not a block the
-            // player is owed.
-            if let Hands::TakeFinds(finds) = hands {
-                for find in finds.into_iter().flatten() {
-                    moved.give(find, 1);
-                }
-            }
-            let item = match hands {
-                Hands::Till(Some(item)) => item,
-                _ => yield_of(save, was, cell, layer),
-            };
-            let direction = fine
-                .set
-                .finest_records()
-                .get(record)
-                .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
-                .and_then(Vec3::try_normalize);
-            if let Some(direction) = direction {
-                // A till's seed comes up out of the soil, over the cell.
-                let lift = if matches!(hands, Hands::Till(_)) {
-                    1.3
-                } else {
-                    0.5
-                };
-                // The body's frame in f64 (`world-frames` 10.4).
-                let centre = direction.as_dvec3().normalize()
-                    * (f64::from(PLANET_RADIUS) + f64::from(column::layer_altitude(layer)) + lift);
-                dropped = Some(Drops::make(save, item, centre, *now_s));
-            }
-        }
-        Hands::Spend => {
-            let index = moved.selected();
-            if moved.take(index, 1) != 1 {
-                info!("edit refused: nothing in the selected slot to place");
+    // A game that joined another's world sends what the player tried, and
+    // shows it when the server's change comes back (`multiplayer` design 20,
+    // first cut: no prediction yet, so a refusal has nothing to undo).
+    if save.joined() {
+        use pbd_core::net::protocol::Request;
+        let layer16 = layer as u16;
+        let request = match hands {
+            Hands::Spend => Request::Place {
+                cell,
+                layer: layer16,
+                slot: slots.0.selected() as u8,
+            },
+            Hands::Take | Hands::TakeFinds(_) if material == Material::Air => Request::Dig {
+                cell,
+                layer: layer16,
+            },
+            other => {
+                info!("not sent to the host yet: {other:?} at cell {cell} layer {layer}");
                 return None;
             }
+        };
+        if save.send_request(request) {
+            info!("sent to the host: {request:?}");
         }
-        Hands::Swap(item) => {
-            let index = moved.selected();
-            if moved.take(index, 1) != 1 {
-                info!("edit refused: nothing in the selected slot to use");
-                return None;
-            }
-            moved.give(item, 1);
-        }
-        Hands::Empty | Hands::Till(None) => {}
+        return None;
     }
+    let mut moved = taken.slots;
+    let taken_floats = taken.floats;
+    // What floats out does so at the cell's centre, and the magnet brings it
+    // in (`inventory-grid` decision 4).
+    let dropped = taken_floats.and_then(|item| {
+        let direction = fine
+            .set
+            .finest_records()
+            .get(record)
+            .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
+            .and_then(Vec3::try_normalize)?;
+        // A till's seed comes up out of the soil, over the cell.
+        let lift = if matches!(hands, Hands::Till(_)) {
+            1.3
+        } else {
+            0.5
+        };
+        // The body's frame in f64 (`world-frames` 10.4).
+        let centre = direction.as_dvec3().normalize()
+            * (f64::from(PLANET_RADIUS) + f64::from(column::layer_altitude(layer)) + lift);
+        Some(Drops::make(save, item, centre, *now_s))
+    });
     // Whether what this replaces is something a player put there: its
     // removal is logged by author (the owner, 2026-11-16: "if an object a
     // user placed despawns, i need logs").
@@ -417,20 +449,41 @@ pub fn apply_edit(
             .for_cell(cell)
             .iter()
             .any(|&(l, m)| usize::from(l) == layer && m == was);
-    if !save.accept(
-        Edit {
-            cell,
-            layer: layer as u16,
-            material,
-        },
-        dropped.as_ref(),
-        &moved,
-    ) {
-        // The durable path refused it, so the world must not change either:
-        // an edit that shows and does not save is the worse of the two.
-        error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
-        return None;
-    }
+    let edit = Edit {
+        cell,
+        layer: layer as u16,
+        material,
+    };
+    // The server decides (`multiplayer` 4.2, design 18): in single player it
+    // is in process and the save is its store, so this answers now and
+    // journals the line the save always wrote. What it decides is what
+    // happens; where it differs from the prediction above, its answer wins
+    // and the difference is logged, for a playtest to find.
+    let sequenced = match save.decide_edit(edit, hands, &slots.0, dropped.as_ref()) {
+        Ok(decided) => {
+            if decided.slots != moved || decided.floats != taken_floats {
+                warn!(
+                    "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: the server's hands \
+                     differ from the prediction; the server's are kept"
+                );
+                moved = decided.slots;
+            }
+            decided.sequenced
+        }
+        Err(pbd_core::net::protocol::Refusal::NotSaved) => {
+            // The durable path refused it, so the world must not change
+            // either: an edit that shows and does not save is the worse of
+            // the two.
+            error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
+            return None;
+        }
+        Err(refusal) => {
+            warn!(
+                "SERVER_DISAGREES cell {cell} layer {layer} {material:?}: refused as {refusal:?}"
+            );
+            return None;
+        }
+    };
     if was_placed {
         info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
     }
@@ -439,28 +492,35 @@ pub fn apply_edit(
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
-    if let Some(column) = adopting {
-        // Checked before the save took the edit, so this cannot refuse.
-        let adopted = set.adopt(record, column);
-        debug_assert!(adopted, "adoption was checked before the save");
+    // APPLY (`edit-pipeline` 5): the same call a world process's or a
+    // server's edit takes, which does not know where the edit came from.
+    // The column, its record and its neighbours', the water and the surface
+    // (`FineSet::write_layer`, the one path a landing's replay takes too),
+    // adopting the cell first if it was past the tier's edge (checked to fit
+    // before the save took it). The surface matters as much as the runs:
+    // repacking the runs and leaving the record's cap alone is the bug the
+    // owner reported as broken geometry, "a meadow over the hole and a wall
+    // across it".
+    let applied = set.apply(sequenced.edit, &save.edits);
+    if applied != Applied::Written {
+        warn!("edit at cell {cell} layer {layer} applied as {applied:?}");
+    }
+    if adopting.is_some() {
         info!("adopted cell {cell} into the tier ahead of the streaming");
     }
-    // The column, its record and its neighbours', the water and the surface
-    // (`FineSet::write_layer`, the one path a landing's replay takes too).
-    // The surface matters as much as the runs: repacking the runs and leaving
-    // the record's cap alone is the bug the owner reported as broken geometry,
-    // "a meadow over the hole and a wall across it".
-    set.write_layer(record, layer, material, &save.edits);
+    debug!(
+        "edit {} of region {:#x} applied: {applied:?}",
+        sequenced.seq, sequenced.region
+    );
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
     // lights round a corner. The reference runs a bounded incremental pass
     // because a full one costs it a second; ours costs six milliseconds, so it
-    // buys the exactness instead.
+    // buys the exactness instead. Then the sea's sheet over the tier, its
+    // shade from the light just baked.
     let repacked = started.elapsed();
-    set.columns.relight();
-    // The sea's sheet over the tier, its shade from the light just baked.
-    set.mark_sea();
+    set.finish_edits();
     let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);
@@ -482,12 +542,29 @@ pub fn apply_edit(
     Some(was)
 }
 
+/// The in-process server carves its columns with the tier's own worms
+/// (`multiplayer` design 18), so the cell it decides on is the cell the
+/// player sees. Without touching the save's change ticks: nothing about the
+/// world changed.
+pub fn server_worms(
+    columns: Option<Res<pbd_app::config::ColumnSettings>>,
+    mut save: ResMut<WorldSave>,
+) {
+    if let Some(columns) = columns {
+        save.bypass_change_detection().set_worms(columns.worms());
+    }
+}
+
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    (cameras, frame): (
+    (cameras, frame, mut shake, planner_lift): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+        // The worked tree's shake (`tree-punch-shake`); drawn only.
+        Option<ResMut<pbd_app::tree_shake::TreeShake>>,
+        // The road planner's lifted view (`townsfolk` design 42n).
+        Option<Res<pbd_app::roads::planner::PlannerLift>>,
     ),
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
@@ -509,7 +586,7 @@ pub fn dig_and_place(
         // Absent in a still capture, which has no husbandry.
         Option<ResMut<pbd_app::husbandry::AimedGround>>,
     ),
-    (mut note, farm, mut gained, mut planted, gather, effects, mut did): (
+    (mut note, farm, mut gained, mut planted, gather, effects, mut did, mut lift): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
@@ -517,21 +594,39 @@ pub fn dig_and_place(
         Res<pbd_app::config::GatherConfig>,
         Option<Res<pbd_app::kitchen::MealEffects>>,
         MessageWriter<pbd_app::missions::Did>,
+        Option<ResMut<pbd_app::walking::Lift>>,
     ),
 ) {
     if let Some(ground) = ground.as_mut() {
         ground.0 = None;
     }
-    // The tool in hand chops while a block is being broken: last frame's
-    // answer, a frame behind, which nobody can see.
-    let breaking = mining.progress().is_some();
-    if let Some(mut swinging) = swinging
-        && swinging.0 != breaking
-    {
-        swinging.0 = breaking;
-    }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
+    // The tool in hand strokes on the dig's beat (`held-swing` decision 5):
+    // last frame's answer, a frame behind, which nobody can see. While a
+    // block breaks, its time and how far in; in the pause after it, on
+    // past the break.
+    if let Some(mut swinging) = swinging {
+        let was = swinging.0;
+        let beat = match mining.breaking.timing() {
+            Some((break_s, elapsed_s)) => pbd_app::held::stroke::DigBeat {
+                working: true,
+                break_s,
+                between_s: between,
+                local_s: elapsed_s,
+            },
+            None if was.working && mining.breaking.pause_left() > 0.0 => {
+                pbd_app::held::stroke::DigBeat {
+                    local_s: was.break_s + (between - mining.breaking.pause_left()).max(0.0),
+                    ..was
+                }
+            }
+            None => pbd_app::held::stroke::DigBeat::default(),
+        };
+        if was != beat {
+            swinging.0 = beat;
+        }
+    }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         mining.breaking.step(dt, false, None, between);
         return;
@@ -553,7 +648,15 @@ pub fn dig_and_place(
     // world should have answered.
     let mut unsampled = None;
     let mut solid_m: Option<f32> = None;
-    let target = aim::march(eye, look, |point| {
+    // From the road planner's lifted eye the ray reaches the ground the
+    // view shows, and only aims: nothing is dug from up there.
+    let lifted = planner_lift.as_deref().is_some_and(|l| l.lifted());
+    let reach = if lifted {
+        pbd_app::roads::planner::LIFTED_REACH_M
+    } else {
+        aim::REACH_M
+    };
+    let target = aim::march_to(eye, look, reach, |point| {
         let sample = sample_at(&fine, &contact, point);
         if sample.is_none() && unsampled.is_none() {
             unsampled = why_unsampled(&contact, point);
@@ -564,6 +667,14 @@ pub fn dig_and_place(
         sample
     });
     aimed.target = target;
+    if lifted {
+        if let Some(ground) = ground.as_mut() {
+            ground.0 = target.map(|t| eye + look * t.distance);
+        }
+        aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
+        return;
+    }
     // What breaks: bare hands dig soft ground (`tool-crafting` decision 1),
     // a tool at its tier; the rod nothing.
     let digger = if tools.bare_handed() {
@@ -574,7 +685,9 @@ pub fn dig_and_place(
     // A tree's trunk nearer than the ground is worked for a log (decision 3).
     if buttons.pressed(MouseButton::Left)
         && digger.is_some()
-        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M))
+        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M), |cell| {
+            tree_standing(&edits, gather.0.axe_logs, cell)
+        })
     {
         let by_axe = matches!(digger, Some(Digger::Tool(Tool::Axe, _)));
         let wood = dig.0.wood.axe;
@@ -587,6 +700,16 @@ pub fn dig_and_place(
         let step = mining
             .breaking
             .step(dt, true, Some(((tree, TREE_LAYER), secs)), between);
+        // A hit shakes the tree: each log, and every half second the button
+        // is held on it (`tree-punch-shake` design 4).
+        let now = time.elapsed_secs();
+        if let Some(shake) = shake.as_mut()
+            && (matches!(step, Step::Broken(_)) || shake.due(tree, now))
+            && let Some(id) = pbd_app::tree_shake::tree_id(&fine, tree)
+        {
+            shake.hit(tree, id, now);
+            debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
+        }
         if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
@@ -629,7 +752,7 @@ pub fn dig_and_place(
     let block = (target.dig.cell, target.dig.layer);
     let rooted = under_standing_tree(&fine, &edits, gather.0.axe_logs, block);
     if rooted && buttons.just_pressed(MouseButton::Left) && digger.is_some() {
-        note.say(time.elapsed_secs(), "Cut down the tree first");
+        note.say(time.elapsed_secs(), tr("farm.tree_first"));
     }
     let held = buttons.pressed(MouseButton::Left) && digger.is_some() && !rooted;
     let secs = match digger {
@@ -646,10 +769,11 @@ pub fn dig_and_place(
     {
         let wall_s = time.elapsed_secs();
         match why {
-            Refusal::NotByHand => note.say(wall_s, "Too hard to dig by hand"),
-            Refusal::TierTooLow(tier) => {
-                note.say(wall_s, format!("Needs a {} pickaxe", tier.name()))
-            }
+            Refusal::NotByHand => note.say(wall_s, tr("digging.by_hand")),
+            Refusal::TierTooLow(tier) => note.say(
+                wall_s,
+                tr_with("digging.needs_pickaxe", &[("tier", &tier.name())]),
+            ),
             Refusal::NotADiggingTool | Refusal::NotABlock => {}
         }
     }
@@ -665,7 +789,10 @@ pub fn dig_and_place(
         if let Some(row) = was.and_then(pbd_core::station::station_of)
             && super::farm::station_state(&edits, cell, layer as u16, row).busy()
         {
-            note.say(wall_s, format!("Empty the {} first", row.name));
+            note.say(
+                wall_s,
+                tr_with("digging.empty_first", &[("station", &row.name())]),
+            );
             return;
         }
         // Dug grass turns up a seed, one cell in a few (decision 14).
@@ -685,12 +812,22 @@ pub fn dig_and_place(
                 .any(|&(l, e)| usize::from(l) == layer && e == m)
         });
         let find = was.and_then(|m| gather.0.find(m, cell, layer as u16, placed));
-        // Bait worms out of wet ground at the shore (`starter-missions` G1).
-        let bait = was.and_then(|m| {
-            gather
-                .0
-                .bait(m, cell, layer as u16, placed, column::layer_altitude(layer))
+        // Bait worms out of earth by a river or the sea (`starter-missions`
+        // G1, `dig-fixes` 2).
+        let bait = was.filter(|_| !placed).and_then(|m| {
+            // Any earth, by the water or not (owner, 2026-11-19: "make bait
+            // show up in all dirt blocks", "1 in 5 dirt blocks have worm").
+            gather.0.bait(m, cell, layer as u16, placed, true)
         });
+        // What an ore cell gives when it is not a block (coal): counted as
+        // gathered at the cut, as a dug block is (`mission-playthrough` 3.1).
+        let ore_good = was
+            .filter(|m| *m == Material::Ore)
+            .map(|m| yield_of(&edits, m, cell, layer))
+            .and_then(|item| match item {
+                Item::Good(good) => Some(good),
+                _ => None,
+            });
         let hands = if seed.is_none() && find.is_none() && bait.is_none() {
             Hands::Take
         } else {
@@ -720,7 +857,6 @@ pub fn dig_and_place(
                     count: 1,
                     how: pbd_app::hotbar::How::Found,
                 });
-                note.say(wall_s, format!("Found {}", good.name()));
             }
             if taken == Material::Tilled {
                 super::farm::uproot(&mut edits, &slots.0, cell);
@@ -730,12 +866,19 @@ pub fn dig_and_place(
                 pbd_core::missions::Kind::Gather,
                 taken,
             ));
+            if let Some(good) = ore_good {
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Gather,
+                    good.code(),
+                    1,
+                ));
+            }
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
                 match digger {
                     Some(Digger::Tool(tool, tier)) => pbd_core::inventory::tool_title(tool, tier),
-                    _ => "bare hands".to_string(),
+                    _ => pbd_core::locale::tr("equipment.bare"),
                 },
                 secs.unwrap_or(0.0),
                 fine.version
@@ -860,13 +1003,24 @@ pub fn dig_and_place(
                 "PLACE refused: a crop grows in cell {} layer {}",
                 place.cell, place.layer
             );
-            note.say(wall_s, "Something is planted here");
+            note.say(wall_s, tr("digging.planted"));
             return;
         }
         // A block may not be placed into the player. Sealing yourself into
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
-        if occupies(&fine, &contact, eye, place) {
+        // Under the player's own feet, with room over the head to rise
+        // into: placed, and the player lifted onto it (`place-underfoot`).
+        let underfoot = underfoot(&contact, eye, place);
+        if underfoot && !head_room(&fine, &edits, place) {
+            info!(
+                "PLACE refused: no room over the head to stand on {material:?} at cell {} layer {}",
+                place.cell, place.layer
+            );
+            note.say(wall_s, tr("digging.no_room_above"));
+            return;
+        }
+        if !underfoot && occupies(&fine, &contact, eye, place) {
             info!(
                 "PLACE refused: {material:?} into cell {} layer {} is where the player stands",
                 place.cell, place.layer
@@ -890,9 +1044,19 @@ pub fn dig_and_place(
         .is_some()
         {
             info!(
-                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}",
-                place.cell, place.layer, fine.version
+                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}{}",
+                place.cell,
+                place.layer,
+                fine.version,
+                if underfoot {
+                    ", under the feet: lifted"
+                } else {
+                    ""
+                }
             );
+            if underfoot && let Some(lift) = lift.as_mut() {
+                lift.0 = 1.0;
+            }
             did.write(pbd_app::missions::Did::block(
                 pbd_core::missions::Kind::Place,
                 material,
@@ -911,7 +1075,17 @@ pub fn dig_and_place(
 /// reach, by its cell's key: a vertical column at the centre of a cell that
 /// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
 /// the trunk's width low down and the canopy's higher up.
-pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> Option<u32> {
+///
+/// Only a tree `standing` says still stands: a felled tree is not drawn, and
+/// its trunk taking the ray left the ground where it stood undiggable by any
+/// tool (`dig-fixes` 1).
+pub fn tree_on_ray(
+    fine: &PlanetFine,
+    eye: Vec3,
+    look: Vec3,
+    before_m: f32,
+    standing: impl Fn(u32) -> bool,
+) -> Option<u32> {
     let reach = before_m.min(aim::REACH_M);
     let toward = eye.normalize_or(Vec3::Y);
     let near = ((aim::REACH_M + 3.0) / PLANET_RADIUS).cos();
@@ -956,7 +1130,10 @@ pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> O
                 continue;
             }
             let height = (rel + look * t).dot(up);
-            if (low..=high).contains(&height) && best.is_none_or(|(bt, _)| t < bt) {
+            if (low..=high).contains(&height)
+                && best.is_none_or(|(bt, _)| t < bt)
+                && standing(record.key())
+            {
                 best = Some((t, record.key()));
             }
         }
@@ -985,10 +1162,8 @@ fn take_log(
         .and_then(|r| r.read())
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
-        // Nothing to say (owner, 2026-11-17: the line "sounds like AI writing").
-        Err(TreeSpent::BranchTaken) => return,
         Err(TreeSpent::Felled) => {
-            note.say(wall_s, "No more wood");
+            note.say(wall_s, tr("digging.no_wood"));
             return;
         }
         Ok(()) => {}
@@ -996,7 +1171,7 @@ fn take_log(
     let log = Item::Good(pbd_core::goods::Good::LOG);
     let mut moved = slots.0.clone();
     if moved.give(log, 1) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return;
     }
     let record = pbd_core::records::Record::of(
@@ -1017,17 +1192,11 @@ fn take_log(
         count: 1,
         how: pbd_app::hotbar::How::Found,
     });
-    note.say(
-        wall_s,
-        if by_axe {
-            "+1 log"
-        } else {
-            "+1 log: a branch pulled down"
-        },
-    );
+    // The toast says it (`item-toasts` decision 6).
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
-    // The axe's last log fells the tree (`starter-missions` H.1).
-    if by_axe && gather.0.tree_gives(taken.logs + 1, true).is_err() {
+    // The last log fells the tree, by axe or by hand (`starter-missions`
+    // H.1; `tree-punch-shake` decision 2).
+    if gather.0.tree_gives(taken.logs + 1, by_axe).is_err() {
         did.write(pbd_app::missions::Did::new(
             pbd_core::missions::Kind::Fell,
             "tree",
@@ -1045,6 +1214,28 @@ fn take_log(
 /// player. Only those cells: the layer alone refused every block set on
 /// level ground beside the player, a workbench or a campfire included
 /// (`step-videos` 5.2, found by the showcase's bot).
+/// Whether `place` is the block the feet stand in, in the player's own
+/// cell (the cell under the eye): the one place a block may go into the
+/// player, who is then lifted onto it (`place-underfoot` design 1).
+fn underfoot(contact: &PlanetContact, eye: Vec3, place: Sample) -> bool {
+    let altitude = eye.length() - PLANET_RADIUS;
+    let Some(head) = column::layer_at(altitude) else {
+        return false;
+    };
+    let feet = head.saturating_sub(1);
+    place.layer == feet && contact.finest_key(eye.normalize_or(Vec3::Y)) == Some(place.cell)
+}
+
+/// Whether the two layers over a block set under the feet are open: the
+/// body's room once lifted onto it (owner, 2026-11-20: "there MUST BE
+/// HEADROOM ABOVE TO PLACE A BLOCK ON YOUR FEET").
+fn head_room(fine: &PlanetFine, save: &WorldSave, place: Sample) -> bool {
+    (place.layer + 1..=place.layer + 2).all(|layer| {
+        material_of(fine, save, (place.cell, layer))
+            .is_some_and(|m| m == Material::Air || m.is_water() || m.is_lamp())
+    })
+}
+
 fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample) -> bool {
     let altitude = eye.length() - PLANET_RADIUS;
     let Some(head) = column::layer_at(altitude) else {
@@ -1481,6 +1672,438 @@ mod placed_tests {
             );
             // And the sand under it is still the desert's sand.
             assert_eq!(built.material(under), Material::Sand);
+        }
+    }
+}
+
+/// `sand-tiles` design 5 (c): sand dug in a desert is desert sand.
+#[cfg(test)]
+mod desert_sand_tests {
+    use super::*;
+    use pbd_app::planet::terrain_config;
+    use pbd_core::cell_key::{self, Address};
+    use pbd_core::edits::Edit;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::planet_gen::{self, Biome};
+
+    /// The first finest cell, on a sparse sweep of the lattice, whose
+    /// generated top is sand in `biome` above the sea: its key, direction and
+    /// top layer.
+    fn sand_cell(biome: Biome) -> (u32, Vec3, usize) {
+        let cfg = terrain_config();
+        let level = cell_key::LAST_LEVEL;
+        let side = 1u32 << level;
+        for face in 0..20u8 {
+            for i in (1..side).step_by(29) {
+                for j in (1..side - i).step_by(31) {
+                    let a = Address { face, level, i, j };
+                    let Some(key) = cell_key::key(a) else {
+                        continue;
+                    };
+                    let d = cell_key::direction(a);
+                    let surface = column::surface_m(cfg, d);
+                    if surface >= cfg.sea_level_m
+                        && planet_gen::biome_at(cfg, d, surface) == biome
+                        && planet_gen::top_material(cfg, d, surface) == Material::Sand
+                        && pbd_core::settlement::ground::top(cfg, d).is_none()
+                    {
+                        let top = column::generate_solid(cfg, d).surface().unwrap();
+                        return (key, d, top);
+                    }
+                }
+            }
+        }
+        panic!("the shipped world has {biome:?} sand");
+    }
+
+    /// Dug in the dunes, put back in the dunes: desert sand, drawn from the
+    /// desert sheet, and dug again, desert sand.
+    #[test]
+    fn sand_dug_in_the_dunes_is_desert_sand() {
+        let cfg = terrain_config();
+        let (cell, d, top) = sand_cell(Biome::Desert);
+        let mut save = WorldSave::memory_only();
+        let generated = column::generate_edited_solid(cfg, d, save.edits.for_cell(cell));
+        assert_eq!(
+            generated.material(top),
+            Material::Sand,
+            "generation is untouched"
+        );
+        assert_eq!(
+            yield_of(&save, Material::Sand, cell, top),
+            Item::Block(Material::DesertSand)
+        );
+        // Dug, then put back.
+        for material in [Material::Air, Material::DesertSand] {
+            assert!(save.accept(
+                Edit {
+                    cell,
+                    layer: top as u16,
+                    material,
+                },
+                None,
+                &Slots::new()
+            ));
+        }
+        let built = column::generate_edited_solid(cfg, d, save.edits.for_cell(cell));
+        assert_eq!(built.material(top), Material::DesertSand);
+        assert_eq!(
+            pbd_app::planet::column::placed_sheet(&built, top),
+            pbd_app::planet::tileset_slot(Biome::Desert) + 1,
+            "drawn from the desert sheet"
+        );
+        assert_eq!(
+            yield_of(&save, Material::DesertSand, cell, top),
+            Item::Block(Material::DesertSand)
+        );
+    }
+
+    /// Dug on the beach: sand. And sand PLACED in the dunes is still sand.
+    #[test]
+    fn beach_sand_and_placed_sand_dig_as_sand() {
+        let (beach, _, top) = sand_cell(Biome::Beach);
+        let save = WorldSave::memory_only();
+        assert_eq!(
+            yield_of(&save, Material::Sand, beach, top),
+            Item::Block(Material::Sand)
+        );
+        let (cell, _, top) = sand_cell(Biome::Desert);
+        let mut save = WorldSave::memory_only();
+        assert!(save.accept(
+            Edit {
+                cell,
+                layer: top as u16 + 1,
+                material: Material::Sand,
+            },
+            None,
+            &Slots::new()
+        ));
+        assert_eq!(
+            yield_of(&save, Material::Sand, cell, top + 1),
+            Item::Block(Material::Sand)
+        );
+    }
+}
+
+/// `dig-fixes` 1: a felled tree no longer takes the dig. Through
+/// `dig_and_place` itself, on the shipped world's ground.
+#[cfg(test)]
+mod felled_tree_tests {
+    use super::*;
+    use bevy::time::TimeUpdateStrategy;
+    use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeTaken};
+    use std::time::Duration;
+
+    /// A tree near the fields spawn on level ground, and an eye a pace east
+    /// of it: the tree's key, the ground at its foot, and the eye.
+    fn tree_and_eye(fine: &PlanetFine, anchor: Vec3) -> (u32, Vec3, Vec3) {
+        fine.set
+            .finest_records()
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| {
+                pbd_core::flora::grows_tree(
+                    &pbd_app::planet::terrain_config().trees,
+                    r.spare[0],
+                    r.metadata[1],
+                )
+            })
+            .filter(|(_, r)| r.direction_height[3] > 2.0)
+            .filter(|(record, _)| fine.set.columns.column(*record).is_some())
+            .filter_map(|(_, r)| {
+                let d = Vec3::from_slice(&r.direction_height[..3]).normalize();
+                let base = d * (PLANET_RADIUS + r.direction_height[3]);
+                let east = Vec3::Y.cross(d).normalize();
+                let stand_d = (base + east * 1.7).normalize();
+                let h = surface_height(stand_d);
+                ((h - r.direction_height[3]).abs() < 0.3).then(|| {
+                    let eye = stand_d * (PLANET_RADIUS + h + pbd_app::walking::EYE_HEIGHT);
+                    (r.key(), base, eye, d.distance(anchor))
+                })
+            })
+            .min_by(|a, b| a.3.total_cmp(&b.3))
+            .map(|(k, base, eye, _)| (k, base, eye))
+            .expect("a tree near the spawn")
+    }
+
+    /// Hold the left button with a shovel for `frames`, looking at the foot
+    /// of a tree that is felled or standing: the logs the tree has given and
+    /// the cells dug.
+    fn hold_at_the_foot(felled: bool, frames: usize) -> (u16, usize) {
+        let anchor = super::super::spawn_direction(&super::super::Launch::parse(&[
+            "--walk".into(),
+            "--spawn".into(),
+            "fields".into(),
+        ]));
+        let (fine, contact) = pbd_app::planet::test_ground(anchor);
+        let (tree, base, eye) = tree_and_eye(&fine, anchor);
+        let gather = pbd_app::config::GatherConfig::default();
+        let mut save = WorldSave::memory_only();
+        let hotbar = super::super::slots::Hotbar::restore(&mut save);
+        if felled {
+            let record = pbd_core::records::Record::of(
+                TREE_KIND,
+                u64::from(tree),
+                TREE_SCHEMA,
+                &TreeTaken {
+                    logs: gather.0.axe_logs,
+                },
+            );
+            assert!(save.store_with_hands(record, TREE_SCHEMA, &hotbar.0));
+        }
+        let mut tools = pbd_app::fish::ToolSlot::default();
+        assert!(tools.0.hold(Tool::Shovel));
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 60.0,
+            )))
+            .insert_resource(fine)
+            .insert_resource(contact)
+            .insert_resource(save)
+            .insert_resource(hotbar)
+            .insert_resource(tools)
+            .insert_resource(gather)
+            .insert_resource(pbd_app::walking::WalkingReadout {
+                active: true,
+                captured: true,
+                ..default()
+            })
+            .insert_resource(pbd_app::sky::Sun::default())
+            .init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<Aim>()
+            .init_resource::<Mining>()
+            .init_resource::<NearField>()
+            .init_resource::<Drops>()
+            .init_resource::<pbd_app::config::DigConfig>()
+            .init_resource::<pbd_app::config::FarmConfig>()
+            .init_resource::<super::super::farm::FarmNote>()
+            .add_message::<pbd_app::hotbar::Gained>()
+            .add_message::<pbd_app::hotbar::Planted>()
+            .add_message::<pbd_app::missions::Did>()
+            .add_systems(First, |mut b: ResMut<ButtonInput<MouseButton>>| b.clear())
+            .add_systems(Update, dig_and_place);
+        let up = eye.normalize();
+        let at = Transform::from_translation(eye).looking_at(base, up);
+        app.world_mut()
+            .spawn((Camera3d::default(), Camera::default(), at));
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        for _ in 0..frames {
+            app.update();
+        }
+        let save = app.world().resource::<WorldSave>();
+        let logs = save
+            .records
+            .get(TREE_KIND, u64::from(tree))
+            .and_then(|r| r.read::<TreeTaken>())
+            .map_or(0, |t| t.logs);
+        (logs, save.edits.all().len())
+    }
+
+    /// Standing, the tree takes the hold and gives a log, and the ground
+    /// under it holds. Felled, the hold goes on to the ground and digs it:
+    /// before `dig-fixes`, the felled tree's invisible trunk took every
+    /// stroke ("No more wood") and nothing was dug.
+    #[test]
+    fn the_ground_at_a_felled_tree_s_foot_digs() {
+        let (logs, dug) = hold_at_the_foot(false, 200);
+        assert_eq!(logs, 1, "a standing tree is worked by the hold");
+        assert_eq!(dug, 0, "and its ground is not dug");
+        let axe_logs = pbd_app::config::GatherConfig::default().0.axe_logs;
+        let (logs, dug) = hold_at_the_foot(true, 120);
+        assert_eq!(logs, axe_logs, "a felled tree gives nothing more");
+        assert!(dug > 0, "the ground where it stood digs");
+    }
+}
+
+/// `dig-fixes` 2: bait from earth by a river or the sea, on the shipped
+/// world's own ground, and the mission counting it.
+#[cfg(test)]
+mod bait_tests {
+    use super::*;
+    use pbd_core::gather::GatherSettings;
+
+    fn earth(m: Material) -> bool {
+        matches!(
+            m,
+            Material::Grass
+                | Material::DryGrass
+                | Material::JungleGrass
+                | Material::Soil
+                | Material::Dirt
+                | Material::Sand
+        )
+    }
+
+    /// Over a fine set: the earth tops beside water whose top water layer
+    /// passes `which` (a direct neighbour, the top at most 3 m over the
+    /// water's), and the earth tops more than 30 m from any water at all,
+    /// each as its cell and top layer.
+    #[allow(clippy::type_complexity)]
+    fn beside_and_far(
+        fine: &PlanetFine,
+        which: impl Fn(usize) -> bool,
+    ) -> (Vec<(u32, usize)>, Vec<(u32, usize)>) {
+        let records = fine.set.finest_records();
+        let dir = |r: usize| Vec3::from_slice(&records[r].direction_height[..3]).normalize();
+        let water_top = |r: usize| {
+            let column = fine.set.columns.column(r)?;
+            (0..column::LAYERS)
+                .rev()
+                .find(|&l| column.material(l).is_water())
+        };
+        let wet: Vec<(usize, usize)> = (0..records.len())
+            .filter_map(|r| water_top(r).map(|top| (r, top)))
+            .collect();
+        let mut beside = Vec::new();
+        let mut far = Vec::new();
+        for (r, record) in records.iter().enumerate() {
+            let Some(column) = fine.set.columns.column(r) else {
+                continue;
+            };
+            let Some(top) = column.surface() else {
+                continue;
+            };
+            if !earth(column.material(top)) || column.material(top + 1) != Material::Air {
+                continue;
+            }
+            let next_to = fine.set.finest_neighbors[r].iter().any(|&n| {
+                n != u32::MAX
+                    && water_top(n as usize).is_some_and(|w| which(w) && top >= w && top <= w + 3)
+            });
+            if next_to {
+                beside.push((record.key(), top));
+            }
+            // Far: 30 m from every water cell the tier holds, and inside the
+            // tier by four cells, so no water past its edge is in reach.
+            let d = dir(r);
+            let within = (30.0 / PLANET_RADIUS).cos();
+            let mut ring = vec![r];
+            let mut inside = true;
+            for _ in 0..4 {
+                ring = ring
+                    .iter()
+                    .flat_map(|&k| fine.set.finest_neighbors[k])
+                    .filter(|&n| n != u32::MAX)
+                    .map(|n| n as usize)
+                    .collect();
+                inside &=
+                    ring.len() >= 5 && ring.iter().all(|&k| fine.set.columns.column(k).is_some());
+            }
+            if inside && wet.iter().all(|&(w, _)| d.dot(dir(w)) < within) {
+                far.push((record.key(), top));
+            }
+        }
+        (beside, far)
+    }
+
+    /// Every earth top beside the water is by it, about a third give bait,
+    /// and none far from water is (`dig-fixes` 2).
+    fn check(fine: &PlanetFine, which: impl Fn(usize) -> bool, place: &str) {
+        let save = WorldSave::memory_only();
+        let g = GatherSettings::default();
+        let (beside, far) = beside_and_far(fine, which);
+        assert!(
+            beside.len() >= 6,
+            "{place}: {} earth cells beside",
+            beside.len()
+        );
+        assert!(!far.is_empty(), "{place}: no earth far from water");
+        let mut baits = 0;
+        for &(cell, top) in &beside {
+            assert!(
+                by_water(fine, &save, &g, (cell, top)),
+                "{place}: cell {cell}"
+            );
+            let m = material_of(fine, &save, (cell, top)).unwrap();
+            if g.bait(m, cell, top as u16, false, true).is_some() {
+                baits += 1;
+            }
+            assert_eq!(g.bait(m, cell, top as u16, true, true), None, "placed");
+        }
+        assert!(
+            baits > 0 && baits < beside.len(),
+            "{place}: {baits} of {}",
+            beside.len()
+        );
+        for &(cell, top) in &far {
+            assert!(
+                !by_water(fine, &save, &g, (cell, top)),
+                "{place}: far cell {cell}"
+            );
+        }
+    }
+
+    /// A river inland, its water metres over the sea: the river run's own
+    /// spawn, in a river near its source.
+    #[test]
+    fn earth_by_a_river_inland_gives_bait() {
+        let anchor =
+            super::super::spawn_direction(&super::super::Launch::parse(&["--walk-river".into()]));
+        let (fine, _) = pbd_app::planet::test_ground(anchor);
+        // Water whose top is 3 m and more over the sea's level: a river's.
+        check(&fine, |w| column::layer_altitude(w) >= 3.0, "river");
+    }
+
+    /// The shore: the ground at the sea's waterline nearest the default
+    /// spawn, the sea's water at its level.
+    #[test]
+    fn earth_by_the_sea_gives_bait() {
+        let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let shore = pbd_app::planet::nearest_ground_near(default, 0.5..4.0).expect("a shore");
+        let (fine, _) = pbd_app::planet::test_ground(shore);
+        let sea = column::layer_at(-0.5).unwrap();
+        check(&fine, |w| w == sea, "sea");
+    }
+
+    /// Three baits dug while "Dig for bait" is open, each raised as the dig
+    /// raises a find (`Gained`, one, `Found`), meet its `dig bait 3`.
+    #[test]
+    fn three_baits_dug_meet_the_mission() {
+        use pbd_app::missions::{MissionChain, Missions};
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (recipes, _) = pbd_app::config::recipe_book();
+        app.insert_resource(recipes)
+            .insert_resource(pbd_app::config::FaunaConfig(
+                ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap(),
+            ))
+            .insert_resource(pbd_app::config::HusbandryConfig(Default::default()))
+            .insert_resource(WorldSave::memory_only())
+            .insert_resource(pbd_app::hotbar::Hotbar::default())
+            .insert_resource(pbd_app::fish::ToolSlot(
+                pbd_core::inventory::Equipment::new_world(),
+            ))
+            .add_plugins(pbd_app::missions::MissionsPlugin);
+        app.update();
+        // Everything "Dig for bait" needs, done.
+        let chain = app.world().resource::<MissionChain>().0.clone();
+        let mut need = chain.get("bait").expect("the bait mission").needs.clone();
+        while let Some(id) = need.pop() {
+            let mut missions = app.world_mut().resource_mut::<Missions>();
+            if missions.progress.done.insert(id.clone()) {
+                need.extend(chain.get(&id).map(|m| m.needs.clone()).unwrap_or_default());
+            }
+        }
+        app.update();
+        let bait = chain.get("bait").unwrap();
+        let dug = |app: &App| app.world().resource::<Missions>().progress.counts(bait)[0];
+        assert_eq!(dug(&app), 0);
+        assert_eq!(
+            pbd_core::missions::item_code(Item::Good(Good::BAIT)),
+            "bait"
+        );
+        for n in 1..=3 {
+            app.world_mut().write_message(pbd_app::hotbar::Gained {
+                item: Item::Good(Good::BAIT),
+                count: 1,
+                how: pbd_app::hotbar::How::Found,
+            });
+            app.update();
+            assert_eq!(dug(&app), n, "bait {n}");
         }
     }
 }

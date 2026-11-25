@@ -1,0 +1,153 @@
+// What everything is worth, in whole coins (`townsfolk` design 6), and the
+// group a town's need for it is read by (`trade.ron`).
+//
+// APPEND-ONLY, like the goods table: never drop or rename a row; retune a
+// value in place, add a new item as a new row at the end. A test
+// (`pbd_core::economy` tests) fails while any good, block, tool or fish the
+// game knows has no row, and while a row shipped before is missing.
+//
+// Codes: a good's code; `block:<name>` by the block's English name;
+// `tool:<code>`; `fish:<species id>` from `fauna.ron`.
+(
+    values: [
+        // ---- goods: crops and seeds
+        ("wheat-seed", 1, seed),
+        ("wheat", 3, crop),
+        ("turnip-seed", 1, seed),
+        ("turnip", 3, crop),
+        ("frost-kale-seed", 2, seed),
+        ("frost-kale", 4, crop),
+        ("chili-seed", 2, seed),
+        ("chili", 4, crop),
+        // ---- goods: smelting
+        ("coal", 3, ore),
+        ("tin-ore", 4, ore),
+        ("copper-ingot", 10, ore),
+        ("iron-ingot", 14, ore),
+        ("bronze-ingot", 18, ore),
+        // ---- goods: husbandry
+        ("fence", 4, wood),
+        ("gate", 6, wood),
+        ("egg", 3, herd),
+        ("wool", 5, herd),
+        ("milk", 4, herd),
+        // ---- goods: by hand
+        ("fibre", 1, crop),
+        ("stone", 1, stone),
+        ("log", 3, wood),
+        ("planks", 2, wood),
+        ("rope", 3, goods),
+        // ---- goods: dishes
+        ("grilled-fish", 9, dish),
+        ("chili-fish", 12, dish),
+        ("flatbread", 6, dish),
+        ("roast-turnip", 7, dish),
+        ("kale-skewer", 8, dish),
+        ("fried-egg", 6, dish),
+        ("roast-meat", 12, dish),
+        // ---- goods: water, eggs, fruit
+        ("bucket", 6, goods),
+        ("water-bucket", 6, goods),
+        ("fertile-egg", 5, herd),
+        ("incubator", 30, goods),
+        ("apple", 2, fruit),
+        ("pear", 2, fruit),
+        ("plum", 2, fruit),
+        ("cherry", 2, fruit),
+        ("mango", 3, fruit),
+        ("papaya", 3, fruit),
+        ("marula", 3, fruit),
+        ("baobab", 3, fruit),
+        ("pine-cone", 1, wood),
+        ("bait", 1, goods),
+        ("inner-tube", 25, goods),
+        ("raft", 20, goods),
+        ("rowboat", 60, goods),
+        ("glowing-mushroom", 4, fruit),
+        ("leather", 8, herd),
+        // ---- blocks
+        ("block:stone", 1, stone),
+        ("block:soil", 1, stone),
+        ("block:grass", 1, stone),
+        ("block:ore", 4, ore),
+        ("block:sand", 1, stone),
+        ("block:dry grass", 1, stone),
+        ("block:jungle grass", 1, stone),
+        ("block:snow", 1, stone),
+        ("block:rock", 1, stone),
+        ("block:dirt", 1, stone),
+        ("block:torch", 3, light),
+        ("block:street lantern", 12, light),
+        ("block:wall lantern", 10, light),
+        ("block:hanging lantern", 10, light),
+        ("block:brazier", 15, light),
+        ("block:candle", 4, light),
+        ("block:tilled soil", 1, stone),
+        ("block:forge", 30, goods),
+        ("block:workbench", 15, goods),
+        ("block:campfire", 6, light),
+        ("block:reef rock", 2, stone),
+        ("block:sea ice", 1, stone),
+        ("block:basalt", 2, stone),
+        ("block:mussel bed", 3, fish),
+        ("block:sticks", 1, wood),
+        ("block:desert sand", 1, stone),
+        // ---- tools
+        ("tool:rod", 12, tool),
+        ("tool:shovel", 10, tool),
+        ("tool:pickaxe", 12, tool),
+        ("tool:axe", 12, tool),
+        // ---- fish, by `fauna.ron` id
+        ("fish:minnow", 2, fish),
+        ("fish:silverfin", 4, fish),
+        ("fish:perch", 5, fish),
+        ("fish:ray", 8, fish),
+        ("fish:eel", 7, fish),
+        ("fish:reef", 6, fish),
+        ("fish:deepback", 10, fish),
+        ("fish:serpent", 15, fish),
+        ("fish:shore_crab", 4, fish),
+        ("fish:lobster", 12, fish),
+        ("fish:giant_clam", 14, fish),
+        ("fish:reef_turtle", 16, fish),
+        ("fish:sea_otter", 12, fish),
+        ("fish:reed_dabbler", 5, fish),
+        ("fish:pond_diver", 5, fish),
+        ("fish:octopus", 12, fish),
+        ("fish:tube_worm", 3, fish),
+        ("fish:seal", 18, fish),
+        ("fish:beaver", 12, fish),
+        ("fish:river_otter", 12, fish),
+        // ---- townsfolk: a delivery's parcel (never traded, `trade.ron`)
+        ("parcel", 1, goods),
+        // ---- townsfolk design 31: crushed stone for a road
+        ("gravel", 1, stone),
+        // ---- townsfolk design 41: the gravel stations and their goods
+        ("crushed-stone", 1, stone),
+        ("survey-stakes", 1, wood),
+        ("block:grinder", 40, goods),
+        ("block:mixer", 35, goods),
+        // ---- land-transport design 10: the cart wheel and the two carts
+        ("wheel", 12, goods),
+        ("hand-cart", 45, goods),
+        ("horse-cart", 90, goods),
+        // ---- player-building design B8: a door, planks and an iron fitting
+        ("door", 24, goods),
+        // ---- goods: furniture (`furniture` design 2), by their planks.
+        ("chair", 10, goods),
+        ("stool", 6, goods),
+        ("bench", 12, goods),
+        ("table", 16, goods),
+        ("bed", 30, goods),
+        ("drawers", 20, goods),
+        ("closet", 26, goods),
+        ("chest", 18, goods),
+        ("banded-chest", 30, goods),
+        ("crate", 9, goods),
+        ("block:carpenter's bench", 40, goods),
+        // ---- building-planner design 3 and 6: the mallet (a log and a
+        // stone) and the drafting table (6 planks and 2 rope).
+        ("mallet", 4, goods),
+        ("block:drafting table", 22, goods),
+    ],
+)

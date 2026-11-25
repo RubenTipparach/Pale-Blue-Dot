@@ -18,6 +18,7 @@ use crate::sea::Sea;
 use crate::walking::{WalkingCamera, WalkingState};
 use bevy::prelude::*;
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::vehicle::{Craft, Kind};
 use pbd_core::{DQuat, DVec3};
 
@@ -41,7 +42,6 @@ pub struct TakingUp(pub Option<(Entity, f32)>);
 /// surface's radius and the point on it, or why not.
 pub(super) fn water_along(
     sea_radius: f32,
-    tide: Vec4,
     contact: Option<&PlanetContact>,
     eye: DVec3,
     look: DVec3,
@@ -51,11 +51,10 @@ pub(super) fn water_along(
         let p = eye + look * (k as f64 * 0.25);
         let r = p.length();
         let floor = ground_under(contact, p);
-        // A river's own surface, else the sea's with the tide on it.
-        let surface = contact.and_then(|c| fresh_water(c, p)).map_or_else(
-            || f64::from(sea_radius + pbd_core::sea::tide_m(p.normalize().as_vec3(), tide)),
-            |f| f.surface,
-        );
+        // A river's own surface, else the sea's.
+        let surface = contact
+            .and_then(|c| fresh_water(c, p))
+            .map_or(f64::from(sea_radius), |f| f.surface);
         if r <= surface + 0.1 && floor < surface - LAUNCH_DEPTH_M {
             let up = p.normalize();
             return Ok((surface, up * surface));
@@ -177,23 +176,17 @@ fn launch(world: &mut World) {
     let Some((eye, look)) = walking_eye(world) else {
         return;
     };
-    let (sea_radius, tide) = {
-        let sea = world.resource::<Sea>();
-        (sea.radius, sea.tide)
-    };
-    let found = water_along(
-        sea_radius,
-        tide,
-        world.get_resource::<PlanetContact>(),
-        eye,
-        look,
-    );
+    let sea_radius = world.resource::<Sea>().radius;
+    let found = water_along(sea_radius, world.get_resource::<PlanetContact>(), eye, look);
     let on = match found {
         Ok((_, on)) => on,
         Err(why) => {
             say(
                 world,
-                &format!("The {} goes on water: {why}", kind.name().to_lowercase()),
+                &tr_with(
+                    "launch.goes_on_water",
+                    &[("craft", &kind.lower_name()), ("why", &why)],
+                ),
             );
             return;
         }
@@ -203,7 +196,7 @@ fn launch(world: &mut World) {
     // The fleet first, with the new craft: a crash after it keeps the boat.
     if !write_fleet(world) {
         world.entity_mut(entity).despawn();
-        say(world, "The save did not take the launch");
+        say(world, &tr("launch.save_refused_launch"));
         return;
     }
     let good = kind.good_code().and_then(pbd_core::goods::Good::by_code);
@@ -218,7 +211,10 @@ fn launch(world: &mut World) {
     }
     world.resource_mut::<Hotbar>().0 = slots;
     world.resource_mut::<Fleet>().dirty = true;
-    say(world, &format!("{} launched", kind.name()));
+    say(
+        world,
+        &tr_with("launch.launched", &[("craft", &kind.name())]),
+    );
 }
 
 /// The made craft the look is on, nobody aboard, in reach.
@@ -267,7 +263,7 @@ fn take_up(world: &mut World, dt: f32) {
         .get_resource::<WorldSave>()
         .is_some_and(|save| !super::hold::read(save, id).is_empty());
     if full {
-        say(world, "Empty the hold first");
+        say(world, &tr("launch.empty_hold"));
         return;
     }
     let Some(good) = kind.good_code().and_then(pbd_core::goods::Good::by_code) else {
@@ -275,14 +271,14 @@ fn take_up(world: &mut World, dt: f32) {
     };
     let mut slots = world.resource::<Hotbar>().0.clone();
     if slots.give(Item::Good(good), 1) > 0 {
-        say(world, "No room in the pack");
+        say(world, &tr("farm.no_room"));
         return;
     }
     // The slots first, with the good: a crash after it keeps the boat.
     if let Some(mut save) = world.get_resource_mut::<WorldSave>()
         && !save.record_pack(&slots)
     {
-        say(world, "The save did not take it");
+        say(world, &tr("launch.save_refused"));
         return;
     }
     world.resource_mut::<Hotbar>().0 = slots;
@@ -290,7 +286,10 @@ fn take_up(world: &mut World, dt: f32) {
     if !write_fleet(world) {
         world.resource_mut::<Fleet>().dirty = true;
     }
-    say(world, &format!("{} taken up", kind.name()));
+    say(
+        world,
+        &tr_with("launch.taken_up", &[("craft", &kind.name())]),
+    );
 }
 
 #[cfg(test)]
@@ -313,7 +312,6 @@ mod tests {
         .as_dvec3();
         let land = water_along(
             sea.radius,
-            Vec4::ZERO,
             Some(&contact),
             start * (ground_under(Some(&contact), start * 4800.0) + 1.6),
             -start,
@@ -322,14 +320,8 @@ mod tests {
         let mut fleet = Fleet::new(Default::default());
         let berth = place::berth_near(&sea, start.as_vec3()).expect("water near the start");
         let eye = berth.normalize() * (f64::from(sea.radius) + 1.6);
-        let (surface, on) = water_along(
-            sea.radius,
-            Vec4::ZERO,
-            Some(&contact),
-            eye,
-            -berth.normalize(),
-        )
-        .expect("water");
+        let (surface, on) =
+            water_along(sea.radius, Some(&contact), eye, -berth.normalize()).expect("water");
         assert!((surface - f64::from(sea.radius)).abs() < 1e-3);
         let raft = made_craft(&mut fleet, Kind::Raft, on, DVec3::X);
         assert!(raft.made && raft.kind == Kind::Raft);

@@ -27,6 +27,7 @@ use pbd_core::fauna::{self, HOME_BODY, School, Species, Water, WaterClass};
 use pbd_core::fishing::{Angler, Controls, Event, Line, Phase};
 use pbd_core::goods::Good;
 use pbd_core::inventory::{Equipment, Item, Tool};
+use pbd_core::locale::{Localized, tr, tr_with};
 use pbd_core::sea::LocalSea;
 use pbd_core::world_frame::SimOrigin;
 use std::collections::HashMap;
@@ -78,6 +79,9 @@ pub struct Fishery {
     /// more readily, and a fish landed on it uses one (`starter-missions`
     /// G1).
     pub baited: bool,
+    /// Where the angler stood this frame, local: which way the fish on the
+    /// line is drawn running (`fish-behaviour`).
+    pub feet: Option<Vec3>,
 }
 
 /// How long a school takes to fade in when spawned, or out before it is
@@ -137,6 +141,7 @@ impl Default for Fishery {
             told_refusal: false,
             fades: HashMap::new(),
             baited: false,
+            feet: None,
         }
     }
 }
@@ -147,10 +152,17 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
-    /// The float is out and a right click reels it in: the interact prompt
-    /// shows that button under the crosshair (owner, 2026-11-16: "just have a
-    /// button prompt to right click to reel in").
-    pub reel_prompt: bool,
+    /// The fishing buttons, bottom left, while the rod is out at fishable
+    /// water: what the left and the right click do now, and whether each does
+    /// anything in this phase (owner, 2026-11-18: "need to show both right
+    /// and left click for fishing, and they both need to be on the left
+    /// corner of the screen"; `fishing-and-equipment`, "Both buttons, bottom
+    /// left").
+    pub keys: Option<[(&'static str, bool); 2]>,
+    /// The bite: the left click's row turns yellow and shakes (owner,
+    /// 2026-11-18: "when fish bites, the left click buton prompt should
+    /// highlight yellow and vibrate").
+    pub bite: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -185,12 +197,21 @@ pub struct FishPlugin;
 fn rebase_fishery(world: &mut World, shift: Vec3) {
     if let Some(mut fishery) = world.get_resource_mut::<Fishery>() {
         fishery.line.rebase(shift);
+        if let Some(feet) = fishery.feet.as_mut() {
+            *feet -= shift;
+        }
         for school in &mut fishery.schools {
             school.rebase(shift);
         }
     }
     if let Some(mut drawn) = world.get_resource_mut::<draw::DrawnFloat>() {
         drawn.rebase(shift);
+    }
+    if let Some(mut trail) = world.get_resource_mut::<draw::CastTrail>() {
+        trail.rebase(shift);
+    }
+    if let Some(mut swim) = world.get_resource_mut::<draw::DrawnSwim>() {
+        swim.rebase(shift);
     }
     if let Some(mut watch) = world.get_resource_mut::<WatchHook>()
         && let Some((eye, target)) = watch.view.as_mut()
@@ -210,6 +231,8 @@ impl Plugin for FishPlugin {
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
             .init_resource::<draw::DrawnFloat>()
+            .init_resource::<draw::CastTrail>()
+            .init_resource::<draw::DrawnSwim>()
             .init_resource::<draw::DrawnHeadings>()
             .add_systems(Startup, draw::spawn)
             .add_systems(
@@ -271,8 +294,7 @@ impl<'a> PlanetWater<'a> {
         let state = sea.state_at(air, direction);
         let local = sea
             .table
-            .local(&state, direction, sea.depth_at(direction), seconds)
-            .with_tide(sea.tide);
+            .local(&state, direction, sea.depth_at(direction), seconds);
         Self {
             sea,
             local,
@@ -305,10 +327,25 @@ pub fn fresh_top(contact: &PlanetContact, up: Vec3, floor: f32) -> Option<f32> {
     (top > sea_top + 0.25).then_some(crate::planet::PLANET_RADIUS + top)
 }
 
+/// How far over a sea-level flat the line counts the sea standing, m.
+const FLAT_WATER_M: f32 = 0.05;
+
 impl Water for PlanetWater<'_> {
     fn surface(&self, point: Vec3) -> f32 {
-        self.fresh(point)
-            .unwrap_or_else(|| self.sea.radius + self.local.height(point, self.sea.radius))
+        if let Some(fresh) = self.fresh(point) {
+            return fresh;
+        }
+        let sea = self.sea.radius + self.local.height(point, self.sea.radius);
+        // A flat at the sea's level is drawn under the sea, half a metre over
+        // the sheet's rest (the sheet sits low so a beach stands clear of the
+        // swell): a float coming down on it is on water, not dry ground
+        // (owner, 2026-11-19, a float on open water: "The float came down on
+        // dry ground"). Ground over the sea's level stays dry.
+        let bed = self.bed(point);
+        if bed <= crate::planet::PLANET_RADIUS + FLAT_WATER_M && bed > sea {
+            return bed + FLAT_WATER_M;
+        }
+        sea
     }
 
     fn bed(&self, point: Vec3) -> f32 {
@@ -361,6 +398,10 @@ struct Surroundings<'w, 's> {
     vehicle_cameras: Query<'w, 's, &'static GlobalTransform, With<crate::vehicles::VehicleCamera>>,
     /// Steady hands (`cooking` design S5).
     meals: Option<Res<'w, crate::kitchen::MealEffects>>,
+    /// Which side of the water the eye is on: no cast from under it
+    /// (`mission-playthrough` 3.6).
+    eye_water: Option<Res<'w, crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<'w, crate::config::WaterSettings>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -375,6 +416,10 @@ fn fish(
     mut save: Option<ResMut<WorldSave>>,
     mut did: MessageWriter<crate::missions::Did>,
     mut heard: MessageWriter<crate::audio::hooks::FishHeard>,
+    (tip_now, mut cue): (
+        Option<Res<crate::held::RodTipNow>>,
+        Option<ResMut<crate::held::RodCue>>,
+    ),
     mut was_aboard: Local<Option<Entity>>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
@@ -411,6 +456,7 @@ fn fish(
         return;
     };
     pbd_core::world_frame::check_local("angler", feet);
+    fishery.feet = Some(feet);
     let up = o.up_at(feet);
     let roster = world.fauna.0.roster(&world.body.0);
     let settings = &world.fauna.0;
@@ -482,19 +528,46 @@ fn fish(
             )
         }),
     };
+    let mut under = false;
+    let has_bait = hotbar
+        .as_deref()
+        .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
     if let (Some((eye, look, right, cam_up)), true) = (camera, rod && walking) {
         let buttons = world.buttons.as_deref();
         let pressed = |b| listening && buttons.is_some_and(|i| i.just_pressed(b));
+        // A line is not cast from under the water (owner, 2026-11-19: "the
+        // line casting shouldnt work underwater").
+        let sheet = crate::planet::PLANET_RADIUS
+            - world
+                .water_settings
+                .as_deref()
+                .map_or(0.5, |w| w.depth_offset_m);
+        under = crate::audio::hooks::eye_under_water(
+            o.query_point(eye),
+            world.eye_water.as_deref(),
+            sheet,
+        );
+        // Said when a cast is tried with nothing to put on the hook.
+        if !has_bait && fishery.line.phase == Phase::Ready && pressed(MouseButton::Left) {
+            status.say(tr("fishing.status.needs_bait"), 2.0);
+        }
         let controls = Controls {
-            pressed: pressed(MouseButton::Left),
+            // And never without a worm to put on the hook (owner,
+            // 2026-11-19: "do not allow fishing without bait").
+            pressed: pressed(MouseButton::Left)
+                && !((under || !has_bait) && fishery.line.phase == Phase::Ready),
             held: listening && buttons.is_some_and(|i| i.pressed(MouseButton::Left)),
             released: buttons.is_some_and(|i| i.just_released(MouseButton::Left)),
             reel_in: pressed(MouseButton::Right),
         };
         let angler = Angler {
-            // The rod model's own tip (`held.rs`): eye space, -z ahead.
+            // The rod tip as last drawn (`held.rs`, `RodTipNow`): eye
+            // space, -z ahead. A cast leaves from where the drawn-back tip is
+            // when the button comes up.
             tip: {
-                let t = crate::held::rod_tip();
+                let t = tip_now
+                    .as_deref()
+                    .map_or_else(crate::held::rod_tip, |t| t.0);
                 eye + right * t.x + cam_up * t.y - look * t.z
             },
             look,
@@ -541,6 +614,11 @@ fn fish(
             crate::sea::surface_gravity(),
             factor,
         );
+        if let Some(cue) = cue.as_deref_mut() {
+            cue.reeling = controls.held && fishery.line.phase == Phase::Hooked;
+            let to_float = (fishery.line.float - angler.tip).normalize_or_zero();
+            cue.pull = to_float.dot(right).clamp(-1.0, 1.0);
+        }
         for event in events {
             // The rod's sounds (`audio-and-ambience` build decision 5).
             heard.write(crate::audio::hooks::FishHeard {
@@ -548,6 +626,38 @@ fn fish(
                 at: o.query_point(fishery.line.float),
             });
             let float = o.query_point(fishery.line.float);
+            if let Some(cue) = cue.as_deref_mut() {
+                cue.events.push(event);
+            }
+            if let Event::Dry = event {
+                // What the line read where it came down (`mission-playthrough`:
+                // a float on open water said dry ground).
+                let q = o.query_point(fishery.line.float);
+                let up = q.normalize_or(Vec3::Y);
+                info!(
+                    "FISH_DRY at r {:.2} (alt {:.2}): surface {:.2}, bed {:.2}, fresh {:?}, sea radius {:.2}, column water {:?}",
+                    q.length(),
+                    q.length() - crate::planet::PLANET_RADIUS,
+                    water.surface(q) - crate::planet::PLANET_RADIUS,
+                    water.bed(q) - crate::planet::PLANET_RADIUS,
+                    water.fresh(q).map(|f| f - crate::planet::PLANET_RADIUS),
+                    sea.radius - crate::planet::PLANET_RADIUS,
+                    contact
+                        .and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS + 50.0))),
+                );
+                info!(
+                    "FISH_DRY ground: generated {:.2}, stand from above {:?}, stand at the sheet {:?}, column water at the bed {:?}",
+                    crate::planet::surface_height(up),
+                    contact.map(|c| c
+                        .stand(up * (crate::planet::PLANET_RADIUS + 20.0))
+                        .floor_radius
+                        - crate::planet::PLANET_RADIUS),
+                    contact
+                        .map(|c| c.stand(up * sea.radius).floor_radius
+                            - crate::planet::PLANET_RADIUS),
+                    contact.and_then(|c| c.column_water(up * (crate::planet::PLANET_RADIUS - 2.0))),
+                );
+            }
             if let Event::Cast { .. } = event {
                 // The bait goes on the hook as the line goes out.
                 fishery.baited = hotbar
@@ -570,11 +680,28 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
-    status.reel_prompt =
-        rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
+    status.keys = (rod && walking && !roster.is_empty()).then(|| {
+        if under && fishery.line.phase == Phase::Ready {
+            [("fishing.key.underwater", false), ("", false)]
+        } else if !has_bait && fishery.line.phase == Phase::Ready {
+            [("fishing.key.need_bait", false), ("", false)]
+        } else {
+            keys_for(fishery.line.phase)
+        }
+    });
+    status.bite = status.keys.is_some() && fishery.line.phase == Phase::Bite;
+    // The rod in hand moves with the line (`held.rs`, `rod-motion`).
+    if let Some(cue) = cue.as_deref_mut() {
+        cue.phase = fishery.line.phase;
+        cue.power = fishery.line.power;
+        cue.tension = fishery.line.tension;
+        if fishery.line.phase != Phase::Hooked {
+            cue.reeling = false;
+        }
+    }
     status.meter = match fishery.line.phase {
-        Phase::Charging => Some(("CAST", fishery.line.power)),
-        Phase::Hooked => Some(("TENSION", fishery.line.tension)),
+        Phase::Charging => Some(("cast", fishery.line.power)),
+        Phase::Hooked => Some(("tension", fishery.line.tension)),
         _ => None,
     };
 
@@ -587,7 +714,13 @@ fn fish(
             let reason = species.catch_refusal()?;
             (species.status == fauna::Status::Protected
                 && school.centre().distance(float) <= species.sense_m.max(3.0))
-            .then(|| format!("{}: {reason}", species.name))
+            .then(|| {
+                tr_with(
+                    "fishing.refused",
+                    &[("species", &species.name()), ("reason", &reason)],
+                )
+                .into_string()
+            })
         });
         if let Some(text) = refused
             && !fishery.told_refusal
@@ -664,8 +797,23 @@ fn fish(
         fishery.spawn_s = 0.0;
         drop_far(fishery, feet, settings.spawn.despawn_m);
         if let Some(air) = air {
+            // The colonies a beaver may be seen by (`ocean-environments`
+            // B29), read only where a species asks for one.
+            let colonies: Vec<pbd_core::beaver::Colony> =
+                if roster.iter().any(|sp| sp.near_colony_m > 0.0) {
+                    save.as_deref()
+                        .map(|save| {
+                            save.records
+                                .of_kind(pbd_core::beaver::KIND)
+                                .filter_map(|r| r.read::<pbd_core::beaver::Colony>())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             try_spawn(
-                &o, fishery, feet, sea, air, contact, roster, settings, seconds,
+                &o, fishery, feet, sea, air, contact, roster, settings, seconds, &colonies,
             );
         }
     }
@@ -759,6 +907,16 @@ pub struct LifeScript {
     pub placed: bool,
 }
 
+/// `PBD_SCHOOL_DEPTH=sea`: a capture instrument (`ocean-environments`
+/// task 18.2) that reads a school's depth off the sea's mean sphere, the
+/// rule before design B23, so the before frame of a school in a lake can be
+/// taken beside the after. Unset, a school's depth is read from the surface
+/// of the water it is in. It changes nothing a player meets.
+fn school_depth_from_sea() -> bool {
+    static FROM_SEA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FROM_SEA.get_or_init(|| std::env::var("PBD_SCHOOL_DEPTH").is_ok_and(|v| v == "sea"))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn life_script(
     mut script: ResMut<LifeScript>,
@@ -826,13 +984,33 @@ fn life_script(
     let species = &roster[index];
     let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
     let first = script.metres.unwrap_or(3.0);
-    for step in 0..=22 {
+    // Straight ahead first; where no water ahead fits it, the bearings round
+    // the eye in turn (`ocean-environments` B29), the turn logged so a second
+    // capture can face it with `--yaw`.
+    let turns = (0..=18).map(|k| {
+        if k % 2 == 0 {
+            k / 2 * 20
+        } else {
+            -(k / 2 + 1) * 20
+        }
+    });
+    for (turn, step) in turns.flat_map(|t| (0..=22).map(move |s| (t, s))) {
         let metres = first + step as f32 * 0.5;
-        let direction = (eye + ahead * metres).normalize_or(up);
-        if !species.fits(sea.depth_at(direction)) {
+        let along = Quat::from_axis_angle(up, -(turn as f32).to_radians()) * ahead;
+        let direction = (eye + along * metres).normalize_or(up);
+        // Fresh water over the sea's level (a lake, a river, a pond) is
+        // asked as the spawner asks it (task 18.2); the sea otherwise.
+        let contact = world.contact.as_deref();
+        let floor =
+            crate::vehicles::ground_under(contact, direction.as_dvec3() * f64::from(sea.radius))
+                as f32;
+        let fresh = contact.and_then(|c| fresh_top(c, direction, floor));
+        let depth = fresh.map_or_else(|| sea.depth_at(direction), |top| top - floor);
+        if !species.fits(depth) {
             continue;
         }
-        let anchor = direction * sea.radius;
+        let top = fresh.unwrap_or(sea.radius);
+        let anchor = direction * top;
         let water = PlanetWater::at(
             sea,
             world.air.as_deref(),
@@ -842,12 +1020,13 @@ fn life_script(
             seconds,
         );
         let o = crate::sim_origin::from_render_frame(&world.frame);
-        let local = o.at(direction.as_dvec3(), f64::from(sea.radius));
+        let local = o.at(direction.as_dvec3(), f64::from(top));
         let school = School::spawn(&o, index as u16, species, local, 0x11fe, &water);
         info!(
-            "life script: {} x{} put {metres} m ahead",
+            "life script: {} x{} put {metres} m ahead, turned {turn} degrees clockwise, in {} water {depth:.1} m deep",
             species.id,
-            school.len()
+            school.len(),
+            if fresh.is_some() { "fresh" } else { "sea" }
         );
         fishery.schools.push(school);
         script.placed = true;
@@ -998,6 +1177,7 @@ fn try_spawn(
     roster: &[Species],
     settings: &fauna::FaunaSettings,
     seconds: f64,
+    colonies: &[pbd_core::beaver::Colony],
 ) {
     // Fish and the rest of the water life have their own caps, so the life
     // never crowds out what a line is cast for (`ocean-environments` 7.1).
@@ -1063,6 +1243,7 @@ fn try_spawn(
             sp.lives_in(class, temperature, &settings.water)
                 && sp.fits(depth)
                 && sp.env_allows(here)
+                && colony_allows(sp, direction, colonies)
                 && if sp.can_bite() { fish_room } else { life_room }
                 && fishery
                     .schools
@@ -1098,13 +1279,31 @@ fn try_spawn(
     }
     debug!(
         "{} school of {} spawned in {} at {:.1} C, {:.0} m out",
-        roster[pick].name,
+        roster[pick].id,
         school.len(),
         class.name(),
         temperature,
         distance
     );
     fishery.schools.push(school);
+}
+
+/// Whether a species may spawn at this planet direction for the colonies
+/// there are (`ocean-environments` B25, B29): a species that asks for one
+/// (`near_colony_m`, the beaver) only within that of a colony's site, the
+/// colony not gone; any other anywhere.
+pub fn colony_allows(
+    species: &Species,
+    direction: Vec3,
+    colonies: &[pbd_core::beaver::Colony],
+) -> bool {
+    species.near_colony_m <= 0.0
+        || pbd_core::beaver::near_colony(
+            colonies,
+            direction,
+            species.near_colony_m,
+            crate::planet::PLANET_RADIUS,
+        )
 }
 
 /// How big a body of fresh water is, as the size its fish grow to, 0.35 to
@@ -1152,36 +1351,47 @@ fn report(
     let name = |species: u16| {
         roster
             .get(species as usize)
-            .map_or("fish", |sp| sp.name.as_str())
-            .to_string()
+            .map_or_else(|| tr("inventory.fish"), Species::name)
+    };
+    // The name mid-sentence ("the minnow").
+    let lower = |species: u16| {
+        roster
+            .get(species as usize)
+            .map_or_else(|| tr("inventory.fish"), Species::lower_name)
+    };
+    // The name missions and their saved progress count by.
+    let data_name = |species: u16| {
+        roster
+            .get(species as usize)
+            .map_or_else(|| "fish".to_string(), Species::data_name)
     };
     match event {
-        Event::Dry => status.say("The float came down on dry ground", 1.5),
-        Event::Bite { .. } => status.say("Bite! Click now", 0.3),
+        Event::Dry => status.say(tr("fishing.status.dry"), 1.5),
+        Event::Bite { .. } => status.say(tr("fishing.status.bite"), 0.3),
         Event::TooEarly { species } => status.say(
-            format!("Too early - the {} bolted", name(species).to_lowercase()),
+            tr_with("fishing.status.too_early", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Missed { species } => status.say(
-            format!(
-                "Missed - the {} spat the hook",
-                name(species).to_lowercase()
-            ),
+            tr_with("fishing.status.missed", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Lost { species } => status.say(
-            format!("Wound in - the {} got away", name(species).to_lowercase()),
+            tr_with("fishing.status.lost", &[("species", &lower(species))]),
             2.0,
         ),
         Event::Snapped { species } => status.say(
-            format!(
-                "The line snapped - the {} is gone",
-                name(species).to_lowercase()
-            ),
+            tr_with("fishing.status.snapped", &[("species", &lower(species))]),
             2.5,
         ),
         Event::Caught { species, length_cm } => {
-            status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
+            status.say(
+                tr_with(
+                    "fishing.status.caught",
+                    &[("species", &name(species)), ("length", &length_cm)],
+                ),
+                3.0,
+            );
             // A baited line's catch uses one bait, taken in the catch's own
             // durable write (`starter-missions` G1); given back if the fish
             // is let go.
@@ -1190,7 +1400,7 @@ fn report(
             let used_bait = baited && hotbar.as_deref_mut().is_some_and(|h| h.take_item(bait, 1));
             if land(species, length_cm, hotbar.as_deref_mut(), save, status) {
                 use crate::missions::Did;
-                let kind = name(species).to_lowercase();
+                let kind = data_name(species);
                 let mut did = vec![Did::new(Kind::Catch, kind.clone(), 1)];
                 if used_bait {
                     did.push(Did::new(Kind::Baited, kind.clone(), 1));
@@ -1232,7 +1442,7 @@ pub fn land(
         return false;
     };
     if hotbar.give(Item::Fish(species), 1) > 0 {
-        status.say("No room in the hotbar - the fish was let go", 3.0);
+        status.say(tr("fishing.status.no_room"), 3.0);
         return false;
     }
     if let Some(save) = save
@@ -1243,23 +1453,41 @@ pub fn land(
     true
 }
 
+/// What the left and the right click do in `phase`, and whether each is
+/// drawn lit (`fishing-and-equipment`, "Both buttons, bottom left"). The
+/// right click's CANCEL is never lit (owner, 2026-11-18: "right click cancle
+/// doesnt need to be highlighted"); the left lights when it does something.
+pub fn keys_for(phase: Phase) -> [(&'static str, bool); 2] {
+    // The right click shows only while the line is out (owner, 2026-11-18:
+    // "right click doesnt show up if the line isnt cast").
+    let out = matches!(
+        phase,
+        Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
+    );
+    let left = match phase {
+        Phase::Ready => ("fishing.key.hold_to_cast", true),
+        Phase::Charging => ("fishing.key.let_go_to_cast", true),
+        Phase::Hooked => ("fishing.key.hold_to_reel", true),
+        Phase::Bite => ("fishing.key.hook", true),
+        Phase::Flying | Phase::Floating | Phase::Nibble => ("fishing.key.hook", false),
+    };
+    [left, (if out { "fishing.key.cancel" } else { "" }, false)]
+}
+
 /// The standing line under the crosshair while the rod is out.
 fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
     if !rod {
         return String::new();
     }
     if roster.is_empty() {
-        return "Nothing lives in this water".into();
+        return tr("fishing.status.nothing_lives").into();
     }
     match line.phase {
-        Phase::Ready => "Hold the left button to cast".into(),
-        Phase::Charging => "Let go to cast".into(),
-        Phase::Flying => String::new(),
-        // The button prompt says it (`reel_prompt`).
-        Phase::Floating => String::new(),
-        Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
-        Phase::Bite => "Bite! Click now".into(),
-        Phase::Hooked => "Hold to reel - ease off when it runs".into(),
+        // The buttons in the corner say these (`keys_for`).
+        Phase::Ready | Phase::Charging | Phase::Flying | Phase::Floating => String::new(),
+        Phase::Nibble => tr("fishing.status.nibble").into(),
+        Phase::Bite => tr("fishing.status.bite").into(),
+        Phase::Hooked => tr("fishing.status.hooked").into(),
     }
 }
 
@@ -1287,46 +1515,74 @@ pub fn species_icon(species: &Species) -> String {
 pub fn guide_facts(
     species: &Species,
     fishing: &fauna::FishingSettings,
-) -> Vec<(&'static str, String)> {
+) -> Vec<(Localized, Localized)> {
     let water = species
         .water
         .iter()
-        .map(|class| class.name())
+        .map(|class| class.label().into_string())
         .collect::<Vec<_>>()
         .join(", ");
+    let (lo, hi) = (
+        format!("{:.0}", species.depth_m.0),
+        format!("{:.0}", species.depth_m.1),
+    );
     let depth = if species.bed {
-        format!(
-            "on the bed, {:.0}-{:.0} m",
-            species.depth_m.0, species.depth_m.1
-        )
+        tr_with("fishing.fact.on_bed", &[("from", &lo), ("to", &hi)])
     } else {
-        format!("{:.0}-{:.0} m down", species.depth_m.0, species.depth_m.1)
+        tr_with("fishing.fact.down", &[("from", &lo), ("to", &hi)])
     };
     let pips =
         "#".repeat(species.strength as usize) + &"-".repeat(5 - species.strength.min(5) as usize);
     vec![
-        ("WATER", water),
+        (tr("fishing.fact.water"), Localized::verbatim(water)),
         (
-            "TEMPERATURE",
-            format!("{:.0} to {:.0} C", species.temp_c.0, species.temp_c.1),
+            tr("fishing.fact.temperature"),
+            tr_with(
+                "fishing.fact.temperature_range",
+                &[
+                    ("from", &format!("{:.0}", species.temp_c.0)),
+                    ("to", &format!("{:.0}", species.temp_c.1)),
+                ],
+            ),
         ),
-        ("DEPTH", depth),
+        (tr("fishing.fact.depth"), depth),
         (
-            "FOUND",
-            format!("schools of {}-{}", species.school.0, species.school.1),
+            tr("fishing.fact.found"),
+            tr_with(
+                "fishing.fact.schools",
+                &[("fewest", &species.school.0), ("most", &species.school.1)],
+            ),
         ),
         (
-            "LENGTH",
-            format!("about {:.0} cm", species.length_m * 100.0),
-        ),
-        ("STRENGTH", format!("{pips} {}/5", species.strength)),
-        (
-            "HOOK WINDOW",
-            format!("{:.2} s", fishing.hook_window(species.strength)),
+            tr("fishing.fact.length"),
+            tr_with(
+                "fishing.fact.about_cm",
+                &[("length", &format!("{:.0}", species.length_m * 100.0))],
+            ),
         ),
         (
-            "SPEED",
-            format!("{:.1}-{:.1} m/s", species.speed_mps.0, species.speed_mps.1),
+            tr("fishing.fact.strength"),
+            Localized::verbatim(format!("{pips} {}/5", species.strength)),
+        ),
+        (
+            tr("fishing.fact.hook_window"),
+            tr_with(
+                "fishing.fact.seconds",
+                &[(
+                    "seconds",
+                    &format!("{:.2}", fishing.hook_window(species.strength)),
+                )],
+            ),
+        ),
+        (
+            tr("fishing.fact.speed"),
+            tr_with(
+                "fishing.fact.speed_range",
+                &[
+                    ("from", &format!("{:.1}", species.speed_mps.0)),
+                    ("to", &format!("{:.1}", species.speed_mps.1)),
+                ],
+            ),
         ),
     ]
 }
@@ -1349,6 +1605,58 @@ pub fn water_here(
 pub mod bodies;
 pub mod places;
 
+/// A mesh's attribute buffers taken back to be laid into again
+/// (`memory-leak`): emptied, their capacity kept, so a mesh rebuilt every
+/// frame stops allocating once it has reached its size.
+pub(crate) mod kept {
+    use bevy::mesh::{Mesh, MeshVertexAttribute, VertexAttributeValues, triangle_normal};
+
+    /// The attribute's buffer out of `mesh`, empty, or a new one if it has
+    /// none of that type.
+    pub fn float2(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 2]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x2(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], three floats a vertex.
+    pub fn float3(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 3]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x3(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// As [`float2`], four floats a vertex.
+    pub fn float4(mesh: &mut Mesh, attribute: MeshVertexAttribute) -> Vec<[f32; 4]> {
+        match mesh.remove_attribute(attribute) {
+            Some(VertexAttributeValues::Float32x4(mut v)) => {
+                v.clear();
+                v
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The flat normals of an unindexed triangle list, into `out`: what
+    /// `Mesh::compute_flat_normals` works out, without a new buffer.
+    pub fn flat_normals(positions: &[[f32; 3]], out: &mut Vec<[f32; 3]>) {
+        out.clear();
+        out.reserve(positions.len());
+        for p in positions.chunks_exact(3) {
+            let normal = triangle_normal(p[0], p[1], p[2]);
+            out.extend([normal; 3]);
+        }
+    }
+}
+
 pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
@@ -1367,98 +1675,21 @@ pub(crate) mod draw {
     #[derive(Component)]
     pub struct LineMesh;
 
-    /// How quickly a jump of the hooked float is eased out, 1/s: critically
-    /// damped, so 95% of it is gone in about 4.7 / this (a third of a
-    /// second).
-    pub(crate) const FLOAT_EASE_PER_S: f32 = 14.0;
+    /// The bait on the hook, at the lure under the float (`fish-behaviour`):
+    /// what the fish pecks at and takes.
+    #[derive(Component)]
+    pub struct Hook;
 
     /// Where the float is drawn (`movement-smoothness` design 7.1): the
-    /// line's float plus an offset that takes up the one-frame jump the line
-    /// makes when a hooked fish starts or stops running (its swing switched
-    /// on or off) or is struck, and eases it out. Draw only: nothing in the
-    /// line's rules reads it.
-    #[derive(Resource, Clone, Copy, Debug, Default)]
-    pub struct DrawnFloat {
-        /// Drawn minus simulated, planet-local, m, and how fast it changes.
-        pub offset: Vec3,
-        velocity: Vec3,
-        /// The line as last frame left it: its float, phase and run.
-        last: Option<(Vec3, Phase, f32)>,
-        /// Struck, and not yet swung: the line's first hooked step, a frame
-        /// after the strike, puts the swing on.
-        struck: bool,
-    }
+    /// core's [`fauna::swim::DrawnFloat`], as a resource. Draw only.
+    #[derive(Resource, Clone, Copy, Debug, Default, Deref, DerefMut)]
+    pub struct DrawnFloat(pub fauna::swim::DrawnFloat);
 
-    impl DrawnFloat {
-        /// One frame: `float`, `phase` and `run` are the line's after this
-        /// frame's step.
-        pub fn update(&mut self, o: &SimOrigin, dt: f32, float: Vec3, phase: Phase, run: f32) {
-            let hooked = phase == Phase::Hooked;
-            let jumped = match self.last {
-                Some((was, Phase::Hooked, was_run))
-                    if hooked && (was_run != run || self.struck) =>
-                {
-                    self.struck = false;
-                    Some(was)
-                }
-                Some((was, Phase::Bite, _)) if hooked => {
-                    self.struck = true;
-                    Some(was)
-                }
-                _ => None,
-            };
-            self.last = Some((float, phase, run));
-            if !hooked {
-                *self = Self {
-                    last: self.last,
-                    ..Self::default()
-                };
-                return;
-            }
-            if let Some(was) = jumped {
-                // Drawn where it was drawn last frame.
-                self.offset += was - float;
-            } else if dt > 0.0 && dt.is_finite() {
-                // Critically damped: x = (x0 + (v0 + w x0) t) e^-wt.
-                let w = FLOAT_EASE_PER_S;
-                let e = (-w * dt).exp();
-                let (x0, v0) = (self.offset, self.velocity);
-                let c = v0 + x0 * w;
-                self.offset = (x0 + c * dt) * e;
-                self.velocity = (v0 - c * (w * dt)) * e;
-            }
-            // Along the water: no part of it toward the planet's centre.
-            let up = o.up_at(float);
-            self.offset -= up * self.offset.dot(up);
-            self.velocity -= up * self.velocity.dot(up);
-            if !(self.offset.is_finite() && self.velocity.is_finite()) {
-                self.offset = Vec3::ZERO;
-                self.velocity = Vec3::ZERO;
-            }
-        }
-
-        /// The float as drawn: `float` moved by the offset and kept at its
-        /// height over the centre.
-        pub fn drawn(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
-            if self.offset == Vec3::ZERO {
-                return float;
-            }
-            o.with_radius(float + self.offset, o.radius_at(float))
-        }
-
-        /// How far the drawn float is from the line's: what the fish on the
-        /// line, held at the lure, is drawn moved by.
-        pub fn shift(&self, o: &SimOrigin, float: Vec3) -> Vec3 {
-            self.drawn(o, float) - float
-        }
-
-        /// The origin was rebased: the float it last saw moves with it.
-        pub fn rebase(&mut self, shift: Vec3) {
-            if let Some((float, _, _)) = self.last.as_mut() {
-                *float -= shift;
-            }
-        }
-    }
+    /// Every swimmer's drawn pose and the line's fish (`fish-behaviour`
+    /// design 5): the core's [`fauna::swim::Drawing`], as a resource. Draw
+    /// only, but for a bolting fish handed back to its school.
+    #[derive(Resource, Clone, Debug, Default, Deref, DerefMut)]
+    pub struct DrawnSwim(pub fauna::swim::Drawing);
 
     /// Ease the float's jumps (`movement-smoothness` design 7.1), after the
     /// line has stepped and before anything is drawn from it.
@@ -1466,10 +1697,12 @@ pub(crate) mod draw {
         time: Res<Time>,
         fishery: Res<Fishery>,
         mut drawn: ResMut<DrawnFloat>,
+        mut trail: ResMut<CastTrail>,
         space: crate::SimSpace,
     ) {
         let line = &fishery.line;
         let o = space.origin();
+        trail.update(line.phase, line.float, time.delta_secs().min(0.1));
         drawn.update(
             &o,
             time.delta_secs().min(0.1),
@@ -1477,6 +1710,114 @@ pub(crate) mod draw {
             line.phase,
             line.run,
         );
+    }
+
+    /// How far the float flies between the places the cast's trail keeps,
+    /// m (the mockup's).
+    pub(crate) const TRAIL_STEP_M: f32 = 0.15;
+
+    /// How long the line takes to ease from the cast's trail to its hanging
+    /// curve once the float is down, s.
+    pub(crate) const TRAIL_EASE_S: f32 = 0.6;
+
+    /// The cast's line as drawn (`rod-motion` design 8): while the float
+    /// flies the line lies along the path it took, from the rod tip back to
+    /// where it was let go and out along its arc; once it is down the line
+    /// eases to its hanging curve. Drawing only: the line's rule never reads
+    /// it.
+    #[derive(Resource, Clone, Debug, Default, PartialEq)]
+    pub struct CastTrail {
+        /// The float's places since it was let go, planet-local, m: the
+        /// first where it left the tip, then one every `TRAIL_STEP_M`.
+        pub points: Vec<Vec3>,
+        flying: bool,
+        /// How long the float has been down, s.
+        landed_s: Option<f32>,
+    }
+
+    impl CastTrail {
+        /// One frame: the line's phase and float after this frame's step.
+        pub fn update(&mut self, phase: Phase, float: Vec3, dt: f32) {
+            match phase {
+                Phase::Flying => {
+                    if !self.flying {
+                        *self = Self {
+                            points: vec![float],
+                            flying: true,
+                            landed_s: None,
+                        };
+                    } else if self
+                        .points
+                        .last()
+                        .is_some_and(|last| last.distance(float) > TRAIL_STEP_M)
+                    {
+                        self.points.push(float);
+                    }
+                }
+                Phase::Floating | Phase::Nibble | Phase::Bite if !self.points.is_empty() => {
+                    if self.flying {
+                        self.flying = false;
+                        self.landed_s = Some(0.0);
+                    } else if let Some(t) = self.landed_s.as_mut() {
+                        *t += dt.max(0.0);
+                    }
+                }
+                _ => *self = Self::default(),
+            }
+        }
+
+        /// How much of the line lies along the trail: all of it while the
+        /// float flies, easing to none over `TRAIL_EASE_S` once it is down.
+        pub fn blend(&self) -> f32 {
+            if self.points.is_empty() {
+                return 0.0;
+            }
+            if self.flying {
+                return 1.0;
+            }
+            match self.landed_s {
+                Some(t) if t < TRAIL_EASE_S => {
+                    let u = t / TRAIL_EASE_S;
+                    1.0 - u * u * (3.0 - 2.0 * u)
+                }
+                _ => 0.0,
+            }
+        }
+
+        /// The origin was rebased: the trail moves with it.
+        pub fn rebase(&mut self, shift: Vec3) {
+            for p in &mut self.points {
+                *p -= shift;
+            }
+        }
+    }
+
+    /// `n` points evenly along the cast's path (the mockup's `trailPoints`):
+    /// from the rod tip back to where the float was let go, along the
+    /// float's places, to `end`, where the line is tied.
+    pub(crate) fn trail_points(tip: Vec3, trail: &[Vec3], end: Vec3, n: usize) -> Vec<Vec3> {
+        let path: Vec<Vec3> = std::iter::once(tip)
+            .chain(trail.iter().copied())
+            .chain(std::iter::once(end))
+            .collect();
+        let mut acc = vec![0.0f32];
+        for k in 1..path.len() {
+            acc.push(acc[k - 1] + path[k].distance(path[k - 1]));
+        }
+        let total = *acc.last().unwrap();
+        let total = if total > 0.0 { total } else { 1.0 };
+        (0..n)
+            .map(|k| {
+                let d = total * k as f32 / (n.max(2) - 1) as f32;
+                let mut j = 1;
+                while j < acc.len() - 1 && acc[j] < d {
+                    j += 1;
+                }
+                let seg = acc[j] - acc[j - 1];
+                let seg = if seg > 0.0 { seg } else { 1.0 };
+                path[j - 1].lerp(path[j], (d - acc[j - 1]) / seg)
+            })
+            .collect()
     }
 
     #[derive(Component)]
@@ -1521,6 +1862,9 @@ pub(crate) mod draw {
     pub struct Heading {
         pub forward: Vec3,
         pub up: Vec3,
+        /// Where its mouth is drawn, local (`fish-behaviour`'s trace): the
+        /// model's nose, laid rigid.
+        pub mouth: Vec3,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -1613,12 +1957,20 @@ pub(crate) mod draw {
 
     /// The float, the line and the HUD line; the rod is hung on the walking
     /// camera once there is one.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         mut commands: Commands,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
         mut images: ResMut<Assets<Image>>,
+        fauna: Option<Res<FaunaConfig>>,
+        rows: Option<ResMut<crate::field_light::FieldRows>>,
     ) {
+        // The body-wave table the schools' vertex stage reads
+        // (`fish-behaviour` design 8.4), from `fauna.ron`.
+        if let (Some(fauna), Some(mut rows)) = (fauna, rows) {
+            rows.set_swim_rows(&bodies::wave_table(&fauna.0.behaviour));
+        }
         // The creatures' material, with one tiny creature-shaped mesh held
         // hidden from the start so the loading screen warms its pipeline
         // before play (no schools exist until the walker is in the water).
@@ -1643,6 +1995,13 @@ pub(crate) mod draw {
         warm.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; 3]);
         warm.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![bodies::white_uv(); 3]);
         warm.compute_flat_normals();
+        // A school's mesh carries the body-wave attributes and is drawn
+        // through the swim vertex stage: warmed too, so no school's first
+        // frame compiles a pipeline after `READY`.
+        let mut warm_school = warm.clone();
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, vec![[0.0f32; 4]; 3]);
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, vec![[0.0f32; 4]; 3]);
+        warm_school.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, vec![[0.0f32; 4]; 3]);
         commands.spawn((
             Name::new("Water life (warm)"),
             crate::field_light::LitByField,
@@ -1650,6 +2009,19 @@ pub(crate) mod draw {
             MeshMaterial3d(life.clone()),
             Transform::default(),
             Visibility::Hidden,
+        ));
+        commands.spawn((
+            Name::new("Water life school (warm)"),
+            crate::field_light::LitByField,
+            crate::field_light::LitLikeTerrain,
+            Transform::default(),
+            Visibility::Hidden,
+            children![(
+                Mesh3d(meshes.add(warm_school)),
+                MeshMaterial3d(life.clone()),
+                Transform::default(),
+                Visibility::Inherited,
+            )],
         ));
         commands.insert_resource(LifeMaterial(life));
         let red = materials.add(StandardMaterial {
@@ -1682,8 +2054,41 @@ pub(crate) mod draw {
                     Transform::from_xyz(0.0, -0.02, 0.0),
                 ));
             });
+        // The bait on the hook: a worm's end and the shank over it, the
+        // mockup's (M37).
+        let bait = materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(0xb0, 0x60, 0x5a),
+            perceptual_roughness: 0.9,
+            ..default()
+        });
+        let shank = materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(0x5a, 0x5f, 0x63),
+            metallic: 0.6,
+            perceptual_roughness: 0.4,
+            ..default()
+        });
+        commands
+            .spawn((
+                Name::new("Fishing hook"),
+                Hook,
+                crate::field_light::LitByField,
+                Transform::default(),
+                Visibility::Hidden,
+            ))
+            .with_children(|hook| {
+                hook.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.018, 0.035, 0.018))),
+                    MeshMaterial3d(bait),
+                    Transform::default(),
+                ));
+                hook.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.004, 0.03, 0.004))),
+                    MeshMaterial3d(shank),
+                    Transform::from_xyz(0.0, 0.02, 0.0),
+                ));
+            });
         let mut line = Mesh::new(PrimitiveTopology::LineStrip, RenderAssetUsages::default());
-        line.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![Vec3::ZERO; LINE_POINTS]);
+        line.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![Vec3::ZERO; LINE_POINTS + 1]);
         commands.spawn((
             Name::new("Fishing line"),
             LineMesh,
@@ -1790,12 +2195,12 @@ pub(crate) mod draw {
     #[allow(clippy::too_many_arguments)]
     pub fn schools(
         mut commands: Commands,
-        fishery: Res<Fishery>,
+        mut fishery: ResMut<Fishery>,
         fauna: Res<FaunaConfig>,
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         float: Res<DrawnFloat>,
-        mut headings: ResMut<DrawnHeadings>,
+        (mut headings, mut swim): (ResMut<DrawnHeadings>, ResMut<DrawnSwim>),
         time: Res<Time>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(
@@ -1819,10 +2224,80 @@ pub(crate) mod draw {
         // What the water does to a creature's colour at its depth
         // (`ocean-environments` B12, B23): the depth under the surface of
         // the water its school swims in, a lake's or a river's own top, the
-        // sea's tided one otherwise, never the mean sea sphere.
+        // sea's otherwise.
         let under = super::places::UnderWater::of(water.as_deref());
         let seconds = now.map_or(0.0, |(seconds, _)| seconds);
         let o = crate::sim_origin::from_render_frame(&frame);
+        let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
+        // The fish on the line is drawn at the lure under the drawn float
+        // (`movement-smoothness` 7.1).
+        let held = float.shift(&o, fishery.line.float);
+        let dt = time.delta_secs().min(0.1);
+        // Every swimmer turned and its wave stepped, and the line's fish
+        // moved by its choreography (`fish-behaviour`): before the meshes
+        // are built from them.
+        {
+            let lure = drawn_lure(&o, &fishery, &float);
+            let fishery = &mut *fishery;
+            let water = sea.as_deref().map(|sea| {
+                PlanetWater::at(
+                    sea,
+                    air.as_deref(),
+                    contact.as_deref(),
+                    &fishery.beds,
+                    o.query_point(fishery.line.float),
+                    seconds,
+                )
+            });
+            let view = match (fishery.line.is_out(), fishery.feet) {
+                (true, Some(feet)) => Some(fauna::swim::LineView {
+                    line: &fishery.line,
+                    lure,
+                    feet,
+                }),
+                _ => None,
+            };
+            swim.frame(
+                &o,
+                &mut fishery.schools,
+                roster,
+                &fauna.0.behaviour,
+                view,
+                alpha,
+                dt,
+                |school, i, species| {
+                    let id = school.ids.get(i).copied().unwrap_or(0);
+                    let body = bodies::model_for(&species.id, id);
+                    let kind = body.wave_kind()?;
+                    let length_m = school.length_cm(i, species) as f32 / 100.0;
+                    let scale = length_m / body.length;
+                    Some((
+                        fauna::swim::Build {
+                            length_m,
+                            mouth_m: body.nose * scale,
+                            speeds: species.speed_mps,
+                        },
+                        kind,
+                    ))
+                },
+                |p| {
+                    let Some(water) = water.as_ref() else {
+                        return p;
+                    };
+                    let q = o.query_point(p);
+                    let (top, bottom) = (
+                        f64::from(water.surface(q) - 0.25),
+                        f64::from(water.bed(q) + 0.25),
+                    );
+                    if top > bottom {
+                        o.with_radius(p, o.radius_at(p).clamp(bottom, top))
+                    } else {
+                        p
+                    }
+                },
+            );
+        }
+        let fishery = &*fishery;
         let dim = |school: &School| {
             sea.as_deref().map(|sea| {
                 let anchor = o.query_point(school.anchor);
@@ -1834,14 +2309,17 @@ pub(crate) mod draw {
                     anchor,
                     seconds,
                 );
-                (water.surface(anchor), under)
+                // `PBD_SCHOOL_DEPTH=sea`, a capture instrument (task 18.2):
+                // the depth read off the sea's mean sphere, as before B23, so
+                // a before frame can be taken beside the after.
+                let surface = if school_depth_from_sea() {
+                    sea.radius
+                } else {
+                    water.surface(anchor)
+                };
+                (surface, under)
             })
         };
-        let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
-        // The fish on the line is drawn at the lure under the drawn float
-        // (`movement-smoothness` 7.1).
-        let held = float.shift(&o, fishery.line.float);
-        let dt = time.delta_secs().min(0.1);
         headings.begin();
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
@@ -1869,7 +2347,7 @@ pub(crate) mod draw {
                     dim(school),
                     alpha,
                     held,
-                    (&mut headings, dt),
+                    (&mut headings, &swim, dt),
                 );
             }
         }
@@ -1894,12 +2372,12 @@ pub(crate) mod draw {
                 dim(school),
                 alpha,
                 held,
-                (&mut headings, dt),
+                (&mut headings, &swim, dt),
             );
             let handle = meshes.add(mesh);
             commands
                 .spawn((
-                    Name::new(format!("{} school", species.name)),
+                    Name::new(format!("{} school", species.id)),
                     SchoolMesh {
                         index,
                         mesh: handle.clone(),
@@ -1936,11 +2414,16 @@ pub(crate) mod draw {
         o: &SimOrigin,
         fishery: &Fishery,
         float: &DrawnFloat,
+        swim: Option<&DrawnSwim>,
         s: usize,
         i: usize,
         step_hz: f32,
     ) -> Option<Vec3> {
         let school = fishery.schools.get(s)?;
+        // A swimmer is drawn at its pose (`fish-behaviour`).
+        if let Some(pose) = swim.and_then(|w| w.poses.get(&(school.seed, *school.ids.get(i)?))) {
+            return Some(pose.pos);
+        }
         (i < school.len()).then(|| {
             drawn_at(
                 school,
@@ -1962,6 +2445,14 @@ pub(crate) mod draw {
         }
     }
 
+    /// The lure as drawn this frame, local: a hand's width under the drawn
+    /// float (`fish-behaviour`'s trace reads it).
+    /// Before what the fish does to it: add [`fauna::swim::Drawing::lure_offset`].
+    pub(crate) fn drawn_lure(o: &SimOrigin, fishery: &Fishery, float: &DrawnFloat) -> Vec3 {
+        let drawn = float.drawn(o, fishery.line.float);
+        drawn - o.up_at(drawn) * 0.35
+    }
+
     /// How far under a diving duck is drawn when wholly dived, m.
     const DUCK_UNDER_M: f32 = 0.8;
 
@@ -1976,7 +2467,7 @@ pub(crate) mod draw {
     /// a diver under the water is not drawn and a hidden octopus is small in
     /// its den.
     #[allow(clippy::too_many_arguments)]
-    fn build(
+    pub(super) fn build(
         o: &SimOrigin,
         mesh: &mut Mesh,
         school: &School,
@@ -1985,15 +2476,36 @@ pub(crate) mod draw {
         dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
         held: Vec3,
-        (headings, dt): (&mut DrawnHeadings, f32),
+        (headings, swim, dt): (&mut DrawnHeadings, &DrawnSwim, f32),
     ) {
-        let mut positions: Vec<[f32; 3]> = Vec::new();
-        let mut colours: Vec<[f32; 4]> = Vec::new();
-        let mut uvs: Vec<[f32; 2]> = Vec::new();
+        // Laid into the buffers the mesh already holds (`memory-leak`): a
+        // school is laid every frame, and new buffers grown from empty each
+        // time were most of the game's large allocations.
+        let mut positions = kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
+        let mut colours = kept::float4(mesh, Mesh::ATTRIBUTE_COLOR);
+        let mut uvs = kept::float2(mesh, Mesh::ATTRIBUTE_UV_0);
+        let mut waves = bodies::SwimAttributes {
+            axes: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_AXES),
+            wave: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_WAVE),
+            up: kept::float4(mesh, bodies::ATTRIBUTE_SWIM_UP),
+        };
+        let mut normals = kept::float3(mesh, Mesh::ATTRIBUTE_NORMAL);
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
-        for i in 0..school.len() {
-            // Between the school's last two steps (`movement-smoothness`).
-            let p = &drawn_at(school, i, alpha, held);
+        // The beavers and otters are drawn with their own skinned bodies
+        // (`crate::critters`, `ocean-environments` B29), not in the school's
+        // mesh.
+        let laid = if crate::critters::rig::Animal::of_species(&species.id).is_some() {
+            0
+        } else {
+            school.len()
+        };
+        for i in 0..laid {
+            let id = school.ids.get(i).copied().unwrap_or(0);
+            // A swimmer's pose (`fish-behaviour`): turned, banked, its body
+            // wave; else between the school's last two steps
+            // (`movement-smoothness`).
+            let posed = swim.poses.get(&(school.seed, id));
+            let p = &posed.map_or_else(|| drawn_at(school, i, alpha, held), |pose| pose.pos);
             let up = o.up_at(*p);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
@@ -2003,7 +2515,6 @@ pub(crate) mod draw {
             let under = now.map_or(0.0, |(seconds, sun)| {
                 fauna::under_share(species, school, i, seconds, sun.dot(up) < -0.05)
             });
-            let id = school.ids.get(i).copied().unwrap_or(0);
             let body = bodies::model_for(&species.id, id);
             let phase = (fauna::hash2(school.seed, u64::from(id)) >> 40) as f32
                 / (1u64 << 24) as f32
@@ -2019,7 +2530,14 @@ pub(crate) mod draw {
                 _ => along,
             };
             let held_here = school.held.is_some_and(|(h, _)| h == i);
-            let eased = headings.ease((school.seed, id), step, up, held_here, dt);
+            let length = school.length_cm(i, species) as f32 / 100.0;
+            let mut scale = length / body.length;
+            let mouth = body.nose * scale;
+            let framed = posed.map(|pose| pose.frame(up, mouth));
+            let eased = match framed {
+                Some((forward, _, _)) => forward,
+                None => headings.ease((school.seed, id), step, up, held_here, dt),
+            };
             let flat = (eased - up * eased.dot(up)).normalize_or(up.any_orthonormal_vector());
             let mut forward = match species.mover {
                 fauna::Mover::School => eased,
@@ -2031,13 +2549,16 @@ pub(crate) mod draw {
             }
             let side = forward.cross(up).normalize_or(up.any_orthonormal_vector());
             let mut top = side.cross(forward);
-            let length = school.length_cm(i, species) as f32 / 100.0;
-            let mut scale = length / body.length;
             let at = *p - school.anchor;
             let mut origin = match species.mover {
                 fauna::Mover::Crawler => at - up * fauna::crawl_lift(species),
                 _ => at,
             };
+            // Posed: banked, flashing, its head shaken about its mouth.
+            if let Some((_, posed_top, posed_origin)) = framed {
+                top = posed_top;
+                origin = posed_origin - school.anchor;
+            }
             match (body.kind, pose) {
                 (bodies::Kind::Seal, _) => {
                     origin -= up * (0.1 * scale + (1.2 + 0.03 * scale) * under);
@@ -2065,38 +2586,61 @@ pub(crate) mod draw {
                 tint = water.albedo(tint, (f64::from(surface) - o.radius_at(*p)) as f32);
             }
             let look = bodies::Look { t, phase, pose };
-            headings
-                .map
-                .insert((school.seed, id), Heading { forward, up: top });
+            headings.map.insert(
+                (school.seed, id),
+                Heading {
+                    forward,
+                    up: top,
+                    mouth: school.anchor + origin + forward * body.nose * scale,
+                },
+            );
+            // Its body wave: the pose's; a swimmer drawn without one (a seal)
+            // cruises on the world clock.
+            let wave = match posed {
+                Some(pose) => Some(pose.wave),
+                None => body.wave_kind().map(|_| bodies::cruising(body, &look)),
+            };
             let place = bodies::Place {
                 origin,
                 forward,
                 up: top,
                 scale,
             };
-            bodies::emit(
+            bodies::emit_swimmer(
                 body,
                 &look,
                 &place,
                 tint,
+                wave,
                 &mut positions,
                 &mut colours,
                 &mut uvs,
+                &mut waves,
             );
         }
         // A school with nobody drawn (all under, all gone) keeps one hidden
         // triangle, so its mesh keeps the layout the loading screen warmed
         // and never asks for a pipeline of its own.
         if positions.is_empty() {
-            positions = vec![[0.0; 3]; 3];
-            colours = vec![[0.0; 4]; 3];
-            uvs = vec![bodies::white_uv(); 3];
+            positions.extend([[0.0; 3]; 3]);
+            colours.extend([[0.0; 4]; 3]);
+            uvs.extend([bodies::white_uv(); 3]);
+            waves.axes.extend([[0.0; 4]; 3]);
+            waves.wave.extend([[0.0; 4]; 3]);
+            waves.up.extend([[0.0; 4]; 3]);
         }
+        // Flat normals of the rigid body: the vertex stage turns them with
+        // the bend. `Mesh::compute_flat_normals`'s arithmetic, into the
+        // buffer the mesh held.
+        kept::flat_normals(&positions, &mut normals);
+        mesh.remove_indices();
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.remove_indices();
-        mesh.compute_flat_normals();
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_AXES, waves.axes);
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_WAVE, waves.wave);
+        mesh.insert_attribute(bodies::ATTRIBUTE_SWIM_UP, waves.up);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     }
 
     /// The float on the water and the line from the rod's tip to it, placed
@@ -2112,19 +2656,44 @@ pub(crate) mod draw {
         air: Option<Res<Air>>,
         contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
-        drawn: Res<DrawnFloat>,
+        tip_now: Option<Res<crate::held::RodTipNow>>,
+        (drawn, swim, trail): (Res<DrawnFloat>, Res<DrawnSwim>, Res<CastTrail>),
         cameras: Query<&Transform, With<WalkingCamera>>,
         rods: Query<
             (&crate::held::Held, &Transform),
-            (Without<WalkingCamera>, Without<Float>, Without<LineMesh>),
+            (
+                Without<WalkingCamera>,
+                Without<Float>,
+                Without<LineMesh>,
+                Without<Hook>,
+            ),
         >,
         mut floats: Query<
             (&mut Transform, &mut Visibility),
-            (With<Float>, Without<LineMesh>, Without<WalkingCamera>),
+            (
+                With<Float>,
+                Without<LineMesh>,
+                Without<WalkingCamera>,
+                Without<Hook>,
+            ),
         >,
         mut lines: Query<
             (&Mesh3d, &mut Transform, &mut Visibility),
-            (With<LineMesh>, Without<Float>, Without<WalkingCamera>),
+            (
+                With<LineMesh>,
+                Without<Float>,
+                Without<WalkingCamera>,
+                Without<Hook>,
+            ),
+        >,
+        mut hooks: Query<
+            (&mut Transform, &mut Visibility),
+            (
+                With<Hook>,
+                Without<Float>,
+                Without<LineMesh>,
+                Without<WalkingCamera>,
+            ),
         >,
         mut meshes: ResMut<Assets<Mesh>>,
     ) {
@@ -2139,7 +2708,24 @@ pub(crate) mod draw {
         // (`movement-smoothness` 7.1).
         let o = crate::sim_origin::from_render_frame(&frame);
         let float = drawn.drawn(&o, line.float);
+        // The lure, where the fish has it (`fish-behaviour`: a peck's tug,
+        // the take's drag), and the float leaning toward a lure pulled
+        // aside and down after it. Drawn only.
+        let up_here = o.up_at(float);
+        let lure_off = swim.lure_offset();
+        let lure = float - up_here * 0.35 + lure_off;
+        let aside = lure_off - up_here * lure_off.dot(up_here);
+        let float = float + aside * 0.45 - up_here * (-lure_off.dot(up_here)).max(0.0) * 0.3;
         let float_at = crate::render_origin::render_from_physics(&frame, float);
+        for (mut transform, mut visibility) in &mut hooks {
+            *visibility = if out {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+            transform.translation = crate::render_origin::render_from_physics(&frame, lure);
+            transform.rotation = Quat::from_rotation_arc(Vec3::Y, up_here);
+        }
         for (mut transform, mut visibility) in &mut floats {
             *visibility = if out {
                 Visibility::Visible
@@ -2164,31 +2750,44 @@ pub(crate) mod draw {
             // The camera is a top-level entity: its `Transform`, which
             // `follow_walker` has just set, is where the rod is drawn this
             // frame. (Its `GlobalTransform` is still last frame's here.)
-            // The rod's tip as the rod is posed this frame (`held::hold`,
-            // in `Update`, has swayed it): `movement-smoothness` 7.3.
-            let tip = rods
-                .iter()
-                .find(|(held, _)| held.tool() == Tool::Rod)
-                .map_or(crate::held::rod_tip(), |(held, pose)| {
-                    held.posed(pose, crate::held::rod_tip())
-                });
+            // The tip is where the rod is drawn this frame (`held.rs` poses
+            // it in `Update`, rod-motion), else the swayed rest tip
+            // (`movement-smoothness` 7.3).
+            let tip = tip_now.as_deref().map_or_else(
+                || {
+                    rods.iter()
+                        .find(|(held, _)| held.tool() == Tool::Rod)
+                        .map_or(crate::held::rod_tip(), |(held, pose)| {
+                            held.posed(pose, crate::held::rod_tip())
+                        })
+                },
+                |t| t.0,
+            );
             // The line's shape is laid in local points (`world-frames`
             // 10.1), from the drawn rod tip to the drawn float; the water is
             // asked at planet query points.
             let tip_render = eye.transform_point(tip);
             let tip_local = crate::sim_origin::local_from_render(&frame, tip_render);
             transform.translation = tip_render;
+            // With a fish on the line it is taut: nearly straight at the bite
+            // and through the fight, a touch of sag only at the lowest
+            // tension (owner, 2026-11-18: "I dont think the line in real life
+            // would slack wheren theres a fish connected to it").
             let slack = match line.phase {
-                Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
+                Phase::Bite => 0.03,
+                Phase::Hooked => 0.01 + 0.05 * (1.0 - line.tension.min(1.0)),
                 _ => 0.6,
             };
             // A slack line is held just over the water rather than hanging
             // through it (the mockup's sag ran under the surface and looped
-            // back up): the water the float rides, with its waves and tide,
-            // not the mean sea, which stands a metre over it at low water.
+            // back up): the water the float rides, with its waves.
             // It ends on the top of the float, where it is tied.
             let end = float + o.up_at(float) * FLOAT_TOP_M;
             let end_point = o.query_point(end);
+            // While the float flies the line follows its path, easing to the
+            // hanging curve once it is down (`rod-motion` 8).
+            let blend = trail.blend();
+            let cast = (blend > 0.0).then_some((trail.points.as_slice(), blend));
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -2200,12 +2799,15 @@ pub(crate) mod draw {
                         end_point,
                         seconds,
                     );
-                    line_points(&o, tip_local, end, slack, |p| {
+                    line_points(&o, tip_local, end, slack, cast, |p| {
                         line_floor(&water, end_point, o.query_point(p))
                     })
                 }
-                None => line_points(&o, tip_local, end, slack, |_| 0.0),
+                None => line_points(&o, tip_local, end, slack, cast, |_| 0.0),
             };
+            // On down through the float to the hook: the leader.
+            let mut points = points;
+            points.push(lure + up_here * 0.03 - tip_local);
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
             }
@@ -2253,9 +2855,9 @@ pub(crate) mod draw {
     ///
     /// - Never under the drawn sea ([`drawn_surface`]).
     /// - Never under the waterline the frame's composite tints
-    ///   (`water.wgsl` `compose`): the mean sea lifted by the tide, without
-    ///   the waves. A line under it is drawn as seen through water, dark.
-    /// - Over the crests: every wave at its crest, on the tide here. The eye
+    ///   (`water.wgsl` `compose`): the sea's mean surface, without the
+    ///   waves. A line under it is drawn as seen through water, dark.
+    /// - Over the crests: every wave at its crest. The eye
     ///   looks down on the line from the rod, so a line over every crest has
     ///   no wave between it and the eye. A line lying low on the water in
     ///   front of the float was seen through the crests nearer the eye, dark
@@ -2264,11 +2866,9 @@ pub(crate) mod draw {
     ///   down onto the float where it is tied.
     pub(crate) fn line_floor(water: &PlanetWater, end: Vec3, point: Vec3) -> f32 {
         let sea = water.sea;
-        let under = drawn_surface(water, point).max(sea.radius + sea.tide_at(point));
-        // Every wave at its crest: the table's reach less the tide's highest,
-        // which it adds; the tide here instead.
-        let waves = water.local.reach() - pbd_core::sea::tide_high_m(sea.tide.w.max(0.0));
-        let crests = sea.radius + waves.max(0.0) + sea.tide_at(point);
+        let under = drawn_surface(water, point).max(sea.radius);
+        // Every wave at its crest.
+        let crests = sea.radius + water.local.reach().max(0.0);
         let up = end.normalize_or(Vec3::Y);
         let rel = point - end;
         let across = (rel - up * rel.dot(up)).length();
@@ -2284,16 +2884,21 @@ pub(crate) mod draw {
     /// through the origin in f64. The first point is the tip
     /// and the last is the float, exactly: a float pulled under on a bite
     /// is still where the line ends (`fishing-and-equipment` design 4, the
-    /// line's far end).
+    /// line's far end). With a cast's trail (its places, local, and how
+    /// much of the line lies along it) each point between is moved that far
+    /// toward the trail's (`rod-motion` 8).
     pub(crate) fn line_points(
         origin: &SimOrigin,
         tip: Vec3,
         float: Vec3,
         slack: f32,
+        cast: Option<(&[Vec3], f32)>,
         surface: impl Fn(Vec3) -> f32,
     ) -> Vec<Vec3> {
         let down = -origin.up_at(tip);
         let last = LINE_POINTS - 1;
+        let along =
+            cast.map(|(trail, blend)| (trail_points(tip, trail, float, LINE_POINTS), blend));
         (0..LINE_POINTS)
             .map(|k| {
                 if k == 0 {
@@ -2303,7 +2908,10 @@ pub(crate) mod draw {
                     return float - tip;
                 }
                 let u = k as f32 / last as f32;
-                let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                let mut offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                if let Some((trail, blend)) = &along {
+                    offset = offset.lerp(trail[k] - tip, *blend);
+                }
                 let at = tip + offset;
                 let r = origin.radius_at(at);
                 let floor = f64::from(surface(at) + LINE_CLEARANCE_M);
@@ -2340,9 +2948,9 @@ pub(crate) mod draw {
             for (mut node, mut colour) in &mut fill {
                 node.width = percent(value.clamp(0.0, 1.0) * 100.0);
                 colour.0 = match label {
-                    "TENSION" if value > 0.8 => Color::srgb(1.0, 0.42, 0.34),
-                    "TENSION" if value > 0.55 => Color::srgb(0.94, 0.71, 0.24),
-                    "TENSION" => Color::srgb(0.47, 0.88, 0.63),
+                    "tension" if value > 0.8 => Color::srgb(1.0, 0.42, 0.34),
+                    "tension" if value > 0.55 => Color::srgb(0.94, 0.71, 0.24),
+                    "tension" => Color::srgb(0.47, 0.88, 0.63),
                     _ => Color::srgb(0.94, 0.71, 0.24),
                 };
             }

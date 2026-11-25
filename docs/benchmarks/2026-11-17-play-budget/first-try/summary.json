@@ -1,0 +1,269 @@
+{
+ "branches": {
+  "phase-1-trunk": {
+   "status": "stall",
+   "all": {
+    "frames": 11638,
+    "seconds": 233.6872970000002,
+    "fps": 49.801594478624956,
+    "wall": {
+     "p50": 18.347,
+     "p95": 32.311,
+     "p99": 40.349
+    },
+    "mean_ms": {
+     "wall": 20.07967838116515,
+     "gpu": 18.48871446984018,
+     "main_cpu": 11.883058687059632,
+     "render_cpu": 6.328748582230624,
+     "acquire_wait": 11.84772632754769
+    },
+    "p95_ms": {
+     "gpu": 23.904,
+     "main_cpu": 16.107,
+     "render_cpu": 7.736000000000001
+    },
+    "bound_share": {
+     "gpu": 0.9367588932806324,
+     "main cpu": 0.06324110671936758,
+     "render cpu": 0.0
+    },
+    "gpu_passes": {
+     "planet_terrain": 10.055023028011686,
+     "planet_shadow": 7.656213610586011,
+     "planet_cull": 0.2378731740848943,
+     "water_compose": 0.10752569169960474,
+     "rain": 0.08609434610757863,
+     "rain_half": 0.058579910637566596,
+     "other": 0.04992808042619007,
+     "main_opaque_pass_3d": 0.03419908919058257,
+     "ssr_capture": 0.02695927135246606,
+     "upscaling": 0.025472417941227014,
+     "main_transparent_pass_3d": 0.024811221859426018,
+     "reflect_half": 0.024115140058429282,
+     "cloud_puffs": 0.014895256916996048,
+     "reflect_compose": 0.009226499398522083,
+     "rain_splash": 0.0,
+     "cloud_march": 0.0,
+     "cloud_resolve": 0.0,
+     "weather_overlay": 0.0,
+     "water_lens": 0.0,
+     "lens_mist": 0.0,
+     "lite_bloom": 0.0,
+     "tonemapping": 0.0
+    }
+   },
+   "shots": {
+    "1 Gather by hand: stones and fibre off the ground with F, then soil": {
+     "frames": 11638,
+     "seconds": 233.6872970000002,
+     "fps": 49.801594478624956,
+     "wall": {
+      "p50": 18.347,
+      "p95": 32.311,
+      "p99": 40.349
+     },
+     "mean_ms": {
+      "wall": 20.07967838116515,
+      "gpu": 18.48871446984018,
+      "main_cpu": 11.883058687059632,
+      "render_cpu": 6.328748582230624,
+      "acquire_wait": 11.84772632754769
+     },
+     "p95_ms": {
+      "gpu": 23.904,
+      "main_cpu": 16.107,
+      "render_cpu": 7.736000000000001
+     },
+     "bound_share": {
+      "gpu": 0.9367588932806324,
+      "main cpu": 0.06324110671936758,
+      "render cpu": 0.0
+     },
+     "gpu_passes": {
+      "planet_terrain": 10.055023028011686,
+      "planet_shadow": 7.656213610586011,
+      "planet_cull": 0.2378731740848943,
+      "water_compose": 0.10752569169960474,
+      "rain": 0.08609434610757863,
+      "rain_half": 0.058579910637566596,
+      "other": 0.04992808042619007,
+      "main_opaque_pass_3d": 0.03419908919058257,
+      "ssr_capture": 0.02695927135246606,
+      "upscaling": 0.025472417941227014,
+      "main_transparent_pass_3d": 0.024811221859426018,
+      "reflect_half": 0.024115140058429282,
+      "cloud_puffs": 0.014895256916996048,
+      "reflect_compose": 0.009226499398522083,
+      "rain_splash": 0.0,
+      "cloud_march": 0.0,
+      "cloud_resolve": 0.0,
+      "weather_overlay": 0.0,
+      "water_lens": 0.0,
+      "lens_mist": 0.0,
+      "lite_bloom": 0.0,
+      "tonemapping": 0.0
+     }
+    }
+   }
+  },
+  "phase-1-farming": {
+   "status": "stall",
+   "all": {
+    "frames": 7788,
+    "seconds": 148.9851579999999,
+    "fps": 52.27366339404093,
+    "wall": {
+     "p50": 16.529,
+     "p95": 30.683,
+     "p99": 37.747
+    },
+    "mean_ms": {
+     "wall": 19.130092193117616,
+     "gpu": 14.428452491011813,
+     "main_cpu": 14.976954802259888,
+     "render_cpu": 6.708032999486389,
+     "acquire_wait": 6.824549948638932
+    },
+    "p95_ms": {
+     "gpu": 22.428,
+     "main_cpu": 17.735,
+     "render_cpu": 8.236
+    },
+    "bound_share": {
+     "gpu": 0.5383923985618901,
+     "main cpu": 0.46147919876733434,
+     "render cpu": 0.00012840267077555214
+    },
+    "gpu_passes": {
+     "planet_terrain": 6.58898343605547,
+     "planet_shadow": 6.494984591679507,
+     "water_compose": 0.33795107858243456,
+     "planet_cull": 0.2129768875192604,
+     "water_lens": 0.20469042116076014,
+     "rain_half": 0.16417026194144838,
+     "rain": 0.0857342064714946,
+     "reflect_half": 0.06557524396507447,
+     "other": 0.04942000513610683,
+     "rain_splash": 0.029549563430919364,
+     "ssr_capture": 0.025619542886492038,
+     "main_opaque_pass_3d": 0.025465844889573704,
+     "upscaling": 0.023056368772470467,
+     "main_transparent_pass_3d": 0.021021828454031843,
+     "reflect_compose": 0.012774011299435027,
+     "cloud_puffs": 0.008670005136106832,
+     "cloud_march": 0.0,
+     "cloud_resolve": 0.0,
+     "weather_overlay": 0.0,
+     "lens_mist": 0.0,
+     "lite_bloom": 0.0,
+     "tonemapping": 0.0
+    }
+   },
+   "shots": {
+    "1 Farming. Find seeds: wild plants give them when picked": {
+     "frames": 7788,
+     "seconds": 148.9851579999999,
+     "fps": 52.27366339404093,
+     "wall": {
+      "p50": 16.529,
+      "p95": 30.683,
+      "p99": 37.747
+     },
+     "mean_ms": {
+      "wall": 19.130092193117616,
+      "gpu": 14.428452491011813,
+      "main_cpu": 14.976954802259888,
+      "render_cpu": 6.708032999486389,
+      "acquire_wait": 6.824549948638932
+     },
+     "p95_ms": {
+      "gpu": 22.428,
+      "main_cpu": 17.735,
+      "render_cpu": 8.236
+     },
+     "bound_share": {
+      "gpu": 0.5383923985618901,
+      "main cpu": 0.46147919876733434,
+      "render cpu": 0.00012840267077555214
+     },
+     "gpu_passes": {
+      "planet_terrain": 6.58898343605547,
+      "planet_shadow": 6.494984591679507,
+      "water_compose": 0.33795107858243456,
+      "planet_cull": 0.2129768875192604,
+      "water_lens": 0.20469042116076014,
+      "rain_half": 0.16417026194144838,
+      "rain": 0.0857342064714946,
+      "reflect_half": 0.06557524396507447,
+      "other": 0.04942000513610683,
+      "rain_splash": 0.029549563430919364,
+      "ssr_capture": 0.025619542886492038,
+      "main_opaque_pass_3d": 0.025465844889573704,
+      "upscaling": 0.023056368772470467,
+      "main_transparent_pass_3d": 0.021021828454031843,
+      "reflect_compose": 0.012774011299435027,
+      "cloud_puffs": 0.008670005136106832,
+      "cloud_march": 0.0,
+      "cloud_resolve": 0.0,
+      "weather_overlay": 0.0,
+      "lens_mist": 0.0,
+      "lite_bloom": 0.0,
+      "tonemapping": 0.0
+     }
+    }
+   }
+  }
+ },
+ "all": {
+  "frames": 19426,
+  "seconds": 382.6724549999988,
+  "fps": 50.764040489927766,
+  "wall": {
+   "p50": 17.304,
+   "p95": 31.818,
+   "p99": 39.834
+  },
+  "mean_ms": {
+   "wall": 19.698983578708948,
+   "gpu": 16.860931071759495,
+   "main_cpu": 13.123420210027797,
+   "render_cpu": 6.480805981674045,
+   "acquire_wait": 9.833904766807372
+  },
+  "p95_ms": {
+   "gpu": 23.781,
+   "main_cpu": 17.132,
+   "render_cpu": 7.948
+  },
+  "bound_share": {
+   "gpu": 0.777051374446618,
+   "main cpu": 0.2228971481519613,
+   "render cpu": 5.147740142077628e-05
+  },
+  "gpu_passes": {
+   "planet_terrain": 8.665466951508288,
+   "planet_shadow": 7.19066992690209,
+   "planet_cull": 0.22789210336662205,
+   "water_compose": 0.19990461237516732,
+   "rain_half": 0.10091171625656337,
+   "rain": 0.085949963965819,
+   "water_lens": 0.08206161844950066,
+   "other": 0.04972438999279317,
+   "reflect_half": 0.04073674456913415,
+   "main_opaque_pass_3d": 0.030697879131061465,
+   "ssr_capture": 0.026422166169051787,
+   "upscaling": 0.02450380932770514,
+   "main_transparent_pass_3d": 0.023292031298260064,
+   "cloud_puffs": 0.012399516112426644,
+   "rain_splash": 0.011846597343766087,
+   "reflect_compose": 0.010648718212704623,
+   "cloud_march": 0.0,
+   "cloud_resolve": 0.0,
+   "weather_overlay": 0.0,
+   "lens_mist": 0.0,
+   "lite_bloom": 0.0,
+   "tonemapping": 0.0
+  }
+ }
+}

@@ -8,18 +8,31 @@
 use std::path::Path;
 
 /// The files whose simulation runs in local space.
-const FILES: [&str; 10] = [
+const FILES: [&str; 16] = [
     "crates/pbd-app/src/walking.rs",
     "crates/pbd-app/src/flight_view.rs",
     "crates/pbd-app/src/fish.rs",
     "crates/pbd-app/src/sim_origin.rs",
     "crates/pbd-core/src/fauna/school.rs",
     "crates/pbd-core/src/fishing.rs",
-    // `world-frames` 10: the herd, drops and decks.
+    // `world-frames` 10: the herd and drops (the decks went with the cog).
     "crates/pbd-app/src/husbandry.rs",
     "crates/pbd-app/src/husbandry/breed.rs",
     "crates/pbd-app/src/drops.rs",
-    "crates/pbd-app/src/decks.rs",
+    // `fish-behaviour`: the drawn poses and the line's fish.
+    "crates/pbd-core/src/fauna/swim.rs",
+    // `ocean-environments` B29: the beavers and otters drawn on the fauna's
+    // creatures.
+    "crates/pbd-app/src/critters.rs",
+    // `townsfolk` 25: the townspeople, placed in the planet's frame in f64.
+    "crates/pbd-core/src/townsfolk.rs",
+    "crates/pbd-app/src/townsfolk.rs",
+    // `townsfolk` 28: the lost villager, stored and walked in the body's
+    // frame in f64.
+    "crates/pbd-app/src/economy/special.rs",
+    // `land-transport` 11: the carts, kept in the body's frame in f64.
+    "crates/pbd-core/src/vehicle/cart.rs",
+    "crates/pbd-app/src/vehicles/carts.rs",
 ];
 
 /// What taking up or a radius from a local position looks like.

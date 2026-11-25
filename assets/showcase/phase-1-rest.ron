@@ -1,0 +1,87 @@
+// The phase-1 showcase, the missions no other branch plays
+// (`mission-playthrough`): the flock, sea and fresh-water fishing, the
+// three crops and the meals from them, and getting about past a swim
+// (the reef, a town, a boat). Run after the other branches, on their world.
+(
+    goal: "Goal: the rest of the mission tree",
+    at: Some((11.5085, -25.0992)),
+    hour: 10.0,
+    shots: [
+        (
+            caption: "A flock: tame a woolback or a plodder",
+            max_s: 600.0,
+            acts: [Focus("flock"), Hand("hand"), Tame("woolback"), Still],
+        ),
+        (
+            caption: "(played)",
+            max_s: 5.0,
+            acts: [Wait(0.5)],
+        ),
+        (
+            caption: "(played)",
+            max_s: 5.0,
+            acts: [Wait(0.5)],
+        ),
+        (
+            caption: "A pen for the woolback, and lead it in",
+            max_s: 600.0,
+            acts: [Focus("flock"), Hand("axe"), Chop(Have("log", 8)), Craft("planks", 8), Hand("hand"), Craft("workbench", 1), Place("block:workbench"), Bench("fence", 18), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("gate", 1), Hand("hand"), Walk(2.0), Pen, Select("fence"), Lead("woolback"), Still],
+        ),
+        (
+            caption: "Four days later: wool to shear",
+            rate: Some(300.0),
+            max_s: 80.0,
+            acts: [Wait(60.0)],
+        ),
+        (
+            caption: "Collect the wool",
+            max_s: 120.0,
+            acts: [Focus("flock"), Collect("woolback")],
+        ),
+        (
+            caption: "Four days later: wool to shear",
+            rate: Some(300.0),
+            max_s: 80.0,
+            acts: [Wait(60.0)],
+        ),
+        (
+            caption: "Collect the wool",
+            max_s: 120.0,
+            acts: [Focus("flock"), Collect("woolback")],
+        ),
+        (
+            caption: "Four days later: wool to shear",
+            rate: Some(300.0),
+            max_s: 80.0,
+            acts: [Wait(60.0)],
+        ),
+        (
+            caption: "Collect the wool",
+            until: ["flock"],
+            repeat: true,
+            max_s: 300.0,
+            acts: [Focus("flock"), Collect("woolback"), Still],
+        ),
+        (
+            caption: "(played)",
+            max_s: 5.0,
+            acts: [Wait(0.5)],
+        ),
+        (
+            caption: "Fish the sea",
+            max_s: 900.0,
+            acts: [Focus("sea-fishing"), Shore, Hand("shovel"), Dig(Have("bait", 8), 1), Hand("rod"), Fish(Times(3)), Still],
+        ),
+        (
+            caption: "Then fresh water: a river or a lake",
+            until: ["sea-fishing"],
+            max_s: 900.0,
+            acts: [Focus("sea-fishing"), Fresh, Hand("shovel"), Dig(Have("bait", 6), 1), Hand("rod"), Fish(Mission("sea-fishing")), Still],
+        ),
+        (
+            caption: "The rest done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

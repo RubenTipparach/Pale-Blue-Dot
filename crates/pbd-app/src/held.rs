@@ -6,21 +6,42 @@
 //! `tools/gen_held_tools.py` from the approved Hex Tool Bench mockup into
 //! `assets/models/held_tools.ron`, which is compiled in. The same generator
 //! draws the slot icons from the same hexes, so the icon and the model cannot
-//! differ. The sway and the chop are tunables in `assets/config/held.ron`.
+//! differ. The sway, the stroke and the rod's motion are tunables in
+//! `assets/config/held.ron`.
+//!
+//! The pickaxe and the axe swing from the shoulder in four stages, and the
+//! shovel tips, slides and scoops, on one steady beat timed by the dig
+//! (`openspec/changes/held-swing`, [`stroke`]). The hand is chamfered
+//! blocks with small nearest-sampled textures, lit by a wrapped light that
+//! stays put in eye space as the tool moves (`openspec/changes/hand-model`,
+//! `pbd_core::hand`).
 //! The fishing line leaves from the rod model's own tip
-//! (`openspec/changes/hex-held-tools`).
+//! (`openspec/changes/hex-held-tools`), where the rod is drawn this frame.
+//!
+//! The rod moves with the line (`openspec/changes/rod-motion`): the fist is
+//! raised over the shoulder and the rod drawn back on the charge, the arm
+//! drives down with the flick on the cast, and the rod twitches on a nibble,
+//! dips on a bite and shakes with a fish on. The motion is drawn only: no
+//! rule reads it.
 
 use crate::config::HeldConfig;
 use crate::fish::ToolSlot;
 use crate::walking::{WalkingCamera, WalkingReadout};
 use bevy::asset::RenderAssetUsages;
+use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::light::NotShadowCaster;
 use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
+use pbd_core::fishing::{Event, Phase};
+use pbd_core::hand::{self, HandMeshes, Shade, Texture};
 use pbd_core::hexel::{self, Hex, HexelMesh, Prism};
 use pbd_core::inventory::{Tier, Tool};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
+
+pub mod light;
+pub mod stroke;
+use stroke::{DigBeat, Gear, ShovelSettings, StrokeClock, StrokeSettings, StrokeTool};
 
 /// How the tool in hand moves, in `held.ron`.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -29,12 +50,203 @@ pub struct HeldSettings {
     /// The idle sway: amplitude right and up, m, and rate, rad/s (Tenebris).
     pub sway_m: [f32; 2],
     pub sway_rate: [f32; 2],
-    /// The chop while a block is being broken (Tenebris): the swing's rate,
-    /// rad/s, how far the tool drops, m, and how far it pitches about the
-    /// fist, rad.
-    pub swing_rate: f32,
-    pub swing_drop_m: f32,
-    pub swing_pitch_rad: f32,
+    /// The pickaxe's and the axe's stroke, and what the shovel shares
+    /// (`held-swing` decisions 5-8).
+    pub stroke: StrokeSettings,
+    /// The shovel's stroke (`held-swing` decision 9).
+    pub shovel: ShovelSettings,
+    /// How the rod moves with the line (`rod-motion` design 2).
+    pub rod: RodSettings,
+    /// How the hand is lit (`hand-model`).
+    pub hand_light: HandLight,
+    /// How a light in hand is held and burns (`glowing-mushrooms` design
+    /// 14).
+    pub light: light::LightHold,
+}
+
+/// The hand's wrapped light, in `held.hand_light`: a face's shade is
+/// `ambient + wrap * (0.5 + 0.5 n.l)^2 + fill * max(n.f, 0)`, with the light
+/// and the fill fixed in eye space (`pbd_core::hand::LIGHT_EYE`, `FILL_EYE`).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HandLight {
+    pub ambient: f32,
+    pub wrap: f32,
+    pub fill: f32,
+}
+
+impl Default for HandLight {
+    fn default() -> Self {
+        Self {
+            ambient: 0.45,
+            wrap: 0.55,
+            fill: 0.12,
+        }
+    }
+}
+
+impl HandLight {
+    pub fn shade(&self) -> Shade {
+        Shade {
+            ambient: self.ambient,
+            wrap: self.wrap,
+            fill: self.fill,
+        }
+    }
+}
+
+/// How the rod in hand moves with the line, in `held.rod`. Pitch is about
+/// the fist, rod tip up and back positive; every value here is a size, a
+/// rate or a time, and the code gives it its sign.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RodSettings {
+    /// Charging: how far the rod draws back at full charge, rad.
+    pub draw_rad: f32,
+    /// The overhead cast (`rod-motion` decision 7): at full charge the fist
+    /// is raised on an arc about the shoulder this far up and this far back
+    /// toward the head from rest, m, above the right shoulder; at the flick
+    /// the arm stretches this far past rest and swings down as far, m.
+    pub cast_raise_m: f32,
+    pub cast_back_m: f32,
+    pub cast_reach_m: f32,
+    /// The cast: how far forward of rest the rod flicks, rad, and for how
+    /// long it is held there, s.
+    pub flick_rad: f32,
+    pub flick_s: f32,
+    /// The float out: how far forward of rest the rod is held, rad, and its
+    /// slow bob, rad and Hz.
+    pub settle_rad: f32,
+    pub bob_rad: f32,
+    pub bob_hz: f32,
+    /// A nibble: the tip's twitch down, rad, and how long it lasts, s.
+    pub nibble_rad: f32,
+    pub nibble_s: f32,
+    /// A bite: how far the tip dips, rad, and its shake, rad and Hz, until
+    /// the window ends.
+    pub bite_rad: f32,
+    pub bite_shake_rad: f32,
+    pub bite_shake_hz: f32,
+    /// A fish on: how far the rod is held up, rad, and its shake at full
+    /// tension, rad and Hz (the shake scales with the tension).
+    pub fight_rad: f32,
+    pub fight_shake_rad: f32,
+    pub fight_shake_hz: f32,
+    /// Reeling a fish in: the circle the fist turns, radius m, and Hz.
+    pub crank_m: f32,
+    pub crank_hz: f32,
+    /// How far the rod rolls toward a hooked fish's pull, rad.
+    pub roll_rad: f32,
+    /// A catch: the rod lifts this far, rad, and eases back to rest over
+    /// this long, s.
+    pub catch_rad: f32,
+    pub catch_s: f32,
+    /// A snap, a miss, a strike too early or a line wound in: how long the
+    /// rod takes to ease back, s.
+    pub ease_s: f32,
+    /// The spring that carries the rod toward each target: its natural
+    /// frequency, Hz, and damping ratio (1 is critical).
+    pub spring_hz: f32,
+    pub damping: f32,
+    /// The rod flexes (`rod-motion` 8): the blank past the fist bends by
+    /// `bend * L * s^2` (s from the fist to the tip, 0..1), `bend` a damped
+    /// spring toward `flex` times the rod's own pitch rate against it, rad
+    /// per rad/s, at `bend_hz`, Hz, with `bend_damping`, a ratio, never past
+    /// `bend_max_rad`.
+    pub flex: f32,
+    pub bend_max_rad: f32,
+    pub bend_hz: f32,
+    pub bend_damping: f32,
+    /// The follow-through while the float flies: the rod held this far
+    /// below rest, rad, the arm reaching this share of the flick's reach
+    /// down the cast's arc.
+    pub follow_rad: f32,
+    pub follow_reach: f32,
+}
+
+impl Default for RodSettings {
+    fn default() -> Self {
+        Self {
+            draw_rad: 0.9,
+            cast_raise_m: 0.28,
+            cast_back_m: 0.18,
+            cast_reach_m: 0.07,
+            flick_rad: 0.35,
+            flick_s: 0.14,
+            settle_rad: 0.12,
+            bob_rad: 0.015,
+            bob_hz: 0.4,
+            nibble_rad: 0.05,
+            nibble_s: 0.15,
+            bite_rad: 0.22,
+            bite_shake_rad: 0.04,
+            bite_shake_hz: 14.0,
+            fight_rad: 0.45,
+            fight_shake_rad: 0.06,
+            fight_shake_hz: 9.0,
+            crank_m: 0.012,
+            crank_hz: 3.0,
+            roll_rad: 0.15,
+            catch_rad: 0.6,
+            catch_s: 0.6,
+            ease_s: 0.3,
+            spring_hz: 9.0,
+            damping: 0.7,
+            flex: 0.07,
+            bend_max_rad: 0.6,
+            bend_hz: 4.5,
+            bend_damping: 0.3,
+            follow_rad: 0.55,
+            follow_reach: 0.8,
+        }
+    }
+}
+
+impl RodSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        let all = [
+            self.draw_rad,
+            self.cast_raise_m,
+            self.cast_back_m,
+            self.cast_reach_m,
+            self.flick_rad,
+            self.flick_s,
+            self.settle_rad,
+            self.bob_rad,
+            self.bob_hz,
+            self.nibble_rad,
+            self.nibble_s,
+            self.bite_rad,
+            self.bite_shake_rad,
+            self.bite_shake_hz,
+            self.fight_rad,
+            self.fight_shake_rad,
+            self.fight_shake_hz,
+            self.crank_m,
+            self.crank_hz,
+            self.roll_rad,
+            self.catch_rad,
+            self.catch_s,
+            self.ease_s,
+            self.spring_hz,
+            self.damping,
+            self.flex,
+            self.bend_max_rad,
+            self.bend_hz,
+            self.bend_damping,
+            self.follow_rad,
+            self.follow_reach,
+        ];
+        if all.iter().any(|v| !v.is_finite() || *v < 0.0) {
+            return Err("held.rod: every value is finite and non-negative".into());
+        }
+        if self.spring_hz <= 0.0 || self.bend_hz <= 0.0 {
+            return Err(
+                "held.rod: spring_hz and bend_hz are positive, or the rod never moves".into(),
+            );
+        }
+        Ok(())
+    }
 }
 
 impl Default for HeldSettings {
@@ -42,9 +254,11 @@ impl Default for HeldSettings {
         Self {
             sway_m: [0.006, 0.005],
             sway_rate: [1.3, 1.7],
-            swing_rate: 9.0,
-            swing_drop_m: 0.06,
-            swing_pitch_rad: 0.85,
+            stroke: StrokeSettings::default(),
+            shovel: ShovelSettings::default(),
+            rod: RodSettings::default(),
+            hand_light: HandLight::default(),
+            light: light::LightHold::default(),
         }
     }
 }
@@ -56,14 +270,17 @@ impl HeldSettings {
             self.sway_m[1],
             self.sway_rate[0],
             self.sway_rate[1],
-            self.swing_rate,
-            self.swing_drop_m,
-            self.swing_pitch_rad,
+            self.hand_light.ambient,
+            self.hand_light.wrap,
+            self.hand_light.fill,
         ];
         if all.iter().any(|v| !v.is_finite() || *v < 0.0) {
-            return Err("held: sway and swing are finite and non-negative".into());
+            return Err("held: the sway and the hand's light are finite and non-negative".into());
         }
-        Ok(())
+        self.stroke.validate()?;
+        self.shovel.validate()?;
+        self.light.validate()?;
+        self.rod.validate()
     }
 }
 
@@ -85,8 +302,9 @@ pub struct HeldModel {
     /// the rod.
     pub tip: [f32; 3],
     pub hexes: Vec<Hex>,
-    /// The hand's prisms, in tool units.
-    pub hand: Vec<Prism>,
+    /// The hand's 19 bones on this tool's grip, in its units: what the hand
+    /// is built from (`hand-model`, `pbd_core::hand::build`).
+    pub bones: Vec<hand::Bone>,
 }
 
 impl HeldModel {
@@ -106,6 +324,8 @@ impl HeldModel {
 pub struct HeldModels {
     /// Hex centre spacing, tool units.
     pub spacing: f32,
+    /// The hand's look and shape, every tool's.
+    pub hand: hand::Look,
     pub tools: Vec<HeldModel>,
 }
 
@@ -114,6 +334,9 @@ impl HeldModels {
     pub fn validate(&self) -> Result<(), String> {
         if !(self.spacing.is_finite() && self.spacing > 0.0) {
             return Err("held_tools: spacing is positive".into());
+        }
+        if !self.hand.is_sound() {
+            return Err("held_tools: the hand's look is not sound".into());
         }
         for tool in Tool::ALL {
             let n = self.tools.iter().filter(|m| m.tool == key(tool)).count();
@@ -138,8 +361,12 @@ impl HeldModels {
                     m.tool
                 ));
             }
-            if m.hand.is_empty() || !m.hand.iter().all(Prism::is_sound) {
-                return Err(format!("held_tools.{}: a hand prism is not sound", m.tool));
+            if m.bones.len() != hand::BONES || !m.bones.iter().all(hand::Bone::is_sound) {
+                return Err(format!(
+                    "held_tools.{}: the hand has {} sound bones",
+                    m.tool,
+                    hand::BONES
+                ));
             }
         }
         Ok(())
@@ -177,39 +404,655 @@ pub fn models() -> &'static HeldModels {
     })
 }
 
-/// Where the fishing line leaves the rod, in eye space: the rod model's own
-/// tip.
+/// The rod tip at rest, in eye space: the rod model's own tip. The line
+/// leaves from where the tip is drawn this frame, `RodTipNow`.
 pub fn rod_tip() -> Vec3 {
     models().get(Tool::Rod).tip.into()
 }
 
-/// The light the hand is shaded against, in eye space: from above, a little
-/// right and toward the eye.
-const HAND_LIGHT: Vec3 = Vec3::new(0.3, 0.8, 0.55);
-
-/// A tool's hex mesh and its hand's mesh, in tool units.
-pub fn meshes(model: &HeldModel, spacing: f32) -> (HexelMesh, HexelMesh) {
-    let tool = hexel::mesh(&model.hexes, spacing);
-    let light = model.rest().rotation.inverse() * HAND_LIGHT.normalize();
-    let mut hand = HexelMesh::default();
-    for part in &model.hand {
-        hexel::prism(part, light, &mut hand);
-    }
-    (tool, hand)
+/// A held tool's meshes, in tool units: the tool's hexes; the hand by
+/// texture, the hand and the arm (the wrist, the cuff and the sleeve,
+/// which may turn at the wrist) and the wrist joint; and, for the shovel,
+/// the clump of dirt it scoops.
+pub struct HeldMeshes {
+    pub tool: HexelMesh,
+    pub hand: HandMeshes,
+    pub arm: HandMeshes,
+    pub wrist: Vec3,
+    pub dirt: Option<HexelMesh>,
 }
 
-/// Whether a block is being broken, so the tool in hand chops. Written by
-/// whoever runs the digging.
+/// A tool's meshes, the hand built with `look` and its sleeve drawn
+/// `sleeve_extra` tool units longer.
+pub fn meshes(model: &HeldModel, spacing: f32, look: &hand::Look, sleeve_extra: f32) -> HeldMeshes {
+    let tool = hexel::mesh(&model.hexes, spacing);
+    let fist = model
+        .rest()
+        .compute_affine()
+        .inverse()
+        .transform_point3(model.fist.into());
+    let built = hand::build(&model.bones, fist, look, sleeve_extra);
+    let dirt = (model.tool == key(Tool::Shovel)).then(|| dirt_clump(model));
+    HeldMeshes {
+        tool,
+        hand: built.hand,
+        arm: built.arm,
+        wrist: built.wrist,
+        dirt,
+    }
+}
+
+/// The dirt colour of the scoop's clump, straight sRGB: the Tools in Hand
+/// mockup's dirt.
+const DIRT: [u8; 3] = [122, 86, 54];
+
+/// The clump of dirt the shovel lifts (`held-swing` decision 9): seven hex
+/// chips on both faces of the blade, near its middle, as the mockup's
+/// `makeHeld` lays them out (its generator, seed 5), shaded by the light
+/// at rest as the tool is.
+fn dirt_clump(model: &HeldModel) -> HexelMesh {
+    let to_tool = model.rest().compute_affine().inverse();
+    let fist = to_tool.transform_point3(model.fist.into());
+    let tip = to_tool.transform_point3(model.tip.into());
+    let blade = fist.lerp(tip, 0.86);
+    let mut seed: u32 = 5;
+    let mut r = || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        seed as f32 / 4_294_967_296.0
+    };
+    let light = model.rest().rotation.inverse() * hand::LIGHT_EYE.normalize();
+    let mut out = HexelMesh::default();
+    for i in 0..7 {
+        let radius = 0.5 + r() * 0.5;
+        let length = 0.45 + r() * 0.3;
+        let x = (r() - 0.5) * 1.8;
+        let y = (r() - 0.5) * 1.8;
+        let side = if i & 1 == 1 { 1.0 } else { -1.0 };
+        let z = side * (0.45 + r() * 0.2);
+        let chip = Prism {
+            axis: [0.0, 0.0, 1.0],
+            at: (blade + Vec3::new(x, y, z)).to_array(),
+            radius,
+            length,
+            across: None,
+            width: None,
+            colour: DIRT,
+        };
+        hexel::prism(&chip, light, &mut out);
+    }
+    out
+}
+
+/// What the dig's rule says this frame, as the tool in hand needs it to
+/// swing: whether a hold is working, the block's break time and how far
+/// into it and its pause the hold is (`held-swing` decision 5). Written by
+/// whoever runs the digging, read only to draw.
 #[derive(Resource, Default, Clone, Copy, Debug)]
-pub struct Swinging(pub bool);
+pub struct Swinging(pub DigBeat);
+
+/// A stroke's impact this frame (`held-swing` 2.2): whether it is a
+/// block's last, the one on the break. Written by the hold, read by the
+/// dig sounds.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StrokeImpact {
+    pub last: bool,
+}
+
+/// An offset from a held tool's rest pose: a pitch about the fist (tip up
+/// and back positive), a roll about the view's forward axis (tip right
+/// positive), a yaw about the view's up (the stroke's swing across, tip
+/// left positive), and a shift of the whole, eye space, m. The stroke is
+/// one, and so is the rod's motion.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HeldPose {
+    pub pitch: f32,
+    pub roll: f32,
+    pub yaw: f32,
+    pub shift: Vec3,
+}
+
+impl HeldPose {
+    pub fn rotation(&self) -> Quat {
+        Quat::from_rotation_y(self.yaw)
+            * Quat::from_rotation_z(-self.roll)
+            * Quat::from_rotation_x(self.pitch)
+    }
+
+    /// A point of the rest pose, eye space, where this pose puts it.
+    pub fn place(&self, point: Vec3, fist: Vec3) -> Vec3 {
+        fist + self.rotation() * (point - fist) + self.shift
+    }
+
+    /// The rest pose moved by this one.
+    pub fn apply(&self, rest: Transform, fist: Vec3) -> Transform {
+        Transform {
+            translation: self.place(rest.translation, fist),
+            rotation: self.rotation() * rest.rotation,
+            scale: rest.scale,
+        }
+    }
+
+    pub fn lerp(self, to: Self, t: f32) -> Self {
+        Self {
+            pitch: self.pitch + (to.pitch - self.pitch) * t,
+            roll: self.roll + (to.roll - self.roll) * t,
+            yaw: self.yaw + (to.yaw - self.yaw) * t,
+            shift: self.shift.lerp(to.shift, t),
+        }
+    }
+
+    /// The rod's spring carries pitch, roll and shift; it never yaws.
+    fn to_array(self) -> [f32; 5] {
+        [
+            self.pitch,
+            self.roll,
+            self.shift.x,
+            self.shift.y,
+            self.shift.z,
+        ]
+    }
+
+    fn from_array(a: [f32; 5]) -> Self {
+        Self {
+            pitch: a[0],
+            roll: a[1],
+            yaw: 0.0,
+            shift: Vec3::new(a[2], a[3], a[4]),
+        }
+    }
+}
+
+/// What the line is doing this frame, as the rod in hand needs it: written
+/// by the fishing (`fish.rs`) each frame and read only to draw the rod.
+#[derive(Resource, Clone, Debug, PartialEq)]
+pub struct RodCue {
+    pub phase: Phase,
+    /// The cast's charge, 0..1.
+    pub power: f32,
+    /// The line's tension with a fish on, 0..1.
+    pub tension: f32,
+    /// A fish is on and the reel is being wound.
+    pub reeling: bool,
+    /// Which side of the eye a hooked fish pulls, -1 left to 1 right.
+    pub pull: f32,
+    /// The line's events since the rod last moved; the rod takes them.
+    pub events: Vec<Event>,
+}
+
+impl Default for RodCue {
+    fn default() -> Self {
+        Self {
+            phase: Phase::Ready,
+            power: 0.0,
+            tension: 0.0,
+            reeling: false,
+            pull: 0.0,
+            events: Vec::new(),
+        }
+    }
+}
+
+/// A motion an event starts, over the phase's own target, for a while.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Moment {
+    #[default]
+    None,
+    /// The cast: the rod flicks forward and the arm drives forward and
+    /// down the cast's arc from where the charge left it (`from_k`).
+    Flick { from_k: f32 },
+    /// A nibble: the tip twitches.
+    Nibble,
+    /// From a pose (and the arm's turn on the cast's arc in it) to the
+    /// phase's target: after a catch, a snap, a miss.
+    Ease {
+        from: HeldPose,
+        from_turn: f32,
+        over_s: f32,
+    },
+}
+
+/// The rod's motion: its pose as drawn, the spring carrying it toward each
+/// target, and the moment the last event started.
+#[derive(Resource, Clone, Debug)]
+pub struct RodMotion {
+    pub pose: HeldPose,
+    velocity: HeldPose,
+    moment: Moment,
+    since_s: f32,
+    clock_s: f32,
+    /// How far along the cast's arc the charge has the fist, 0..1, kept
+    /// for the flick that starts from there.
+    drawn_k: f32,
+    /// The shoulder the cast's arc turns about, eye space, m: the
+    /// stroke's (`held.stroke.shoulder`), set each frame by the hold.
+    pub shoulder: Vec3,
+    /// How far the forearm has turned on the cast's arc, rad, carried by
+    /// the same spring as the pose, and its rate: the pose's pitch less
+    /// this is the rod's own pitch about the fist.
+    turn: f32,
+    turn_v: f32,
+    /// The rod's bend, rad (`rod-motion` 8), and its rate.
+    pub bend: f32,
+    bend_v: f32,
+}
+
+impl Default for RodMotion {
+    fn default() -> Self {
+        Self {
+            pose: HeldPose::default(),
+            velocity: HeldPose::default(),
+            moment: Moment::default(),
+            since_s: 0.0,
+            clock_s: 0.0,
+            drawn_k: 0.0,
+            shoulder: StrokeSettings::default().shoulder.into(),
+            turn: 0.0,
+            turn_v: 0.0,
+            bend: 0.0,
+            bend_v: 0.0,
+        }
+    }
+}
+
+/// Where the rod tip is drawn this frame, eye space: the rest tip through
+/// the frame's pose. The line leaves from here.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub struct RodTipNow(pub Vec3);
+
+impl Default for RodTipNow {
+    fn default() -> Self {
+        Self(rod_tip())
+    }
+}
+
+/// 0..1 eased in and out.
+fn smooth(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// 0..1 eased out: fast from the start, slowing into the end.
+fn ease_out(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    1.0 - (1.0 - t) * (1.0 - t)
+}
+
+/// The share of the charge the cast's windup (the raise) takes; the rest of
+/// the charge is the held coil at the top (`rod-motion` decision 7).
+const CAST_RAISE_SHARE: f32 = 0.4;
+
+/// The fist on the cast's arc about `shoulder` (eye space, m), in its
+/// upright plane: the
+/// shift from the rod's rest fist, eye space, m, and how far the forearm has
+/// turned, rad (up and back positive). `k` 0 is rest, 1 the top of the draw
+/// (`cast_raise_m` up, `cast_back_m` back), -1 the flick's reach; the arc's
+/// radius and angle go between them together.
+pub fn cast_arc(s: &RodSettings, shoulder: Vec3, k: f32) -> (Vec3, f32) {
+    let fist: Vec3 = models().get(Tool::Rod).fist.into();
+    let (y0, z0) = (fist.y - shoulder.y, fist.z - shoulder.z);
+    let (r0, a0) = (y0.hypot(z0), y0.atan2(-z0));
+    let (r1, a1, k) = if k >= 0.0 {
+        let (y1, z1) = (y0 + s.cast_raise_m, z0 + s.cast_back_m);
+        (y1.hypot(z1), y1.atan2(-z1), k)
+    } else {
+        (r0 + s.cast_reach_m, a0 - s.cast_reach_m / r0, -k)
+    };
+    let r = r0 + (r1 - r0) * k;
+    let a = a0 + (a1 - a0) * k;
+    let at = Vec3::new(fist.x, shoulder.y + r * a.sin(), shoulder.z - r * a.cos());
+    (at - fist, a - a0)
+}
+
+/// The charge, `power` 0..1: how far along the cast's arc the fist is and
+/// the rod's pitch as drawn. The windup raises the fist, eased out, in the
+/// first share of the charge; the anticipation then coils the last of the
+/// arc and the draw and holds at the top.
+fn cast_draw(s: &RodSettings, power: f32) -> (f32, f32) {
+    let raise = ease_out(power / CAST_RAISE_SHARE);
+    let coil = smooth((power - CAST_RAISE_SHARE) / (1.0 - CAST_RAISE_SHARE));
+    (
+        0.88 * raise + 0.12 * coil,
+        s.draw_rad * (0.8 * raise + 0.2 * coil),
+    )
+}
+
+/// How far a timed motion is through, 0..1; one with no time is done.
+fn through(since_s: f32, over_s: f32) -> f32 {
+    if over_s > 0.0 {
+        (since_s / over_s).clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
+}
+
+impl RodMotion {
+    /// A wave of this many Hz on the motion's clock, -1..1.
+    fn wave(&self, hz: f32) -> f32 {
+        (self.clock_s * hz * std::f32::consts::TAU).sin()
+    }
+
+    /// Where the line's phase holds the rod, with nothing starting.
+    pub fn phase_target(&self, s: &RodSettings, cue: &RodCue) -> HeldPose {
+        self.phase_aim(s, cue).0
+    }
+
+    /// The phase's target and the arm's turn on the cast's arc in it.
+    fn phase_aim(&self, s: &RodSettings, cue: &RodCue) -> (HeldPose, f32) {
+        match cue.phase {
+            Phase::Ready => (HeldPose::default(), 0.0),
+            Phase::Charging => {
+                let (k, pitch) = cast_draw(s, cue.power);
+                let (shift, turn) = cast_arc(s, self.shoulder, k);
+                (
+                    HeldPose {
+                        pitch,
+                        shift,
+                        ..default()
+                    },
+                    turn,
+                )
+            }
+            // The follow-through (`rod-motion` 8): held out low with the
+            // arm reaching down the arc while the float flies.
+            Phase::Flying => {
+                let (shift, turn) = cast_arc(s, self.shoulder, -s.follow_reach);
+                (
+                    HeldPose {
+                        pitch: -s.follow_rad + turn,
+                        shift,
+                        ..default()
+                    },
+                    turn,
+                )
+            }
+            Phase::Floating | Phase::Nibble => (
+                HeldPose {
+                    pitch: -s.settle_rad + s.bob_rad * self.wave(s.bob_hz),
+                    ..default()
+                },
+                0.0,
+            ),
+            Phase::Bite => (
+                HeldPose {
+                    pitch: -s.bite_rad + s.bite_shake_rad * self.wave(s.bite_shake_hz),
+                    ..default()
+                },
+                0.0,
+            ),
+            Phase::Hooked => {
+                let tension = cue.tension.clamp(0.0, 1.0);
+                let crank = if cue.reeling {
+                    let turn = self.clock_s * s.crank_hz * std::f32::consts::TAU;
+                    Vec3::new(0.0, turn.sin(), turn.cos()) * s.crank_m
+                } else {
+                    Vec3::ZERO
+                };
+                (
+                    HeldPose {
+                        pitch: s.fight_rad
+                            + s.fight_shake_rad * tension * self.wave(s.fight_shake_hz),
+                        roll: s.roll_rad * cue.pull.clamp(-1.0, 1.0),
+                        yaw: 0.0,
+                        shift: crank,
+                    },
+                    0.0,
+                )
+            }
+        }
+    }
+
+    /// Where the rod is carried toward this frame: the phase's target, or
+    /// the motion the last event started while it lasts.
+    pub fn target(&self, s: &RodSettings, cue: &RodCue) -> HeldPose {
+        self.aim(s, cue).0
+    }
+
+    /// The target and the arm's turn on the cast's arc in it.
+    fn aim(&self, s: &RodSettings, cue: &RodCue) -> (HeldPose, f32) {
+        let (phase, phase_turn) = self.phase_aim(s, cue);
+        match self.moment {
+            Moment::None => (phase, phase_turn),
+            Moment::Flick { from_k } => {
+                // The hit: the arm drives down the arc, fastest at the end,
+                // and the rod turns with it past the flick.
+                let u = through(self.since_s, s.flick_s);
+                let (shift, turn) = cast_arc(s, self.shoulder, from_k + (-1.0 - from_k) * u * u);
+                (
+                    HeldPose {
+                        pitch: -s.flick_rad + turn,
+                        shift,
+                        ..default()
+                    },
+                    turn,
+                )
+            }
+            Moment::Nibble => (
+                HeldPose {
+                    pitch: phase.pitch - s.nibble_rad,
+                    ..phase
+                },
+                phase_turn,
+            ),
+            Moment::Ease {
+                from,
+                from_turn,
+                over_s,
+            } => {
+                let t = smooth(through(self.since_s, over_s));
+                (
+                    from.lerp(phase, t),
+                    from_turn + (phase_turn - from_turn) * t,
+                )
+            }
+        }
+    }
+
+    /// The rod's own pitch rate about the fist, rad/s: the pose's less the
+    /// forearm's turn on the arc.
+    pub fn own_rate(&self) -> f32 {
+        self.velocity.pitch - self.turn_v
+    }
+
+    /// Take the line's events and carry the rod a frame on.
+    pub fn step(&mut self, s: &RodSettings, cue: &RodCue, events: &[Event], dt: f32) {
+        let dt = dt.clamp(0.0, 0.1);
+        // The clock only drives the shakes and the bob; wrapped so it keeps
+        // its precision in a long sitting.
+        self.clock_s = (self.clock_s + dt).rem_euclid(3600.0);
+        self.since_s += dt;
+        if matches!(cue.phase, Phase::Charging) {
+            self.drawn_k = cast_draw(s, cue.power).0;
+        }
+        for event in events {
+            let moment = match event {
+                Event::Cast { .. } => Moment::Flick {
+                    from_k: self.drawn_k,
+                },
+                Event::Nibble { .. } => Moment::Nibble,
+                Event::Caught { .. } => Moment::Ease {
+                    from: HeldPose {
+                        pitch: s.catch_rad,
+                        ..default()
+                    },
+                    from_turn: 0.0,
+                    over_s: s.catch_s,
+                },
+                Event::Snapped { .. }
+                | Event::Missed { .. }
+                | Event::TooEarly { .. }
+                | Event::Lost { .. }
+                | Event::ReeledIn
+                | Event::Dry => Moment::Ease {
+                    from: self.pose,
+                    from_turn: self.turn,
+                    over_s: s.ease_s,
+                },
+                _ => continue,
+            };
+            self.moment = moment;
+            self.since_s = 0.0;
+        }
+        let lasts = match self.moment {
+            Moment::None => f32::INFINITY,
+            Moment::Flick { .. } => s.flick_s,
+            Moment::Nibble => s.nibble_s,
+            Moment::Ease { over_s, .. } => over_s,
+        };
+        if self.since_s > lasts {
+            self.moment = Moment::None;
+        }
+        let (target, turn) = self.aim(s, cue);
+        let target = target.to_array();
+        // A damped spring, stepped implicitly so a long frame never throws
+        // it: the rod is carried from wherever it is, so nothing pops. The
+        // arm's turn rides the same spring, so the pose's pitch less it is
+        // the rod's own.
+        let w = s.spring_hz * std::f32::consts::TAU;
+        let damp = 1.0 + 2.0 * s.damping * w * dt + w * w * dt * dt;
+        let mut x = self.pose.to_array();
+        let mut v = self.velocity.to_array();
+        for i in 0..5 {
+            v[i] = (v[i] + dt * w * w * (target[i] - x[i])) / damp;
+            x[i] += v[i] * dt;
+        }
+        self.pose = HeldPose::from_array(x);
+        self.velocity = HeldPose::from_array(v);
+        self.turn_v = (self.turn_v + dt * w * w * (turn - self.turn)) / damp;
+        self.turn += self.turn_v * dt;
+        self.step_bend(s, dt);
+    }
+
+    /// The bend lags the rod's own swing (`rod-motion` 8): a damped spring
+    /// toward `-flex` times its pitch rate, capped, so it loads on the draw,
+    /// whips through the flick and wobbles straight. The mockup's step,
+    /// cut into steps of at most 1/240 s so a long frame stays stable.
+    fn step_bend(&mut self, s: &RodSettings, dt: f32) {
+        let cap = s.bend_max_rad;
+        let target = (-self.own_rate() * s.flex).clamp(-cap, cap);
+        let w = s.bend_hz * std::f32::consts::TAU;
+        let n = (dt * 240.0).ceil().max(1.0) as usize;
+        let h = dt / n as f32;
+        for _ in 0..n {
+            self.bend_v +=
+                (w * w * (target - self.bend) - 2.0 * s.bend_damping * w * self.bend_v) * h;
+            self.bend = (self.bend + self.bend_v * h).clamp(-cap, cap);
+        }
+        if !(self.bend.is_finite() && self.bend_v.is_finite()) {
+            self.bend = 0.0;
+            self.bend_v = 0.0;
+        }
+    }
+
+    /// Where the rod's tip is drawn, eye space, with the rod posed `pose`
+    /// (its sway added) and bent by `bend`: the straight tip moved square to
+    /// the rod, toward the side a positive pitch turns it, by `bend` times
+    /// the rod's length past the fist (the mockup's `tipBend`).
+    pub fn tip(pose: &HeldPose, bend: f32) -> Vec3 {
+        let rod = models().get(Tool::Rod);
+        let (fist, tip): (Vec3, Vec3) = (rod.fist.into(), rod.tip.into());
+        let straight = pose.place(tip, fist);
+        let dir = straight - pose.place(fist, fist);
+        straight + Vec3::X.cross(dir.normalize_or_zero()) * bend * dir.length()
+    }
+}
 
 /// A held tool, one per tool, a child of the walking camera: it carries the
-/// pose, and its two children are the tool's mesh and the hand's.
+/// pose, and its children are the tool's mesh, the hand's meshes (one per
+/// texture), the arm's on a pivot at the wrist, and the shovel's clump of
+/// dirt.
 #[derive(Component)]
 pub struct Held {
     tool: Tool,
     rest: Transform,
     fist: Vec3,
+    /// The wrist joint, tool units, and the arm's pivot there.
+    wrist: Vec3,
+    arm: Entity,
+    dirt: Option<Entity>,
+}
+
+/// A hand mesh and what its light is re-baked from (`hand-model`): its
+/// faces' normals, the shade baked into them (the knuckles' creases and the
+/// occlusion) and the fingertips' flush, which holder it hangs from,
+/// whether it is on the arm's pivot, and the rotation into eye space it was
+/// last lit at.
+#[derive(Component)]
+struct HandShading {
+    holder: Entity,
+    on_arm: bool,
+    normals: Vec<Vec3>,
+    shade: Vec<f32>,
+    tint: Vec<[f32; 3]>,
+    lit_at: Option<(Quat, HandLight)>,
+}
+
+/// The rod's mesh as it bends (`rod-motion` 8): its straight vertices,
+/// tool units, the fist and the rod's axis and length past it, the holder
+/// it hangs from, and the bend it was last drawn with.
+#[derive(Component)]
+struct RodBend {
+    holder: Entity,
+    straight: Vec<[f32; 3]>,
+    fist: Vec3,
+    axis: Vec3,
+    len: f32,
+    now: f32,
+}
+
+impl RodBend {
+    fn new(model: &HeldModel, positions: &[[f32; 3]]) -> Self {
+        let to_tool = model.rest().compute_affine().inverse();
+        let fist = to_tool.transform_point3(model.fist.into());
+        let along = to_tool.transform_point3(model.tip.into()) - fist;
+        Self {
+            holder: Entity::PLACEHOLDER,
+            straight: positions.to_vec(),
+            fist,
+            axis: along.normalize(),
+            len: along.length(),
+            now: 0.0,
+        }
+    }
+
+    /// The vertices bent by `bend`, with the rod turned into eye space by
+    /// `rotation`: each past the fist moved square to the rod, toward the
+    /// side a positive pitch turns its tip, by `bend * L * s^2`.
+    fn bent(&self, rotation: Quat, bend: f32) -> Vec<[f32; 3]> {
+        let side = (rotation.inverse() * Vec3::X).cross(self.axis).normalize();
+        self.straight
+            .iter()
+            .map(|p| {
+                let v = Vec3::from(*p);
+                let s = ((v - self.fist).dot(self.axis) / self.len).max(0.0);
+                (v + side * bend * self.len * s * s).to_array()
+            })
+            .collect()
+    }
+}
+
+/// Bend the rod's mesh as `RodMotion` bends it, on a change.
+fn bend_rod(
+    rod: Res<RodMotion>,
+    held: Query<(&Transform, &Visibility), With<Held>>,
+    mut rods: Query<(&mut RodBend, &Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for (mut bend, mesh) in &mut rods {
+        let Ok((transform, visibility)) = held.get(bend.holder) else {
+            continue;
+        };
+        if *visibility == Visibility::Hidden || (rod.bend - bend.now).abs() < 1e-5 {
+            continue;
+        }
+        let Some(mesh) = meshes.get_mut(&mesh.0) else {
+            continue;
+        };
+        mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            bend.bent(transform.rotation, rod.bend),
+        );
+        bend.now = rod.bend;
+    }
 }
 
 impl Held {
@@ -240,9 +1083,36 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
-            .add_systems(Update, (spawn, carry, hold, light_held, tint_held).chain());
+            .init_resource::<RodCue>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
+            .add_message::<StrokeImpact>()
+            // The rod is posed after the fishing has stepped the line, so it
+            // moves on this frame's events; the line is drawn from its tip
+            // in `PostUpdate`.
+            .add_systems(
+                Update,
+                (
+                    spawn,
+                    light::spawn_lights,
+                    carry,
+                    hold.in_set(HoldSet),
+                    light::hold_lights.in_set(HoldSet),
+                    bend_rod,
+                    shade_hands,
+                    light_held,
+                    tint_held,
+                )
+                    .chain()
+                    .after(crate::fish::FishSet),
+            );
     }
 }
+
+/// The system that poses the tool in hand, so a capture instrument can be
+/// ordered before it.
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HoldSet;
 
 /// A held tool's mesh and its colours as drawn, so its head can be recoloured
 /// for its tier (`tool-crafting` decision 9).
@@ -307,19 +1177,24 @@ fn tint_held(
     }
 }
 
-/// The one material every held tool and the hand share.
+/// The materials every held tool and hand share: the tools' (vertex
+/// colours), then the hand's six textures in `Texture::ALL`'s order.
 #[derive(Resource, Clone)]
-struct HeldMaterial(Handle<StandardMaterial>);
+struct HeldMaterials(Vec<Handle<StandardMaterial>>);
 
 /// Light the tool in hand from the field at the eye, each frame
-/// (`lamps-and-lanterns` decision 10). The material stays unlit, so each
-/// face keeps the shade baked into it; its colour is the light the terrain
+/// (`lamps-and-lanterns` decision 10). The materials stay unlit, so each
+/// face keeps the shade baked into it; their colour is the light the terrain
 /// would lay over a white surface where the eye is. At noon in the open
 /// that is white, which is exactly how it was drawn before; in a cave it is
-/// the cave's floor, and beside a torch it is warm.
+/// the cave's floor, and beside a torch it is warm. The player's own carried
+/// light is added as the terrain takes it, no nearer than `hand_min_m`
+/// (`glowing-mushrooms` design 9), so a torch in hand lights the hand warm.
 #[allow(clippy::too_many_arguments)]
 fn light_held(
-    material: Option<Res<HeldMaterial>>,
+    settings: Res<HeldConfig>,
+    carried: Option<Res<crate::carried_light::CarriedLights>>,
+    held_materials: Option<Res<HeldMaterials>>,
     fine: Option<Res<crate::planet::PlanetFine>>,
     contact: Option<Res<crate::planet::PlanetContact>>,
     sun: Option<Res<crate::sky::Sun>>,
@@ -327,7 +1202,8 @@ fn light_held(
     cameras: Query<&GlobalTransform, With<WalkingCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let (Some(material), Some(fine), Some(contact), Some(sun)) = (material, fine, contact, sun)
+    let (Some(held_materials), Some(fine), Some(contact), Some(sun)) =
+        (held_materials, fine, contact, sun)
     else {
         return;
     };
@@ -340,17 +1216,27 @@ fn light_held(
     let point = eye.translation() - centre;
     let sample = crate::field_light::field_at(&fine, &contact, point);
     let daylight = sun.clock.daylight(point.normalize_or(Vec3::Y));
-    let light = crate::field_light::light_of(sample, daylight);
+    let mut light = crate::field_light::light_of(sample, daylight);
+    if let Some(own) = carried.as_deref().and_then(|c| c.own()) {
+        let share = pbd_core::light::lamp_share(sample.0, daylight);
+        let near = (own.at - point).length();
+        let add = pbd_core::light::carried_on_hand(own, near, settings.0.light.hand_min_m);
+        light += Vec3::from(add) * share;
+    }
     let colour = Color::linear_rgb(light.x, light.y, light.z);
-    // Only on a change the eye could see: a write re-uploads the material.
-    let Some(current) = materials.get(&material.0).map(|m| m.base_color) else {
-        return;
-    };
-    let was = current.to_linear();
-    if (was.red - light.x).abs() + (was.green - light.y).abs() + (was.blue - light.z).abs() > 1e-3
-        && let Some(held) = materials.get_mut(&material.0)
-    {
-        held.base_color = colour;
+    for handle in &held_materials.0 {
+        // Only on a change the eye could see: a write re-uploads the
+        // material.
+        let Some(current) = materials.get(handle).map(|m| m.base_color) else {
+            continue;
+        };
+        let was = current.to_linear();
+        if (was.red - light.x).abs() + (was.green - light.y).abs() + (was.blue - light.z).abs()
+            > 1e-3
+            && let Some(held) = materials.get_mut(handle)
+        {
+            held.base_color = colour;
+        }
     }
 }
 
@@ -365,14 +1251,87 @@ fn bevy_mesh(built: HexelMesh) -> Mesh {
     mesh
 }
 
+/// A face's shade under the hand's light with the model turned into eye
+/// space by `rotation`, times the shade baked into it (its crease and
+/// occlusion) and its flush, as a vertex colour (the texture carries the
+/// colour; the mockup's `paintProposedHand`).
+fn hand_colours(
+    normals: &[Vec3],
+    baked: &[f32],
+    tint: &[[f32; 3]],
+    rotation: Quat,
+    light: &HandLight,
+) -> Vec<[f32; 4]> {
+    let back = rotation.inverse();
+    let l = back * hand::LIGHT_EYE.normalize();
+    let f = back * hand::FILL_EYE.normalize();
+    let shade = light.shade();
+    normals
+        .iter()
+        .zip(baked)
+        .zip(tint)
+        .map(|((n, k), t)| {
+            let v = hand::wrapped(shade, *n, l, f) * k;
+            [v * t[0], v * t[1], v * t[2], 1.0]
+        })
+        .collect()
+}
+
+pub(crate) fn hand_mesh(built: &hand::HandMesh, colours: Vec<[f32; 4]>) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, built.positions.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, built.normals.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, built.uvs.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh
+}
+
+/// The hand's textures, generated by `tools/gen_held_tools.py` (the
+/// mockup's `handTextures`, `palmTexture` and `foldTexture`) and compiled
+/// in.
+fn hand_png(texture: Texture) -> &'static [u8] {
+    match texture {
+        Texture::Skin => include_bytes!("../../../assets/textures/hand/skin.png"),
+        Texture::Nail => include_bytes!("../../../assets/textures/hand/nail.png"),
+        Texture::Cloth => include_bytes!("../../../assets/textures/hand/cloth.png"),
+        Texture::Cuff => include_bytes!("../../../assets/textures/hand/cuff.png"),
+        Texture::Palm => include_bytes!("../../../assets/textures/hand/palm.png"),
+        Texture::Fold => include_bytes!("../../../assets/textures/hand/fold.png"),
+    }
+}
+
+/// A hand texture as drawn: sRGB, nearest-sampled and tiled.
+pub(crate) fn hand_image(texture: Texture) -> Image {
+    let pixels = image::load_from_memory(hand_png(texture))
+        .expect("assets/textures/hand/*.png: tools/gen_held_tools.py writes them")
+        .to_rgba8();
+    let mut image = Image::from_dynamic(
+        image::DynamicImage::ImageRgba8(pixels),
+        true,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        ..ImageSamplerDescriptor::nearest()
+    });
+    image
+}
+
 /// Build the four tools and their hands once the walking camera exists,
 /// hidden.
+#[allow(clippy::too_many_arguments)]
 fn spawn(
     mut commands: Commands,
+    settings: Res<HeldConfig>,
     cameras: Query<Entity, With<WalkingCamera>>,
     existing: Query<(), With<Held>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     if !existing.is_empty() {
         return;
@@ -388,13 +1347,52 @@ fn spawn(
         fog_enabled: false,
         ..default()
     });
+    // The hand's: unlit too, a texture for each part, the shade in the
+    // vertex colours (`shade_hands`).
+    let hand_materials: Vec<Handle<StandardMaterial>> = Texture::ALL
+        .iter()
+        .map(|&texture| {
+            materials.add(StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture: Some(images.add(hand_image(texture))),
+                unlit: true,
+                fog_enabled: false,
+                ..default()
+            })
+        })
+        .collect();
     // Lit from the field each frame by `light_held`.
-    commands.insert_resource(HeldMaterial(material.clone()));
+    commands.insert_resource(HeldMaterials(
+        std::iter::once(material.clone())
+            .chain(hand_materials.iter().cloned())
+            .collect(),
+    ));
+    let light = settings.0.hand_light;
     let all = models();
     for tool in Tool::ALL {
         let model = all.get(tool);
         let rest = model.rest();
-        let (tool_mesh, hand_mesh) = self::meshes(model, all.spacing);
+        let built = self::meshes(
+            model,
+            all.spacing,
+            &all.hand,
+            settings.0.stroke.sleeve_extra,
+        );
+        let arm = commands
+            .spawn((Name::new("arm"), Transform::IDENTITY, Visibility::Inherited))
+            .id();
+        let dirt = built.dirt.map(|clump| {
+            commands
+                .spawn((
+                    Name::new("dirt"),
+                    Mesh3d(meshes.add(bevy_mesh(clump))),
+                    MeshMaterial3d(material.clone()),
+                    Transform::IDENTITY,
+                    Visibility::Hidden,
+                    NotShadowCaster,
+                ))
+                .id()
+        });
         let holder = commands
             .spawn((
                 Name::new(format!("{} in hand", tool.name())),
@@ -402,31 +1400,71 @@ fn spawn(
                     tool,
                     rest,
                     fist: model.fist.into(),
+                    wrist: built.wrist,
+                    arm,
+                    dirt,
                 },
                 rest,
                 Visibility::Hidden,
             ))
-            .with_children(|parent| {
-                for (part, built) in [("tool", tool_mesh), ("hand", hand_mesh)] {
-                    let drawn = built.colours.clone();
-                    let mut child = parent.spawn((
-                        Name::new(part),
-                        Mesh3d(meshes.add(bevy_mesh(built))),
-                        MeshMaterial3d(material.clone()),
+            .id();
+        let drawn = built.tool.colours.clone();
+        let bend = (tool == Tool::Rod).then(|| RodBend::new(model, &built.tool.positions));
+        let tool_mesh = commands
+            .spawn((
+                Name::new("tool"),
+                Mesh3d(meshes.add(bevy_mesh(built.tool))),
+                MeshMaterial3d(material.clone()),
+                Transform::IDENTITY,
+                Visibility::Inherited,
+                NotShadowCaster,
+                ToolColours {
+                    tool,
+                    drawn,
+                    tier: Some(Tier::Iron),
+                },
+            ))
+            .id();
+        if let Some(mut bend) = bend {
+            bend.holder = holder;
+            commands.entity(tool_mesh).insert(bend);
+        }
+        commands.entity(holder).add_children(&[tool_mesh, arm]);
+        if let Some(dirt) = dirt {
+            commands.entity(holder).add_child(dirt);
+        }
+        for (on_arm, set) in [(false, &built.hand), (true, &built.arm)] {
+            for texture in Texture::ALL {
+                let part = &set[texture.index()];
+                if part.positions.is_empty() {
+                    continue;
+                }
+                let normals: Vec<Vec3> = part.normals.iter().map(|n| Vec3::from(*n)).collect();
+                let tint: Vec<[f32; 3]> = part.flush.iter().map(|f| all.hand.tint(*f)).collect();
+                let colours = hand_colours(&normals, &part.shade, &tint, rest.rotation, &light);
+                let child = commands
+                    .spawn((
+                        Name::new(if on_arm { "arm part" } else { "hand part" }),
+                        Mesh3d(meshes.add(hand_mesh(part, colours))),
+                        MeshMaterial3d(hand_materials[texture.index()].clone()),
                         Transform::IDENTITY,
                         Visibility::Inherited,
                         NotShadowCaster,
-                    ));
-                    if part == "tool" {
-                        child.insert(ToolColours {
-                            tool,
-                            drawn,
-                            tier: Some(Tier::Iron),
-                        });
-                    }
-                }
-            })
-            .id();
+                        HandShading {
+                            holder,
+                            on_arm,
+                            normals,
+                            shade: part.shade.clone(),
+                            tint,
+                            lit_at: None,
+                        },
+                    ))
+                    .id();
+                commands
+                    .entity(if on_arm { arm } else { holder })
+                    .add_child(child);
+            }
+        }
         commands.entity(camera).add_child(holder);
     }
 }
@@ -472,8 +1510,30 @@ fn carry(
     }
 }
 
-/// Show the tool in hand, sway it, and chop while a block is being broken.
-#[allow(clippy::too_many_arguments)]
+/// The stroke a tool in hand makes, and the model it is posed from.
+fn stroke_tool(held: Option<Tool>) -> (StrokeTool, Tool) {
+    match held {
+        Some(Tool::Pickaxe) => (StrokeTool::Pickaxe, Tool::Pickaxe),
+        Some(Tool::Axe) => (StrokeTool::Axe, Tool::Axe),
+        Some(Tool::Shovel) => (StrokeTool::Shovel, Tool::Shovel),
+        _ => (StrokeTool::Hands, Tool::Pickaxe),
+    }
+}
+
+/// The arm's turn about the wrist, tool units: `bend` rad about the eye's
+/// x through the joint (the shovel's wrist, `arm_follow`).
+fn arm_bend(rest: Quat, wrist: Vec3, bend: f32) -> Transform {
+    let turn = Quat::from_axis_angle((rest.inverse() * Vec3::X).normalize(), bend);
+    Transform {
+        translation: wrist - turn * wrist,
+        rotation: turn,
+        scale: Vec3::ONE,
+    }
+}
+
+/// Show the tool in hand, sway it, stroke while the dig works, and move the
+/// rod with the line.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn hold(
     settings: Res<HeldConfig>,
     tools: Res<ToolSlot>,
@@ -483,32 +1543,65 @@ fn hold(
     vehicles: Query<&crate::vehicles::Vehicle>,
     swinging: Res<Swinging>,
     time: Res<Time>,
-    mut phase: Local<f32>,
-    mut models: Query<(&Held, &mut Transform, &mut Visibility)>,
+    mut cue: ResMut<RodCue>,
+    mut rod: ResMut<RodMotion>,
+    mut tip_now: ResMut<RodTipNow>,
+    mut clock: Local<StrokeClock>,
+    mut impacts: MessageWriter<StrokeImpact>,
+    mut held_tools: Query<(&Held, &mut Transform, &mut Visibility), Without<light::HeldLightView>>,
+    mut parts: Query<(&mut Transform, &mut Visibility), Without<Held>>,
 ) {
     let s = &settings.0;
+    let dt = time.delta_secs();
+    // The rod moves with the line whether or not it is shown, so taking it
+    // up mid-motion does not pop.
+    let events = std::mem::take(&mut cue.events);
+    rod.shoulder = s.stroke.shoulder.into();
+    rod.step(&s.rod, &cue, &events, dt);
+    // While a raft's oars row, both hands are on their handles
+    // (`river-craft` design 9.6): the tool in hand is put down.
+    let rowing = aboard
+        .as_deref()
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok())
+        .and_then(|v| v.craft.rowing())
+        .is_some_and(|(_, r)| r.running);
     let on_foot = walking.is_some_and(|w| w.active)
-        || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
-    // The chop advances while breaking and snaps back when it stops, as
-    // Tenebris's does; a tool changed mid-swing does not pop.
-    *phase = if swinging.0 {
-        *phase + time.delta_secs() * s.swing_rate
-    } else {
-        0.0
+        || (seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles) && !rowing);
+    // The stroke reads the dig's beat; bare hands keep it for the sounds.
+    let in_hand = tools.held();
+    let (kind, posed_from) = stroke_tool(in_hand);
+    let tier = in_hand
+        .and_then(|tool| tools.tier(tool))
+        .map_or(0, |tier| tier.digit());
+    let model = models().get(posed_from);
+    let gear = Gear {
+        tool: kind,
+        weight: s.stroke.weight(kind, tier),
+        fist: model.fist.into(),
+        tip: model.tip.into(),
     };
-    let chop = if *phase > 0.0 {
-        phase.sin().max(-0.2)
-    } else {
-        0.0
-    };
+    let stroke = clock.step(&s.stroke, &s.shovel, gear, swinging.0, dt);
+    for &last in &stroke.impacts {
+        impacts.write(StrokeImpact { last });
+    }
     let t = time.elapsed_secs();
     let sway = Vec3::new(
         (t * s.sway_rate[0]).sin() * s.sway_m[0],
         (t * s.sway_rate[1]).cos() * s.sway_m[1],
         0.0,
     );
-    for (held, mut transform, mut visibility) in &mut models {
-        let shown = on_foot && tools.held() == Some(held.tool);
+    let struck = HeldPose {
+        shift: stroke.pose.shift + sway,
+        ..stroke.pose
+    };
+    let rod_pose = HeldPose {
+        shift: rod.pose.shift + sway,
+        ..rod.pose
+    };
+    tip_now.0 = RodMotion::tip(&rod_pose, rod.bend);
+    for (held, mut transform, mut visibility) in &mut held_tools {
+        let shown = on_foot && in_hand == Some(held.tool);
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -520,15 +1613,83 @@ fn hold(
         if !shown {
             continue;
         }
-        // The chop pitches the tool and the hand about the fist and drops
-        // them: the rod does not chop, it casts.
-        let chop = if held.tool == Tool::Rod { 0.0 } else { chop };
-        let pitch = Quat::from_rotation_x(-chop * s.swing_pitch_rad);
-        let mut pose = held.rest;
-        pose.translation = held.fist + pitch * (pose.translation - held.fist) + sway
-            - Vec3::Y * chop * s.swing_drop_m;
-        pose.rotation = pitch * pose.rotation;
-        *transform = pose;
+        let pose = if held.tool == Tool::Rod {
+            rod_pose
+        } else {
+            struck
+        };
+        *transform = pose.apply(held.rest, held.fist);
+        // The shovel's arm follows `arm_follow` of the spade's pitch; the
+        // wrist takes the rest (0.7, version 12: the shoulder stays low).
+        let bend = if held.tool == Tool::Shovel {
+            -(1.0 - s.shovel.arm_follow) * pose.pitch
+        } else {
+            0.0
+        };
+        if let Ok((mut pivot, _)) = parts.get_mut(held.arm) {
+            let want = arm_bend(held.rest.rotation, held.wrist, bend);
+            if *pivot != want {
+                *pivot = want;
+            }
+        }
+        if let Some(dirt) = held.dirt
+            && let Ok((_, mut seen)) = parts.get_mut(dirt)
+        {
+            let want = if stroke.scoop {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+            if *seen != want {
+                *seen = want;
+            }
+        }
+    }
+}
+
+/// Re-bake the hand's light when its turn into eye space changes
+/// (`hand-model`): the light stays put in eye space while the tool moves,
+/// so the lit side stays toward it. Only the shown hand, and only when it
+/// has turned or the light's values changed.
+fn shade_hands(
+    settings: Res<HeldConfig>,
+    held: Query<(&Held, &Transform, &Visibility)>,
+    pivots: Query<&Transform, Without<Held>>,
+    mut hands: Query<(&mut HandShading, &Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let light = settings.0.hand_light;
+    for (mut shading, mesh) in &mut hands {
+        let Ok((holder, transform, visibility)) = held.get(shading.holder) else {
+            continue;
+        };
+        if *visibility == Visibility::Hidden {
+            continue;
+        }
+        let mut rotation = transform.rotation;
+        if shading.on_arm
+            && let Ok(pivot) = pivots.get(holder.arm)
+        {
+            rotation *= pivot.rotation;
+        }
+        if shading
+            .lit_at
+            .is_some_and(|(at, was)| at.angle_between(rotation) < 1e-3 && was == light)
+        {
+            continue;
+        }
+        let Some(mesh) = meshes.get_mut(&mesh.0) else {
+            continue;
+        };
+        let colours = hand_colours(
+            &shading.normals,
+            &shading.shade,
+            &shading.tint,
+            rotation,
+            &light,
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+        shading.lit_at = Some((rotation, light));
     }
 }
 
@@ -547,14 +1708,31 @@ mod tests {
             assert!(model.hexes.len() > 100, "{tool:?}: {}", model.hexes.len());
             let pieces = hexel::pieces(&model.hexes);
             assert_eq!(pieces.len(), 1, "{tool:?} is in pieces: {pieces:?}");
-            let (tool_mesh, hand_mesh) = meshes(model, all.spacing);
-            assert!(tool_mesh.triangles() > model.hexes.len() * 12);
-            assert_eq!(hand_mesh.triangles(), model.hand.len() * 24);
+            let built = meshes(model, all.spacing, &all.hand, 6.0);
+            assert!(built.tool.triangles() > model.hexes.len() * 12);
+            // The palm (12 sides of 3 bevel quads and 2 cap triangles), 14 finger
+            // and thumb blocks (the thumb's tip round), 5 nails, the wrist,
+            // the cuff, the sleeve and its hem.
+            let hand: usize = built
+                .hand
+                .iter()
+                .chain(&built.arm)
+                .map(|m| m.triangles())
+                .sum();
+            assert_eq!(hand, 96 + 64 * 13 + 80 + 64 * 5 + 64 * 4, "{tool:?}");
             assert!(
-                tool_mesh
+                built.arm.iter().flat_map(|m| &m.part).all(|p| *p >= 16)
+                    && built.hand.iter().flat_map(|m| &m.part).all(|p| *p < 16),
+                "{tool:?}: the arm is the wrist, the cuff and the sleeve"
+            );
+            assert_eq!(built.dirt.is_some(), tool == Tool::Shovel);
+            assert!(
+                built
+                    .tool
                     .positions
                     .iter()
-                    .chain(&hand_mesh.positions)
+                    .chain(built.hand.iter().flat_map(|m| &m.positions))
+                    .chain(built.arm.iter().flat_map(|m| &m.positions))
                     .flatten()
                     .all(|v| v.is_finite())
             );
@@ -613,6 +1791,9 @@ mod tests {
             tool: Tool::Rod,
             rest: rod.rest(),
             fist: rod.fist.into(),
+            wrist: Vec3::ZERO,
+            arm: Entity::PLACEHOLDER,
+            dirt: None,
         };
         let tip = rod_tip();
         assert!(held.posed(&rod.rest(), tip).distance(tip) < 1e-5);
@@ -648,12 +1829,17 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<Assets<Mesh>>()
             .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<Assets<Image>>()
+            .add_message::<StrokeImpact>()
             .insert_resource(HeldConfig::default())
             .insert_resource(WalkingReadout {
                 active: true,
                 ..default()
             })
             .init_resource::<Swinging>()
+            .init_resource::<RodCue>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
             .insert_resource({
                 let mut slot = ToolSlot::default();
                 slot.hold(Tool::Pickaxe);
@@ -671,7 +1857,17 @@ mod tests {
         assert_eq!(rows.len(), 4);
         for (tool, shown, children) in &rows {
             assert_eq!(*shown, *tool == Tool::Pickaxe, "{tool:?}");
-            assert_eq!(*children, 2, "{tool:?}: the tool and the hand");
+            // The tool, the arm's pivot, the hand's back, nails, palm and
+            // folds, and the shovel's clump of dirt.
+            let want = if *tool == Tool::Shovel { 7 } else { 6 };
+            assert_eq!(*children, want, "{tool:?}");
+        }
+        // The arm's pivot carries the wrist's back and fold, the cuff and
+        // the sleeve.
+        let arms: Vec<Entity> = holders.iter(app.world()).map(|(h, _, _)| h.arm).collect();
+        for arm in arms {
+            let n = app.world().get::<Children>(arm).map_or(0, |c| c.len());
+            assert_eq!(n, 4, "the arm's parts");
         }
         app.world_mut().resource_mut::<WalkingReadout>().active = false;
         app.update();
@@ -685,10 +1881,909 @@ mod tests {
     #[test]
     fn the_defaults_validate() {
         HeldSettings::default().validate().unwrap();
-        let bad = HeldSettings {
-            swing_rate: -1.0,
+        for bad in [
+            HeldSettings {
+                sway_m: [-1.0, 0.0],
+                ..Default::default()
+            },
+            HeldSettings {
+                stroke: StrokeSettings {
+                    strike_s: 0.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            HeldSettings {
+                stroke: StrokeSettings {
+                    camera_kick_rad: 0.05,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            HeldSettings {
+                shovel: ShovelSettings {
+                    arm_follow: 1.5,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            HeldSettings {
+                hand_light: HandLight {
+                    wrap: f32::NAN,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        ] {
+            assert!(bad.validate().is_err(), "{bad:?}");
+        }
+        for rod in [
+            RodSettings {
+                bite_rad: f32::NAN,
+                ..Default::default()
+            },
+            RodSettings {
+                crank_m: -0.01,
+                ..Default::default()
+            },
+            RodSettings {
+                spring_hz: 0.0,
+                ..Default::default()
+            },
+        ] {
+            let bad = HeldSettings {
+                rod,
+                ..Default::default()
+            };
+            assert!(bad.validate().is_err(), "{rod:?}");
+        }
+        // A missing rod block, or a field of it, takes the default.
+        let partial: HeldSettings = ron::from_str("(rod: (draw_rad: 0.5))").unwrap();
+        assert_eq!(partial.rod.draw_rad, 0.5);
+        assert_eq!(partial.rod.bite_rad, RodSettings::default().bite_rad);
+    }
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn cue(phase: Phase) -> RodCue {
+        RodCue {
+            phase,
             ..Default::default()
+        }
+    }
+
+    /// Run the rod `seconds` on one cue, events on the first frame only;
+    /// the largest change of pitch in a frame.
+    fn run(rod: &mut RodMotion, cue: &RodCue, events: &[Event], seconds: f32) -> f32 {
+        let s = RodSettings::default();
+        let mut most: f32 = 0.0;
+        let frames = (seconds / DT).round() as usize;
+        for frame in 0..frames {
+            let was = rod.pose.pitch;
+            let now = if frame == 0 { events } else { &[] };
+            rod.step(&s, cue, now, DT);
+            most = most.max((rod.pose.pitch - was).abs());
+        }
+        most
+    }
+
+    /// Each phase holds the rod where the design's table says: drawn back
+    /// with the charge, forward on the water, dipped on a bite, up with a
+    /// fish on and rolled toward its pull, at rest with nothing out.
+    #[test]
+    fn each_phase_has_its_target() {
+        let s = RodSettings::default();
+        let rod = RodMotion::default();
+        let near = |a: f32, b: f32, by: f32| (a - b).abs() <= by;
+        assert_eq!(
+            rod.phase_target(&s, &cue(Phase::Ready)),
+            HeldPose::default()
+        );
+        let charged = RodCue {
+            power: 1.0,
+            ..cue(Phase::Charging)
         };
-        assert!(bad.validate().is_err());
+        let drawn = rod.phase_target(&s, &charged);
+        assert!(near(drawn.pitch, s.draw_rad, 1e-6));
+        assert!(near(drawn.shift.y, s.cast_raise_m, 1e-5), "{drawn:?}");
+        assert!(near(drawn.shift.z, s.cast_back_m, 1e-5), "{drawn:?}");
+        assert!(near(drawn.shift.x, 0.0, 1e-6));
+        // Overhead (decision 7): at the top of the draw the fist is above
+        // the shoulder.
+        let fist: Vec3 = models().get(Tool::Rod).fist.into();
+        assert!(fist.y + drawn.shift.y > rod.shoulder.y + 0.15, "{drawn:?}");
+        // The windup is done before the charge is half full; the coil then
+        // takes the last of the draw.
+        let half = rod.phase_target(
+            &s,
+            &RodCue {
+                power: 0.5,
+                ..cue(Phase::Charging)
+            },
+        );
+        assert!(half.shift.y > 0.85 * s.cast_raise_m, "{half:?}");
+        assert!(half.pitch > 0.8 * s.draw_rad && half.pitch < s.draw_rad);
+        // On an arc about the shoulder, not a straight line: half way, the
+        // fist has risen further than it has come back.
+        let (mid, turn) = cast_arc(&s, rod.shoulder, 0.5);
+        assert!(
+            mid.y / s.cast_raise_m > mid.z / s.cast_back_m + 0.1,
+            "{mid}"
+        );
+        assert!(turn > 0.0);
+        // The flick's reach: ahead of rest and below it.
+        let (reach, turn) = cast_arc(&s, rod.shoulder, -1.0);
+        assert!(reach.z < -0.5 * s.cast_reach_m && reach.y < 0.0, "{reach}");
+        assert!(turn < 0.0);
+        for phase in [Phase::Floating, Phase::Nibble] {
+            let t = rod.phase_target(&s, &cue(phase));
+            assert!(near(t.pitch, -s.settle_rad, s.bob_rad), "{phase:?}");
+        }
+        let bite = rod.phase_target(&s, &cue(Phase::Bite));
+        assert!(near(bite.pitch, -s.bite_rad, s.bite_shake_rad));
+        let fight = RodCue {
+            tension: 1.0,
+            pull: 1.0,
+            reeling: true,
+            ..cue(Phase::Hooked)
+        };
+        let hooked = rod.phase_target(&s, &fight);
+        assert!(near(hooked.pitch, s.fight_rad, s.fight_shake_rad));
+        assert!(near(hooked.roll, s.roll_rad, 1e-6), "toward the pull");
+        assert!(near(hooked.shift.length(), s.crank_m, 1e-6), "the crank");
+        // A cast flicks forward of the fishing pose, and a nibble twitches
+        // the tip down from it.
+        let mut cast = RodMotion::default();
+        cast.step(
+            &s,
+            &cue(Phase::Flying),
+            &[Event::Cast { speed_mps: 9.0 }],
+            DT,
+        );
+        let flick = cast.target(&s, &cue(Phase::Flying));
+        assert!(near(flick.pitch, -s.flick_rad, 0.01), "{flick:?}");
+        // By the end of the flick the arm has driven down to the reach.
+        run(&mut cast, &cue(Phase::Flying), &[], s.flick_s - 2.0 * DT);
+        let hit = cast.target(&s, &cue(Phase::Flying));
+        assert!(hit.pitch < -s.flick_rad && hit.shift.z < 0.0, "{hit:?}");
+        let mut nibble = RodMotion::default();
+        nibble.step(&s, &cue(Phase::Nibble), &[Event::Nibble { species: 0 }], DT);
+        let twitched = nibble.target(&s, &cue(Phase::Nibble)).pitch;
+        assert!(twitched < nibble.phase_target(&s, &cue(Phase::Nibble)).pitch - 0.9 * s.nibble_rad);
+        // A catch lifts the rod, then it eases back to rest.
+        let mut caught = RodMotion::default();
+        caught.step(
+            &s,
+            &cue(Phase::Ready),
+            &[Event::Caught {
+                species: 0,
+                length_cm: 30,
+            }],
+            DT,
+        );
+        assert!(caught.target(&s, &cue(Phase::Ready)).pitch > 0.9 * s.catch_rad);
+        run(&mut caught, &cue(Phase::Ready), &[], 1.5);
+        assert!(caught.pose.pitch.abs() < 1e-3, "at rest: {:?}", caught.pose);
+    }
+
+    /// The follow-through (`rod-motion` 8): while the float flies the rod is
+    /// held out low, `follow_rad` below rest on its own, the arm reaching
+    /// `follow_reach` of the flick's reach down the cast's arc; once the
+    /// float lands it settles on the fishing pose.
+    #[test]
+    fn the_rod_follows_through_while_the_float_flies() {
+        let s = RodSettings::default();
+        let rod = RodMotion::default();
+        let (shift, turn) = cast_arc(&s, rod.shoulder, -s.follow_reach);
+        let flying = rod.phase_target(&s, &cue(Phase::Flying));
+        assert!(
+            (flying.pitch - (-s.follow_rad + turn)).abs() < 1e-6,
+            "{flying:?}"
+        );
+        assert_eq!(flying.shift, shift);
+        assert!(turn < 0.0 && shift.z < 0.0, "reaching ahead and down");
+        let (reach, _) = cast_arc(&s, rod.shoulder, -1.0);
+        assert!(
+            shift.length() < reach.length(),
+            "short of the flick's reach"
+        );
+        // After the flick the rod is carried there: its own pitch, less the
+        // forearm's turn, is near -follow_rad.
+        let mut cast = RodMotion::default();
+        run(
+            &mut cast,
+            &cue(Phase::Flying),
+            &[Event::Cast { speed_mps: 9.0 }],
+            1.0,
+        );
+        assert!(
+            (cast.pose.pitch - flying.pitch).abs() < 0.02,
+            "{:?}",
+            cast.pose
+        );
+        assert!((cast.turn - turn).abs() < 0.02);
+        run(&mut cast, &cue(Phase::Floating), &[], 1.0);
+        assert!((cast.pose.pitch + s.settle_rad).abs() < s.bob_rad + 0.01);
+    }
+
+    /// The bend (`rod-motion` 8) is a damped spring toward `-flex` times the
+    /// rod's own pitch rate: held at a steady rate it settles there, it
+    /// overshoots first (damping 0.3), it never passes `bend_max_rad` however
+    /// fast the rod turns, and with the rod still it springs straight. The
+    /// tip as drawn moves square to the rod by the bend times its length.
+    #[test]
+    fn the_rod_bends_behind_its_swing() {
+        let s = RodSettings::default();
+        let mut rod = RodMotion::default();
+        rod.velocity.pitch = 2.0;
+        let mut most: f32 = 0.0;
+        for _ in 0..120 {
+            rod.step_bend(&s, DT);
+            most = most.max(-rod.bend);
+        }
+        let want = -s.flex * 2.0;
+        assert!((rod.bend - want).abs() < 1e-3, "{} vs {want}", rod.bend);
+        assert!(most > -want * 1.2, "overshoots: {most}");
+        // The arm's turn is not the rod's: turning with the forearm alone
+        // does not bend it.
+        rod.turn_v = 2.0;
+        for _ in 0..240 {
+            rod.step_bend(&s, DT);
+        }
+        assert!(rod.bend.abs() < 1e-3, "{}", rod.bend);
+        // A whip as fast as anything: capped.
+        rod.turn_v = 0.0;
+        rod.velocity.pitch = -60.0;
+        for _ in 0..240 {
+            rod.step_bend(&s, DT);
+            assert!(rod.bend.abs() <= s.bend_max_rad + 1e-6);
+        }
+        assert!((rod.bend - s.bend_max_rad).abs() < 1e-3, "{}", rod.bend);
+        // A long frame does not throw it.
+        rod.step_bend(&s, 0.5);
+        assert!(rod.bend.is_finite() && rod.bend.abs() <= s.bend_max_rad);
+        // Still again: straight.
+        rod.velocity.pitch = 0.0;
+        for _ in 0..240 {
+            rod.step_bend(&s, DT);
+        }
+        assert!(rod.bend.abs() < 1e-3);
+        // The tip: bent up by a positive bend, by bend times the rod's
+        // length, square to it.
+        let pose = HeldPose::default();
+        let straight = RodMotion::tip(&pose, 0.0);
+        let bent = RodMotion::tip(&pose, 0.2);
+        let m = models().get(Tool::Rod);
+        let len = Vec3::from(m.tip).distance(Vec3::from(m.fist));
+        let dir = (Vec3::from(m.tip) - Vec3::from(m.fist)).normalize();
+        let square = Vec3::X.cross(dir).length();
+        assert!((bent.distance(straight) - 0.2 * len * square).abs() < 1e-5);
+        assert!(
+            (bent - straight)
+                .dot(Vec3::from(m.tip) - Vec3::from(m.fist))
+                .abs()
+                < 1e-5
+        );
+        assert_eq!(straight, rod_tip());
+        // The mesh bends the same way: its tip moves as the drawn tip does.
+        let built = meshes(m, models().spacing, &models().hand, 6.0);
+        let bend = RodBend::new(m, &built.tool.positions);
+        let far = bend
+            .straight
+            .iter()
+            .enumerate()
+            .max_by(|a, b| {
+                Vec3::from(*a.1)
+                    .dot(bend.axis)
+                    .total_cmp(&Vec3::from(*b.1).dot(bend.axis))
+            })
+            .unwrap()
+            .0;
+        let rest = m.rest();
+        let moved = rest.transform_point(Vec3::from(bend.bent(rest.rotation, 0.2)[far]))
+            - rest.transform_point(Vec3::from(bend.straight[far]));
+        let drawn = bent - straight;
+        assert!(
+            moved.normalize().dot(drawn.normalize()) > 0.999,
+            "{moved} {drawn}"
+        );
+        // The hand's end of the rod, behind the fist, never moves.
+        let back = bend.bent(rest.rotation, 0.5);
+        for (a, b) in bend.straight.iter().zip(&back) {
+            if (Vec3::from(*a) - bend.fist).dot(bend.axis) <= 0.0 {
+                assert_eq!(a, b);
+            }
+        }
+    }
+
+    /// The spring carries the rod from wherever it is: a change of phase
+    /// never moves it more in one frame than a share of the jump, it
+    /// settles on the target, and a bite dips the tip within a frame.
+    #[test]
+    fn the_spring_settles_without_popping() {
+        let s = RodSettings::default();
+        let mut rod = RodMotion::default();
+        let charged = RodCue {
+            power: 1.0,
+            ..cue(Phase::Charging)
+        };
+        let jump = run(&mut rod, &charged, &[], 1.0);
+        assert!(jump < 0.4 * s.draw_rad, "the draw popped: {jump}");
+        assert!((rod.pose.pitch - s.draw_rad).abs() < 1e-3, "{:?}", rod.pose);
+        // The cast: from drawn back to the flick, then to the water.
+        let jump = run(
+            &mut rod,
+            &cue(Phase::Flying),
+            &[Event::Cast { speed_mps: 9.0 }],
+            0.1,
+        );
+        assert!(jump < 0.4 * (s.draw_rad + s.flick_rad), "{jump}");
+        assert!(rod.pose.pitch < 0.0, "flicked forward: {:?}", rod.pose);
+        // A bite while the float is out: the tip dips at once.
+        run(&mut rod, &cue(Phase::Floating), &[], 1.0);
+        let floating = rod.pose.pitch;
+        rod.step(
+            &s,
+            &cue(Phase::Bite),
+            &[Event::Bite {
+                species: 0,
+                window_s: 0.6,
+            }],
+            DT,
+        );
+        assert!(
+            rod.pose.pitch < floating - 0.1 * (s.bite_rad - s.settle_rad),
+            "{floating} -> {:?}",
+            rod.pose
+        );
+        // A snap from a hard fight eases back, never pops.
+        let fight = RodCue {
+            tension: 1.0,
+            pull: -1.0,
+            ..cue(Phase::Hooked)
+        };
+        run(&mut rod, &fight, &[], 1.0);
+        let jump = run(
+            &mut rod,
+            &cue(Phase::Ready),
+            &[Event::Snapped { species: 0 }],
+            1.0,
+        );
+        assert!(jump < 0.1, "the snap popped: {jump}");
+        assert!(rod.pose.pitch.abs() < 1e-3 && rod.pose.roll.abs() < 1e-3);
+        // A long frame does not throw it.
+        rod.step(&s, &charged, &[], 0.5);
+        assert!(rod.pose.pitch.is_finite() && rod.pose.pitch <= s.draw_rad + 0.01);
+    }
+
+    /// The tip as drawn is the rest tip through the frame's pose: the rod
+    /// holder's own transform carries the model's tip there, and a rod
+    /// drawn back carries the tip up and back from its rest.
+    #[test]
+    fn the_tip_follows_the_pose() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(DT),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<Assets<Image>>()
+            .add_message::<StrokeImpact>()
+            .insert_resource(HeldConfig::default())
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .init_resource::<Swinging>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
+            .insert_resource(RodCue {
+                power: 1.0,
+                ..cue(Phase::Charging)
+            })
+            .insert_resource({
+                let mut slot = ToolSlot::default();
+                slot.hold(Tool::Rod);
+                slot
+            })
+            .add_systems(Update, (spawn, hold).chain());
+        app.world_mut().spawn((WalkingCamera, Transform::default()));
+        for _ in 0..90 {
+            app.update();
+        }
+        let model = models().get(Tool::Rod);
+        let rest_tip: Vec3 = model.tip.into();
+        let tip = app.world().resource::<RodTipNow>().0;
+        let mut holders = app.world_mut().query::<(&Held, &Transform)>();
+        let (_, transform) = holders
+            .iter(app.world())
+            .find(|(h, _)| h.tool == Tool::Rod)
+            .unwrap();
+        let in_tool = model
+            .rest()
+            .compute_affine()
+            .inverse()
+            .transform_point3(rest_tip);
+        let drawn = transform.transform_point(in_tool);
+        assert!(drawn.distance(tip) < 1e-4, "{drawn} vs {tip}");
+        assert!(
+            tip.z > rest_tip.z + 0.2,
+            "drawn back: {tip} from {rest_tip}"
+        );
+        // Let go: the rod comes forward of its rest, and the tip with it.
+        app.insert_resource(cue(Phase::Floating));
+        for _ in 0..90 {
+            app.update();
+        }
+        let tip = app.world().resource::<RodTipNow>().0;
+        assert!(tip.z < rest_tip.z, "forward: {tip} from {rest_tip}");
+    }
+    /// A tool's hand as built for the game: every triangle with its
+    /// texture, positions, normal, shade and part.
+    struct Tri {
+        texture: Texture,
+        p: [Vec3; 3],
+        n: Vec3,
+        uv: [Vec2; 3],
+        k: [f32; 3],
+        part: u8,
+    }
+
+    fn triangles(tool: Tool) -> Vec<Tri> {
+        let all = models();
+        let built = meshes(all.get(tool), all.spacing, &all.hand, 6.0);
+        let mut out = Vec::new();
+        for set in [&built.hand, &built.arm] {
+            for texture in Texture::ALL {
+                let m = &set[texture.index()];
+                for t in 0..m.triangles() {
+                    let i = t * 3;
+                    out.push(Tri {
+                        texture,
+                        p: std::array::from_fn(|j| Vec3::from(m.positions[i + j])),
+                        n: Vec3::from(m.normals[i]),
+                        uv: std::array::from_fn(|j| Vec2::from(m.uvs[i + j])),
+                        k: std::array::from_fn(|j| m.shade[i + j]),
+                        part: m.part[i],
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// The grip's turn about the handle through the fist, as the hand is
+    /// built with it: what a direction or point of the bones is in the mesh.
+    fn grip(tool: Tool) -> (Quat, Vec3) {
+        let model = models().get(tool);
+        let fist = model
+            .rest()
+            .compute_affine()
+            .inverse()
+            .transform_point3(model.fist.into());
+        let turn = Quat::from_axis_angle(
+            hand::handle_dir(&model.bones),
+            models().hand.grip_turn_deg.to_radians(),
+        );
+        (turn, fist)
+    }
+
+    /// The palm's side of the back of the hand in the built mesh: where the
+    /// fingertips curl to, square to its bone, turned with the grip.
+    fn palm_side(tool: Tool) -> Vec3 {
+        let bones = &models().get(tool).bones;
+        let (turn, _) = grip(tool);
+        let at = Vec3::from(bones[0].at);
+        let axis = Vec3::from(bones[0].axis).normalize();
+        let tips = [3, 6, 9, 12]
+            .iter()
+            .map(|&i| Vec3::from(bones[i].at))
+            .sum::<Vec3>()
+            / 4.0;
+        let mut side = tips - at;
+        side -= axis * side.dot(axis);
+        turn * side.normalize()
+    }
+
+    /// Whether `q` is inside a closed triangle list: a ray's crossings,
+    /// counted along a direction no face is square to.
+    fn inside(tris: &[&Tri], q: Vec3) -> bool {
+        let d = Vec3::new(0.5377, 0.3112, 0.7841).normalize();
+        let mut crossings = 0;
+        for t in tris {
+            let (e1, e2) = (t.p[1] - t.p[0], t.p[2] - t.p[0]);
+            let h = d.cross(e2);
+            let a = e1.dot(h);
+            if a.abs() < 1e-9 {
+                continue;
+            }
+            let f = 1.0 / a;
+            let s = q - t.p[0];
+            let u = f * s.dot(h);
+            let qv = s.cross(e1);
+            let v = f * d.dot(qv);
+            if u < 0.0 || v < 0.0 || u + v > 1.0 {
+                continue;
+            }
+            if f * e2.dot(qv) > 1e-6 {
+                crossings += 1;
+            }
+        }
+        crossings % 2 == 1
+    }
+
+    /// The palm is one traced piece, not a box (hand-model 5.2): closed,
+    /// every face wound with its normal and looking out of it (a step out
+    /// along the normal is outside, a step in is inside), and wider across
+    /// the knuckles than at the wrist.
+    #[test]
+    fn the_palm_is_closed_and_faces_out() {
+        for tool in Tool::ALL {
+            let tris = triangles(tool);
+            let palm: Vec<&Tri> = tris.iter().filter(|t| t.part == 0).collect();
+            assert_eq!(palm.len(), 96, "{tool:?}");
+            let positions: Vec<[f32; 3]> = palm
+                .iter()
+                .flat_map(|t| t.p.iter().map(|p| p.to_array()))
+                .collect();
+            let key = |a: [f32; 3]| a.map(|v| (v * 1e3).round() as i64);
+            let mut edges = std::collections::HashMap::new();
+            for t in positions.chunks(3) {
+                for e in 0..3 {
+                    let (a, b) = (key(t[e]), key(t[(e + 1) % 3]));
+                    *edges
+                        .entry(if a < b { (a, b) } else { (b, a) })
+                        .or_insert(0) += 1;
+                }
+            }
+            assert!(edges.values().all(|n| *n == 2), "{tool:?}: an open edge");
+            let mut out = 0;
+            for t in &palm {
+                let wound = (t.p[1] - t.p[0]).cross(t.p[2] - t.p[0]).normalize();
+                assert!(wound.dot(t.n) > 0.999, "{tool:?}: wound against its normal");
+                let mid = (t.p[0] + t.p[1] + t.p[2]) / 3.0;
+                if !inside(&palm, mid + t.n * 0.02) && inside(&palm, mid - t.n * 0.02) {
+                    out += 1;
+                }
+            }
+            assert_eq!(out, palm.len(), "{tool:?}: faces looking in");
+        }
+    }
+
+    /// Each skin face is the palm's side or the back's by its normal
+    /// (hand-model 5.2): on the back of the hand, a face turned more than
+    /// 0.35 toward where the fingertips curl takes the palm's texture, the
+    /// rest the back's; on a finger, a face turned toward the handle takes
+    /// the fold's. The palm's island runs from the thumb's side to the
+    /// little finger's and from the wrist to the knuckles.
+    #[test]
+    fn the_palm_and_the_back_take_their_sides() {
+        for tool in Tool::ALL {
+            let bones = &models().get(tool).bones;
+            let (turn, fist) = grip(tool);
+            let side = palm_side(tool);
+            let tris = triangles(tool);
+            let (mut palm, mut back) = (0, 0);
+            for t in tris.iter().filter(|t| t.part == 0) {
+                if t.n.dot(side) > 0.35 {
+                    assert_eq!(t.texture, Texture::Palm, "{tool:?}");
+                    palm += 1;
+                } else {
+                    assert_eq!(t.texture, Texture::Skin, "{tool:?}");
+                    back += 1;
+                }
+            }
+            assert!(palm >= 24 && back >= 24, "{tool:?}: {palm} {back}");
+            // A finger's palm side faces the handle.
+            let handle = turn * hand::handle_dir(bones);
+            for t in tris.iter().filter(|t| (1..=12).contains(&t.part)) {
+                if t.texture != Texture::Fold {
+                    continue;
+                }
+                let bone = Vec3::from(bones[t.part as usize].at);
+                let mid = turn * (bone - fist) + fist;
+                let mut to_handle = fist - mid;
+                to_handle -= handle * to_handle.dot(handle);
+                assert!(
+                    t.n.dot(to_handle.normalize()) > 0.0,
+                    "{tool:?}: a fold face on {} away from the handle",
+                    t.part
+                );
+            }
+            // The island: u from the thumb's side (0) to the little
+            // finger's (1); v from the wrist (the image's bottom, 1) to the
+            // knuckles (0).
+            let thumb = hand::Thumb::new(bones, &models().hand);
+            let little = turn * (Vec3::from(bones[10].at) - fist) + fist;
+            let root = turn * (thumb.rig_root - fist) + fist;
+            let wrist = turn * (hand::wrist_joint(bones) - fist) + fist;
+            let island: Vec<(Vec3, Vec2)> = tris
+                .iter()
+                .filter(|t| t.texture == Texture::Palm)
+                .flat_map(|t| t.p.iter().copied().zip(t.uv.iter().copied()))
+                .collect();
+            let near = |q: Vec3| {
+                island
+                    .iter()
+                    .min_by(|a, b| a.0.distance(q).total_cmp(&b.0.distance(q)))
+                    .unwrap()
+                    .1
+            };
+            assert!(near(root).x < 0.35, "{tool:?}: {}", near(root));
+            assert!(near(little).x > 0.65, "{tool:?}: {}", near(little));
+            assert!(near(wrist).y > 0.65, "{tool:?}: {}", near(wrist));
+            assert!(near(little).y < 0.35, "{tool:?}: {}", near(little));
+            assert!(
+                island
+                    .iter()
+                    .all(|(_, uv)| (-1e-4..=1.0001).contains(&uv.x)
+                        && (-1e-4..=1.0001).contains(&uv.y)),
+                "{tool:?}: one island"
+            );
+        }
+    }
+
+    /// The thumb is two equal segments, not three (owner, 2026-11-17), the
+    /// chain split half way along its length,
+    /// 0.72 of the rig's chain, its root sunk into the palm (owner,
+    /// 2026-11-18): the first segment starts inside the palm's mesh.
+    #[test]
+    fn the_thumb_is_two_equal_segments_rooted_in_the_palm() {
+        let look = models().hand;
+        for tool in Tool::ALL {
+            let bones = &models().get(tool).bones;
+            let thumb = hand::Thumb::new(bones, &look);
+            let (a, b) = (
+                thumb.root.distance(thumb.joint),
+                thumb.joint.distance(thumb.tip),
+            );
+            // Split half way along the chain; the chords are within a few
+            // percent where the chain bends.
+            assert!((a - b).abs() < 0.05 * a, "{tool:?}: {a} {b}");
+            let tris = triangles(tool);
+            assert!(
+                tris.iter().all(|t| t.part != 14),
+                "{tool:?}: two, not three"
+            );
+            assert!(tris.iter().any(|t| t.part == 13) && tris.iter().any(|t| t.part == 15));
+            let palm: Vec<&Tri> = tris.iter().filter(|t| t.part == 0).collect();
+            let (turn, fist) = grip(tool);
+            let root = turn * (thumb.root - fist) + fist;
+            assert!(
+                inside(&palm, root),
+                "{tool:?}: the root floats over the palm"
+            );
+            let rig_root = turn * (thumb.rig_root - fist) + fist;
+            let centre = turn * (Vec3::from(bones[0].at) - fist) + fist;
+            assert!(root.distance(centre) < rig_root.distance(centre));
+        }
+        // The pickaxe's: 0.72 of the rig's three segments (1.8712, 1.532,
+        // 1.0141 tool units), less what the chain's bend and the sink take.
+        let thumb = hand::Thumb::new(&models().get(Tool::Pickaxe).bones, &look);
+        let total = thumb.root.distance(thumb.joint) + thumb.joint.distance(thumb.tip);
+        let chain = 0.72 * (1.8712 + 1.532 + 1.0141);
+        assert!(total < chain && total > 0.8 * chain, "{total} of {chain}");
+    }
+
+    /// The baked occlusion (hand-model 5.2) darkens the sides of the
+    /// fingers, where they press on each other, more than the back of the
+    /// hand, which nothing covers.
+    #[test]
+    fn the_ao_darkens_between_fingers_more_than_on_the_back() {
+        for tool in Tool::ALL {
+            let bones = &models().get(tool).bones;
+            let (turn, _) = grip(tool);
+            let handle = turn * hand::handle_dir(bones);
+            let tris = triangles(tool);
+            let mean = |pick: &dyn Fn(&Tri) -> bool| {
+                let ks: Vec<f32> = tris.iter().filter(|t| pick(t)).flat_map(|t| t.k).collect();
+                assert!(!ks.is_empty());
+                ks.iter().sum::<f32>() / ks.len() as f32
+            };
+            // The middle two fingers' sides: square to the handle, toward a
+            // neighbour.
+            let between = mean(&|t: &Tri| {
+                matches!(t.part, 4..=9) && t.texture == Texture::Skin && t.n.dot(handle).abs() > 0.8
+            });
+            let side = palm_side(tool);
+            let back = mean(&|t: &Tri| t.part == 0 && t.n.dot(-side) > 0.7);
+            assert!(
+                between < back - 0.08,
+                "{tool:?}: between {between} back {back}"
+            );
+            // Nothing is darkened past the strength (times a crease).
+            assert!(
+                tris.iter()
+                    .flat_map(|t| t.k)
+                    .all(|k| (0.88 * 0.4 - 1e-4..=1.0).contains(&k))
+            );
+        }
+    }
+
+    /// The grip is turned about the handle through the fist (hand-model
+    /// 5.2, 45 degrees): the fist stays on the handle, so every finger is
+    /// as far from the handle's line as before the turn.
+    #[test]
+    fn the_grip_turns_about_the_handle() {
+        for tool in Tool::ALL {
+            let bones = &models().get(tool).bones;
+            let (turn, fist) = grip(tool);
+            let handle = hand::handle_dir(bones);
+            let from_line = |p: Vec3| {
+                let d = p - fist;
+                (d - handle * d.dot(handle)).length()
+            };
+            let p = Vec3::from(bones[6].at);
+            let moved = turn * (p - fist) + fist;
+            assert!((from_line(p) - from_line(moved)).abs() < 1e-4);
+            assert!(p.distance(moved) > 0.3 * from_line(p), "{tool:?}: turned");
+        }
+    }
+
+    /// The fist closes on each handle without passing through it: every
+    /// finger and thumb bone sits outside the grip's radius and within a
+    /// few of it (the generator's `grip_r`, tool units, about the handle's
+    /// line, y = z = 0).
+    #[test]
+    fn the_fist_closes_on_the_handle() {
+        for (tool, grip) in [
+            (Tool::Pickaxe, 0.45),
+            (Tool::Shovel, 0.51),
+            (Tool::Axe, 0.45),
+            (Tool::Rod, 0.28),
+        ] {
+            let model = models().get(tool);
+            for (i, b) in model.bones.iter().enumerate().take(16).skip(1) {
+                let r = b.at[1].hypot(b.at[2]);
+                assert!(r > grip && r < 6.0 * grip, "{tool:?} {i}: {r}");
+            }
+        }
+    }
+
+    /// The textures are the sizes stated (16 px, the palm's 32,
+    /// `pbd_core::hand`) and on their palette: each a handful of tones of
+    /// its part's colour. The back is the skin darker and browner, the palm
+    /// paler and pinker (hand-model 5.1).
+    #[test]
+    fn the_textures_are_their_size_on_their_palette() {
+        for (texture, base, most) in [
+            (Texture::Skin, [195u8, 144, 110], 4),
+            (Texture::Nail, [215, 175, 148], 3),
+            (Texture::Cloth, [77, 106, 140], 3),
+            (Texture::Cuff, [58, 82, 110], 3),
+            (Texture::Palm, [238, 193, 167], 5),
+            (Texture::Fold, [238, 193, 167], 3),
+        ] {
+            let image = image::load_from_memory(hand_png(texture))
+                .unwrap()
+                .to_rgb8();
+            assert_eq!(image.dimensions(), (texture.size(), texture.size()));
+            let tones: std::collections::BTreeSet<[u8; 3]> = image.pixels().map(|p| p.0).collect();
+            assert!(tones.len() <= most, "{texture:?}: {tones:?}");
+            for t in tones {
+                let close =
+                    (0..3).all(|i| (t[i] as f32 - base[i] as f32).abs() <= 0.35 * base[i] as f32);
+                assert!(close, "{texture:?}: {t:?} off {base:?}");
+            }
+        }
+    }
+
+    /// The wrapped light stays in eye space while the tool moves: whatever
+    /// the hand's turn, the face toward the light is lit fully and the face
+    /// away from it by the ambient and the fill alone; no part is darker by
+    /// its paint (the vertex colour is the shade only).
+    #[test]
+    fn the_lit_side_stays_toward_the_light() {
+        let light = HandLight::default();
+        let l = hand::LIGHT_EYE.normalize();
+        let f = hand::FILL_EYE.normalize();
+        let lit = light.ambient + light.wrap + light.fill * l.dot(f).max(0.0);
+        let dark = light.ambient + light.fill * (-l).dot(f).max(0.0);
+        for rotation in [
+            Quat::IDENTITY,
+            Quat::from_rotation_x(0.9),
+            Quat::from_rotation_y(-0.4) * Quat::from_rotation_x(-1.2),
+            models().get(Tool::Shovel).rest().rotation,
+        ] {
+            let back = rotation.inverse();
+            let normals = [back * l, back * -l];
+            let c = hand_colours(&normals, &[1.0, 1.0], &[[1.0; 3]; 2], rotation, &light);
+            assert!((c[0][0] - lit).abs() < 1e-5, "{rotation:?}: {c:?}");
+            assert!((c[1][0] - dark).abs() < 1e-5, "{rotation:?}: {c:?}");
+            assert!(
+                c.iter().all(|v| v[0] == v[1] && v[1] == v[2]),
+                "grey: the shade only"
+            );
+        }
+        // A knuckle's crease and the occlusion darken a face by their own
+        // factor, and a fingertip's flush tints it.
+        let c = hand_colours(&[l], &[0.9], &[[1.0; 3]], Quat::IDENTITY, &light);
+        assert!((c[0][0] - 0.9 * lit).abs() < 1e-5);
+        let tint = models().hand.tint(models().hand.tip_flush);
+        let c = hand_colours(&[l], &[1.0], &[tint], Quat::IDENTITY, &light);
+        assert!((c[0][1] - tint[1] * lit).abs() < 1e-5 && c[0][1] < c[0][0]);
+    }
+
+    /// The hold re-bakes the hand's light when the tool turns: a pickaxe
+    /// swinging is lit differently mid-stroke than at rest.
+    #[test]
+    fn the_hand_is_relit_as_it_swings() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(DT),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<Assets<Image>>()
+            .add_message::<StrokeImpact>()
+            .insert_resource(HeldConfig::default())
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .init_resource::<Swinging>()
+            .init_resource::<RodCue>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
+            .insert_resource({
+                let mut slot = ToolSlot::default();
+                slot.hold(Tool::Pickaxe);
+                slot
+            })
+            .add_systems(Update, (spawn, hold, shade_hands).chain());
+        app.world_mut().spawn((WalkingCamera, Transform::default()));
+        for _ in 0..3 {
+            app.update();
+        }
+        let colours = |app: &mut App| -> Vec<[f32; 4]> {
+            let mut q = app.world_mut().query::<(&HandShading, &Mesh3d)>();
+            let handles: Vec<(Entity, Handle<Mesh>)> = q
+                .iter(app.world())
+                .filter(|(s, _)| !s.on_arm)
+                .map(|(s, m)| (s.holder, m.0.clone()))
+                .collect();
+            let meshes = app.world().resource::<Assets<Mesh>>();
+            let mut out = Vec::new();
+            for (_, h) in handles {
+                if let Some(bevy::mesh::VertexAttributeValues::Float32x4(c)) = meshes
+                    .get(&h)
+                    .and_then(|m| m.attribute(Mesh::ATTRIBUTE_COLOR))
+                {
+                    out.extend(c.iter().copied());
+                }
+            }
+            out
+        };
+        let at_rest = colours(&mut app);
+        app.insert_resource(Swinging(stroke::DigBeat {
+            working: true,
+            break_s: 1.2,
+            between_s: 0.15,
+            local_s: 0.0,
+        }));
+        // Into the windup of the first stroke.
+        for i in 0..14 {
+            app.insert_resource(Swinging(stroke::DigBeat {
+                working: true,
+                break_s: 1.2,
+                between_s: 0.15,
+                local_s: i as f32 * DT,
+            }));
+            app.update();
+        }
+        let swinging = colours(&mut app);
+        assert_eq!(at_rest.len(), swinging.len());
+        let differ = at_rest
+            .iter()
+            .zip(&swinging)
+            .filter(|(a, b)| (a[0] - b[0]).abs() > 1e-3)
+            .count();
+        assert!(
+            differ > at_rest.len() / 10,
+            "relit: {differ} of {}",
+            at_rest.len()
+        );
     }
 }

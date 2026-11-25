@@ -18,3 +18,5 @@ owner judges the creatures (Q2).
 | `octopus.png` | `docs/mockups/ocean/octopus.png` (`ocean-environments` B9) |
 | `tube_worm.png` | `docs/mockups/ocean/tubeworm.png` (B9) |
 | `seal.png` | `docs/mockups/ocean/seal.png` (B9) |
+| `beaver.png` | `docs/mockups/ocean/beaver.png` (B29) |
+| `river_otter.png` | `docs/mockups/ocean/riverotter.png` (B29) |

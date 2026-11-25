@@ -19,9 +19,11 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
+use pbd_app::ui_kit::{Localized, tr};
 use pbd_app::walking::WalkingReadout;
+use pbd_core::accept::PackMove;
 use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
-use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
+use pbd_core::vehicle::hold::{self, HOLD_MAX, Hold, Place};
 
 /// How near a raft must be, m, for the pack opened on foot to show its hold.
 pub const HOLD_REACH_M: f64 = 3.5;
@@ -39,6 +41,11 @@ pub struct HoldView {
 #[derive(Component)]
 pub struct HoldPanel;
 
+/// The row under the pack that holds the HOLD and, beside it, the boat's
+/// own panel (`boat`).
+#[derive(Component)]
+pub struct HoldRow;
+
 /// The stack picked up: which slot, and how many of it go on the next click
 /// (all of it, or the larger half for a right-click).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,6 +61,16 @@ pub struct PackHand(pub Option<Held>);
 /// A square of the pack's screen, by slot index.
 #[derive(Component)]
 pub struct PackCell(pub usize);
+
+/// The pack's trash plaque: a stack put on it is destroyed
+/// (`drop-and-trash` design 3).
+#[derive(Component)]
+pub struct TrashCell;
+
+/// One of the pack screen's two panels: a click with a stack held that is
+/// on neither (the background) drops the stack (`drop-and-trash` design 3).
+#[derive(Component)]
+pub struct PackPanel;
 
 /// The stack drawn at the pointer.
 #[derive(Component)]
@@ -75,6 +92,7 @@ pub enum Click {
 ///   half of it, and a shift-click sends it between the hotbar and the pack.
 /// - A stack in hand: either click puts it down on `index` (`Slots::shift`),
 ///   and a click on the slot it came from puts it back.
+#[cfg(test)]
 pub fn click(
     slots: &Slots,
     hand: Option<Held>,
@@ -82,15 +100,30 @@ pub fn click(
     button: Click,
     shift: bool,
 ) -> (Option<Slots>, Option<Held>) {
+    let (mv, held) = resolve(slots, hand, index, button, shift);
+    let moved = mv
+        .and_then(|mv| pbd_core::accept::pack(slots, mv).ok())
+        .filter(|moved| moved != slots);
+    (moved, held)
+}
+
+/// What a click asks for: the move (`multiplayer` design 19), which the
+/// server decides, and what is in hand after. [`click`] is this with the
+/// move applied.
+pub fn resolve(
+    slots: &Slots,
+    hand: Option<Held>,
+    index: usize,
+    button: Click,
+    shift: bool,
+) -> (Option<PackMove>, Option<Held>) {
     match hand {
         None => {
             let Some(stack) = slots.get(index) else {
                 return (None, None);
             };
             if shift {
-                let mut sent = slots.clone();
-                sent.send(index);
-                return ((sent != *slots).then_some(sent), None);
+                return (Some(PackMove::Send { index }), None);
             }
             let count = match button {
                 Click::Left => stack.count,
@@ -99,11 +132,14 @@ pub fn click(
             (None, Some(Held { from: index, count }))
         }
         Some(held) if held.from == index => (None, None),
-        Some(held) => {
-            let mut moved = slots.clone();
-            moved.shift(held.from, index, held.count);
-            ((moved != *slots).then_some(moved), None)
-        }
+        Some(held) => (
+            Some(PackMove::Shift {
+                from: held.from,
+                to: index,
+                count: held.count,
+            }),
+            None,
+        ),
     }
 }
 
@@ -129,7 +165,7 @@ pub fn hold_click(
     button: Click,
     shift: bool,
 ) -> Option<Held> {
-    if index >= CARRIED + HOLD {
+    if index >= CARRIED + hold_now.slots.len() {
         return hand;
     }
     let at = place_of(index);
@@ -170,10 +206,40 @@ pub fn find_hold(
     save: Res<WorldSave>,
     mut view: ResMut<HoldView>,
     frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
-    mut panels: Query<&mut Node, With<HoldPanel>>,
+    mut panels: Query<&mut Node, (With<HoldPanel>, Without<PackCell>)>,
+    (carts, cart_state, fleet, mut squares): (
+        Query<(Entity, &pbd_app::vehicles::carts::CartThing)>,
+        Option<Res<pbd_app::vehicles::carts::Carts>>,
+        Option<Res<pbd_app::vehicles::Fleet>>,
+        Query<(&PackCell, &mut Node), Without<HoldPanel>>,
+    ),
 ) {
     let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
-    let found = if *screen != Screen::Pack {
+    // A cart's hold (`land-transport` design 10): the one in hand or under
+    // the seat, else the nearest in reach on foot, at its own size.
+    let frame_now = frame.as_deref().copied().unwrap_or_default();
+    let cart_size = |kind| fleet.as_deref().map_or(9, |f| f.specs.carts.of(kind).hold);
+    let with_cart = cart_state
+        .as_deref()
+        .and_then(|c| c.holding.or(c.seated))
+        .and_then(|e| carts.get(e).ok())
+        .or_else(|| {
+            let feet = walkers
+                .iter()
+                .next()
+                .map(|p| p.0.as_dvec3() - frame_now.physics_center())?;
+            carts
+                .iter()
+                .map(|(e, t)| (e, t, t.cart.at.distance(feet)))
+                .filter(|(_, _, d)| *d <= HOLD_REACH_M)
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+                .map(|(e, t, _)| (e, t))
+        })
+        .map(|(e, t)| (e, t.cart.id, cart_size(t.cart.kind)));
+    let found_cart = with_cart.filter(|_| *screen == Screen::Pack);
+    let found = if let Some((e, id, _)) = found_cart {
+        Some((e, id))
+    } else if *screen != Screen::Pack {
         None
     } else if let Some(entity) = aboard.and_then(|a| a.0) {
         vehicles
@@ -205,10 +271,29 @@ pub fn find_hold(
         })
     };
     if found != view.craft {
-        view.hold = found.map_or_else(Hold::default, |(_, id)| {
-            pbd_app::vehicles::hold::read(&save, id)
-        });
+        view.hold = match (found, found_cart) {
+            (Some((_, id)), Some((_, _, size))) => {
+                pbd_app::vehicles::hold::read_sized(&save, id, size)
+            }
+            (Some((_, id)), None) => pbd_app::vehicles::hold::read(&save, id),
+            (None, _) => Hold::default(),
+        };
         view.craft = found;
+    }
+    // Only the hold's own squares show.
+    let size = view.hold.slots.len();
+    for (cell, mut node) in &mut squares {
+        if cell.0 < CARRIED {
+            continue;
+        }
+        let want = if cell.0 - CARRIED < size {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != want {
+            node.display = want;
+        }
     }
     let want = if found.is_some() {
         Display::Flex
@@ -240,25 +325,26 @@ pub fn paint_hold(
     if *screen != Screen::Pack || view.craft.is_none() {
         return;
     }
+    let hold = |i: usize| (CARRIED..super::furniture::STORE_AT).contains(&i);
     for (icon, mut node) in &mut icon_nodes {
-        if icon.0 >= CARRIED {
+        if hold(icon.0) {
             slots::paint_icon(&mut node, view.hold.get(icon.0 - CARRIED), &icons, &images);
         }
     }
     for (count, mut text) in &mut counts {
-        if count.0 < CARRIED {
+        if !hold(count.0) {
             continue;
         }
         let label = match view.hold.get(count.0 - CARRIED) {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;
         }
     }
     for (cell, mut tip) in &mut tips {
-        if cell.0 < CARRIED {
+        if !hold(cell.0) {
             continue;
         }
         let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
@@ -302,11 +388,16 @@ pub fn open(
     }
 }
 
-/// The pack's columns, native px (`tool-crafting` decision 12): the ten
-/// slots on the left, the gap, and the Craft panel on the right. With the
-/// rock's rim on both sides they are the `pack-wide` rock's width exactly.
+/// The pack's column, native px (`tool-crafting` decision 12): the ten
+/// slots. The Craft panel stands beside it, a panel of its own.
 pub const PACK_COLUMN: f32 = 10.0 * slots::SLOT;
-pub const COLUMN_GAP: f32 = 16.0;
+/// The two panels, native px: the pack (its ten slots, three rows, the hand
+/// and the hotbar, in the rim) and the craft panel beside it (the lintel, the
+/// six recipes, the craft row and its bar, in the rim).
+// The pack's height fits its rows, with a small gap over the hotbar (owner,
+// 2026-11-20: "why so much empty space on inventory?").
+pub const PACK_PANEL: (f32, f32) = (PACK_COLUMN + 2.0 * RIM, 160.0);
+pub const CRAFT_PANEL: (f32, f32) = (super::craft::CRAFT_COLUMN + 2.0 * RIM, 214.0);
 /// The rock's rim, inside which everything stands.
 pub const RIM: f32 = 14.0;
 
@@ -326,7 +417,10 @@ pub fn spawn(
 ) {
     let atlas = icons.atlas.clone();
     let kit = &*kit;
-    let (rock, (w, h)) = kit.rock("pack-wide");
+    // Two panels side by side (owner, 2026-11-19, with a sketch: "make
+    // crafting box sepereate", the pack on the left, a taller craft panel on
+    // the right), each on the kit's stone frame at the size it holds: no
+    // baked rock is the pack's own size alone.
     let (hold_rock, (hold_w, _)) = kit.rock("pack");
     commands
         .spawn((
@@ -340,82 +434,160 @@ pub fn spawn(
         ))
         .with_children(|layer| {
             layer
-                .spawn((
-                    rock,
-                    Node {
-                        width: px(w),
-                        height: px(h),
-                        padding: UiRect::all(px(RIM)),
-                        column_gap: px(COLUMN_GAP),
-                        ..default()
-                    },
-                ))
-                .with_children(|panel| {
-                    panel
-                        .spawn(Node {
-                            width: px(PACK_COLUMN),
+                .spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::FlexStart,
+                    column_gap: px(8),
+                    ..default()
+                })
+                .with_children(|pair| {
+                    pair.spawn((
+                        kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        PackPanel,
+                        Interaction::default(),
+                        // Sized here: a framed node is otherwise its picture's
+                        // size, not its contents'.
+                        Node {
+                            width: px(PACK_PANEL.0),
+                            height: px(PACK_PANEL.1),
                             flex_shrink: 0.0,
-                            flex_direction: FlexDirection::Column,
-                            justify_content: JustifyContent::SpaceBetween,
+                            padding: UiRect::all(px(RIM)),
                             ..default()
-                        })
-                        .with_children(|column| {
-                            column
-                                .spawn(Node {
-                                    flex_direction: FlexDirection::Column,
-                                    ..default()
-                                })
-                                .with_children(|top| {
-                                    menu::lintel(top, kit, "PACK");
-                                    for row in 0..PACK / SLOTS {
-                                        slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
-                                    }
-                                });
-                            column
-                                .spawn(Node {
-                                    flex_direction: FlexDirection::Column,
-                                    ..default()
-                                })
-                                .with_children(|foot| {
-                                    // The hand over the hotbar's first slot,
-                                    // as the HUD has it beside the hotbar
-                                    // (`pack-tool-slot` decision 3): the
-                                    // baked rock is the ten slots wide.
-                                    foot.spawn(Node {
-                                        align_items: AlignItems::End,
-                                        column_gap: px(4),
-                                        margin: UiRect::bottom(px(3)),
+                        },
+                    ))
+                    .with_children(|panel| {
+                        panel
+                            .spawn(Node {
+                                width: px(PACK_COLUMN),
+                                flex_shrink: 0.0,
+                                flex_direction: FlexDirection::Column,
+                                justify_content: JustifyContent::SpaceBetween,
+                                ..default()
+                            })
+                            .with_children(|column| {
+                                column
+                                    .spawn(Node {
+                                        flex_direction: FlexDirection::Column,
                                         ..default()
                                     })
-                                    .with_children(|line| {
-                                        super::equipment::spawn_pack_hand(line, kit, &icons);
-                                        line.spawn(
-                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                                .shadow(ui_kit::INK),
-                                        );
+                                    .with_children(|top| {
+                                        menu::lintel(top, kit, tr("pack.pack"));
+                                        for row in 0..PACK / SLOTS {
+                                            slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
+                                        }
                                     });
-                                    slot_line(foot, kit, &atlas, 0);
-                                });
-                        });
-                    super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
+                                column
+                                    .spawn(Node {
+                                        flex_direction: FlexDirection::Column,
+                                        ..default()
+                                    })
+                                    .with_children(|foot| {
+                                        // The hand over the hotbar's first slot,
+                                        // as the HUD has it beside the hotbar
+                                        // (`pack-tool-slot` decision 3): the
+                                        // baked rock is the ten slots wide.
+                                        foot.spawn(Node {
+                                            align_items: AlignItems::End,
+                                            column_gap: px(4),
+                                            margin: UiRect::bottom(px(3)),
+                                            ..default()
+                                        })
+                                        .with_children(
+                                            |line| {
+                                                super::equipment::spawn_pack_hand(
+                                                    line, kit, &icons,
+                                                );
+                                                line.spawn(
+                                                    KitText::new(
+                                                        tr("pack.hotbar"),
+                                                        ui_kit::TEXT_DIM,
+                                                    )
+                                                    .shadow(ui_kit::INK),
+                                                );
+                                                // The trash, at the line's far end.
+                                                line.spawn(Node {
+                                                    flex_grow: 1.0,
+                                                    ..default()
+                                                });
+                                                line.spawn((
+                                                    ui_kit::plaque(
+                                                        kit,
+                                                        pbd_app::ui_kit::Set::Stone,
+                                                        0.0,
+                                                    ),
+                                                    TrashCell,
+                                                ))
+                                                .with_child(ui_kit::plaque_label(
+                                                    pbd_app::ui_kit::Set::Stone,
+                                                    tr("pack.trash"),
+                                                ));
+                                            },
+                                        );
+                                        slot_line(foot, kit, &atlas, 0);
+                                    });
+                            });
+                    });
+                    pair.spawn((
+                        kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
+                        PackPanel,
+                        Interaction::default(),
+                        // Sized here: a framed node is otherwise its picture's
+                        // size, not its contents'.
+                        Node {
+                            width: px(CRAFT_PANEL.0),
+                            height: px(CRAFT_PANEL.1),
+                            flex_shrink: 0.0,
+                            padding: UiRect::all(px(RIM)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|panel| {
+                        super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
+                    });
                 });
             // A raft's hold, under the pack, while one is aboard or in reach
-            // (`small-boats` design 5).
+            // (`small-boats` design 5); the boat's menu puts its panel
+            // beside it (`river-craft` design 10).
             layer
                 .spawn((
-                    hold_rock,
                     Node {
-                        width: px(hold_w),
-                        padding: UiRect::all(px(RIM)),
-                        flex_direction: FlexDirection::Column,
-                        display: Display::None,
+                        column_gap: px(6),
+                        align_items: AlignItems::FlexStart,
                         ..default()
                     },
-                    HoldPanel,
+                    HoldRow,
                 ))
-                .with_children(|panel| {
-                    menu::lintel(panel, kit, "HOLD");
-                    slot_line(panel, kit, &atlas, CARRIED);
+                .with_children(|layer| {
+                    layer
+                        .spawn((
+                            hold_rock,
+                            Node {
+                                width: px(hold_w),
+                                padding: UiRect::all(px(RIM)),
+                                flex_direction: FlexDirection::Column,
+                                display: Display::None,
+                                ..default()
+                            },
+                            HoldPanel,
+                        ))
+                        .with_children(|panel| {
+                            menu::lintel(panel, kit, tr("pack.hold"));
+                            // As many squares as the largest hold (a horse
+                            // cart's, `land-transport` design 10), in rows of
+                            // ten; a smaller hold hides the rest.
+                            for first in (CARRIED..CARRIED + HOLD_MAX).step_by(SLOTS) {
+                                slot_row(
+                                    panel,
+                                    kit,
+                                    &atlas,
+                                    first,
+                                    (CARRIED + HOLD_MAX - first).min(SLOTS),
+                                );
+                            }
+                        });
+                    // A container's panel, beside the hold's, while one is
+                    // open (`furniture` design 11).
+                    super::furniture::spawn_panel(layer, kit, &atlas);
                 });
         });
     commands
@@ -437,7 +609,7 @@ pub fn spawn(
         ))
         .with_children(|icon| {
             icon.spawn((
-                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(-3),
@@ -447,6 +619,21 @@ pub fn spawn(
                 HeldCount,
             ));
         });
+}
+
+/// `count` slots in a row, from slot `first`.
+fn slot_row(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    first: usize,
+    count: usize,
+) {
+    parent.spawn(Node::default()).with_children(|line| {
+        for index in first..first + count {
+            slots::cell(line, kit, index, atlas, (Button, PackCell(index)));
+        }
+    });
 }
 
 /// Ten slots in a row, from slot `first`.
@@ -468,6 +655,11 @@ pub fn press(
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
     mut view: ResMut<HoldView>,
+    (trash, panels, mut toss): (
+        Query<&Interaction, With<TrashCell>>,
+        Query<&Interaction, With<PackPanel>>,
+        ResMut<pbd_app::drops::Toss>,
+    ),
 ) {
     if *screen != Screen::Pack {
         if hand.0.is_some() {
@@ -483,9 +675,48 @@ pub fn press(
     } else {
         return;
     };
+    // The square pressed, before one merely hovered (a hover left on another
+    // square took the click: seen with the showcase bot, 2026-11-20).
+    // A stack held over the trash: destroyed, the slots recorded.
+    if button == Click::Left
+        && let Some(held) = hand.0
+        && held.from < CARRIED
+        && trash.iter().any(|i| *i != Interaction::None)
+    {
+        let trash = PackMove::Trash {
+            index: held.from,
+            count: held.count,
+        };
+        match save.decide_pack(trash, &hotbar.0) {
+            Ok(slots) => {
+                info!("TRASH {} from slot {}", held.count, held.from);
+                hotbar.0 = slots;
+            }
+            Err(refusal) => warn!("trash refused: {refusal:?}"),
+        }
+        hand.0 = None;
+        return;
+    }
+    // A stack held and clicked on the background (no panel, slot or button
+    // under the pointer): dropped in front of the player.
+    if button == Click::Left
+        && let Some(held) = hand.0
+        && held.from < CARRIED
+        && panels.iter().all(|i| *i == Interaction::None)
+        && cells.iter().all(|(i, _)| *i == Interaction::None)
+    {
+        toss.0 = Some((held.from, held.count));
+        hand.0 = None;
+        return;
+    }
     let Some(index) = cells
         .iter()
-        .find(|(interaction, _)| **interaction != Interaction::None)
+        .find(|(interaction, _)| **interaction == Interaction::Pressed)
+        .or_else(|| {
+            cells
+                .iter()
+                .find(|(interaction, _)| **interaction != Interaction::None)
+        })
         .map(|(_, cell)| cell.0)
     else {
         return;
@@ -512,16 +743,43 @@ pub fn press(
     if index >= CARRIED {
         return;
     }
-    let (moved, held) = click(&hotbar.0, hand.0, index, button, shift);
-    if let Some(moved) = moved {
-        if !save.record_pack(&moved) {
-            error!("pack move BLOCKED: the save did not accept it");
-            hand.0 = None;
-            return;
+    // The move is the server's to decide (`multiplayer` design 19); one that
+    // would change nothing is not asked.
+    let (mv, held) = resolve(&hotbar.0, hand.0, index, button, shift);
+    if let Some(mv) = mv
+        && pbd_core::accept::pack(&hotbar.0, mv).is_ok_and(|moved| moved != hotbar.0)
+    {
+        match save.decide_pack(mv, &hotbar.0) {
+            Ok(moved) => hotbar.0 = moved,
+            Err(refusal) => {
+                error!("pack move BLOCKED: {refusal:?}");
+                hand.0 = None;
+                return;
+            }
         }
-        hotbar.0 = moved;
     }
     hand.0 = held;
+}
+
+/// Q on foot drops the held hotbar stack in front of the player
+/// (`drop-and-trash` design 2).
+pub fn drop_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    screen: Res<Screen>,
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    hotbar: Res<Hotbar>,
+    mut toss: ResMut<pbd_app::drops::Toss>,
+) {
+    if *screen != Screen::Playing
+        || !walking.is_some_and(|w| w.active && w.captured)
+        || !keys.just_pressed(KeyCode::KeyQ)
+    {
+        return;
+    }
+    let slot = hotbar.0.selected();
+    if let Some(stack) = hotbar.0.get(slot) {
+        toss.0 = Some((slot, stack.count));
+    }
 }
 
 /// Draw what is in hand at the pointer, and mark the square it came from.
@@ -572,8 +830,8 @@ pub fn paint(
     }
     for mut text in &mut count {
         let label = match stack {
-            Some(stack) if stack.count > 1 => stack.count.to_string(),
-            _ => String::new(),
+            Some(stack) if stack.count > 1 => Localized::verbatim(stack.count.to_string()),
+            _ => Localized::empty(),
         };
         if text.text != label {
             text.text = label;
@@ -650,6 +908,10 @@ mod tests {
             goods: Vec::new(),
             forge: Handle::default(),
             workbench: Handle::default(),
+            carpenter: Handle::default(),
+            drafting: Handle::default(),
+            grinder: Handle::default(),
+            mixer: Handle::default(),
             tiered: Vec::new(),
         });
         app.insert_resource(pbd_app::config::Recipes(
@@ -661,7 +923,7 @@ mod tests {
         let (rock, lintel, slots) = {
             let kit = world.resource::<UiKit>();
             (
-                kit.image("rock/pack-wide"),
+                kit.nine(pbd_app::ui_kit::Set::Stone, "frame").image,
                 kit.image("lintel"),
                 [kit.image("slot-idle"), kit.image("slot-selected")],
             )
@@ -671,21 +933,14 @@ mod tests {
             .iter(world)
             .find(|(p, _)| p.0 == Screen::Pack)
             .expect("the pack's panel");
-        let frame = children[0];
-        let image = world.get::<ImageNode>(frame).unwrap();
-        assert_eq!(image.image, rock);
-        assert!(
-            matches!(image.image_mode, NodeImageMode::Stretch),
-            "drawn whole"
-        );
-        let node = world.get::<Node>(frame).unwrap();
-        // The wide pack (`tool-crafting` decision 12): its rim and columns
-        // are the rock's width exactly, so nothing stands outside it.
-        assert_eq!((node.width, node.height), (px(464), px(200)));
-        assert_eq!(
-            RIM * 2.0 + PACK_COLUMN + COLUMN_GAP + super::super::craft::CRAFT_COLUMN,
-            464.0
-        );
+        // Two panels side by side (`mission-playthrough` 4.4): the pack and
+        // the craft column, each on the stone frame.
+        let pair = world.get::<Children>(children[0]).unwrap().to_vec();
+        assert_eq!(pair.len(), 2, "the pack and the craft panel");
+        for frame in pair {
+            let image = world.get::<ImageNode>(frame).unwrap();
+            assert_eq!(image.image, rock);
+        }
         let mut wells = world.query::<&super::super::craft::Well>();
         assert!(wells.iter(world).count() >= 2, "the needs and the result");
         let mut rows = world.query::<&super::super::craft::RecipeRow>();
@@ -708,8 +963,8 @@ mod tests {
         let n = cells.iter(world).count();
         assert_eq!(
             n,
-            PACK + SLOTS + HOLD,
-            "and the hold's ten, shown with a raft"
+            PACK + SLOTS + HOLD_MAX,
+            "and the hold's squares, as many as a horse cart's"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
         // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its
@@ -792,6 +1047,7 @@ mod tests {
             .insert_resource(PackHand(Some(Held { from: 0, count: 64 })))
             .insert_resource(WorldSave::memory_only())
             .init_resource::<HoldView>()
+            .init_resource::<pbd_app::drops::Toss>()
             .add_systems(Update, (open, press).chain());
         let tap_i = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

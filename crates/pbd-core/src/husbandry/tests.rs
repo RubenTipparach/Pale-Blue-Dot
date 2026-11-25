@@ -25,7 +25,7 @@ fn the_shipped_file_parses_and_validates() {
     let s = settings();
     s.validate().unwrap();
     // A partial file inherits the rest.
-    let partial: HusbandrySettings = ron::from_str("(taming: (fear_moving_m: 9.0, fear_still_m: 4.5, reach_m: 2.5, spook_cost: 0.5, decay_per_hour: 5.0, follow_s: 60.0))").unwrap();
+    let partial: HusbandrySettings = ron::from_str("(taming: (fear_moving_m: 9.0, fear_still_m: 4.5, reach_m: 2.5, spook_cost: 0.5, decay_per_hour: 5.0, follow_s: 60.0, wild_follow_s: 20.0))").unwrap();
     assert_eq!(partial.taming.spook_cost, 0.5);
     assert_eq!(partial.land, s.land);
     assert!(ron::from_str::<HusbandrySettings>("(tamng: ())").is_err());
@@ -61,13 +61,13 @@ fn every_species_has_a_class_a_status_and_a_guide_entry_and_airless_bodies_have_
                 "{body}/{}",
                 sp.id
             );
-            assert!(!sp.guide.entry.is_empty());
+            assert!(!sp.entry().starts_with('\u{27e6}'));
             assert!(ids.insert(sp.id.clone()));
         }
     }
     for (body, list) in &s.land {
         for sp in list {
-            assert!(!sp.guide.entry.is_empty(), "{body}/{}", sp.id);
+            assert!(!sp.entry().starts_with('\u{27e6}'), "{body}/{}", sp.id);
             assert!(sp.class != crate::fauna::Class::Fish);
             assert!(ids.insert(sp.id.clone()), "{} is also a fish", sp.id);
         }
@@ -126,17 +126,23 @@ fn a_plodder_takes_five_feeds_and_a_spook_costs_ten() {
 fn a_wild_only_or_protected_species_refuses_with_its_reason() {
     let fish = &crate::fauna::FaunaSettings::default().bodies["home"][0];
     assert_eq!(
-        fish.status.refusal(fish.class),
+        fish.status.refusal(fish.class).as_deref(),
         Some("wild only: fish are kept in tanks, not pens")
     );
     let mut otter = species("woolback");
     otter.status = crate::fauna::Status::Protected;
     otter.keep = None;
-    assert_eq!(otter.refusal(), Some("protected: it may not be caught"));
+    assert_eq!(
+        otter.refusal().as_deref(),
+        Some("protected: it may not be caught")
+    );
     let mut fox = species("woolback");
     fox.status = crate::fauna::Status::WildOnly;
     fox.keep = None;
-    assert_eq!(fox.refusal(), Some("wild only: it cannot be tamed"));
+    assert_eq!(
+        fox.refusal().as_deref(),
+        Some("wild only: it cannot be tamed")
+    );
     assert_eq!(species("meadow-hen").refusal(), None);
     // Food (S3): a woolback eats wheat and turf, a hen seed and wheat.
     let keep = species("woolback").keep.unwrap();
@@ -448,7 +454,8 @@ fn a_known_herds_output_matches_the_economy_tab() {
             }
         }
     }
-    assert_eq!(total["egg"], 12, "three hens, four days");
+    // An egg every 6 hours (`hen-laying`): four a day.
+    assert_eq!(total["egg"], 48, "three hens, four days");
     assert_eq!(total["wool"], 6, "two woolbacks, one shearing each");
     assert_eq!(total["milk"], 4, "one cow, four days");
     // Collecting keeps the fraction, and the wait is capped.
@@ -491,6 +498,44 @@ fn herds_are_derived_from_the_seed_alone() {
         assert!(h.members.len() >= sp.herd.0 as usize && h.members.len() <= sp.herd.1 as usize);
         assert_eq!(herds::square_of(h.centre, radius, &s.herds), h.square);
     }
+}
+
+/// `land-transport` design 10 (task 5.5): the horse is appended to the end
+/// of the home roster as a bought species, and no wild herd ever rolls it:
+/// every world's herds are what they were before it, square for square and
+/// animal for animal, under several seeds.
+#[test]
+fn the_horse_is_bought_and_every_wild_herd_is_unchanged() {
+    let s = settings();
+    let roster = s.roster("home");
+    let horse = roster.iter().position(|sp| sp.id == "horse").unwrap();
+    assert_eq!(
+        horse, 3,
+        "appended after the hen, the woolback and the plodder"
+    );
+    let sp = &roster[horse];
+    assert_eq!(sp.status, crate::fauna::Status::Bought);
+    assert_eq!(sp.plan, Plan::Horse);
+    assert!(sp.keep.is_some() && sp.refusal().is_none());
+    let before = &roster[..3];
+    let radius = 4800.0;
+    let mut herds = 0;
+    for seed in [1u64, 42, 0x5eed, 987_654_321] {
+        for at in [
+            glam::Vec3::new(0.3, 0.5, 0.8),
+            glam::Vec3::new(-0.7, 0.1, 0.2),
+            glam::Vec3::new(0.0, -1.0, 0.1),
+        ] {
+            for q in herds::squares_near(at.normalize(), 1500.0, radius, &s.herds) {
+                let now = herds::herd_in(seed, q, radius, &s.herds, roster);
+                let then = herds::herd_in(seed, q, radius, &s.herds, before);
+                assert_eq!(now, then, "seed {seed}, square {q:?}");
+                herds += usize::from(now.is_some());
+                assert!(now.is_none_or(|h| h.species as usize != horse));
+            }
+        }
+    }
+    assert!(herds > 50, "{herds} herds compared");
 }
 
 // ---- 7 and 8: eggs, young and breeding (design 13) -------------------------
@@ -600,7 +645,11 @@ mod breeding_tests {
         let at_12 = farm.advance_from(d + 12.99, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
         assert_eq!(at_12.waiting("egg"), 0, "a pullet lays nothing");
         let at_15 = farm.advance_from(d + 15.0, c, &keep, Sex::F, 1.0, &s.needs, lays_from);
-        assert_eq!(at_15.waiting("egg"), 2, "two days of a hen's laying");
+        assert_eq!(
+            at_15.waiting("egg"),
+            8,
+            "two days of a hen's laying, four a day"
+        );
         // Hatched once: the brood is done.
         apply(&mut records, &events);
         assert!(
@@ -818,5 +867,53 @@ mod breeding_tests {
             ..BroodBody::default()
         };
         assert_eq!(b.record(7).read::<BroodBody>(), Some(b));
+    }
+}
+
+/// `hen-laying`: feeds add up to the cap, and a fed, content hen lays an egg
+/// every six in-game hours.
+#[test]
+fn a_fed_happy_hen_lays_four_eggs_a_day_and_feeds_add_up() {
+    let n = settings().needs;
+    let sp = species("meadow-hen");
+    let mut hen = FarmState::new(0.0);
+    hen.hand_feed(0.0, &n);
+    hen.hand_feed(0.0, &n);
+    assert_eq!(hen.fed_until, 4.0, "two feeds are four days of food");
+    hen.hand_feed(0.0, &n);
+    assert_eq!(hen.fed_until, f64::from(n.cap_days), "never past the cap");
+    let penned = Conditions {
+        space: true,
+        ..Conditions::default()
+    };
+    let day = advance_all(&hen, 1.0, penned, &sp, Sex::F);
+    assert_eq!(day.waiting("egg"), 4);
+}
+
+/// Every product, collection and life stage a kept species names has its
+/// words in the locale file.
+#[test]
+fn every_keeping_word_is_in_the_locale_file() {
+    let english = crate::locale::Locale::english();
+    let has = |key: String| assert!(english.get(&key).is_some(), "{key}");
+    for sp in HusbandrySettings::default().land.values().flatten() {
+        let Some(keep) = &sp.keep else { continue };
+        for p in &keep.products {
+            has(format!("husbandry.collect.{}", p.good));
+            has(format!("husbandry.collected.{}", p.good));
+            has(format!("husbandry.waiting.{}", p.good));
+        }
+        for stage in &keep.young.stages {
+            has(format!("husbandry.stage.{}", stage.name));
+        }
+        for coat in &keep.coats {
+            has(format!("husbandry.coat.{coat}"));
+        }
+        for pattern in &keep.patterns {
+            has(format!("husbandry.pattern.{pattern}"));
+        }
+        has(format!("husbandry.morph.{}", keep.morph));
+        has(format!("husbandry.adult.{}", keep.young.adult.0));
+        has(format!("husbandry.adult.{}", keep.young.adult.1));
     }
 }

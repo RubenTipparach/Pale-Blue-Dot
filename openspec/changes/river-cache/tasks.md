@@ -51,3 +51,87 @@
       the river and water tests, `openspec validate --all`.
 - [ ] Video or screenshots: none, the picture does not change (the map is
       the same bytes).
+
+## 7. The dry channel (design 7), 2026-11-17
+- [x] Reproduce at the owner's spot (`--walk --at 20.885 -6.393`, 91.6 m):
+      the channel dry past the fall; the far sheet tinted (an uncommitted
+      instrument) shows the gap from the tier's edge outward.
+- [x] Probe the data: the river's far surface and column water are whole
+      along its 1,593 m (an ignored probe, not kept).
+- [x] The cause: the visibility pass tests every water sheet on the sea's
+      sphere; a far river's sheet is drawn at its own surface.
+- [x] The fix: `compact_visible` tests a far river's sheet at
+      `R + max(surface, ground + 0.05)`, the radius `water.wgsl` draws it at.
+- [x] GPU test on the shipped shader:
+      `actual_gpu_lists_a_far_river_s_sheet_at_its_own_surface` (fails on
+      `origin/main`'s shader: one of two listed).
+- [x] Requirement "A far river is drawn wherever it is in view" moved to
+      `openspec/specs/world/water` with its test.
+- [x] Screenshots before and after at the owner's spot
+      (`docs/screenshots/river-cache/`).
+
+## 8. The river walk (design 8)
+- [x] `RiverMap::course`: a river's cells from its source to the sea, with
+      `a_course_runs_from_its_source_to_the_sea`.
+- [x] `river_walk::RiverPath`: the bank path, progress and the drawn-water
+      measure, with tests.
+- [x] `--walk-river`: the walk through the player's inputs, its log lines.
+- [x] The recording: before and after, one OBS, real time, cut into one
+      video with progress captions (`river-walk-before-after-2026-11-17-900p60.mp4`,
+      design 9); uploaded to Drive.
+
+## 9. Measure again
+- [x] `RIVER_AHEAD` along the whole walk, old rule against new, summarised
+      in design 9.
+- [ ] The perf suite on the release build (the fix lists more sheets):
+      refused, the screen locked (design 10). Owed.
+
+## 10. The whole river cached (design 11), 2026-11-18
+- [x] The map's near-river mask; `at_widened` answers from it
+      (`the_near_mask_never_hides_a_river`).
+- [x] The memos for `carve`, `top_at` and `far_surface`, sharded, by bits
+      (`the_cached_river_terms_are_the_worked_out_ones`).
+- [x] The settled water kept away from the rim and stamped by the next tier;
+      edited columns and their neighbours never stamped or kept
+      (`a_stamped_tier_s_rivers_are_the_fresh_ones`).
+- [x] The cache file: header, nodes, memos; atomic write every 30 s and on
+      exit; any mismatch rebuilds (`the_cache_file_reads_back_or_is_refused`).
+- [x] The background fill along whole rivers near the camera (`river_fill`).
+- [x] `river_cost` before; the river run with the cache on and off (design 13).
+- [ ] The perf suite on the release build.
+- [ ] The file's size as a player wanders: a cap if it grows.
+
+## 11. The river run (design 12)
+- [x] Spawned in the river at its source; inputs only after.
+- [x] Hex by hex: `HexRoute` over the finest cells
+      (`a_hex_route_runs_down_the_owner_s_river`).
+- [x] Stuck: under 3 m (1.5 m swimming) of ground in the last second
+      (`stuck_is_ground_covered_in_a_second`).
+- [x] Unsticking escalates: hop, route round, back out.
+- [x] Day, the frame graph on.
+- [x] Five minutes of river runs, cold and warm, OBS, uploaded.
+- [x] Its stalls fixed: the live tier's floors and water, the walker's own
+      step rule (`the_step_rule_is_the_walker_s`), swimming read at the
+      feet, jumps tapped on land; re-recorded with no stall
+      (`river-cache-runs-v2-2026-11-18-450p60.mp4`).
+
+## 12. Far rivers drawn the way terrain is (design 14), proposed
+- [x] Real water across the finest band (300 m), built in the fine-set job
+      with the ground, landing with it; the flowing-water mesh off the frame.
+- [x] Water pieces cached (by cell, not by lattice cell: finer, and exact), in memory and in the
+      file; a job assembles from pieces and builds only the missing ones;
+      edits drop the pieces they reach.
+- [ ] The background fill settles and builds pieces along the whole river
+      (not built: each job builds the new strip it reaches, about 30 cells
+      warm, 1,100 cold).
+- [x] Stand-in sheets only past the finest band and from orbit, over every
+      flooded cell.
+- [x] The handover at the band's edge rides the ground's cross-fade; the
+      tier's 25 m water dither removed.
+- [x] The tier anchored ahead of a moving walker.
+- [x] Measured against the perf study (section 15), and recorded down the
+      owner's river.
+- [x] Off the tier, the eye and the walker read the band's water tops.
+- [x] A rebuild requested before the walker outruns the tier.
+- [x] The point memo capped; only river-changed values written.
+- [ ] The perf suite on the release build.

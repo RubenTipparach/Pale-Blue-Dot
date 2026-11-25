@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pbd-bot": {
+      "command": "python",
+      "args": ["tools/bot_mcp.py"]
+    }
+  }
+}

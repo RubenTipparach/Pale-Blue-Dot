@@ -1,0 +1,42 @@
+// How the beaver, the river otter and the sea otter move (pbd_app::critters,
+// openspec/changes/ocean-environments design B28 and B29). The block M25's
+// Beavers and otters tab prints under its sliders, pasted in unchanged: a
+// block printed there after tuning pastes over this one. The code defaults
+// written out; a test holds the two together. Metres, seconds, radians and
+// degrees as each name says; `stance` is a share of the cycle. Drawn only:
+// nothing in the game reads the motion back.
+//
+// assets/config/creature_motion.ron (proposed: ocean-environments design B28)
+(
+    beaver: (
+        walk: (stride_m: 0.36, stance: 0.62, speed_mps: 0.5, foot_lift_m: 0.05, waddle_roll_rad: 0.1, hip_bob_m: 0.02, head_lag_s: 0.1, tail_lag_s: 0.18),
+        gnaw: (beat_s: 0.42, pull_rad: 0.35, chips_per_bite: 4, bites_to_fell: 12),
+        fell: (creak_s: 1.0, lean_back_rad: 0.05, fall_s: 1.7, bounce_rad: 0.1, settle_s: 0.9),
+        swim: (speed_mps: 0.75, scull_hz: 1.3, scull_rad: 0.35, head_above_m: 0.07),
+        slap: (windup_s: 0.3, anticipate_s: 0.22, strike_s: 0.08, recoil_s: 0.35, raise_rad: 1.15),
+        shake: (hz: 7.0, time_s: 1.0, roll_rad: 0.45, dry_s: 20.0),
+        forelimb: (elbow_max_deg: 80, wrist_flex_deg: 60, wrist_ext_deg: 100, hands_in_deg: 16),
+    ),
+    river_otter: (
+        bound: (stride_m: 0.85, stance: 0.38, speed_mps: 1.5, arch_rad: 0.42, lift_m: 0.07),
+        slide: (accel_mps2: 3.0, max_mps: 4.5),
+        porpoise: (arc_m: 0.45),
+        eat: (beat_s: 0.36),
+        look: (hold_s: 0.9),
+        forelimb: (elbow_max_deg: 100, wrist_flex_deg: 70, wrist_ext_deg: 100, hands_in_deg: 14),
+    ),
+    sea_otter: (
+        crack: (windup_s: 0.32, anticipate_s: 0.16, strike_s: 0.07, recoil_s: 0.26, raise_m: 0.16, cracks: 4),
+        roll: (roll_s: 0.7),
+        dive: (dive_s: 5.0),
+        sleep: (kelp_wrap_s: 2.4),
+        forelimb: (elbow_max_deg: 85, wrist_flex_deg: 70, wrist_ext_deg: 95, hands_in_deg: 12),
+    ),
+    shared: (
+        forelegs: (anticipate_s: 0.18, rise_s: 0.42, lower_s: 0.55, overshoot: 0.12, swing_curl_rad: 0.8, paddle_rad: 0.7),
+        upright: (reach: 0.86, drop_deg: 62, curl_deg: 25),
+        paddle: (paddle_idle: 0.35, paddle_phase_rad: 1.57, paddle_tuck: 0.85, rate_idle: 0.45),
+        fur: (spring_hz: 3.6, damping: 0.75, sway: 0.4, max_m: 0.012, wet_spike: 0.4, shake: 0.45),
+    ),
+    exaggerate: 1.0,
+)

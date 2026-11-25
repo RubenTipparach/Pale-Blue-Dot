@@ -14,11 +14,12 @@ use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
 use glam::{DVec3, Vec2, Vec3};
 use std::collections::BTreeMap;
 
-pub mod cog;
 pub mod desert;
 pub mod dressing;
+pub mod furnish;
 pub mod harbour;
 pub mod jungle;
+pub mod smithy;
 pub mod steps;
 pub mod tundra;
 
@@ -409,6 +410,19 @@ pub struct BuildingSolids {
     /// Its top storey's ceiling over its floor, metres: under it, and under
     /// the roof's plan, the rain does not fall.
     pub top_m: f32,
+    /// Its furniture (`furniture` design 8), in the order it was laid.
+    pub furniture: Vec<Furnished>,
+}
+
+/// A piece of a town building's furniture, where it stands: for the seats,
+/// the beds and the containers the game offers on F.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Furnished {
+    pub kind: crate::furniture::Kind,
+    /// Its middle on its floor, planet-centred, metres.
+    pub at: Vec3,
+    /// Its front, a unit tangent there.
+    pub front: Vec3,
 }
 
 impl BuildingSolids {
@@ -571,6 +585,8 @@ pub struct Sink<'a> {
     pub indoors: Option<Indoors>,
     /// What burns in its rooms (decision 7a).
     pub lights: Vec<RoomLight>,
+    /// Its furniture, as it is laid.
+    pub furniture: Vec<Furnished>,
 }
 
 /// What burns in a room (`cities-in-the-world` decision 7a), as the towns
@@ -764,7 +780,36 @@ impl<'a> Sink<'a> {
             rooms: Meshes::new(),
             indoors: None,
             lights: Vec::new(),
+            furniture: Vec::new(),
         }
+    }
+
+    /// A piece of furniture (`furniture` design 8): its middle at `at` in
+    /// plan on a floor at `y0`, its front along `front`; a solid unless it is
+    /// a seat.
+    pub fn furnish(&mut self, kind: crate::furniture::Kind, at: Vec2, y0: f32, front: Vec2) {
+        for poly in crate::furniture::model::placed(kind, at, y0, front) {
+            self.smooth_face(
+                poly.texture,
+                &poly.points,
+                &poly.normals,
+                poly.uvs.as_deref(),
+            );
+        }
+        if kind.solid() {
+            let outline = crate::furniture::rect(at, front, kind.size_m()).to_vec();
+            self.solids.push(Solid {
+                outline: ccw(outline),
+                y0,
+                y1: y0 + kind.height_m(),
+            });
+        }
+        let f = front.normalize_or(Vec2::Y);
+        self.furniture.push(Furnished {
+            kind,
+            at: self.frame.world(Vec3::new(at.x, y0, at.y)),
+            front: self.frame.world_dir(Vec3::new(f.x, 0.0, f.y)),
+        });
     }
 
     /// A light at `p` in the frame.
@@ -865,6 +910,49 @@ impl<'a> Sink<'a> {
                 buf.positions.push(self.frame.world(pts[k]).to_array());
                 buf.normals.push(world_n);
                 buf.uvs.push(uv_of(pts[k]));
+            }
+        }
+    }
+
+    /// A convex face already wound to face out, a normal at each point (a
+    /// piece of furniture's, shaded smooth across its curves), textured as
+    /// [`Sink::face`] textures one.
+    fn smooth_face(
+        &mut self,
+        material: &str,
+        pts: &[Vec3],
+        normals: &[Vec3],
+        mapped: Option<&[Vec2]>,
+    ) {
+        if pts.len() < 3 || normals.len() != pts.len() {
+            return;
+        }
+        let n = (pts[1] - pts[0]).cross(pts[2] - pts[0]).normalize_or_zero();
+        let rep = (self.repeat_m)(material);
+        let centre = pts.iter().fold(Vec3::ZERO, |s, p| s + *p) / pts.len() as f32;
+        let inside = self
+            .indoors
+            .as_ref()
+            .is_some_and(|rooms| rooms.holds(centre, n));
+        let frame = self.frame;
+        let meshes = if inside {
+            &mut self.rooms
+        } else {
+            &mut *self.meshes
+        };
+        let buf = meshes.entry(material.to_string()).or_default();
+        for i in 1..pts.len() - 1 {
+            for k in [0, i, i + 1] {
+                let uv = match mapped {
+                    Some(uvs) => uvs[k].to_array(),
+                    None => {
+                        let t = uv_world(pts[k], n, rep);
+                        [t.x, -t.y]
+                    }
+                };
+                buf.positions.push(frame.world(pts[k]).to_array());
+                buf.normals.push(frame.world_dir(normals[k]).to_array());
+                buf.uvs.push(uv);
             }
         }
     }
@@ -1161,6 +1249,7 @@ pub fn cut_building(
         top_m: sink.indoors.as_ref().map_or(0.0, |i| i.top),
         rooms: sink.rooms,
         lights: sink.lights,
+        furniture: sink.furniture,
     })
 }
 
@@ -1333,6 +1422,7 @@ pub fn cut_masonry(
         top_m: 0.0,
         rooms: Meshes::new(),
         lights: Vec::new(),
+        furniture: Vec::new(),
     })
 }
 
@@ -1454,6 +1544,11 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                 continue;
             }
             for s in 0..storeys {
+                // A wall the world broke for a repair job is not there
+                // until it is mended (`townsfolk` design 29).
+                if def.broken.contains(&[c, r, d as i32, s as i32]) {
+                    continue;
+                }
                 let wall = &kit.walls[(s as usize).min(kit.walls.len() - 1)];
                 let y0 = s as f32 * storey_m;
                 let y1 = y0 + storey_m;
@@ -1804,6 +1899,31 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
             storey_m,
             def.newel.as_ref(),
         );
+    }
+    // The furniture (`furniture` design 8), laid from the record.
+    let seed = def
+        .cells
+        .iter()
+        .fold(crate::river_cache::fnv(def.name.as_bytes()), |h, c| {
+            h.rotate_left(13) ^ ((c[0] as u64) << 32 | c[1] as u32 as u64)
+        });
+    for laid in furnish::layout(plan, def, seed) {
+        let i = laid.cell;
+        let centre = plan.centres[i];
+        let mid = |d: usize| {
+            let (a, b) = edge_ends(plan, i, d);
+            (a + b) * 0.5
+        };
+        let (at, front) = if laid.side >= crate::furniture::MIDDLE {
+            (centre, (centre - mid(0)).normalize_or(Vec2::Y))
+        } else {
+            let m = mid(usize::from(laid.side));
+            let inward = (centre - m).normalize_or(Vec2::Y);
+            let back = crate::furniture::BACK_M + laid.kind.size_m().y / 2.0;
+            (m + inward * back, inward)
+        };
+        let y0 = laid.storey as f32 * storey_m + LIFT_M;
+        sink.furnish(laid.kind, at, y0, front);
     }
     Ok(())
 }

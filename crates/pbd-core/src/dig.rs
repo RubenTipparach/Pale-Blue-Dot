@@ -56,12 +56,26 @@ impl Class {
             | Material::Soil
             | Material::Dirt
             | Material::Sand
+            | Material::DesertSand
             | Material::Snow
             | Material::Tilled => Class::Dirt,
-            Material::Stone | Material::Forge => Class::Stone,
+            // The sea's cells (`ocean-environments` B24): reef rock, basalt
+            // and sea ice take a pick as stone does; a mussel bed is dug
+            // as loose ground.
+            Material::Stone
+            | Material::Forge
+            | Material::ReefRock
+            | Material::Basalt
+            | Material::SeaIce => Class::Stone,
+            Material::MusselBed => Class::Dirt,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
-            Material::Workbench => Class::Wood,
+            Material::Workbench
+            | Material::Carpenter
+            | Material::DraftingTable
+            | Material::Sticks
+            | Material::Grinder
+            | Material::Mixer => Class::Wood,
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall
@@ -330,6 +344,19 @@ impl<C: Copy + PartialEq> Breaking<C> {
             .map(|(block, secs)| (block, (self.elapsed_s / secs).clamp(0.0, 1.0)))
     }
 
+    /// The block being broken's break time and the time it has had, s, or
+    /// `None`. Read by what draws the swing (`held-swing` decision 5),
+    /// never written by it.
+    pub fn timing(&self) -> Option<(f32, f32)> {
+        self.target.map(|(_, secs)| (secs, self.elapsed_s))
+    }
+
+    /// The pause left before the next block may start, s: after a block
+    /// broke, while the button stays down.
+    pub fn pause_left(&self) -> f32 {
+        self.pause_s
+    }
+
     /// One frame. `aim` is the block under the reticle and the time it needs
     /// with the tool in hand (`None` for nothing breakable, or the rod);
     /// `held` is the use button. Letting go, or aiming at another block,
@@ -552,6 +579,7 @@ mod tests {
             Material::Snow,
             Material::Tilled,
             Material::Torch,
+            Material::MusselBed,
         ] {
             assert!(s.secs_by(soft, Digger::Hands).is_ok(), "{soft:?}");
         }
@@ -561,6 +589,12 @@ mod tests {
             Material::Ore,
             Material::Forge,
             Material::Workbench,
+            // The sea's cells (`ocean-environments` B24) and a beaver's
+            // sticks (B25).
+            Material::ReefRock,
+            Material::Basalt,
+            Material::SeaIce,
+            Material::Sticks,
         ] {
             assert_eq!(
                 s.secs_by(hard, Digger::Hands),

@@ -185,7 +185,9 @@ impl Atmosphere {
     /// `spin_up` for weather on the first frame.
     pub fn new(terrain: &TerrainConfig, settings: AtmosphereSettings, seed: u64) -> Self {
         let grid = Grid::new(settings.level, terrain.radius_m);
-        let surface = surface_of(&grid, terrain, &settings);
+        // Version 11's swamps are left out of the weather (`swamps` decision
+        // 7): the climate reads the ground version 10 makes.
+        let surface = surface_of(&grid, &terrain.climate_ground(), &settings);
         let n = grid.len();
         let mut atmosphere = Atmosphere {
             seed,

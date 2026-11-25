@@ -81,7 +81,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
     let roster = fauna.roster(HOME_BODY).to_vec();
     let minnow = roster.iter().position(|s| s.id == "minnow").unwrap();
 
-    for (strike, seed) in [("left", 70), ("right", 71)] {
+    // Only the left button hooks; a right click at the bite cancels (owner,
+    // 2026-11-18), pinned in pbd_core's `a_right_click_at_the_bite_cancels`.
+    for (strike, seed) in [("left", 70), ("left", 71)] {
         let mut line = Line::new(seed);
         let mut schools = vec![School::spawn(
             &PLANET,
@@ -114,13 +116,9 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                     released: true,
                     ..Default::default()
                 },
-                Phase::Bite if strike == "left" => Controls {
+                Phase::Bite => Controls {
                     pressed: true,
                     held: true,
-                    ..Default::default()
-                },
-                Phase::Bite => Controls {
-                    reel_in: true,
                     ..Default::default()
                 },
                 Phase::Hooked => Controls {
@@ -312,7 +310,7 @@ fn the_wiki_page_holds_to_the_roster() {
         let heading = format!(
             "![](../../assets/{}) {}\n",
             species_icon(species),
-            species.name
+            species.name()
         );
         assert!(
             section.starts_with(&heading),
@@ -320,12 +318,12 @@ fn the_wiki_page_holds_to_the_roster() {
             species.id
         );
         assert!(
-            section.contains(&species.guide.entry),
+            section.contains(species.entry().as_str()),
             "{}: entry",
             species.id
         );
         assert!(
-            section.contains(&format!("*Tip:* {}", species.guide.tip)),
+            section.contains(&format!("*Tip:* {}", species.tip())),
             "{}: tip",
             species.id
         );
@@ -401,21 +399,16 @@ fn the_float_rides_the_sea_the_hulls_ride() {
     assert!(spread > 0.01, "the float rises and falls: {heights:?}");
 }
 
-/// The drawn line starts at the rod tip and ends at the drawn float, at low
-/// tide, in a wave trough and pulled under on a bite, and lies on the water
-/// between rather than through it (owner, 2026-11-16: "end of fishing rod
-/// rope is not connected to bobber"; `fishing-and-equipment` design 4). The
-/// line was held over the mean sea, so at low water its end hung over the
-/// float.
+/// The drawn line starts at the rod tip and ends at the drawn float, in a
+/// wave trough and pulled under on a bite, and lies on the water between
+/// rather than through it (owner, 2026-11-16: "end of fishing rod rope is
+/// not connected to bobber"; `fishing-and-equipment` design 4).
 #[test]
 fn the_line_runs_from_the_rod_tip_to_the_float() {
     let water = crate::config::WaterSettings::default();
-    let mut sea = Sea::new(&water);
+    let sea = Sea::new(&water);
     let beds = Mutex::new(HashMap::new());
     let direction = Vec3::new(0.3, 0.9, 0.2).normalize();
-    // Low water here: the moon a quarter turn round, the tide's full range.
-    sea.set_moon(direction.any_orthonormal_vector());
-    assert!(sea.tide_at(direction) < -0.9, "low water");
     let side = direction.any_orthonormal_vector();
     let feet = direction * (sea.radius + 1.5);
     let tip = feet + direction * 1.6 + side * 0.8;
@@ -425,15 +418,11 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         let surface = |p: Vec3| here.surface(p);
         // The float as `Line` places it: on the sea, less its dip.
         let float = out * (surface(out * sea.radius) - dip);
-        assert!(
-            float.length() < sea.radius - 0.5,
-            "the float rides under the mean"
-        );
         let tied = float + float.normalize() * draw::FLOAT_TOP_M;
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
         let centre =
             pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
-        let points = draw::line_points(&centre, tip, tied, slack, floor);
+        let points = draw::line_points(&centre, tip, tied, slack, None, floor);
         assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
         let end = tip + *points.last().unwrap();
         assert!(
@@ -449,7 +438,9 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
             (feet.as_dvec3() / 128.0).round() * 128.0,
         );
         let (tip_l, tied_l) = (near.from_query_point(tip), near.from_query_point(tied));
-        let local = draw::line_points(&near, tip_l, tied_l, slack, |p| floor(near.query_point(p)));
+        let local = draw::line_points(&near, tip_l, tied_l, slack, None, |p| {
+            floor(near.query_point(p))
+        });
         assert!((tip_l + *local.last().unwrap()).distance(tied_l) < 1e-5);
         for (a, b) in points.iter().zip(&local) {
             assert!(a.distance(*b) < 2e-3, "{a} {b}");
@@ -460,15 +451,15 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
                 at.length() >= floor(at) + draw::LINE_CLEARANCE_M - 1e-3,
                 "a point of the line is not held clear of the water"
             );
-            // Clear of the drawn sea and of the composite's tided waterline,
-            // so nothing of it is drawn as under water.
+            // Clear of the drawn sea and of the composite's waterline, the
+            // sea's mean, so nothing of it is drawn as under water.
             assert!(
                 at.length() > draw::drawn_surface(&here, at),
                 "a point of the line is under the drawn sea"
             );
             assert!(
-                at.length() > sea.radius + sea.tide_at(at),
-                "a point of the line is under the tided waterline"
+                at.length() > sea.radius,
+                "a point of the line is under the waterline"
             );
         }
     }
@@ -545,6 +536,33 @@ fn smaller_water_makes_smaller_fish() {
     assert!((puddle - 0.35).abs() < 1e-3, "puddle {puddle}");
     assert!(brook > puddle && brook < river, "brook {brook}");
     assert!((river - 1.0).abs() < 1e-3, "river {river}");
+}
+
+/// Both buttons show in every phase with what each does now (owner,
+/// 2026-11-18): only the left hooks, lit only at the bite; the right's
+/// CANCEL is never lit.
+#[test]
+fn both_buttons_say_what_they_do_in_every_phase() {
+    use pbd_core::fishing::Phase;
+    let table = [
+        (Phase::Ready, ("fishing.key.hold_to_cast", true), false),
+        (Phase::Charging, ("fishing.key.let_go_to_cast", true), false),
+        (Phase::Flying, ("fishing.key.hook", false), true),
+        (Phase::Floating, ("fishing.key.hook", false), true),
+        (Phase::Nibble, ("fishing.key.hook", false), true),
+        (Phase::Bite, ("fishing.key.hook", true), true),
+        (Phase::Hooked, ("fishing.key.hold_to_reel", true), false),
+    ];
+    for (phase, left, _) in table {
+        let [l, r] = super::keys_for(phase);
+        assert_eq!(l, left, "{phase:?}");
+        let cancel = if matches!(phase, Phase::Ready | Phase::Charging | Phase::Hooked) {
+            ""
+        } else {
+            "fishing.key.cancel"
+        };
+        assert_eq!(r, (cancel, false), "{phase:?}");
+    }
 }
 
 /// The hooked float's one-frame jump when a run starts or stops is drawn
@@ -670,4 +688,310 @@ fn a_fish_turns_over_frames_not_in_one() {
     let f = headings.ease(key, Vec3::Z, up, false, 1.0 / 60.0);
     headings.end();
     assert!(f.dot(Vec3::Z) > 0.9999);
+}
+
+/// The cast's line (`rod-motion` 8): while the float flies the line runs
+/// from the rod tip back to where the float was let go and out along the
+/// float's path, ending at the float; the trail keeps a place every
+/// 0.15 m; once the float is down the line eases to its hanging curve over
+/// 0.6 s, and a wound-in line forgets the trail.
+#[test]
+fn the_cast_line_follows_the_float_from_the_tip() {
+    let up = Vec3::Y;
+    let feet = up * 100.0;
+    let tip = feet + Vec3::new(0.1, 1.9, 0.3);
+    let mut trail = draw::CastTrail::default();
+    // Let go at the tip, the float thrown up and away.
+    let (mut float, mut v) = (tip, Vec3::new(0.0, 4.0, -9.0));
+    trail.update(Phase::Flying, float, 1.0 / 60.0);
+    assert_eq!(
+        trail.points,
+        vec![tip],
+        "the trail starts where it was let go"
+    );
+    for _ in 0..30 {
+        v -= up * 9.81 / 60.0;
+        float += v / 60.0;
+        trail.update(Phase::Flying, float, 1.0 / 60.0);
+    }
+    assert_eq!(trail.blend(), 1.0);
+    for w in trail.points.windows(2) {
+        assert!(w[0].distance(w[1]) > draw::TRAIL_STEP_M && w[0].distance(w[1]) < 0.4);
+    }
+    // The rod has come forward since: the drawn tip is ahead and lower.
+    let tip_now = tip + Vec3::new(0.0, -0.3, -0.4);
+    let tied = float + up * draw::FLOAT_TOP_M;
+    let path = draw::trail_points(tip_now, &trail.points, tied, 24);
+    assert_eq!(path.len(), 24);
+    assert_eq!(path[0], tip_now, "starts at the tip");
+    assert!(path[23].distance(tied) < 1e-4, "ends at the float");
+    // It runs back up to the release point before it goes out.
+    assert!(
+        path.iter().any(|p| p.distance(tip) < 0.2),
+        "through the release"
+    );
+    // Evenly along the path: no chord longer than the path's length over
+    // the 23 steps (a chord across a corner is shorter).
+    let length: f32 = std::iter::once(tip_now)
+        .chain(trail.points.iter().copied())
+        .chain(std::iter::once(tied))
+        .collect::<Vec<_>>()
+        .windows(2)
+        .map(|w| w[0].distance(w[1]))
+        .sum();
+    assert!(
+        path.windows(2)
+            .all(|w| w[0].distance(w[1]) <= length / 23.0 + 1e-4),
+        "evenly along"
+    );
+    // Drawn: the line's points lie on the trail while flying.
+    let points = draw::line_points(
+        &PLANET,
+        tip_now,
+        tied,
+        0.6,
+        Some((&trail.points, trail.blend())),
+        |_| 0.0,
+    );
+    for (k, p) in points.iter().enumerate() {
+        assert!((tip_now + *p).distance(path[k]) < 1e-4, "{k}");
+    }
+    // Down on the water: eased out over 0.6 s.
+    trail.update(Phase::Floating, float, 1.0 / 60.0);
+    assert_eq!(trail.blend(), 1.0);
+    trail.update(Phase::Floating, float, 0.3);
+    assert!(
+        trail.blend() > 0.3 && trail.blend() < 0.7,
+        "{}",
+        trail.blend()
+    );
+    trail.update(Phase::Floating, float, 0.31);
+    assert_eq!(trail.blend(), 0.0);
+    let hanging = draw::line_points(&PLANET, tip_now, tied, 0.6, None, |_| 0.0);
+    let eased = draw::line_points(
+        &PLANET,
+        tip_now,
+        tied,
+        0.6,
+        Some((&trail.points, 0.0)),
+        |_| 0.0,
+    );
+    assert_eq!(hanging, eased);
+    trail.update(Phase::Ready, float, 1.0 / 60.0);
+    assert!(trail.points.is_empty() && trail.blend() == 0.0);
+    // A rebase moves the trail with the origin.
+    trail.update(Phase::Flying, tip, 1.0 / 60.0);
+    trail.rebase(Vec3::X);
+    assert_eq!(trail.points, vec![tip - Vec3::X]);
+}
+
+/// A school laid every frame lays into the buffers its mesh already holds
+/// (`memory-leak`): once it has reached its size a frame moves no attribute's
+/// buffer, so nothing is allocated for it, and what it lays is what laying
+/// it into a new mesh would.
+mod laid_in_place {
+    use super::*;
+    use bevy::mesh::{MeshVertexAttribute, VertexAttributeValues};
+
+    struct Deep;
+    impl Water for Deep {
+        fn surface(&self, point: Vec3) -> f32 {
+            let _ = point;
+            1000.0
+        }
+        fn bed(&self, point: Vec3) -> f32 {
+            let _ = point;
+            990.0
+        }
+    }
+
+    const ATTRIBUTES: [MeshVertexAttribute; 7] = [
+        Mesh::ATTRIBUTE_POSITION,
+        Mesh::ATTRIBUTE_COLOR,
+        Mesh::ATTRIBUTE_UV_0,
+        Mesh::ATTRIBUTE_NORMAL,
+        bodies::ATTRIBUTE_SWIM_AXES,
+        bodies::ATTRIBUTE_SWIM_WAVE,
+        bodies::ATTRIBUTE_SWIM_UP,
+    ];
+
+    fn school() -> (School, Species) {
+        let roster = FaunaConfig::default().0.roster(HOME_BODY).to_vec();
+        let species = roster[0].clone();
+        let school = School::spawn(&PLANET, 0, &species, Vec3::Y * 995.0, 11, &Deep);
+        assert!(!school.is_empty(), "a school with fish in it");
+        (school, species)
+    }
+
+    fn lay(
+        mesh: &mut Mesh,
+        school: &School,
+        species: &Species,
+        headings: &mut draw::DrawnHeadings,
+    ) {
+        let swim = draw::DrawnSwim::default();
+        draw::build(
+            &PLANET,
+            mesh,
+            school,
+            species,
+            None,
+            None,
+            0.5,
+            Vec3::ZERO,
+            (headings, &swim, 1.0 / 60.0),
+        );
+    }
+
+    fn new_mesh() -> Mesh {
+        Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+    }
+
+    /// Each attribute's buffer: where it is and how long.
+    fn buffers(mesh: &Mesh) -> Vec<(usize, usize)> {
+        ATTRIBUTES
+            .iter()
+            .map(|a| match mesh.attribute(a.id).expect("laid") {
+                VertexAttributeValues::Float32x2(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x3(v) => (v.as_ptr() as usize, v.len()),
+                VertexAttributeValues::Float32x4(v) => (v.as_ptr() as usize, v.len()),
+                _ => panic!("an attribute of another type"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_school_is_laid_into_the_buffers_it_holds() {
+        let (school, species) = school();
+        let mut headings = draw::DrawnHeadings::default();
+        let mut mesh = new_mesh();
+        lay(&mut mesh, &school, &species, &mut headings);
+        let first = buffers(&mesh);
+        for frame in 0..30 {
+            lay(&mut mesh, &school, &species, &mut headings);
+            assert_eq!(buffers(&mesh), first, "frame {frame} moved a buffer");
+        }
+    }
+
+    #[test]
+    fn a_school_relaid_is_the_school_laid_fresh() {
+        let (school, species) = school();
+        // The same history of eased headings for both, so only the mesh
+        // each is laid into differs.
+        let (mut a, mut b) = (
+            draw::DrawnHeadings::default(),
+            draw::DrawnHeadings::default(),
+        );
+        let mut relaid = new_mesh();
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut relaid, &school, &species, &mut a);
+        lay(&mut new_mesh(), &school, &species, &mut b);
+        let mut fresh = new_mesh();
+        lay(&mut fresh, &school, &species, &mut b);
+        for a in ATTRIBUTES {
+            let (x, y) = (relaid.attribute(a.id), fresh.attribute(a.id));
+            assert_eq!(
+                x.map(VertexAttributeValues::get_bytes),
+                y.map(VertexAttributeValues::get_bytes),
+                "{} differs",
+                a.name
+            );
+        }
+        // And the normals are what `compute_flat_normals` makes of the
+        // positions.
+        let mut bevy_normals = fresh.clone();
+        bevy_normals.compute_flat_normals();
+        assert_eq!(
+            bevy_normals
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes),
+            fresh
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .map(VertexAttributeValues::get_bytes)
+        );
+    }
+}
+
+/// `ocean-environments` 18.2 (design B23, cause 4): a school in a river over
+/// the sea's level reads its depth from the RIVER's surface, which is what
+/// `draw::schools` dims it by. Its anchor's surface is the river's top, not
+/// the sea's sphere (from which the depth was negative and the school never
+/// dimmed), and a fish half a metre under the river's top is half a metre
+/// deep.
+#[test]
+fn a_school_in_a_river_reads_its_depth_from_the_river() {
+    use crate::planet::terrain;
+    let river = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: 28.25_f32.to_radians(),
+        lon: 0.75_f32.to_radians(),
+    });
+    assert!(pbd_core::rivers::floods(terrain::terrain_config(), river));
+    let set = crate::planet::lod::generate_fine(
+        river,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
+    let mut contact = crate::planet::PlanetContact::test_planet(5);
+    contact.set_fine(&std::sync::Arc::new(set));
+    let water = crate::config::WaterSettings::default();
+    let sea = Sea::new(&water);
+    let beds = Mutex::new(HashMap::new());
+    let r = terrain::PLANET_RADIUS;
+    let bed = r + terrain::surface_height(river);
+    let top = contact
+        .column_water(river * (bed + 0.5))
+        .flatten()
+        .map(|top| r + top)
+        .expect("the river's water on its bed");
+    assert!(top > sea.radius + 1.0, "the river stands over the sea");
+    // The anchor as the spawner puts it: at the fresh water's top.
+    let anchor = river * top;
+    let here = PlanetWater::at(&sea, None, Some(&contact), &beds, anchor, 0.0);
+    let surface = here.surface(anchor);
+    assert!(
+        (surface - top).abs() < 1e-3,
+        "the school's surface is the river's: {surface} against {top}"
+    );
+    let fish = river * (top - 0.5);
+    let depth = surface - fish.length();
+    assert!((depth - 0.5).abs() < 1e-2, "half a metre down: {depth}");
+    assert!(sea.radius - fish.length() < 0.0, "the sea's rule gave none");
+}
+
+/// The beaver is offered by the spawner only within 40 m of a colony that
+/// is not gone (`ocean-environments` B29, task 8.4); the river otter, which
+/// asks for none, anywhere its water allows.
+#[test]
+fn a_beaver_is_offered_only_by_a_colony() {
+    use pbd_core::beaver::{Colony, Site, State};
+    let fauna = crate::config::FaunaConfig::default();
+    let roster = fauna.0.roster(HOME_BODY);
+    let beaver = roster.iter().find(|s| s.id == "beaver").unwrap();
+    let otter = roster.iter().find(|s| s.id == "river_otter").unwrap();
+    assert_eq!(beaver.near_colony_m, 40.0);
+    let at = Vec3::new(0.3, 0.9, 0.3).normalize();
+    let site = Site {
+        at: at.to_array(),
+        lip: vec![1, 2, 3],
+        pond: vec![4],
+        bed: 10,
+        bank: 12,
+        trees: Vec::new(),
+    };
+    let mut colony = Colony::new(vec![site], 4, 0);
+    let r = crate::planet::PLANET_RADIUS;
+    let off = |m: f32| (at + at.any_orthonormal_vector() * (m / r)).normalize();
+    let colonies = [colony.clone()];
+    assert!(colony_allows(beaver, off(20.0), &colonies), "20 m from it");
+    assert!(!colony_allows(beaver, off(55.0), &colonies), "55 m from it");
+    assert!(!colony_allows(beaver, at, &[]), "no colony");
+    assert!(
+        colony_allows(otter, off(500.0), &[]),
+        "the otter needs none"
+    );
+    colony.state = State::Gone;
+    assert!(!colony_allows(beaver, at, &[colony]), "a gone colony");
 }

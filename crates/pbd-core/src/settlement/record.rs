@@ -18,8 +18,8 @@
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
-    BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, desert, dressing, harbour,
-    jungle, steps, tundra,
+    BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, desert, dressing, harbour,
+    jungle, smithy, steps, tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -49,11 +49,15 @@ pub const TERRACED_SCHEMA: u32 = 2;
 pub const SEA_SCHEMA: u32 = 3;
 /// The laying-out rules' version, stored with each town: a town is never
 /// rebuilt by it, and its ground is found by the rules it names.
-pub const LAYOUT_VERSION: u32 = 2;
+pub const LAYOUT_VERSION: u32 = 3;
 /// The first layout whose ground finds a direction's cell by the nearest
 /// chord (design, "Finding: a column can take its neighbour's ground"): a
 /// town stored at layout 1 keeps the dot lookup it was played with.
 pub const CHORD_LAYOUT: u32 = 2;
+/// The first layout that stands its template's smithies (`townsfolk` design
+/// 26a): a town stored at layout 1 or 2 is cut with no smithy and no forge
+/// lamp, as it was played.
+pub const FORGE_LAYOUT: u32 = 3;
 /// Rings of layout cells round the built ones that are terraced with them,
 /// so the yards between the houses are level too.
 pub const YARD_RINGS: usize = 2;
@@ -171,6 +175,11 @@ pub struct Building {
     /// only where it is raised.
     #[serde(default, skip_serializing_if = "is_false")]
     pub raised: bool,
+    /// Walls the world broke for a repair job (`townsfolk` design 29),
+    /// `[c, r, d, storey]`, written only where there are some, so every
+    /// other building's record is as it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub broken: Vec<[i32; 4]>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -203,6 +212,7 @@ impl Building {
             parapet_gaps: def.parapet_gaps.clone(),
             archways: def.archways.clone(),
             raised: def.raised,
+            broken: Vec::new(),
         }
     }
 
@@ -228,7 +238,40 @@ impl Building {
             parapet_gaps: self.parapet_gaps.clone(),
             archways: self.archways.clone(),
             raised: self.raised,
+            broken: self.broken.clone(),
         }
+    }
+
+    /// The walls a repair job may break (`townsfolk` design 29): the ground
+    /// storey's outer walls with no door, window or archway in them, on no
+    /// open edge and no stair's cell, in cell then side order. Empty for a
+    /// building on stilts, a raised one or a stair tower.
+    pub fn breakable(&self) -> Vec<[i32; 4]> {
+        if self.stilts.is_some() || self.raised || self.newel.is_some() || self.storeys == 0 {
+            return Vec::new();
+        }
+        let inside = |c: i32, r: i32| self.cells.iter().any(|x| *x == [c, r]);
+        let mut out = Vec::new();
+        for &[c, r] in &self.cells {
+            if self.stair_cells.contains(&[c, r]) {
+                continue;
+            }
+            for d in 0..6 {
+                let (c2, r2) = super::neighbour(c, r, d);
+                let at = [c, r, d as i32, 0];
+                if inside(c2, r2)
+                    || self.open.contains(&[c, r, d as i32])
+                    || self.doors.contains(&at)
+                    || self.windows.contains(&at)
+                    || self.archways.contains(&at)
+                    || self.broken.contains(&at)
+                {
+                    continue;
+                }
+                out.push(at);
+            }
+        }
+        out
     }
 }
 
@@ -538,15 +581,6 @@ pub struct Built {
     /// left out for standing off its chart.
     pub dressing: usize,
     pub dressing_skipped: usize,
-    /// Its cog's ship among its solids, where it stands at its mooring
-    /// (`sail-the-cog` design 6): the gangplank is the piece after it, and
-    /// the dressing comes after both.
-    pub cog: Option<usize>,
-    /// The ship's faces, by texture, apart from the town's: it rides the
-    /// water, so it is drawn on its own.
-    pub cog_meshes: Meshes,
-    /// Which way its bow points, a planet-local unit tangent.
-    pub cog_bow: Vec3,
     /// Where its dressing's faces are in `meshes` (`crab-breeze-lessons`
     /// rank 5): for each texture, the run of vertices its dressing things
     /// added. They are small, and cast only into the finer cascades.
@@ -659,6 +693,18 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
                 .iter()
                 .filter_map(|f| off_grid(f.x, f.y, f.z, f.material())),
         )
+        // A smithy's forge (`townsfolk` design 26a), from layout 3: a
+        // brazier in the first layer of the forge's cell, inside its base.
+        .chain(
+            template
+                .smithies
+                .iter()
+                .filter(|_| town.layout >= FORGE_LAYOUT)
+                .filter_map(|s| {
+                    let (c, r) = s.forge_cell(cell_m);
+                    lamp(c, r, None, Material::Brazier)
+                }),
+        )
         // The jungle's lanterns, hanging off its bridges' ropes (slice 4i).
         .chain(template.bridges.iter().flat_map(|b| {
             b.lanterns
@@ -743,9 +789,6 @@ pub fn build(
         lights,
         dressing: 0,
         dressing_skipped: 0,
-        cog: None,
-        cog_meshes: Meshes::new(),
-        cog_bow: Vec3::ZERO,
         props: BTreeMap::new(),
         stairs: Vec::new(),
         stairs_yielded: 0,
@@ -759,10 +802,7 @@ pub fn build(
 /// every world. A masonry cell stands on its own cell's terrace and rises to
 /// the template's top over the datum; a gate's vault starts as far over its
 /// ground as the template has it. Masonry comes after the buildings, each
-/// with no rooms and no lights. `sheet_m` is the drawn sea's surface,
-/// metres over the radius, which a harbour's cog floats on (`sail-the-cog`
-/// design 6): the game draws it under the sea level the layers are filled
-/// to.
+/// with no rooms and no lights.
 #[allow(clippy::too_many_arguments)]
 pub fn build_town(
     town: &Town,
@@ -771,7 +811,6 @@ pub fn build_town(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     radius_m: f32,
-    sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
     build_town_yielding(
@@ -781,7 +820,6 @@ pub fn build_town(
         kits,
         repeat_m,
         radius_m,
-        sheet_m,
         natural,
         &|_| false,
     )
@@ -800,7 +838,6 @@ pub fn build_town_yielding(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     radius_m: f32,
-    sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
     yielded: &dyn Fn(u32) -> bool,
 ) -> Result<Built, String> {
@@ -857,44 +894,9 @@ pub fn build_town_yielding(
                 terrace,
             )?);
         }
-        // Its cog at its mooring (`sail-the-cog` design 6), drawn apart from
-        // the town since it rides the water, and the gangplank up to it, off
-        // the chart in a harbour stored before it.
-        if let Some(c) = &template.cog {
-            let ship = cog::ship(
-                &mut built.cog_meshes,
-                repeat_m,
-                patch,
-                &built.chart,
-                template,
-                c,
-                radius_m,
-                sheet_m,
-            );
-            let plank = cog::gangplank(
-                &mut built.meshes,
-                repeat_m,
-                patch,
-                &built.chart,
-                template,
-                c,
-                radius_m,
-                (terrace, sheet_m),
-            );
-            let bow = cog::bow(patch, &built.chart, template, c);
-            match (ship, plank, bow) {
-                (Some(ship), Some(plank), Some(bow)) => {
-                    built.cog = Some(built.solids.len() + cut.len());
-                    built.cog_bow = bow;
-                    cut.push(ship);
-                    cut.push(plank);
-                }
-                _ => {
-                    built.cog_meshes.clear();
-                    built.dressing_skipped += 1;
-                }
-            }
-        }
+        // Its cog's ship and gangplank were cut here until
+        // `retire-rowboat-and-cog`: the cog is retired, so neither is. The
+        // cells under them are still laid (`sea::over_water`).
         // Its dressing (task 4.2c), each thing on what is under it.
         let before = counts(&built.meshes);
         let (things, skipped) = dressing::dressing(
@@ -1044,6 +1046,40 @@ pub fn build_town_yielding(
             built.rooms.push(Meshes::new());
             built.lights.push(Vec::new());
             built.solids.push(c);
+        }
+    }
+    // Its smithies (`townsfolk` design 26a), from layout 3, each on its
+    // forge cell's terrace, with no rooms and no lights of its own: its fire
+    // is a lamp in the field.
+    if let Some(template) = template.filter(|_| town.layout >= FORGE_LAYOUT) {
+        let cell_m = template.grid.cell_m;
+        for s in &template.smithies {
+            let (c, r) = s.forge_cell(cell_m);
+            let floor = town
+                .cells
+                .iter()
+                .position(|t| (t.0, t.1) == (c, r))
+                .map(|i| town.terrace_of(i));
+            let piece = floor.and_then(|floor| {
+                smithy::smithy(
+                    &mut built.meshes,
+                    repeat_m,
+                    patch,
+                    &built.chart,
+                    s,
+                    cell_m,
+                    radius_m,
+                    floor,
+                )
+            });
+            match piece {
+                Some(piece) => {
+                    built.rooms.push(Meshes::new());
+                    built.lights.push(Vec::new());
+                    built.solids.push(piece);
+                }
+                None => built.dressing_skipped += 1,
+            }
         }
     }
     let Some(template) = template.filter(|t| !t.masonry.is_empty()) else {

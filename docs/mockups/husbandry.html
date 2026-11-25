@@ -167,6 +167,19 @@ pre.code{font-family:var(--mono);font-size:12px;color:var(--sky);background:var(
 @media (max-width:520px){.erow{grid-template-columns:118px minmax(0,1fr) 64px}.trait{grid-template-columns:78px minmax(0,1fr) 60px}}
 footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
 @media (prefers-reduced-motion: reduce){.toast{transition:none}}
+/* Art style tab: short labels on screen, everything else in its info modal */
+.artctl{top:26px;left:8px;padding:9px;display:grid;gap:6px;width:min(300px,calc(100% - 16px))}
+.artctl .k{font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--muted)}
+.infobtn{all:unset;cursor:pointer;position:absolute;right:8px;top:26px;z-index:3;width:34px;height:34px;display:grid;place-items:center;border:1px solid #5d7a78;background:var(--panel);color:var(--amber);font-family:var(--display);font-size:20px;font-weight:700}
+.infobtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+dialog.artinfo{width:min(760px,94vw);max-height:88vh;max-height:88dvh;padding:0;border:1px solid #5d7a78;background:var(--panel-solid);color:var(--ink)}
+dialog.artinfo::backdrop{background:rgba(4,6,4,.72)}
+dialog.artinfo .hd{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:var(--panel-solid);border-bottom:1px solid var(--line)}
+dialog.artinfo .bd{padding:12px 16px 18px;font-size:14px} dialog.artinfo .bd p, dialog.artinfo .bd li{max-width:none}
+dialog.artinfo table{border-collapse:collapse;font-size:12.5px;width:100%;display:block;overflow-x:auto} dialog.artinfo td,dialog.artinfo th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+dialog.artinfo .x{all:unset;cursor:pointer;font-size:20px;line-height:1;padding:4px 8px;color:var(--ink)} dialog.artinfo .x:focus-visible{outline:2px solid var(--amber)}
+@media (max-width:760px){ .artctl{top:auto;bottom:8px;max-height:44%;overflow:auto} }
+
 </style>
 </head>
 <body>
@@ -174,7 +187,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <header class="top">
   <div class="row"><span class="pill">Proposal, not built</span><span class="eyebrow">Design mockup &middot; 2026-11-14 &middot; <code>animal-husbandry</code></span></div>
   <h1>Pens, Nests and Pedigrees</h1>
-  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA">All Pale Blue Dot mockups (the tracker)</a></p>
   <p class="lede">The animal kingdom of every world in one tree, and keeping animals on Tenebris: taming wild ones, pens and coops, what each needs and gives, eggs that hatch, young that grow, and breeding that passes traits from both parents. The owner: <i>"we need a whole animal kingdom and domestication of animals, eggs, breeding".</i> None of it is in the game yet; today the game's only animals are eight fish.</p>
   <details class="about"><summary>About this mockup, and which art is whose</summary>
     <p>It extends the animals mockup (M7, <code>animals.html</code>: its species, biomes, taming by a trust meter and drops), the seas and rivers mockup (M25, <code>ocean.html</code>: its 41 water creatures and ducks with eggs), the fish lab (M9: a creature rolled from a species and a seed, rare morphs 1 in 64), the planets mockup (M1: Sequoia's, Wick's and Fallow's species) and farming (M8: pens beside the fields, compost from muck). It contradicts none of them, and redraws none of their art. Dishes made from meat, eggs, milk and honey are in the cooking mockup, drafted beside this one; this page lists them only as products.</p>
@@ -182,7 +195,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
     <p class="small">Rendered for review in a cloud container with no GPU (Chromium on SwiftShader): the screenshots say how it looks, never how fast it runs.</p>
   </details>
   <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
-    <span class="grp">3D</span><button role="tab" data-tab="farm">Farmstead</button><button role="tab" data-tab="tame">Taming</button><button role="tab" data-tab="hatch">Hatchery</button>
+    <span class="grp">3D</span><button role="tab" data-tab="farm">Farmstead</button><button role="tab" data-tab="tame">Taming</button><button role="tab" data-tab="hatch">Hatchery</button><button role="tab" data-tab="art">Art style</button>
     <span class="grp">Guide</span><button role="tab" data-tab="kingdom">Kingdom</button><button role="tab" data-tab="breed">Breeding</button><button role="tab" data-tab="economy">Economy</button><button role="tab" data-tab="engine">In the engine</button><button role="tab" data-tab="decisions">Decisions</button>
   </nav>
 </header>
@@ -251,6 +264,50 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
     <div><h3>Young</h3><p>Stages come from the birth day and the world day, so nothing about growth is saved. A chick is a pullet at 5 days and a laying hen at 10; a world day is 48 minutes of play (M8), so that is eight hours. Mammals carry their young: a woolback 5 days for one or two lambs, a plodder 8 for a calf, a rootling 4 for a litter of 4 to 8, a fellrunner 10 for a foal. Young follow their mother.</p></div>
   </div>
 </section>
+
+<!-- ================================================================== ART STYLE (design 17) -->
+<section id="tab-art" class="tabpanel" role="tabpanel" hidden>
+  <div class="stage" id="stage-art">
+    <div class="dbg" id="artDbg">art style | today | 11:00</div>
+    <button class="infobtn" id="artInfoBtn" aria-haspopup="dialog" aria-label="About the art styles" title="About the art styles">i</button>
+    <div class="panel artctl" id="artCtl">
+      <span class="k">Style</span>
+      <div class="seg" role="group" aria-label="Style"><button class="btn" data-style="today">Today</button><button class="btn" data-style="neck">Neck fixed</button><button class="btn" data-style="soft">Soft low-poly</button><button class="btn" data-style="carved">Carved blocky</button></div>
+      <span class="k">Pose</span>
+      <div class="seg" role="group" aria-label="Pose"><button class="btn" data-pose="stand">Stand</button><button class="btn" data-pose="graze">Graze</button><button class="btn" id="artWalk" aria-pressed="false">Walk</button></div>
+      <span class="k">View</span>
+      <div class="seg"><button class="btn" data-at="11">Day</button><button class="btn" data-at="22.5">Night</button><button class="btn" id="artGrid" aria-pressed="true">1 m grid</button><button class="btn" id="artClose" aria-pressed="false">Plodder's head</button></div>
+    </div>
+  </div>
+</section>
+<dialog class="artinfo" id="artInfo" aria-labelledby="artInfoTitle">
+  <div class="hd"><h3 id="artInfoTitle" style="margin:0">Art style: the herd</h3><button class="x" id="artInfoX" aria-label="Close">&#x2715;</button></div>
+  <div class="bd">
+    <p>The owner, on the red plodder grazing in the game (2026-11-23): <i>"his neck bent too far lol, alsoo these guys are a little too smooth. can you make me a mockup of animals? so i can approve the art style?"</i> Pick a style; the game's animals change after that, on a request (<code>animal-husbandry</code> design 17, tasks 10.3 and 10.4).</p>
+    <h4>The four styles</h4>
+    <ul>
+      <li><b>Today</b>: the game's own forms. The page builds them with a port of <code>husbandry/loft.rs</code> and <code>forms.rs</code>, checked against the game's mesh (<code>husbandry/art/today.json</code>, written by the test <code>dump_the_herds_forms_for_the_art_mockup</code>): positions, triangles and UVs agree to 0.1 mm. 2,308 triangles for the plodder.</li>
+      <li><b>Neck fixed</b>: Today's forms, with the neck carried and lowered as below.</li>
+      <li><b>Soft low-poly</b>: the same authored rings joined straight, 9 sides round the body, 8 the neck and head, 6 the legs (about 820 triangles); normals 60% smooth and 40% the face's own, so planes read without flat shading; hard creases at the hoof, the horn's root and a squared jaw; the coat laid a tile every 2 m, so its pixels match the ground's.</li>
+      <li><b>Carved blocky</b>: block-led sections (rounded squares) bevelled at the corners, joined straight, the same creases and texture scale (about 1,100 triangles). Every part is still one shaped piece fitted into the body.</li>
+    </ul>
+    <p><b>Recommendation: <span id="artRec">Soft low-poly</span></b>. <span id="artRecWhy">It keeps today's shapes and their smooth light across the curves, but its planes, its creases at the hoof, horn and jaw, and coat pixels the ground's size sit it beside the hex columns, the timber and the townsfolk. Carved blocky reads boxier than the animals need; Today with the neck fixed is still the rubber tube.</span></p>
+    <h4>The neck, measured (the plodder, withers 1.37 m)</h4>
+    <table>
+      <tr><th></th><th>Neck</th><th>Face</th><th>Poll</th><th>Muzzle</th></tr>
+      <tr><td>Today, standing</td><td>+18.4&deg;</td><td>-51.5&deg;</td><td>1.21 m</td><td>0.81 m</td></tr>
+      <tr><td>Today, grazing</td><td>-87.6&deg;</td><td>-157.5&deg;</td><td>0.55 m</td><td>0.36 m up, 0.45 m behind the neck's root</td></tr>
+      <tr><td>Fixed, standing</td><td>+30&deg;</td><td>-42&deg;</td><td>1.35 m</td><td>1.01 m</td></tr>
+      <tr><td>Fixed, grazing</td><td>-35 to -70&deg;</td><td>-76&deg;</td><td>0.58 m</td><td>0.09 m, at the grass</td></tr>
+    </table>
+    <p>Today a graze turns the neck and the face together by 106&deg; about the neck's root, so the face ends past vertical, pointing back at the chest, and still 0.36 m above the grass. Fixed: the face keeps its own angle (never past vertical), and the neck is lowered from the shoulder with an arch along it until the muzzle reaches the grass. The plodder's neck is 1.2 times the game's and the woolback's 1.5 times, so they reach the grass without folding.</p>
+    <h4>Why today's read as too smooth</h4>
+    <p>Splined ellipses everywhere (16 sides round the body, three rings between each authored pair), every normal averaged so the light rolls round every part alike, no crease at a hoof, jaw or horn, no flat back or face, and the coat's texels from 8.1 cm on the barrel down to 0.8 cm on a leg, so the head and legs blur to flat colour.</p>
+    <h4>On this page</h4>
+    <p>Horse, plodder, woolback and meadow hen at the game's sizes (withers 1.55, 1.35 and 0.8 m; the hen 0.42 m), in their colours from <code>husbandry.ron</code>, wearing the game's <code>coat.png</code> (byte for byte, nearest sampled, tinted by the species' colours). A 1.8 m player stands at the end, and the grid is 1 m. Lit as the terrain is: sun, sky and two lanterns; at night the moon is dim and the lanterns light the herd. No outlines. Drag to turn, scroll or pinch to zoom; nothing moves until Walk is pressed (they walk in place).</p>
+    <p class="small muted">Screenshots for review were rendered on SwiftShader in a cloud container (no GPU): they show the look, never the speed.</p>
+  </div>
+</dialog>
 
 <!-- ================================================================== KINGDOM -->
 <section id="tab-kingdom" class="tabpanel" role="tabpanel" hidden>
@@ -399,7 +456,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 // the page (owner, 2026-11-13). The open tab is the URL's bare hash; #farm-night opens the farm at night. A 3D tab's scene is
 // built the first time it opens; the page has one WebGL renderer, made when the first 3D tab opens, whose canvas moves into
 // the open tab's stage; its frame loop runs only while a 3D tab is showing.
-const TABS = ["farm", "tame", "hatch", "kingdom", "breed", "economy", "engine", "decisions"];
+const TABS = ["farm", "tame", "hatch", "art", "kingdom", "breed", "economy", "engine", "decisions"];
 const TAB_HOOKS = {};
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); if (TABS.includes(h)) return h; const b = h.split("-")[0]; return TABS.includes(b) ? b : null; };
 let TAB = null;
@@ -489,10 +546,10 @@ function makeU(){
   };
 }
 const VS = `
-attribute vec3 aTile;
-varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+attribute vec3 aTile; attribute vec3 aCol;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile; varying vec3 vCol;
 void main(){
-  vUv = uv; vTile = aTile;
+  vUv = uv; vTile = aTile; vCol = aCol;
   vec4 w = modelMatrix * vec4(position, 1.0);
   vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * viewMatrix * w;
@@ -501,7 +558,7 @@ const FS = `
 uniform vec3 uColor; uniform vec3 uEmissive; uniform float uOpacity; uniform sampler2D uMap; uniform float uMode; uniform float uRep; uniform vec3 uTile; uniform float uCell; uniform float uNightEmit;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar; uniform float uNight;
 uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
-varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile; varying vec3 vCol;
 // The game's atlas, read the way planet_surface.wgsl's pixel_tile does: four sheets across and down, each a 4x4 grid of 32-texel tiles.
 vec3 atlasTile(vec2 uv, vec3 t0){
   vec3 t = floor(t0 + 0.5);
@@ -523,7 +580,12 @@ void main(){
     vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0;
     base.rgb *= texture2D(uMap, vec2((uCell + px.x) / 8.0, px.y)).rgb;
   }
-  if (uMode > 5.5) { vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0; base.rgb *= texture2D(uMap, px).rgb; } // a 32 px floor tile, uRep a metre
+  if (uMode > 6.5) { // the herd's coat strip (coat.png, six 32 px tiles): the tile from aTile.x, the texel nearest within
+    // it, tinted by the vertex colour, as the game's coat material does
+    vec2 px = (floor(fract(vUv) * 32.0) + 0.5) / 32.0;
+    base.rgb *= texture2D(uMap, vec2((vTile.x + px.x) / 6.0, px.y)).rgb * vCol;
+  }
+  if (uMode > 5.5 && uMode < 6.5) { vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0; base.rgb *= texture2D(uMap, px).rgb; } // a 32 px floor tile, uRep a metre
   vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
   vec3 light = mix(uGround, uSky, n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSunDir), 0.0);
   for (int i = 0; i < ${MAXL}; i++) {
@@ -1535,6 +1597,168 @@ MAKERS.hatch = function(){
 };
 </script>
 
+<script src="husbandry/art/forms.js?v=1"></script>
+<script>
+"use strict";
+// =====================================================================================================
+// Art style (animal-husbandry design 17): the herd in four styles, side by side on the game's ground, one 3D view.
+// The forms come from husbandry/art/forms.js (the game's loft.rs and forms.rs, ported and checked against the game's
+// mesh); the coat is the game's coat.png, drawn by the page's terrain shader's mode 7 (tile, nearest texel, tint).
+// =====================================================================================================
+const ART_STATE = { style: "today", pose: "stand", walk: false, hour: 11, grid: true, close: false };
+const ART_LINE = [   // id, x, z, yaw (radians, turning a -Z-facing form toward the camera's side), label
+  { id: "horse", x: -2.25, z: 0.2, label: "Horse" },
+  { id: "plodder", x: 0.0, z: 0.0, label: "Plodder" },
+  { id: "woolback", x: 1.85, z: -0.15, label: "Woolback" },
+  { id: "meadow-hen", x: 3.05, z: -0.35, label: "Meadow hen" },
+];
+const ART_YAW = -2.2;
+MAKERS.art = function(){
+  const V = newView("art", { yaw: 0.1, pitch: 0.17, dist: 6.4, target: new THREE.Vector3(0.2, 0.72, 0), min: 1.2, max: 30, minPitch: 0.02 });
+  V.camera.near = 0.03; V.camera.updateProjectionMatrix();
+  // the game's ground: fields grass on hex cells, flat
+  const cells = new Map();
+  for (let q = -5; q <= 5; q++) for (let r = -5; r <= 5; r++) if (hdist([0, 0], [q, r]) <= 4) cells.set(key(q, r), { q, r, h: 0 });
+  ground(V, cells, SLOT.fields);
+  // two lanterns behind the herd: at night they light it, the moon dim
+  lanternPost(V, -1.2, 0, -2.0, Math.PI / 2);
+  lanternPost(V, 2.2, 0, -2.2, Math.PI / 2);
+  trough(V, -0.6, 0, -2.4, 0.15, true);
+  tree(V, 7.2, 0, -6.5, 1);
+  tree(V, -8.0, 0, -5.0, 1.1);
+  // the coat
+  const coatTex = tex("game/coat", true);
+  coatTex.flipY = false; coatTex.wrapS = coatTex.wrapT = THREE.RepeatWrapping;
+  V.coatMat = litMat(V, { map: coatTex, mode: 7 });
+  V.herd = ART_LINE.map(a => {
+    const g = new THREE.Group(); g.position.set(a.x, 0, a.z); g.rotation.y = ART_YAW; V.scene.add(g);
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), V.coatMat); g.add(mesh);
+    const tag = document.createElement("div"); tag.className = "tag3d"; V.stage.appendChild(tag);
+    return Object.assign({ g, mesh, tag, phase: Math.random() * 6 }, a);
+  });
+  V.person = artPerson(V); V.person.position.set(4.3, 0, -0.2); V.person.rotation.y = ART_YAW + 0.5;
+  const ptag = document.createElement("div"); ptag.className = "tag3d"; ptag.textContent = "Player 1.8 m"; V.stage.appendChild(ptag);
+  V.ptag = ptag;
+  // 1 m grid over the ground, as a measuring overlay
+  const grid = new THREE.GridHelper(12, 12, 0xf0e0b0, 0xf0e0b0);
+  grid.material.transparent = true; grid.material.opacity = 0.32; grid.position.set(0, 0.012, 0); V.scene.add(grid); V.grid = grid;
+  V.update = dt => {
+    if (ART_STATE.walk) { for (const a of V.herd) a.phase += dt * (a.id === "meadow-hen" ? 7 : a.id === "horse" ? 3.6 : 3.2); artBuild(V); }
+  };
+  V.after = () => {
+    const r = V.stage.getBoundingClientRect(), w = r.width, h = r.height;
+    const put = (el, p) => { const v = p.clone().project(V.camera); const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && !ART_STATE.close; el.style.display = on ? "" : "none"; el.style.left = ((v.x + 1) / 2 * w) + "px"; el.style.top = ((1 - v.y) / 2 * h - 6) + "px"; };
+    for (const a of V.herd){ const top = a.top || 1; put(a.tag, new THREE.Vector3(a.x, top + 0.25, a.z)); }
+    put(V.ptag, new THREE.Vector3(V.person.position.x, 2.05, V.person.position.z));
+  };
+  V.setTime = h => { ART_STATE.hour = h; const L = light(V, h); V.grid.material.opacity = 0.05 + 0.27 * L.day; artDbg(V); };
+  V.setTime(ART_STATE.hour);
+  artBuild(V);
+  return V;
+};
+function artPose(a){
+  const P = Object.assign({}, HerdForms.STAND);
+  if (ART_STATE.pose === "graze") P.head_down = a.id === "meadow-hen" ? 0.95 : 1.85;
+  if (ART_STATE.walk) { P.phase = a.phase; P.walk = 1; if (a.id === "meadow-hen") P.bob = Math.sin(a.phase * 2) * 0.012; }
+  return P;
+}
+function artBuild(V){
+  for (const a of V.herd){
+    const b = HerdForms.build(a.id, ART_STATE.style, artPose(a));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(b.position, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(b.normal, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
+    g.setAttribute("aCol", new THREE.Float32BufferAttribute(b.colour, 3));
+    const t = new Float32Array(b.tile.length * 3); b.tile.forEach((v, i) => t[i * 3] = v);
+    g.setAttribute("aTile", new THREE.BufferAttribute(t, 3));
+    g.setIndex(b.index);
+    a.mesh.geometry.dispose(); a.mesh.geometry = g;
+    let top = 0; for (let i = 1; i < b.position.length; i += 3) top = Math.max(top, b.position[i]); a.top = top;
+    a.tris = b.index.length / 3;
+    a.tag.textContent = a.label + " " + a.tris + " tris";
+  }
+  artDbg(V);
+}
+function artDbg(V){ if (V.herd) $("artDbg").textContent = "art style | " + ART_STATE.style + " | " + ART_STATE.pose + (ART_STATE.walk ? " walking" : "") + " | " + fmtT(ART_STATE.hour); }
+// The player for scale, 1.8 m: one lofted body in the game's settlement cloth (linen shirt, wool trousers), skin and
+// hair from the coat strip; each part grows from inside the torso.
+function artPerson(V){
+  const F = HerdForms, g = new THREE.Group(); V.scene.add(g);
+  const R = (y, rx, rz, x = 0, z = 0) => F.ring([x, y, z], [1, 0, 0], [0, 0, 1], rx, rz);
+  const mesh = (b, mat) => { const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(b.position, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(b.normal, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2)); geo.setAttribute("aCol", new THREE.Float32BufferAttribute(b.colour, 3)); const t = new Float32Array(b.tile.length * 3); b.tile.forEach((v, i) => t[i * 3] = v); geo.setAttribute("aTile", new THREE.BufferAttribute(t, 3)); geo.setIndex(b.index); g.add(new THREE.Mesh(geo, mat)); };
+  const white = () => [1, 1, 1];
+  const shirt = F.builder(), trousers = F.builder(), skin = F.builder();
+  F.smooth(shirt, F.curve([R(0.86, 0.17, 0.11), R(1.0, 0.165, 0.105), R(1.2, 0.18, 0.11), R(1.38, 0.2, 0.115), R(1.46, 0.15, 0.095), R(1.5, 0.06, 0.055)], 2), 12, 0, white);
+  for (const s of [-1, 1]){
+    F.smooth(trousers, F.curve([R(0.98, 0.1, 0.1, 0.09 * s), R(0.78, 0.085, 0.085, 0.095 * s), R(0.5, 0.062, 0.065, 0.1 * s, 0.01), R(0.14, 0.05, 0.052, 0.1 * s)], 2), 10, 0, white);
+    F.smooth(shirt, F.curve([R(1.42, 0.06, 0.065, 0.19 * s), R(1.2, 0.052, 0.055, 0.215 * s), R(1.0, 0.045, 0.045, 0.225 * s, -0.03), R(0.86, 0.04, 0.04, 0.225 * s, -0.04)], 2), 8, 0, white);
+    F.smooth(skin, [R(0.88, 0.036, 0.03, 0.225 * s, -0.04), R(0.8, 0.04, 0.025, 0.224 * s, -0.045), R(0.74, 0.02, 0.018, 0.222 * s, -0.045)], 7, 5, () => [0.86, 0.64, 0.48]);
+    // a boot: from inside the trouser cuff, forward to the toe
+    F.smooth(skin, [F.ring([0.1 * s, 0.16, 0.0], [1, 0, 0], [0, 0, 1], 0.05, 0.055), F.ring([0.1 * s, 0.06, -0.03], [1, 0, 0], [0, 0.6, 0.8], 0.055, 0.07), F.ring([0.1 * s, 0.04, -0.14], [1, 0, 0], [0, 1, 0], 0.048, 0.04), F.ring([0.1 * s, 0.035, -0.17], [1, 0, 0], [0, 1, 0], 0.02, 0.02)], 8, 2, () => [0.24, 0.17, 0.12]);
+  }
+  // neck and head, hair painted onto the head's own crown and back
+  F.smooth(skin, F.curve([R(1.44, 0.055, 0.055), R(1.53, 0.06, 0.06, 0, 0.005), R(1.58, 0.085, 0.098, 0, 0.0), R(1.66, 0.1, 0.112), R(1.73, 0.098, 0.108), R(1.78, 0.075, 0.085), R(1.8, 0.02, 0.025)], 2), 12, 5, (n, t) => {
+    if (t > 0.55 && (n[1] > 0.25 || n[2] > 0.35)) return [0.29, 0.2, 0.14];
+    if (t > 0.5 && t < 0.62 && n[2] < -0.75 && Math.abs(n[0]) > 0.18) return [0.12, 0.1, 0.09];
+    return [0.86, 0.64, 0.48];
+  });
+  mesh(shirt, gameMat(V, "linen", 0x9ab0c8)); mesh(trousers, gameMat(V, "wool", 0x8a7050)); mesh(skin, V.coatMat);
+  return g;
+}
+function artCloseUp(V, on){
+  ART_STATE.close = on; $("artClose").setAttribute("aria-pressed", on);
+  const o = V.orbit;
+  if (on){
+    // the plodder's head and neck from its near side, a little ahead of square
+    const p = V.herd[1], fx = -Math.sin(ART_YAW), fz = -Math.cos(ART_YAW), sx = -fz, sz = fx;
+    Object.assign(o, { yaw: Math.atan2(sx, sz) + 0.2, pitch: 0.08, dist: V.stage.clientWidth < V.stage.clientHeight ? 4.6 : 3.1 }); o.target.set(p.x + fx * 0.75, ART_STATE.pose === "graze" ? 0.72 : 1.0, p.z + fz * 0.75);
+    // nudge the view so the head sits right of the controls
+    o.target.x -= Math.cos(o.yaw) * 0.45; o.target.z += Math.sin(o.yaw) * 0.45;
+  }
+  else { const narrow = V.stage.clientWidth < V.stage.clientHeight; Object.assign(o, { yaw: 0.1, pitch: narrow ? 0.3 : 0.17, dist: narrow ? 17.5 : 6.4 }); o.target.set(narrow ? 1.0 : 0.2, narrow ? -0.6 : 0.72, 0); }
+  V.place();
+}
+function artPaint(){
+  document.querySelectorAll("#artCtl [data-style]").forEach(b => b.setAttribute("aria-pressed", b.dataset.style === ART_STATE.style));
+  document.querySelectorAll("#artCtl [data-pose]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pose === ART_STATE.pose));
+  document.querySelectorAll("#artCtl [data-at]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.at === ART_STATE.hour));
+  $("artWalk").setAttribute("aria-pressed", ART_STATE.walk); $("artGrid").setAttribute("aria-pressed", ART_STATE.grid);
+}
+// #art, or #art-<style>-<pose>-night-close in any order (e.g. #art-soft-graze-night)
+function artFromHash(){
+  const parts = location.hash.replace(/^#/, "").split("-");
+  if (parts[0] !== "art") return;
+  for (const p of parts.slice(1)){
+    if (HerdForms.STYLES[p]) ART_STATE.style = p;
+    if (p === "stand" || p === "graze") ART_STATE.pose = p;
+    if (p === "night") ART_STATE.hour = 22.5;
+    if (p === "day") ART_STATE.hour = 11;
+    if (p === "nogrid") ART_STATE.grid = false;
+  }
+  return parts.includes("close");
+}
+TAB_HOOKS.art = {
+  show(){
+    const close = artFromHash();
+    showView("art");
+    const V = VIEWS.art;
+    V.grid.visible = ART_STATE.grid; V.setTime(ART_STATE.hour); artBuild(V); artCloseUp(V, !!close || ART_STATE.close); artPaint();
+  },
+  hide(){ const V = VIEWS.art; if (V){ V.herd.forEach(a => a.tag.style.display = "none"); V.ptag.style.display = "none"; } hideView(); },
+};
+document.querySelectorAll("#artCtl [data-style]").forEach(b => b.addEventListener("click", () => { ART_STATE.style = b.dataset.style; artBuild(VIEWS.art); artPaint(); }));
+document.querySelectorAll("#artCtl [data-pose]").forEach(b => b.addEventListener("click", () => { ART_STATE.pose = b.dataset.pose; artBuild(VIEWS.art); if (ART_STATE.close) artCloseUp(VIEWS.art, true); artPaint(); }));
+document.querySelectorAll("#artCtl [data-at]").forEach(b => b.addEventListener("click", () => { VIEWS.art.setTime(+b.dataset.at); artPaint(); }));
+$("artWalk").addEventListener("click", () => { ART_STATE.walk = !ART_STATE.walk; artBuild(VIEWS.art); artPaint(); });
+$("artGrid").addEventListener("click", () => { ART_STATE.grid = !ART_STATE.grid; VIEWS.art.grid.visible = ART_STATE.grid; artPaint(); });
+$("artClose").addEventListener("click", () => artCloseUp(VIEWS.art, !ART_STATE.close));
+// the info modal: closes with its X, Esc (the dialog's own) or a tap outside
+const artInfo = $("artInfo");
+$("artInfoBtn").addEventListener("click", () => artInfo.showModal());
+$("artInfoX").addEventListener("click", () => artInfo.close());
+artInfo.addEventListener("click", e => { if (e.target === artInfo) artInfo.close(); });
+</script>
 <script>
 "use strict";
 // =====================================================================================================

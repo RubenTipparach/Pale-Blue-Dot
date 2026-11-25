@@ -134,10 +134,10 @@ fn every_good_round_trips_its_slot_code_and_has_its_icon() {
     }
 }
 
-/// A rig is whole boxes, and a walking leg moves where a standing one does
-/// not: the feet follow the phase.
+/// A rig is one whole textured form (design 16), and a walking leg moves
+/// where a standing one does not: the feet follow the phase.
 #[test]
-fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
+fn a_rig_builds_its_form_and_its_legs_follow_the_phase() {
     let settings = HusbandrySettings::default();
     for sp in settings.roster("home") {
         let build = |phase: f32, swing: f32| {
@@ -157,8 +157,10 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
             b
         };
         let still = build(0.0, 0.0);
-        assert_eq!(still.positions.len() % 24, 0, "{}", sp.id);
-        assert_eq!(still.indices.len(), still.positions.len() / 4 * 6);
+        // Lofted and textured, its points shared round its curves.
+        assert!(still.textured, "{}", sp.id);
+        assert_eq!(still.uvs.len(), still.positions.len(), "{}", sp.id);
+        assert!(still.indices.len() > still.positions.len(), "{}", sp.id);
         let top = still
             .positions
             .iter()
@@ -334,10 +336,10 @@ fn find_a_coastal_start_with_hens() {
     let roster = settings
         .land
         .values()
-        .find(|r| r.iter().any(|s| s.name == "Yard hen"))
+        .find(|r| r.iter().any(|s| s.name() == "Yard hen"))
         .expect("a roster with the hen")
         .clone();
-    let hen = roster.iter().position(|s| s.name == "Yard hen").unwrap() as u16;
+    let hen = roster.iter().position(|s| s.name() == "Yard hen").unwrap() as u16;
     let seed = crate::planet::terrain_config().seed;
     let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     let mut found = Vec::new();
@@ -520,4 +522,73 @@ fn a_rebase_leaves_the_yard_where_it_was() {
     let b = &yard.beasts[0];
     assert!((n.to_world(b.pos).pos - feet).length() < 1e-6);
     assert!((n.to_world(b.goal.unwrap()).pos - goal).length() < 1e-6);
+}
+
+/// The herd as the owner picked it (`animal-husbandry` design 17, "The
+/// owner's pick": M26's blocky animals), built from the game's own species
+/// data the way the yard builds it: the triangles each species is made of,
+/// and design 17's neck: the head carried standing, the muzzle at the grass
+/// grazing. Prints what it measures for the records.
+#[test]
+fn the_herd_is_built_blocky_with_its_head_at_the_grass() {
+    use super::forms::{self, Beast, Stance};
+    use super::rig::{self, Builder, Pose};
+    let settings: HusbandrySettings =
+        ron::from_str(include_str!("../../../../assets/config/husbandry.ron")).unwrap();
+    let find = |id: &str| -> LandSpecies {
+        settings
+            .land
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .unwrap_or_else(|| panic!("{id} in husbandry.ron"))
+            .clone()
+    };
+    let mut counted = Vec::new();
+    for (id, triangles) in [
+        ("horse", 228),
+        ("plodder", 200),
+        ("woolback", 168),
+        ("meadow-hen", 180),
+    ] {
+        let sp = find(id);
+        let mut b = Builder::default();
+        rig::build(
+            &mut b,
+            &sp,
+            &Genome::default(),
+            Sex::F,
+            &Pose::default(),
+            [Vec3::X, Vec3::Y, Vec3::Z],
+        );
+        let tris = b.indices.len() / 3;
+        println!("{id}: {tris} triangles, {} points", b.positions.len());
+        assert!(b.textured, "{id} wears its hide");
+        counted.push((id, tris, triangles));
+        let Some(kind) = Beast::of_id(id) else {
+            continue;
+        };
+        let size = sp.height_m / kind.withers_m();
+        let (stand, _) = forms::muzzle(kind, &Stance::default(), size);
+        let (graze, face) = forms::muzzle(
+            kind,
+            &Stance {
+                head_down: 1.85,
+                ..default()
+            },
+            size,
+        );
+        println!(
+            "{id}: withers {:.2} m, muzzle standing {:.3} m, grazing {:.3} m, face {:.1} deg",
+            sp.height_m,
+            stand.y,
+            graze.y,
+            face.y.asin().to_degrees()
+        );
+        assert!((0.0..=0.15).contains(&graze.y), "{id} grazes at the grass");
+        assert!(face.z <= 1e-4, "{id}'s face never past vertical");
+    }
+    for (id, tris, triangles) in counted {
+        assert_eq!(tris, triangles, "{id}'s triangles");
+    }
 }

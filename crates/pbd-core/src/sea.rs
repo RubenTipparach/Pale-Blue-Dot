@@ -264,7 +264,6 @@ impl SeaTable {
             phase[i / 4][i % 4] = self.phase_at(i, seconds);
         }
         SeaGpu {
-            tide: Vec4::ZERO,
             directions: self.directions.map(|d| d.extend(0.0)),
             bands: std::array::from_fn(|b| {
                 let band = self.bands[b];
@@ -317,7 +316,6 @@ impl SeaTable {
         let wind_norm = wind_norm.max(1e-4);
         let mut out = LocalSea {
             normal,
-            tide: Vec4::ZERO,
             count: 0,
             components: [Component::default(); COMPONENTS],
         };
@@ -380,8 +378,6 @@ pub struct Component {
 #[derive(Clone, Debug)]
 pub struct LocalSea {
     pub normal: Vec3,
-    /// The tide (see [`tide_m`]): the moon's direction and the range.
-    pub tide: Vec4,
     pub count: usize,
     pub components: [Component; COMPONENTS],
 }
@@ -414,14 +410,7 @@ impl LocalSea {
             let aw = c.amplitude * c.omega * decay;
             out.velocity += c.travel * (aw * s) - self.normal * (aw * co);
         }
-        out.height += tide_m(p, self.tide);
         out
-    }
-
-    /// This sea with the tide `tide` (moon direction, range) on it.
-    pub fn with_tide(mut self, tide: Vec4) -> Self {
-        self.tide = tide;
-        self
     }
 
     /// Height only: the loop the hull's cells run.
@@ -431,19 +420,16 @@ impl LocalSea {
             .iter()
             .map(|c| c.amplitude * (c.k.dot(on_sea) + c.phase).sin())
             .sum::<f32>()
-            + tide_m(p, self.tide)
     }
 
     /// The highest the surface can stand above the mean here, m: every
-    /// wave at its crest, on the tide at its highest. (The tide was left out
-    /// until `small-boats`: at high water every hull cell more than the waves'
-    /// reach over the mean was counted dry, and boats sank to the tide.)
+    /// wave at its crest. The sea has no tide (`no-tides`): its mean is one
+    /// level.
     pub fn reach(&self) -> f32 {
         self.components[..self.count]
             .iter()
             .map(|c| c.amplitude)
             .sum::<f32>()
-            + tide_high_m(self.tide.w.max(0.0))
     }
 }
 
@@ -454,9 +440,6 @@ impl LocalSea {
 /// depth limit).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SeaGpu {
-    /// The tide: the moon's unit direction in the planet's frame, and the
-    /// range, m (zero: no tide). `sea.wgsl`'s `sea_tide` is [`tide_m`].
-    pub tide: Vec4,
     pub directions: [Vec4; DIRECTIONS],
     pub bands: [Vec4; BANDS + 1],
     pub phase: [Vec4; COMPONENTS / 4],
@@ -467,28 +450,6 @@ pub struct SeaGpu {
 fn smoothstep(lo: f32, hi: f32, x: f32) -> f32 {
     let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
-}
-
-/// The tide over body-local point `p` (`ocean-environments` design 10): an
-/// offset of the sea's surface, m, from the moon. `tide` is the moon's unit
-/// direction in the planet's frame and the range, m. The moon's pull raises
-/// the water under it and opposite it and lowers it between: the second
-/// Legendre term, `(3 cos^2 - 1) / 2`, scaled so the water at any one place
-/// rises and falls by `range` over a day, two highs and two lows as the
-/// planet turns under the moon. Its mean over the sphere is nought, so the sea
-/// keeps its volume. A range of nought is no tide at all.
-pub fn tide_m(p: Vec3, tide: Vec4) -> f32 {
-    if tide.w == 0.0 {
-        return 0.0;
-    }
-    let c = p.normalize_or_zero().dot(tide.truncate());
-    tide.w / 1.5 * (1.5 * c * c - 0.5)
-}
-
-/// The highest the tide stands over the mean anywhere, m: two thirds of the
-/// range, under the moon and opposite it.
-pub fn tide_high_m(range: f32) -> f32 {
-    range * 2.0 / 3.0
 }
 
 /// Double-precision convenience for the vehicle code.
@@ -505,52 +466,6 @@ mod tests {
 
     fn table() -> SeaTable {
         SeaTable::new(SeaSettings::default(), G)
-    }
-
-    /// The tide (`ocean-environments` 5.1): at one place it rises and falls
-    /// by its range as the moon goes round, twice a turn; a moonless body has
-    /// none; over the sphere it averages nought; and the local sea carries it.
-    #[test]
-    fn the_tide_ranges_twice_a_turn_and_keeps_the_seas_volume() {
-        let range = 3.0;
-        let here = Vec3::X;
-        let (mut high, mut low, mut crossings) = (f32::MIN, f32::MAX, 0);
-        let mut last = 0.0f32;
-        for step in 0..=3600 {
-            let a = step as f32 / 3600.0 * std::f32::consts::TAU;
-            let moon = Vec3::new(a.cos(), 0.0, a.sin());
-            let h = tide_m(here, moon.extend(range));
-            if step > 0 && (h > 0.0) != (last > 0.0) {
-                crossings += 1;
-            }
-            last = h;
-            high = high.max(h);
-            low = low.min(h);
-        }
-        assert!((high - low - range).abs() < 1e-3, "{high} {low}");
-        assert!((high - tide_high_m(range)).abs() < 1e-3);
-        assert_eq!(crossings, 4, "two highs and two lows a turn");
-        assert_eq!(tide_m(here, Vec3::X.extend(0.0)), 0.0, "no moon, no tide");
-        // The mean over the sphere.
-        let mut sum = 0.0f64;
-        let n = 20_000;
-        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-        for i in 0..n {
-            let y = 1.0 - 2.0 * (i as f32 + 0.5) / n as f32;
-            let r = (1.0 - y * y).sqrt();
-            let t = golden * i as f32;
-            let d = Vec3::new(r * t.cos(), y, r * t.sin());
-            sum += tide_m(d, Vec3::new(0.3, 0.8, 0.52).normalize().extend(range)) as f64;
-        }
-        assert!((sum / n as f64).abs() < 1e-3, "{}", sum / n as f64);
-        let table = table();
-        let state = table.state(0.0, Vec3::ZERO);
-        let calm = table.local(&state, Vec3::Y, 40.0, 0.0);
-        let p = Vec3::Y * R;
-        let tide = Vec3::Y.extend(range);
-        let tided = calm.clone().with_tide(tide);
-        assert!((tided.height(p, R) - calm.height(p, R) - tide_high_m(range)).abs() < 1e-4);
-        assert_eq!(tided.at(p, R, 1.0).height, tided.height(p, R));
     }
 
     #[test]

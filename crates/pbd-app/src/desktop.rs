@@ -1,6 +1,9 @@
 mod arrival;
+mod boat;
 mod breeding;
+mod build_mode;
 mod compass_bar;
+mod construction;
 mod cpu_times;
 mod cracks;
 mod craft;
@@ -12,6 +15,8 @@ mod farm;
 mod forge;
 mod frame_graph;
 mod fruit;
+mod furniture;
+mod glow_plants;
 mod guide;
 mod hud;
 mod kitchen;
@@ -22,12 +27,16 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod planner;
 mod repro;
 mod scene;
+mod scroll_list;
 mod showcase;
 mod slots;
 mod sounds;
+mod talk;
 mod time_ui;
+mod toasts;
 mod water;
 mod weather_ui;
 
@@ -85,12 +94,23 @@ pub struct Launch {
     /// walk up and down a town's lane for a video (`--walk --at` puts it
     /// there).
     pub stroll: Option<f32>,
+    /// `--stand SECONDS`: a measurement instrument (`cascade-perf`). The
+    /// walker stands where `--walk --at` put it, looking the way `--yaw` and
+    /// `--pitch` say, touching nothing; logs `STAND_START` once it stands
+    /// and `STAND_DONE` and quits that long after: a held view for the frame
+    /// log to measure.
+    pub stand: Option<f32>,
     /// `--coast-walk METRES`: a recording instrument (`coast-walk`). The
     /// walker walks (no sprint) along the shore with the sea on one side,
     /// crosses the rivers it meets, keeps off cliffs and never digs; logs
     /// `COAST_START`, `COAST_RIVER` and `COAST_DONE` and quits after that many
     /// metres along the ground (`--walk --at` puts it on the shore).
     pub coast_walk: Option<f32>,
+    /// `--walk-river`: walk the river nearest the start from its source to
+    /// the sea on its bank (`river-cache` design 8).
+    pub walk_river: bool,
+    /// `--walk-river right`: keep to the right bank.
+    pub walk_river_right: bool,
     /// `--clock-runs`: `--time` sets the hour the clock starts from but does
     /// not stop it (a recording instrument: a walk from golden hour into the
     /// night).
@@ -98,10 +118,6 @@ pub struct Launch {
     /// `--stroll-leg SECONDS`: how long the stroll walks before it turns
     /// round (half the stroll when not given): a short leg paces one lane.
     pub stroll_leg: Option<f32>,
-    /// `--sail-for SECONDS`: a measurement instrument. Once aboard a cog
-    /// (`--aboard cog --sail DEG`), the run sails it that long in real
-    /// time, logs `SAIL_DONE` and quits: `perf_suite.py`'s `sail`.
-    pub sail_for: Option<f32>,
     /// `--frame-graph`: start with the frame graph shown (`F3` toggles it).
     pub frame_graph: bool,
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
@@ -171,14 +187,23 @@ pub struct Launch {
     /// A recording instrument.
     pub watch_hook: bool,
     /// `--cast`: take up the rod and cast once, from a boat's seat
-    /// (`--aboard tube|raft|loon|rowboat`) or on foot where the walker
+    /// (`--aboard tube|raft|loon`) or on foot where the walker
     /// stands (`--at`), scripted as `--fish` casts on its shore
     /// (`small-boats` design 6). A capture instrument.
     pub cast: bool,
+    /// `--rod-cue nibble|bite|hooked`: once a cast's float has been on the
+    /// water a second, the rod in hand is drawn as if the line were in that
+    /// phase, for a still of the rod's motion (`rod-motion` 2.5). Only the
+    /// drawn rod sees it: the line, its rules and any fish do not. A capture
+    /// instrument.
+    pub rod_cue: Option<pbd_core::fishing::Phase>,
     /// `--load-hold`: aboard a raft, put twelve logs in its hold through the
     /// pack's own move and save (`small-boats` design 5). A capture
     /// instrument.
     pub load_hold: bool,
+    /// `--carts` (`land-transport` 5.6): a hand cart and a hitched horse cart
+    /// set down ahead; `--cart-pull` takes the handles, `--cart-drive` the seat.
+    pub carts: Option<pbd_app::vehicles::carts::CartScript>,
     /// `--husbandry SCENE`: set a farm scene in front of the walker through
     /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
     /// animals can be photographed (`animal-husbandry` S12). A capture
@@ -188,14 +213,14 @@ pub struct Launch {
     /// species a few metres in front of the eye (`ocean-environments` 7.1).
     pub life: Option<String>,
     /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
-    /// cog or a rowboat once a harbour has made one), and `--seat` takes the
+    /// tube or a raft is launched for it), and `--seat` takes the
     /// seat rather than the chase view: a headless run has nobody to walk up
     /// to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
+    /// `--pole-run`: aboard a raft, pole it up the river and back down
+    /// (`vehicles::pole_run`).
+    pub pole_run: bool,
     pub seat: bool,
-    /// Capture instrument: a cog boarded with `--aboard cog` is cast off
-    /// with its yard braced this many degrees and 2 m/s of way.
-    pub sail: Option<f32>,
     /// Test instrument: hold the render origin this far from the camera's
     /// cell, so the planet's centre and the eye are both away from 0 in
     /// render space (`movement-smoothness` design 6.6). Works in play.
@@ -242,6 +267,9 @@ pub struct Launch {
     pub at: Option<(f32, f32)>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--gale <m/s>`: the sea held at a gale (`ocean-environments` 4.3), an
+    /// instrument for filming the spray.
+    pub gale: Option<f32>,
     /// `--weather-at SECONDS` starts the weather field that far into its own
     /// time, so a capture can be taken under a chosen sky: the spawn is a wet
     /// meadow whose cover sits near 0.6 at launch, and the body's average is
@@ -255,10 +283,6 @@ pub struct Launch {
     /// `--no-shadows` draws no sun cascades and lights everything as if in
     /// the sun: the same build's picture without them (`sun-shadows`).
     pub no_shadows: bool,
-    /// `--cog-swing <scale>` scales how far the harbours' cogs swing at
-    /// their moorings, 1 the mooring swing and 0 still (`sail-the-cog`
-    /// design 6, step 2).
-    pub cog_swing: Option<f32>,
     /// `--room-sky OPEN SHUT` sets the share of the sky a town's rooms take
     /// with a door open and with all shut (`sun-shadows` decision 7), for
     /// tuning against captures.
@@ -278,6 +302,21 @@ pub struct Launch {
     /// `--take-trees`: a capture's instrument that marks the nearest trees
     /// picked bare and the next felled (`flora-v2` 12.5).
     pub take_trees: bool,
+    /// `--pick-trees`: the same instrument picking only, felling nothing, so a
+    /// picked tree is seen bare among the trees it stood with.
+    pub pick_only: bool,
+    /// `--pick-fruit FRAME`: a pick played by the player's own key
+    /// (`flora-v2` 9.6). Once the fine set stands round the walker, the look
+    /// turns onto the nearest hanging fruit in reach and F is pressed on the
+    /// script's FRAME-th frame (counted from the aim), as a player would.
+    pub pick_fruit: Option<u32>,
+    /// `--pick-glow FRAME`: the same for the nearest glowing mushroom
+    /// (`glowing-mushrooms` 2.3), F pressed by the player's own key.
+    pub pick_glow: Option<u32>,
+    /// `--hold <item>`: that item in the selected hotbar slot from the
+    /// start, as a player holds it (`glowing-mushrooms` part B): a block as
+    /// `block:torch`, a good by its code.
+    pub hold: Option<String>,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -313,9 +352,6 @@ pub struct Launch {
     /// last of `--water-ticks`, and held there: the rule does not tick on
     /// its own, so a capture shows smooth water mid-tick (`water-flow` 5.3).
     pub water_tick_frac: Option<f32>,
-    /// `--tide high|low`: the tide's moon over the camera or a quarter turn
-    /// round (`ocean-environments` 5.1), for the tide's captures.
-    pub tide: Option<String>,
     /// `--arrows` turns the flow-arrow overlay on (`water-flow` 3.4).
     pub arrows: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
@@ -363,6 +399,17 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
+    /// instrument): a grinder and a mixer that far ahead either side, and a
+    /// plan staked from beyond them along the view, its nearer half paved,
+    /// through the same paths a player's stake and shovel take.
+    pub paving: Option<f32>,
+    /// `--road-plan <scene>` with `--paving` (`townsfolk` 14, a capture
+    /// instrument): the road planner's scenes, `two` (a road by two
+    /// clicks, an open start whose ghost follows the aim), `stake` (a second
+    /// road from the first's stake), `erased` (that second road erased),
+    /// `wide` (a three-wide road up the view).
+    pub road_plan: Option<String>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -384,6 +431,15 @@ pub struct Launch {
     /// `--tree-hover <id>`: zoomed out, show that mission's hover card as if
     /// the pointer were on its tile (a capture instrument).
     pub tree_hover: Option<String>,
+    /// `--tree-town`: the Missions tab shows the town tree once it is open;
+    /// `--town-focus <id>`: that town mission is made the one the player is
+    /// on once it opens, as a pick on the tree would (capture instruments,
+    /// `town-missions-tree` design 6).
+    pub tree_town: bool,
+    pub town_focus: Option<String>,
+    /// `--no-readout`: no debug readout at the top left, as in a showcase
+    /// (a capture instrument).
+    pub no_readout: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -447,6 +503,12 @@ pub struct Launch {
     /// no `--world` is made by, so a repro of an older world stands on its
     /// own ground. Refused with `--world`, whose generator is its own.
     pub generator: Option<u32>,
+    /// `--host <port>` (`multiplayer` design 20): play this world and let
+    /// others join it on the network.
+    pub host: Option<u16>,
+    /// `--join <address:port>` (`multiplayer` design 20): play the world
+    /// another game hosts.
+    pub join: Option<std::net::SocketAddr>,
 }
 
 impl Launch {
@@ -457,10 +519,12 @@ impl Launch {
             frame_log: None,
             walk_distance: None,
             stroll: None,
+            stand: None,
             coast_walk: None,
+            walk_river: false,
+            walk_river_right: false,
             clock_runs: false,
             stroll_leg: None,
-            sail_for: None,
             frame_graph: false,
             no_vsync: false,
             vsync: false,
@@ -488,21 +552,23 @@ impl Launch {
             fish_play: false,
             watch_hook: false,
             cast: false,
+            rod_cue: None,
             load_hold: false,
+            carts: None,
             husbandry: None,
             life: None,
             aboard: None,
+            pole_run: false,
             seat: false,
-            sail: None,
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
             at: None,
             rain: 0.0,
+            gale: None,
             weather_at: 0.0,
             open_doors: false,
             no_shadows: false,
-            cog_swing: None,
             room_sky: None,
             room_bounce: None,
             up: 0.0,
@@ -517,6 +583,8 @@ impl Launch {
             showcase_stills: None,
             showcase_from: 1,
             generator: None,
+            host: None,
+            join: None,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -524,7 +592,6 @@ impl Launch {
             pit: 0,
             pour_for: None,
             water_tick_frac: None,
-            tide: None,
             arrows: false,
             lamps: false,
             lamps_at: 5.0,
@@ -536,6 +603,8 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            paving: None,
+            road_plan: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -547,8 +616,15 @@ impl Launch {
             tree_select: None,
             tree_zoom: None,
             tree_hover: None,
+            tree_town: false,
+            town_focus: None,
+            no_readout: false,
             dig_ahead: false,
             take_trees: false,
+            pick_only: false,
+            pick_fruit: None,
+            pick_glow: None,
+            hold: None,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -615,8 +691,9 @@ impl Launch {
                                 | "pack-locked"
                                 | "bench"
                                 | "bench-view"
+                                | "carpenter"
                         ),
-                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench, bench-view or carpenter"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -655,12 +732,6 @@ impl Launch {
                         .expect("--water-ticks requires a count");
                 }
                 "--arrows" => result.arrows = true,
-                "--tide" => {
-                    i += 1;
-                    let which = args.get(i).expect("--tide requires high or low").clone();
-                    assert!(matches!(which.as_str(), "high" | "low"), "--tide high|low");
-                    result.tide = Some(which);
-                }
                 "--pit" => {
                     i += 1;
                     result.pit = args
@@ -757,6 +828,23 @@ impl Launch {
                         result.forge = Some(metres);
                     }
                 }
+                "--paving" => {
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--paving takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.paving = Some(metres);
+                }
+                "--road-plan" => {
+                    i += 1;
+                    result.road_plan = Some(
+                        args.get(i)
+                            .expect("--road-plan takes a scene: two, stake, erased, wide, lamps")
+                            .clone(),
+                    );
+                }
                 "--gather-around" => {
                     i += 1;
                     result.gather_around = Some(
@@ -811,6 +899,16 @@ impl Launch {
                             .clone(),
                     );
                 }
+                "--tree-town" => result.tree_town = true,
+                "--no-readout" => result.no_readout = true,
+                "--town-focus" => {
+                    i += 1;
+                    result.town_focus = Some(
+                        args.get(i)
+                            .expect("--town-focus takes a town mission id")
+                            .clone(),
+                    );
+                }
                 "--missions" => {
                     i += 1;
                     result.missions = Some(
@@ -821,6 +919,34 @@ impl Launch {
                 }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--take-trees" => result.take_trees = true,
+                "--pick-fruit" => {
+                    i += 1;
+                    result.pick_fruit = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-fruit takes the frame to press F on"),
+                    );
+                }
+                "--pick-glow" => {
+                    i += 1;
+                    result.pick_glow = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-glow takes the frame to press F on"),
+                    );
+                }
+                "--hold" => {
+                    i += 1;
+                    result.hold = Some(
+                        args.get(i)
+                            .cloned()
+                            .expect("--hold takes an item: block:torch, glowing-mushroom"),
+                    );
+                }
+                "--pick-trees" => {
+                    result.take_trees = true;
+                    result.pick_only = true;
+                }
                 "--pitch" => {
                     i += 1;
                     let degrees: f32 = args
@@ -861,6 +987,22 @@ impl Launch {
                         .and_then(|d| d.parse().ok())
                         .expect("--day requires a day number");
                     result.day = Some(day);
+                }
+                "--host" => {
+                    i += 1;
+                    result.host = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--host requires a port"),
+                    );
+                }
+                "--join" => {
+                    i += 1;
+                    result.join = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--join requires an address:port"),
+                    );
                 }
                 "--generator" => {
                     i += 1;
@@ -1102,6 +1244,15 @@ impl Launch {
                             .expect("--reflections takes off, low, medium or high"),
                     );
                 }
+                "--antialiasing" => {
+                    i += 1;
+                    let state = args.get(i).expect("--antialiasing requires on or off");
+                    result.settings.antialiasing = Some(match state.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        _ => panic!("--antialiasing takes on or off"),
+                    });
+                }
                 "--shadows" => {
                     i += 1;
                     let level = args
@@ -1156,6 +1307,19 @@ impl Launch {
                     result.stroll = Some(seconds);
                     result.walk = true;
                 }
+                "--stand" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--stand requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--stand takes seconds"
+                    );
+                    result.stand = Some(seconds);
+                    result.walk = true;
+                }
                 "--coast-walk" => {
                     i += 1;
                     let metres: f32 = args
@@ -1168,6 +1332,19 @@ impl Launch {
                     );
                     result.coast_walk = Some(metres);
                     result.walk = true;
+                }
+                "--walk-river" => {
+                    result.walk_river = true;
+                    result.walk = true;
+                    // An optional bank, looking downstream: left (the
+                    // default) or right.
+                    if let Some(side) = args
+                        .get(i + 1)
+                        .filter(|s| matches!(s.as_str(), "left" | "right"))
+                    {
+                        result.walk_river_right = side == "right";
+                        i += 1;
+                    }
                 }
                 "--stroll-leg" => {
                     i += 1;
@@ -1233,7 +1410,41 @@ impl Launch {
                 }
                 "--watch-hook" => result.watch_hook = true,
                 "--cast" => result.cast = true,
+                "--rod-cue" => {
+                    i += 1;
+                    use pbd_core::fishing::Phase;
+                    let name = args.get(i).expect("--rod-cue requires a phase");
+                    result.rod_cue = Some(match name.to_lowercase().as_str() {
+                        "nibble" => Phase::Nibble,
+                        "bite" => Phase::Bite,
+                        "hooked" => Phase::Hooked,
+                        other => panic!("--rod-cue: nibble, bite or hooked, not {other}"),
+                    });
+                }
                 "--load-hold" => result.load_hold = true,
+                "--carts" => {
+                    result.walk = true;
+                    result.carts.get_or_insert_default();
+                }
+                "--cart-pull" => result.carts.get_or_insert_default().pull = true,
+                "--cart-drive" => result.carts.get_or_insert_default().drive = true,
+                "--cart-close" => {
+                    i += 1;
+                    result.walk = true;
+                    let code = args
+                        .get(i)
+                        .expect("--cart-close requires hand, horse, plodder or ride");
+                    let script = result.carts.get_or_insert_default();
+                    script.plodder = code == "plodder";
+                    script.ride = code == "ride";
+                    script.close = if script.plodder {
+                        Some(pbd_core::vehicle::cart::CartKind::HorseCart)
+                    } else {
+                        pbd_core::vehicle::cart::CartKind::ALL
+                            .into_iter()
+                            .find(|k| k.code().starts_with(code.as_str()))
+                    };
+                }
                 "--life" => {
                     i += 1;
                     result.walk = true;
@@ -1257,27 +1468,12 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows tern, loon, cog, rowboat, tube and raft"),
+                            .expect("--aboard knows loon, tube and raft"),
                     );
                     result.walk = true;
                 }
                 "--seat" => result.seat = true,
-                "--sail-for" => {
-                    i += 1;
-                    result.sail_for = Some(
-                        args.get(i)
-                            .and_then(|a| a.parse().ok())
-                            .expect("--sail-for requires seconds"),
-                    );
-                }
-                "--sail" => {
-                    i += 1;
-                    result.sail = Some(
-                        args.get(i)
-                            .and_then(|a| a.parse().ok())
-                            .expect("--sail requires the yard's angle in degrees"),
-                    );
-                }
+                "--pole-run" => result.pole_run = true,
                 "--fixed-dt" => result.fixed = true,
                 "--clock-runs" => result.clock_runs = true,
                 "--real-time" => result.real_time = true,
@@ -1320,6 +1516,16 @@ impl Launch {
                             .unwrap_or_else(|| panic!("no overlay called {name}")),
                     );
                 }
+                "--gale" => {
+                    i += 1;
+                    let mps: f32 = args
+                        .get(i)
+                        .expect("--gale requires a wind in m/s")
+                        .parse()
+                        .expect("invalid gale wind");
+                    assert!((0.0..=60.0).contains(&mps), "gale must be within 0..60 m/s");
+                    result.gale = Some(mps);
+                }
                 "--rain" => {
                     i += 1;
                     let rain: f32 = args
@@ -1342,19 +1548,6 @@ impl Launch {
                 }
                 "--open-doors" => result.open_doors = true,
                 "--no-shadows" => result.no_shadows = true,
-                "--cog-swing" => {
-                    i += 1;
-                    let scale: f32 = args
-                        .get(i)
-                        .expect("--cog-swing requires a scale")
-                        .parse()
-                        .expect("invalid cog swing");
-                    assert!(
-                        scale.is_finite() && scale >= 0.0,
-                        "--cog-swing takes 0 or more"
-                    );
-                    result.cog_swing = Some(scale);
-                }
                 "--room-sky" => {
                     let mut share = || {
                         i += 1;
@@ -1460,6 +1653,9 @@ struct CaptureState {
 pub struct FrameStats {
     pub frame_ms: f32,
     pub samples: Vec<f64>,
+    /// Frames measured since the start: the frame log's frame number, which
+    /// `samples` (trimmed in a long session) no longer is.
+    frames: u64,
     previous: Instant,
     /// When the app started: the frame log's clock, to line a slow frame up
     /// with what the log says happened then.
@@ -1480,6 +1676,10 @@ pub fn run(args: &[String]) {
         return;
     }
     let launch = Launch::parse(args);
+    // The river cache's file lives beside the worlds (`river-cache` design
+    // 11): set before anything asks an altitude, so the drainage map is read
+    // from it rather than built.
+    pbd_core::river_cache::set_dir(Some(pbd_app::paths::saves_dir().join("cache")));
     if let Some(path) = &launch.capture
         && let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
     {
@@ -1493,6 +1693,37 @@ pub fn run(args: &[String]) {
     let mut world = open_world(&launch);
     if let Some(version) = launch.generator {
         world.identity.generator = version;
+    }
+    // Joining another's world (`multiplayer` design 20): the world is the
+    // host's, opened in memory from its welcome, before anything is built.
+    let mut joined = None;
+    if let Some(addr) = launch.join {
+        // Two minutes: a host still building its world answers when its first
+        // frame runs.
+        match pbd_app::net_play::join(addr, std::time::Duration::from_secs(120)) {
+            Ok(joining) => {
+                world = saves::WorldSave::memory_only();
+                world.identity.seed = joining.seed;
+                world.identity.generator = joining.generator;
+                world.identity.topology = joining.topology;
+                world.world_seconds = Some(joining.clock_s);
+                world.join_remote();
+                let mut early = Vec::new();
+                for message in joining.early {
+                    pbd_app::net_play::receive(joining.player, message, &mut world, &mut early);
+                }
+                eprintln!(
+                    "joined {addr} as player {} ({} edits so far)",
+                    joining.player,
+                    early.len()
+                );
+                joined = Some((joining.client, joining.player));
+            }
+            Err(why) => {
+                eprintln!("could not join {addr}: {why}");
+                std::process::exit(2);
+            }
+        }
     }
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
@@ -1508,8 +1739,12 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some() || launch.showcase.is_some(),
-        launch.capture.is_some(),
+        // A joined game plays the host's world (`multiplayer` design 20):
+        // the title screen's CONTINUE would open a saved world instead.
+        launch.world.is_some() || launch.showcase.is_some() || launch.join.is_some(),
+        // A recording instrument plays the world it was launched on, as a
+        // capture does: the title screen would stand in front of the film.
+        launch.capture.is_some() || launch.walk_river,
     );
     let restored = world.pose;
     // Where and when a world with no pose starts, from the launch alone, for
@@ -1542,7 +1777,7 @@ pub fn run(args: &[String]) {
             })
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Pale Blue Dot | Planet Explorer".into(),
+                    title: pbd_core::locale::tr("window.title").into(),
                     resolution: window_size().into(),
                     present_mode: if launch.capture.is_some()
                         || launch.no_vsync
@@ -1650,6 +1885,8 @@ pub fn run(args: &[String]) {
     // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
     .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
     .add_plugins(pbd_app::step_trace::StepTracePlugin)
+    // `PBD_MEMORY_TRACE` (`memory-leak`): absent, nothing.
+    .add_plugins(pbd_app::memory_trace::MemoryTracePlugin)
     .add_plugins(pbd_app::sim_origin::SimOriginPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
@@ -1658,6 +1895,54 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::compass::CompassPlugin)
     // The towns standing at their sites (`cities-in-the-world`).
     .add_plugins(pbd_app::towns::TownsPlugin)
+    // The player's buildings and build mode (`player-building`).
+    .add_plugins(pbd_app::builds::BuildsPlugin)
+    // Logs on the water (`log-drives`).
+    .add_plugins(pbd_app::logs::LogsPlugin)
+    // Furniture: seats, beds and containers (`furniture`).
+    .add_plugins(furniture::plugin)
+    // The building planner and construction sites (`building-planner`).
+    .add_plugins(construction::plugin)
+    .init_resource::<build_mode::BuildMode>()
+    .init_resource::<build_mode::Blueprints>()
+    .init_resource::<pbd_app::build_view::BuildView>()
+    .add_systems(Startup, build_mode::spawn_ghost)
+    .add_systems(
+        PreUpdate,
+        build_mode::take_input
+            .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys),
+    )
+    .add_systems(
+        Update,
+        (
+            build_mode::load_blueprints,
+            build_mode::drive_view,
+            build_mode::aim_and_build.run_if(
+                resource_exists::<pbd_app::planet::PlanetFine>
+                    .and(resource_exists::<pbd_app::planet::PlanetContact>),
+            ),
+            build_mode::draw_ghost,
+            build_mode::paint_ui,
+        )
+            .chain()
+            .before(pbd_app::builds::sync),
+    )
+    // `PBD_BUILD_SHOT`, a capture instrument (`player-building` captures).
+    .add_systems(
+        Update,
+        build_mode::scripted
+            .run_if(
+                resource_exists::<CaptureState>
+                    .and(resource_exists::<pbd_app::planet::PlanetFine>)
+                    .and(pbd_app::loading::ready),
+            )
+            .before(build_mode::aim_and_build),
+    )
+    // The roads between them (`townsfolk` design 10 and 11).
+    .add_plugins(pbd_app::roads::RoadsPlugin)
+    // Their people (`townsfolk`).
+    .add_plugins(pbd_app::townsfolk::TownsfolkPlugin)
     .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(
@@ -1673,6 +1958,7 @@ pub fn run(args: &[String]) {
     // husbandry plugin, and the screen's systems still run.
     .init_resource::<pbd_app::husbandry::BreedingPick>()
     .init_resource::<pack::PackHand>()
+    .init_resource::<boat::BoatMenu>()
     .init_resource::<pack::HoldView>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
@@ -1688,6 +1974,10 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    // Coins, trade and town jobs (`townsfolk` design 5 to 12): the rules'
+    // state and counting, then the coin count and the talk, trade and
+    // board panels.
+    .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(
@@ -1700,7 +1990,9 @@ pub fn run(args: &[String]) {
             (
                 missions::press_tabs,
                 missions::paint,
-                missions::show_goals,
+                missions::show_line,
+                mission_tree::tree_tabs,
+                mission_tree::switch_tree,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -1709,6 +2001,8 @@ pub fn run(args: &[String]) {
             )
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::scripted_town.run_if(pbd_app::loading::ready),
+            showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
         ),
@@ -1717,6 +2011,11 @@ pub fn run(args: &[String]) {
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
     .insert_resource(world)
+    // The network, hosting or joined (`multiplayer` design 20).
+    .add_systems(
+        Update,
+        pbd_app::net_play::play.after(digging::dig_and_place),
+    )
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
@@ -1745,6 +2044,7 @@ pub fn run(args: &[String]) {
     .insert_resource(FrameStats {
         frame_ms: 0.0,
         samples: Vec::new(),
+        frames: 0,
         previous: Instant::now(),
         started: Instant::now(),
     })
@@ -1767,6 +2067,7 @@ pub fn run(args: &[String]) {
             farm::make_looks,
             farm::spawn_note,
             pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+            pbd_app::interact::spawn_fish_keys.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
         ),
     )
     // The interact key's offers from the fruit and the farm (the husbandry
@@ -1777,11 +2078,13 @@ pub fn run(args: &[String]) {
         PostUpdate,
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::saves::WorldSave>),
             pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
+            pbd_app::interact::show_fish_keys,
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1795,7 +2098,13 @@ pub fn run(args: &[String]) {
     )))
     .init_resource::<menu::NameField>()
     .init_resource::<equipment::HandListOpen>()
+    .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
+    .insert_resource(if launch.tree_town {
+        mission_tree::ShownTree::Town
+    } else {
+        mission_tree::ShownTree::Starter
+    })
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
@@ -1804,10 +2113,12 @@ pub fn run(args: &[String]) {
         PostStartup,
         (
             slots::spawn,
+            build_mode::spawn_ui,
             (
                 slots::load_icons,
                 (
                     equipment::spawn,
+                    toasts::spawn,
                     guide::spawn,
                     drops_view::dress,
                     pack::spawn,
@@ -1818,6 +2129,7 @@ pub fn run(args: &[String]) {
                     breeding::spawn,
                     mission_tree::spawn,
                 ),
+                boat::spawn,
             )
                 .chain(),
         ),
@@ -1833,6 +2145,7 @@ pub fn run(args: &[String]) {
             guide::open,
             breeding::open,
             pack::open,
+            boat::open,
             map_screen::open,
         )
             .chain()
@@ -1855,6 +2168,7 @@ pub fn run(args: &[String]) {
         (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
+    .add_systems(Update, (boat::press, boat::paint).chain())
     .add_systems(
         Update,
         (
@@ -1883,13 +2197,19 @@ pub fn run(args: &[String]) {
                 equipment::pack_hand,
                 equipment::paint,
                 menu::hide_hud_on_title,
+                menu::show_splash,
+                toasts::gather,
+                toasts::paint,
             )
                 .chain(),
             (
                 pack::find_hold,
+                furniture::press,
                 pack::press,
+                pack::drop_key,
                 slots::update,
                 pack::paint_hold,
+                furniture::paint,
                 pack::paint,
             )
                 .chain(),
@@ -1909,7 +2229,14 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
-            (digging::dig_and_place, cracks::show)
+            // A dig press on a survey stake takes it back, and is spent
+            // (`townsfolk` design 39): before the digging.
+            (
+                digging::server_worms,
+                pbd_app::roads::take_stakes,
+                digging::dig_and_place,
+                cracks::show,
+            )
                 .chain()
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
@@ -1933,6 +2260,12 @@ pub fn run(args: &[String]) {
                 .before(farm::use_key)
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
+            // The glowing mushrooms (`glowing-mushrooms` design 3, 4): a
+            // pick, then the resident set brought round to it.
+            (glow_plants::pick, glow_plants::follow)
+                .chain()
+                .after(fruit::pick)
+                .before(farm::use_key),
             (
                 farm::use_key,
                 forge::work,
@@ -1959,6 +2292,7 @@ pub fn run(args: &[String]) {
                 .after(pbd_app::husbandry::HusbandryHands),
             (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
             kitchen::scripted.after(farm::scripted),
+            glow_plants::hold_script.run_if(pbd_app::loading::ready),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),
@@ -2045,6 +2379,14 @@ pub fn run(args: &[String]) {
     );
     cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
+        // MEASUREMENT (`cascade-perf`): a measured run is never paced by
+        // focus. Bevy holds an unfocused window to 60 Hz, which hid every
+        // frame under 16.7 ms when the window could not take focus (a
+        // locked screen); the run still logs it lost focus.
+        app.insert_resource(bevy::winit::WinitSettings {
+            focused_mode: bevy::winit::UpdateMode::Continuous,
+            unfocused_mode: bevy::winit::UpdateMode::Continuous,
+        });
         // A route that ends the run when it lands, like `--walk-distance`.
         app.add_systems(
             Last,
@@ -2068,12 +2410,21 @@ pub fn run(args: &[String]) {
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
-    // The player's settings (`player-settings`): the file in a plain run;
+    app.add_plugins(pbd_app::river_fill::RiverFillPlugin);
+    // The player's settings (`player-settings`): the file in a plain run and
+    // in a bot playing the game (owner, 2026-11-19: "it shouldnt skip
+    // settings save", after a volume set in a showcase's window was lost);
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
+    // A bot playing climbs with auto step (owner, 2026-11-19: "when in bot
+    // run also just turn on autostep").
+    let mut overrides = launch.settings;
+    if launch.showcase.is_some() {
+        overrides.auto_step = Some(true);
+    }
     let (player, mut keys, kept) = pbd_app::settings::for_launch(
-        launch.capture.is_some() || launch.frame_log.is_some() || launch.showcase.is_some(),
-        &launch.settings,
+        launch.capture.is_some() || launch.frame_log.is_some(),
+        &overrides,
     );
     info!(
         "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} pixel_grass={} file={}",
@@ -2118,9 +2469,6 @@ pub fn run(args: &[String]) {
             ..default()
         });
     }
-    if let Some(scale) = launch.cog_swing {
-        app.insert_resource(pbd_app::decks::CogSwing(scale));
-    }
     // Every door of every town open, for a capture, with a walker or in a
     // still view (the column view's tree hut).
     if launch.open_doors {
@@ -2148,11 +2496,22 @@ pub fn run(args: &[String]) {
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
+            pbd_app::beaver::BeaverPlugin,
+            // The beavers' and otters' skinned bodies (`ocean-environments` B29).
+            pbd_app::critters::CrittersPlugin,
+            // The light a player carries (`glowing-mushrooms` part B).
+            pbd_app::carried_light::CarriedLightPlugin,
         ))
+        .add_systems(
+            Update,
+            glow_plants::hand_item.before(pbd_app::held::HoldSet),
+        )
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
-            sail: launch.sail,
+            at: launch.at.map(|_| spawn_direction(&launch)),
+            pole_run: launch.pole_run,
+            pitch: launch.pitch.map(f32::to_radians),
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
@@ -2166,8 +2525,23 @@ pub fn run(args: &[String]) {
                 bounce: launch.room_bounce.unwrap_or(base.bounce),
             });
         }
+        if launch.pick_fruit.is_some() {
+            app.add_systems(
+                PreUpdate,
+                fruit::pick_script.after(bevy::input::InputSystems),
+            );
+        }
+        if launch.pick_glow.is_some() {
+            app.add_systems(
+                PreUpdate,
+                glow_plants::pick_script.after(bevy::input::InputSystems),
+            );
+        }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if let Some(mps) = launch.gale {
+            app.insert_resource(pbd_app::sea::SeaGale(mps));
         }
         if let Some(id) = launch.life.clone() {
             // `--life ID:METRES` puts the group that far ahead, for a close
@@ -2191,8 +2565,21 @@ pub fn run(args: &[String]) {
                 cast_afloat_script.after(bevy::input::InputSystems),
             );
         }
+        if let Some(phase) = launch.rod_cue {
+            app.insert_resource(RodCueScript(phase)).add_systems(
+                Update,
+                rod_cue_script
+                    .after(pbd_app::fish::FishSet)
+                    .before(pbd_app::held::HoldSet),
+            );
+        }
         if launch.load_hold {
             app.add_systems(Update, load_hold_script.before(pack::find_hold));
+        }
+        if let Some(script) = launch.carts {
+            app.world_mut()
+                .get_resource_or_insert_with(pbd_app::vehicles::carts::Carts::default)
+                .script = Some(script);
         }
         if launch.fish {
             if launch.fish_play {
@@ -2229,13 +2616,6 @@ pub fn run(args: &[String]) {
                     ),
             );
         }
-        if let Some(seconds) = launch.sail_for {
-            app.insert_resource(SailFor {
-                seconds,
-                since: None,
-            })
-            .add_systems(Update, sail_for);
-        }
         if launch.hold_pointer {
             app.add_systems(
                 PreUpdate,
@@ -2254,6 +2634,17 @@ pub fn run(args: &[String]) {
         if launch.stroll.is_some() {
             app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
         }
+        if launch.stand.is_some() {
+            app.add_systems(PreUpdate, stand_script.after(bevy::input::InputSystems));
+        }
+        if launch.walk_river {
+            app.add_systems(
+                PreUpdate,
+                river_walk_script
+                    .after(bevy::input::InputSystems)
+                    .run_if(pbd_app::loading::ready),
+            );
+        }
         if launch.coast_walk.is_some() {
             app.add_systems(
                 PreUpdate,
@@ -2265,6 +2656,10 @@ pub fn run(args: &[String]) {
         if let Some((name, file)) = launch.showcase.clone() {
             if let Some(dir) = &launch.showcase_stills {
                 std::fs::create_dir_all(dir).expect("stills directory");
+            }
+            // The live control channel (`bot-control`): local only.
+            if let Some(control) = showcase::control::open() {
+                app.insert_resource(control);
             }
             app.insert_resource(
                 showcase::Player::new(name, file, launch.showcase_stills.clone())
@@ -2339,6 +2734,11 @@ pub fn run(args: &[String]) {
         launched,
         capture: launch.capture.is_some() && !launch.real_time,
     });
+    // A launch onto the title loads on the splash (`title-screen`, "The
+    // splash"): no world is seen before the menu.
+    if app.world().get_resource::<menu::Screen>() == Some(&menu::Screen::Title) {
+        app.insert_resource(pbd_app::loading::SplashLaunch);
+    }
     if launch.capture_loading
         && let Some(path) = &launch.capture
     {
@@ -2359,6 +2759,25 @@ pub fn run(args: &[String]) {
         app.insert_resource(pbd_app::loading::CaptureSwitch(beside("loading")));
         app.insert_resource(arrival::ArrivalShot(beside("arrival")));
         app.insert_resource(LeavingShot(beside("leaving")));
+    }
+    // On the network (`multiplayer` design 20): joined, or hosting.
+    if let Some((client, player)) = joined {
+        app.insert_resource(pbd_app::net_play::NetPlay::Joined {
+            client,
+            player,
+            pending: Vec::new(),
+        });
+    } else if let Some(port) = launch.host {
+        match pbd_net::Host::bind(port) {
+            Ok(host) => {
+                eprintln!("hosting on {}", host.local_addr());
+                app.insert_resource(pbd_app::net_play::NetPlay::Host {
+                    host,
+                    players: Default::default(),
+                });
+            }
+            Err(why) => eprintln!("could not host on port {port}: {why}"),
+        }
     }
     app.run();
 }
@@ -2800,6 +3219,19 @@ fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight:
     use pbd_core::daylight::{Clock, START_HOUR};
     let clock = match (launch.day, launch.time, saved_seconds) {
         (None, None, Some(seconds)) => Clock { seconds },
+        // A saved world asked for an hour: on to that hour, today or the next
+        // day, never back. The world's own days stand (`mission-playthrough`:
+        // a bot run started at 10:00 put the world back to day 0, so the wheat
+        // sown on a later day could never ripen).
+        (None, Some(hour), Some(seconds)) => {
+            let now = Clock { seconds };
+            let today = Clock::at(now.day() as u32, hour);
+            if today.seconds >= seconds {
+                today
+            } else {
+                Clock::at(now.day() as u32 + 1, hour)
+            }
+        }
         (day, hour, _) => Clock::at(day.unwrap_or(0), hour.unwrap_or(START_HOUR)),
     };
     if launch.day.is_some() {
@@ -2851,6 +3283,32 @@ fn fibonacci_sphere(count: usize) -> impl Iterator<Item = Vec3> {
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    // The river run starts in the river (owner, 2026-11-18: "You should
+    // start out spawn in middle of a river. You know the map already"): the
+    // drainage map's river nearest `--at` (or the default spawn), 15 m down
+    // its line from its source, in its water.
+    if launch.walk_river {
+        let near = launch.at.map_or(default, |(lat, lon)| {
+            pbd_core::geo::direction(pbd_core::geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            })
+        });
+        let cfg = pbd_app::planet::terrain_config();
+        if let Some(settings) = cfg.rivers.as_ref()
+            && let Some(source) = pbd_core::rivers::map(cfg, settings)
+                .course(near, 40)
+                .first()
+            && let Some(path) = pbd_app::river_walk::RiverPath::through(source.centre, 1.0)
+        {
+            let start = path.line_at(15.0);
+            info!(
+                "RIVER_WALK spawn in the river 15 m from its source, {}",
+                pbd_app::place::Place::of(start * PLANET_RADIUS).line()
+            );
+            return start;
+        }
+    }
     if let Some((lat, lon)) = launch.at {
         return pbd_core::geo::direction(pbd_core::geo::LatLon {
             lat: lat.to_radians(),
@@ -2972,13 +3430,20 @@ fn window_size() -> (u32, u32) {
         .unwrap_or((1440, 900))
 }
 
-/// The camera's samples: 4, or `PBD_MSAA=<1|2|4>`, a measurement switch
-/// (`frame-budget` 5c) that prices the multisampling.
+/// The camera's samples: none, or `PBD_MSAA=<1|2|4>`, a measurement switch
+/// (`frame-budget` 5c). Off by default (owner, 2026-11-20: "AA should be a
+/// final composite thing, but I didnt even ask for AA to be implemented"):
+/// the water's passes run after the resolve on blended edge pixels, which
+/// put a pale line round everything seen under the water
+/// (`ocean-environments` B24), and the pixel look wants hard edges. The
+/// player's ANTIALIASING is SMAA on the finished frame instead
+/// (`settings::follow_antialiasing`), and is never added to a camera that
+/// multisamples.
 fn msaa_samples() -> Msaa {
     match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
-        Some("1") => Msaa::Off,
         Some("2") => Msaa::Sample2,
-        _ => Msaa::Sample4,
+        Some("4") => Msaa::Sample4,
+        _ => Msaa::Off,
     }
 }
 
@@ -3597,6 +4062,35 @@ fn ground_m(a: Vec3, b: Vec3) -> f32 {
     2.0 * (chord * 0.5).min(1.0).asin() * pbd_app::planet::PLANET_RADIUS
 }
 
+/// The `--stand` instrument: hold still where the walker was put, for the
+/// frame log, and quit after that long.
+fn stand_script(
+    launch: Res<Launch>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<(), With<pbd_app::walking::Walker>>,
+    mut exit: MessageWriter<AppExit>,
+    mut started: Local<Option<Instant>>,
+    mut done: Local<bool>,
+) {
+    let Some(seconds) = launch.stand else {
+        return;
+    };
+    if !state.active || *done || walkers.single().is_err() {
+        return;
+    }
+    state.captured = true;
+    state.scripted = true;
+    let since = *started.get_or_insert_with(|| {
+        info!("STAND_START {seconds:.0} s");
+        Instant::now()
+    });
+    if since.elapsed().as_secs_f32() >= seconds {
+        *done = true;
+        info!("STAND_DONE {seconds:.0} s");
+        exit.write(AppExit::Success);
+    }
+}
+
 /// The `--stroll` instrument: walk ahead at walking pace for a video, hop
 /// what stalls it, turn a quarter after three seconds stuck, never dig.
 // Ten parameters, `walk_script`'s reason: an instrument that drives keys,
@@ -3947,39 +4441,447 @@ fn coast_script(
     }
 }
 
-/// `--sail-for`: how long to sail, and when the cog was boarded.
-#[derive(Resource)]
-struct SailFor {
-    seconds: f32,
-    since: Option<std::time::Instant>,
+/// Where the river walk is (`river-cache` design 8).
+#[derive(Default)]
+struct RiverWalk {
+    path: Option<pbd_app::river_walk::RiverPath>,
+    started: Option<Instant>,
+    /// When the next once-a-second line is due.
+    next_log: Option<Instant>,
+    /// The heading the walker moves toward.
+    target: Option<Vec3>,
+    last: Option<(Vec3, Instant)>,
+    walked_m: f32,
+    /// The furthest along the river the walker has been, m.
+    best_m: f32,
+    /// When `best_m` last grew by 5 m.
+    gained: Option<(f32, Instant)>,
+    /// The last second and a bit of where the walker was: seconds since the
+    /// start and the unit direction (`river-cache` design 12).
+    trail: std::collections::VecDeque<(f32, Vec3)>,
+    /// The hex route being walked, cell centre to cell centre.
+    route: Option<pbd_app::river_walk::HexRoute>,
+    /// Cells that stuck it, kept out of the next routes.
+    blocked: Vec<[u32; 3]>,
+    /// Stuck this many times in a row near `stuck_at`.
+    stuck: u32,
+    stuck_at: Option<Vec3>,
+    /// When it last found itself stuck: the next check waits a second.
+    stuck_when: Option<Instant>,
+    stuck_total: u32,
+    routes: u32,
+    /// Where `--walk-river` spawned it.
+    spawn: Option<Vec3>,
+    /// When a route was last planned: at most twice a second.
+    planned: Option<Instant>,
+    hop_until: Option<Instant>,
+    /// The jump key went down last frame: on land it is let up between taps.
+    jump_down: bool,
+    /// The main thread's cache lookups at the last `RIVER_CACHE` line.
+    main_lookups: u64,
+    backing: Option<Instant>,
+    done: bool,
 }
 
-/// End a `--sail-for` run: once aboard a cog, sail it the given seconds of
-/// real time, log `SAIL_DONE` with how far it went, and quit.
-fn sail_for(
-    mut sail: ResMut<SailFor>,
-    aboard: Res<pbd_app::vehicles::Aboard>,
-    vehicles: Query<&pbd_app::vehicles::Vehicle>,
-    mut from: Local<Option<pbd_core::DVec3>>,
+/// The `--walk-river` instrument (`river-cache` design 8): walk the river
+/// nearest the start from its source to the sea on its left bank, through
+/// the player's inputs only: W and sprint, the view turned toward a point
+/// `STEER_AHEAD_M` along the bank no faster than 70 degrees a second (as a
+/// mouse turns it), jump to hop a stall or swim at the surface, and the
+/// coast walk's turn away (here from the river) after 1.5 s stuck. It does
+/// not move the walker to the source: the start (`--at`) should be at it,
+/// and `RIVER_WALK_START` logs where the source is. Each second it logs its
+/// progress and `RIVER_AHEAD`, the drawn water ahead under the old listing
+/// rule and the new (a CPU model of the visibility pass's frustum test with
+/// the camera's own view; the recording is the check). It quits at the
+/// mouth, or after five minutes without 5 m of progress.
+#[allow(clippy::too_many_arguments)]
+fn river_walk_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    cameras: Query<(&GlobalTransform, &Projection), With<pbd_app::walking::WalkingCamera>>,
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
+    columns: Option<Res<pbd_app::config::ColumnSettings>>,
+    water: Option<Res<pbd_app::config::WaterSettings>>,
     mut exit: MessageWriter<AppExit>,
+    mut walk: Local<RiverWalk>,
+    space: pbd_app::SimSpace,
+    contact: Option<Res<pbd_app::planet::PlanetContact>>,
 ) {
-    let Some(craft) = aboard
-        .0
-        .and_then(|e| vehicles.get(e).ok())
-        .map(|v| &v.craft)
-        .filter(|c| c.kind == pbd_core::vehicle::Kind::Cog)
-    else {
+    use pbd_app::river_walk::{RiverPath, STEER_AHEAD_M};
+    let _ = STEER_AHEAD_M;
+    /// How far down the river's line the view looks, m.
+    const LOOK_AHEAD_M: f32 = 50.0;
+    if !state.active || walk.done {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
         return;
     };
-    let started = *sail.since.get_or_insert_with(std::time::Instant::now);
-    let at = *from.get_or_insert(craft.reference_position());
-    let elapsed = started.elapsed().as_secs_f32();
-    if elapsed >= sail.seconds {
+    let here = space.origin().query_point(position.0);
+    let up = here.normalize_or(Vec3::Y);
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    if walk.path.is_none() {
+        // Not before the walker stands where it was spawned, in the river:
+        // a world opening may hold it elsewhere for a few frames, and a
+        // river measured from there is measured from the wrong place.
+        let spawn = *walk.spawn.get_or_insert_with(|| spawn_direction(&launch));
+        if launch.walk_river && up.angle_between(spawn) * PLANET_RADIUS > 60.0 {
+            return;
+        }
+        let side = if launch.walk_river_right { -1.0 } else { 1.0 };
+        let Some(path) = RiverPath::through(up, side) else {
+            error!(
+                "RIVER_WALK_DONE no river near {}",
+                pbd_app::place::Place::of(here).line()
+            );
+            walk.done = true;
+            exit.write(AppExit::Success);
+            return;
+        };
+        let source = pbd_app::place::Place::of(path.line[0] * pbd_app::planet::PLANET_RADIUS);
         info!(
-            "SAIL_DONE {:.0} m in {:.1} s",
-            craft.reference_position().distance(at),
-            elapsed
+            "RIVER_WALK_START {:.0} m of river, {} cells, from level {} m to the sea; source {}; starting {:.0} m along it, {}",
+            path.length_m(),
+            path.line.len(),
+            path.level[0],
+            source.line(),
+            path.progress_m(up),
+            pbd_app::place::Place::of(here).line()
         );
+        let toward = path.bank_at(path.progress_m(up) + STEER_AHEAD_M);
+        state.face(up, toward * pbd_app::planet::PLANET_RADIUS);
+        walk.started = Some(now);
+        walk.next_log = Some(now);
+        walk.gained = Some((path.progress_m(up), now));
+        walk.path = Some(path);
+    }
+    let path = walk.path.clone().expect("the river");
+    let started = walk.started.unwrap_or(now);
+    let progress = path.progress_m(up);
+    // Never a jump: a meander's nearest line point can lie far along.
+    walk.best_m = walk.best_m.max(progress.min(walk.best_m + 30.0));
+    keys.press(KeyCode::ShiftLeft);
+    let t = now.duration_since(started).as_secs_f32();
+    walk.trail.push_back((t, up));
+    while walk.trail.len() > 2 && walk.trail[1].0 <= t - 1.0 {
+        walk.trail.pop_front();
+    }
+    if let Some((last, _)) = walk.last {
+        walk.walked_m += ground_m(here, last).min(5.0);
+    }
+    let heading = state.view().0;
+    // The view looks down the river, 50 m along its line, so the river and
+    // its distance are in the picture, turning no faster than a mouse does.
+    let look = path.line_at(walk.best_m.max(progress) + LOOK_AHEAD_M);
+    let look = (look - up * look.dot(up)).normalize_or(heading);
+    if let Some((_, at)) = walk.last {
+        let dt = now.duration_since(at).as_secs_f32();
+        let angle = heading.angle_between(look);
+        let sign = up.dot(heading.cross(look)).signum();
+        let turn = angle.min(70f32.to_radians() * dt) * sign;
+        if turn.abs() > 1e-5 {
+            state.face(up, Quat::from_axis_angle(up, turn) * heading);
+        }
+    }
+    walk.last = Some((here, now));
+    let backing = walk.backing.is_some_and(|until| now < until);
+    if backing {
+        for key in [KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyD] {
+            keys.release(key);
+        }
+        keys.press(KeyCode::KeyS);
+        keys.press(KeyCode::Space);
+    } else {
+        if walk.backing.take().is_some() {
+            keys.release(KeyCode::KeyS);
+            walk.route = None;
+        }
+        // Hex by hex (`river-cache` design 12): a route over the finest
+        // cells to the bank 40 m on (or the channel when the bank has none),
+        // walked centre to centre; planned again near its end or off it.
+        let due = walk
+            .planned
+            .is_none_or(|at| now.duration_since(at).as_secs_f32() >= 0.5);
+        let replan = walk
+            .route
+            .as_ref()
+            .is_none_or(|r| r.left_m() < 15.0 || r.off_m(up) > 6.0);
+        if replan && due {
+            walk.planned = Some(now);
+            let ahead = progress.min(walk.best_m) + 40.0;
+            let blocked = walk.blocked.clone();
+            let live = contact.as_deref();
+            walk.route =
+                pbd_app::river_walk::HexRoute::plan(up, path.line_at(ahead), &blocked, live)
+                    .or_else(|| {
+                        pbd_app::river_walk::HexRoute::plan(up, path.bank_at(ahead), &blocked, live)
+                    });
+            walk.routes += 1;
+            if walk.route.is_none() {
+                info!(
+                    "RIVER_WALK_ROUTE none from {:.0} m along: straight for the channel",
+                    progress
+                );
+            }
+        }
+        let aim = match walk.route.as_mut() {
+            Some(route) => route.aim(up),
+            None => path.line_at(walk.best_m.max(progress) + 10.0),
+        };
+        walk.target = Some((aim - up).normalize_or_zero());
+        let moving = walk
+            .target
+            .map(|t| (t - up * t.dot(up)).normalize_or(heading))
+            .unwrap_or(heading);
+        let left = up.cross(heading).normalize_or_zero();
+        let (ahead, aside) = (moving.dot(heading), moving.dot(left));
+        for (key, on) in [
+            (KeyCode::KeyW, ahead > 0.38),
+            (KeyCode::KeyS, ahead < -0.38),
+            (KeyCode::KeyA, aside > 0.38),
+            (KeyCode::KeyD, aside < -0.38),
+        ] {
+            if on {
+                keys.press(key);
+            } else {
+                keys.release(key);
+            }
+        }
+        // Jump: swimming, a hop being taken, or the next cell a rise the
+        // auto step will not take.
+        // In water by the live column at the feet, as the walker's own
+        // physics has it; the generator's river says "river" over a dry bed.
+        let feet = here - up * pbd_app::walking::HALF_HEIGHT;
+        let swimming = contact.as_deref().map_or_else(
+            || pbd_app::planet::surface_height(up) < 0.0 || pbd_app::coast_walk::in_river(up),
+            |c| c.stand(feet).water_depth > 0.5,
+        );
+        // A step the auto step will not take, measured from the feet: the
+        // next cell's floor, live, over where the walker stands now.
+        let feet_m = feet.length() - pbd_app::planet::PLANET_RADIUS;
+        let rise = walk.route.as_ref().is_some_and(|r| {
+            let next = r.cells[r.next];
+            let (floor, _) = pbd_app::river_walk::cell_heights(contact.as_deref(), next);
+            floor - feet_m > 0.6 && next.angle_between(up) * pbd_app::planet::PLANET_RADIUS < 4.0
+        });
+        // In water the jump is held to swim up; on land a jump is a press,
+        // so it is tapped (a held key jumps once and never again).
+        let want = swimming || rise || walk.hop_until.is_some_and(|until| now < until);
+        if want && (swimming || !walk.jump_down) {
+            keys.press(KeyCode::Space);
+            walk.jump_down = true;
+        } else {
+            keys.release(KeyCode::Space);
+            walk.jump_down = false;
+        }
+        // Stuck: under a few metres of ground in the last second, measured
+        // on the planet with height left out, so a hop or a slide is not
+        // motion. Each stuck in one place escalates.
+        let threshold = if swimming {
+            pbd_app::river_walk::STUCK_SWIM_M
+        } else {
+            pbd_app::river_walk::STUCK_LAND_M
+        };
+        let trail: Vec<(f32, Vec3)> = walk.trail.iter().copied().collect();
+        if let Some(moved) = pbd_app::river_walk::moved_in_last_second(&trail)
+            && moved < threshold
+            && walk
+                .stuck_when
+                .is_none_or(|at| now.duration_since(at).as_secs_f32() >= 1.0)
+        {
+            if walk.stuck_at.is_some_and(|at| ground_m(here, at) < 8.0) {
+                walk.stuck += 1;
+            } else {
+                walk.stuck = 1;
+                walk.stuck_at = Some(here);
+            }
+            walk.stuck_total += 1;
+            walk.stuck_when = Some(now);
+            walk.trail.clear();
+            // The cells it was walking into stay out of the next routes.
+            if let Some(route) = &walk.route {
+                let keys: Vec<[u32; 3]> = route.cells[route.next..]
+                    .iter()
+                    .take(2)
+                    .map(|&d| pbd_app::river_walk::cell_key(d))
+                    .collect();
+                walk.blocked.extend(keys);
+            }
+            // A swimmer already holds the jump: a hop adds nothing, so it
+            // goes straight to a route round the spot.
+            if swimming && walk.stuck == 1 {
+                walk.stuck = 2;
+            }
+            let action = match walk.stuck {
+                1 => {
+                    walk.hop_until = Some(now + std::time::Duration::from_millis(700));
+                    "a hop forward"
+                }
+                2 => {
+                    walk.route = None;
+                    walk.hop_until = Some(now + std::time::Duration::from_millis(700));
+                    "a new route round it"
+                }
+                _ => {
+                    walk.route = None;
+                    walk.backing = Some(now + std::time::Duration::from_millis(1200));
+                    walk.stuck = 1;
+                    "backing out, then a new route"
+                }
+            };
+            if walk.blocked.len() > 64 {
+                let drop = walk.blocked.len() - 64;
+                walk.blocked.drain(..drop);
+            }
+            // What it was doing, to find what holds it.
+            let held: Vec<&str> = [
+                (KeyCode::KeyW, "W"),
+                (KeyCode::KeyA, "A"),
+                (KeyCode::KeyS, "S"),
+                (KeyCode::KeyD, "D"),
+                (KeyCode::Space, "jump"),
+            ]
+            .into_iter()
+            .filter(|(k, _)| keys.pressed(*k))
+            .map(|(_, n)| n)
+            .collect();
+            let aiming = walk.route.as_ref().map_or_else(
+                || "no route".to_string(),
+                |r| {
+                    format!(
+                        "cell {} of {} at {:.1} m, rise {:.1} m, its ground {:.1} m, here {:.1} m",
+                        r.next,
+                        r.cells.len(),
+                        r.cells[r.next].angle_between(up) * pbd_app::planet::PLANET_RADIUS,
+                        r.rise_ahead(),
+                        r.heights[r.next],
+                        pbd_app::river_walk::walked_on(up)
+                    )
+                },
+            );
+            info!(
+                "RIVER_WALK_STUCK {moved:.1} m in the last second at {progress:.0} m along, {}, {} in a row: {action}; holding {:?}, swimming {swimming}, {aiming}",
+                pbd_app::place::Place::of(here).line(),
+                walk.stuck,
+                held
+            );
+        }
+    }
+    let length = path.length_m();
+    if walk.next_log.is_some_and(|t| now >= t) {
+        walk.next_log = Some(now + std::time::Duration::from_secs(1));
+        let seconds = now.duration_since(started).as_secs_f32();
+        info!(
+            "RIVER_WALK {seconds:.0} s, {:.0} m walked, {:.0} of {:.0} m along ({:.0}%), {}, {}, --yaw {:.0}",
+            walk.walked_m,
+            progress,
+            length,
+            100.0 * progress / length.max(1.0),
+            match (
+                pbd_app::coast_walk::in_river(up),
+                contact
+                    .as_deref()
+                    .is_none_or(|c| c.column_water(here).is_some()),
+            ) {
+                (true, true) => "in the river",
+                (false, true) => "on the bank",
+                (true, false) => "in the river, off the tier",
+                (false, false) => "on the bank, off the tier",
+            },
+            pbd_app::place::Place::of(here).line(),
+            pbd_app::place::yaw_of(up, state.view().0).to_degrees()
+        );
+        // The river cache (`river-cache` design 11): what it holds, and the
+        // share of river lookups it answered since the start.
+        if let Some(field) = pbd_core::rivers::field(pbd_app::planet::terrain_config()) {
+            use std::sync::atomic::Ordering;
+            let [carve, top, far, settled] = field.counts();
+            let (hits, misses) = (
+                field.hits.load(Ordering::Relaxed),
+                field.misses.load(Ordering::Relaxed),
+            );
+            info!(
+                "RIVER_CACHE {seconds:.0} s: {:.1}% of {} lookups from the cache; holds {carve} ground, {top} water tops, {far} far sheets, {settled} settled cells; stuck {} times so far; main thread {} lookups since the last line",
+                100.0 * hits as f64 / (hits + misses).max(1) as f64,
+                hits + misses,
+                walk.stuck_total,
+                pbd_core::river_cache::thread_lookups() - walk.main_lookups
+            );
+            walk.main_lookups = pbd_core::river_cache::thread_lookups();
+        }
+        if let (Ok((camera, projection)), Some(fine)) = (cameras.single(), fine.as_deref()) {
+            let fov = match projection {
+                Projection::Perspective(p) => Some((p.fov, p.aspect_ratio)),
+                _ => None,
+            };
+            if let Some((fov, aspect)) = fov {
+                let eye =
+                    here + up * (pbd_app::walking::EYE_HEIGHT - pbd_app::walking::HALF_HEIGHT);
+                let inverse = camera.rotation().inverse();
+                let (ty, tx) = ((fov * 0.5).tan(), (fov * 0.5).tan() * aspect);
+                // The visibility pass's sphere test against the four side
+                // planes, its bound a finest cell's reach and the swell's 4 m.
+                let in_view = |d: Vec3, radius: f32| {
+                    let v = inverse * (d * radius - eye);
+                    let depth = -v.z;
+                    let r = 1.7 + 4.0;
+                    let slack = |t: f32| r * (1.0 + t * t).sqrt();
+                    depth > -r
+                        && v.x.abs() <= depth * tx + slack(tx)
+                        && v.y.abs() <= depth * ty + slack(ty)
+                };
+                let sea = pbd_app::planet::PLANET_RADIUS
+                    - water.as_deref().map_or(0.5, |w| w.depth_offset_m);
+                let old = |d: Vec3, _surface: f32| in_view(d, sea);
+                let new =
+                    |d: Vec3, surface: f32| in_view(d, pbd_app::planet::PLANET_RADIUS + surface);
+                let tier = columns.as_deref().map_or(0.0, |c| c.reach_m) - 15.0;
+                let anchor = fine.set.anchor;
+                // The river measured: to the measure's reach, or to the mouth.
+                let measured = (length - progress).clamp(0.0, pbd_app::river_walk::AHEAD_REACH_M);
+                info!(
+                    "RIVER_AHEAD {seconds:.0} s: drawn to {:.0} m ahead under the old listing, {:.0} m under the new, of {:.0} m measured ({:.0} m from the tier's anchor)",
+                    path.drawn_ahead_m(progress, anchor, tier, &in_view, &old)
+                        .min(measured),
+                    path.drawn_ahead_m(progress, anchor, tier, &in_view, &new)
+                        .min(measured),
+                    measured,
+                    ground_m(here, anchor * pbd_app::planet::PLANET_RADIUS)
+                );
+            }
+        }
+    }
+    if walk.best_m - walk.gained.map_or(0.0, |g| g.0) >= 5.0 {
+        walk.gained = Some((walk.best_m, now));
+    }
+    let stuck = walk
+        .gained
+        .is_some_and(|(_, t)| now.duration_since(t).as_secs_f32() > 300.0);
+    // The course's last step is the sea's cell, whose centre is half a
+    // cell (21 m) and more past the mouth.
+    let at_sea = progress >= length - 45.0
+        || (pbd_app::planet::surface_height(up) < 0.0
+            && !pbd_app::coast_walk::in_river(up)
+            && progress > length * 0.8);
+    if at_sea || stuck {
+        walk.done = true;
+        info!(
+            "RIVER_WALK_DONE {} at {:.0} of {:.0} m ({:.0}%), {:.0} m walked in {:.1} s, stuck {} times",
+            if stuck { "stuck" } else { "at the mouth" },
+            progress,
+            length,
+            100.0 * progress / length.max(1.0),
+            walk.walked_m,
+            now.duration_since(started).as_secs_f32(),
+            walk.stuck_total
+        );
+        keys.release(KeyCode::KeyW);
+        keys.release(KeyCode::ShiftLeft);
         exit.write(AppExit::Success);
     }
 }
@@ -4301,6 +5203,50 @@ fn cast_afloat_script(
     }
 }
 
+/// `--rod-cue`'s phase.
+#[derive(Resource, Clone, Copy)]
+struct RodCueScript(pbd_core::fishing::Phase);
+
+/// `--rod-cue`: a second after the float lands, the rod in hand is drawn as
+/// if the line were in the scripted phase, with that phase's event once.
+/// It writes only the rod's cue, which nothing but the drawn rod reads.
+fn rod_cue_script(
+    script: Res<RodCueScript>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    mut cue: ResMut<pbd_app::held::RodCue>,
+    mut floating: Local<u32>,
+) {
+    use pbd_core::fishing::{Event, Phase};
+    let Some(fishery) = fishery else {
+        return;
+    };
+    if fishery.line.phase != Phase::Floating {
+        return;
+    }
+    *floating += 1;
+    if *floating < 60 {
+        return;
+    }
+    cue.phase = script.0;
+    if *floating == 60 {
+        let event = match script.0 {
+            Phase::Nibble => Event::Nibble { species: 0 },
+            Phase::Bite => Event::Bite {
+                species: 0,
+                window_s: 1.0,
+            },
+            _ => Event::Hooked { species: 0 },
+        };
+        cue.events.push(event);
+        info!("rod cue script: the rod drawn as {:?}", script.0);
+    }
+    if script.0 == Phase::Hooked {
+        cue.tension = 0.7;
+        cue.reeling = true;
+        cue.pull = 0.5;
+    }
+}
+
 /// `--load-hold`: aboard a raft, twelve logs into the slots and then into
 /// its hold's first square, by the pack's own move and the one save line.
 fn load_hold_script(
@@ -4355,6 +5301,9 @@ fn hide_in_play_hud(mut nodes: Query<&mut Visibility, With<Node>>) {
     }
 }
 
+/// How long into a bite `--fish-play` strikes, s.
+const FISH_PLAY_STRIKE_S: f32 = 0.3;
+
 /// `--fish-play` is on: `fish_script` plays the bite out.
 #[derive(Resource)]
 struct FishPlay;
@@ -4380,6 +5329,8 @@ fn fish_script(
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut was: Local<Option<pbd_core::fishing::Phase>>,
     mut frame: Local<u32>,
+    time: Res<Time>,
+    mut bite_at: Local<Option<f32>>,
 ) {
     use pbd_core::fishing::Phase;
     *frame += 1;
@@ -4433,11 +5384,24 @@ fn fish_script(
             );
             *was = Some(line.phase);
         }
+        // Strike 0.3 s into the bite, as a player who sees the float go
+        // under does (and as M37's angler does, `fish-behaviour`), so the
+        // take is seen before the strike.
+        let now = time.elapsed_secs();
+        if line.phase == Phase::Bite {
+            bite_at.get_or_insert(now);
+        } else {
+            *bite_at = None;
+        }
         match line.phase {
             // The float has gone under: click.
-            Phase::Bite if !buttons.pressed(MouseButton::Left) => {
+            Phase::Bite
+                if !buttons.pressed(MouseButton::Left)
+                    && bite_at.is_some_and(|at| now - at >= FISH_PLAY_STRIKE_S) =>
+            {
                 buttons.press(MouseButton::Left);
             }
+            Phase::Bite => {}
             // Reel as a hand does: hold the button down until the tension
             // is high, let it up until it has fallen, never one frame on and
             // one off (`movement-smoothness` 7.2).
@@ -4825,7 +5789,7 @@ fn write_frame_log(
     let _ = writeln!(
         out,
         "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3}",
-        stats.samples.len(),
+        stats.frames,
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
         walk.map_or(f32::NAN, |walk| walk.walked_m),
@@ -4984,9 +5948,15 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
     let ms = now.duration_since(stats.previous).as_secs_f64() * 1000.0;
     stats.previous = now;
     stats.frame_ms = stats.frame_ms * 0.9 + ms as f32 * 0.1;
-    if stats.samples.len() < 100_000 {
-        stats.samples.push(ms);
+    // Kept to the last 100 000 frames: past that the oldest half goes, so
+    // the F3 graph keeps showing the latest frames. It stopped at 100 000
+    // and froze half an hour into a session (owner, 2026-11-20: "why did
+    // the frame graph not tick forward?").
+    if stats.samples.len() >= 100_000 {
+        stats.samples.drain(..50_000);
     }
+    stats.samples.push(ms);
+    stats.frames += 1;
 }
 
 /// `--verify-route far-side`: fly the whole route headless and report what the

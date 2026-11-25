@@ -49,46 +49,6 @@ The ghost SHALL show where the piece would go before it is placed.
 - **WHEN** a floor is placed three layers above the ground floor
 - **THEN** it is the next storey's floor, and walls placed on it stand on it
 
-### Requirement: A placement is checked by the towns' own rules
-
-A placement SHALL be refused when it would break any layout rule a town is
-held to:
-- headroom at every walkable point;
-- roofs never overlap;
-- every stair lands on a layer line;
-- no building on a pentagon or a pentagon's neighbour;
-- furniture stands clear of walls;
-- no two faces in one plane.
-
-A refused ghost SHALL be shown in red with the rule it breaks. The check SHALL
-be the same function the town layouts are checked with.
-
-#### Scenario: A low floor over a stair
-
-- **WHEN** the player places a floor that would leave less than the walker's
-  height over a stair below
-- **THEN** the ghost is red and says there is no headroom over the stair, and
-  nothing is placed
-
-#### Scenario: One rule, two callers
-
-- **WHEN** a player-built house and a town's house are checked
-- **THEN** both are checked by the same function, with the same result for
-  the same pieces
-
-### Requirement: A roof is fitted over what it covers
-
-The roof tool SHALL fit the kit's roof over an enclosed footprint the player
-picks, the way a town's roofs are fitted. A roof SHALL NOT be placed tile by
-tile.
-
-#### Scenario: Roofing a house
-
-- **WHEN** the player uses the roof tool on a house of two rows of four cells
-  with walls all round
-- **THEN** a gable roof is fitted over its rows, with its eaves, and it passes
-  the roof-overlap check
-
 ### Requirement: A blueprint places a whole building
 
 The player SHALL be able to choose any building from the settlement templates
@@ -102,19 +62,44 @@ once where building is free.
 - **THEN** the cottage stands with its door, stair and roof, and can be walked
   into like a town's
 
-### Requirement: What is built is kept, and can be taken back
 
-Placing or removing a piece SHALL be a world edit that enters the durable
-transaction path at once. A player SHALL be able to remove a piece they
-placed. Removing a piece that something else stands on or hangs from SHALL
-be refused, with the reason.
+### Requirement: A footing has a stone texture of its own
 
-#### Scenario: Reloading
+A floor's footing SHALL be drawn in a dressed stone texture of its own,
+coloured only from the town kits' stones, sampled nearest.
 
-- **WHEN** the player builds a room and the world is reloaded
-- **THEN** the room is there, piece for piece
+#### Scenario: A house on a terrace
 
-#### Scenario: Taking out a floor under a table
+- **WHEN** a floor stands over lower ground
+- **THEN** its footing shows coursed stone blocks in the stones' palette
 
-- **WHEN** the player removes a floor a table stands on
-- **THEN** the removal is refused and names the table
+### Requirement: A door is crafted and hung in a doorway
+
+A door SHALL be made at the workbench, SHALL be placed only in a wall's
+doorway, and SHALL open and shut with the interact key. Its state SHALL be
+kept through the durable path, and a shut door SHALL stop the walker. A
+doorway with no door SHALL stay an open doorway, in a new save and in an old
+one.
+
+#### Scenario: Hanging a door
+
+- **WHEN** the player carries a door and places it in a doorway
+- **THEN** the door hangs there shut, one door is taken from the pack, and
+  the walker cannot pass until it is opened
+
+#### Scenario: An old house
+
+- **WHEN** a world saved before doors could be made is opened
+- **THEN** its houses' doorways are open, with no door, until one is hung
+
+### Requirement: Architecture mode
+
+In build mode, one key SHALL raise a build camera over the plot, where the
+cursor places and removes pieces on the grid and the build layer moves up and
+down. Leaving it SHALL give back the walker's camera exactly as it was.
+
+#### Scenario: Back to walking
+
+- **WHEN** the player leaves architecture mode
+- **THEN** the camera is at the walker's eye with the walker's heading and
+  pitch, unchanged

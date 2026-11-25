@@ -26,11 +26,13 @@ use pbd_app::hotbar::{Gained, How, Planted};
 use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::Localized;
 use pbd_core::column;
 use pbd_core::farming::{
     self, Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Picked, Plot, Stage, WILD_KIND, WILD_SCHEMA,
 };
 use pbd_core::inventory::{Item, Tool};
+use pbd_core::locale::{tr, tr_with};
 use pbd_core::records::Record as StoredRecord;
 use pbd_core::station::{self, STATION_KIND, StationState};
 use pbd_core::terrain::Material;
@@ -120,21 +122,26 @@ pub fn plant(
     let ground = digging::material_of(world.fine, world.save, (cell, layer));
     let over = digging::material_of(world.fine, world.save, (cell, layer + 1));
     if ground != Some(Material::Tilled) || over != Some(Material::Air) {
-        note.say(wall_s, "Seeds need tilled soil");
+        note.say(wall_s, tr("farm.seeds_need_tilled"));
         return false;
     }
     if live_crop(world.fine, world.save, cell).is_some() {
-        note.say(wall_s, "Something is already growing here");
+        note.say(wall_s, tr("farm.already_growing"));
         return false;
     }
     let climate = climate_at(world.fine, cell, layer);
     if !crop.grows_in(climate) {
         note.say(
             wall_s,
-            format!(
-                "{} does not grow in a {} climate",
-                crop.row().name,
-                climate.map_or("barren", Climate::name)
+            tr_with(
+                "farm.wrong_climate",
+                &[
+                    ("crop", &crop.row().name()),
+                    (
+                        "climate",
+                        &climate.map_or_else(|| tr("farming.climate.barren"), Climate::name),
+                    ),
+                ],
             ),
         );
         return false;
@@ -153,7 +160,10 @@ pub fn plant(
     }
     world.slots.0 = moved;
     planted.write(Planted { crop });
-    note.say(wall_s, format!("Planted {}", crop.row().name));
+    note.say(
+        wall_s,
+        tr_with("farm.planted", &[("crop", &crop.row().name())]),
+    );
     true
 }
 
@@ -205,7 +215,7 @@ fn pick(
     let seeds = farm.0.wild_seeds;
     let mut moved = slots.0.clone();
     if moved.give(Item::Good(row.seed), seeds) + moved.give(Item::Good(row.produce), 1) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return;
     }
     let record = StoredRecord::of(
@@ -229,7 +239,13 @@ fn pick(
         count: 1,
         how: How::Picked,
     });
-    note.say(wall_s, format!("Picked wild {}: +{seeds} seed", row.name));
+    note.say(
+        wall_s,
+        tr_with(
+            "farm.picked_wild",
+            &[("crop", &row.name()), ("seeds", &seeds)],
+        ),
+    );
 }
 
 /// Take a piece of the ground clutter by hand (`gather-by-hand`): its goods
@@ -256,7 +272,7 @@ pub fn gather(
     }
     let mut moved = slots.0.clone();
     if moved.give(Item::Good(good), count) > 0 {
-        note.say(wall_s, "No room in the pack");
+        note.say(wall_s, tr("farm.no_room"));
         return false;
     }
     let record = StoredRecord::of(CLUTTER_KIND, u64::from(key), CLUTTER_SCHEMA, &taken);
@@ -270,7 +286,6 @@ pub fn gather(
         count,
         how: How::Gathered,
     });
-    note.say(wall_s, format!("+{count} {}", good.name()));
     info!("gathered {kind:?} at cell {key}: +{count} {code}");
     true
 }
@@ -481,26 +496,29 @@ impl FarmAct {
     /// Its row of `interact::ACTS` and what it is done to.
     pub fn offer(&self) -> Offer {
         match *self {
-            FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name),
+            FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name()),
             FarmAct::Crop { crop, ripe, .. } => Offer::new(
                 if ripe { Act::Harvest } else { Act::Check },
-                crop.row().name.to_lowercase(),
+                crop.row().name(),
             ),
-            FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name.to_lowercase()),
+            FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name()),
             FarmAct::Gather { kind, .. } => {
                 let (code, _) = kind.gives();
                 Offer::new(
                     Act::Gather,
-                    pbd_core::goods::Good::by_code(code).map_or(code, |g| g.name()),
+                    pbd_core::goods::Good::by_code(code)
+                        .map_or_else(|| Localized::verbatim(code), |g| g.name()),
                 )
             }
             FarmAct::Till { material, .. } => Offer::new(
                 Act::Till,
                 match material {
-                    Material::Grass | Material::DryGrass | Material::JungleGrass => "grass",
-                    Material::Dirt => "dirt",
-                    Material::Sand => "sand",
-                    _ => "soil",
+                    Material::Grass | Material::DryGrass | Material::JungleGrass => {
+                        tr("block.grass.name")
+                    }
+                    Material::Dirt => tr("block.dirt.name"),
+                    Material::Sand | Material::DesertSand => tr("block.sand.name"),
+                    _ => tr("block.soil.name"),
                 },
             ),
         }
@@ -614,7 +632,7 @@ fn eye_ray(
 
 /// The logs a tree gives the axe before it falls, from the gathering's
 /// settings (absent in a still capture).
-fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
+pub(super) fn axe_logs(gather: Option<&pbd_app::config::GatherConfig>) -> u16 {
     gather.map_or_else(
         || pbd_core::gather::GatherSettings::default().axe_logs,
         |g| g.0.axe_logs,
@@ -771,9 +789,9 @@ pub fn use_key(
         {
             let block = (target.dig.cell, target.dig.layer);
             if digging::under_standing_tree(&fine, &save, axe_logs(gathering.as_deref()), block) {
-                note.say(wall_s, "Cut down the tree first");
+                note.say(wall_s, tr("farm.tree_first"));
             } else {
-                note.say(wall_s, "Can't till under a block");
+                note.say(wall_s, tr("farm.till_under_block"));
             }
         }
         return;
@@ -783,7 +801,7 @@ pub fn use_key(
             station_at.0 = Some((cell, layer as u16));
             // The kitchen's stations have their own panel (`cooking` design S4).
             *screen = super::kitchen::screen_for(row);
-            info!("opened the {} at cell {cell} layer {layer}", row.name);
+            info!("opened the {} at cell {cell} layer {layer}", row.name());
             return;
         }
         FarmAct::Crop {
@@ -866,10 +884,8 @@ pub fn use_key(
                 how: How::Found,
             });
         }
-        match seed {
-            Some(seed) => note.say(wall_s, format!("Tilled. Found {}", seed.name())),
-            None => note.say(wall_s, "Tilled"),
-        }
+        // A seed turned up is the toast's to say (`item-toasts` decision 6).
+        note.say(wall_s, tr("farm.tilled"));
     }
 }
 
@@ -894,7 +910,13 @@ fn harvest(
             * 24.0;
         note.say(
             wall_s,
-            format!("{}: ripe in {:.0} game hours", row.name, left_h.ceil()),
+            tr_with(
+                "farm.ripe_in",
+                &[
+                    ("crop", &row.name()),
+                    ("hours", &format!("{:.0}", left_h.ceil())),
+                ],
+            ),
         );
         return;
     }
@@ -903,7 +925,7 @@ fn harvest(
     let left = moved.give(Item::Good(row.produce), tuning.produce)
         + moved.give(Item::Good(row.seed), tuning.seeds);
     if left > 0 {
-        note.say(wall_s, "No room in the pack for the harvest");
+        note.say(wall_s, tr("farm.no_room_harvest"));
         return;
     }
     let bare = Plot::bare(plot.layer);
@@ -924,14 +946,22 @@ fn harvest(
     });
     note.say(
         wall_s,
-        format!("+{} {}, +{} seed", tuning.produce, row.name, tuning.seeds),
+        tr_with(
+            "farm.harvested",
+            &[
+                ("produce", &tuning.produce),
+                ("crop", &row.name()),
+                ("seeds", &tuning.seeds),
+            ],
+        ),
     );
 }
 
 /// The note under the crosshair.
 pub fn spawn_note(mut commands: Commands) {
     commands.spawn((
-        pbd_app::ui_kit::KitText::new("", pbd_app::ui_kit::LABEL).outline(pbd_app::ui_kit::INK),
+        pbd_app::ui_kit::KitText::new(Localized::empty(), pbd_app::ui_kit::LABEL)
+            .outline(pbd_app::ui_kit::INK),
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),
@@ -949,13 +979,20 @@ pub fn show_note(
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
     mut text: Query<&mut pbd_app::ui_kit::KitText, With<NoteText>>,
+    road: Option<ResMut<pbd_app::roads::RoadSay>>,
 ) {
+    // A road's refusal (`townsfolk` design 39 and 40) shows as the note.
+    if let Some(mut road) = road
+        && let Some(line) = road.0.take()
+    {
+        note.say(time.elapsed_secs(), line);
+    }
     if !note.text.is_empty() && time.elapsed_secs() > note.until_s {
         note.text.clear();
     }
     for mut words in &mut text {
         if words.text != note.text {
-            words.text.clone_from(&note.text);
+            words.text = Localized::verbatim(note.text.clone());
         }
     }
 }
@@ -985,6 +1022,50 @@ pub struct FarmLooks {
     board: Handle<Mesh>,
     vise: Handle<Mesh>,
     oak: Handle<StandardMaterial>,
+    /// The carpenter's bench's board, saw and square (`furniture` design
+    /// 1), in the oak and the iron.
+    carpenter_wood: Handle<Mesh>,
+    carpenter_iron: Handle<Mesh>,
+    plank_tex: Handle<StandardMaterial>,
+    iron_tex: Handle<StandardMaterial>,
+    /// The drafting table's board and its sheet (`building-planner` design
+    /// 3), in the plank and the linen.
+    drafting_wood: Handle<Mesh>,
+    drafting_sheet: Handle<Mesh>,
+    linen_tex: Handle<StandardMaterial>,
+}
+
+/// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
+fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str], repeat_m: f32) -> Mesh {
+    let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
+    for poly in polys.iter().filter(|p| keep.contains(&p.texture)) {
+        let n = poly.normal();
+        // The town's world mapping at the texture's own scale, so its texels
+        // match the walls'; each point its own normal, shaded smooth.
+        let uv = |p: Vec3| -> [f32; 2] {
+            let s = 1.0 / repeat_m;
+            if n.y.abs() > 0.7 {
+                return [p.x * s, -p.z * s];
+            }
+            let l = n.x.hypot(n.z).max(1e-6);
+            [(p.x * -n.z + p.z * n.x) / l * s, -p.y * s]
+        };
+        for i in 1..poly.points.len().saturating_sub(1) {
+            for k in [0, i, i + 1] {
+                let p = poly.points[k];
+                positions.push(p.to_array());
+                normals.push(poly.normals[k].to_array());
+                uvs.push(uv(p));
+            }
+        }
+    }
+    Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
 }
 
 /// The path of a crop's stage sprite (decision 5).
@@ -1073,6 +1154,49 @@ pub fn make_looks(
         }),
         flame: meshes.add(clumps_mesh(0.45, 0.0)),
         board: meshes.add(Cuboid::new(1.5, 0.08, 0.32)),
+        carpenter_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+            2.0,
+        )),
+        carpenter_iron: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::carpenter_top(),
+            &[pbd_core::furniture::model::IRON],
+            1.0,
+        )),
+        // The carpenter's bench's board and tools in the town's own plank
+        // and iron, sampled nearest (owner: "Make sure things have textures").
+        plank_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "plank")),
+            perceptual_roughness: 0.92,
+            ..default()
+        }),
+        drafting_wood: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[
+                pbd_core::furniture::model::FRAME,
+                pbd_core::furniture::model::TOP,
+            ],
+            2.0,
+        )),
+        drafting_sheet: meshes.add(polys_mesh(
+            &pbd_core::furniture::model::drafting_top(),
+            &[pbd_core::furniture::model::SHEET],
+            1.0,
+        )),
+        linen_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "linen")),
+            perceptual_roughness: 0.95,
+            ..default()
+        }),
+        iron_tex: materials.add(StandardMaterial {
+            base_color_texture: Some(pbd_app::towns::texture(&assets, "iron")),
+            perceptual_roughness: 0.6,
+            ..default()
+        }),
         vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
         oak: materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.38, 0.21),
@@ -1196,8 +1320,10 @@ pub fn show(
     mut flames: Query<&mut Visibility, With<Flame>>,
     mut keys: Local<Keys>,
     mut since: Local<f32>,
+    paving: Option<Res<pbd_app::roads::paving::PavingLooks>>,
 ) {
     let Some(looks) = looks else { return };
+    let Some(paving) = paving else { return };
     let dt = time.delta_secs();
     let step = dt / FADE_S;
     // Fades run every frame.
@@ -1347,7 +1473,15 @@ pub fn show(
     // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
     let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
-        if !matches!(edit.material, Material::Forge | Material::Workbench) {
+        if !matches!(
+            edit.material,
+            Material::Forge
+                | Material::Workbench
+                | Material::Carpenter
+                | Material::DraftingTable
+                | Material::Grinder
+                | Material::Mixer
+        ) {
             continue;
         }
         let Some(&index) = keys.map.get(&edit.cell) else {
@@ -1360,8 +1494,10 @@ pub fn show(
         if column.material(layer) != edit.material || near(index, layer).is_none() {
             continue;
         }
-        let row = station::station_of(edit.material).expect("checked");
-        let working = station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s);
+        // The drafting table queues no jobs (`building-planner` design 3).
+        let working = station::station_of(edit.material).is_some_and(|row| {
+            station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s)
+        });
         wanted.insert((edit.cell, edit.layer), (index, working, edit.material));
     }
     for (_, mut view, _, children) in &mut forges {
@@ -1391,6 +1527,96 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::DraftingTable {
+            // Its board tipped to the front with a sheet on it
+            // (`building-planner` design 3), in the plank and the linen.
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|table| {
+                    table.spawn((
+                        Mesh3d(looks.drafting_wood.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
+                    ));
+                    table.spawn((
+                        Mesh3d(looks.drafting_sheet.clone()),
+                        MeshMaterial3d(looks.linen_tex.clone()),
+                    ));
+                });
+            continue;
+        }
+        if material == Material::Carpenter {
+            // A board laid on it, a saw across the board and a square at
+            // its end (`furniture` design 1).
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|bench| {
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_wood.clone()),
+                        MeshMaterial3d(looks.plank_tex.clone()),
+                    ));
+                    bench.spawn((
+                        Mesh3d(looks.carpenter_iron.clone()),
+                        MeshMaterial3d(looks.iron_tex.clone()),
+                    ));
+                });
+            continue;
+        }
+        if matches!(material, Material::Grinder | Material::Mixer) {
+            // The gravel stations (`townsfolk` design 41): shaped forms of
+            // timber, iron and stone, lit as the ground is.
+            let parts = if material == Material::Grinder {
+                &paving.grinder
+            } else {
+                &paving.mixer
+            };
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|station| {
+                    for (stuff, mesh) in parts {
+                        station.spawn((
+                            Mesh3d(mesh.clone()),
+                            MeshMaterial3d(paving.material(*stuff)),
+                        ));
+                    }
+                });
+            continue;
+        }
         if material == Material::Workbench {
             // Two planks laid across the top and an iron vise at one end,
             // after M3's workbench icon.
@@ -1562,8 +1788,17 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
+    (net, standing, roads_cfg, planner): (
+        Option<ResMut<pbd_app::roads::RoadNet>>,
+        Option<ResMut<pbd_app::roads::RoadsStanding>>,
+        Option<Res<pbd_app::roads::RoadsSettings>>,
+        Option<ResMut<pbd_app::roads::planner::Planner>>,
+    ),
 ) {
-    if *done || launch.capture.is_none() || (launch.farm.is_none() && launch.forge.is_none()) {
+    if *done
+        || launch.capture.is_none()
+        || (launch.farm.is_none() && launch.forge.is_none() && launch.paving.is_none())
+    {
         return;
     }
     if refresh.in_flight_s().is_some() {
@@ -1592,7 +1827,11 @@ pub fn scripted(
         let top = fine.set.columns.column(record)?.surface()?;
         Some((key, top))
     };
-    let first = launch.farm.or(launch.forge).unwrap_or(6.0);
+    let first = launch
+        .farm
+        .or(launch.forge)
+        .or(launch.paving)
+        .unwrap_or(6.0);
     if spot(&fine, &contact, first, 0.0).is_none() {
         return;
     }
@@ -1648,7 +1887,7 @@ pub fn scripted(
                 }
                 info!(
                     "scripted farm: {} at cell {cell}, {:.0}% grown",
-                    crop.row().name,
+                    crop.row().name(),
                     share * 100.0
                 );
             }
@@ -1694,7 +1933,7 @@ pub fn scripted(
             if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
                 info!(
                     "scripted farm: a wild {} {d:.1} m away, {:.0} degrees right of the view",
-                    crop.row().name,
+                    crop.row().name(),
                     side.atan2(fwd).to_degrees()
                 );
             }
@@ -1739,7 +1978,7 @@ pub fn scripted(
                 Some((d, cell, crop)) => {
                     info!(
                         "scripted farm: picking the wild {} {d:.1} m away",
-                        crop.row().name
+                        crop.row().name()
                     );
                     pick(
                         &mut save,
@@ -1784,6 +2023,175 @@ pub fn scripted(
             *screen = Screen::Forge;
         }
         info!("scripted forge at cell {cell} layer {layer}");
+    }
+    if let Some(metres) = launch.paving {
+        use pbd_app::roads::paving;
+        // The grinder to the left and the mixer to the right.
+        for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
+            if let Some((cell, top)) = spot(&fine, &contact, metres, across) {
+                apply_edit(world!(), Hands::Empty, cell, top + 1, material);
+                info!("scripted paving: a {material:?} at cell {cell}");
+            }
+        }
+        // A road staked from past them along the view by its two ends, as
+        // the planner's two clicks do (design 42k), its nearer cells paved.
+        let config = *pbd_app::planet::terrain_config();
+        let cfg = roads_cfg.map_or_else(pbd_app::roads::load_config, |r| (*r.0).clone());
+        let pcfg = paving::load_planner();
+        let key_at = |fine: &PlanetFine, contact: &PlanetContact, ahead: f32, across: f32| {
+            spot(fine, contact, ahead, across).map(|(cell, _)| cell)
+        };
+        slots.give(Item::Good(pbd_core::goods::Good::SURVEY_STAKES), 16);
+        slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 12);
+        let scene = launch.road_plan.clone();
+        let wide = scene.as_deref() == Some("wide");
+        // `lamps`: a three-wide dirt road with lamps, staked, paved and its
+        // lamp posts built through the paving's own calls (design 42m).
+        let lamps = scene.as_deref() == Some("lamps");
+        let how = pbd_core::roads::planner::How {
+            width: if wide || lamps { 3 } else { 1 },
+            surface: if lamps {
+                pbd_core::roads::Surface::Dirt
+            } else {
+                pbd_core::roads::Surface::Gravel
+            },
+            lamps,
+        };
+        if lamps {
+            slots.give(Item::Good(pbd_core::goods::Good::LOG), 16);
+            slots.give(Item::Block(Material::LanternPost), 16);
+        }
+        let road = |save: &mut WorldSave, slots: &mut super::slots::Hotbar, a: u32, b: u32| {
+            match paving::end_road(save, slots, a, b, how, &|_| false, &config, &cfg, &pcfg) {
+                Ok((stakes, cells)) => {
+                    info!("scripted road plan: {stakes} stakes, {cells} cells");
+                }
+                Err(why) => warn!("scripted road plan: refused: {why:?}"),
+            }
+        };
+        let (start, end) = (
+            key_at(&fine, &contact, metres + 3.0, 0.0),
+            key_at(&fine, &contact, metres + 34.0, 0.0),
+        );
+        if let (Some(a), Some(b)) = (start, end) {
+            // `wide` stakes nothing: its road is the open one below, so its
+            // ghost shows which lanes the ground allows.
+            if lamps {
+                // Straight along a row of the lattice, where a wide road
+                // may climb (design 42m).
+                let b = pbd_core::roads::planner::along_row(a, b, 11).unwrap_or(b);
+                road(&mut save, &mut slots, a, b);
+                if pbd_core::roads::planner::plans(&save.records).is_empty() {
+                    // Ground no wide road takes here: one wide, lamps on.
+                    let one = pbd_core::roads::planner::How { width: 1, ..how };
+                    if let Err(why) = paving::end_road(
+                        &mut save,
+                        &mut slots,
+                        a,
+                        b,
+                        one,
+                        &|_| false,
+                        &config,
+                        &cfg,
+                        &pcfg,
+                    ) {
+                        warn!("scripted road plan: refused one wide too: {why:?}");
+                    }
+                }
+            } else if !wide {
+                road(&mut save, &mut slots, a, b);
+            }
+            let plans = pbd_core::roads::planner::plans(&save.records);
+            let first = plans.values().flat_map(|p| p.roads.first()).next().cloned();
+            match scene.as_deref() {
+                None => {
+                    if let Some(first) = &first {
+                        for &key in first.centre().iter().take(6) {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                            }
+                        }
+                    }
+                }
+                Some("lamps") => {
+                    if let Some(first) = &first {
+                        let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                        let keys: Vec<u32> = pbd_core::roads::planner::lay(
+                            first,
+                            &ground,
+                            &|_| false,
+                            &pcfg,
+                            cfg.ford_depth_m,
+                        )
+                        .iter()
+                        .map(|c| c.key)
+                        .collect();
+                        drop(ground);
+                        for key in keys {
+                            if let Err(why) =
+                                paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                            {
+                                warn!("scripted paving: cell {key} not paved: {why:?}");
+                                continue;
+                            }
+                            match paving::build_lamps(&mut save, &mut slots, key, &config, &cfg) {
+                                Ok(made) => pbd_app::economy::road_jobs::into_tier(
+                                    &made,
+                                    &save,
+                                    &mut fine,
+                                    &mut contact,
+                                ),
+                                Err(why) => warn!("scripted lamps: {why:?}"),
+                            }
+                        }
+                    }
+                }
+                Some("stake") | Some("erased") => {
+                    let mid = first.as_ref().map(|r| r.centre()[r.centre().len() / 2]);
+                    if let (Some(mid), Some(side)) =
+                        (mid, key_at(&fine, &contact, metres + 22.0, 16.0))
+                    {
+                        road(&mut save, &mut slots, mid, side);
+                        if scene.as_deref() == Some("erased")
+                            && let Err(why) = paving::erase_road(
+                                &mut save, &mut slots, side, &config, &cfg, &pcfg,
+                            )
+                        {
+                            warn!("scripted eraser: refused: {why:?}");
+                        }
+                    }
+                }
+                _ => {}
+            }
+            // Stakes in hand, and for `two` an open start, so the ghost
+            // follows the aim from it.
+            let held = (0..10).find(|&i| {
+                slots.get(i).map(|s| s.item)
+                    == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
+            });
+            if scene.is_some()
+                && let Some(i) = held
+            {
+                slots.select(i);
+            }
+            match (planner, scene.as_deref()) {
+                (Some(mut planner), Some("two")) => {
+                    planner.start = key_at(&fine, &contact, metres + 1.0, -3.0);
+                }
+                // A three-wide road open from far up the view: its ghost
+                // runs back to the aim.
+                (Some(mut planner), Some("wide")) => {
+                    planner.how = how;
+                    planner.start = Some(b);
+                }
+                _ => {}
+            }
+        }
+        if let (Some(mut net), Some(mut standing)) = (net, standing) {
+            paving::restand(&save, &mut net, &mut standing);
+        }
     }
 }
 
@@ -2048,7 +2456,7 @@ mod tests {
         );
         assert_eq!(
             world.resource::<Interact>().now.as_ref().map(Offer::words),
-            Some("Harvest wheat".to_string())
+            Some(Localized::verbatim("Harvest wheat"))
         );
         press_f(&mut app);
         let save = app.world().resource::<WorldSave>();
@@ -2091,7 +2499,10 @@ mod tests {
                 .now
                 .as_ref()
                 .map(Offer::words),
-            Some(format!("Pick wild {}", crop.row().name.to_lowercase()))
+            Some(tr_with(
+                "interact.act.pick_wild",
+                &[("thing", &crop.row().name())]
+            ))
         );
         let seeds = carried(&app, crop.row().seed);
         press_f(&mut app);
@@ -2237,7 +2648,7 @@ mod tests {
                     .now
                     .as_ref()
                     .map(Offer::words),
-                Some(format!("Gather {name}")),
+                Some(tr_with("interact.act.gather", &[("thing", &name)])),
                 "{:?} at cell {key}",
                 piece.kind
             );

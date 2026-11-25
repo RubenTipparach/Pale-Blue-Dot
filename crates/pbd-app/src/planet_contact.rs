@@ -399,6 +399,31 @@ impl PlanetContact {
         Some(column.water_surface(point.length() - PLANET_RADIUS))
     }
 
+    /// [`Self::column_water`], at the surface the water is DRAWN at: a
+    /// flowing top is drawn through its corners, up to a layer's share over
+    /// the cell's own level (`water_flow::drawn_top_m`), and a craft floats on
+    /// what is seen (`craft-lighting`: a raft rode with its deck under the
+    /// drawn river, 20 cm over the column's level).
+    pub fn drawn_water(&self, point: Vec3) -> Option<Option<f32>> {
+        let direction = point.try_normalize()?;
+        let fine = self.fine.as_ref()?;
+        let id = fine.locate(direction)?;
+        let column = fine.set.columns.column(id)?;
+        let Some(surface) = column.water_surface(point.length() - PLANET_RADIUS) else {
+            return Some(None);
+        };
+        let drawn = pbd_core::column::layer_at(surface - 1e-3)
+            .zip(fine.set.columns.slot(id))
+            .and_then(|(top, slot)| crate::water_flow::drawn_top_m(&fine.set.columns, slot, top));
+        Some(Some(drawn.unwrap_or(surface).max(surface)))
+    }
+
+    /// Whether `point` (body-local) is over a column of the tier: what the
+    /// river walk logs as on or off the tier.
+    pub fn on_tier(&self, point: Vec3) -> bool {
+        self.column_water(point).is_some()
+    }
+
     pub fn stand(&self, feet: Vec3) -> Stand {
         let direction = feet.try_normalize().unwrap_or(Vec3::Y);
         let surface = self.sample(direction);
@@ -414,10 +439,20 @@ impl PlanetContact {
         let Some(id) = fine.locate(direction) else {
             return stand;
         };
+        let altitude = feet.length() - PLANET_RADIUS;
         let Some(column) = fine.set.columns.column(id) else {
+            // Off the tier, the river band's water (`river-cache` design 14):
+            // a walker in a river past the tier swims it, as it would on the
+            // tier, rather than walking its bed under the water.
+            let key = fine.set.levels[3].get(id).map(|c| c.key());
+            if let Some(&top) = key.and_then(|k| fine.set.river.tops.get(&k)) {
+                let floor = stand.floor_radius - PLANET_RADIUS;
+                if top > floor && altitude < top {
+                    stand.water_depth = top - floor;
+                }
+            }
             return stand;
         };
-        let altitude = feet.length() - PLANET_RADIUS;
         let contact = column.contact(altitude);
         if let Some(floor) = contact.floor {
             // A run's top is the drawn face over it - the cap at the surface,
@@ -456,8 +491,8 @@ impl PlanetContact {
         point.length() >= self.sample(direction).radius - 1e-3
     }
 
-    /// Whether the sea's surface reaches the finest cell under `direction` at
-    /// some tide (`planet::column::sea_reached`, `ocean-environments` B22):
+    /// Whether the sea's surface reaches the finest cell under `direction`
+    /// (`planet::column::sea_reached`, `ocean-environments` B22):
     /// the mark the sheet is listed by. `false` off the column tier.
     pub fn sea_reached(&self, direction: Vec3) -> bool {
         let direction = direction.try_normalize().unwrap_or(Vec3::Y);

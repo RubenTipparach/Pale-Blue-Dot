@@ -15,10 +15,17 @@ use crate::hex::{Hex, Voxel};
 /// places and carves its trenches; version 8 (design 13) runs rivers to
 /// the sea; version 9 (design B15) puts back the reefs version 8 lost;
 /// version 10 (`flora-v2` design 12) grows M13's forests on version 9's
-/// ground. A new world is made with this version;
+/// ground; version 11 (`river-downhill`) keeps every river's water from
+/// rising downstream; version 12 (`swamps`) puts swamps on the low wet land
+/// by the sea and the rivers, on version 11's heights; version 14
+/// (`ocean-environments` B24) lays the sea's cells; version 15
+/// (`mountain-ground`) grasses and snows the mountains' flats, scours their
+/// crests and stands their trees to a tree line (13 was never shipped). A
+/// new world is made
+/// with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 10;
+pub const GENERATOR_VERSION: u32 = 15;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the
@@ -90,6 +97,48 @@ pub enum Material {
     /// kitchen's first station and a light. Like every light it is neither
     /// solid nor opaque, and the column pass draws it as a lamp.
     Campfire = 21,
+    // 22 and 23 are held for the kitchen.
+    /// The sea's cells (`ocean-environments` design B24), made by generator
+    /// version 14 and dug like any ground. Each is drawn as an existing
+    /// render code from a sheet of its own, as ore is, so the column's
+    /// four-bit material word does not widen. Reef rock: a reef's limestone,
+    /// the ocean sheet's (3,0). Solid.
+    ReefRock = 24,
+    /// Sea ice: a floe's cell, standing on polar water; the frozen wastes'
+    /// layered glacial ice. Solid.
+    SeaIce = 25,
+    /// Basalt: the ground round a vent; the basalt wastes' own. Solid.
+    Basalt = 26,
+    /// A mussel bed: the shells packed on a vent's basalt; the ocean sheet's
+    /// shell bed (3,1). Solid.
+    MusselBed = 27,
+    /// Sticks: a beaver's dam and lodge (`ocean-environments` design B25),
+    /// laid by the `beaver` world process; the local trees' bark, as the
+    /// workbench is drawn. Solid, so flowing water treats a dam as a wall.
+    Sticks = 28,
+    /// Desert sand (`sand-tiles` design 5 (c)): what generated sand dug in a
+    /// desert cell yields. Generation never writes it, so no generator
+    /// version moves; a desert's ground is still [`Material::Sand`], drawn
+    /// from the desert sheet. Placed, it is drawn from the desert sheet
+    /// wherever it lands, as render code 1 (sand). It acts as sand in every
+    /// other way ([`Material::is_sand`]).
+    DesertSand = 29,
+    /// The grinder (`townsfolk` design 41): the station that crushes stone,
+    /// a hopper over two stone rollers in a timber frame. Solid, drawn in the
+    /// local trees' wood as the workbench is, with its frame stood on it.
+    Grinder = 30,
+    /// The mixer (design 41): the station that mixes crushed stone and sand
+    /// into gravel, a drum on a timber frame. Solid, drawn as the grinder.
+    Mixer = 31,
+    /// The carpenter's bench (`furniture` design 1): the station every piece
+    /// of furniture is made at. Solid, drawn in the workbench's wood with a
+    /// saw and a square on its top. Code 40: 30 to 39 are the paving's
+    /// stations (`townsfolk` design 41).
+    Carpenter = 40,
+    /// The drafting table (`building-planner` design 3): where a plan is
+    /// drawn. Solid, drawn in the workbench's wood with a sloped board on
+    /// its top. It queues no jobs: F on it opens the planner.
+    DraftingTable = 41,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -224,6 +273,13 @@ impl Material {
         }
     }
 
+    /// Whether this is sand of either kind, beach or desert (`sand-tiles`
+    /// design 5): the two dig, sound, bounce, till and turn up bait alike,
+    /// and differ only in the sheet they are drawn from.
+    pub fn is_sand(self) -> bool {
+        matches!(self, Material::Sand | Material::DesertSand)
+    }
+
     /// Whether this light burns only from dusk to dawn. A property of the
     /// kind of light, not of where it stands (`lamps-and-lanterns` decision
     /// 4): a street lantern the player places behaves like a city's.
@@ -234,7 +290,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 22] = [
+    pub const ALL: [Material; 32] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -257,6 +313,16 @@ impl Material {
         Material::Forge,
         Material::Workbench,
         Material::Campfire,
+        Material::ReefRock,
+        Material::SeaIce,
+        Material::Basalt,
+        Material::MusselBed,
+        Material::Sticks,
+        Material::DesertSand,
+        Material::Grinder,
+        Material::Mixer,
+        Material::Carpenter,
+        Material::DraftingTable,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the
@@ -337,6 +403,97 @@ impl TerrainGenerator {
             Material::Stone
         }
     }
+}
+
+/// The material a saved code names, and the code it is saved as: the save's
+/// journal, a region's snapshot and its digest (`multiplayer` 3.1) all
+/// write a material by this code.
+///
+/// Written out both ways rather than transmuted: a code nothing names must not
+/// become a material, and a material added tomorrow must not silently take
+/// another's number.
+pub fn material_code(material: Material) -> u8 {
+    match material {
+        Material::Air => 0,
+        Material::Stone => 1,
+        Material::Soil => 2,
+        Material::Grass => 3,
+        Material::Water => 4,
+        Material::Ore => 5,
+        Material::Sand => 6,
+        Material::DryGrass => 7,
+        Material::JungleGrass => 8,
+        Material::Snow => 9,
+        Material::Rock => 10,
+        Material::Dirt => 11,
+        Material::Torch => 12,
+        Material::LanternPost => 13,
+        Material::LanternWall => 14,
+        Material::LanternHanging => 15,
+        Material::Brazier => 16,
+        Material::Candle => 17,
+        Material::Tilled => 18,
+        Material::Forge => 19,
+        Material::Workbench => 20,
+        Material::Campfire => 21,
+        // The sea's cells (`ocean-environments` B24); 22 and 23 are held for
+        // the kitchen. An older build reads none of them, as it reads no
+        // code it does not know.
+        Material::ReefRock => 24,
+        Material::SeaIce => 25,
+        Material::Basalt => 26,
+        Material::MusselBed => 27,
+        Material::Sticks => 28,
+        // Desert sand (`sand-tiles` design 5): the next free code.
+        Material::DesertSand => 29,
+        // `townsfolk` design 41: the gravel stations.
+        Material::Grinder => 30,
+        Material::Mixer => 31,
+        Material::Carpenter => 40,
+        Material::DraftingTable => 41,
+        // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
+        // the material's own code, far from the blocks' run.
+        flowing @ crate::flowing_water!() => flowing as u16 as u8,
+    }
+}
+
+pub fn material_of(code: u8) -> Option<Material> {
+    Some(match code {
+        0 => Material::Air,
+        1 => Material::Stone,
+        2 => Material::Soil,
+        3 => Material::Grass,
+        4 => Material::Water,
+        5 => Material::Ore,
+        6 => Material::Sand,
+        7 => Material::DryGrass,
+        8 => Material::JungleGrass,
+        9 => Material::Snow,
+        10 => Material::Rock,
+        11 => Material::Dirt,
+        12 => Material::Torch,
+        13 => Material::LanternPost,
+        14 => Material::LanternWall,
+        15 => Material::LanternHanging,
+        16 => Material::Brazier,
+        17 => Material::Candle,
+        18 => Material::Tilled,
+        19 => Material::Forge,
+        20 => Material::Workbench,
+        21 => Material::Campfire,
+        24 => Material::ReefRock,
+        25 => Material::SeaIce,
+        26 => Material::Basalt,
+        27 => Material::MusselBed,
+        28 => Material::Sticks,
+        29 => Material::DesertSand,
+        30 => Material::Grinder,
+        31 => Material::Mixer,
+        40 => Material::Carpenter,
+        41 => Material::DraftingTable,
+        64..=79 => Material::flowing((code - 64) % 8, code >= 72),
+        _ => return None,
+    })
 }
 
 #[cfg(test)]

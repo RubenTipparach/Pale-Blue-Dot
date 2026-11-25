@@ -8,6 +8,7 @@
 //! still says which world this is.
 
 use bevy::prelude::*;
+use pbd_core::locale::{Localized, tr};
 
 /// Seconds the banner holds before it fades.
 const HOLD_S: f32 = 3.0;
@@ -36,13 +37,13 @@ impl Arrival {
     }
 
     /// The two lines: the name, and what kind of arrival it is.
-    pub fn lines(&self) -> (String, &'static str) {
+    pub fn lines(&self) -> (Localized, Localized) {
         (
-            self.name.to_uppercase(),
+            pbd_core::locale::caps(&Localized::verbatim(self.name.clone())),
             if self.fresh {
-                "A NEW WORLD"
+                tr("arrival.new_world")
             } else {
-                "WELCOME BACK"
+                tr("arrival.welcome_back")
             },
         )
     }
@@ -91,7 +92,13 @@ pub fn banner(
         }
         let (name, kind) = arrival.lines();
         info!("ARRIVE banner '{name}' {kind}");
-        spawn(&mut commands, &name, kind);
+        // One banner at a time: a world opened while the last one's banner
+        // is still up (a launch into a new world opens the last world first)
+        // takes it down, or the two names are drawn over each other.
+        for entity in &banners {
+            commands.entity(entity).despawn();
+        }
+        spawn(&mut commands, &name, &kind);
         arrival.shown_s = Some(0.0);
         return;
     };
@@ -176,7 +183,7 @@ mod tests {
     fn a_new_world_says_so_and_a_saved_one_welcomes_back() {
         assert_eq!(
             Arrival::new("Cave", true).lines(),
-            ("CAVE".to_string(), "A NEW WORLD")
+            (Localized::verbatim("CAVE"), tr("arrival.new_world"))
         );
         assert_eq!(Arrival::new("Cave", false).lines().1, "WELCOME BACK");
     }

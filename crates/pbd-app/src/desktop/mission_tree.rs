@@ -13,8 +13,87 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::missions::{MissionChain, Missions};
+use pbd_app::town_missions::{TownChain, TownMissions};
 use pbd_app::ui_kit::{self, KitText, Set, UiKit};
-use pbd_core::missions::{Chain, Standing};
+use pbd_app::ui_kit::{Localized, tr};
+use pbd_core::locale::tr_with;
+use pbd_core::missions::{Chain, Progress, Standing};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Which of the two trees the tab shows (`town-missions-tree` design 6):
+/// the starter tree, or the town tree once it is open.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShownTree {
+    #[default]
+    Starter,
+    Town,
+}
+
+/// The progress of a tree not yet open: nothing done.
+static NOTHING: Progress = Progress {
+    done: BTreeSet::new(),
+    counts: BTreeMap::new(),
+    seen: BTreeMap::new(),
+    focus: None,
+};
+
+/// The tree the tab shows, and its progress.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct Trees<'w> {
+    pub shown: Res<'w, ShownTree>,
+    starter_chain: Res<'w, MissionChain>,
+    starter: Res<'w, Missions>,
+    town_chain: Option<Res<'w, TownChain>>,
+    town: Option<Res<'w, TownMissions>>,
+}
+
+impl Trees<'_> {
+    /// Whether the town tree is open in this world.
+    pub fn town_open(&self) -> bool {
+        self.town_chain.is_some() && self.town.as_deref().is_some_and(TownMissions::is_open)
+    }
+
+    fn town_shown(&self) -> bool {
+        *self.shown == ShownTree::Town && self.town_chain.is_some()
+    }
+
+    /// The shown tree.
+    pub fn chain(&self) -> &Chain {
+        match &self.town_chain {
+            Some(t) if self.town_shown() => &t.0,
+            _ => &self.starter_chain.0,
+        }
+    }
+
+    /// The shown tree's progress.
+    pub fn progress(&self) -> &Progress {
+        if self.town_shown() {
+            self.town
+                .as_deref()
+                .and_then(TownMissions::progress)
+                .unwrap_or(&NOTHING)
+        } else {
+            &self.starter.progress
+        }
+    }
+
+    /// Whether what the tab draws moved.
+    pub fn changed(&self) -> bool {
+        self.shown.is_changed()
+            || self.starter.is_changed()
+            || self.town.as_ref().is_some_and(|t| t.is_changed())
+    }
+}
+
+/// The tab's tree, rebuilt when the other tree is shown.
+#[derive(Component)]
+pub struct TreeLayer;
+/// A plaque over the tab that shows one of the two trees.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub struct TreeTab(pub ShownTree);
+/// The two plaques' row.
+#[derive(Component)]
+pub struct TreeTabs;
 
 /// One zoom level of the tree: a designed view, not a scale. The cards are
 /// always drawn at the UI kit's own scale (the tree's `UiTransform` scale is
@@ -313,16 +392,25 @@ pub fn rezoom(pan: Vec2, at: Vec2, from: &Level, to: &Level) -> Vec2 {
     at - to.origin() - u * to.pitch()
 }
 
-/// The branches in M33's order, with the names drawn over them.
-pub const BRANCHES: [(&str, &str); 8] = [
-    ("trunk", "HANDS TO TOOLS"),
-    ("fishing", "FISHING"),
-    ("farming", "FARMING"),
-    ("herding", "HERDING"),
-    ("mining", "MINING & SMELTING"),
-    ("cooking", "COOKING"),
-    ("light", "LIGHT & BUILDING"),
-    ("about", "GETTING ABOUT"),
+/// The branches in M33's order, with the keys of the names drawn over them.
+pub const BRANCHES: [(&str, &str); 15] = [
+    ("trunk", "mission_tree.branch.hands_tools"),
+    ("fishing", "mission_tree.branch.fishing"),
+    ("farming", "mission_tree.branch.farming"),
+    ("herding", "mission_tree.branch.herding"),
+    ("mining", "mission_tree.branch.mining_smelting"),
+    ("cooking", "mission_tree.branch.cooking"),
+    ("light", "mission_tree.branch.light_building"),
+    ("about", "mission_tree.branch.getting_about"),
+    // The town tree's (`town-missions-tree` design 2).
+    ("town", "mission_tree.branch.town"),
+    ("trade", "mission_tree.branch.trade"),
+    ("jobs", "mission_tree.branch.jobs"),
+    ("roads", "mission_tree.branch.roads"),
+    ("carts", "mission_tree.branch.carts"),
+    ("houses", "mission_tree.branch.houses_logs"),
+    // `furniture` design 12.
+    ("carpentry", "mission_tree.branch.carpentry"),
 ];
 
 fn branch_rank(key: &str) -> usize {
@@ -332,11 +420,11 @@ fn branch_rank(key: &str) -> usize {
         .unwrap_or(BRANCHES.len())
 }
 
-fn branch_name(key: &str) -> &'static str {
+fn branch_name(key: &str) -> Localized {
     BRANCHES
         .iter()
         .find(|(k, _)| *k == key)
-        .map_or("", |(_, n)| n)
+        .map_or_else(Localized::empty, |(_, n)| tr(n))
 }
 
 /// Each mission's column and row, by its place in the chain.
@@ -417,6 +505,9 @@ pub struct TreeViewport;
 pub struct TreeWorld;
 #[derive(Component)]
 pub struct Card(pub usize);
+/// An icon on a mission's card, faded with it while the mission is locked.
+#[derive(Component)]
+pub struct CardIconOf(pub usize);
 #[derive(Component)]
 pub struct CardTitle(pub usize);
 #[derive(Component)]
@@ -474,15 +565,39 @@ fn body(text: &str, size: f32, colour: Color) -> impl Bundle {
     menu::body(text.to_string(), size, colour)
 }
 
-pub fn spawn(
-    mut commands: Commands,
-    kit: Res<UiKit>,
-    chain: Res<MissionChain>,
-    assets: Res<AssetServer>,
-) {
-    let kit = &*kit;
-    let assets = &*assets;
-    let chain = &chain.0;
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>, trees: Trees, assets: Res<AssetServer>) {
+    spawn_tree(&mut commands, &kit, trees.chain(), &assets);
+    // The two trees' plaques, top left, over whichever is drawn; shown once
+    // the town tree is open.
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(6),
+                top: px(10),
+                column_gap: px(4),
+                display: Display::None,
+                ..default()
+            },
+            GlobalZIndex(12),
+            TreeTabs,
+        ))
+        .with_children(|row| {
+            for (tree, words) in [
+                (ShownTree::Starter, tr("mission_tree.tree.starter")),
+                (ShownTree::Town, tr("mission_tree.tree.town")),
+            ] {
+                row.spawn((ui_kit::plaque(&kit, Set::Oak, 64.0), TreeTab(tree)))
+                    .with_children(|p| {
+                        p.spawn(ui_kit::plaque_label(Set::Oak, words));
+                    });
+            }
+        });
+}
+
+/// Build the tab's tree for `chain`: the cards, lines, plaques, side panel
+/// and hover cards.
+fn spawn_tree(commands: &mut Commands, kit: &UiKit, chain: &Chain, assets: &AssetServer) {
     // `relayout` sizes and places every part for the view's level.
     commands
         .spawn((
@@ -490,6 +605,7 @@ pub fn spawn(
             BackgroundColor(ui_kit::NIGHT),
             GlobalZIndex(11),
             Panel(Screen::Missions),
+            TreeLayer,
         ))
         .with_children(|layer| {
             layer
@@ -555,7 +671,11 @@ fn spawn_edges(world: &mut ChildSpawnerCommands, chain: &Chain) {
 }
 
 fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
-    for (n, (key, name)) in BRANCHES.iter().enumerate() {
+    // Numbered within the tree drawn, from its trunk's nought.
+    let present = BRANCHES
+        .iter()
+        .filter(|(key, _)| chain.missions.iter().any(|m| m.branch == *key));
+    for (n, (key, name)) in present.enumerate() {
         let Some(first) = chain.missions.iter().position(|m| m.branch == *key) else {
             continue;
         };
@@ -570,7 +690,13 @@ fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
                 BranchLabel(first),
             ))
             .with_children(|plaque| {
-                plaque.spawn(KitText::new(format!("{n} · {name}"), ui_kit::OAK_LABEL));
+                plaque.spawn(KitText::new(
+                    tr_with(
+                        "mission_tree.branch_label",
+                        &[("number", &n), ("name", &tr(name))],
+                    ),
+                    ui_kit::OAK_LABEL,
+                ));
             });
     }
 }
@@ -594,11 +720,15 @@ fn spawn_card(
             position_type: PositionType::Absolute,
             flex_direction: FlexDirection::Column,
             row_gap: px(2),
-            border: UiRect::all(px(1)),
+            // Wide enough to see zoomed out (`mission-playthrough` 3.5).
+            border: UiRect::all(px(2)),
             overflow: Overflow::clip(),
             ..default()
         },
         BorderColor::all(Color::NONE),
+        // The selected card's ring, drawn outside the frame: a border sits
+        // under the stone frame's picture and showed only at its corners.
+        Outline::new(px(2), px(1), Color::NONE),
         Card(i),
     ));
     if tip {
@@ -646,7 +776,12 @@ fn spawn_card(
             ))
             .with_children(|big| {
                 if let Some(icon) = icon.clone() {
-                    big.spawn((ImageNode::new(icon), Node::default(), CardBig));
+                    big.spawn((
+                        ImageNode::new(icon),
+                        Node::default(),
+                        CardBig,
+                        CardIconOf(i),
+                    ));
                 }
             });
         }
@@ -675,6 +810,7 @@ fn spawn_card(
                             ..default()
                         },
                         CardIcon,
+                        CardIconOf(i),
                     ));
                     part(&mut e);
                 }
@@ -682,7 +818,7 @@ fn spawn_card(
                 part(&mut e);
             });
             let mut e = head.spawn((
-                KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                 Node {
                     margin: UiRect::left(px(3)),
                     flex_shrink: 0.0,
@@ -770,16 +906,16 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
                 head.spawn((body("", 13.0, ui_kit::TITLE), SideText::Title));
                 head.spawn((ui_kit::plaque(kit, Set::Stone, 18.0), SideClose))
                     .with_children(|p| {
-                        p.spawn(ui_kit::plaque_label(Set::Stone, "X"));
+                        p.spawn(ui_kit::plaque_label(Set::Stone, tr("mission_tree.close")));
                     });
             });
             side.spawn((body("", 9.0, ui_kit::LABEL_DIM), SideText::Sub));
             for (heading, text) in [
-                ("OBJECTIVES", SideText::Objectives),
-                ("HELP", SideText::Help),
-                ("UNLOCKS", SideText::Unlocks),
-                ("NEEDS", SideText::Needs),
-                ("OPENS NEXT", SideText::Next),
+                (tr("mission_tree.objectives"), SideText::Objectives),
+                (tr("mission_tree.help"), SideText::Help),
+                (tr("mission_tree.unlocks"), SideText::Unlocks),
+                (tr("mission_tree.needs"), SideText::Needs),
+                (tr("mission_tree.opens_next"), SideText::Next),
             ] {
                 side.spawn((
                     KitText::new(heading, ui_kit::TEXT_DIM).shadow(ui_kit::INK),
@@ -795,13 +931,13 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
 
 /// What a card's badge says, and its colour. A locked card has none: its dim
 /// silhouettes say so (owner, 2026-11-16: "we dont need locked, its obvious").
-fn badge(standing: Standing, now: bool) -> (&'static str, Color) {
+fn badge(standing: Standing, now: bool) -> (Localized, Color) {
     match standing {
-        Standing::Done => ("DONE", ui_kit::RUNE),
-        Standing::Open if now => ("NOW", ui_kit::TITLE),
-        Standing::Open => ("OPEN", ui_kit::TEXT),
-        Standing::Locked => ("", ui_kit::LABEL_DIM),
-        Standing::Pending => ("NOT YET", ui_kit::LABEL_DIM),
+        Standing::Done => (tr("mission_tree.done"), ui_kit::RUNE),
+        Standing::Open if now => (tr("mission_tree.now"), ui_kit::TITLE),
+        Standing::Open => (tr("mission_tree.open"), ui_kit::TEXT),
+        Standing::Locked => (Localized::empty(), ui_kit::LABEL_DIM),
+        Standing::Pending => (tr("mission_tree.not_yet"), ui_kit::LABEL_DIM),
     }
 }
 
@@ -812,7 +948,7 @@ fn recipe_name(recipes: &pbd_app::config::Recipes, code: &str) -> String {
         .recipes
         .iter()
         .find(|r| r.code == code)
-        .map_or(code.to_string(), |r| r.name.clone())
+        .map_or(code.to_string(), |r| r.name().into_string())
 }
 
 fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {
@@ -824,17 +960,87 @@ fn set_text(text: &mut Text, colour: &mut TextColor, words: String, c: Color) {
     }
 }
 
+/// Show the other tree: the tab's tree rebuilt for it and its view opened
+/// afresh. A world whose town tree is not open shows the starter tree.
+pub fn switch_tree(
+    mut commands: Commands,
+    kit: Res<UiKit>,
+    assets: Res<AssetServer>,
+    trees: Trees,
+    layers: Query<Entity, With<TreeLayer>>,
+    mut view: ResMut<TreeView>,
+    mut built: Local<Option<ShownTree>>,
+) {
+    let want = if trees.town_open() {
+        *trees.shown
+    } else {
+        ShownTree::Starter
+    };
+    if built.is_none() {
+        *built = Some(ShownTree::Starter);
+    }
+    if *built == Some(want) {
+        return;
+    }
+    *built = Some(want);
+    for layer in &layers {
+        commands.entity(layer).despawn();
+    }
+    let chain = if want == ShownTree::Town && trees.town_open() {
+        trees.chain()
+    } else {
+        &trees.starter_chain.0
+    };
+    spawn_tree(&mut commands, &kit, chain, &assets);
+    *view = TreeView::default();
+}
+
+/// The two trees' plaques: shown on the tab once the town tree is open, the
+/// shown tree's latched; a press shows its tree.
+pub fn tree_tabs(
+    screen: Res<Screen>,
+    (town, town_chain): (Option<Res<TownMissions>>, Option<Res<TownChain>>),
+    mut shown: ResMut<ShownTree>,
+    mut row: Query<&mut Node, With<TreeTabs>>,
+    mut tabs: Query<(&TreeTab, &Interaction, &mut ui_kit::Plaque)>,
+) {
+    let town_open = town_chain.is_some() && town.as_deref().is_some_and(TownMissions::is_open);
+    let on = *screen == Screen::Missions && town_open;
+    for mut node in &mut row {
+        let want = if on { Display::Flex } else { Display::None };
+        if node.display != want {
+            node.display = want;
+        }
+    }
+    let mut pick = None;
+    for (tab, interaction, mut plaque) in &mut tabs {
+        let latched = tab.0 == *shown;
+        if plaque.latched != latched {
+            plaque.latched = latched;
+        }
+        if on && *interaction == Interaction::Pressed && tab.0 != *shown {
+            pick = Some(tab.0);
+        }
+    }
+    if let Some(tree) = pick {
+        *shown = tree;
+    }
+}
+
 /// Keep the cards, the lines and the side panel current.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
 pub fn paint(
-    missions: Res<Missions>,
-    chain: Res<MissionChain>,
+    trees: Trees,
     screen: Res<Screen>,
     view: Res<TreeView>,
     recipes: Option<Res<pbd_app::config::Recipes>>,
     kit: Res<UiKit>,
-    mut cards: Query<(&Card, &mut BorderColor)>,
+    mut cards: Query<
+        (&Card, &mut Outline, Option<&mut ImageNode>),
+        (Without<CardCheck>, Without<CardIconOf>),
+    >,
+    mut card_icons: Query<(&CardIconOf, &mut ImageNode), (Without<Card>, Without<CardCheck>)>,
     mut texts: ParamSet<(
         Query<(&CardTitle, &mut Text, &mut TextColor)>,
         Query<(&CardSub, &mut Text, &mut TextColor)>,
@@ -843,18 +1049,19 @@ pub fn paint(
         Query<(&SideText, &mut Text, &mut TextColor)>,
     )>,
     mut badges: Query<(&CardBadge, &mut KitText)>,
-    mut checks: Query<(&CardCheck, &mut ImageNode)>,
+    mut checks: Query<(&CardCheck, &mut ImageNode), (Without<Card>, Without<CardIconOf>)>,
     mut edges: Query<(&Edge, &mut BackgroundColor)>,
     mut side: Query<&mut Node, With<SidePanel>>,
+    added: Query<(), Added<Card>>,
 ) {
     if *screen != Screen::Missions
-        || !(missions.is_changed() || screen.is_changed() || view.is_changed())
+        || !(trees.changed() || screen.is_changed() || view.is_changed() || !added.is_empty())
     {
         return;
     }
-    let chain = &chain.0;
-    let progress = &missions.progress;
-    let current = progress.current(chain).map(|m| m.id.clone());
+    let chain = trees.chain();
+    let progress = trees.progress();
+    let current = progress.focused(chain).map(|m| m.id.clone());
     let standing = |i: usize| {
         let m = &chain.missions[i];
         (
@@ -863,25 +1070,43 @@ pub fn paint(
         )
     };
     let title_of = |id: &str| chain.get(id).map_or(id.to_string(), |m| m.title.clone());
-    for (card, mut border) in &mut cards {
-        let (s, now) = standing(card.0);
-        let c = if view.selected == Some(card.0) {
-            ui_kit::LABEL
-        } else if now {
+    // The selected card is framed yellow, the one the player is on when none
+    // is selected; every other card plain, a locked one faded (owner,
+    // 2026-11-20: "Locked nodes should be faded. Selected node should be
+    // yellow.. all other nodes should be regular").
+    let marked = view
+        .selected
+        .or_else(|| (0..chain.missions.len()).find(|&i| standing(i).1));
+    let faded = |s: Standing| if s == Standing::Locked { 0.35 } else { 1.0 };
+    for (card, mut outline, image) in &mut cards {
+        let (s, _) = standing(card.0);
+        let c = if marked == Some(card.0) {
             ui_kit::TITLE
         } else {
             Color::NONE
         };
-        if border.top != c {
-            *border = BorderColor::all(c);
+        if outline.color != c {
+            outline.color = c;
         }
-        let _ = s;
+        if let Some(mut image) = image {
+            let want = image.color.with_alpha(faded(s));
+            if image.color != want {
+                image.color = want;
+            }
+        }
+    }
+    for (of, mut image) in &mut card_icons {
+        let (s, _) = standing(of.0);
+        let want = image.color.with_alpha(faded(s));
+        if image.color != want {
+            image.color = want;
+        }
     }
     for (b, mut text) in &mut badges {
         let (s, now) = standing(b.0);
         let (word, colour) = badge(s, now);
         if text.text != word || text.colour != colour {
-            text.text = word.to_string();
+            text.text = word;
             text.colour = colour;
         }
     }
@@ -901,9 +1126,9 @@ pub fn paint(
         let words = if s == Standing::Locked {
             let mut gates: Vec<String> = m.needs.iter().map(|id| title_of(id)).collect();
             gates.extend(m.after.iter().map(|id| title_of(id)));
-            format!("after {}", gates.join(" + "))
+            tr_with("mission_tree.after", &[("missions", &gates.join(" + "))]).into()
         } else {
-            branch_name(&m.branch).to_string()
+            branch_name(&m.branch).into_string()
         };
         set_text(&mut text, &mut colour, words, ui_kit::LABEL_DIM);
     }
@@ -942,7 +1167,11 @@ pub fn paint(
                         .map_or(code.clone(), |r| recipe_name(r, code))
                 })
                 .collect();
-            format!("UNLOCKS {}", names.join(", "))
+            tr_with(
+                "mission_tree.unlocks_list",
+                &[("recipes", &names.join(", "))],
+            )
+            .into()
         };
         let (s, _) = standing(u.0);
         let c = if s == Standing::Done {
@@ -967,15 +1196,12 @@ pub fn paint(
         let m = &chain.missions[e.0];
         let parent_done = m.needs.first().is_some_and(|p| progress.is_done(p));
         let (s, _) = standing(e.0);
-        let lit = view
-            .selected
-            .is_some_and(|sel| sel == e.0 || m.needs.first().and_then(|p| index(p)) == Some(sel));
-        let c = if lit {
-            ui_kit::LABEL
-        } else if parent_done && s == Standing::Done {
+        // Blue where the mission it leads to is unlocked, plain where it is
+        // not; no yellow lines (owner, 2026-11-20: "Connections are other
+        // blue or not based on unlocks.. yellow is too confusing").
+        let _ = (index, s);
+        let c = if parent_done {
             ui_kit::RUNE_DIM
-        } else if parent_done {
-            ui_kit::TITLE
         } else {
             ui_kit::STONE_MID.with_alpha(0.6)
         };
@@ -1005,7 +1231,7 @@ pub fn paint(
             SideText::Title => (m.title.clone(), ui_kit::TITLE),
             SideText::Sub => (
                 match badge(s, now).0 {
-                    "" => branch_name(&m.branch).to_string(),
+                    word if word.is_empty() => branch_name(&m.branch).into_string(),
                     word => format!("{} · {}", branch_name(&m.branch), word),
                 },
                 ui_kit::LABEL_DIM,
@@ -1020,7 +1246,11 @@ pub fn paint(
                         } else {
                             counts.get(k).copied().unwrap_or(0)
                         };
-                        let tick = if n >= o.count { "[x]" } else { "[ ]" };
+                        let tick = if n >= o.count {
+                            tr("mission_tree.x")
+                        } else {
+                            Localized::verbatim("[ ]")
+                        };
                         format!("{tick} {} {n}/{}", o.label, o.count)
                     })
                     .collect::<Vec<_>>()
@@ -1091,8 +1321,13 @@ fn centred(lv: &Level, at: (usize, usize), size: Vec2) -> Vec2 {
 #[allow(clippy::too_many_arguments)]
 pub fn steer(
     screen: Res<Screen>,
-    missions: Res<Missions>,
-    chain: Res<MissionChain>,
+    (mut missions, chain, mut town, town_chain, shown): (
+        ResMut<Missions>,
+        Res<MissionChain>,
+        Option<ResMut<TownMissions>>,
+        Option<Res<TownChain>>,
+        Res<ShownTree>,
+    ),
     mouse: Res<ButtonInput<MouseButton>>,
     mut wheel: MessageReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -1124,19 +1359,35 @@ pub fn steer(
     let k = scale * window.scale_factor();
     let size = Vec2::new(window.width(), window.height()) / scale;
     let pointer = window.cursor_position().map(|p| p / scale);
+    // The shown tree and its progress (`town-missions-tree` design 6).
+    let town_shown = *shown == ShownTree::Town
+        && town_chain.is_some()
+        && town.as_deref().is_some_and(TownMissions::is_open);
+    let tree: &Chain = match &town_chain {
+        Some(t) if town_shown => &t.0,
+        _ => &chain.0,
+    };
+    let progress: Progress = if town_shown {
+        town.as_deref()
+            .and_then(TownMissions::progress)
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        missions.progress.clone()
+    };
+    let moved = missions.is_changed() || town.as_ref().is_some_and(|t| t.is_changed());
     let mut next = view.clone();
-    if !next.placed || (!next.touched && missions.is_changed()) {
+    if !next.placed || (!next.touched && moved) {
         // Open on the current mission, until the player moves the view.
-        let at = layout(&chain.0);
-        let current = missions
-            .progress
-            .current(&chain.0)
-            .and_then(|m| chain.0.missions.iter().position(|n| n.id == m.id))
+        let at = layout(tree);
+        let current = progress
+            .current(tree)
+            .and_then(|m| tree.missions.iter().position(|n| n.id == m.id))
             .unwrap_or(0);
         if !next.placed
             && let Some(id) = launch.tree_select.as_deref()
         {
-            next.selected = chain.0.missions.iter().position(|m| m.id == id);
+            next.selected = tree.missions.iter().position(|m| m.id == id);
         }
         next.level = launch.tree_zoom.unwrap_or(OPEN_LEVEL).min(LEVELS.len() - 1);
         next.pan = centred(
@@ -1145,7 +1396,7 @@ pub fn steer(
             size,
         );
         if !next.placed && launch.tree_select.as_deref() == Some("fit") {
-            next = fitted(&chain.0, size, next);
+            next = fitted(tree, size, next);
             next.touched = true;
         }
         next.placed = true;
@@ -1174,18 +1425,26 @@ pub fn steer(
             }
         }
     }
+    // The card pressed before one merely hovered, as the pack does.
     let on_card = cards
         .iter()
-        .find(|(_, i)| **i != Interaction::None)
+        .find(|(_, i)| **i == Interaction::Pressed)
+        .or_else(|| cards.iter().find(|(_, i)| **i != Interaction::None))
         .map(|(c, _)| c.0);
-    if mouse.just_pressed(MouseButton::Left)
-        && (over || on_card.is_some())
-        && let Some(at) = pointer
-    {
-        *press = Some((at, on_card, false));
+    // A press on a card counts with or without the pointer over the window
+    // (the showcase bot presses the card itself, as it does every other
+    // control; a pointer it set was taken over by the real mouse, and the
+    // click became a pan). Without a pointer, the press cannot become a pan.
+    if mouse.just_pressed(MouseButton::Left) && (over || on_card.is_some()) {
+        if let Some(at) = pointer {
+            *press = Some((at, on_card, false));
+        } else if on_card.is_some() {
+            *press = Some((Vec2::NAN, on_card, false));
+        }
     }
     if let (Some((from, _, moved)), Some(at)) = (press.as_mut(), pointer)
         && mouse.pressed(MouseButton::Left)
+        && !from.is_nan()
     {
         let d = at - *from;
         if *moved || d.length() > 3.0 {
@@ -1199,11 +1458,51 @@ pub fn steer(
         && let Some((_, card, moved)) = press.take()
         && !moved
     {
-        next.selected = card;
+        // A done mission is not picked: nothing is left to do on it, so it
+        // cannot be the one the player is on (owner, 2026-11-20: "Selecting
+        // a completed mission node is not possible because it's already
+        // completed"). Its hover card still shows it.
+        let done = card.is_some_and(|i| {
+            tree.missions
+                .get(i)
+                .is_some_and(|m| progress.standing(tree, m) == Standing::Done)
+        });
+        if !done {
+            next.selected = card;
+        }
+        // Picking an open mission makes it the one the player is on
+        // (`mission-playthrough` 3.5), on either tree; the other tree's
+        // focus is cleared, so the HUD has one.
+        if let Some(m) = card.filter(|_| !done).and_then(|i| tree.missions.get(i))
+            && progress.standing(tree, m) == Standing::Open
+        {
+            let id = m.id.clone();
+            if town_shown {
+                if let Some(t) = town.as_deref_mut()
+                    && let Some(p) = t.progress_mut()
+                    && p.focus_on(tree, &id)
+                {
+                    t.refocused = true;
+                    if missions.progress.focus.take().is_some() {
+                        missions.refocused = true;
+                    }
+                }
+            } else if missions.progress.focus_on(tree, &id) {
+                missions.refocused = true;
+                if let Some(t) = town.as_deref_mut()
+                    && t.progress().is_some_and(|p| p.focus.is_some())
+                {
+                    if let Some(p) = t.progress_mut() {
+                        p.focus = None;
+                    }
+                    t.refocused = true;
+                }
+            }
+        }
     }
     // F fits the whole tree to the screen.
     if keys.just_pressed(KeyCode::KeyF) {
-        next = fitted(&chain.0, size, next);
+        next = fitted(tree, size, next);
         next.touched = true;
     }
     if close.iter().any(|i| *i == Interaction::Pressed) {
@@ -1213,7 +1512,7 @@ pub fn steer(
     // Bounds (M33, owner 2026-11-16: "a max bounds so the user doesnt get
     // lost"): the tree may slide only so far that some card keeps 40 px in
     // view.
-    next.pan = bounded(next.pan, &LEVELS[next.level], &layout(&chain.0), size);
+    next.pan = bounded(next.pan, &LEVELS[next.level], &layout(tree), size);
     next.pan = snap(next.pan, k);
     if next != *view {
         *view = next;
@@ -1260,9 +1559,10 @@ pub fn hover_tip(
     ui_scale: Option<Res<UiScale>>,
     cards: Query<(&Card, &Interaction), Without<TipPart>>,
     mut tips: Query<(&TipCard, &mut Node)>,
-    chain: Res<MissionChain>,
+    trees: Trees,
     launch: Res<super::Launch>,
 ) {
+    let chain = trees.chain();
     let lv = &LEVELS[view.level.min(LEVELS.len() - 1)];
     let zoomed_out = lv.big > 0.0;
     let scale = ui_scale.map_or(1.0, |s| s.0);
@@ -1281,9 +1581,9 @@ pub fn hover_tip(
     if *screen == Screen::Missions
         && zoomed_out
         && let Some(id) = launch.tree_hover.as_deref()
-        && let Some(i) = chain.0.missions.iter().position(|m| m.id == id)
+        && let Some(i) = chain.missions.iter().position(|m| m.id == id)
     {
-        let at = layout(&chain.0);
+        let at = layout(chain);
         hovered = Some(i);
         pointer = Some(view.pan + lv.card(at[i]) + Vec2::new(lv.cw, lv.ch) / 2.0);
     }
@@ -1338,7 +1638,7 @@ fn fitted(chain: &Chain, size: Vec2, mut view: TreeView) -> TreeView {
 #[allow(clippy::type_complexity)]
 pub fn relayout(
     view: Res<TreeView>,
-    chain: Res<MissionChain>,
+    trees: Trees,
     added: Query<(), Added<Card>>,
     mut last: Local<Option<usize>>,
     mut nodes: ParamSet<(
@@ -1367,7 +1667,7 @@ pub fn relayout(
     }
     *last = Some(view.level);
     let lv = &LEVELS[view.level.min(LEVELS.len() - 1)];
-    let chain = &chain.0;
+    let chain = trees.chain();
     let at = layout(chain);
     let (cols, rows) = extent(&at);
     for mut node in &mut nodes.p4() {

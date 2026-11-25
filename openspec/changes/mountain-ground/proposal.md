@@ -17,8 +17,9 @@ Measured in version 10 (`design.md`, "Measured"):
 
 ## What Changes
 
-- **Generator version 11** (`TENEBRIS_V11`, beside V4-V10, which stay cell
-  for cell): a Mountains cell that is flat (no neighbour more than a metre
+- **Generator version 13** (`TENEBRIS_V13`, beside V4-V12, which stay cell
+  for cell; version 11 went to `swamps`, 2026-11-18, so this builds on
+  version 11's ground): a Mountains cell that is flat (no neighbour more than a metre
   off) takes alpine grass or dirt below a ragged snow line and snow above
   it; steep cells stay rock; the snow line comes down onto the flats.
 - **Mountain grass and dirt drawn as alpine soil**, not as the mountains
@@ -33,9 +34,64 @@ Measured in version 10 (`design.md`, "Measured"):
 ## Impact
 
 - `pbd-core`: `planet_gen.rs` (V11, a slope test in `top_material`),
-  `terrain.rs` (`GENERATOR_VERSION = 11`), a digest test of V10 taken first.
+  `terrain.rs` (`GENERATOR_VERSION = 12`), a digest test of V11 taken first.
 - `pbd-app`: `planet_surface.wgsl` (rock tile per cell, alpine grass and
   soil, risers' far colour).
 - Saves: no change to any existing world (CLAUDE.md, "Saved games survive
-  every change"); new worlds are made on version 11.
+  every change"); new worlds are made on version 13.
 - Look changes go to the owner with before-and-after captures.
+
+## Approved (2026-11-20): built as generator version 15
+
+The owner, in chat: "approve sand and mountains, and rivers". The Mountains
+tab (M13 version 6) is approved for the game. Version 14 went to
+`ocean-environments`' sea cells, so this change is built as **generator
+version 15** on version 14's config (design decision 1's note): a new world
+has the sea cells and the mountain ground, 13 stays unused, and every world
+made on 4 to 14 keeps its ground. Where this file and the tasks say "version
+13", read 15.
+
+## Mountain flora and features (added 2026-11-19)
+
+The owner, 2026-11-19, on M13: "nice, can you add more stuff to the mountain
+biomes? add stuff to foliage detail playground".
+
+Read in the code (design 5): a mountain today grows nothing of its own. Its
+trees are 0 in 256 cells in every generator version (`TreeTable::V4`,
+`V10`), it has no fruit, and its clutter rolls only pebbles and, on snow,
+dead shrubs, because the green pieces need grass and a version 12 mountain
+has none. Its tufts take the scree tile's greys.
+
+**Recommended: one change, not two.** The flora goes into this change rather
+than a new `mountain-flora`, because what grows where on a mountain hangs on
+what version 13 lays down: the flats, the alpine grass and the ragged snow
+line. Version 13 is not built yet, so the generated parts of the flora (the
+trees, the tree line, the scoured ridges) ride in the same version and the
+same digest, instead of a version 15 that repeats its rules
+(`ocean-environments` holds 14). Recommendation taken (ask only with
+screenshots); the look goes to the owner on M13's new Mountains tab.
+
+What changes, by altitude band (design 5 to 14):
+
+- **Montane forest edge**: firs and spruce on the lower flats, thinning
+  upward to a tree line; **krummholz**, stunted wind-bent conifers, at the
+  line. Version 13 (whether a tree stands on a cell is generation).
+- **Alpine meadow** on the flats: an alpine turf tile and its pixel tufts,
+  cushion plants, small alpine flowers in four low-saturation colours
+  (gentian blue-violet, edelweiss white, yellow, pink), dwarf juniper,
+  heather and bilberry bushes. Draw-time, in the existing clutter slots, so
+  no new vertices.
+- **Rock**: scree below cliffs with boulders, lichen patches (orange,
+  yellow-green, grey) drawn into the rock texels, moss in seeps. Draw-time.
+- **Snow zone**: snow patches lingering on shaded flats below the line, ice
+  on the high flats, wind-scoured bare rock on the ridges, a rare hardy flower
+  at the snow edge. The patches and ice are draw-time; the scoured ridges are
+  version 13.
+- **Proposed, not in this change's build**: mountain tarns (version 13,
+  still water in closed basins, if `water-flow` agrees), cairns on summits,
+  bilberries as a forage item for cooking, and mountain goats, marmots and
+  eagles (a note for animal work). No falling water: a waterfall's look is
+  designed only in its own mockup (CLAUDE.md).
+
+Old worlds keep their ground and their trees; the draw-time parts reach every
+world, as decision 3's rock variety does, and are a look change shown first.

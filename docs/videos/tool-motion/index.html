@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools in Hand Videos</title>
+<meta name="description" content="Gate page for the Tools in Hand mockup (M36): a technical montage of the dig, chop, cast and hand motion, today against proposed, and a clip per topic.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light dark;
+    --ground: #f3f1ec;
+    --panel: #ffffff;
+    --line: #d9d4ca;
+    --text: #1d2226;
+    --muted: #5d676e;
+    --brass: #8a5a00;
+    --shade: rgba(20, 24, 28, 0.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #12161a;
+      --panel: #1a2026;
+      --line: #2d3740;
+      --text: #e4e8ea;
+      --muted: #8d99a2;
+      --brass: #d9a441;
+      --shade: rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #12161a;
+    --panel: #1a2026;
+    --line: #2d3740;
+    --text: #e4e8ea;
+    --muted: #8d99a2;
+    --brass: #d9a441;
+    --shade: rgba(0, 0, 0, 0.6);
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--ground); color: var(--text); margin: 0; }
+  body { font: 15px/1.55 "IBM Plex Sans", system-ui, sans-serif; padding: 10px 16px 40px; overflow-x: hidden; }
+  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+  header { display: grid; gap: 4px; }
+  .headrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  h1 { font: 700 28px/1.1 "IBM Plex Sans", system-ui, sans-serif; margin: 0; letter-spacing: 0.02em; }
+  h2 { font: 700 18px/1.2 "IBM Plex Sans", system-ui, sans-serif; margin: 0; letter-spacing: 0.03em; }
+  .links { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 500 12px/1.4 "IBM Plex Mono", ui-monospace, monospace; }
+  .links a { color: inherit; }
+  a { color: var(--brass); }
+  button {
+    font: 500 13px/1 "IBM Plex Mono", monospace; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 11px; cursor: pointer; min-height: 32px;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .info { width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; font: 700 14px/1 "IBM Plex Mono", monospace; color: var(--brass); flex: none; }
+  .clip { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 8px; min-width: 0; }
+  .clip .top { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .clip .meta { font: 12px "IBM Plex Mono", monospace; color: var(--muted); }
+  video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #0b0f13; border-radius: 4px; }
+  .clips { display: grid; gap: 14px; min-width: 0; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  dialog.modal { width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+  dialog.modal::backdrop { background: var(--shade); }
+  .mbody { padding: 18px 18px 22px; overflow: auto; max-height: calc(100dvh - 26px); display: grid; gap: 10px; }
+  .mbody h3 { margin: 0 34px 0 0; font: 700 18px/1.25 "IBM Plex Sans", system-ui, sans-serif; }
+  .mbody p, .mbody li { color: var(--muted); }
+  .mbody strong, .mbody b { color: var(--text); }
+  .mbody ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+  .mbody code { font: 0.9em "IBM Plex Mono", monospace; color: var(--text); }
+  .mclose { position: absolute; right: 10px; top: 10px; width: 32px; height: 32px; padding: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="headrow"><h1>Tools in Hand: videos</h1><button class="info" data-clip="about" aria-label="About these videos" title="About these videos">i</button></div>
+    <div class="links">
+      <a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a>
+      <a href="https://claude.ai/artifact/CwwZtbNGjZSVtjivQAMuzL" target="_blank" rel="noopener">The live mockup (M36)</a>
+    </div>
+  </header>
+  <main id="clips" class="clips"></main>
+</div>
+
+<dialog class="modal" id="info" aria-labelledby="info-title">
+  <button class="mclose" id="info-close" aria-label="Close">✕</button>
+  <div class="mbody" id="info-body"></div>
+</dialog>
+
+<script>
+(function () {
+  // Each shot: [id, caption, what it shows, the change and decision it demonstrates].
+  const SHOTS = {
+    "dig-pick-today": ["Dig - pickaxe on stone - TODAY", "The game's swing today: one sine wave pitched about the fist, run while the block breaks.", "The before for <code>held-swing</code> (measured in its design)."],
+    "dig-pick-proposed": ["Dig - pickaxe on stone - PROPOSED", "The four-stage stroke on the shoulder arc at its steady beat, the last hit landing on the break, chips and the hit marker.", "<code>held-swing</code> decisions 5 (one steady beat), 6 (the arm swings from the shoulder), 7 (windup, anticipation, hit, recoil)."],
+    "dig-pick-slow": ["Dig - pickaxe - PROPOSED at x0.25", "The same stroke at a quarter speed, the stage name live at the top right.", "<code>held-swing</code> decisions 7 and 8 (the four stages, the principles)."],
+    "dig-shovel": ["Dig - shovel on grass - PROPOSED", "The shovel's own stroke: a steep stab along the handle, angle up, lift the dirt.", "<code>held-swing</code> decision 9 (the shovel digs steeply and scoops)."],
+    "dig-shovel-slow": ["Dig - shovel - PROPOSED at x0.25", "Stab (HIT), angle up about the blade in the ground, lift, at a quarter speed.", "<code>held-swing</code> decision 9."],
+    "chop-today": ["Chop - axe on a trunk - TODAY", "Today's chop: the same sine wave as the pickaxe.", "The before for <code>held-swing</code>."],
+    "chop-proposed": ["Chop - axe on a trunk - PROPOSED", "The STRIKE stroke: raised over the shoulder, a held coil, a fast hit with the arm reaching out to the trunk, the kick back.", "<code>held-swing</code> decisions 5 to 8 (the owner's \"more visceral, more faster\")."],
+    "chop-night": ["Chop - PROPOSED at night", "The same stroke by the lantern on the bank, the moon kept dim.", "CLAUDE.md, mockups are lit at night."],
+    "fish-cast": ["Fish - the cast - PROPOSED", "The overhead cast: the fist raised above the right shoulder, a held coil while the charge fills, the flick down to the water, the tip's wobble, the float landing.", "<code>rod-motion</code> decision 7 (owner, 2026-11-17: \"the casting fishing line the hand should be raised above shoulder\")."],
+    "fish-cast-slow": ["Fish - the cast - PROPOSED at x0.25", "The cast at a quarter speed with its stages named: WINDUP (RAISE), ANTICIPATION (COIL), HIT (FLICK), RECOIL.", "<code>rod-motion</code> decision 7; the <code>animation</code> skill's four stages."],
+    "fish-bite": ["Fish - float, nibble, bite, strike - PROPOSED", "The float out; the tip twitches on each nibble and dips on the bite; the bot clicks and the rod comes up with a fish on.", "<code>rod-motion</code> design 2 (nibble, bite, hooked)."],
+    "fish-fight": ["Fish - the fight - PROPOSED", "Held up, pulled down and rolled while the fish runs, shaking with the tension; the tension meter moves; the fist cranks while the bot reels.", "<code>rod-motion</code> design 2 (hooked: fight, roll, shake, crank)."],
+    "fish-land": ["Fish - landed - PROPOSED", "The end of the same fight: the fish landed, a small dip, the lift, the ease back to rest.", "<code>rod-motion</code> design 2 (caught)."],
+    "fish-snap": ["Fish - a snap - PROPOSED", "Reeling against the fish without easing off: the meter climbs into the red, the line snaps, the rod eases back.", "<code>rod-motion</code> design 2 (snapped, no pop)."],
+    "fish-today": ["Fish - the cast - TODAY", "For contrast: the rod before <code>rod-motion</code> stands still through the charge and the cast.", "The before for <code>rod-motion</code>."],
+    "hand-game": ["Hand - the game's hand, axe grip", "The game's hand, turned by the script as a drag would turn it.", "The before for <code>hand-model</code> and <code>rod-motion</code> design 1."],
+    "hand-proposed": ["Hand - the proposed hand, axe grip", "The proposed hand with its textures and shading, turned the same way.", "<code>hand-model</code>."],
+    "hand-swing": ["Hand - the axe swing on the hand alone", "The proposed stroke played on the hand, the camera stood back to keep the whole motion in view.", "<code>held-swing</code> decisions 6 and 7."],
+    "hand-rod": ["Hand - the rod's phases on the hand alone", "Charge (the raise above the shoulder, the coil), cast, float, nibble, bite, fight and catch, in turn.", "<code>rod-motion</code> design 2 and decision 7."],
+  };
+  const TOPIC = { dig: ["dig-pick-today", "dig-pick-proposed", "dig-pick-slow", "dig-shovel", "dig-shovel-slow"], chop: ["chop-today", "chop-proposed", "chop-night"], fish: ["fish-cast", "fish-cast-slow", "fish-bite", "fish-fight", "fish-land", "fish-snap", "fish-today"], hand: ["hand-game", "hand-proposed", "hand-swing", "hand-rod"] };
+  const CLIPS = [
+    ["montage", "Montage", "tools-in-hand-montage.mp4", [].concat(TOPIC.dig, TOPIC.chop, TOPIC.fish, TOPIC.hand)],
+    ["dig", "Dig", "tools-in-hand-dig.mp4", TOPIC.dig],
+    ["chop", "Chop", "tools-in-hand-chop.mp4", TOPIC.chop],
+    ["fish", "Fish", "tools-in-hand-fish.mp4", TOPIC.fish],
+    ["hand", "Hand", "tools-in-hand-hand.mp4", TOPIC.hand],
+  ];
+  const ABOUT = "<h3 id=\"info-title\">About these videos</h3>" +
+    "<p>The step's video for the Tools in Hand mockup (M36): a technical montage of the motion of the tool in hand, each shot captioned in the frame with what it shows and whether it is today's motion or the proposed one, and a shorter clip per topic. The owner, 2026-11-17: <em>\"make some videos of the animations. they look freaking awesome, though I think the casting fishing line the hand should be raised above shoulder\"</em>. The cast in these videos is the raised, overhead one that note asked for.</p>" +
+    "<p><strong>How they were made.</strong> Recorded from the mockup in headless Chromium on SwiftShader (software rendering: the cloud container has no GPU), its clock stopped and stepped exactly 1/30 s per frame, so the motion and its timing are the mockup's own whatever the render speed. They show the look and the timing, never the frame rate or the smoothness on a real machine. Waiting is never sped up; the x0.25 shots use the mockup's own slow switch and say so.</p>" +
+    "<p><strong>What drives them.</strong> Every motion is the page's own: the Dig and Chop views hold their dig button, the Fish view's bot plays the line through the same controls as the mouse, and the Hand view's own Play button. The only scripted camera move is the Hand view's turn, standing in for a drag.</p>" +
+    "<p>Each clip's <b>i</b> lists its shots in order, with the OpenSpec change and decision each one demonstrates.</p>";
+  const main = document.getElementById("clips");
+  for (const [id, name, file, shots] of CLIPS) {
+    const sec = document.createElement("section");
+    sec.className = "clip"; sec.id = id;
+    sec.innerHTML = `<div class="top"><h2>${name}</h2><button class="info" data-clip="${id}" aria-label="Shots in ${name}" title="Shots in ${name}">i</button></div>` +
+      `<video controls preload="metadata" playsinline src="${file}"></video><div class="meta">${shots.length} shots</div>`;
+    const v = sec.querySelector("video"), meta = sec.querySelector(".meta");
+    v.addEventListener("loadedmetadata", () => { meta.textContent = `${shots.length} shots · ${v.duration.toFixed(0)} s`; });
+    if (id === "montage") main.appendChild(sec);
+    else { let grid = main.querySelector(".grid"); if (!grid) { grid = document.createElement("div"); grid.className = "grid"; main.appendChild(grid); } grid.appendChild(sec); }
+  }
+  const dlg = document.getElementById("info"), body = document.getElementById("info-body");
+  function open(id) {
+    if (id === "about") body.innerHTML = ABOUT;
+    else {
+      const [, name, file, shots] = CLIPS.find(c => c[0] === id);
+      body.innerHTML = `<h3 id="info-title">${name}: the shots</h3><p><code>${file}</code>, in order:</p><ol>` +
+        shots.map(s => { const [cap, shows, demo] = SHOTS[s]; return `<li><b>${cap}</b><br>${shows}<br>Demonstrates: ${demo}</li>`; }).join("") +
+        "</ol><p>SwiftShader, a fixed 1/30 s step: the look and the timing, not the frame rate.</p>";
+    }
+    try { dlg.showModal(); } catch (_) { dlg.setAttribute("open", ""); }
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("button.info"); if (b) open(b.dataset.clip); });
+  document.getElementById("info-close").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>

@@ -25,13 +25,15 @@
 //! so the line that records the hole records where the block went, and a
 //! pickup is a line of its own.
 
+use pbd_core::building::site::BuildingSetting;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
 use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tier, Tool};
+use pbd_core::locale::tr_with;
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::{Author, Record as StoredRecord, split_author};
-use pbd_core::terrain::{GENERATOR_VERSION, Material, TOPOLOGY_VERSION};
+use pbd_core::terrain::{GENERATOR_VERSION, TOPOLOGY_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -70,6 +72,9 @@ pub enum Record {
     /// Some of drop `id` was picked up, leaving `left` on it (none: it is
     /// gone), into the slots this line carries whole.
     Pick { id: u64, left: u16, slots: Slots },
+    /// A stack the player dropped (`drop-and-trash`): the drop, and the
+    /// slots after it.
+    Toss { drop: ItemDrop, slots: Slots },
     /// A record's new value, whole (`world-persistence` decision 11): a
     /// site, and later a settlement or a landmark. Held as text, so a kind
     /// this build does not know is kept as it came.
@@ -90,6 +95,8 @@ const HAND: &str = "hand";
 const PACK: &str = "pack";
 /// A pickup's.
 const PICK: &str = "pick";
+/// A stack the player dropped's (`drop-and-trash`).
+const TOSS: &str = "toss";
 /// A record with the hands': `with s0 .. s39 rec @p kind id schema body`.
 const WITH: &str = "with";
 
@@ -127,69 +134,9 @@ pub fn tool_of(code: u8) -> Option<Tool> {
     })
 }
 
-/// The material a saved code names, and the code it is saved as.
-///
-/// Written out both ways rather than transmuted: a code nothing names must not
-/// become a material, and a material added tomorrow must not silently take
-/// another's number.
-pub fn material_code(material: Material) -> u8 {
-    match material {
-        Material::Air => 0,
-        Material::Stone => 1,
-        Material::Soil => 2,
-        Material::Grass => 3,
-        Material::Water => 4,
-        Material::Ore => 5,
-        Material::Sand => 6,
-        Material::DryGrass => 7,
-        Material::JungleGrass => 8,
-        Material::Snow => 9,
-        Material::Rock => 10,
-        Material::Dirt => 11,
-        Material::Torch => 12,
-        Material::LanternPost => 13,
-        Material::LanternWall => 14,
-        Material::LanternHanging => 15,
-        Material::Brazier => 16,
-        Material::Candle => 17,
-        Material::Tilled => 18,
-        Material::Forge => 19,
-        Material::Workbench => 20,
-        Material::Campfire => 21,
-        // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
-        // the material's own code, far from the blocks' run.
-        flowing @ pbd_core::flowing_water!() => flowing as u16 as u8,
-    }
-}
-
-pub fn material_of(code: u8) -> Option<Material> {
-    Some(match code {
-        0 => Material::Air,
-        1 => Material::Stone,
-        2 => Material::Soil,
-        3 => Material::Grass,
-        4 => Material::Water,
-        5 => Material::Ore,
-        6 => Material::Sand,
-        7 => Material::DryGrass,
-        8 => Material::JungleGrass,
-        9 => Material::Snow,
-        10 => Material::Rock,
-        11 => Material::Dirt,
-        12 => Material::Torch,
-        13 => Material::LanternPost,
-        14 => Material::LanternWall,
-        15 => Material::LanternHanging,
-        16 => Material::Brazier,
-        17 => Material::Candle,
-        18 => Material::Tilled,
-        19 => Material::Forge,
-        20 => Material::Workbench,
-        21 => Material::Campfire,
-        64..=79 => Material::flowing((code - 64) % 8, code >= 72),
-        _ => return None,
-    })
-}
+/// The save's material codes live in the core, where the server and the
+/// region digest read them too (`multiplayer` 3.1).
+pub use pbd_core::terrain::{material_code, material_of};
 
 pub fn stack_text(stack: Option<Stack>) -> String {
     match stack {
@@ -293,6 +240,14 @@ fn drop_of(text: &str) -> Option<ItemDrop> {
 /// `pack s0 s1 .. s39`, one line.
 pub fn pack_line_of(slots: &Slots) -> String {
     let mut line = PACK.to_string();
+    push_slots(&mut line, slots);
+    line
+}
+
+/// `toss d<drop> s0 s1 .. s39`, one line: a stack the player dropped and
+/// the slots after it (`drop-and-trash` design 1).
+pub fn toss_line_of(drop: &ItemDrop, slots: &Slots) -> String {
+    let mut line = format!("{TOSS} {}", drop_text(drop));
     push_slots(&mut line, slots);
     line
 }
@@ -474,6 +429,14 @@ pub fn parse_line(line: &str) -> Option<Record> {
             slots: slots_of(&carried)?,
         });
     }
+    if head == TOSS {
+        let drop = drop_of(parts.next()?)?;
+        let carried: Vec<&str> = parts.collect();
+        return Some(Record::Toss {
+            drop,
+            slots: slots_of(&carried)?,
+        });
+    }
     if head == PICK {
         let id = parts.next()?.parse().ok()?;
         let left = parts.next()?.parse().ok()?;
@@ -559,6 +522,11 @@ pub struct Identity {
     /// world made with tool crafting, which starts owning none.
     #[serde(default)]
     pub tools: u32,
+    /// How the world builds (`building-planner` design 11): absent in every
+    /// world made before, which reads as Free, the way those worlds were
+    /// built; a world this build makes is Planned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub building: Option<BuildingSetting>,
 }
 
 /// The `tools` a world this build makes is marked with.
@@ -574,7 +542,13 @@ impl Identity {
             keys: KEY_VERSION,
             records: BTreeMap::new(),
             tools: TOOLS_VERSION,
+            building: Some(BuildingSetting::NEW_WORLD),
         }
+    }
+
+    /// How the world builds: missing reads Free (`building-planner` 11).
+    pub fn building(&self) -> BuildingSetting {
+        BuildingSetting::of_saved(self.building)
     }
 
     /// Whether the world began with tool crafting, owning no tools.
@@ -593,6 +567,7 @@ impl Identity {
             keys,
             records: BTreeMap::new(),
             tools: 0,
+            building: None,
         }
     }
 
@@ -610,22 +585,27 @@ impl Identity {
     /// ground would be generated by rules it was not made by.
     pub fn refusal(&self) -> Option<String> {
         if TerrainConfig::for_version(self.generator).is_none() {
-            return Some(format!(
-                "terrain generator version {}, which this build does not have",
-                self.generator
-            ));
+            return Some(
+                tr_with("saves.refusal.generator", &[("version", &self.generator)]).into(),
+            );
         }
         if self.topology != TOPOLOGY_VERSION {
-            return Some(format!(
-                "topology version {}, where this build has {TOPOLOGY_VERSION}",
-                self.topology
-            ));
+            return Some(
+                tr_with(
+                    "saves.refusal.topology",
+                    &[("version", &self.topology), ("have", &TOPOLOGY_VERSION)],
+                )
+                .into(),
+            );
         }
         if self.keys > KEY_VERSION {
-            return Some(format!(
-                "cell key version {}, where this build has {KEY_VERSION}",
-                self.keys
-            ));
+            return Some(
+                tr_with(
+                    "saves.refusal.keys",
+                    &[("version", &self.keys), ("have", &KEY_VERSION)],
+                )
+                .into(),
+            );
         }
         None
     }
@@ -685,6 +665,7 @@ impl WorldFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pbd_core::terrain::Material;
 
     fn kit() -> Slots {
         let mut slots = Slots::new();
@@ -883,6 +864,20 @@ mod tests {
                 slots: Some(full())
             })
         );
+        // A stack the player dropped (`drop-and-trash`).
+        let tossed = ItemDrop {
+            id: 42,
+            item: Item::Block(Material::Sand),
+            count: 99,
+            ..drop
+        };
+        assert_eq!(
+            parse_line(&toss_line_of(&tossed, &full())),
+            Some(Record::Toss {
+                drop: tossed,
+                slots: full()
+            })
+        );
         assert_eq!(
             parse_line(&pick_line_of(41, 3, &full())),
             Some(Record::Pick {
@@ -1046,6 +1041,24 @@ mod tests {
         assert_eq!(back, slots);
         assert_eq!(material_of(21), Some(Material::Campfire));
         assert_eq!(material_of(20), Some(Material::Workbench));
+        // The sea's cells and a beaver's sticks (`ocean-environments` B24,
+        // B25), each its own number, read back as itself.
+        for material in [
+            Material::ReefRock,
+            Material::SeaIce,
+            Material::Basalt,
+            Material::MusselBed,
+            Material::Sticks,
+            Material::DesertSand,
+        ] {
+            assert_eq!(material_of(material_code(material)), Some(material));
+        }
+        assert_eq!(material_code(Material::ReefRock), 24);
+        assert_eq!(material_code(Material::Sticks), 28);
+        // `sand-tiles` design 5: desert sand takes the next code, and sand
+        // keeps its own, so an old save's sand is read back as sand.
+        assert_eq!(material_code(Material::DesertSand), 29);
+        assert_eq!(material_of(6), Some(Material::Sand));
     }
 
     /// A good this build does not have costs its own line and no other.

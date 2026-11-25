@@ -1538,14 +1538,17 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
-    // The buildings, their path stairs (`path-stairs`), and the masonry.
+    // The buildings, their path stairs (`path-stairs`), the smithy and the
+    // masonry.
     assert_eq!(
         b.solids.len(),
-        template.buildings.len() + b.stairs.len() + template.masonry.len()
+        template.buildings.len()
+            + b.stairs.len()
+            + template.smithies.len()
+            + template.masonry.len()
     );
     assert_eq!(b.rooms.len(), b.solids.len());
     let datum = record::datum(&template);
@@ -1606,7 +1609,6 @@ fn a_gate_passage_is_walled_on_both_sides() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -1707,7 +1709,6 @@ fn a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -1805,7 +1806,6 @@ fn walk_the_walls(
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -2125,12 +2125,6 @@ fn a_harbour_is_stored_in_schema_3() {
     assert!(record::lay_at_sea(&walled(), 9, patch, *at, 0, coast(), 0.0).is_err());
 }
 
-/// The harbour laid on the test coast and cut whole: its buildings, then
-/// its piers' stretches and its light, every door open.
-/// The drawn sea's surface over the radius, as the game draws it: half a
-/// metre under the layers' sea level (`water.ron`, `depth_offset_m`).
-const SHEET_M: f32 = -0.5;
-
 fn cut_harbour() -> (Template, record::Town, record::Built) {
     let (template, town, _) = laid_harbour();
     let (patch, _) = patch();
@@ -2142,7 +2136,6 @@ fn cut_harbour() -> (Template, record::Town, record::Built) {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -2411,7 +2404,9 @@ fn a_walker_climbs_a_fish_huts_porch_and_goes_in() {
 #[test]
 fn a_towns_lamps_stand_over_their_cells() {
     let template = walled();
-    let town = laid_village(&template);
+    // The street lamps alone: a town laid before the forge's brazier.
+    let mut town = laid_village(&template);
+    town.layout = record::FORGE_LAYOUT - 1;
     let (patch, _) = patch();
     let (chart, ground) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
     let lamps = record::lamps_of(&town, &template, &chart, patch);
@@ -2608,230 +2603,6 @@ fn a_walker_goes_down_the_slip_into_the_water() {
     assert!(floor + feet < sea - 1.0, "its foot in the water");
 }
 
-/// `sail-the-cog` design 6, step 1: the walker from the main pier up the
-/// gangplank through the gangway onto the cog's deck, 1.9 m over the sea,
-/// across it to the stair and up onto the aftcastle, the feet never
-/// falling and the body in nothing.
-#[test]
-fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
-    let (_, _, b) = cut_harbour();
-    walk_aboard(&b);
-}
-
-/// `sail-the-cog` step 3, part 3: the craft stands where the template moors
-/// the ship. `cog::berth` is the ship piece's own frame's origin and its
-/// bow, and with the craft's cut stood there in the ship's place, a walker
-/// still comes up the town's gangplank, across the deck and up the stair.
-#[test]
-fn the_craft_cog_stands_at_its_berth_and_is_boarded_up_the_towns_gangplank() {
-    let (template, town, mut b) = cut_harbour();
-    let n = b.cog.expect("the cog stands");
-    let (patch, _) = patch();
-    let chart = record::chart_of(&town, patch).unwrap();
-    let cog = template.cog.as_ref().expect("the harbour moors a cog");
-    let (origin, bow) =
-        pieces::cog::berth(patch, &chart, &template, cog, RADIUS_M, SHEET_M).expect("on the chart");
-    assert!(origin.distance(b.solids[n].frame.origin) < 1e-3);
-    let towns_bow = pieces::cog::bow(patch, &chart, &template, cog).unwrap();
-    assert!(bow.distance(towns_bow) < 1e-6);
-    let up = origin.normalize();
-    assert!(
-        bow.dot(up).abs() < 1e-5,
-        "the bow lies in the tangent plane"
-    );
-    let z = -bow;
-    let mut craft = pieces::cog::sailing(&mut Meshes::new(), &|_: &str| 2.0, cog.gang_side);
-    craft.frame = pieces::Frame {
-        origin,
-        x: up.cross(z),
-        y: up,
-        z,
-    };
-    b.solids[n] = craft;
-    walk_aboard(&b);
-}
-
-/// From the pier up the gangplank, across the cog's deck and up its stair
-/// to the aftcastle, the feet never falling and the body never held.
-fn walk_aboard(b: &record::Built) {
-    let n = b.cog.expect("the cog stands");
-    let (ship, plank) = (&b.solids[n], &b.solids[n + 1]);
-    assert!(!b.cog_meshes.is_empty(), "the ship is drawn apart");
-    let Some(&pieces::Surface::Ramp {
-        foot: pa,
-        dir: pd,
-        len: pl,
-        to: rise,
-        ..
-    }) = plank.surfaces.first()
-    else {
-        panic!("the gangplank is a ramp");
-    };
-    let Some(&pieces::Surface::Flight {
-        foot: sf,
-        dir: sd,
-        len: sl,
-        ..
-    }) = ship
-        .surfaces
-        .iter()
-        .find(|x| matches!(x, pieces::Surface::Flight { .. }))
-    else {
-        panic!("the cog has its stair");
-    };
-    let sea = RADIUS_M + SHEET_M;
-    let deck = ship.frame.origin.length() + 1.9;
-    assert!(
-        (deck - sea - 1.9).abs() < 0.01,
-        "the deck 1.9 m over the drawn sea"
-    );
-    let at = |f: &pieces::Frame, p: Vec2| f.world(Vec3::new(p.x, 0.0, p.y)).normalize();
-    let way = [
-        at(&plank.frame, pa - pd * 0.6),
-        at(&plank.frame, pa + pd * (pl + 1.0)),
-        at(&ship.frame, sf - sd * 0.4),
-        at(&ship.frame, sf + sd * (sl + 1.0)),
-    ];
-    let mut feet = feet_on(b, way[0] * (plank.frame.origin.length() + 0.01))
-        .expect("the pier at the gangplank's foot");
-    assert!((feet - plank.frame.origin.length()).abs() < 0.03);
-    // The pier is a layer over the layers' sea level, the deck 1.9 m over
-    // the drawn sea half a metre under it.
-    assert!(
-        (rise - 0.4).abs() < 0.02,
-        "the gangplank climbs {rise} m to the deck"
-    );
-    for (leg, name) in way
-        .windows(2)
-        .zip(["the gangplank", "the deck", "the stair"])
-    {
-        for k in 1..=60 {
-            let d = leg[0].lerp(leg[1], k as f32 / 60.0).normalize();
-            let next = feet_on(b, d * (feet + 0.01)).unwrap_or_else(|| {
-                let l = ship.frame.local(d * (feet + 0.01));
-                let e = plank.frame.local(d * (feet + 0.01));
-                let end = pa + pd * pl;
-                panic!(
-                    "{name}: nothing underfoot at {k}: in the ship ({:.3}, {:.3}, {:.3}), {:.3} past the plank's end",
-                    l.x, l.y, l.z, (Vec2::new(e.x, e.z) - end).dot(pd)
-                )
-            });
-            assert!(next > feet - 0.3, "{name}: fell from {feet} to {next}");
-            let body = d * (next + 0.95);
-            assert!(
-                !b.solids.iter().any(|x| x.holds(body, 0.9, 0.3)),
-                "{name}: held at {k}, the feet {:.2} m over the sea",
-                next - sea
-            );
-            feet = next;
-        }
-        if name == "the gangplank" {
-            assert!((feet - deck).abs() < 0.03, "on the deck, {}", feet - sea);
-        }
-    }
-    assert!(
-        (feet - deck - 1.6).abs() < 0.03,
-        "on the aftcastle, {:.2} m over the sea",
-        feet - sea
-    );
-}
-
-/// `sail-the-cog` step 3: the ship the craft carries is the moored one cut
-/// in the craft's own frame, without its yard: its deck amidships 1.9 m over
-/// the waterline, its aftcastle aft (+z), where the helm is, and its yard and
-/// furled sail apart, in the rig the craft turns.
-#[test]
-fn the_cog_cut_for_its_craft_lies_bow_forward_without_its_yard() {
-    let repeat = |_: &str| 2.0;
-    let frame = pieces::Frame {
-        origin: Vec3::ZERO,
-        x: Vec3::X,
-        y: Vec3::Y,
-        z: Vec3::Z,
-    };
-    let mut moored = Meshes::new();
-    pieces::cog::ship_in(&mut moored, &repeat, frame, -std::f32::consts::FRAC_PI_2, 1);
-    let mut sailing = Meshes::new();
-    let ship = pieces::cog::sailing(&mut sailing, &repeat, 1);
-    let top = |x: f32, z: f32| {
-        let p = Vec2::new(x, z);
-        ship.solids
-            .iter()
-            .filter(|s| {
-                let n = s.outline.len();
-                (0..n).all(|i| {
-                    let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
-                    (b - a).perp_dot(p - a) >= 0.0
-                })
-            })
-            .map(|s| s.y1)
-            .fold(f32::MIN, f32::max)
-    };
-    // The hull is solid to a hand under the deck's floor at 1.9 m, and the
-    // aftcastle's deck 1.6 m over that.
-    let (waist, castle) = (top(0.0, 0.0), top(0.0, 5.6));
-    assert!((1.75..=1.9).contains(&waist), "the hull's top at {waist}");
-    assert!((castle - 3.5).abs() < 0.05, "aftcastle at {castle}");
-    let Some(&pieces::Surface::Flight { foot, dir, .. }) = ship
-        .surfaces
-        .iter()
-        .find(|x| matches!(x, pieces::Surface::Flight { .. }))
-    else {
-        panic!("the cog has its stair");
-    };
-    assert!(
-        dir.y > 0.99,
-        "the stair climbs aft to the aftcastle: from {foot} along {dir}"
-    );
-    let count = |m: &Meshes, k: &str| m.get(k).map_or(0, |b| b.positions.len());
-    let rig = pieces::cog::rig(&repeat, false);
-    assert_eq!(count(&sailing, "linen"), 0, "the sail is in the rig");
-    assert_eq!(count(&moored, "linen"), count(&rig, "linen"));
-    assert_eq!(
-        count(&moored, "timber"),
-        count(&sailing, "timber") + count(&rig, "timber")
-    );
-    assert!(count(&pieces::cog::rig(&repeat, true), "linen") > count(&rig, "linen"));
-}
-
-/// `sail-the-cog` step 3, part 4: the cog's stern lantern stands on its
-/// aftcastle, over its deck, with a flame in its cage.
-#[test]
-fn the_cogs_stern_lantern_stands_on_its_aftcastle() {
-    let repeat = |_: &str| 2.0;
-    let ship = pieces::cog::sailing(&mut Meshes::new(), &repeat, -1);
-    let at = pieces::cog::LANTERN;
-    let p = Vec2::new(at.x, at.z);
-    let feet = ship
-        .solids
-        .iter()
-        .filter(|s| {
-            let n = s.outline.len();
-            (0..n).all(|i| {
-                let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
-                (b - a).perp_dot(p - a) >= 0.0
-            })
-        })
-        .map(|s| s.y1)
-        .fold(f32::MIN, f32::max);
-    assert!(
-        (feet - 3.5).abs() < 0.01,
-        "on the aftcastle's deck, at {feet}"
-    );
-    assert!(at.y > feet + 1.0, "over the deck, at {}", at.y);
-    let lantern = pieces::cog::lantern(&repeat);
-    assert!(
-        lantern
-            .get("flame")
-            .is_some_and(|m| !m.positions.is_empty())
-    );
-    assert!(
-        lantern
-            .get("timber")
-            .is_some_and(|m| !m.positions.is_empty())
-    );
-}
-
 /// The desert, laid and cut (slice 4e), every door open.
 fn cut_desert() -> (Template, record::Town, record::Built) {
     let template = desert();
@@ -2845,7 +2616,6 @@ fn cut_desert() -> (Template, record::Town, record::Built) {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -3047,7 +2817,6 @@ fn cut_tundra() -> (Template, record::Town, record::Built) {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -3307,7 +3076,6 @@ fn cut_jungle() -> (Template, record::Town, record::Built) {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -3776,6 +3544,10 @@ fn no_lamp_of_an_older_town_moves() {
     ];
     let mut checked = 0;
     for (template, town) in &towns {
+        // A town that already stands: laid before the forge (layout 3).
+        let mut town = town.clone();
+        town.layout = record::FORGE_LAYOUT - 1;
+        let town = &town;
         let natural = slope();
         let (chart, _) = record::ground_of(town, patch, RADIUS_M, move |d| natural(d).floor())
             .unwrap_or_else(|e| panic!("{e}"));
@@ -3839,7 +3611,7 @@ fn a_towns_layout_names_how_its_ground_finds_a_cell() {
     let (patch, _) = patch();
     let town = laid_village(&village());
     assert_eq!(town.layout, record::LAYOUT_VERSION);
-    assert_eq!(record::LAYOUT_VERSION, 2);
+    assert!(record::LAYOUT_VERSION >= 2);
     let mut old = town.clone();
     old.layout = 1;
     let mut store = crate::records::Records::new();
@@ -3907,7 +3679,6 @@ fn every_stair_has_a_sconce_a_turn() {
             &kits(),
             &|_: &str| 2.0,
             RADIUS_M,
-            SHEET_M,
             move |d| natural(d).floor(),
         )
         .unwrap_or_else(|e| panic!("{e}"));
@@ -3947,7 +3718,6 @@ fn print_the_towns_vertex_counts() {
             &kits(),
             &|_: &str| 2.0,
             RADIUS_M,
-            SHEET_M,
             move |d| natural(d).floor(),
         )
         .unwrap_or_else(|e| panic!("{e}"));
@@ -4127,7 +3897,6 @@ fn cut_yielding(
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
-        SHEET_M,
         &natural,
         yielded,
     )
@@ -4371,7 +4140,6 @@ fn a_stored_town_gains_only_its_stairs() {
                 &kits(),
                 &|_: &str| 2.0,
                 RADIUS_M,
-                SHEET_M,
                 &natural,
                 &move |_| all,
             )
@@ -4514,4 +4282,216 @@ fn a_pier_climbs_a_bank_by_a_stair_at_each_end() {
         "over the bank at {}",
         high - RADIUS_M
     );
+}
+
+/// `retire-rowboat-and-cog` decision 5: with the cog retired its ship is no
+/// longer cut, but the harbour still lays the cells under where it lay and
+/// under its gangplank, so a harbour's ground is what it was. The count is
+/// the shipped template's, from the build before (`05d1bec2`).
+#[test]
+fn a_harbour_lays_the_cells_under_its_retired_cogs_berth() {
+    let template = harbour();
+    let cells = sea::over_water(&template);
+    let cog = template.cog.as_ref().expect("the template moors a cog");
+    let cell_m = template.grid.cell_m;
+    assert!(
+        cells.contains(&sea::cell_at(cog.x, cog.z, cell_m)),
+        "its middle"
+    );
+    let g = &cog.gangplank;
+    assert!(
+        cells.contains(&sea::cell_at(g.to[0], g.to[2], cell_m)),
+        "its gangplank"
+    );
+    assert_eq!(cells.len(), OVER_WATER_CELLS, "cell for cell as before");
+}
+
+const OVER_WATER_CELLS: usize = 312;
+
+/// `furniture` design 8: every village house has a bed, a house of more
+/// than one cell a table; every piece stands inside its building, on one of
+/// its floors, and none stands in a door's way in; the hall and the inn have
+/// tables and benches; and the same record furnishes the same way twice.
+#[test]
+fn every_house_is_furnished_by_its_record() {
+    use crate::furniture::Kind;
+    use pieces::furnish::{Use, use_of};
+    let (village, solids) = cut_village();
+    let (_, again) = cut_village();
+    assert_eq!(
+        solids
+            .iter()
+            .map(|s| s.furniture.clone())
+            .collect::<Vec<_>>(),
+        again
+            .iter()
+            .map(|s| s.furniture.clone())
+            .collect::<Vec<_>>()
+    );
+    for (b, cut) in village.buildings.iter().zip(&solids) {
+        let kinds: Vec<Kind> = cut.furniture.iter().map(|f| f.kind).collect();
+        match use_of(&b.name) {
+            Some(Use::House) => {
+                // A house of one cell has no room for a bed clear of its
+                // door: a stool and a chest.
+                if b.cells.len() > 1 {
+                    assert!(kinds.contains(&Kind::Bed), "{}: a bed in {kinds:?}", b.name);
+                    assert!(kinds.contains(&Kind::Table), "{}: a table", b.name);
+                } else {
+                    assert!(
+                        kinds.contains(&Kind::Chest),
+                        "{}: a chest in {kinds:?}",
+                        b.name
+                    );
+                }
+            }
+            Some(Use::Inn | Use::Hall) => {
+                assert!(kinds.contains(&Kind::Table), "{}: tables", b.name);
+                assert!(kinds.contains(&Kind::Bench), "{}: benches", b.name);
+            }
+            _ => {}
+        }
+        let f = cut.frame;
+        let top = b.storeys.max(1) as f32 * crate::settlement::STOREY_M * b.tall.max(1) as f32;
+        for piece in &cut.furniture {
+            let p = f.local(piece.at);
+            assert!(
+                p.y > -0.05 && p.y < top,
+                "{}: {:?} at {p}",
+                b.name,
+                piece.kind
+            );
+            assert!(
+                p.x.abs() < cut.reach_m && p.z.abs() < cut.reach_m,
+                "{}: {:?} inside",
+                b.name,
+                piece.kind
+            );
+            // Clear of every door leaf's swing: a door's middle is more than
+            // half a metre from any piece's footprint.
+            for door in &cut.doors {
+                let s = door.solid();
+                let mid =
+                    s.outline.iter().fold(glam::Vec2::ZERO, |a, q| a + *q) / s.outline.len() as f32;
+                if (s.y0 - p.y).abs() > 1.0 {
+                    continue;
+                }
+                let foot = crate::furniture::rect(
+                    glam::Vec2::new(p.x, p.z),
+                    {
+                        let fl = f.local(piece.at + piece.front) - p;
+                        glam::Vec2::new(fl.x, fl.z)
+                    },
+                    piece.kind.size_m(),
+                );
+                let near = foot
+                    .iter()
+                    .map(|q| q.distance(mid))
+                    .fold(f32::MAX, f32::min);
+                assert!(
+                    near > 0.25,
+                    "{}: {:?} {near} m from a door",
+                    b.name,
+                    piece.kind
+                );
+            }
+        }
+    }
+}
+
+/// `townsfolk` design 26a: a village and a walled town laid at layout 3
+/// stand their smithy (its posts, forge and anvil, solid to the walker) and
+/// burn a brazier in the forge's cell; a town stored at layout 2 is cut
+/// exactly as its template without smithies cuts it, so a saved town keeps
+/// its pieces and lamps.
+#[test]
+fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
+    use crate::settlement::pieces::smithy;
+    use crate::terrain::Material;
+    assert_eq!(record::LAYOUT_VERSION, record::FORGE_LAYOUT);
+    let (patch, _) = patch();
+    for template in [village(), walled()] {
+        assert_eq!(template.smithies.len(), 1, "{}", template.scene);
+        let forge_def = &template.smithies[0];
+        assert_eq!(forge_def.cells.len(), 6, "two rows by three");
+        let town = laid_village(&template);
+        assert_eq!(town.layout, record::FORGE_LAYOUT);
+        let mut old = town.clone();
+        old.layout = record::FORGE_LAYOUT - 1;
+        let mut bare = template.clone();
+        bare.smithies.clear();
+        let natural = slope();
+        let cut = |t: &record::Town, tm: &Template| {
+            record::build_town(t, Some(tm), patch, &kits(), &|_: &str| 2.0, RADIUS_M, |d| {
+                natural(d).floor()
+            })
+            .unwrap_or_else(|e| panic!("{e}"))
+        };
+        let (new, was, without) = (
+            cut(&town, &template),
+            cut(&old, &template),
+            cut(&old, &bare),
+        );
+        // Layout 2: the same pieces and the same meshes as with no smithy.
+        assert_eq!(was.solids.len(), without.solids.len());
+        let counts = |b: &record::Built| -> Vec<(String, usize)> {
+            b.meshes
+                .iter()
+                .map(|(k, m)| (k.clone(), m.positions.len()))
+                .collect()
+        };
+        assert_eq!(counts(&was), counts(&without), "{}", template.scene);
+        let (chart, _) = record::ground_of(&old, patch, RADIUS_M, slope()).expect("ground");
+        assert_eq!(
+            record::lamps_of(&old, &template, &chart, patch),
+            record::lamps_of(&old, &bare, &chart, patch),
+            "no forge lamp at layout 2"
+        );
+        // Layout 3: one piece more, and one brazier, in the forge's cell.
+        assert_eq!(new.solids.len(), was.solids.len() + 1, "{}", template.scene);
+        // After the buildings, stairs and dressing, before the masonry.
+        let shed = &new.solids[new.solids.len() - template.masonry.len() - 1];
+        assert_eq!(
+            shed.solids.len(),
+            6 + 2 + 1,
+            "six posts, the forge, the anvil"
+        );
+        let tall = shed.solids.iter().map(|s| s.y1).fold(0.0f32, f32::max);
+        assert!(
+            tall > smithy::EAVE_M,
+            "the chimney through the roof: {tall}"
+        );
+        for m in ["timber", "shingle", "stone", "iron", "flame"] {
+            assert!(
+                new.meshes.get(m).is_some_and(|b| !b.positions.is_empty()),
+                "{m}"
+            );
+        }
+        let (chart, _) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
+        let lamps = record::lamps_of(&town, &template, &chart, patch);
+        let before = record::lamps_of(&old, &template, &chart, patch);
+        assert_eq!(lamps.len(), before.len() + 1);
+        let (c, r) = forge_def.forge_cell(template.grid.cell_m);
+        let forge_dir = patch.cells[chart.cell(c, r).unwrap()].direction;
+        let brazier = lamps
+            .iter()
+            .find(|l| l.material == Material::Brazier && l.direction == forge_dir)
+            .expect("a brazier in the forge's cell");
+        // The forge is centred on that cell, its base over the brazier's own
+        // drawn fire (1.04 m), so only the forge's flame shows.
+        let forge = &shed.solids[6];
+        let middle = forge.outline.iter().fold(Vec2::ZERO, |a, p| a + *p) / 4.0;
+        let at = shed.frame.world(Vec3::new(middle.x, 0.0, middle.y));
+        assert!(
+            (at.normalize() - brazier.direction).length() * RADIUS_M < 0.05,
+            "the forge stands on the brazier: {} m off, outline {:?}",
+            (at.normalize() - brazier.direction).length() * RADIUS_M,
+            forge.outline
+        );
+        assert!(forge.y1 > 1.04 && forge.y1 < 1.2, "{}", forge.y1);
+        assert!(
+            (brazier.altitude_m - (shed.frame.origin.length() - RADIUS_M)).abs() < 1e-3,
+            "on the forge's floor"
+        );
+    }
 }

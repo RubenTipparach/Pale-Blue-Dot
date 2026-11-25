@@ -75,6 +75,33 @@ pub struct Warming {
     immediate: bool,
 }
 
+impl Warming {
+    /// A `--capture`, which does not warm: nothing is shown behind the
+    /// screen for it.
+    pub fn immediate(&self) -> bool {
+        self.immediate
+    }
+
+    /// Whether the world warms behind the screen long enough to make every
+    /// pipeline it may need: not in a `--capture`, which lifts the screen on
+    /// its first open frame.
+    pub fn prewarms(&self) -> bool {
+        !self.immediate
+    }
+
+    /// A world warming, for a test.
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Self {
+        Warming {
+            started: Instant::now(),
+            frames: 0,
+            quiet: 0,
+            clock_ran: None,
+            immediate: false,
+        }
+    }
+}
+
 /// Whether the loading screen has lifted (or there never was one).
 pub fn ready(loading: Option<Res<WorldLoading>>, warming: Option<Res<Warming>>) -> bool {
     loading.is_none() && warming.is_none()
@@ -109,17 +136,17 @@ impl Step {
         }
     }
 
-    fn label(self) -> &'static str {
-        match self {
-            Self::Reading => "READING THE WORLD",
-            Self::Surveying => "SURVEYING SITES",
-            Self::Laying => "LAYING OUT TOWNS",
-            Self::Ground => "THE TOWNS' GROUND",
-            Self::Planet => "BUILDING THE PLANET",
-            Self::Shaders => "COMPILING SHADERS",
-            Self::Sounds => "TUNING THE AIR",
-            Self::Standing => "STANDING THE TOWNS",
-        }
+    fn label(self) -> pbd_core::locale::Localized {
+        pbd_core::locale::tr(match self {
+            Self::Reading => "loading.reading",
+            Self::Surveying => "loading.surveying",
+            Self::Laying => "loading.laying",
+            Self::Ground => "loading.ground",
+            Self::Planet => "loading.planet",
+            Self::Shaders => "loading.shaders",
+            Self::Sounds => "loading.sounds",
+            Self::Standing => "loading.standing",
+        })
     }
 
     /// Where the step starts on the bar, and how much of it the step fills.
@@ -182,6 +209,9 @@ pub struct Prepared {
     /// The towns, read or laid and stored, their ground installed; `None`
     /// where there are no sites.
     pub towns: Option<Towns>,
+    /// The roads between the towns, read or planned and stored
+    /// (`townsfolk` design 11); `None` where there are no towns.
+    pub roads: Option<crate::roads::RoadNet>,
     pub planet: PreparedPlanet,
 }
 
@@ -247,6 +277,7 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         }
     }
     ground::install(None);
+    pbd_core::roads::install_cleared(None);
     let towns = sites.as_ref().map(|list| {
         progress.set(Step::Laying);
         let ids: Vec<u32> = list.iter().map(|s| s.id).collect();
@@ -276,6 +307,19 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         }
         Towns::opened(ids, kept, unsettled)
     });
+    // The roads between them (`townsfolk` design 11): read, or planned
+    // once over the towns' ground and stored, so a world saved before
+    // roads gains them here, in place.
+    let roads = towns.as_ref().map(|t| {
+        let sites: Vec<Site> = t.held.iter().map(|h| h.site.clone()).collect();
+        let (net, seq) =
+            crate::roads::prepare(&mut save, &sites, &config, &crate::roads::load_config());
+        if seq > 0 && !committed(&save, seq) {
+            error!("the roads were not saved, so none is shown");
+            return crate::roads::RoadNet::default();
+        }
+        net
+    });
     progress.set(Step::Planet);
     let built = Instant::now();
     let planet = PreparedPlanet::build(inputs.near, &inputs.columns, &inputs.scatter, &save.edits);
@@ -288,6 +332,7 @@ pub fn prepare(mut save: WorldSave, inputs: Inputs, progress: &Progress) -> Prep
         save,
         sites,
         towns,
+        roads,
         planet,
     }
 }
@@ -343,6 +388,14 @@ struct StepText;
 struct DetailText;
 #[derive(Component)]
 struct Block;
+
+/// A plain launch that opens on the title (`title-screen`, "The splash"):
+/// its loading screen is the splash, deep space with the full logo, and the
+/// title's menu takes the bar's place when the world is ready. Inserted by
+/// the desktop before the first frame; a world opened later from the menu
+/// loads on the plain slab.
+#[derive(Resource)]
+pub struct SplashLaunch;
 
 /// The loading screen.
 pub struct LoadingPlugin {
@@ -464,7 +517,7 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
 /// decision 8), the step in the body face and the bar as the stone band
 /// with its progress fill. The kit is decoded before the first frame
 /// (`ui_kit::install`), so the first frame the window shows is this one.
-fn spawn_screen(world: &mut World) {
+fn spawn_screen(world: &mut World, splash: bool) {
     ui_kit::install(world);
     let camera = world
         .spawn((
@@ -480,14 +533,22 @@ fn spawn_screen(world: &mut World) {
     // The logo's emblem, the crystal ball in its ring (`loading-screen` decision
     // 8), decoded now so the first frame shows it: a painted render, sampled
     // linear. The full logo is the main menu's.
-    let logo = {
-        let pixels = image::open(crate::paths::assets_dir().join("ui/logo-emblem.png"))
-            .unwrap_or_else(|e| panic!("assets/ui/logo-emblem.png: {e}"));
+    let decode = |world: &mut World, name: &str| {
+        let pixels = image::open(crate::paths::assets_dir().join(name))
+            .unwrap_or_else(|e| panic!("assets/{name}: {e}"));
         let mut img = Image::from_dynamic(pixels, true, RenderAssetUsages::default());
         img.sampler = bevy::image::ImageSampler::linear();
         let aspect = img.width() as f32 / img.height().max(1) as f32;
         (world.resource_mut::<Assets<Image>>().add(img), aspect)
     };
+    let logo = decode(world, "ui/logo-emblem.png");
+    // The splash: the space and the full logo where the title draws them.
+    let splash = splash.then(|| {
+        (
+            decode(world, "ui/splash-space.png").0,
+            decode(world, "ui/logo.png"),
+        )
+    });
     let kit = world.resource::<UiKit>();
     let (slab, (w, h)) = kit.rock("loading");
     let bar = kit.nine(Set::Stone, "bar");
@@ -509,29 +570,71 @@ fn spawn_screen(world: &mut World) {
             LoadingRoot,
         ))
         .with_children(|root| {
-            root.spawn((
-                slab,
-                Node {
-                    width: px(w),
-                    height: px(h),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(px(14)),
-                    ..default()
-                },
-            ))
-            .with_children(|panel| {
-                let logo_w = 96.0;
-                panel.spawn((
-                    ImageNode::new(logo.0.clone()),
+            if let Some((space, full)) = &splash {
+                root.spawn((
+                    ImageNode::new(space.clone()),
                     Node {
-                        width: px(logo_w),
-                        height: px(logo_w / logo.1),
-                        flex_shrink: 0.0,
-                        margin: UiRect::bottom(px(3)),
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        top: px(0),
+                        width: percent(100),
+                        height: percent(100),
                         ..default()
                     },
                 ));
+                // As the title lays it out (`menu::spawn_title`): the logo
+                // 300 wide, 10 from the top, the bar under it.
+                let logo_w = 300.0;
+                root.spawn((
+                    ImageNode::new(full.0.clone()),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(10),
+                        width: px(logo_w),
+                        height: px(logo_w / full.1),
+                        ..default()
+                    },
+                ));
+            }
+            // On the splash the step and bar stand bare under the logo, where
+            // the title's menu will be; otherwise on the slab.
+            let mut panel = match &splash {
+                Some((_, full)) => root.spawn(Node {
+                    position_type: PositionType::Absolute,
+                    top: px(10.0 + 300.0 / full.1 + 16.0),
+                    width: px(w),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    ..default()
+                }),
+                None => root.spawn((
+                    slab,
+                    Node {
+                        width: px(w),
+                        height: px(h),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::all(px(14)),
+                        ..default()
+                    },
+                )),
+            };
+            panel.with_children(|panel| {
+                let logo_w = 96.0;
+                if splash.is_some() {
+                    // The full logo is above; the slab keeps only its step and bar.
+                } else {
+                    panel.spawn((
+                        ImageNode::new(logo.0.clone()),
+                        Node {
+                            width: px(logo_w),
+                            height: px(logo_w / logo.1),
+                            flex_shrink: 0.0,
+                            margin: UiRect::bottom(px(3)),
+                            ..default()
+                        },
+                    ));
+                }
                 panel.spawn((
                     Text::new(Step::Reading.label()),
                     TextFont {
@@ -593,7 +696,7 @@ fn paint(world: &mut World, step: Step, fraction: f32, detail: String) {
     let filled = filled(step, fraction);
     let mut steps = world.query_filtered::<&mut Text, With<StepText>>();
     for mut text in steps.iter_mut(world) {
-        if text.0 != step.label() {
+        if text.0.as_str() != step.label().as_str() {
             text.0 = step.label().into();
         }
     }
@@ -639,7 +742,7 @@ pub fn begin_switch(
     slot: crate::saves::Slot,
     new_world: Vec3,
 ) {
-    spawn_screen(world);
+    spawn_screen(world, false);
     let near = slot
         .file
         .position
@@ -681,7 +784,8 @@ pub fn begin_switch(
 /// and when it is done put what it made in place for `Startup`.
 fn drive_loading(world: &mut World) {
     if !world.contains_resource::<Preparing>() {
-        spawn_screen(world);
+        let splash = world.contains_resource::<SplashLaunch>();
+        spawn_screen(world, splash);
         let save = world
             .remove_resource::<WorldSave>()
             .unwrap_or_else(WorldSave::memory_only);
@@ -739,6 +843,7 @@ fn drive_loading(world: &mut World) {
         save,
         sites,
         towns,
+        roads,
         planet,
     } = match prepared {
         Ok(prepared) => prepared,
@@ -749,6 +854,7 @@ fn drive_loading(world: &mut World) {
         // In place of the open world's: its towns taken down, its save
         // dropped (which drains and joins its writer), its planet replaced.
         crate::towns::replace(world, towns.unwrap_or_default());
+        crate::roads::replace(world, roads);
         let fresh = save.pose.is_none();
         world.insert_resource(save);
         crate::planet::install_prepared(world, planet);
@@ -756,6 +862,9 @@ fn drive_loading(world: &mut World) {
     } else {
         if let Some(towns) = towns {
             world.insert_resource(towns);
+        }
+        if let Some(roads) = roads {
+            world.insert_resource(roads);
         }
         world.insert_resource(save);
         world.insert_resource(planet);
@@ -963,7 +1072,7 @@ pub fn warm(world: &mut World) {
 /// tell: its material, and its vertex layout (or, for a mesh whose vertices
 /// live only on the GPU, the mesh itself).
 #[derive(Clone, PartialEq, Eq, Hash)]
-enum Layout {
+pub(crate) enum Layout {
     Attributes(
         Vec<bevy::mesh::MeshVertexAttributeId>,
         bevy::mesh::PrimitiveTopology,
@@ -979,7 +1088,7 @@ enum Layout {
 /// material, tiny and unculled in front of the active camera, behind the
 /// opaque screen. The proxies go at `READY`.
 #[allow(clippy::type_complexity)]
-fn show_unseen<M: Material>(
+pub(crate) fn show_unseen<M: Material>(
     mut commands: Commands,
     warming: Res<Warming>,
     mut shown: Local<std::collections::HashSet<(AssetId<M>, Layout)>>,
@@ -990,6 +1099,7 @@ fn show_unseen<M: Material>(
             &MeshMaterial3d<M>,
             Has<bevy::light::NotShadowCaster>,
             Has<bevy::light::NotShadowReceiver>,
+            Has<bevy::mesh::skinning::SkinnedMesh>,
         ),
         Without<PrewarmProxy>,
     >,
@@ -1006,10 +1116,22 @@ fn show_unseen<M: Material>(
     else {
         return;
     };
-    for (mesh, material, no_cast, no_receive) in &entities {
+    for (mesh, material, no_cast, no_receive, skinned) in &entities {
+        // Never a skinned mesh (decision 9): its pipeline is chosen by its
+        // joint attributes and its bind group by its skin, so a proxy without
+        // the skin is a fatal draw. The critters warm their own, skin and all.
+        if skinned {
+            continue;
+        }
         let Some(data) = meshes.get(&mesh.0) else {
             continue;
         };
+        if data
+            .try_contains_attribute(Mesh::ATTRIBUTE_JOINT_INDEX)
+            .unwrap_or(false)
+        {
+            continue;
+        }
         let layout = match data.try_attributes() {
             Ok(attributes) => {
                 let mut ids: Vec<_> = attributes.map(|(a, _)| a.id).collect();

@@ -386,6 +386,8 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         felled: [UVec4::ZERO; crate::trees_taken::FELLED / 4],
         picked: [UVec4::ZERO; crate::trees_taken::PICKED / 4],
         clutter_taken: [UVec4::ZERO; crate::clutter::TAKEN_CELLS / 2],
+        shake: UVec4::ZERO,
+        carried: [Vec4::ZERO; 2 * crate::carried_light::MAX_CARRIED_LIGHTS],
     }
 }
 
@@ -1095,4 +1097,46 @@ fn a_dissolve_draws_both_partitions_whole_on_real_fine_sets() {
         short_before >= 3,
         "the cases should include landings whose records stop short of the old partition"
     );
+}
+
+/// `river-cache` design 7: a far river's water sheet is listed where it is
+/// drawn, at its own surface, not on the sea's sphere. The owner's river
+/// stands 90 m over the sea; a cell of it 100 m ahead of an eye on its bank
+/// looking level put the tested point 92 m under the eye, out of the view,
+/// and the channel read dry from the tier's edge outward.
+#[test]
+#[ignore = "requires a GPU; run cargo test -p pbd-app --lib far_river -- --ignored --nocapture"]
+fn actual_gpu_lists_a_far_river_s_sheet_at_its_own_surface() {
+    let gpu = VisibilityGpu::new();
+    let surface_m = 90.0f32;
+    // A river cell `ahead` metres along +X from the point under the eye, its
+    // ground two metres under its water, the river's surface in `spare.w`.
+    let river = |ahead: f32| {
+        let mut cell = column(Vec3::new(ahead, 0., RADIUS + surface_m - 2.), 6, 1.4, 0.);
+        cell.spare[3] = surface_m.to_bits();
+        cell
+    };
+    let cells = [river(100.), river(-100.), river(300.)];
+    let mut eye = params(cells.len(), surface_m + 1.6, 10.);
+    let camera = eye.camera.truncate();
+    // The desktop camera: reverse-Z perspective, 60 degrees high, looking
+    // level along the ground toward +X.
+    eye.clip_from_body = Mat4::perspective_infinite_reverse_rh(60f32.to_radians(), 16. / 9., 0.1)
+        * Mat4::look_at_rh(camera, camera + Vec3::X, Vec3::Z);
+    let seen = gpu.run(&cells, eye.clone());
+    // The two ahead are listed, the one behind is not.
+    assert_eq!(seen.water, 2, "{seen:?}");
+
+    // The sea's sheet is still tested on the sea's sphere: the same cells
+    // without a river, under the sea, are listed as before (none here: the
+    // sea under an eye 92 m up is out of a level view this close).
+    let dry: Vec<GpuCell> = cells
+        .iter()
+        .map(|c| {
+            let mut c = *c;
+            c.spare[3] = 0;
+            c
+        })
+        .collect();
+    assert_eq!(gpu.run(&dry, eye).water, 0);
 }

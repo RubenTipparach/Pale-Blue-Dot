@@ -74,3 +74,43 @@ logs with rope across, and the rowboat a planked hull from above with its
 thwart and oars. The palette is the fence's two browns and ink (`FARM`),
 with the fibre's straw and the rope's tan. Each is an inventory icon with
 the 1 px outline.
+
+## Leather (`small-boats` design 2e)
+
+`leather` is drawn by `tools/gen_item_icons.py` from its own pixel grid: a
+tanned hide stretched out, in the fence's browns with a lighter grain.
+
+## glowing-mushrooms design 3: the glowing mushroom
+
+`glowing-mushroom` is drawn by `tools/gen_item_icons.py` (`GLOW`): the glowing
+plant's low cap in the cyan its head burns with at night
+(`pbd_core::flora::GLOW_HEAD_RGB`) over the plant's pale green stalk, with the
+1 px outline of an inventory icon.
+
+## townsfolk design 9: the parcel, and the coin
+
+`parcel` is drawn by `tools/gen_item_icons.py` (`ECONOMY`): brown paper tied
+with a cross of twine and a bow, the 1 px outline of an inventory icon. The
+coin beside the hotbar (`assets/items/ui/coin.png`, design 5) is drawn by the
+same script: a gold piece with a stamped square ring.
+
+## player-building design B8: the door
+
+`door` is drawn by `tools/gen_item_icons.py`: a door of planks with two iron
+strap hinges on its hinge side and a ring pull, in the fence's browns and the
+lights' irons (`FARM`), with the 1 px outline of an inventory icon. The leaf
+in the world (`assets/textures/settlement/door.png`) has no outline and is
+drawn by `tools/art/door_texture.py` from the `plank`, `timber` and `iron`
+textures' own colours.
+
+## townsfolk design 31: gravel
+
+`gravel` is drawn by `tools/gen_item_icons.py` (`ROADS`): a heap of crushed
+stone in four greys, with the 1 px outline of an inventory icon.
+
+## land-transport design 10: the wheel and the carts
+
+`wheel`, `hand-cart` and `horse-cart` are drawn by `tools/gen_item_icons.py`
+(`CARTS`): a spoked wheel with its iron tyre, and the two carts side on, each
+from a few shapes in the boats' browns with the 1 px outline of an inventory
+icon.

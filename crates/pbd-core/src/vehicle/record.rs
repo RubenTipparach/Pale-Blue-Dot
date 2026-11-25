@@ -5,7 +5,7 @@
 //! precision, and the frame they are in is named, because a craft's pose is
 //! meaningless without it.
 
-use super::{Craft, CraftState, Hulls, Kind, Mooring};
+use super::{Craft, Hulls, Kind, Mooring};
 use crate::vehicle::spec::VehicleSpecs;
 use glam::{DQuat, DVec3};
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,10 @@ pub struct VehicleRecord {
     pub mooring: Option<([f64; 3], f64, bool)>,
     /// Who it belongs to; nobody yet, in a world with one player.
     pub owner: Option<String>,
-    /// The Kestrel's nacelles and brake, kept in layout 1 for the retired
-    /// records that carry them (`retire-kestrel` decision 2); the Tern's
-    /// sheet.
+    /// The Kestrel's nacelles and brake and the Tern's sheet, kept in
+    /// layout 1 for the retired records that carry them (`retire-kestrel`
+    /// decision 2, `retire-tern` decision 1). No craft this build sails
+    /// writes them.
     pub nacelle: Option<f64>,
     pub brake: Option<bool>,
     pub sheet: Option<f64>,
@@ -46,14 +47,24 @@ pub struct VehicleRecord {
     /// every other craft's record is as it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub berth: Option<(u32, u32)>,
-    /// The cog's yard off square, rad (`sail-the-cog`). Written only for a
-    /// cog, so every other craft's record is as it was.
+    /// The cog's yard off square, rad (`sail-the-cog`), kept in layout 1 for
+    /// the retired cog records that carry it (`retire-rowboat-and-cog`
+    /// decision 1). No craft this build sails writes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yard: Option<f64>,
     /// A boat the player made and launched (`small-boats` design 4). Written
     /// only for one, so every other craft's record is as it was.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub made: bool,
+    /// The anchor's rope setting, m (`river-craft` design 10.5); absent is
+    /// "to the bed". Written only where set, so every older record reads
+    /// and writes as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rope_m: Option<f64>,
+    /// The lantern put out in the boat's menu (design 10.5). Written only
+    /// when out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lantern_out: bool,
 }
 
 /// Every craft in a world, as the save file holds them.
@@ -70,14 +81,6 @@ impl Craft {
     /// quits aboard comes back on foot beside the craft, which is where the
     /// load puts them, and the craft is unattended until they board again.
     pub fn record(&self) -> VehicleRecord {
-        let (nacelle, brake, sheet) = match &self.state {
-            CraftState::Tern(s) => (None, None, Some(s.sheet)),
-            CraftState::Loon(_) | CraftState::Cog(_) => (None, None, None),
-        };
-        let yard = match &self.state {
-            CraftState::Cog(s) => Some(s.yard),
-            _ => None,
-        };
         VehicleRecord {
             id: self.id,
             kind: self.kind.key().into(),
@@ -91,12 +94,14 @@ impl Craft {
                 .mooring
                 .map(|m| (m.at.to_array(), m.length, m.anchored)),
             owner: None,
-            nacelle,
-            brake,
-            sheet,
+            nacelle: None,
+            brake: None,
+            sheet: None,
             berth: self.berth,
-            yard,
+            yard: None,
             made: self.made,
+            rope_m: self.rope_m,
+            lantern_out: self.lantern_out,
         }
     }
 
@@ -154,19 +159,14 @@ impl Craft {
             length,
             anchored,
         });
-        match &mut craft.state {
-            CraftState::Tern(s) => {
-                if let Some(sheet) = record.sheet.filter(|s| s.is_finite()) {
-                    s.sheet = sheet.clamp(0.0, 1.0);
-                }
-            }
-            CraftState::Cog(s) => {
-                let reach = (craft.specs.cog.sail.brace_deg as f64).to_radians();
-                if let Some(yard) = record.yard.filter(|y| y.is_finite()) {
-                    s.yard = yard.clamp(-reach, reach);
-                }
-            }
-            CraftState::Loon(_) => {}
+        craft.rope_m = record.rope_m.filter(|r| r.is_finite() && *r > 0.0);
+        craft.lantern_out = record.lantern_out;
+        // A saved anchor is on the bed, set and holding, on the rode it was
+        // saved with.
+        if craft.has_anchor()
+            && let Some(m) = craft.mooring.filter(|m| m.anchored)
+        {
+            craft.anchor = Some(super::anchor::Anchor::holding(m.at, m.length));
         }
         Ok(craft)
     }
@@ -182,7 +182,7 @@ mod tests {
         let hulls = Hulls::new(&specs);
         let q = DQuat::from_rotation_y(0.7);
         let mut craft = Craft::new(
-            Kind::Tern,
+            Kind::Raft,
             42,
             specs.clone(),
             hulls.clone(),
@@ -206,7 +206,7 @@ mod tests {
         let file: VehicleFile = ron::from_str(&text).unwrap();
         let back = Craft::from_record(&file.vehicles[0], specs, hulls).unwrap();
         assert_eq!(back.id, 42);
-        assert_eq!(back.kind, Kind::Tern);
+        assert_eq!(back.kind, Kind::Raft);
         assert!((back.reference_position() - craft.reference_position()).length() < 1e-9);
         assert!(back.body.orientation.angle_between(q) < 1e-9);
         assert_eq!(back.bilge_kg, 12.5);

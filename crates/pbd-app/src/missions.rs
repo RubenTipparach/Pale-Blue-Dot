@@ -58,6 +58,8 @@ pub struct Missions {
     /// Which opening of a world has joined the chain (design 4):
     /// [`WorldSave::serial`].
     joined: Option<u64>,
+    /// The focus was picked on the tree and is to be stored.
+    pub refocused: bool,
 }
 
 /// How long a finished mission's "Done" line stays up, seconds.
@@ -69,6 +71,10 @@ pub fn progress_of(save: &WorldSave) -> Progress {
     save.records
         .get(MISSIONS_KIND, MISSIONS_ID)
         .and_then(|r| r.read::<Progress>())
+        .map(|mut p| {
+            p.migrate();
+            p
+        })
         .unwrap_or_default()
 }
 
@@ -76,7 +82,37 @@ pub fn progress_of(save: &WorldSave) -> Progress {
 /// logging each pending mission. A chain naming what this build cannot know
 /// (and does not await) is refused, as every config is.
 pub fn load_chain(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig) -> Chain {
-    let path = crate::config::config_dir().join("missions.ron");
+    load_tree("missions.ron", "mission", &catalog_of(recipes, fauna, land))
+}
+
+/// What this build knows, for resolving a mission file's names: the recipe
+/// book and the rosters.
+pub fn catalog_of(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig) -> Catalog {
+    let fish: Vec<String> = fauna
+        .0
+        .bodies
+        .values()
+        .flatten()
+        .map(|s| s.data_name())
+        .collect();
+    let animals: Vec<String> = land
+        .0
+        .land
+        .values()
+        .flatten()
+        .map(|s| s.data_name())
+        .collect();
+    Catalog::new(
+        &recipes.0,
+        fish.iter().map(String::as_str),
+        animals.iter().map(String::as_str),
+    )
+}
+
+/// Read and resolve one tree's file, its words under `keys` in the locale
+/// file, logging each pending mission.
+pub fn load_tree(name: &str, keys: &str, catalog: &Catalog) -> Chain {
+    let path = crate::config::config_dir().join(name);
     let file: MissionFile = match std::fs::read_to_string(&path) {
         Ok(text) => ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
         Err(_) => {
@@ -84,11 +120,8 @@ pub fn load_chain(recipes: &Recipes, fauna: &FaunaConfig, land: &HusbandryConfig
             MissionFile::default()
         }
     };
-    let fish = fauna.0.bodies.values().flatten().map(|s| s.name.as_str());
-    let animals = land.0.land.values().flatten().map(|s| s.name.as_str());
-    let catalog = Catalog::new(&recipes.0, fish, animals);
     let chain = file
-        .resolve(&catalog)
+        .resolve_keyed(catalog, keys)
         .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     for (id, missing) in chain.pending() {
         info!("mission {id} is pending: no {missing:?} in this build");
@@ -127,6 +160,11 @@ pub fn held(
     }
 }
 
+/// This frame's happenings, as the counting read them: what the town jobs
+/// (`economy`) count with the same rule, after [`count`].
+#[derive(Resource, Clone, Debug, Default)]
+pub struct Happenings(pub Vec<Happened>);
+
 /// Everything the counting reads and writes, in one parameter.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct Counting<'w, 's> {
@@ -144,6 +182,8 @@ pub struct Counting<'w, 's> {
     finished: MessageWriter<'w, MissionDone>,
     cooked: MessageReader<'w, 's, Cooked>,
     did: MessageReader<'w, 's, Did>,
+    heard: ResMut<'w, Happenings>,
+    eco: Option<Res<'w, crate::economy::Economy>>,
 }
 
 /// What the messages of this frame mean to the chain.
@@ -157,7 +197,7 @@ fn happenings(c: &mut Counting) -> Vec<Happened> {
             .0
             .roster(&body)
             .get(species as usize)
-            .map_or("animal".to_string(), |s| s.name.to_lowercase())
+            .map_or("animal".to_string(), |s| s.data_name())
     };
     let mut out = Vec::new();
     for gained in c.gained.read() {
@@ -210,12 +250,20 @@ pub fn count(mut c: Counting) {
             c.missions.notice = None;
         }
     }
-    let happened = happenings(&mut c);
+    let mut happened = happenings(&mut c);
+    if !(happened.is_empty() && c.heard.0.is_empty()) {
+        c.heard.0.clone_from(&happened);
+    }
+    // What the town raised, which the taken jobs have counted already: the
+    // trees count it, the jobs never see it twice.
+    if let Some(eco) = c.eco.as_deref() {
+        happened.extend(eco.raised.iter().cloned());
+    }
     let Some(mut save) = c.save else {
         return;
     };
     let joining = c.missions.joined != Some(save.serial());
-    if happened.is_empty() && !joining {
+    if happened.is_empty() && !joining && !c.missions.refocused {
         return;
     }
     let slots = c.hotbar.as_deref().map(|h| h.0.clone()).unwrap_or_default();
@@ -231,7 +279,7 @@ pub fn count(mut c: Counting) {
     let chain = &c.chain.0;
     let missions = &mut *c.missions;
     let mut done = Vec::new();
-    let mut changed = false;
+    let mut changed = std::mem::take(&mut missions.refocused);
     // A world just opened (every load replaces the save): read its record
     // and join the chain, closing what the world already holds.
     if joining {
@@ -250,6 +298,7 @@ pub fn count(mut c: Counting) {
         done.extend(step.done);
     }
     for id in &done {
+        missions.progress.focus_past(chain, id);
         let title = chain.get(id).map_or(id.as_str(), |m| m.title.as_str());
         info!("mission done: {id} ({title})");
         c.finished.write(MissionDone { id: id.clone() });
@@ -296,9 +345,27 @@ pub fn refresh_locks(
     hotbar: Option<Res<Hotbar>>,
     tools: Option<Res<crate::fish::ToolSlot>>,
     mut locks: ResMut<RecipeLocks>,
+    town: (
+        Option<Res<crate::town_missions::TownChain>>,
+        Option<Res<crate::town_missions::TownMissions>>,
+    ),
 ) {
     let chain = &chain.0;
-    if chain.missions.iter().all(|m| m.unlocks.is_empty()) {
+    let none = Progress::default();
+    let town_chain = town.0.as_deref().map(|t| &t.0);
+    let town_progress = town
+        .1
+        .as_deref()
+        .and_then(|t| t.progress())
+        .unwrap_or(&none);
+    let mut trees = vec![(chain, &missions.progress)];
+    if let Some(t) = town_chain {
+        trees.push((t, town_progress));
+    }
+    if trees
+        .iter()
+        .all(|(c, _)| c.missions.iter().all(|m| m.unlocks.is_empty()))
+    {
         if !locks.0.is_empty() {
             locks.0.clear();
         }
@@ -337,8 +404,8 @@ pub fn refresh_locks(
                     .map(|(t, _)| item_code(Item::Tool(*t))),
             )
             .collect();
-        if !chain.recipe_open(&missions.progress, &recipe.code, &makes, holds(recipe))
-            && let Some(m) = chain.unlocked_by(&recipe.code)
+        if !pbd_core::missions::recipe_open_in(&trees, &recipe.code, &makes, holds(recipe))
+            && let Some(m) = trees.iter().find_map(|(c, _)| c.unlocked_by(&recipe.code))
         {
             now.insert(recipe.code.clone(), m.title.clone());
         }
@@ -377,6 +444,7 @@ impl Plugin for MissionsPlugin {
             .add_message::<Deed>()
             .add_message::<Cooked>()
             .init_resource::<Missions>()
+            .init_resource::<Happenings>()
             .init_resource::<RecipeLocks>()
             .add_systems(PreStartup, start)
             .add_systems(

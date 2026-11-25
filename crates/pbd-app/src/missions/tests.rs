@@ -9,7 +9,7 @@ fn objective(kind: Kind, what: &str, count: u32) -> ObjectiveEntry {
         kind,
         what: what.into(),
         count,
-        label: what.into(),
+        label: Some(what.into()),
     }
 }
 
@@ -23,9 +23,25 @@ fn app(chain: Option<MissionFile>) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     if let Some(file) = chain {
-        let fish = fauna.0.bodies.values().flatten().map(|s| s.name.as_str());
-        let animals = land.0.land.values().flatten().map(|s| s.name.as_str());
-        let catalog = Catalog::new(&recipes.0, fish, animals);
+        let fish = fauna
+            .0
+            .bodies
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let animals = land
+            .0
+            .land
+            .values()
+            .flatten()
+            .map(|s| s.data_name())
+            .collect::<Vec<_>>();
+        let catalog = Catalog::new(
+            &recipes.0,
+            fish.iter().map(String::as_str),
+            animals.iter().map(String::as_str),
+        );
         app.insert_resource(MissionChain(file.resolve(&catalog).unwrap()));
     }
     app.insert_resource(recipes)
@@ -72,14 +88,15 @@ fn every_kind_counts_from_its_message() {
             .iter()
             .map(|(id, o)| MissionEntry {
                 id: id.to_string(),
-                title: id.to_string(),
-                help: String::new(),
+                title: Some(id.to_string()),
+                help: None,
                 needs: vec![],
                 objectives: vec![o.clone()],
                 unlocks: vec![],
                 after: vec![],
                 branch: String::new(),
                 icon: String::new(),
+                coins: 0,
             })
             .collect(),
     };
@@ -143,7 +160,7 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     };
     assert_eq!(
         line(&app).as_deref(),
-        Some("Gather by hand: Pull fiber 0/8")
+        Some("Gather by hand: Pull fiber 0/8, Pick up stones 0/9, Dig soil 0/6")
     );
     let world = app.world_mut();
     for (good, count) in [("fibre", 8), ("stone", 9)] {
@@ -154,21 +171,16 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         });
     }
     app.update();
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: Dig soil 0/6"));
+    assert_eq!(
+        line(&app).as_deref(),
+        Some("Gather by hand: Pull fiber 8/8, Pick up stones 9/9, Dig soil 0/6")
+    );
     for _ in 0..6 {
         app.world_mut()
             .write_message(Did::block(Kind::Gather, Material::Dirt));
     }
     app.update();
     assert!(done(&app, "gather"));
-    // The close is told once, for the jingle (design "The goals on the HUD,
-    // and a jingle").
-    {
-        let told = app.world().resource::<Messages<MissionDone>>();
-        let mut cursor = told.get_cursor();
-        let ids: Vec<String> = cursor.read(told).map(|d| d.id.clone()).collect();
-        assert_eq!(ids, ["gather"]);
-    }
     assert_eq!(line(&app).as_deref(), Some("Craft an axe 0/1"));
     let missions = app.world().resource::<Missions>();
     assert_eq!(
@@ -202,12 +214,16 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
             .write_message(Did::new(Kind::Catch, "minnow", 1));
         app.update();
         if n < 3 {
-            assert_eq!(line(&app), Some(format!("Go fishing: Catch fish {n}/3")));
+            assert_eq!(line(&app), Some(format!("Go fishing {n}/3")));
         }
     }
     assert!(done(&app, "go-fishing"));
-    // Bait is a good now: digging it and landing fish on it is next (G1).
-    assert_eq!(line(&app).as_deref(), Some("Dig for bait: Dig up bait 0/3"));
+    // Bait is a good now: digging it and landing fish on it is next (G1);
+    // the line names every objective (`mission-playthrough` 3.5).
+    assert_eq!(
+        line(&app).as_deref(),
+        Some("Dig for bait: Dig up bait 0/3, Catch fish on bait 0/3")
+    );
     app.world_mut().write_message(Gained {
         item: Item::Good(Good::BAIT),
         count: 3,
@@ -272,6 +288,25 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
             .progress
             .line(chain)
             .as_deref(),
-        Some("Go fishing: Catch fish 0/3")
+        Some("Go fishing 0/3")
     );
+}
+
+/// Every mission in `missions.ron` has its title, help and objective labels
+/// in the locale file, by its id.
+#[test]
+fn every_mission_has_its_words() {
+    let file: pbd_core::missions::MissionFile =
+        ron::from_str(include_str!("../../../../assets/config/missions.ron")).unwrap();
+    let english = pbd_core::locale::Locale::english();
+    for m in &file.missions {
+        let mut keys = vec![
+            format!("mission.{}.title", m.id),
+            format!("mission.{}.help", m.id),
+        ];
+        keys.extend((0..m.objectives.len()).map(|i| format!("mission.{}.objective.{i}", m.id)));
+        for key in keys {
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
 }

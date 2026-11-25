@@ -12,7 +12,7 @@
 //! the job is queued.
 
 use crate::goods::Good;
-use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool, material_name};
+use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 pub struct StationRow {
     /// Its saved name, in a station record and in `recipes.ron`.
     pub code: &'static str,
-    pub name: &'static str,
     /// The block it is; `None` for the hands, whose "station" is the pack
     /// itself (a recipe made by hand, `tool-crafting`).
     pub material: Option<Material>,
@@ -36,31 +35,51 @@ pub struct StationRow {
 /// recipe whose station is `hand` is queued and collected by the same rules,
 /// with its queue kept on the player rather than on a cell. Nothing in this
 /// change makes anything by hand yet.
+impl StationRow {
+    /// Its name: `station.<code>.name` in the locale file.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("station.{}.name", self.code))
+    }
+}
+
 pub const STATIONS: &[StationRow] = &[
     StationRow {
         code: "forge",
-        name: "forge",
         material: Some(Material::Forge),
         max_jobs: 4,
     },
     StationRow {
         code: "hand",
-        name: "hands",
         material: None,
-        max_jobs: 1,
+        max_jobs: 4,
     },
     // `cooking` design S2: the kitchen's first station, also a light.
     StationRow {
         code: "campfire",
-        name: "campfire",
         material: Some(Material::Campfire),
         max_jobs: 4,
     },
     // tool-crafting: tools, the rod and a forge (decision 5).
     StationRow {
         code: "workbench",
-        name: "workbench",
         material: Some(Material::Workbench),
+        max_jobs: 4,
+    },
+    // `townsfolk` design 41: crushed stone, and gravel from it and sand.
+    StationRow {
+        code: "grinder",
+        material: Some(Material::Grinder),
+        max_jobs: 4,
+    },
+    // furniture design 1: every piece of furniture, and nothing else.
+    StationRow {
+        code: "carpenter",
+        material: Some(Material::Carpenter),
+        max_jobs: 4,
+    },
+    StationRow {
+        code: "mixer",
+        material: Some(Material::Mixer),
         max_jobs: 4,
     },
 ];
@@ -118,7 +137,7 @@ pub fn item_named(name: &str) -> Option<Item> {
     if let Some(block) = name.strip_prefix("block:") {
         return Material::ALL
             .into_iter()
-            .find(|m| material_name(*m) == block)
+            .find(|m| crate::inventory::material_id(*m) == block)
             .map(Item::Block);
     }
     Good::by_code(name).map(Item::Good)
@@ -130,8 +149,6 @@ pub fn item_named(name: &str) -> Option<Item> {
 pub struct RecipeEntry {
     /// Its saved name, in a station's queue. Never renamed once shipped.
     pub code: String,
-    /// What the panel's plaque says.
-    pub name: String,
     /// The station code it is made at.
     pub station: String,
     /// World seconds from start to done.
@@ -155,32 +172,28 @@ impl Default for RecipeFile {
     fn default() -> Self {
         let pair = |name: &str, n| (name.to_string(), n);
         let recipe = |code: &str,
-                      name: &str,
                       station: &str,
                       secs: f32,
                       inputs: &[(&str, u16)],
                       outputs: &[(&str, u16)]| RecipeEntry {
             code: code.into(),
-            name: name.into(),
             station: station.into(),
             secs,
             inputs: inputs.iter().map(|&(n, k)| pair(n, k)).collect(),
             outputs: outputs.iter().map(|&(n, k)| pair(n, k)).collect(),
         };
-        let stone_tool = |tool: &str, name: &str| {
+        let stone_tool = |tool: &str| {
             recipe(
                 &format!("stone-{tool}"),
-                name,
                 "workbench",
                 3.0,
                 &[("stone", 3), ("planks", 2), ("rope", 1)],
                 &[(&format!("tool:stone-{tool}"), 1)],
             )
         };
-        let metal_tool = |tier: &str, tool: &str, name: &str| {
+        let metal_tool = |tier: &str, tool: &str| {
             recipe(
                 &format!("{tier}-{tool}"),
-                name,
                 "workbench",
                 4.0,
                 &[(&format!("{tier}-ingot"), 3), ("planks", 2)],
@@ -191,7 +204,6 @@ impl Default for RecipeFile {
             recipes: vec![
                 RecipeEntry {
                     code: "mixed-ore".into(),
-                    name: "SMELT ORE".into(),
                     station: "forge".into(),
                     secs: 8.0,
                     inputs: vec![pair("block:ore", 4), pair("coal", 2)],
@@ -203,7 +215,6 @@ impl Default for RecipeFile {
                 },
                 RecipeEntry {
                     code: "bronze".into(),
-                    name: "BRONZE".into(),
                     station: "forge".into(),
                     secs: 5.0,
                     inputs: vec![pair("copper-ingot", 1), pair("tin-ore", 1), pair("coal", 1)],
@@ -213,30 +224,30 @@ impl Default for RecipeFile {
         };
         // ---- tool-crafting: by hand, then at the workbench (M3 section 4).
         file.recipes.extend([
+            recipe("planks", "hand", 1.0, &[("log", 1)], &[("planks", 4)]),
+            recipe("rope", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
+            // townsfolk design 41: survey stakes, in gravel's old row (the
+            // hand recipe for gravel is retired: `RETIRED_RECIPES`).
             recipe(
-                "planks",
-                "PLANKS",
+                "survey-stakes",
                 "hand",
                 1.0,
-                &[("log", 1)],
-                &[("planks", 4)],
+                &[("planks", 1), ("fibre", 1)],
+                &[("survey-stakes", 4)],
             ),
-            recipe("rope", "ROPE", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
             recipe(
                 "workbench",
-                "WORKBENCH",
                 "hand",
                 4.0,
                 &[("planks", 6)],
                 &[("block:workbench", 1)],
             ),
-            stone_tool("pickaxe", "STONE PICK"),
-            stone_tool("shovel", "STONE SHOVEL"),
+            stone_tool("pickaxe"),
+            stone_tool("shovel"),
             // The first tool, by hand (`starter-missions` T.2, the tree's
             // trunk): loose stone, fibre and a branch.
             recipe(
                 "stone-axe",
-                "STONE AXE",
                 "hand",
                 3.0,
                 &[("stone", 3), ("fibre", 2), ("log", 1)],
@@ -244,17 +255,9 @@ impl Default for RecipeFile {
             ),
             // A pen's pieces and a torch (T.2): made, where the kit used to
             // deal them.
-            recipe(
-                "fence",
-                "FENCE X2",
-                "workbench",
-                2.0,
-                &[("planks", 1)],
-                &[("fence", 2)],
-            ),
+            recipe("fence", "workbench", 2.0, &[("planks", 1)], &[("fence", 2)]),
             recipe(
                 "gate",
-                "GATE",
                 "workbench",
                 3.0,
                 &[("planks", 2), ("rope", 1)],
@@ -262,7 +265,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "torch",
-                "TORCH X2",
                 "hand",
                 1.0,
                 &[("planks", 1), ("fibre", 1)],
@@ -270,7 +272,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "rod",
-                "ROD",
                 "workbench",
                 3.0,
                 &[("planks", 2), ("rope", 2), ("fibre", 2)],
@@ -278,7 +279,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "forge",
-                "FORGE",
                 "workbench",
                 6.0,
                 &[("stone", 8), ("block:stone", 4)],
@@ -286,7 +286,6 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "bucket",
-                "BUCKET",
                 "workbench",
                 3.0,
                 &[("planks", 3), ("rope", 1)],
@@ -294,53 +293,213 @@ impl Default for RecipeFile {
             ),
             recipe(
                 "incubator",
-                "INCUBATOR",
                 "workbench",
                 4.0,
                 &[("planks", 4), ("rope", 2)],
                 &[("incubator", 1)],
             ),
-            metal_tool("bronze", "pickaxe", "BRONZE PICK"),
-            metal_tool("bronze", "shovel", "BRONZE SHOVEL"),
-            metal_tool("bronze", "axe", "BRONZE AXE"),
-            metal_tool("iron", "pickaxe", "IRON PICK"),
-            metal_tool("iron", "shovel", "IRON SHOVEL"),
-            metal_tool("iron", "axe", "IRON AXE"),
-            // small-boats design 3: the boats, up to a small rowboat.
+            // player-building design B8: a door, planks and an iron fitting
+            // (its strap hinges and pull).
             recipe(
-                "inner-tube",
-                "INNER TUBE",
+                "door",
                 "workbench",
                 4.0,
-                &[("wool", 4), ("rope", 2)],
+                &[("planks", 4), ("iron-ingot", 1)],
+                &[("door", 1)],
+            ),
+            metal_tool("bronze", "pickaxe"),
+            metal_tool("bronze", "shovel"),
+            metal_tool("bronze", "axe"),
+            metal_tool("iron", "pickaxe"),
+            metal_tool("iron", "shovel"),
+            metal_tool("iron", "axe"),
+            // small-boats design 3: the boats. (The rowboat was here until
+            // `retire-rowboat-and-cog`: `RETIRED_RECIPES`.)
+            recipe(
+                "inner-tube",
+                "workbench",
+                4.0,
+                // Leather alone (small-boats design 2e).
+                &[("leather", 3)],
                 &[("inner-tube", 1)],
             ),
             recipe(
                 "raft",
-                "RAFT",
                 "workbench",
                 6.0,
                 &[("log", 6), ("rope", 4)],
                 &[("raft", 1)],
             ),
+            // townsfolk design 41: the gravel stations and what they make.
             recipe(
-                "rowboat",
-                "ROWBOAT",
+                "grinder",
                 "workbench",
-                10.0,
-                &[("planks", 16), ("rope", 2)],
-                &[("rowboat", 1)],
+                6.0,
+                &[("stone", 10), ("planks", 6), ("iron-ingot", 2)],
+                &[("block:grinder", 1)],
+            ),
+            recipe(
+                "mixer",
+                "workbench",
+                6.0,
+                &[("planks", 8), ("rope", 2), ("iron-ingot", 1), ("bucket", 1)],
+                &[("block:mixer", 1)],
+            ),
+            recipe(
+                "crushed-stone",
+                "grinder",
+                4.0,
+                &[("stone", 2)],
+                &[("crushed-stone", 3)],
+            ),
+            recipe(
+                "mixed-gravel",
+                "mixer",
+                6.0,
+                &[("crushed-stone", 3), ("block:sand", 1)],
+                &[("gravel", 4)],
+            ),
+            // land-transport design 10: the wheel and the two carts.
+            recipe(
+                "wheel",
+                "workbench",
+                4.0,
+                &[("planks", 4), ("iron-ingot", 1)],
+                &[("wheel", 1)],
+            ),
+            recipe(
+                "hand-cart",
+                "workbench",
+                6.0,
+                &[("wheel", 2), ("planks", 8), ("rope", 2)],
+                &[("hand-cart", 1)],
+            ),
+            recipe(
+                "horse-cart",
+                "workbench",
+                8.0,
+                &[("wheel", 2), ("planks", 14), ("rope", 4), ("leather", 2)],
+                &[("horse-cart", 1)],
+            ),
+            // furniture design 1 and 2: the carpenter's bench, and the
+            // Furniture branch made at it and nowhere else.
+            RecipeEntry {
+                code: "carpenter-bench".into(),
+                station: "workbench".into(),
+                secs: 6.0,
+                inputs: vec![pair("planks", 8), pair("log", 2), pair("iron-ingot", 1)],
+                // The block's name is its English name (`material_id`).
+                outputs: vec![(
+                    format!(
+                        "block:{}",
+                        crate::inventory::material_id(Material::Carpenter)
+                    ),
+                    1,
+                )],
+            },
+            recipe("chair", "carpenter", 3.0, &[("planks", 3)], &[("chair", 1)]),
+            recipe("stool", "carpenter", 2.0, &[("planks", 2)], &[("stool", 1)]),
+            recipe("bench", "carpenter", 3.0, &[("planks", 4)], &[("bench", 1)]),
+            recipe("table", "carpenter", 4.0, &[("planks", 5)], &[("table", 1)]),
+            recipe(
+                "bed",
+                "carpenter",
+                6.0,
+                &[("planks", 5), ("wool", 3)],
+                &[("bed", 1)],
+            ),
+            recipe(
+                "drawers",
+                "carpenter",
+                5.0,
+                &[("planks", 6)],
+                &[("drawers", 1)],
+            ),
+            recipe(
+                "closet",
+                "carpenter",
+                6.0,
+                &[("planks", 8)],
+                &[("closet", 1)],
+            ),
+            recipe(
+                "chest",
+                "carpenter",
+                4.0,
+                &[("planks", 5), ("rope", 1)],
+                &[("chest", 1)],
+            ),
+            recipe(
+                "banded-chest",
+                "carpenter",
+                5.0,
+                &[("planks", 5), ("iron-ingot", 2)],
+                &[("banded-chest", 1)],
+            ),
+            recipe("crate", "carpenter", 3.0, &[("planks", 3)], &[("crate", 1)]),
+            // building-planner design 3 and 6: the drafting table and the
+            // mallet.
+            RecipeEntry {
+                code: "drafting-table".into(),
+                station: "workbench".into(),
+                secs: 5.0,
+                inputs: vec![pair("planks", 6), pair("rope", 2)],
+                outputs: vec![(
+                    format!(
+                        "block:{}",
+                        crate::inventory::material_id(Material::DraftingTable)
+                    ),
+                    1,
+                )],
+            },
+            recipe(
+                "mallet",
+                "workbench",
+                2.0,
+                &[("log", 1), ("stone", 1)],
+                &[("mallet", 1)],
             ),
         ]);
         file
     }
 }
 
+/// Recipes this build has retired, by code, and the inputs each took as it
+/// shipped (`retire-rowboat-and-cog` decisions 2 and 3): what a saved job
+/// for one, a good it made, or a craft launched from that good gives back.
+/// Never edited: a refund is what the player paid.
+pub const RETIRED_RECIPES: [(&str, &[(&str, u16)]); 2] = [
+    ("rowboat", &[("planks", 16), ("rope", 2)]),
+    // `townsfolk` design 41: gravel is made at the mixer now.
+    ("gravel", &[("stone", 2)]),
+];
+
+/// The inputs a retired recipe took, resolved; `None` for a code that was
+/// never retired.
+pub fn retired_inputs(code: &str) -> Option<Vec<(Item, u16)>> {
+    let (_, inputs) = RETIRED_RECIPES.iter().find(|(c, _)| *c == code)?;
+    inputs
+        .iter()
+        .map(|&(item, n)| item_named(item).map(|i| (i, n)))
+        .collect()
+}
+
+/// Give all of `items` into `slots`, or none of them: whether they went.
+pub fn give_all(slots: &mut Slots, items: &[(Item, u16)]) -> bool {
+    let mut after = slots.clone();
+    if items.iter().all(|&(item, n)| after.give(item, n) == 0) {
+        *slots = after;
+        true
+    } else {
+        false
+    }
+}
+
 /// A recipe with its items resolved.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recipe {
+    /// Its saved name; its plaque's words are `recipe.<code>.name`.
     pub code: String,
-    pub name: String,
     pub station: &'static StationRow,
     pub secs: f32,
     pub inputs: Vec<(Item, u16)>,
@@ -352,6 +511,11 @@ pub struct Recipe {
 }
 
 impl Recipe {
+    /// What the panel's plaque says.
+    pub fn name(&self) -> crate::locale::Localized {
+        crate::locale::tr(&format!("recipe.{}.name", self.code))
+    }
+
     /// Everything it gives, tools as items, for a panel to draw.
     pub fn shown_outputs(&self) -> Vec<(Item, u16)> {
         let mut all = self.outputs.clone();
@@ -418,7 +582,6 @@ impl RecipeFile {
             };
             recipes.push(Recipe {
                 code: entry.code.clone(),
-                name: entry.name.clone(),
                 station,
                 secs: entry.secs,
                 inputs: items(&entry.inputs)?,
@@ -604,13 +767,17 @@ impl StationState {
                 break;
             }
             let mut after = slots.clone();
-            let fits = match book.get(&self.jobs[0].recipe) {
-                Some(recipe) => recipe
+            let code = &self.jobs[0].recipe;
+            let fits = match (book.get(code), retired_inputs(code)) {
+                (Some(recipe), _) => recipe
                     .outputs
                     .iter()
                     .all(|&(item, n)| after.give(item, n) == 0),
+                // A retired recipe gives back what it took
+                // (`retire-rowboat-and-cog` decision 3).
+                (None, Some(inputs)) => give_all(&mut after, &inputs),
                 // A recipe this build lacks: kept, never thrown away.
-                None => false,
+                (None, None) => false,
             };
             if !fits {
                 break;
@@ -658,8 +825,42 @@ pub fn ore_yield(cell: u32, layer: u16, placed: bool) -> Item {
 mod tests {
     use super::*;
 
+    /// Every recipe, the stations' and the campfire's, has its plaque's
+    /// words in the locale file, by its code.
+    #[test]
+    fn every_recipe_has_its_name() {
+        let english = crate::locale::Locale::english();
+        let codes = RecipeFile::default()
+            .recipes
+            .into_iter()
+            .chain(crate::cooking::CookingFile::default().recipes)
+            .map(|r| r.code);
+        for code in codes {
+            let key = format!("recipe.{code}.name");
+            assert!(english.get(&key).is_some(), "{key}");
+        }
+    }
+
     fn book() -> RecipeBook {
         RecipeFile::default().resolve().unwrap()
+    }
+
+    /// `player-building` design B8: a door is made at the workbench from 4
+    /// planks and 1 iron ingot, and gives one door.
+    #[test]
+    fn a_door_is_planks_and_an_iron_fitting_at_the_workbench() {
+        let book = book();
+        let door = book.get("door").expect("the door's recipe");
+        assert_eq!(door.station.code, "workbench");
+        assert_eq!(
+            door.inputs,
+            vec![
+                (Item::Good(Good::PLANKS), 4),
+                (Item::Good(Good::IRON_INGOT), 1)
+            ]
+        );
+        assert_eq!(door.outputs, vec![(Item::Good(Good::DOOR), 1)]);
+        assert!(door.tools.is_empty());
     }
 
     fn forge() -> StationState {
@@ -681,13 +882,36 @@ mod tests {
         assert_eq!(file, RecipeFile::default());
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
-        // Planks, rope, the workbench, the stone axe and torches by hand
-        // (`starter-missions` T.2); at the bench the rest, fences and gates.
-        assert_eq!(book.at("hand").count(), 5);
+        // Planks, rope, survey stakes (`townsfolk` design 41, in gravel's
+        // old row), the workbench, the stone axe and torches by hand (`starter-missions` T.2); at the
+        // bench the rest, fences and gates.
+        assert_eq!(book.at("hand").count(), 6);
         assert_eq!(
             book.at("workbench").count(),
-            17,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the three boats (small-boats)"
+            25,
+            "with the drafting table and the mallet (building-planner), the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), the tube and raft (small-boats; the rowboat retired), the door (player-building B8), the grinder and mixer (townsfolk design 41), the wheel and the two carts (land-transport), and the carpenter's bench (furniture design 1)"
+        );
+        assert!(book.get("rowboat").is_none(), "the rowboat is retired");
+        // `townsfolk` design 41: gravel comes from the mixer, never the hand;
+        // crushed stone from the grinder. The hand recipe's code is retired.
+        assert!(book.get("gravel").is_none(), "gravel by hand is retired");
+        assert!(retired_inputs("gravel").is_some());
+        assert_eq!(book.at("grinder").count(), 1);
+        assert_eq!(book.at("mixer").count(), 1);
+        let mixed = book.get("mixed-gravel").unwrap();
+        assert_eq!(mixed.station.code, "mixer");
+        assert_eq!(
+            mixed.outputs,
+            vec![(Item::Good(Good::GRAVEL), 4)],
+            "3 crushed stone and a sand block make 4 gravel"
+        );
+        assert_eq!(
+            book.get("crushed-stone").unwrap().inputs,
+            vec![(Item::Good(Good::LOOSE_STONE), 2)]
+        );
+        assert_eq!(
+            station_of(Material::Grinder).map(|s| s.code),
+            Some("grinder")
         );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));
@@ -697,6 +921,7 @@ mod tests {
             Some(Item::Tool(crate::inventory::Tool::Pickaxe))
         );
         assert_eq!(station_by_code("hand").map(|s| s.material), Some(None));
+        assert_eq!(book.at("carpenter").count(), 10, "the Furniture branch");
     }
 
     #[test]
@@ -880,5 +1105,46 @@ mod tests {
         let jobs = other.collect_into(&mut slots, Some(&mut kit), &book, 40.0);
         assert_eq!(jobs.len(), 1, "never stuck");
         assert!(!other.busy());
+    }
+
+    /// `retire-rowboat-and-cog` decision 3: a rowboat queued at a workbench
+    /// before the recipe was retired takes no time and collects as the
+    /// planks and rope it took, and only when they all fit.
+    #[test]
+    fn a_retired_recipes_job_collects_as_its_inputs() {
+        let book = book();
+        let bench = STATIONS
+            .iter()
+            .find(|s| s.code == "workbench")
+            .expect("the workbench");
+        let mut state = StationState::new(bench);
+        state.jobs.push(Job {
+            recipe: "rowboat".into(),
+            queued_s: 100.0,
+        });
+        let mut slots = Slots::new();
+        assert_eq!(state.collect(&mut slots, &book, 100.0), 1);
+        assert_eq!(slots.count(Item::Good(Good::PLANKS)), 16);
+        assert_eq!(slots.count(Item::Good(Good::ROPE)), 2);
+        assert!(state.jobs.is_empty());
+        // A full pack takes nothing and the job waits.
+        state.jobs.push(Job {
+            recipe: "rowboat".into(),
+            queued_s: 200.0,
+        });
+        let mut full = Slots::new();
+        while full.give(Item::Good(Good::COAL), 99) == 0 {}
+        let before = full.clone();
+        assert_eq!(state.collect(&mut full, &book, 200.0), 0);
+        assert_eq!(full, before);
+        assert_eq!(state.jobs.len(), 1);
+        assert_eq!(
+            retired_inputs("rowboat"),
+            Some(vec![
+                (Item::Good(Good::PLANKS), 16),
+                (Item::Good(Good::ROPE), 2)
+            ])
+        );
+        assert_eq!(retired_inputs("raft"), None);
     }
 }
