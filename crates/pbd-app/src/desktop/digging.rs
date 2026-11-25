@@ -637,7 +637,7 @@ pub fn server_worms(
 /// The eye ray, the click, and the two verbs.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
-    (cameras, frame, mut shake, planner_lift): (
+    (cameras, frame, _shake, planner_lift): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<pbd_app::planet::PlanetRenderFrame>>,
         // The worked tree's shake (`tree-punch-shake`); drawn only.

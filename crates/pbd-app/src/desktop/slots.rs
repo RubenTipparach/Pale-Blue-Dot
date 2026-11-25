@@ -694,7 +694,6 @@ mod tests {
             drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
-            carpenter: Handle::default(),
             chest: Handle::default(),
             tiered: Vec::new(),
         };

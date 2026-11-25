@@ -32,8 +32,10 @@ use std::sync::OnceLock;
 /// A tile's side, m (on the cube projection, so up to about 1.7 times this
 /// near a cube corner).
 const TILE_M: f32 = 12.0;
-/// The reef's lattice, m (the mockup's 0.62, opened a little for the cost).
-const REEF_STEP_M: f32 = 0.7;
+/// The reef's lattice, m (the mockup's 0.62, opened a little for the cost;
+/// then half as dense, 0.7 times the square root of two: owner, 2026-11-25,
+/// "Lower its density by 2x").
+const REEF_STEP_M: f32 = 0.99;
 
 /// What stands in one place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1542,7 +1544,10 @@ const LAND_S: f32 = 0.8;
 /// Within this of the eye a tile sways, m; the sway eases out over the
 /// last `SWAY_EASE_M` (`ocean-environments` B18: it snapped to rest). Its
 /// ambient life is drawn while the tile is, and fades with it.
+/// The sway itself runs in `sway_vertex.wgsl`, which keeps these two.
+#[cfg_attr(not(test), allow(dead_code))]
 const NEAR_M: f32 = 30.0;
+#[cfg_attr(not(test), allow(dead_code))]
 const SWAY_EASE_M: f32 = 4.0;
 
 /// Where a tile's fade goes from where it is, 0 whole to 1 gone: `metres`
@@ -1567,84 +1572,15 @@ fn tile_fade(fade: f32, metres: f32, wanted: bool, dt: f32) -> f32 {
     }
 }
 
-/// Bend every tile's swaying meshes this frame asks for (`Drawn::bend_now`):
-/// each mesh's position buffer taken out, filled on every core at once, and
-/// put back (`ocean-environments` B31: 400,000 reef vertices bent one tile
-/// after another held the main thread 28 ms a frame). The same positions the
-/// one-by-one bend made, so the same look. Returns the vertices written.
-fn bend_all(drawn: &HashMap<Key, Drawn>, meshes: &mut Assets<Mesh>, seconds: f32) -> usize {
-    let mut jobs: Vec<(Handle<Mesh>, Vec<[f32; 3]>, &Sway, f32)> = Vec::new();
-    for tile in drawn.values() {
-        let pairs = [
-            (
-                tile.sway.as_ref().map(|s| &s.1),
-                &tile.still,
-                tile.bend_now.0,
-            ),
-            (tile.kelp.as_ref(), &tile.kelp_still, tile.bend_now.1),
-        ];
-        for (handle, still, bend) in pairs {
-            if let (Some(handle), Some(bend)) = (handle, bend)
-                && let Some(mesh) = meshes.get_mut(handle)
-            {
-                let buffer = super::kept::float3(mesh, Mesh::ATTRIBUTE_POSITION);
-                jobs.push((handle.clone(), buffer, still, bend));
-            }
-        }
-    }
-    let threads = std::thread::available_parallelism()
-        .map_or(4, |n| n.get())
-        .min(8);
-    let per = jobs.len().div_ceil(threads.max(1)).max(1);
-    std::thread::scope(|scope| {
-        for chunk in jobs.chunks_mut(per) {
-            scope.spawn(move || {
-                for (_, positions, still, bend) in chunk.iter_mut() {
-                    fill_bent(positions, still, seconds, *bend);
-                }
-            });
-        }
-    });
-    let mut written = 0;
-    for (handle, positions, _, _) in jobs {
-        written += positions.len();
-        if let Some(mesh) = meshes.get_mut(&handle) {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        }
-    }
-    written
-}
-
-/// A swaying mesh's positions in the surge, into `positions` (emptied).
-fn fill_bent(positions: &mut Vec<[f32; 3]>, still: &Sway, seconds: f32, bend: f32) {
-    positions.clear();
-    positions.extend((0..still.rest.len()).map(|i| {
-        let h = still.height[i];
-        let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
-        let reach = (0.07 * h).min(0.7) * bend;
-        (still.rest[i] + still.axis[i] * wave * reach).to_array()
-    }));
-}
-
 struct Drawn {
     root: Entity,
     glow: Option<Entity>,
-    sway: Option<(Entity, Handle<Mesh>)>,
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
     anchor: Vec3,
     /// Its fade, 0 whole to 1 gone ([`tile_fade`]); it lands at 1.
     fade: f32,
-    still: Sway,
     ambient: Vec<Ambient>,
-    swayed: bool,
-    /// The kelp's mesh (design B20), at rest, and whether it was bent.
-    kelp: Option<Handle<Mesh>>,
-    kelp_still: Sway,
-    kelp_swayed: bool,
-    /// This frame's bend for the tile's sway and its kelp, set by the fade
-    /// pass and worked out on every core after it (`bend_all`).
-    bend_now: (Option<f32>, Option<f32>),
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
@@ -1768,6 +1704,39 @@ fn warm_glow(
 
 /// A mesh of a part of a tile; `textured` for the pieces and the life (the
 /// water life's atlas), not for the unlit glow.
+/// A swaying vertex's surge (`sway_vertex.wgsl`): xyz its axis times its
+/// reach (`min(0.07 h, 0.7)`), w its phase with the height's share
+/// (`phase + 0.6 h`). Written once when the tile is built; the GPU moves it.
+pub const ATTRIBUTE_SWAY: bevy::mesh::MeshVertexAttribute = bevy::mesh::MeshVertexAttribute::new(
+    "Reef_Sway",
+    0x5eed_5ea_0001,
+    bevy::render::render_resource::VertexFormat::Float32x4,
+);
+
+/// The sway attribute of a tile's swaying pieces, one row a vertex.
+fn sway_rows(still: &Sway) -> Vec<[f32; 4]> {
+    (0..still.rest.len())
+        .map(|i| {
+            let h = still.height[i];
+            let reach = (0.07 * h).min(0.7);
+            let a = still.axis[i] * reach;
+            [a.x, a.y, a.z, still.phase[i] + h * 0.6]
+        })
+        .collect()
+}
+
+/// A swaying mesh: its rest pose, flat normals from it, and its sway.
+fn swaying_mesh(still: &Sway) -> Mesh {
+    let verts = Verts {
+        positions: still.rest.iter().map(|p| p.to_array()).collect(),
+        colours: still.colours.clone(),
+        uvs: still.uvs.clone(),
+    };
+    let mut mesh = mesh_of(verts, true);
+    mesh.insert_attribute(ATTRIBUTE_SWAY, sway_rows(still));
+    mesh
+}
+
 fn mesh_of(verts: Verts, textured: bool) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -1788,6 +1757,22 @@ static TILES_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 static TILES_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 struct TilesTimer(std::time::Instant);
+
+/// A measurement instrument (`memory-leak`, the reef): the share of
+/// [`tiles`] spent laying the ambient life and plumes, summed until
+/// `SEA_PLACES` reads it.
+static AMBIENT_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct AmbientTimer(std::time::Instant);
+
+impl Drop for AmbientTimer {
+    fn drop(&mut self) {
+        AMBIENT_NS.fetch_add(
+            self.0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
 
 impl Drop for TilesTimer {
     fn drop(&mut self) {
@@ -1868,7 +1853,6 @@ fn tiles(
         .map_or(now as f64, |s| s.clock.seconds)
         .rem_euclid(3600.0) as f32;
     let mut gone = Vec::new();
-    let mut swayed_verts = 0usize;
     for (key, drawn) in state.drawn.iter_mut() {
         let m = metres(*key);
         let fade = tile_fade(drawn.fade, m, wanted.contains(key), dt);
@@ -1899,23 +1883,11 @@ fn tiles(
                 }
             }
         }
-        let bend = ((NEAR_M - m) / SWAY_EASE_M).clamp(0.0, 1.0);
-        let near = bend > 0.0;
         let local_eye = eye - drawn.anchor;
-        // The surge: soft corals, anemones, grass and kelp bend, near the eye.
-        // Bent below, on every core at once (`bend_all`).
-        drawn.bend_now = (None, None);
-        if drawn.sway.is_some() && (near || !drawn.swayed) {
-            drawn.bend_now.0 = Some(bend);
-            drawn.swayed = near;
-        }
-        if drawn.kelp.is_some() && (near || !drawn.kelp_swayed) {
-            drawn.bend_now.1 = Some(bend);
-            drawn.kelp_swayed = near;
-        }
         // The ambient life and the plumes, while the tile is drawn: they
         // fade with it, never cut at a distance.
         if !drawn.ambient.is_empty() {
+            let _ambient_timer = AmbientTimer(std::time::Instant::now());
             let (mut lit, mut smoke) = (Verts::default(), Verts::default());
             if fade < 1.0 {
                 // Depth under the sea's surface over the tile.
@@ -1947,7 +1919,6 @@ fn tiles(
             commands.entity(drawn.root).despawn();
         }
     }
-    swayed_verts += bend_all(&state.drawn, &mut meshes, seconds);
     // A measurement instrument (`ocean-environments` B20): what the sea's
     // places draw and rewrite, once a second.
     if now - state.logged_s >= 1.0 {
@@ -1956,14 +1927,16 @@ fn tiles(
             .drawn
             .values()
             .fold((0, 0), |(t, k), d| (t + d.tris, k + d.kelp_tris));
+        let (tiles_ms, ambient_ms) = {
+            use std::sync::atomic::Ordering::Relaxed;
+            let calls = TILES_CALLS.swap(0, Relaxed).max(1) as f64;
+            let ns = TILES_NS.swap(0, Relaxed) as f64;
+            let amb = AMBIENT_NS.swap(0, Relaxed) as f64;
+            (ns / 1e6 / calls, amb / 1e6 / calls)
+        };
         info!(
-            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} swayed_verts={swayed_verts} tiles_ms={:.3}",
+            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} tiles_ms={tiles_ms:.3} ambient_ms={ambient_ms:.3}",
             state.drawn.len(),
-            {
-                use std::sync::atomic::Ordering::Relaxed;
-                let ns = TILES_NS.swap(0, Relaxed) as f64;
-                ns / 1e6 / TILES_CALLS.swap(0, Relaxed).max(1) as f64
-            }
         );
     }
     state.planning.retain(|k, _| wanted.contains(k));
@@ -2087,32 +2060,20 @@ fn tiles(
             "Vent glow",
         )
     });
-    let sway = (!built.sway.rest.is_empty()).then(|| {
-        let verts = Verts {
-            positions: built.sway.rest.iter().map(|p| p.to_array()).collect(),
-            colours: built.sway.colours.clone(),
-            uvs: built.sway.uvs.clone(),
-        };
-        let handle = meshes.add(mesh_of(verts, true));
-        (
-            child(
-                &mut commands,
-                handle.clone(),
-                life.0.clone(),
-                "Sea pieces (swaying)",
-            ),
-            handle,
-        )
-    });
+    // The swaying pieces and the kelp carry their sway; the GPU moves them
+    // (`sway_vertex.wgsl`), so the meshes are never written again.
+    if !built.sway.rest.is_empty() {
+        child(
+            &mut commands,
+            meshes.add(swaying_mesh(&built.sway)),
+            life.0.clone(),
+            "Sea pieces (swaying)",
+        );
+    }
     // The kelp: M25's cards, cut out, frustum culled (a tile behind the eye
     // draws none of it).
-    let kelp = (!built.kelp.rest.is_empty()).then(|| {
-        let verts = Verts {
-            positions: built.kelp.rest.iter().map(|p| p.to_array()).collect(),
-            colours: built.kelp.colours.clone(),
-            uvs: built.kelp.uvs.clone(),
-        };
-        let handle = meshes.add(mesh_of(verts, true));
+    if !built.kelp.rest.is_empty() {
+        let handle = meshes.add(swaying_mesh(&built.kelp));
         let id = commands
             .spawn((
                 Name::new("Kelp"),
@@ -2123,8 +2084,7 @@ fn tiles(
             ))
             .id();
         commands.entity(root).add_child(id);
-        handle
-    });
+    }
     // The ambient meshes start with one hidden triangle, so the field gives
     // them their material at once and they never need it again.
     let blank = |textured: bool| {
@@ -2158,18 +2118,11 @@ fn tiles(
         Drawn {
             root,
             glow: glow_id,
-            sway,
             life: (life_id, life_handle),
             smoke,
             anchor,
             fade: 1.0,
-            still: built.sway,
             ambient: built.ambient,
-            swayed: false,
-            kelp,
-            kelp_still: built.kelp,
-            kelp_swayed: false,
-            bend_now: (None, None),
             tris,
             kelp_tris,
         },
@@ -2652,5 +2605,51 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod sway_tests {
+    use super::*;
+
+    /// The GPU sway is the CPU's old `fill_bent`: the vertex moves along its
+    /// axis by `sin(clock * 1.1 + phase + 0.6 h) * min(0.07 h, 0.7) * bend`.
+    #[test]
+    fn a_swaying_vertex_carries_its_reach_and_phase() {
+        let still = Sway {
+            rest: vec![Vec3::ZERO, Vec3::Y, Vec3::X * 2.0],
+            colours: vec![[1.0; 4]; 3],
+            uvs: vec![[0.0; 2]; 3],
+            height: vec![0.0, 2.0, 20.0],
+            axis: vec![Vec3::X, Vec3::Z, Vec3::Y],
+            phase: vec![0.5, 1.0, 2.0],
+        };
+        let rows = sway_rows(&still);
+        assert_eq!(rows[0], [0.0, 0.0, 0.0, 0.5]);
+        assert!((rows[1][2] - 0.14).abs() < 1e-6 && (rows[1][3] - 2.2).abs() < 1e-6);
+        assert!(
+            (rows[2][1] - 0.7).abs() < 1e-6,
+            "the reach is capped at 0.7 m"
+        );
+        let clock = 7.25f32;
+        for i in 0..3 {
+            let h = still.height[i];
+            let old = still.axis[i]
+                * (clock * 1.1 + still.phase[i] + h * 0.6).sin()
+                * (0.07 * h).min(0.7);
+            let r = rows[i];
+            let new = Vec3::new(r[0], r[1], r[2]) * (clock * 1.1 + r[3]).sin();
+            assert!((old - new).length() < 1e-4, "{i}");
+        }
+        let mesh = swaying_mesh(&still);
+        assert!(mesh.attribute(ATTRIBUTE_SWAY).is_some());
+    }
+
+    /// The shader's distances are the ones the CPU used.
+    #[test]
+    fn the_shader_keeps_the_sway_distances() {
+        let wgsl = include_str!("../../../../assets/shaders/sway_vertex.wgsl");
+        assert!(wgsl.contains(&format!("const NEAR_M: f32 = {NEAR_M:.1};")));
+        assert!(wgsl.contains(&format!("const SWAY_EASE_M: f32 = {SWAY_EASE_M:.1};")));
     }
 }

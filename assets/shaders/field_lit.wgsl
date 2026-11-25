@@ -58,6 +58,8 @@ struct Scene {
     // the cut's radius, then the way beyond the site and the storey's
     // ceiling; zero when off (`build_view::Cutaway`).
     cut: array<vec4<f32>, 2>,
+    // `memory-leak`: the reef's surge clock (x), read by `sway_vertex.wgsl`.
+    sway: vec4<f32>,
 }
 
 // How far round the site the cutaway cuts (`build_view::CUT_REACH_M`).

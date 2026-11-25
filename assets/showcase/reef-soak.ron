@@ -1,0 +1,67 @@
+// MEASUREMENT (`memory-leak`): back and forth between a reef's coast and
+// the land behind it, to watch memory and frame time over a long walk
+// (owner, 2026-11-25: "Coral reefs and long play seems to cause memory
+// leaks after walking around or back and forth"). Run with
+// `PBD_MEMORY_TRACE` and `--frame-log`.
+(
+    goal: "Goal: walk to a reef and back and forth from it",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Find a reef on the map and walk to its coast",
+            max_s: 1800.0,
+            acts: [MapGoal("places", "reef"), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (1 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (2 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (3 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (4 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (5 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (6 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (7 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (8 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (9 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+        (
+            caption: "Inland and back to the reef (10 of 10)",
+            max_s: 900.0,
+            acts: [Away(150.0), ToMark],
+        ),
+    ],
+)

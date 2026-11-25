@@ -51,3 +51,74 @@ entries to its size and frees the lot.
 
 - A buffer kept at its largest size holds that memory while the school
   lives: at most the size of its largest frame, freed with the school.
+
+## The reef sways on the GPU (owner, 2026-11-25)
+
+The owner: "Coral reefs and long play seems to cause memory leaks after
+walking around or back and forth for a while causing frame drops", and "We
+have gpu vertex shaders to animate simple animations ... The reef is easiest
+fix, do that first".
+
+**Finding (read in the code).** `places::bend_all` ran every frame for every
+reef tile within 30 m: it spawned up to eight OS threads
+(`std::thread::scope`), worked out every swaying vertex's sine on the CPU
+(`fill_bent`), and inserted a new position buffer into each swaying mesh and
+kelp mesh, so Bevy re-extracted and re-uploaded every one of them each frame.
+The more reef in reach, the more of the frame it took; walking along a reef
+keeps it in reach.
+
+**Change.** The sway is the same sum, moved to the vertex stage:
+- each swaying vertex carries `ATTRIBUTE_SWAY` (xyz its axis times its
+  reach, `min(0.07 h, 0.7)`; w its phase with the height's share,
+  `phase + 0.6 h`), written once when its tile is built;
+- `sway_vertex.wgsl` moves it by `sin(clock * 1.1 + w)` times the bend,
+  which eases from 1 to 0 over the last `SWAY_EASE_M` before `NEAR_M` from
+  the eye, measured from the tile's anchor (the mesh origin), as the CPU
+  did;
+- the clock is the sun clock's seconds wrapped at an hour, as before, sent
+  in the field's view buffer (`FieldView::sway`, `Scene.sway`);
+- `FieldLit::specialize` gives the stage to a mesh carrying the attribute,
+  as it gives `swim_vertex.wgsl` to a school; `bend_all`, `fill_bent` and
+  the tiles' kept rest poses are gone.
+
+The look is unchanged except where the eye stands well above or below the
+reef: the CPU measured the tile's distance along the surface, the shader
+measures it straight from the camera, so the sway's last 4 m of easing may
+sit a little nearer when the eye is far above the sea. Normals were the rest
+pose's before and are now.
+
+**Not yet.** The ambient life and vent smoke are still written per tile per
+frame (`write_mesh`), the reef's meshes still carry `NoFrustumCulling`, and
+there is no instancing; they are next, measured the same way.
+
+**Proof.** Tests: `a_swaying_vertex_carries_its_reach_and_phase` (the GPU's
+sum against the old CPU sum) and `the_shader_keeps_the_sway_distances`.
+Before and after: the reef soak (`assets/showcase/reef-soak.ron`, a reef's
+coast and 150 m inland, ten times), `--frame-log` and `SEA_PLACES tiles_ms`,
+the same world and build profile.
+
+**Half as dense (owner, 2026-11-25: "Lower its density by 2x").** The
+reef's lattice step goes from 0.7 m to 0.99 m (times the square root of
+two), so a tile holds half the pieces and half the triangles. The pieces
+are drawn only, from the seed, never saved, so no world changes.
+
+**Measured (2026-11-25, the desktop, RTX 3070, fast build).** At the reef
+of `ocean-life` (13.096, 94.896), 11:00, standing 150 s, frames after the
+first 40 s, the build before against the GPU sway with half the density,
+interleaved twice (each baseline run with its own `field_lit.wgsl`):
+
+| | Before | After |
+| --- | ---: | ---: |
+| Frame p50 | 97.6, 98.1 ms | 51.2, 52.5 ms |
+| Frame p99 | 163.5, 169.8 ms | 71.4, 74.6 ms |
+| Main thread p50 | 58.6, 59.0 ms | 46.4, 47.7 ms |
+| GPU p50 | 11.1, 11.0 ms | 10.3, 10.3 ms |
+| Memory (working set) | 1885, 1854 MB | 1364, 1369 MB |
+| Reef triangles | 2.73 M | 1.38 M |
+
+**What is left: the ambient life.** `SEA_PLACES ambient_ms` (a measurement
+instrument, the share of `tiles` spent in `ambient`) is 34-38 ms of the
+47 ms main thread: every tile in reach lays its whole anthias cloud (40
+swimming bodies), its clownfish and its vents' 36 puffs on the CPU each
+frame and uploads them. Each is a function of time alone, so it moves to the
+vertex stage as the sway did: laid once, moved on the GPU (task 5.3).
